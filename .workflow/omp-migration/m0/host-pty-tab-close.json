@@ -1,0 +1,1043 @@
+{
+  "schemaVersion": 1,
+  "task": "omp-through-m3/27",
+  "probe": "PROBE-06",
+  "baseCommit": "edfdf0963",
+  "startedAt": "2026-10-11T19:10:25.786Z",
+  "platform": "linux",
+  "arch": "x64",
+  "nodeVersion": "v24.18.0",
+  "scenarioCount": 1,
+  "status": "pass",
+  "source": {
+    "tree": "assembled parent working tree (read-only)",
+    "owner": "packages/web/server/lib/terminal/runtime.js",
+    "shutdownOwnerRead": "packages/web/server/lib/terminal/shutdown.js",
+    "sha256BeforeInvocation": {
+      "packages/web/server/lib/terminal/runtime.js": "c01808be46443d7da5b71dea22a7d5601ab5ac0fdc611f786d3aae1eb9f5cbe2",
+      "packages/web/server/lib/terminal/shutdown.js": "0a89feb8dc223e91da97f88d4ac5c6787656530c77d4d9198eb95819653d3e65",
+      "packages/web/server/lib/terminal/shells.js": "658e5009023c6ccd4572e622a01e8e925354f0f30dac2e9c513803f60f748f9d",
+      "packages/web/server/lib/terminal/terminal-ws-protocol.js": "6a45cafca8fd7e385a70ba44c483f5a5f3db49d1770d71cf6294c4a22c8b5f2a",
+      "packages/web/server/lib/inherited-env.js": "2fd0fb13ddeea5786af5382e0cb8119b9d71693553efee0babdef6bf95119a30",
+      "packages/ui/src/components/views/TerminalView.tsx": "239f1e73b8fa1054c8af0dc8ee8be102ce7d297ac3787cf052431a2e43fb0546",
+      "packages/ui/src/lib/terminalApi.ts": "7864bd6774095f441990eef016a117f273f7900dffa94f304b82d320904c7313",
+      "packages/web/src/api/terminal.ts": "7f2f55fdb703e057cdb9e4d8ae0baed10ffed08a36916edf7c07efdd85d35a0f"
+    },
+    "clientCloseChainRead": [
+      "packages/ui/src/components/views/TerminalView.tsx:813-836 handleCloseTab",
+      "packages/web/src/api/terminal.ts:65-67 close",
+      "packages/ui/src/lib/terminalApi.ts:542 closeTerminal -> DELETE /api/terminal/:sessionId"
+    ]
+  },
+  "invocation": {
+    "command": "env -i PATH=/usr/bin:/bin HOME=$PRIVATE/home XDG_CONFIG_HOME=$PRIVATE/config XDG_CACHE_HOME=$PRIVATE/cache XDG_DATA_HOME=$PRIVATE/data XDG_STATE_HOME=$PRIVATE/state TMPDIR=$PRIVATE/tmp OMP_AGENT_DIR=$PRIVATE/agent SHELL=/usr/bin/bash PROBE_ROOT=$PRIVATE PROBE_SOURCE=$ASSEMBLED_SOURCE /usr/bin/node $PRIVATE/probe.mjs",
+    "mode": "Actual createTerminalRuntime production owner registered on real Express + node:http; not whole-application bootstrap",
+    "ptyProviderOverride": false,
+    "terminationGraceOverride": false,
+    "shutdownHelperCalled": false,
+    "hostBinding": {
+      "address": "127.0.0.1",
+      "family": "IPv4",
+      "port": 39723
+    },
+    "privateState": [
+      "HOME",
+      "workspace",
+      "TMPDIR",
+      "XDG_CONFIG_HOME",
+      "XDG_CACHE_HOME",
+      "XDG_DATA_HOME",
+      "XDG_STATE_HOME",
+      "OMP_AGENT_DIR"
+    ],
+    "security": "Dedicated unauthenticated loopback-only fixture; no credentials, tunnels, real projects or provider runtime.",
+    "workingDirectory": "$PRIVATE/workspace",
+    "prototypeSha256": "27ba68ce252c3df27a31e23b5644201f6745aef3620f8d41a9c52e6f0512be22",
+    "subprocessReturnCode": 0,
+    "stderr": "",
+    "timeoutSeconds": 40,
+    "timedOut": false,
+    "environmentKeys": [
+      "HOME",
+      "OMP_AGENT_DIR",
+      "PATH",
+      "PROBE_ROOT",
+      "PROBE_SOURCE",
+      "SHELL",
+      "TMPDIR",
+      "XDG_CACHE_HOME",
+      "XDG_CONFIG_HOME",
+      "XDG_DATA_HOME",
+      "XDG_STATE_HOME"
+    ]
+  },
+  "routes": [
+    {
+      "method": "POST",
+      "path": "/api/terminal/create",
+      "httpStatus": 200,
+      "response": {
+        "sessionId": "task27-owned-tab",
+        "cols": 100,
+        "rows": 30,
+        "status": "running",
+        "mode": "interactive",
+        "purpose": {
+          "type": "terminal"
+        }
+      },
+      "durationMs": 30.551
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/terminal/task27-owned-tab",
+      "httpStatus": 200,
+      "response": {
+        "success": true
+      },
+      "durationMs": 3.86
+    }
+  ],
+  "observations": [
+    {
+      "label": "before-delete",
+      "msSinceDeleteStarted": null,
+      "children": [
+        {
+          "role": "pty-shell",
+          "birth": {
+            "pid": 220787,
+            "birthStartTicks": "4513987",
+            "parentPid": 220775,
+            "processGroupId": 220787,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "current": {
+            "pid": 220787,
+            "birthStartTicks": "4513987",
+            "parentPid": 220775,
+            "processGroupId": 220787,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "sameBirth": true,
+          "alive": true,
+          "zombie": false
+        },
+        {
+          "role": "background-sleep",
+          "birth": {
+            "pid": 220790,
+            "birthStartTicks": "4513992",
+            "parentPid": 220787,
+            "processGroupId": 220790,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "current": {
+            "pid": 220790,
+            "birthStartTicks": "4513992",
+            "parentPid": 220787,
+            "processGroupId": 220790,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "sameBirth": true,
+          "alive": true,
+          "zombie": false
+        },
+        {
+          "role": "subshell",
+          "birth": {
+            "pid": 220791,
+            "birthStartTicks": "4513992",
+            "parentPid": 220787,
+            "processGroupId": 220791,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "current": {
+            "pid": 220791,
+            "birthStartTicks": "4513992",
+            "parentPid": 220787,
+            "processGroupId": 220791,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "sameBirth": true,
+          "alive": true,
+          "zombie": false
+        },
+        {
+          "role": "web-server",
+          "birth": {
+            "pid": 220792,
+            "birthStartTicks": "4513992",
+            "parentPid": 220791,
+            "processGroupId": 220791,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "current": {
+            "pid": 220792,
+            "birthStartTicks": "4513992",
+            "parentPid": 220791,
+            "processGroupId": 220791,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "sameBirth": true,
+          "alive": true,
+          "zombie": false
+        },
+        {
+          "role": "subshell-sleep",
+          "birth": {
+            "pid": 220793,
+            "birthStartTicks": "4513992",
+            "parentPid": 220791,
+            "processGroupId": 220791,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "current": {
+            "pid": 220793,
+            "birthStartTicks": "4513992",
+            "parentPid": 220791,
+            "processGroupId": 220791,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "sameBirth": true,
+          "alive": true,
+          "zombie": false
+        }
+      ],
+      "port": {
+        "host": "127.0.0.1",
+        "port": 33327,
+        "accepting": true
+      },
+      "unrelatedSibling": {
+        "birth": {
+          "pid": 220789,
+          "birthStartTicks": "4513989",
+          "parentPid": 220775,
+          "processGroupId": 220199,
+          "sessionId": 220199,
+          "state": "R"
+        },
+        "current": {
+          "pid": 220789,
+          "birthStartTicks": "4513989",
+          "parentPid": 220775,
+          "processGroupId": 220199,
+          "sessionId": 220199,
+          "state": "S"
+        },
+        "sameBirth": true,
+        "alive": true,
+        "zombie": false
+      }
+    },
+    {
+      "label": "after-delete-0ms-target",
+      "msSinceDeleteStarted": 5.079,
+      "children": [
+        {
+          "role": "pty-shell",
+          "birth": {
+            "pid": 220787,
+            "birthStartTicks": "4513987",
+            "parentPid": 220775,
+            "processGroupId": 220787,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "current": null,
+          "sameBirth": false,
+          "alive": false,
+          "zombie": false
+        },
+        {
+          "role": "background-sleep",
+          "birth": {
+            "pid": 220790,
+            "birthStartTicks": "4513992",
+            "parentPid": 220787,
+            "processGroupId": 220790,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "current": null,
+          "sameBirth": false,
+          "alive": false,
+          "zombie": false
+        },
+        {
+          "role": "subshell",
+          "birth": {
+            "pid": 220791,
+            "birthStartTicks": "4513992",
+            "parentPid": 220787,
+            "processGroupId": 220791,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "current": null,
+          "sameBirth": false,
+          "alive": false,
+          "zombie": false
+        },
+        {
+          "role": "web-server",
+          "birth": {
+            "pid": 220792,
+            "birthStartTicks": "4513992",
+            "parentPid": 220791,
+            "processGroupId": 220791,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "current": null,
+          "sameBirth": false,
+          "alive": false,
+          "zombie": false
+        },
+        {
+          "role": "subshell-sleep",
+          "birth": {
+            "pid": 220793,
+            "birthStartTicks": "4513992",
+            "parentPid": 220791,
+            "processGroupId": 220791,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "current": null,
+          "sameBirth": false,
+          "alive": false,
+          "zombie": false
+        }
+      ],
+      "port": {
+        "host": "127.0.0.1",
+        "port": 33327,
+        "accepting": false
+      },
+      "unrelatedSibling": {
+        "birth": {
+          "pid": 220789,
+          "birthStartTicks": "4513989",
+          "parentPid": 220775,
+          "processGroupId": 220199,
+          "sessionId": 220199,
+          "state": "R"
+        },
+        "current": {
+          "pid": 220789,
+          "birthStartTicks": "4513989",
+          "parentPid": 220775,
+          "processGroupId": 220199,
+          "sessionId": 220199,
+          "state": "S"
+        },
+        "sameBirth": true,
+        "alive": true,
+        "zombie": false
+      }
+    },
+    {
+      "label": "after-delete-250ms-target",
+      "msSinceDeleteStarted": 250.02,
+      "children": [
+        {
+          "role": "pty-shell",
+          "birth": {
+            "pid": 220787,
+            "birthStartTicks": "4513987",
+            "parentPid": 220775,
+            "processGroupId": 220787,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "current": null,
+          "sameBirth": false,
+          "alive": false,
+          "zombie": false
+        },
+        {
+          "role": "background-sleep",
+          "birth": {
+            "pid": 220790,
+            "birthStartTicks": "4513992",
+            "parentPid": 220787,
+            "processGroupId": 220790,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "current": null,
+          "sameBirth": false,
+          "alive": false,
+          "zombie": false
+        },
+        {
+          "role": "subshell",
+          "birth": {
+            "pid": 220791,
+            "birthStartTicks": "4513992",
+            "parentPid": 220787,
+            "processGroupId": 220791,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "current": null,
+          "sameBirth": false,
+          "alive": false,
+          "zombie": false
+        },
+        {
+          "role": "web-server",
+          "birth": {
+            "pid": 220792,
+            "birthStartTicks": "4513992",
+            "parentPid": 220791,
+            "processGroupId": 220791,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "current": null,
+          "sameBirth": false,
+          "alive": false,
+          "zombie": false
+        },
+        {
+          "role": "subshell-sleep",
+          "birth": {
+            "pid": 220793,
+            "birthStartTicks": "4513992",
+            "parentPid": 220791,
+            "processGroupId": 220791,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "current": null,
+          "sameBirth": false,
+          "alive": false,
+          "zombie": false
+        }
+      ],
+      "port": {
+        "host": "127.0.0.1",
+        "port": 33327,
+        "accepting": false
+      },
+      "unrelatedSibling": {
+        "birth": {
+          "pid": 220789,
+          "birthStartTicks": "4513989",
+          "parentPid": 220775,
+          "processGroupId": 220199,
+          "sessionId": 220199,
+          "state": "R"
+        },
+        "current": {
+          "pid": 220789,
+          "birthStartTicks": "4513989",
+          "parentPid": 220775,
+          "processGroupId": 220199,
+          "sessionId": 220199,
+          "state": "S"
+        },
+        "sameBirth": true,
+        "alive": true,
+        "zombie": false
+      }
+    },
+    {
+      "label": "after-delete-1000ms-target",
+      "msSinceDeleteStarted": 1000.592,
+      "children": [
+        {
+          "role": "pty-shell",
+          "birth": {
+            "pid": 220787,
+            "birthStartTicks": "4513987",
+            "parentPid": 220775,
+            "processGroupId": 220787,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "current": null,
+          "sameBirth": false,
+          "alive": false,
+          "zombie": false
+        },
+        {
+          "role": "background-sleep",
+          "birth": {
+            "pid": 220790,
+            "birthStartTicks": "4513992",
+            "parentPid": 220787,
+            "processGroupId": 220790,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "current": null,
+          "sameBirth": false,
+          "alive": false,
+          "zombie": false
+        },
+        {
+          "role": "subshell",
+          "birth": {
+            "pid": 220791,
+            "birthStartTicks": "4513992",
+            "parentPid": 220787,
+            "processGroupId": 220791,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "current": null,
+          "sameBirth": false,
+          "alive": false,
+          "zombie": false
+        },
+        {
+          "role": "web-server",
+          "birth": {
+            "pid": 220792,
+            "birthStartTicks": "4513992",
+            "parentPid": 220791,
+            "processGroupId": 220791,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "current": null,
+          "sameBirth": false,
+          "alive": false,
+          "zombie": false
+        },
+        {
+          "role": "subshell-sleep",
+          "birth": {
+            "pid": 220793,
+            "birthStartTicks": "4513992",
+            "parentPid": 220791,
+            "processGroupId": 220791,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "current": null,
+          "sameBirth": false,
+          "alive": false,
+          "zombie": false
+        }
+      ],
+      "port": {
+        "host": "127.0.0.1",
+        "port": 33327,
+        "accepting": false
+      },
+      "unrelatedSibling": {
+        "birth": {
+          "pid": 220789,
+          "birthStartTicks": "4513989",
+          "parentPid": 220775,
+          "processGroupId": 220199,
+          "sessionId": 220199,
+          "state": "R"
+        },
+        "current": {
+          "pid": 220789,
+          "birthStartTicks": "4513989",
+          "parentPid": 220775,
+          "processGroupId": 220199,
+          "sessionId": 220199,
+          "state": "S"
+        },
+        "sameBirth": true,
+        "alive": true,
+        "zombie": false
+      }
+    },
+    {
+      "label": "after-delete-3000ms-target",
+      "msSinceDeleteStarted": 2997.837,
+      "children": [
+        {
+          "role": "pty-shell",
+          "birth": {
+            "pid": 220787,
+            "birthStartTicks": "4513987",
+            "parentPid": 220775,
+            "processGroupId": 220787,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "current": null,
+          "sameBirth": false,
+          "alive": false,
+          "zombie": false
+        },
+        {
+          "role": "background-sleep",
+          "birth": {
+            "pid": 220790,
+            "birthStartTicks": "4513992",
+            "parentPid": 220787,
+            "processGroupId": 220790,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "current": null,
+          "sameBirth": false,
+          "alive": false,
+          "zombie": false
+        },
+        {
+          "role": "subshell",
+          "birth": {
+            "pid": 220791,
+            "birthStartTicks": "4513992",
+            "parentPid": 220787,
+            "processGroupId": 220791,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "current": null,
+          "sameBirth": false,
+          "alive": false,
+          "zombie": false
+        },
+        {
+          "role": "web-server",
+          "birth": {
+            "pid": 220792,
+            "birthStartTicks": "4513992",
+            "parentPid": 220791,
+            "processGroupId": 220791,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "current": null,
+          "sameBirth": false,
+          "alive": false,
+          "zombie": false
+        },
+        {
+          "role": "subshell-sleep",
+          "birth": {
+            "pid": 220793,
+            "birthStartTicks": "4513992",
+            "parentPid": 220791,
+            "processGroupId": 220791,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "current": null,
+          "sameBirth": false,
+          "alive": false,
+          "zombie": false
+        }
+      ],
+      "port": {
+        "host": "127.0.0.1",
+        "port": 33327,
+        "accepting": false
+      },
+      "unrelatedSibling": {
+        "birth": {
+          "pid": 220789,
+          "birthStartTicks": "4513989",
+          "parentPid": 220775,
+          "processGroupId": 220199,
+          "sessionId": 220199,
+          "state": "R"
+        },
+        "current": {
+          "pid": 220789,
+          "birthStartTicks": "4513989",
+          "parentPid": 220775,
+          "processGroupId": 220199,
+          "sessionId": 220199,
+          "state": "S"
+        },
+        "sameBirth": true,
+        "alive": true,
+        "zombie": false
+      }
+    },
+    {
+      "label": "after-delete-5000ms-target",
+      "msSinceDeleteStarted": 5002.297,
+      "children": [
+        {
+          "role": "pty-shell",
+          "birth": {
+            "pid": 220787,
+            "birthStartTicks": "4513987",
+            "parentPid": 220775,
+            "processGroupId": 220787,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "current": null,
+          "sameBirth": false,
+          "alive": false,
+          "zombie": false
+        },
+        {
+          "role": "background-sleep",
+          "birth": {
+            "pid": 220790,
+            "birthStartTicks": "4513992",
+            "parentPid": 220787,
+            "processGroupId": 220790,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "current": null,
+          "sameBirth": false,
+          "alive": false,
+          "zombie": false
+        },
+        {
+          "role": "subshell",
+          "birth": {
+            "pid": 220791,
+            "birthStartTicks": "4513992",
+            "parentPid": 220787,
+            "processGroupId": 220791,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "current": null,
+          "sameBirth": false,
+          "alive": false,
+          "zombie": false
+        },
+        {
+          "role": "web-server",
+          "birth": {
+            "pid": 220792,
+            "birthStartTicks": "4513992",
+            "parentPid": 220791,
+            "processGroupId": 220791,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "current": null,
+          "sameBirth": false,
+          "alive": false,
+          "zombie": false
+        },
+        {
+          "role": "subshell-sleep",
+          "birth": {
+            "pid": 220793,
+            "birthStartTicks": "4513992",
+            "parentPid": 220791,
+            "processGroupId": 220791,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "current": null,
+          "sameBirth": false,
+          "alive": false,
+          "zombie": false
+        }
+      ],
+      "port": {
+        "host": "127.0.0.1",
+        "port": 33327,
+        "accepting": false
+      },
+      "unrelatedSibling": {
+        "birth": {
+          "pid": 220789,
+          "birthStartTicks": "4513989",
+          "parentPid": 220775,
+          "processGroupId": 220199,
+          "sessionId": 220199,
+          "state": "R"
+        },
+        "current": {
+          "pid": 220789,
+          "birthStartTicks": "4513989",
+          "parentPid": 220775,
+          "processGroupId": 220199,
+          "sessionId": 220199,
+          "state": "S"
+        },
+        "sameBirth": true,
+        "alive": true,
+        "zombie": false
+      }
+    }
+  ],
+  "cleanup": {
+    "signals": [],
+    "siblingSignalled": false,
+    "afterOwnedTeardown": {
+      "label": "after-owned-fixture-teardown",
+      "msSinceDeleteStarted": 6253.547,
+      "children": [
+        {
+          "role": "pty-shell",
+          "birth": {
+            "pid": 220787,
+            "birthStartTicks": "4513987",
+            "parentPid": 220775,
+            "processGroupId": 220787,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "current": null,
+          "sameBirth": false,
+          "alive": false,
+          "zombie": false
+        },
+        {
+          "role": "background-sleep",
+          "birth": {
+            "pid": 220790,
+            "birthStartTicks": "4513992",
+            "parentPid": 220787,
+            "processGroupId": 220790,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "current": null,
+          "sameBirth": false,
+          "alive": false,
+          "zombie": false
+        },
+        {
+          "role": "subshell",
+          "birth": {
+            "pid": 220791,
+            "birthStartTicks": "4513992",
+            "parentPid": 220787,
+            "processGroupId": 220791,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "current": null,
+          "sameBirth": false,
+          "alive": false,
+          "zombie": false
+        },
+        {
+          "role": "web-server",
+          "birth": {
+            "pid": 220792,
+            "birthStartTicks": "4513992",
+            "parentPid": 220791,
+            "processGroupId": 220791,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "current": null,
+          "sameBirth": false,
+          "alive": false,
+          "zombie": false
+        },
+        {
+          "role": "subshell-sleep",
+          "birth": {
+            "pid": 220793,
+            "birthStartTicks": "4513992",
+            "parentPid": 220791,
+            "processGroupId": 220791,
+            "sessionId": 220787,
+            "state": "S"
+          },
+          "current": null,
+          "sameBirth": false,
+          "alive": false,
+          "zombie": false
+        }
+      ],
+      "port": {
+        "host": "127.0.0.1",
+        "port": 33327,
+        "accepting": false
+      },
+      "unrelatedSibling": {
+        "birth": {
+          "pid": 220789,
+          "birthStartTicks": "4513989",
+          "parentPid": 220775,
+          "processGroupId": 220199,
+          "sessionId": 220199,
+          "state": "R"
+        },
+        "current": {
+          "pid": 220789,
+          "birthStartTicks": "4513989",
+          "parentPid": 220775,
+          "processGroupId": 220199,
+          "sessionId": 220199,
+          "state": "S"
+        },
+        "sameBirth": true,
+        "alive": true,
+        "zombie": false
+      }
+    },
+    "originalBirthsNoLongerLive": true,
+    "portClosed": true,
+    "wholeHostShutdownHelperCalled": false,
+    "terminalRuntimeShutdownCalled": false,
+    "hostHttpListenerClosed": true,
+    "scratchRemoved": true,
+    "throwawayPrototypeRetained": false,
+    "applicationSourceModified": false,
+    "prototypeProcessExited": true,
+    "completedAt": "2026-10-11T19:11:40Z"
+  },
+  "limits": [
+    "One Linux x64 interactive bash tab, default node-pty backend; not macOS/Windows/Bun PTY coverage.",
+    "Direct production terminal composition, not full application bootstrap, browser interaction, authentication or SDK execution.",
+    "Fixed 5-second post-close observation window; no deliberately signal-resistant or daemonized fixture.",
+    "No claim of M0 acceptance or gate-03 release."
+  ],
+  "pty": {
+    "backend": "node-pty (production default under Node)",
+    "packageVersion": "1.2.0-beta.15",
+    "providerOverride": false,
+    "snapshot": {
+      "t": "snapshot",
+      "runtime": "node",
+      "ptyBackend": "node-pty",
+      "status": "running"
+    }
+  },
+  "createRequest": {
+    "cwd": "$PRIVATE/workspace",
+    "sessionId": "task27-owned-tab",
+    "cols": 100,
+    "rows": 30,
+    "shell": "bash",
+    "loginShell": false,
+    "mode": "interactive",
+    "purpose": {
+      "type": "terminal"
+    }
+  },
+  "unrelatedSibling": {
+    "relationship": "Independent child of prototype Host process; never descendant of PTY shell",
+    "birth": {
+      "pid": 220789,
+      "birthStartTicks": "4513989",
+      "parentPid": 220775,
+      "processGroupId": 220199,
+      "sessionId": 220199,
+      "state": "R"
+    },
+    "command": "sleep 12",
+    "signalsSent": [],
+    "naturalExit": {
+      "code": 0,
+      "signal": null,
+      "observedAt": "2026-10-11T19:10:37.919Z"
+    },
+    "aliveAfterOwnedCleanup": true
+  },
+  "terminalInput": {
+    "transport": "Actual v3 binary WebSocket write frame",
+    "command": ". ./tree.sh",
+    "rawTerminalOutputRetained": false,
+    "fixtureTree": "Interactive PTY bash -> background sleep; background bash subshell -> Python HTTPServer and sleep; HTTPServer binds 127.0.0.1 port 0"
+  },
+  "ownership": {
+    "host": {
+      "pid": 220775,
+      "birthStartTicks": "4513965",
+      "parentPid": 220199,
+      "processGroupId": 220199,
+      "sessionId": 220199,
+      "state": "R"
+    },
+    "fixtureRoles": [
+      "pty-shell",
+      "background-sleep",
+      "subshell",
+      "web-server",
+      "subshell-sleep"
+    ],
+    "ancestryVerified": true,
+    "siblingOutsidePtySession": true
+  },
+  "close": {
+    "startedAt": "2026-10-11T19:10:26.000Z",
+    "httpStatus": 200,
+    "response": {
+      "success": true
+    },
+    "routeDurationMs": 3.883,
+    "productionTerminationGraceMs": 1000
+  },
+  "perChildResult": [
+    {
+      "role": "pty-shell",
+      "pid": 220787,
+      "birthStartTicks": "4513987",
+      "result": "pass-original-birth-gone"
+    },
+    {
+      "role": "background-sleep",
+      "pid": 220790,
+      "birthStartTicks": "4513992",
+      "result": "pass-original-birth-gone"
+    },
+    {
+      "role": "subshell",
+      "pid": 220791,
+      "birthStartTicks": "4513992",
+      "result": "pass-original-birth-gone"
+    },
+    {
+      "role": "web-server",
+      "pid": 220792,
+      "birthStartTicks": "4513992",
+      "result": "pass-original-birth-gone"
+    },
+    {
+      "role": "subshell-sleep",
+      "pid": 220793,
+      "birthStartTicks": "4513992",
+      "result": "pass-original-birth-gone"
+    }
+  ],
+  "tabCloseResult": "pass",
+  "unrelatedSiblingResult": "pass-alive-same-birth",
+  "preCleanupResultPreserved": true,
+  "finishedAt": "2026-10-11T19:10:37.919Z",
+  "prototypeExitCode": 0,
+  "fixtures": {
+    "sha256": {
+      "tree.sh": "b06af858998f0912cf2940ceedda9f5fde46bcc82322f945366b8a4d124d27d5",
+      "loopback.py": "6ab812c01d7016ee259bdaa5dc2b66299283480e90e5d6145e15bcfd227227b7"
+    },
+    "shellTreeSource": "echo \"$BASHPID\" > pty-shell.pid\n/usr/bin/sleep 300 &\necho \"$!\" > background-sleep.pid\n(\n  echo \"$BASHPID\" > subshell.pid\n  /usr/bin/python3 loopback.py &\n  echo \"$!\" > web-server.pid\n  /usr/bin/sleep 300 &\n  echo \"$!\" > subshell-sleep.pid\n  wait\n) &\necho \"$!\" > subshell-job.pid\n",
+    "loopbackServerSource": "import http.server\nimport json\nimport pathlib\n\nclass Handler(http.server.BaseHTTPRequestHandler):\n    def do_GET(self):\n        self.send_response(200)\n        self.end_headers()\n        self.wfile.write(b'owned-task27-fixture')\n    def log_message(self, *args):\n        pass\n\nserver = http.server.HTTPServer(('127.0.0.1', 0), Handler)\npathlib.Path('port.json').write_text(json.dumps({'host': '127.0.0.1', 'port': server.server_address[1]}))\nserver.serve_forever()",
+    "siblingCommand": [
+      "/usr/bin/sleep",
+      "12"
+    ],
+    "signalHandlersInstalled": false
+  },
+  "reproduction": [
+    "Create private HOME/workspace/tmp/config/cache/data/state/agent directories and the two fixture files recorded here.",
+    "Run the recorded Node invocation from $PRIVATE/workspace with only the recorded environment keys. Resolve Express/ws from the assembled terminal owner; import its createTerminalRuntime and v3 framing helpers.",
+    "Register the unchanged terminal runtime on real Express/node:http; use system-only PATH helpers and exact loopback-origin check. Omit loadPtyProvider, termination grace and shutdown overrides. Bind server.listen(0, 127.0.0.1).",
+    "POST the recorded createRequest to /api/terminal/create, start the independent sleep 12 sibling, attach via /api/terminal/ws, and write the recorded shell command in a v3 binary write frame.",
+    "Read only owned fixture PID/port files and Linux /proc/PID/stat; verify recorded ancestry and all initial live births, sibling separation and accepting loopback port.",
+    "DELETE /api/terminal/task27-owned-tab exactly once. Observe known births and TCP port at the recorded actual timing offsets before cleanup.",
+    "Persist tab-close result before cleanup. If needed signal only still-live PID/start-tick-matching owned fixtures, never sibling or process groups; then wait for unrelated sibling natural exit. Do not call runtime.shutdown or shutdownTerminalProcesses."
+  ],
+  "interpretation": "The single exercised ordinary interactive bash background/subshell tree passed actual Host per-tab close: all five original process births were absent and port refused by the first 5.079 ms post-delete observation; the unrelated sibling remained alive. This is bounded owner-specific evidence, not full application/M0 acceptance or proof for unexercised signal-resistant/daemonized workloads."
+}

@@ -1,0 +1,164 @@
+{
+  "schemaVersion": 1,
+  "task": "omp-through-m3/25",
+  "observedAt": "2026-10-12",
+  "status": "observed-with-required-gaps",
+  "m0Accepted": false,
+  "inputs": {
+    "sourceRevision": "c9de2b02b997f37cc89639282ed35dec86f139e8",
+    "artifactSetSha256": "d4652edea9d0b09c76c793a2ef54efb0331a89b770def0cc42b9ae849d31da34",
+    "consumerLockSha256": "03981eeabb92a06eb59ebbacd0139abe92ce00854b396e461daf9c70f9df6847",
+    "bunVersion": "1.4.2",
+    "packageInputs": "task24 immutable installed package closure; frozen install reused, no rebuild or registry substitute"
+  },
+  "invocation": {
+    "command": "bun run task25-public-factory-probe.ts",
+    "cwd": "/tmp/ohpi-m0-evidence-consumer",
+    "timeoutSeconds": 180,
+    "platform": "linux-x64",
+    "bunVersion": "1.4.2",
+    "exitCode": 0,
+    "stdoutBytes": 0,
+    "stderrBytes": 0,
+    "environment": "private HOME, PI_CODING_AGENT_DIR, workspace, TMPDIR and XDG roots; minimal PATH; loopback server bound only to 127.0.0.1 on an ephemeral port",
+    "runtimeImports": "installed package exports only; no source-workspace import, session.agent.streamFn replacement, CLI/RPC substitute, or internal monkey-patch",
+    "applicationOrDependencyChanges": false
+  },
+  "apiOwners": [
+    {
+      "api": "@oh-my-pi/pi-coding-agent#createAgentSession",
+      "status": "observed",
+      "use": "Two sessions created against synthetic local OpenAI-compatible and Anthropic-compatible models; both used the same caller-owned ModelRegistry/AuthStorage lifecycle."
+    },
+    {
+      "api": "AuthStorage.create and credentials.set/remove/reload/generation/close",
+      "status": "observed",
+      "use": "Owned SQLite store; API-key records were persisted, rotated, removed, cold-reopened after explicit credentials.reload(), and closed."
+    },
+    {
+      "api": "ModelRegistry.registerProvider and getApiKeyForProvider",
+      "status": "observed",
+      "use": "Supported transport-only provider registrations plus live stored-key resolution; no provider config key was installed, so AuthStorage remained the request credential owner. Removal resolved no key before transport."
+    },
+    {
+      "api": "@oh-my-pi/pi-catalog/build#buildModel",
+      "status": "observed",
+      "use": "Built synthetic public Model values for the registered transports without mutating registry internals."
+    },
+    {
+      "api": "discoverSkills, AgentSession.skills, buildSkillPromptMessage, SKILL_PROMPT_MESSAGE_TYPE, AgentSession.promptCustomMessage",
+      "status": "observed",
+      "use": "Full factory discovered the owned .agents/skills fixture, included its description in the provider system prompt, advertised read, and delivered public-builder output through a user-attributed skill message."
+    },
+    {
+      "api": "AgentSession.getEnabledToolNames, subscribe, prompt, waitForIdle, dispose",
+      "status": "observed",
+      "use": "Recorded factory tool lifecycle events and prompt admission/idle/disposal without retaining raw arguments, provider payloads, or tool results."
+    },
+    {
+      "api": "Factory-registered built-in read/write/bash tools",
+      "status": "observed",
+      "use": "Actual provider tool calls went through the full factory and its tool/approval wrappers; no custom echo tools were used."
+    }
+  ],
+  "authAndProtocols": {
+    "syntheticHostShapeTranslation": {
+      "inputType": "api",
+      "pinnedSdkType": "api_key",
+      "translatedWrites": 3,
+      "status": "observed",
+      "limit": "Synthetic field mapping only; this is not the application's Host credential API or a real credential handoff."
+    },
+    "authStorageGeneration": {
+      "initial": 1,
+      "afterTwoInitialSets": 3,
+      "afterRotation": 4,
+      "afterRemoval": 5,
+      "notifications": [2, 3, 4, 5]
+    },
+    "openAiCompatible": {
+      "initialTurn": { "requests": 4, "storedCredentialMatched": true, "status": "controlled-turn-completed" },
+      "sameRegistryRotation": { "requests": 1, "rotatedStoredCredentialMatched": true, "status": "observed" },
+      "remove": {
+        "registryResolvedNoCredential": true,
+        "requestsAfterRemoval": 0,
+        "promptAdmitted": false,
+        "status": "credential-removed; transport-not-entered"
+      },
+      "coldReopenAfterRotation": "api-key-present",
+      "coldReopenAfterRemoval": "removed"
+    },
+    "anthropicCompatible": {
+      "requests": 1,
+      "storedCredentialMatched": true,
+      "observedAuthHeaderKind": "bearer",
+      "status": "controlled-turn-completed",
+      "limit": "The fixture was a non-official loopback endpoint; this does not establish official upstream header policy or external provider auth."
+    },
+    "secretHandling": "Synthetic keys were compared only in process; no key, secret file, raw request/response, prompt text, real endpoint, or real model was written to output."
+  },
+  "skills": {
+    "discoveryFromAgentsSkills": true,
+    "fullFactorySystemPromptContainsSkillDescription": true,
+    "readToolAdvertised": true,
+    "publicSkillBuilderMessageDelivered": true,
+    "providerRequestContainsSyntheticSkillBody": true,
+    "promptIdleStatus": "completed",
+    "limit": "No CLI slash-command behavior, user Composer handling, or Host installation path was tested."
+  },
+  "permissions": {
+    "settings": { "approvalMode": "write", "hasUI": false, "autoApprove": false, "agentRetryEnabled": false },
+    "read": {
+      "factoryToolStartAndEndObserved": true,
+      "toolResultIsError": false,
+      "fixtureContentReturned": true,
+      "effectiveRepresentativeTier": "read"
+    },
+    "write": {
+      "factoryToolStartAndEndObserved": true,
+      "toolResultIsError": false,
+      "ownedWorkspaceFileMatchesSyntheticContent": true,
+      "effectiveRepresentativeTier": "write"
+    },
+    "exec": {
+      "factoryToolStartAndEndObserved": true,
+      "toolResultIsError": true,
+      "noUiApprovalRefusalVisible": true,
+      "syntheticCommandSideEffectPresent": false,
+      "effectiveRepresentativeTier": "exec",
+      "status": "refused-without-UI"
+    },
+    "limit": "No interactive approval was answered; Host Gatekeeper interception, service CAS, stale request rejection, restart expiry, and question UI were not tested."
+  },
+  "probeSetupCorrections": [
+    {
+      "status": "corrected-before-observation",
+      "detail": "An early custom-model registerProvider attempt failed source-backed runtime-registration validation because custom model definitions require a configured apiKey or OAuth registration. The final probe registered only baseUrl/api and built the synthetic models through public buildModel, leaving stored AuthStorage keys authoritative."
+    },
+    {
+      "status": "corrected-fixture-envelope",
+      "detail": "An early Anthropic fixture omitted SSE event-type frames and used the OpenAI [DONE] terminator; it produced seven authenticated loopback requests without a completed turn. The final protocol-conforming event stream completed with one authenticated request. This was a disposable fixture defect, not a provider-capability pass/fail."
+    }
+  ],
+  "unexercised": {
+    "approvedRealProviderEnvironment": "not inspected or used; availability remains unknown",
+    "externalOpenAiOrAnthropicAuthentication": "not exercised",
+    "oauthRefreshScopesAndAccountSelection": "not exercised",
+    "onlineModelDiscovery": "not exercised",
+    "interactiveUiApproval": "not exercised",
+    "serviceCasAndHostAuthorization": "not exercised"
+  },
+  "cleanup": {
+    "sessionsDisposed": 2,
+    "authStorageAndColdReopenStoresClosed": true,
+    "loopbackServerStopped": true,
+    "privateRuntimeHomeAgentWorkspaceAndXdgStateRemoved": true,
+    "temporaryProbeAndSanitizedRunnerOutputRemovedAfterEvidenceCapture": true,
+    "packageInputsChanged": false
+  },
+  "limits": [
+    "The controlled local protocol proves the installed SDK can use a stored api_key, react to rotation/removal, and cold-reopen SQLite for this fixture; it does not prove a real upstream credential import or provider availability.",
+    "Anthropic's observed Bearer header belongs to the custom loopback endpoint and is not evidence for official Anthropic authentication, OAuth, refresh, or scope behavior.",
+    "This task is one installed public-factory slice only; task 26/27 evidence and the authoritative M0 gate review remain separate. Gate 03 remains blocked until every original M0 requirement has observed evidence or an explicit maintainer decision."
+  ]
+}

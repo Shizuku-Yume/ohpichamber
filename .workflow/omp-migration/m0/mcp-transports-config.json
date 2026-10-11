@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "task": "omp-through-m3/26",
+  "probeDate": "2026-10-12",
+  "status": "observed",
+  "m0Accepted": false,
+  "runtime": {
+    "platform": "linux-x64",
+    "bunVersion": "1.4.2",
+    "consumer": "/tmp/ohpi-m0-evidence-consumer",
+    "command": "bun run ./mcp-transports-probe.ts",
+    "commandTimeoutSeconds": 120,
+    "exitCode": 0,
+    "stderr": "empty",
+    "environment": "private HOME, OMP_AGENT_DIR, XDG_CONFIG_HOME and TMPDIR under /tmp; minimal PATH; no inherited secrets/endpoints/models",
+    "probeSource": "disposable private /tmp source; no application or permanent probe files"
+  },
+  "inputs": {
+    "pinnedSourceRevision": "c9de2b02b997f37cc89639282ed35dec86f139e8",
+    "installedPackage": "@oh-my-pi/pi-coding-agent@18.8.9",
+    "codingAgentTarballSha256": "dde740cca56c27cec0c946d3c67beb50d253c034965c063b5d0f4eea58555c6d",
+    "artifactSetSha256": "d4652edea9d0b09c76c793a2ef54efb0331a89b770def0cc42b9ae849d31da34",
+    "consumerLockSha256": "03981eeabb92a06eb59ebbacd0139abe92ce00854b396e461daf9c70f9df6847",
+    "reuse": "Prepared task-24 installed consumer and retained frozen lock used as-is; no install, rebuild, revision acquisition or source-workspace import. During diagnostics, one uniquely named scratch probe file was briefly written under installed package source then removed; this read-only deviation is recorded below. Retained artifact inputs were not modified."
+  },
+  "installedOwners": {
+    "publicSubpath": "@oh-my-pi/pi-coding-agent/mcp",
+    "exportMap": "package.json exports ./mcp -> src/mcp/index.ts",
+    "indexExports": "MCP manager, config, client, HTTP/SSE transports and MCP types",
+    "symbolsUsed": [
+      "MCPManager",
+      "callTool",
+      "MCPServerConfig",
+      "MCPAuthChallenge"
+    ],
+    "supportingPublicOwners": [
+      "loadAllMCPConfigs",
+      "HttpTransport",
+      "LegacySseTransport"
+    ],
+    "implementationEvidence": [
+      "src/mcp/manager.ts: MCPManager, discoverAndConnect, connectServers, disconnectServer, disconnectAll, reconnectServer, refreshServerTools",
+      "src/mcp/client.ts: connectToServer and callTool",
+      "src/mcp/transports/http.ts: Streamable HTTP, 401/403 auth-error hook, SSE listener and close lifecycle",
+      "src/mcp/transports/sse.ts: legacy SSE connection and POST message channel",
+      "src/mcp/config.ts: loadAllMCPConfigs and configuration conversion",
+      "src/mcp/types.ts: MCPConfigFile, MCPServerConfig, enabled flag and MCPAuthChallenge",
+      "package.json ./mcp export and src/mcp/index.ts re-export map"
+    ],
+    "invocation": "new MCPManager(cwd, null, fixtureConfigLoader), then discoverAndConnect, getTools/getConnection, callTool, refreshServerTools, disconnectServer, connectServers, reconnectServer, and disconnectAll",
+    "configLoaderBoundary": "The injected fixture loader reads the owned temporary .mcp.json and maps enabled entries to manager configs. This isolates the tested installed manager/transport owner from ambient source discovery; default loadAllMCPConfigs discovery was inspected but not invoked as the fixture loader."
+  },
+  "fixture": {
+    "listener": "one Bun.serve listener bound only to 127.0.0.1 on an ephemeral port",
+    "endpoints": [
+      "Streamable HTTP JSON-RPC at /mcp",
+      "Legacy SSE event stream at /sse with JSON-RPC POST endpoint /message"
+    ],
+    "remoteConnections": false,
+    "requestCounts": {
+      "http": 20,
+      "sse": 8
+    },
+    "toolCalls": {
+      "http": 3,
+      "sse": 2
+    },
+    "transportConnections": {
+      "http": 5,
+      "sse": 2
+    },
+    "toolCatalog": {
+      "bothTransportsDiscoveredFixtureEcho": true,
+      "initialCallsSucceeded": true,
+      "schemaChangedFromOneToTwo": true,
+      "managerRefreshServerToolsCalled": true,
+      "updatedSchemaObservedInManagerCatalog": true,
+      "notificationWasSent": false
+    }
+  },
+  "configuration": {
+    "file": "<private-loopback-workspace>/.mcp.json",
+    "persistence": "The probe wrote the changed enabled/config and fixture auth values to the private file; the file remained distinct from applying manager state.",
+    "fileWatcher": "not observed; no automatic file-triggered apply",
+    "disable": {
+      "enabledFalsePersisted": true,
+      "fixtureLoaderExcludedEntry": true,
+      "toolsBeforeExplicitDisconnect": 1,
+      "toolsAfterExplicitDisconnect": 0
+    },
+    "reenableAndApply": {
+      "enabledEntryLoaded": true,
+      "explicitManagerConnectServersErrors": 0,
+      "httpToolCountAfterApply": 1
+    },
+    "failedReconfiguration": {
+      "validCatalogCountBeforeDisconnect": 1,
+      "explicitDisconnectRequiredBeforeConnectServersReplacement": true,
+      "failedLoopbackConnectionErrorCount": 1,
+      "catalogCountAfterFailedApply": 0,
+      "catalogLost": true,
+      "lossAttribution": "disconnectServer removed the prior catalog before the failing connectServers attempt; the SDK fixture does not provide a last-good transaction or service-level rollback.",
+      "restoredConfigErrorCount": 0,
+      "restoredCatalogCount": 1
+    }
+  },
+  "auth": {
+    "challenge": "A controlled local HTTP POST returned 401 with WWW-Authenticate; the first tool call surfaced MCPTransportError.",
+    "recovery": "The fixture explicitly called reconnectServer with manual=true and an MCPAuthChallenge; the installed MCPManager auth handler returned a changed config with a fake local bearer value; the replacement connection and following call succeeded.",
+    "automaticOAuthRefresh": "not exercised: no AuthStorage/managed OAuth credential was configured",
+    "remoteIdPConsentRefreshScopesProviderAuth": "unresolved; local challenge is not remote OAuth evidence",
+    "secretHandling": "Fake authorization values existed only in the owned temporary config/server process and were omitted from output; no real token or credential was used."
+  },
+  "recovery": {
+    "automatic": {
+      "interruption": "Called close() on the connected installed HTTP transport; this invoked its manager onClose path without calling reconnectServer directly.",
+      "activeServerSseStreamsAtInterruption": 0,
+      "managerReconnectionStatusObserved": true,
+      "newConnectionObserved": true,
+      "followupToolCallSucceeded": true
+    },
+    "explicit": {
+      "call": "reconnectServer('fixture-sse', { manual: true })",
+      "newConnectionObserved": true,
+      "followupToolCallSucceeded": true
+    },
+    "distinction": "Automatic manager callback recovery and explicit manual reconnect were each invoked and observed separately. The HTTP transport was logically connected, but no server-side HTTP SSE GET stream was active at the interruption; an abrupt network-level outage was not simulated."
+  },
+  "cleanup": {
+    "managerDisconnectAllCalled": true,
+    "managerConnectionsAfterClose": 0,
+    "httpAndSseFixtureStreamsAfterClose": 0,
+    "loopbackListenerStopped": true,
+    "childProcessesSpawned": 0,
+    "commandExitCode": 0,
+    "probeLogs": "The successful probe emitted only sanitized JSON summary and phase markers; stderr was empty. No raw request/response, prompt, user file, secret, real endpoint, model or user path appeared in successful probe output.",
+    "installedPackageScratchDeviation": "One uniquely named temporary resolution probe was written into installed coding-agent package source during diagnostics, then removed before the final probe and cleanup. It is absent now; task-24 retained artifact inputs were not edited. The package payload was not strictly read-only throughout diagnostics."
+  },
+  "limits": [
+    "One loopback-only configuration/transport prototype; the installed consumer and retained immutable task-24 artifacts were reused without rebuilding or revision drift.",
+    "The temporary .mcp.json was read by a fixture-supplied config loader. This demonstrates the installed manager's config application/recovery behavior, not the default discovery provider's path precedence or a native file watcher.",
+    "The schema mutation was applied with explicit MCPManager.refreshServerTools; no tools/list_changed notification was sent and no file watcher behavior is claimed.",
+    "The HTTP interruption exercised the installed transport close/onClose reconnection path, not a network-level socket outage; zero server-side HTTP SSE GET streams were active at the time.",
+    "Failure followed explicit disconnectServer, so observed catalog loss is not evidence that a transactional apply overwrote a prior valid catalog. The service-owned transaction/rollback contract remains unimplemented/unproved here.",
+    "The local auth challenge validates only explicit SDK auth-handler/reconnect plumbing. Remote OAuth, IdP interaction, stored credentials, refresh tokens, scopes, provider-specific authentication and platform variation remain unresolved.",
+    "No application/service implementation, M0/M1 acceptance, or gate-03 passage is claimed."
+  ]
+}

@@ -35,6 +35,8 @@ Before exporting types, reconcile draft contradictions and unsupported assumptio
 
 Task 19 measured isolated default/XDG AuthStorage paths separately from explicit agent-directory override; task 24 established the source-derived installed identity. Neither proves stored-credential conversion or model discovery. Task 02's [evidence boundaries](../omp-migration/implementation-plan.md#evidence-boundaries-for-gate-03) identify remaining original M0 requirements for task 03 to judge.
 
+Tasks 25, 26 and 27 fill reachable original M0 gaps before gate 03: installed public-factory/auth/skills/permission paths, MCP configuration/transports, and actual Host PTY tab close. They reuse task 24's immutable package inputs and unchanged earlier evidence. Each investigation records its actual failures and limits; archiving an investigation does not accept the capability or release M1. External provider/OAuth and non-Linux requirements remain for the gate review and any necessary maintainer decision.
+
 A failed resource target remains failed until a measured design change or explicit maintainer decision addresses it. The maintainer accepted the measured Linux fixture worker RSS as a known M0 limitation in `decisions.md: 2026-10-11 - Accept measured worker memory as an M0 limitation`; the original 100 MiB probe remains failed and actual service resources still require M2 evidence. Other unavailable platform/provider behavior retains its actual status. Do not close M0 by renaming missing required evidence as a later task.
 
 ### M1 host boundary
@@ -69,7 +71,7 @@ After dependent callers move, remove the old UI client, translators, runtime sel
 
 Each implementation task owns an isolated worktree and one bounded set of files. The coordinator owns shared package manifests, lockfile, gateway composition, shared protocol changes and integration. Read-only sessions may share a tree.
 
-Implementation advances through gates 03 (M0), 21 (M1 extraction/preflight), 23 (M2 real service/server consumers/credential handoff), then 18 (M3). Tasks 01/19 are independent investigations; task 24 resolves source-install identity before task 02. M1 extension retirement can run independently of extraction; metadata and health/preflight follow extraction, without premature SDK import. M2 interaction/queue/catalogs follow projection; task 22 then performs server migration and actual handoff before gate 23. M3 caller slices follow core client/composer; task 17 activates and retires obsolete owners. No stage advances past an unmet gate; coordinator resolves shared-contract changes before dependent slices land.
+Implementation advances through gates 03 (M0), 21 (M1 extraction/preflight), 23 (M2 real service/server consumers/credential handoff), then 18 (M3). Tasks 01/19 are independent investigations; task 24 resolves source-install identity before task 02; independent evidence tasks 25/26/27 follow 02 before gate 03. M1 extension retirement can run independently of extraction; metadata and health/preflight follow extraction, without premature SDK import. M2 interaction/queue/catalogs follow projection; task 22 then performs server migration and actual handoff before gate 23. M3 caller slices follow core client/composer; task 17 activates and retires obsolete owners. No stage advances past an unmet gate; coordinator resolves shared-contract changes before dependent slices land.
 
 The maintainer has authorized all future local Git operations for this repository and the necessary OMP SDK dependencies. GitHub commands and pushing remain outside this request. Pre-existing worktree changes remain separate until their ownership/landing is settled.
 
@@ -125,7 +127,7 @@ Tasks are under `../tasks/omp-through-m3/`. This effort is complete only when it
 
 Execution order and gate tasks:
 
-1. M0: 01 and 19; 24 follows 19; then 02 and gate 03.
+1. M0: 01 and 19; 24 follows 19; then 02; independent evidence tasks 25, 26 and 27; gate 03.
 2. M1: 04 and 06; 05 and 20 follow 04; gate 21 follows all M1 work.
 3. M2: 07, 08, 09; 10, 11 and 12 follow 09; server consumers 22, then gate 23.
 4. M3: 13, 14; independent caller slices 15 and 16; coordinated runtime cutover 17, then acceptance gate 18.

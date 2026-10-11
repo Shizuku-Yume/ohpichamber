@@ -4,7 +4,7 @@
 **Task type:** feature
 **Base commit:** <commit-sha>
 
-**Delivers:** A Bun Agent Service supervisor starts, health-checks, stops and restarts dedicated per-session/workspace SDK workers with authenticated loopback transport and cleanup of owned children.
+**Delivers:** A Bun Agent Service supervisor starts, health-checks, stops and restarts one dedicated SDK worker per active root session with authenticated private transport and cleanup of owned children.
 
 **Blocked by:** 07
 **Files:** `packages/agent-service/`, `packages/web/server/lib/host/agent-service-supervisor.js`, service tests and package documentation
@@ -16,7 +16,7 @@
 
 - [ ] Keep SDK imports and SDK registry/session objects inside worker processes.
 - [ ] Install the source-derived SDK closure verified by task 24 through reproducible package inputs. Preserve first-party artifact/hash bindings and required third-party/native resolutions; do not select divergent registry packages merely because their version matches. Runtime SDK imports must resolve inside the service installation, not an operator's external source checkout.
-- [ ] Allocate one worker identity per active session/workspace scope and preserve process cwd/env isolation.
+- [ ] Allocate one worker identity per active root session, including its subagents. Independent roots in the same workspace remain separate workers with process cwd/env isolation, as required by ADR-03.
 - [ ] Use loopback or Unix-socket binding only, internal secret injection, bounded startup/stop timeouts and orphan cleanup.
 - [ ] Make health reflect worker/service readiness rather than a process PID alone.
 - [ ] Record measured RSS and restart evidence against the resource decision accepted at task 03. Any unmet accepted target keeps the gate open.

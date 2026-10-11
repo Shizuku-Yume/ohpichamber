@@ -1,0 +1,582 @@
+{
+  "schemaVersion": 1,
+  "task": "omp-through-m3/19",
+  "observedAt": "2026-10-11T13:51:31.505737Z",
+  "status": "observed",
+  "platform": "linux-x64",
+  "runtime": {
+    "bun": "1.4.2"
+  },
+  "identityLimitation": "Source and published scopes differ. These bounded path/create/close observations apply only to the recorded imports and bytes, not to other prior SDK capabilities.",
+  "importedSourceHashes": [
+    {
+      "package": "@oh-my-pi/pi-utils",
+      "path": "src/dirs.ts",
+      "pinnedSha256": "2fcd846203851bbc3e52a63c93a7d6cb87e8d1e1111fcd7dec55faf41d5dbb24",
+      "publishedSha256": "2fcd846203851bbc3e52a63c93a7d6cb87e8d1e1111fcd7dec55faf41d5dbb24",
+      "identical": true
+    },
+    {
+      "package": "@oh-my-pi/pi-ai",
+      "path": "src/auth-storage.ts",
+      "pinnedSha256": "27986da8f969de630399597f9b219ca47e231b0ee137fcf0c03aab3193730419",
+      "publishedSha256": "c1b26182b131b836962fc47889dff024c8dba080c5115d1d6d910be1cbc06203",
+      "identical": false
+    },
+    {
+      "package": "@oh-my-pi/pi-ai",
+      "path": "src/auth/sqlite-credential-store.ts",
+      "pinnedSha256": "a3829a270fd05965078986913682cf7d454121046bbcfcea4ce2d251a8b554e6",
+      "publishedSha256": "ec5034df660fc235839b503e5d57a8b1338a72accdedacdef6778ab0f97b732b",
+      "identical": false
+    }
+  ],
+  "cases": [
+    {
+      "kind": "source",
+      "caseName": "default",
+      "noArgumentPathLabel": "<HOME>/.omp/agent/agent.db",
+      "selectedPathLabel": "<HOME>/.omp/agent/agent.db",
+      "agentDirLabel": "<HOME>/.omp/agent",
+      "databaseExistedBefore": false,
+      "createReturned": true,
+      "closeReturned": true,
+      "databaseIsRegularFile": true,
+      "databaseOwnerMatchesProcess": true,
+      "databaseMode": "600",
+      "databaseSizeBytes": 114688,
+      "sqliteHeaderMatched": true,
+      "nativeAddons": [
+        {
+          "pathLabel": "<OMP_SOURCE>/packages/natives/native/pi_natives.linux-x64-modern.node",
+          "sha256": "33710d1ac6830e068fb46db335e6e2f2e6175a343b267506cd8a31d72d52e059"
+        }
+      ],
+      "createdFiles": [
+        "<HOME>/.omp/agent/agent.db"
+      ],
+      "exitCode": 0,
+      "bunCacheFileCount": 153
+    },
+    {
+      "kind": "source",
+      "caseName": "xdg-uninitialized",
+      "noArgumentPathLabel": "<HOME>/.omp/agent/agent.db",
+      "selectedPathLabel": "<HOME>/.omp/agent/agent.db",
+      "agentDirLabel": "<HOME>/.omp/agent",
+      "databaseExistedBefore": false,
+      "createReturned": true,
+      "closeReturned": true,
+      "databaseIsRegularFile": true,
+      "databaseOwnerMatchesProcess": true,
+      "databaseMode": "600",
+      "databaseSizeBytes": 114688,
+      "sqliteHeaderMatched": true,
+      "nativeAddons": [
+        {
+          "pathLabel": "<OMP_SOURCE>/packages/natives/native/pi_natives.linux-x64-modern.node",
+          "sha256": "33710d1ac6830e068fb46db335e6e2f2e6175a343b267506cd8a31d72d52e059"
+        }
+      ],
+      "createdFiles": [
+        "<HOME>/.omp/agent/agent.db"
+      ],
+      "exitCode": 0,
+      "bunCacheFileCount": 153
+    },
+    {
+      "kind": "source",
+      "caseName": "xdg-initialized",
+      "noArgumentPathLabel": "<XDG_DATA_HOME>/omp/agent.db",
+      "selectedPathLabel": "<XDG_DATA_HOME>/omp/agent.db",
+      "agentDirLabel": "<HOME>/.omp/agent",
+      "databaseExistedBefore": false,
+      "createReturned": true,
+      "closeReturned": true,
+      "databaseIsRegularFile": true,
+      "databaseOwnerMatchesProcess": true,
+      "databaseMode": "600",
+      "databaseSizeBytes": 114688,
+      "sqliteHeaderMatched": true,
+      "nativeAddons": [
+        {
+          "pathLabel": "<OMP_SOURCE>/packages/natives/native/pi_natives.linux-x64-modern.node",
+          "sha256": "33710d1ac6830e068fb46db335e6e2f2e6175a343b267506cd8a31d72d52e059"
+        }
+      ],
+      "createdFiles": [
+        "<XDG_DATA_HOME>/omp/agent.db"
+      ],
+      "exitCode": 0,
+      "bunCacheFileCount": 153
+    },
+    {
+      "kind": "source",
+      "caseName": "environment-override",
+      "noArgumentPathLabel": "<AGENT_OVERRIDE>/agent.db",
+      "selectedPathLabel": "<AGENT_OVERRIDE>/agent.db",
+      "agentDirLabel": "<AGENT_OVERRIDE>",
+      "databaseExistedBefore": false,
+      "createReturned": true,
+      "closeReturned": true,
+      "databaseIsRegularFile": true,
+      "databaseOwnerMatchesProcess": true,
+      "databaseMode": "600",
+      "databaseSizeBytes": 114688,
+      "sqliteHeaderMatched": true,
+      "nativeAddons": [
+        {
+          "pathLabel": "<OMP_SOURCE>/packages/natives/native/pi_natives.linux-x64-modern.node",
+          "sha256": "33710d1ac6830e068fb46db335e6e2f2e6175a343b267506cd8a31d72d52e059"
+        }
+      ],
+      "createdFiles": [
+        "<AGENT_OVERRIDE>/agent.db"
+      ],
+      "exitCode": 0,
+      "bunCacheFileCount": 153
+    },
+    {
+      "kind": "source",
+      "caseName": "argument-override",
+      "noArgumentPathLabel": "<XDG_DATA_HOME>/omp/agent.db",
+      "selectedPathLabel": "<ARG_OVERRIDE>/agent.db",
+      "agentDirLabel": "<HOME>/.omp/agent",
+      "databaseExistedBefore": false,
+      "createReturned": true,
+      "closeReturned": true,
+      "databaseIsRegularFile": true,
+      "databaseOwnerMatchesProcess": true,
+      "databaseMode": "600",
+      "databaseSizeBytes": 114688,
+      "sqliteHeaderMatched": true,
+      "nativeAddons": [
+        {
+          "pathLabel": "<OMP_SOURCE>/packages/natives/native/pi_natives.linux-x64-modern.node",
+          "sha256": "33710d1ac6830e068fb46db335e6e2f2e6175a343b267506cd8a31d72d52e059"
+        }
+      ],
+      "createdFiles": [
+        "<ARG_OVERRIDE>/agent.db"
+      ],
+      "exitCode": 0,
+      "bunCacheFileCount": 153
+    },
+    {
+      "kind": "published",
+      "caseName": "default",
+      "noArgumentPathLabel": "<HOME>/.omp/agent/agent.db",
+      "selectedPathLabel": "<HOME>/.omp/agent/agent.db",
+      "agentDirLabel": "<HOME>/.omp/agent",
+      "databaseExistedBefore": false,
+      "createReturned": true,
+      "closeReturned": true,
+      "databaseIsRegularFile": true,
+      "databaseOwnerMatchesProcess": true,
+      "databaseMode": "600",
+      "databaseSizeBytes": 114688,
+      "sqliteHeaderMatched": true,
+      "nativeAddons": [
+        {
+          "pathLabel": "<PUBLISHED_MODULES>/@oh-my-pi/pi-natives-linux-x64/pi_natives.linux-x64-modern.node",
+          "sha256": "33710d1ac6830e068fb46db335e6e2f2e6175a343b267506cd8a31d72d52e059"
+        }
+      ],
+      "createdFiles": [
+        "<HOME>/.omp/agent/agent.db"
+      ],
+      "exitCode": 0,
+      "bunCacheFileCount": 153
+    },
+    {
+      "kind": "published",
+      "caseName": "xdg-uninitialized",
+      "noArgumentPathLabel": "<HOME>/.omp/agent/agent.db",
+      "selectedPathLabel": "<HOME>/.omp/agent/agent.db",
+      "agentDirLabel": "<HOME>/.omp/agent",
+      "databaseExistedBefore": false,
+      "createReturned": true,
+      "closeReturned": true,
+      "databaseIsRegularFile": true,
+      "databaseOwnerMatchesProcess": true,
+      "databaseMode": "600",
+      "databaseSizeBytes": 114688,
+      "sqliteHeaderMatched": true,
+      "nativeAddons": [
+        {
+          "pathLabel": "<PUBLISHED_MODULES>/@oh-my-pi/pi-natives-linux-x64/pi_natives.linux-x64-modern.node",
+          "sha256": "33710d1ac6830e068fb46db335e6e2f2e6175a343b267506cd8a31d72d52e059"
+        }
+      ],
+      "createdFiles": [
+        "<HOME>/.omp/agent/agent.db"
+      ],
+      "exitCode": 0,
+      "bunCacheFileCount": 153
+    },
+    {
+      "kind": "published",
+      "caseName": "xdg-initialized",
+      "noArgumentPathLabel": "<XDG_DATA_HOME>/omp/agent.db",
+      "selectedPathLabel": "<XDG_DATA_HOME>/omp/agent.db",
+      "agentDirLabel": "<HOME>/.omp/agent",
+      "databaseExistedBefore": false,
+      "createReturned": true,
+      "closeReturned": true,
+      "databaseIsRegularFile": true,
+      "databaseOwnerMatchesProcess": true,
+      "databaseMode": "600",
+      "databaseSizeBytes": 114688,
+      "sqliteHeaderMatched": true,
+      "nativeAddons": [
+        {
+          "pathLabel": "<PUBLISHED_MODULES>/@oh-my-pi/pi-natives-linux-x64/pi_natives.linux-x64-modern.node",
+          "sha256": "33710d1ac6830e068fb46db335e6e2f2e6175a343b267506cd8a31d72d52e059"
+        }
+      ],
+      "createdFiles": [
+        "<XDG_DATA_HOME>/omp/agent.db"
+      ],
+      "exitCode": 0,
+      "bunCacheFileCount": 153
+    },
+    {
+      "kind": "published",
+      "caseName": "environment-override",
+      "noArgumentPathLabel": "<AGENT_OVERRIDE>/agent.db",
+      "selectedPathLabel": "<AGENT_OVERRIDE>/agent.db",
+      "agentDirLabel": "<AGENT_OVERRIDE>",
+      "databaseExistedBefore": false,
+      "createReturned": true,
+      "closeReturned": true,
+      "databaseIsRegularFile": true,
+      "databaseOwnerMatchesProcess": true,
+      "databaseMode": "600",
+      "databaseSizeBytes": 114688,
+      "sqliteHeaderMatched": true,
+      "nativeAddons": [
+        {
+          "pathLabel": "<PUBLISHED_MODULES>/@oh-my-pi/pi-natives-linux-x64/pi_natives.linux-x64-modern.node",
+          "sha256": "33710d1ac6830e068fb46db335e6e2f2e6175a343b267506cd8a31d72d52e059"
+        }
+      ],
+      "createdFiles": [
+        "<AGENT_OVERRIDE>/agent.db"
+      ],
+      "exitCode": 0,
+      "bunCacheFileCount": 153
+    },
+    {
+      "kind": "published",
+      "caseName": "argument-override",
+      "noArgumentPathLabel": "<XDG_DATA_HOME>/omp/agent.db",
+      "selectedPathLabel": "<ARG_OVERRIDE>/agent.db",
+      "agentDirLabel": "<HOME>/.omp/agent",
+      "databaseExistedBefore": false,
+      "createReturned": true,
+      "closeReturned": true,
+      "databaseIsRegularFile": true,
+      "databaseOwnerMatchesProcess": true,
+      "databaseMode": "600",
+      "databaseSizeBytes": 114688,
+      "sqliteHeaderMatched": true,
+      "nativeAddons": [
+        {
+          "pathLabel": "<PUBLISHED_MODULES>/@oh-my-pi/pi-natives-linux-x64/pi_natives.linux-x64-modern.node",
+          "sha256": "33710d1ac6830e068fb46db335e6e2f2e6175a343b267506cd8a31d72d52e059"
+        }
+      ],
+      "createdFiles": [
+        "<ARG_OVERRIDE>/agent.db"
+      ],
+      "exitCode": 0,
+      "bunCacheFileCount": 153
+    }
+  ],
+  "interpretation": {
+    "default": "No-argument getAgentDbPath() resolves <HOME>/.omp/agent/agent.db.",
+    "xdgWithoutOmpDirectories": "Setting XDG_CONFIG_HOME/XDG_DATA_HOME/XDG_CACHE_HOME alone does not redirect the database; missing omp app directories leave the HOME default selected.",
+    "xdgWithOmpDirectories": "Pre-existing <XDG_DATA_HOME>/omp selects <XDG_DATA_HOME>/omp/agent.db. XDG_CONFIG_HOME does not select an auth path. XDG_CACHE_HOME contains observed Bun caches, not agent.db.",
+    "environmentOverride": "PI_CODING_AGENT_DIR overrides no-argument path even when initialized XDG app directories exist.",
+    "argumentOverride": "Separate getAgentDbPath(explicitDirectory) selects <ARG_OVERRIDE>/agent.db; no-argument path in that process still selects initialized XDG data.",
+    "authStorage": "create(selectedPath) and close() returned for ten fresh isolated cases. Each created a new regular SQLite agent.db with mode0600 and effective-user ownership; no credential read/write APIs were called."
+  },
+  "commands": [
+    {
+      "kind": "source",
+      "case": "default",
+      "envClear": true,
+      "environment": {
+        "PATH": "<INHERITED_PATH>",
+        "HOME": "<SCRATCH>/corrected-cases/source/default/home",
+        "TMPDIR": "<SCRATCH>/corrected-cases/source/default",
+        "PROBE_SANDBOX": "<SCRATCH>/corrected-cases/source/default",
+        "PROBE_SOURCE": "<OMP_SOURCE>",
+        "PROBE_PUBLISHED_MODULES": "<SCRATCH>/published/node_modules"
+      },
+      "argv": [
+        "<BUN>",
+        "<SCRATCH>/published/path-probe.mjs",
+        "source",
+        "default",
+        "<OMP_SOURCE>"
+      ],
+      "cwd": "<SCRATCH>/corrected-cases/source/default"
+    },
+    {
+      "kind": "source",
+      "case": "xdg-uninitialized",
+      "envClear": true,
+      "environment": {
+        "PATH": "<INHERITED_PATH>",
+        "HOME": "<SCRATCH>/corrected-cases/source/xdg-uninitialized/home",
+        "TMPDIR": "<SCRATCH>/corrected-cases/source/xdg-uninitialized",
+        "PROBE_SANDBOX": "<SCRATCH>/corrected-cases/source/xdg-uninitialized",
+        "PROBE_SOURCE": "<OMP_SOURCE>",
+        "PROBE_PUBLISHED_MODULES": "<SCRATCH>/published/node_modules",
+        "XDG_CONFIG_HOME": "<SCRATCH>/corrected-cases/source/xdg-uninitialized/xdg/config",
+        "XDG_DATA_HOME": "<SCRATCH>/corrected-cases/source/xdg-uninitialized/xdg/data",
+        "XDG_CACHE_HOME": "<SCRATCH>/corrected-cases/source/xdg-uninitialized/xdg/cache"
+      },
+      "argv": [
+        "<BUN>",
+        "<SCRATCH>/published/path-probe.mjs",
+        "source",
+        "xdg-uninitialized",
+        "<OMP_SOURCE>"
+      ],
+      "cwd": "<SCRATCH>/corrected-cases/source/xdg-uninitialized"
+    },
+    {
+      "kind": "source",
+      "case": "xdg-initialized",
+      "envClear": true,
+      "environment": {
+        "PATH": "<INHERITED_PATH>",
+        "HOME": "<SCRATCH>/corrected-cases/source/xdg-initialized/home",
+        "TMPDIR": "<SCRATCH>/corrected-cases/source/xdg-initialized",
+        "PROBE_SANDBOX": "<SCRATCH>/corrected-cases/source/xdg-initialized",
+        "PROBE_SOURCE": "<OMP_SOURCE>",
+        "PROBE_PUBLISHED_MODULES": "<SCRATCH>/published/node_modules",
+        "XDG_CONFIG_HOME": "<SCRATCH>/corrected-cases/source/xdg-initialized/xdg/config",
+        "XDG_DATA_HOME": "<SCRATCH>/corrected-cases/source/xdg-initialized/xdg/data",
+        "XDG_CACHE_HOME": "<SCRATCH>/corrected-cases/source/xdg-initialized/xdg/cache"
+      },
+      "argv": [
+        "<BUN>",
+        "<SCRATCH>/published/path-probe.mjs",
+        "source",
+        "xdg-initialized",
+        "<OMP_SOURCE>"
+      ],
+      "cwd": "<SCRATCH>/corrected-cases/source/xdg-initialized"
+    },
+    {
+      "kind": "source",
+      "case": "environment-override",
+      "envClear": true,
+      "environment": {
+        "PATH": "<INHERITED_PATH>",
+        "HOME": "<SCRATCH>/corrected-cases/source/environment-override/home",
+        "TMPDIR": "<SCRATCH>/corrected-cases/source/environment-override",
+        "PROBE_SANDBOX": "<SCRATCH>/corrected-cases/source/environment-override",
+        "PROBE_SOURCE": "<OMP_SOURCE>",
+        "PROBE_PUBLISHED_MODULES": "<SCRATCH>/published/node_modules",
+        "XDG_CONFIG_HOME": "<SCRATCH>/corrected-cases/source/environment-override/xdg/config",
+        "XDG_DATA_HOME": "<SCRATCH>/corrected-cases/source/environment-override/xdg/data",
+        "XDG_CACHE_HOME": "<SCRATCH>/corrected-cases/source/environment-override/xdg/cache",
+        "PI_CODING_AGENT_DIR": "<SCRATCH>/corrected-cases/source/environment-override/agent-override"
+      },
+      "argv": [
+        "<BUN>",
+        "<SCRATCH>/published/path-probe.mjs",
+        "source",
+        "environment-override",
+        "<OMP_SOURCE>"
+      ],
+      "cwd": "<SCRATCH>/corrected-cases/source/environment-override"
+    },
+    {
+      "kind": "source",
+      "case": "argument-override",
+      "envClear": true,
+      "environment": {
+        "PATH": "<INHERITED_PATH>",
+        "HOME": "<SCRATCH>/corrected-cases/source/argument-override/home",
+        "TMPDIR": "<SCRATCH>/corrected-cases/source/argument-override",
+        "PROBE_SANDBOX": "<SCRATCH>/corrected-cases/source/argument-override",
+        "PROBE_SOURCE": "<OMP_SOURCE>",
+        "PROBE_PUBLISHED_MODULES": "<SCRATCH>/published/node_modules",
+        "XDG_CONFIG_HOME": "<SCRATCH>/corrected-cases/source/argument-override/xdg/config",
+        "XDG_DATA_HOME": "<SCRATCH>/corrected-cases/source/argument-override/xdg/data",
+        "XDG_CACHE_HOME": "<SCRATCH>/corrected-cases/source/argument-override/xdg/cache",
+        "PROBE_ARGUMENT_OVERRIDE": "<SCRATCH>/corrected-cases/source/argument-override/argument-override"
+      },
+      "argv": [
+        "<BUN>",
+        "<SCRATCH>/published/path-probe.mjs",
+        "source",
+        "argument-override",
+        "<OMP_SOURCE>"
+      ],
+      "cwd": "<SCRATCH>/corrected-cases/source/argument-override"
+    },
+    {
+      "kind": "published",
+      "case": "default",
+      "envClear": true,
+      "environment": {
+        "PATH": "<INHERITED_PATH>",
+        "HOME": "<SCRATCH>/corrected-cases/published/default/home",
+        "TMPDIR": "<SCRATCH>/corrected-cases/published/default",
+        "PROBE_SANDBOX": "<SCRATCH>/corrected-cases/published/default",
+        "PROBE_SOURCE": "<OMP_SOURCE>",
+        "PROBE_PUBLISHED_MODULES": "<SCRATCH>/published/node_modules"
+      },
+      "argv": [
+        "<BUN>",
+        "<SCRATCH>/published/path-probe.mjs",
+        "published",
+        "default",
+        "<SCRATCH>/published"
+      ],
+      "cwd": "<SCRATCH>/corrected-cases/published/default"
+    },
+    {
+      "kind": "published",
+      "case": "xdg-uninitialized",
+      "envClear": true,
+      "environment": {
+        "PATH": "<INHERITED_PATH>",
+        "HOME": "<SCRATCH>/corrected-cases/published/xdg-uninitialized/home",
+        "TMPDIR": "<SCRATCH>/corrected-cases/published/xdg-uninitialized",
+        "PROBE_SANDBOX": "<SCRATCH>/corrected-cases/published/xdg-uninitialized",
+        "PROBE_SOURCE": "<OMP_SOURCE>",
+        "PROBE_PUBLISHED_MODULES": "<SCRATCH>/published/node_modules",
+        "XDG_CONFIG_HOME": "<SCRATCH>/corrected-cases/published/xdg-uninitialized/xdg/config",
+        "XDG_DATA_HOME": "<SCRATCH>/corrected-cases/published/xdg-uninitialized/xdg/data",
+        "XDG_CACHE_HOME": "<SCRATCH>/corrected-cases/published/xdg-uninitialized/xdg/cache"
+      },
+      "argv": [
+        "<BUN>",
+        "<SCRATCH>/published/path-probe.mjs",
+        "published",
+        "xdg-uninitialized",
+        "<SCRATCH>/published"
+      ],
+      "cwd": "<SCRATCH>/corrected-cases/published/xdg-uninitialized"
+    },
+    {
+      "kind": "published",
+      "case": "xdg-initialized",
+      "envClear": true,
+      "environment": {
+        "PATH": "<INHERITED_PATH>",
+        "HOME": "<SCRATCH>/corrected-cases/published/xdg-initialized/home",
+        "TMPDIR": "<SCRATCH>/corrected-cases/published/xdg-initialized",
+        "PROBE_SANDBOX": "<SCRATCH>/corrected-cases/published/xdg-initialized",
+        "PROBE_SOURCE": "<OMP_SOURCE>",
+        "PROBE_PUBLISHED_MODULES": "<SCRATCH>/published/node_modules",
+        "XDG_CONFIG_HOME": "<SCRATCH>/corrected-cases/published/xdg-initialized/xdg/config",
+        "XDG_DATA_HOME": "<SCRATCH>/corrected-cases/published/xdg-initialized/xdg/data",
+        "XDG_CACHE_HOME": "<SCRATCH>/corrected-cases/published/xdg-initialized/xdg/cache"
+      },
+      "argv": [
+        "<BUN>",
+        "<SCRATCH>/published/path-probe.mjs",
+        "published",
+        "xdg-initialized",
+        "<SCRATCH>/published"
+      ],
+      "cwd": "<SCRATCH>/corrected-cases/published/xdg-initialized"
+    },
+    {
+      "kind": "published",
+      "case": "environment-override",
+      "envClear": true,
+      "environment": {
+        "PATH": "<INHERITED_PATH>",
+        "HOME": "<SCRATCH>/corrected-cases/published/environment-override/home",
+        "TMPDIR": "<SCRATCH>/corrected-cases/published/environment-override",
+        "PROBE_SANDBOX": "<SCRATCH>/corrected-cases/published/environment-override",
+        "PROBE_SOURCE": "<OMP_SOURCE>",
+        "PROBE_PUBLISHED_MODULES": "<SCRATCH>/published/node_modules",
+        "XDG_CONFIG_HOME": "<SCRATCH>/corrected-cases/published/environment-override/xdg/config",
+        "XDG_DATA_HOME": "<SCRATCH>/corrected-cases/published/environment-override/xdg/data",
+        "XDG_CACHE_HOME": "<SCRATCH>/corrected-cases/published/environment-override/xdg/cache",
+        "PI_CODING_AGENT_DIR": "<SCRATCH>/corrected-cases/published/environment-override/agent-override"
+      },
+      "argv": [
+        "<BUN>",
+        "<SCRATCH>/published/path-probe.mjs",
+        "published",
+        "environment-override",
+        "<SCRATCH>/published"
+      ],
+      "cwd": "<SCRATCH>/corrected-cases/published/environment-override"
+    },
+    {
+      "kind": "published",
+      "case": "argument-override",
+      "envClear": true,
+      "environment": {
+        "PATH": "<INHERITED_PATH>",
+        "HOME": "<SCRATCH>/corrected-cases/published/argument-override/home",
+        "TMPDIR": "<SCRATCH>/corrected-cases/published/argument-override",
+        "PROBE_SANDBOX": "<SCRATCH>/corrected-cases/published/argument-override",
+        "PROBE_SOURCE": "<OMP_SOURCE>",
+        "PROBE_PUBLISHED_MODULES": "<SCRATCH>/published/node_modules",
+        "XDG_CONFIG_HOME": "<SCRATCH>/corrected-cases/published/argument-override/xdg/config",
+        "XDG_DATA_HOME": "<SCRATCH>/corrected-cases/published/argument-override/xdg/data",
+        "XDG_CACHE_HOME": "<SCRATCH>/corrected-cases/published/argument-override/xdg/cache",
+        "PROBE_ARGUMENT_OVERRIDE": "<SCRATCH>/corrected-cases/published/argument-override/argument-override"
+      },
+      "argv": [
+        "<BUN>",
+        "<SCRATCH>/published/path-probe.mjs",
+        "published",
+        "argument-override",
+        "<SCRATCH>/published"
+      ],
+      "cwd": "<SCRATCH>/corrected-cases/published/argument-override"
+    }
+  ],
+  "probeSource": "import { existsSync, statSync, realpathSync, readFileSync, readdirSync } from 'node:fs';\nimport { relative, isAbsolute, join } from 'node:path';\nimport { pathToFileURL } from 'node:url';\nimport { createHash } from 'node:crypto';\nimport { createRequire } from 'node:module';\nconst [kind, caseName, root] = process.argv.slice(2);\nconst home = process.env.HOME;\nconst sandbox = process.env.PROBE_SANDBOX;\nfunction label(p) {\n  const roots = [['<AGENT_OVERRIDE>', process.env.PI_CODING_AGENT_DIR], ['<ARG_OVERRIDE>', process.env.PROBE_ARGUMENT_OVERRIDE], ['<XDG_DATA_HOME>', process.env.XDG_DATA_HOME], ['<XDG_CONFIG_HOME>', process.env.XDG_CONFIG_HOME], ['<XDG_CACHE_HOME>', process.env.XDG_CACHE_HOME], ['<HOME>', home], ['<SANDBOX>', sandbox], ['<OMP_SOURCE>', process.env.PROBE_SOURCE], ['<PUBLISHED_MODULES>', process.env.PROBE_PUBLISHED_MODULES]];\n  for (const [name, base] of roots) {\n    if (!base) continue;\n    const rel = relative(base, p);\n    if (rel === '') return name;\n    if (!rel.startsWith('..') && !isAbsolute(rel)) return `${name}/${rel}`;\n  }\n  throw new Error('UNLABELLED_PATH');\n}\nconst dirsPath = kind === 'source' ? join(root, 'packages/utils/src/dirs.ts') : join(root, 'node_modules/@oh-my-pi/pi-utils/src/dirs.ts');\nconst authPath = kind === 'source' ? join(root, 'packages/ai/src/auth-storage.ts') : join(root, 'node_modules/@oh-my-pi/pi-ai/src/auth-storage.ts');\nconst dirs = await import(pathToFileURL(dirsPath).href);\nconst { AuthStorage } = await import(pathToFileURL(authPath).href);\nconst noArgumentPath = dirs.getAgentDbPath();\nconst selectedPath = caseName === 'argument-override' ? dirs.getAgentDbPath(process.env.PROBE_ARGUMENT_OVERRIDE) : noArgumentPath;\nif (!realpathSync(home).startsWith(realpathSync(sandbox) + '/')) throw new Error('UNSAFE_HOME');\nif (!selectedPath.startsWith(sandbox + '/')) throw new Error('UNSAFE_DATABASE');\nconst before = existsSync(selectedPath);\nlet created = false;\nlet closed = false;\nlet store;\ntry {\n  store = await AuthStorage.create(selectedPath);\n  created = true;\n} finally {\n  if (store) { store.close(); closed = true; }\n}\nconst db = statSync(selectedPath);\nconst header = readFileSync(selectedPath).subarray(0,16).toString('ascii');\nconst require = createRequire(pathToFileURL(dirsPath));\nconst addonPaths = Object.keys(require.cache).filter(p => p.endsWith('.node'));\nconst mappedAddons = addonPaths.map(p => ({ pathLabel: label(realpathSync(p)), sha256: createHash('sha256').update(readFileSync(p)).digest('hex') }));\nconst createdFiles = [];\nfunction walk(p) { for (const name of readdirSync(p, { withFileTypes: true })) { const child = join(p, name.name); if (name.isDirectory()) walk(child); else if (name.isFile()) createdFiles.push(label(child)); } }\nwalk(sandbox);\nconsole.log(JSON.stringify({ kind, caseName, noArgumentPathLabel: label(noArgumentPath), selectedPathLabel: label(selectedPath), agentDirLabel: label(dirs.getAgentDir()), databaseExistedBefore: before, createReturned: created, closeReturned: closed, databaseIsRegularFile: db.isFile(), databaseOwnerMatchesProcess: db.uid === process.getuid(), databaseMode: (db.mode & 0o777).toString(8), databaseSizeBytes: db.size, sqliteHeaderMatched: header === 'SQLite format 3\\u0000', nativeAddons: mappedAddons, createdFiles }));\n",
+  "probeSourceSha256": "12048f4664e77a8e71fd28c070d67527088545a5df1eebb482162daae5a739a1",
+  "initialProbeCorrection": {
+    "attemptCount": 10,
+    "exitCode": 1,
+    "errorCode": "DISPOSABLE_PROJECTION_CALLED_NONEXPORTED_GETCONFIGROOT",
+    "timing": "The unsupported output projection failed after create/close. Those homes were not reused; corrected observations used ten new independent homes. No failed initial attempt was labelled passed."
+  },
+  "limits": [
+    "No user AuthStorage/credential files were selected or read. Only newly created controlled SQLite headers and filesystem metadata were inspected.",
+    "create/close return and process exit are observed; no credential migration, reopen/readback, provider authentication or durability/restart semantics are claimed.",
+    "No-argument path calls use fresh processes with environment cleared except recorded allowlist. PATH is inherited solely to locate runtime helpers; values are omitted.",
+    "XDG_CONFIG_HOME/data/cache initialized and uninitialized cases are separate. Named profiles, XDG_STATE_HOME and non-Linux systems are not exercised.",
+    "Bun wrote runtime cache files inside isolated HOME/XDG cache; these are summarized by bunCacheFileCount and removed with the sandbox."
+  ],
+  "cleanup": {
+    "scratchLabel": "<SCRATCH>",
+    "temporaryProbeScriptsRemoved": true,
+    "downloadedPackageFilesRemoved": true,
+    "isolatedHomesDatabasesAndCachesRemoved": true,
+    "allObservationProcessesExited": true,
+    "externalSourceEdited": false,
+    "applicationDependenciesChanged": false,
+    "parentTreeEdited": false,
+    "scratchRemovalObserved": true,
+    "cleanupCommand": "rm -rf -- <SCRATCH>",
+    "cleanupExitCode": 0
+  },
+  "redactions": [
+    "absolute host paths",
+    "inherited environment values except controlled paths",
+    "user storage and credentials",
+    "raw exception text",
+    "package/source file contents other than disposable probe source"
+  ],
+  "projectionNotes": [
+    "Opaque Bun cache filenames omitted. createdFiles retains SQLite/OMP and other non-cache file labels; bunCacheFileCount is derived from the originally recorded per-case file list. No observations were repeated."
+  ]
+}

@@ -1,0 +1,1578 @@
+{
+  "schemaVersion": 1,
+  "task": "omp-through-m3/19",
+  "observedAt": "2026-10-11T13:51:31.505737Z",
+  "status": "mismatch",
+  "platform": "linux-x64",
+  "runtime": {
+    "bun": "1.4.2"
+  },
+  "pinnedSource": {
+    "sourceRevision": "c9de2b02b997f37cc89639282ed35dec86f139e8",
+    "acceptedSourceFingerprint": "b70a2f4afd9fd8fa9ec20094e9658b528e943eff52608d296af2366b80241ad1",
+    "fingerprintFileCount": 3499,
+    "fingerprintRerun": false,
+    "identityRecord": ".workflow/omp-migration/m0/source-identity.json"
+  },
+  "publishedProvenance": {
+    "attestationDocumentSha256": "bef500eaa3c87ca762831aed2c986abf1c40ad702216fcaf90e4b9b0901ce62c",
+    "payloadSourceRevision": "fa5ff4a3a977a28b93d025f4cf50f046e019f18c",
+    "packageSubjectSha512": "f80c2443172e7954ca59f8c4df24560f7e95865de34667640134fb0a861874f80d7019f53e1118150bba4c807d3bb1ce21fd7c4d6f12ff1822716f2e18ad11df",
+    "subjectMatchesDownloadedTarball": true,
+    "signatureVerification": "not performed; decoded npm-supplied payload is supporting metadata, byte comparison independently proves mismatch",
+    "gitHead": null
+  },
+  "packages": [
+    {
+      "name": "@oh-my-pi/pi-coding-agent",
+      "version": "18.8.9",
+      "metadataSha256": "4687659b2b436ff188f898d3bf635e25a2edac39b2346e72303c24bbb1cd1c09",
+      "tarballSha256": "2d326b842f3a282d8b09f12e7659665193e4d53194f0ccd3c3e8f9b79a7d5877",
+      "tarballSha1": "de6caddfd53237cc418c4b4f69bb9f97af0bfed8",
+      "registrySha1Matched": true,
+      "registrySha512Matched": true,
+      "registryIntegrity": "sha512-+AwkQxcueVTKWfjE3yRWD36Vhl3jRmdkATT7CoYYdPgNcBn1PhEYFQu6TIB9O7HOIf18TW8S/xgicW8uGK0R3w==",
+      "regularFileCount": 3221,
+      "packageJsonSha256": "ba154470f67eba595ae2be7078eefa8d9d8ced6a85297a0f6cf2f00306325999",
+      "pinnedPackageJsonSha256": "f6e413ba22c8ab46b1adf5dca9c6de4aa474136e25bad875018d4f655a46b7f4",
+      "entrypoints": {
+        "main": "./src/index.ts",
+        "types": "./dist/types/index.d.ts",
+        "bin": {
+          "omp": "dist/cli.js"
+        },
+        "engines": {
+          "bun": ">=1.3.14"
+        },
+        "relevantExports": {
+          ".": {
+            "types": "./dist/types/index.d.ts",
+            "import": "./src/index.ts"
+          },
+          "./*": {
+            "types": "./dist/types/*.d.ts",
+            "import": "./src/*.ts"
+          },
+          "./*.js": "./src/*.ts"
+        }
+      },
+      "authoredSourceComparison": {
+        "pinnedFileCount": 1756,
+        "publishedFileCount": 1748,
+        "commonFileCount": 1737,
+        "identicalFileCount": 1581,
+        "pinnedOnly": [
+          "src/cli/build-service.ts",
+          "src/extensibility/custom-commands/bundled/annotate/api.ts",
+          "src/extensibility/legacy-pi-transcript.ts",
+          "src/memory-backend/recall-entry.ts",
+          "src/modes/controllers/composer-prediction-controller.ts",
+          "src/prompts/judge/auto-graph.json",
+          "src/prompts/judge/auto-thinking.json",
+          "src/prompts/judge/find.json",
+          "src/prompts/judge/git-stage.json",
+          "src/prompts/judge/unexpected-stop.json",
+          "src/prompts/system/composer-prediction-user.md",
+          "src/prompts/system/memory-recall-changes.md",
+          "src/prompts/tools/computer-screen-locked-capture.md",
+          "src/prompts/tools/computer-screen-state.md",
+          "src/session/reset-expiry.ts",
+          "src/session/reset-fence.ts",
+          "src/tools/browser/tern/blocks.ts",
+          "src/tools/computer/window-miss.ts",
+          "src/tools/file-mutation-queue.ts"
+        ],
+        "publishedOnly": [
+          "src/commit/cli.ts",
+          "src/commit/utils/exclusions.ts",
+          "src/prompts/system/auto-graph-column-question.md",
+          "src/prompts/system/auto-graph-kind-question.md",
+          "src/prompts/system/auto-graph-transpose-question.md",
+          "src/prompts/system/auto-thinking-bucket-question.md",
+          "src/prompts/system/auto-thinking-level-question.md",
+          "src/prompts/system/auto-thinking-solution-space-question.md",
+          "src/prompts/tools/find-name-question.md",
+          "src/prompts/tools/find-passage-question.md",
+          "src/prompts/tools/find-sketch-question.md"
+        ],
+        "differingFileCount": 156,
+        "differingPaths": [
+          "src/advisor/delta-split.ts",
+          "src/advisor/runtime.ts",
+          "src/async/job-manager.ts",
+          "src/auto-graph/planner.ts",
+          "src/auto-thinking/classifier.ts",
+          "src/cli/auth-broker-cli.ts",
+          "src/cli/git-tui/ai-stage.ts",
+          "src/cli/read-cli.ts",
+          "src/cli/ssh-cli.ts",
+          "src/cli/update-cli.ts",
+          "src/cli/usage-cli.ts",
+          "src/collab/relay-client.ts",
+          "src/commands/update.ts",
+          "src/commands/usage.ts",
+          "src/config/model-discovery.ts",
+          "src/config/model-patch.ts",
+          "src/config/model-registry.ts",
+          "src/config/model-resolver.ts",
+          "src/config/registry.ts",
+          "src/config/settings-ui.ts",
+          "src/discovery/codex.ts",
+          "src/discovery/helpers.ts",
+          "src/eval/backend.ts",
+          "src/eval/completion-bridge.ts",
+          "src/eval/js/shared/helpers.ts",
+          "src/eval/js/shared/prelude.txt",
+          "src/eval/js/shared/rewrite-imports.ts",
+          "src/eval/js/shared/runtime.ts",
+          "src/eval/js/worker-core.ts",
+          "src/eval/py/prelude.py",
+          "src/eval/py/runner.py",
+          "src/export/html/template.css",
+          "src/export/html/web-palette.ts",
+          "src/extensibility/custom-commands/bundled/annotate/direct-source.ts",
+          "src/extensibility/custom-commands/bundled/annotate/fullscreen.ts",
+          "src/extensibility/custom-commands/bundled/annotate/index.ts",
+          "src/extensibility/custom-commands/bundled/annotate/text-source.ts",
+          "src/extensibility/custom-commands/bundled/review/diff.ts",
+          "src/extensibility/custom-commands/bundled/review/index.ts",
+          "src/extensibility/custom-commands/bundled/review/prompt.ts",
+          "src/extensibility/custom-commands/bundled/review/target.ts",
+          "src/extensibility/extensions/runner.ts",
+          "src/extensibility/extensions/types.ts",
+          "src/extensibility/legacy-pi-ai-shim.ts",
+          "src/extensibility/legacy-pi-coding-agent-shim.ts",
+          "src/extensibility/legacy-pi-tui-shim.ts",
+          "src/extensibility/plugins/manager.ts",
+          "src/hindsight/state.ts",
+          "src/internal-urls/cfg-protocol.ts",
+          "src/internal-urls/mcp-protocol.ts",
+          "src/internal-urls/memory-protocol.ts",
+          "src/internal-urls/router.ts",
+          "src/internal-urls/skill-protocol.ts",
+          "src/internal-urls/types.ts",
+          "src/lib/xai-http.ts",
+          "src/main.ts",
+          "src/mcp/client.ts",
+          "src/mcp/manager.ts",
+          "src/mcp/smithery-connect.ts",
+          "src/mcp/transports/sse.ts",
+          "src/memory-backend/types.ts",
+          "src/mnemopi/backend.ts",
+          "src/mnemopi/config.ts",
+          "src/mnemopi/state.ts",
+          "src/modes/acp/acp-agent.ts",
+          "src/modes/acp/acp-mode.ts",
+          "src/modes/controllers/btw-controller.ts",
+          "src/modes/controllers/event-controller.ts",
+          "src/modes/controllers/extension-ui-controller.ts",
+          "src/modes/controllers/mcp-command-controller.ts",
+          "src/modes/controllers/ssh-command-controller.ts",
+          "src/modes/controllers/tan-command-controller.ts",
+          "src/modes/interactive-mode.ts",
+          "src/modes/print-mode.ts",
+          "src/modes/rpc/rpc-mode.ts",
+          "src/modes/rpc/rpc-types.ts",
+          "src/modes/rpc/wire/events.ts",
+          "src/modes/rpc/wire/rpc-wire.generated.ts",
+          "src/modes/rpc/wire/rpc-wire.schema.json",
+          "src/modes/rpc/wire/state.ts",
+          "src/modes/settings.ts",
+          "src/modes/setup.ts",
+          "src/modes/status-line-host.ts",
+          "src/modes/utils/ui-helpers.ts",
+          "src/prompts/review-request.md",
+          "src/prompts/tools/browser.md",
+          "src/prompts/tools/computer.md",
+          "src/registry/agent-lifecycle.ts",
+          "src/registry/agent-registry.ts",
+          "src/registry/persisted-agents.ts",
+          "src/sdk.ts",
+          "src/secrets/obfuscator.ts",
+          "src/session/agent-session-events.ts",
+          "src/session/agent-session-types.ts",
+          "src/session/agent-session.ts",
+          "src/session/async-job-delivery.ts",
+          "src/session/claude-auto-reset.ts",
+          "src/session/codex-auto-reset.ts",
+          "src/session/context-settings.ts",
+          "src/session/messages.ts",
+          "src/session/retry-fallback-chains.ts",
+          "src/session/session-advisors.ts",
+          "src/session/session-anonymizer.ts",
+          "src/session/session-history-format.ts",
+          "src/session/session-maintenance.ts",
+          "src/session/session-persistence.ts",
+          "src/session/session-storage.ts",
+          "src/session/session-tools.ts",
+          "src/session/settings.ts",
+          "src/session/turn-recovery.ts",
+          "src/session/unexpected-stop-classifier.ts",
+          "src/slash-commands/builtin-session.ts",
+          "src/slash-commands/helpers/active-oauth-account.ts",
+          "src/slash-commands/helpers/reset-usage.ts",
+          "src/task/completion-probe.ts",
+          "src/task/executor.ts",
+          "src/task/persisted-revive.ts",
+          "src/task/structured-subagent.ts",
+          "src/tools/ask.ts",
+          "src/tools/browser.ts",
+          "src/tools/browser/attach.ts",
+          "src/tools/browser/cmux/cmux-tab.ts",
+          "src/tools/browser/declarations.d.ts",
+          "src/tools/browser/frames.ts",
+          "src/tools/browser/launch.ts",
+          "src/tools/browser/prelude.js",
+          "src/tools/browser/prelude.py",
+          "src/tools/browser/registry.ts",
+          "src/tools/browser/relay/bridge.ts",
+          "src/tools/browser/relay/daemon.ts",
+          "src/tools/browser/relay/probe.ts",
+          "src/tools/browser/relay/server.ts",
+          "src/tools/browser/screenshot.ts",
+          "src/tools/browser/shared-daemon.ts",
+          "src/tools/browser/tab-protocol.ts",
+          "src/tools/browser/tab-supervisor.ts",
+          "src/tools/browser/tab-worker.ts",
+          "src/tools/browser/tern/tern-tab.ts",
+          "src/tools/computer.ts",
+          "src/tools/computer/declarations.d.ts",
+          "src/tools/computer/prelude.js",
+          "src/tools/computer/prelude.py",
+          "src/tools/computer/protocol.ts",
+          "src/tools/computer/worker.ts",
+          "src/tools/eval.ts",
+          "src/tools/grep.ts",
+          "src/tools/index.ts",
+          "src/tools/jfind/questions.ts",
+          "src/tools/memory-retain.ts",
+          "src/tools/output-meta.ts",
+          "src/tools/read.ts",
+          "src/tools/run-scope.ts",
+          "src/utils/image-resize.ts",
+          "src/vibe/runtime.ts",
+          "src/web/scrapers/index.ts",
+          "src/web/search/providers/openai.ts"
+        ],
+        "pairedHashEvidence": "priorEvidenceReuse.changedExercisedSeams and additionalSdkFactoryDifference retain hashes for the relevant exercised SDK owners; whole tarball and manifest hashes identify the compared packages."
+      }
+    },
+    {
+      "name": "@oh-my-pi/omp-stats",
+      "version": "18.8.9",
+      "metadataSha256": "686042ca1aa134dbace47b1f6abac361f8f6205c9d05e26641af85ffbab3e228",
+      "tarballSha256": "051234a9dd5f96b8c4003780a68f1e201dd12edc00f465d2e02c68abd4a42c89",
+      "tarballSha1": "a14a0b9873e96043ee601536a67276c616d9369b",
+      "registrySha1Matched": true,
+      "registrySha512Matched": true,
+      "registryIntegrity": "sha512-yFc/hgMAT0TqrQWXzTxpUlg8CXscHxm7Wy+jbSesXTex8Mz2yuPDozUE8QwjXCbAwWARsYTJz+JKKyASq4TrjA==",
+      "regularFileCount": 176,
+      "packageJsonSha256": "987fbcb971d13e0c632c322b1ee57772e3b8d9c81de1b0952ad48697f3421619",
+      "pinnedPackageJsonSha256": "5cbd2193bf33e903aca7bee7445b80e860e469e4087e158c4761dacba82f9c45",
+      "entrypoints": {
+        "main": "./src/index.ts",
+        "types": "./dist/types/index.d.ts",
+        "bin": {
+          "omp-stats": "./src/index.ts"
+        },
+        "engines": {
+          "bun": ">=1.3.14"
+        },
+        "relevantExports": {
+          ".": {
+            "types": "./dist/types/index.d.ts",
+            "import": "./src/index.ts"
+          },
+          "./*": {
+            "types": "./dist/types/*.d.ts",
+            "import": "./src/*.ts"
+          },
+          "./*.js": "./src/*.ts"
+        }
+      },
+      "authoredSourceComparison": {
+        "pinnedFileCount": 92,
+        "publishedFileCount": 90,
+        "commonFileCount": 90,
+        "identicalFileCount": 89,
+        "pinnedOnly": [
+          "src/client/favicon.ico",
+          "src/prompts/judge/frustration.json"
+        ],
+        "publishedOnly": [],
+        "differingFileCount": 1,
+        "differingPaths": [
+          "src/frustration.ts"
+        ],
+        "pairedHashEvidence": "priorEvidenceReuse.changedExercisedSeams and additionalSdkFactoryDifference retain hashes for the relevant exercised SDK owners; whole tarball and manifest hashes identify the compared packages."
+      }
+    },
+    {
+      "name": "@oh-my-pi/omptype",
+      "version": "18.8.9",
+      "metadataSha256": "55f419d25d50b89294677515b747d9bf5f81c77745750aed6f159329e009b93d",
+      "tarballSha256": "faebb8a99a44d148ec74292c1775092946c00ac699cbd27abf4f89b56ec8ee56",
+      "tarballSha1": "c1cfb412a1a1d557ad8838a17290c0fc16bcfdf7",
+      "registrySha1Matched": true,
+      "registrySha512Matched": true,
+      "registryIntegrity": "sha512-wjQBkcvlM78CBRZlf6G3koaJjC8iu8kfdh7rq7FOx0irYx5E8TDQjVqrqh1DwcnIJOV3/OkYfz2+leEMISAsAw==",
+      "regularFileCount": 44,
+      "packageJsonSha256": "2bdd45a85d807e39cd56c5cdc15a1ff211bf4703a37bd9cbef6f8401aa62e464",
+      "pinnedPackageJsonSha256": "8bd2dd36ff10b1c6a72c30c005dd63cfb4c01115691a175668ed80105cf15907",
+      "entrypoints": {
+        "main": "./dist/js/index.js",
+        "types": "./dist/types/index.d.ts",
+        "bin": null,
+        "engines": {
+          "node": ">=20",
+          "bun": ">=1.3.14"
+        },
+        "relevantExports": {
+          ".": {
+            "types": "./dist/types/index.d.ts",
+            "bun": "./src/index.ts",
+            "default": "./dist/js/index.js"
+          },
+          "./*": {
+            "types": "./dist/types/*.d.ts",
+            "bun": "./src/*.ts",
+            "default": "./dist/js/*.js"
+          },
+          "./*.js": {
+            "types": "./dist/types/*.d.ts",
+            "bun": "./src/*.ts",
+            "default": "./dist/js/*.js"
+          }
+        }
+      },
+      "authoredSourceComparison": {
+        "pinnedFileCount": 13,
+        "publishedFileCount": 13,
+        "commonFileCount": 13,
+        "identicalFileCount": 13,
+        "pinnedOnly": [],
+        "publishedOnly": [],
+        "differingFileCount": 0,
+        "differingPaths": [],
+        "pairedHashEvidence": "priorEvidenceReuse.changedExercisedSeams and additionalSdkFactoryDifference retain hashes for the relevant exercised SDK owners; whole tarball and manifest hashes identify the compared packages."
+      }
+    },
+    {
+      "name": "@oh-my-pi/pi-agent-core",
+      "version": "18.8.9",
+      "metadataSha256": "cc1eeb5e0a04fe89e5b1b14452e49cdf46da3f5e443ff8958d085bcbd0d8dd91",
+      "tarballSha256": "f891409b70175675005937714db7cd56429b2b6bbd995214deae8d69f774c958",
+      "tarballSha1": "ea00fe3ce5acdf1e99bb9c136da0bfcdc559b332",
+      "registrySha1Matched": true,
+      "registrySha512Matched": true,
+      "registryIntegrity": "sha512-0EJoyLro9OAx3Sk0K6bL0J4NMyY2xMQxRFyaWaUsYaZlEhQz7bqN8Ri7Iw46GGb8HWClq8nBPqUkgucrwjqZnA==",
+      "regularFileCount": 98,
+      "packageJsonSha256": "0864ae09b0bc036f4d38bd13306b7cdb8d61ef15b52c807f5efb17b601bb662c",
+      "pinnedPackageJsonSha256": "0882013dfbf505e7667b01924191ccfcd1f8abcdce1a8e02d987a6a29dfecd10",
+      "entrypoints": {
+        "main": "./src/index.ts",
+        "types": "./dist/types/index.d.ts",
+        "bin": null,
+        "engines": {
+          "bun": ">=1.3.14"
+        },
+        "relevantExports": {
+          ".": {
+            "types": "./dist/types/index.d.ts",
+            "import": "./src/index.ts"
+          },
+          "./*": {
+            "types": "./dist/types/*.d.ts",
+            "import": "./src/*.ts"
+          }
+        }
+      },
+      "authoredSourceComparison": {
+        "pinnedFileCount": 55,
+        "publishedFileCount": 55,
+        "commonFileCount": 55,
+        "identicalFileCount": 52,
+        "pinnedOnly": [],
+        "publishedOnly": [],
+        "differingFileCount": 3,
+        "differingPaths": [
+          "src/agent.ts",
+          "src/compaction/compaction-v2-streaming.ts",
+          "src/compaction/openai.ts"
+        ],
+        "pairedHashEvidence": "priorEvidenceReuse.changedExercisedSeams and additionalSdkFactoryDifference retain hashes for the relevant exercised SDK owners; whole tarball and manifest hashes identify the compared packages."
+      }
+    },
+    {
+      "name": "@oh-my-pi/pi-ai",
+      "version": "18.8.9",
+      "metadataSha256": "a5691adc7edadcecb825b9092759f6a0f1d301d057a6de94a100a5badbb6dded",
+      "tarballSha256": "d646b841bccaa82ad1051855da0e863be087e68db8aba6b95e14e01325931b22",
+      "tarballSha1": "6e69ade0757a80b2f449c455f0e0b4646b12bcb1",
+      "registrySha1Matched": true,
+      "registrySha512Matched": true,
+      "registryIntegrity": "sha512-m36Fq4MQ3zwEBn5DXns78d0ZmVOt1JH+OL8Mfi3gOrBBxMPaecxstwtOoy0OgZIn1E950jvHtM85XQhYC5H2pQ==",
+      "regularFileCount": 756,
+      "packageJsonSha256": "ffd14f1d19701b2fb5dcd7eb075138754b85907897081fc65c1110aca058a7c7",
+      "pinnedPackageJsonSha256": "513cd96727e06620b6ff1f9e824dce9b6cce78252153052c2a7de24d10a361f5",
+      "entrypoints": {
+        "main": "./src/index.ts",
+        "types": "./dist/types/index.d.ts",
+        "bin": null,
+        "engines": {
+          "bun": ">=1.3.14"
+        },
+        "relevantExports": {
+          ".": {
+            "types": "./dist/types/index.d.ts",
+            "import": "./src/index.ts"
+          },
+          "./*": {
+            "types": "./dist/types/*.d.ts",
+            "import": "./src/*.ts"
+          },
+          "./*.js": "./src/*.ts"
+        }
+      },
+      "authoredSourceComparison": {
+        "pinnedFileCount": 414,
+        "publishedFileCount": 413,
+        "commonFileCount": 413,
+        "identicalFileCount": 380,
+        "pinnedOnly": [
+          "src/judgment/question-file.ts"
+        ],
+        "publishedOnly": [],
+        "differingFileCount": 33,
+        "differingPaths": [
+          "src/auth-storage.ts",
+          "src/auth/affinity.ts",
+          "src/auth/policy.ts",
+          "src/auth/pool.ts",
+          "src/auth/refresh.ts",
+          "src/auth/sqlite-credential-store.ts",
+          "src/auth/types.ts",
+          "src/error/flags.ts",
+          "src/images/openai-hosted.ts",
+          "src/judgment/index.ts",
+          "src/providers/anthropic-client.ts",
+          "src/providers/anthropic-state.ts",
+          "src/providers/anthropic.ts",
+          "src/providers/cursor.ts",
+          "src/providers/devin.ts",
+          "src/providers/factory-droid/gemini.ts",
+          "src/providers/google-shared.ts",
+          "src/providers/google-vertex.ts",
+          "src/providers/inference-headers.ts",
+          "src/providers/openai-codex-responses.ts",
+          "src/providers/openai-codex/request-transformer.ts",
+          "src/providers/openai-completions.ts",
+          "src/providers/openai-configuration-update.ts",
+          "src/providers/openai-responses-wire.ts",
+          "src/providers/openai-responses.ts",
+          "src/providers/openai-shared.ts",
+          "src/providers/transform-messages.ts",
+          "src/registry/oauth/callback-server.ts",
+          "src/stream.ts",
+          "src/types.ts",
+          "src/usage/claude.ts",
+          "src/utils/block-symbols.ts",
+          "src/utils/leaked-thinking-stream.ts"
+        ],
+        "pairedHashEvidence": "priorEvidenceReuse.changedExercisedSeams and additionalSdkFactoryDifference retain hashes for the relevant exercised SDK owners; whole tarball and manifest hashes identify the compared packages."
+      }
+    },
+    {
+      "name": "@oh-my-pi/pi-catalog",
+      "version": "18.8.9",
+      "metadataSha256": "d60b37a697f2c870f29a02f019cc841bf6ac5c1860c0ef9a11ae72c4433e7a51",
+      "tarballSha256": "8c8f75f45871cc8ee82cbff4c634d27f3169f81925891488e7db221e57d07105",
+      "tarballSha1": "137e78bf1f3623f4e9180332b893fe1978c6340a",
+      "registrySha1Matched": true,
+      "registrySha512Matched": true,
+      "registryIntegrity": "sha512-PfqtSg+tIpTc9znYAK0fnhxALLv7789fVnjMn8j6ZIuZq/efk+aWKpZEohKWJDPivOJaA94VtFyS6B82sUvB2g==",
+      "regularFileCount": 418,
+      "packageJsonSha256": "9fc6cfa2eb9197ba71d75ed9f7a6d2277bcb31de552926d337a240e6265a1548",
+      "pinnedPackageJsonSha256": "bd46b3160f9810da914fc0e1472128b577ddd32820ecd78fdcba02369a233031",
+      "entrypoints": {
+        "main": "./src/index.ts",
+        "types": "./dist/types/index.d.ts",
+        "bin": null,
+        "engines": {
+          "bun": ">=1.3.14"
+        },
+        "relevantExports": {
+          ".": {
+            "types": "./dist/types/index.d.ts",
+            "import": "./src/index.ts"
+          },
+          "./*": {
+            "types": "./dist/types/*.d.ts",
+            "import": "./src/*.ts"
+          },
+          "./*.js": "./src/*.ts"
+        }
+      },
+      "authoredSourceComparison": {
+        "pinnedFileCount": 326,
+        "publishedFileCount": 325,
+        "commonFileCount": 325,
+        "identicalFileCount": 302,
+        "pinnedOnly": [
+          "src/compat/reasoning-carry.ts"
+        ],
+        "publishedOnly": [],
+        "differingFileCount": 23,
+        "differingPaths": [
+          "src/compat/axes.ts",
+          "src/compat/resolve.ts",
+          "src/compat/rules.json",
+          "src/compat/rules/classes/deepseek.kdl",
+          "src/compat/rules/classes/glm.kdl",
+          "src/compat/rules/classes/kimi.kdl",
+          "src/compat/rules/classes/minimax.kdl",
+          "src/compat/rules/classes/openai.kdl",
+          "src/compat/rules/providers/abliteration.kdl",
+          "src/compat/rules/providers/cursor.kdl",
+          "src/compat/rules/providers/factory-droid.kdl",
+          "src/compat/rules/providers/litellm.kdl",
+          "src/compat/rules/providers/mistral.kdl",
+          "src/compat/rules/providers/openai-codex.kdl",
+          "src/compat/rules/providers/openai.kdl",
+          "src/compat/rules/providers/opencode-zen.kdl",
+          "src/compat/rules/providers/openrouter.kdl",
+          "src/compat/rules/providers/zhipu-coding-plan.kdl",
+          "src/compat/rules/runtime/behavior.kdl",
+          "src/models.json",
+          "src/provider-models/openai-compat.ts",
+          "src/types.ts",
+          "src/wire/factory-droid.ts"
+        ],
+        "pairedHashEvidence": "priorEvidenceReuse.changedExercisedSeams and additionalSdkFactoryDifference retain hashes for the relevant exercised SDK owners; whole tarball and manifest hashes identify the compared packages."
+      }
+    },
+    {
+      "name": "@oh-my-pi/pi-mnemopi",
+      "version": "18.8.9",
+      "metadataSha256": "c1f868036935858c956c520ff8203c6ac4be58e2a15815ec5cc094f06f31206f",
+      "tarballSha256": "8dbf99d6262331ebfb8341c7664ed2ec57888eb721bf75f09de618e78d531258",
+      "tarballSha1": "2baa9edf35c0bd2400864cb9012f727f48ac2cf8",
+      "registrySha1Matched": true,
+      "registrySha512Matched": true,
+      "registryIntegrity": "sha512-Kjsb48Hp4jCv0nyQbKoFqmKwT461vVbA36cV3XTW+PcMLDkEhEnOJqtu0stQS8PIjAZHteByiSWo/hZazyrTJw==",
+      "regularFileCount": 139,
+      "packageJsonSha256": "f863cf8ae81bb66483b19e09675a566770c1ed15cfc3244ea55929e821d6a791",
+      "pinnedPackageJsonSha256": "fa6c98e3ac41ee195aa124b4caf8f0bc38f3045a285eea4d6313c37f56114d05",
+      "entrypoints": {
+        "main": "./src/index.ts",
+        "types": "./dist/types/index.d.ts",
+        "bin": {
+          "mnemopi": "src/cli.ts"
+        },
+        "engines": {
+          "bun": ">=1.3.14"
+        },
+        "relevantExports": {
+          ".": {
+            "types": "./dist/types/index.d.ts",
+            "import": "./src/index.ts"
+          },
+          "./*": {
+            "types": "./dist/types/*.d.ts",
+            "import": "./src/*.ts"
+          },
+          "./*.js": "./src/*.ts"
+        }
+      },
+      "authoredSourceComparison": {
+        "pinnedFileCount": 67,
+        "publishedFileCount": 67,
+        "commonFileCount": 67,
+        "identicalFileCount": 58,
+        "pinnedOnly": [],
+        "publishedOnly": [],
+        "differingFileCount": 9,
+        "differingPaths": [
+          "src/core/beam/helpers.ts",
+          "src/core/beam/index.ts",
+          "src/core/beam/recall.ts",
+          "src/core/beam/store.ts",
+          "src/core/embeddings.ts",
+          "src/core/episodic-graph.ts",
+          "src/core/extraction.ts",
+          "src/core/memory.ts",
+          "src/core/polyphonic-recall.ts"
+        ],
+        "pairedHashEvidence": "priorEvidenceReuse.changedExercisedSeams and additionalSdkFactoryDifference retain hashes for the relevant exercised SDK owners; whole tarball and manifest hashes identify the compared packages."
+      }
+    },
+    {
+      "name": "@oh-my-pi/pi-natives",
+      "version": "18.8.9",
+      "metadataSha256": "862e68a4129866cd3f10768d13d8ebb38f4c1fcae402b8d725950959e61e55ab",
+      "tarballSha256": "7b98cacebb1871dc53fc9a665b9fe13601327998a6884c2815928b24e7d3abc0",
+      "tarballSha1": "0033f519caab3e7a49585756293f70bf13762267",
+      "registrySha1Matched": true,
+      "registrySha512Matched": true,
+      "registryIntegrity": "sha512-HK8bTSypCZXQ+btupDF0zQO34V/5uZg3GbRh65O0SQNdgPT+BA/VXE7MpZNdo634+cMUvEluKMScWFPGKAYI7w==",
+      "regularFileCount": 21,
+      "packageJsonSha256": "1fe35b759bca07564fa0e96ba69fb9393500d74adf5450b943e740107103c4f6",
+      "pinnedPackageJsonSha256": "26e3c9334d75ec9f2e886148c9c70e79e2d3f79e0155df0bbe50387ea564728d",
+      "entrypoints": {
+        "main": "./native/index.js",
+        "types": "./native/index.d.ts",
+        "bin": null,
+        "engines": {
+          "bun": ">=1.3.14"
+        },
+        "relevantExports": {
+          ".": {
+            "types": "./native/index.d.ts",
+            "import": "./native/index.js",
+            "default": "./native/index.js"
+          },
+          "./path": {
+            "types": "./native/path.d.ts",
+            "import": "./native/path.js",
+            "default": "./native/path.js"
+          },
+          "./vcs": {
+            "types": "./native/vcs.d.ts",
+            "import": "./native/vcs.js",
+            "default": "./native/vcs.js"
+          },
+          "./desktop": {
+            "types": "./native/desktop.d.ts",
+            "import": "./native/desktop.js",
+            "default": "./native/desktop.js"
+          },
+          "./clipboard": {
+            "types": "./native/clipboard.d.ts",
+            "import": "./native/clipboard.js",
+            "default": "./native/clipboard.js"
+          }
+        }
+      },
+      "authoredSourceComparison": null,
+      "comparisonLimit": "No src directory in native core; native/*.js and native/*.d.ts compared separately. Rust implementation and generated binaries are not covered by the accepted packages/*/src fingerprint.",
+      "selectedPlatformOptionalDependency": {
+        "name": "@oh-my-pi/pi-natives-linux-x64",
+        "version": "18.8.9"
+      }
+    },
+    {
+      "name": "@oh-my-pi/pi-tui",
+      "version": "18.8.9",
+      "metadataSha256": "5df72e982d94b9223484665b99610c4571b13042f2a675ce52c1960dd345997c",
+      "tarballSha256": "aa41cc46eb3e6c378d0575eece9ee598dcc514df1009e940d5542ffdc4a876d8",
+      "tarballSha1": "ce6931f6cd886fc3b44480ae80bf6d0c5dcad375",
+      "registrySha1Matched": true,
+      "registrySha512Matched": true,
+      "registryIntegrity": "sha512-RGN0pXRuqWV+kf3uu04T/hPJlaVfmV/u55VbOs/ILVCdBCaEty1MoSP1uF2CFoPBuDuwC8Zkg4p8Xa7E4eNGrg==",
+      "regularFileCount": 948,
+      "packageJsonSha256": "bb1cd9f954b686d5c3349d3161a3cba2051ee5fa5dd450e7b1a1b786072c4650",
+      "pinnedPackageJsonSha256": "e0c2c893bce22e1d47547a9b6216f442774a9f3c60b832c731155d1bceab0df0",
+      "entrypoints": {
+        "main": "./src/index.ts",
+        "types": "./dist/types/index.d.ts",
+        "bin": null,
+        "engines": {
+          "bun": ">=1.3.14"
+        },
+        "relevantExports": {
+          ".": {
+            "types": "./dist/types/index.d.ts",
+            "import": "./src/index.ts"
+          },
+          "./*": {
+            "types": "./dist/types/*.d.ts",
+            "import": "./src/*.ts"
+          },
+          "./*.js": "./src/*.ts"
+        }
+      },
+      "authoredSourceComparison": {
+        "pinnedFileCount": 525,
+        "publishedFileCount": 525,
+        "commonFileCount": 525,
+        "identicalFileCount": 484,
+        "pinnedOnly": [],
+        "publishedOnly": [],
+        "differingFileCount": 41,
+        "differingPaths": [
+          "src/charts/chart-plan.ts",
+          "src/charts/chart-svg.ts",
+          "src/charts/table-data.ts",
+          "src/chat/assistant-message.ts",
+          "src/chat/chat-transcript-builder.ts",
+          "src/chat/table-chart.ts",
+          "src/chat/user-message.ts",
+          "src/chrome/shared.ts",
+          "src/chrome/transcript-container.ts",
+          "src/components/editor.ts",
+          "src/components/form.ts",
+          "src/components/markdown.ts",
+          "src/components/settings-list.ts",
+          "src/components/tree-view.ts",
+          "src/loop-watchdog.ts",
+          "src/overlays/agent-hub-projection.ts",
+          "src/overlays/agent-hub-types.ts",
+          "src/overlays/annotation-overlay.ts",
+          "src/overlays/model-browser.ts",
+          "src/overlays/model-hub.ts",
+          "src/overlays/settings-defs.ts",
+          "src/overlays/settings-selector.ts",
+          "src/overlays/tree-selector.ts",
+          "src/overlays/usage-display.ts",
+          "src/setup/scenes/model.ts",
+          "src/setup/scenes/types.ts",
+          "src/status-line/component.ts",
+          "src/status-line/host.ts",
+          "src/status-line/segments.ts",
+          "src/status-line/types.ts",
+          "src/terminal.ts",
+          "src/theme/schema-validation.ts",
+          "src/theme/schema.ts",
+          "src/theme/theme-class.ts",
+          "src/theme/theme-schema.json",
+          "src/tools/eval.ts",
+          "src/tools/output-meta.ts",
+          "src/tools/streaming-output.ts",
+          "src/tools/todo.ts",
+          "src/tui.ts",
+          "src/windows-input-mode.ts"
+        ],
+        "pairedHashEvidence": "priorEvidenceReuse.changedExercisedSeams and additionalSdkFactoryDifference retain hashes for the relevant exercised SDK owners; whole tarball and manifest hashes identify the compared packages."
+      }
+    },
+    {
+      "name": "@oh-my-pi/pi-utils",
+      "version": "18.8.9",
+      "metadataSha256": "245e93f3eca388609a043b9389a5c41098904512341bdd83362925375a0c74a1",
+      "tarballSha256": "e75f479d4bdbd0ba972cbc0264ac64901b775eb218e0e0fa66edd2317c9c4a4c",
+      "tarballSha1": "4eed31f382be99a155c61fc111ae03b4ca81890e",
+      "registrySha1Matched": true,
+      "registrySha512Matched": true,
+      "registryIntegrity": "sha512-zek2mZn2BZcoEgI9sr67lYpvA7W7sr7pP6/gyYpJYjGwBCbSlromLMjkKGMstK3g8qL7QSR5fTlpw4RSnFf8Gg==",
+      "regularFileCount": 257,
+      "packageJsonSha256": "c153f5bab9b993cddb2ad4fce897ea5dcf539e7222e65400024743456011cc7b",
+      "pinnedPackageJsonSha256": "196bcd443725be757d1329ec1da53c88d884b7681c0e0cf3509221c96dada342",
+      "entrypoints": {
+        "main": "./src/index.ts",
+        "types": "./dist/types/index.d.ts",
+        "bin": null,
+        "engines": {
+          "bun": ">=1.3.14"
+        },
+        "relevantExports": {
+          ".": {
+            "types": "./dist/types/index.d.ts",
+            "import": "./src/index.ts"
+          },
+          "./*": {
+            "types": "./dist/types/*.d.ts",
+            "import": "./src/*.ts"
+          },
+          "./*.js": "./src/*.ts"
+        }
+      },
+      "authoredSourceComparison": {
+        "pinnedFileCount": 126,
+        "publishedFileCount": 126,
+        "commonFileCount": 126,
+        "identicalFileCount": 123,
+        "pinnedOnly": [],
+        "publishedOnly": [],
+        "differingFileCount": 3,
+        "differingPaths": [
+          "src/ar/open.ts",
+          "src/json-lexer.ts",
+          "src/loop-phase.ts"
+        ],
+        "pairedHashEvidence": "priorEvidenceReuse.changedExercisedSeams and additionalSdkFactoryDifference retain hashes for the relevant exercised SDK owners; whole tarball and manifest hashes identify the compared packages."
+      }
+    },
+    {
+      "name": "@oh-my-pi/pi-wire",
+      "version": "18.8.9",
+      "metadataSha256": "9e12ba641e0b8940d5e63723f7194b774ae1ff246d29f916002caea439c379f0",
+      "tarballSha256": "1ea9f920af371d2bfa0ac10900e336d6c4ee67da99b581e8b33740c1a81767e8",
+      "tarballSha1": "db2746964f5b3b5807353211d09926d91843e0df",
+      "registrySha1Matched": true,
+      "registrySha512Matched": true,
+      "registryIntegrity": "sha512-9J2DXyBU8DTWhlWqhIhe4Mg9wBvygwyAyL8aUBcQKWm0mn0YqOLzIQJdklGzAWKjAc+KnA2kz0Dg1jq5GuYM/Q==",
+      "regularFileCount": 13,
+      "packageJsonSha256": "cdf9fef1dbce42f6bfa5a5fff8bc553b452eb564a48f55a809e4c178cb06a97d",
+      "pinnedPackageJsonSha256": "930336b277fc30d3a31273e5fbeb4eecb4212195d58551617d7ebe1575b6937c",
+      "entrypoints": {
+        "main": "./src/index.ts",
+        "types": "./dist/types/index.d.ts",
+        "bin": null,
+        "engines": {
+          "bun": ">=1.3.14"
+        },
+        "relevantExports": {
+          ".": {
+            "types": "./dist/types/index.d.ts",
+            "import": "./src/index.ts"
+          },
+          "./*": {
+            "types": "./dist/types/*.d.ts",
+            "import": "./src/*.ts"
+          },
+          "./*.js": "./src/*.ts"
+        }
+      },
+      "authoredSourceComparison": {
+        "pinnedFileCount": 4,
+        "publishedFileCount": 4,
+        "commonFileCount": 4,
+        "identicalFileCount": 4,
+        "pinnedOnly": [],
+        "publishedOnly": [],
+        "differingFileCount": 0,
+        "differingPaths": [],
+        "pairedHashEvidence": "priorEvidenceReuse.changedExercisedSeams and additionalSdkFactoryDifference retain hashes for the relevant exercised SDK owners; whole tarball and manifest hashes identify the compared packages."
+      }
+    },
+    {
+      "name": "@oh-my-pi/snapcompact",
+      "version": "18.8.9",
+      "metadataSha256": "45fcc133c0e745f84c9cb99f3546010da3dd23570ab1ec893613cb1e96d89f8c",
+      "tarballSha256": "a3d3ea55a9e0a89d393d13fd0c9dfbd02545650f528a981fa62f3d9ba947bd3d",
+      "tarballSha1": "7c05d815d13efb25da888334bba3571e450b109e",
+      "registrySha1Matched": true,
+      "registrySha512Matched": true,
+      "registryIntegrity": "sha512-n7XU967BxjYGSIWMA3kbb+fHIY90GiweIqoE1FN5nNV5NpcIGAaFbEKiWSTSQ4BBkxGcWVsiI5AwvV+exAd8OA==",
+      "regularFileCount": 11,
+      "packageJsonSha256": "a0d3beda73033e0972491cd517eee507f60c5ee97ef9a39dc76e41a1eb7a7119",
+      "pinnedPackageJsonSha256": "0099fa15e6845cc10c230f3dc96ab9369156abe285daa2c9e4a210eecf35460d",
+      "entrypoints": {
+        "main": "./src/index.ts",
+        "types": "./dist/types/index.d.ts",
+        "bin": null,
+        "engines": {
+          "bun": ">=1.3.14"
+        },
+        "relevantExports": {
+          ".": {
+            "types": "./dist/types/index.d.ts",
+            "import": "./src/index.ts"
+          },
+          "./*": {
+            "types": "./dist/types/*.d.ts",
+            "import": "./src/*.ts"
+          }
+        }
+      },
+      "authoredSourceComparison": {
+        "pinnedFileCount": 4,
+        "publishedFileCount": 4,
+        "commonFileCount": 4,
+        "identicalFileCount": 4,
+        "pinnedOnly": [],
+        "publishedOnly": [],
+        "differingFileCount": 0,
+        "differingPaths": [],
+        "pairedHashEvidence": "priorEvidenceReuse.changedExercisedSeams and additionalSdkFactoryDifference retain hashes for the relevant exercised SDK owners; whole tarball and manifest hashes identify the compared packages."
+      }
+    },
+    {
+      "name": "@oh-my-pi/pi-natives-linux-x64",
+      "version": "18.8.9",
+      "metadataSha256": "7542bb43a7231fe851707194e31ef92b6bcb99d17aec516d2035505727856b9c",
+      "tarballSha256": "35effa44e183ac54621f8099d85a5f27f5a8a054a1e2293eb357bf8fe504e6c7",
+      "tarballSha1": "0300785e14ab187990371bdfd80985d0da5fcf50",
+      "registrySha1Matched": true,
+      "registrySha512Matched": true,
+      "registryIntegrity": "sha512-8EtejfmJCAEOKNmsrCl2Kbe4bFZFY7rA5/6s8E7EwaOXRxTQCnzU5qk5mxz50k6q3aKdPGsq/FmfZg2iSwis/Q==",
+      "regularFileCount": 6,
+      "packageJsonSha256": "d0796fe382e5ca6ed2fb0167b634430aed1ecb951466dda13135a972a0c35ecd",
+      "pinnedPackageJsonSha256": null,
+      "entrypoints": {
+        "main": "./pi_natives.linux-x64-baseline.node",
+        "types": null,
+        "bin": null,
+        "engines": {
+          "bun": ">=1.3.14"
+        }
+      },
+      "authoredSourceComparison": null
+    }
+  ],
+  "directDependencyDeclarationsAndExistingResolution": [
+    {
+      "name": "axe-core",
+      "pinnedDeclaration": "4.13.0",
+      "pinnedCatalogValue": null,
+      "publishedDeclaration": "4.13.0",
+      "installedVersion": "4.13.0",
+      "installedKind": "existing-registry-dependency"
+    },
+    {
+      "name": "@babel/parser",
+      "pinnedDeclaration": "catalog:",
+      "pinnedCatalogValue": "^7.29.7",
+      "publishedDeclaration": "^7.29.7",
+      "installedVersion": "7.29.9",
+      "installedKind": "existing-registry-dependency"
+    },
+    {
+      "name": "puppeteer-core",
+      "pinnedDeclaration": "catalog:",
+      "pinnedCatalogValue": "25.3.0",
+      "publishedDeclaration": "25.3.0",
+      "installedVersion": "25.3.0",
+      "installedKind": "existing-registry-dependency"
+    },
+    {
+      "name": "@oh-my-pi/pi-ai",
+      "pinnedDeclaration": "catalog:",
+      "pinnedCatalogValue": "18.8.9",
+      "publishedDeclaration": "18.8.9",
+      "installedVersion": "18.8.9",
+      "installedKind": "pinned-source-workspace"
+    },
+    {
+      "name": "@oh-my-pi/pi-tui",
+      "pinnedDeclaration": "catalog:",
+      "pinnedCatalogValue": "18.8.9",
+      "publishedDeclaration": "18.8.9",
+      "installedVersion": "18.8.9",
+      "installedKind": "pinned-source-workspace"
+    },
+    {
+      "name": "@oh-my-pi/omptype",
+      "pinnedDeclaration": "catalog:",
+      "pinnedCatalogValue": "18.8.9",
+      "publishedDeclaration": "18.8.9",
+      "installedVersion": "18.8.9",
+      "installedKind": "pinned-source-workspace"
+    },
+    {
+      "name": "@oh-my-pi/pi-wire",
+      "pinnedDeclaration": "catalog:",
+      "pinnedCatalogValue": "18.8.9",
+      "publishedDeclaration": "18.8.9",
+      "installedVersion": "18.8.9",
+      "installedKind": "pinned-source-workspace"
+    },
+    {
+      "name": "@oh-my-pi/pi-utils",
+      "pinnedDeclaration": "catalog:",
+      "pinnedCatalogValue": "18.8.9",
+      "publishedDeclaration": "18.8.9",
+      "installedVersion": "18.8.9",
+      "installedKind": "pinned-source-workspace"
+    },
+    {
+      "name": "@opentelemetry/api",
+      "pinnedDeclaration": "catalog:",
+      "pinnedCatalogValue": "^1.9.1",
+      "publishedDeclaration": "^1.9.1",
+      "installedVersion": "1.9.1",
+      "installedKind": "existing-registry-dependency"
+    },
+    {
+      "name": "@oh-my-pi/omp-stats",
+      "pinnedDeclaration": "catalog:",
+      "pinnedCatalogValue": "18.8.9",
+      "publishedDeclaration": "18.8.9",
+      "installedVersion": "18.8.9",
+      "installedKind": "pinned-source-workspace"
+    },
+    {
+      "name": "@oh-my-pi/pi-catalog",
+      "pinnedDeclaration": "catalog:",
+      "pinnedCatalogValue": "18.8.9",
+      "publishedDeclaration": "18.8.9",
+      "installedVersion": "18.8.9",
+      "installedKind": "pinned-source-workspace"
+    },
+    {
+      "name": "@oh-my-pi/pi-mnemopi",
+      "pinnedDeclaration": "catalog:",
+      "pinnedCatalogValue": "18.8.9",
+      "publishedDeclaration": "18.8.9",
+      "installedVersion": "18.8.9",
+      "installedKind": "pinned-source-workspace"
+    },
+    {
+      "name": "@oh-my-pi/pi-natives",
+      "pinnedDeclaration": "catalog:",
+      "pinnedCatalogValue": "18.8.9",
+      "publishedDeclaration": "18.8.9",
+      "installedVersion": "18.8.9",
+      "installedKind": "pinned-source-workspace"
+    },
+    {
+      "name": "@oh-my-pi/snapcompact",
+      "pinnedDeclaration": "catalog:",
+      "pinnedCatalogValue": "18.8.9",
+      "publishedDeclaration": "18.8.9",
+      "installedVersion": "18.8.9",
+      "installedKind": "pinned-source-workspace"
+    },
+    {
+      "name": "@oh-my-pi/pi-agent-core",
+      "pinnedDeclaration": "catalog:",
+      "pinnedCatalogValue": "18.8.9",
+      "publishedDeclaration": "18.8.9",
+      "installedVersion": "18.8.9",
+      "installedKind": "pinned-source-workspace"
+    },
+    {
+      "name": "@opentelemetry/api-logs",
+      "pinnedDeclaration": "catalog:",
+      "pinnedCatalogValue": "^0.220.0",
+      "publishedDeclaration": "^0.220.0",
+      "installedVersion": "0.220.0",
+      "installedKind": "existing-registry-dependency"
+    },
+    {
+      "name": "@opentelemetry/sdk-logs",
+      "pinnedDeclaration": "catalog:",
+      "pinnedCatalogValue": "^0.220.0",
+      "publishedDeclaration": "^0.220.0",
+      "installedVersion": "0.220.0",
+      "installedKind": "existing-registry-dependency"
+    },
+    {
+      "name": "@opentelemetry/resources",
+      "pinnedDeclaration": "catalog:",
+      "pinnedCatalogValue": "^2.9.0",
+      "publishedDeclaration": "^2.9.0",
+      "installedVersion": "2.11.0",
+      "installedKind": "existing-registry-dependency"
+    },
+    {
+      "name": "@opentelemetry/sdk-metrics",
+      "pinnedDeclaration": "catalog:",
+      "pinnedCatalogValue": "^2.9.0",
+      "publishedDeclaration": "^2.9.0",
+      "installedVersion": "2.11.0",
+      "installedKind": "existing-registry-dependency"
+    },
+    {
+      "name": "@opentelemetry/sdk-trace-base",
+      "pinnedDeclaration": "catalog:",
+      "pinnedCatalogValue": "^2.9.0",
+      "publishedDeclaration": "^2.9.0",
+      "installedVersion": "2.11.0",
+      "installedKind": "existing-registry-dependency"
+    },
+    {
+      "name": "@opentelemetry/sdk-trace-node",
+      "pinnedDeclaration": "catalog:",
+      "pinnedCatalogValue": "^2.9.0",
+      "publishedDeclaration": "^2.9.0",
+      "installedVersion": "2.11.0",
+      "installedKind": "existing-registry-dependency"
+    },
+    {
+      "name": "@opentelemetry/context-async-hooks",
+      "pinnedDeclaration": "catalog:",
+      "pinnedCatalogValue": "^2.9.0",
+      "publishedDeclaration": "^2.9.0",
+      "installedVersion": "2.11.0",
+      "installedKind": "existing-registry-dependency"
+    },
+    {
+      "name": "@opentelemetry/exporter-logs-otlp-proto",
+      "pinnedDeclaration": "catalog:",
+      "pinnedCatalogValue": "^0.220.0",
+      "publishedDeclaration": "^0.220.0",
+      "installedVersion": "0.220.0",
+      "installedKind": "existing-registry-dependency"
+    },
+    {
+      "name": "@opentelemetry/exporter-trace-otlp-proto",
+      "pinnedDeclaration": "catalog:",
+      "pinnedCatalogValue": "^0.220.0",
+      "publishedDeclaration": "^0.220.0",
+      "installedVersion": "0.220.0",
+      "installedKind": "existing-registry-dependency"
+    },
+    {
+      "name": "@opentelemetry/exporter-metrics-otlp-proto",
+      "pinnedDeclaration": "catalog:",
+      "pinnedCatalogValue": "^0.220.0",
+      "publishedDeclaration": "^0.220.0",
+      "installedVersion": "0.220.0",
+      "installedKind": "existing-registry-dependency"
+    }
+  ],
+  "nativeRuntimeFiles": [
+    {
+      "path": "native/clipboard.d.ts",
+      "installedSourceTreeSha256": "9b550b22d15564ed59ccbeca90af4f6fce3a2a57f74fabb4b3d85a951ccf0c47",
+      "publishedSha256": "9b550b22d15564ed59ccbeca90af4f6fce3a2a57f74fabb4b3d85a951ccf0c47",
+      "identical": true,
+      "currentSourceTreeFilePresent": true
+    },
+    {
+      "path": "native/clipboard.js",
+      "installedSourceTreeSha256": "8a8e33cc33432713820c7c965af14012439d941d4f2914677a17cec910acc08d",
+      "publishedSha256": "8a8e33cc33432713820c7c965af14012439d941d4f2914677a17cec910acc08d",
+      "identical": true,
+      "currentSourceTreeFilePresent": true
+    },
+    {
+      "path": "native/desktop-adapter.d.ts",
+      "installedSourceTreeSha256": "4534f056639718decd8d29d1760e241cb2a9563ff390cd7fd22f90de300a6d95",
+      "publishedSha256": "4534f056639718decd8d29d1760e241cb2a9563ff390cd7fd22f90de300a6d95",
+      "identical": true,
+      "currentSourceTreeFilePresent": true
+    },
+    {
+      "path": "native/desktop-adapter.js",
+      "installedSourceTreeSha256": "1c867e991de9450ec4fa2b53da227860c81916f06ea603104bf8d990481c60c3",
+      "publishedSha256": "1c867e991de9450ec4fa2b53da227860c81916f06ea603104bf8d990481c60c3",
+      "identical": true,
+      "currentSourceTreeFilePresent": true
+    },
+    {
+      "path": "native/desktop.d.ts",
+      "installedSourceTreeSha256": "b3a7f0ff974c9a8d695eed971bb8b854e13069f327fa5725c2b418aa1390d15e",
+      "publishedSha256": "b3a7f0ff974c9a8d695eed971bb8b854e13069f327fa5725c2b418aa1390d15e",
+      "identical": true,
+      "currentSourceTreeFilePresent": true
+    },
+    {
+      "path": "native/desktop.js",
+      "installedSourceTreeSha256": "426438d690ca86f6c02b9a29d78f7e1ce8432894287880577fff93aa835353ec",
+      "publishedSha256": "426438d690ca86f6c02b9a29d78f7e1ce8432894287880577fff93aa835353ec",
+      "identical": true,
+      "currentSourceTreeFilePresent": true
+    },
+    {
+      "path": "native/embedded-addon.js",
+      "installedSourceTreeSha256": "ad94332d9b1ba71dac4c3bc394c35aea2e0e4cf2280bc1c2ba42aba3fb237fc1",
+      "publishedSha256": "ad94332d9b1ba71dac4c3bc394c35aea2e0e4cf2280bc1c2ba42aba3fb237fc1",
+      "identical": true,
+      "currentSourceTreeFilePresent": true
+    },
+    {
+      "path": "native/index.d.ts",
+      "installedSourceTreeSha256": "f40ed036fe9ebfa808e00dd4e39f27e70fe4f1412e2da5ddd0b7ab69a8f3a0f5",
+      "publishedSha256": "4aa8a69da6afb4b425eb5db27dcf3ef48e2f4427e8fc56b4805fe707318dd679",
+      "identical": false,
+      "currentSourceTreeFilePresent": true
+    },
+    {
+      "path": "native/index.js",
+      "installedSourceTreeSha256": "89a9474f75c0658f1adbd77d6ac75f0bea274705fc16f455ccce7ad47a583ddd",
+      "publishedSha256": "e4ee6f849c4e34a648d773c9090a84cfa5f8219c4a1db582532fba0cfc9daccb",
+      "identical": false,
+      "currentSourceTreeFilePresent": true
+    },
+    {
+      "path": "native/loader-state.d.ts",
+      "installedSourceTreeSha256": "495ee42ac876ed95bbd6270e91eace61a9ac9d17247b5f7f7bdeaad3ca709725",
+      "publishedSha256": "495ee42ac876ed95bbd6270e91eace61a9ac9d17247b5f7f7bdeaad3ca709725",
+      "identical": true,
+      "currentSourceTreeFilePresent": true
+    },
+    {
+      "path": "native/loader-state.js",
+      "installedSourceTreeSha256": "3de1f2e6b7edbe11b38f678f815ddeab7ca7678c9786c122472c4f29602eb908",
+      "publishedSha256": "3de1f2e6b7edbe11b38f678f815ddeab7ca7678c9786c122472c4f29602eb908",
+      "identical": true,
+      "currentSourceTreeFilePresent": true
+    },
+    {
+      "path": "native/path.d.ts",
+      "installedSourceTreeSha256": "5bbf0e7dc526535b2fa8221b1ea280f190eab653af8757a7f1bf76786b25cf14",
+      "publishedSha256": "5bbf0e7dc526535b2fa8221b1ea280f190eab653af8757a7f1bf76786b25cf14",
+      "identical": true,
+      "currentSourceTreeFilePresent": true
+    },
+    {
+      "path": "native/path.js",
+      "installedSourceTreeSha256": "716fe783105dc03fc5deaab32a4f0470ba366e663ae77de42c5760144855bf99",
+      "publishedSha256": "716fe783105dc03fc5deaab32a4f0470ba366e663ae77de42c5760144855bf99",
+      "identical": true,
+      "currentSourceTreeFilePresent": true
+    },
+    {
+      "path": "native/vcs.d.ts",
+      "installedSourceTreeSha256": "3a91e25f15324e6b57c9919631a2e0f72d8da875f23f06abc4caa44b8f7f2d96",
+      "publishedSha256": "3a91e25f15324e6b57c9919631a2e0f72d8da875f23f06abc4caa44b8f7f2d96",
+      "identical": true,
+      "currentSourceTreeFilePresent": true
+    },
+    {
+      "path": "native/vcs.js",
+      "installedSourceTreeSha256": "0869ea284f27dfa866aeed868059b3c519e1b11ace66c5c364dcdfee0e718c86",
+      "publishedSha256": "0869ea284f27dfa866aeed868059b3c519e1b11ace66c5c364dcdfee0e718c86",
+      "identical": true,
+      "currentSourceTreeFilePresent": true
+    },
+    {
+      "path": "native/version-sentinel.d.ts",
+      "installedSourceTreeSha256": "9845deab9de927d6b4bff2b5616086d6a740d2b93964db6b4f0cb2e561e8faba",
+      "publishedSha256": "9845deab9de927d6b4bff2b5616086d6a740d2b93964db6b4f0cb2e561e8faba",
+      "identical": true,
+      "currentSourceTreeFilePresent": true
+    },
+    {
+      "path": "native/version-sentinel.js",
+      "installedSourceTreeSha256": "926c11315b5ff843b6cf236c866a12e9ddbf25824db267334c1323a6736cc7be",
+      "publishedSha256": "926c11315b5ff843b6cf236c866a12e9ddbf25824db267334c1323a6736cc7be",
+      "identical": true,
+      "currentSourceTreeFilePresent": true
+    }
+  ],
+  "nativeResolution": {
+    "sourcePathLabel": "<OMP_SOURCE>/packages/natives/native/pi_natives.linux-x64-modern.node",
+    "publishedPathLabel": "<PUBLISHED_MODULES>/@oh-my-pi/pi-natives-linux-x64/pi_natives.linux-x64-modern.node",
+    "selectedVariant": "linux-x64-modern",
+    "selectedSha256": "33710d1ac6830e068fb46db335e6e2f2e6175a343b267506cd8a31d72d52e059",
+    "sourceAndPublishedLoadedAddonBytesIdentical": true,
+    "baselineSha256": "df5f6404bdd1db1da01144d91e76accef34a6beeb0e3041537c8d6edf05e5a15",
+    "baselineLoaded": false,
+    "nativeOverrideSet": false,
+    "sourceBuildEquivalence": "not established; existing source-tree binaries match registry18.8.9, not a native build from c9de2b02",
+    "loaderIdentityLimit": "Source native/loader-state.js:591-602 deliberately skips release-version validation for workspace loads; registry scope validates its declared release. Both loading the same binary does not prove same authored/native source."
+  },
+  "priorEvidenceReuse": {
+    "coversSelectedPublishedPackage": false,
+    "originalEvidenceRetained": true,
+    "changedExercisedSeams": [
+      {
+        "priorProbeIds": [
+          "lifecycle-session",
+          "lifecycle-events",
+          "lifecycle-history",
+          "lifecycle-fork",
+          "lifecycle-branch",
+          "lifecycle-abort",
+          "lifecycle-dispose",
+          "lifecycle-subagent",
+          "capabilities.model-unavailable",
+          "isolation-shared-default",
+          "isolation-shared-private-bound",
+          "isolation-shared-private-unbound",
+          "isolation-dedicated-workers",
+          "isolation-worker-resources",
+          "restart-pending.approval",
+          "restart-pending.question",
+          "restart-pending.cleanup"
+        ],
+        "files": [
+          {
+            "package": "@oh-my-pi/pi-coding-agent",
+            "path": "src/session/agent-session.ts",
+            "pinnedSha256": "1fdb54bef99d5662d1c79c1f01d6b49a59fb4f5dc4a3ce844e439e59b3fd6cdd",
+            "publishedSha256": "f120a70a2ac5e8523c7286c695146ec802ffbf8c4698f65f61bcb2a27cf5bd75"
+          },
+          {
+            "package": "@oh-my-pi/pi-coding-agent",
+            "path": "src/session/agent-session-events.ts",
+            "pinnedSha256": "459a277b182c56195a4bcc75a411ddfc0624c9e72c123850436e991982598ea5",
+            "publishedSha256": "e51ed8fc54475621c11d4498d894c9c18a94460f27e0c13e6cdef6a4cea4a416"
+          },
+          {
+            "package": "@oh-my-pi/pi-coding-agent",
+            "path": "src/session/messages.ts",
+            "pinnedSha256": "b9f2a38f902ca8e65748511cfbb6161270f1fb63e5dcbf0b9c2cc439fbc8b442",
+            "publishedSha256": "acfb01d9d4f68a6d536f804e7251bd680eb7f6b9ec73d5b446491ce7251ef641"
+          },
+          {
+            "package": "@oh-my-pi/pi-coding-agent",
+            "path": "src/task/executor.ts",
+            "pinnedSha256": "7b004cd776be17ad5b63996fd1b0428578d9de348748fa1713469bfb910f5ff5",
+            "publishedSha256": "f3c0357b3dbcb8e4bc2177b5e6d942362afe72cd8c4e663c7541f69af3162fe9"
+          },
+          {
+            "package": "@oh-my-pi/pi-coding-agent",
+            "path": "src/config/model-registry.ts",
+            "pinnedSha256": "47b2c18a7274749672114cd063387c089a16839fefdce95f4a89d726e3b9aab4",
+            "publishedSha256": "40d46daf799b4d8e36f74ccbb816ee8bd9be5690be49aa367623b04a4b2c570c"
+          },
+          {
+            "package": "@oh-my-pi/pi-agent-core",
+            "path": "src/agent.ts",
+            "pinnedSha256": "75783203bebd3d889a0fb93a6f24d953c9f1a349c25130fc73dfb04675da4daa",
+            "publishedSha256": "0adcb4422cd52f0fcd93f1e534c08a4ed03b5a3e0e8a2481b8e74e2df7ce80b2"
+          }
+        ],
+        "conclusion": "These source-based SDK observations are not evidence for the published artifact. Original observed outcomes remain unchanged for c9de2b02."
+      },
+      {
+        "priorProbeIds": [
+          "capabilities.auth-sqlite",
+          "capabilities.credential-formats",
+          "capabilities.models"
+        ],
+        "files": [
+          {
+            "package": "@oh-my-pi/pi-ai",
+            "path": "src/auth-storage.ts",
+            "pinnedSha256": "27986da8f969de630399597f9b219ca47e231b0ee137fcf0c03aab3193730419",
+            "publishedSha256": "c1b26182b131b836962fc47889dff024c8dba080c5115d1d6d910be1cbc06203"
+          },
+          {
+            "package": "@oh-my-pi/pi-ai",
+            "path": "src/auth/sqlite-credential-store.ts",
+            "pinnedSha256": "a3829a270fd05965078986913682cf7d454121046bbcfcea4ce2d251a8b554e6",
+            "publishedSha256": "ec5034df660fc235839b503e5d57a8b1338a72accdedacdef6778ab0f97b732b"
+          },
+          {
+            "package": "@oh-my-pi/pi-ai",
+            "path": "src/auth/types.ts",
+            "pinnedSha256": "2089096b131e497a8dd9408b7030ad890760af4f525897e211c48c050d420593",
+            "publishedSha256": "bdf0f6bbbe91cddafb6f7cb99d57299d0c120761542103dcb5b519e93aaed72b"
+          },
+          {
+            "package": "@oh-my-pi/pi-ai",
+            "path": "src/auth/pool.ts",
+            "pinnedSha256": "0d2122cc9262569a9ab886098a2469f8cbb6d61730d7638b4acfb7ff2e1d0d6f",
+            "publishedSha256": "9aaa50a81bd0919ad5a65961f121b227609a0d070dc9477c05fa2a9af97d33a4"
+          },
+          {
+            "package": "@oh-my-pi/pi-ai",
+            "path": "src/auth/refresh.ts",
+            "pinnedSha256": "a5df42f86a3cf8ddcc7e7d631eeaf91429139b8c2d8db4808be04982d6a0d43f",
+            "publishedSha256": "597de9520ce8fa429f916c23b180d08fc7301d7d8d9a42fe79b3723d5f28a891"
+          },
+          {
+            "package": "@oh-my-pi/pi-ai",
+            "path": "src/auth/policy.ts",
+            "pinnedSha256": "ab42fb43c953f1d9df5911a543905ce6e1632b54295c4a5cea9bd2b0f943b70e",
+            "publishedSha256": "184270084b4a07431df3a59c110ecb2f7506936754de30cf7c06093867af0256"
+          },
+          {
+            "package": "@oh-my-pi/pi-coding-agent",
+            "path": "src/config/model-registry.ts",
+            "pinnedSha256": "47b2c18a7274749672114cd063387c089a16839fefdce95f4a89d726e3b9aab4",
+            "publishedSha256": "40d46daf799b4d8e36f74ccbb816ee8bd9be5690be49aa367623b04a4b2c570c"
+          }
+        ],
+        "conclusion": "Auth account identity/replacement, refresh/policy and model registry differ. New create/close observations here do not replace credential conversion or provider acceptance."
+      },
+      {
+        "priorProbeIds": [
+          "capabilities.completion-text",
+          "capabilities.completion-structured",
+          "capabilities.completion-cancel",
+          "capabilities.completion-failure",
+          "capabilities.real-provider"
+        ],
+        "files": [
+          {
+            "package": "@oh-my-pi/pi-ai",
+            "path": "src/stream.ts",
+            "pinnedSha256": "718ee7cdab5873f09214cf32b2c8bff562fc1117a3be5f9d5e1b1a9fb9ce2351",
+            "publishedSha256": "db7f00fb738133f096d89a9da46d0fbf14ff82f4e3913e3b9cfd0d460a7da288"
+          },
+          {
+            "package": "@oh-my-pi/pi-ai",
+            "path": "src/providers/openai-completions.ts",
+            "pinnedSha256": "084b4d9d92e8a6ca88fca22b9c4a607c400e67160c8c5d8ff77f38e18812e28e",
+            "publishedSha256": "07f6663b41c8242b812fa86d30a30f37846835294fee8049bcb8b244e742878b"
+          },
+          {
+            "package": "@oh-my-pi/pi-ai",
+            "path": "src/types.ts",
+            "pinnedSha256": "fd94f7e1af0e0346f74ae20c8660960a2acb67f803881b849176a6119798bedb",
+            "publishedSha256": "27835b173a1f16d516c95cae4ab62d016bce01d74a7a272acea24b0735eab0d1"
+          }
+        ],
+        "conclusion": "Completion dispatcher/provider bytes differ even though MockModel itself matches."
+      },
+      {
+        "priorProbeIds": [
+          "capabilities.approval",
+          "capabilities.question",
+          "capabilities.mcp"
+        ],
+        "files": [
+          {
+            "package": "@oh-my-pi/pi-coding-agent",
+            "path": "src/extensibility/extensions/runner.ts",
+            "pinnedSha256": "66eb6af97dc83ec1489073da3858c19d03746e9eb070f4d92f46f94810c0db0a",
+            "publishedSha256": "cdf3f8b2d80da336a443c6cbd5616f84859624b8d73fd5b8347b5572fed5f28c"
+          },
+          {
+            "package": "@oh-my-pi/pi-coding-agent",
+            "path": "src/tools/ask.ts",
+            "pinnedSha256": "2a4dd55c5e4fd6caa0596a5e22719446eb2a78fbb2b6eae1be8ac3f3025e8f5a",
+            "publishedSha256": "043631ea6666a44f9eeef8e76f033a400261143e825eda6910b2c6968b89f325"
+          },
+          {
+            "package": "@oh-my-pi/pi-coding-agent",
+            "path": "src/mcp/manager.ts",
+            "pinnedSha256": "d2905c1642d33ab25875262862984437a345e0014e2877280ea0c9c067b796c7",
+            "publishedSha256": "e21868de7c19cdf218cf8965700393687132e56b34f278c6155b0eaed2183227"
+          },
+          {
+            "package": "@oh-my-pi/pi-coding-agent",
+            "path": "src/mcp/client.ts",
+            "pinnedSha256": "479aef6ddda012f8402bc2480637a8c71ada8597d9705a56080dd3ed7c7d3fe9",
+            "publishedSha256": "d1c8a899a76d998c6d55a10ba99c2866fdeec984aa4308c9937a33fdbb88ea7e"
+          }
+        ],
+        "conclusion": "The exercised extension, question and MCP owner bytes differ."
+      }
+    ],
+    "unchangedDirectSkillSeams": [
+      {
+        "package": "@oh-my-pi/pi-coding-agent",
+        "path": "src/extensibility/skills.ts",
+        "sha256": "50892b528c20ab1fc901dad90e3900f05433d64767710e288d1821c96f50ea85",
+        "identical": true
+      },
+      {
+        "package": "@oh-my-pi/pi-coding-agent",
+        "path": "src/discovery/builtin.ts",
+        "sha256": "957a5a641b602917cdb817139c3926ca9a533bd39375801f026c84bf10900ed5",
+        "identical": true
+      },
+      {
+        "package": "@oh-my-pi/pi-coding-agent",
+        "path": "src/capability/index.ts",
+        "sha256": "5d754c7e8e82ccffdd83b278a0a59e3b597800f62e256b63e6c894102c8cd4c1",
+        "identical": true
+      }
+    ],
+    "skillsConclusion": "No direct byte invalidation established for capabilities.skills. It remains partial for the pinned source; changed discovery/helpers.ts and the unproven published dependency closure prevent claiming whole-package coverage. No new skills guarantee or rerun is claimed.",
+    "unaffectedNonSdkEvidence": [
+      "runner/process-group/pidfd cleanup tooling independent of SDK package bytes"
+    ],
+    "sourceIdentityConclusion": "Prior source-identity results attest only the pinned authored-source fingerprint, not npm tarball identity."
+  },
+  "pinnedSourcePackaging": {
+    "status": "unverified",
+    "sourceReferences": [
+      "scripts/ci-release-publish.ts:10-39,164-188,239-287,306-342,347-360",
+      "packages/coding-agent/package.json:522-569",
+      "package.json:7-69"
+    ],
+    "finding": "The pinned source defines a Bun pack/release path and source workspace entrypoints. Catalog values match published18.8.9 versions, but packing only coding-agent resolves its siblings to the older registry bytes. [INFERENCE] A source-derived local artifact set can preserve c9de2b02 only if all first-party workspace dependencies resolve to that same authored snapshot by explicit local artifact/hash bindings, with third-party lock and generated/native inputs pinned separately. This task does not prove such an install.",
+    "nativeLimit": "The accepted authored fingerprint excludes Rust sources and native/*.js. Existing prebuilt binary equality is not c9de2b02 native source equivalence.",
+    "buildPackInstallPerformed": false,
+    "runtimeSelectionChanged": false,
+    "catalogResolutionLimit": "Bun pack resolves catalog/workspace references to versions. A source coding-agent tarball with unchanged18.8.9 sibling declarations alone would silently select published fa5ff4a3-era dependencies, not source-pinned siblings."
+  },
+  "commands": {
+    "metadataRequest": {
+      "method": "GET",
+      "url": "https://registry.npmjs.org/@oh-my-pi%2fpi-coding-agent/18.8.9"
+    },
+    "tarballRequests": [
+      {
+        "method": "GET",
+        "url": "https://registry.npmjs.org/@oh-my-pi/pi-coding-agent/-/pi-coding-agent-18.8.9.tgz"
+      },
+      {
+        "method": "GET",
+        "url": "https://registry.npmjs.org/@oh-my-pi/omp-stats/-/omp-stats-18.8.9.tgz"
+      },
+      {
+        "method": "GET",
+        "url": "https://registry.npmjs.org/@oh-my-pi/omptype/-/omptype-18.8.9.tgz"
+      },
+      {
+        "method": "GET",
+        "url": "https://registry.npmjs.org/@oh-my-pi/pi-agent-core/-/pi-agent-core-18.8.9.tgz"
+      },
+      {
+        "method": "GET",
+        "url": "https://registry.npmjs.org/@oh-my-pi/pi-ai/-/pi-ai-18.8.9.tgz"
+      },
+      {
+        "method": "GET",
+        "url": "https://registry.npmjs.org/@oh-my-pi/pi-catalog/-/pi-catalog-18.8.9.tgz"
+      },
+      {
+        "method": "GET",
+        "url": "https://registry.npmjs.org/@oh-my-pi/pi-mnemopi/-/pi-mnemopi-18.8.9.tgz"
+      },
+      {
+        "method": "GET",
+        "url": "https://registry.npmjs.org/@oh-my-pi/pi-natives/-/pi-natives-18.8.9.tgz"
+      },
+      {
+        "method": "GET",
+        "url": "https://registry.npmjs.org/@oh-my-pi/pi-tui/-/pi-tui-18.8.9.tgz"
+      },
+      {
+        "method": "GET",
+        "url": "https://registry.npmjs.org/@oh-my-pi/pi-utils/-/pi-utils-18.8.9.tgz"
+      },
+      {
+        "method": "GET",
+        "url": "https://registry.npmjs.org/@oh-my-pi/pi-wire/-/pi-wire-18.8.9.tgz"
+      },
+      {
+        "method": "GET",
+        "url": "https://registry.npmjs.org/@oh-my-pi/snapcompact/-/snapcompact-18.8.9.tgz"
+      },
+      {
+        "method": "GET",
+        "url": "https://registry.npmjs.org/@oh-my-pi/pi-natives-linux-x64/-/pi-natives-linux-x64-18.8.9.tgz"
+      }
+    ],
+    "provenanceRequest": {
+      "method": "GET",
+      "url": "https://registry.npmjs.org/-/npm/v1/attestations/@oh-my-pi%2fpi-coding-agent@18.8.9"
+    },
+    "downloadImplementation": "Python urllib.request.urlopen with bounded timeout; tarfile reads regular members in memory, then path-constrained scratch extraction; no npm/bun install",
+    "comparisonAlgorithm": "Compare SHA-256 for every common packages/<workspace>/src/** regular file against tarball package/src/**; exclude only src/export/html/tool-views.generated.js. Record differing, pinned-only and published-only paths. Manifest hashes are recorded separately. Native core native/*.js and native/*.d.ts are compared separately.",
+    "dependencyResolution": "Downloaded first-party packages occupy <SCRATCH>/published/node_modules/@oh-my-pi. Non-OMP dependencies are read-only symlinks to existing <OMP_SOURCE>/node_modules entries. No source workspace first-party fallback exists in the published scope.",
+    "pathAndNativeCommandsArtifact": "auth-paths.json"
+  },
+  "limits": [
+    "No application dependency was added. No existing lifecycle/capability/isolation/restart suite was rerun. No builds, pack/install command, tests, lint or formatters were run.",
+    "Published package root/CLI initialization and full provider behavior were not exercised. All downloaded first-party metadata/tarballs were compared, but only dirs/AuthStorage import closure and native resolution were observed at runtime.",
+    "Registry integrity hashes were verified; npm/Sigstore signature trust was not independently verified. No GitHub network calls were made.",
+    "Linux x64 only. XDG state/profile/custom config-name permutations were outside the bounded default/config-data-cache/agent-override question."
+  ],
+  "cleanup": {
+    "scratchLabel": "<SCRATCH>",
+    "temporaryProbeScriptsRemoved": true,
+    "downloadedPackageFilesRemoved": true,
+    "isolatedHomesDatabasesAndCachesRemoved": true,
+    "allObservationProcessesExited": true,
+    "externalSourceEdited": false,
+    "applicationDependenciesChanged": false,
+    "parentTreeEdited": false,
+    "scratchRemovalObserved": true,
+    "cleanupCommand": "rm -rf -- <SCRATCH>",
+    "cleanupExitCode": 0
+  },
+  "redactions": [
+    "absolute host paths",
+    "inherited environment values except controlled paths",
+    "user storage and credentials",
+    "raw exception text",
+    "package/source file contents other than disposable probe source"
+  ],
+  "additionalSdkFactoryDifference": {
+    "file": {
+      "package": "@oh-my-pi/pi-coding-agent",
+      "path": "src/sdk.ts",
+      "pinnedSha256": "3f3a0575b0aa0e12d83fa0b6d0fe831ff919c6b3a0739ca80b10a273074d569d",
+      "publishedSha256": "4b9f9aa2a62deacfbe36fa0ea0e262b2c4d753fb724de0dea8a0e379bf60f8c8"
+    },
+    "observation": "Pinned source creates one AsyncJobManager per root and explicitly passes the parent manager to children; published source selects a process-global singleton. SDK factory is not exercised by the earlier manual AgentSession fixture; its difference is separate packaging/production integration risk, not an observed runtime regression."
+  },
+  "entrypointDifferences": {
+    "runtimeRoot": "Both coding-agent manifests use ./src/index.ts; index.ts bytes are identical, but re-exported authored owners differ.",
+    "sourceCLI": "src/cli.ts",
+    "publishedCLI": "dist/cli.js",
+    "sourceTypes": "./src/index.ts",
+    "publishedTypes": "./dist/types/index.d.ts",
+    "typeAndCLIBundleExplanation": "Publish-time rewrite is documented in pinned scripts/ci-release-publish.ts. Authored src differences cannot be explained by these packaging transforms.",
+    "generatedToolViewsExcluded": {
+      "path": "src/export/html/tool-views.generated.js",
+      "currentSourceTreeSha256": "f63d8bbed089cb1fccc11187e81543041e9dfa20dbc74a5dfd2fb82f90a7e50b",
+      "publishedSha256": "f63d8bbed089cb1fccc11187e81543041e9dfa20dbc74a5dfd2fb82f90a7e50b"
+    }
+  },
+  "projectionNotes": [
+    "Full repeated export/dependency maps omitted. Relevant export conditions and runtime entrypoints retained; direct dependency declarations/resolution remain authoritative in directDependencyDeclarationsAndExistingResolution.",
+    "Broad changed-source inventory retains paths/counts, not duplicate paired hashes. Exact changed exercised seam hashes remain in priorEvidenceReuse and additionalSdkFactoryDifference. Observation results, mismatch status, limits, commands and cleanup are unchanged."
+  ]
+}

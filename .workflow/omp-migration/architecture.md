@@ -592,8 +592,8 @@ OpenChamber supports third-party extensions via `@openchamber/sdk` (`packages/sd
    there is no sandbox for services. A service runs with the user's full access.
    ```
    Guest services run as child processes spawned by the Host Gateway using `ELECTRON_RUN_AS_NODE` or system Node. They inherit user privileges and can access the network and local file system.
-3. **OMP Permissions Cannot Promise Unverified Coverage:**
-   M0 observed controlled extension approval and ask seams. Complete built-in permission coverage remains unverified. Neither an approval hook nor a dedicated worker confines a Guest service's operating-system access.
+3. **OMP Permissions Are Scoped to Exercised SDK Paths:**
+   M0 observed controlled extension approval and ask seams. Task 28 additionally observed installed public-factory built-in `write` approval/deny, `bash` selector cancellation and headless refusal on Linux x64, with no side effect after refusal and cleanup. This is SDK evidence only; Host authorization, service request CAS and worker restart expiry remain separate boundaries. Neither an approval hook nor a dedicated worker confines a Guest service's operating-system access.
 
 ### Architectural boundary rules
 

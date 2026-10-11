@@ -1,0 +1,236 @@
+{
+  "schemaVersion": 1,
+  "task": "omp-through-m3/28",
+  "observedAt": "2026-10-12",
+  "status": "observed-with-required-gaps",
+  "m0Accepted": false,
+  "inputs": {
+    "sourceRevision": "c9de2b02b997f37cc89639282ed35dec86f139e8",
+    "artifactSetSha256": "d4652edea9d0b09c76c793a2ef54efb0331a89b770def0cc42b9ae849d31da34",
+    "consumerLockSha256": "03981eeabb92a06eb59ebbacd0139abe92ce00854b396e461daf9c70f9df6847",
+    "packageVersion": "18.8.9",
+    "packageInputs": "Task-24 immutable source-derived installed consumer and frozen lock reused; no registry substitute or rebuild",
+    "bunVersion": "1.4.2",
+    "platform": "linux-x64"
+  },
+  "invocation": {
+    "command": "bun run task28-public-factory-permissions.ts",
+    "cwd": "/tmp/ohpi-m0-evidence-consumer",
+    "timeoutSeconds": 180,
+    "exitCode": 0,
+    "stdout": "One sanitized JSON result object emitted; no raw provider payloads, prompts, tool arguments, paths or secrets",
+    "stderr": "empty",
+    "environment": "Private HOME, PI_CODING_AGENT_DIR, workspace, TMPDIR and XDG roots; minimal PATH; loopback fixture bound only to 127.0.0.1 on an ephemeral port",
+    "runtimeImports": "Installed public package exports only; public createAgentSession, buildModel, AuthStorage, ModelRegistry and ExtensionUIContext; no CLI/RPC substitute, custom echo tool, session stream replacement or internal monkey-patch",
+    "applicationOrDependencyChanges": false
+  },
+  "factory": {
+    "createdForEachCase": true,
+    "factory": "@oh-my-pi/pi-coding-agent#createAgentSession",
+    "model": "Synthetic local OpenAI-compatible SSE model with expected model id; all eight requests used the synthetic authorization header",
+    "extensionLoading": "disableExtensionDiscovery true with the public inline observer extension; restrictToolNames false was required for caller extensions to bind, while toolNames requested write and bash",
+    "observerHandlersLoaded": [
+      "tool_approval_requested",
+      "tool_approval_resolved",
+      "session_start",
+      "session_switch",
+      "session_branch",
+      "session_tree",
+      "session_shutdown",
+      "agent_end",
+      "before_agent_start"
+    ],
+    "availableTools": [
+      "write",
+      "bash",
+      "goal",
+      "init_experiment",
+      "run_experiment",
+      "log_experiment",
+      "update_notes"
+    ],
+    "builtInToolsExercised": ["write", "bash"]
+  },
+  "server": {
+    "bound": "127.0.0.1",
+    "requestCount": 8,
+    "requestsPerCase": 2,
+    "allRequestsUsedSyntheticAuthorization": true,
+    "allRequestsUsedExpectedModel": true,
+    "unknownRequests": 0,
+    "errors": []
+  },
+  "cases": [
+    {
+      "case": "approved-write",
+      "tool": "write",
+      "decision": "approve",
+      "hasUI": true,
+      "factoryCreated": true,
+      "promptReturned": true,
+      "promptError": null,
+      "approval": {
+        "requested": true,
+        "resolved": true,
+        "approvalMode": "always-ask",
+        "approved": true,
+        "toolCallIdPresent": true,
+        "sessionIdPresent": true,
+        "reasonPresent": false,
+        "uiSelectCalls": 1
+      },
+      "execution": {
+        "start": 1,
+        "end": 1,
+        "isError": false,
+        "result": "actual write completed"
+      },
+      "sideEffectBeforeCleanup": {
+        "fileExists": true,
+        "contentMatches": true
+      },
+      "cleanup": {
+        "caseRootRemoved": true
+      },
+      "runtimeErrors": []
+    },
+    {
+      "case": "denied-write",
+      "tool": "write",
+      "decision": "deny",
+      "hasUI": true,
+      "factoryCreated": true,
+      "promptReturned": true,
+      "promptError": null,
+      "approval": {
+        "requested": true,
+        "resolved": true,
+        "approvalMode": "always-ask",
+        "approved": false,
+        "toolCallIdPresent": true,
+        "sessionIdPresent": true,
+        "reasonPresent": true,
+        "uiSelectCalls": 1
+      },
+      "execution": {
+        "start": 1,
+        "end": 1,
+        "isError": true,
+        "result": "Tool call denied by user: write"
+      },
+      "sideEffectBeforeCleanup": {
+        "fileExists": false,
+        "contentMatches": false
+      },
+      "cleanup": {
+        "caseRootRemoved": true
+      },
+      "runtimeErrors": []
+    },
+    {
+      "case": "cancelled-bash",
+      "tool": "bash",
+      "decision": "cancel",
+      "hasUI": true,
+      "factoryCreated": true,
+      "promptReturned": true,
+      "promptError": null,
+      "approval": {
+        "requested": true,
+        "resolved": true,
+        "approvalMode": "always-ask",
+        "approved": false,
+        "toolCallIdPresent": true,
+        "sessionIdPresent": true,
+        "reasonPresent": true,
+        "uiSelectCalls": 1,
+        "selectorResult": "undefined (supported cancellation)"
+      },
+      "execution": {
+        "start": 1,
+        "end": 1,
+        "isError": true,
+        "result": "Tool call denied by user: bash"
+      },
+      "sideEffectBeforeCleanup": {
+        "fileExists": false,
+        "contentMatches": false
+      },
+      "cleanup": {
+        "caseRootRemoved": true
+      },
+      "runtimeErrors": []
+    },
+    {
+      "case": "headless-bash",
+      "tool": "bash",
+      "decision": "headless",
+      "hasUI": false,
+      "factoryCreated": true,
+      "promptReturned": true,
+      "promptError": null,
+      "approval": {
+        "requested": true,
+        "resolved": true,
+        "approvalMode": "always-ask",
+        "approved": false,
+        "toolCallIdPresent": true,
+        "sessionIdPresent": true,
+        "reasonPresent": true,
+        "uiSelectCalls": 0
+      },
+      "execution": {
+        "start": 1,
+        "end": 1,
+        "isError": true,
+        "result": "requires approval but no interactive UI available"
+      },
+      "sideEffectBeforeCleanup": {
+        "fileExists": false,
+        "contentMatches": false
+      },
+      "cleanup": {
+        "caseRootRemoved": true
+      },
+      "runtimeErrors": []
+    }
+  ],
+  "cleanup": {
+    "runRootRemoved": true,
+    "serverStopped": true,
+    "sessionsDisposed": 4,
+    "authStoresClosed": 4,
+    "privateRuntimeStateRemoved": true,
+    "throwawayProbeStateRemovedAfterCapture": true,
+    "packageInputsChanged": false
+  },
+  "setupCorrections": [
+    {
+      "status": "superseded-before-final-evidence",
+      "detail": "The first fixture run set restrictToolNames true, which intentionally omitted caller inline extensions and left the observer unbound. The final run used the public full-factory path with restrictToolNames false, disabled ambient discovery, and kept write/bash as the requested tools."
+    },
+    {
+      "status": "superseded-before-final-evidence",
+      "detail": "The first interactive fixture UI omitted the public setWidget method and produced autoresearch extension UI errors. The final fixture supplied the supported setWidget surface; all final runtimeErrors arrays were empty."
+    },
+    {
+      "status": "superseded-before-final-evidence",
+      "detail": "An interim cancellation fixture threw from ExtensionUIContext.select. That exercised injected UI-error handling rather than the supported selector cancellation result. The final fixture returns undefined from select, matching the public cancellation seam."
+    }
+  ],
+  "unexercised": {
+    "realProviderOrExternalNetwork": "not used",
+    "oauthRefreshScopesAndAccountSelection": "not exercised",
+    "nonLinuxAndMacOSInteractiveBehavior": "not exercised",
+    "hostGatekeeperAuthorization": "not exercised",
+    "serviceCasRequestHandlesAndStaleResolution": "not exercised",
+    "restartExpiryAndCrossWorkerResolution": "not exercised",
+    "questionUi": "not exercised by this task"
+  },
+  "limits": [
+    "This is one Linux x64 run of the installed public SDK against a controlled loopback model; it proves the exercised factory and built-in permission seams, not external provider availability or credential conversion.",
+    "The controlled UI select implementation is a disposable public ExtensionUIContext fixture. It does not prove a Host or terminal UI rendering integration.",
+    "Approval events expose presence and boolean outcome only; raw reasons, IDs, prompt text, arguments, paths and responses were not retained.",
+    "The result closes the reachable full-factory interactive permission evidence gap for this M0 slice, but M0 remains blocked on maintainer-owned provider/OAuth conversion feasibility and non-Linux/macOS worker-resource decisions."
+  ]
+}

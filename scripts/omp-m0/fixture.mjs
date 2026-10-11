@@ -21,7 +21,7 @@ export async function loadFixtureSDK(context) {
   return { Agent: core.Agent, createMockModel: mock.createMockModel, AgentSession: session.AgentSession, SessionManager: manager.SessionManager, Settings: settings.Settings, AuthStorage: storage.AuthStorage, ModelRegistry: registry.ModelRegistry, type: schema.type, convertToLlm: messages.convertToLlm };
 }
 
-export async function createFixtureSession(context, { responses, tools = [], manager, persistent = false, settings = {}, skills = [], extensionRunnerFactory }) {
+export async function createFixtureSession(context, { responses, tools = [], manager, persistent = false, settings = {}, skills = [], extensionRunnerFactory, agentId, asyncJobManager, ownedAsyncJobManager }) {
   const sdk = await loadFixtureSDK(context);
   // The registry already treats 'local' as keyless. The transport is exclusively
   // MockModel.stream, so this label never selects a real provider or endpoint.
@@ -34,7 +34,7 @@ export async function createFixtureSession(context, { responses, tools = [], man
   try {
     const isolatedSettings = sdk.Settings.isolated({ 'compaction.enabled': false, 'todo.enabled': false, 'retry.enabled': false, 'secrets.enabled': false, 'advisor.enabled': false, 'autolearn.enabled': false, ...settings });
     const extensionRunner = extensionRunnerFactory?.({ manager: sessionManager, modelRegistry, settings: isolatedSettings });
-    session = new sdk.AgentSession({ agent, sessionManager, skills, extensionRunner, settings: isolatedSettings, modelRegistry, toolRegistry: new Map(tools.map(tool => [tool.name, tool])), memoryEnabled: false, autoTitle: false, interactivePrompts: false, sideStreamFn: model.stream });
+    session = new sdk.AgentSession({ agent, sessionManager, skills, extensionRunner, settings: isolatedSettings, modelRegistry, toolRegistry: new Map(tools.map(tool => [tool.name, tool])), memoryEnabled: false, autoTitle: false, interactivePrompts: false, sideStreamFn: model.stream, agentId, asyncJobManager, ownedAsyncJobManager });
   } catch (error) { authStorage.close(); throw error; }
   return { session, agent, model, manager: sessionManager, authStorage, modelRegistry, async dispose() { try { await session.dispose(); } finally { authStorage.close(); } } };
 }

@@ -1,0 +1,326 @@
+{
+  "schemaVersion": 2,
+  "run": {
+    "sourceRevision": "c9de2b02b997f37cc89639282ed35dec86f139e8",
+    "packageVersion": "18.8.9",
+    "bunVersion": "1.4.2",
+    "platform": "linux-x64",
+    "startedAt": "2026-10-11T13:55:53.896Z",
+    "command": "bun run scripts/omp-m0/run.mjs --suite guest-shell --fixture --output <report> --timeout-ms 60000",
+    "fixture": true,
+    "suite": "guest-shell",
+    "realProvider": false,
+    "timeoutMs": 60000,
+    "packageName": "@oh-my-pi/pi-coding-agent",
+    "sourceFingerprint": "b70a2f4afd9fd8fa9ec20094e9658b528e943eff52608d296af2366b80241ad1",
+    "sourceFingerprintScope": "packages/*/src/** excluding the listed generated artifacts, packages/*/package.json, package.json, bun.lock",
+    "fingerprintFileCount": 3499,
+    "identityMethod": "pinned authored-source fingerprint; generated artifacts hashed separately; snapshot without Git history",
+    "acquisitionArchiveSha256": "06b6a671af953f5cdefe95cbd44271a5c20d9b9e951173af7d10d71e1b0dc150",
+    "archiveVerification": "unavailable; original acquisition archive not retained",
+    "generatedArtifacts": [
+      {
+        "path": "packages/coding-agent/src/export/html/tool-views.generated.js",
+        "sha256": "f63d8bbed089cb1fccc11187e81543041e9dfa20dbc74a5dfd2fb82f90a7e50b"
+      }
+    ],
+    "directories": {
+      "home": "<temporary-home>",
+      "agent": "<temporary-agent>",
+      "workspace": "<temporary-workspace>"
+    },
+    "workerExitPolicy": "explicit exit after suite resource cleanup; no implicit dependency installation",
+    "exitCode": 0
+  },
+  "probes": [
+    {
+      "id": "source-identity",
+      "capability": "source/package identity",
+      "status": "passed",
+      "observations": {
+        "fingerprintMatched": true,
+        "timeoutMs": 60000,
+        "exitCode": 0,
+        "cleanup": {
+          "resourcesCreated": false
+        }
+      },
+      "errors": [],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "guest-shell-start-output",
+      "capability": "real asynchronous command start and live output inspection",
+      "status": "passed",
+      "observations": {
+        "seam": "BashTool.execute async -> native executeBash -> AsyncJobManager; AgentSession snapshot and inspect",
+        "runningStatus": "running",
+        "terminalStatus": "completed",
+        "commandExitCode": 0,
+        "liveOutputBytes": 14,
+        "completedOutputBytes": 51,
+        "liveProcessCount": 1,
+        "workspaceMatched": true,
+        "startAndEndMarkersObserved": true,
+        "rawSuccessfulExitCodePresent": false,
+        "successfulExitCodeSource": "AgentSession.inspectAsyncJob synthesizes zero for completed bash",
+        "runtimeEvidence": "one disposable Linux SDK worker, not a connected service",
+        "startedAt": "2026-10-11T13:55:54.770Z",
+        "durationMs": 1073.5,
+        "timeoutMs": 12000,
+        "exitCode": 0
+      },
+      "errors": [],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "guest-shell-nonzero",
+      "capability": "nonzero exit status and retained failed output",
+      "status": "passed",
+      "observations": {
+        "terminalStatus": "failed",
+        "commandExitCode": 42,
+        "rawReportedExitCode": 42,
+        "failedOutputBytes": 65,
+        "endedAtRecorded": true,
+        "repeatedStopAccepted": false,
+        "startedAt": "2026-10-11T13:55:55.843Z",
+        "durationMs": 3.841,
+        "timeoutMs": 12000,
+        "exitCode": 0
+      },
+      "errors": [],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "guest-shell-output-limit",
+      "capability": "bounded inline output and raw SDK output artifact",
+      "status": "passed",
+      "observations": {
+        "terminalStatus": "completed",
+        "generatedBytes": 108924,
+        "retainedDataBytes": 51200,
+        "composedBodyBytes": 51224,
+        "inlineCompositionOverheadBytes": 24,
+        "finalNoticeBytes": 146,
+        "retainedInlineBytes": 51370,
+        "inlineDataLimitBytes": 51200,
+        "finalInlineLimitBytes": 53248,
+        "rawArtifactBytes": 108924,
+        "truncationDirection": "middle",
+        "rawArtifactResolved": true,
+        "artifactDiskCap": {
+          "sourceDefaultBytes": 16777216,
+          "capOverflowExercised": false
+        },
+        "retrieval": "inspectAsyncJob returns the latest inline string and an optional artifactId, not a byte cursor",
+        "startedAt": "2026-10-11T13:55:55.847Z",
+        "durationMs": 14.767,
+        "timeoutMs": 12000,
+        "exitCode": 0
+      },
+      "errors": [],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "guest-shell-owner-cancel",
+      "capability": "owner-filtered snapshots, inspection and cancellation of real commands",
+      "status": "passed",
+      "observations": {
+        "sameManagerDistinctAgentOwners": true,
+        "ownerFilteredRunningCounts": [
+          1,
+          1
+        ],
+        "foreignInspectionReturned": false,
+        "foreignStopAccepted": false,
+        "configuredRunningLimit": 2,
+        "capacityRejected": true,
+        "terminalStatuses": [
+          "cancelled",
+          "cancelled"
+        ],
+        "stopExitCode": null,
+        "underlyingProcessesExited": true,
+        "capturedLiveProcessCounts": [
+          1,
+          1
+        ],
+        "siblingSurvivedOtherOwnerStop": true,
+        "limitation": "agent owner filtering is not session, project or Guest capability authorization",
+        "startedAt": "2026-10-11T13:55:55.862Z",
+        "durationMs": 29.738,
+        "timeoutMs": 12000,
+        "exitCode": 0
+      },
+      "errors": [],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "guest-shell-retention",
+      "capability": "retention expiry removes real command inspection and snapshots",
+      "status": "passed",
+      "observations": {
+        "configuredRetentionMs": 600,
+        "configuredConsumedEvictionMs": 100,
+        "observedUnconsumedEvictionMs": 606.151,
+        "observedConsumedEvictionMs": 100.458,
+        "bothHandlesUnavailableAfterEviction": true,
+        "defaultRetentionFromPinnedSource": {
+          "unconsumedMs": 300000,
+          "consumedMs": 30000,
+          "defaultDurationsRuntimeExercised": false
+        },
+        "limitation": "SDK expiry is time-based; Guest newest-200 ended history requires a separate observation store",
+        "startedAt": "2026-10-11T13:55:55.892Z",
+        "durationMs": 717.688,
+        "timeoutMs": 12000,
+        "exitCode": 0
+      },
+      "errors": [],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "guest-shell-dispose",
+      "capability": "owning session shutdown cancels and reaps a live native command",
+      "status": "passed",
+      "observations": {
+        "owningSessionDisposed": true,
+        "terminalStatus": "cancelled",
+        "capturedLiveProcessCount": 1,
+        "underlyingProcessesExited": true,
+        "managerRowsAfterDispose": 0,
+        "pendingDeliveriesAfterDispose": 0,
+        "handleReadableAfterDispose": false,
+        "startedAt": "2026-10-11T13:55:56.609Z",
+        "durationMs": 27.84,
+        "timeoutMs": 12000,
+        "exitCode": 0
+      },
+      "errors": [],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "guest-shell-service-boundary",
+      "capability": "SDK execution owner and remaining service requirements",
+      "status": "passed",
+      "observations": {
+        "evidence": "pinned-source inspection; boundary classification only, not service runtime acceptance",
+        "executionOwner": "native BashTool execution retained by worker-local AsyncJobManager and AgentSession",
+        "snapshotMethods": [
+          "getAsyncJobSnapshot",
+          "inspectAsyncJob",
+          "cancelAsyncJob"
+        ],
+        "serviceAcceptanceExercised": false,
+        "reconnectAndWorkerRestart": "requires service registry and execution lifecycle; no reconstructable cross-worker SDK handle",
+        "outputCursor": "requires service byte-cursor storage with skipped detection; SDK inline strings can elide output",
+        "sessionProjectGlobalScope": "requires service ownership index and Guest capability checks; agent ownerId is not project authorization",
+        "endedHistory": "requires Guest observation retention capped at newest 200; SDK job rows expire by time",
+        "terminalReason": "service must preserve stop and timeout reasons; SDK failed status alone does not distinguish nonzero exit from timeout",
+        "scopeOfPass": "identifying these boundaries only; task 12 must exercise service guarantees"
+      },
+      "errors": [],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "guest-shell-cleanup",
+      "capability": "all created SDK sessions, managers and captured native processes cleaned up",
+      "status": "passed",
+      "observations": {
+        "sessionsDisposed": true,
+        "managersDisposed": true,
+        "managerCount": 2,
+        "trackedNativeProcessCount": 4,
+        "trackedNativeProcessesExited": true,
+        "directoryAndWorkerGroupCleanupOwner": "outer disposable runner",
+        "cleanupRunsInFinally": true,
+        "startedAt": "2026-10-11T13:55:56.637Z",
+        "durationMs": 1.883,
+        "timeoutMs": 12000,
+        "exitCode": 0
+      },
+      "errors": [],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    }
+  ],
+  "summary": {
+    "passed": 9,
+    "partial": 0,
+    "failed": 0,
+    "unsupported": 0,
+    "unavailable": 0,
+    "unknown": 0
+  },
+  "cleanup": {
+    "temporaryDirectoriesRemoved": true,
+    "workerExited": true,
+    "workerDescendantsExited": true,
+    "processGroupVerified": true,
+    "remainingProcessesDetected": false,
+    "signal": null
+  }
+}

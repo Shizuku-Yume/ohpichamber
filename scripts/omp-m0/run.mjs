@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { finishEnvelope, identifySource, ProbeError, probeResult, safeError, serializeEnvelope } from './envelope.mjs';
-import { captureProcessGroup, cleanupProcessGroup } from './process-group.mjs';
+import { captureProcessGroup, cleanupProcessGroup, enableWorkerSubreaper, restoreWorkerSubreaper } from './process-group.mjs';
 
 const directory = dirname(fileURLToPath(import.meta.url));
 const run = { sourceRevision: null, packageVersion: null, bunVersion: Bun.version, platform: `${process.platform}-${process.arch}`, startedAt: new Date().toISOString(), command: 'bun run scripts/omp-m0/run.mjs --suite lifecycle --fixture --output <report>', fixture: true };
@@ -50,7 +50,7 @@ try {
     else if (args[i] === '--timeout-ms') timeoutMs = Number(args[++i]);
     else throw new ProbeError('INVALID_ARGUMENTS');
   }
-  if (!fixture || !['lifecycle', 'isolation', 'capabilities', 'restart-pending'].includes(suite) || !output || !Number.isInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 300000 || (realProvider && suite !== 'capabilities')) throw new ProbeError('INVALID_ARGUMENTS');
+  if (!fixture || !['lifecycle', 'isolation', 'capabilities', 'restart-pending', 'guest-shell'].includes(suite) || !output || !Number.isInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 300000 || (realProvider && suite !== 'capabilities')) throw new ProbeError('INVALID_ARGUMENTS');
   run.command = `bun run scripts/omp-m0/run.mjs --suite ${suite} --fixture${realProvider ? ' --real-provider' : ''} --output <report> --timeout-ms ${timeoutMs}`;
   run.suite = suite;
   run.realProvider = realProvider;
@@ -79,6 +79,8 @@ try {
   await writeFile(join(sandbox, 'input.json'), JSON.stringify({ sourceDir, sandbox, suite, timeoutMs, realProvider }));
   if (interrupted || timedOut) throw new ProbeError(interrupted ? 'RUN_INTERRUPTED' : 'SUITE_TIMEOUT');
   if (process.platform !== 'linux') throw new ProbeError('PROCESS_GROUP_INSPECTION_UNAVAILABLE', 'unavailable');
+  try { enableWorkerSubreaper(); }
+  catch { throw new ProbeError('PROCESS_GROUP_OWNERSHIP_UNAVAILABLE', 'unavailable'); }
   child = spawn(process.execPath, ['--no-install', join(directory, 'worker.mjs'), join(sandbox, 'input.json')], {
     cwd: join(sandbox, 'workspace'),
     env: { HOME: join(sandbox, 'home'), USERPROFILE: join(sandbox, 'home'), XDG_CONFIG_HOME: join(sandbox, 'home/.config'), XDG_CACHE_HOME: join(sandbox, 'home/.cache'), TMPDIR: join(sandbox, 'tmp'), PI_CODING_AGENT_DIR: join(sandbox, 'agent'), OMP_AGENT_DIR: join(sandbox, 'agent'), PATH: '/usr/bin:/bin', NO_COLOR: '1', TERM: 'dumb', ...providerEnv },
@@ -124,6 +126,8 @@ try {
       try { await stat(sandbox); } catch (error) { if (error.code === 'ENOENT') cleanup.temporaryDirectoriesRemoved = true; }
     } catch { probes.push(probeResult('cleanup', 'temporary cleanup', 'failed', {}, ['CLEANUP_FAILED'])); exitCode = 1; }
   } else if (!sandbox) cleanup.temporaryDirectoriesRemoved = true;
+  try { restoreWorkerSubreaper(); }
+  catch { probes.push(probeResult('process-group-cleanup', 'disposable runner orphan ownership restoration', 'failed', {}, ['PROCESS_GROUP_OWNERSHIP_RESTORE_FAILED'])); exitCode = 1; }
 }
 
 let report;

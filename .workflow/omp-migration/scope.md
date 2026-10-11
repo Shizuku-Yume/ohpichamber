@@ -64,6 +64,8 @@ The final OMP cutover removes dependencies on OpenCode and the VS Code extension
 
 ### OpenCode retirement breakdown
 
+M1 extracts retained Host owners and prepares the explicit credential handoff. Final lifecycle, proxy and legacy configuration/credential removal occurs at the coordinated M3 cutover, after canonical service, server consumers, UI callers and the handoff are ready. Extraction does not pass final retirement acceptance.
+
 The following subsystems and files are scheduled for complete removal:
 1. OpenCode server proxy and lifecycle manager:
    - `packages/web/server/lib/opencode/lifecycle.js` and process watchers.
@@ -119,7 +121,7 @@ Milestones adhere to the project roadmap:
 - `M0`: Capability probe and contract definition.
 - `M1`: Host boundary extraction and VS Code retirement.
 - `M2`: SDK service execution closure and security boundaries.
-- `M3`: UI data layer cutover to Canonical Client.
+- `M3`: UI data layer cutover to Canonical Client and coordinated final OpenCode retirement.
 - `M4`: Advanced autonomous features (Goals, Assist, Walkthrough, Queue, Routing, Memory, Scheduled Tasks).
 - `M5`: Retained surfaces verification and release switchover.
 
@@ -165,7 +167,7 @@ Milestones adhere to the project roadmap:
 | `SCOPE-13.2` | 13.2 | Provider and Model Registry | Rewrite | Model selection, custom base URL, API keys, OAuth tokens, capability flags, context window, pricing | Agent Service / Host Gateway | M2 | Provider configuration maps directly to OMP ModelRegistry and AuthStorage; UI displays models with token limits and tags. |
 | `SCOPE-13.3` | 13.3 | Agent Profile Configuration | Rewrite | Agent profile editor, system prompt override, tool whitelist, model binding, permission presets | Agent Service / Client UI | M2 | Custom agent configurations map to OMP model roles and subagent specs, applying tool approval policies per agent profile. |
 | `SCOPE-13.4` | 13.4 | Model Context Protocol (MCP) | Rewrite | Stdio, SSE, and HTTP MCP servers, OAuth handshake, tool discovery, dynamic enable/disable | Agent Service / OMP SDK | M2 | MCP configuration writes to OMP MCP configuration; Agent Service connects to MCP servers without deferred restart delays. |
-| `SCOPE-13.5` | 13.5 | Skills Management and Execution | Retain | Standard `SKILL.md` parser, skill catalog download, workspace and global installation, prompt injection | Agent Service / Host Gateway | M3 | Skills catalog downloads and installs skills into `~/.config/omp/skills` or `.agents/skills`, exposing them to agent runtime. |
+| `SCOPE-13.5` | 13.5 | Skills Management and Execution | Retain | Standard `SKILL.md` parser, skill catalog download, workspace and global installation, prompt injection | Agent Service / Host Gateway | M3 | Skills catalog downloads and installs into the selected OMP agent directory's `skills/` (default `~/.omp/agent/skills/`) or project skill directories, including retained `.agents/skills/` support, exposing them to agent runtime through the service-owned expansion boundary. |
 | `SCOPE-14.1` | 14.1 | GitHub Integration | Retain | OAuth Device Flow, token encryption, PR status, multi-remote fork detection, PR review UI | Host Gateway | M1 | GitHub integration authenticates via Device Flow, queries GitHub GraphQL API, and renders PR reviews and checks. |
 | `SCOPE-14.2` | 14.2 | Linear Integration | Retain | OAuth PKCE, GraphQL API, team/project mapping, issue list, session progress comments, URL filter | Host Gateway | M1 | Linear integration links issues to sessions and posts progress updates while sanitizing localhost and internal network URLs. |
 | `SCOPE-14.3` | 14.3 | Quota and Usage Tracking | Rewrite | Provider usage APIs, token accounting, rate-limit cooldown, concurrency merging | Host Gateway | M4 | Usage dashboard queries provider billing endpoints using credentials from OMP AuthStorage, displaying token spend and rate limits. |
@@ -175,8 +177,8 @@ Milestones adhere to the project roadmap:
 | `SCOPE-15.2` | 15.2 | Remote Client Pairing | Retain | Long-lived Bearer tokens, token revocation, Pairing v2 handshake, ephemeral tokens, QR export | Host Gateway | M1 | Remote clients pair via encrypted token exchange or QR code, establishing authenticated sessions with explicit permission scopes. |
 | `SCOPE-15.3` | 15.3 | Remote Access Tunnels and Relays | Retain | Cloudflare Quick / Managed Tunnels, ngrok, E2EE Relay (ECDH + AEAD), Host Lock verification | Host Gateway | M1 | Host Gateway establishes outbound encrypted tunnels and relays, allowing secure remote browser and mobile connections. |
 | `SCOPE-16.0` | 16.0 | Guest Extension SDK | Retain | Iframe sandbox, early document bootstrap with one-shot `MessageChannel`, transferred `MessagePort` protocol, manifest parser, permission whitelist, background services | Host Gateway / Guest SDK | M5 | Guest extensions run in sandboxed iframes using `@openchamber/sdk`, receive a port only after an authorized document's early bootstrap, and invoke host services according to manifest permissions. Unapproved self-navigation receives no replacement port. |
-| `SCOPE-17.1` | 17.1 | OpenCode Proxy and Lifecycle | Retire | None; all proxy routing, port probing, and process management deleted | None | M1 | All OpenCode proxy endpoints and process managers removed; no network connections attempt to dial OpenCode binaries. |
-| `SCOPE-17.2` | 17.2 | OpenCode Configs and Credentials | Retire | None; `opencode.json` and legacy `auth.json` loading removed | None | M1 | Application config exclusively uses OhPiChamber settings and OMP configuration paths without creating OpenCode files. |
+| `SCOPE-17.1` | 17.1 | OpenCode Proxy and Lifecycle | Retire | None; all proxy routing, port probing, and process management deleted | Host Gateway / Agent Service | M3 | All OpenCode proxy endpoints and process managers removed; no network connections attempt to dial OpenCode binaries. M1 extracts retained Host owners; task 17 performs final removal after replacement consumers are ready. |
+| `SCOPE-17.2` | 17.2 | OpenCode Configs and Credentials | Retire | None; `opencode.json` and legacy `auth.json` loading removed | Host Gateway / Agent Service | M3 | Application config exclusively uses OhPiChamber settings and OMP configuration paths without creating OpenCode files. M1 prepares authenticated explicit intent/preflight; the real M2 service handoff passes gate 23 before task 17 removes legacy readers and importer. |
 | `SCOPE-17.3` | 17.3 | OpenCode-specific UI Controls | Retire | None; OpenCode settings tabs, upgrade toasts, and LSP error cleaners removed | None | M3 | Settings UI displays only OhPiChamber and OMP options; chat rendering parses canonical errors without OpenCode cleanup regexes. |
 | `SCOPE-17.4` | 17.4 | OpenCode Cloud Session Sharing | Retire | None; upstream cloud sharing removed; local export retained | None | M1 | Session share button removed or adapted to local JSON/markdown export; no calls made to external OpenCode sharing servers. |
 | `SCOPE-18.1` | 18.1 | FS Security Invariant | Retain | Canonical realpath comparison, symlink destination verification, path traversal denial, Range checks | Host Gateway | M1 | Host FS rejects requests targeting paths outside canonical workspace root, symlink escapes, or unverified path segments. |
@@ -214,7 +216,7 @@ This section provides granular technical requirements, constraints, and implemen
 #### ChatView and virtualized timeline (`SCOPE-4.1`, `SCOPE-4.2`)
 The chat interface renders an append-only timeline of conversation turns. The UI preserves virtualized scrolling via `@tanstack/react-virtual` to support transcripts with thousands of events without performance degradation.
 - Streaming state machine: The client tracks session state across `idle`, `running`, `waiting_approval`, `waiting_input`, and `error`.
-- Turn lifecycle distinction: The client must distinguish between model turn completion and outer user request turn completion. An OMP `turn_end` or `turn.completed` event indicates that a specific model generation cycle has finished. If that turn invoked a tool, requested an approval, or prompted an autonomous follow-up, the overall user request remains active. The timeline spinner remains active until the Host Gateway signals complete request resolution.
+- Turn lifecycle distinction: The client must distinguish model turn completion from outer user request completion. Raw OMP `turn_end` is projected into canonical `turn.completed`; the dotted name is an intentional service event, not an observed SDK alias. Tool calls, approval waits and autonomous follow-ups can keep the overall request active. The timeline spinner remains active until canonical `run.completed` resolves that request.
 - Reasoning blocks: Assistant reasoning tokens render inside collapsible thought containers. The container auto-expands while streaming and collapses on completion if configured by user preferences.
 
 #### Tool execution and cards (`SCOPE-4.3`)
@@ -238,7 +240,7 @@ Slash commands provide rapid invocation of agent actions and installed prompt te
 - Command runtime (target cutover): All legacy references to `.opencode/commands` are deleted. Slash commands are registered through two sources:
   1. Built-in OMP commands (such as `/clear`, `/help`, `/compact`).
   2. Workspace and user skills formatted as standard `SKILL.md` documents.
-- Skills storage: Skills are stored in `~/.config/omp/skills/` (global) and `.agents/skills/` (project-local). The skills catalog UI allows browsing, installing, and updating skills without modifying core application code.
+- Skills storage: Global skills use the selected OMP agent directory's `skills/` (default `~/.omp/agent/skills/`); project `.omp/skills/` was exercised, while retained `.agents/skills/` discovery remains a requirement to prove. The Host catalog installs files; the Agent Service discovers and expands skills through OMP, not client-side substitution. See [the skill contract](contracts.md#skill-storage-and-expansion) for the observed and required boundaries. The catalog supports browsing, installing and updating without modifying core application code.
 
 ### Approvals, interactive input, and safety
 
@@ -330,13 +332,13 @@ The Guest SDK (`@openchamber/sdk`) allows third-party extensions to embed custom
 The following technical areas contain known constraints, deferred capabilities, or pending empirical validations that must be handled conservatively during implementation.
 
 ### Multi-session isolation in OMP SDK
-- Status: Unverified in multi-threaded Bun processes.
-- Constraint: Legacy OpenCode RPC operated on a strict 1-process-to-1-active-session model. It is unverified whether the OMP SDK can safely execute multiple concurrent sessions with separate working directories and environment states inside a single long-lived Bun process without global state pollution.
-- Decision: OhPiChamber adopts a conservative worker-per-session model. The Bun Agent Service will spawn dedicated worker processes for active sessions until milestone `M0` concurrency probe benchmarks establish whether shared-process multi-session isolation is robust.
+- Status: Dedicated-worker fixture isolation passed; shared-process cwd/env modes failed on Linux. See [the isolation artifact](m0/isolation-artifact.json).
+- Constraint: The exercised SDK shares process state that prevents independent concurrent cwd and environment ownership in one Bun process. Fixture success is not actual Agent Service resource or cross-platform evidence.
+- Decision: Each active root session has a dedicated worker process; its OMP subagents remain within that worker's ownership. Shared-process pooling is not the chosen topology. Preserve the failed 100 MiB result and existing maintainer acceptance of measured Linux RSS as an M0 limitation; actual service measurements belong to M2.
 
 ### Turn completion semantics
 - Status: Architectural invariant.
-- Constraint: In streaming agent protocols, receiving a model `turn_end` or `turn.completed` event does not imply that the overarching user turn or task is finished. A model turn may trigger one or more tool calls, wait on user permission approvals, request interactive input, or initiate autonomous follow-up turns.
+- Constraint: Raw OMP `turn_end`, projected as canonical `turn.completed`, does not imply that the overarching user request is finished. A model turn may trigger tools, wait on approvals, request interactive input, or initiate autonomous follow-ups. Canonical `run.completed` is the service's outer-request completion signal, not another name for the raw model event.
 - Decision: The Host Gateway maintains an explicit User Request state machine. A turn is only declared finished and notifications emitted when the agent reaches a stable `idle` state with no pending tool calls, approvals, or supervisor goals.
 
 ### Cloud session sharing
@@ -351,8 +353,8 @@ The following technical areas contain known constraints, deferred capabilities, 
 
 ### Identity and credential migration
 - Status: Required one-time explicit user-triggered importer with provider feasibility gate; no automatic startup import.
-- Constraint: OpenCode stored provider API keys, OAuth tokens, and quota usage credentials under `~/.local/share/opencode/auth.json` and `.opencode/auth.json`. OhPiChamber cannot read these paths after OpenCode logic is removed.
-- Decision: Milestone `M1` includes a dedicated one-time user-triggered migration utility before retiring legacy OpenCode paths. The importer reads documented legacy credential records, validates provider feasibility against OMP `AuthStorage` (`agent.db`) and OhPiChamber settings (`~/.config/ohpichamber/settings.json`), reports per-provider success or explicit failure requiring user re-authentication, and does not promise conversion for unsupported formats. It never runs automatically at startup or acts as a runtime fallback.
+- Constraint: The refreshed Host obtains OpenCode credentials through its secret-bearing credential API; historical auth files alone do not describe the current source. Stored-format conversion, OAuth refresh and scope compatibility remain unverified. No credential may enter public DTOs or logs; selected-provider authenticated traffic remains necessary and permitted under existing policy.
+- Decision: M1 task 05 prepares the authenticated one-time user intent/preflight and reports service absence truthfully, without reading/staging secrets, writing SDK AuthStorage from Node or claiming imported. M2 task 22, after the real service exists, obtains only explicitly selected Host credential records or supported selected files, hands them privately to the Bun OMP owner, validates AuthStorage write/read-reload and provider-specific success or explicit unsupported/re-authentication failure. No unsupported conversion is promised, startup never imports, and no runtime fallback exists. M2 gate 23 preserves the actual handoff acceptance; task 17 removes importer and legacy readers at M3, leaving no legacy credential path for M5.
 ### Guest SDK declarative tools
 - Status: Declaration only; no runtime execution.
 - Constraint: The historical Guest inspection found that `contributes.tools` in the Guest extension manifest is declarative metadata used to display tool cards; it does not provide an in-process executable tool dispatch runtime in the adopted source.

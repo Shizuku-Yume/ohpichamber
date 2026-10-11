@@ -27,7 +27,7 @@ Codebase references point to paths relative to the repository root, such as `../
 
 ### ADR-01: Direct OMP SDK integration inside a dedicated Bun Agent Service
 
-- **Context:** The inherited application interacts with OpenCode as an external HTTP server and proxy. Earlier SDK research identified OMP CLI RPC and a native TypeScript SDK. The exact installed version and service-safe APIs remain M0 inputs. OpenChamber requires multi-session management, fine-grained event subscriptions, rich tool cards, and streaming.
+- **Context:** The inherited application uses an external OpenCode HTTP server. M0 selected the pinned-source OMP SDK artifact set identified in [source-install.json](m0/source-install.json), not the divergent same-version registry package. Installed public factory/disposal and modern Linux native actions were observed, with the probe's exit 1 retained. The [development record](../development.md#guest-shell-and-installable-sdk-evidence) owns evidence limits; service-safe behavior still requires its owning gates.
 - **Decision:** Build a dedicated `packages/agent-service` running on Bun that integrates the OMP TypeScript SDK directly. Do not use OMP CLI RPC as the default runtime path. Do not support OpenCode as a secondary engine. Remove all multi-engine selectors and fallback branches.
 - **Rationale:** The OMP SDK exposes programmatic primitives (`createAgentSession`, `session.prompt`, `session.subscribe`, `session.steer`, `session.abort`) with in-memory event dispatch. Running the SDK directly in Bun avoids child process serialization bottlenecks, allows custom tools to execute as normal async functions without stdin/stdout pipe round-trips, and provides direct access to OMP compaction and token accounting.
 - **Consequences:** The Agent Service must run under Bun because OMP relies on Bun runtime primitives. The Node.js Host Gateway manages the Bun process as a trusted internal daemon.
@@ -35,21 +35,21 @@ Codebase references point to paths relative to the repository root, such as `../
 ### ADR-02: Strict process separation between Node.js Host Gateway and Bun Agent Service
 
 - **Context:** OpenChamber's Host Gateway runs on Node.js (or embedded Node in Electron) and manages file systems, Git repositories, PTY terminals, passkey authentication, tunnels, and user preferences. The OMP SDK runs on Bun.
-- **Decision:** Keep the Node.js Host Gateway and the Bun Agent Service as separate operating system processes. Expose the Canonical Agent API (`/api/agent/v1`) through the Host Gateway, which proxies requests to the Bun Agent Service over a loopback connection authenticated by an ephemeral shared secret.
+- **Decision:** Keep the Node.js Host Gateway and Bun Agent Service as separate OS processes. Host dispatches canonical metadata/queue and skill installation to its local writers before proxying Agent-owned operations over authenticated private loopback. Host response composition and independent revisions follow [the canonical routing/ownership contract](contracts.md#route-matrix); the public prefix does not transfer durable ownership to Bun.
 - **Rationale:** Process separation isolates agent crashes, memory leaks, and native addon compilation issues from the core application shell. If an agent session exhausts memory or crashes Bun, the user's terminal sessions, editor tabs, and Git operations in the Host Gateway remain running. Node.js native addons like `node-pty` remain on their tested Node runtime without requiring Bun compatibility shims.
 - **Consequences:** All client traffic passes through the Host Gateway. The Agent Service is bound strictly to `127.0.0.1` or a local UNIX domain socket and never listens on public network interfaces.
 
 ### ADR-03: Conservative session isolation via dedicated SDK worker processes
 
-- **Context:** The OMP SDK contains process-level state. Specifically, `process.cwd()` is global to the OS process, the default `AgentRegistry` admits only one `Main` agent per generation, and `AsyncJobManager` and eval execution environments share module-level state. Multi-session concurrency inside a single process has not been formally verified in OMP.
-- **Decision:** Adopt a conservative process-per-session worker architecture. The Bun Agent Service acts as a supervisor, spawning an isolated Bun SDK Worker process for each active session or workspace directory.
-- **Rationale:** Running separate worker processes guarantees that different sessions with different working directories (`cwd`) never collide. Global singletons in OMP cannot leak between concurrent user sessions. If an individual worker crashes, sibling sessions continue uninterrupted.
-- **Consequences:** Worker spawning introduces a small memory and startup overhead. A worker pool and idle hibernation policy manage resource usage. In-process multi-session isolation will only be evaluated after targeted concurrency probes pass in milestone M0.
+- **Context:** The OMP SDK has process-level state, including cwd, environment and registry bindings. The [M0 isolation artifact](m0/isolation-artifact.json) passed dedicated workers and failed every exercised shared-process cwd/env mode, including private registries. These fixture observations are not a production-service isolation guarantee.
+- **Decision:** The Bun Agent Service supervises one dedicated SDK worker per active root session, including that session's subagents. A common workspace alone is not permission to share worker state between independent root sessions.
+- **Rationale:** Separate process cwd and environment boundaries address the observed shared-state collision. Actual service sibling isolation, worker failure and child cleanup still require M2 evidence.
+- **Consequences:** Original idle RSS budget 104,857,600 bytes, 100 MiB, failed. Linux fixture idle samples were 270,200,832 and 274,202,624 bytes; active samples were 278,822,912 and 283,652,096 bytes. These are point-in-time RSS observations, not heap sizes or cross-platform budgets. The maintainer accepted them as an M0 limitation in `decisions.md: 2026-10-11 - Accept measured worker memory as an M0 limitation`. M2 measures actual service resources and cleanup. Pooling/hibernation is not an assumed fix or a new acceptance target; add it only if a measured workload justifies it.
 
 ### ADR-04: Single source of truth for transcripts and session state
 
 - **Context:** Systems that wrap an external AI engine often attempt to duplicate session history in their own application database, creating desynchronization bugs during context compaction, branching, or rollbacks.
-- **Decision:** OMP is the sole authority for the conversation transcript, execution events, tool results, and compaction history. OpenChamber Host Gateway owns the durable prompt queue, session goals checklist, scheduled tasks, and folder metadata. OpenChamber never maintains a second copy of the full conversation transcript.
+- **Decision:** OMP alone owns the transcript, execution results and compaction history. Host operational metadata and Agent Service projections follow [contracts.md](contracts.md#metadata-sidecar-and-transcript-ownership). The Host also owns durable delivery and scheduled tasks. OpenChamber never maintains a second transcript.
 - **Rationale:** OMP's `SessionManager` manages append-only transcript persistence on disk. Writing a second transcript in SQLite introduces synchronization latency, double writes, and ordering conflicts during compaction or aborts. The Agent Service projects OMP's transcript on demand into Canonical API Data Transfer Objects (DTOs).
 - **Consequences:** Deleting an OMP session removes its underlying transcript file. Moving or renaming sessions in the UI updates metadata records in the Host database without mutating the internal OMP transcript file.
 - **Current source versus target:** The inherited prompt queue uses atomic `message-queue.json` writes with a revision counter. The target SQLite queue is a later Host Gateway persistence cutover, not an existing implementation. Preserve ordered delivery, captured attachments, leases and explicit corrupt-file/failure handling while migrating it.
@@ -99,7 +99,7 @@ flowchart TD
     subgraph AgentTier[Agent Service & Workers - Bun]
         AgentSupervisor[Agent Service Supervisor]
         LoopbackAuth[Internal Secret Guard]
-        WorkerPool[SDK Worker Pool Manager]
+        WorkerSupervisor[SDK Worker Supervisor]
 
         subgraph Worker1[SDK Worker Process 1]
             OMPSession1[OMP AgentSession]
@@ -131,9 +131,9 @@ flowchart TD
 
     AuthRouter -->|Loopback HTTP / SSE + Secret| LoopbackAuth
     LoopbackAuth --> AgentSupervisor
-    AgentSupervisor --> WorkerPool
-    WorkerPool -->|IPC / Domain Socket| Worker1
-    WorkerPool -->|IPC / Domain Socket| Worker2
+    AgentSupervisor --> WorkerSupervisor
+    WorkerSupervisor -->|IPC / Domain Socket| Worker1
+    WorkerSupervisor -->|IPC / Domain Socket| Worker2
 ```
 
 ### Detailed process layout
@@ -157,7 +157,7 @@ flowchart TD
 | - Host Services: File system, Git, Worktree lifecycle, PTY terminal streaming         |
 | - Autonomous Engines: Durable Prompt Queue (SQLite), Goals Supervisor, Task Loops    |
 | - Extension Host: Iframe envelope manager, Guest child service process runner         |
-| - Reverse Proxy: Routes /api/agent/v1/* to internal Bun Agent Service                 |
+| - Canonical Dispatch: Local Host writers first; remaining Agent operations to Bun      |
 +---------------------------------------------------------------------------------------+
                                         |
                  Private Loopback IPC (UNIX Domain Socket or 127.0.0.1 TCP)
@@ -168,7 +168,7 @@ flowchart TD
 | - Runtime: Bun                                                                        |
 | - Internal Loopback HTTP, SSE, and WebSocket Server                                   |
 | - Secret Verification Guard: Rejects non-loopback or unauthorized callers             |
-| - SDK Worker Pool: Spawns, monitors, and terminates isolated SDK Worker processes     |
+| - SDK Worker Supervisor: Spawns, monitors, and terminates dedicated workers           |
 | - Catalog Projection: Exposes OMP models, thinking levels, and settings schemas       |
 | - Session Directory Mapping: Maps canonicalSessionId to ompSessionId and worker PID  |
 +---------------------------------------------------------------------------------------+
@@ -176,7 +176,7 @@ flowchart TD
                  Worker IPC (Parent-Child Process Pipe / Domain Socket)
                                         v
 +---------------------------------------------------------------------------------------+
-| ISOLATED SDK WORKER PROCESS (1 process per active session or workspace)                |
+| ISOLATED SDK WORKER PROCESS (1 process per active root session)                        |
 | - Runtime: Bun                                                                        |
 | - Isolated process.cwd() bound to session workspace or worktree directory             |
 | - Dedicated AgentRegistry (admitting independent Main agent)                          |
@@ -212,7 +212,7 @@ The table below defines ownership, runtime environments, source code locations, 
 | Guest Extension Host | Host Gateway | Node.js / Electron Main | `packages/web/server/lib/guests*` | Manifest validation, sandbox iframe envelope, capability granting. | Enforces manifest permissions; passes whitelisted environment only. |
 | Guest Service Spawner | Host Gateway | Node.js / Electron Main | `packages/web/server/lib/guests/service*` | Spawns background helper processes for extensions declaring `service`. | Runs as child process; does not have an OS sandbox; user must approve. |
 | Agent Supervisor | Agent Service | Bun Process | `packages/agent-service/src/supervisor` | Loopback listener, internal secret guard, worker lifecycle, routing. | Listens on loopback only; authenticates caller via internal secret. |
-| SDK Worker Pool | Agent Service | Bun Process | `packages/agent-service/src/pool` | Spawns worker processes, manages worker recycling, monitors health. | Recycles workers after idle timeout or unrecoverable error. |
+| SDK Worker Supervisor | Agent Service | Bun Process | `packages/agent-service/src/supervisor` | Spawns dedicated workers and owns their generations, health and cleanup. | Resource and cleanup behavior require actual M2 evidence; no assumed worker pool. |
 | SDK Session Worker | Agent Worker | Bun Child Process | `packages/agent-service/src/worker` | Creates `AgentSession`, hosts OMP loop, registers SDK custom tools. | Dedicated `cwd`; dedicated `AgentRegistry`; isolated memory heap. |
 | OMP Core Engine | Agent Worker | Bun Library | `@oh-my-pi/pi-coding-agent` | Agent loop, model calling, context compaction, tool execution, telemetry. | Authoritative transcript owner; persists to `~/.omp/agent/sessions/`. |
 | Guest Extension SDK | External Extensions | Browser / Host Bridge | `packages/sdk` | Third-party extension contract, UI kit, one-shot `MessageChannel` bootstrap and `MessagePort` bridge. | Sandboxed iframe; receives a port only after an authorized document's early bootstrap and cannot call internal agent APIs directly. |
@@ -223,22 +223,16 @@ Current host ownership is not confined to the proposed `lib/host/*` paths above.
 
 ## SDK versus RPC runtime selection and rationale
 
-The target architecture uses the OMP TypeScript SDK directly within a dedicated Bun service rather than running the OMP CLI in RPC mode (`omp --mode rpc`). This decision rests on verified source code evidence.
+The target uses the OMP TypeScript SDK directly within a dedicated Bun service rather than OMP CLI RPC. The following interface comparison is source-based design rationale, not a service benchmark. Current exercised identity and runtime limits belong to [development.md](../development.md#guest-shell-and-installable-sdk-evidence).
 
-### Verified source code facts
+### Source-based interface facts
 
-1. **OMP SDK Structure (`@oh-my-pi/pi-coding-agent/src/sdk.ts`):**
+1. **OMP SDK structure:**
    - The SDK exports `createAgentSession(options: CreateAgentSessionOptions): Promise<CreateAgentSessionResult>`.
    - Custom tools are registered through `customTools?: (CustomTool | ToolDefinition)[]`. Each custom tool defines an `execute: async (toolCallId, params, signal, onUpdate, ctx) => ...` function. Tool execution in the SDK is a direct asynchronous function call within the runtime.
    - The session exposes programmatic control: `session.prompt()`, `session.steer()`, `session.followUp()`, `session.abort()`, and `session.subscribe(listener)`.
    - Event subscription receives strongly typed `AgentSessionEvent` objects containing tokens, tool execution progress, thinking levels, compaction results, and errors.
-   - Line 726 of `src/sdk.ts` explicitly documents:
-     ```typescript
-     // Agent registry: pass a private instance per `createAgentSession` when
-     // embedding several concurrent top-level sessions in one process (the default
-     // global registry admits only one "Main" per process generation).
-     export { type AgentRef, AgentRegistry, MAIN_AGENT_ID } from "./registry/agent-registry";
-     ```
+   - The registry is process-scoped by default; explicit private registry injection was exercised by M0. It did not isolate ambient cwd/environment in shared-process fixtures. The [isolation artifact](m0/isolation-artifact.json) records the distinction.
 
 2. **OMP RPC Mode Structure (`@oh-my-pi/pi-coding-agent/src/modes/rpc/`):**
    - RPC mode operates over `process.stdin` and `process.stdout` using newline-delimited JSON messages (`rpc-input.ts`, `rpc-output.ts`).
@@ -257,7 +251,7 @@ The target architecture uses the OMP TypeScript SDK directly within a dedicated 
 | Session Lifecycle Control | Fine-grained instantiation, fork, branch, compact. | Coarse-grained command set (`new_session`, `switch_session`). |
 | Multi-session Concurrency | Multiple sessions instantiated across worker processes. | One active session per subprocess on stdin and stdout. |
 | Failure Modes | Structured exceptions caught at function boundary. | Broken pipe, unhandled process crash, corrupted JSON framing. |
-| Memory Overhead | Lean worker footprint sharing common module graph. | Full Node/Bun CLI bootstrap overhead per RPC instance. |
+| Memory Overhead | Measured dedicated-worker RSS is recorded in ADR-03; no lean-footprint claim. | No current comparative RPC memory benchmark. |
 
 ### Architectural conclusion
 
@@ -313,10 +307,16 @@ sequenceDiagram
    - Every internal HTTP request from the Host Gateway includes the header `X-Internal-Secret: <token>`. Requests without this header or from non-loopback addresses are rejected immediately with HTTP 403 Forbidden.
 
 3. **Model Provider Credentials:**
-   - Model provider API keys and OAuth tokens (Anthropic, OpenAI, GitHub Copilot, Google) reside in OMP's `AuthStorage` (SQLite database `agent.db` at `getAgentDbPath()`, e.g. `~/.omp/agent/agent.db`).
-   - Keys are loaded strictly inside the SDK Session Worker process when initiating outbound requests to AI providers.
-   - Provider credentials are never transmitted to client browsers, never sent across the public network, and never exposed in Canonical API responses.
+   - Provider keys and OAuth tokens use OMP `AuthStorage`. [auth-paths.json](m0/auth-paths.json) establishes default `~/.omp/agent/agent.db`, initialized XDG data selection and independent environment/explicit agent-directory overrides. Those path cases prove owned database create/close, not credential conversion.
+   - SDK workers own authenticated model-provider requests and read credentials through the verified OMP boundary. Host credential import and quota access remain privileged, scoped operations; no secret is projected to a client.
+   - Provider transport necessarily sends authentication to the selected provider. Credentials must never appear in public DTOs, browser/renderer responses or Host/service logs, nor be sent to unrelated destinations. This is not a prohibition on authenticated provider egress.
 
+
+### Retained enterprise enforcement
+
+The Host keeps the existing administrator-policy source precedence, read-at-use behavior and fail-closed handling defined by `packages/web/server/lib/enterprise-mode.js` and `packages/docs/content/docs/security.mdx`. Enforcement remains at each crossing, not only in the UI. Canonical provider/configuration/import operations must preserve provider-entry refusal, and worker environment resolution must preserve the enterprise restriction on user Settings overlays reaching agent execution. The service owns the equivalent execution-time provider/tool restrictions before deleting the legacy policy owner; an unobserved OMP equivalent is a required gap, not permission to drop the restriction.
+
+Retain loopback-only exposure unless existing policy allows network access, pinned-relay-only enterprise access, external-tunnel refusal, local speech restrictions, generic remote notifications, usage suppression and Guest source policy. Small-model work stays with the selected session provider or its configured authorized small model, never another connected provider as a fallback. Metadata/discovery fetches also pass the owning policy boundary. No policy knob or waiver is added by this document reconciliation.
 ---
 
 ## Process lifecycle: startup readiness, version negotiation, termination, and crash recovery
@@ -334,13 +334,13 @@ The Host Gateway and Agent Service follow an ordered lifecycle sequence during a
    - Host Gateway verifies that the `bun` binary exists on the system PATH or in configured runtime paths.
    - Host Gateway generates the ephemeral shared secret and starts the Bun Agent Service:
      ```bash
-     bun packages/agent-service/src/index.ts --port 0 --secret <secret>
+     bun packages/agent-service/src/index.ts --port 0
      ```
    - Passing `--port 0` prompts the operating system to allocate an ephemeral free port, eliminating port conflict issues.
 3. **Readiness Probe:**
    - The Agent Service initializes its HTTP server and verifies that the OMP SDK can be imported and initialized.
-   - The Agent Service writes its assigned port and readiness status to stdout in a structured JSON line: `{"status":"ready","port":48123}`.
-   - The Host Gateway reads the port from stdout, establishes a loopback connection, and performs a health check query: `GET /api/agent/v1/ready`.
+   - The Agent Service advertises its assigned port over the owned process channel. This is endpoint discovery, not proof of readiness.
+   - The Host establishes the authenticated loopback connection and checks `GET /api/agent/v1/ready`; only that authoritative response establishes readiness. The ephemeral secret uses the private spawn environment above, never command-line arguments or logs.
    - If the Agent Service fails to report readiness within 15 seconds, the Host Gateway logs an error, marks agent capabilities as unavailable, and exposes an error banner in the client UI.
 
 ### Version and capability negotiation
@@ -363,7 +363,7 @@ Clients negotiate capabilities with the Host Gateway upon connection:
     }
   }
   ```
-- If a client requests an unsupported capability (such as an obsolete OpenCode command), the server returns HTTP 501 (`NOT_IMPLEMENTED`) or HTTP 400 (`UNSUPPORTED_CAPABILITY`) with a structured RFC 7807 problem detail. It never accepts calls silently.
+- Unsupported commands return the top-level `application/problem+json` contract in [contracts.md](contracts.md#standard-error-schema), with the actual HTTP status and a stable code. Capability flags cannot waive retained scope requirements.
 
 ### Termination and graceful shutdown
 
@@ -382,13 +382,13 @@ The multi-tier process model prevents single-point failures from compromising th
    - If an SDK Worker crashes due to an out-of-memory condition or unhandled native error, the Bun Agent Supervisor detects child process exit.
    - The Supervisor records the exit code and marks the session state as `error` with error code `SESSION_WORKER_CRASHED`.
    - An error event streams to the connected client. Sibling sessions running in other worker processes continue without interruption.
-   - When the user submits a new prompt or clicks retry, the Supervisor spawns a fresh SDK Worker. The new worker calls `createAgentSession` with `continueSession: true`, restoring session history from the OMP transcript file.
+   - On an explicit retry, the Supervisor creates a new worker generation and restores the authorized session through verified OMP session-store APIs. M0 observed `SessionManager.open`/`buildSessionContext`, not a `continueSession` factory option. Task 09 must implement and prove the factory/history integration, unavailable-model errors and no stale publication.
 2. **Bun Agent Service Supervisor Crash:**
    - If the main Bun Agent Service process crashes, the Node.js Host Gateway detects child exit via `child_process` event handlers.
    - The Host Gateway updates its internal service health state to `degraded`.
-   - Incoming requests to `/api/agent/v1/*` return HTTP 503 (`AGENT_SERVICE_UNAVAILABLE`).
+   - Agent-owned operations return HTTP 503 (`AGENT_SERVICE_UNAVAILABLE`); Host metadata/queue reads and durable writes remain Host-owned and usable, with execution dispatch waiting for readiness. See [canonical response ownership](contracts.md#host-metadata-and-queue-response-ownership).
    - The Host Gateway initiates automatic restart of the Agent Service with exponential backoff (initial retry at 1s, doubling up to 15s, maximum 3 retries).
-   - Once restarted, clients reconnect and resume streaming without requiring an application restart.
+   - After restart, clients recover through the [canonical snapshot/cursor protocol](contracts.md#streaming-protocol-and-catch-up). Pending approval/question handles expire under its generation rules; reconnection does not revive the old runtime.
 
 ---
 
@@ -426,7 +426,7 @@ Bun Agent Supervisor
 
 - Each worker process executes with its own operating system working directory (`cwd`) set to the project root or Git worktree path.
 - Subagents spawned by a session (via the OMP `task` tool) execute inside the same worker process as their parent session. They inherit the parent's `subagentEventBus`, share the worker's private `AgentRegistry`, and communicate across IPC without affecting other projects.
-- Workers that remain idle for longer than the configured pool timeout (default: 15 minutes) are terminated gracefully after saving state, freeing system memory.
+- Worker lifecycle belongs to the supervisor. An idle timeout or hibernation policy is not established by the SDK fixtures and is not part of the selected M0 design. Measure actual service resources in M2 before choosing an optimization.
 
 ---
 
@@ -464,8 +464,8 @@ OhPiChamber enforces clear ownership boundaries between OMP and OpenChamber data
 ```
 
 - **OMP owns the transcript:** All conversation text, assistant reasoning blocks, tool inputs, tool execution outputs, context compactions, and token counts are stored in OMP's native session files. OpenChamber never duplicates these records into a second transcript table.
-- **Host Gateway owns operational metadata:** The Host SQLite database tracks UI folders, custom titles, pin status, project associations, and Git worktree bindings.
-- **Single Writer Rule:** Only OMP writes to OMP transcript files. Only the Host Gateway writes to the metadata database. The Agent Service acts as a read-only projector, transforming OMP transcript events into Canonical DTOs during queries and streaming.
+- **Host Gateway owns operational metadata:** [The canonical ownership contract](contracts.md#metadata-sidecar-and-transcript-ownership) includes goals, recap, context delivery cursor, pins and folders. Task 20 moves existing accessors and metadata before source removal; it does not import a second transcript.
+- **Single writer rule:** OMP writes its transcript and the Host writes operational metadata. The service projects those inputs and owns runtime request/event state. Its snapshot cursor orders its own projection, not independently persisted Host writes.
 
 ### Identifier mapping
 
@@ -495,26 +495,19 @@ In the target OhPiChamber architecture, subject to M0 verification:
 ### Provider credentials and quota migration
 
 - The current host's `lib/opencode/auth.js` reads stored credentials through `GET /api/credential` and managed environment connections through `GET /api/integration`. Credential responses contain secrets and remain host-only. External-runtime environment values are unavailable, not authoritative empty credentials. The projected legacy auth-entry shape does not mean the host still reads `auth.json`.
-- Earlier OMP research identified SQLite `agent.db` and `AuthStorage`. M0 must verify the exercised SDK's path, API/OAuth fields and supported provider conversions before the importer is implemented.
-- **One-time migration boundary:** M1 supplies a user-triggered importer from documented available credential records to verified OMP AuthStorage and OhPiChamber settings. Resolve each provider separately, report unsupported or unavailable records as requiring re-authentication, never export secrets to the browser, and remove the importer after the cutover. It is not a permanent OpenCode reader, compatibility API or startup action. Historical credential files are optional explicitly selected inputs, not the sole refreshed-source contract.
+- AuthStorage path/create/close and syntactic storage round trips are observed, but provider conversion/OAuth refresh/scopes remain partial or unavailable. One separately authenticated text completion does not prove any of the seven stored-format conversions. The [development record](../development.md#m0-fixture-evidence) and artifacts retain those limits.
+- **One-time migration boundary:** M1 task 05 implements authenticated explicit user intent and provider-specific preflight, not an SDK import. While the real Agent Service is absent it reports unavailable, reads/stages no secret and never claims imported. Node Host does not load/write SDK AuthStorage or spawn an ad-hoc migration worker. M2 task 22 performs the user-triggered handoff through the real Bun service after SDK integration: Host obtains only the selected documented credential records, sends them privately to the service, and the OMP owner writes AuthStorage and proves read/reload plus provider-specific success or explicit unsupported/re-authentication failure. No secret appears in browser responses/logs or a staging store. Historical files are optional explicitly selected inputs. M2 gate 23 requires actual handoff results before task 17 removes importer/legacy readers; it is never startup logic, permanent compatibility or runtime fallback.
 - **Quota tracking migration:** Host quota modules retain provider billing ownership but consume credentials through the OMP-owned boundary after cutover. Do not leave the OpenCode accessor or legacy entry aliases as a fallback.
 ### Model Context Protocol (MCP) integration
 
-- The inherited config writers persist OpenCode `mcp.servers` entities immediately and rely on its file watcher to apply changes. The current mutation response does not restart the daemon. Replace that format and lifecycle at cutover, not a presumed mandatory restart workflow.
-- Earlier OMP research identified `MCPManager` with stdio, SSE and HTTP transports. M0 must verify its live reload and shutdown behavior before freezing the service integration.
-- MCP configurations are saved in `~/.config/omp/mcp.json` or workspace `.omp/mcp.json`.
-- The Agent Service passes the configured `MCPManager` directly to `createAgentSession({ enableMCP: true, mcpManager })`. Tools provided by MCP servers are discovered during session startup and injected into the agent loop.
+- The inherited configuration writer/watch lifecycle is an input, not the OMP implementation. Replace its format and consumers together at coordinated cutover.
+- [contracts.md](contracts.md#mcp-and-skills-service-boundary) owns observed stdio refresh/manual reconnect/shutdown semantics, unexercised transports/configuration behavior and the future service-owned apply/reconnect contract. Do not claim unobserved factory parameters or global configuration paths.
+- Dynamic tool refresh, enable/disable and stdio/SSE/HTTP/OAuth remain retained requirements in `scope.md`. Task 12 owns actual service implementation and evidence; a persisted write or unsupported flag cannot stand in for live application.
 
 ### Skills management
 
-- The inherited command/skill catalog remains an OpenCode integration boundary. Replace its discovery and configuration callers together, preserving installed standard skills rather than assuming the old prompt-template inventory is exhaustive.
-- OMP natively supports the standard `SKILL.md` format (`@oh-my-pi/pi-coding-agent/src/extensibility/skills.ts`).
-- Skills are discovered from:
-  - Global user skills: `~/.config/omp/skills/`
-  - Workspace skills: `.agents/skills/` and `.omp/skills/`
-- The Composer autocomplete menu and slash command suggestions read directly from OMP's skill discovery mechanism.
-
----
+- [contracts.md](contracts.md#skill-storage-and-expansion) owns global/project storage and the discovery/filter/expansion boundary. The Host owns catalog acquisition/install policy; the service owns OMP-backed discovery and expansion; the Composer consumes projections.
+- Preserve installed standard `SKILL.md` skills and project `.agents/skills/`. The exercised lower-level fixture's unsupported direct slash expansion does not retire Composer commands. Task 12 and task 15 must prove their owning runtime/client behavior.
 
 ## Turn lifecycle semantics: turn_end versus outer request completion
 
@@ -600,7 +593,7 @@ OpenChamber supports third-party extensions via `@openchamber/sdk` (`packages/sd
    ```
    Guest services run as child processes spawned by the Host Gateway using `ELECTRON_RUN_AS_NODE` or system Node. They inherit user privileges and can access the network and local file system.
 3. **OMP Permissions Cannot Promise Unverified Coverage:**
-   OMP's internal permission checks and approval hooks cover its own built-in tools (`read`, `bash`, `edit`, `write`). They do not provide sandbox confinement for external guest processes.
+   M0 observed controlled extension approval and ask seams. Complete built-in permission coverage remains unverified. Neither an approval hook nor a dedicated worker confines a Guest service's operating-system access.
 
 ### Architectural boundary rules
 
@@ -678,7 +671,7 @@ The following modules must be extracted to `packages/web/server/lib/host/` durin
 
 ### Modules to delete (OpenCode-specific)
 
-The following files contain pure OpenCode logic and will be deleted after host modules are moved:
+These pure OpenCode owners are deleted at coordinated M3 task 17, only after M1 Host extraction/metadata, M2 service and server-consumer task 22, M3 UI callers and the explicit credential handoff are ready. M1 gate 21 proves extraction, not premature lifecycle/proxy deletion:
 - `lifecycle.js`, `lifecycle-process.test.js`: OpenCode binary downloader and process supervisor.
 - `proxy.js`, `proxy.test.js`: Reverse proxy routing requests to OpenCode HTTP ports.
 - `opencode-resolution-runtime.js`: Resolves system OpenCode binary paths.
@@ -720,7 +713,7 @@ The transition to OhPiChamber follows a clean cutover model across six milestone
 - `M4`: Advanced autonomous features (Goals, Assist, Queue, Scheduler, Routing).
 - `M5`: Retained surface verification and production release.
 
-At no point will a public release contain both OpenCode and OMP options. Each module cutover immediately deletes its legacy OpenCode code path.
+At no point will a public release offer both engines. M1 extracts Host owners and retires the extension; M2 proves the service and migrates server consumers in disposable scenarios; M3 task 17 activates the canonical runtime and removes obsolete lifecycle/proxy/config/auth owners. Each completed owner cutover removes its dead path, with no compatibility alias or fallback. M5 certifies retained release surfaces, not a deferred second-engine removal.
 
 ---
 
@@ -729,7 +722,7 @@ At no point will a public release contain both OpenCode and OMP options. Each mo
 To maintain technical integrity, this specification distinguishes verified facts from design hypotheses.
 
 ### Source-inspection baseline
-1. The earlier OMP source inspection used `@oh-my-pi/pi-coding-agent@18.7.0`. This is a dated design input, not the current installed or registry version. SDK facts below must be rechecked against the version actually exercised in M0; no runtime capability gate has passed.
+1. Earlier inspection used 18.7.0. Current M0 evidence uses the pinned-source 18.8.9 artifact set identified by [source-install.json](m0/source-install.json), not divergent registry 18.8.9. Installed factory/disposal/native actions do not close M0; original passed/partial/failed/unavailable results retain their scopes.
 2. OMP SDK provides `createAgentSession` and async function tool execution (`src/sdk.ts`).
 3. OMP RPC mode is a stdin/stdout JSON lines protocol for one active session (`src/modes/rpc/`).
 4. `turn_end` is emitted per model turn; outer request completion requires `agent_end` with `isTerminal: true` (`src/session/agent-session-events.ts`).
@@ -738,17 +731,17 @@ To maintain technical integrity, this specification distinguishes verified facts
 7. `packages/web/server/lib/opencode/` contains essential host configuration and theme infrastructure.
 
 ### Design hypotheses
-1. Running one Bun SDK Worker process per active session provides sufficient performance and memory density for typical desktop workloads.
+1. Dedicated workers address the observed cwd/env collision. Their original 100 MiB idle target failed; ADR-03 records maintainer acceptance as an M0 limitation, not measured production density. M2 must measure actual service resource costs.
 2. Host Gateway SQLite queue can reliably arbitrate FIFO delivery across multi-turn OMP sessions.
 3. An explicit one-time importer can seed supported fields from legacy OpenCode credentials into OMP `AuthStorage` without user re-authentication.
 
 ### Risk and probe verification table
 
-| Probe ID | Subsystem | Hypothesis / Assumption | Technical Risk | Verification Method / Gate (Milestone M0) | Fallback / Mitigation Plan |
-|---|---|---|---|---|---|
-| `PROBE-01` | SDK Concurrency | OMP SDK cannot safely run multiple concurrent sessions with different `cwd` in one process. | Process-level singletons cause race conditions or state corruption. | Create two concurrent `AgentSession` instances in one Bun process with different `cwd`. Trigger concurrent `read` tools. Verify path isolation. | Enforce process-per-session worker architecture as defined in ADR-03. |
-| `PROBE-02` | Worker Footprint | A dedicated Bun worker process requires acceptable memory (under 100MB idle). | Too many workers cause memory pressure on desktop machines. | Benchmark memory consumption of idle and active Bun SDK Worker processes under Linux and macOS. | Implement an LRU worker hibernation policy that persists state and terminates idle workers after 10 minutes. |
-| `PROBE-03` | Turn Completion | `agent_end` with `isTerminal: true` reliably marks request completion across all tool loops. | Premature request completion if an agent turn emits misleading events. | Execute multi-turn tasks (e.g. read file, edit file, report) and capture exact event sequence up to `agent_end`. | Keep Host queue listener active until `agent_end` is received with matching request ID. |
-| `PROBE-04` | Credential Migration | An explicit one-time importer maps supported legacy OpenCode credentials in `auth.json` to OMP `AuthStorage`. | Missing fields or signature differences cause provider authentication failures. | Parse a fixture copy of legacy `auth.json` and attempt seeding into OMP `AuthStorage`; execute a controlled test completion against Anthropic and OpenAI. | Show per-provider failure and request the user to enter affected API keys; never fall back to automatic startup migration. |
-| `PROBE-05` | Gatekeeper Overhead | Realpath verification on every file tool does not introduce perceptible latency. | High I/O overhead on large repositories during recursive globbing or diffing. | Benchmark Host Gatekeeper path canonicalization across 10,000 file access calls. | Implement a short-lived LRU realpath cache (TTL: 2s) invalidated on file write operations. |
-| `PROBE-06` | PTY Signal Propagation | PTY cleanup cleanly terminates complex process trees (e.g. subshells, background servers). | Orphaned zombie processes leak CPU and port bindings after session exit. | Spawn background sleep and web server in PTY tab; close tab; verify process tree cleanup via `ps` probe. | Maintain Host process tree tracker; issue recursive `SIGKILL` to process group after 20-second timeout. |
+| Probe ID | Subsystem | Milestone / owner | Hypothesis / Assumption | Technical Risk | Verification Method / Gate | Fallback / Mitigation Plan |
+|---|---|---|---|---|---|---|
+| `PROBE-01` | SDK Concurrency | M0 / gate 03 | OMP SDK cannot safely run multiple concurrent sessions with different `cwd` in one process. | Process-level singletons cause race conditions or state corruption. | Create two concurrent `AgentSession` instances in one Bun process with different `cwd`. Trigger concurrent `read` tools. Verify path isolation. | Enforce process-per-session worker architecture as defined in ADR-03. |
+| `PROBE-02` | Worker Footprint | M0 / gate 03; actual service resources M2 | Original 100 MiB idle hypothesis failed; Linux RSS and maintainer acceptance remain in ADR-03. | Concurrent workers may impose unacceptable service memory cost. | Preserve existing Linux idle/active samples without rerun. Non-Linux measurements remain unavailable; gate 03 must account for original Linux/macOS requirement and accepted limitation. M2 measures real service. | Retain isolation. No pooling/hibernation or revised budget without evidence or maintainer decision. |
+| `PROBE-03` | Turn Completion | M0 / gate 03 | `agent_end` with `isTerminal: true` reliably marks request completion across all tool loops. | Premature request completion if an agent turn emits misleading events. | Execute multi-turn tasks (e.g. read file, edit file, report) and capture exact event sequence up to `agent_end`. | Keep Host queue listener active until `agent_end` is received with matching request ID. |
+| `PROBE-04` | Credential Migration | M0 feasibility / gate 03; real handoff M2 task 22 / gate 23 | User-triggered importer must establish provider feasibility from documented Host records or explicitly selected historical files. | Storage-format validity is not provider validity, OAuth refresh or conversion proof. | Preserve seven syntactic round trips and separate authenticated completion. Original Anthropic/OpenAI conversion/controlled-auth feasibility stays unresolved for gate 03 until observed/accepted; actual real-service write/read-reload handoff remains M2 acceptance. | Per-provider failure/re-authentication; no startup import or provider fallback. |
+| `PROBE-05` | Gatekeeper Overhead | M2 / `SCOPE-6.3`, task 10 Host tool boundary, gate 23 | Realpath verification on every file tool does not introduce perceptible latency. | High I/O overhead on large repositories during recursive globbing or diffing. | Benchmark the implemented Host Gatekeeper tool-interception boundary across 10,000 file access calls. Existing FS/path-cache primitives cannot substitute for the target boundary. | Keep path authorization intact. Measure before selecting an optimization; no prescribed LRU/TTL or pre-M0 Gatekeeper implementation. |
+| `PROBE-06` | PTY Signal Propagation | M0 existing Host PTY / gate 03 | PTY cleanup cleanly terminates complex process trees (e.g. subshells, background servers). | Orphaned zombie processes leak CPU and port bindings after session exit. | Spawn background sleep and web server in a real Host PTY tab; close tab; verify process tree cleanup via `ps`. This original reachable M0 proof remains unavailable; dedicated SDK runner cleanup is not this owner. | Retain required process-tree cleanup. Prove per-tab close separately from whole-Host shutdown; a shutdown-only 20-second tree sweep is not tab-close evidence. |

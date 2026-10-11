@@ -4,7 +4,7 @@
 **Task type:** feature
 **Base commit:** <commit-sha>
 
-**Delivers:** Current evidence proves retained Host owners after extraction, no supported VS Code extension path, explicit credential handoff results and durable Host metadata before Agent Service implementation begins.
+**Delivers:** Evidence proves retained extracted Host owners, no supported VS Code extension path, authenticated explicit credential preflight/absent-service refusal and durable Host metadata before Agent Service implementation. Actual migration results remain mandatory in task 22/M2 gate 23, not claimed by M1.
 
 **Blocked by:** 05, 06, 20
 **Files:** `.workflow/development.md`, `.workflow/omp-migration/implementation-plan.md`, focused M1 acceptance evidence
@@ -16,6 +16,6 @@
 
 - [ ] Verify extraction preserved behavior, not merely imports.
 - [ ] Prove extension package/build/release references are retired while external editor and theme import remain.
-- [ ] Verify explicit credential migration results and no automatic startup credential reads.
+- [ ] Verify authenticated explicit credential intent/preflight and absent-service refusal without secret reads/staging, Node SDK writes, fabricated imported results or startup credential import. Task 22/M2 gate 23 owns actual SDK write/read-reload and provider migration/re-authentication results before task 17 retirement.
 - [ ] Record that legacy agent execution removal is deliberately blocked on the coordinated M3 cutover, as established in task 02; do not claim deletion happened in M1.
 - [ ] Update development progress and only release task 07 when the revised M1 gate is met.

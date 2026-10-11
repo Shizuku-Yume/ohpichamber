@@ -4,7 +4,7 @@ These documents define the proposed OMP-only migration of OhPiChamber. The sourc
 
 Read [development progress and lessons](../development.md) for verified work, remaining gates, and findings from implementation. Keep progress there rather than treating this design set as a completion log.
 
-The [latest-upstream rebaseline](../specs/upstream-rebaseline.md) has adopted the application source. Runtime acceptance and documentation review remain prerequisites to OMP implementation. Do not use unchanged historical assumptions or selective-import exclusions to constrain the refreshed source. Current evidence and external blockers belong in [development.md](../development.md).
+The [latest-upstream rebaseline](../specs/upstream-rebaseline.md) has adopted the application source and closed its prerequisite at the source/document boundary under the recorded maintainer decision. Unavailable runtime certification remains unverified, not passed. M0 gate 03 remains open before M1 implementation. Do not use unchanged historical assumptions or selective-import exclusions to constrain the refreshed source. Current evidence and external blockers belong in [development.md](../development.md).
 
 ## Decisions
 

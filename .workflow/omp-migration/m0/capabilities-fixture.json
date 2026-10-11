@@ -1,0 +1,554 @@
+{
+  "schemaVersion": 2,
+  "run": {
+    "sourceRevision": "c9de2b02b997f37cc89639282ed35dec86f139e8",
+    "packageVersion": "18.8.9",
+    "bunVersion": "1.4.2",
+    "platform": "linux-x64",
+    "startedAt": "2026-10-11T11:03:41.939Z",
+    "command": "bun run scripts/omp-m0/run.mjs --suite capabilities --fixture --output <report> --timeout-ms 120000",
+    "fixture": true,
+    "suite": "capabilities",
+    "realProvider": false,
+    "timeoutMs": 120000,
+    "packageName": "@oh-my-pi/pi-coding-agent",
+    "sourceFingerprint": "b70a2f4afd9fd8fa9ec20094e9658b528e943eff52608d296af2366b80241ad1",
+    "sourceFingerprintScope": "packages/*/src/** excluding the listed generated artifacts, packages/*/package.json, package.json, bun.lock",
+    "fingerprintFileCount": 3499,
+    "identityMethod": "pinned authored-source fingerprint; generated artifacts hashed separately; snapshot without Git history",
+    "acquisitionArchiveSha256": "06b6a671af953f5cdefe95cbd44271a5c20d9b9e951173af7d10d71e1b0dc150",
+    "archiveVerification": "unavailable; original acquisition archive not retained",
+    "generatedArtifacts": [
+      {
+        "path": "packages/coding-agent/src/export/html/tool-views.generated.js",
+        "sha256": "f63d8bbed089cb1fccc11187e81543041e9dfa20dbc74a5dfd2fb82f90a7e50b"
+      }
+    ],
+    "directories": {
+      "home": "<temporary-home>",
+      "agent": "<temporary-agent>",
+      "workspace": "<temporary-workspace>"
+    },
+    "workerExitPolicy": "explicit exit after suite resource cleanup; no implicit dependency installation",
+    "exitCode": 1
+  },
+  "probes": [
+    {
+      "id": "source-identity",
+      "capability": "source/package identity",
+      "status": "passed",
+      "observations": {
+        "fingerprintMatched": true,
+        "timeoutMs": 120000,
+        "exitCode": 0,
+        "cleanup": {
+          "resourcesCreated": false
+        }
+      },
+      "errors": [],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "capabilities.auth-sqlite",
+      "capability": "AuthStorage and SQLite",
+      "status": "passed",
+      "observations": {
+        "evidence": "packages/ai/src/auth-storage.ts:267-275; packages/ai/src/auth/types.ts:796-905",
+        "databaseFile": "agent.db",
+        "explicitAgentDirectory": true,
+        "sqliteHeaderObserved": true,
+        "crossInstanceReload": true,
+        "removalReload": true,
+        "runtimeOverrideNotPersisted": true,
+        "initialCredentialCount": 0,
+        "cleanup": "both storage handles closed",
+        "limitation": "Non-authenticating markers only; no provider authentication or credential conversion is established."
+      },
+      "errors": [],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "capabilities.credential-formats",
+      "capability": "Provider credential feasibility",
+      "status": "partial",
+      "observations": {
+        "evidence": "packages/ai/src/auth-storage.ts:267-275; packages/ai/src/auth/types.ts:796-905",
+        "providers": [
+          {
+            "provider": "anthropic",
+            "format": "api_key",
+            "storageStatus": "passed",
+            "authenticationStatus": "unavailable",
+            "migrationStatus": "unknown"
+          },
+          {
+            "provider": "openai",
+            "format": "api_key",
+            "storageStatus": "passed",
+            "authenticationStatus": "unavailable",
+            "migrationStatus": "unknown"
+          },
+          {
+            "provider": "google",
+            "format": "api_key",
+            "storageStatus": "passed",
+            "authenticationStatus": "unavailable",
+            "migrationStatus": "unknown"
+          },
+          {
+            "provider": "anthropic",
+            "format": "oauth",
+            "storageStatus": "passed",
+            "authenticationStatus": "unavailable",
+            "migrationStatus": "unknown"
+          },
+          {
+            "provider": "openai-codex",
+            "format": "oauth",
+            "storageStatus": "passed",
+            "authenticationStatus": "unavailable",
+            "migrationStatus": "unknown"
+          },
+          {
+            "provider": "github-copilot",
+            "format": "oauth",
+            "storageStatus": "passed",
+            "authenticationStatus": "unavailable",
+            "migrationStatus": "unknown"
+          },
+          {
+            "provider": "google-gemini-cli",
+            "format": "oauth",
+            "storageStatus": "passed",
+            "authenticationStatus": "unavailable",
+            "migrationStatus": "unknown"
+          }
+        ],
+        "limitation": "Only syntactic storage round trips were exercised. OAuth refresh, scopes, provider validity and host importer feasibility remain unverified."
+      },
+      "errors": [],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "capabilities.models",
+      "capability": "Model and provider discovery",
+      "status": "passed",
+      "observations": {
+        "evidence": "packages/coding-agent/src/config/model-registry.ts:482-528,2909-3109",
+        "discoveredModelCount": 5523,
+        "discoveredProviders": [
+          "abliteration",
+          "aiand",
+          "aimlapi",
+          "alibaba-coding-plan",
+          "alibaba-token-plan",
+          "amazon-bedrock",
+          "anthropic",
+          "azure",
+          "baseten",
+          "bedrock-mantle",
+          "cerebras",
+          "cline-pass",
+          "cloudflare-ai-gateway",
+          "commandcode",
+          "coralbricks",
+          "coreweave",
+          "cursor",
+          "deepinfra",
+          "deepseek",
+          "devin",
+          "factory-droid",
+          "firepass",
+          "fireworks",
+          "github-copilot",
+          "gitlab-duo",
+          "gitlab-duo-agent",
+          "gmi-cloud",
+          "google",
+          "google-antigravity",
+          "google-gemini-cli",
+          "google-vertex",
+          "groq",
+          "helmcode",
+          "huggingface",
+          "kilo",
+          "kimi-code",
+          "meta",
+          "minimax",
+          "minimax-cn",
+          "minimax-code",
+          "minimax-code-cn",
+          "mistral",
+          "moonshot",
+          "muse-code",
+          "nanogpt",
+          "novita",
+          "nvidia",
+          "ollama-cloud",
+          "openai",
+          "openai-codex",
+          "opencode-go",
+          "opencode-zen",
+          "openrouter",
+          "qianfan",
+          "qwen-portal",
+          "sakana",
+          "snowflake",
+          "stepfun",
+          "synthetic",
+          "together",
+          "umans",
+          "venice",
+          "vercel-ai-gateway",
+          "wafer-serverless",
+          "xai",
+          "xai-oauth",
+          "xiaomi",
+          "xiaomi-token-plan-ams",
+          "xiaomi-token-plan-cn",
+          "xiaomi-token-plan-sgp",
+          "yolo-auto",
+          "zai",
+          "zenmux",
+          "zhipu-coding-plan"
+        ],
+        "authenticatedFixtureProvider": "anthropic",
+        "availableBefore": 0,
+        "availableAfter": 28,
+        "missingModel": "undefined lookup, caller must reject",
+        "networkAttempts": 0,
+        "limitation": "Catalog availability means auth is configured, not that the marker authenticates. No online discovery or real provider call was performed."
+      },
+      "errors": [],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "capabilities.approval",
+      "capability": "Approval resolve cancel restart cleanup",
+      "status": "partial",
+      "observations": {
+        "evidence": "packages/coding-agent/src/extensibility/extensions/wrapper.ts:347-420; packages/coding-agent/src/modes/runtime-init.ts:56-213",
+        "realExtensionRunner": true,
+        "pendingObservedBeforeExecution": true,
+        "resolveExecutedOnce": true,
+        "denyRejected": true,
+        "userCancelRejected": true,
+        "headlessFailClosed": true,
+        "events": [
+          {
+            "type": "tool_approval_requested"
+          },
+          {
+            "type": "tool_approval_resolved",
+            "approved": true
+          },
+          {
+            "type": "tool_approval_requested"
+          },
+          {
+            "type": "tool_approval_resolved",
+            "approved": false
+          },
+          {
+            "type": "tool_approval_requested"
+          },
+          {
+            "type": "tool_approval_resolved",
+            "approved": false
+          },
+          {
+            "type": "tool_approval_requested"
+          },
+          {
+            "type": "tool_approval_resolved",
+            "approved": false
+          }
+        ],
+        "restartCleanup": {
+          "status": "unavailable",
+          "reason": "Controlled direct wrapper calls are not an Agent Service pending-request registry; no worker restart projection exists."
+        },
+        "limitation": "Real wrapper and runner with controlled UI.select. Do not infer complete built-in approval coverage or cross-worker pending request cleanup."
+      },
+      "errors": [],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "capabilities.question",
+      "capability": "Question resolve cancel restart cleanup",
+      "status": "partial",
+      "observations": {
+        "evidence": "packages/coding-agent/src/tools/ask.ts:643-654,764-869",
+        "requestPresented": true,
+        "resolvedAnswerObserved": true,
+        "userCancelRejected": true,
+        "headlessRejected": true,
+        "signalAbortRejected": true,
+        "restartCleanup": {
+          "status": "unavailable",
+          "reason": "Direct AskTool UI seam has no worker restart or durable pending-request registry; Agent Service does not exist."
+        },
+        "limitation": "Real AskTool invoked through a controlled UI context. This does not establish reconnect or process-restart cleanup."
+      },
+      "errors": [],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "capabilities.mcp",
+      "capability": "MCP discovery connection tools refresh reconnect shutdown",
+      "status": "partial",
+      "observations": {
+        "evidence": "packages/coding-agent/src/mcp/manager.ts:646-672,1430-1458; packages/coding-agent/src/mcp/tool-bridge.ts:707-740",
+        "configLocation": ".omp/mcp.json",
+        "discoveredFromWorkspaceConfig": true,
+        "projectedToolName": "mcp__m0_fixture_fixture_echo",
+        "projectedToolCount": 1,
+        "startupErrorCount": 0,
+        "toolCallObserved": true,
+        "refreshToolsListCalls": 2,
+        "reconnectCreatedNewProcess": true,
+        "replacedProcessExited": true,
+        "dynamicConfigReload": {
+          "status": "unknown",
+          "reason": "Explicit tools refresh and manual reconnect exercised; no file-watcher or changed configuration reload was tested."
+        },
+        "limitation": "Local controlled stdio server only. HTTP, SSE, remote OAuth, automatic crash recovery and changed tool schemas were not exercised.",
+        "shutdown": {
+          "disconnected": true,
+          "childProcessesExited": 2,
+          "toolsCleared": true
+        },
+        "observedProtocolMethods": [
+          "initialize",
+          "notifications/initialized",
+          "tools/call",
+          "tools/list"
+        ]
+      },
+      "errors": [],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "capabilities.skills",
+      "capability": "Global workspace skills filtering and injection",
+      "status": "partial",
+      "observations": {
+        "evidence": "packages/coding-agent/src/extensibility/skills.ts:289-375; packages/coding-agent/src/discovery/builtin.ts:295-324; packages/coding-agent/src/extensibility/skills.ts:671-714",
+        "discoveredNames": [
+          "m0-global",
+          "m0-ignored",
+          "m0-workspace"
+        ],
+        "filteredNames": [
+          "m0-global",
+          "m0-workspace"
+        ],
+        "injectedName": "m0-workspace",
+        "explicitSkillMessageBodyObserved": true,
+        "directSessionSlashExpansion": {
+          "status": "unsupported",
+          "scope": "Lower-level AgentSession fixture",
+          "expanded": false
+        },
+        "injectionMechanism": "OMP buildSkillPromptMessage followed by AgentSession.prompt",
+        "excludedBodyAbsent": true,
+        "warningsCount": 0,
+        "globalLocation": "agent-directory skills",
+        "workspaceLocation": ".omp/skills",
+        "limitation": "Native discovery, session skill metadata and explicit body injection verified. Full createAgentSession system-prompt generation and CLI slash handling were not exercised."
+      },
+      "errors": [],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "capabilities.completion-text",
+      "capability": "Stateless completion text",
+      "status": "passed",
+      "observations": {
+        "evidence": "packages/ai/src/stream.ts:1119-1125,1570-1585; packages/ai/src/providers/mock.ts:84-115",
+        "mode": "text",
+        "stopReason": "stop",
+        "callCount": 1,
+        "sessionCreated": false,
+        "persistedAgentFilesAdded": 0,
+        "transport": "OMP MockModel through completeSimple custom API dispatch",
+        "limitation": "Controlled OMP provider only; no real network/provider behavior is claimed."
+      },
+      "errors": [],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "capabilities.completion-structured",
+      "capability": "Stateless completion structured",
+      "status": "passed",
+      "observations": {
+        "evidence": "packages/ai/src/stream.ts:1119-1125,1570-1585; packages/ai/src/providers/mock.ts:84-115",
+        "mode": "structured",
+        "stopReason": "toolUse",
+        "callCount": 1,
+        "sessionCreated": false,
+        "persistedAgentFilesAdded": 0,
+        "transport": "OMP MockModel through completeSimple custom API dispatch",
+        "limitation": "Typed tool arguments verified with a controlled schema. Real provider schema enforcement and dedicated response-format support were not exercised."
+      },
+      "errors": [],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "capabilities.completion-cancel",
+      "capability": "Stateless completion cancel",
+      "status": "passed",
+      "observations": {
+        "evidence": "packages/ai/src/stream.ts:1119-1125,1570-1585; packages/ai/src/providers/mock.ts:84-115",
+        "mode": "cancel",
+        "stopReason": "aborted",
+        "callCount": 1,
+        "sessionCreated": false,
+        "persistedAgentFilesAdded": 0,
+        "transport": "OMP MockModel through completeSimple custom API dispatch",
+        "limitation": "Controlled OMP provider only; no real network/provider behavior is claimed."
+      },
+      "errors": [],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "capabilities.completion-failure",
+      "capability": "Stateless completion failure",
+      "status": "passed",
+      "observations": {
+        "evidence": "packages/ai/src/stream.ts:1119-1125,1570-1585; packages/ai/src/providers/mock.ts:84-115",
+        "mode": "failure",
+        "stopReason": "error",
+        "callCount": 1,
+        "sessionCreated": false,
+        "persistedAgentFilesAdded": 0,
+        "transport": "OMP MockModel through completeSimple custom API dispatch",
+        "limitation": "Controlled OMP provider only; no real network/provider behavior is claimed."
+      },
+      "errors": [],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "capabilities.model-unavailable",
+      "capability": "Unavailable model rejection",
+      "status": "passed",
+      "observations": {
+        "evidence": "packages/coding-agent/src/session/agent-session.ts:11348-11356,11520-11527",
+        "restoreRejected": true,
+        "activeSessionPreserved": true,
+        "providerCalls": 0,
+        "fallbackAllowed": false,
+        "limitation": "Controlled saved selector absent from ModelRegistry; no external provider availability was measured."
+      },
+      "errors": [],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    }
+  ],
+  "summary": {
+    "passed": 8,
+    "partial": 5,
+    "failed": 0,
+    "unsupported": 0,
+    "unavailable": 0,
+    "unknown": 0
+  },
+  "cleanup": {
+    "temporaryDirectoriesRemoved": true,
+    "workerExited": true,
+    "workerDescendantsExited": true,
+    "processGroupVerified": true,
+    "remainingProcessesDetected": false,
+    "signal": null
+  }
+}

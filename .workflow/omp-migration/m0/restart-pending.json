@@ -1,0 +1,201 @@
+{
+  "schemaVersion": 2,
+  "run": {
+    "sourceRevision": "c9de2b02b997f37cc89639282ed35dec86f139e8",
+    "packageVersion": "18.8.9",
+    "bunVersion": "1.4.2",
+    "platform": "linux-x64",
+    "startedAt": "2026-10-11T12:19:33.869Z",
+    "command": "bun run scripts/omp-m0/run.mjs --suite restart-pending --fixture --output <report> --timeout-ms 120000",
+    "fixture": true,
+    "suite": "restart-pending",
+    "realProvider": false,
+    "timeoutMs": 120000,
+    "packageName": "@oh-my-pi/pi-coding-agent",
+    "sourceFingerprint": "b70a2f4afd9fd8fa9ec20094e9658b528e943eff52608d296af2366b80241ad1",
+    "sourceFingerprintScope": "packages/*/src/** excluding the listed generated artifacts, packages/*/package.json, package.json, bun.lock",
+    "fingerprintFileCount": 3499,
+    "identityMethod": "pinned authored-source fingerprint; generated artifacts hashed separately; snapshot without Git history",
+    "acquisitionArchiveSha256": "06b6a671af953f5cdefe95cbd44271a5c20d9b9e951173af7d10d71e1b0dc150",
+    "archiveVerification": "unavailable; original acquisition archive not retained",
+    "generatedArtifacts": [
+      {
+        "path": "packages/coding-agent/src/export/html/tool-views.generated.js",
+        "sha256": "f63d8bbed089cb1fccc11187e81543041e9dfa20dbc74a5dfd2fb82f90a7e50b"
+      }
+    ],
+    "directories": {
+      "home": "<temporary-home>",
+      "agent": "<temporary-agent>",
+      "workspace": "<temporary-workspace>"
+    },
+    "workerExitPolicy": "explicit exit after suite resource cleanup; no implicit dependency installation",
+    "exitCode": 1
+  },
+  "probes": [
+    {
+      "id": "source-identity",
+      "capability": "source/package identity",
+      "status": "passed",
+      "observations": {
+        "fingerprintMatched": true,
+        "timeoutMs": 120000,
+        "exitCode": 0,
+        "cleanup": {
+          "resourcesCreated": false
+        }
+      },
+      "errors": [],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "restart-pending.approval",
+      "capability": "Approval pending worker restart cleanup",
+      "status": "partial",
+      "observations": {
+        "pendingObservedBeforeStop": true,
+        "workerStopped": true,
+        "freshWorkerStarted": true,
+        "distinctWorker": true,
+        "staleResolution": {
+          "status": "unavailable",
+          "reason": "The controlled fixture exposes no cross-worker request handle or durable pending registry."
+        },
+        "eventCounts": {
+          "before": 2,
+          "after": 7,
+          "pendingAtStop": 2,
+          "pendingAfterStop": 2,
+          "lateObservationWindowMs": 100
+        },
+        "staleResolutionRejected": null,
+        "lateExecutionObserved": false,
+        "before": {
+          "toolExecutionCount": 0,
+          "eventCount": 2
+        },
+        "after": {
+          "toolExecutionCount": 1,
+          "eventCount": 7
+        },
+        "toolExecutionCountBeforeStop": 0,
+        "measurementValid": true
+      },
+      "errors": [
+        "APPROVAL_RESTART_REGISTRY_UNAVAILABLE"
+      ],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "restart-pending.question",
+      "capability": "Question pending worker restart cleanup",
+      "status": "partial",
+      "observations": {
+        "pendingObservedBeforeStop": true,
+        "workerStopped": true,
+        "freshWorkerStarted": true,
+        "distinctWorker": true,
+        "staleResolution": {
+          "status": "unavailable",
+          "reason": "The controlled fixture exposes no cross-worker request handle or durable pending registry."
+        },
+        "eventCounts": {
+          "before": 2,
+          "after": 7,
+          "pendingAtStop": 2,
+          "pendingAfterStop": 2,
+          "lateObservationWindowMs": 100
+        },
+        "staleResolutionRejected": null,
+        "lateAnswerObserved": false,
+        "before": {
+          "answerCount": 0,
+          "eventCount": 2
+        },
+        "after": {
+          "answerCount": 1,
+          "eventCount": 7
+        },
+        "answerCountBeforeStop": 0,
+        "measurementValid": true
+      },
+      "errors": [
+        "QUESTION_RESTART_REGISTRY_UNAVAILABLE"
+      ],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "restart-pending.cleanup",
+      "capability": "Restart-pending worker cleanup",
+      "status": "passed",
+      "observations": {
+        "pendingWorkerStopped": true,
+        "freshWorkerStopped": true,
+        "pendingIdentity": {
+          "pid": 130579,
+          "startTicks": "2048809"
+        },
+        "freshIdentity": {
+          "pid": 130694,
+          "startTicks": "2048900"
+        },
+        "distinctWorker": true,
+        "pendingExitSignal": "SIGKILL",
+        "freshExitCode": 0,
+        "eventCounts": {
+          "before": 2,
+          "after": 7,
+          "pendingAtStop": 2,
+          "pendingAfterStop": 2,
+          "lateObservationWindowMs": 100
+        }
+      },
+      "errors": [],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    }
+  ],
+  "summary": {
+    "passed": 2,
+    "partial": 2,
+    "failed": 0,
+    "unsupported": 0,
+    "unavailable": 0,
+    "unknown": 0
+  },
+  "cleanup": {
+    "temporaryDirectoriesRemoved": true,
+    "workerExited": true,
+    "workerDescendantsExited": true,
+    "processGroupVerified": true,
+    "remainingProcessesDetected": false,
+    "signal": null
+  }
+}

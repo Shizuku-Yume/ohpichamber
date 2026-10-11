@@ -1,53 +1,112 @@
-# OpenChamber Agent Guide
+# OhPiChamber agent guide
 
 ## Purpose
 
-OpenChamber provides shared web, desktop, VS Code, hosted-mobile, and native-mobile UI surfaces for OpenCode.
+OhPiChamber is an OpenChamber fork. The pinned upstream application baseline has been adopted and identified fork customization is being restored and verified. Runtime acceptance and the source-based documentation audit are still in progress; [development.md](.workflow/development.md) owns their evidence. The subsequent target is Oh My Pi (OMP) as the only agent runtime, retaining Web/PWA, Electron, hosted and Capacitor mobile, and the Guest SDK. OpenCode compatibility and the VS Code extension are not final target features.
 
 This file contains only always-on repository rules and routing. Detailed workflows belong to project skills and module documentation.
+<!-- workflow:start -->
+# Project workflow
+
+Before non-trivial work, read `.workflow/standards.md` (this project's commands, layout
+and landing) and `.workflow/STYLE.md` (how to write). Read only the `.workflow/CONVENTIONS.md`
+sections named by the skill you are using; do not preload the whole rulebook. The steps are
+skills in `.agents/skills/`; when the next step isn't obvious, start with `flow-start`.
+
+When rules disagree: the user's current instruction, then `.workflow/standards.md` and
+the repository's existing conventions (commit style in `git log`, lint and formatter
+config, CONTRIBUTING), then CONVENTIONS.md, then STYLE.md.
+
+Always:
+1. Find facts yourself; ask the user only what they own, in batches (CONVENTIONS §0, §1).
+2. Run it and observe the result before saying it is done.
+3. A plan that turns out wrong is fixed in the plan (CONVENTIONS §5).
+4. One task at a time per working tree; parallel tasks get separate worktrees.
+<!-- workflow:end -->
+
+## Conversation entrypoint
+
+At each new conversation or after lost context, load `flow-start` first and use `.workflow/bin/workflow next --no-color` to recover the active task. Classify even a small request through that entrypoint; classification does not require creating a task for trivial work. During an ongoing task, continue its earliest incomplete workflow step rather than starting a second process.
+
+The workflow is the default, not an optional appendix. Its project facts live in `.workflow/standards.md`; migration authority remains with the scope hierarchy below. Read-only investigations may run in parallel in one tree. Parallel implementation requires separate worktrees and explicit Git authorization. Landing mode never authorizes Git commands by itself.
+
+
+## Migration direction and status
+
+The [OMP migration documents](.workflow/omp-migration/README.md) define the target, not completed implementation. Existing OpenCode code, package names, skills, and upstream documentation describe the inherited baseline. Verify implementation status in the affected source and gate evidence before claiming a milestone is complete.
+
+The active effort is [latest-upstream rebaseline](.workflow/specs/upstream-rebaseline.md), before OMP implementation. Source acquisition and preservation inventory are complete; continue assembled-source verification and documentation adaptation rather than reacquiring or selectively porting the old baseline. Inheriting upstream OpenCode code during this prerequisite is not adding an OMP compatibility layer or changing the final runtime target. Preserve earlier investigations as dated inputs, not current implementation evidence.
+
+- Build agent execution around the Canonical API at `/api/agent/v1`, backed by the OMP SDK in a separate Bun Agent Service. Keep SDK objects private to the service and its workers.
+- Preserve the existing host services and their security boundaries. Extract host-owned code from legacy OpenCode directories before removing the agent integration.
+- Cut over migrated callers without OpenCode-shaped adapters, configuration readers, dual-engine selectors, or fallback engines.
+- Retiring the VS Code extension does not retire external editor launching or VS Code theme import.
+
+### Required migration reading
+
+Before planning or editing, read the [migration index](.workflow/omp-migration/README.md) and [scope](.workflow/omp-migration/scope.md). Then load the documents for the affected boundary:
+
+| Task | Required reference |
+|---|---|
+| Implementation or milestone selection | [Implementation plan](.workflow/omp-migration/implementation-plan.md). Identify the work package and required gate evidence; unverified OMP behavior remains an M0 gate. |
+| Process lifecycle, runtime integration, module ownership, persistence, or security | [Architecture](.workflow/omp-migration/architecture.md). Read the relevant ownership rules, ADRs, and verification gates. |
+| API, client data access, session state, commands, events, approvals, or queues | [Contracts](.workflow/omp-migration/contracts.md) and the relevant architecture sections. Proposed schemas need verification before becoming exported contracts. |
+| Feature retention, removal, or acceptance coverage | The scope traceability table and [feature inventory](.workflow/omp-migration/feature-inventory.md). Use the inventory as historical baseline, not current implementation evidence. |
+
+Resolve migration design conflicts using the [scope document hierarchy](.workflow/omp-migration/scope.md#document-hierarchy). These fork decisions supersede inherited OpenCode integration and VS Code support requirements in skills, package READMEs, and module docs. Continue applying their non-conflicting engineering and safety rules. If a conflict is not covered by that hierarchy, resolve it before editing.
+
+## Development memory
+
+- Maintain this guide as development changes the fork's direction, global rules, or document entrypoints. Update or remove stale guidance in the same task; keep task logs and detailed designs out of `AGENTS.md`.
+- Before implementation, read [development progress and lessons](.workflow/development.md) alongside the relevant design documents. After meaningful work, update its current status, verification evidence, remaining blockers, and next actionable step. Distinguish implemented, verified, and proposed work; never advance a migration gate without its required evidence.
+- Record reusable development findings in `.workflow/`: the observed problem, cause, chosen approach, and evidence or limitation. Prefer the existing owning document. Product and operational guides stay in `docs/` or `packages/docs/`; module contracts stay beside their code.
+- Keep one authoritative record per fact. Migration design stays in `.workflow/omp-migration/`; progress and cross-cutting lessons stay in `.workflow/development.md`; the historical selective upstream assessment stays in `.workflow/upstream-review.md`, and the current rebaseline scope stays in `.workflow/specs/upstream-rebaseline.md`. Workflow tasks record execution, decisions record new settled choices, glossary records vocabulary, and technical debt records actionable findings. Existing architecture ADRs remain with their design. Replace superseded status rather than accumulating transcripts or duplicate reports.
+- This fork uses a maintainer-and-agent workflow. Keep documentation useful for implementation, debugging, operation, or recovery. Preserve licensing, security guidance, and build/test/release requirements; public contribution ceremonies and upstream community promotion are not development requirements.
 
 ## Instruction Order
 
 These steps are mandatory. Before editing, you **MUST**:
 
-1. Follow this root guide.
-2. Load every matching project skill and every task-required reference from
-   those skills.
-3. Read the nearest `DOCUMENTATION.md` and package `README.md` when present.
-4. Follow local code and test precedent.
+1. Follow the conversation entrypoint above and read `.workflow/standards.md` and `.workflow/STYLE.md` before non-trivial work.
+2. Complete the required migration reading above.
+3. Load every matching project skill and every task-required reference from those skills.
+4. Read the nearest `DOCUMENTATION.md` and package `README.md` when present.
+5. Follow local code and test precedent.
 
-If these sources materially conflict, stop and resolve the conflict instead of silently choosing one.
+Apply the migration precedence above when these sources conflict; resolve any remaining conflict instead of silently choosing one.
 Do not start editing when a matching skill or required reference has not been
 read. Skill loading is a required part of the task, not optional guidance.
 
-## Runtime Boundaries
+## Runtime boundaries
+
+The existing package layout is a migration starting point, not the target support matrix:
 
 - `packages/ui`: shared React UI, state, sync, and runtime contracts.
-- `packages/web`: web surfaces, OpenChamber server, managed/external OpenCode lifecycle, and CLI.
+- `packages/web`: web surfaces, host server, and CLI. Replace its inherited OpenCode lifecycle integration while preserving host-owned services.
 - `packages/electron`: native desktop shell and privileged Electron boundary.
-- `packages/vscode`: extension host, webview, and runtime bridge.
+- `packages/vscode`: inherited extension scheduled for removal. Inventory retained callers before removing package, build, release, or documentation references; do not extend its support.
 - `packages/mobile`: Capacitor iOS/Android shell; bundles the mobile web surface and connects to an existing OpenChamber server.
 - `packages/docs`: product documentation; not a Bun workspace.
 - `packages/sdk`: guest contract for third-party panels. Manifest parse, iframe envelope, `connectHost`. Host and guest import from here; do not copy these types into `packages/ui`.
 - `packages/extensions`: app-owned SDK extensions and their build registry, not a Bun workspace. See its `DOCUMENTATION.md` for trust, packaging, and migration rules.
 
-Shared UI calls official OpenCode APIs through `@opencode-ai/sdk/v2`. OpenChamber-owned capabilities use `RuntimeAPIs`, `runtimeFetch`, and shared browser/realtime transport helpers. Server-side upstream integrations may use their owning runtime modules.
+The inherited shared UI uses `@opencode/client` and `@opencode/schema`; those dependencies are later cutover targets, not the API for new agent functionality. Migrated agent data uses the Canonical Client through the Host Gateway. Host-owned capabilities keep `RuntimeAPIs`, `runtimeFetch`, and shared browser/realtime transport helpers. `packages/sdk` remains the Guest contract, not the canonical agent contract. Consult the architecture for proposed package locations rather than assuming they already exist.
 
-Electron starts the OpenChamber backend in-process, never as a sidecar. Development may load loopback/HMR UI; packaged builds load staged assets through `openchamber-ui://` while the loopback server remains the API backend. Keep domain backends in web/runtime modules unless behavior is inherently native.
+Electron keeps the Node.js Host Gateway in-process. The target Bun Agent Service and SDK workers are separate processes; the inherited prohibition on a backend sidecar applies to the host, not the Agent Service. Development may load loopback/HMR UI; packaged builds load staged assets through `openchamber-ui://` while the loopback host remains the API entrypoint. Keep domain backends in their owning host or agent modules unless behavior is inherently native.
 
-Shared contracts must define intentional behavior for every applicable runtime: web, desktop, VS Code, hosted mobile, and Capacitor mobile.
+Shared contracts must define intentional behavior for every retained surface listed in the scope matrix. Mobile connects to the host and does not run local Agent Service or Guest service processes.
 
 ## Always-On Constraints
 
 - Do not modify `../opencode`; it is a separate repository.
-- Do not run git or GitHub commands unless the user explicitly asks.
+- Do not run GitHub commands unless the user explicitly asks.
 - Do not add dependencies unless explicitly requested.
 - Never add or log secrets, bearer tokens, pairing credentials, or sensitive user data.
 - Keep changes minimal and preserve unrelated worktree changes.
 - Release notes are the maintainer's release-time work: they get written once, as one story, in `changelog/unreleased.md` when the maintainer asks to update the changelog. Until that request, treat `changelog/` as read-only — a fix, feature, or merged PR lands without a changelog line. `packages/vscode/CHANGELOG.md` and `changelog/index.json` are generated from `changelog/*.md` by `oc-dev create-release`, and `CHANGELOG.md` is a legacy copy for older installs: never edit or regenerate any of them; an agent's only changelog output is `changelog/unreleased.md`.
 - Enforce security and correctness in core/runtime logic, not only UI visibility or prompts.
 - Keep entrypoints and bridges thin; place domain logic in focused owning modules.
-- Update owning documentation when module ownership, contracts, or invariants change.
+- Update owning documentation when module ownership, contracts, or invariants change, following the development-memory rules above.
 
 ## Correctness Invariants
 
@@ -75,7 +134,7 @@ High-value anchors:
 - Stores: `packages/ui/src/stores/DOCUMENTATION.md`
 - CLI: `packages/web/bin/lib/DOCUMENTATION.md`
 - Performance measurement tooling: `scripts/perf/DOCUMENTATION.md`
-- VS Code runtime: `packages/vscode/src/DOCUMENTATION.md`
+- VS Code removal and legacy bridge inventory only: `packages/vscode/src/DOCUMENTATION.md`
 - Electron: `packages/electron/README.md`
 - Mobile: `packages/mobile/README.md`
 - SDK: `packages/sdk/DOCUMENTATION.md`
@@ -85,16 +144,15 @@ High-value anchors:
 Project skills live under `.agents/skills/*/SKILL.md`. You **MUST** load every
 skill matching the character of the change before editing; multiple skills may
 apply, including companion skills required by another skill. Read every
-task-required reference named by those skills. Skills are canonical for their
-detailed workflows and checklists. Treating this table as optional advice is a
-process violation.
+task-required reference named by those skills. Skills own their detailed
+workflows and checklists, subject to the fork migration precedence above.
 
 
 | Trigger | Required skill |
 |---|---|
 | Source/dependency changes, exports or package contracts, build/generated assets, or module ownership | `openchamber-change-discipline` |
 | CLI commands, prompts, terminal output, non-TTY, `--quiet`, or `--json` behavior | `clack-cli-patterns` |
-| Shared UI data access, OpenCode SDK or server routes, `RuntimeAPIs`, runtime auth/URLs, bridges, or runtime switching | `ui-api-decoupling` |
+| Shared UI data access, Canonical Client cutover, legacy OpenCode SDK removal, server routes, `RuntimeAPIs`, runtime auth/URLs, bridges, or runtime switching | `ui-api-decoupling` |
 | Electron main/preload, IPC, native UI, updater, deep links, SSH/tunnels, packaging, or child processes | `desktop-shell` |
 | Session sync, bootstrap/reconnect, reducers, polling, optimistic state, queues, live status, reconciliation, or directory-scoped caches | `sync-state-invariants` |
 | Isolated-space trust boundaries: hardening, networks and gatekeeper policy, exec and lifecycle, grants and credentials, code transfer and apply, dispatcher isolation, preview content, or protection tests | `isolated-space-boundary` |
@@ -107,9 +165,6 @@ process violation.
 | iOS Simulator build, launch, preview, gestures, or `serve-sim` control | `serve-sim` |
 | The maintainer explicitly asks to update the changelog (main app or VS Code extension) — the only time `changelog/unreleased.md` is edited | `update-changelog` |
 | Creating or editing skills, `AGENTS.md`, or docs reached through agent instructions/context pointers | `writing-for-agents` |
-| Reviewing a single pull request or drafting a PR verdict/close/review comment | `pr-review` |
-| Triaging, cleaning up, or batch-processing the open PR queue | `triage-prs` |
-| Triaging, cleaning up, or batch-processing the issue backlog | `triage-issues` |
 
 Pure code-reading or explanation does not require implementation skills unless needed to interpret a specialized subsystem.
 
@@ -144,10 +199,5 @@ Before adding guidance to a skill, identify its canonical owner. If another skil
 - For docs-only or isolated config changes, run the narrowest relevant validation.
 - Report exactly what was and was not validated. Static checks alone do not prove runtime, relay, performance, or platform correctness.
 
-## Pull Request Handoff
 
-Before creating or updating a pull request, read `CONTRIBUTING.md` and
-`.github/PULL_REQUEST_TEMPLATE.md`. Complete the template with concrete,
-current evidence for the final PR HEAD; do not make the reviewer reconstruct
-intent, affected surfaces, validation, visual behavior, or failure and
-rollback considerations from the diff alone.
+

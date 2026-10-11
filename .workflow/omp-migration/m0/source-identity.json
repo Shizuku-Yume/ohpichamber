@@ -1,0 +1,10 @@
+{
+  "sourceRevision": "c9de2b02b997f37cc89639282ed35dec86f139e8",
+  "acquisitionArchiveSha256": "06b6a671af953f5cdefe95cbd44271a5c20d9b9e951173af7d10d71e1b0dc150",
+  "packageName": "@oh-my-pi/pi-coding-agent",
+  "packageVersion": "18.8.9",
+  "sourceFingerprint": "b70a2f4afd9fd8fa9ec20094e9658b528e943eff52608d296af2366b80241ad1",
+  "fingerprintFileCount": 3499,
+  "fingerprintScope": "packages/*/src/** excluding the listed generated artifacts, packages/*/package.json, package.json, bun.lock",
+  "generatedArtifactPaths": ["packages/coding-agent/src/export/html/tool-views.generated.js"]
+}

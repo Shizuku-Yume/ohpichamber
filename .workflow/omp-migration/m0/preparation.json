@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "sourceIdentityFile": "source-identity.json",
+  "applicationDependenciesChanged": false,
+  "externalSourceModified": false,
+  "credentialInheritance": false,
+  "platform": "linux-x64",
+  "bunVersion": "1.4.2",
+  "dependencyPreparation": {
+    "command": "bun install --frozen-lockfile --ignore-scripts --filter @oh-my-pi/pi-coding-agent",
+    "environment": "Explicit credential-free allowlist; temporary HOME, XDG directories, TMPDIR and package caches inside disposable source copy",
+    "exitCode": 0,
+    "installedPackages": 268,
+    "lifecycleScriptsExecuted": false
+  },
+  "nativePreparation": {
+    "package": "@oh-my-pi/pi-natives-linux-x64",
+    "version": "18.8.9",
+    "registryIntegrityVerified": true,
+    "operation": "Extracted genuine baseline and modern native binaries from the public registry package into the disposable copy only",
+    "stubUsed": false
+  },
+  "generatedArtifactPreparation": {
+    "command": "bun packages/collab-web/scripts/build-tool-views.ts",
+    "environment": "Same explicit credential-free allowlist and disposable HOME",
+    "exitCode": 0,
+    "artifact": "packages/coding-agent/src/export/html/tool-views.generated.js",
+    "sha256": "f63d8bbed089cb1fccc11187e81543041e9dfa20dbc74a5dfd2fb82f90a7e50b",
+    "identityRule": "The exact generated output is recorded separately from the unchanged pinned authored-source fingerprint"
+  },
+  "runtimeEvidence": ["lifecycle.json", "lifecycle-unavailable.json", "lifecycle-timeout.json", "capabilities-fixture.json", "capabilities-real-provider.json", "isolation-artifact.json", "restart-pending.json"],
+  "limits": ["Original acquisition archive is unavailable for re-verification", "Only Linux x64 was exercised", "One credentialed openai-completions completion was run; broader provider discovery, tools, cancellation, quota, retry and cross-platform behavior remain unverified"]
+}

@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "run": {
+    "sourceRevision": null,
+    "packageVersion": null,
+    "bunVersion": "1.4.2",
+    "platform": "linux-x64",
+    "startedAt": "2026-10-11T08:20:12.299Z",
+    "command": "bun run scripts/omp-m0/run.mjs --suite lifecycle --fixture --output <report> --timeout-ms 100",
+    "fixture": true,
+    "suite": "lifecycle",
+    "timeoutMs": 100,
+    "exitCode": 1
+  },
+  "probes": [
+    {
+      "id": "runner",
+      "capability": "disposable suite runner",
+      "status": "failed",
+      "observations": {
+        "timeoutMs": 100,
+        "exitCode": 1
+      },
+      "errors": [
+        "SUITE_TIMEOUT"
+      ],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    }
+  ],
+  "summary": {
+    "passed": 0,
+    "failed": 1,
+    "unsupported": 0,
+    "unavailable": 0,
+    "unknown": 0
+  },
+  "cleanup": {
+    "temporaryDirectoriesRemoved": true,
+    "workerExited": true,
+    "signal": null
+  }
+}

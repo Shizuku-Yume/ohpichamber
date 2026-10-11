@@ -1,0 +1,727 @@
+{
+  "schemaVersion": 2,
+  "run": {
+    "sourceRevision": "c9de2b02b997f37cc89639282ed35dec86f139e8",
+    "packageVersion": "18.8.9",
+    "bunVersion": "1.4.2",
+    "platform": "linux-x64",
+    "startedAt": "2026-10-11T11:03:41.939Z",
+    "command": "bun run scripts/omp-m0/run.mjs --suite lifecycle --fixture --output <report> --timeout-ms 120000",
+    "fixture": true,
+    "suite": "lifecycle",
+    "realProvider": false,
+    "timeoutMs": 120000,
+    "packageName": "@oh-my-pi/pi-coding-agent",
+    "sourceFingerprint": "b70a2f4afd9fd8fa9ec20094e9658b528e943eff52608d296af2366b80241ad1",
+    "sourceFingerprintScope": "packages/*/src/** excluding the listed generated artifacts, packages/*/package.json, package.json, bun.lock",
+    "fingerprintFileCount": 3499,
+    "identityMethod": "pinned authored-source fingerprint; generated artifacts hashed separately; snapshot without Git history",
+    "acquisitionArchiveSha256": "06b6a671af953f5cdefe95cbd44271a5c20d9b9e951173af7d10d71e1b0dc150",
+    "archiveVerification": "unavailable; original acquisition archive not retained",
+    "generatedArtifacts": [
+      {
+        "path": "packages/coding-agent/src/export/html/tool-views.generated.js",
+        "sha256": "f63d8bbed089cb1fccc11187e81543041e9dfa20dbc74a5dfd2fb82f90a7e50b"
+      }
+    ],
+    "directories": {
+      "home": "<temporary-home>",
+      "agent": "<temporary-agent>",
+      "workspace": "<temporary-workspace>"
+    },
+    "workerExitPolicy": "explicit exit after suite resource cleanup; no implicit dependency installation",
+    "exitCode": 0
+  },
+  "probes": [
+    {
+      "id": "source-identity",
+      "capability": "source/package identity",
+      "status": "passed",
+      "observations": {
+        "fingerprintMatched": true,
+        "timeoutMs": 120000,
+        "exitCode": 0,
+        "cleanup": {
+          "resourcesCreated": false
+        }
+      },
+      "errors": [],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "lifecycle-session",
+      "capability": "SDK session construction",
+      "status": "passed",
+      "observations": {
+        "created": true,
+        "persistent": true,
+        "seam": "OMP Agent and AgentSession constructors; built-in MockModel.stream; keyless local label",
+        "initialMessageCount": 0,
+        "startedAt": "2026-10-11T11:03:43.386Z",
+        "durationMs": 42.734,
+        "timeoutMs": 15000,
+        "exitCode": 0,
+        "cleanup": {
+          "sessionDisposed": true
+        }
+      },
+      "errors": [],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "lifecycle-events",
+      "capability": "prompt, model turn versus terminal request completion, fragment density",
+      "status": "passed",
+      "observations": {
+        "eventCount": 31,
+        "fragmentCount": 5,
+        "fragmentCharacters": 52,
+        "meanCharactersPerFragment": 10.4,
+        "eventsPerFragment": 6.2,
+        "elapsedMs": 98.991,
+        "events": [
+          {
+            "sequence": 1,
+            "type": "agent_start",
+            "timestamp": "2026-10-11T11:03:43.479Z",
+            "elapsedMs": 50.342
+          },
+          {
+            "sequence": 2,
+            "type": "turn_start",
+            "timestamp": "2026-10-11T11:03:43.504Z",
+            "elapsedMs": 75.834
+          },
+          {
+            "sequence": 3,
+            "type": "message_start",
+            "timestamp": "2026-10-11T11:03:43.504Z",
+            "elapsedMs": 76.011
+          },
+          {
+            "sequence": 4,
+            "type": "message_end",
+            "timestamp": "2026-10-11T11:03:43.505Z",
+            "elapsedMs": 76.276
+          },
+          {
+            "sequence": 5,
+            "type": "message_start",
+            "timestamp": "2026-10-11T11:03:43.505Z",
+            "elapsedMs": 76.97
+          },
+          {
+            "sequence": 6,
+            "type": "message_update",
+            "timestamp": "2026-10-11T11:03:43.505Z",
+            "elapsedMs": 77.201,
+            "fragmentType": "thinking_start"
+          },
+          {
+            "sequence": 7,
+            "type": "message_update",
+            "timestamp": "2026-10-11T11:03:43.506Z",
+            "elapsedMs": 77.291,
+            "fragmentType": "thinking_delta",
+            "fragmentCharacters": 20
+          },
+          {
+            "sequence": 8,
+            "type": "message_update",
+            "timestamp": "2026-10-11T11:03:43.506Z",
+            "elapsedMs": 77.312,
+            "fragmentType": "thinking_end"
+          },
+          {
+            "sequence": 9,
+            "type": "message_update",
+            "timestamp": "2026-10-11T11:03:43.506Z",
+            "elapsedMs": 77.36,
+            "fragmentType": "toolcall_start"
+          },
+          {
+            "sequence": 10,
+            "type": "message_update",
+            "timestamp": "2026-10-11T11:03:43.506Z",
+            "elapsedMs": 77.378,
+            "fragmentType": "toolcall_delta",
+            "fragmentCharacters": 2
+          },
+          {
+            "sequence": 11,
+            "type": "message_update",
+            "timestamp": "2026-10-11T11:03:43.506Z",
+            "elapsedMs": 77.399,
+            "fragmentType": "toolcall_end"
+          },
+          {
+            "sequence": 12,
+            "type": "message_end",
+            "timestamp": "2026-10-11T11:03:43.508Z",
+            "elapsedMs": 79.565,
+            "stopReason": "toolUse"
+          },
+          {
+            "sequence": 13,
+            "type": "tool_execution_start",
+            "timestamp": "2026-10-11T11:03:43.514Z",
+            "elapsedMs": 86.132
+          },
+          {
+            "sequence": 14,
+            "type": "tool_execution_end",
+            "timestamp": "2026-10-11T11:03:43.515Z",
+            "elapsedMs": 86.746
+          },
+          {
+            "sequence": 15,
+            "type": "message_start",
+            "timestamp": "2026-10-11T11:03:43.515Z",
+            "elapsedMs": 86.872
+          },
+          {
+            "sequence": 16,
+            "type": "message_end",
+            "timestamp": "2026-10-11T11:03:43.515Z",
+            "elapsedMs": 87.068
+          },
+          {
+            "sequence": 17,
+            "type": "turn_end",
+            "timestamp": "2026-10-11T11:03:43.518Z",
+            "elapsedMs": 89.797
+          },
+          {
+            "sequence": 18,
+            "type": "turn_start",
+            "timestamp": "2026-10-11T11:03:43.519Z",
+            "elapsedMs": 91.111
+          },
+          {
+            "sequence": 19,
+            "type": "message_start",
+            "timestamp": "2026-10-11T11:03:43.519Z",
+            "elapsedMs": 91.191
+          },
+          {
+            "sequence": 20,
+            "type": "message_update",
+            "timestamp": "2026-10-11T11:03:43.520Z",
+            "elapsedMs": 91.22,
+            "fragmentType": "text_start"
+          },
+          {
+            "sequence": 21,
+            "type": "message_update",
+            "timestamp": "2026-10-11T11:03:43.520Z",
+            "elapsedMs": 91.246,
+            "fragmentType": "text_delta",
+            "fragmentCharacters": 11
+          },
+          {
+            "sequence": 22,
+            "type": "message_update",
+            "timestamp": "2026-10-11T11:03:43.520Z",
+            "elapsedMs": 91.258,
+            "fragmentType": "text_end"
+          },
+          {
+            "sequence": 23,
+            "type": "message_update",
+            "timestamp": "2026-10-11T11:03:43.520Z",
+            "elapsedMs": 91.271,
+            "fragmentType": "text_start"
+          },
+          {
+            "sequence": 24,
+            "type": "message_update",
+            "timestamp": "2026-10-11T11:03:43.520Z",
+            "elapsedMs": 91.288,
+            "fragmentType": "text_delta",
+            "fragmentCharacters": 8
+          },
+          {
+            "sequence": 25,
+            "type": "message_update",
+            "timestamp": "2026-10-11T11:03:43.520Z",
+            "elapsedMs": 91.297,
+            "fragmentType": "text_end"
+          },
+          {
+            "sequence": 26,
+            "type": "message_update",
+            "timestamp": "2026-10-11T11:03:43.520Z",
+            "elapsedMs": 91.307,
+            "fragmentType": "text_start"
+          },
+          {
+            "sequence": 27,
+            "type": "message_update",
+            "timestamp": "2026-10-11T11:03:43.520Z",
+            "elapsedMs": 91.317,
+            "fragmentType": "text_delta",
+            "fragmentCharacters": 11
+          },
+          {
+            "sequence": 28,
+            "type": "message_update",
+            "timestamp": "2026-10-11T11:03:43.520Z",
+            "elapsedMs": 91.329,
+            "fragmentType": "text_end"
+          },
+          {
+            "sequence": 29,
+            "type": "message_end",
+            "timestamp": "2026-10-11T11:03:43.520Z",
+            "elapsedMs": 91.429,
+            "stopReason": "stop"
+          },
+          {
+            "sequence": 30,
+            "type": "turn_end",
+            "timestamp": "2026-10-11T11:03:43.520Z",
+            "elapsedMs": 91.863
+          },
+          {
+            "sequence": 31,
+            "type": "agent_end",
+            "timestamp": "2026-10-11T11:03:43.527Z",
+            "elapsedMs": 98.29,
+            "isTerminal": true
+          }
+        ],
+        "modelCalls": 2,
+        "turnEndCount": 2,
+        "terminalAgentEndCount": 1,
+        "turnBoundaries": [
+          {
+            "promptSettled": false,
+            "observedSequence": 17
+          },
+          {
+            "promptSettled": false,
+            "observedSequence": 30
+          }
+        ],
+        "outerCompletionDistinctFromTurnEnd": true,
+        "batchingApplied": false,
+        "cursorMapping": "unverified; observed sequence is probe-local only",
+        "startedAt": "2026-10-11T11:03:43.428Z",
+        "durationMs": 98.856,
+        "timeoutMs": 15000,
+        "exitCode": 0,
+        "cleanup": {
+          "sessionDisposed": true
+        }
+      },
+      "errors": [],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "lifecycle-history",
+      "capability": "persisted SDK history reload",
+      "status": "passed",
+      "observations": {
+        "loaded": true,
+        "sameSessionIdentity": true,
+        "entryCount": 6,
+        "messageCount": 4,
+        "roles": [
+          "user",
+          "assistant",
+          "toolResult",
+          "assistant"
+        ],
+        "source": "SessionManager.open and buildSessionContext, not a duplicate transcript",
+        "startedAt": "2026-10-11T11:03:43.527Z",
+        "durationMs": 14.22,
+        "timeoutMs": 15000,
+        "exitCode": 0,
+        "cleanup": {
+          "sessionDisposed": true
+        }
+      },
+      "errors": [],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "lifecycle-fork",
+      "capability": "SDK fork without workspace rollback",
+      "status": "passed",
+      "observations": {
+        "accepted": true,
+        "newSessionIdentity": true,
+        "preservedMessageCount": 4,
+        "workspaceUnchanged": true,
+        "workspaceDigestBefore": "74242a3b1690db91a462314959984f83d8b40ea2fee0108f9c3d832dbf743a1f",
+        "workspaceDigestAfter": "74242a3b1690db91a462314959984f83d8b40ea2fee0108f9c3d832dbf743a1f",
+        "workspaceFileCount": 1,
+        "startedAt": "2026-10-11T11:03:43.542Z",
+        "durationMs": 3.957,
+        "timeoutMs": 15000,
+        "exitCode": 0,
+        "cleanup": {
+          "sessionDisposed": true
+        }
+      },
+      "errors": [],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "lifecycle-branch",
+      "capability": "SDK branch without workspace rollback",
+      "status": "passed",
+      "observations": {
+        "accepted": true,
+        "newSessionIdentity": true,
+        "selectedTextReturned": true,
+        "activeMessageCount": 0,
+        "workspaceUnchanged": true,
+        "workspaceDigestBefore": "74242a3b1690db91a462314959984f83d8b40ea2fee0108f9c3d832dbf743a1f",
+        "workspaceDigestAfter": "74242a3b1690db91a462314959984f83d8b40ea2fee0108f9c3d832dbf743a1f",
+        "workspaceFileCount": 1,
+        "startedAt": "2026-10-11T11:03:43.546Z",
+        "durationMs": 2.616,
+        "timeoutMs": 15000,
+        "exitCode": 0,
+        "cleanup": {
+          "sessionDisposed": true
+        }
+      },
+      "errors": [],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "lifecycle-abort",
+      "capability": "abort in-flight controlled model",
+      "status": "passed",
+      "observations": {
+        "idleAfterAbort": true,
+        "abortedAssistantObserved": true,
+        "eventCount": 8,
+        "fragmentCount": 0,
+        "fragmentCharacters": 0,
+        "meanCharactersPerFragment": null,
+        "eventsPerFragment": null,
+        "elapsedMs": 43.15,
+        "events": [
+          {
+            "sequence": 1,
+            "type": "agent_start",
+            "timestamp": "2026-10-11T11:03:43.572Z",
+            "elapsedMs": 17.826
+          },
+          {
+            "sequence": 2,
+            "type": "turn_start",
+            "timestamp": "2026-10-11T11:03:43.592Z",
+            "elapsedMs": 38.229
+          },
+          {
+            "sequence": 3,
+            "type": "message_start",
+            "timestamp": "2026-10-11T11:03:43.592Z",
+            "elapsedMs": 38.424
+          },
+          {
+            "sequence": 4,
+            "type": "message_end",
+            "timestamp": "2026-10-11T11:03:43.593Z",
+            "elapsedMs": 39.159
+          },
+          {
+            "sequence": 5,
+            "type": "message_start",
+            "timestamp": "2026-10-11T11:03:43.594Z",
+            "elapsedMs": 39.683
+          },
+          {
+            "sequence": 6,
+            "type": "message_end",
+            "timestamp": "2026-10-11T11:03:43.594Z",
+            "elapsedMs": 39.8,
+            "stopReason": "aborted"
+          },
+          {
+            "sequence": 7,
+            "type": "turn_end",
+            "timestamp": "2026-10-11T11:03:43.594Z",
+            "elapsedMs": 39.939
+          },
+          {
+            "sequence": 8,
+            "type": "agent_end",
+            "timestamp": "2026-10-11T11:03:43.597Z",
+            "elapsedMs": 42.632,
+            "isTerminal": true
+          }
+        ],
+        "startedAt": "2026-10-11T11:03:43.548Z",
+        "durationMs": 49.826,
+        "timeoutMs": 15000,
+        "exitCode": 0,
+        "cleanup": {
+          "sessionDisposed": true
+        }
+      },
+      "errors": [],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "lifecycle-dispose",
+      "capability": "dispose, cancellation and post-close event observation",
+      "status": "passed",
+      "observations": {
+        "disposed": true,
+        "repeatedDisposeCompleted": true,
+        "delayedProviderReturnedAfterDispose": true,
+        "coreSettledAfterClose": true,
+        "drainDeadlineMs": 25,
+        "quietWindowMs": 100,
+        "postCloseSessionEventCount": 0,
+        "postCloseAgentEventCount": 0,
+        "eventCount": 7,
+        "fragmentCount": 0,
+        "fragmentCharacters": 0,
+        "meanCharactersPerFragment": null,
+        "eventsPerFragment": null,
+        "elapsedMs": 117.055,
+        "events": [
+          {
+            "sequence": 1,
+            "type": "agent_start",
+            "timestamp": "2026-10-11T11:03:43.620Z",
+            "elapsedMs": 15.21
+          },
+          {
+            "sequence": 2,
+            "type": "turn_start",
+            "timestamp": "2026-10-11T11:03:43.620Z",
+            "elapsedMs": 15.527
+          },
+          {
+            "sequence": 3,
+            "type": "message_start",
+            "timestamp": "2026-10-11T11:03:43.620Z",
+            "elapsedMs": 15.641
+          },
+          {
+            "sequence": 4,
+            "type": "message_end",
+            "timestamp": "2026-10-11T11:03:43.620Z",
+            "elapsedMs": 15.802
+          },
+          {
+            "sequence": 5,
+            "type": "message_start",
+            "timestamp": "2026-10-11T11:03:43.621Z",
+            "elapsedMs": 16.038
+          },
+          {
+            "sequence": 6,
+            "type": "message_end",
+            "timestamp": "2026-10-11T11:03:43.621Z",
+            "elapsedMs": 16.121,
+            "stopReason": "aborted"
+          },
+          {
+            "sequence": 7,
+            "type": "turn_end",
+            "timestamp": "2026-10-11T11:03:43.621Z",
+            "elapsedMs": 16.248
+          }
+        ],
+        "limitation": "bounded fixture late-delivery window, not a guarantee for arbitrary providers",
+        "startedAt": "2026-10-11T11:03:43.598Z",
+        "durationMs": 123.851,
+        "timeoutMs": 15000,
+        "exitCode": 0,
+        "cleanup": {
+          "sessionDisposed": true
+        }
+      },
+      "errors": [],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "lifecycle-subagent",
+      "capability": "native SDK subagent executor",
+      "status": "passed",
+      "observations": {
+        "childCompleted": true,
+        "childExitCode": 0,
+        "modelCalls": 1,
+        "eventCount": 15,
+        "events": [
+          {
+            "sequence": 1,
+            "type": "agent_start",
+            "timestamp": "2026-10-11T11:03:43.816Z"
+          },
+          {
+            "sequence": 2,
+            "type": "turn_start",
+            "timestamp": "2026-10-11T11:03:43.840Z"
+          },
+          {
+            "sequence": 3,
+            "type": "message_start",
+            "timestamp": "2026-10-11T11:03:43.840Z"
+          },
+          {
+            "sequence": 4,
+            "type": "message_end",
+            "timestamp": "2026-10-11T11:03:43.844Z"
+          },
+          {
+            "sequence": 5,
+            "type": "message_start",
+            "timestamp": "2026-10-11T11:03:43.845Z"
+          },
+          {
+            "sequence": 6,
+            "type": "message_update",
+            "timestamp": "2026-10-11T11:03:43.845Z"
+          },
+          {
+            "sequence": 7,
+            "type": "message_update",
+            "timestamp": "2026-10-11T11:03:43.845Z"
+          },
+          {
+            "sequence": 8,
+            "type": "message_update",
+            "timestamp": "2026-10-11T11:03:43.846Z"
+          },
+          {
+            "sequence": 9,
+            "type": "message_end",
+            "timestamp": "2026-10-11T11:03:43.848Z"
+          },
+          {
+            "sequence": 10,
+            "type": "tool_execution_start",
+            "timestamp": "2026-10-11T11:03:43.851Z"
+          },
+          {
+            "sequence": 11,
+            "type": "tool_execution_end",
+            "timestamp": "2026-10-11T11:03:43.851Z"
+          },
+          {
+            "sequence": 12,
+            "type": "message_start",
+            "timestamp": "2026-10-11T11:03:43.852Z"
+          },
+          {
+            "sequence": 13,
+            "type": "message_end",
+            "timestamp": "2026-10-11T11:03:43.852Z"
+          },
+          {
+            "sequence": 14,
+            "type": "turn_end",
+            "timestamp": "2026-10-11T11:03:43.853Z"
+          },
+          {
+            "sequence": 15,
+            "type": "agent_end",
+            "timestamp": "2026-10-11T11:03:43.853Z",
+            "isTerminal": true
+          }
+        ],
+        "outputRetained": false,
+        "nativeExecutor": "runSubprocess, SDK sessions not CLI/RPC",
+        "keepAlive": false,
+        "startedAt": "2026-10-11T11:03:43.722Z",
+        "durationMs": 299.314,
+        "timeoutMs": 15000,
+        "exitCode": 0,
+        "cleanup": {
+          "sessionDisposed": true
+        }
+      },
+      "errors": [],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    }
+  ],
+  "summary": {
+    "passed": 9,
+    "partial": 0,
+    "failed": 0,
+    "unsupported": 0,
+    "unavailable": 0,
+    "unknown": 0
+  },
+  "cleanup": {
+    "temporaryDirectoriesRemoved": true,
+    "workerExited": true,
+    "workerDescendantsExited": true,
+    "processGroupVerified": true,
+    "remainingProcessesDetected": false,
+    "signal": null
+  }
+}

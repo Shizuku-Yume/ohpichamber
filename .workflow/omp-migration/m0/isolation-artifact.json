@@ -1,0 +1,685 @@
+{
+  "schemaVersion": 2,
+  "run": {
+    "sourceRevision": "c9de2b02b997f37cc89639282ed35dec86f139e8",
+    "packageVersion": "18.8.9",
+    "bunVersion": "1.4.2",
+    "platform": "linux-x64",
+    "startedAt": "2026-10-11T11:03:41.940Z",
+    "command": "bun run scripts/omp-m0/run.mjs --suite isolation --fixture --output <report> --timeout-ms 120000",
+    "fixture": true,
+    "suite": "isolation",
+    "realProvider": false,
+    "timeoutMs": 120000,
+    "packageName": "@oh-my-pi/pi-coding-agent",
+    "sourceFingerprint": "b70a2f4afd9fd8fa9ec20094e9658b528e943eff52608d296af2366b80241ad1",
+    "sourceFingerprintScope": "packages/*/src/** excluding the listed generated artifacts, packages/*/package.json, package.json, bun.lock",
+    "fingerprintFileCount": 3499,
+    "identityMethod": "pinned authored-source fingerprint; generated artifacts hashed separately; snapshot without Git history",
+    "acquisitionArchiveSha256": "06b6a671af953f5cdefe95cbd44271a5c20d9b9e951173af7d10d71e1b0dc150",
+    "archiveVerification": "unavailable; original acquisition archive not retained",
+    "generatedArtifacts": [
+      {
+        "path": "packages/coding-agent/src/export/html/tool-views.generated.js",
+        "sha256": "f63d8bbed089cb1fccc11187e81543041e9dfa20dbc74a5dfd2fb82f90a7e50b"
+      }
+    ],
+    "directories": {
+      "home": "<temporary-home>",
+      "agent": "<temporary-agent>",
+      "workspace": "<temporary-workspace>"
+    },
+    "workerExitPolicy": "explicit exit after suite resource cleanup; no implicit dependency installation",
+    "exitCode": 1
+  },
+  "probes": [
+    {
+      "id": "source-identity",
+      "capability": "source/package identity",
+      "status": "passed",
+      "observations": {
+        "fingerprintMatched": true,
+        "timeoutMs": 120000,
+        "exitCode": 0,
+        "cleanup": {
+          "resourcesCreated": false
+        }
+      },
+      "errors": [],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "isolation-shared-default",
+      "capability": "PROBE-01 concurrent cwd/environment isolation",
+      "status": "failed",
+      "observations": {
+        "mode": "shared-default",
+        "privateAgentRegistry": false,
+        "bindProcessState": true,
+        "overlayMethod": "Host installs controlled cwd and environment overlay before each session creation.",
+        "observationPath": "SDK custom tool reads a marker relative to SessionManager.getCwd() and separately relative to process.cwd(); only the public fixture environment marker is inspected.",
+        "adr03Changed": false,
+        "startup": {
+          "type": "ready",
+          "sessionCount": 2
+        },
+        "measurement": {
+          "type": "result",
+          "rows": [
+            {
+              "label": "a",
+              "sessionMarker": "a",
+              "processMarker": "b",
+              "environmentMarker": "b",
+              "sessionCwdMatches": true,
+              "processSettingsBinding": "b",
+              "registryOwnsSession": false,
+              "registryEntryCount": 1
+            },
+            {
+              "label": "b",
+              "sessionMarker": "b",
+              "processMarker": "b",
+              "environmentMarker": "b",
+              "sessionCwdMatches": true,
+              "processSettingsBinding": "b",
+              "registryOwnsSession": true,
+              "registryEntryCount": 1
+            }
+          ],
+          "eventCount": 44,
+          "concurrentToolsObserved": 2
+        },
+        "sessionScopedCwdIsolated": true,
+        "ambientProcessCwdIsolated": false,
+        "ambientEnvironmentIsolated": false,
+        "registryOwnsBothSessions": false,
+        "processSettingsBindingCorrect": true,
+        "shutdown": {
+          "type": "closed",
+          "eventsAtClose": 44,
+          "lateEvents": 0,
+          "observationWindowMs": 100,
+          "disposeFailed": false,
+          "bindingRestoration": [
+            {
+              "disposedLabel": "b",
+              "processSettingsBinding": "a"
+            },
+            {
+              "disposedLabel": "a",
+              "processSettingsBinding": "none"
+            }
+          ]
+        },
+        "processSettingsRestored": true,
+        "cleanup": {
+          "directChildExited": true,
+          "identityScanObserved": true,
+          "descendantInspection": {
+            "status": "passed",
+            "members": []
+          },
+          "trackedPids": [
+            112142
+          ],
+          "remnantsObserved": 0,
+          "complete": true
+        },
+        "worker": {
+          "pid": 112142,
+          "startedAt": "2026-10-11T11:03:42.444Z",
+          "startupMs": 1171.591,
+          "exitCode": 0,
+          "signal": null,
+          "stderrBytes": 0,
+          "messagesAfterClosed": 0,
+          "timedOut": false,
+          "forcedTermination": false,
+          "exitedAt": "2026-10-11T11:03:43.862Z",
+          "lifetimeMs": 1421.814
+        },
+        "startedAt": "2026-10-11T11:03:42.439Z",
+        "durationMs": 1432.971,
+        "timeoutMs": 20000,
+        "exitCode": 1
+      },
+      "errors": [
+        "SHARED_PROCESS_CWD_OR_ENV_LEAK"
+      ],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "isolation-shared-private-bound",
+      "capability": "PROBE-01 concurrent cwd/environment isolation",
+      "status": "failed",
+      "observations": {
+        "mode": "shared-private-bound",
+        "privateAgentRegistry": true,
+        "bindProcessState": true,
+        "overlayMethod": "Host installs controlled cwd and environment overlay before each session creation.",
+        "observationPath": "SDK custom tool reads a marker relative to SessionManager.getCwd() and separately relative to process.cwd(); only the public fixture environment marker is inspected.",
+        "adr03Changed": false,
+        "startup": {
+          "type": "ready",
+          "sessionCount": 2
+        },
+        "measurement": {
+          "type": "result",
+          "rows": [
+            {
+              "label": "a",
+              "sessionMarker": "a",
+              "processMarker": "b",
+              "environmentMarker": "b",
+              "sessionCwdMatches": true,
+              "processSettingsBinding": "b",
+              "registryOwnsSession": true,
+              "registryEntryCount": 1
+            },
+            {
+              "label": "b",
+              "sessionMarker": "b",
+              "processMarker": "b",
+              "environmentMarker": "b",
+              "sessionCwdMatches": true,
+              "processSettingsBinding": "b",
+              "registryOwnsSession": true,
+              "registryEntryCount": 1
+            }
+          ],
+          "eventCount": 44,
+          "concurrentToolsObserved": 2
+        },
+        "sessionScopedCwdIsolated": true,
+        "ambientProcessCwdIsolated": false,
+        "ambientEnvironmentIsolated": false,
+        "registryOwnsBothSessions": true,
+        "processSettingsBindingCorrect": true,
+        "shutdown": {
+          "type": "closed",
+          "eventsAtClose": 44,
+          "lateEvents": 0,
+          "observationWindowMs": 100,
+          "disposeFailed": false,
+          "bindingRestoration": [
+            {
+              "disposedLabel": "b",
+              "processSettingsBinding": "a"
+            },
+            {
+              "disposedLabel": "a",
+              "processSettingsBinding": "none"
+            }
+          ]
+        },
+        "processSettingsRestored": true,
+        "cleanup": {
+          "directChildExited": true,
+          "identityScanObserved": true,
+          "descendantInspection": {
+            "status": "passed",
+            "members": []
+          },
+          "trackedPids": [
+            112388
+          ],
+          "remnantsObserved": 0,
+          "complete": true
+        },
+        "worker": {
+          "pid": 112388,
+          "startedAt": "2026-10-11T11:03:43.873Z",
+          "startupMs": 830.203,
+          "exitCode": 0,
+          "signal": null,
+          "stderrBytes": 0,
+          "messagesAfterClosed": 0,
+          "timedOut": false,
+          "forcedTermination": false,
+          "exitedAt": "2026-10-11T11:03:44.947Z",
+          "lifetimeMs": 1074.169
+        },
+        "startedAt": "2026-10-11T11:03:43.873Z",
+        "durationMs": 1083.964,
+        "timeoutMs": 20000,
+        "exitCode": 1
+      },
+      "errors": [
+        "SHARED_PROCESS_CWD_OR_ENV_LEAK"
+      ],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "isolation-shared-private-unbound",
+      "capability": "PROBE-01 concurrent cwd/environment isolation",
+      "status": "failed",
+      "observations": {
+        "mode": "shared-private-unbound",
+        "privateAgentRegistry": true,
+        "bindProcessState": false,
+        "overlayMethod": "Host installs controlled cwd and environment overlay before each session creation.",
+        "observationPath": "SDK custom tool reads a marker relative to SessionManager.getCwd() and separately relative to process.cwd(); only the public fixture environment marker is inspected.",
+        "adr03Changed": false,
+        "startup": {
+          "type": "ready",
+          "sessionCount": 2
+        },
+        "measurement": {
+          "type": "result",
+          "rows": [
+            {
+              "label": "a",
+              "sessionMarker": "a",
+              "processMarker": "b",
+              "environmentMarker": "b",
+              "sessionCwdMatches": true,
+              "processSettingsBinding": "none",
+              "registryOwnsSession": true,
+              "registryEntryCount": 1
+            },
+            {
+              "label": "b",
+              "sessionMarker": "b",
+              "processMarker": "b",
+              "environmentMarker": "b",
+              "sessionCwdMatches": true,
+              "processSettingsBinding": "none",
+              "registryOwnsSession": true,
+              "registryEntryCount": 1
+            }
+          ],
+          "eventCount": 44,
+          "concurrentToolsObserved": 2
+        },
+        "sessionScopedCwdIsolated": true,
+        "ambientProcessCwdIsolated": false,
+        "ambientEnvironmentIsolated": false,
+        "registryOwnsBothSessions": true,
+        "processSettingsBindingCorrect": true,
+        "shutdown": {
+          "type": "closed",
+          "eventsAtClose": 44,
+          "lateEvents": 0,
+          "observationWindowMs": 100,
+          "disposeFailed": false,
+          "bindingRestoration": [
+            {
+              "disposedLabel": "b",
+              "processSettingsBinding": "none"
+            },
+            {
+              "disposedLabel": "a",
+              "processSettingsBinding": "none"
+            }
+          ]
+        },
+        "processSettingsRestored": true,
+        "cleanup": {
+          "directChildExited": true,
+          "identityScanObserved": true,
+          "descendantInspection": {
+            "status": "passed",
+            "members": []
+          },
+          "trackedPids": [
+            112561
+          ],
+          "remnantsObserved": 0,
+          "complete": true
+        },
+        "worker": {
+          "pid": 112561,
+          "startedAt": "2026-10-11T11:03:44.958Z",
+          "startupMs": 755.26,
+          "exitCode": 0,
+          "signal": null,
+          "stderrBytes": 0,
+          "messagesAfterClosed": 0,
+          "timedOut": false,
+          "forcedTermination": false,
+          "exitedAt": "2026-10-11T11:03:45.954Z",
+          "lifetimeMs": 997.028
+        },
+        "startedAt": "2026-10-11T11:03:44.957Z",
+        "durationMs": 1006.495,
+        "timeoutMs": 20000,
+        "exitCode": 1
+      },
+      "errors": [
+        "SHARED_PROCESS_CWD_OR_ENV_LEAK"
+      ],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "isolation-dedicated-workers",
+      "capability": "Bun worker cwd/environment and lifecycle isolation",
+      "status": "passed",
+      "observations": {
+        "platform": "linux-x64",
+        "workers": [
+          {
+            "label": "a",
+            "startup": {
+              "type": "ready",
+              "sessionCount": 1
+            },
+            "idle": {
+              "status": "passed",
+              "method": "linux-procfs",
+              "sampledAt": "2026-10-11T11:03:46.774Z",
+              "rssBytes": 270200832,
+              "userCpuTicks": 94,
+              "systemCpuTicks": 13,
+              "threads": 42
+            },
+            "activeAcknowledgment": {
+              "type": "active",
+              "label": "a"
+            },
+            "active": {
+              "status": "passed",
+              "method": "linux-procfs",
+              "sampledAt": "2026-10-11T11:03:46.851Z",
+              "rssBytes": 278822912,
+              "userCpuTicks": 98,
+              "systemCpuTicks": 14,
+              "threads": 59
+            },
+            "measurement": {
+              "type": "result",
+              "rows": [
+                {
+                  "label": "a",
+                  "sessionMarker": "a",
+                  "processMarker": "a",
+                  "environmentMarker": "a",
+                  "sessionCwdMatches": true,
+                  "processSettingsBinding": "a",
+                  "registryOwnsSession": true,
+                  "registryEntryCount": 1
+                }
+              ],
+              "eventCount": 22,
+              "concurrentToolsObserved": 0
+            },
+            "processSettingsBindingCorrect": true,
+            "shutdown": {
+              "type": "closed",
+              "eventsAtClose": 22,
+              "lateEvents": 0,
+              "observationWindowMs": 100,
+              "disposeFailed": false,
+              "bindingRestoration": [
+                {
+                  "disposedLabel": "a",
+                  "processSettingsBinding": "none"
+                }
+              ]
+            },
+            "processSettingsRestored": true,
+            "cleanup": {
+              "directChildExited": true,
+              "identityScanObserved": true,
+              "descendantInspection": {
+                "status": "passed",
+                "members": []
+              },
+              "trackedPids": [
+                112631
+              ],
+              "remnantsObserved": 0,
+              "complete": true
+            },
+            "lifecycle": {
+              "pid": 112631,
+              "startedAt": "2026-10-11T11:03:45.965Z",
+              "startupMs": 799.048,
+              "exitCode": 0,
+              "signal": null,
+              "stderrBytes": 0,
+              "messagesAfterClosed": 0,
+              "timedOut": false,
+              "forcedTermination": false,
+              "exitedAt": "2026-10-11T11:03:47.031Z",
+              "lifetimeMs": 1066.352
+            },
+            "status": "passed"
+          },
+          {
+            "label": "b",
+            "startup": {
+              "type": "ready",
+              "sessionCount": 1
+            },
+            "idle": {
+              "status": "passed",
+              "method": "linux-procfs",
+              "sampledAt": "2026-10-11T11:03:46.789Z",
+              "rssBytes": 274202624,
+              "userCpuTicks": 148,
+              "systemCpuTicks": 39,
+              "threads": 45
+            },
+            "activeAcknowledgment": {
+              "type": "active",
+              "label": "b"
+            },
+            "active": {
+              "status": "passed",
+              "method": "linux-procfs",
+              "sampledAt": "2026-10-11T11:03:46.864Z",
+              "rssBytes": 283652096,
+              "userCpuTicks": 151,
+              "systemCpuTicks": 39,
+              "threads": 62
+            },
+            "measurement": {
+              "type": "result",
+              "rows": [
+                {
+                  "label": "b",
+                  "sessionMarker": "b",
+                  "processMarker": "b",
+                  "environmentMarker": "b",
+                  "sessionCwdMatches": true,
+                  "processSettingsBinding": "b",
+                  "registryOwnsSession": true,
+                  "registryEntryCount": 1
+                }
+              ],
+              "eventCount": 22,
+              "concurrentToolsObserved": 0
+            },
+            "processSettingsBindingCorrect": true,
+            "shutdown": {
+              "type": "closed",
+              "eventsAtClose": 22,
+              "lateEvents": 0,
+              "observationWindowMs": 100,
+              "disposeFailed": false,
+              "bindingRestoration": [
+                {
+                  "disposedLabel": "b",
+                  "processSettingsBinding": "none"
+                }
+              ]
+            },
+            "processSettingsRestored": true,
+            "cleanup": {
+              "directChildExited": true,
+              "identityScanObserved": true,
+              "descendantInspection": {
+                "status": "passed",
+                "members": []
+              },
+              "trackedPids": [
+                112632
+              ],
+              "remnantsObserved": 0,
+              "complete": true
+            },
+            "lifecycle": {
+              "pid": 112632,
+              "startedAt": "2026-10-11T11:03:45.965Z",
+              "startupMs": 812.016,
+              "exitCode": 0,
+              "signal": null,
+              "stderrBytes": 0,
+              "messagesAfterClosed": 0,
+              "timedOut": false,
+              "forcedTermination": false,
+              "exitedAt": "2026-10-11T11:03:47.028Z",
+              "lifetimeMs": 1063.175
+            },
+            "status": "passed"
+          }
+        ],
+        "limitations": [
+          "RSS is a point-in-time Linux procfs observation, not a heap measurement or a cross-platform guarantee.",
+          "CPU values are cumulative scheduler ticks; no sampling-frequency or CPU percentage claim is made.",
+          "Two fixture workers and one deterministic tool turn per worker do not represent production provider or long-lived workloads.",
+          "The probe imposes a time and IPC size bound, not an OS memory, CPU, network or filesystem sandbox.",
+          "Per-worker cleanup checks tracked descendant identities; the runner separately sweeps the complete suite process group, including reparented descendants. Deliberate setsid escape is not OS sandbox containment."
+        ],
+        "adr03Changed": false,
+        "startedAt": "2026-10-11T11:03:45.964Z",
+        "durationMs": 1076.343,
+        "timeoutMs": 20000,
+        "exitCode": 0
+      },
+      "errors": [],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "isolation-worker-resources",
+      "capability": "PROBE-02 idle/active worker resources",
+      "status": "failed",
+      "observations": {
+        "platform": "linux-x64",
+        "method": "linux-procfs",
+        "samples": [
+          {
+            "label": "a",
+            "idle": {
+              "status": "passed",
+              "method": "linux-procfs",
+              "sampledAt": "2026-10-11T11:03:46.774Z",
+              "rssBytes": 270200832,
+              "userCpuTicks": 94,
+              "systemCpuTicks": 13,
+              "threads": 42
+            },
+            "active": {
+              "status": "passed",
+              "method": "linux-procfs",
+              "sampledAt": "2026-10-11T11:03:46.851Z",
+              "rssBytes": 278822912,
+              "userCpuTicks": 98,
+              "systemCpuTicks": 14,
+              "threads": 59
+            }
+          },
+          {
+            "label": "b",
+            "idle": {
+              "status": "passed",
+              "method": "linux-procfs",
+              "sampledAt": "2026-10-11T11:03:46.789Z",
+              "rssBytes": 274202624,
+              "userCpuTicks": 148,
+              "systemCpuTicks": 39,
+              "threads": 45
+            },
+            "active": {
+              "status": "passed",
+              "method": "linux-procfs",
+              "sampledAt": "2026-10-11T11:03:46.864Z",
+              "rssBytes": 283652096,
+              "userCpuTicks": 151,
+              "systemCpuTicks": 39,
+              "threads": 62
+            }
+          }
+        ],
+        "activePhase": "A real SDK prompt is running with its controlled tool blocked until the supervisor completes the resource sample.",
+        "idleBudgetBytes": 104857600,
+        "samplingComplete": true,
+        "idleUnderArchitectureHypothesis": false,
+        "limitations": [
+          "RSS is a point-in-time Linux procfs observation, not a heap measurement or a cross-platform guarantee.",
+          "CPU values are cumulative scheduler ticks; no sampling-frequency or CPU percentage claim is made.",
+          "Two fixture workers and one deterministic tool turn per worker do not represent production provider or long-lived workloads.",
+          "The probe imposes a time and IPC size bound, not an OS memory, CPU, network or filesystem sandbox.",
+          "Per-worker cleanup checks tracked descendant identities; the runner separately sweeps the complete suite process group, including reparented descendants. Deliberate setsid escape is not OS sandbox containment."
+        ],
+        "startedAt": "2026-10-11T11:03:45.964Z",
+        "durationMs": 1076.35,
+        "timeoutMs": 20000,
+        "exitCode": 1
+      },
+      "errors": [
+        "IDLE_RSS_BUDGET_EXCEEDED"
+      ],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    }
+  ],
+  "summary": {
+    "passed": 2,
+    "partial": 0,
+    "failed": 4,
+    "unsupported": 0,
+    "unavailable": 0,
+    "unknown": 0
+  },
+  "cleanup": {
+    "temporaryDirectoriesRemoved": true,
+    "workerExited": true,
+    "workerDescendantsExited": true,
+    "processGroupVerified": true,
+    "remainingProcessesDetected": false,
+    "signal": null
+  }
+}

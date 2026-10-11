@@ -1,0 +1,257 @@
+{
+  "schemaVersion": 1,
+  "run": {
+    "sourceRevision": "c9de2b02b997f37cc89639282ed35dec86f139e8",
+    "packageVersion": "18.8.9",
+    "bunVersion": "1.4.2",
+    "platform": "linux-x64",
+    "startedAt": "2026-10-11T08:20:12.055Z",
+    "command": "bun run scripts/omp-m0/run.mjs --suite lifecycle --fixture --output <report> --timeout-ms 20000",
+    "fixture": true,
+    "suite": "lifecycle",
+    "timeoutMs": 20000,
+    "packageName": "@oh-my-pi/pi-coding-agent",
+    "sourceFingerprint": "b70a2f4afd9fd8fa9ec20094e9658b528e943eff52608d296af2366b80241ad1",
+    "sourceFingerprintScope": "packages/*/src/** excluding the listed generated artifacts, packages/*/package.json, package.json, bun.lock",
+    "fingerprintFileCount": 3499,
+    "identityMethod": "pinned authored-source fingerprint; generated artifacts hashed separately; snapshot without Git history",
+    "acquisitionArchiveSha256": "06b6a671af953f5cdefe95cbd44271a5c20d9b9e951173af7d10d71e1b0dc150",
+    "archiveVerification": "unavailable; original acquisition archive not retained",
+    "generatedArtifacts": [],
+    "directories": {
+      "home": "<temporary-home>",
+      "agent": "<temporary-agent>",
+      "workspace": "<temporary-workspace>"
+    },
+    "workerExitPolicy": "explicit exit after suite resource cleanup; no implicit dependency installation",
+    "exitCode": 1
+  },
+  "probes": [
+    {
+      "id": "source-identity",
+      "capability": "source/package identity",
+      "status": "passed",
+      "observations": {
+        "fingerprintMatched": true,
+        "timeoutMs": 20000,
+        "exitCode": 0,
+        "cleanup": {
+          "resourcesCreated": false
+        }
+      },
+      "errors": [],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "lifecycle-session",
+      "capability": "session",
+      "status": "unavailable",
+      "observations": {
+        "timeoutMs": 15000,
+        "exitCode": 1,
+        "cleanup": {
+          "sessionCreated": false,
+          "sessionDisposed": null
+        }
+      },
+      "errors": [
+        "SDK_DEPENDENCY_UNAVAILABLE"
+      ],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "lifecycle-events",
+      "capability": "events",
+      "status": "unavailable",
+      "observations": {
+        "timeoutMs": 15000,
+        "exitCode": 1,
+        "cleanup": {
+          "sessionCreated": false,
+          "sessionDisposed": null
+        }
+      },
+      "errors": [
+        "SDK_DEPENDENCY_UNAVAILABLE"
+      ],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "lifecycle-abort",
+      "capability": "abort",
+      "status": "unavailable",
+      "observations": {
+        "timeoutMs": 15000,
+        "exitCode": 1,
+        "cleanup": {
+          "sessionCreated": false,
+          "sessionDisposed": null
+        }
+      },
+      "errors": [
+        "SDK_DEPENDENCY_UNAVAILABLE"
+      ],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "lifecycle-dispose",
+      "capability": "dispose",
+      "status": "unavailable",
+      "observations": {
+        "timeoutMs": 15000,
+        "exitCode": 1,
+        "cleanup": {
+          "sessionCreated": false,
+          "sessionDisposed": null
+        }
+      },
+      "errors": [
+        "SDK_DEPENDENCY_UNAVAILABLE"
+      ],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "lifecycle-history",
+      "capability": "history",
+      "status": "unavailable",
+      "observations": {
+        "timeoutMs": 15000,
+        "exitCode": 1,
+        "cleanup": {
+          "sessionCreated": false,
+          "sessionDisposed": null
+        }
+      },
+      "errors": [
+        "SDK_DEPENDENCY_UNAVAILABLE"
+      ],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "lifecycle-branch",
+      "capability": "branch",
+      "status": "unavailable",
+      "observations": {
+        "timeoutMs": 15000,
+        "exitCode": 1,
+        "cleanup": {
+          "sessionCreated": false,
+          "sessionDisposed": null
+        }
+      },
+      "errors": [
+        "SDK_DEPENDENCY_UNAVAILABLE"
+      ],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "lifecycle-fork",
+      "capability": "fork",
+      "status": "unavailable",
+      "observations": {
+        "timeoutMs": 15000,
+        "exitCode": 1,
+        "cleanup": {
+          "sessionCreated": false,
+          "sessionDisposed": null
+        }
+      },
+      "errors": [
+        "SDK_DEPENDENCY_UNAVAILABLE"
+      ],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    },
+    {
+      "id": "lifecycle-subagent",
+      "capability": "subagent",
+      "status": "unavailable",
+      "observations": {
+        "timeoutMs": 15000,
+        "exitCode": 1,
+        "cleanup": {
+          "sessionCreated": false,
+          "sessionDisposed": null
+        }
+      },
+      "errors": [
+        "SDK_DEPENDENCY_UNAVAILABLE"
+      ],
+      "artifacts": [],
+      "redactions": [
+        "message bodies",
+        "tool arguments",
+        "paths",
+        "environment",
+        "raw exceptions"
+      ]
+    }
+  ],
+  "summary": {
+    "passed": 1,
+    "failed": 0,
+    "unsupported": 0,
+    "unavailable": 8,
+    "unknown": 0
+  },
+  "cleanup": {
+    "temporaryDirectoriesRemoved": true,
+    "workerExited": true,
+    "signal": null
+  }
+}

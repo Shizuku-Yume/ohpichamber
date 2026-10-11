@@ -1,0 +1,2182 @@
+{
+  "schemaVersion": 1,
+  "task": "omp-through-m3/24",
+  "observedAt": "2026-10-11T14:44:08.294115+00:00",
+  "status": "identity-established; bounded-runtime-check-exit-1",
+  "m0Accepted": false,
+  "applicationDependenciesChanged": false,
+  "externalSourceModified": false,
+  "platform": "linux-x64",
+  "bunVersion": "1.4.2",
+  "pinnedSource": {
+    "revision": "c9de2b02b997f37cc89639282ed35dec86f139e8",
+    "authoredFingerprint": {
+      "fileCount": 3499,
+      "sha256": "b70a2f4afd9fd8fa9ec20094e9658b528e943eff52608d296af2366b80241ad1"
+    },
+    "sourceLockSha256": "fcd23297e0c05fb6fd9b6623a70823826fd99a6cc7ffca18201c95860fce66b3",
+    "acquisitionArchiveReverified": false
+  },
+  "retained": {
+    "path": "/home/shizuku/Project/ohpichamber-omp-artifacts/c9de2b02/task24-20261011",
+    "artifactSetFile": "artifact-set.json",
+    "artifactSetSha256": "d4652edea9d0b09c76c793a2ef54efb0331a89b770def0cc42b9ae849d31da34",
+    "packages": [
+      {
+        "name": "@oh-my-pi/omp-stats",
+        "version": "18.8.9",
+        "file": "tarballs/oh-my-pi-omp-stats-18.8.9.tgz",
+        "sha256": "39768f9d7f7c57c753a74831db71fc802215dbbcdd4155650a4199200f39c907",
+        "size": 225254
+      },
+      {
+        "name": "@oh-my-pi/omptype",
+        "version": "18.8.9",
+        "file": "tarballs/oh-my-pi-omptype-18.8.9.tgz",
+        "sha256": "dc1aeb58fea77c8c8eb496c4568cc8854ef352ec3206f1f70efcc7f65d62d719",
+        "size": 94302
+      },
+      {
+        "name": "@oh-my-pi/pi-agent-core",
+        "version": "18.8.9",
+        "file": "tarballs/oh-my-pi-pi-agent-core-18.8.9.tgz",
+        "sha256": "e0c3f60b3ce4090f2c686e66e7b87a4a9e206777f8f506ac780ffc07694d0bf0",
+        "size": 261137
+      },
+      {
+        "name": "@oh-my-pi/pi-ai",
+        "version": "18.8.9",
+        "file": "tarballs/oh-my-pi-pi-ai-18.8.9.tgz",
+        "sha256": "ff45663e8d6d491e32889a54b44d74c66c30ec8c35153d5e01d4be161567e0d4",
+        "size": 1571330
+      },
+      {
+        "name": "@oh-my-pi/pi-catalog",
+        "version": "18.8.9",
+        "file": "tarballs/oh-my-pi-pi-catalog-18.8.9.tgz",
+        "sha256": "f0793ad9d6e2fe105066120fe9452ff27943c974d43c4570a6f009a30c82f4df",
+        "size": 884729
+      },
+      {
+        "name": "@oh-my-pi/pi-coding-agent",
+        "version": "18.8.9",
+        "file": "tarballs/oh-my-pi-pi-coding-agent-18.8.9.tgz",
+        "sha256": "dde740cca56c27cec0c946d3c67beb50d253c034965c063b5d0f4eea58555c6d",
+        "size": 13172340
+      },
+      {
+        "name": "@oh-my-pi/pi-mnemopi",
+        "version": "18.8.9",
+        "file": "tarballs/oh-my-pi-pi-mnemopi-18.8.9.tgz",
+        "sha256": "e16ddc3191b2e00b1182ee13ab568e04970522741aaed82b2b19461dd3cb7a42",
+        "size": 188947
+      },
+      {
+        "name": "@oh-my-pi/pi-natives",
+        "version": "18.8.9",
+        "file": "tarballs/oh-my-pi-pi-natives-18.8.9.tgz",
+        "sha256": "523d09347c800b31ee91460849627ece0fb954f773fc72642bb95f305f46e46e",
+        "size": 155706
+      },
+      {
+        "name": "@oh-my-pi/pi-natives-linux-x64",
+        "version": "18.8.9",
+        "file": "tarballs/oh-my-pi-pi-natives-linux-x64-18.8.9.tgz",
+        "sha256": "35effa44e183ac54621f8099d85a5f27f5a8a054a1e2293eb357bf8fe504e6c7",
+        "size": 91033175
+      },
+      {
+        "name": "@oh-my-pi/pi-tui",
+        "version": "18.8.9",
+        "file": "tarballs/oh-my-pi-pi-tui-18.8.9.tgz",
+        "sha256": "7f1a257e757cc5da995fd63e64e06490db272ab974d85c5708484bce7f9b51a2",
+        "size": 2063552
+      },
+      {
+        "name": "@oh-my-pi/pi-utils",
+        "version": "18.8.9",
+        "file": "tarballs/oh-my-pi-pi-utils-18.8.9.tgz",
+        "sha256": "d66fe4a1323eb07b8097545e1698e52e825e04b604b585c206a1d9ede40c2e06",
+        "size": 385669
+      },
+      {
+        "name": "@oh-my-pi/pi-wire",
+        "version": "18.8.9",
+        "file": "tarballs/oh-my-pi-pi-wire-18.8.9.tgz",
+        "sha256": "2e664bd14d84189759ba5972ca65d24620c17ac1ec09ad88605b671b3a725377",
+        "size": 24523
+      },
+      {
+        "name": "@oh-my-pi/snapcompact",
+        "version": "18.8.9",
+        "file": "tarballs/oh-my-pi-snapcompact-18.8.9.tgz",
+        "sha256": "ca74a9adc472baff7ff4bc742a4659dd9417864d92466de5bc94035820565da9",
+        "size": 39946
+      }
+    ],
+    "consumerManifestSha256": "f4e81b330a4d6a86f0c8ca0772ae1410e9d4a2f0df2f03b4cfcb8606430d3094",
+    "consumerLockSha256": "03981eeabb92a06eb59ebbacd0139abe92ce00854b396e461daf9c70f9df6847",
+    "files": 36,
+    "sizeBytes": 111034849,
+    "fileMode": "0444",
+    "directoryMode": "0555"
+  },
+  "recipe": {
+    "copy": "Copy /home/shizuku/Project/oh-my-pi recursively to <SCRATCH>/source, excluding node_modules and .git. Compare selected authored fingerprint before packaging; external source is read-only.",
+    "environment": {
+      "inherited": [
+        "PATH only"
+      ],
+      "explicitKeys": [
+        "BUN_INSTALL_CACHE_DIR",
+        "CI",
+        "HOME",
+        "NO_COLOR",
+        "PATH",
+        "PI_CODING_AGENT_DIR",
+        "TMPDIR",
+        "XDG_CACHE_HOME",
+        "XDG_CONFIG_HOME",
+        "XDG_DATA_HOME",
+        "npm_config_cache"
+      ],
+      "policy": "Fresh HOME/XDG/TMPDIR/PI_CODING_AGENT_DIR/Bun and npm caches under <SCRATCH>; no provider credentials or real user storage. No uploads. Registry downloads only during approved dependency installation."
+    },
+    "prepare": [
+      "/home/shizuku/.bun/bin/bun install --frozen-lockfile --ignore-scripts --filter @oh-my-pi/pi-coding-agent --filter @oh-my-pi/collab-web --filter @oh-my-pi/omp-stats"
+    ],
+    "closure": "Traverse actual workspace manifests starting at pi-coding-agent, following first-party dependencies and optionalDependencies. 12 packages: 11 source TypeScript packages plus JS native core. Generate and retain the exercised Linux x64 leaf as package 13. collab-web is a prepack build input, not an installed runtime dependency.",
+    "pack": [
+      "bun --cwd=packages/natives run gen:npm --tag linux-x64",
+      "bun pm pack --destination <RETAINED>/tarballs --quiet from packages/natives/npm/linux-x64",
+      "Import upstream prepareNativeCorePackage(\"packages/natives\", true) and applyPublishBin(\"packages/coding-agent\", true) from scripts/ci-release-publish.ts in the disposable source root.",
+      "Pack stats, omptype, agent, ai, catalog, mnemopi, natives, tui, utils, wire, snapcompact with bun pm pack, then coding-agent. coding-agent prepack generates tool views, stats client embed, docs index and CLI and resets stats placeholder."
+    ],
+    "consumer": "Install all 12 core packages as explicit file dependencies, bind all 13 artifacts as overrides. Linux native leaf arrives through core optionalDependencies, not a direct dependency. Carry root @ark/schema override and both source patchedDependencies/patch files.",
+    "lockCorrection": "Initial upstream-style fresh install drifted on 45 lock entries. Seed a JSON lock from the pinned source lock, replace workspaces with the consumer root and overrides with consumer overrides, retain source third-party packages, replace all first-party package records with local artifact records from initial consumer lock, remove every @workspace: package record and remove catalog. Keep source patchedDependencies. Final bun install --frozen-lockfile --ignore-scripts exited 0 and left seeded lock bytes unchanged. Exact final manifest, lock and patch files are retained.",
+    "reinstall": "Copy retained inputs/consumer/{package.json,bun.lock,patches} into a fresh isolated consumer; run bun install --frozen-lockfile --ignore-scripts with Bun 1.4.2, leaving retained absolute tarball paths unchanged. Recheck artifact-set hashes. Registry access is needed for locked third-party packages.",
+    "comparisonAlgorithms": {
+      "authored": "Same paths and SHA-256 of every src regular file in the 11 source packages, excluding only declared generated tool-views. Native JS/d.ts wrappers compared separately. main/exports/types compared to pinned manifests.",
+      "packagePayload": "For each of 13 tgz files, hash every tar regular file and compare corresponding installed regular file.",
+      "thirdParty": "Compare source-frozen installation to corrected consumer by physical package name/version and all payload files, excluding nested node_modules and Bun .bun-tag cache markers. Compare effective dependency+optionalDependency owner resolutions with Bun.resolveSync, following manifests. Source workspace-local node_modules included.",
+      "fingerprint": "SHA-256 over sorted paths + NUL + raw file SHA-256 digest for pinned 3499-file scope.",
+      "sourceUntouched": "SHA-256 snapshot of all 8965 external source regular files before disposable copy and after runtime; no differences."
+    }
+  },
+  "commands": [
+    {
+      "command": [
+        "/home/shizuku/.bun/bin/bun",
+        "--version"
+      ],
+      "cwd": "<SCRATCH>/source",
+      "exitCode": 0,
+      "output": "1.4.2\n",
+      "elapsedSeconds": 0.0
+    },
+    {
+      "command": [
+        "/home/shizuku/.bun/bin/bun",
+        "install",
+        "--frozen-lockfile",
+        "--ignore-scripts",
+        "--filter",
+        "@oh-my-pi/pi-coding-agent",
+        "--filter",
+        "@oh-my-pi/collab-web",
+        "--filter",
+        "@oh-my-pi/omp-stats"
+      ],
+      "cwd": "<SCRATCH>/source",
+      "exitCode": 0,
+      "output": "bun install v1.4.2 (744846f84)\nResolving dependencies\nResolved, downloaded and extracted [2]\n\n+ @types/bun@1.4.2\n+ typescript@7.0.2\n+ sherpa-onnx-node@1.13.2\n\n271 packages installed [39.78s]",
+      "elapsedSeconds": 39.78
+    },
+    {
+      "command": [
+        "/home/shizuku/.bun/bin/bun",
+        "--cwd=packages/natives",
+        "run",
+        "gen:npm",
+        "--tag",
+        "linux-x64"
+      ],
+      "cwd": "<SCRATCH>/source",
+      "exitCode": 0,
+      "output": "$ bun scripts/gen-npm-packages.ts --tag \"linux-x64\"\n",
+      "elapsedSeconds": 0.08
+    },
+    {
+      "command": [
+        "/home/shizuku/.bun/bin/bun",
+        "pm",
+        "pack",
+        "--destination",
+        "/home/shizuku/Project/ohpichamber-omp-artifacts/c9de2b02/task24-20261011/tarballs",
+        "--quiet"
+      ],
+      "cwd": "<SCRATCH>/source/packages/natives/npm/linux-x64",
+      "exitCode": 0,
+      "output": "/home/shizuku/Project/ohpichamber-omp-artifacts/c9de2b02/task24-20261011/tarballs/oh-my-pi-pi-natives-linux-x64-18.8.9.tgz\n",
+      "elapsedSeconds": 7.41
+    },
+    {
+      "command": [
+        "/home/shizuku/.bun/bin/bun",
+        "-e",
+        "import { prepareNativeCorePackage, applyPublishBin } from \"./scripts/ci-release-publish.ts\"; await prepareNativeCorePackage(\"packages/natives\", true); await applyPublishBin(\"packages/coding-agent\", true);"
+      ],
+      "cwd": "<SCRATCH>/source",
+      "exitCode": 0,
+      "output": "",
+      "elapsedSeconds": 0.01
+    },
+    {
+      "command": [
+        "/home/shizuku/.bun/bin/bun",
+        "pm",
+        "pack",
+        "--destination",
+        "/home/shizuku/Project/ohpichamber-omp-artifacts/c9de2b02/task24-20261011/tarballs",
+        "--quiet"
+      ],
+      "cwd": "<SCRATCH>/source/packages/stats",
+      "exitCode": 0,
+      "output": "/home/shizuku/Project/ohpichamber-omp-artifacts/c9de2b02/task24-20261011/tarballs/oh-my-pi-omp-stats-18.8.9.tgz\n",
+      "elapsedSeconds": 0.02
+    },
+    {
+      "command": [
+        "/home/shizuku/.bun/bin/bun",
+        "pm",
+        "pack",
+        "--destination",
+        "/home/shizuku/Project/ohpichamber-omp-artifacts/c9de2b02/task24-20261011/tarballs",
+        "--quiet"
+      ],
+      "cwd": "<SCRATCH>/source/packages/omptype",
+      "exitCode": 0,
+      "output": "/home/shizuku/Project/ohpichamber-omp-artifacts/c9de2b02/task24-20261011/tarballs/oh-my-pi-omptype-18.8.9.tgz\n",
+      "elapsedSeconds": 0.01
+    },
+    {
+      "command": [
+        "/home/shizuku/.bun/bin/bun",
+        "pm",
+        "pack",
+        "--destination",
+        "/home/shizuku/Project/ohpichamber-omp-artifacts/c9de2b02/task24-20261011/tarballs",
+        "--quiet"
+      ],
+      "cwd": "<SCRATCH>/source/packages/agent",
+      "exitCode": 0,
+      "output": "/home/shizuku/Project/ohpichamber-omp-artifacts/c9de2b02/task24-20261011/tarballs/oh-my-pi-pi-agent-core-18.8.9.tgz\n",
+      "elapsedSeconds": 0.03
+    },
+    {
+      "command": [
+        "/home/shizuku/.bun/bin/bun",
+        "pm",
+        "pack",
+        "--destination",
+        "/home/shizuku/Project/ohpichamber-omp-artifacts/c9de2b02/task24-20261011/tarballs",
+        "--quiet"
+      ],
+      "cwd": "<SCRATCH>/source/packages/ai",
+      "exitCode": 0,
+      "output": "/home/shizuku/Project/ohpichamber-omp-artifacts/c9de2b02/task24-20261011/tarballs/oh-my-pi-pi-ai-18.8.9.tgz\n",
+      "elapsedSeconds": 0.15
+    },
+    {
+      "command": [
+        "/home/shizuku/.bun/bin/bun",
+        "pm",
+        "pack",
+        "--destination",
+        "/home/shizuku/Project/ohpichamber-omp-artifacts/c9de2b02/task24-20261011/tarballs",
+        "--quiet"
+      ],
+      "cwd": "<SCRATCH>/source/packages/catalog",
+      "exitCode": 0,
+      "output": "/home/shizuku/Project/ohpichamber-omp-artifacts/c9de2b02/task24-20261011/tarballs/oh-my-pi-pi-catalog-18.8.9.tgz\n",
+      "elapsedSeconds": 0.09
+    },
+    {
+      "command": [
+        "/home/shizuku/.bun/bin/bun",
+        "pm",
+        "pack",
+        "--destination",
+        "/home/shizuku/Project/ohpichamber-omp-artifacts/c9de2b02/task24-20261011/tarballs",
+        "--quiet"
+      ],
+      "cwd": "<SCRATCH>/source/packages/mnemopi",
+      "exitCode": 0,
+      "output": "/home/shizuku/Project/ohpichamber-omp-artifacts/c9de2b02/task24-20261011/tarballs/oh-my-pi-pi-mnemopi-18.8.9.tgz\n",
+      "elapsedSeconds": 0.02
+    },
+    {
+      "command": [
+        "/home/shizuku/.bun/bin/bun",
+        "pm",
+        "pack",
+        "--destination",
+        "/home/shizuku/Project/ohpichamber-omp-artifacts/c9de2b02/task24-20261011/tarballs",
+        "--quiet"
+      ],
+      "cwd": "<SCRATCH>/source/packages/natives",
+      "exitCode": 0,
+      "output": "/home/shizuku/Project/ohpichamber-omp-artifacts/c9de2b02/task24-20261011/tarballs/oh-my-pi-pi-natives-18.8.9.tgz\n",
+      "elapsedSeconds": 0.02
+    },
+    {
+      "command": [
+        "/home/shizuku/.bun/bin/bun",
+        "pm",
+        "pack",
+        "--destination",
+        "/home/shizuku/Project/ohpichamber-omp-artifacts/c9de2b02/task24-20261011/tarballs",
+        "--quiet"
+      ],
+      "cwd": "<SCRATCH>/source/packages/tui",
+      "exitCode": 0,
+      "output": "/home/shizuku/Project/ohpichamber-omp-artifacts/c9de2b02/task24-20261011/tarballs/oh-my-pi-pi-tui-18.8.9.tgz\n",
+      "elapsedSeconds": 0.18
+    },
+    {
+      "command": [
+        "/home/shizuku/.bun/bin/bun",
+        "pm",
+        "pack",
+        "--destination",
+        "/home/shizuku/Project/ohpichamber-omp-artifacts/c9de2b02/task24-20261011/tarballs",
+        "--quiet"
+      ],
+      "cwd": "<SCRATCH>/source/packages/utils",
+      "exitCode": 0,
+      "output": "/home/shizuku/Project/ohpichamber-omp-artifacts/c9de2b02/task24-20261011/tarballs/oh-my-pi-pi-utils-18.8.9.tgz\n",
+      "elapsedSeconds": 0.04
+    },
+    {
+      "command": [
+        "/home/shizuku/.bun/bin/bun",
+        "pm",
+        "pack",
+        "--destination",
+        "/home/shizuku/Project/ohpichamber-omp-artifacts/c9de2b02/task24-20261011/tarballs",
+        "--quiet"
+      ],
+      "cwd": "<SCRATCH>/source/packages/wire",
+      "exitCode": 0,
+      "output": "/home/shizuku/Project/ohpichamber-omp-artifacts/c9de2b02/task24-20261011/tarballs/oh-my-pi-pi-wire-18.8.9.tgz\n",
+      "elapsedSeconds": 0.01
+    },
+    {
+      "command": [
+        "/home/shizuku/.bun/bin/bun",
+        "pm",
+        "pack",
+        "--destination",
+        "/home/shizuku/Project/ohpichamber-omp-artifacts/c9de2b02/task24-20261011/tarballs",
+        "--quiet"
+      ],
+      "cwd": "<SCRATCH>/source/packages/snapcompact",
+      "exitCode": 0,
+      "output": "/home/shizuku/Project/ohpichamber-omp-artifacts/c9de2b02/task24-20261011/tarballs/oh-my-pi-snapcompact-18.8.9.tgz\n",
+      "elapsedSeconds": 0.01
+    },
+    {
+      "command": [
+        "/home/shizuku/.bun/bin/bun",
+        "pm",
+        "pack",
+        "--destination",
+        "/home/shizuku/Project/ohpichamber-omp-artifacts/c9de2b02/task24-20261011/tarballs",
+        "--quiet"
+      ],
+      "cwd": "<SCRATCH>/source/packages/coding-agent",
+      "exitCode": 0,
+      "output": "$ bun run gen:tool-views && bun run gen:bundle\n$ bun --cwd=../collab-web run gen:tool-views\n$ bun scripts/build-tool-views.ts\nGenerated ../coding-agent/src/export/html/tool-views.generated.js (276.1 KiB)\n$ bun scripts/bundle-dist.ts\n$ bun scripts/generate-client-bundle.ts --generate\n$ bun run build.ts\nBuilding dashboard client...\nBuild complete\nGenerated src/embedded-client.generated.txt\n$ bun scripts/generate-client-bundle.ts --reset\nReset src/embedded-client.generated.txt\nBundled coding-agent CLI to <SCRATCH>/source/packages/coding-agent/dist/cli.js (28.32MB) in 494ms\n/home/shizuku/Project/ohpichamber-omp-artifacts/c9de2b02/task24-20261011/tarballs/oh-my-pi-pi-coding-agent-18.8.9.tgz\n",
+      "elapsedSeconds": 1.5
+    },
+    {
+      "command": [
+        "/home/shizuku/.bun/bin/bun",
+        "install",
+        "--ignore-scripts"
+      ],
+      "cwd": "<SCRATCH>/consumer",
+      "exitCode": 0,
+      "output": "bun install v1.4.2 (744846f84)\nResolving dependencies\nResolved, downloaded and extracted [310]\nSaved lockfile\n\n\n114 packages installed [7.74s]\n\nBlocked 2 postinstalls. Run `bun pm untrusted` for details.",
+      "elapsedSeconds": 7.75
+    },
+    {
+      "command": [
+        "/home/shizuku/.bun/bin/bun",
+        "install",
+        "--frozen-lockfile",
+        "--ignore-scripts"
+      ],
+      "cwd": "<SCRATCH>/consumer",
+      "exitCode": 1,
+      "output": "bun install v1.4.2 (744846f84)\n4720 |       \"robomp-web@workspace:python/robomp/web\"\n             ^\nerror: Unknown workspace: 'python/robomp/web'\n    at bun.lock:4720:7\nInvalidLockfile: failed to parse lockfile: 'bun.lock'\n\nwarn: Ignoring lockfile\nerror: lockfile had changes, but lockfile is frozen\n",
+      "elapsedSeconds": 0.0
+    },
+    {
+      "command": [
+        "/home/shizuku/.bun/bin/bun",
+        "install",
+        "--frozen-lockfile",
+        "--ignore-scripts"
+      ],
+      "cwd": "<SCRATCH>/consumer",
+      "exitCode": 1,
+      "output": "bun install v1.4.2 (744846f84)\nResolving dependencies\nResolved, downloaded and extracted [2]\nerror: lockfile had changes, but lockfile is frozen\nnote: the catalog in package.json changed since bun.lock was saved\nnote: try re-running without --frozen-lockfile and commit the updated lockfile\n",
+      "elapsedSeconds": 0.0
+    },
+    {
+      "command": [
+        "/home/shizuku/.bun/bin/bun",
+        "install",
+        "--frozen-lockfile",
+        "--ignore-scripts"
+      ],
+      "cwd": "<SCRATCH>/consumer",
+      "exitCode": 0,
+      "output": "bun install v1.4.2 (744846f84)\nResolving dependencies\nResolved, downloaded and extracted [2]\n\n\n151 packages installed [106.00ms]",
+      "elapsedSeconds": 0.11
+    },
+    {
+      "command": [
+        "/home/shizuku/.bun/bin/bun",
+        "runtime-probe.mjs"
+      ],
+      "cwd": "<SCRATCH>/consumer",
+      "exitCode": 1,
+      "output": "{\"phases\":[\"installed-public-root-imported\",\"real-native-operations-returned\",\"actual-public-factory-created\",\"actual-session-disposed\",\"caller-owned-auth-closed\"],\"networkAttempts\":12,\"preconnectAttempts\":0,\"cwd\":\"<SCRATCH>/consumer\",\"entries\":{\"@oh-my-pi/pi-coding-agent\":\"<SCRATCH>/consumer/node_modules/@oh-my-pi/pi-coding-agent/src/index.ts\",\"@oh-my-pi/pi-coding-agent/sdk\":\"<SCRATCH>/consumer/node_modules/@oh-my-pi/pi-coding-agent/src/sdk.ts\",\"@oh-my-pi/pi-natives\":\"<SCRATCH>/consumer/node_modules/@oh-my-pi/pi-natives/native/index.js\",\"@oh-my-pi/pi-ai\":\"<SCRATCH>/consumer/node_modules/@oh-my-pi/pi-ai/src/index.ts\",\"@oh-my-pi/pi-utils\":\"<SCRATCH>/consumer/node_modules/@oh-my-pi/pi-utils/src/index.ts\"},\"native\":{\"tokenCount\":3,\"visibleWidth\":8,\"diff\":[{\"value\":\"line 1\\n\",\"count\":1,\"added\":false,\"removed\":false},{\"value\":\"line 2\\n\",\"count\":1,\"added\":true,\"removed\":false}],\"loaderStatus\":{\"path\":\"<SCRATCH>/consumer/node_modules/@oh-my-pi/pi-natives-linux-x64/pi_natives.linux-x64-modern.node\",\"version\":\"18.8.9\",\"packageVersion\":\"18.8.9\",\"stale\":false},\"workspaceLoad\":false,\"addonSha256\":\"33710d1ac6830e068fb46db335e6e2f2e6175a343b267506cd8a31d72d52e059\"},\"docs\":{\"count\":134,\"firstName\":\"ERRATA-GPT5-HARMONY.md\",\"firstBodyBytes\":12590},\"auth\":{\"selectedPath\":\"<SCRATCH>/agent/agent.db\",\"existedBefore\":false,\"mode\":\"600\",\"regularFile\":true,\"ownedByEffectiveUser\":true,\"closed\":true},\"factory\":{\"created\":true,\"sessionManagerRetained\":true,\"modelSelected\":false,\"disposed\":true},\"status\":\"network-attempt-blocked\"}\n",
+      "elapsedSeconds": 1.13
+    },
+    {
+      "command": [
+        "/home/shizuku/.bun/bin/bun",
+        "-e",
+        "import fs from 'node:fs'; import path from 'node:path';\nconst roots=JSON.parse(process.argv[1]);const result={};\nfunction pkg(name,from){let p;try{p=Bun.resolveSync(name+'/package.json',from)}catch{try{p=Bun.resolveSync(name,from)}catch{return null}};let d=fs.statSync(p).isDirectory()?p:path.dirname(p);while(d!==path.dirname(d)){const f=path.join(d,'package.json');if(fs.existsSync(f)){const m=JSON.parse(fs.readFileSync(f,'utf8'));if(m.name===name)return {d,m};}d=path.dirname(d)}return null}\nfunction visit(o){const id=o.m.name+'@'+o.m.version;if(result[id])return;const edges={};result[id]=edges;for(const [name,spec] of Object.entries({...o.m.dependencies,...o.m.optionalDependencies})){const q=pkg(name,o.d);edges[name]=q?q.m.version:'MISSING';if(q)visit(q)}}\nfor(const [name,from] of Object.entries(roots)){const p=pkg(name,from);if(!p)throw new Error('root missing '+name);visit(p)}console.log(JSON.stringify(result));",
+        "{\"@oh-my-pi/pi-coding-agent\": \"<SCRATCH>/source/packages/coding-agent\", \"@oh-my-pi/pi-wire\": \"<SCRATCH>/source/packages/wire\", \"@oh-my-pi/pi-natives\": \"<SCRATCH>/source/packages/natives\", \"@oh-my-pi/omptype\": \"<SCRATCH>/source/packages/omptype\", \"@oh-my-pi/pi-tui\": \"<SCRATCH>/source/packages/tui\", \"@oh-my-pi/pi-agent-core\": \"<SCRATCH>/source/packages/agent\", \"@oh-my-pi/pi-catalog\": \"<SCRATCH>/source/packages/catalog\", \"@oh-my-pi/omp-stats\": \"<SCRATCH>/source/packages/stats\", \"@oh-my-pi/pi-utils\": \"<SCRATCH>/source/packages/utils\", \"@oh-my-pi/pi-ai\": \"<SCRATCH>/source/packages/ai\", \"@oh-my-pi/snapcompact\": \"<SCRATCH>/source/packages/snapcompact\", \"@oh-my-pi/pi-mnemopi\": \"<SCRATCH>/source/packages/mnemopi\"}"
+      ],
+      "cwd": "<SCRATCH>/source",
+      "exitCode": 0,
+      "output": "Dependency-owner graph retained as comparison summary, no runtime modules executed.",
+      "elapsedSeconds": 0.02
+    },
+    {
+      "command": [
+        "/home/shizuku/.bun/bin/bun",
+        "-e",
+        "import fs from 'node:fs'; import path from 'node:path';\nconst roots=JSON.parse(process.argv[1]);const result={};\nfunction pkg(name,from){let p;try{p=Bun.resolveSync(name+'/package.json',from)}catch{try{p=Bun.resolveSync(name,from)}catch{return null}};let d=fs.statSync(p).isDirectory()?p:path.dirname(p);while(d!==path.dirname(d)){const f=path.join(d,'package.json');if(fs.existsSync(f)){const m=JSON.parse(fs.readFileSync(f,'utf8'));if(m.name===name)return {d,m};}d=path.dirname(d)}return null}\nfunction visit(o){const id=o.m.name+'@'+o.m.version;if(result[id])return;const edges={};result[id]=edges;for(const [name,spec] of Object.entries({...o.m.dependencies,...o.m.optionalDependencies})){const q=pkg(name,o.d);edges[name]=q?q.m.version:'MISSING';if(q)visit(q)}}\nfor(const [name,from] of Object.entries(roots)){const p=pkg(name,from);if(!p)throw new Error('root missing '+name);visit(p)}console.log(JSON.stringify(result));",
+        "{\"@oh-my-pi/pi-coding-agent\": \"<SCRATCH>/consumer\", \"@oh-my-pi/pi-wire\": \"<SCRATCH>/consumer\", \"@oh-my-pi/pi-natives\": \"<SCRATCH>/consumer\", \"@oh-my-pi/omptype\": \"<SCRATCH>/consumer\", \"@oh-my-pi/pi-tui\": \"<SCRATCH>/consumer\", \"@oh-my-pi/pi-agent-core\": \"<SCRATCH>/consumer\", \"@oh-my-pi/pi-catalog\": \"<SCRATCH>/consumer\", \"@oh-my-pi/omp-stats\": \"<SCRATCH>/consumer\", \"@oh-my-pi/pi-utils\": \"<SCRATCH>/consumer\", \"@oh-my-pi/pi-ai\": \"<SCRATCH>/consumer\", \"@oh-my-pi/snapcompact\": \"<SCRATCH>/consumer\", \"@oh-my-pi/pi-mnemopi\": \"<SCRATCH>/consumer\"}"
+      ],
+      "cwd": "<SCRATCH>/consumer",
+      "exitCode": 0,
+      "output": "Dependency-owner graph retained as comparison summary, no runtime modules executed.",
+      "elapsedSeconds": 0.02
+    }
+  ],
+  "authoredComparison": [
+    {
+      "name": "@oh-my-pi/omp-stats",
+      "authoredSourceFiles": 92,
+      "changed": [],
+      "missing": [],
+      "extra": [],
+      "runtimeEntrypointsMatch": true,
+      "typesMatch": true,
+      "realpathInsideConsumer": true
+    },
+    {
+      "name": "@oh-my-pi/omptype",
+      "authoredSourceFiles": 13,
+      "changed": [],
+      "missing": [],
+      "extra": [],
+      "runtimeEntrypointsMatch": true,
+      "typesMatch": true,
+      "realpathInsideConsumer": true
+    },
+    {
+      "name": "@oh-my-pi/pi-agent-core",
+      "authoredSourceFiles": 55,
+      "changed": [],
+      "missing": [],
+      "extra": [],
+      "runtimeEntrypointsMatch": true,
+      "typesMatch": true,
+      "realpathInsideConsumer": true
+    },
+    {
+      "name": "@oh-my-pi/pi-ai",
+      "authoredSourceFiles": 414,
+      "changed": [],
+      "missing": [],
+      "extra": [],
+      "runtimeEntrypointsMatch": true,
+      "typesMatch": true,
+      "realpathInsideConsumer": true
+    },
+    {
+      "name": "@oh-my-pi/pi-catalog",
+      "authoredSourceFiles": 326,
+      "changed": [],
+      "missing": [],
+      "extra": [],
+      "runtimeEntrypointsMatch": true,
+      "typesMatch": true,
+      "realpathInsideConsumer": true
+    },
+    {
+      "name": "@oh-my-pi/pi-coding-agent",
+      "authoredSourceFiles": 1756,
+      "changed": [],
+      "missing": [],
+      "extra": [],
+      "runtimeEntrypointsMatch": true,
+      "typesMatch": true,
+      "realpathInsideConsumer": true
+    },
+    {
+      "name": "@oh-my-pi/pi-mnemopi",
+      "authoredSourceFiles": 67,
+      "changed": [],
+      "missing": [],
+      "extra": [],
+      "runtimeEntrypointsMatch": true,
+      "typesMatch": true,
+      "realpathInsideConsumer": true
+    },
+    {
+      "name": "@oh-my-pi/pi-natives",
+      "authoredSourceFiles": 0,
+      "changed": [],
+      "missing": [],
+      "extra": [],
+      "runtimeEntrypointsMatch": true,
+      "typesMatch": true,
+      "realpathInsideConsumer": true
+    },
+    {
+      "name": "@oh-my-pi/pi-tui",
+      "authoredSourceFiles": 525,
+      "changed": [],
+      "missing": [],
+      "extra": [],
+      "runtimeEntrypointsMatch": true,
+      "typesMatch": true,
+      "realpathInsideConsumer": true
+    },
+    {
+      "name": "@oh-my-pi/pi-utils",
+      "authoredSourceFiles": 126,
+      "changed": [],
+      "missing": [],
+      "extra": [],
+      "runtimeEntrypointsMatch": true,
+      "typesMatch": true,
+      "realpathInsideConsumer": true
+    },
+    {
+      "name": "@oh-my-pi/pi-wire",
+      "authoredSourceFiles": 4,
+      "changed": [],
+      "missing": [],
+      "extra": [],
+      "runtimeEntrypointsMatch": true,
+      "typesMatch": true,
+      "realpathInsideConsumer": true
+    },
+    {
+      "name": "@oh-my-pi/snapcompact",
+      "authoredSourceFiles": 4,
+      "changed": [],
+      "missing": [],
+      "extra": [],
+      "runtimeEntrypointsMatch": true,
+      "typesMatch": true,
+      "realpathInsideConsumer": true
+    }
+  ],
+  "tarballInstalledComparison": [
+    {
+      "name": "@oh-my-pi/omp-stats",
+      "files": 97,
+      "changedOrMissing": []
+    },
+    {
+      "name": "@oh-my-pi/omptype",
+      "files": 17,
+      "changedOrMissing": []
+    },
+    {
+      "name": "@oh-my-pi/pi-agent-core",
+      "files": 59,
+      "changedOrMissing": []
+    },
+    {
+      "name": "@oh-my-pi/pi-ai",
+      "files": 418,
+      "changedOrMissing": []
+    },
+    {
+      "name": "@oh-my-pi/pi-catalog",
+      "files": 330,
+      "changedOrMissing": []
+    },
+    {
+      "name": "@oh-my-pi/pi-coding-agent",
+      "files": 1841,
+      "changedOrMissing": []
+    },
+    {
+      "name": "@oh-my-pi/pi-mnemopi",
+      "files": 71,
+      "changedOrMissing": []
+    },
+    {
+      "name": "@oh-my-pi/pi-natives",
+      "files": 21,
+      "changedOrMissing": []
+    },
+    {
+      "name": "@oh-my-pi/pi-natives-linux-x64",
+      "files": 6,
+      "changedOrMissing": []
+    },
+    {
+      "name": "@oh-my-pi/pi-tui",
+      "files": 529,
+      "changedOrMissing": []
+    },
+    {
+      "name": "@oh-my-pi/pi-utils",
+      "files": 130,
+      "changedOrMissing": []
+    },
+    {
+      "name": "@oh-my-pi/pi-wire",
+      "files": 8,
+      "changedOrMissing": []
+    },
+    {
+      "name": "@oh-my-pi/snapcompact",
+      "files": 8,
+      "changedOrMissing": []
+    }
+  ],
+  "native": {
+    "wrapperComparison": [
+      {
+        "path": "native/clipboard.d.ts",
+        "sourceSha256": "9b550b22d15564ed59ccbeca90af4f6fce3a2a57f74fabb4b3d85a951ccf0c47",
+        "installedSha256": "9b550b22d15564ed59ccbeca90af4f6fce3a2a57f74fabb4b3d85a951ccf0c47"
+      },
+      {
+        "path": "native/clipboard.js",
+        "sourceSha256": "8a8e33cc33432713820c7c965af14012439d941d4f2914677a17cec910acc08d",
+        "installedSha256": "8a8e33cc33432713820c7c965af14012439d941d4f2914677a17cec910acc08d"
+      },
+      {
+        "path": "native/desktop-adapter.d.ts",
+        "sourceSha256": "4534f056639718decd8d29d1760e241cb2a9563ff390cd7fd22f90de300a6d95",
+        "installedSha256": "4534f056639718decd8d29d1760e241cb2a9563ff390cd7fd22f90de300a6d95"
+      },
+      {
+        "path": "native/desktop-adapter.js",
+        "sourceSha256": "1c867e991de9450ec4fa2b53da227860c81916f06ea603104bf8d990481c60c3",
+        "installedSha256": "1c867e991de9450ec4fa2b53da227860c81916f06ea603104bf8d990481c60c3"
+      },
+      {
+        "path": "native/desktop.d.ts",
+        "sourceSha256": "b3a7f0ff974c9a8d695eed971bb8b854e13069f327fa5725c2b418aa1390d15e",
+        "installedSha256": "b3a7f0ff974c9a8d695eed971bb8b854e13069f327fa5725c2b418aa1390d15e"
+      },
+      {
+        "path": "native/desktop.js",
+        "sourceSha256": "426438d690ca86f6c02b9a29d78f7e1ce8432894287880577fff93aa835353ec",
+        "installedSha256": "426438d690ca86f6c02b9a29d78f7e1ce8432894287880577fff93aa835353ec"
+      },
+      {
+        "path": "native/embedded-addon.js",
+        "sourceSha256": "ad94332d9b1ba71dac4c3bc394c35aea2e0e4cf2280bc1c2ba42aba3fb237fc1",
+        "installedSha256": "ad94332d9b1ba71dac4c3bc394c35aea2e0e4cf2280bc1c2ba42aba3fb237fc1"
+      },
+      {
+        "path": "native/index.d.ts",
+        "sourceSha256": "f40ed036fe9ebfa808e00dd4e39f27e70fe4f1412e2da5ddd0b7ab69a8f3a0f5",
+        "installedSha256": "f40ed036fe9ebfa808e00dd4e39f27e70fe4f1412e2da5ddd0b7ab69a8f3a0f5"
+      },
+      {
+        "path": "native/index.js",
+        "sourceSha256": "89a9474f75c0658f1adbd77d6ac75f0bea274705fc16f455ccce7ad47a583ddd",
+        "installedSha256": "89a9474f75c0658f1adbd77d6ac75f0bea274705fc16f455ccce7ad47a583ddd"
+      },
+      {
+        "path": "native/loader-state.d.ts",
+        "sourceSha256": "495ee42ac876ed95bbd6270e91eace61a9ac9d17247b5f7f7bdeaad3ca709725",
+        "installedSha256": "495ee42ac876ed95bbd6270e91eace61a9ac9d17247b5f7f7bdeaad3ca709725"
+      },
+      {
+        "path": "native/loader-state.js",
+        "sourceSha256": "3de1f2e6b7edbe11b38f678f815ddeab7ca7678c9786c122472c4f29602eb908",
+        "installedSha256": "3de1f2e6b7edbe11b38f678f815ddeab7ca7678c9786c122472c4f29602eb908"
+      },
+      {
+        "path": "native/path.d.ts",
+        "sourceSha256": "5bbf0e7dc526535b2fa8221b1ea280f190eab653af8757a7f1bf76786b25cf14",
+        "installedSha256": "5bbf0e7dc526535b2fa8221b1ea280f190eab653af8757a7f1bf76786b25cf14"
+      },
+      {
+        "path": "native/path.js",
+        "sourceSha256": "716fe783105dc03fc5deaab32a4f0470ba366e663ae77de42c5760144855bf99",
+        "installedSha256": "716fe783105dc03fc5deaab32a4f0470ba366e663ae77de42c5760144855bf99"
+      },
+      {
+        "path": "native/vcs.d.ts",
+        "sourceSha256": "3a91e25f15324e6b57c9919631a2e0f72d8da875f23f06abc4caa44b8f7f2d96",
+        "installedSha256": "3a91e25f15324e6b57c9919631a2e0f72d8da875f23f06abc4caa44b8f7f2d96"
+      },
+      {
+        "path": "native/vcs.js",
+        "sourceSha256": "0869ea284f27dfa866aeed868059b3c519e1b11ace66c5c364dcdfee0e718c86",
+        "installedSha256": "0869ea284f27dfa866aeed868059b3c519e1b11ace66c5c364dcdfee0e718c86"
+      },
+      {
+        "path": "native/version-sentinel.d.ts",
+        "sourceSha256": "9845deab9de927d6b4bff2b5616086d6a740d2b93964db6b4f0cb2e561e8faba",
+        "installedSha256": "9845deab9de927d6b4bff2b5616086d6a740d2b93964db6b4f0cb2e561e8faba"
+      },
+      {
+        "path": "native/version-sentinel.js",
+        "sourceSha256": "926c11315b5ff843b6cf236c866a12e9ddbf25824db267334c1323a6736cc7be",
+        "installedSha256": "926c11315b5ff843b6cf236c866a12e9ddbf25824db267334c1323a6736cc7be"
+      }
+    ],
+    "prebuiltAddons": [
+      {
+        "path": "pi_natives.linux-x64-modern.node",
+        "sha256": "33710d1ac6830e068fb46db335e6e2f2e6175a343b267506cd8a31d72d52e059",
+        "loaded": true
+      },
+      {
+        "path": "pi_natives.linux-x64-baseline.node",
+        "sha256": "df5f6404bdd1db1da01144d91e76accef34a6beeb0e3041537c8d6edf05e5a15",
+        "loaded": false
+      }
+    ],
+    "compiledFromPinnedRevision": "unproven; existing prebuilt inputs reused unchanged",
+    "installedTopology": "Core contains JS/d.ts wrappers only; Linux x64 optional leaf contains both binaries. Installed loader context workspaceLoad=false and resident/package release both18.8.9, stale=false."
+  },
+  "generatedAssets": [
+    {
+      "path": "dist/CHANGELOG-r7r44m9d.md",
+      "sha256": "01fa89fece2a5e1fc18dc6362260f89fcf27f5b762ee3d2c8e3fb2dcf7b5de19",
+      "size": 225620
+    },
+    {
+      "path": "dist/cli.js",
+      "sha256": "8c7d535006e39dd0ea9065db4fdd09525e82840a8e4b86e0f6ed4488a8ddb28e",
+      "size": 29693151
+    },
+    {
+      "path": "dist/docs-index.generated.txt",
+      "sha256": "f37c9bb7416e14aa466bf89bb06dc0a539c0919cd49e947d288a023e4ea3b856",
+      "size": 1346035
+    },
+    {
+      "path": "dist/highlight.min-h0rrm4jy.js",
+      "sha256": "837a6fa5b0c736b52bbde2b2b6190f305da3fc9ed41681db5321507057b5c846",
+      "size": 121727
+    },
+    {
+      "path": "dist/marked.min-9hyvm9jm.js",
+      "sha256": "74c9f2e02c180c3e6caa09881a0b24032c86473af90acb1c87b6dc7255d491dd",
+      "size": 39055
+    },
+    {
+      "path": "dist/template-65mwrmj7.css",
+      "sha256": "8afc5b91e2f82dd73c428a452fbf1b73652990ec3eb1ebf20f69012b125e097b",
+      "size": 32693
+    },
+    {
+      "path": "dist/template-fxk08cb7.html",
+      "sha256": "66cde9d44d1621553e01c0956f07f81c7d7e34469b633798a5969f9a3ab5ecc8",
+      "size": 2663
+    },
+    {
+      "path": "dist/template-ven1z43n.js",
+      "sha256": "109773e66d5c653b388f0162fa869f12ec5af3ff6ba4930cfbcd19d1fdcc9969",
+      "size": 74983
+    },
+    {
+      "path": "dist/tool-views.generated-pn3nqv1r.js",
+      "sha256": "f63d8bbed089cb1fccc11187e81543041e9dfa20dbc74a5dfd2fb82f90a7e50b",
+      "size": 282882
+    },
+    {
+      "path": "src/export/html/tool-views.generated.js",
+      "sha256": "f63d8bbed089cb1fccc11187e81543041e9dfa20dbc74a5dfd2fb82f90a7e50b",
+      "sourceBeforeSha256": "f63d8bbed089cb1fccc11187e81543041e9dfa20dbc74a5dfd2fb82f90a7e50b",
+      "size": 282882
+    }
+  ],
+  "statsGeneratedPlaceholder": {
+    "path": "packages/stats/src/embedded-client.generated.txt",
+    "sourceAndInstalledSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "scope": "Empty generated placeholder is included in the existing pinned fingerprint scope. Coding-agent prepack generated a temporary dashboard embed for its CLI bundle, then upstream gen:stats:reset restored the placeholder. This is not an independently authored dashboard payload."
+  },
+  "thirdParty": {
+    "initialFreshInstallChangedOrNewLockEntries": [
+      {
+        "key": "@huggingface/transformers",
+        "initial": "@huggingface/transformers@4.3.1",
+        "sourceVersions": [
+          "4.3.0"
+        ]
+      },
+      {
+        "key": "@img/sharp-darwin-arm64",
+        "initial": "@img/sharp-darwin-arm64@0.35.5",
+        "sourceVersions": [
+          "0.35.4"
+        ]
+      },
+      {
+        "key": "@img/sharp-darwin-x64",
+        "initial": "@img/sharp-darwin-x64@0.35.5",
+        "sourceVersions": [
+          "0.35.4"
+        ]
+      },
+      {
+        "key": "@img/sharp-freebsd-wasm32",
+        "initial": "@img/sharp-freebsd-wasm32@0.35.5",
+        "sourceVersions": [
+          "0.35.4"
+        ]
+      },
+      {
+        "key": "@img/sharp-libvips-darwin-arm64",
+        "initial": "@img/sharp-libvips-darwin-arm64@1.3.4",
+        "sourceVersions": [
+          "1.3.3"
+        ]
+      },
+      {
+        "key": "@img/sharp-libvips-darwin-x64",
+        "initial": "@img/sharp-libvips-darwin-x64@1.3.4",
+        "sourceVersions": [
+          "1.3.3"
+        ]
+      },
+      {
+        "key": "@img/sharp-libvips-linux-arm",
+        "initial": "@img/sharp-libvips-linux-arm@1.3.4",
+        "sourceVersions": [
+          "1.3.3"
+        ]
+      },
+      {
+        "key": "@img/sharp-libvips-linux-arm64",
+        "initial": "@img/sharp-libvips-linux-arm64@1.3.4",
+        "sourceVersions": [
+          "1.3.3"
+        ]
+      },
+      {
+        "key": "@img/sharp-libvips-linux-ppc64",
+        "initial": "@img/sharp-libvips-linux-ppc64@1.3.4",
+        "sourceVersions": [
+          "1.3.3"
+        ]
+      },
+      {
+        "key": "@img/sharp-libvips-linux-riscv64",
+        "initial": "@img/sharp-libvips-linux-riscv64@1.3.4",
+        "sourceVersions": [
+          "1.3.3"
+        ]
+      },
+      {
+        "key": "@img/sharp-libvips-linux-s390x",
+        "initial": "@img/sharp-libvips-linux-s390x@1.3.4",
+        "sourceVersions": [
+          "1.3.3"
+        ]
+      },
+      {
+        "key": "@img/sharp-libvips-linux-x64",
+        "initial": "@img/sharp-libvips-linux-x64@1.3.4",
+        "sourceVersions": [
+          "1.3.3"
+        ]
+      },
+      {
+        "key": "@img/sharp-libvips-linuxmusl-arm64",
+        "initial": "@img/sharp-libvips-linuxmusl-arm64@1.3.4",
+        "sourceVersions": [
+          "1.3.3"
+        ]
+      },
+      {
+        "key": "@img/sharp-libvips-linuxmusl-x64",
+        "initial": "@img/sharp-libvips-linuxmusl-x64@1.3.4",
+        "sourceVersions": [
+          "1.3.3"
+        ]
+      },
+      {
+        "key": "@img/sharp-linux-arm",
+        "initial": "@img/sharp-linux-arm@0.35.5",
+        "sourceVersions": [
+          "0.35.4"
+        ]
+      },
+      {
+        "key": "@img/sharp-linux-arm64",
+        "initial": "@img/sharp-linux-arm64@0.35.5",
+        "sourceVersions": [
+          "0.35.4"
+        ]
+      },
+      {
+        "key": "@img/sharp-linux-ppc64",
+        "initial": "@img/sharp-linux-ppc64@0.35.5",
+        "sourceVersions": [
+          "0.35.4"
+        ]
+      },
+      {
+        "key": "@img/sharp-linux-riscv64",
+        "initial": "@img/sharp-linux-riscv64@0.35.5",
+        "sourceVersions": [
+          "0.35.4"
+        ]
+      },
+      {
+        "key": "@img/sharp-linux-s390x",
+        "initial": "@img/sharp-linux-s390x@0.35.5",
+        "sourceVersions": [
+          "0.35.4"
+        ]
+      },
+      {
+        "key": "@img/sharp-linux-x64",
+        "initial": "@img/sharp-linux-x64@0.35.5",
+        "sourceVersions": [
+          "0.35.4"
+        ]
+      },
+      {
+        "key": "@img/sharp-linuxmusl-arm64",
+        "initial": "@img/sharp-linuxmusl-arm64@0.35.5",
+        "sourceVersions": [
+          "0.35.4"
+        ]
+      },
+      {
+        "key": "@img/sharp-linuxmusl-x64",
+        "initial": "@img/sharp-linuxmusl-x64@0.35.5",
+        "sourceVersions": [
+          "0.35.4"
+        ]
+      },
+      {
+        "key": "@img/sharp-wasm32",
+        "initial": "@img/sharp-wasm32@0.35.5",
+        "sourceVersions": [
+          "0.35.4"
+        ]
+      },
+      {
+        "key": "@img/sharp-webcontainers-wasm32",
+        "initial": "@img/sharp-webcontainers-wasm32@0.35.5",
+        "sourceVersions": [
+          "0.35.4"
+        ]
+      },
+      {
+        "key": "@img/sharp-win32-arm64",
+        "initial": "@img/sharp-win32-arm64@0.35.5",
+        "sourceVersions": [
+          "0.35.4"
+        ]
+      },
+      {
+        "key": "@img/sharp-win32-ia32",
+        "initial": "@img/sharp-win32-ia32@0.35.5",
+        "sourceVersions": [
+          "0.35.4"
+        ]
+      },
+      {
+        "key": "@img/sharp-win32-x64",
+        "initial": "@img/sharp-win32-x64@0.35.5",
+        "sourceVersions": [
+          "0.35.4"
+        ]
+      },
+      {
+        "key": "@opentelemetry/context-async-hooks",
+        "initial": "@opentelemetry/context-async-hooks@2.12.0",
+        "sourceVersions": [
+          "2.11.0"
+        ]
+      },
+      {
+        "key": "@opentelemetry/resources",
+        "initial": "@opentelemetry/resources@2.12.0",
+        "sourceVersions": [
+          "2.11.0",
+          "2.9.0"
+        ]
+      },
+      {
+        "key": "@opentelemetry/sdk-metrics",
+        "initial": "@opentelemetry/sdk-metrics@2.12.0",
+        "sourceVersions": [
+          "2.11.0",
+          "2.9.0"
+        ]
+      },
+      {
+        "key": "@opentelemetry/sdk-trace-base",
+        "initial": "@opentelemetry/sdk-trace-base@2.12.0",
+        "sourceVersions": [
+          "2.11.0"
+        ]
+      },
+      {
+        "key": "@opentelemetry/sdk-trace-node",
+        "initial": "@opentelemetry/sdk-trace-node@2.12.0",
+        "sourceVersions": [
+          "2.11.0"
+        ]
+      },
+      {
+        "key": "@types/node",
+        "initial": "@types/node@26.6.5",
+        "sourceVersions": [
+          "26.6.2"
+        ]
+      },
+      {
+        "key": "ansi-regex",
+        "initial": "ansi-regex@6.4.0",
+        "sourceVersions": [
+          "5.0.1",
+          "6.3.0"
+        ]
+      },
+      {
+        "key": "lucide-react",
+        "initial": "lucide-react@1.55.0",
+        "sourceVersions": [
+          "1.47.0"
+        ]
+      },
+      {
+        "key": "sharp",
+        "initial": "sharp@0.35.5",
+        "sourceVersions": [
+          "0.35.4"
+        ]
+      },
+      {
+        "key": "sherpa-onnx-darwin-arm64",
+        "initial": "sherpa-onnx-darwin-arm64@1.13.8",
+        "sourceVersions": [
+          "1.13.3"
+        ]
+      },
+      {
+        "key": "string-width",
+        "initial": "string-width@8.3.0",
+        "sourceVersions": [
+          "4.2.3",
+          "7.2.0",
+          "8.2.2"
+        ]
+      },
+      {
+        "key": "typed-query-selector",
+        "initial": "typed-query-selector@2.12.3",
+        "sourceVersions": [
+          "2.12.2"
+        ]
+      },
+      {
+        "key": "ws",
+        "initial": "ws@8.22.0",
+        "sourceVersions": [
+          "8.21.3"
+        ]
+      },
+      {
+        "key": "@opentelemetry/resources/@opentelemetry/core",
+        "initial": "@opentelemetry/core@2.12.0",
+        "sourceVersions": [
+          "2.11.0",
+          "2.9.0"
+        ]
+      },
+      {
+        "key": "@opentelemetry/sdk-metrics/@opentelemetry/core",
+        "initial": "@opentelemetry/core@2.12.0",
+        "sourceVersions": [
+          "2.11.0",
+          "2.9.0"
+        ]
+      },
+      {
+        "key": "@opentelemetry/sdk-trace-base/@opentelemetry/core",
+        "initial": "@opentelemetry/core@2.12.0",
+        "sourceVersions": [
+          "2.11.0",
+          "2.9.0"
+        ]
+      },
+      {
+        "key": "@opentelemetry/sdk-trace-base/@opentelemetry/sdk-trace",
+        "initial": "@opentelemetry/sdk-trace@2.12.0",
+        "sourceVersions": [
+          "2.11.0",
+          "2.9.0"
+        ]
+      },
+      {
+        "key": "@opentelemetry/sdk-trace-node/@opentelemetry/core",
+        "initial": "@opentelemetry/core@2.12.0",
+        "sourceVersions": [
+          "2.11.0",
+          "2.9.0"
+        ]
+      }
+    ],
+    "initialExactLockEntries": 96,
+    "correctedFrozenInstallExitCode": 0,
+    "correctedLockUnchanged": true,
+    "installedPhysicalPackagesCompared": 138,
+    "physicalPayloadChanges": [],
+    "identity": [
+      {
+        "name": "@anush008/tokenizers",
+        "version": "0.0.0",
+        "fileCount": 20,
+        "payloadSha256": "7210e331967db2b8ee888f2078ac67e1d28fbbbd8717dfdde126e4783d4e98af"
+      },
+      {
+        "name": "@anush008/tokenizers-linux-x64-gnu",
+        "version": "0.0.0",
+        "fileCount": 3,
+        "payloadSha256": "023466d9b854b912a51e136abeacdcf4b38351ec4d76b4d97d8b39f7d743fa49"
+      },
+      {
+        "name": "@babel/helper-string-parser",
+        "version": "7.29.7",
+        "fileCount": 5,
+        "payloadSha256": "224c09ecff20789f6ae576818d2d98de415890acf939526e2c8499356083beb1"
+      },
+      {
+        "name": "@babel/helper-validator-identifier",
+        "version": "7.29.7",
+        "fileCount": 9,
+        "payloadSha256": "0710ffb52a91d2dc63892e0923107bc1c81fb2704ba921a41a85f7bdc9bbeef3"
+      },
+      {
+        "name": "@babel/parser",
+        "version": "7.29.9",
+        "fileCount": 8,
+        "payloadSha256": "54ac5bf119f800c2e3d32eb9d4e4e6984232412186dae200776d3ec3ff525aa7"
+      },
+      {
+        "name": "@babel/types",
+        "version": "7.29.8",
+        "fileCount": 178,
+        "payloadSha256": "9ba6257d8ef322a7348917ce64406e00a83379eb011347b35454412a9a7ba915"
+      },
+      {
+        "name": "@huggingface/blake3-jit",
+        "version": "0.0.2",
+        "fileCount": 40,
+        "payloadSha256": "b5b88a4a4c1fd9e779d5ee5f15a976f1cd89c05af1f5cccca0b40e9c31d8f2ba"
+      },
+      {
+        "name": "@huggingface/hub",
+        "version": "2.17.5",
+        "fileCount": 623,
+        "payloadSha256": "59af0fc04dd7eabb6d43702236bc8ec0640c48c679ea79ab9589b6b24ed3e238"
+      },
+      {
+        "name": "@huggingface/jinja",
+        "version": "0.5.10",
+        "fileCount": 27,
+        "payloadSha256": "4873390de0c75a4a79ec26734e414c91d7e211dde3eb08192aa3dad67ea7bc55"
+      },
+      {
+        "name": "@huggingface/tasks",
+        "version": "0.21.48",
+        "fileCount": 872,
+        "payloadSha256": "a196a3fcb823018e95bbd0f86f247336a693d0e1995db415598d2e2b0aede32b"
+      },
+      {
+        "name": "@huggingface/tokenizers",
+        "version": "0.2.0",
+        "fileCount": 80,
+        "payloadSha256": "1d6275a15b26c74305846202942b7778a8fc16d2cfcfa29ec62365f4a68f63a9"
+      },
+      {
+        "name": "@huggingface/transformers",
+        "version": "4.3.0",
+        "fileCount": 1351,
+        "payloadSha256": "4fe5b73f3a5bebf1ad11cfee4fcdf2f3f8361ea3146ed084192305343c6a7dd3"
+      },
+      {
+        "name": "@huggingface/xetchunk-wasm",
+        "version": "0.2.0",
+        "fileCount": 40,
+        "payloadSha256": "4922ec03e65473ca8d95f7b6aa4934ceddeee70056e32fb1d93dd3a2bf54947a"
+      },
+      {
+        "name": "@img/colour",
+        "version": "1.1.0",
+        "fileCount": 6,
+        "payloadSha256": "8adcbf850946036ff6e0862b22b196d3130c70f690c821b2194504fbf2a3e13b"
+      },
+      {
+        "name": "@img/sharp-libvips-linux-x64",
+        "version": "1.3.3",
+        "fileCount": 6,
+        "payloadSha256": "605b6857cbc89afedeb16a9591ecd915e2aaa192fe135a1a0db318014eb4340d"
+      },
+      {
+        "name": "@img/sharp-libvips-linuxmusl-x64",
+        "version": "1.3.3",
+        "fileCount": 6,
+        "payloadSha256": "048edf7c1a98cfc5b99bbd22429ee88f87f89e6c16d18561a51fb10a9a7dd5a4"
+      },
+      {
+        "name": "@img/sharp-linux-x64",
+        "version": "0.35.4",
+        "fileCount": 5,
+        "payloadSha256": "ce57f7c00b379226a9bd5e36ca4b1c95a2ce99d98140db4e28505509e817e68d"
+      },
+      {
+        "name": "@img/sharp-linuxmusl-x64",
+        "version": "0.35.4",
+        "fileCount": 5,
+        "payloadSha256": "d3268befa29e616adc53ad3772de555ccd7b054a8b5c346290d74bf32bc3c535"
+      },
+      {
+        "name": "@isaacs/fs-minipass",
+        "version": "4.0.1",
+        "fileCount": 13,
+        "payloadSha256": "4a236b5dd124d4d646d4c3d212a855ca0874a9720af2fd01314f5e4f71485cd9"
+      },
+      {
+        "name": "@opentelemetry/api",
+        "version": "1.9.1",
+        "fileCount": 588,
+        "payloadSha256": "115bd9a575ed013d0b40817ba690ac194a4ec62426bf362d2fc631ba96cdfc5f"
+      },
+      {
+        "name": "@opentelemetry/api-logs",
+        "version": "0.220.0",
+        "fileCount": 120,
+        "payloadSha256": "e2cc111ea82757bc6905fdcfaadf38bd05d39da6778586b2f85b8e62212ea069"
+      },
+      {
+        "name": "@opentelemetry/context-async-hooks",
+        "version": "2.11.0",
+        "fileCount": 21,
+        "payloadSha256": "63d345886b3755b2bf67ef1b3327109dd59923092748a4f7c2267c14f1143769"
+      },
+      {
+        "name": "@opentelemetry/core",
+        "version": "2.11.0",
+        "fileCount": 327,
+        "payloadSha256": "6de75907d02b3aafbda6f84e7068c055e321a8b6b3cee4b4d5f90df385e9c00a"
+      },
+      {
+        "name": "@opentelemetry/core",
+        "version": "2.9.0",
+        "fileCount": 327,
+        "payloadSha256": "da7daa11946e2b87f7a4fedb8def1d439ffb3c5fc24e10a28c61a23d0db2c1ce"
+      },
+      {
+        "name": "@opentelemetry/exporter-logs-otlp-proto",
+        "version": "0.220.0",
+        "fileCount": 66,
+        "payloadSha256": "cfb14920170ae579bb62884396cab6514c2db00e5602fe7bdffce9e529fee893"
+      },
+      {
+        "name": "@opentelemetry/exporter-metrics-otlp-http",
+        "version": "0.220.0",
+        "fileCount": 84,
+        "payloadSha256": "714f38ae576c0dc9b70d1775824448f49f7506c4d3add401e6138f6a1b8720eb"
+      },
+      {
+        "name": "@opentelemetry/exporter-metrics-otlp-proto",
+        "version": "0.220.0",
+        "fileCount": 66,
+        "payloadSha256": "4cf926c8e009876c74909d959d73dde0709a570953f3cb968a85806ddbe06b62"
+      },
+      {
+        "name": "@opentelemetry/exporter-trace-otlp-proto",
+        "version": "0.220.0",
+        "fileCount": 66,
+        "payloadSha256": "8d2776f3c9f128ff12937b0e994c0a071a29c1e61bcec35276fa082046567bf4"
+      },
+      {
+        "name": "@opentelemetry/otlp-exporter-base",
+        "version": "0.220.0",
+        "fileCount": 309,
+        "payloadSha256": "2906e1f37160f5f0cca2a132fbb5395bdf8a6e456ad1e6c49eb1149d932eb3bd"
+      },
+      {
+        "name": "@opentelemetry/otlp-transformer",
+        "version": "0.220.0",
+        "fileCount": 390,
+        "payloadSha256": "565fa11f988047219fc41452d0f7d38e4417c22a656faa4ce5e7a6ee5d1ac30b"
+      },
+      {
+        "name": "@opentelemetry/resources",
+        "version": "2.11.0",
+        "fileCount": 291,
+        "payloadSha256": "58bba2da242f7cc682de80adfec336d197f0dd74fce46d170a1f385d569c8912"
+      },
+      {
+        "name": "@opentelemetry/resources",
+        "version": "2.9.0",
+        "fileCount": 291,
+        "payloadSha256": "0be8fe6f15167906346bdbacaa68dc26d8228f5c27e29d01f6de0e8ab4defb78"
+      },
+      {
+        "name": "@opentelemetry/sdk-logs",
+        "version": "0.220.0",
+        "fileCount": 246,
+        "payloadSha256": "05a594812f9ba73798dcc79f15f4c6f7e1903998c1f15f4563d3a1e632f3a455"
+      },
+      {
+        "name": "@opentelemetry/sdk-metrics",
+        "version": "2.11.0",
+        "fileCount": 606,
+        "payloadSha256": "845219661e3efa091faafe3fd6f402c47bdbe9af8ad1db2e60e560dac621dbf4"
+      },
+      {
+        "name": "@opentelemetry/sdk-metrics",
+        "version": "2.9.0",
+        "fileCount": 606,
+        "payloadSha256": "5dfeee9a8898d3063400240a6fa4bb9bfba0100b687daaddf896880d11430c6c"
+      },
+      {
+        "name": "@opentelemetry/sdk-trace",
+        "version": "2.11.0",
+        "fileCount": 318,
+        "payloadSha256": "cce523e835947034fb02ddac749dc5cb5830946c63c3fd07af7b3378e86a1b70"
+      },
+      {
+        "name": "@opentelemetry/sdk-trace",
+        "version": "2.9.0",
+        "fileCount": 318,
+        "payloadSha256": "84daa31b1afff5a4bb5b7f6d3b69878e375afb97bcfed65e3af09819d135fcfe"
+      },
+      {
+        "name": "@opentelemetry/sdk-trace-base",
+        "version": "2.11.0",
+        "fileCount": 75,
+        "payloadSha256": "43bba4e83b3c3d8a5a2c6b7cdb50daa43cd2bd5df13e4b47e74f0662b9cc063e"
+      },
+      {
+        "name": "@opentelemetry/sdk-trace-node",
+        "version": "2.11.0",
+        "fileCount": 15,
+        "payloadSha256": "62165240e13f8916177d775d6dbd8175968ae044138f84db71982aa89a6395d6"
+      },
+      {
+        "name": "@opentelemetry/semantic-conventions",
+        "version": "1.43.0",
+        "fileCount": 129,
+        "payloadSha256": "0b58cf7d2258cc6669bd8ebb5666f52280362f858b04bbbae5fdad695169393e"
+      },
+      {
+        "name": "@protobufjs/aspromise",
+        "version": "1.1.2",
+        "fileCount": 6,
+        "payloadSha256": "1d26a10ff1608aeb36deb3fa484a3c2edd1959ba368ca0fca8bd0373432ee7a1"
+      },
+      {
+        "name": "@protobufjs/base64",
+        "version": "1.1.2",
+        "fileCount": 6,
+        "payloadSha256": "2ca1265da133f76971e4e516fb5c83dafcbd0f9454faefe47ae0e70d9eb17e39"
+      },
+      {
+        "name": "@protobufjs/codegen",
+        "version": "2.0.5",
+        "fileCount": 6,
+        "payloadSha256": "90eb60ce5f80631baa89eafd14e28e8ecfd5095835558ada3e22a0a88ee859aa"
+      },
+      {
+        "name": "@protobufjs/eventemitter",
+        "version": "1.1.1",
+        "fileCount": 7,
+        "payloadSha256": "982f396dc7b7857008ff3a54f17a0965d1d7605ac801e42627a324120612063c"
+      },
+      {
+        "name": "@protobufjs/fetch",
+        "version": "1.1.1",
+        "fileCount": 9,
+        "payloadSha256": "404358387fe3b3c281250f97b8a735fcdd94724af2c3ba3c5dc0cbeae69ccec0"
+      },
+      {
+        "name": "@protobufjs/float",
+        "version": "1.0.2",
+        "fileCount": 8,
+        "payloadSha256": "2a50bb16366659deb2e313a989162df3ccc0b9dbd3f30654806885f0ad559c4b"
+      },
+      {
+        "name": "@protobufjs/path",
+        "version": "1.1.2",
+        "fileCount": 6,
+        "payloadSha256": "100ebbdb8e96d281e6796c9726201c8d1799cd47484a31492f8d7678bb407ac8"
+      },
+      {
+        "name": "@protobufjs/pool",
+        "version": "1.1.0",
+        "fileCount": 7,
+        "payloadSha256": "89e215d8ec551faa0824ce6b471ebbec3a16cfbd03ba65d34686f17b4da8edab"
+      },
+      {
+        "name": "@protobufjs/utf8",
+        "version": "1.1.2",
+        "fileCount": 9,
+        "payloadSha256": "6e1e2e722d01079a50c3184eb042e9faab8c1279a227d0267a9898c6f70532dc"
+      },
+      {
+        "name": "@puppeteer/browsers",
+        "version": "3.0.6",
+        "fileCount": 102,
+        "payloadSha256": "fc9ff50b9c755fd873c119d37b545a07181027f46e7ea405208d219705d77d78"
+      },
+      {
+        "name": "@types/node",
+        "version": "26.6.2",
+        "fileCount": 92,
+        "payloadSha256": "9da3585509e4c91181e49808007c276da2b7f8f1ea2f8ecb795a3f5eb617d6b3"
+      },
+      {
+        "name": "adm-zip",
+        "version": "0.5.18",
+        "fileCount": 19,
+        "payloadSha256": "2d82fecd7426f3f29ccad8cb8c7e25f05644e461537710628f3e308e4db0c4b3"
+      },
+      {
+        "name": "adm-zip",
+        "version": "0.6.1",
+        "fileCount": 20,
+        "payloadSha256": "9660fc2fccaa26f5a192144fb803d8b69e127456ccf0435787882e8622f860a0"
+      },
+      {
+        "name": "ansi-regex",
+        "version": "5.0.1",
+        "fileCount": 5,
+        "payloadSha256": "5b44f2675d8871baa0c7dd924dda9f8a52eee91ea1609823f98b684b2a4f4386"
+      },
+      {
+        "name": "ansi-regex",
+        "version": "6.3.0",
+        "fileCount": 5,
+        "payloadSha256": "1c1475c2ede60274fb84d57706c7e622e294245b192ea6516ba743ff8ee6435b"
+      },
+      {
+        "name": "ansi-styles",
+        "version": "6.2.3",
+        "fileCount": 5,
+        "payloadSha256": "586490b1609b421ea3cdd801aa429bad0cd4557f80b9c706b70a33d58a0ef1a9"
+      },
+      {
+        "name": "axe-core",
+        "version": "4.13.0",
+        "fileCount": 30,
+        "payloadSha256": "3a4504020cce1bec3bf8615f0bc18f20af19a38fc90991ff8f6b4d0c5fe54e1c"
+      },
+      {
+        "name": "boolean",
+        "version": "3.2.0",
+        "fileCount": 18,
+        "payloadSha256": "b2328bf1556741f97c538dc8198a031799dc25f394333c45027c6cccea7ab58c"
+      },
+      {
+        "name": "chownr",
+        "version": "3.0.0",
+        "fileCount": 13,
+        "payloadSha256": "43fc42afbb6876081b8d8d5d12619ab7c0874d78bf63feb92ad2c58f597049db"
+      },
+      {
+        "name": "chromium-bidi",
+        "version": "16.0.1",
+        "fileCount": 313,
+        "payloadSha256": "c718bac9650fde9151c8f66bc0252672762835582102891694998c6cac74ee82"
+      },
+      {
+        "name": "cli-progress",
+        "version": "3.12.0",
+        "fileCount": 20,
+        "payloadSha256": "51bc61f7281ccdbce09a52cb90bea9ad4222836bd58baba47892ed75e1ccadc6"
+      },
+      {
+        "name": "cliui",
+        "version": "9.0.1",
+        "fileCount": 7,
+        "payloadSha256": "7e656fd59f92dab79593a4a346c80ede8fccd85874f5cba5ff3549258e3bf819"
+      },
+      {
+        "name": "define-data-property",
+        "version": "1.1.4",
+        "fileCount": 11,
+        "payloadSha256": "175787173bd3cef618589ba44ae617ad29aceefe8c8ded6fa35b4fa25f424be1"
+      },
+      {
+        "name": "define-properties",
+        "version": "1.2.1",
+        "fileCount": 9,
+        "payloadSha256": "4629626ac983f9a8dc505b42d3040fec4a9fa1bc645a98c76d07534ae557e990"
+      },
+      {
+        "name": "detect-libc",
+        "version": "2.1.2",
+        "fileCount": 8,
+        "payloadSha256": "ffa6c2d30bd5567d4ffd46943b7e3dbc4f5464738a4bd29435cd031ff66b2538"
+      },
+      {
+        "name": "detect-node",
+        "version": "2.1.0",
+        "fileCount": 6,
+        "payloadSha256": "16bb2a5315ccf9f6308fee37bbf70b0da7e85e91da8c1130725f211352f66d3f"
+      },
+      {
+        "name": "devtools-protocol",
+        "version": "0.0.1638949",
+        "fileCount": 62,
+        "payloadSha256": "486b73ec823fc50090f68a96f63a8da0e5944ba3d0eda97234a7f53e751a36b3"
+      },
+      {
+        "name": "emoji-regex",
+        "version": "10.6.0",
+        "fileCount": 6,
+        "payloadSha256": "49108b2ee6932ab01e429e51efaacb75f07b6979b63e50cfc29382ed12a0382b"
+      },
+      {
+        "name": "emoji-regex",
+        "version": "8.0.0",
+        "fileCount": 8,
+        "payloadSha256": "3479994848186678dd9e2231b9163f3285463d9daa09d7ab2765324757a535cd"
+      },
+      {
+        "name": "es-define-property",
+        "version": "1.0.1",
+        "fileCount": 11,
+        "payloadSha256": "537eb2b7066042780ddf6d3afa605eb5f4b457984399a0690642d8a1ee753eea"
+      },
+      {
+        "name": "es-errors",
+        "version": "1.3.0",
+        "fileCount": 22,
+        "payloadSha256": "2435a49e503d43328eb5eba3616b1a7d0f61de17a315ba46031a88ff2d1876f1"
+      },
+      {
+        "name": "es6-error",
+        "version": "4.1.1",
+        "fileCount": 7,
+        "payloadSha256": "63fbc1f7b5fce94f6dab0c25dd4b28bf93f37c1c88ac4a3bd2ee73bbf8f8ca27"
+      },
+      {
+        "name": "escalade",
+        "version": "3.2.0",
+        "fileCount": 11,
+        "payloadSha256": "8a7b029a3168a61b3550574eb54147c87975b9ad48084436269a4a9ddef231e8"
+      },
+      {
+        "name": "escape-string-regexp",
+        "version": "4.0.0",
+        "fileCount": 5,
+        "payloadSha256": "df3fe4262c39df2ab812e161478281116bbe5ab80c076b10007d4904dd2e6f80"
+      },
+      {
+        "name": "fastembed",
+        "version": "3.0.0",
+        "fileCount": 20,
+        "payloadSha256": "54bbf345367d10ed54c3953304d56fc7e595701daa5d654eb8c7fc9a36cb6f6b"
+      },
+      {
+        "name": "flatbuffers",
+        "version": "25.9.23",
+        "fileCount": 89,
+        "payloadSha256": "e936482e19e4fd1c31c2bacc5d7f29e274bdc58635413b7b09c65ead73601ce6"
+      },
+      {
+        "name": "gearhash-jit",
+        "version": "1.0.2",
+        "fileCount": 22,
+        "payloadSha256": "95fd6b3ebb15e87b9149b829b7ac3ee15b4012b5d0f4b9739e202d3b98126ed5"
+      },
+      {
+        "name": "get-caller-file",
+        "version": "2.0.5",
+        "fileCount": 6,
+        "payloadSha256": "dbaeba91c18b99298cc8c7ee94d52f80b760d608c0465d90b3479b31b55d8b28"
+      },
+      {
+        "name": "get-east-asian-width",
+        "version": "1.7.0",
+        "fileCount": 8,
+        "payloadSha256": "fd6d223a2e51e87dc7e8e8cfa5d3c0b4bd0be9f03d2e9eb777916faa7aca6a18"
+      },
+      {
+        "name": "global-agent",
+        "version": "3.0.0",
+        "fileCount": 73,
+        "payloadSha256": "86b1f3b0fdf13477dde178c3d81c7fc9a3abe402e532e916c9e43ce91d3741d4"
+      },
+      {
+        "name": "global-agent",
+        "version": "4.1.3",
+        "fileCount": 47,
+        "payloadSha256": "739197e8b48a956762fccac561aa724f99c9ecc1fbcada9ff60aa6d41672bcac"
+      },
+      {
+        "name": "globalthis",
+        "version": "1.0.4",
+        "fileCount": 17,
+        "payloadSha256": "8ca971b6ba46a476356cf03a7181c30f3870e9f8548fa641d66434553cd89338"
+      },
+      {
+        "name": "gopd",
+        "version": "1.2.0",
+        "fileCount": 12,
+        "payloadSha256": "219f51983aaf3c00a5748e9cd4337ae16aebce084d85b273ee5c7bdcbe9550b0"
+      },
+      {
+        "name": "guid-typescript",
+        "version": "1.0.9",
+        "fileCount": 4,
+        "payloadSha256": "c49815d30c035b27e7029c41ea002013634a9f2d38e97abfb3973f3863c51650"
+      },
+      {
+        "name": "has-property-descriptors",
+        "version": "1.0.2",
+        "fileCount": 9,
+        "payloadSha256": "d9d1d4d9d3e467d6b633eb41063ef6ddec74057228736a287bbe3cc226d7c41d"
+      },
+      {
+        "name": "is-fullwidth-code-point",
+        "version": "3.0.0",
+        "fileCount": 5,
+        "payloadSha256": "a501a9f54e25f692bd7d9f11139aa54ccd140a23d41e5d08999fedfdd303c6eb"
+      },
+      {
+        "name": "json-stringify-safe",
+        "version": "5.0.1",
+        "fileCount": 9,
+        "payloadSha256": "f47a25b255529a303db380a650c2b555ea18009adb8927c5bc874bd7d42a772d"
+      },
+      {
+        "name": "long",
+        "version": "5.3.2",
+        "fileCount": 10,
+        "payloadSha256": "f4b2039d70e21ac787714ac72cf2d6f21dea40b6dab6342c192a2ea6bc7a4fd2"
+      },
+      {
+        "name": "lucide-react",
+        "version": "1.47.0",
+        "fileCount": 4270,
+        "payloadSha256": "411f1b0acc1579acf73d29ffb18210b9017107d2730e8dd915ad439af6c2756a"
+      },
+      {
+        "name": "matcher",
+        "version": "3.0.0",
+        "fileCount": 5,
+        "payloadSha256": "cfed79fd7cc11a3309a411c189cc66a2fe2d8e8d279c19264d8d2cc35e968c29"
+      },
+      {
+        "name": "matcher",
+        "version": "4.0.0",
+        "fileCount": 5,
+        "payloadSha256": "3e74b98c3c000adb70e0afe12ae9353e3e9e8972900052fbf3f1a071a9a8f90d"
+      },
+      {
+        "name": "minipass",
+        "version": "7.1.3",
+        "fileCount": 13,
+        "payloadSha256": "e9cbf04ae34db92d85c75cc057ff74b1d45d757bf090bb6d6005bf39fac4aebb"
+      },
+      {
+        "name": "minizlib",
+        "version": "3.1.0",
+        "fileCount": 21,
+        "payloadSha256": "9c00c9e8ce5b3af2a5ae08a8ce1583c92ca06f879b5cee83c6eec5ae66cddcc7"
+      },
+      {
+        "name": "mitt",
+        "version": "3.0.1",
+        "fileCount": 10,
+        "payloadSha256": "3a26d83eb3d732f82fc339747d84c4b290689666e7dee1ce40432a088fe39c4b"
+      },
+      {
+        "name": "modern-tar",
+        "version": "0.7.7",
+        "fileCount": 9,
+        "payloadSha256": "1d64453f6a6e0390b8ae4e0549c9267281760f9fe93350bd2228bd75f8fca374"
+      },
+      {
+        "name": "object-keys",
+        "version": "1.1.1",
+        "fileCount": 11,
+        "payloadSha256": "bf5d2fdecf52c15d2a90fa0e3de41760b769a2f4b90f4b1f995b85c7eb2182ff"
+      },
+      {
+        "name": "onnxruntime-common",
+        "version": "1.21.0",
+        "fileCount": 193,
+        "payloadSha256": "ffedfdf00d5353a94e736d973f925dd2503a93201594b553a2d5dc680fb7ce68"
+      },
+      {
+        "name": "onnxruntime-common",
+        "version": "1.26.0",
+        "fileCount": 193,
+        "payloadSha256": "1e70502602cff4be21acee04ba827e39da05bcdfdeac4cd32738e0b0cc69164a"
+      },
+      {
+        "name": "onnxruntime-common",
+        "version": "1.30.0",
+        "fileCount": 193,
+        "payloadSha256": "03e42f30952a30b876623ad52f3ce38b20a27b6f8840fa7b5e3ceeba9390b22e"
+      },
+      {
+        "name": "onnxruntime-common",
+        "version": "1.31.0-dev.20260911-2a43ec07e",
+        "fileCount": 194,
+        "payloadSha256": "c78b8bb1e1b7fa47a386d655baee5183699eb4962c3357eed479201be6b34708"
+      },
+      {
+        "name": "onnxruntime-node",
+        "version": "1.21.0",
+        "fileCount": 40,
+        "payloadSha256": "b290b2036984524ff9d51cbcac0af1690e509490bb925b49c0a7da1f1fec504a"
+      },
+      {
+        "name": "onnxruntime-node",
+        "version": "1.26.0",
+        "fileCount": 43,
+        "payloadSha256": "981a286f579ffbf9c846a4076135503d86dc4883a95688039c0abc7d1d26d9d8"
+      },
+      {
+        "name": "onnxruntime-node",
+        "version": "1.30.0",
+        "fileCount": 43,
+        "payloadSha256": "a765b859dd993449c78e9e3519aeb0bc3b1cf70a38c520e1e7ee8269f5032efc"
+      },
+      {
+        "name": "onnxruntime-web",
+        "version": "1.31.0-dev.20260914-8d85527a0",
+        "fileCount": 510,
+        "payloadSha256": "60edf1d27bb24cd6ce22b6801787464a38d088fda5ac27cbd55c0ecbba3c55c9"
+      },
+      {
+        "name": "platform",
+        "version": "1.3.6",
+        "fileCount": 4,
+        "payloadSha256": "c29835f33024b3ce75f8dc5fd06f813ea05d786c9744ee2da741a6e1334f886c"
+      },
+      {
+        "name": "progress",
+        "version": "2.0.3",
+        "fileCount": 7,
+        "payloadSha256": "702b1a6995fb8639b6ac0cb01dd5d8613dba5d570bb3234d697250ebc8303ef1"
+      },
+      {
+        "name": "protobufjs",
+        "version": "7.6.6",
+        "fileCount": 79,
+        "payloadSha256": "c3c1ddf34564a462b022746be1b865713cee77bdc807473b6d8c8f60ce75a990"
+      },
+      {
+        "name": "puppeteer-core",
+        "version": "25.3.0",
+        "fileCount": 912,
+        "payloadSha256": "a94d59c6b0790fe019acfd64050d07f4d9db31359ec653b5f813cee488a4c799"
+      },
+      {
+        "name": "react",
+        "version": "19.2.7",
+        "fileCount": 27,
+        "payloadSha256": "4285df197123d80179c3388bc34a3a7a83c334970f61099ed09443127c4baa32"
+      },
+      {
+        "name": "react-dom",
+        "version": "19.2.7",
+        "fileCount": 43,
+        "payloadSha256": "a5866135da36016646c59cc95cc250a19a1ae4c6280cdd3a05d87df08ade0949"
+      },
+      {
+        "name": "roarr",
+        "version": "2.15.4",
+        "fileCount": 27,
+        "payloadSha256": "a4afc40f29177cb780fce9102db67cf77a184331d372f5de5aa3025a171e172d"
+      },
+      {
+        "name": "scheduler",
+        "version": "0.27.0",
+        "fileCount": 15,
+        "payloadSha256": "60ca372be2b49a5d55abf0ee95b52ab19f5066369541d37221687720865e2a1b"
+      },
+      {
+        "name": "semver",
+        "version": "7.8.5",
+        "fileCount": 53,
+        "payloadSha256": "24046b432a1a88e69de3d8f8913e58d770bb742505fb770217bb3a1c5cafde5c"
+      },
+      {
+        "name": "semver-compare",
+        "version": "1.0.0",
+        "fileCount": 8,
+        "payloadSha256": "e74707e4429d9815ff104c8d7672074ca2d195c7901cafe3bd3e71199fbc9315"
+      },
+      {
+        "name": "serialize-error",
+        "version": "7.0.1",
+        "fileCount": 5,
+        "payloadSha256": "1592509f407eb4ae76cf646dcf72d569536730b8ba662f66b83f9a2b53ab6253"
+      },
+      {
+        "name": "serialize-error",
+        "version": "8.1.0",
+        "fileCount": 5,
+        "payloadSha256": "1d2228bc76f5958a6966715703dfff13ea5d2ef4d1ffc10cf19cd897fc5a7e16"
+      },
+      {
+        "name": "sharp",
+        "version": "0.35.4",
+        "fileCount": 47,
+        "payloadSha256": "9d41993290ad628c0345aa8712189b4c08c8e4538ca2701fd3a42d137b423228"
+      },
+      {
+        "name": "sherpa-onnx-linux-x64",
+        "version": "1.13.8",
+        "fileCount": 7,
+        "payloadSha256": "9f2bb2ab9c6d32e5558867792d504965d0105491e19db477f578f4197104d24a"
+      },
+      {
+        "name": "sherpa-onnx-node",
+        "version": "1.13.2",
+        "fileCount": 18,
+        "payloadSha256": "99482bb98ec46f6935942cbae3f35884228ded28625afd49b44105c06657f137"
+      },
+      {
+        "name": "sprintf-js",
+        "version": "1.1.3",
+        "fileCount": 11,
+        "payloadSha256": "c355672a4c22fb3d8a9826dc95890111c2802a4cac8d6cebbdc3fb9c12c2d1e9"
+      },
+      {
+        "name": "string-width",
+        "version": "4.2.3",
+        "fileCount": 5,
+        "payloadSha256": "b63dc8c5ee43d6ef2fc144a1094ee8aefa9ce8ad6e0a0caa6d521335a49e200c"
+      },
+      {
+        "name": "string-width",
+        "version": "7.2.0",
+        "fileCount": 5,
+        "payloadSha256": "cb006fe16610ca454aeafcb4c04c0f6c2536bd150d6fb1fda0de5f70dd47c135"
+      },
+      {
+        "name": "string-width",
+        "version": "8.2.2",
+        "fileCount": 5,
+        "payloadSha256": "e51ff3343d0ed37820f30f94d82db8b88f9ce9edf4c24cc2eb9f947c87779352"
+      },
+      {
+        "name": "strip-ansi",
+        "version": "6.0.1",
+        "fileCount": 5,
+        "payloadSha256": "128f499cd2feac6ca2931366e7c6b9ae2b9e535a4f6e4a720ce0be093a00e80d"
+      },
+      {
+        "name": "strip-ansi",
+        "version": "7.2.0",
+        "fileCount": 5,
+        "payloadSha256": "09f894567a29321683e0525c6f461e1df9e0ee048398124a875e8be026c3483d"
+      },
+      {
+        "name": "tar",
+        "version": "7.5.22",
+        "fileCount": 249,
+        "payloadSha256": "e34b7e2d88128215d43907c86810fcd46ccefa5d216013caf5088662738d7a10"
+      },
+      {
+        "name": "type-fest",
+        "version": "0.13.1",
+        "fileCount": 28,
+        "payloadSha256": "f4a21d0b6fe414a68122b2d988decb142768bd6799c8b0bcb039240385f220f0"
+      },
+      {
+        "name": "type-fest",
+        "version": "0.20.2",
+        "fileCount": 42,
+        "payloadSha256": "24f6e02bb40e7fde6396b0c6d351bba6d1f835b7619d4d6066678bc9f4c0e17a"
+      },
+      {
+        "name": "typed-query-selector",
+        "version": "2.12.2",
+        "fileCount": 6,
+        "payloadSha256": "27c60f35bc496602f25b60b0450b802255a4549eda529aa8eaef2779e2f43819"
+      },
+      {
+        "name": "undici-types",
+        "version": "8.9.0",
+        "fileCount": 48,
+        "payloadSha256": "c88e5f47e41aea0e854934be38afd9e5643d30b0a3c6df5b5ad597a7297cc08f"
+      },
+      {
+        "name": "webdriver-bidi-protocol",
+        "version": "0.4.2",
+        "fileCount": 22,
+        "payloadSha256": "acdbeeccb66acd94c6b471ddfd192d91588d12e44cd5a4e665d8deda2e92e2c8"
+      },
+      {
+        "name": "wrap-ansi",
+        "version": "9.0.2",
+        "fileCount": 5,
+        "payloadSha256": "b9c454079f77cc3a14430875eaf5626c45cf4dae0f0d77261e8f8bf56dfd5e30"
+      },
+      {
+        "name": "ws",
+        "version": "8.21.3",
+        "fileCount": 19,
+        "payloadSha256": "299f85794b733697690cc153fcc60831762d28aabd7f378fefbf032c923118f3"
+      },
+      {
+        "name": "y18n",
+        "version": "5.0.8",
+        "fileCount": 9,
+        "payloadSha256": "b28f87f83edc68c5ce3d22d4a08a53d51988f46b3e733e4322488512aba02262"
+      },
+      {
+        "name": "yallist",
+        "version": "5.0.0",
+        "fileCount": 13,
+        "payloadSha256": "abd24ac1858ba5b990a39a0f4aa1b3a09f7e6d497438838d75e45f37ff80bb77"
+      },
+      {
+        "name": "yargs",
+        "version": "18.2.0",
+        "fileCount": 59,
+        "payloadSha256": "cb9b970012f3b83dafc2c4bb971284d8b40c193579fad3cdf40eb984bbfb2d1c"
+      },
+      {
+        "name": "yargs-parser",
+        "version": "22.0.0",
+        "fileCount": 10,
+        "payloadSha256": "9405562dc2305445af28a681161873a5be435c7c688ced68abc2c413ac815f86"
+      },
+      {
+        "name": "zod",
+        "version": "3.25.76",
+        "fileCount": 596,
+        "payloadSha256": "014e0343a32f52b91f244f98f070d1a73b3f0ef12bd9282735caabcec5e6d9f3"
+      }
+    ],
+    "effectiveResolutionOwners": 114,
+    "effectiveResolutionEdges": 236,
+    "effectiveResolutionDifferences": [
+      {
+        "owner": "@oh-my-pi/pi-natives-linux-x64@18.8.9",
+        "reason": "not in exercised source install"
+      }
+    ],
+    "differenceInterpretation": "Only generated native Linux leaf is a new owner relative to workspace topology. All shared resolved dependency owner/version edges match; all 138 actual third-party payloads match source-frozen install. Extra source lock records are intentionally retained but are not claims of installed/exercised packages."
+  },
+  "runtimeContainment": {
+    "firstPartyInstalledRootsInsideConsumer": 13,
+    "consumerSymlinksObserved": 7,
+    "symlinksResolvingOutsideConsumer": 0,
+    "externalSourceWorkspaceRuntimeBinding": false,
+    "limits": "Observed installed roots, representative actual SDK/native runtime entries, package payloads and resolver dependency graph. No complete ESM module-load or syscall trace was available."
+  },
+  "boundedCheck": {
+    "command": "bun runtime-probe.mjs",
+    "runCount": 1,
+    "exitCode": 1,
+    "elapsedSeconds": 1.13,
+    "result": {
+      "phases": [
+        "installed-public-root-imported",
+        "real-native-operations-returned",
+        "actual-public-factory-created",
+        "actual-session-disposed",
+        "caller-owned-auth-closed"
+      ],
+      "networkAttempts": 12,
+      "preconnectAttempts": 0,
+      "cwd": "<SCRATCH>/consumer",
+      "entries": {
+        "@oh-my-pi/pi-coding-agent": "<SCRATCH>/consumer/node_modules/@oh-my-pi/pi-coding-agent/src/index.ts",
+        "@oh-my-pi/pi-coding-agent/sdk": "<SCRATCH>/consumer/node_modules/@oh-my-pi/pi-coding-agent/src/sdk.ts",
+        "@oh-my-pi/pi-natives": "<SCRATCH>/consumer/node_modules/@oh-my-pi/pi-natives/native/index.js",
+        "@oh-my-pi/pi-ai": "<SCRATCH>/consumer/node_modules/@oh-my-pi/pi-ai/src/index.ts",
+        "@oh-my-pi/pi-utils": "<SCRATCH>/consumer/node_modules/@oh-my-pi/pi-utils/src/index.ts"
+      },
+      "native": {
+        "tokenCount": 3,
+        "visibleWidth": 8,
+        "diff": [
+          {
+            "value": "line 1\n",
+            "count": 1,
+            "added": false,
+            "removed": false
+          },
+          {
+            "value": "line 2\n",
+            "count": 1,
+            "added": true,
+            "removed": false
+          }
+        ],
+        "loaderStatus": {
+          "path": "<SCRATCH>/consumer/node_modules/@oh-my-pi/pi-natives-linux-x64/pi_natives.linux-x64-modern.node",
+          "version": "18.8.9",
+          "packageVersion": "18.8.9",
+          "stale": false
+        },
+        "workspaceLoad": false,
+        "addonSha256": "33710d1ac6830e068fb46db335e6e2f2e6175a343b267506cd8a31d72d52e059"
+      },
+      "docs": {
+        "count": 134,
+        "firstName": "ERRATA-GPT5-HARMONY.md",
+        "firstBodyBytes": 12590
+      },
+      "auth": {
+        "selectedPath": "<SCRATCH>/agent/agent.db",
+        "existedBefore": false,
+        "mode": "600",
+        "regularFile": true,
+        "ownedByEffectiveUser": true,
+        "closed": true
+      },
+      "factory": {
+        "created": true,
+        "sessionManagerRetained": true,
+        "modelSelected": false,
+        "disposed": true
+      },
+      "status": "network-attempt-blocked"
+    },
+    "probeSource": "import fs from 'node:fs';\nimport path from 'node:path';\nimport { createHash } from 'node:crypto';\nconst evidence = { phases: [], networkAttempts: 0, preconnectAttempts: 0, cwd: process.cwd() };\nconst denyFetch = async () => { evidence.networkAttempts++; throw new Error('TASK24_NETWORK_DISABLED'); };\ndenyFetch.preconnect = () => { evidence.preconnectAttempts++; throw new Error('TASK24_PRECONNECT_DISABLED'); };\nglobalThis.fetch = denyFetch;\nlet authStorage;\nlet session;\ntry {\n  const sdk = await import('@oh-my-pi/pi-coding-agent');\n  evidence.phases.push('installed-public-root-imported');\n  evidence.entries = Object.fromEntries(['@oh-my-pi/pi-coding-agent','@oh-my-pi/pi-coding-agent/sdk','@oh-my-pi/pi-natives','@oh-my-pi/pi-ai','@oh-my-pi/pi-utils'].map(name => [name, fs.realpathSync(Bun.resolveSync(name, process.cwd()))]));\n  for (const file of Object.values(evidence.entries)) if (!file.startsWith(path.join(process.cwd(),'node_modules') + path.sep)) throw new Error('ENTRY_OUTSIDE_INSTALLED_CONSUMER');\n  const natives = await import('@oh-my-pi/pi-natives');\n  evidence.native = { tokenCount: natives.countTokens('Hello world!'), visibleWidth: natives.visibleWidth('oh-my-pi', 2), diff: natives.diffLines('line 1\\n', 'line 1\\nline 2\\n') };\n  const nativeDir = path.dirname(evidence.entries['@oh-my-pi/pi-natives']);\n  const loader = await import(path.join(nativeDir,'loader-state.js'));\n  const ctx = loader.initLoaderContext();\n  evidence.native.loaderStatus = loader.nativeAddonStatus();\n  if (ctx) evidence.native.workspaceLoad = ctx.isWorkspaceLoad;\n  const addonPath = evidence.native.loaderStatus?.path;\n  if (!addonPath || !fs.realpathSync(addonPath).startsWith(path.join(process.cwd(),'node_modules') + path.sep)) throw new Error('ADDON_OUTSIDE_INSTALLED_CONSUMER');\n  evidence.native.addonSha256 = createHash('sha256').update(fs.readFileSync(addonPath)).digest('hex');\n  evidence.phases.push('real-native-operations-returned');\n  const docs = await import('@oh-my-pi/pi-coding-agent/internal-urls/docs-index');\n  const filenames = docs.getDocFilenames();\n  const body = filenames.length ? await docs.getEmbeddedDoc(filenames[0]) : undefined;\n  evidence.docs = { count: filenames.length, firstName: filenames[0], firstBodyBytes: body ? Buffer.byteLength(body) : 0 };\n  if (!evidence.docs.count || !evidence.docs.firstBodyBytes) throw new Error('INSTALLED_DOCS_NOT_LOADED');\n  const cwd = path.join(process.cwd(),'workspace');\n  fs.mkdirSync(cwd, {recursive:true});\n  const agentDir = process.env.PI_CODING_AGENT_DIR;\n  const dbPath = path.join(agentDir,'agent.db');\n  evidence.auth = { selectedPath: dbPath, existedBefore: fs.existsSync(dbPath) };\n  authStorage = await sdk.AuthStorage.create(dbPath);\n  const stat = fs.statSync(dbPath);\n  evidence.auth.mode = (stat.mode & 0o777).toString(8);\n  evidence.auth.regularFile = stat.isFile();\n  evidence.auth.ownedByEffectiveUser = stat.uid === process.geteuid();\n  const settings = sdk.Settings.isolated({'secrets.enabled':false}, {storage:null});\n  const modelRegistry = new sdk.ModelRegistry(authStorage,path.join(agentDir,'models.yml'), {ignoreLocalModelConfig:true,settings,cacheDbPath:':memory:',fetch:denyFetch});\n  const sessionManager = sdk.SessionManager.inMemory(cwd);\n  const agentRegistry = new sdk.AgentRegistry();\n  const result = await sdk.createAgentSession({cwd,agentDir,settings,authStorage,modelRegistry,sessionManager,agentRegistry,skills:[],rules:[],promptTemplates:[],slashCommands:[],contextFiles:[],workspaceTree:{rootPath:cwd,rendered:'',truncated:false,totalLines:0,agentsMdFiles:[]},disableExtensionDiscovery:true,additionalExtensionPaths:[],enableMCP:false,enableLsp:false,skipPythonPreflight:true,cacheWarming:false,bindProcessState:false});\n  session = result.session;\n  evidence.factory = { created: session instanceof sdk.AgentSession, sessionManagerRetained: session.sessionManager === sessionManager, modelSelected: Boolean(session.model) };\n  evidence.phases.push('actual-public-factory-created');\n  await session.dispose();\n  session = undefined;\n  evidence.factory.disposed = true;\n  evidence.phases.push('actual-session-disposed');\n  authStorage.close(); authStorage = undefined;\n  evidence.auth.closed = true;\n  evidence.phases.push('caller-owned-auth-closed');\n  evidence.status = evidence.networkAttempts === 0 && evidence.preconnectAttempts === 0 ? 'passed' : 'network-attempt-blocked';\n} catch (error) {\n  evidence.status = 'failed';\n  evidence.error = {name:error?.name,message:String(error?.message ?? error),stack:String(error?.stack ?? '').split('\\n').slice(0,8)};\n} finally {\n  if (session) { try { await session.dispose(); evidence.cleanupSessionDisposed = true; } catch { evidence.cleanupSessionDisposed = false; } }\n  if (authStorage) { try { authStorage.close(); evidence.cleanupAuthClosed = true; } catch { evidence.cleanupAuthClosed = false; } }\n  fs.writeFileSync(path.join(process.cwd(),'runtime-result.json'),JSON.stringify(evidence,null,2)+'\\n');\n  console.log(JSON.stringify(evidence));\n}\nif (evidence.status !== 'passed') process.exitCode = 1;\n",
+    "network": {
+      "deniedFetchCalls": 12,
+      "deniedPreconnectCalls": 0,
+      "underlyingFetchInvoked": false,
+      "requestArgumentCapture": "not recorded by guard; exact per-call destination/count attribution is unavailable",
+      "observedDiscoveryDiagnostics": [
+        {
+          "level": "warn",
+          "message": "model discovery failed for provider",
+          "provider": "ollama",
+          "url": "http://<LOOPBACK>:11434",
+          "error": "TASK24_NETWORK_DISABLED"
+        },
+        {
+          "level": "warn",
+          "message": "model discovery failed for provider",
+          "provider": "llama.cpp",
+          "url": "http://<LOOPBACK>:8080",
+          "error": "TASK24_NETWORK_DISABLED"
+        },
+        {
+          "level": "warn",
+          "message": "model discovery failed for provider",
+          "provider": "lm-studio",
+          "url": "http://<LOOPBACK>:1234/v1",
+          "error": "TASK24_NETWORK_DISABLED"
+        },
+        {
+          "level": "debug",
+          "message": "model refresh rewrote many model cache rows",
+          "rows": 35,
+          "strategy": "online-if-uncached",
+          "bytes": 7357083
+        }
+      ],
+      "staticOwner": "packages/coding-agent/src/sdk.ts:3189-3195 calls explicit ModelRegistry.refresh(\"online-if-uncached\") on a cold cache with no chosen model; explicit modelRegistry only suppresses the separate refreshInBackground branch at 1975-1977",
+      "staticCandidateCategories": [
+        {
+          "category": "public model catalog GET",
+          "destination": "https://catalog.stencil.so/models.json.zstd",
+          "owner": "packages/catalog/src/provider-models/openai-compat.ts:85,233-245",
+          "observedPerCall": false
+        },
+        {
+          "category": "local OpenAI-compatible catalog GET and native metadata GET",
+          "destinations": [
+            "http://<LOOPBACK>:11434/v1/models",
+            "http://<LOOPBACK>:11434/api/tags",
+            "http://<LOOPBACK>:1234/v1/models",
+            "http://<LOOPBACK>:1234/api/v0/models"
+          ],
+          "owner": "packages/catalog/src/provider-models/openai-compat.ts:578-589,3388-3439,4234-4305; packages/catalog/src/discovery/openai-compatible.ts:143-168",
+          "observedPerCall": false
+        }
+      ],
+      "providerInferenceRequests": "none submitted; no prompt or completion call was made",
+      "credentials": "explicit newly created empty AuthStorage only; no credential environment inherited; no actual user storage selected",
+      "interpretation": "Exit 1 is the probe's stricter zero-attempt guard, not failed factory/native execution. Quiet startup is an observation and future service consideration, not an added M0 product acceptance requirement."
+    },
+    "interpretation": "Actual public factory creation, disposal, caller-owned auth close, real native operations and shipped docs succeeded before the probe set exitCode=1 for12 denied metadata discovery fetch attempts. Keep exit1; no retry or SDK modification. Written installation identity/resolution inputs are established. Quiet startup is not promoted to a new product gate."
+  },
+  "reuse": {
+    "reusable": "Prior pinned-source SDK probe observations can retain their original scope because the full first-party authored closure, native JS wrappers/prebuilt identities, generated tool views, and actual third-party owner resolutions/bytes match. New installed observations cover factory/dispose, docs corpus and Linux modern native release validation/operation. No old suite was rerun.",
+    "notReusable": "Divergent registry 18.8.9 artifacts remain rejected. Source-only native bypass was not installed release validation proof; this spike adds that observation only for modern Linux x64. Prior provider/credential/platform gaps remain gaps. New application integration, service behavior and packaged CLI behavior are not established by these results."
+  },
+  "unresolvedRequiredBehavior": [
+    "No new authored/runtime-entrypoint or exercised third-party mismatch remains after lock correction. The once-only Check is still exit1, not passed. Parent must judge written acceptance using completed factory/native actions and strict guard distinction.",
+    "Original M0 required behavior outside task24 remains open; this spike does not accept M0 or start M1."
+  ],
+  "limits": [
+    "Only Linux x64 and Bun 1.4.2 observed. Modern addon loaded; baseline hashed and packaged, not loaded.",
+    "Existing prebuilt addon identities do not prove Rust compilation from c9de2b02. Native Rust was not rebuilt or stamped.",
+    "Full npm publication type declaration emission and omptype Node JS build were intentionally not run; retained packages follow upstream Bun installation-tarball procedure.",
+    "No two-build reproducibility or hermetic/offline claim. Build embeds may contain paths and the package inventory is the exact measured artifact set.",
+    "Third-party lifecycle scripts remain disabled as in prior source preparation. Optional heavyweight providers/voice/embedding engines were not exercised.",
+    "Factory used explicit empty isolated storage/settings/registry, no active model, and disabled extension/MCP/LSP/Python/cache-warming paths. It does not prove default provider discovery, prompts, credential conversion, restart or cross-platform behavior.",
+    "All 12 denied fetch attempts are retained as an aggregate. Guard omitted arguments; only logged local destinations and static candidate categories can be attributed.",
+    "No kernel/network syscall trace was available. No underlying fetch was called by the guard; SDK transport suppression is observed at the injected fetch boundary, not a machine-wide packet capture.",
+    "No application dependency/lock/source files changed; task08 must integrate retained inputs and re-establish application dependency-owner resolutions."
+  ],
+  "cleanup": {
+    "scratch": "<SCRATCH>",
+    "removedClasses": [
+      "disposable source copy and its node_modules",
+      "isolated consumer and runtime probe",
+      "isolated HOME/XDG/agent storage and SQLite files",
+      "temporary package caches and TMPDIR"
+    ],
+    "retained": "/home/shizuku/Project/ohpichamber-omp-artifacts/c9de2b02/task24-20261011",
+    "retainedFiles": 36,
+    "retainedFileMode": "0444",
+    "retainedDirectoryMode": "0555",
+    "sourceRegularFilesCompared": 8965,
+    "sourceRegularFilesUnchanged": true,
+    "runtimeProcessExitCode": 1,
+    "scratchAbsent": true
+  }
+}

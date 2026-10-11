@@ -1,13 +1,13 @@
 # OMP migration through M3
 
-**Status:** proposed
+**Status:** in progress
 **Priority:** high
 
 ## What this is for
 
 The adopted upstream application still executes through OpenCode. The Agent Service, canonical contract package and `/api/agent/v1` are absent. The maintainer requested a planned migration through M3 acceptance, using concurrent OMP sessions where task boundaries permit it and avoiding repeated checks or speculative defensive code.
 
-The current workflow has no active tasks. Existing M0 reports prove some SDK behavior, not an implemented service or client cutover. [Development progress](../development.md) remains the owner of observed evidence. This effort continues that work rather than acquiring upstream source or repeating accepted probes.
+Existing M0 reports prove some SDK behavior, not an implemented service or client cutover. [Development progress](../development.md) remains the owner of observed evidence. This effort continues that work rather than acquiring upstream source or repeating accepted probes.
 
 ## What it does
 
@@ -27,7 +27,7 @@ The existing prerequisite was closed at its source/document boundary by `decisio
 
 ### M0 evidence and contract reconciliation
 
-Use the pinned official OMP 18.8.9 source and existing identity/evidence records as the comparison input. Confirm the installable SDK identity before adding the approved application dependency. A package with the same version number is not automatically the same source snapshot.
+Use the pinned official OMP 18.8.9 source and existing identity/evidence records as the comparison input. Task 19 observed that the published package and exercised first-party owners differ from that source. Task 24 must verify an installable source-derived dependency closure before contract freezing or adding the approved application dependency. Keep authored TypeScript, generated assets, native wrappers and prebuilt addon identities distinct; a matching version number is not source identity.
 
 Complete the missing Guest Shell probe using real commands through the OMP execution owner. Observe start, output, exit status, cancellation and retention limits, and identify which handle/snapshot semantics the SDK actually supplies. Service reconnect and capability-enforced scope isolation remain task 12 acceptance. Reuse existing lifecycle, completion, MCP and isolation reports unless the dependency or exercised API changes.
 
@@ -35,7 +35,7 @@ Before exporting types, reconcile draft contradictions and unsupported assumptio
 
 Probe the isolated default and XDG AuthStorage paths separately from an explicit agent-directory override. Compare the installable SDK artifact with the pinned source before treating the prior probes as evidence for the application dependency.
 
-A failed resource target remains failed until a measured design change or explicit maintainer decision addresses it. Unavailable platform/provider behavior retains its actual status. Do not close M0 by renaming missing required evidence as a later task.
+A failed resource target remains failed until a measured design change or explicit maintainer decision addresses it. The maintainer accepted the measured Linux fixture worker RSS as a known M0 limitation in `decisions.md: 2026-10-11 - Accept measured worker memory as an M0 limitation`; the original 100 MiB probe remains failed and actual service resources still require M2 evidence. Other unavailable platform/provider behavior retains its actual status. Do not close M0 by renaming missing required evidence as a later task.
 
 ### M1 host boundary
 
@@ -69,7 +69,7 @@ After dependent callers move, remove the old UI client, translators, runtime sel
 
 Each implementation task owns an isolated worktree and one bounded set of files. The coordinator owns shared package manifests, lockfile, gateway composition, shared protocol changes and integration. Read-only sessions may share a tree.
 
-Implementation advances through explicit gates, M0 task 03, M1 task 21, M2 task 23, then M3 task 18. Tasks 01 and 19 are independent M0 investigations. Within M1, extension retirement can run independently of host extraction; metadata and health/import work follow the extracted owner. Within M2, interaction, queue and catalogs/shell work can run independently after session projection. Within M3, settings/Board/Guest and utility/residual callers can run independently after the core client/composer contract works. Different stages do not run ahead of an unmet gate. Shared-contract changes are resolved by the coordinator before dependent slices land.
+Implementation advances through explicit gates, M0 task 03, M1 task 21, M2 task 23, then M3 task 18. Tasks 01 and 19 are independent M0 investigations; task 24 resolves the installable-source prerequisite exposed by task 19, before task 02 freezes the contract. Within M1, extension retirement can run independently of host extraction; metadata and health/import work follow the extracted owner. Within M2, interaction, queue and catalogs/shell work can run independently after session projection. Within M3, settings/Board/Guest and utility/residual callers can run independently after the core client/composer contract works. Different stages do not run ahead of an unmet gate. Shared-contract changes are resolved by the coordinator before dependent slices land.
 
 The maintainer has authorized all future local Git operations for this repository and the necessary OMP SDK dependencies. GitHub commands and pushing remain outside this request. Pre-existing worktree changes remain separate until their ownership/landing is settled.
 
@@ -115,7 +115,7 @@ W7-W10 require the integrated application and are rerun at effort closure. Earli
 
 The first M0 task and protocol reconciliation settle SDK facts, not user preferences. Current milestone wording and incomplete reports require a source-backed gate review before claiming M0 or choosing an execution order. Any required unavailable platform/resource acceptance remains open until the maintainer decides or its evidence becomes reachable.
 
-The initial dirty-file inventory contains the upstream adoption and prior workflow work. The coordinator must settle its baseline before dependent worktrees can use the assembled source; an old HEAD is not that source baseline.
+The maintainer authorized the assembled migration baseline in `decisions.md: 2026-10-11 - Continue from the assembled migration baseline`. M0 worktrees use the committed workflow and probe inputs. Later application worktrees must also include the assembled application source; the old HEAD does not contain it.
 
 ## Notes
 
@@ -125,7 +125,7 @@ Tasks are under `../tasks/omp-through-m3/`. This effort is complete only when it
 
 Execution order and gate tasks:
 
-1. M0: 01 and 19, then 02, then gate 03.
+1. M0: 01 and 19; 24 follows 19; then 02 and gate 03.
 2. M1: 04 and 06; 05 and 20 follow 04; gate 21 follows all M1 work.
 3. M2: 07, 08, 09; 10, 11 and 12 follow 09; server consumers 22, then gate 23.
 4. M3: 13, 14; independent caller slices 15 and 16; coordinated runtime cutover 17, then acceptance gate 18.

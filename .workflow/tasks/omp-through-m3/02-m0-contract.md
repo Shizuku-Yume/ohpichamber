@@ -6,10 +6,10 @@
 
 **Delivers:** Migration documents distinguish verified OMP facts, Agent Service responsibilities and remaining M0 unknowns, with no draft contract claim contradicted by current evidence.
 
-**Blocked by:** 01, 19
+**Blocked by:** 01, 19, 24
 **Files:** `.workflow/omp-migration/contracts.md`, `.workflow/omp-migration/architecture.md`, `.workflow/omp-migration/implementation-plan.md`, `.workflow/development.md`, `.workflow/decisions.md`
 
-**Read first:** `.workflow/specs/omp-through-m3.md` M0 section and W1; task 01 artifact; existing `.workflow/omp-migration/m0/*.json`; `contracts.md` event/cursor, approval, MCP, skills and Guest Shell sections; `architecture.md` ADR-03 and resource assumptions
+**Read first:** `.workflow/specs/omp-through-m3.md` M0 section and W1; task 01 artifact; task 19 identity/path findings and task 24 installed-source evidence; existing `.workflow/omp-migration/m0/*.json`; `contracts.md` event/cursor, approval, MCP, skills and Guest Shell sections; `architecture.md` ADR-03 and resource assumptions
 **Covers:** W1
 
 **Check:** `bun run docs:validate && .workflow/bin/workflow validate --no-color` → both pass; the documents identify the exercised SDK, Guest Shell owner, worker RSS evidence, CAS ownership, MCP reconnect semantics, skill expansion boundary and explicit unresolved gates.

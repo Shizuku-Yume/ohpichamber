@@ -124,3 +124,23 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** no
 - **Revisit when:** the bounded provider/OAuth probe records an outcome for each supported format and actual non-Linux/macOS worker runs record resource results, or the maintainer changes the support and acceptance scope.
 - **Effort:** omp-through-m3
+- **Superseded by:** 2026-10-12 - Leave unavailable platform evidence outside the M0 release condition
+
+## 2026-10-12 - Leave unavailable platform evidence outside the M0 release condition
+
+- **Decided:** task 30 no longer requires a passing non-Linux/macOS run before M1. Keep the missing platform measurements explicitly unverified and stop unavailable-runner work. Retain the bounded approved-provider task 29 and its actual provider/OAuth outcomes for the gate review; this platform waiver alone does not turn unavailable provider evidence into a pass.
+- **Instead of:** keeping M0 blocked on access to a real macOS/Windows runner.
+- **Because:** the maintainer explicitly said to drop the mandatory task-30 pass when it cannot be verified and enter M1 promptly. This changes the release condition, not the observed platform status or retained support matrix.
+- **Mine:** no
+- **Revisit when:** a real target-platform runner is available or platform certification becomes required for a retained release surface.
+- **Effort:** omp-through-m3
+- **Supersedes:** 2026-10-12 - Keep provider and platform evidence as M0 prerequisites
+
+## 2026-10-12 - Enter M1 with the observed provider path and explicit OAuth limitation
+
+- **Decided:** accept the real approved-provider stored API-key path as the measured M0 provider boundary and enter M1 after the bounded investigation is reviewed. Keep official provider conversion, OAuth refresh/scopes and account-selection behavior unverified rather than reporting success. Actual credential handoff and per-provider unsupported/re-authentication outcomes remain mandatory at task 22 and M2 gate 23.
+- **Instead of:** keeping M0 blocked until unavailable official-provider/OAuth credentials can be supplied and exercised.
+- **Because:** the approved test provider completed through persisted, closed and cold-reopened AuthStorage plus the installed public factory. The maintainer explicitly accepted the remaining provider limitation and selected entry into M1; Host extraction and extension retirement do not perform SDK credential migration.
+- **Mine:** no
+- **Revisit when:** official provider/OAuth credentials become available, or real service credential handoff requires a provider behavior not yet established.
+- **Effort:** omp-through-m3

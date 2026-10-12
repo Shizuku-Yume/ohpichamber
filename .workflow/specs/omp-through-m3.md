@@ -35,11 +35,11 @@ Before exporting types, reconcile draft contradictions and unsupported assumptio
 
 Task 19 measured isolated default/XDG AuthStorage paths separately from explicit agent-directory override; task 24 established the source-derived installed identity. Neither proves stored-credential conversion or model discovery. Task 02's [evidence boundaries](../omp-migration/implementation-plan.md#evidence-boundaries-for-gate-03) identify remaining original M0 requirements for task 03 to judge.
 
-Tasks 25, 26, 27 and the narrow task 28 filled reachable original M0 gaps before gate 03: installed public-factory/auth/skills/permission paths, MCP configuration/transports, actual Host PTY tab close, and the full-factory interactive permission seam. Task 29 now owns the bounded provider/OAuth feasibility probe authorized by the maintainer; task 30 owns actual non-Linux/macOS worker-resource evidence. They reuse task 24's immutable package inputs where applicable and preserve all failures, partials and unavailable results. Archiving an investigation does not accept the capability or release M1. Gate 03 remains paused until tasks 29 and 30 produce evidence or explicit unresolved blockers are reviewed; no platform or provider result is inferred from Linux or documentation.
+Tasks 25-28 filled reachable M0 public-factory/auth/skills/permission, MCP configuration/transport and actual Linux Host PTY gaps. Task 29 is archived with its valid corrected custom-proxy stored-key execution receipt and its defective disposable source discarded without reuse; [development.md](../development.md#additional-m0-reachable-evidence) owns the precise run and review state. These investigations reuse task 24's immutable inputs and preserve all failures, partials and unavailable results. `decisions.md: 2026-10-12 - Enter M1 with the observed provider path and explicit OAuth limitation` accepts missing official-provider/OAuth feasibility for M1 only. `decisions.md: 2026-10-12 - Leave unavailable platform evidence outside the M0 release condition` withdraws task 30 as a mandatory pass; no platform run occurred. Final requirements review identified required online model discovery as the remaining M0 gap. The maintainer selected verification before M1, not a waiver; gate 03 is blocked on task 31's narrow public installed-SDK online discovery evidence and review. No completion rerun, provider/platform status upgrade or M1/runtime implementation is claimed.
 
 ### M1 host boundary
 
-Move host-owned settings, theme, project, tunnel, process registry and startup code out of `lib/opencode`, updating callers without re-exports. Preserve modules already owned by filesystem, Git, terminal, environment, guests and source-control integrations.
+Move the 19 Host modules named by [scope](../omp-migration/scope.md#preserving-host-infrastructure-in-libopencode) out of `lib/opencode`, updating callers without re-exports. Preserve modules already owned by filesystem, Git, terminal, environment, guests and source-control integrations. Legacy SSE `watcher.js`, `.opencode` snippet CRUD `snippets.js` and mixed execution `shutdown-runtime.js` are not generic Host extraction; retain still-used execution owners until replacement dependencies and coordinated M3 retirement are ready.
 
 Inventory VS Code references before retirement. Remove extension entrypoints, package/build/release paths and UI-specific bridges while preserving external editor launching and VS Code theme import. Generated release notes remain read-only.
 
@@ -113,7 +113,7 @@ W7-W10 require the integrated application and are rerun at effort closure. Earli
 
 ## Open questions
 
-The first M0 task and protocol reconciliation settle SDK facts, not user preferences. Current milestone wording and incomplete reports require a source-backed gate review before claiming M0 or choosing an execution order. Any required unavailable platform/resource acceptance remains open until the maintainer decides or its evidence becomes reachable.
+Official-provider/OAuth feasibility and non-Linux/macOS resource measurements remain explicitly unverified under the two accepted M0 release-limit entries cited above. Required online model discovery is not waived: task 31 must produce and review its narrow installed-SDK evidence before gate 03 releases M1. Actual M2 credential handoff and per-provider outcomes, service resources, Host Gatekeeper, CAS and restart evidence remain required at their owning gates; the accepted M0 limits waive none of them.
 
 The maintainer authorized the assembled migration baseline in `decisions.md: 2026-10-11 - Continue from the assembled migration baseline`. M0 worktrees use the committed workflow and probe inputs. Later application worktrees must also include the assembled application source; the old HEAD does not contain it.
 
@@ -125,9 +125,9 @@ Tasks are under `../tasks/omp-through-m3/`. This effort is complete only when it
 
 Execution order and gate tasks:
 
-1. M0: 01 and 19; 24 follows 19; then 02; independent evidence tasks 25, 26, 27 and 28; bounded provider/OAuth task 29 and non-Linux/macOS resource task 30; gate 03.
+1. M0: 01 and 19; 24 follows 19; then 02; evidence tasks 25-28 and archived provider task 29; task 30 withdrawn from the mandatory release condition with platform evidence unverified; required online model discovery task 31; gate 03 review and archive before M1.
 2. M1: 04 and 06; 05 and 20 follow 04; gate 21 follows all M1 work.
 3. M2: 07, 08, 09; 10, 11 and 12 follow 09; server consumers 22, then gate 23.
 4. M3: 13, 14; independent caller slices 15 and 16; coordinated runtime cutover 17, then acceptance gate 18.
 
-Existing M0 evidence is reused only for unchanged SDK behavior. Gates 03, 21, 23 and 18 remain unarchived on any unresolved required item; a well-written blocker report does not release the next stage.
+Existing M0 evidence and reviews are reused only for unchanged SDK behavior. Gate 03 judges required evidence against the cited maintainer-accepted provider/platform limits, but remains blocked on task 31 online model discovery; an unavailable observation never becomes passed. Gates 21, 23 and 18 remain unarchived on any unresolved required item, and a well-written blocker report cannot replace their actual Host, service/handoff or client-cutover acceptance.

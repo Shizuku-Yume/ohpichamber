@@ -1,0 +1,278 @@
+{
+  "schemaVersion": 1,
+  "task": "omp-through-m3/29",
+  "observedAt": "2026-10-12T03:27:14.726Z",
+  "status": "observed-custom-proxy-stored-api-key; official-provider-and-oauth-feasibility-unavailable",
+  "taskStatus": "reviewed and archived; disposable source removed",
+  "m0Accepted": false,
+  "applicationOrDependencyChanges": false,
+  "inputs": {
+    "sourceArtifact": "source-install.json",
+    "earlierFactoryArtifact": "public-factory-auth-skills.json",
+    "historicalFormatsArtifact": "capabilities-real-provider.json#capabilities.credential-formats",
+    "sourceRevision": "c9de2b02b997f37cc89639282ed35dec86f139e8",
+    "packageName": "@oh-my-pi/pi-coding-agent",
+    "packageVersion": "18.8.9",
+    "artifactSetSha256": "d4652edea9d0b09c76c793a2ef54efb0331a89b770def0cc42b9ae849d31da34",
+    "consumerManifestSha256": "f4e81b330a4d6a86f0c8ca0772ae1410e9d4a2f0df2f03b4cfcb8606430d3094",
+    "consumerLockSha256": "03981eeabb92a06eb59ebbacd0139abe92ce00854b396e461daf9c70f9df6847",
+    "sourceLockSha256": "fcd23297e0c05fb6fd9b6623a70823826fd99a6cc7ffca18201c95860fce66b3",
+    "identityMethod": "Hashes copied from existing task24 artifact, not newly reverified. Reused immutable installed consumer; no rebuild, registry substitute, package edits or broad capability-suite rerun.",
+    "native": {
+      "priorLoadedAddon": "pi_natives.linux-x64-modern.node",
+      "priorLoadedAddonSha256": "33710d1ac6830e068fb46db335e6e2f2e6175a343b267506cd8a31d72d52e059",
+      "priorBaselineAddonSha256": "df5f6404bdd1db1da01144d91e76accef34a6beeb0e3041537c8d6edf05e5a15",
+      "compiledFromPinnedRevision": "unproven; task24 reused existing prebuilt inputs",
+      "task29AddonLoadIdentity": "not independently measured; task24 identity reused, no source-build equivalence claim"
+    }
+  },
+  "source": {
+    "logicalPath": "<immutable-consumer>/task29-provider-probe.ts",
+    "sha256": "9f9acf16792250fdb18c2ea7c8a325faf5cb5071d952f460ad7a7709d590535d",
+    "historicalUnsafeLaunchSourceSha256": "53bf18e7ae947bae59840b81b24ffaa2d3f62299316aaa487c0d968b1c97c724",
+    "retainedForParentReview": false,
+    "removalOwner": "parent; removed after independent reviews without reuse",
+    "containsProviderValuesOrCredentials": false
+  },
+  "authorization": {
+    "approvedInputs": ["OMP_M0_PROVIDER_API", "OMP_M0_PROVIDER_API_KEY", "OMP_M0_PROVIDER_BASE_URL", "OMP_M0_PROVIDER_MODEL"],
+    "configEntry": "operator-approved fish provider configuration; sourced only inside isolated executing fish process, source stdout/stderr discarded",
+    "inputFormat": "api_key; not OAuth authorization",
+    "providerLabel": "approved-custom-test-proxy",
+    "sdkCredentialProviderIdentity": "task29-approved-proxy",
+    "modelLabel": "approved-model-value-withheld",
+    "transport": "openai-completions",
+    "baseUrlPolicy": "approved value used unchanged; no guessed /v1 alteration",
+    "egress": "one bounded synthetic factory prompt scenario plus one parent-authorized rerun of the same scenario after secret-launch correction; approved configured provider only; no listener/interception, OAuth login/refresh or other authorized external destination",
+    "legacyUserCredentialStoresRead": false,
+    "configContentsReadOrDisplayedByAssistant": false
+  },
+  "publicOwners": [
+    {
+      "export": "@oh-my-pi/pi-coding-agent#AuthStorage",
+      "definition": "pi-coding-agent/src/index.ts:43 -> session/auth-storage.ts:23 -> pi-ai/src/auth-storage.ts:267-275",
+      "observedUse": "AuthStorage.create owned SQLite; credentials.set with type api_key; close; cold create same owned database; credentials.reload; credentials.get private equality comparison; close after session disposal"
+    },
+    {
+      "export": "@oh-my-pi/pi-coding-agent#ModelRegistry",
+      "definition": "pi-coding-agent/src/index.ts:12 -> config/model-registry.ts:482-513,3218-3256,3384-3455",
+      "observedUse": "Caller-owned registry registered only api/baseUrl. No apiKey config/runtime override, custom stream, OAuth registration, custom models or factory getApiKey override. Registry resolved stored key privately and AuthStorage.keys.source kind was api_key."
+    },
+    {
+      "export": "@oh-my-pi/pi-catalog/build#buildModel",
+      "definition": "pi-catalog/src/build.ts:348-372",
+      "observedUse": "Constructed approved provider model through installed public builder; returned output cap observed as32, checked not enlarged beyond64 before prompt"
+    },
+    {
+      "export": "@oh-my-pi/pi-coding-agent#Settings.isolated",
+      "definition": "pi-coding-agent/src/config/settings.ts:758-765; session/settings.ts:680-785,1206-1244; session/settings-stream-fn.ts:105-106,153-155",
+      "observedUse": "Isolated runtime settings: retry.enabled=false; retry.maxRetries=0; retry.modelFallback=false; retry.usageAwareFallback=false; first-event20s and idle15s watchdogs"
+    },
+    {
+      "export": "@oh-my-pi/pi-coding-agent#createAgentSession and SessionManager.inMemory",
+      "definition": "pi-coding-agent/src/index.ts:40,52 -> sdk.ts:534-912,1975-1977,2745-2761; session/session-manager.ts:4284-4288",
+      "observedUse": "Actual full factory, caller-owned auth/registry/model/settings, memory-only session manager, prompt/subscribe/waitForIdle/dispose; no stream replacement, CLI, RPC, mock transport or internal monkeypatch"
+    }
+  ],
+  "invocation": {
+    "status": "historical invocation only; unsafe secret-bearing env argv; not final secret-handling evidence",
+    "command": "bun run task29-provider-probe.ts",
+    "cwd": "<immutable-consumer>",
+    "outerCommandTimeoutSeconds": 180,
+    "workerHardTimeoutSeconds": 150,
+    "factoryDeadlineAndPromptAbortSeconds": 45,
+    "firstEventWatchdogSeconds": 20,
+    "idleWatchdogSeconds": 15,
+    "platform": "linux-x64",
+    "bunVersion": "1.4.2",
+    "workerLaunchSanitizedArgv": ["/usr/bin/fish", "--no-config", "-c", "<fishCommand below>", "<approved-config-path>", "<bun-executable>", "<private-root>", "<bun-dir>:/usr/bin:/bin", "<probe-source>"],
+    "fishCommandSanitized": "source \"$argv[1]\" >/dev/null 2>/dev/null; or exit 65\nexec /usr/bin/env -i PATH=\"$argv[4]\" HOME=\"$argv[3]/home\" PI_CODING_AGENT_DIR=\"$argv[3]/agent\" TMPDIR=\"$argv[3]/tmp\" XDG_CONFIG_HOME=\"$argv[3]/config\" XDG_CACHE_HOME=\"$argv[3]/cache\" XDG_DATA_HOME=\"$argv[3]/data\" XDG_STATE_HOME=\"$argv[3]/state\" XDG_RUNTIME_DIR=\"$argv[3]/runtime\" TASK29_ROOT=\"$argv[3]\" OMP_M0_PROVIDER_API=\"$OMP_M0_PROVIDER_API\" OMP_M0_PROVIDER_API_KEY=\"$OMP_M0_PROVIDER_API_KEY\" OMP_M0_PROVIDER_BASE_URL=\"$OMP_M0_PROVIDER_BASE_URL\" OMP_M0_PROVIDER_MODEL=\"$OMP_M0_PROVIDER_MODEL\" \"$argv[2]\" run \"$argv[5]\" --worker",
+    "environment": "Private root mode0700, umask0077; private HOME/agent/workspace/TMPDIR/XDG config/cache/data/state/runtime; allowlisted fish env then env -i worker; no ambient provider keys, broker/proxy/debug/telemetry variables inherited. Four approved vars deleted before SDK runtime imports.",
+    "sdkImports": "Runtime SDK loading deferred to private worker because static runtime loading in launcher would precede isolation. Only installed public exports are imported.",
+    "workerStdout": "discarded without capture; byte count unobserved",
+    "workerStderr": "discarded without capture; byte count unobserved",
+    "launcherOutput": "sanitized receipt only; SDK errors reduced to fixed classification and stage, no raw values",
+    "discovery": "Caller-owned registry prevents default background refresh; ignoreLocalModelConfig=true; model-registry fetch public option rejects all discovery requests; hasUI=true prevents automatic runtime discovery and no starter called. No interactive host/UI attached. MCP/LSP/IRC/Python preflight/extensions disabled; skills/rules/context/templates/slash commands supplied empty; no cache warming or title generation.",
+    "tools": "restrictToolNames=true with empty toolNames/customTools and requireYieldTool=false; enabledToolCount observed0",
+    "sessionRetry": "disabled via supported public Settings overrides",
+    "transportRetry": {
+      "suppression": "unavailable through installed public factory settings; transport left unchanged with parent authorization",
+      "sourceEvidence": "pi-ai/src/utils/openai-http.ts:33,98-105 hardcodes6 total HTTP attempts per transport call; pi-ai/src/providers/openai-completions.ts:1815-1818 enables replay-safe empty/transient retries; pi-ai/src/utils/empty-completion-retry.ts:21,138-158 bounds empty retries2 and provider error retries1",
+      "exactExternalHttpAttempts": "unobserved; no interception or request/header inspection",
+      "bound": "one prompt call, factory45s deadline/abort, first-event20s and idle15s watchdogs, worker150s hard kill, outer180s timeout; no claim of zero transport retries or exactly one HTTP request"
+    }
+  },
+  "secretLaunchCorrection": {
+    "finding": "Security review identified that fish expanded the API key and approved provider values into /usr/bin/env -i argv in the original successful launch. Private directories and discarded stdout/stderr do not prevent process argv exposure.",
+    "historicalObservation": "Original successful SDK completion remains observed, but the original private-path secret-handling claim is invalidated by argv exposure. No actual credential capture was observed. Process visibility/audit retention is unknown and historical logs cannot be retracted.",
+    "fix": "Fish builtins set -gx the four approved variables; remove exported variables outside the allowlist; restore private PATH/HOME/agent/TMPDIR/XDG settings with builtins; exec Bun directly. No /usr/bin/env or other external command receives provider values in argv. SDK worker deletes approved variables before SDK imports.",
+    "authorization": "Parent explicitly authorized one corrected bounded run of the same scenario; no new provider scenario or broad suite.",
+    "finalLaunchSourceSemantics": "Source reviewed at fish-command construction: secret expansions occur only in fish builtin set, not the external exec argv. Bun exec argv is executable/run/probe-source/--worker. Values are inherited in process environment, not cmdline. Environment remains process-visible under OS access policy; this is not a claim of protection from privileged inspection.",
+    "correctedInvocation": {
+      "command": "bun run task29-provider-probe.ts",
+      "cwd": "<immutable-consumer>",
+      "sameBoundsAndSdkOptionsAsHistoricalInvocation": true,
+      "workerLaunchSanitizedArgv": ["/usr/bin/fish", "--no-config", "-c", "<corrected fishCommand below>", "<approved-config-path>", "<bun-executable>", "<private-root>", "<bun-dir>:/usr/bin:/bin", "<probe-source>"],
+      "fishCommandSanitized": "source \"$argv[1]\" >/dev/null 2>/dev/null; or exit 65\nset -gx OMP_M0_PROVIDER_API \"$OMP_M0_PROVIDER_API\"\nset -gx OMP_M0_PROVIDER_API_KEY \"$OMP_M0_PROVIDER_API_KEY\"\nset -gx OMP_M0_PROVIDER_BASE_URL \"$OMP_M0_PROVIDER_BASE_URL\"\nset -gx OMP_M0_PROVIDER_MODEL \"$OMP_M0_PROVIDER_MODEL\"\nfor name in (set --names --export)\n  switch \"$name\"\n    case PATH HOME PI_CODING_AGENT_DIR TMPDIR XDG_CONFIG_HOME XDG_CACHE_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_RUNTIME_DIR TASK29_ROOT OMP_M0_PROVIDER_API OMP_M0_PROVIDER_API_KEY OMP_M0_PROVIDER_BASE_URL OMP_M0_PROVIDER_MODEL\n    case '*'\n      set -e \"$name\"\n  end\nend\nset -gx PATH \"$argv[4]\"\nset -gx HOME \"$argv[3]/home\"\nset -gx PI_CODING_AGENT_DIR \"$argv[3]/agent\"\nset -gx TMPDIR \"$argv[3]/tmp\"\nset -gx XDG_CONFIG_HOME \"$argv[3]/config\"\nset -gx XDG_CACHE_HOME \"$argv[3]/cache\"\nset -gx XDG_DATA_HOME \"$argv[3]/data\"\nset -gx XDG_STATE_HOME \"$argv[3]/state\"\nset -gx XDG_RUNTIME_DIR \"$argv[3]/runtime\"\nset -gx TASK29_ROOT \"$argv[3]\"\nexec \"$argv[2]\" run \"$argv[5]\" --worker",
+      "secretBearingExternalArgv": false,
+      "launchCredentialChannel": "inherited allowlisted environment; cleared before SDK imports after transient private input read",
+      "independentSecurityRereview": "passed; no remaining security blockers in corrected source; historical argv exposure and process-environment visibility limits retained"
+    }
+  },
+  "attempts": [
+    {
+      "startedAt": "2026-10-12T03:05:04.007Z",
+      "finishedAt": "2026-10-12T03:05:04.010Z",
+      "outerExitCode": 1,
+      "workerExitCode": 65,
+      "timedOut": false,
+      "classification": "launcher-config-source-failure",
+      "receipt": null,
+      "runtimePrivateStateRemoved": true,
+      "childExited": true,
+      "correction": "Removed an extra task29 positional argument before approved-config-path. Fish -c uses argv[1] for that first argument, unlike POSIX shell's command-name convention. Initial invocation tried the fixed label instead of config path; exited65 before worker/SDK/provider execution. Raw stderr discarded."
+    },
+    {
+      "launchSecurityStatus": "historical successful completion with secret-bearing env argv exposure; no actual capture observed",
+      "startedAt": "2026-10-12T03:05:33.951Z",
+      "finishedAt": "2026-10-12T03:05:36.802Z",
+      "outerExitCode": 0,
+      "workerExitCode": 0,
+      "timedOut": false,
+      "launcherError": false,
+      "runtimePrivateStateRemoved": true,
+      "childExited": true,
+      "receipt": {
+        "stage": "complete",
+        "status": "observed-real-completion",
+        "startedAt": "2026-10-12T03:05:33.958Z",
+        "finishedAt": "2026-10-12T03:05:36.776Z",
+        "auth": {
+          "persisted": true,
+          "initialStoreClosed": true,
+          "coldReopened": true,
+          "reloaded": true,
+          "storedRecordMatched": true,
+          "registryKeyMatched": true,
+          "storedKeySource": true,
+          "closed": true
+        },
+        "factory": {
+          "created": true,
+          "enabledToolCount": 0,
+          "dispatchObserved": true,
+          "promptCalls": 1,
+          "admitted": true,
+          "disposed": true
+        },
+        "discoveryFetchDeniedCount": 0,
+        "completion": {
+          "classification": "completed",
+          "stopReason": "stop",
+          "usage": { "input": 7, "output": 2, "cacheRead": 0, "cacheWrite": 0, "totalTokens": 9 },
+          "httpErrorStatus": null,
+          "errorValueRetained": false
+        },
+        "errors": [],
+        "promptTimeout": false,
+        "outputTokenCap": 32
+      }
+    },
+    {
+      "invocation": "secretLaunchCorrection.correctedInvocation",
+      "sourceSha256": "9f9acf16792250fdb18c2ea7c8a325faf5cb5071d952f460ad7a7709d590535d",
+      "startedAt": "2026-10-12T03:27:12.672Z",
+      "finishedAt": "2026-10-12T03:27:14.726Z",
+      "outerExitCode": 0,
+      "workerExitCode": 0,
+      "timedOut": false,
+      "launcherError": false,
+      "runtimePrivateStateRemoved": true,
+      "childExited": true,
+      "receipt": {
+        "stage": "complete",
+        "status": "observed-real-completion",
+        "startedAt": "2026-10-12T03:27:12.683Z",
+        "finishedAt": "2026-10-12T03:27:14.697Z",
+        "auth": {
+          "persisted": true, "initialStoreClosed": true, "coldReopened": true, "reloaded": true,
+          "storedRecordMatched": true, "registryKeyMatched": true, "storedKeySource": true, "closed": true
+        },
+        "factory": {
+          "created": true, "enabledToolCount": 0, "dispatchObserved": true,
+          "promptCalls": 1, "admitted": true, "disposed": true
+        },
+        "discoveryFetchDeniedCount": 0,
+        "completion": {
+          "classification": "completed", "stopReason": "stop",
+          "usage": { "input": 7, "output": 2, "cacheRead": 0, "cacheWrite": 0, "totalTokens": 9 },
+          "httpErrorStatus": null, "errorValueRetained": false
+        },
+        "errors": [], "promptTimeout": false, "outputTokenCap": 32
+      }
+    }
+  ],
+  "providerFormats": {
+    "historicalRecordsUnchanged": [
+      { "provider": "anthropic", "format": "api_key", "storageStatus": "passed", "authenticationStatus": "unavailable", "migrationStatus": "unknown" },
+      { "provider": "openai", "format": "api_key", "storageStatus": "passed", "authenticationStatus": "unavailable", "migrationStatus": "unknown" },
+      { "provider": "google", "format": "api_key", "storageStatus": "passed", "authenticationStatus": "unavailable", "migrationStatus": "unknown" },
+      { "provider": "anthropic", "format": "oauth", "storageStatus": "passed", "authenticationStatus": "unavailable", "migrationStatus": "unknown" },
+      { "provider": "openai-codex", "format": "oauth", "storageStatus": "passed", "authenticationStatus": "unavailable", "migrationStatus": "unknown" },
+      { "provider": "github-copilot", "format": "oauth", "storageStatus": "passed", "authenticationStatus": "unavailable", "migrationStatus": "unknown" },
+      { "provider": "google-gemini-cli", "format": "oauth", "storageStatus": "passed", "authenticationStatus": "unavailable", "migrationStatus": "unknown" }
+    ],
+    "historicalStorageLimit": "Earlier syntactic storage round trips only; this task did not rerun or upgrade those seven records.",
+    "newNarrowObservation": {
+      "provider": "approved-custom-test-proxy",
+      "sdkProviderIdentity": "task29-approved-proxy",
+      "format": "api_key",
+      "storageStatus": "observed-public-persist-close-cold-reopen-reload",
+      "authenticationStatus": "observed-real-factory-completion-through-stored-key",
+      "migrationStatus": "unknown; no Host credential conversion/import/handoff performed",
+      "limit": "API-key OpenAI-compatible custom proxy only, not official OpenAI or Anthropic authentication/OAuth feasibility and not Google or another historical provider format"
+    },
+    "oauth": {
+      "approvedOAuthCredentialsSupplied": false,
+      "authenticationStatus": "unavailable",
+      "refreshStatus": "unavailable",
+      "scopeStatus": "unknown",
+      "accountSelectionStatus": "unavailable",
+      "storageConversionStatus": "unknown; not exercised",
+      "interactiveLoginOrReauthentication": "not attempted; not authorized",
+      "publicImporter": "not established or invented"
+    },
+    "officialProviderFeasibility": "unavailable with the supplied custom-proxy API-key configuration; no official provider credential formats or OAuth scopes inferred"
+  },
+  "cleanup": {
+    "observedSessionDisposed": true,
+    "observedInitialAndColdAuthStoresClosed": true,
+    "observedPrivateRootRemovedAfterBothAttempts": true,
+    "observedPrivateRootRemovedAfterCorrectedAttempt": true,
+    "observedProviderWorkerExited": true,
+    "ephemeralReceiptRemovedWithPrivateRoot": true,
+    "ownedSqliteAndWalShmFilesRemovedWithPrivateRoot": true,
+    "sdkSessionHistory": "memory-only; any SDK auxiliary private state removed with root",
+    "secretsRetainedInEvidenceOrSource": false,
+    "historicalArgvExposure": "Original env launch placed credential/provider values in external argv. No actual capture observed; audit retention unknown and cannot be retracted. Corrected launch inherits environment without secret-bearing external argv.",
+    "legacyStoresRead": false,
+    "approvedConfigModified": false,
+    "listenerOrInterceptionCreated": false,
+    "residualSdkChildProcessEnumeration": "not independently measured; MCP/LSP/IRC/Python execution disabled and no tool runs; only directly owned worker exit observed",
+    "sourceRetained": "removed after independent reviews; two unexercised success-classification/cleanup-exit defects forbid reuse of the discarded probe"
+  },
+  "redactions": ["keys", "tokens", "headers", "provider endpoint", "model value", "environment values", "prompt text", "response content", "raw exceptions", "absolute private runtime paths", "provider payloads", "request/response IDs"],
+  "qualityReview": {
+    "observedReceipt": "valid within the measured stop run: stopReason=stop, errors empty and observed cleanup flags true",
+    "discardedSourceFindings": ["length/toolUse could be classified as completed", "teardown errors did not change final success exit"],
+    "disposition": "source deleted without reuse; no general success/cleanup guarantee inferred from probe exit alone and no provider rerun"
+  },
+  "limits": [
+    "One bounded scenario completed twice: original launch and parent-authorized secret-handling correction rerun. No tools, structured completion, cancellation, quota, provider discovery, rotation/removal or official-provider/OAuth behavior measured. Task25 rotation/removal evidence reused without rerun.",
+    "Successful SDK completion establishes configured proxy use through persisted then cold-reopened AuthStorage. It does not prove proxy-side credential enforcement or official upstream ownership; no headers or server-side authentication policy inspected.",
+    "The exact HTTP request count and in-provider retries are unobserved; session retry disabled is not transport retry disabled.",
+    "The receipts report SDK completion classification, stop reason and usage only. No secret, endpoint/model, prompt/response or raw error values retained in source/evidence. Original launch had external argv exposure; no actual capture observed, OS/audit retention unknown. Corrected inherited environment remains subject to process/privileged inspection.",
+    "This is installed direct-SDK investigation evidence, not application/provider integration, startup import, Host authorization, service credential handoff/CAS, M2 task22 acceptance, M0 gate passage or M1 authorization.",
+    "Linux-x64 only. Non-Linux/macOS resource evidence remains separate task30. Native prebuilt source-build equivalence remains unproven."
+  ]
+}

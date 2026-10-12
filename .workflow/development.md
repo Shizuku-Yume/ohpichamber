@@ -92,7 +92,7 @@ bun run scripts/omp-m0/run.mjs --suite capabilities --fixture --real-provider --
 
 ## Next implementation step
 
-The active [OMP-through-M3 effort](specs/omp-through-m3.md) remains in M0. Tasks 01, 19, 24, 25, 26, 27 and 28 are complete investigations; task 02's contract reconciliation is validated and reviewed, not M0 acceptance. Gate 03 has re-evaluated task 28's resolved reachable permission gap but remains blocked by unresolved provider/OAuth conversion feasibility and non-Linux/macOS worker-resource decisions. The existing Linux resource limitation decision preserves the failed 100 MiB result; M2 still requires real service measurements, CAS/restart evidence and Host Gatekeeper proof. No stage advances on documentation alone.
+The active [OMP-through-M3 effort](specs/omp-through-m3.md) remains in M0. Tasks 01, 19, 24, 25, 26, 27 and 28 are complete investigations; task 02's contract reconciliation is validated and reviewed, not M0 acceptance. Gate 03 remains blocked after task 28 closed the reachable permission gap: task 29 is the maintainer-authorized bounded provider/OAuth feasibility probe, and task 30 requires actual non-Linux/macOS worker-resource evidence. The existing Linux resource limitation decision preserves the failed 100 MiB result; M2 still requires real service measurements, CAS/restart evidence and Host Gatekeeper proof. No stage advances on documentation alone.
 
 ## Reusable findings
 

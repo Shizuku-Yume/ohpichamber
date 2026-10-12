@@ -4,12 +4,12 @@
 **Task type:** feature
 **Base commit:** edfdf096316b92775b55410a532f61fa8aa62de9
 **Started:** 2026-10-11T20:17:55+00:00
-**Status:** paused
+**Status:** blocked
 **Dirty at start:** 3,242 pre-existing assembled application, workflow, skill and documentation paths; all are excluded from this task except the named gate documents.
 
 **Delivers:** A current M0 gate record states what is accepted for M1/M2, what remains explicitly deferred, and the exact source-backed handoff for implementation.
 
-**Blocked by:** 02, 25, 26, 27, 28
+**Blocked by:** 02, 25, 26, 27, 28, 29, 30
 **Files:** `.workflow/development.md`, `.workflow/omp-migration/implementation-plan.md`, `.workflow/specs/omp-through-m3.md`
 
 **Read first:** `.workflow/specs/omp-through-m3.md` W1; archived tasks 01/02/19/24 and evidence tasks 25-27; `.workflow/development.md`; migration scope, architecture and implementation-plan gates
@@ -34,13 +34,14 @@
 
 - Task 28's sanitized artifact records the final Linux x64/Bun 1.4.2 invocation, installed package identity, synthetic loopback model/auth, four separate outcomes, setup corrections, empty runtime errors, and cleanup. Its final command exited 0 within the 180-second bound.
 - The reachable full-factory interactive permission gap identified in the first gate review is resolved for this exercised public-SDK slice. No CLI/RPC substitute, custom echo tool, real provider, secret, application edit or service claim was used.
-- The gate is paused. Closing this reachable gap does not resolve maintainer-owned provider/OAuth conversion feasibility or non-Linux/macOS worker-resource decisions, and no later service evidence is promoted into M0.
+- The gate remains blocked. Closing this reachable gap does not resolve the newly authorized provider/OAuth evidence task or the required non-Linux/macOS worker-resource evidence, and no later service evidence is promoted into M0.
+- Task 29 is the authorized bounded provider/OAuth feasibility investigation; task 30 is the required non-Linux/macOS worker-resource investigation. Until both are archived and their actual outcomes are reviewed, M1 remains unreleased.
 
 
 
 
-- [ ] Compare every M0 implementation-plan item and architecture risk probe with current artifacts, task-02 corrections and tasks 25-28 outcomes. Completed investigations do not turn failed/unavailable capabilities into accepted evidence.
+- [ ] Compare every M0 implementation-plan item and architecture risk probe with current artifacts, task-02 corrections and tasks 25-30 outcomes. Completed investigations do not turn failed/unavailable capabilities into accepted evidence.
 - [ ] Separate reachable M0 work from M5/platform or provider limits without silently dropping required M0 evidence.
 - [ ] Record the accepted worker architecture and its measured resource limitation.
 - [ ] Make M1 the next ready phase only after every M0 prerequisite is accepted, not merely documented.
-- [ ] Keep M0 paused and do not release M1 until every required item is evidenced or explicitly decided by the maintainer.
+- [ ] Keep M0 blocked and do not release M1 until every required item is evidenced or explicitly decided by the maintainer.

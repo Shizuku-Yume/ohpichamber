@@ -35,9 +35,7 @@ Before exporting types, reconcile draft contradictions and unsupported assumptio
 
 Task 19 measured isolated default/XDG AuthStorage paths separately from explicit agent-directory override; task 24 established the source-derived installed identity. Neither proves stored-credential conversion or model discovery. Task 02's [evidence boundaries](../omp-migration/implementation-plan.md#evidence-boundaries-for-gate-03) identify remaining original M0 requirements for task 03 to judge.
 
-Tasks 25, 26, 27 and the narrow task 28 fill reachable original M0 gaps before gate 03: installed public-factory/auth/skills/permission paths, MCP configuration/transports, actual Host PTY tab close, and the remaining full-factory interactive permission seam. They reuse task 24's immutable package inputs and unchanged earlier evidence. Each investigation records its actual failures and limits; archiving an investigation does not accept the capability or release M1. External provider/OAuth and non-Linux requirements remain for the gate review and any necessary maintainer decision.
-
-A failed resource target remains failed until a measured design change or explicit maintainer decision addresses it. The maintainer accepted the measured Linux fixture worker RSS as a known M0 limitation in `decisions.md: 2026-10-11 - Accept measured worker memory as an M0 limitation`; the original 100 MiB probe remains failed and actual service resources still require M2 evidence. Other unavailable platform/provider behavior retains its actual status. Do not close M0 by renaming missing required evidence as a later task.
+Tasks 25, 26, 27 and the narrow task 28 filled reachable original M0 gaps before gate 03: installed public-factory/auth/skills/permission paths, MCP configuration/transports, actual Host PTY tab close, and the full-factory interactive permission seam. Task 29 now owns the bounded provider/OAuth feasibility probe authorized by the maintainer; task 30 owns actual non-Linux/macOS worker-resource evidence. They reuse task 24's immutable package inputs where applicable and preserve all failures, partials and unavailable results. Archiving an investigation does not accept the capability or release M1. Gate 03 remains paused until tasks 29 and 30 produce evidence or explicit unresolved blockers are reviewed; no platform or provider result is inferred from Linux or documentation.
 
 ### M1 host boundary
 
@@ -127,7 +125,7 @@ Tasks are under `../tasks/omp-through-m3/`. This effort is complete only when it
 
 Execution order and gate tasks:
 
-1. M0: 01 and 19; 24 follows 19; then 02; independent evidence tasks 25, 26, 27 and 28; gate 03.
+1. M0: 01 and 19; 24 follows 19; then 02; independent evidence tasks 25, 26, 27 and 28; bounded provider/OAuth task 29 and non-Linux/macOS resource task 30; gate 03.
 2. M1: 04 and 06; 05 and 20 follow 04; gate 21 follows all M1 work.
 3. M2: 07, 08, 09; 10, 11 and 12 follow 09; server consumers 22, then gate 23.
 4. M3: 13, 14; independent caller slices 15 and 16; coordinated runtime cutover 17, then acceptance gate 18.

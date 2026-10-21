@@ -1,15 +1,15 @@
 # OhPiChamber
 
-OhPiChamber is an OpenChamber fork. The pinned upstream application source and source-aware documentation audit have been adopted. The [active effort](.workflow/specs/omp-through-m3.md) migrates the application to Oh My Pi (OMP) through M3 acceptance.
+OhPiChamber is an OpenChamber fork. The pinned upstream application source and source-aware documentation audit have been adopted; the technical [M3 W1-W10 gate](.workflow/specs/omp-through-m3.md) is complete, and final maintainer acceptance is pending. M4/M5 remain open and no next implementation is selected.
 
-The checkout still executes through inherited OpenCode integration. M0 evidence is accepted for M1 Host extraction and VS Code extension retirement; unavailable provider/platform and rebaseline runtime evidence remain explicit. OMP is the sole target agent runtime, retaining Web/PWA, Electron, mobile and the Guest SDK, not OpenCode compatibility or the VS Code extension.
+The checkout executes through the Host-supervised OMP Agent Service after the technical M3 gate; final maintainer acceptance is pending and M0 provider/platform and rebaseline runtime limits remain explicit. OMP is the sole target agent runtime, retaining Web/PWA, Electron, mobile and the Guest SDK, not OpenCode compatibility or the VS Code extension.
 
 ## Development documents
 
 - [AGENTS.md](AGENTS.md): global rules and the mandatory `flow-start` conversation entrypoint.
 - [Workflow standards](.workflow/standards.md): project facts, task recovery and landing authorization.
 - [Development progress and lessons](.workflow/development.md): observed progress, verification limits, and next steps.
-- [OMP migration](.workflow/omp-migration/README.md): scope, architecture, proposed contracts, and implementation gates.
+- [OMP migration](.workflow/omp-migration/README.md): scope, architecture, canonical contracts, and implementation gates.
 - [Historical upstream assessment](.workflow/upstream-review.md): retained selective-sync research; its pick/exclude/defer decisions no longer govern the baseline update.
 - [Inherited isolated-space design](.workflow/isolated-spaces/DESIGN.md): sandbox reference and historical experiments, not local product wiring.
 - [Latest-upstream rebaseline](.workflow/specs/upstream-rebaseline.md): closed source/document prerequisite and unverified runtime certification.

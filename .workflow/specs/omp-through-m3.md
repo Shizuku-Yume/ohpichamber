@@ -5,7 +5,7 @@
 
 ## What this is for
 
-The adopted application executes through the Host-supervised Bun Agent Service. The compiled Canonical contract, M1 Host boundaries, the M2 service and credential-handoff gates, and the M3 Canonical Client cutover with task 17 legacy retirement are implemented. The final root gate passed at `8d179c4e2` on 2026-10-22 (all seven phases exit 0; `.workflow/omp-migration/m3/task18-gate-final-2026-10-22.json`), and the a92 matrix PASS covers W7 visual sanity, W8, W9 child/Board/Guest, W10 and PWA. Task18/Task57 are archived; coordinator final closure/review remains pending, so this spec stays in progress and no M3 pass is claimed yet. The maintainer requested migration through M3 acceptance, using concurrent OMP sessions where task boundaries permit and avoiding repeated checks or speculative defensive code.
+The adopted application executes through the Host-supervised Bun Agent Service. The compiled Canonical contract, M1 Host boundaries, the M2 service and credential-handoff gates, and the M3 Canonical Client cutover with task 17 legacy retirement are implemented. The final root gate passed at `8d179c4e2` on 2026-10-22 (all seven phases exit 0; `.workflow/omp-migration/m3/task18-gate-final-2026-10-22.json`), and the a92 matrix PASS covers W7 visual sanity, W8, W9 child/Board/Guest, W10 and PWA. The technical W1-W10 gate is complete and Task18/Task57 technical work is archived; final maintainer acceptance is pending. M4 orchestration and M5 packaged/mobile/Docker release certification remain open and are not passed by this effort. The maintainer requested migration through M3 acceptance, using concurrent OMP sessions where task boundaries permit and avoiding repeated checks or speculative defensive code.
 
 [Development progress](../development.md) remains the owner of observed evidence, accepted limits and the exact next step. This effort continues that work rather than acquiring upstream source or repeating accepted probes.
 
@@ -70,9 +70,9 @@ After dependent callers move, remove the old UI client, translators, runtime sel
 Each implementation task owns an isolated worktree and one bounded set of files. The coordinator owns shared package manifests, lockfile, gateway composition, shared protocol changes and integration. Read-only sessions may share a tree.
 
 Implementation advances through gates 03 (M0), 21 (M1 extraction/preflight), 23 (M2 real service/server consumers/credential handoff), then 18 (M3). Tasks 01/19 are independent investigations; task 24 resolves source-install identity before task 02; independent evidence tasks 25, 26, 27 and 28 follow 02 before gate 03. M1 extension retirement can run independently of extraction; metadata and health/preflight follow extraction, without premature SDK import. M2 interaction (10), queue owner/dispatcher source (11) and catalogs/Shell (12) follow projection (09); task 22 follows tasks 10 and 12 acceptance to compose server consumers and explicit credential handoff using the committed task 11 queue source, task 11 then completes its final composed queue acceptance, and gate 23 requires both tasks 11 and 22 (`decisions.md: 2026-10-13 - Remove the M2 queue and consumer acceptance cycle`). M3 shared client/sync core is delivered by task 13; native child subagent projection, session registry, and history navigation are delivered by task 32 (blocked by 13); task 16 remains independent of 32 after 13; consumer UI slices 14 (session/composer timeline navigation) and 15 (sidebar subagent hierarchy) advance in parallel once 13 and 32 land; task 17 activates and retires obsolete owners (blocked by 14, 15, 16, 22, transitively requiring 32 via 14 and 15); and task 18 acceptance requires 32 explicitly. No stage advances past an unmet gate; coordinator resolves shared-contract changes before dependent slices land.
-### M3 continuation breakdown
+### M3 continuation breakdown (historical, completed)
 
-Task 17 remains the owner of residual production UI caller migration, Host lifecycle retirement, and packaged Agent Runtime closure. The remaining work is split into isolated test-contract slices followed by one connected acceptance run:
+Task 17 was the owner of residual production UI caller migration, Host lifecycle retirement, and packaged Agent Runtime closure. The remaining work was split into isolated test-contract slices followed by one connected acceptance run:
 
 - **Task 33** modernizes chat, message, turn, and `SyncProvider` test fixtures against canonical DTOs.
 - **Task 34** modernizes sidebar, session-collection, worktree, and remaining UI fixture contracts. Tasks 33 and 34 are independent and may run in separate worktrees.
@@ -81,13 +81,13 @@ Task 17 remains the owner of residual production UI caller migration, Host lifec
 
 ### Current status (2026-10-22)
 
-The M3 implementation is complete through the a92 matrix on artifact `a92fbb36…` at source `8d179c4e2`: W7 visual sanity, W8, W9 packaged child/Board/Guest, W10 and PWA pass; W1-W6 reuse archived M0/M1/M2/Task36 receipts (`.workflow/omp-migration/m3/task57-a92-matrix-2026-10-22/`). The W8 fix is `f4e609dc1`: the old raw trace showed seq7 `part.started` content `w8` plus seq8 delta `w8`; a92 records an empty start, one delta and a stable one-token final body. Child snapshot 404 is the intentional history-only contract. Limits: packaged live-region at 400 ms is inconclusive while the Web announcement was observed; PWA auth proof is the Web Host with existing packaged state, not packaged Electron password auth. The final root gate passed at `8d179c4e2` on 2026-10-22 (all seven phases exit 0; `.workflow/omp-migration/m3/task18-gate-final-2026-10-22.json`); Task18 and Task57 are archived. Coordinator final closure/review remains pending, so this spec stays in progress and no M3 pass is claimed yet. The earlier `b9fbb4bb0` gate and `068a` artifacts remain historical evidence.
+The M3 implementation is complete through the a92 matrix on artifact `a92fbb36…` at source `8d179c4e2`: W7 visual sanity, W8, W9 packaged child/Board/Guest, W10 and PWA pass; W1-W6 reuse archived M0/M1/M2/Task36 receipts (`.workflow/omp-migration/m3/task57-a92-matrix-2026-10-22/`). The W8 fix is `f4e609dc1`: the old raw trace showed seq7 `part.started` content `w8` plus seq8 delta `w8`; a92 records an empty start, one delta and a stable one-token final body. Child snapshot 404 is the intentional history-only contract. Limits: packaged live-region at 400 ms is inconclusive while the Web announcement was observed; PWA auth proof is the Web Host with existing packaged state, not packaged Electron password auth. The final root gate passed at `8d179c4e2` on 2026-10-22 (all seven phases exit 0; `.workflow/omp-migration/m3/task18-gate-final-2026-10-22.json`); Task18 and Task57 technical work is archived; the technical W1-W10 gate is complete and final maintainer acceptance is pending. M4 orchestration and M5 packaged/mobile/Docker release certification remain open; this closure does not select or claim an M4 implementation. The earlier `b9fbb4bb0` gate and `068a` artifacts remain historical evidence.
 
 ### Remaining effort and exit order (2026-10-17) — historical planning snapshot, superseded 2026-10-22
 
-The four implementation packets and the final gate are complete (a92 matrix plus final root gate PASS at `8d179c4e2`). Only coordinator final closure/review remains; no further runtime or test work is planned here.
+The four implementation packets and the final gate are complete (a92 matrix plus final root gate PASS at `8d179c4e2`); the technical M3 gate is complete and final maintainer acceptance is pending. This snapshot remains only as history; M4/M5 remain open.
 
-The E1–E5 table and E2 sub-slices below are the 2026-10-17 planning snapshot, retained for history. Their remaining-work wording is not a current claim or open work; current status is the coordinator-closure state above.
+The E1–E5 table and E2 sub-slices below are the 2026-10-17 planning snapshot, retained for history. Their remaining-work wording is not a current claim or open work; current status is the technical-gate-complete state above.
 
 | Packet | Evidence at plan time | Planned deliverable | Planned effort |
 |---|---|---|---|
@@ -95,7 +95,7 @@ The E1–E5 table and E2 sub-slices below are the 2026-10-17 planning snapshot, 
 | E2 — retained caller closure | The source inventory identifies 31 non-test `@/lib/opencode/model` type consumers, 15 `@/lib/opencode/client` call sites, and 67 total legacy helper reach-ins. | Move each remaining production consumer to an existing canonical owner, or create a separate task only when the current contract lacks a real owner. No aliases or fallback paths. | 2–4 bounded owner slices, parallel where files do not overlap |
 | E3 — Host lifecycle retirement | The Host composition root still registers the legacy execution owner set; routes remain only while verified callers use them. | Remove the managed-OpenCode lifecycle/proxy/config/auth owners after E2, preserving Host services and live `/api/agent/v1` readiness/auth boundaries. | 1 integration slice |
 | E4 — connected acceptance | The a92 matrix supplies connected W7–W10/PWA evidence on artifact `a92fbb36…` (source `8d179c4e2`); W1–W6 reuse archived receipts. | One connected Web plus packaged Electron packet covering W7–W10, with durable sanitized receipts. | Complete |
-| E5 — final gate | The final root gate passed at `8d179c4e2` (all seven phases exit 0; `.workflow/omp-migration/m3/task18-gate-final-2026-10-22.json`); Task18/Task57 are archived. | Run the workspace checks once, inspect dead-code output, update development/task/spec evidence, and close only evidenced W1–W10 items. | Complete; coordinator closure pending |
+| E5 — final gate | The final root gate passed at `8d179c4e2` (all seven phases exit 0; `.workflow/omp-migration/m3/task18-gate-final-2026-10-22.json`); Task18/Task57 technical work is archived. | Run the workspace checks once, inspect dead-code output, update development/task/spec evidence, and close only evidenced W1–W10 items. | Technical gate complete; final maintainer acceptance pending |
 
 **E2 sub-slices (historical 2026-10-17 planning snapshot; superseded):** (a) canonical model/helper types for chat, layout, multirun and provider presentation; (b) runtime endpoint, health and connection state for `runtimeEndpointReset`, `useConfigStore` and connection polling; (c) provider integration/configuration mutations and session-warming controls; (d) retained tool, web-search, plugin, stats and ID helpers with canonical owners; (e) Git initialization and remaining host capability callers; (f) Electron path/remote management imports; (g) Host composition, proxy and route retirement after all callers land. Each slice had to name its exact current owner and prove the affected behavior; a missing canonical owner blocked that slice instead of producing an adapter.
 **2026-10-17 execution update:** The first E2(b) slice is implemented: `CanonicalClient.checkReady()` validates `GET /api/agent/v1/ready`; `useConfigStore`, startup recovery diagnostics, and configuration refresh polling now use the canonical Agent Service readiness owner. The retained OpenCode client remains bound only where other uncut callers still require it, so runtime endpoint rebinding and legacy `/api/opencode/health` retirement stay open. Focused readiness tests pass; the full canonical transport file retains one unrelated pre-existing MCP fixture failure. Remaining E2 is the owner-by-owner cutover of the 31/15 callers, followed by E3 lifecycle retirement, E4 connected acceptance, and E5 final checks.
@@ -106,15 +106,17 @@ The E1–E5 table and E2 sub-slices below are the 2026-10-17 planning snapshot, 
 **2026-10-18 chat utility slice:** `mobileControlsUtils.ts` now anchors its agent utility types to `@openchamber/agent-contract`; the optional legacy `mode` input remains only as a shape-neutral cycling rule, with native agents treated as primary by the existing `isPrimaryMode` behavior. The focused utility suite passes (`4` tests / `11` assertions), UI build passes, and touched-file oxlint is clean. Full ModelControls/ChatInput catalog migration remains open because their selection cascade still belongs to ConfigStore.
 **2026-10-18 mobile caller slice:** `MobileAgentButton` now reads its label source from `useAgentsStore`, matching the canonical `useAgentColors` owner; it no longer calls ConfigStore's legacy `getVisibleAgents`. The supporting native-contract utility suite passes (`4` tests / `11` assertions), UI build passes, and MobileAgentButton oxlint is clean. Composer-wide agent selection remains on the explicitly open ConfigStore boundary.
 
-**Stop conditions:** Do not repeat historical M0/M1/M2 probes. Do not run workspace-wide checks after every fixture edit. Do not add defensive retries, compatibility adapters, or new abstractions unless a current connected failure identifies the missing owner. M3 remains open until E4 supplies current W7–W10 evidence and E5 verifies the assembled state.
+**Stop conditions (historical):** Do not repeat historical M0/M1/M2 probes. Do not run workspace-wide checks after every fixture edit. Do not add defensive retries, compatibility adapters, or new abstractions unless a current connected failure identifies the missing owner. M3 closed after E4 supplied current W7–W10 evidence and E5 verified the assembled state; this historical condition no longer marks it open.
 
 No task adds an OpenCode adapter, broad defensive fallback, repeated historical smoke, or a new contract without an observed missing owner.
 
 The maintainer has authorized all future local Git operations for this repository and the necessary OMP SDK dependencies. GitHub commands and pushing remain outside this request. Pre-existing worktree changes remain separate until their ownership/landing is settled.
 
-### M3 continuation plan (2026-10-18)
+### M3 continuation plan (2026-10-18) — historical, superseded 2026-10-22
 
-#### Verified current baseline
+This section is the historical 2026-10-18 planning record. The technical M3 gate is complete and final maintainer acceptance is pending; packet statuses and remaining-work wording below are not open work.
+
+#### Historical baseline at plan time
 
 The migration baseline at the start of this planning wave is:
 - UI test-project type-check exits 0 (`bunx tsc --noEmit --pretty false -p packages/ui/tsconfig.test.json`).
@@ -128,7 +130,7 @@ The migration baseline at the start of this planning wave is:
   - BTW utility anchors agent input to `@openchamber/agent-contract`.
 - W7–W10 are verified by the a92 matrix (W7 visual sanity, W8, W9 child/Board/Guest, W10) with W1–W6 reused from archived evidence:
   - Task 17 (Host integration and legacy retirement), Task 36 (connected Web/Electron acceptance), and Task 18 (integrated acceptance gate) are archived.
-  - The final root gate passed at `8d179c4e2`; coordinator final closure remains pending.
+  - The final root gate passed at `8d179c4e2`; the technical M3 gate is complete and final maintainer acceptance is pending, with M4/M5 remaining open.
 
 #### Remaining packets
 
@@ -156,7 +158,7 @@ The ModelControls gap is design work, resolved in Task 46 and grounded by `decis
 
 The canonical `Agent` contract (`packages/agent-contract/src/session.ts`) intentionally has no legacy visibility/role/display fields. The settled decision `decisions.md: 2026-10-18 - Canonical agent profiles are the selectable UI roster` makes the replacement behavior explicit: the enabled native catalog is the roster, `name` is the label, and no hidden/mode/display adapter is introduced.
 
-### Residual caller closure plan (2026-10-18)
+### Residual caller closure plan (2026-10-18) — historical, superseded 2026-10-22
 
 The remaining issues follow the execution progression: `native SDK investigation → intentional contracts → implementation migration then Host retirement → one connected packet → final checks`. Missing canonical contracts and browser test tooling are implementation work, not external blockers or zero-effort tasks. The plan preserves all retained scope and exact W1–W10 acceptance criteria without adapters, fallbacks, or shrinking gates.
 

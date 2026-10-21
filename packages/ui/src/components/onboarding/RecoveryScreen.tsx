@@ -1,10 +1,8 @@
 import React from 'react';
 import { isDesktopShell, restartDesktopApp } from '@/lib/desktop';
-import { DesktopConnectionRecovery, type RecoveryVariant } from './DesktopConnectionRecovery';
+import { DesktopConnectionRecovery, type RecoveryVariant, type ServerUpdateState } from './DesktopConnectionRecovery';
 import { RemoteConnectionForm } from './RemoteConnectionForm';
-import { resolveRecoveryNextStep } from './desktopRecoveryRouting';
-import { desktopHostsGet, desktopHostsSet } from '@/lib/desktopHosts';
-import { runtimeFetch } from '@/lib/runtime-fetch';
+import { desktopHostsGet, desktopHostsSet, desktopHostUpdateServer, normalizeHostUrl, waitForDesktopHostUpdated } from '@/lib/desktopHosts';
 
 type RecoveryScreenProps = {
   /** Recovery variant */
@@ -13,18 +11,14 @@ type RecoveryScreenProps = {
   hostUrl?: string;
   /** Host label for recovery context */
   hostLabel?: string;
-  /** Callback when user wants to retry */
-  onRetry?: () => void;
+  /** Saved host the recovery is about, when the boot named one */
+  hostId?: string;
   /** Callback when user chooses remote */
   onChooseRemote?: () => void;
   /** Whether to show the remote connection form */
   showRemoteForm?: boolean;
   /** Callback when closing remote form */
   onCloseRemoteForm?: () => void;
-  /** Callback when switching to local from remote form */
-  onSwitchToLocalFromRemote?: () => void;
-  /** Callback when entering local setup */
-  onEnterLocalSetup?: () => void;
   /** Whether retry action is in progress */
   isRetrying?: boolean;
   localAvailable?: boolean;
@@ -34,12 +28,10 @@ export function RecoveryScreen({
   variant,
   hostUrl,
   hostLabel,
-  onRetry,
+  hostId,
   onChooseRemote,
   showRemoteForm = false,
   onCloseRemoteForm,
-  onSwitchToLocalFromRemote,
-  onEnterLocalSetup,
   isRetrying = false,
   localAvailable = true,
 }: RecoveryScreenProps) {
@@ -65,17 +57,10 @@ export function RecoveryScreen({
       return;
     }
 
-    await runtimeFetch('/api/config/reload', { method: 'POST' });
-    onRetry?.();
-  }, [onRetry]);
+    window.location.reload();
+  }, []);
 
   const handleRecoveryUseLocal = React.useCallback(async () => {
-    const step = resolveRecoveryNextStep(variant, 'use-local');
-    if (step.kind === 'local-setup') {
-      // local-unavailable + local → enter local-setup subflow without reload
-      onEnterLocalSetup?.();
-      return;
-    }
     // switch-default-to-local → persist local choice and restart
     await persistFirstChoice('local');
 
@@ -85,14 +70,56 @@ export function RecoveryScreen({
     }
 
     window.location.reload();
-  }, [variant, persistFirstChoice, onEnterLocalSetup]);
+  }, [persistFirstChoice]);
+
+  const [serverUpdate, setServerUpdate] = React.useState<ServerUpdateState>({ kind: 'idle' });
+
+  // Only a saved host with a direct address can be asked to update: a server
+  // named by environment override is not in the hosts file.
+  const [updatableHostId, setUpdatableHostId] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    setUpdatableHostId(null);
+    if (variant !== 'remote-incompatible' || !hostId || !isDesktopShell()) return;
+    let cancelled = false;
+    void desktopHostsGet().then((config) => {
+      const host = config.hosts.find((entry) => entry.id === hostId);
+      const directUrl = normalizeHostUrl(host?.apiUrl || host?.url || '');
+      if (!cancelled && directUrl) setUpdatableHostId(hostId);
+    }).catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [variant, hostId]);
+
+  // The host runs an OpenChamber this app cannot use: ask it to update itself,
+  // wait for it to come back compatible, then boot again so the app connects.
+  // Every way out ends in a state the screen can leave.
+  const handleUpdateServer = React.useCallback(async (targetHostId: string) => {
+    setServerUpdate({ kind: 'updating' });
+    try {
+      const result = await desktopHostUpdateServer(targetHostId);
+      if (result.status === 'auth') {
+        setServerUpdate({ kind: 'auth' });
+        return;
+      }
+      if (result.status === 'failed') {
+        setServerUpdate({ kind: 'refused', error: result.error });
+        return;
+      }
+      if (await waitForDesktopHostUpdated(targetHostId) === 'timeout') {
+        setServerUpdate({ kind: 'timeout' });
+        return;
+      }
+      // Updated: a failed restart leaves Retry, which restarts as well.
+      if (!await restartDesktopApp()) setServerUpdate({ kind: 'idle' });
+    } catch {
+      setServerUpdate({ kind: 'timeout' });
+    }
+  }, []);
 
   const handleRecoveryUseRemote = React.useCallback(() => {
-    const step = resolveRecoveryNextStep(variant, 'use-remote');
-    if (step.kind === 'remote-form') {
-      onChooseRemote?.();
-    }
-  }, [variant, onChooseRemote]);
+    onChooseRemote?.();
+  }, [onChooseRemote]);
 
   // Recovery mode — show recovery component first; only switch to remote form on explicit user action
   if (showRemoteForm) {
@@ -106,15 +133,7 @@ export function RecoveryScreen({
         initialLabel={prefillLabel}
         isRecoveryMode={true}
         showInstancePicker={!localAvailable}
-        onSwitchToLocal={localAvailable ? (onSwitchToLocalFromRemote || (() => {
-          persistFirstChoice('local').then(() => {
-            if (isDesktopShell()) {
-              restartDesktopApp();
-            } else {
-              onEnterLocalSetup?.();
-            }
-          });
-        })) : undefined}
+        onSwitchToLocal={localAvailable ? () => void handleRecoveryUseLocal() : undefined}
       />
     );
   }
@@ -128,6 +147,8 @@ export function RecoveryScreen({
       onUseLocal={localAvailable ? handleRecoveryUseLocal : undefined}
       onUseRemote={handleRecoveryUseRemote}
       isRetrying={isRetrying}
+      onUpdateServer={updatableHostId ? () => void handleUpdateServer(updatableHostId) : undefined}
+      serverUpdate={serverUpdate}
     />
   );
 }

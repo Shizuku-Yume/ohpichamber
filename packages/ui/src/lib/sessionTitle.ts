@@ -1,13 +1,11 @@
-import type { AssistantMessage, Message, Part } from '@opencode-ai/sdk/v2';
+import type { Message } from '@openchamber/agent-contract';
+import type { NativeTitleTurn } from '@/sync/session-title-context';
 import { z } from 'zod';
-import { readContextPart } from './messages/contextParts';
-import { excerptMarkdown, formatMessageText } from './messages/messageMarkdown';
-import { runtimeFetch } from './runtime-fetch';
+import { excerptMarkdown } from './messages/messageMarkdown';
+import { completionText, requestSmallModel } from './smallModelRequest';
 
-type MessageRecord = { info: Message; parts: Part[] };
-type TitleTurn = { user: MessageRecord; assistant: { info: AssistantMessage; parts: Part[] } };
 
-// Adapted from OpenCode's agent/prompt/title.txt for recent completed turns.
+// Titles use only the recent completed conversation, never tool execution.
 const TITLE_SYSTEM_PROMPT = [
   'You are a title generator. Output ONLY a thread title. Nothing else.',
   'Generate a brief title that helps the user find this conversation later.',
@@ -22,43 +20,17 @@ const TITLE_SYSTEM_PROMPT = [
   'Examples: debug 500 errors in production → Debugging production 500 errors; add dark mode to App.tsx → Dark mode in App.',
 ].join('\n');
 
-/** Input is chronological. Parent IDs, not adjacency, associate final answers. */
-export function collectSessionTitleTurns(records: readonly MessageRecord[], revertMessageID?: string): TitleTurn[] {
-  const boundary = revertMessageID ? records.findIndex((record) => record.info.id === revertMessageID) : -1;
-  if (revertMessageID && boundary < 0) return [];
-  const end = boundary < 0 ? records.length : boundary;
-  const answers = new Map<string, TitleTurn['assistant']>();
-  const turns: TitleTurn[] = [];
-  for (let index = end - 1; index >= 0; index -= 1) {
-    const { info, parts } = records[index];
-    if (info.role === 'assistant') {
-      // Only the latest assistant record for this user can finish its turn.
-      if (answers.has(info.parentID)) continue;
-      answers.set(info.parentID, { info, parts });
-      continue;
-    }
-    const answer = answers.get(info.id);
-    if (!answer || answer.info.finish !== 'stop' || !answer.info.time.completed || answer.info.error || answer.info.summary) continue;
-    const hasUserContent = parts.some((part) => part.type === 'text' && !part.ignored
-      && ((!part.synthetic && part.text.trim()) || readContextPart(part)));
-    if (!hasUserContent || !answer.parts.some((part) => part.type === 'text' && !part.ignored && !part.synthetic && part.text.trim())) continue;
-    turns.push({ user: records[index], assistant: answer });
-    if (turns.length === 3) break;
-  }
-  return turns.reverse();
-}
 
-export function formatSessionTitleContext(turns: readonly TitleTurn[]): string {
-  return turns.map((turn) => [
-    '**User**',
-    excerptMarkdown(formatMessageText(turn.user.parts, { user: true, excludeSynthetic: true, fieldLimit: 2000 }), 4000),
-    '**Assistant final response**',
-    excerptMarkdown(formatMessageText(turn.assistant.parts, { excludeSynthetic: true, fieldLimit: 4000 }), 4000),
+export function formatSessionTitleContext(turns: readonly NativeTitleTurn[]): string {
+  const text = (message: Message) => message.parts.flatMap(part => part.type === 'text' ? [part.content] : part.type === 'attachment' ? [`[Attachment: ${part.name}]`] : []).join('\n\n');
+  return turns.slice(-3).map(turn => [
+    '**User**', excerptMarkdown(text(turn.user), 4000),
+    '**Assistant final response**', excerptMarkdown(text(turn.assistant), 4000),
   ].join('\n\n')).join('\n\n---\n\n');
 }
 
 export const generatedSessionTitleSchema = z.object({ text: z.string().trim().min(1) }).transform(({ text }, context) => {
-  // Match OpenCode's initial title generation cleanup and length limit.
+  // Keep the established first-line cleanup and length limit.
   const title = text
     .replace(/<think>[\s\S]*?<\/think>\s*/g, '')
     .split('\n')
@@ -72,27 +44,21 @@ export const generatedSessionTitleSchema = z.object({ text: z.string().trim().mi
 });
 
 export async function generateSessionTitle(input: {
-  turns: readonly TitleTurn[];
-  sessionID: string;
+  turns: readonly NativeTitleTurn[];
   directory: string;
+  workspaceId?: string;
   signal: AbortSignal;
 }): Promise<string> {
   const last = input.turns.at(-1);
   if (!last) throw new Error('No completed turns');
-  const response = await runtimeFetch('/api/small-model/generate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+  if (!last.assistant.providerId || !last.assistant.modelId) throw new Error('Completed turn model selection is unavailable');
+  const result = await requestSmallModel({
+    prompt: formatSessionTitleContext(input.turns),
+    system: TITLE_SYSTEM_PROMPT,
+    directory: input.directory,
+    workspaceId: input.workspaceId,
     signal: input.signal,
-    body: JSON.stringify({
-      prompt: formatSessionTitleContext(input.turns),
-      system: TITLE_SYSTEM_PROMPT,
-      directory: input.directory,
-      sessionID: input.sessionID,
-      preferredProviderID: last.assistant.info.providerID,
-      preferredModelID: last.assistant.info.modelID,
-      restrictToPreferredProvider: true,
-    }),
-  });
-  if (!response.ok) throw new Error('Session title generation failed');
-  return generatedSessionTitleSchema.parse(await response.json());
+    preferred: { providerId: last.assistant.providerId, modelId: last.assistant.modelId },
+  }, { notifyOnError: false });
+  return generatedSessionTitleSchema.parse({ text: completionText(result) });
 }

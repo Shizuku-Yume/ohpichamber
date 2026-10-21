@@ -1,81 +1,48 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import type { Event } from '@opencode-ai/sdk/v2/client';
-import {
-  applyGlobalBlockingRequestEvents,
-  resetGlobalBlockingRequests,
-  seedGlobalBlockingRequests,
-  useGlobalBlockingRequestsStore,
-} from './global-blocking-requests';
-import type { PermissionRequest } from '@/types/permission';
-import type { QuestionRequest } from '@/types/question';
-
-const permission = (id: string, sessionID: string): PermissionRequest => ({
-  id, sessionID, permission: 'bash', patterns: ['rm *'], metadata: {}, always: [],
-});
-const question = (id: string, sessionID: string): QuestionRequest => ({
-  id, sessionID, questions: [{ header: 'Pick', question: 'Which?', options: [] }],
-});
-const asked = (request: PermissionRequest | QuestionRequest): Event => ({
-  id: `e-${request.id}`,
-  type: 'permission' in request ? 'permission.asked' : 'question.asked',
-  // SAFETY: test payloads mirror the SDK ask event shape.
-  properties: request as never,
-});
+import type { ApprovalRequest, CanonicalEvent, QuestionRequest } from '@openchamber/agent-contract';
+import { applyGlobalBlockingRequestEvents, replaceGlobalBlockingRequestSnapshot, resetGlobalBlockingRequests, seedGlobalBlockingRequests, useGlobalBlockingRequestsStore } from './global-blocking-requests';
+const approval = (approvalId: string, sessionId: string): ApprovalRequest => ({ version: '1', epoch: 'epoch_1', workerGeneration: 'worker_1', approvalId, sessionId, turnId: 'turn_1', toolCallId: `tool_${approvalId}`, toolName: 'bash', actionType: 'bash_command', commandSummary: 'ls', details: {}, status: 'pending', requestedAt: 1 });
+const question = (questionId: string, sessionId: string): QuestionRequest => ({ version: '1', epoch: 'epoch_1', workerGeneration: 'worker_1', questionId, sessionId, turnId: 'turn_1', prompt: 'Continue?', status: 'pending', requestedAt: 1 });
+const event = (type: CanonicalEvent['type'], fields: Record<string, unknown>): CanonicalEvent => ({ sessionId: String(fields.sessionId ?? 'session_1'), epoch: 'epoch_1', sequence: '1', timestamp: 1, type, ...fields } as CanonicalEvent);
 const bySession = () => useGlobalBlockingRequestsStore.getState().bySession;
-
 beforeEach(() => resetGlobalBlockingRequests());
-
-describe('global blocking requests index', () => {
-  test('tracks asks per session and settles them by request id', () => {
-    applyGlobalBlockingRequestEvents('/far/', [asked(permission('p1', 's1')), asked(question('q1', 's1')), asked(permission('p2', 's2'))]);
-
-    expect(bySession().get('s1')).toEqual({ directory: '/far', permissions: [permission('p1', 's1')], questions: [question('q1', 's1')] });
-    expect(bySession().get('s2')?.permissions.map((p) => p.id)).toEqual(['p2']);
-
-    applyGlobalBlockingRequestEvents('/far', [
-      { id: 'r1', type: 'permission.replied', properties: { sessionID: 's1', requestID: 'p1', reply: 'once' } },
-      { id: 'r2', type: 'question.rejected', properties: { sessionID: 's1', requestID: 'q1' } },
-    ]);
-    expect(bySession().has('s1')).toBe(false);
-    expect(bySession().has('s2')).toBe(true);
+describe('global native blocking requests', () => {
+  test('tracks approval and question requests and settles by native IDs', () => {
+    applyGlobalBlockingRequestEvents('/repo', [event('approval.requested', { sessionId: 'session_1', approval: approval('approval_1', 'session_1') }), event('question.requested', { sessionId: 'session_1', question: question('question_1', 'session_1') })]);
+    expect(bySession().get('session_1')?.permissions[0].approvalId).toBe('approval_1');
+    expect(bySession().get('session_1')?.forms[0].questionId).toBe('question_1');
+    const resolvedApproval = { ...approval('approval_1', 'session_1'), version: '2' as const, status: 'approved' as const, resolvedAt: 2, resolution: { decision: 'approve' as const } };
+    const resolvedQuestion = { ...question('question_1', 'session_1'), version: '2' as const, status: 'cancelled' as const, resolvedAt: 2 };
+    applyGlobalBlockingRequestEvents('/repo', [event('approval.resolved', { sessionId: 'session_1', approval: resolvedApproval }), event('question.resolved', { sessionId: 'session_1', question: resolvedQuestion })]);
+    expect(bySession().has('session_1')).toBe(false);
   });
-
-  test('a reply without a request id settles that kind for the session, and deletion clears it', () => {
-    applyGlobalBlockingRequestEvents('/far', [asked(permission('p1', 's1')), asked(permission('p2', 's1')), asked(question('q1', 's1'))]);
-    // SAFETY: OpenCode may omit requestID on a reply; the SDK type requires it, the reducer contract does not.
-    applyGlobalBlockingRequestEvents('/far', [{ id: 'r', type: 'permission.replied', properties: { sessionID: 's1', reply: 'once' } as never }]);
-    expect(bySession().get('s1')?.permissions).toEqual([]);
-    expect(bySession().get('s1')?.questions.map((q) => q.id)).toEqual(['q1']);
-
-    // SAFETY: only the deleted session's id matters here; the full SDK session record is irrelevant to the index.
-    applyGlobalBlockingRequestEvents('/far', [{ id: 'd', type: 'session.deleted', properties: { info: { id: 's1' } } as never }]);
-    expect(bySession().has('s1')).toBe(false);
+  test('deletion clears a session without affecting siblings', () => {
+    applyGlobalBlockingRequestEvents('/repo', [event('approval.requested', { sessionId: 'session_1', approval: approval('approval_1', 'session_1') }), event('approval.requested', { sessionId: 'session_2', approval: approval('approval_2', 'session_2') })]);
+    applyGlobalBlockingRequestEvents('/repo', [event('session.deleted', { sessionId: 'session_1', deletedSessionIds: ['session_1'] })]);
+    expect(bySession().has('session_1')).toBe(false); expect(bySession().has('session_2')).toBe(true);
   });
-
-  test('repeated and unrelated events do not publish', () => {
-    applyGlobalBlockingRequestEvents('/far', [asked(permission('p1', 's1'))]);
-    const before = bySession();
-    applyGlobalBlockingRequestEvents('/far', [
-      { id: 'x', type: 'session.status', properties: { sessionID: 's1', status: { type: 'busy' } } },
-      { id: 'y', type: 'permission.replied', properties: { sessionID: 'other', requestID: 'nope', reply: 'once' } },
-    ]);
-    expect(bySession()).toBe(before);
+  test('seeding is additive and does not override live entries', () => {
+    const first = approval('approval_1', 'session_1'); const second = approval('approval_2', 'session_2');
+    seedGlobalBlockingRequests([{ sessionId: 'session_1', directory: '/repo', permissions: [first], forms: [] }]);
+    seedGlobalBlockingRequests([{ sessionId: 'session_1', directory: '/other', permissions: [second], forms: [] }, { sessionId: 'session_2', directory: '/other', permissions: [second], forms: [] }]);
+    expect(bySession().get('session_1')?.permissions[0].approvalId).toBe('approval_1'); expect(bySession().has('session_2')).toBe(true);
   });
-
-  test('seeding adds only sessions without live entries and never clears', () => {
-    applyGlobalBlockingRequestEvents('/far', [asked(permission('p1', 's1'))]);
-    applyGlobalBlockingRequestEvents('/far', [{ id: 'r', type: 'permission.replied', properties: { sessionID: 's1', requestID: 'p1', reply: 'once' } }]);
-
-    seedGlobalBlockingRequests([
-      { sessionId: 's2', directory: '/other', permissions: [permission('p2', 's2')], questions: [] },
-      { sessionId: 's3', directory: '/other', permissions: [], questions: [] },
-    ]);
-    expect([...bySession().keys()]).toEqual(['s2']);
-
-    // A later seed cannot resurrect a settled request or override a live entry.
-    seedGlobalBlockingRequests([{ sessionId: 's2', directory: '/elsewhere', permissions: [permission('p9', 's2')], questions: [] }]);
-    expect(bySession().get('s2')?.permissions.map((p) => p.id)).toEqual(['p2']);
-    seedGlobalBlockingRequests([]);
-    expect(bySession().has('s2')).toBe(true);
+  test('authoritative snapshot replaces pending scope and ignores prior epoch events', () => {
+    const current = approval('approval_1', 'session_1');
+    replaceGlobalBlockingRequestSnapshot('/repo', {
+      session: { sessionId: 'session_1', projectId: 'project_1', workspaceId: 'workspace_1', displayPath: '.', rootSessionId: 'session_1', createdAt: 1, updatedAt: 1, epoch: 'epoch_1', headSequence: '4', runtimeStatus: 'awaiting_approval', activeRunId: 'run_1' },
+      cursor: 'epoch_1:4', activeRun: null, branch: { branchId: 'branch_1', branchVersion: '0', leafMessageId: null },
+      window: { firstTurnId: null, lastTurnId: null, firstMessageId: null, lastMessageId: null, hasEarlier: false }, turns: [], messages: [], approvals: [current], questions: [], requestRecovery: { pendingSet: 'replace', priorEpochs: 'expired' },
+    });
+    expect(bySession().get('session_1')?.permissions[0]?.approvalId).toBe('approval_1');
+    const old = { ...current, epoch: 'epoch_0', version: '2' as const };
+    applyGlobalBlockingRequestEvents('/repo', [event('approval.resolved', { sessionId: 'session_1', epoch: 'epoch_0', approval: old })]);
+    expect(bySession().get('session_1')?.permissions[0]?.approvalId).toBe('approval_1');
+    replaceGlobalBlockingRequestSnapshot('/repo', {
+      session: { sessionId: 'session_1', projectId: 'project_1', workspaceId: 'workspace_1', displayPath: '.', rootSessionId: 'session_1', createdAt: 1, updatedAt: 2, epoch: 'epoch_1', headSequence: '5', runtimeStatus: 'idle', activeRunId: null },
+      cursor: 'epoch_1:5', activeRun: null, branch: { branchId: 'branch_1', branchVersion: '0', leafMessageId: null },
+      window: { firstTurnId: null, lastTurnId: null, firstMessageId: null, lastMessageId: null, hasEarlier: false }, turns: [], messages: [], approvals: [], questions: [], requestRecovery: { pendingSet: 'replace', priorEpochs: 'expired' },
+    });
+    expect(bySession().has('session_1')).toBe(false);
   });
 });

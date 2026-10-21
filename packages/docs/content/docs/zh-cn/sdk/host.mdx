@@ -27,8 +27,8 @@ const host = connectHost();
 | `theme.tokens` | 应用的颜色（表面、文本、交互状态、primary、success/warning/error/info），以及 `font`、`mono` 和 `radius`。在挂载 UI 之前把它传给 `applyHostReady`。 |
 | `locale` | 应用的语言标签 |
 | `directory` | 当前项目目录，或 `null` |
-| `session` | `{ id, title, busy }` 或 `null`。没有标题时回退为会话 id。`busy` 是实时状态。会话有 `model` 和 `agent`（OpenCode 的 agent）时也会出现。 |
-| `surface` | 侧栏为 `panel`，附加窗口为 `dialog`，全屏为 `page` |
+| `session` | `{ id, title, busy }` 或 `null`。没有标题时回退为会话 id。`busy` 是实时状态。会话有 `model` 和 `agent`（会话的 agent）时也会出现。 |
+| `surface` | 侧栏为 `panel`，附加窗口为 `dialog`，全屏为 `page`，Work Status 面板中为 `status`，Files 中的文件编辑器为 `file` |
 | `item` | 此界面因何而打开，或 `null`：用户点击的已附加条目（与你传给 `attach` 的字段相同，包括 `data`）、来自你声明的某个操作的消息（`kind: "message"`）或会话（`kind: "session"`）。见[操作](/sdk/#操作命令和徽标)。 |
 | `connection` | 你的集成的 `{ connected, account }` |
 | `settings` | 你在 `integration.settings` 中声明的字段的值 |
@@ -65,6 +65,14 @@ const host = connectHost();
 | `generate({ prompt, system?, maxOutputTokens? })` | 来自用户 Small Model 的一次性文本。返回 `{ text }`。需要 `model` 能力。 |
 | `onResolve(handler)` | 注册你的斜杠命令处理函数。它收到 `{ command, args }`，返回一个要附加的条目或 `null`。 |
 | `setBadge(count)` | 在你的侧栏图标上显示一个数字（0 到 999），或传 `null` 清除 |
+| `openCommit(sha)` | 在当前项目的该提交上打开 Diff 视图。`sha` 为 7 到 64 个十六进制字符；OpenChamber 自己读取提交。 |
+| `setHeight(px)` | 设置你的 Work Status 分区的高度。OpenChamber 会把它限制在 24 到 320 像素之间；更高的内容在你的页面内滚动。其他位置会忽略它。 |
+| `onFileOpen(listener)` | 文件编辑器：获取要编辑的文件，`{ path, name, readOnly }`，外加 `encoding: "text"` 与 `content`，或 `encoding: "binary"` 与 `bytes`。同时让你页面中的 Cmd/Ctrl+S 能够保存。 |
+| `onFileSnapshot(handler)` | 文件编辑器：返回 `{ content, version }`（二进制编辑器则返回 `{ bytes, version }`），即编辑后的完整文件。OpenChamber 在保存时以及切换到源码视图或全屏之前调用它。 |
+| `onFileSaved(listener)` | 文件编辑器：带该 `version` 的快照已写入磁盘。用 `reportFileChange` 回应。 |
+| `reportFileChange({ dirty, edited })` | 文件编辑器：告诉 OpenChamber 是否有未保存的更改，以及文档是否刚刚发生变化 |
+| `requestFileSave()` | 文件编辑器：立即保存，与 Cmd/Ctrl+S 相同 |
+| `reportFileUnsupported()` | 文件编辑器：此文件无法在这里打开，改为显示其源码 |
 
 ## attach、startSession 和 sessionLink
 
@@ -145,6 +153,22 @@ host.onSessionLifecycle((event) => {
 
 `host.storage.get(key)`、`set(key, value)`、`delete(key)`、`keys()` 无需额外权限即可在连接的服务器保存扩展自己的 JSON。缺少的键返回 `undefined`，保存的 null 仍为 null。键长1到128字符，每个值最多64 KiB UTF-8，整个空间最多2 MiB及2,000个键。项目专属数据可将项目 ID 加入键名。写入串行且原子化，失败保留已有数据。卸载扩展会删除存储。
 
+## 后台 shell
+
+使用 `shells` 能力，观察在后台运行的 shell 命令，范围可限制在某个会话及其 subagent、已注册的项目或所有会话。OpenChamber 从其本地存储做出响应；不会发起网络读取。
+
+| 调用 | 作用 |
+| --- | --- |
+| `onRunningShells(scope, listener)` | 订阅指定范围内的 shell 命令：`{ kind: 'session', sessionId }` 涵盖该会话及其 subagent，`{ kind: 'project', projectId }` 涵盖已注册项目，`{ kind: 'global' }` 涵盖所有会话。按从早到晚的顺序获取运行中的命令（每条都带有 `background` 标志）以及已结束的命令。返回退订函数。 |
+| `readShellOutput(shellId, { cursor?, tailBytes? })` | 运行中或已结束命令的一页输出。没有 `cursor` 时，从末尾向前 `tailBytes`（最多 65536）处开始。返回 `{ output, cursor, skipped }`。 |
+| `stopShell(shellId)` | 先向 agent 发送停止通知，然后移除该命令。 |
+
+快照格式为 `{ kind: "shells", scope, shells, ended }`，其中 `scope` 与订阅的范围对应。每个运行中的 shell 为 `{ id, sessionID, command, startedAt, background }`，最多 200 个，按时间从早到晚排列。对于轮次无需等待完成的任务，`background` 为 `true`。
+
+`ended` 列出 OpenChamber 观测到已结束的命令，按结束时间从早到晚排列，最多保留 200 个（保留最新的）。如果命令退出时带有退出码，每项会包含 `status`、`endedAt` 和 `exit`。状态为 `exited`、`timeout`、被信号 `killed`、被用户 `stopped`，或在重新连接期间结束时的 `unknown`。OpenChamber 仅在内存中保留此列表。应用重新加载后列表为空，因此请把面板展示所需的内容保存在扩展存储中。
+
+Host 会为每个目录保留其最近 25 个已结束命令的输出。被停止的命令会立即丢失其输出。读取 OpenChamber 从未见过的 shell，或 host 已不再保留的输出，会返回 `NOT_FOUND`。停止未在运行的 shell 也是如此。未获批准的 `shells` 能力会返回 `NOT_GRANTED`。
+
 ## request
 
 ```ts
@@ -186,7 +210,7 @@ const result = await host.serviceRequest({ method: "GET", path: "/containers" })
 const { content } = await host.readFile("package.json");
 await host.writeFile("notes/today.md", "# Today\n");
 const { entries } = await host.listDir("src");
-const info = await host.stat("~/.config/opencode/opencode.json");
+const info = await host.stat("~/.config/openchamber/config.json");
 ```
 
 限制：路径最长 1024 个字符，内容最多 2,000,000 个字符，列表最多 2000 项。内容超出限制为 `FILE_TOO_LARGE`。
@@ -217,12 +241,13 @@ const { text } = await host.generate({ prompt: notes, system: "Summarize in one 
 | `NO_SERVICE` | 未声明本地服务、未批准或未运行 |
 | `NOT_GRANTED` | 用户尚未批准此调用所需的能力 |
 | `SERVICE_FAILED` | 本地服务崩溃或从未就绪 |
-| `NO_DIRECTORY` | 在没有打开项目的情况下使用了相对文件路径 |
-| `NOT_FOUND` | 对不存在的文件调用 `readFile` |
+| `NO_DIRECTORY` | 在没有打开项目的情况下使用了相对文件路径，或在没有打开项目时调用 `openCommit` |
+| `NOT_FOUND` | 对不存在的文件调用 `readFile`，或对项目中不存在的提交调用 `openCommit` |
 | `FILE_TOO_LARGE` | 读取或写入时文件内容超出限制 |
 | `DENIED` | 操作系统拒绝了该文件操作 |
 | `NO_MODEL` | 没有可用的 Small Model 时调用 `generate` |
 | `MODEL_FAILED` | Small Model 返回了错误 |
+| `UNSUPPORTED` | 这个 OpenChamber 无法执行该调用，例如在没有 Diff 视图的地方调用 `openCommit` |
 
 ## 相关页面
 

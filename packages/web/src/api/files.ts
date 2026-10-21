@@ -10,6 +10,8 @@ import {
   type FilesystemErrorReason,
 } from '@openchamber/ui/lib/api/files-errors';
 import { runtimeFetch } from '@openchamber/ui/lib/runtime-fetch';
+import { hostFilesystem } from '@openchamber/ui/lib/host-filesystem';
+import { shareFileFromNativeApp } from '@openchamber/ui/lib/nativeFileShare';
 
 const normalizePath = (path: string): string => path.replace(/\\/g, '/');
 
@@ -32,7 +34,7 @@ type WebDirectoryListResponse = {
   entries?: WebDirectoryEntry[];
 };
 
-type WebFileUploadResponse = {
+type WebFileMutationResponse = {
   success?: boolean;
   path?: string;
   error?: string;
@@ -61,9 +63,14 @@ const toDirectoryListResult = (fallbackDirectory: string, payload: WebDirectoryL
   };
 };
 
-const directoryHeaders = (getDirectory?: () => string | undefined, override?: string): Record<string, string> | undefined => {
-  const directory = override || getDirectory?.();
-  return directory ? { 'x-opencode-directory': directory } : undefined;
+const requestDirectory = (getDirectory?: () => string | undefined, override?: string): string | undefined =>
+  override || getDirectory?.();
+
+const withDirectoryQuery = (query: URLSearchParams, directory: string | undefined): URLSearchParams => {
+  if (directory) {
+    query.set('directory', directory);
+  }
+  return query;
 };
 
 export const createWebFilesAPI = ({ getDirectory }: WebFilesAPIOptions): FilesAPI => ({
@@ -78,8 +85,7 @@ export const createWebFilesAPI = ({ getDirectory }: WebFilesAPIOptions): FilesAP
     }
 
     const response = await runtimeFetch('/api/fs/list', {
-      query: params,
-      headers: directoryHeaders(getDirectory),
+      query: withDirectoryQuery(params, requestDirectory(getDirectory)),
     });
 
     if (!response.ok) {
@@ -101,45 +107,23 @@ export const createWebFilesAPI = ({ getDirectory }: WebFilesAPIOptions): FilesAP
   },
 
   async search(payload: FileSearchQuery): Promise<FileSearchResult[]> {
-    const params = new URLSearchParams();
-
-    const directory = normalizePath(payload.directory);
-    if (directory) {
-      params.set('directory', directory);
-    }
-
-    params.set('query', payload.query);
-    params.set('dirs', 'false');
-    params.set('type', 'file');
-
-    if (typeof payload.maxResults === 'number' && Number.isFinite(payload.maxResults)) {
-      params.set('limit', String(payload.maxResults));
-    }
-
-    const response = await runtimeFetch('/api/find/file', {
-      query: params,
-      headers: directoryHeaders(getDirectory),
+    const hits = await hostFilesystem.searchFiles(payload.query, {
+      directory: normalizePath(payload.directory),
+      limit: payload.maxResults,
+      type: 'file',
+      includeHidden: payload.includeHidden,
+      respectGitignore: payload.respectGitignore,
     });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: response.statusText }));
-      throw new Error((error as { error?: string }).error || 'Failed to search files');
-    }
-
-    const result = (await response.json()) as string[];
-    const files = Array.isArray(result) ? result : [];
-
-    return files.map((relativePath) => ({
-      path: normalizePath(`${directory}/${relativePath}`),
-      preview: [normalizePath(relativePath)],
-    }));
+    return hits.map((hit) => ({ path: hit.path, preview: [hit.relativePath] }));
   },
 
   async createDirectory(path: string): Promise<{ success: boolean; path: string }> {
     const target = normalizePath(path);
+    const directory = requestDirectory(getDirectory);
     const response = await runtimeFetch('/api/fs/mkdir', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...directoryHeaders(getDirectory) },
+      query: directory ? { directory } : undefined,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: target }),
     });
 
@@ -165,9 +149,8 @@ export const createWebFilesAPI = ({ getDirectory }: WebFilesAPIOptions): FilesAP
       params.set('outsideFileGrant', options.outsideFileGrant);
     }
     const response = await runtimeFetch('/api/fs/stat', {
-      query: params,
+      query: withDirectoryQuery(params, requestDirectory(getDirectory, options?.directory)),
       signal: AbortSignal.timeout(30_000),
-      headers: directoryHeaders(getDirectory, options?.directory),
     });
 
     if (!response.ok) {
@@ -197,10 +180,9 @@ export const createWebFilesAPI = ({ getDirectory }: WebFilesAPIOptions): FilesAP
       params.set('optional', 'true');
     }
     const response = await runtimeFetch('/api/fs/read', {
-      query: params,
+      query: withDirectoryQuery(params, requestDirectory(getDirectory, options?.directory)),
       signal: AbortSignal.timeout(30_000),
       cache: options?.optional || options?.fresh ? 'no-store' : 'default',
-      headers: directoryHeaders(getDirectory, options?.directory),
     });
 
     if (!response.ok) {
@@ -214,9 +196,11 @@ export const createWebFilesAPI = ({ getDirectory }: WebFilesAPIOptions): FilesAP
 
   async writeFile(path: string, content: string): Promise<{ success: boolean; path: string }> {
     const target = normalizePath(path);
+    const directory = requestDirectory(getDirectory);
     const response = await runtimeFetch('/api/fs/write', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...directoryHeaders(getDirectory) },
+      query: directory ? { directory } : undefined,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: target, content }),
     });
 
@@ -239,23 +223,23 @@ export const createWebFilesAPI = ({ getDirectory }: WebFilesAPIOptions): FilesAP
       query: {
         path: target,
         overwrite: options?.overwrite ? 'true' : undefined,
+        directory: requestDirectory(getDirectory, options?.directory),
       },
       headers: {
         'Content-Type': 'application/octet-stream',
-        ...directoryHeaders(getDirectory, options?.directory),
       },
       body: file,
     });
 
     if (!response.ok) {
-      const error: WebFileUploadResponse = await response.json().catch(() => ({ error: response.statusText }));
+      const error: WebFileMutationResponse = await response.json().catch(() => ({ error: response.statusText }));
       throw new FilesystemError(error.error || 'Failed to upload file', {
         reason: parseFilesystemErrorReason(error.reason),
         status: response.status,
       });
     }
 
-    const result: WebFileUploadResponse = await response.json().catch(() => ({}));
+    const result: WebFileMutationResponse = await response.json().catch(() => ({}));
     return {
       success: Boolean(result.success),
       path: result.path ? normalizePath(result.path) : target,
@@ -264,9 +248,11 @@ export const createWebFilesAPI = ({ getDirectory }: WebFilesAPIOptions): FilesAP
 
   async delete(path: string): Promise<{ success: boolean }> {
     const target = normalizePath(path);
+    const directory = requestDirectory(getDirectory);
     const response = await runtimeFetch('/api/fs/delete', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...directoryHeaders(getDirectory) },
+      query: directory ? { directory } : undefined,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: target }),
     });
 
@@ -280,28 +266,35 @@ export const createWebFilesAPI = ({ getDirectory }: WebFilesAPIOptions): FilesAP
   },
 
   async rename(oldPath: string, newPath: string): Promise<{ success: boolean; path: string }> {
+    const directory = requestDirectory(getDirectory);
     const response = await runtimeFetch('/api/fs/rename', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...directoryHeaders(getDirectory) },
+      query: directory ? { directory } : undefined,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ oldPath, newPath }),
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: response.statusText }));
-      throw new Error((error as { error?: string }).error || 'Failed to rename file');
+      const error: WebFileMutationResponse = await response.json().catch(() => ({ error: response.statusText }));
+      throw new FilesystemError(error.error || 'Failed to rename file', {
+        reason: parseFilesystemErrorReason(error.reason),
+        status: response.status,
+      });
     }
 
-    const result = await response.json().catch(() => ({}));
+    const result: WebFileMutationResponse = await response.json().catch(() => ({}));
     return {
-      success: Boolean((result as { success?: boolean }).success),
-      path: typeof (result as { path?: string }).path === 'string' ? normalizePath((result as { path: string }).path) : newPath,
+      success: Boolean(result.success),
+      path: result.path ? normalizePath(result.path) : newPath,
     };
   },
 
   async revealPath(targetPath: string): Promise<{ success: boolean }> {
+    const directory = requestDirectory(getDirectory);
     const response = await runtimeFetch('/api/fs/reveal', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...directoryHeaders(getDirectory) },
+      query: directory ? { directory } : undefined,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: normalizePath(targetPath) }),
     });
 
@@ -314,11 +307,17 @@ export const createWebFilesAPI = ({ getDirectory }: WebFilesAPIOptions): FilesAP
     return { success: Boolean((result as { success?: boolean }).success) };
   },
 
-  async downloadFile(path: string): Promise<void> {
+  async downloadFile(path: string, options): Promise<void> {
     const target = normalizePath(path);
+    const params = new URLSearchParams({ path: target, download: 'true' });
+    if (options?.allowOutsideWorkspace) {
+      params.set('allowOutsideWorkspace', 'true');
+    }
+    if (options?.outsideFileGrant) {
+      params.set('outsideFileGrant', options.outsideFileGrant);
+    }
     const response = await runtimeFetch('/api/fs/raw', {
-      query: { path: target, download: true },
-      headers: directoryHeaders(getDirectory),
+      query: withDirectoryQuery(params, requestDirectory(getDirectory, options?.directory)),
     });
     if (!response.ok) {
       throw new Error(`Download failed (${response.status})`);
@@ -329,9 +328,8 @@ export const createWebFilesAPI = ({ getDirectory }: WebFilesAPIOptions): FilesAP
     const capacitor = (window as typeof window & {
       Capacitor?: { isNativePlatform?: () => boolean };
     }).Capacitor;
-    const file = new File([blob], filename, { type: blob.type || 'application/octet-stream' });
-    if (capacitor?.isNativePlatform?.() === true && navigator.canShare?.({ files: [file] })) {
-      await navigator.share({ files: [file] });
+    if (capacitor?.isNativePlatform?.() === true) {
+      await shareFileFromNativeApp(new File([blob], filename, { type: blob.type || 'application/octet-stream' }));
       return;
     }
 

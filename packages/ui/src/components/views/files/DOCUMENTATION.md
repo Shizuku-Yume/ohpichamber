@@ -23,6 +23,12 @@ Background polling never supersedes an in-flight directory read. Explicit
 refresh after file mutations does. Each directory failure remains local and
 preserves its previous successful snapshot.
 
+An authoritative recovery snapshot that advances the session epoch or
+`headSequence` also requests one directory-scoped invalidation, because the
+abandoned live event may have hidden an agent write or edit. Initial hydration
+and unchanged recovery snapshots do not invalidate. The normal 2 s batching
+below coalesces this with any other file changes.
+
 Opening a file outside the workspace reads it directly through the active
 runtime, in both editor-only and full Files modes. Chat navigation and file
 loading do not request native file grants. Server-backed text reads and metadata
@@ -67,9 +73,15 @@ directory (outside the workspace when the file is) and swapped for object
 URLs that are revoked with the preview; relative links open the target file
 through `useUIStore.openContextFile`, which the context panel and the mobile
 files surface both consume.
+An HTML file's preview is untrusted content. `useHtmlPreviewUrl` asks the
+server for a grant (`POST /api/fs/preview`) and loads the page from
+`/api/fs/preview/<grant>/<path>`; the frame's `sandbox` has no
+`allow-same-origin`, so the page runs as an opaque origin with no session and
+cannot reach the app's API, DOM or terminal. Its neighbouring images, styles
+and scripts load through the grant in the path on every retained runtime.
+
 
 An agent can ask for a file to be shown (`file.open` on the managed
 `openchamber` tool). The server broadcasts `openchamber:file-open-request`;
 `ContextPanel` answers it with `openContextFile`, `MobileApp` additionally
-opens the files drawer. VS Code has no shared file viewer and no managed
-tool, so the event never reaches it.
+opens the files drawer.

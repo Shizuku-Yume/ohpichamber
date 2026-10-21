@@ -1,0 +1,14 @@
+{
+ "status": "PASS",
+ "steps": [
+  {
+   "n": "board-pass",
+   "has5304": true,
+   "hasProject": true,
+   "hasBranch": true,
+   "composer": true,
+   "text": "New session\nchats\nT57-W8-A92\nT57-CHILD-NET\nT57-CHILD-CLEAN\nT57-CHILD-UI\nT57-W8-FINAL2\nShow more sessions\nchats\nStart a session\nwork\nT15-SHELL\n4m 16s\nLocal\nWhat are we working on in work?\nwork\nmain\n#5304by sdhector\nMobile Tree promotes subagent sessions to top-level rows when parent is in another worktree\nPlan, build, or ask. @ to mention, $ for skills, / for commands\n\nT18 Fixture\nt15child\nExplore the codebase\nCatch me up\nWeigh my options\nStart feature planning\nCraft a Goal\nSchedule a Task\nDebug an issue\nReview my changes\nSession\nProject\nwork\nmain\n1 file changed\n+6\n/\n−0\nUsage\nUsed"
+  }
+ ],
+ "note": "Issue #5304 opened from packaged Board; Attach to session -> New session produced work/main draft with #5304 chip; click used DOM menuitem adjacent to Attach after portal inspection."
+}

@@ -1,29 +1,48 @@
 import React from 'react';
+import type { Message, Part } from '@openchamber/agent-contract';
 import { Icon } from '@/components/icon/Icon';
+import { Button } from '@/components/ui/button';
+import { ErrorResponseDetails } from '@/components/chat/ErrorResponseDetails';
 import { useI18n } from '@/lib/i18n';
+import { showRuntimeStatus } from '@/lib/runtimeStatus';
 import { useLatestSessionError } from '@/sync/notification-store';
-import { useDirectoryStore, useSessionStatus } from '@/sync/sync-context';
-import { readLastMessageState, type LastMessageState } from './sessionErrorNoticeState';
+import { useDirectoryStore, useSessionStatus, useSessionStatusSnapshotReady } from '@/sync/sync-context';
+import { refetchSessionMessages } from '@/sync/session-actions';
+import { LongErrorText } from './LongErrorText';
+import { scheduleUnansweredRechecks } from './sessionErrorNoticeState';
 
 interface SessionErrorNoticeProps {
   sessionId: string;
   directory?: string;
 }
 
+type LastMessageState = {
+  role: 'user' | 'assistant' | 'system';
+  timestamp: number;
+  hasError: boolean;
+} | null;
+
 // How long a user message may sit unanswered on an idle session before the
 // notice calls it a reply that never began.
 const UNANSWERED_AFTER_MS = 5_000;
 
-// The last message of a session, with whether it already carries an error of
-// its own: an assistant message that OpenCode marked failed renders its error
-// inline, so the session-level notice must not repeat it.
+// Canonical sessions do not carry OpenCode outcome or parent tool metadata.
+// Report live errors and canonical tool-result errors without guessing them.
 const useLastMessageState = (sessionId: string, directory?: string): LastMessageState => {
   const store = useDirectoryStore(directory);
   const cacheRef = React.useRef<LastMessageState>(null);
   const getSnapshot = React.useCallback((): LastMessageState => {
     if (!sessionId) return null;
-    const messages = store.getState().message[sessionId];
-    const next = readLastMessageState(messages && messages.length > 0 ? messages[messages.length - 1] : null);
+    const messages: Message[] = store.getState().message[sessionId] ?? [];
+    let last: Message | undefined;
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message: Message = messages[index];
+      if (message.role === 'user' || message.role === 'assistant') {
+        last = message;
+        break;
+      }
+    }
+    const next: LastMessageState = last ? { role: last.role, timestamp: last.createdAt, hasError: last.parts.some((part: Part) => part.type === 'tool_result' && part.isError) } : null;
     if (!next) {
       cacheRef.current = null;
       return null;
@@ -43,17 +62,23 @@ const useLastMessageState = (sessionId: string, directory?: string): LastMessage
 };
 
 /**
- * Shows what OpenCode reported when it stopped a turn without producing a
- * reply. Rendered under the last message, only while that turn is the latest
- * one: sending again moves the last message past the error and hides it.
+ * Shows what the canonical runtime reported when it stopped a turn without
+ * producing a reply. Rendered under the last message, only while that turn is
+ * the latest one: sending again moves the last message past the error and
+ * hides it. Canonical sessions do not expose legacy stored outcome or parent
+ * tool metadata, so those details are intentionally not reconstructed here.
  */
 export const SessionErrorNotice: React.FC<SessionErrorNoticeProps> = ({ sessionId, directory }) => {
   const { t } = useI18n();
   const latestError = useLatestSessionError(sessionId);
   const status = useSessionStatus(sessionId, directory);
+  const statusSnapshotReady = useSessionStatusSnapshotReady(directory, sessionId);
   const lastMessage = useLastMessageState(sessionId, directory);
 
-  const isIdle = !status || status.type === 'idle';
+  // An omitted status means idle only after a successful status snapshot:
+  // after a reload the last prompt is hydrated before the runtime reports
+  // that the session is still busy.
+  const isIdle = status === 'idle' || (status === undefined && statusSnapshotReady);
   const reportedError = latestError && isIdle
     && (!lastMessage || latestError.time >= lastMessage.timestamp)
     && !(lastMessage?.role === 'assistant' && lastMessage.hasError)
@@ -62,7 +87,8 @@ export const SessionErrorNotice: React.FC<SessionErrorNoticeProps> = ({ sessionI
   // A user message that the session is idle on, with nothing after it for a
   // while, is a reply that never began: the send was accepted but OpenCode
   // produced neither a message nor an error for it.
-  const unansweredSince = !reportedError && isIdle && lastMessage?.role === 'user' && lastMessage.timestamp > 0
+  const unansweredSince = !reportedError && isIdle
+    && lastMessage?.role === 'user' && lastMessage.timestamp > 0
     ? lastMessage.timestamp
     : null;
   const [now, setNow] = React.useState(() => Date.now());
@@ -73,28 +99,69 @@ export const SessionErrorNotice: React.FC<SessionErrorNoticeProps> = ({ sessionI
     const timer = window.setTimeout(() => setNow(Date.now()), remaining + 50);
     return () => window.clearTimeout(timer);
   }, [unansweredSince]);
-  const unanswered = unansweredSince !== null && Math.max(now, Date.now()) - unansweredSince >= UNANSWERED_AFTER_MS;
+  const unansweredDue = unansweredSince !== null && Math.max(now, Date.now()) - unansweredSince >= UNANSWERED_AFTER_MS;
+  // Looking unanswered is only a guess: the live stream may have dropped the
+  // reply. Re-read the session first and show the notice only once a read has
+  // settled with the prompt still last. The key ties that verdict to this
+  // session and prompt, so a new send or a session switch starts unverified.
+  const unansweredKey = unansweredDue && sessionId ? `${sessionId}:${unansweredSince}` : null;
+  const [verifiedKey, setVerifiedKey] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (!unansweredKey || !sessionId) return undefined;
+    return scheduleUnansweredRechecks(
+      () => refetchSessionMessages(sessionId),
+      window,
+      () => setVerifiedKey(unansweredKey),
+    );
+  }, [unansweredKey, sessionId]);
+  const unanswered = unansweredKey !== null && verifiedKey === unansweredKey;
 
   if (!reportedError && !unanswered) return null;
 
-  const detail = reportedError
-    ? (reportedError.error?.message ?? t('chat.sessionError.noDetails'))
-    : t('chat.sessionError.noDetails');
-  const name = reportedError?.error?.name;
+  let title: string;
+  let detail: string;
+  let hasDetails = true;
+  let responseBody: string | null = null;
+  if (reportedError) {
+    title = t('chat.sessionError.title');
+    hasDetails = Boolean(reportedError.error?.message);
+    const message = reportedError.error?.message ?? t('chat.sessionError.noDetails');
+    detail = reportedError.error?.name ? `${reportedError.error.name}: ${message}` : message;
+    responseBody = reportedError.error?.responseBody ?? null;
+  } else {
+    title = t('chat.sessionError.noReply');
+    hasDetails = false;
+    detail = t('chat.sessionError.noDetails');
+  }
 
   return (
     <div className="chat-message-column">
       <div
         role="status"
-        className="mt-3 max-w-full break-words rounded-2xl border border-[var(--status-error-border)] bg-[var(--status-error-background)] px-4 py-3 text-base leading-relaxed"
+        className="mt-2 max-w-full rounded-lg border border-[var(--status-error-border)] bg-[var(--status-error-background)] px-3 py-2"
       >
-        <div className="flex items-start gap-3">
-          <Icon name="error-warning" className="mt-0.5 size-4 shrink-0 text-[var(--status-error)]" />
-          <div className="min-w-0 flex-1 break-words">
-            <div className="font-medium text-foreground">{reportedError ? t('chat.sessionError.title') : t('chat.sessionError.noReply')}</div>
-            <div className="mt-1 text-foreground/80">{name ? `${name}: ${detail}` : detail}</div>
-          </div>
+        <div className="flex items-center gap-2">
+          <Icon name="error-warning" className="size-3.5 shrink-0 text-[var(--status-error)]" />
+          <span className="typography-meta font-medium text-foreground">{title}</span>
         </div>
+        <LongErrorText text={detail} buttonClassName="ml-[0.875rem]">
+          {(visibleText) => (
+            <div className="mt-1 pl-[1.375rem] typography-meta text-muted-foreground break-words">{visibleText}</div>
+          )}
+        </LongErrorText>
+        {!hasDetails ? (
+          <div className="pl-[1.375rem]">
+            <Button
+              variant="link"
+              size="xs"
+              onClick={() => { void showRuntimeStatus(); }}
+              className="-ml-2 normal-case"
+            >
+              {t('chat.sessionError.showRuntimeStatus')}
+            </Button>
+          </div>
+        ) : null}
+        {responseBody ? <ErrorResponseDetails body={responseBody} className="pl-[1.375rem]" /> : null}
       </div>
     </div>
   );

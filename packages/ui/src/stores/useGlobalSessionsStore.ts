@@ -1,15 +1,22 @@
 import { create } from 'zustand';
-import type { OpencodeClient, Session } from '@opencode-ai/sdk/v2';
-import { opencodeClient } from '@/lib/opencode/client';
-import { filterManagedChatsForRuntime, listGlobalSessionPages, splitGlobalSessionsByArchived } from '@/stores/globalSessions';
-import { getReviewTransferDirection, type ReviewTransferDirection } from '@/lib/reviewFlow';
-import { getOriginalSessionID, getReviewSessionID } from '@/lib/sessionReviewMetadata';
+import type { Session, Subagent } from '@openchamber/agent-contract';
+import { SessionSchema, SubagentSchema } from '@openchamber/agent-contract';
+import { canonicalClient } from '@/api/canonicalClient';
+import { isSessionDiscoveryFailed, registerWorkspaceDirectory, resetWorkspaceDirectories, resolveWorkspaceDirectory, splitGlobalSessionsByArchived, subscribeWorkspaceDirectories } from '@/stores/globalSessions';
 import { normalizePath } from '@/lib/pathNormalization';
 import { raiseSessionOrderingBaselines } from '@/sync/session-ordering';
 import { mapWithConcurrency } from '@/lib/concurrency';
-import { persistManagedChatSessions, readManagedChatSessions } from '@/sync/persist-cache';
-import { isVSCodeRuntime } from '@/lib/desktop';
-import { ensureChatsRootDirectory, getChatsRootForHome } from '@/lib/chatDirectories';
+import { omitKeys } from '@/lib/omitKeys';
+import {
+  persistGlobalSessionSnapshot,
+  persistManagedChatSessions,
+  readGlobalSessionSnapshot,
+  readManagedChatSessions,
+} from '@/sync/persist-cache';
+import { spaceIdOfDirectory } from '@/lib/spaces/space-route';
+import { useSpacesStore } from '@/lib/spaces/spaces-store';
+import { ensureChatsRootDirectory, getChatsRoot, isChatDirectoryPath } from '@/lib/chatDirectories';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { countSyncPerformance } from '@/sync/performance-diagnostics';
 import {
   applyGlobalSessionStructureMutations,
@@ -29,7 +36,7 @@ type LoadResult = {
   archivedSessions: Session[];
 };
 
-export type GlobalSessionMutation =
+type GlobalSessionMutation =
   | { type: 'upsert'; session: Session }
   | { type: 'remove'; sessionId: string };
 
@@ -39,9 +46,10 @@ type GlobalSessionsState = {
   entityById: ReadonlyMap<string, Session>;
   structure: GlobalSessionStructure;
   sessionsByDirectory: Map<string, Session[]>;
-  reviewTransferBySessionId: Map<string, ReviewTransferDirection>;
+  reviewTransferBySessionId: Map<string, 'review-to-original' | 'original-to-review'>;
   mutationRevision: number;
   mutationRevisionBySessionId: Map<string, number>;
+  /** A complete global snapshot has arrived for this runtime. */
   hasLoaded: boolean;
   managedChatsHydrated: boolean;
   status: GlobalSessionsStatus;
@@ -54,6 +62,7 @@ type GlobalSessionsState = {
   applySessionMutations: (mutations: readonly GlobalSessionMutation[]) => void;
   upsertSession: (session: Session) => void;
   upsertSessions: (sessions: Session[]) => void;
+  upsertSubagents: (parent: Session, children: readonly Subagent[]) => void;
   removeSessions: (ids: Iterable<string>) => void;
   archiveSessions: (ids: Iterable<string>, archivedAt?: number) => void;
   /** Drop every session from the previous runtime instance and go back to the
@@ -61,7 +70,6 @@ type GlobalSessionsState = {
   resetForRuntimeSwitch: () => void;
 };
 
-const PAGE_SIZE = 500;
 const DIRECTORY_SESSION_REFRESH_CONCURRENCY = 2;
 let directorySessionRefreshActive = 0;
 const directorySessionRefreshWaiters: Array<() => void> = [];
@@ -82,22 +90,92 @@ const withDirectorySessionRefreshSlot = async <T>(task: () => Promise<T>): Promi
 };
 
 let inflightLoad: Promise<LoadResult> | null = null;
-// True while a page of an unfinished load is being merged. The managed-chats
-// snapshot is written from complete loads only, never from a partial list.
-let mergingSessionPage = false;
 // Bumped on runtime switch: an in-flight load from the previous instance must
 // not apply its (stale) snapshot after the reset.
 let loadGeneration = 0;
 
-export const mergeLiveSessionWithGlobalSession = (
-  liveSession: Session,
-  globalSession: Session,
-): Session => {
-  const merged = mergeSessionDirectoryMetadata(liveSession, globalSession);
-  if (merged.share !== globalSession.share) {
-    return { ...merged, share: globalSession.share };
-  }
-  return merged;
+type ChildDiscovery = { sessions: Session[]; succeededParents: Set<string>; failedParents: Set<string> };
+
+const childSessionRecord = (parent: Session, child: Subagent): Session => {
+  const active = child.status === 'running' && parent.activeRunId !== null;
+  const runtimeStatus = parent.runtimeStatus === 'unavailable' ? 'unavailable' : active ? parent.runtimeStatus : 'idle';
+  return SessionSchema.parse({
+    sessionId: child.childSessionId, parentSessionId: parent.sessionId, rootSessionId: parent.rootSessionId,
+    projectId: parent.projectId, workspaceId: parent.workspaceId, displayPath: parent.displayPath,
+    createdAt: parent.createdAt, updatedAt: parent.updatedAt, epoch: parent.epoch, headSequence: parent.headSequence,
+    runtimeStatus, activeRunId: runtimeStatus === 'idle' || runtimeStatus === 'unavailable' ? null : parent.activeRunId,
+    metadata: { title: child.role }, metadataRevision: parent.metadataRevision === '0' ? '1' : parent.metadataRevision,
+    archiveRevision: parent.archiveRevision,
+  });
+};
+
+// Children have history, but no snapshot or Host metadata endpoint. These stable
+// host records provide sidebar identity and routing, not a child event cursor.
+const discoverChildSessions = async (roots: readonly Session[], known: ReadonlyMap<string, Session>, generation: number): Promise<ChildDiscovery> => {
+  const sessions: Session[] = [];
+  const succeededParents = new Set<string>();
+  const failedParents = new Set<string>();
+  const rootIds = new Set(roots.map((root) => root.sessionId));
+  const owners = new Map<string, string>();
+  await mapWithConcurrency(roots.filter((root) => !root.parentSessionId && root.archivedAt === undefined), DIRECTORY_SESSION_REFRESH_CONCURRENCY, async (root) => {
+    if (generation !== loadGeneration) return;
+    try {
+      const records = await withDirectorySessionRefreshSlot(() => {
+        if (generation !== loadGeneration) throw new Error('Runtime changed before child discovery');
+        return canonicalClient.listSubagents(root.sessionId);
+      });
+      if (generation !== loadGeneration) return;
+      const children: Session[] = [];
+      for (const record of records) {
+        const child = SubagentSchema.parse(record);
+        const previous = known.get(child.childSessionId);
+        const owner = owners.get(child.childSessionId);
+        if (child.parentSessionId !== root.sessionId || rootIds.has(child.childSessionId)
+          || owner !== undefined
+          || (previous && previous.parentSessionId !== root.sessionId)) continue;
+        children.push(childSessionRecord(root, child));
+        owners.set(child.childSessionId, root.sessionId);
+      }
+      sessions.push(...children);
+      succeededParents.add(root.sessionId);
+    } catch {
+      failedParents.add(root.sessionId);
+    }
+  });
+  return { sessions, succeededParents, failedParents };
+};
+
+const bindKnownWorkspaceDirectories = async (generation: number): Promise<void> => {
+  const [{ useProjectsStore }, { useSessionUIStore }] = await Promise.all([
+    import('@/stores/useProjectsStore'), import('@/sync/session-ui-store'),
+  ]);
+  if (generation !== loadGeneration) return;
+  const directoryState = useDirectoryStore.getState();
+  const sessionState = useSessionUIStore.getState();
+  const chatsRoot = getChatsRoot();
+  const candidates = normalizeDirectorySet([
+    directoryState.currentDirectory,
+    ...directoryState.directoryHistory,
+    ...useProjectsStore.getState().projects.map((project) => project.path),
+    ...[...sessionState.availableWorktreesByProject.values()].flatMap((worktrees) => worktrees.map((worktree) => worktree.path)),
+    ...[...sessionState.worktreeMetadata.values()].map((worktree) => worktree.path),
+    ...(chatsRoot ? [chatsRoot] : []),
+  ]);
+  await mapWithConcurrency([...candidates], DIRECTORY_SESSION_REFRESH_CONCURRENCY, async (directory) => {
+    if (generation !== loadGeneration) return;
+    try {
+      const workspace = await withDirectorySessionRefreshSlot(() => {
+        if (generation !== loadGeneration) throw new Error('Runtime changed before workspace resolution');
+        return canonicalClient.resolveWorkspace(directory);
+      });
+      if (generation === loadGeneration && resolveWorkspaceDirectory(workspace.workspaceId) === null) {
+        registerWorkspaceDirectory(workspace.workspaceId, directory);
+      }
+    } catch {
+      // A candidate is only a hint. Failed admission grants no path binding;
+      // independently successful native session discovery remains usable.
+    }
+  });
 };
 
 const buildSessionsByDirectory = (sessions: Session[]): Map<string, Session[]> => {
@@ -117,42 +195,36 @@ const buildSessionsByDirectory = (sessions: Session[]): Map<string, Session[]> =
   return next;
 };
 
-const getSessionSignature = (session: Session): string => {
-  const record = session as Session & { parentID?: string | null; slug?: string | null };
-  return [
-    session.id,
-    session.title ?? '',
-    record.parentID ?? '',
-    record.slug ?? '',
-    session.time?.created ?? 0,
-    session.time?.updated ?? 0,
-    session.time?.archived ?? 0,
-    session.share?.url ?? '',
-    JSON.stringify((session as Session & { metadata?: unknown }).metadata ?? null),
-    resolveGlobalSessionDirectory(session) ?? '',
-  ].join(':');
-};
+const getSessionSignature = (session: Session): string => JSON.stringify(session);
 
 const getSessionStructuralSignature = (session: Session): string => {
-  const record = session as Session & { parentID?: string | null; slug?: string | null };
-  return [
-    session.id,
-    session.title ?? '',
-    record.parentID ?? '',
-    record.slug ?? '',
-    session.time?.created ?? 0,
-    session.time?.archived ?? 0,
-    session.share?.url ?? '',
-    JSON.stringify((session as Session & { metadata?: unknown }).metadata ?? null),
-    resolveGlobalSessionDirectory(session) ?? '',
-  ].join(':');
+  const structural = omitKeys(session, ['updatedAt']);
+  return JSON.stringify(structural);
 };
 
 export const isGlobalSessionRecencyOnlyUpdate = (existing: Session, incoming: Session): boolean => {
   const merged = mergeSessionDirectoryMetadata(incoming, existing);
-  return existing.time?.updated !== merged.time?.updated
+  return existing.updatedAt !== merged.updatedAt
     && getSessionStructuralSignature(existing) === getSessionStructuralSignature(merged);
 };
+
+
+/**
+ * The startup seed: managed chats and the global snapshot of every other
+ * directory. Never authoritative; `hasLoaded` stays false until a complete
+ * load replaces it.
+ */
+const readPersistedSessionSeed = (): Session[] => {
+  const chats = readManagedChatSessions();
+  const chatIds = new Set(chats.map((session) => session.sessionId));
+  const others = readGlobalSessionSnapshot().filter((session) => !chatIds.has(session.sessionId));
+  return sortSessionsByUpdated([...chats, ...others]);
+};
+
+/** Whether `existing` can stay in place of `incoming`. */
+const isSameSessionRecord = (existing: Session, incoming: Session): boolean => (
+  existing === incoming || getSessionSignature(existing) === getSessionSignature(incoming)
+);
 
 const sameSessionList = (prev: Session[], next: Session[]): boolean => {
   if (prev === next) {
@@ -162,7 +234,7 @@ const sameSessionList = (prev: Session[], next: Session[]): boolean => {
     return false;
   }
   for (let index = 0; index < prev.length; index += 1) {
-    if (getSessionSignature(prev[index]) !== getSessionSignature(next[index])) {
+    if (!isSameSessionRecord(prev[index], next[index])) {
       return false;
     }
   }
@@ -170,11 +242,11 @@ const sameSessionList = (prev: Session[], next: Session[]): boolean => {
 };
 
 const getSessionUpdatedAt = (session: Session): number => {
-  const updatedAt = session.time?.updated;
+  const updatedAt = session.updatedAt;
   if (typeof updatedAt === 'number' && Number.isFinite(updatedAt)) {
     return updatedAt;
   }
-  const createdAt = session.time?.created;
+  const createdAt = session.createdAt;
   return typeof createdAt === 'number' && Number.isFinite(createdAt) ? createdAt : 0;
 };
 
@@ -182,7 +254,7 @@ const sortSessionsByUpdated = (sessions: Session[]): Session[] => {
   return [...sessions].sort((left, right) => {
     const timeDelta = getSessionUpdatedAt(right) - getSessionUpdatedAt(left);
     if (timeDelta !== 0) return timeDelta;
-    return right.id.localeCompare(left.id);
+    return right.sessionId.localeCompare(left.sessionId);
   });
 };
 
@@ -190,7 +262,7 @@ const normalizeDirectorySet = (directories: Iterable<string>): Set<string> => {
   const next = new Set<string>();
   for (const directory of directories) {
     const normalized = normalizePath(directory);
-    if (normalized) next.add(normalized);
+    if (normalized && (normalized.startsWith('/') || /^[A-Za-z]:\//.test(normalized))) next.add(normalized);
   }
   return next;
 };
@@ -199,23 +271,20 @@ const replaceSessionsForDirectories = (
   existing: Session[],
   incoming: Session[],
   directories: Set<string>,
+  failures: Readonly<Record<string, string>>,
 ): Session[] => {
-  if (directories.size === 0) {
-    return existing;
-  }
 
-  const existingById = new Map(existing.map((session) => [session.id, session]));
+  const existingById = new Map(existing.map((session) => [session.sessionId, session]));
   const incomingById = new Map<string, Session>();
 
   for (const session of incoming) {
-    if (!session?.id) continue;
-    incomingById.set(session.id, mergeSessionDirectoryMetadata(session, existingById.get(session.id)));
+    incomingById.set(session.sessionId, mergeSessionDirectoryMetadata(session, existingById.get(session.sessionId)));
   }
 
   const kept = existing.filter((session) => {
-    if (incomingById.has(session.id)) return false;
+    if (incomingById.has(session.sessionId)) return false;
     const directory = resolveGlobalSessionDirectory(session);
-    return !directory || !directories.has(directory);
+    return !directory || !directories.has(directory) || isSessionDiscoveryFailed(session, failures);
   });
 
   return sortSessionsByUpdated([...incomingById.values(), ...kept]);
@@ -225,13 +294,14 @@ type DirectoryPageResult = {
   directories: Set<string>;
   sessions: Session[];
   errors: unknown[];
+  failures: Record<string, string>;
 };
 
 const fetchDirectoryPages = async (
-  sdk: OpencodeClient,
   directories: Set<string>,
 ): Promise<DirectoryPageResult> => {
-  const currentDirectory = normalizePath(opencodeClient.getDirectory());
+  const generation = loadGeneration;
+  const currentDirectory = normalizePath(useDirectoryStore.getState().currentDirectory);
   const orderedDirectories = [...directories].sort((left, right) => {
     if (left === currentDirectory) return -1;
     if (right === currentDirectory) return 1;
@@ -239,18 +309,17 @@ const fetchDirectoryPages = async (
   });
   const results = await mapWithConcurrency(orderedDirectories, DIRECTORY_SESSION_REFRESH_CONCURRENCY, async (directory) => {
     try {
-      return {
-        status: 'fulfilled' as const,
-        value: {
-          directory,
-          // One inclusive request per directory: the server has no filter that
-          // returns only active sessions including restored (`time.archived`
-          // falsy-but-present) rows, so fetch everything and split client-side.
-          sessions: await withDirectorySessionRefreshSlot(() => (
-            listGlobalSessionPages(sdk, { directory, archived: true, narrowToArchived: false, pageSize: PAGE_SIZE })
-          )),
-        },
-      };
+      const workspace = await withDirectorySessionRefreshSlot(() => {
+        if (generation !== loadGeneration) throw new Error('Runtime changed before workspace resolution');
+        return canonicalClient.resolveWorkspace(directory);
+      });
+      if (generation !== loadGeneration) throw new Error('Runtime changed during workspace resolution');
+      registerWorkspaceDirectory(workspace.workspaceId, directory);
+      const result = await withDirectorySessionRefreshSlot(() => {
+        if (generation !== loadGeneration) throw new Error('Runtime changed before session discovery');
+        return canonicalClient.listSessions(workspace.workspaceId);
+      });
+      return { status: 'fulfilled' as const, value: { directory, ...result } };
     } catch (reason) {
       return { status: 'rejected' as const, reason };
     }
@@ -259,26 +328,29 @@ const fetchDirectoryPages = async (
   const fulfilledDirectories = new Set<string>();
   const sessions: Session[] = [];
   const errors: unknown[] = [];
+  const failures: Record<string, string> = {};
 
   for (const result of results) {
     if (result.status === 'fulfilled') {
       fulfilledDirectories.add(result.value.directory);
-      sessions.push(...result.value.sessions);
+      Object.assign(failures, result.value.errors);
+      if (Object.keys(result.value.errors).length > 0) errors.push(result.value.errors);
+      sessions.push(...result.value.items);
     } else {
       errors.push(result.reason);
     }
   }
 
-  return { directories: fulfilledDirectories, sessions, errors };
+  return { directories: fulfilledDirectories, sessions, errors, failures };
 };
 
 const upsertSessionIntoList = (sessions: Session[], session: Session): Session[] => {
-  const index = sessions.findIndex((candidate) => candidate.id === session.id);
+  const index = sessions.findIndex((candidate) => candidate.sessionId === session.sessionId);
   if (index === -1) {
     return [session, ...sessions];
   }
   const mergedSession = mergeSessionDirectoryMetadata(session, sessions[index]);
-  if (getSessionSignature(sessions[index]) === getSessionSignature(mergedSession)) {
+  if (isSameSessionRecord(sessions[index], mergedSession)) {
     return sessions;
   }
   const next = [...sessions];
@@ -286,44 +358,25 @@ const upsertSessionIntoList = (sessions: Session[], session: Session): Session[]
   return next;
 };
 
-const mergeSessionLists = (existing: Session[], incoming?: Session[]): Session[] => {
-  if (!incoming || incoming.length === 0) {
-    return existing;
-  }
 
-  if (existing.length === 0) {
-    return incoming;
-  }
-
-  const byId = new Map(existing.map((session) => [session.id, session]));
-  incoming.forEach((session) => {
-    byId.set(session.id, mergeSessionDirectoryMetadata(session, byId.get(session.id)));
+/**
+ * Adds the live directory-store sessions this list does not hold yet.
+ *
+ * A record already held, active or archived, always stands: this list hears
+ * every session event and action result itself, while a directory store can
+ * keep an old copy of a session it does not own. Letting that copy win put
+ * sessions the user had marked done back under "In work".
+ */
+const addUnlistedLiveSessions = (active: Session[], archived: Session[], live?: Session[]): Session[] => {
+  if (!live || live.length === 0) return active;
+  const listed = new Set([...active, ...archived].map((session) => session.sessionId));
+  const unlisted = live.filter((session) => {
+    if (session.archivedAt !== undefined) return false;
+    if (listed.has(session.sessionId)) return false;
+    listed.add(session.sessionId);
+    return true;
   });
-
-  const ordered: Session[] = [];
-  const seen = new Set<string>();
-
-  existing.forEach((session) => {
-    const next = byId.get(session.id);
-    if (!next) {
-      return;
-    }
-    ordered.push(next);
-    seen.add(session.id);
-  });
-
-  incoming.forEach((session) => {
-    if (seen.has(session.id)) {
-      return;
-    }
-    const next = byId.get(session.id);
-    if (next) {
-      ordered.push(next);
-      seen.add(session.id);
-    }
-  });
-
-  return ordered;
+  return unlisted.length > 0 ? [...active, ...unlisted] : active;
 };
 
 const applySnapshot = (
@@ -333,12 +386,16 @@ const applySnapshot = (
   status: GlobalSessionsStatus,
   /** False for a partial page merged mid-load: the lists are incomplete, so
       they must not claim the authority `hasLoaded` grants. */
-  markLoaded = true,
+  markLoaded = status === 'ready',
 ): Partial<GlobalSessionsState> | GlobalSessionsState => {
-  if (isVSCodeRuntime()) {
-    activeSessions = filterManagedChatsForRuntime(activeSessions, true);
-    archivedSessions = filterManagedChatsForRuntime(archivedSessions, true);
-  }
+  activeSessions = activeSessions.map((session) => {
+    const previous = state.entityById.get(session.sessionId);
+    return previous && isSameSessionRecord(previous, session) ? previous : session;
+  });
+  archivedSessions = archivedSessions.map((session) => {
+    const previous = state.entityById.get(session.sessionId);
+    return previous && isSameSessionRecord(previous, session) ? previous : session;
+  });
   const nextActiveSessions = sameSessionList(state.activeSessions, activeSessions)
     ? state.activeSessions
     : activeSessions;
@@ -348,7 +405,7 @@ const applySnapshot = (
   const sessionsChanged = nextActiveSessions !== state.activeSessions
     || nextArchivedSessions !== state.archivedSessions;
   const nextEntityById = sessionsChanged
-    ? new Map([...nextActiveSessions, ...nextArchivedSessions].map((session) => [session.id, session]))
+    ? new Map([...nextActiveSessions, ...nextArchivedSessions].map((session) => [session.sessionId, session]))
     : state.entityById;
   const nextStructure = nextActiveSessions !== state.activeSessions
     ? buildGlobalSessionStructure(nextActiveSessions)
@@ -383,29 +440,6 @@ const applySnapshot = (
   };
 };
 
-/**
- * Merge one page of an in-flight global load into the visible lists. Never a
- * replacement: the store may already hold the persisted managed-chats seed and
- * earlier pages, and those must stay visible while pagination continues.
- * Sessions the page reclassifies move buckets; mutations newer than the load's
- * baseline win, so an archive or delete made while the page was in flight is
- * not undone.
- */
-const mergeSessionPage = (
-  state: GlobalSessionsState,
-  active: Session[],
-  archived: Session[],
-  baselineRevision: number,
-): Partial<GlobalSessionsState> | GlobalSessionsState => {
-  const incomingActiveIds = new Set(active.map((session) => session.id));
-  const incomingArchivedIds = new Set(archived.map((session) => session.id));
-  const mergedActive = mergeSessionLists(state.activeSessions, active)
-    .filter((session) => !incomingArchivedIds.has(session.id));
-  const mergedArchived = mergeSessionLists(state.archivedSessions, archived)
-    .filter((session) => !incomingActiveIds.has(session.id));
-  const reconciled = overlayMutationsSince(state, mergedActive, mergedArchived, baselineRevision);
-  return applySnapshot(state, reconciled.activeSessions, reconciled.archivedSessions, state.status, false);
-};
 
 const overlayMutationsSince = (
   state: GlobalSessionsState,
@@ -419,10 +453,10 @@ const overlayMutationsSince = (
   }
   if (affectedIds.size === 0) return { activeSessions, archivedSessions };
 
-  const currentActive = new Map(state.activeSessions.map((session) => [session.id, session]));
-  const currentArchived = new Map(state.archivedSessions.map((session) => [session.id, session]));
-  let nextActive = activeSessions.filter((session) => !affectedIds.has(session.id));
-  let nextArchived = archivedSessions.filter((session) => !affectedIds.has(session.id));
+  const currentActive = new Map(state.activeSessions.map((session) => [session.sessionId, session]));
+  const currentArchived = new Map(state.archivedSessions.map((session) => [session.sessionId, session]));
+  let nextActive = activeSessions.filter((session) => !affectedIds.has(session.sessionId));
+  let nextArchived = archivedSessions.filter((session) => !affectedIds.has(session.sessionId));
   for (const sessionId of affectedIds) {
     const active = currentActive.get(sessionId);
     const archived = currentArchived.get(sessionId);
@@ -452,8 +486,8 @@ const materializeChangedSessionList = (
     return session && memberIds.has(sessionId) ? [session] : [];
   });
   for (const previousSession of previous) {
-    if (!memberIds.has(previousSession.id) || addedIds.has(previousSession.id)) continue;
-    const session = entityById.get(previousSession.id);
+    if (!memberIds.has(previousSession.sessionId) || addedIds.has(previousSession.sessionId)) continue;
+    const session = entityById.get(previousSession.sessionId);
     if (session) next.push(session);
   }
   return next;
@@ -469,10 +503,10 @@ const updateSessionsByDirectory = (
   const affectedDirectories = new Set<string>();
   const entityChangedDirectories = new Set<string>();
   for (const mutation of mutations) {
-    const previousDirectory = mutation.previous && !mutation.previous.time?.archived
+    const previousDirectory = mutation.previous && mutation.previous.archivedAt === undefined
       ? resolveGlobalSessionDirectory(mutation.previous)
       : null;
-    const nextDirectory = mutation.next && !mutation.next.time?.archived
+    const nextDirectory = mutation.next && mutation.next.archivedAt === undefined
       ? resolveGlobalSessionDirectory(mutation.next)
       : null;
     if (previousDirectory) affectedDirectories.add(previousDirectory);
@@ -505,20 +539,13 @@ const applySessionMutations = (
   state: GlobalSessionsState,
   requestedMutations: readonly GlobalSessionMutation[],
 ): Partial<GlobalSessionsState> => {
-  let mutations = requestedMutations;
-  if (isVSCodeRuntime()) {
-    mutations = requestedMutations.filter((mutation) => (
-      mutation.type === 'remove'
-      || filterManagedChatsForRuntime([mutation.session], true).length > 0
-    ));
-    if (mutations.length === 0) return state;
-  }
+  const mutations = requestedMutations;
   const revisionPatch = mutationRevisionPatch(state, mutations.map((mutation) => (
-    mutation.type === 'upsert' ? mutation.session.id : mutation.sessionId
+    mutation.type === 'upsert' ? mutation.session.sessionId : mutation.sessionId
   )));
   let nextEntityById: Map<string, Session> | null = null;
-  const activeIds = new Set(state.activeSessions.map((session) => session.id));
-  const archivedIds = new Set(state.archivedSessions.map((session) => session.id));
+  const activeIds = new Set(state.activeSessions.map((session) => session.sessionId));
+  const archivedIds = new Set(state.archivedSessions.map((session) => session.sessionId));
   const activeAdditions = new Set<string>();
   const archivedAdditions = new Set<string>();
   const structureMutations: GlobalSessionStructureMutation[] = [];
@@ -537,14 +564,14 @@ const applySessionMutations = (
   };
 
   for (const mutation of mutations) {
-    const sessionId = mutation.type === 'upsert' ? mutation.session.id : mutation.sessionId;
+    const sessionId = mutation.type === 'upsert' ? mutation.session.sessionId : mutation.sessionId;
     const existingSession = (nextEntityById ?? state.entityById).get(sessionId) ?? null;
     if (mutation.type === 'remove') {
       if (!existingSession) continue;
       nextEntityById ??= new Map(state.entityById);
       nextEntityById.delete(sessionId);
       structureMutations.push({ sessionId, previous: existingSession, next: null });
-      if (existingSession.time?.archived) {
+      if (existingSession.archivedAt !== undefined) {
         archivedChanged = true;
         removeMember(archivedIds, archivedAdditions, sessionId);
       } else {
@@ -555,12 +582,12 @@ const applySessionMutations = (
     }
 
     const sessionWithMetadata = mergeSessionDirectoryMetadata(mutation.session, existingSession);
-    if (existingSession && getSessionSignature(existingSession) === getSessionSignature(sessionWithMetadata)) continue;
+    if (existingSession && isSameSessionRecord(existingSession, sessionWithMetadata)) continue;
     nextEntityById ??= new Map(state.entityById);
     nextEntityById.set(sessionId, sessionWithMetadata);
     structureMutations.push({ sessionId, previous: existingSession, next: sessionWithMetadata });
-    const isArchived = Boolean(sessionWithMetadata.time?.archived);
-    const wasArchived = Boolean(existingSession?.time?.archived);
+    const isArchived = sessionWithMetadata.archivedAt !== undefined;
+    const wasArchived = existingSession !== null && existingSession.archivedAt !== undefined;
     if (existingSession) {
       if (wasArchived) archivedChanged = true;
       else activeChanged = true;
@@ -606,32 +633,28 @@ const applySessionMutations = (
   };
 };
 
-const buildReviewTransferMap = (sessions: Session[]): Map<string, ReviewTransferDirection> => {
-  const next = new Map<string, ReviewTransferDirection>()
-  const activeIds = new Set(sessions.map((s) => s.id))
+const buildReviewTransferMap = (sessions: Session[]): GlobalSessionsState['reviewTransferBySessionId'] => {
+  const next: GlobalSessionsState['reviewTransferBySessionId'] = new Map();
+  const activeIds = new Set(sessions.map((session) => session.sessionId));
   for (const session of sessions) {
-    const direction = getReviewTransferDirection(session)
-    if (!direction) continue
-    const targetSessionId = direction === 'review-to-original'
-      ? getOriginalSessionID(session)
-      : getReviewSessionID(session)
-    if (!targetSessionId || !activeIds.has(targetSessionId)) continue
-    next.set(session.id, direction)
+    const metadata = session.metadata?.openchamber;
+    const target = metadata?.kind === 'review' ? metadata.originalSessionID : metadata?.reviewSessionID;
+    if (!target || !activeIds.has(target)) continue;
+    next.set(session.sessionId, metadata?.kind === 'review' ? 'review-to-original' : 'original-to-review');
   }
-  return next
-}
+  return next;
+};
 
 const buildManagedChatSessionsState = (sessions: Session[], archivedSessions: Session[] = []) => ({
   activeSessions: sessions,
   archivedSessions,
-  entityById: new Map([...sessions, ...archivedSessions].map((session) => [session.id, session])),
+  entityById: new Map([...sessions, ...archivedSessions].map((session) => [session.sessionId, session])),
   structure: buildGlobalSessionStructure(sessions),
   sessionsByDirectory: buildSessionsByDirectory(sessions),
   reviewTransferBySessionId: buildReviewTransferMap(sessions),
 });
 
-const initialManagedChatSessions = readManagedChatSessions();
-const initialState = buildManagedChatSessionsState(initialManagedChatSessions);
+const initialState = buildManagedChatSessionsState(readPersistedSessionSeed());
 
 export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => ({
   ...initialState,
@@ -660,7 +683,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
   rehydrateManagedChatSessions: () => {
     const state = get();
     if (state.managedChatsHydrated || state.hasLoaded) return;
-    const hydrated = overlayMutationsSince(state, readManagedChatSessions(), state.archivedSessions, 0);
+    const hydrated = overlayMutationsSince(state, readPersistedSessionSeed(), state.archivedSessions, 0);
     const unchanged = sameSessionList(hydrated.activeSessions, state.activeSessions)
       && sameSessionList(hydrated.archivedSessions, state.archivedSessions);
     set(unchanged
@@ -671,8 +694,9 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
   resetForRuntimeSwitch: () => {
     loadGeneration += 1;
     inflightLoad = null;
+    resetWorkspaceDirectories();
     set({
-      ...buildManagedChatSessionsState(readManagedChatSessions()),
+      ...buildManagedChatSessionsState(readPersistedSessionSeed()),
       mutationRevision: 0,
       mutationRevisionBySessionId: new Map(),
       hasLoaded: false,
@@ -695,42 +719,30 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
         if (generation !== loadGeneration) return { activeSessions: [], archivedSessions: [] };
         rootsReady = true;
         get().rehydrateManagedChatSessions();
-        set((state) => (state.status === 'loading' ? state : { status: 'loading' }));
-        const sdk = opencodeClient.getSdkClient();
-        // One inclusive fetch, split client-side. The server's
-        // `time_archived IS NULL` active filter would exclude restored
-        // sessions (`time.archived` falsy-but-present), so an
-        // `archived: false` request cannot produce a truthful active list.
-        // Thousands of sessions paginate for seconds. Show the newest page as
-        // soon as it lands and keep loading the rest silently; the complete
-        // snapshot below is still the only authoritative result.
-        let firstPageMerged = false;
-        const allSessions = await listGlobalSessionPages(sdk, {
-          archived: true,
-          narrowToArchived: false,
-          pageSize: PAGE_SIZE,
-          onPage: (page) => {
-            if (firstPageMerged || generation !== loadGeneration) return;
-            firstPageMerged = true;
-            const firstPage = splitGlobalSessionsByArchived(page);
-            mergingSessionPage = true;
-            try {
-              set((state) => mergeSessionPage(state, firstPage.active, firstPage.archived, baselineRevision));
-            } finally {
-              mergingSessionPage = false;
-            }
-          },
-        });
+        const [result] = await Promise.all([canonicalClient.listSessions(), bindKnownWorkspaceDirectories(generation)]);
 
         if (generation !== loadGeneration) {
           // Runtime switched mid-load: this snapshot belongs to the previous
           // instance — drop it.
           return { activeSessions: [], archivedSessions: [] };
         }
-        const { active, archived } = splitGlobalSessionsByArchived(allSessions);
+        const children = await discoverChildSessions(result.items, get().entityById, generation);
+        if (generation !== loadGeneration) return { activeSessions: [], archivedSessions: [] };
         set((state) => {
+          const incoming = [...result.items, ...children.sessions];
+          const incomingIds = new Set(incoming.map((session) => session.sessionId));
+          const retained = [...state.activeSessions, ...state.archivedSessions].filter((session) => (
+            !incomingIds.has(session.sessionId) && (isSessionDiscoveryFailed(session, result.errors)
+              || (session.parentSessionId !== undefined && (children.failedParents.has(session.parentSessionId)
+                || isSessionDiscoveryFailed(state.entityById.get(session.parentSessionId) ?? session, result.errors))))
+          ));
+          const { active, archived } = splitGlobalSessionsByArchived([
+            ...incoming.map((session) => mergeSessionDirectoryMetadata(session, state.entityById.get(session.sessionId))),
+            ...retained,
+          ]);
           const reconciled = overlayMutationsSince(state, active, archived, baselineRevision);
-          return applySnapshot(state, reconciled.activeSessions, reconciled.archivedSessions, 'ready');
+          const complete = Object.keys(result.errors).length === 0 && children.failedParents.size === 0;
+          return applySnapshot(state, reconciled.activeSessions, reconciled.archivedSessions, complete ? 'ready' : 'error', complete);
         });
         const committed = get();
         raiseSessionOrderingBaselines(committed.activeSessions);
@@ -750,7 +762,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
         set((state) => {
           const reconciled = overlayMutationsSince(
             state,
-            mergeSessionLists(state.activeSessions, fallbackActive),
+            addUnlistedLiveSessions(state.activeSessions, state.archivedSessions, fallbackActive),
             state.archivedSessions,
             baselineRevision,
           );
@@ -762,6 +774,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
     })();
 
     inflightLoad = loadPromise;
+    set({ status: 'loading' });
     const clearInflightLoad = () => {
       if (inflightLoad === loadPromise) {
         inflightLoad = null;
@@ -791,9 +804,13 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
       return { activeSessions: state.activeSessions, archivedSessions: state.archivedSessions };
     }
     get().rehydrateManagedChatSessions();
-    const sdk = opencodeClient.getSdkClient();
-    const fetched = await fetchDirectoryPages(sdk, directorySet);
+    const fetched = await fetchDirectoryPages(directorySet);
 
+    if (generation !== loadGeneration) {
+      const state = get();
+      return { activeSessions: state.activeSessions, archivedSessions: state.archivedSessions };
+    }
+    const children = await discoverChildSessions(fetched.sessions, get().entityById, generation);
     if (generation !== loadGeneration) {
       const state = get();
       return { activeSessions: state.activeSessions, archivedSessions: state.archivedSessions };
@@ -802,20 +819,35 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
     if (fetched.errors.length > 0) {
       console.warn('[GlobalSessions] Failed to refresh sessions for some directories:', fetched.errors[0]);
     }
+    // A space that answered a directory read is reachable again, whatever the last global list said.
+    for (const directory of fetched.directories) {
+      const spaceId = spaceIdOfDirectory(directory);
+      if (spaceId !== null) useSpacesStore.getState().noteReachable(spaceId);
+    }
 
-    const { active, archived } = splitGlobalSessionsByArchived(fetched.sessions);
-    const refreshedActiveIds = active.map((session) => session.id);
+    const { active, archived } = splitGlobalSessionsByArchived([...fetched.sessions, ...children.sessions].map((session) => (
+      mergeSessionDirectoryMetadata(session, get().entityById.get(session.sessionId))
+    )));
+    const refreshedActiveIds = active.map((session) => session.sessionId);
 
     set((state) => {
-      let nextActiveSessions = replaceSessionsForDirectories(state.activeSessions, active, fetched.directories);
-      nextActiveSessions = mergeSessionLists(nextActiveSessions, fallbackActive);
-      if (sameSessionList(state.activeSessions, nextActiveSessions)) {
-        nextActiveSessions = state.activeSessions;
-      }
-
-      let nextArchivedSessions = replaceSessionsForDirectories(state.archivedSessions, archived, fetched.directories);
+      // Directory root discovery cannot prove a child disappeared. Only a
+      // successful list for that child's parent authorizes replacement.
+      const preservedChildren = state.activeSessions.filter((session) => session.parentSessionId !== undefined
+        && !children.succeededParents.has(session.parentSessionId));
+      const preservedArchivedChildren = state.archivedSessions.filter((session) => session.parentSessionId !== undefined
+        && !children.succeededParents.has(session.parentSessionId));
+      let nextArchivedSessions = replaceSessionsForDirectories(state.archivedSessions, [...archived, ...preservedArchivedChildren], fetched.directories, fetched.failures);
       if (sameSessionList(state.archivedSessions, nextArchivedSessions)) {
         nextArchivedSessions = state.archivedSessions;
+      }
+
+      let nextActiveSessions = replaceSessionsForDirectories(state.activeSessions, [...active, ...preservedChildren], fetched.directories, fetched.failures);
+      nextActiveSessions = addUnlistedLiveSessions(nextActiveSessions, nextArchivedSessions, fallbackActive?.filter((session) => (
+        !session.parentSessionId || !children.succeededParents.has(session.parentSessionId)
+      )));
+      if (sameSessionList(state.activeSessions, nextActiveSessions)) {
+        nextActiveSessions = state.activeSessions;
       }
 
       const reconciled = overlayMutationsSince(state, nextActiveSessions, nextArchivedSessions, baselineRevision);
@@ -839,7 +871,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
       return {
         activeSessions: nextActiveSessions,
         archivedSessions: nextArchivedSessions,
-        entityById: new Map([...nextActiveSessions, ...nextArchivedSessions].map((session) => [session.id, session])),
+        entityById: new Map([...nextActiveSessions, ...nextArchivedSessions].map((session) => [session.sessionId, session])),
         structure: activeChanged ? buildGlobalSessionStructure(nextActiveSessions) : state.structure,
         sessionsByDirectory: nextSessionsByDirectory,
         reviewTransferBySessionId: nextActiveSessions === state.activeSessions
@@ -851,7 +883,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
     const state = get();
     raiseSessionOrderingBaselines(refreshedActiveIds.flatMap((sessionId) => {
       const session = state.entityById.get(sessionId);
-      return session && !session.time?.archived ? [session] : [];
+      return session && session.archivedAt === undefined ? [session] : [];
     }));
     return { activeSessions: state.activeSessions, archivedSessions: state.archivedSessions };
   },
@@ -866,6 +898,15 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
       state,
       sessions.map((session) => ({ type: 'upsert' as const, session })),
     ));
+  },
+
+  upsertSubagents: (parent, children) => {
+    set((state) => applySessionMutations(state, children.flatMap((child) => {
+      const previous = state.entityById.get(child.childSessionId);
+      if (child.parentSessionId !== parent.sessionId || child.childSessionId === parent.rootSessionId
+        || (previous && previous.parentSessionId !== parent.sessionId)) return [];
+      return [{ type: 'upsert' as const, session: childSessionRecord(parent, child) }];
+    })));
   },
 
   removeSessions: (ids) => {
@@ -890,14 +931,8 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
       const movedSessions: Session[] = [];
       for (const sessionId of idSet) {
         const session = state.entityById.get(sessionId);
-        if (!session || session.time?.archived) continue;
-        movedSessions.push({
-          ...session,
-          time: {
-            ...session.time,
-            archived: archivedAt,
-          },
-        });
+        if (!session || session.archivedAt !== undefined) continue;
+        movedSessions.push({ ...session, archivedAt });
       }
 
       if (movedSessions.length === 0) {
@@ -915,22 +950,53 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
   },
 }));
 
+subscribeWorkspaceDirectories(() => {
+  const state = useGlobalSessionsStore.getState();
+  if (state.activeSessions.length === 0) return;
+  useGlobalSessionsStore.setState({
+    structure: buildGlobalSessionStructure(state.activeSessions),
+    sessionsByDirectory: buildSessionsByDirectory(state.activeSessions),
+  });
+});
+/**
+ * Before the first complete load the store holds a non-authoritative seed and
+ * live upserts. Persist the saved snapshot plus explicit mutations until a
+ * complete discovery succeeds; partial discovery cannot retire unread scopes.
+ */
+const persistGlobalSnapshotFrom = (state: GlobalSessionsState, previous: GlobalSessionsState): void => {
+  if (state.hasLoaded) {
+    if (state.activeSessions !== previous.activeSessions || state.sessionsByDirectory !== previous.sessionsByDirectory || !previous.hasLoaded) {
+      persistGlobalSessionSnapshot(state.activeSessions.filter((session) => !isChatDirectoryPath(resolveGlobalSessionDirectory(session))));
+    }
+    return;
+  }
+  if (state.mutationRevision !== previous.mutationRevision || state.sessionsByDirectory !== previous.sessionsByDirectory) {
+    persistGlobalSessionSnapshot(overlayMutationsSince(state, readGlobalSessionSnapshot(), [], 0).activeSessions.filter((session) => !isChatDirectoryPath(resolveGlobalSessionDirectory(session))));
+  }
+};
+
 useGlobalSessionsStore.subscribe((state, previous) => {
   countSyncPerformance('globalSessionPublications');
+  // Both snapshots split sessions by the chats root, so they wait for it.
+  if (getChatsRoot() === null) return;
   if (
-    !mergingSessionPage
-    && getChatsRootForHome(null) !== null
-    && (state.activeSessions !== previous.activeSessions
-      || (!state.managedChatsHydrated && state.mutationRevision !== previous.mutationRevision)
-      || (state.hasLoaded && !previous.hasLoaded))
+    state.activeSessions !== previous.activeSessions
+    || state.sessionsByDirectory !== previous.sessionsByDirectory
+    || (!state.managedChatsHydrated && state.mutationRevision !== previous.mutationRevision)
+    || (state.hasLoaded && !previous.hasLoaded)
   ) {
     // A local mutation can precede the initial load. Preserve the saved seed
     // and overlay its explicit mutations instead of persisting a partial list.
     const sessions = !state.hasLoaded && !state.managedChatsHydrated
       ? overlayMutationsSince(state, readManagedChatSessions(), [], 0).activeSessions
       : state.activeSessions;
-    persistManagedChatSessions(sessions);
+    const previousChats = new Set(readManagedChatSessions().map((session) => session.sessionId));
+    persistManagedChatSessions(sessions.filter((session) => (
+      isChatDirectoryPath(resolveGlobalSessionDirectory(session))
+      || (resolveGlobalSessionDirectory(session) === null && previousChats.has(session.sessionId))
+    )));
   }
+  persistGlobalSnapshotFrom(state, previous);
 });
 
 export const ensureGlobalSessionsLoaded = async (fallbackActive?: Session[]): Promise<LoadResult> => {

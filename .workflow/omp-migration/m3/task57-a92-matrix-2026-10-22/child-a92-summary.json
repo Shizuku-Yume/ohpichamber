@@ -1,0 +1,19 @@
+{
+  "childPass": true,
+  "session": "3a97efba-e839-429f-8e80-d81715e5a60e",
+  "child": "01a15f8e-9cb8-73ff-8ebf-51b66dda125b",
+  "checks": {
+    "taskResultStatus": "completed",
+    "subagentsStatus": 200,
+    "childHistoryStatus": 200,
+    "taskRowLink": true,
+    "sidebarNested": true
+  },
+  "screenshots": [
+    "child-ui-a92.png",
+    "child-panel-a92.png",
+    "child-page-a92.png",
+    "child-back-a92.png",
+    "child-sidebar-a92.png"
+  ]
+}

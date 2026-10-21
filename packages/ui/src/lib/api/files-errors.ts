@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 export type FilesystemErrorReason =
   | 'os-permission'
   | 'already-exists'
@@ -40,3 +42,20 @@ export const parseFilesystemErrorReason = (value: unknown): FilesystemErrorReaso
       return 'unknown';
   }
 };
+
+// Inspect message-bearing failures without depending on their prototype.
+const messageCarrierSchema = z.object({ message: z.string() });
+
+export const isFileMissingError = (error: unknown): boolean => {
+  if (isFilesystemError(error) && error.reason === 'not-found') {
+    return true;
+  }
+  const carrier = messageCarrierSchema.safeParse(error);
+  const message = error instanceof Error ? error.message : carrier.success ? carrier.data.message : String(error ?? '');
+  const normalized = message.toLowerCase();
+  return normalized.includes('file not found')
+    || normalized.includes('enoent')
+    || normalized.includes('no such file')
+    || normalized.includes('does not exist');
+};
+

@@ -13,7 +13,7 @@
 //   instead of being listed here, so adding a test never requires editing a
 //   list that then rots.
 //
-// Usage: node scripts/run-isolated-tests.mjs <root> [...roots]
+// Usage: node scripts/run-isolated-tests.mjs <root> [...roots] [--exclude <dir>]
 
 import { spawn } from 'node:child_process';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -26,15 +26,20 @@ const SKIP_DIRS = new Set(['node_modules', 'dist', 'dist-bundle', 'build', 'out'
 const MAX_PARALLEL = 4;
 const bunExecutable = resolveBunExecutable();
 
+// Staged dependency trees (a packaged runtime's own sources) are not this
+// repository's tests, so a caller names them instead of the runner guessing.
+const excluded = [];
+const isExcluded = (full) => excluded.some((dir) => full === dir || full.startsWith(`${dir}${path.sep}`));
+
 const collect = (root, found = []) => {
   for (const entry of readdirSync(root, { withFileTypes: true })) {
     if (entry.name.startsWith('.') && entry.name !== '.') continue;
     const full = path.join(root, entry.name);
     if (entry.isDirectory()) {
-      if (!SKIP_DIRS.has(entry.name)) collect(full, found);
+      if (!SKIP_DIRS.has(entry.name) && !isExcluded(full)) collect(full, found);
       continue;
     }
-    if (TEST_FILE.test(entry.name)) found.push(full);
+    if (TEST_FILE.test(entry.name) && !isExcluded(full)) found.push(full);
   }
   return found;
 };
@@ -55,19 +60,76 @@ const resolveCommand = (file) => {
   return null;
 };
 
+// Only the tail of a file's output is kept for its failure report. A test that
+// logs in a loop otherwise grows the buffer past V8's string limit and takes
+// the whole run down with a RangeError that names no file.
+const OUTPUT_TAIL_BYTES = 1024 * 1024;
+
+// A hung file is killed so it cannot block the run. The whole CI test step
+// takes about two minutes, so this leaves room for slower machines.
+const FILE_TIMEOUT_MS = 5 * 60 * 1000;
+
 const run = ({ command, args }) => new Promise((resolve) => {
   const child = spawn(command, args, {
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
   });
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    // A process the test started can hold the pipes open after the kill, so
+    // `close` may never come. Stop reading and settle on `exit`. The file may
+    // also have exited on its own long ago with only that process left; then
+    // `exit` is over and the settle happens right away.
+    const settle = () => {
+      child.stdout.destroy();
+      child.stderr.destroy();
+      resolve({ code: 1, output: report(), dropped, timedOut });
+    };
+    if (child.exitCode !== null || child.signalCode !== null) {
+      settle();
+      return;
+    }
+    child.once('exit', settle);
+    child.kill('SIGKILL');
+  }, FILE_TIMEOUT_MS);
   let output = '';
-  child.stdout.on('data', (chunk) => { output += chunk; });
-  child.stderr.on('data', (chunk) => { output += chunk; });
-  child.on('error', (error) => resolve({ code: 1, output: `${output}${error.message}` }));
-  child.on('close', (code) => resolve({ code: code ?? 1, output }));
+  let dropped = 0;
+  const append = (chunk) => {
+    output += chunk;
+    if (output.length > 2 * OUTPUT_TAIL_BYTES) {
+      dropped += output.length - OUTPUT_TAIL_BYTES;
+      output = output.slice(-OUTPUT_TAIL_BYTES);
+    }
+  };
+  const report = () => (dropped > 0 ? `[${dropped} earlier characters of output dropped]\n${output}` : output);
+  child.stdout.on('data', append);
+  child.stderr.on('data', append);
+  child.on('error', (error) => {
+    clearTimeout(timer);
+    resolve({ code: 1, output: `${report()}${error.message}`, dropped, timedOut });
+  });
+  child.on('close', (code) => {
+    clearTimeout(timer);
+    resolve({ code: code ?? 1, output: report(), dropped, timedOut });
+  });
 });
 
-const roots = process.argv.slice(2);
+const roots = [];
+const args = process.argv.slice(2);
+for (let index = 0; index < args.length; index += 1) {
+  if (args[index] === '--exclude') {
+    const value = args[index + 1];
+    if (!value) {
+      console.error('run-isolated-tests: --exclude expects a directory');
+      process.exit(1);
+    }
+    excluded.push(path.resolve(value));
+    index += 1;
+    continue;
+  }
+  roots.push(args[index]);
+}
 if (roots.length === 0) {
   console.error('run-isolated-tests: expected at least one root directory');
   process.exit(1);
@@ -98,8 +160,12 @@ const worker = async () => {
       unknown.push(relative);
       continue;
     }
-    const { code, output } = await run(resolved);
-    if (code === 0) {
+    const { code, output, dropped, timedOut } = await run(resolved);
+    if (dropped > 0) console.error(`NOISY (${resolved.label}) ${relative}: ${dropped} characters of output dropped`);
+    if (timedOut) {
+      failures.push({ relative, label: resolved.label, output: `${output}\n[killed after ${FILE_TIMEOUT_MS / 1000}s]` });
+      console.error(`TIMEOUT (${resolved.label}) ${relative}`);
+    } else if (code === 0) {
       passed += 1;
     } else {
       failures.push({ relative, label: resolved.label, output });

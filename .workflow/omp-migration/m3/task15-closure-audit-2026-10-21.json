@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "task": "omp-through-m3/15",
+  "status": "closure-audit-paused",
+  "observedAt": "2026-10-21T14:30:00+08:00",
+  "integrationHead": "36d30521f5cb4d14b5a1d35c2d23f6565c9cf8f9",
+  "worktree": "/home/shizuku/Project/ohpichamber-worktrees/15-close-receipt",
+  "branch": "omp-through-m3/15-close-receipt-20261021",
+  "sourceChanges": "none",
+  "execution": "No service, test, build, or connected run was performed. Existing receipts were reconciled with a current-source audit.",
+  "acceptance": [
+    {
+      "check": "Migrate model/provider/MCP/skills/completion and shell consumers to canonical service calls.",
+      "result": "supported",
+      "evidence": [
+        "Task15 checks: task15-paused-evidence-2026-10-21.json and task15-connected-retry-2026-10-21.json.",
+        "Current source audit at 36d30521f: zero production imports of @opencode/client, @opencode/schema, or lib/opencode under packages/ui/src, packages/web/src and the Electron package source; Task36 archived W10 recorded the same zero result.",
+        "packages/ui/src/stores/useConfigStore.ts resolves provider/model catalogs through canonicalClient; packages/ui/src/stores/useMcpConfigStore.ts and useMcpStore.ts use canonical workspace MCP routes; useSkillsStore/useSkillsCatalogStore use Host discovery plus canonical Composer expansion; packages/ui/src/lib/smallModelRequest.ts uses canonicalClient.complete; packages/ui/src/lib/guests/shells.ts and shell-requests.ts use canonicalClient shell methods.",
+        "Canonical workspace MCP authority is integrated (development.md: sessionless workspace MCP backend 7ab670325, legacy retirement 3c4b8e7a6); packages/web/server/lib/host/canonical-routes.js owns the workspace and session MCP routes."
+      ]
+    },
+    {
+      "check": "Composer skill mentions and slash commands through service-owned expansion.",
+      "result": "supported",
+      "evidence": [
+        "Task15 Progress: focused canonical Composer routing tests 17 tests / 34 assertions passed; session-ui-store 65 passed / 6 unrelated pre-existing failures.",
+        "Task15 Progress: skills Host cutover focused store checks 13 tests / 56 assertions and Host skill-route suites 23 tests passed."
+      ]
+    },
+    {
+      "check": "Guest SDK contract remains separate from Canonical Agent Client types.",
+      "result": "supported",
+      "evidence": [
+        "Task15 Progress Guest canonical caller closure (ad7deaf8b) uses @openchamber/agent-contract for message records and removes the legacy tool-model import.",
+        "packages/sdk remains the Guest wire contract; Guest bridge code imports SDK request/result types and canonical DTOs from @openchamber/agent-contract, without copying SDK types into packages/ui."
+      ]
+    },
+    {
+      "check": "Host-owned filesystem/Git/environment/terminal capabilities stay on Host Gateway APIs.",
+      "result": "supported",
+      "evidence": [
+        "task15-paused-evidence-2026-10-21.json: Host filesystem dirty move passed with an explicit directory query (mkdir/write/rename/read 200, old path 404, delete 200, removed directory 404).",
+        "Git, environment and terminal were not re-observed connected; they remain on the existing Host APIs as recorded in the checked Task15 box."
+      ]
+    },
+    {
+      "check": "Make loading, empty, unavailable and partial states distinguishable.",
+      "result": "open",
+      "evidence": [
+        "Focused store tests cover several distinctions (useAgentsStore loading/ready/error and successful empty catalogs; useSkillsStore successful empty versus failed discovery; useMcpConfigStore failed reads and partial apply; Guest GuestLoadState loading/ready/error).",
+        "No recorded connected observation of the migrated settings, sidebar, Board and Guest surfaces distinguishes loading, empty, unavailable and partial states. Store-level tests alone do not close this task box."
+      ]
+    },
+    {
+      "check": "Update search/labels/ARIA and theme states only where migration changes visible behavior.",
+      "result": "open",
+      "evidence": [
+        "No recorded source or visual audit of search, labels, ARIA and theme states after migration.",
+        "The Task15 Progress records this as an unobserved connected row; no locale, ARIA or theme change was separately verified."
+      ]
+    },
+    {
+      "check": "Render sidebar subagent hierarchy via canonical parentSessionId.",
+      "result": "source-supported-connected-observation-open",
+      "evidence": [
+        "Task15 Progress child hierarchy slice: listSubagents projection into the native Session cache; focused global/session-loader/session-action packet 160 tests / 509 assertions.",
+        "Task32 archived record proves native TaskTool child projection through the built service and loopback provider.",
+        "No connected sidebar run has shown a native child row. The Host workspace policy hard-codes toolRequests: [] (packages/web/server/lib/host/agent-runtime.js:48) and worker-operation-authorizer.js:112 denies a task request absent from that list, so the Task15 retry could not create a native child."
+      ]
+    }
+  ],
+  "connectedRows": {
+    "boardItemAndDraft": "passed; task15-connected-retry-2026-10-21.json (real openchamber/openchamber #5304, Attach to session -> New session draft)",
+    "hostFilesystemDirtyMove": "passed; task15-paused-evidence-2026-10-21.json",
+    "supportedHostShellFlow": "passed; task15-connected-retry-2026-10-21.json (fixture bash async:true approval, canonical run, output read, stop {reason:'stopped'})",
+    "guestProjectSessionItems": "passed; task73-guest-projection-2026-10-21.json, implementation c6ab1d55e (path_* project, pro_* canonical sessions, own-guest-only ITEM-1, root/worktree sessions)",
+    "guestShellOutputStop": "passed; task74-guest-shell-bridge-2026-10-21.json, implementation 0152a0718 (readShellOutput t15-line-1..3, stopShell {stopped:true}, bridge answers inside 15 s deadline)",
+    "utilityGenerateAndPackagedElectron": "Task36 archived receipt task36-connected-acceptance-2026-10-21.json covers utility generate 200 and packaged Electron session/Board/Guest observations on Web dist 42170a97 and AppImage 598bf582; it does not cover Guest shell output/stop or child hierarchy",
+    "connectedSidebarChildHierarchy": "not observed; blocked by Host task policy as recorded above"
+  },
+  "remaining": [
+    "Connected observation of loading, empty, unavailable and partial states on the migrated settings, sidebar, Board and Guest surfaces.",
+    "Search/labels/ARIA/theme audit where migration changes visible behavior.",
+    "Connected sidebar child-hierarchy observation with a profile whose Host policy permits the task tool, or a recorded owning-task decision for that policy gap.",
+    "Packaged Electron at the current HEAD remains Task18 gate work; the Task36 artifact predates Tasks 73/74."
+  ],
+  "archiveDecision": "paused-not-archived",
+  "nextStep": "Task18's gate waits on this task, so its integrated acceptance packet is the natural place to observe the three open connected rows. If Task18 does not observe them, resume Task15 with one bounded connected Web run at the landed integration HEAD, reusing the Task73/74 isolated project, Guest and fixture-provider setup. Rerun the focused owner suites only if source changes. Archive when every Task15 box is checked. Do not repeat Board launch, Host filesystem dirty move, Guest projection or Guest shell output/stop.",
+  "review": "not run; no source change in this audit"
+}

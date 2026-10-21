@@ -1,7 +1,5 @@
-import { readAuthFile } from '../../opencode/auth.js';
+import { credentialAccessToken } from './selected-credential.js';
 import {
-  getAuthEntry,
-  normalizeAuthEntry,
   buildResult,
   toUsageWindow,
   toNumber,
@@ -10,19 +8,13 @@ import {
 
 export const providerId = 'deepseek';
 export const providerName = 'DeepSeek';
-const aliases = ['deepseek'];
+
 const DEEPSEEK_QUOTA_URL = 'https://api.deepseek.com/user/balance';
 
-export const isConfigured = () => {
-  const auth = readAuthFile();
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  return Boolean(entry?.key || entry?.token);
-};
+export const isConfigured = (credential) => Boolean(credentialAccessToken(credential));
 
-export const fetchQuota = async () => {
-  const auth = readAuthFile();
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  const apiKey = entry?.key ?? entry?.token;
+export const fetchQuota = async ({ credential } = {}) => {
+  const apiKey = credentialAccessToken(credential);
 
   if (!apiKey) {
     return buildResult({
@@ -60,7 +52,13 @@ export const fetchQuota = async () => {
 
     const payload = await response.json();
     const balanceInfos = Array.isArray(payload?.balance_infos) ? payload.balance_infos : [];
-    const balanceInfo = balanceInfos.find((info) => info?.currency === 'USD')
+    const positiveBalances = balanceInfos.filter((info) => {
+      const num = toNumber(info?.total_balance);
+      return typeof num === 'number' && num > 0;
+    });
+    const balanceInfo = positiveBalances.find((info) => info?.currency === 'USD')
+      ?? positiveBalances.find((info) => info?.currency === 'CNY')
+      ?? balanceInfos.find((info) => info?.currency === 'USD')
       ?? balanceInfos.find((info) => info?.currency === 'CNY')
       ?? null;
     const rawBalance = balanceInfo?.total_balance;
@@ -112,7 +110,7 @@ export const fetchQuota = async () => {
         ? 'Request timed out'
         : isParseError
           ? 'Invalid response from provider'
-          : (error instanceof Error ? error.message : 'Request failed')
+          : ('Request failed')
     });
   }
 };

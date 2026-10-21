@@ -1,7 +1,7 @@
 import { describe, expect, mock, test } from 'bun:test';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { Session } from '@opencode-ai/sdk/v2';
+import type { Session } from '@openchamber/agent-contract';
 import type { SessionNodeItemProps } from './SessionNodeItem';
 import type { SessionTreeItemProps } from './SessionTreeItem';
 import { installHookTestDom } from '../test-utils/testDom';
@@ -21,7 +21,6 @@ mock.module('./hooks/useSessionActions', () => ({
     setEditingId: (id: string | null) => void;
     setEditTitle: (title: string) => void;
   }) => ({
-    copiedSessionId: null,
     handleSaveEdit: () => undefined,
     handleCancelEdit: () => undefined,
     handleSessionSelect: () => undefined,
@@ -29,10 +28,7 @@ mock.module('./hooks/useSessionActions', () => ({
       args.setEditingId(id);
       args.setEditTitle(title);
     },
-    handleShareSession: () => undefined,
-    handleCopyShareUrl: () => undefined,
     handleCopySessionId: () => undefined,
-    handleUnshareSession: () => undefined,
     handleDeleteSession: () => undefined,
     handleRestoreSession: () => undefined,
   }),
@@ -45,14 +41,21 @@ const noopStartSessionWorktreeMenuLoad: SessionTreeItemProps['startSessionWorktr
   refreshTargets: Promise.resolve([]),
 });
 
-const session = (id: string): Session => ({
-  id,
-  slug: id,
-  projectID: 'project',
-  title: 'Shared title',
-  version: '1',
-  directory: '/workspace',
-  time: { created: 1, updated: 1 },
+const session = (sessionId: string): Session => ({
+  sessionId,
+  rootSessionId: sessionId,
+  projectId: 'project',
+  workspaceId: 'workspace',
+  displayPath: '/workspace',
+  createdAt: 1,
+  updatedAt: 1,
+  epoch: '1',
+  headSequence: '0',
+  runtimeStatus: 'idle',
+  activeRunId: null,
+  metadata: { title: 'Shared title' },
+  metadataRevision: '1',
+  archiveRevision: '0',
 });
 
 describe('SessionTreeItem public behavior', () => {
@@ -68,7 +71,6 @@ describe('SessionTreeItem public behavior', () => {
       const [editingRowKey, setEditingRowKey] = React.useState<string | null>(null);
       const [editTitle, setEditTitle] = React.useState('');
       const [menuKey, setMenuKey] = React.useState<string | null>(null);
-      const [copiedSessionId, setCopiedSessionId] = React.useState<string | null>(null);
       const rows = [
         { renderContext: 'project' as const, groupDirectory: '/workspace', rowKey: 'project:session:same-session' },
         { renderContext: 'recent' as const, groupDirectory: '/workspace', rowKey: 'recent:session:same-session' },
@@ -88,7 +90,6 @@ describe('SessionTreeItem public behavior', () => {
         editTitle={editTitle}
         setEditTitle={setEditTitle}
         toggleParent={noop}
-        copiedSessionId={copiedSessionId}
         openSidebarMenuKey={menuKey}
         setOpenSidebarMenuKey={setMenuKey}
         allowReselect={false}
@@ -96,7 +97,6 @@ describe('SessionTreeItem public behavior', () => {
         deleteSessionConfirm={null}
         setDeleteSessionConfirm={noop}
         startFolderRename={noop}
-        setCopiedSessionId={setCopiedSessionId}
         startSessionWorktreeMenuLoad={noopStartSessionWorktreeMenuLoad}
         mobileVariant={false}
         alwaysShowActions={false}
@@ -108,12 +108,12 @@ describe('SessionTreeItem public behavior', () => {
       await act(async () => root.render(<I18nProvider><Harness /></I18nProvider>));
       expect(renderedRows).toHaveLength(2);
 
-      await act(async () => renderedRows[0]?.handleSessionDoubleClick(sharedSession.id, sharedSession.title));
+      await act(async () => renderedRows[0]?.handleSessionDoubleClick(sharedSession.sessionId, sharedSession.metadata?.title ?? ''));
       expect(renderedRows).toHaveLength(4);
       expect(renderedRows.slice(-2).map((row) => [row.editingId, row.editingRowKey, row.editTitle]))
         .toEqual([
-          [sharedSession.id, 'project:session:same-session', sharedSession.title],
-          [sharedSession.id, 'project:session:same-session', sharedSession.title],
+          [sharedSession.sessionId, 'project:session:same-session', sharedSession.metadata?.title ?? ''],
+          [sharedSession.sessionId, 'project:session:same-session', sharedSession.metadata?.title ?? ''],
         ]);
 
       await act(async () => renderedRows[3]?.setOpenSidebarMenuKey('session-menu:recent:session:same-session'));

@@ -1,14 +1,11 @@
 import React from 'react';
-import type { Message, Part } from '@opencode-ai/sdk/v2';
 import { useShallow } from 'zustand/react/shallow';
 
-import { MessageFreshnessDetector } from '@/lib/messageFreshness';
+import type { ChatMessageEntry, TurnGroupingContext } from './lib/turns/types';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { useFeatureFlagsStore } from '@/stores/useFeatureFlagsStore';
 import { useUIStore } from '@/stores/useUIStore';
-import { useContextStore } from '@/stores/contextStore';
+import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useSelectionStore } from '@/sync/selection-store';
 import { useDeviceInfo } from '@/lib/device';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { cn } from '@/lib/utils';
@@ -19,59 +16,31 @@ import { GuestIcon } from '@/components/layout/GuestRailIcon';
 import { useGuestActions } from '@/hooks/useGuestSurfaces';
 import { buildGuestMessageItem, guestMessageActionsFor } from '@/lib/guests/actions';
 import { runGuestAction } from '@/lib/guests/run-action';
-import type { AgentMentionInfo } from './message/types';
 import type { StreamPhase, ToolPopupContent } from './message/types';
-import { deriveMessageRole } from './message/messageRole';
 import { filterVisibleParts, normalizeParts } from './message/partUtils';
-import { normalizeUserDisplayParts } from './message/normalizeUserDisplayParts';
 import { isHiddenUserMessage } from './message/hiddenUserMessage';
 import { flattenAssistantTextParts, flattenUserTextParts } from '@/lib/messages/messageText';
-import { isLikelyProviderAuthFailure, PROVIDER_AUTH_FAILURE_MESSAGE } from '@/lib/messages/providerAuthError';
-import { getProviderModelDisplayName } from '@/lib/modelDisplay';
 import { lazyWithChunkRecovery } from '@/lib/chunkLoadRecovery';
-import type { TurnGroupingContext } from './lib/turns/types';
 import { copyMarkdownToClipboard, copyTextToClipboard } from '@/lib/clipboard';
+import { renderMarkdownSync } from './markdown/markdownCore';
+import { renderedMarkdownHtmlToPlainText } from './markdown/selectionMarkdown';
 import { FadeInOnReveal } from './message/FadeInOnReveal';
 import { streamPerfCount } from '@/stores/utils/streamDebug';
 import { areOptionalRenderRelevantMessagesEqual, areRenderRelevantMessagesEqual, areRelevantTurnGroupingContextsEqual } from './message/renderCompare';
 import type { ReviewTransferDirection } from '@/lib/reviewFlow';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui';
+import { useCopyMessageLink } from './message/useCopyMessageLink';
 import { useI18n } from '@/lib/i18n';
-import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { getContextObligatoryMessages } from '@/lib/contextObligatoryMessages';
 import { setContextObligatoryMessage } from '@/sync/session-actions';
-import { isVSCodeRuntime } from '@/lib/desktop';
-import { focusChatInput } from './composer/editor/dom';
+import { useChatColumnActions } from './chatColumnSession';
+import { isFileChangeTool, isShellTool } from '@/lib/toolHelpers';
 
 const ToolOutputDialog = lazyWithChunkRecovery(() => import('./message/ToolOutputDialog'));
 
 const EXPANDED_TOOLS_CACHE_MAX = 4000;
 const expandedToolsStateCache = new Map<string, Set<string>>();
 const collapsedToolsStateCache = new Map<string, Set<string>>();
-
-const BASH_TOOL_NAMES = new Set(['bash', 'shell', 'cmd', 'terminal']);
-const EDIT_TOOL_NAMES = new Set([
-    'apply_patch',
-    'edit',
-    'write',
-    'multiedit',
-    'str_replace',
-    'str_replace_based_edit_tool',
-    'create',
-    'file_write',
-]);
-
-const normalizeToolName = (toolName: unknown): string => {
-    if (typeof toolName !== 'string') return '';
-    const trimmed = toolName.trim().toLowerCase();
-    if (!trimmed) return '';
-    const withoutIndex = trimmed.replace(/:\d+$/, '');
-    if (!withoutIndex.includes('.')) {
-        return withoutIndex;
-    }
-    const parts = withoutIndex.split('.').filter(Boolean);
-    return parts[parts.length - 1] ?? withoutIndex;
-};
 
 const readExpandedToolsCache = (messageId: string): Set<string> => {
     const cached = expandedToolsStateCache.get(messageId);
@@ -81,7 +50,7 @@ const readExpandedToolsCache = (messageId: string): Set<string> => {
 const writeExpandedToolsCache = (messageId: string, value: Set<string>): void => {
     if (expandedToolsStateCache.size >= EXPANDED_TOOLS_CACHE_MAX && !expandedToolsStateCache.has(messageId)) {
         const oldest = expandedToolsStateCache.keys().next().value;
-        if (typeof oldest === 'string') {
+        if (oldest !== undefined) {
             expandedToolsStateCache.delete(oldest);
         }
     }
@@ -96,7 +65,7 @@ const readCollapsedToolsCache = (messageId: string): Set<string> => {
 const writeCollapsedToolsCache = (messageId: string, value: Set<string>): void => {
     if (collapsedToolsStateCache.size >= EXPANDED_TOOLS_CACHE_MAX && !collapsedToolsStateCache.has(messageId)) {
         const oldest = collapsedToolsStateCache.keys().next().value;
-        if (typeof oldest === 'string') {
+        if (oldest !== undefined) {
             collapsedToolsStateCache.delete(oldest);
         }
     }
@@ -115,27 +84,10 @@ function useStickyDisplayValue<T>(value: T | null | undefined): T | null | undef
     return value ?? stickyValue;
 }
 
-const getMessageInfoProp = (info: unknown, key: string): unknown => {
-    if (typeof info === 'object' && info !== null) {
-        return (info as Record<string, unknown>)[key];
-    }
-    return undefined;
-};
-
 interface ChatMessageProps {
-    message: {
-        info: Message;
-        parts: Part[];
-    };
-    previousMessage?: {
-        info: Message;
-        parts: Part[];
-    };
-    nextMessage?: {
-        info: Message;
-        parts: Part[];
-    };
-    scrollToBottom?: () => void;
+    message: ChatMessageEntry;
+    previousMessage?: ChatMessageEntry;
+    nextMessage?: ChatMessageEntry;
     turnGroupingContext?: TurnGroupingContext;
     assistantHeaderMessageId?: string;
     isInActiveTurn?: boolean;
@@ -160,12 +112,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     const { t } = useI18n();
     const { isMobile, isTablet, hasTouchInput } = useDeviceInfo();
     const alwaysShowMessageActions = isMobile || isTablet;
-    const canPinIntoContext = !isVSCodeRuntime();
     const { currentTheme } = useThemeSystem();
     const messageContainerRef = React.useRef<HTMLDivElement | null>(null);
-
-    const getAgentModelForSession = useSelectionStore((s) => s.getAgentModelForSession);
-    const getSessionModelSelection = useSelectionStore((s) => s.getSessionModelSelection);
 
     streamPerfCount('ui.chat_message.render');
     if (isInActiveTurn) {
@@ -185,8 +133,9 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
     const [copiedCode, setCopiedCode] = React.useState<string | null>(null);
     const [copiedMessage, setCopiedMessage] = React.useState(false);
-    const [expandedTools, setExpandedTools] = React.useState<Set<string>>(() => readExpandedToolsCache(message.info.id));
-    const [collapsedTools, setCollapsedTools] = React.useState<Set<string>>(() => readCollapsedToolsCache(message.info.id));
+    const handleCopyLink = useCopyMessageLink(message.sessionId, message.messageId);
+    const [expandedTools, setExpandedTools] = React.useState<Set<string>>(() => readExpandedToolsCache(message.messageId));
+    const [collapsedTools, setCollapsedTools] = React.useState<Set<string>>(() => readCollapsedToolsCache(message.messageId));
     const [popupContent, setPopupContent] = React.useState<ToolPopupContent>({
         open: false,
         title: '',
@@ -194,258 +143,26 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     });
 
     React.useEffect(() => {
-        setExpandedTools(readExpandedToolsCache(message.info.id));
-        setCollapsedTools(readCollapsedToolsCache(message.info.id));
-    }, [message.info.id]);
+        setExpandedTools(readExpandedToolsCache(message.messageId));
+        setCollapsedTools(readCollapsedToolsCache(message.messageId));
+    }, [message.messageId]);
 
-
-
-    const messageRole = React.useMemo(() => deriveMessageRole(message.info), [message.info]);
-    const isUser = messageRole.isUser;
+    const isUser = message.role === 'user';
     const chatSurfaceMode = useChatSurfaceMode();
     const useExternalUserActionsRow = isUser && (isMobile || !stickyUserHeader);
     const showStickyInlineHoverRow = isUser && !isMobile && stickyUserHeader && !useExternalUserActionsRow;
 
-    const sessionId = message.info.sessionID;
-    const planModeEnabled = useFeatureFlagsStore((state) => state.planModeEnabled);
-
-    // Keep non-active-turn rows detached from context-store churn.
-    const { currentContextAgent, savedSessionAgentSelection } = useContextStore(
-        useShallow((state) => ({
-            currentContextAgent: isInActiveTurn && sessionId ? state.currentAgentContext.get(sessionId) : undefined,
-            savedSessionAgentSelection: isInActiveTurn && sessionId ? state.sessionAgentSelections.get(sessionId) : undefined,
-        }))
-    );
-
-    const normalizedParts = React.useMemo(() => {
-        const safeParts = normalizeParts(message.parts);
-        if (!isUser) {
-            return safeParts;
-        }
-
-        return normalizeUserDisplayParts(safeParts, { planModeEnabled });
-    }, [isUser, message.parts, planModeEnabled]);
-
-    const previousUserMetadata = React.useMemo(() => {
-        if (isUser || !previousMessage) {
-            return null;
-        }
-
-        const clientRole = getMessageInfoProp(previousMessage.info, 'clientRole');
-        const role = getMessageInfoProp(previousMessage.info, 'role');
-        const previousRole = typeof clientRole === 'string' ? clientRole : (typeof role === 'string' ? role : undefined);
-        if (previousRole !== 'user') {
-            return null;
-        }
-
-        const mode = getMessageInfoProp(previousMessage.info, 'mode');
-        const agent = getMessageInfoProp(previousMessage.info, 'agent');
-        const providerID = getMessageInfoProp(previousMessage.info, 'providerID');
-        const modelID = getMessageInfoProp(previousMessage.info, 'modelID');
-        const variant = getMessageInfoProp(previousMessage.info, 'variant');
-        const resolvedAgent =
-            typeof mode === 'string' && mode.trim().length > 0
-                ? mode
-                : (typeof agent === 'string' && agent.trim().length > 0 ? agent : undefined);
-        const resolvedProvider = typeof providerID === 'string' && providerID.trim().length > 0 ? providerID : undefined;
-        const resolvedModel = typeof modelID === 'string' && modelID.trim().length > 0 ? modelID : undefined;
-        const resolvedVariant = typeof variant === 'string' && variant.trim().length > 0 ? variant : undefined;
-
-        if (!resolvedAgent && !resolvedProvider && !resolvedModel && !resolvedVariant) {
-            return null;
-        }
-
-        return {
-            agentName: resolvedAgent,
-            providerId: resolvedProvider,
-            modelId: resolvedModel,
-            variant: resolvedVariant,
-        };
-    }, [isUser, previousMessage]);
-
-    const previousIsModeSwitchMessage = React.useMemo(() => {
-        if (!planModeEnabled) return false;
-        if (isUser || !previousMessage) return false;
-        const parts = Array.isArray(previousMessage.parts) ? previousMessage.parts : [];
-        for (let i = 0; i < parts.length; i++) {
-            const part = parts[i] as unknown as { type?: string; text?: string; synthetic?: boolean };
-            if (part?.type !== 'text') continue;
-            if (part?.synthetic !== true) continue;
-            const text = typeof part.text === 'string' ? part.text.trim() : '';
-            if (text.startsWith('User has requested to enter plan mode') || text.startsWith('The plan at ')) {
-                return true;
-            }
-        }
-        return false;
-    }, [isUser, planModeEnabled, previousMessage]);
-
-    const agentName = React.useMemo(() => {
-        if (isUser) return undefined;
-
-        // While the assistant message is streaming, if the immediately previous user message is a
-        // synthetic mode switch, trust that mode for the badge.
-        const timeInfo = message.info.time as { completed?: number } | undefined;
-        const isCompleted = typeof timeInfo?.completed === 'number' && timeInfo.completed > 0;
-        if (!isCompleted && previousIsModeSwitchMessage && previousUserMetadata?.agentName) {
-            return previousUserMetadata.agentName;
-        }
-
-        const messageMode = getMessageInfoProp(message.info, 'mode');
-        if (typeof messageMode === 'string' && messageMode.trim().length > 0) {
-            return messageMode;
-        }
-
-        const messageAgent = getMessageInfoProp(message.info, 'agent');
-        if (typeof messageAgent === 'string' && messageAgent.trim().length > 0) {
-            return messageAgent;
-        }
-
-        if (previousUserMetadata?.agentName) {
-            return previousUserMetadata.agentName;
-        }
-
-        if (!sessionId) {
-            return undefined;
-        }
-
-        if (currentContextAgent) {
-            return currentContextAgent;
-        }
-
-        return savedSessionAgentSelection ?? undefined;
-    }, [isUser, message.info, previousIsModeSwitchMessage, previousUserMetadata, sessionId, currentContextAgent, savedSessionAgentSelection]);
-
-    const messageProviderID = !isUser ? getMessageInfoProp(message.info, 'providerID') : null;
-    const messageModelID = !isUser ? getMessageInfoProp(message.info, 'modelID') : null;
-
-    const contextModelSelection = React.useMemo(() => {
-        if (isUser || !sessionId) return null;
-
-        if (previousUserMetadata?.providerId && previousUserMetadata?.modelId) {
-            return {
-                providerId: previousUserMetadata.providerId,
-                modelId: previousUserMetadata.modelId,
-            };
-        }
-
-        if (agentName) {
-            const agentSelection = getAgentModelForSession(sessionId, agentName);
-            if (agentSelection?.providerId && agentSelection?.modelId) {
-                return agentSelection;
-            }
-        }
-
-        const sessionSelection = getSessionModelSelection(sessionId);
-        if (sessionSelection?.providerId && sessionSelection?.modelId) {
-            return sessionSelection;
-        }
-
-        return null;
-    }, [isUser, sessionId, agentName, previousUserMetadata, getAgentModelForSession, getSessionModelSelection]);
-
-    const providerID = React.useMemo(() => {
-        if (isUser) return null;
-        if (typeof messageProviderID === 'string' && messageProviderID.trim().length > 0) {
-            return messageProviderID;
-        }
-        return contextModelSelection?.providerId ?? null;
-    }, [isUser, messageProviderID, contextModelSelection]);
-
-    const modelID = React.useMemo(() => {
-        if (isUser) return null;
-        if (typeof messageModelID === 'string' && messageModelID.trim().length > 0) {
-            return messageModelID;
-        }
-        return contextModelSelection?.modelId ?? null;
-    }, [isUser, messageModelID, contextModelSelection]);
-
-    const modelName = React.useMemo(() => {
-        if (isUser) return undefined;
-
-        const provider = providerID && providers.length > 0
-            ? providers.find((p) => p.id === providerID)
-            : undefined;
-        return getProviderModelDisplayName(provider, modelID) || undefined;
-    }, [isUser, providerID, modelID, providers]);
-
-    const modelHasVariants = React.useMemo(() => {
-        if (isUser) return false;
-        if (!providerID || !modelID) return false;
-
-        const provider = providers.find((p) => p.id === providerID);
-        if (!provider?.models || !Array.isArray(provider.models)) {
-            return false;
-        }
-
-        const model = provider.models.find((m: Record<string, unknown>) => (m as Record<string, unknown>).id === modelID) as
-            | { variants?: Record<string, unknown> }
-            | undefined;
-
-        const variants = model?.variants;
-        return Boolean(variants && Object.keys(variants).length > 0);
-    }, [isUser, modelID, providerID, providers]);
-
-    const displayAgentName = useStickyDisplayValue<string>(agentName);
-    const displayProviderIDValue = useStickyDisplayValue<string>(providerID ?? undefined);
-    const displayModelName = useStickyDisplayValue<string>(modelName);
-
-    const headerAgentName = displayAgentName ?? undefined;
-    const headerProviderID = displayProviderIDValue ?? null;
-    const headerModelName = displayModelName ?? undefined;
-
-    const messageCompletedAt = React.useMemo(() => {
-        const timeInfo = message.info.time as { completed?: number } | undefined;
-        return typeof timeInfo?.completed === 'number' ? timeInfo.completed : null;
-    }, [message.info.time]);
-
-    const messageCreatedAt = React.useMemo(() => {
-        const timeInfo = message.info.time as { created?: number } | undefined;
-        return typeof timeInfo?.created === 'number' ? timeInfo.created : null;
-    }, [message.info.time]);
-    const isPinnedIntoContext = useGlobalSessionsStore((state) => {
-        const session = state.entityById.get(sessionId);
-        return getContextObligatoryMessages(session).some((entry) => entry.id === message.info.id);
-    });
-    const [pinPending, setPinPending] = React.useState(false);
-    const handleToggleContextPin = React.useCallback(async () => {
-        if (!sessionId || !messageCreatedAt || pinPending) return;
-        setPinPending(true);
-        try {
-            const directory = useSessionUIStore.getState().getDirectoryForSession(sessionId);
-            await setContextObligatoryMessage(sessionId, directory, {
-                id: message.info.id,
-                createdAt: messageCreatedAt,
-                role: isUser ? 'user' : 'assistant',
-            }, !isPinnedIntoContext);
-            // Return focus to the composer so the user can keep typing right
-            // after adding the message to context (matches the refocus pattern
-            // used by the model/agent selectors).
-            requestAnimationFrame(focusChatInput);
-        } catch (error) {
-            console.error('[chat-message] failed to update context pin', error);
-            toast.error(t('chat.messageBody.actions.contextPinFailed'));
-        } finally {
-            setPinPending(false);
-        }
-    }, [isPinnedIntoContext, isUser, message.info.id, messageCreatedAt, pinPending, sessionId, t]);
-
-    const isMessageCompleted = React.useMemo(() => {
-        if (isUser) return true;
-        return Boolean(messageCompletedAt && messageCompletedAt > 0);
-    }, [isUser, messageCompletedAt]);
-
-    const messageFinish = React.useMemo(() => {
-        const finish = (message.info as { finish?: string }).finish;
-        return typeof finish === 'string' ? finish : undefined;
-    }, [message.info]);
+    const sessionId = message.sessionId;
 
     const visibleParts = React.useMemo(
-        () =>
-            filterVisibleParts(normalizedParts, {
-                includeReasoning: showReasoningTraces,
-            }),
-        [normalizedParts, showReasoningTraces]
+        () => filterVisibleParts(normalizeParts(message.parts), { includeReasoning: showReasoningTraces }),
+        [message.parts, showReasoningTraces]
     );
+
+    // Canonical assistant messages carry no completion timestamp. The authoritative
+    // owner of activity is the streaming store: the message the session reports as
+    // streaming is the only incomplete one; everything else has settled.
+    const isMessageCompleted = isUser ? true : !isInActiveTurn;
 
     const displayParts = React.useMemo(() => {
         if (isUser) {
@@ -459,24 +176,21 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         return visibleParts;
     }, [chatRenderMode, isMessageCompleted, isUser, visibleParts]);
 
-
     const toolParts = React.useMemo(() => {
         if (isUser) {
             return [];
         }
-        const filtered = visibleParts.filter((part) => part.type === 'tool');
-        return filtered;
+        return visibleParts.filter((part) => part.type === 'tool_call' || part.type === 'tool_result');
     }, [isUser, visibleParts]);
 
     const turnActivityToolParts = React.useMemo(() => {
         if (isUser) {
-            return [] as Part[];
+            return [];
         }
-        const records = turnGroupingContext?.activityParts ?? [];
-        return records
+        return (turnGroupingContext?.activityParts ?? [])
             .filter((record) => record.kind === 'tool')
             .map((record) => record.part)
-            .filter((part): part is Part => part.type === 'tool');
+            .filter((part) => part.type === 'tool_call' || part.type === 'tool_result');
     }, [isUser, turnGroupingContext?.activityParts]);
 
     const defaultOpenToolIds = React.useMemo(() => {
@@ -486,17 +200,13 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
         const next = new Set<string>();
         for (const part of [...toolParts, ...turnActivityToolParts]) {
-            const toolId = typeof part?.id === 'string' ? part.id : '';
-            if (!toolId) continue;
-            const toolName = normalizeToolName((part as { tool?: string }).tool);
-            if (!toolName) continue;
-
-            if (showExpandedBashTools && BASH_TOOL_NAMES.has(toolName)) {
-                next.add(toolId);
+            if (part.type !== 'tool_call') continue;
+            if (showExpandedBashTools && isShellTool(part.toolName)) {
+                next.add(part.partId);
                 continue;
             }
-            if (showExpandedEditTools && EDIT_TOOL_NAMES.has(toolName)) {
-                next.add(toolId);
+            if (showExpandedEditTools && isFileChangeTool(part.toolName)) {
+                next.add(part.partId);
             }
         }
 
@@ -520,62 +230,71 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         return next;
     }, [collapsedTools, defaultOpenToolIds, expandedTools]);
 
-    const agentMention = React.useMemo(() => {
-        if (!isUser) {
-            return undefined;
-        }
-        const mentionPart = normalizedParts.find((part) => part.type === 'agent');
-        if (!mentionPart) {
-            return undefined;
-        }
-        const partWithName = mentionPart as { name?: string; source?: { value?: string } };
-        const name = typeof partWithName.name === 'string' ? partWithName.name : undefined;
-        if (!name) {
-            return undefined;
-        }
-        const rawValue = partWithName.source && typeof partWithName.source.value === 'string' && partWithName.source.value.trim().length > 0
-            ? partWithName.source.value
-            : `@${name}`;
-        return { name, token: rawValue } satisfies AgentMentionInfo;
-    }, [isUser, normalizedParts]);
-
     const shouldHideUserMessage = isUser && displayParts.length === 0;
+
+    const footerProviderID = isUser ? null : (message.providerId ?? null);
+    const footerModelName = React.useMemo(() => {
+        if (isUser || !message.modelId) return undefined;
+        const provider = message.providerId ? providers.find((candidate) => candidate.providerId === message.providerId) : undefined;
+        const model = provider?.models.find((candidate) => candidate.modelId === message.modelId);
+        return model?.name.trim() || message.modelId;
+    }, [isUser, message.modelId, message.providerId, providers]);
+
+    const displayProviderIDValue = useStickyDisplayValue<string>(footerProviderID ?? undefined);
+    const displayModelName = useStickyDisplayValue<string>(footerModelName);
+    const headerProviderID = displayProviderIDValue ?? null;
+    const headerModelName = displayModelName ?? undefined;
+
+    const messageCreatedAt = message.createdAt;
+    const { focusInput: focusColumnInput } = useChatColumnActions();
+
+    const isPinnedIntoContext = useGlobalSessionsStore((state) => {
+        const session = state.entityById.get(sessionId);
+        return getContextObligatoryMessages(session).some((entry) => entry.id === message.messageId);
+    });
+    const [pinPending, setPinPending] = React.useState(false);
+    const handleToggleContextPin = React.useCallback(async () => {
+        if (!sessionId || !messageCreatedAt || pinPending || message.role === 'system') return;
+        setPinPending(true);
+        try {
+            const directory = useSessionUIStore.getState().getDirectoryForSession(sessionId);
+            await setContextObligatoryMessage(sessionId, directory, {
+                id: message.messageId,
+                createdAt: messageCreatedAt,
+                role: isUser ? 'user' : 'assistant',
+            }, !isPinnedIntoContext);
+            // Return focus to the composer so the user can keep typing right
+            // after adding the message to context.
+            requestAnimationFrame(focusColumnInput);
+        } catch (error) {
+            console.error('[chat-message] failed to update context pin', error);
+            toast.error(t('chat.messageBody.actions.contextPinFailed'));
+        } finally {
+            setPinPending(false);
+        }
+    }, [focusColumnInput, isPinnedIntoContext, isUser, message.messageId, message.role, messageCreatedAt, pinPending, sessionId, t]);
 
     const themeVariant = currentTheme?.metadata.variant;
     const isDarkTheme = React.useMemo(() => {
         if (themeVariant) {
             return themeVariant === 'dark';
         }
-        if (typeof document !== 'undefined') {
-            return document.documentElement.classList.contains('dark');
-        }
-        return false;
+        return document.documentElement.classList.contains('dark');
     }, [themeVariant]);
 
-    const shouldAnimateMessage = React.useMemo(() => {
-        if (isUser) return false;
-        const freshnessDetector = MessageFreshnessDetector.getInstance();
-        return freshnessDetector.shouldAnimateMessage(message.info, message.info.sessionID);
-    }, [message.info, isUser]);
-
-    const [hasStartedStreamingHeader, setHasStartedStreamingHeader] = React.useState(false);
-
-    const nextRole = React.useMemo(() => {
-        if (!nextMessage) return null;
-        return deriveMessageRole(nextMessage.info);
-    }, [nextMessage]);
+    const nextRole = nextMessage?.role ?? null;
 
     const hasTurnGrouping = Boolean(turnGroupingContext);
     const isLastAssistantInTurn = turnGroupingContext?.isLastAssistantInTurn ?? false;
 
     const previousIsHiddenUserMessage = React.useMemo(
-        () => !isUser && isHiddenUserMessage(previousMessage, { planModeEnabled }),
-        [isUser, planModeEnabled, previousMessage]
+        () => !isUser && isHiddenUserMessage(previousMessage),
+        [isUser, previousMessage]
     );
 
     const nextIsHiddenUserMessage = React.useMemo(
-        () => !isUser && isHiddenUserMessage(nextMessage, { planModeEnabled }),
-        [isUser, planModeEnabled, nextMessage]
+        () => !isUser && isHiddenUserMessage(nextMessage),
+        [isUser, nextMessage]
     );
 
     const isFollowedByAssistant = React.useMemo(() => {
@@ -583,8 +302,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         if (hasTurnGrouping) {
             return !isLastAssistantInTurn;
         }
-        if (!nextRole) return false;
-        return !nextRole.isUser && nextRole.role === 'assistant';
+        return nextRole === 'assistant';
     }, [hasTurnGrouping, isLastAssistantInTurn, isUser, nextRole]);
 
     const streamPhase: StreamPhase = React.useMemo(() => {
@@ -601,52 +319,17 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         if (!isUser || !animateUserOnMount) {
             return;
         }
-        onUserAnimationConsumed?.(message.info.id);
-    }, [animateUserOnMount, isUser, message.info.id, onUserAnimationConsumed]);
-
-    React.useEffect(() => {
-        setHasStartedStreamingHeader(false);
-    }, [message.info.id]);
-
-    React.useEffect(() => {
-        const headerMessageId = assistantHeaderMessageId ?? turnGroupingContext?.headerMessageId;
-        if (isUser || !headerMessageId || headerMessageId !== message.info.id) {
-            return;
-        }
-
-        const isCurrentlyStreaming = streamPhase === 'streaming' || streamPhase === 'cooldown';
-        if (isCurrentlyStreaming) {
-            setHasStartedStreamingHeader(true);
-        }
-    }, [assistantHeaderMessageId, isUser, message.info.id, streamPhase, turnGroupingContext?.headerMessageId]);
+        onUserAnimationConsumed?.(message.messageId);
+    }, [animateUserOnMount, isUser, message.messageId, onUserAnimationConsumed]);
 
     const shouldShowHeader = React.useMemo(() => {
         if (isUser) return true;
-
-        // Use turn grouping context if available for more precise control
         const headerMessageId = assistantHeaderMessageId ?? turnGroupingContext?.headerMessageId;
         if (headerMessageId) {
-            // For turn grouping: only show header for the first assistant message in the turn
-            const isFirstAssistantInTurn = message.info.id === headerMessageId;
-
-            if (isFirstAssistantInTurn) {
-                // For completed messages, always show header (historical messages)
-                if (streamPhase === 'completed') {
-                    return true;
-                }
-
-                // For streaming messages: show header when streaming starts and keep it visible
-                const isCurrentlyStreaming = streamPhase === 'streaming' || streamPhase === 'cooldown';
-                return hasStartedStreamingHeader || isCurrentlyStreaming;
-            }
-
-            // For non-first assistant messages, don't show header
-            return false;
+            return message.messageId === headerMessageId;
         }
-
-        // Ungrouped fallback path: always show assistant header.
         return true;
-    }, [assistantHeaderMessageId, hasStartedStreamingHeader, isUser, turnGroupingContext, streamPhase, message.info.id]);
+    }, [assistantHeaderMessageId, isUser, message.messageId, turnGroupingContext?.headerMessageId]);
 
     const handleCopyCode = React.useCallback((code: string) => {
         void copyTextToClipboard(code).then((result) => {
@@ -658,62 +341,12 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         });
     }, []);
 
-    const headerVariantRaw = !isUser ? (turnGroupingContext?.userMessageVariant ?? previousUserMetadata?.variant) : undefined;
-
-    const headerVariant = !isUser && modelHasVariants ? (headerVariantRaw ?? 'Default') : undefined;
-
-    // Summary body removed — flat rendering means text is always inline.
-
-    const assistantError = React.useMemo(() => {
-        if (isUser) {
-            return undefined;
-        }
-        const errorInfo = (message.info as { error?: unknown } | undefined)?.error as
-            | { data?: { message?: unknown }; message?: unknown; name?: unknown }
-            | undefined;
-        if (!errorInfo) {
-            return undefined;
-        }
-        const dataMessage = typeof errorInfo.data?.message === 'string' ? errorInfo.data.message : undefined;
-        const errorMessage = typeof errorInfo.message === 'string' ? errorInfo.message : undefined;
-        const errorName = typeof errorInfo.name === 'string' ? errorInfo.name : undefined;
-        const detail = dataMessage || errorMessage || errorName;
-        if (!detail) {
-            return undefined;
-        }
-        if (errorName === 'SessionRetry') {
-            return {
-                text: `Opencode failed to send a message. Retry attempt info: ${detail}`,
-            };
-        }
-        if (isLikelyProviderAuthFailure(detail)) {
-            return {
-                text: PROVIDER_AUTH_FAILURE_MESSAGE,
-            };
-        }
-        if (detail.trim().toLowerCase() === 'aborted') {
-            return {
-                text: 'The running turn was stopped before OpenCode could send the next message.',
-            };
-        }
-        return {
-            text: `Opencode failed to send message with error: ${detail}`,
-        };
-    }, [isUser, message.info]);
-
-    const assistantErrorText = assistantError?.text;
-
     const messageTextContent = React.useMemo(() => {
         if (isUser) {
             return flattenUserTextParts(displayParts);
         }
-
-        if (assistantErrorText && assistantErrorText.trim().length > 0) {
-            return assistantErrorText;
-        }
-
         return flattenAssistantTextParts(displayParts);
-    }, [assistantErrorText, displayParts, isUser]);
+    }, [displayParts, isUser]);
 
     const hasTextContent = messageTextContent.length > 0;
 
@@ -722,8 +355,11 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         if (isUser) {
             result = await copyTextToClipboard(messageTextContent);
         } else {
-            const { renderMarkdownSync } = await import('./markdown/markdownCore');
-            result = await copyMarkdownToClipboard(messageTextContent, renderMarkdownSync(messageTextContent));
+            const html = renderMarkdownSync(messageTextContent);
+            const plainText = useUIStore.getState().copyMessagesAsPlainText
+                ? renderedMarkdownHtmlToPlainText(html, document)
+                : undefined;
+            result = await copyMarkdownToClipboard(messageTextContent, html, { plainText });
         }
         if (!result.ok) {
             return false;
@@ -736,12 +372,10 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     }, [isUser, messageTextContent]);
 
     const handleRevert = React.useCallback(() => {
-        if (!sessionId || !message.info.id) return;
-        useSessionUIStore.getState().revertToMessage(sessionId, message.info.id);
-    }, [sessionId, message.info.id]);
+        if (!sessionId || !message.messageId) return;
+        void useSessionUIStore.getState().revertToMessage(sessionId, message.messageId);
+    }, [sessionId, message.messageId]);
 
-    // Extension actions for this role. The record is read at click time so a
-    // streaming message does not rebuild the list on every part update.
     const guestActionEntries = useGuestActions();
     const messageRecordRef = React.useRef(message);
     messageRecordRef.current = message;
@@ -754,7 +388,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
             label: entry.action.label,
             icon: <GuestIcon icon={entry.icon} iconSrc={entry.iconSrc} className="size-3.5" />,
             onSelect: () => {
-                const sessionTitle = useGlobalSessionsStore.getState().entityById.get(sessionId)?.title ?? null;
+                const sessionTitle = useGlobalSessionsStore.getState().entityById.get(sessionId)?.metadata?.title ?? null;
                 const directory = useSessionUIStore.getState().getDirectoryForSession(sessionId);
                 const item = buildGuestMessageItem(entry.action.id, { sessionId, sessionTitle, directory }, messageRecordRef.current);
                 void runGuestAction(entry, item, t);
@@ -762,11 +396,10 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         }));
     }, [guestActionEntries, isUser, sessionId, t]);
 
-    // NEW: Fork handler
     const handleFork = React.useCallback(() => {
-        if (!sessionId || !message.info.id) return;
-        useSessionUIStore.getState().forkFromMessage(sessionId, message.info.id);
-    }, [sessionId, message.info.id]);
+        if (!sessionId || !message.messageId) return;
+        void useSessionUIStore.getState().forkFromMessage(sessionId, message.messageId);
+    }, [sessionId, message.messageId]);
 
     const handleToggleTool = React.useCallback((toolId: string) => {
         const isDefaultOpen = defaultOpenToolIds.has(toolId);
@@ -780,7 +413,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                 } else {
                     next.delete(toolId);
                 }
-                writeCollapsedToolsCache(message.info.id, next);
+                writeCollapsedToolsCache(message.messageId, next);
                 return next;
             });
 
@@ -788,7 +421,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                 setExpandedTools((prev) => {
                     const next = new Set(prev);
                     next.delete(toolId);
-                    writeExpandedToolsCache(message.info.id, next);
+                    writeExpandedToolsCache(message.messageId, next);
                     return next;
                 });
             }
@@ -802,7 +435,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
             } else {
                 next.add(toolId);
             }
-            writeExpandedToolsCache(message.info.id, next);
+            writeExpandedToolsCache(message.messageId, next);
             return next;
         });
 
@@ -812,23 +445,16 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
             }
             const next = new Set(prev);
             next.delete(toolId);
-            writeCollapsedToolsCache(message.info.id, next);
+            writeCollapsedToolsCache(message.messageId, next);
             return next;
         });
-    }, [defaultOpenToolIds, effectiveExpandedTools, message.info.id]);
-
-    const hasEverStreamedRef = React.useRef(false);
-
-    React.useEffect(() => {
-        hasEverStreamedRef.current = false;
-    }, [message.info.id]);
+    }, [defaultOpenToolIds, effectiveExpandedTools, message.messageId]);
 
     const setImagePreviewOpen = useUIStore((state) => state.setImagePreviewOpen);
 
     const handleShowPopup = React.useCallback((content: ToolPopupContent) => {
-
+        setPopupContent(content);
         if (content.image || content.mermaid) {
-            setPopupContent(content);
             setImagePreviewOpen(true);
         }
     }, [setImagePreviewOpen]);
@@ -838,21 +464,18 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         setImagePreviewOpen(open);
     }, [setImagePreviewOpen]);
 
-    const isAnimationSettled = Boolean(getMessageInfoProp(message.info, 'animationSettled'));
-    const isStreamingPhase = streamPhase === 'streaming' || streamPhase === 'cooldown';
-
-    if (isStreamingPhase) {
-        hasEverStreamedRef.current = true;
+    if (message.role === 'system') {
+        return null;
     }
-
-    const allowAnimation = shouldAnimateMessage && !isAnimationSettled && !isStreamingPhase && !hasEverStreamedRef.current;
 
     if (shouldHideUserMessage) {
         return null;
     }
 
-    const assistantTopPaddingClass = !isUser && shouldShowHeader && !previousIsHiddenUserMessage
-        ? (stickyUserHeader ? (isMobile ? 'pt-4' : 'pt-6') : 'pt-0')
+    // Desktop keeps the whole gap below the user bubble inside the user row
+    // (see `pb-11` below), so the assistant block adds nothing on top.
+    const assistantTopPaddingClass = !isUser && shouldShowHeader && !previousIsHiddenUserMessage && stickyUserHeader && isMobile
+        ? 'pt-4'
         : 'pt-0';
     const userMessageRadius = 'var(--radius-xl)';
 
@@ -864,146 +487,142 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                     isUser ? (isMobile ? 'pt-2' : 'pt-4') : assistantTopPaddingClass,
                     isUser ? 'pb-0' : (isFollowedByAssistant || nextIsHiddenUserMessage) ? 'pb-0' : 'pb-2'
                 )}
-                id={`message-${message.info.id}`}
-                data-message-id={message.info.id}
+                id={`message-${message.messageId}`}
+                data-message-id={message.messageId}
                 ref={messageContainerRef}
             >
                 <div className="chat-message-column relative">
                     {isUser ? (
-                        displayParts.length === 0 ? null : (
-                            <FadeInOnReveal
-                                forceAnimation
-                                skipAnimation={!animateUserOnMount}
-                                ignoreContextDisabled
-                                respectReducedMotion
-                            >
-                                <div className={cn('relative flex justify-end', !isMobile ? 'group/user-shell' : undefined)}>
-                                    {/* peek: the action row under the bubble is suppressed, so
-                                        reserve its gap to the next message here, OUTSIDE the
-                                        bubble background. */}
-                                    <div className={cn('max-w-[85%]', showStickyInlineHoverRow ? 'pb-5' : undefined, chatSurfaceMode === 'peek' ? 'pb-3' : undefined)}>
-                                        <div
-                                            style={{
-                                                backgroundColor: 'var(--chat-user-message-bg)',
-                                                borderRadius: userMessageRadius,
-                                                borderBottomRightRadius: 'var(--radius-sm)',
-                                            }}
-                                            className="px-5 py-3 shadow-none border border-primary/5"
-                                        >
-                                            <MessageBody
-                                                messageId={message.info.id}
-                                                parts={displayParts}
-                                                isUser={isUser}
-                                                isMessageCompleted={isMessageCompleted}
-                                                messageFinish={messageFinish}
-                                                messageCreatedAt={messageCreatedAt ?? undefined}
-                                                 isMobile={isMobile}
-                                                 alwaysShowActions={alwaysShowMessageActions}
-                                                 hasTouchInput={hasTouchInput}
-                                                copiedCode={copiedCode}
-                                                onCopyCode={handleCopyCode}
-                                                expandedTools={expandedTools}
-                                                onToggleTool={handleToggleTool}
-                                                onShowPopup={handleShowPopup}
-                                                streamPhase={streamPhase}
-                                                allowAnimation={allowAnimation}
-                                                shouldShowHeader={false}
-                                                hasTextContent={hasTextContent}
-                                                onCopyMessage={handleCopyMessage}
-                                                copiedMessage={copiedMessage}
-                                                showReasoningTraces={showReasoningTraces}
-                                                agentMention={agentMention}
-                                                onRevert={handleRevert}
-                                                onFork={isUser ? handleFork : undefined}
-                                                contextPinned={isPinnedIntoContext}
-                                                contextPinPending={pinPending}
-                                                onToggleContextPin={canPinIntoContext && messageCreatedAt ? handleToggleContextPin : undefined}
-                                                errorMessage={assistantErrorText}
-                                                userActionsMode={useExternalUserActionsRow ? 'external-content' : 'inline'}
-                                                stickyUserHeaderEnabled={stickyUserHeader}
-                                                extraActions={guestMessageActions}
-                                            />
-                                        </div>
-                                        {useExternalUserActionsRow ? (
-                                            <MessageBody
-                                                messageId={message.info.id}
-                                                parts={displayParts}
-                                                isUser={isUser}
-                                                isMessageCompleted={isMessageCompleted}
-                                                messageFinish={messageFinish}
-                                                messageCreatedAt={messageCreatedAt ?? undefined}
-                                                 isMobile={isMobile}
-                                                 alwaysShowActions={alwaysShowMessageActions}
-                                                 hasTouchInput={hasTouchInput}
-                                                copiedCode={copiedCode}
-                                                onCopyCode={handleCopyCode}
-                                                expandedTools={expandedTools}
-                                                onToggleTool={handleToggleTool}
-                                                onShowPopup={handleShowPopup}
-                                                streamPhase={streamPhase}
-                                                allowAnimation={allowAnimation}
-                                                shouldShowHeader={false}
-                                                hasTextContent={hasTextContent}
-                                                onCopyMessage={handleCopyMessage}
-                                                copiedMessage={copiedMessage}
-                                                showReasoningTraces={showReasoningTraces}
-                                                agentMention={agentMention}
-                                                onRevert={handleRevert}
-                                                onFork={isUser ? handleFork : undefined}
-                                                contextPinned={isPinnedIntoContext}
-                                                contextPinPending={pinPending}
-                                                onToggleContextPin={canPinIntoContext && messageCreatedAt ? handleToggleContextPin : undefined}
-                                                errorMessage={assistantErrorText}
-                                                userActionsMode="external-actions"
-                                                stickyUserHeaderEnabled={stickyUserHeader}
-                                                extraActions={guestMessageActions}
-                                            />
-                                        ) : null}
+                        <FadeInOnReveal
+                            forceAnimation
+                            skipAnimation={!animateUserOnMount}
+                            ignoreContextDisabled
+                            respectReducedMotion
+                        >
+                            <div className={cn('relative flex justify-end', !isMobile ? 'group/user-shell' : undefined)}>
+                                {/* The hover action row hangs below the bubble (absolute,
+                                    `top-full` + `pt-5`, 26px tall), so the user row reserves
+                                    the whole 44px gap to the assistant block here. The list's
+                                    row containers paint-contain their content: anything that
+                                    pokes past the row is cut, which showed as a half-visible
+                                    action row while the reply had not started yet.
+                                    peek: the action row is suppressed, so reserve only its
+                                    gap to the next message, OUTSIDE the bubble background. */}
+                                <div className={cn('max-w-[85%]', showStickyInlineHoverRow ? 'pb-11' : undefined, chatSurfaceMode === 'peek' ? 'pb-3' : undefined)}>
+                                    <div
+                                        style={{
+                                            backgroundColor: 'var(--chat-user-message-bg)',
+                                            borderRadius: userMessageRadius,
+                                            borderBottomRightRadius: 'var(--radius-sm)',
+                                        }}
+                                        className="px-5 py-3 shadow-none border border-primary/5"
+                                        data-user-message-bubble=""
+                                    >
+                                        <MessageBody
+                                            sessionId={sessionId}
+                                            messageId={message.messageId}
+                                            parts={displayParts}
+                                            isUser={isUser}
+                                            isMessageCompleted={isMessageCompleted}
+                                            messageCreatedAt={messageCreatedAt}
+                                            isMobile={isMobile}
+                                            alwaysShowActions={alwaysShowMessageActions}
+                                            hasTouchInput={hasTouchInput}
+                                            copiedCode={copiedCode}
+                                            onCopyCode={handleCopyCode}
+                                            expandedTools={expandedTools}
+                                            onToggleTool={handleToggleTool}
+                                            onShowPopup={handleShowPopup}
+                                            streamPhase={streamPhase}
+                                            allowAnimation={false}
+                                            shouldShowHeader={false}
+                                            hasTextContent={hasTextContent}
+                                            onCopyMessage={handleCopyMessage}
+                                            onCopyLink={handleCopyLink}
+                                            copiedMessage={copiedMessage}
+                                            showReasoningTraces={showReasoningTraces}
+                                            onRevert={handleRevert}
+                                            onFork={handleFork}
+                                            contextPinned={isPinnedIntoContext}
+                                            contextPinPending={pinPending}
+                                            onToggleContextPin={isPinnedIntoContext || messageCreatedAt ? handleToggleContextPin : undefined}
+                                            userActionsMode={useExternalUserActionsRow ? 'external-content' : 'inline'}
+                                            stickyUserHeaderEnabled={stickyUserHeader}
+                                            extraActions={guestMessageActions}
+                                        />
                                     </div>
-                                 </div>
-                            </FadeInOnReveal>
-                        )
+                                    {useExternalUserActionsRow ? (
+                                        <MessageBody
+                                            sessionId={sessionId}
+                                            messageId={message.messageId}
+                                            parts={displayParts}
+                                            isUser={isUser}
+                                            isMessageCompleted={isMessageCompleted}
+                                            messageCreatedAt={messageCreatedAt}
+                                            isMobile={isMobile}
+                                            alwaysShowActions={alwaysShowMessageActions}
+                                            hasTouchInput={hasTouchInput}
+                                            copiedCode={copiedCode}
+                                            onCopyCode={handleCopyCode}
+                                            expandedTools={expandedTools}
+                                            onToggleTool={handleToggleTool}
+                                            onShowPopup={handleShowPopup}
+                                            streamPhase={streamPhase}
+                                            allowAnimation={false}
+                                            shouldShowHeader={false}
+                                            hasTextContent={hasTextContent}
+                                            onCopyMessage={handleCopyMessage}
+                                            onCopyLink={handleCopyLink}
+                                            copiedMessage={copiedMessage}
+                                            showReasoningTraces={showReasoningTraces}
+                                            onRevert={handleRevert}
+                                            onFork={handleFork}
+                                            contextPinned={isPinnedIntoContext}
+                                            contextPinPending={pinPending}
+                                            onToggleContextPin={isPinnedIntoContext || messageCreatedAt ? handleToggleContextPin : undefined}
+                                            userActionsMode="external-actions"
+                                            stickyUserHeaderEnabled={stickyUserHeader}
+                                            extraActions={guestMessageActions}
+                                        />
+                                    ) : null}
+                                </div>
+                            </div>
+                        </FadeInOnReveal>
                     ) : (
                         <div className="relative">
                             <MessageBody
-                                sessionId={message.info.sessionID}
-                                messageId={message.info.id}
+                                sessionId={sessionId}
+                                messageId={message.messageId}
                                 parts={visibleParts}
                                 isUser={isUser}
                                 isMessageCompleted={isMessageCompleted}
-                                messageFinish={messageFinish}
-                                messageCompletedAt={messageCompletedAt ?? undefined}
-                                messageCreatedAt={messageCreatedAt ?? undefined}
+                                messageCreatedAt={messageCreatedAt}
                                 contextPinned={isPinnedIntoContext}
                                 contextPinPending={pinPending}
-                                onToggleContextPin={canPinIntoContext && messageCreatedAt ? handleToggleContextPin : undefined}
-                                 isMobile={isMobile}
-                                 alwaysShowActions={alwaysShowMessageActions}
-                                 hasTouchInput={hasTouchInput}
+                                onToggleContextPin={handleToggleContextPin}
+                                isMobile={isMobile}
+                                alwaysShowActions={alwaysShowMessageActions}
+                                hasTouchInput={hasTouchInput}
                                 copiedCode={copiedCode}
                                 onCopyCode={handleCopyCode}
                                 expandedTools={effectiveExpandedTools}
                                 onToggleTool={handleToggleTool}
                                 onShowPopup={handleShowPopup}
                                 streamPhase={streamPhase}
-                                allowAnimation={allowAnimation}
+                                allowAnimation={false}
                                 shouldShowHeader={shouldShowHeader}
                                 hasTextContent={hasTextContent}
                                 onCopyMessage={handleCopyMessage}
+                                onCopyLink={handleCopyLink}
                                 copiedMessage={copiedMessage}
                                 showReasoningTraces={showReasoningTraces}
-                                agentMention={agentMention}
                                 turnGroupingContext={turnGroupingContext}
-                                errorMessage={assistantErrorText}
                                 reviewTransferDirection={reviewTransferDirection}
                                 footerProviderID={headerProviderID}
                                 footerModelName={headerModelName}
-                                footerAgentName={headerAgentName}
-                                footerVariant={headerVariant}
                                 isDarkTheme={isDarkTheme}
                                 extraActions={guestMessageActions}
                             />
-
                         </div>
                     )}
                 </div>
@@ -1021,16 +640,16 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
 export default React.memo(ChatMessage, (prev, next) => {
     return areRenderRelevantMessagesEqual(
-        { info: prev.message.info, parts: prev.message.parts },
-        { info: next.message.info, parts: next.message.parts }
+        { info: prev.message, parts: prev.message.parts },
+        { info: next.message, parts: next.message.parts }
     )
         && areOptionalRenderRelevantMessagesEqual(
-            prev.previousMessage ? { info: prev.previousMessage.info, parts: prev.previousMessage.parts } : undefined,
-            next.previousMessage ? { info: next.previousMessage.info, parts: next.previousMessage.parts } : undefined
+            prev.previousMessage ? { info: prev.previousMessage, parts: prev.previousMessage.parts } : undefined,
+            next.previousMessage ? { info: next.previousMessage, parts: next.previousMessage.parts } : undefined
         )
         && areOptionalRenderRelevantMessagesEqual(
-            prev.nextMessage ? { info: prev.nextMessage.info, parts: prev.nextMessage.parts } : undefined,
-            next.nextMessage ? { info: next.nextMessage.info, parts: next.nextMessage.parts } : undefined
+            prev.nextMessage ? { info: prev.nextMessage, parts: prev.nextMessage.parts } : undefined,
+            next.nextMessage ? { info: next.nextMessage, parts: next.nextMessage.parts } : undefined
         )
         && prev.isInActiveTurn === next.isInActiveTurn
         && prev.activeStreamingPhase === next.activeStreamingPhase
@@ -1041,7 +660,7 @@ export default React.memo(ChatMessage, (prev, next) => {
         && areRelevantTurnGroupingContextsEqual(
             prev.turnGroupingContext,
             next.turnGroupingContext,
-            prev.message.info.id,
-            deriveMessageRole(prev.message.info).isUser
+            prev.message.messageId,
+            prev.message.role === 'user'
         );
 });

@@ -13,6 +13,9 @@ interface DiffStats {
 
 interface TurnActivityProps {
     parts: TurnActivityRecord[];
+    contextParts?: TurnActivityRecord[];
+    sessionId?: string;
+    directory?: string | null;
     isExpanded: boolean;
     collapsedPreviewCount?: number;
     onToggle: () => void;

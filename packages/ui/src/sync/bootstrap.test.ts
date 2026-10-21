@@ -1,218 +1,154 @@
 import { describe, expect, test } from "bun:test"
-import { createOpencodeClient } from "@opencode-ai/sdk/v2/client"
 import { createStore } from "zustand/vanilla"
-import { bootstrapDirectory } from "./bootstrap"
-import { INITIAL_STATE, type State } from "./types"
-import { getBackgroundNetworkState, runBackgroundNetworkTask } from "../lib/background-network"
+import { CanonicalApiError, type CanonicalClient } from "@/api/canonicalClient"
+import type { ShellSnapshot, Workspace } from "@openchamber/agent-contract"
+import { bootstrapDirectory, bootstrapGlobal } from "./bootstrap"
+import { INITIAL_GLOBAL_STATE, INITIAL_STATE, type GlobalState, type State } from "./types"
 
-const deferred = <T>() => {
-  let resolve!: (value: T) => void
-  const promise = new Promise<T>((complete) => { resolve = complete })
-  return { promise, resolve }
-}
-
-const createSdk = (respond?: (url: URL) => Response | Promise<Response> | undefined) => createOpencodeClient({
-  baseUrl: "https://bootstrap.test",
-  directory: "/sdk-default",
-  fetch: async (request) => {
-    const url = new URL(request instanceof Request ? request.url : request.toString())
-    const override = respond?.(url)
-    if (override) return override
-    const directory = url.searchParams.get("directory")
-    const body = url.pathname === "/project/current" ? { id: "project-a" }
-      : url.pathname === "/path" ? { directory, worktree: directory, state: "", config: "", home: "/home" }
-      : url.pathname === "/config" ? { instructions: [directory] }
-      : url.pathname === "/session/status" ? {}
-      : url.pathname === "/vcs" ? { branch: "main" }
-      : []
-    return Response.json(body)
-  },
-})
-
-const inputFor = (sdk = createSdk(), state: Partial<State> = {}) => {
-  const store = createStore<State>(() => ({ ...INITIAL_STATE, ...state }))
+const workspace: Workspace = { workspaceId: "workspace-1", projectId: "project-1", name: "Workspace", displayPath: "." }
+const shellSnapshot = { scope: { kind: "workspace", workspaceId: "workspace-1" }, epoch: "shell-epoch", revision: "0", running: [], ended: [], recovery: { priorEpochs: "invalidated" } } as ShellSnapshot
+const inputFor = (client: CanonicalClient, stale: () => boolean = () => false) => {
+  const store = createStore<State>(() => ({ ...INITIAL_STATE, path: { directory: "", worktree: "", home: "" } }))
+  const patches: Partial<State>[] = []
   return {
-    directory: "/repo", sdk, store,
-    set: (patch: Partial<State>) => { store.setState(patch) },
-    global: { config: {}, projects: [] },
-    loadSessions: async () => undefined,
+    store, patches,
+    input: { directory: "/repo", store, set: (patch: Partial<State>) => { patches.push(patch); store.setState(patch) }, isStale: stale, client, loadSessions: async () => {} },
   }
 }
+function nativeClient(overrides: Partial<Record<string, unknown>> = {}): CanonicalClient {
+  return {
+    resolveWorkspace: async () => workspace,
+    listSessions: async () => ({ items: [], errors: {} }),
+    getModels: async () => ({ workspaceId: workspace.workspaceId, revision: "0", models: [] }),
+    getProviders: async () => ({ workspaceId: workspace.workspaceId, revision: "0", providers: [] }),
+    getAgents: async () => ({ workspaceId: workspace.workspaceId, revision: "0", agents: [] }),
+    getShellSnapshot: async () => shellSnapshot,
+    ...overrides,
+  } as unknown as CanonicalClient
+}
 
-describe("bootstrapDirectory", () => {
-  test("finishes session loading while /config is unresolved", async () => {
-    const blocked = deferred<Response>()
-    const input = inputFor(createSdk((url) => url.pathname === "/config" ? blocked.promise : undefined))
-    let initialized = false
-    const bootstrap = bootstrapDirectory(input)
-    void bootstrap.environment.then(() => { initialized = true })
-    try {
-      expect(await bootstrap.sessions).toBe("complete")
-      expect(initialized).toBe(false)
-      expect(input.store.getState().status).toBe("partial")
-    } finally {
-      blocked.resolve(Response.json({}))
-      expect(await bootstrap.environment).toBe("complete")
-      expect(input.store.getState().status).toBe("complete")
-    }
-  })
-
-  test("keeps session-list failure separate from successful environment initialization", async () => {
-    const cached = [{
-      id: "cached", slug: "cached", projectID: "project-a", directory: "/repo",
-      title: "Cached", version: "1", time: { created: 1, updated: 1 },
-    }]
-    const input = inputFor(createSdk(), { session: cached })
-    const bootstrap = bootstrapDirectory({ ...input, loadSessions: async () => { throw new Error("unavailable") } })
-    expect(await bootstrap.sessions).toBe("failed")
-    expect(await bootstrap.environment).toBe("complete")
-    expect(input.store.getState().session).toBe(cached)
-  })
-
-  test("a config failure cannot suppress status or pending-question recovery", async () => {
-    const question = { id: "question", sessionID: "session", questions: [] }
-    const input = inputFor(createSdk((url) => {
-      if (url.pathname === "/config") return Response.json({ message: "invalid config" }, { status: 400 })
-      if (url.pathname === "/question") return Response.json([question])
-    }))
-    const bootstrap = bootstrapDirectory(input)
-    expect(await bootstrap.sessions).toBe("complete")
-    expect(await bootstrap.environment).toBe("failed")
-    expect(input.store.getState().question.session).toEqual([question])
-    expect(input.store.getState().sessionStatusReady).toBe(true)
-  })
-
-  test("a failed status request does not grant idle authority", async () => {
-    const input = inputFor(createSdk((url) => url.pathname === "/session/status"
-      ? Response.json({ message: "status unavailable" }, { status: 400 }) : undefined))
-    const bootstrap = bootstrapDirectory(input)
-    expect(await bootstrap.sessions).toBe("complete")
-    expect(await bootstrap.environment).toBe("failed")
-    expect(input.store.getState().sessionStatusReady).toBeUndefined()
-  })
-
-  test("malformed status success does not clear live state or grant idle authority", async () => {
-    const statuses: State["session_status"] = { session: { type: "busy" } }
-    const input = inputFor(createSdk((url) => url.pathname === "/session/status" ? Response.json([]) : undefined), {
-      session_status: statuses,
+describe("native canonical bootstrap", () => {
+  test("resolves the authorized workspace before loading sessions and environment", async () => {
+    const calls: string[] = []
+    const client = nativeClient({
+      resolveWorkspace: async () => { calls.push("resolve"); return workspace },
+      getModels: async () => { calls.push("models"); return {} as never },
+      getProviders: async () => { calls.push("providers"); return {} as never },
+      getAgents: async () => { calls.push("agents"); return {} as never },
+      getShellSnapshot: async (scope: unknown) => { calls.push(`shell:${JSON.stringify(scope)}`); return shellSnapshot },
     })
-    const bootstrap = bootstrapDirectory(input)
-    expect(await bootstrap.sessions).toBe("complete")
-    expect(await bootstrap.environment).toBe("failed")
-    expect(input.store.getState().sessionStatusReady).toBeUndefined()
-    expect(input.store.getState().session_status).toBe(statuses)
+    const { input, store } = inputFor(client)
+    const result = bootstrapDirectory({ ...input, loadSessions: async () => { calls.push("sessions") } })
+    expect(await result.sessions).toBe("complete")
+    expect(await result.environment).toEqual({ status: "complete", retryable: false })
+    expect(calls.indexOf("resolve")).toBeLessThan(calls.indexOf("sessions"))
+    expect(calls).toContain('shell:{"kind":"workspace","workspaceId":"workspace-1"}')
+    expect(store.getState().workspace).toEqual(workspace)
+    expect(store.getState().status).toBe("complete")
   })
 
-  test("never reads MCP-initializing endpoints during directory initialization", async () => {
-    // Reading MCP status initializes the directory's entire stdio server
-    // fleet, and listing commands enumerates MCP prompts, which touches the
-    // same state. The sidebar declares bootstrap demand for every known
-    // project directory, so either read spawned a fleet per project at
-    // startup. MCP and command surfaces fetch on demand instead.
-    const requests: URL[] = []
-    const input = inputFor(createSdk((url) => { requests.push(url); return undefined }))
-    const bootstrap = bootstrapDirectory(input)
-    expect(await bootstrap.sessions).toBe("complete")
-    expect(await bootstrap.environment).toBe("complete")
-    expect(requests.some((url) => url.pathname === "/mcp")).toBe(false)
-    expect(requests.some((url) => url.pathname === "/command")).toBe(false)
-  })
-
-  test("rejects stale work before starting either phase", async () => {
-    let calls = 0
-    const input = inputFor(createSdk(() => { calls += 1; return undefined }))
-    const state = input.store.getState()
-    const bootstrap = bootstrapDirectory({ ...input, isStale: () => true, loadSessions: async () => { calls += 1 } })
-    expect(await bootstrap.sessions).toBe("stale")
-    expect(await bootstrap.environment).toBe("stale")
-    expect(calls).toBe(0)
-    expect(input.store.getState()).toBe(state)
-  })
-
-  test("drops queued initialization reads after the directory generation changes", async () => {
-    const blocked = Array.from({ length: getBackgroundNetworkState().limit }, () => deferred<void>())
-    const occupied = blocked.map((task) => runBackgroundNetworkTask(() => task.promise))
-    let calls = 0
+  test("stale scope does not commit workspace or environment results", async () => {
     let stale = false
-    const input = inputFor(createSdk(() => { calls += 1; return undefined }))
-    const bootstrap = bootstrapDirectory({ ...input, isStale: () => stale })
-    expect(await bootstrap.sessions).toBe("complete")
+    let resolve!: (value: Workspace) => void
+    const pending = new Promise<Workspace>((done) => { resolve = done })
+    const { input, store, patches } = inputFor(nativeClient({ resolveWorkspace: () => pending }), () => stale)
+    const result = bootstrapDirectory(input)
     stale = true
-    const state = input.store.getState()
-    for (const task of blocked) task.resolve()
-    await Promise.all(occupied)
-    expect(await bootstrap.environment).toBe("stale")
-    expect(calls).toBe(0)
-    expect(input.store.getState()).toBe(state)
+    resolve(workspace)
+    expect(await result.sessions).toBe("stale")
+    expect(await result.environment).toEqual({ status: "stale", retryable: false })
+    expect(store.getState().workspace).toBeUndefined()
+    expect(patches).toEqual([])
   })
 
-  test("an in-flight response cannot commit after its initialization is superseded", async () => {
-    const response = deferred<Response>()
-    const started = deferred<void>()
+  test("failed native shell snapshot keeps the directory partial and reports a failed environment", async () => {
+    const { input, store } = inputFor(nativeClient({ getShellSnapshot: async () => { throw new Error("shell unavailable") } }))
+    const result = bootstrapDirectory(input)
+    expect(await result.sessions).toBe("complete")
+    expect(await result.environment).toEqual({ status: "failed", retryable: true })
+    expect(store.getState().status).toBe("partial")
+    expect(store.getState().workspace).toEqual(workspace)
+  })
+
+  test("retries service warmup without interpreting it as an empty workspace", async () => {
+    let calls = 0
+    const { input, store } = inputFor(nativeClient({ resolveWorkspace: async () => {
+      calls += 1
+      if (calls === 1) throw new CanonicalApiError({ type: "urn:test:warmup", title: "Warmup", status: 503, detail: "Starting", code: "SERVICE_UNAVAILABLE", retryable: true })
+      return workspace
+    } }))
+    const result = bootstrapDirectory(input)
+    expect(await result.sessions).toBe("complete")
+    expect(await result.environment).toEqual({ status: "complete", retryable: false })
+    expect(calls).toBe(2)
+    expect(store.getState().workspace).toEqual(workspace)
+  })
+
+  test("retries retryable environment readiness and commits the eventual catalog", async () => {
+    let modelCalls = 0
+    const retryable = () => new CanonicalApiError({ type: "urn:test:warmup", title: "Warmup", status: 503, detail: "Agent Service is not ready", code: "SERVICE_UNAVAILABLE", retryable: true })
+    const { input, store } = inputFor(nativeClient({ getModels: async () => {
+      modelCalls += 1
+      if (modelCalls === 1) throw retryable()
+      return { workspaceId: workspace.workspaceId, revision: "1", models: [] }
+    } }))
+    const result = bootstrapDirectory(input)
+    expect(await result.sessions).toBe("complete")
+    expect(await result.environment).toEqual({ status: "complete", retryable: false })
+    expect(modelCalls).toBe(2)
+    expect(store.getState().models).toEqual({ workspaceId: workspace.workspaceId, revision: "1", models: [] })
+    expect(store.getState().status).toBe("complete")
+  })
+
+  test("non-retryable environment failure fails immediately and preserves healthy siblings", async () => {
+    let providerCalls = 0
+    const nonRetryable = new CanonicalApiError({ type: "urn:test:denied", title: "Denied", status: 403, detail: "Forbidden", code: "UNAUTHORIZED", retryable: false })
+    const { input, store } = inputFor(nativeClient({
+      getProviders: async () => { providerCalls += 1; throw nonRetryable },
+      getModels: async () => ({ workspaceId: workspace.workspaceId, revision: "1", models: [] }),
+    }))
+    const result = bootstrapDirectory(input)
+    expect(await result.sessions).toBe("complete")
+    expect(await result.environment).toEqual({ status: "failed", retryable: false })
+    expect(providerCalls).toBe(1)
+    expect(store.getState().models).toEqual({ workspaceId: workspace.workspaceId, revision: "1", models: [] })
+    expect(store.getState().status).toBe("partial")
+  })
+
+  test("ignores environment completion after the runtime scope turns stale", async () => {
     let stale = false
-    const input = inputFor(createSdk((url) => {
-      if (url.pathname !== "/config") return undefined
-      started.resolve()
-      return response.promise
-    }))
-    const bootstrap = bootstrapDirectory({ ...input, isStale: () => stale })
-    await bootstrap.sessions
-    await started.promise
+    let resolveAgents!: (value: { workspaceId: string; revision: string; agents: never[] }) => void
+    const pendingAgents = new Promise<{ workspaceId: string; revision: string; agents: never[] }>((resolve) => { resolveAgents = resolve })
+    const { input, store, patches } = inputFor(nativeClient({ getAgents: () => pendingAgents }), () => stale)
+    const result = bootstrapDirectory(input)
+    await Promise.resolve()
     stale = true
-    const state = input.store.getState()
-    response.resolve(Response.json({ instructions: ["old configuration"] }))
-    expect(await bootstrap.environment).toBe("stale")
-    expect(input.store.getState()).toBe(state)
+    resolveAgents({ workspaceId: workspace.workspaceId, revision: "1", agents: [] })
+    expect(await result.environment).toEqual({ status: "stale", retryable: false })
+    expect(patches.some((patch) => "agents" in patch)).toBe(false)
+    expect(store.getState().agents).toBeUndefined()
   })
 
-  test("addresses every environment read to its directory rather than the SDK default", async () => {
-    const requests: URL[] = []
-    const sdk = createSdk((url) => { requests.push(url); return undefined })
-    for (const directory of ["/workspace/Alpha", "C:/Users/Developer/Tree", "//Server/Share/Project", "C:/Users/Ірина/Project with spaces/100%", "C:/"]) {
-      requests.length = 0
-      const input = { ...inputFor(sdk), directory }
-      const bootstrap = bootstrapDirectory(input)
-      expect(await bootstrap.sessions).toBe("complete")
-      expect(await bootstrap.environment).toBe("complete")
-      expect(requests).toHaveLength(8)
-      expect(new Set(requests.map((url) => url.searchParams.get("directory")))).toEqual(new Set([directory]))
-      expect(input.store.getState().path.directory).toBe(directory)
-      expect(input.store.getState().config.instructions).toEqual([directory])
-    }
+  test("global failed and partial discovery preserve their own cached scopes", async () => {
+    const cachedProject = { projectId: "project-old", name: "Cached", workspaceIds: ["workspace-old"], displayPath: "." }
+    const cachedWorkspace = { ...workspace, workspaceId: "workspace-old", projectId: cachedProject.projectId }
+    const store = createStore<GlobalState>(() => ({ ...INITIAL_GLOBAL_STATE, projects: [cachedProject], workspaces: [cachedWorkspace] }))
+    const client = nativeClient({
+      listProjects: async () => { throw new Error("project read denied") },
+      listWorkspaces: async () => ({ items: [workspace], errors: { [cachedWorkspace.workspaceId]: "unavailable" } }),
+    })
+    await bootstrapGlobal(store.setState, store.getState, client)
+    expect(store.getState().projects).toEqual([cachedProject])
+    expect(store.getState().workspaces).toEqual([workspace, cachedWorkspace])
+    expect(store.getState().error?.message).toBe("project read denied")
+    expect(store.getState().discoveryErrors).toEqual({ [cachedWorkspace.workspaceId]: "unavailable" })
   })
 
-  test("an authoritative empty question list clears old records", async () => {
-    const input = inputFor(createSdk(), { question: { session: [{ id: "old", sessionID: "session", questions: [] }] } })
-    const bootstrap = bootstrapDirectory(input)
-    await bootstrap.sessions
-    expect(await bootstrap.environment).toBe("complete")
-    expect(input.store.getState().question).toEqual({})
-  })
-
-  test("failed question recovery preserves previous questions", async () => {
-    const questions = { session: [{ id: "old", sessionID: "session", questions: [] }] }
-    const input = inputFor(createSdk((url) => url.pathname === "/question"
-      ? Response.json({ message: "unavailable" }, { status: 400 }) : undefined), { question: questions })
-    const bootstrap = bootstrapDirectory(input)
-    await bootstrap.sessions
-    expect(await bootstrap.environment).toBe("failed")
-    expect(input.store.getState().question).toBe(questions)
-  })
-
-  test("retries transient question failures without replaying the session list", async () => {
-    let attempts = 0
-    let lists = 0
-    const question = { id: "pending", sessionID: "session", questions: [] }
-    const input = inputFor(createSdk((url) => {
-      if (url.pathname !== "/question") return undefined
-      attempts += 1
-      return attempts === 1 ? Response.json({ message: "warming up" }, { status: 503 }) : Response.json([question])
-    }))
-    const bootstrap = bootstrapDirectory({ ...input, loadSessions: async () => { lists += 1 } })
-    expect(await bootstrap.sessions).toBe("complete")
-    expect(await bootstrap.environment).toBe("complete")
-    expect(attempts).toBe(2)
-    expect(lists).toBe(1)
-    expect(input.store.getState().question.session).toEqual([question])
+  test("successful empty global discovery is authoritative, unlike failure", async () => {
+    const store = createStore<GlobalState>(() => ({ ...INITIAL_GLOBAL_STATE, workspaces: [workspace] }))
+    await bootstrapGlobal(store.setState, store.getState, nativeClient({ listProjects: async () => ({ items: [], errors: {} }), listWorkspaces: async () => ({ items: [], errors: {} }) }))
+    expect(store.getState().projects).toEqual([])
+    expect(store.getState().workspaces).toEqual([])
+    expect(store.getState().error).toBeUndefined()
   })
 })

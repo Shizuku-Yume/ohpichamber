@@ -1,293 +1,112 @@
+import type { ToolCallPart, ToolResultPart } from '@openchamber/agent-contract';
+
+/** Native SDK tool names; custom tools retain their complete identity. */
+export const NATIVE_TOOLS = {
+  bash: 'bash',
+  edit: 'edit',
+  write: 'write',
+  read: 'read',
+  grep: 'grep',
+  glob: 'glob',
+  find: 'find',
+  task: 'task',
+  ask: 'ask',
+  webSearch: 'web_search',
+  fetch: 'fetch',
+} as const;
+
+export type ToolName = string | undefined;
+export function normalizeToolName(toolName: ToolName): string {
+  return toolName?.trim() ?? '';
+}
+
+export const isShellTool = (name: ToolName): boolean => name === NATIVE_TOOLS.bash;
+export const isSubagentTool = (name: ToolName): boolean => name === NATIVE_TOOLS.task;
+export const isQuestionTool = (name: ToolName): boolean => name === NATIVE_TOOLS.ask;
+export const isEditTool = (name: ToolName): boolean => name === NATIVE_TOOLS.edit;
+export const isWriteTool = (name: ToolName): boolean => name === NATIVE_TOOLS.write;
+export const isFileChangeTool = (name: ToolName): boolean => isEditTool(name) || isWriteTool(name);
+export const isExplorationTool = (name: ToolName): boolean => name === NATIVE_TOOLS.read || name === NATIVE_TOOLS.grep || name === NATIVE_TOOLS.glob || name === NATIVE_TOOLS.find;
+export const isWebTool = (name: ToolName): boolean => name === NATIVE_TOOLS.fetch || name === NATIVE_TOOLS.webSearch;
+
+export function toolInputPath(input: ToolCallPart['input'] | undefined): string | null {
+  return typeof input?.path === 'string' && input.path.trim() ? input.path : null;
+}
+
+/** Inline native selectors are presentation instructions, never editor paths. */
+export function parseNativeReadPath(rawPath: string): { path: string; line?: number } {
+  const selectorIndex = rawPath.search(/:(?=\d|-\d|raw(?:$|:)|img$|conflicts$)[^/]*$/);
+  if (selectorIndex < 0) return { path: rawPath };
+  const selector = rawPath.slice(selectorIndex + 1).replace(/^raw:/, '');
+  const firstLine = /^(\d+)(?=$|[-+,:])/.exec(selector);
+  return { path: rawPath.slice(0, selectorIndex), ...(firstLine ? { line: Number(firstLine[1]) } : {}) };
+}
+
+export function toolInputPaths(call: ToolCallPart): string[] {
+  const path = toolInputPath(call.input);
+  const paths = path ? [path] : [];
+  if (isEditTool(call.toolName) && Array.isArray(call.input.edits)) {
+    for (const edit of call.input.edits) {
+      if (edit && typeof edit === 'object' && !Array.isArray(edit) && typeof edit.rename === 'string' && !paths.includes(edit.rename)) paths.push(edit.rename);
+    }
+  }
+  // Raw edit modes carry a native program, not a path field. Their resolved
+  // targets come from the result's details, not a guessed client-side parser.
+  return paths;
+}
+
 export interface ToolMetadata {
   displayName: string;
-  icon?: string;
-  outputLanguage?: string;
-  inputFields?: {
-    key: string;
-    label: string;
-    type: 'command' | 'file' | 'pattern' | 'text' | 'code';
-    language?: string;
-  }[];
+  outputLanguage: string;
   category: 'file' | 'search' | 'code' | 'system' | 'ai' | 'web';
 }
 
-const TOOL_METADATA: Record<string, ToolMetadata> = {
-
-  read: {
-    displayName: 'Read File',
-    category: 'file',
-    outputLanguage: 'auto',
-    inputFields: [
-      { key: 'filePath', label: 'File Path', type: 'file' },
-      { key: 'offset', label: 'Start Line', type: 'text' },
-      { key: 'limit', label: 'Lines to Read', type: 'text' }
-    ]
-  },
-  write: {
-    displayName: 'Write File',
-    category: 'file',
-    outputLanguage: 'auto',
-    inputFields: [
-      { key: 'filePath', label: 'File Path', type: 'file' },
-      { key: 'content', label: 'Content', type: 'code' }
-    ]
-  },
-  edit: {
-    displayName: 'Edit File',
-    category: 'file',
-    outputLanguage: 'diff',
-    inputFields: [
-      { key: 'filePath', label: 'File Path', type: 'file' },
-      { key: 'oldString', label: 'Find', type: 'code' },
-      { key: 'newString', label: 'Replace', type: 'code' },
-      { key: 'replaceAll', label: 'Replace All', type: 'text' }
-    ]
-  },
-  multiedit: {
-    displayName: 'Multi-Edit',
-    category: 'file',
-    outputLanguage: 'diff',
-    inputFields: [
-      { key: 'filePath', label: 'File Path', type: 'file' },
-      { key: 'edits', label: 'Edits', type: 'code', language: 'json' }
-    ]
-  },
-  apply_patch: {
-    displayName: 'Apply Patch',
-    category: 'file',
-    outputLanguage: 'diff',
-    inputFields: [
-      { key: 'patchText', label: 'Patch', type: 'code', language: 'diff' }
-    ]
-  },
-
-  bash: {
-    displayName: 'Shell Command',
-    category: 'system',
-    outputLanguage: 'text',
-    inputFields: [
-      { key: 'command', label: 'Command', type: 'command', language: 'bash' },
-      { key: 'description', label: 'Description', type: 'text' },
-      { key: 'timeout', label: 'Timeout (ms)', type: 'text' }
-    ]
-  },
-
-  grep: {
-    displayName: 'Search Files',
-    category: 'search',
-    outputLanguage: 'text',
-    inputFields: [
-      { key: 'pattern', label: 'Pattern', type: 'pattern' },
-      { key: 'path', label: 'Directory', type: 'file' },
-      { key: 'include', label: 'Include Pattern', type: 'pattern' }
-    ]
-  },
-  glob: {
-    displayName: 'Find Files',
-    category: 'search',
-    outputLanguage: 'text',
-    inputFields: [
-      { key: 'pattern', label: 'Pattern', type: 'pattern' },
-      { key: 'path', label: 'Directory', type: 'file' }
-    ]
-  },
-  list: {
-    displayName: 'List Directory',
-    category: 'file',
-    outputLanguage: 'text',
-    inputFields: [
-      { key: 'path', label: 'Directory', type: 'file' },
-      { key: 'ignore', label: 'Ignore Patterns', type: 'pattern' }
-    ]
-  },
-
-    task: {
-    displayName: 'Agent Task',
-    category: 'ai',
-    outputLanguage: 'markdown',
-    inputFields: [
-      { key: 'description', label: 'Task', type: 'text' },
-      { key: 'prompt', label: 'Instructions', type: 'text' },
-      { key: 'subagent_type', label: 'Agent Type', type: 'text' }
-    ]
-  },
-
-  webfetch: {
-    displayName: 'Fetch URL',
-    category: 'web',
-    outputLanguage: 'auto',
-    inputFields: [
-      { key: 'url', label: 'URL', type: 'text' },
-      { key: 'format', label: 'Format', type: 'text' },
-      { key: 'timeout', label: 'Timeout', type: 'text' }
-    ]
-  },
-
-   websearch: {
-     displayName: 'Web Search',
-     category: 'web',
-     outputLanguage: 'markdown',
-     inputFields: [
-       { key: 'query', label: 'Search Query', type: 'text' },
-       { key: 'numResults', label: 'Results Count', type: 'text' },
-       { key: 'type', label: 'Search Type', type: 'text' }
-     ]
-   },
-   codesearch: {
-     displayName: 'Code Search',
-     category: 'web',
-     outputLanguage: 'markdown',
-     inputFields: [
-       { key: 'query', label: 'Search Query', type: 'text' },
-       { key: 'tokensNum', label: 'Tokens', type: 'text' }
-     ]
-   },
-
-   todowrite: {
-     displayName: 'Update Todo List',
-     category: 'system',
-     outputLanguage: 'json',
-     inputFields: [
-       { key: 'todos', label: 'Todo Items', type: 'code', language: 'json' }
-     ]
-   },
-   todoread: {
-     displayName: 'Read Todo List',
-     category: 'system',
-     outputLanguage: 'json',
-     inputFields: []
-   },
-   skill: {
-     displayName: 'Load Skill',
-     category: 'ai',
-     outputLanguage: 'markdown',
-     inputFields: [
-       { key: 'name', label: 'Skill Name', type: 'text' }
-     ]
-   },
-    question: {
-       displayName: 'Question',
-       category: 'ai',
-       outputLanguage: 'text',
-       inputFields: [
-         { key: 'questions', label: 'Questions', type: 'code', language: 'json' }
-       ]
-     },
-
-    lsp: {
-      displayName: 'LSP',
-      category: 'code',
-      outputLanguage: 'json',
-      inputFields: [
-        { key: 'operation', label: 'Operation', type: 'text' },
-        { key: 'filePath', label: 'File Path', type: 'file' },
-        { key: 'line', label: 'Line', type: 'text' },
-        { key: 'character', label: 'Character', type: 'text' },
-        { key: 'query', label: 'Query', type: 'text' }
-      ]
-    },
-
-    openchamber: {
-      displayName: 'OpenChamber',
-      category: 'system',
-      outputLanguage: 'json',
-      inputFields: []
-    },
-
-    openchamber_web: {
-      displayName: 'OpenChamber Web',
-      category: 'system',
-      outputLanguage: 'json',
-      inputFields: []
-    },
-
-    openchamber_memory: {
-      displayName: 'OpenChamber Memory',
-      category: 'system',
-      outputLanguage: 'json',
-      inputFields: []
-    },
-
-    plan_enter: {
-      displayName: 'Plan Mode',
-      category: 'ai',
-      outputLanguage: 'text',
-      inputFields: []
-    },
-
-    plan_exit: {
-      displayName: 'Build Mode',
-      category: 'ai',
-      outputLanguage: 'text',
-      inputFields: []
-    },
-
-    StructuredOutput: {
-      displayName: 'Structured Output',
-      category: 'ai',
-      outputLanguage: 'json',
-      inputFields: []
-    },
-
-    structuredoutput: {
-      displayName: 'Structured Output',
-      category: 'ai',
-      outputLanguage: 'json',
-      inputFields: []
-    }
-  };
-
-function formatUnknownToolDisplayName(toolName: string): string {
-  return toolName
-    .trim()
-    .replace(/[_-]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .replace(/^./, (char) => char.toUpperCase());
-}
-
 export function getToolMetadata(toolName: string): ToolMetadata {
-  return TOOL_METADATA[toolName] || {
-    displayName: formatUnknownToolDisplayName(toolName),
-    category: 'system',
-    outputLanguage: 'text',
-    inputFields: []
-  };
+  const category = isFileChangeTool(toolName) || toolName === NATIVE_TOOLS.read ? 'file'
+    : isSubagentTool(toolName) || isQuestionTool(toolName) ? 'ai'
+    : isWebTool(toolName) ? 'web'
+    : isExplorationTool(toolName) ? 'search' : 'system';
+  const outputLanguage = isEditTool(toolName) ? 'diff'
+    : toolName === NATIVE_TOOLS.read || isWriteTool(toolName) ? 'auto' : 'text';
+  return { displayName: toolName, category, outputLanguage };
 }
 
-export function detectToolOutputLanguage(
-  toolName: string,
-  output: string,
-  input?: Record<string, unknown>
-): string {
-  const metadata = getToolMetadata(toolName);
+export type ToolDescription =
+  | { kind: 'path'; value: string }
+  | { kind: 'text'; value: string }
+  | { kind: 'files'; count: number; files: string[] }
+  | { kind: 'questions'; count: number };
 
-  if (metadata.outputLanguage === 'auto') {
-
-    if (input?.filePath || input?.file_path || input?.sourcePath) {
-      const filePath = (input.filePath || input.file_path || input.sourcePath) as string;
-      const language = getLanguageFromExtension(filePath);
-      if (language) return language;
-    }
-
-    if (toolName === 'webfetch') {
-      if (output.trim().startsWith('{') || output.trim().startsWith('[')) {
-        try {
-          JSON.parse(output);
-          return 'json';
-        } catch { /* ignored */ }
-      }
-      if (output.trim().startsWith('<')) {
-        return 'html';
-      }
-      if (output.includes('```')) {
-        return 'markdown';
-      }
-    }
-
-    return 'text';
+/** A result may borrow input only from its exact native call identity. */
+export function toolDescription(part: ToolCallPart | ToolResultPart, pairedCall?: ToolCallPart): ToolDescription | null {
+  const call = part.type === 'tool_call' ? part
+    : pairedCall?.toolCallId === part.toolCallId && pairedCall.toolName === part.toolName ? pairedCall : undefined;
+  if (!call) return part.type === 'tool_result' && part.error ? { kind: 'text', value: part.error } : null;
+  if (isFileChangeTool(call.toolName) || call.toolName === NATIVE_TOOLS.read) {
+    const paths = toolInputPaths(call);
+    return paths.length > 1 ? { kind: 'files', count: paths.length, files: paths }
+      : paths[0] ? { kind: 'path', value: paths[0] } : null;
   }
+  const input = call.input;
+  if (isQuestionTool(call.toolName) && Array.isArray(call.input.questions) && call.input.questions.length) {
+    return { kind: 'questions', count: call.input.questions.length };
+  }
+  const value = isShellTool(call.toolName) ? input.command
+    : call.toolName === NATIVE_TOOLS.grep ? input.pattern
+    : call.toolName === NATIVE_TOOLS.glob ? input.path
+    : call.toolName === NATIVE_TOOLS.find ? input.query
+    : call.toolName === NATIVE_TOOLS.webSearch ? input.query
+    : call.toolName === NATIVE_TOOLS.fetch ? input.url
+    : isSubagentTool(call.toolName) ? input.name ?? input.task : undefined;
+  return typeof value === 'string' && value ? { kind: 'text', value: value.split('\n')[0].slice(0, 160) } : null;
+}
 
-  return metadata.outputLanguage || 'text';
+export function detectToolOutputLanguage(toolName: string, _output: string, input?: ToolCallPart['input']): string {
+  const language = getToolMetadata(toolName).outputLanguage;
+  if (language !== 'auto') return language;
+  const path = toolInputPath(input);
+  if (path) return getLanguageFromExtension(toolName === NATIVE_TOOLS.read ? parseNativeReadPath(path).path : path) ?? 'text';
+  return 'text';
 }
 
 export function getLanguageFromExtension(filePath: string): string | null {
@@ -368,10 +187,18 @@ export function getLanguageFromExtension(filePath: string): string | null {
     'svelte': 'html',
     'astro': 'html',
     'ejs': 'html',
+    'cshtml': 'html',
+    'razor': 'html',
+    'jsp': 'html',
+    'gohtml': 'html',
+    'tmpl': 'html',
     'hbs': 'handlebars',
     'handlebars': 'handlebars',
     'mustache': 'handlebars',
     'njk': 'twig',
+    'jinja': 'twig',
+    'jinja2': 'twig',
+    'j2': 'twig',
     'nunjucks': 'twig',
     'twig': 'twig',
     'liquid': 'liquid',
@@ -391,6 +218,13 @@ export function getLanguageFromExtension(filePath: string): string | null {
     'jsonl': 'json',
     'ndjson': 'json',
     'geojson': 'json',
+    'webmanifest': 'json',
+    'code-workspace': 'json',
+    'har': 'json',
+    'ipynb': 'json',
+    'gltf': 'json',
+    'tfstate': 'json',
+    'tsbuildinfo': 'json',
     'yaml': 'yaml',
     'yml': 'yaml',
     'toml': 'toml',
@@ -411,11 +245,16 @@ export function getLanguageFromExtension(filePath: string): string | null {
     'targets': 'xml',
     'nuspec': 'xml',
     'resx': 'xml',
+    'wxs': 'xml',
+    'storyboard': 'xml',
+    'xib': 'xml',
     'ini': 'ini',
     'cfg': 'ini',
     'conf': 'ini',
     'config': 'ini',
     'properties': 'properties',
+    'service': 'ini',
+    'desktop': 'ini',
     'env': 'bash',
     'csv': 'text',
     'tsv': 'text',
@@ -451,6 +290,10 @@ export function getLanguageFromExtension(filePath: string): string | null {
     'php5': 'php',
     'php7': 'php',
     'phps': 'php',
+    // PHP templates (Smarty-style .tpl, CakePHP .ctp) and PHP test files.
+    'tpl': 'php',
+    'ctp': 'php',
+    'phpt': 'php',
     'inc': 'php',
     'blade.php': 'php',
 
@@ -707,6 +550,11 @@ export function isDrawioFile(filePath: string): boolean {
   return DIAGRAM_EXTENSIONS.includes(ext || '');
 }
 
+export function isExcalidrawFile(filePath: string): boolean {
+  const lower = filePath.toLowerCase();
+  return lower.endsWith('.excalidraw') || lower.endsWith('.excalidraw.md');
+}
+
 const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico', 'bmp', 'avif'];
 
 export function isImageFile(filePath: string): boolean {
@@ -843,89 +691,9 @@ export function getImageMimeType(filePath: string): string {
   return mimeMap[ext || ''] || 'image/png';
 }
 
-export function formatToolInput(input: Record<string, unknown>, toolName: string): string {
-  if (!input) return '';
-
-  const getString = (key: string): string | null => {
-    const val = input[key];
-    return typeof val === 'string' ? val : (typeof val === 'number' ? String(val) : null);
-  };
-
-  if (toolName === 'bash') {
-    const cmd = getString('command');
-    if (cmd) return cmd;
-  }
-
-  if (toolName === 'lsp') {
-    const operation = getString('operation') || 'lsp';
-    const filePath = getString('filePath') || getString('file_path') || getString('path');
-    const line = getString('line');
-    const character = getString('character');
-    const query = getString('query');
-    const position = line && character ? ` (Line: ${line}; Character: ${character})` : '';
-
-    if (operation === 'workspaceSymbol') {
-      return query ? `Operation: ${operation} (Query: "${query}")` : `Operation: ${operation}`;
-    }
-
-    const summary = `Operation: ${operation}${position}`;
-    if (filePath) {
-      return `${summary}\n${filePath}`;
-    }
-
-    return summary;
-  }
-
-  if (toolName === 'task') {
-    const prompt = getString('prompt');
-    if (prompt) return prompt;
-    const desc = getString('description');
-    if (desc) return desc;
-  }
-
-  if (toolName === 'apply_patch' && typeof input === 'object') {
-    const patchText = getString('patchText') || getString('patch_text') || getString('patch');
-    if (patchText) {
-      return patchText;
-    }
-  }
-
-  if ((toolName === 'edit' || toolName === 'multiedit') && typeof input === 'object') {
-    const filePath = getString('filePath') || getString('file_path') || getString('path');
-    if (filePath) {
-      return `File path: ${filePath}`;
-    }
-  }
-
-  if (toolName === 'write' && typeof input === 'object') {
-
-    const content = getString('content');
-    if (content) {
-      return content;
-    }
-  }
-
-  if (typeof input === 'object') {
-    const entries = Object.entries(input)
-      .filter(([, value]) => value !== undefined && value !== null && value !== '')
-      .map(([key, value]) => {
-
-        const formattedKey = key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ')
-          .toLowerCase()
-          .replace(/^./, str => str.toUpperCase());
-
-        let formattedValue = value;
-        if (typeof value === 'object') {
-          formattedValue = JSON.stringify(value, null, 2);
-        } else if (typeof value === 'boolean') {
-          formattedValue = value ? 'Yes' : 'No';
-        }
-
-        return `${formattedKey}: ${formattedValue}`;
-      });
-
-    return entries.join('\n');
-  }
-
-  return String(input);
+export function formatToolInput(input: ToolCallPart['input'], toolName: string): string {
+  if (isShellTool(toolName) && typeof input.command === 'string') return input.command;
+  if (isWriteTool(toolName) && typeof input.content === 'string') return input.content;
+  // Keep complete structured native edit/task/custom-tool inputs visible.
+  return JSON.stringify(input, null, 2);
 }

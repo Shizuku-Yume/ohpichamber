@@ -1,7 +1,6 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { describe, expect, test } from 'bun:test';
-import type { Message } from '@opencode-ai/sdk/v2/client';
 
 import {
     isOlderHistoryPrependCommit,
@@ -90,22 +89,92 @@ const installMinimalDom = () => {
     };
 };
 
+describe('loadHistoryUntilMessage', () => {
+    const userMessage = (messageId: string, createdAt: number): ChatMessageEntry => ({
+        messageId, sessionId: 'session', turnId: `turn_${messageId}`, role: 'user', createdAt, parts: [],
+    });
+
+    // Real scheduling instead of act: the loader waits for the render that
+    // publishes each page, which act would hold back until its scope ends.
+    const renderHarness = (options: {
+        pages: ChatMessageEntry[][];
+        complete?: boolean;
+    }) => {
+        const dom = installMinimalDom();
+        Object.defineProperty(globalThis, 'IS_REACT_ACT_ENVIRONMENT', { configurable: true, writable: true, value: false });
+        const root = createRoot(dom.container);
+        let messages: ChatMessageEntry[] = [userMessage('msg_9', 9)];
+        let calls = 0;
+        let controller!: UseChatTimelineControllerResult;
+        const Harness = () => {
+            controller = useChatTimelineController({
+                sessionId: 'session', sessionKey: 'runtime\n/repo\nsession', messages,
+                historyMeta: { limit: messages.length, complete: options.complete === true, loading: false },
+                scrollRef: { current: null }, messageListRef: { current: null }, isPinned: true, showScrollButton: false,
+                loadMoreMessages: async () => {
+                    const page = options.pages[calls] ?? [];
+                    calls += 1;
+                    messages = [...page, ...messages];
+                    root.render(React.createElement(Harness));
+                },
+                goToBottom: () => undefined, releaseAutoFollow: () => undefined,
+            });
+            return null;
+        };
+        root.render(React.createElement(Harness));
+        return {
+            get controller() { return controller; },
+            get calls() { return calls; },
+            ready: () => new Promise((resolve) => setTimeout(resolve, 20)),
+            dispose: () => {
+                root.unmount();
+                dom.restore();
+            },
+        };
+    };
+
+    test('loads older batches until the message arrives', async () => {
+        const harness = renderHarness({ pages: [[userMessage('msg_5', 5)], [userMessage('msg_1', 1)]] });
+        try {
+            await harness.ready();
+            expect(await harness.controller.loadHistoryUntilMessage('msg_1', { maxBatches: 3 })).toBe(true);
+            expect(harness.calls).toBe(2);
+        } finally {
+            harness.dispose();
+        }
+    });
+
+    test('gives up after the batch limit when the message never arrives', async () => {
+        const harness = renderHarness({ pages: [[userMessage('msg_5', 5)], [userMessage('msg_4', 4)], [userMessage('msg_3', 3)], [userMessage('msg_2', 2)]] });
+        try {
+            await harness.ready();
+            expect(await harness.controller.loadHistoryUntilMessage('reverted', { maxBatches: 3 })).toBe(false);
+            expect(harness.calls).toBe(3);
+        } finally {
+            harness.dispose();
+        }
+    });
+
+    test('loads nothing when the history is already complete', async () => {
+        const harness = renderHarness({ pages: [], complete: true });
+        try {
+            await harness.ready();
+            expect(await harness.controller.loadHistoryUntilMessage('msg_1', { maxBatches: 3 })).toBe(false);
+            expect(harness.calls).toBe(0);
+        } finally {
+            harness.dispose();
+        }
+    });
+});
+
 describe('useChatTimelineController identity lifecycle', () => {
     test('one history action delegates one batch even when rendering has no new user turn', async () => {
         const dom = installMinimalDom();
         const root = createRoot(dom.container);
         const pending = deferred();
-        const user: Message = {
-            id: 'user', sessionID: 'session', role: 'user', time: { created: 100 },
-            agent: 'build', model: { providerID: 'test', modelID: 'test' },
-        };
-        const older: Message = {
-            id: 'older-step', sessionID: 'session', role: 'assistant', parentID: 'unloaded-user',
-            time: { created: 99, completed: 100 }, providerID: 'test', modelID: 'test',
-            mode: 'build', agent: 'build', path: { cwd: '/repo', root: '/repo' }, cost: 0,
-            tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-        };
-        let messages: ChatMessageEntry[] = [{ info: user, parts: [] }];
+        const user: ChatMessageEntry = { messageId: 'user', sessionId: 'session', turnId: 'turn-user', role: 'user', createdAt: 100, parts: [] };
+        const older: ChatMessageEntry = { messageId: 'older-step', sessionId: 'session', turnId: 'turn-older', role: 'assistant', createdAt: 99, parts: [] };
+        let messages: ChatMessageEntry[] = [user];
         let calls = 0;
         let controller!: UseChatTimelineControllerResult;
         const scrollRef = { current: null };
@@ -130,7 +199,7 @@ describe('useChatTimelineController identity lifecycle', () => {
             });
             expect(calls).toBe(1);
             await act(async () => { pending.resolve(); await Promise.resolve(); });
-            messages = [{ info: older, parts: [] }, ...messages];
+            messages = [older, ...messages];
             act(() => root.render(React.createElement(Harness)));
             await act(async () => { await Promise.all([first, duplicate]); });
             expect(calls).toBe(1);
@@ -148,18 +217,9 @@ describe('useChatTimelineController identity lifecycle', () => {
         const pendingB = deferred();
         const calls: string[] = [];
         const sessionId = 'shared-session';
-        const message = {
-            info: { id: 'msg_1', sessionID: sessionId, role: 'user', time: { created: 1 } } as Message,
-            parts: [],
-        };
-        const olderMessage = {
-            info: { id: 'msg_0', sessionID: sessionId, role: 'user', time: { created: 0 } } as Message,
-            parts: [],
-        };
-        const assistantMessage = {
-            info: { id: 'msg_2', sessionID: sessionId, role: 'assistant', time: { created: 2 } } as Message,
-            parts: [],
-        };
+        const message: ChatMessageEntry = { messageId: 'msg_1', sessionId, turnId: 'turn-1', role: 'user', createdAt: 1, parts: [] };
+        const olderMessage: ChatMessageEntry = { messageId: 'msg_0', sessionId, turnId: 'turn-0', role: 'user', createdAt: 0, parts: [] };
+        const assistantMessage: ChatMessageEntry = { messageId: 'msg_2', sessionId, turnId: 'turn-2', role: 'assistant', createdAt: 2, parts: [] };
         const scrollMetrics = {
             scrollTop: 100,
             scrollHeight: 1000,

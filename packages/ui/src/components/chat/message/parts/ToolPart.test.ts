@@ -1,44 +1,30 @@
 import { describe, expect, test } from 'bun:test';
+import type { ToolResultPart } from '@openchamber/agent-contract';
 
-import { getStreamingOutputAppend, getToolOutput, renderTerminalOutput } from './toolOutput';
-import { readTaskTagSessionIdFromOutput } from './taskSessionIdParser';
-import { parseDiffToUnified, tryParseJsonOutput } from '../toolRenderers';
+import { renderTerminalOutput } from './toolOutput';
+import { nativeToolResultContent, parseDiffToUnified, tryParseJsonOutput } from '../toolRenderers';
 import { getStreamingThrottleText } from '../../hooks/useStreamingTextThrottle';
-import { getToolDescriptionFallback } from './toolRenderUtils';
 
-describe('getToolOutput', () => {
-    test('prefers state.output for completed tools', () => {
-        expect(getToolOutput('bash', 'final output', 'partial output', 'completed')).toBe('final output');
+describe('canonical native result content', () => {
+    const result = (output: ToolResultPart['output']): ToolResultPart => ({
+        type: 'tool_result' as const, partId: 'result', toolCallId: 'call', toolName: 'read', isError: false, output,
     });
 
-    test('normalizes completed bash state output while preserving final-output precedence', () => {
-        expect(getToolOutput('bash', '\u001B[32mFinal output\u001B[0m', 'partial output', 'completed')).toBe('Final output');
+    test('decodes SDK text and preserves structured details', () => {
+        expect(nativeToolResultContent(result({ content: [{ type: 'text', text: 'first' }, { type: 'text', text: 'second' }], details: { path: 'src/a.ts' } })))
+            .toEqual({ text: 'first\nsecond', images: [], details: { path: 'src/a.ts' } });
     });
 
-    test('falls back to metadata.output for bash tools without state output', () => {
-        expect(getToolOutput('bash', undefined, 'partial output', 'completed')).toBe('partial output');
+    test('retains image attachments without turning them into text JSON', () => {
+        expect(nativeToolResultContent(result({ content: [{ type: 'image', data: 'aGVsbG8=', mimeType: 'image/png' }] })))
+            .toEqual({ text: '', images: [{ mediaType: 'image/png', data: 'aGVsbG8=' }], details: undefined });
     });
 
-    test('normalizes bash metadata output for completed state', () => {
-        expect(getToolOutput('bash', undefined, 'Progress 10%\r\u001B[2KProgress 90%', 'completed')).toBe('Progress 90%');
-    });
-
-    test('does not normalize bash output while running', () => {
-        expect(getToolOutput('bash', '\u001B[32mRunning\u001B[0m', undefined, 'running')).toBe('\u001B[32mRunning\u001B[0m');
-        expect(getToolOutput('bash', undefined, 'Progress\r\u001B[2K', 'running')).toBe('Progress\r\u001B[2K');
-    });
-
-    test('ignores metadata.output for non-bash tools', () => {
-        expect(getToolOutput('read', undefined, 'partial output', 'completed')).toBe(undefined);
-        expect(getToolOutput('read', 'final output', 'partial output', 'completed')).toBe('final output');
-    });
-
-    test('returns undefined when bash has no output', () => {
-        expect(getToolOutput('bash', undefined, undefined, 'completed')).toBe(undefined);
-    });
-
-    test('ignores empty metadata.output for bash', () => {
-        expect(getToolOutput('bash', undefined, '', 'completed')).toBe(undefined);
+    test('preserves unknown content blocks and generic JSON instead of discarding results', () => {
+        expect(nativeToolResultContent(result({ content: [{ type: 'custom', value: 'kept' }] })).text).toContain('kept');
+        expect(nativeToolResultContent(result({ count: 0 })).text).toBe('{"count":0}');
+        expect(nativeToolResultContent(result(null)).text).toBe('null');
+        expect(nativeToolResultContent(result(undefined)).text).toBe('');
     });
 });
 
@@ -130,19 +116,9 @@ describe('renderTerminalOutput', () => {
     });
 });
 
-describe('getStreamingOutputAppend', () => {
-    test('returns only newly appended output', () => {
-        expect(getStreamingOutputAppend('first\n', 'first\nsecond\n')).toBe('second\n');
-    });
-
-    test('requires replacement when output is rewritten or shortened', () => {
-        expect(getStreamingOutputAppend('progress 10%', 'progress 20%')).toBe(undefined);
-        expect(getStreamingOutputAppend('long output', 'short')).toBe(undefined);
-    });
-});
 
 describe('streaming output transitions', () => {
-    test('allows bash snapshots to be rewritten or shortened while running', () => {
+    test('allows shell snapshots to be rewritten or shortened while running', () => {
         expect(getStreamingThrottleText('progress 10%', 'progress 20%', true, true)).toBe('progress 20%');
         expect(getStreamingThrottleText('long output', 'short', true, true)).toBe('short');
     });
@@ -152,15 +128,6 @@ describe('streaming output transitions', () => {
     });
 });
 
-describe('readTaskTagSessionIdFromOutput', () => {
-    test('parses task tags without state attributes', () => {
-        expect(readTaskTagSessionIdFromOutput('<task id="ses_abc123">')).toBe('ses_abc123');
-    });
-
-    test('parses task tags with additional attributes', () => {
-        expect(readTaskTagSessionIdFromOutput('<task id="ses_def456" state="completed">')).toBe('ses_def456');
-    });
-});
 
 describe('OpenChamber tool output', () => {
     test('keeps the result envelope in the generic JSON rendering pipeline', () => {
@@ -171,17 +138,5 @@ describe('OpenChamber tool output', () => {
             data: { projects: [] },
         };
         expect(tryParseJsonOutput(JSON.stringify(result))).toEqual({ data: result, isJson: true });
-    });
-});
-
-describe('getToolDescriptionFallback', () => {
-    test('uses the glob pattern when the provided description and title are empty', () => {
-        expect(getToolDescriptionFallback('glob', '', { pattern: 'packages/electron/README.md' }))
-            .toBe('packages/electron/README.md');
-    });
-
-    test('prefers an existing glob description over the pattern', () => {
-        expect(getToolDescriptionFallback('glob', 'Electron docs', { pattern: 'packages/electron/README.md' }))
-            .toBe('Electron docs');
     });
 });

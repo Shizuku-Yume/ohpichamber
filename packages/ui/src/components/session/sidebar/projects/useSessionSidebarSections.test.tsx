@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import type { Session } from '@opencode-ai/sdk/v2';
+import type { Session } from '@openchamber/agent-contract';
 import { I18nProvider } from '@/lib/i18n';
 import { useSessionGrouping } from './useSessionGrouping';
 import { useSessionSidebarSections } from './useSessionSidebarSections';
@@ -10,14 +10,21 @@ import type { SessionFoldersMap } from '@/stores/useSessionFoldersStore';
 
 const CHATS_ROOT = '/home/user/.config/openchamber/chats';
 
-const chatSession = (id: string, title: string): Session => ({
-  id,
-  slug: id,
-  projectID: 'chats',
-  title,
-  version: '1',
-  directory: `${CHATS_ROOT}/2026-08-28/session-${id}`,
-  time: { created: 1, updated: 1 },
+const chatSession = (sessionId: string, title: string): Session => ({
+  sessionId,
+  rootSessionId: sessionId,
+  projectId: 'chats',
+  workspaceId: 'workspace',
+  displayPath: `${CHATS_ROOT}/2026-08-28/session-${sessionId}`,
+  createdAt: 1,
+  updatedAt: 1,
+  epoch: 'epoch',
+  headSequence: '0',
+  runtimeStatus: 'idle',
+  activeRunId: null,
+  metadata: { title },
+  metadataRevision: '0',
+  archiveRevision: '0',
 });
 
 const chatsGroup = (sessions: Session[]): SessionGroup => ({
@@ -52,16 +59,17 @@ const renderSections = (
       pinnedSessionIds: new Set(),
       sessionOrderRanks: new Map(),
       gitBranches: new Map(),
-      isVSCode: false,
+      worktreeSortOrder: 'recent' as const,
     });
     captured = useSessionSidebarSections({
       normalizedProjects: projectSessions ? [{ id: 'project', path: CHATS_ROOT, normalizedPath: CHATS_ROOT }] : [],
-      getSessionsForProject: () => projectSessions?.filter((session) => !session.time.archived) ?? [],
-      getArchivedSessionsForProject: () => projectSessions?.filter((session) => Boolean(session.time.archived)) ?? [],
+      getSessionsForProject: () => projectSessions?.filter((session) => session.archiveRevision === '0') ?? [],
+      getArchivedSessionsForProject: () => projectSessions?.filter((session) => session.archiveRevision !== '0') ?? [],
       availableWorktreesByProject: new Map(),
       projectRepoStatus: new Map(),
       projectRootBranches: new Map(),
       gitBranches: new Map(),
+      sessionOrderRanks: new Map(),
       lastRepoStatus: false,
       buildGroupedSessions: grouping.buildGroupedSessions,
       hasSessionSearchQuery: query.length > 0,
@@ -87,13 +95,13 @@ describe('sidebar search over standalone groups', () => {
   const targetId = 'ses_f88b1a2b3c4d';
 
   test('finds project sessions in flat results without searching their archived bucket', () => {
-    const active = { ...chatSession(targetId, 'Active'), directory: CHATS_ROOT };
-    const archived = { ...chatSession('ses_archived', 'Archived'), directory: CHATS_ROOT, time: { created: 1, updated: 1, archived: 2 } };
+    const active = { ...chatSession(targetId, 'Active'), displayPath: CHATS_ROOT };
+    const archived = { ...chatSession('ses_archived', 'Archived'), displayPath: CHATS_ROOT, archiveRevision: '2', archivedAt: 1 };
     const group = chatsGroup([]);
     const sections = renderSections(group, targetId, [active, archived]);
-    expect(sections.flatSectionsForRender[0].groups[0].sessions.map((node) => node.session.id)).toEqual([targetId]);
+    expect(sections.flatSectionsForRender[0].groups[0].sessions.map((node) => node.session.sessionId)).toEqual([targetId]);
     expect(sections.searchMatchCount).toBe(1);
-    const archivedSearch = renderSections(group, archived.id, [active, archived]);
+    const archivedSearch = renderSections(group, archived.sessionId, [active, archived]);
     expect(archivedSearch.flatSectionsForRender).toEqual([]);
     expect(archivedSearch.searchMatchCount).toBe(0);
   });
@@ -107,7 +115,7 @@ describe('sidebar search over standalone groups', () => {
     for (const query of [targetId, `  ${targetId.toUpperCase()}\n`]) {
       const sections = renderSections(group, query);
       const data = sections.groupSearchDataByGroup.get(group);
-      expect(data?.filteredNodes.map((node) => node.session.id)).toEqual([targetId]);
+      expect(data?.filteredNodes.map((node) => node.session.sessionId)).toEqual([targetId]);
       expect(data?.groupMatches).toBe(false);
       expect(data?.folderNameMatchCount).toBe(0);
       expect(sections.searchMatchCount).toBe(1);
@@ -126,8 +134,8 @@ describe('sidebar search over standalone groups', () => {
     ];
     const sections = renderSections(group, targetId);
     const nodes = sections.groupSearchDataByGroup.get(group)?.filteredNodes;
-    expect(nodes?.map((node) => node.session.id)).toEqual(['ses_parent']);
-    expect(nodes?.[0].children.map((node) => node.session.id)).toEqual([targetId]);
+    expect(nodes?.map((node) => node.session.sessionId)).toEqual(['ses_parent']);
+    expect(nodes?.[0].children.map((node) => node.session.sessionId)).toEqual([targetId]);
     expect(sections.searchMatchCount).toBe(1);
     const parentSections = renderSections(group, 'ses_parent');
     expect(parentSections.groupSearchDataByGroup.get(group)?.filteredNodes[0]).toBe(parent);
@@ -137,7 +145,7 @@ describe('sidebar search over standalone groups', () => {
 
   test('does not return archived sessions for an ID query', () => {
     const archived = chatSession(targetId, 'Archived');
-    archived.time.archived = 2;
+    archived.archivedAt = 2;
     const group = chatsGroup([archived]);
     expect(renderSections(group, targetId).searchMatchCount).toBe(0);
   });
@@ -152,7 +160,7 @@ describe('sidebar search over standalone groups', () => {
     const data = sections.groupSearchDataByGroup.get(group);
 
     expect(data).toBeDefined();
-    expect(data?.filteredNodes.map((node) => node.session.id)).toEqual(['ses_a']);
+    expect(data?.filteredNodes.map((node) => node.session.sessionId)).toEqual(['ses_a']);
     expect(data?.hasMatch).toBe(true);
   });
 

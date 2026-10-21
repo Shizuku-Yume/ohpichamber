@@ -83,7 +83,7 @@ describe('useSessionProjectViewState', () => {
     const projects = [{ id: 'project-a' }, { id: 'project-b' }];
     const Harness = () => {
       capture.renderCount += 1;
-      const viewState = useSessionProjectViewState({ isVSCode: true, projects });
+      const viewState = useSessionProjectViewState({ projects });
       capture.state = viewState.state;
       capture.actions = viewState.actions;
       return null;
@@ -105,10 +105,14 @@ describe('useSessionProjectViewState', () => {
 
       await act(async () => initialActions.toggleProject('project-a'));
       expect(capture.state?.collapsedProjects).toEqual(new Set(['project-a']));
-      await act(async () => initialActions.collapseAllProjects());
+      // The timeline zone is not on the grouped view, so Collapse all / Expand all leave it alone.
+      await act(async () => initialActions.setCollapsedActivities(new Set(['timeline'])));
+      await act(async () => initialActions.collapseAll());
       expect(capture.state?.collapsedProjects).toEqual(new Set(['project-a', 'project-b']));
-      await act(async () => initialActions.expandAllProjects());
+      expect(capture.state?.collapsedActivities).toEqual(new Set(['timeline', 'chats', 'work', 'active-now']));
+      await act(async () => initialActions.expandAll());
       expect(capture.state?.collapsedProjects).toEqual(new Set());
+      expect(capture.state?.collapsedActivities).toEqual(new Set(['timeline']));
 
       await act(async () => initialActions.toggleGroup('project-a:group-a'));
       expect(capture.state?.collapsedGroups).toEqual(new Set(['project-a:group-a']));
@@ -157,7 +161,7 @@ describe('useSessionProjectViewState', () => {
     const capture: HookCapture = { renderCount: 0 };
     const Harness = () => {
       capture.renderCount += 1;
-      const value = useSessionProjectViewState({ isVSCode: true, projects: [{ id: 'project-a' }] });
+      const value = useSessionProjectViewState({ projects: [{ id: 'project-a' }] });
       capture.state = value.state;
       capture.actions = value.actions;
       return null;
@@ -193,7 +197,7 @@ describe('useSessionProjectViewState', () => {
     const Harness = ({ hidden }: { hidden: boolean }) => {
       void hidden;
       capture.renderCount += 1;
-      const value = useSessionProjectViewState({ isVSCode: true, projects: [{ id: 'project-a' }] });
+      const value = useSessionProjectViewState({ projects: [{ id: 'project-a' }] });
       capture.state = value.state;
       capture.actions = value.actions;
       return null;

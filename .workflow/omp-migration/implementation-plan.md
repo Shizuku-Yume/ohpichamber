@@ -1,6 +1,6 @@
 # Implementation plan
 
-This plan assumes the OMP-only boundary in [scope.md](./scope.md), the runtime topology in [architecture.md](./architecture.md), and the Canonical API draft in [contracts.md](./contracts.md). It is a migration plan, not a promise that the current repository already implements any item.
+This plan records milestones, work packages, gates, and acceptance evidence for the OMP-only boundary in [scope.md](./scope.md), the runtime topology in [architecture.md](./architecture.md), and the Canonical API contract in [contracts.md](./contracts.md). Implemented status and observed evidence live in [development.md](../development.md); milestone text is not itself acceptance.
 
 ## Prerequisite: refresh upstream and re-audit the fork
 
@@ -110,6 +110,8 @@ A disposable service test can create a session in a temporary cwd, submit a prom
 ### Gate
 
 Web and Electron can create, stream, abort, reload, and reopen a session through the Canonical Client. A reconnect performs snapshot plus cursor recovery without duplicate message parts. The full affected UI package checks pass, and the old OpenCode client is no longer reachable from retained UI code.
+
+**Current status (2026-10-22):** The M3 Canonical Client cutover, task 17 lifecycle retirement, PWA manifest fix, native child `yield` authorization, paired-result child link, and W8 projection fix (`f4e609dc1`) are integrated at source `8d179c4e2`. The a92 matrix on artifact `a92fbb36…` passes W7 visual sanity, W8, W9 packaged child/Board/Guest, W10 and PWA (`.workflow/omp-migration/m3/task57-a92-matrix-2026-10-22/`); W1-W6 reuse archived gates. Limits: packaged live-region at 400 ms is inconclusive while the Web announcement was observed; PWA auth proof is the Web Host with existing packaged state, not packaged Electron password auth; child snapshot 404 is the intentional history-only contract. The final root gate passed at `8d179c4e2` on 2026-10-22 (all seven phases exit 0; `.workflow/omp-migration/m3/task18-gate-final-2026-10-22.json`), and Task18/Task57 are archived. The earlier `b9fbb4bb0` gate and `068a` artifacts are historical. Coordinator final closure/review remains pending, so the spec stays in progress and no M3 pass is claimed yet.
 
 ## M4: OpenChamber orchestration features
 

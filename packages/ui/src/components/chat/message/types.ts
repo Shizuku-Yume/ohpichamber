@@ -1,3 +1,5 @@
+import type { ToolCallPart, ToolResultPart } from '@openchamber/agent-contract';
+
 export type StreamPhase = 'streaming' | 'cooldown' | 'completed';
 
 export type DiffViewMode = 'side-by-side' | 'unified';
@@ -11,10 +13,13 @@ export interface ToolPopupContent {
     open: boolean;
     title: string;
     content: string;
+    toolResult?: ToolResultPart;
+    /** Canonical tool identity, available even before a result exists. */
+    toolName?: string;
+    /** Canonical call arguments for deep inspection; never a legacy alias bag. */
+    input?: ToolCallPart['input'];
     language?: string;
     isDiff?: boolean;
-    diffHunks?: Array<Record<string, unknown>>;
-    metadata?: Record<string, unknown>;
     image?: {
         url: string;
         mimeType?: string;

@@ -1,16 +1,15 @@
-import type { Message, Part } from '@opencode-ai/sdk/v2';
+import type { Message, Part } from '@openchamber/agent-contract';
 
-export interface ChatMessageEntry {
-    info: Message;
-    parts: Part[];
-}
+/** Canonical message plus a display-only session retry notice. */
+export type ChatMessageEntry = Message & {
+    retryError?: { name: 'SessionRetry'; message: string; data: { message: string } };
+};
 
 type TurnActivityKind = 'tool' | 'reasoning' | 'justification';
 
 export interface TurnMessageRecord {
     messageId: string;
     role: string;
-    parentMessageId?: string;
     message: ChatMessageEntry;
     order: number;
 }
@@ -36,11 +35,9 @@ export interface TurnDiffStats {
 
 export interface TurnChangedFile {
     file: string;
-    /** Absent when neither the turn diff nor the tool call reports line counts. */
+    /** Absent when the tool result does not report line counts. */
     additions?: number;
     deletions?: number;
-    /** False when the turn diff view has no entry for this path, so a pill cannot open it. */
-    inTurnDiff?: boolean;
 }
 
 export interface TurnActivityGroup {
@@ -129,7 +126,8 @@ export interface TurnGroupingContext {
     diffStats?: TurnDiffStats;
     changedFiles?: TurnChangedFile[];
     userMessageCreatedAt?: number;
-    userMessageVariant?: string;
+    /** Model variant ("thinking" etc.) the turn ran with, read off its assistant messages. */
+    assistantVariant?: string;
     isWorking: boolean;
     isGroupExpanded?: boolean;
     toggleGroup?: () => void;

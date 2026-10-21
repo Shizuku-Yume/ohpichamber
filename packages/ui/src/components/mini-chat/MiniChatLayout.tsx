@@ -8,6 +8,7 @@ import { toContextUsageReading } from '@/components/ui/contextUsageReading';
 import { WindowsWindowControls } from '@/components/desktop/WindowsWindowControls';
 import { SessionSwitcherDropdown } from '@/components/session/SessionSwitcherDropdown';
 import { cn } from '@/lib/utils';
+import { normalizePath } from '@/lib/pathNormalization';
 import { useI18n } from '@/lib/i18n';
 import { invokeDesktop, isElectronShell } from '@/lib/desktop';
 import { useDesktopWindowControlsLayout } from '@/hooks/useDesktopWindowControlsLayout';
@@ -15,6 +16,7 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSessionWorktreeStore } from '@/sync/session-worktree-store';
 import { useSessionMessages, useSessions } from '@/sync/sync-context';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useGitBranchLabel, useGitStore } from '@/stores/useGitStore';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -41,13 +43,6 @@ const compactPath = (value: string | null | undefined): string => {
   const segments = path.split('/').filter(Boolean);
   if (segments.length <= 3) return path;
   return `.../${segments.slice(-3).join('/')}`;
-};
-
-const normalizePath = (value: string | null | undefined): string => {
-  const raw = typeof value === 'string' ? value.trim() : '';
-  if (!raw) return '';
-  const normalized = raw.replace(/\\/g, '/');
-  return normalized === '/' ? '/' : normalized.replace(/\/+$/, '');
 };
 
 const MiniChatHeader: React.FC<{ mode: MiniChatMode }> = ({ mode }) => {
@@ -85,10 +80,9 @@ const MiniChatHeader: React.FC<{ mode: MiniChatMode }> = ({ mode }) => {
     : '';
 
   const session = React.useMemo(
-    () => currentSessionId ? sessions.find((entry) => entry.id === currentSessionId) ?? null : null,
+    () => currentSessionId ? sessions.find((entry) => entry.sessionId === currentSessionId) ?? null : null,
     [currentSessionId, sessions],
   );
-  const sessionWorktreeMetadata = (session as { worktreeMetadata?: { path?: string | null; branch?: string | null; projectDirectory?: string | null } } | null)?.worktreeMetadata ?? null;
 
   React.useEffect(() => {
     if (!isElectronShell()) return;
@@ -97,10 +91,10 @@ const MiniChatHeader: React.FC<{ mode: MiniChatMode }> = ({ mode }) => {
     });
   }, []);
 
-  const title = session?.title?.trim()
+  const title = session?.metadata?.title?.trim()
     || (draftOpen || mode === 'draft' ? t('miniChat.header.newSession') : t('miniChat.header.session'));
-  const sessionDirectory = normalizePath((session as { directory?: string | null } | null)?.directory ?? null);
-  const worktreeDirectory = normalizePath(worktreePath || sessionWorktreeMetadata?.path || worktreeAttachment?.cwd || worktreeAttachment?.worktreeRoot || '');
+  const sessionDirectory = normalizePath(session ? resolveGlobalSessionDirectory(session) : null);
+  const worktreeDirectory = normalizePath(worktreePath || worktreeAttachment?.cwd || worktreeAttachment?.worktreeRoot || '');
   const currentDirectoryNormalized = normalizePath(currentDirectory);
   const openDirectory = worktreeDirectory || sessionDirectory || draftDirectory || currentDirectoryNormalized;
   const isChatContext = draftOpen ? draftTarget === 'chat' : isChatDirectoryPath(sessionDirectory);
@@ -121,14 +115,14 @@ const MiniChatHeader: React.FC<{ mode: MiniChatMode }> = ({ mode }) => {
   }, [ensureGitStatus, isChatContext, openDirectory, runtimeApis.git]);
 
   const pathMatchedProject = React.useMemo(() => {
-    const projectDirectory = normalizePath(sessionWorktreeMetadata?.projectDirectory ?? worktreeAttachment?.worktreeRoot ?? null);
+    const projectDirectory = normalizePath(worktreeAttachment?.worktreeRoot ?? null);
     const candidateDirectory = projectDirectory || openDirectory;
     if (!candidateDirectory) return null;
     return projects
       .map((entry) => ({ ...entry, normalizedPath: normalizePath(entry.path) }))
       .filter((entry) => entry.normalizedPath && (entry.normalizedPath === candidateDirectory || candidateDirectory.startsWith(`${entry.normalizedPath}/`)))
       .sort((left, right) => right.path.length - left.path.length)[0] ?? null;
-  }, [openDirectory, projects, sessionWorktreeMetadata?.projectDirectory, worktreeAttachment?.worktreeRoot]);
+  }, [openDirectory, projects, worktreeAttachment?.worktreeRoot]);
   const projectLabel = React.useMemo(() => {
     if (isChatContext) return null;
     const project = pathMatchedProject ?? activeProject;
@@ -139,26 +133,23 @@ const MiniChatHeader: React.FC<{ mode: MiniChatMode }> = ({ mode }) => {
     return segments.at(-1) ?? project.path;
   }, [activeProject, directoryLabel, isChatContext, pathMatchedProject]);
   const gitBranchForDirectory = useGitBranchLabel(openDirectory || null);
-  const rawBranchLabel = gitBranchForDirectory || worktreeMetadataBranch || sessionWorktreeMetadata?.branch?.trim() || worktreeAttachment?.branch?.trim() || catalogWorktreeBranch;
+  const rawBranchLabel = gitBranchForDirectory || worktreeMetadataBranch || worktreeAttachment?.branch?.trim() || catalogWorktreeBranch;
   const branchLabel = rawBranchLabel && rawBranchLabel !== 'HEAD' ? rawBranchLabel : null;
   const currentModel = getCurrentModel();
   const latestAssistantModel = React.useMemo(() => {
     for (let i = currentSessionMessages.length - 1; i >= 0; i -= 1) {
-      const message = currentSessionMessages[i] as { role?: unknown; providerID?: unknown; modelID?: unknown };
+      const message = currentSessionMessages[i];
       if (message.role !== 'assistant') continue;
-      if (typeof message.providerID !== 'string' || typeof message.modelID !== 'string') continue;
-      const provider = providers.find((entry) => entry.id === message.providerID);
-      const model = provider?.models.find((entry) => entry.id === message.modelID);
+      if (!message.providerId || !message.modelId) continue;
+      const provider = providers.find((entry) => entry.providerId === message.providerId);
+      const model = provider?.models.find((entry) => entry.modelId === message.modelId);
       if (model) return model;
     }
     return undefined;
   }, [currentSessionMessages, providers]);
-  const modelForLimits = currentModel?.limit ? currentModel : latestAssistantModel;
-  const limit = modelForLimits && typeof modelForLimits.limit === 'object' && modelForLimits.limit !== null
-    ? (modelForLimits.limit as Record<string, unknown>)
-    : null;
-  const contextLimit = limit && typeof limit.context === 'number' ? limit.context : 0;
-  const outputLimit = limit && typeof limit.output === 'number' ? limit.output : 0;
+  const modelForLimits = currentModel ?? latestAssistantModel;
+  const contextLimit = modelForLimits?.contextWindow ?? 0;
+  const outputLimit = modelForLimits?.maxOutputTokens ?? 0;
   const contextUsage = React.useMemo<SessionContextUsage | null>(() => (
     currentSessionId ? buildSessionContextUsage(currentSessionMessages, contextLimit, outputLimit) : null
   ), [contextLimit, currentSessionId, currentSessionMessages, outputLimit]);
@@ -191,7 +182,7 @@ const MiniChatHeader: React.FC<{ mode: MiniChatMode }> = ({ mode }) => {
 
   const handleOpenMainApp = React.useCallback(() => {
     const payload = currentSessionId
-      ? { sessionId: currentSessionId, directory: (session as { directory?: string | null } | null)?.directory ?? currentDirectory ?? '' }
+      ? { sessionId: currentSessionId, directory: sessionDirectory || currentDirectory || '' }
       : {
           mode: 'draft',
           directory: isChatContext ? '' : openDirectory || currentDirectory || '',
@@ -204,7 +195,7 @@ const MiniChatHeader: React.FC<{ mode: MiniChatMode }> = ({ mode }) => {
         }
         return null;
       });
-  }, [currentDirectory, currentSessionId, draftProjectId, isChatContext, openDirectory, session]);
+  }, [currentDirectory, currentSessionId, draftProjectId, isChatContext, openDirectory, sessionDirectory]);
 
   return (
     <header
@@ -227,7 +218,7 @@ const MiniChatHeader: React.FC<{ mode: MiniChatMode }> = ({ mode }) => {
           style={noDragRegionStyle}
           className="flex min-w-0 max-w-full flex-col items-start rounded-md px-1 py-0.5 text-left transition-colors hover:bg-interactive-hover/60 focus-visible:outline-none focus-visible:bg-interactive-hover/60"
         >
-          <span className="truncate typography-ui-label text-[14px] font-normal leading-tight text-foreground max-w-full">
+          <span dir="auto" className="truncate typography-ui-label text-[14px] font-normal leading-tight text-foreground max-w-full">
             {title}
           </span>
           {!isChatContext ? <span className="flex min-w-0 max-w-full items-center gap-1.5 truncate typography-micro text-[10.5px] font-normal leading-tight text-muted-foreground/75">

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { z } from 'zod';
 import type { UpdateInfo, UpdateProgress } from '@/lib/desktop';
 import { getDeviceInfo } from '@/lib/device';
 import { useUIStore } from './useUIStore';
@@ -8,7 +9,6 @@ import {
   restartToApplyUpdate,
   isDesktopLocalOriginActive,
   isElectronShell,
-  isVSCodeRuntime,
   isWebRuntime,
 } from '@/lib/desktop';
 import { formatMessage, useI18nStore } from '@/lib/i18n/store';
@@ -23,10 +23,11 @@ type UpdateState = {
   available: boolean;
   downloading: boolean;
   downloaded: boolean;
+  installing: boolean;
   info: UpdateInfo | null;
   progress: UpdateProgress | null;
   error: string | null;
-  runtimeType: 'desktop' | 'web' | 'vscode' | 'mobile' | null;
+  runtimeType: 'desktop' | 'web' | 'mobile' | null;
   lastChecked: number | null;
   nextCheckInSec: number | null;
 };
@@ -39,7 +40,7 @@ interface UpdateStore extends UpdateState {
   reset: () => void;
 }
 
-type ClientRuntime = 'desktop' | 'web' | 'vscode' | 'mobile';
+type ClientRuntime = 'desktop' | 'web' | 'mobile';
 
 const CLIENT_INSTALL_ID_KEY = 'openchamber.update-install-id';
 
@@ -74,12 +75,6 @@ function detectArch(): 'arm64' | 'x64' | 'unknown' {
     : undefined;
   if (electronArch === 'arm64' || electronArch === 'aarch64') return 'arm64';
   if (electronArch === 'x64' || electronArch === 'amd64' || electronArch === 'x86_64') return 'x64';
-
-  const vscodeArch = typeof window !== 'undefined'
-    ? (window as { __VSCODE_CONFIG__?: { arch?: string } }).__VSCODE_CONFIG__?.arch?.toLowerCase?.()
-    : undefined;
-  if (vscodeArch === 'arm64' || vscodeArch === 'aarch64') return 'arm64';
-  if (vscodeArch === 'x64' || vscodeArch === 'amd64' || vscodeArch === 'x86_64') return 'x64';
 
   const nav = typeof navigator !== 'undefined' ? (navigator as Navigator & { userAgentData?: { architecture?: string } }).userAgentData : undefined;
   const fromUAData = nav?.architecture?.toLowerCase?.();
@@ -121,12 +116,6 @@ function mapRuntimeParams(runtime: ClientRuntime): URLSearchParams {
     return params;
   }
 
-  if (runtime === 'vscode') {
-    params.set('appType', 'vscode');
-    params.set('instanceMode', 'local');
-    return params;
-  }
-
   if (runtime === 'mobile') {
     params.set('appType', 'mobile-capacitor');
     params.set('instanceMode', 'remote');
@@ -138,14 +127,39 @@ function mapRuntimeParams(runtime: ClientRuntime): URLSearchParams {
   return params;
 }
 
+function parseUpdateCheckResponse(data: {
+  available?: boolean;
+  version?: string;
+  currentVersion?: string;
+  body?: string;
+  releaseUrl?: string;
+  downloadUrl?: string;
+  nextSuggestedCheckInSec?: number;
+  packageManager?: string;
+  updateCommand?: string;
+  installBlocked?: string;
+}): UpdateInfo {
+  return {
+    available: data.available ?? false,
+    version: data.version,
+    currentVersion: data.currentVersion ?? 'unknown',
+    body: data.body,
+    releaseUrl: data.releaseUrl,
+    downloadUrl: data.downloadUrl,
+    nextSuggestedCheckInSec:
+      typeof data.nextSuggestedCheckInSec === 'number' && Number.isFinite(data.nextSuggestedCheckInSec)
+        ? data.nextSuggestedCheckInSec
+        : undefined,
+    packageManager: data.packageManager,
+    updateCommand: data.updateCommand,
+    installBlocked: data.installBlocked === 'service-manager' ? 'service-manager' : undefined,
+  };
+}
+
 async function checkForWebUpdates(runtime: ClientRuntime, currentVersion?: string): Promise<UpdateInfo | null> {
   try {
     const params = mapRuntimeParams(runtime);
-    const vscodeVersion = typeof window !== 'undefined'
-      ? (window as { __VSCODE_CONFIG__?: { extensionVersion?: string } }).__VSCODE_CONFIG__?.extensionVersion
-      : undefined;
     if (currentVersion) params.set('currentVersion', currentVersion);
-    else if (runtime === 'vscode' && vscodeVersion) params.set('currentVersion', vscodeVersion);
     const response = await runtimeFetch(`/api/openchamber/update-check?${params.toString()}`, {
       method: 'GET',
       headers: { Accept: 'application/json' },
@@ -157,35 +171,49 @@ async function checkForWebUpdates(runtime: ClientRuntime, currentVersion?: strin
       throw new Error(`Server responded with ${response.status}`);
     }
 
-    const data = await response.json();
-    return {
-      available: data.available ?? false,
-      version: data.version,
-      currentVersion: data.currentVersion ?? 'unknown',
-      body: data.body,
-      releaseUrl: data.releaseUrl,
-      downloadUrl: data.downloadUrl,
-      nextSuggestedCheckInSec:
-        typeof data.nextSuggestedCheckInSec === 'number' && Number.isFinite(data.nextSuggestedCheckInSec)
-          ? data.nextSuggestedCheckInSec
-          : undefined,
-      packageManager: data.packageManager,
-      updateCommand: data.updateCommand,
-    };
+    return parseUpdateCheckResponse(await response.json());
   } catch (error) {
     console.warn('Failed to check for updates:', error);
     return null;
   }
 }
 
-function detectRuntimeType(): 'desktop' | 'web' | 'vscode' | 'mobile' | null {
+const updateCheckFailure = z.object({ error: z.string().trim().min(1) });
+
+/**
+ * Checks the OpenChamber server the native app is connected to, not the app
+ * itself. The shared store's `mobile` check is about the app build (store or
+ * APK updates); this asks the server about its own version, exactly like a
+ * browser on that server would, so the result can be installed through the
+ * server's own update route. Throws on failure so callers never read a failed
+ * check as "up to date".
+ */
+export async function checkConnectedServerForUpdates(): Promise<UpdateInfo> {
+  const params = mapRuntimeParams('web');
+  // The app's own check already reports usage for this install; asking about
+  // the server must not count the phone a second time as a web client.
+  params.set('reportUsage', 'false');
+  const response = await runtimeFetch(`/api/openchamber/update-check?${params.toString()}`, {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    // A desktop host that cannot update itself (for example a Linux build
+    // outside its AppImage) explains why in `error`; keep that reason.
+    const failure = updateCheckFailure.safeParse(payload);
+    throw new Error(failure.success ? failure.data.error : `Server responded with ${response.status}`);
+  }
+  return parseUpdateCheckResponse(payload ?? {});
+}
+
+function detectRuntimeType(): 'desktop' | 'web' | 'mobile' | null {
   if (isCapacitorApp()) {
     return 'mobile';
   }
   if (isElectronShell()) {
     return 'desktop';
   }
-  if (isVSCodeRuntime()) return 'vscode';
   if (isWebRuntime()) return 'web';
   return null;
 }
@@ -195,6 +223,7 @@ const initialState: UpdateState = {
   available: false,
   downloading: false,
   downloaded: false,
+  installing: false,
   info: null,
   progress: null,
   error: null,
@@ -238,9 +267,6 @@ export const useUpdateStore = create<UpdateStore>()((set, get) => ({
       } else if (runtime === 'web') {
         info = await checkForWebUpdates('web');
         suggestedSec = info?.nextSuggestedCheckInSec ?? null;
-      } else if (runtime === 'vscode') {
-        const vscodeInfo = await checkForWebUpdates('vscode');
-        suggestedSec = vscodeInfo?.nextSuggestedCheckInSec ?? null;
       } else if (runtime === 'mobile') {
         const appVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : undefined;
         info = await checkForWebUpdates('mobile', appVersion);
@@ -249,8 +275,8 @@ export const useUpdateStore = create<UpdateStore>()((set, get) => ({
 
       set({
         checking: false,
-        available: runtime === 'vscode' ? false : (info?.available ?? false),
-        info: runtime === 'vscode' ? null : info,
+        available: info?.available ?? false,
+        info,
         lastChecked: Date.now(),
         nextCheckInSec: suggestedSec,
       });
@@ -310,13 +336,16 @@ export const useUpdateStore = create<UpdateStore>()((set, get) => ({
   },
 
   restartToUpdate: async () => {
-    const { downloaded, runtimeType } = get();
+    const { downloaded, installing, runtimeType } = get();
 
-    if (runtimeType !== 'desktop' || !downloaded) {
+    // A restart is already in flight: the app is shutting down, so a second
+    // click must not invoke the updater again. The main process guards the
+    // same race; this keeps the dialog in its restarting state.
+    if (runtimeType !== 'desktop' || !downloaded || installing) {
       return;
     }
 
-    set({ error: null });
+    set({ error: null, installing: true });
 
     try {
       const ok = await restartToApplyUpdate();
@@ -327,12 +356,12 @@ export const useUpdateStore = create<UpdateStore>()((set, get) => ({
     } catch (error) {
       // Keep the real installer failure; the dialog shows it and the button
       // stays clickable for another attempt.
-      set({ error: getUpdateInstallErrorMessage(error instanceof Error ? error : new Error(String(error))) });
+      set({ installing: false, error: getUpdateInstallErrorMessage(error instanceof Error ? error : new Error(String(error))) });
     }
   },
 
   dismiss: () => {
-    set({ available: false, downloaded: false, info: null });
+    set({ available: false, downloaded: false, installing: false, info: null });
   },
 
   reset: () => {

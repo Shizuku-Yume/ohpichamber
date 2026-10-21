@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Session } from '@opencode-ai/sdk/v2';
+import type { Session } from '@openchamber/agent-contract';
 
 import { useGlobalSessionsStore, resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { isBtwSession } from '@/lib/sessionBtwMetadata';
@@ -7,11 +7,10 @@ import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
 import { useGitAllBranches } from '@/stores/useGitStore';
 import type { SessionNode } from '../types';
-import { isPathWithinProject } from '../utils';
+import { isPathWithinProject, normalizePath } from '../utils';
+import { buildWorktreeByPathIndex } from '../worktreeIndex';
 import { compareSessionsByLifecycleOrder, useSessionOrderingStore } from '@/sync/session-ordering';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { isVSCodeRuntime } from '@/lib/desktop';
-import { isChatDirectoryPath } from '@/lib/chatDirectories';
 
 export type SwitcherItem = {
   node: SessionNode;
@@ -32,13 +31,6 @@ type SwitcherItemsOptions = {
   maxParents?: number;
 };
 
-const normalize = (value: string | null | undefined): string | null => {
-  if (!value) return null;
-  const replaced = value.replace(/\\/g, '/');
-  if (replaced === '/') return '/';
-  return replaced.length > 1 ? replaced.replace(/\/+$/, '') : replaced;
-};
-
 const formatProjectLabel = (project: { label?: string | null; path: string } | null): string | null => {
   if (!project) return null;
   const trimmed = project.label?.trim();
@@ -49,9 +41,9 @@ const formatProjectLabel = (project: { label?: string | null; path: string } | n
 
 export const findSwitcherItemAncestorIds = (items: SwitcherItem[], sessionId: string): string[] | null => {
   const visit = (node: SessionNode, ancestors: string[]): string[] | null => {
-    if (node.session.id === sessionId) return ancestors;
+    if (node.session.sessionId === sessionId) return ancestors;
     for (const child of node.children) {
-      const result = visit(child, [...ancestors, node.session.id]);
+      const result = visit(child, [...ancestors, node.session.sessionId]);
       if (result) return result;
     }
     return null;
@@ -74,12 +66,11 @@ export const selectSwitcherParents = (
   maxParents = MAX_PARENT_SESSIONS,
   isExcluded?: (session: Session) => boolean,
 ): Session[] => {
-  const sessionsById = new Map(activeSessions.map((session) => [session.id, session]));
+  const sessionsById = new Map(activeSessions.map((session) => [session.sessionId, session]));
   const isEligibleParent = (session: Session): boolean => {
-    if (session.time?.archived) return false;
+    if (session.archivedAt !== undefined) return false;
     if (isExcluded?.(session)) return false;
-    // SAFETY: the SDK Session type omits parentID, but the server includes it on child sessions.
-    if ((session as Session & { parentID?: string | null }).parentID) return false;
+    if (session.parentSessionId) return false;
     return !scopeProjectId || getProjectId(session) === scopeProjectId;
   };
   const parents = activeSessions
@@ -87,11 +78,10 @@ export const selectSwitcherParents = (
     .sort((a, b) => compareSessionsByLifecycleOrder(a, b, pinnedSessionIds, sessionOrderRanks));
 
   const currentSession = currentSessionId ? sessionsById.get(currentSessionId) ?? null : null;
-  let currentRoot: Session | null = currentSession?.time?.archived ? null : currentSession;
+  let currentRoot: Session | null = currentSession?.archivedAt !== undefined ? null : currentSession;
   const visited = new Set<string>();
   while (currentRoot) {
-    // SAFETY: the SDK Session type omits parentID, but the server includes it on child sessions.
-    const parentId = (currentRoot as Session & { parentID?: string | null }).parentID;
+    const parentId = currentRoot.parentSessionId;
     if (!parentId) break;
     if (visited.has(parentId)) {
       currentRoot = null;
@@ -116,47 +106,36 @@ export const useSwitcherItems = (enabled: boolean, options: SwitcherItemsOptions
   const sessionOrderRanks = useSessionOrderingStore((state) => state.rankById);
   const branchesByDirectory = useGitAllBranches();
   const availableWorktreesByProject = useSessionUIStore((state) => state.availableWorktreesByProject);
-  const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
 
   // Worktree sessions live OUTSIDE their project's path, so prefix matching
   // can't resolve their project — and their branch is known from worktree
   // discovery long before any git status is fetched for that directory.
-  const worktreeInfoByPath = React.useMemo(() => {
-    const map = new Map<string, { projectPath: string; branch: string | null }>();
-    for (const [projectPath, worktrees] of availableWorktreesByProject) {
-      const normalizedProjectPath = normalize(projectPath);
-      if (!normalizedProjectPath) continue;
-      for (const worktree of worktrees) {
-        const worktreePath = normalize(worktree.path);
-        if (!worktreePath) continue;
-        map.set(worktreePath, { projectPath: normalizedProjectPath, branch: worktree.branch?.trim() || null });
-      }
-    }
-    return map;
-  }, [availableWorktreesByProject]);
-
+  // Shared exact index: normalized keys, project-root exclusion, first-wins
+  // dedupe. Branch display below is already live-first, so no branch change.
   const normalizedProjects = React.useMemo(
     () => projects
-      .map((project) => ({ ...project, normalizedPath: normalize(project.path) }))
+      .map((project) => ({ ...project, normalizedPath: normalizePath(project.path) }))
       .filter((project) => project.normalizedPath),
     [projects],
+  );
+
+  const worktreeByPath = React.useMemo(
+    () => buildWorktreeByPathIndex(availableWorktreesByProject, normalizedProjects),
+    [availableWorktreesByProject, normalizedProjects],
   );
 
   const findProjectForDirectory = React.useCallback(
     (directory: string | null) => {
       if (!directory) return null;
       // Known worktree → its project, regardless of where the worktree lives.
-      const worktreeInfo = worktreeInfoByPath.get(normalize(directory) ?? directory);
-      if (worktreeInfo) {
-        const byPath = normalizedProjects.find((project) => project.normalizedPath === worktreeInfo.projectPath);
-        if (byPath) return byPath;
-      }
+      const worktreeHit = worktreeByPath.get(normalizePath(directory) ?? directory);
+      if (worktreeHit) return worktreeHit.project;
       const matches = normalizedProjects
         .filter((project) => isPathWithinProject(directory, project.normalizedPath))
         .sort((a, b) => (b.normalizedPath?.length ?? 0) - (a.normalizedPath?.length ?? 0));
       return matches[0] ?? null;
     },
-    [normalizedProjects, worktreeInfoByPath],
+    [normalizedProjects, worktreeByPath],
   );
 
   const items = React.useMemo<SwitcherItem[]>(() => {
@@ -164,9 +143,9 @@ export const useSwitcherItems = (enabled: boolean, options: SwitcherItemsOptions
 
     const childrenByParent = new Map<string, Session[]>();
     for (const session of activeSessions) {
-      const parentId = (session as Session & { parentID?: string | null }).parentID;
+      const parentId = session.parentSessionId;
       if (!parentId) continue;
-      if (session.time?.archived) continue;
+      if (session.archivedAt !== undefined) continue;
       const bucket = childrenByParent.get(parentId);
       if (bucket) {
         bucket.push(session);
@@ -187,11 +166,11 @@ export const useSwitcherItems = (enabled: boolean, options: SwitcherItemsOptions
       (session) => findProjectForDirectory(resolveGlobalSessionDirectory(session))?.id ?? null,
       maxParents,
       // btw forks stay hidden until promoted to a full session
-      (session) => isBtwSession(session) || (isVSCode && isChatDirectoryPath(resolveGlobalSessionDirectory(session))),
+      (session) => isBtwSession(session),
     );
 
     const buildNode = (session: Session): SessionNode => {
-      const childSessions = childrenByParent.get(session.id) ?? [];
+      const childSessions = childrenByParent.get(session.sessionId) ?? [];
       return {
         session,
         children: childSessions.map((child) => buildNode(child)),
@@ -205,9 +184,9 @@ export const useSwitcherItems = (enabled: boolean, options: SwitcherItemsOptions
       const projectLabel = formatProjectLabel(matchedProject);
       // Live git branch when available; the discovered worktree branch fills
       // in for directories whose git status hasn't been fetched yet.
-      const worktreeInfo = directory ? worktreeInfoByPath.get(normalize(directory) ?? directory) : null;
+      const worktreeHit = directory ? worktreeByPath.get(normalizePath(directory) ?? directory) : null;
       const liveBranch = directory ? branchesByDirectory.get(directory) : undefined;
-      const branchLabel = liveBranch ?? worktreeInfo?.branch ?? null;
+      const branchLabel = liveBranch ?? worktreeHit?.meta.branch?.trim() ?? null;
       return {
         node: buildNode(session),
         projectId: matchedProject?.id ?? null,
@@ -218,7 +197,7 @@ export const useSwitcherItems = (enabled: boolean, options: SwitcherItemsOptions
         },
       };
     });
-  }, [activeSessions, branchesByDirectory, currentSessionId, enabled, findProjectForDirectory, isVSCode, maxParents, pinnedSessionIds, scopeProjectId, sessionOrderRanks, worktreeInfoByPath]);
+  }, [activeSessions, branchesByDirectory, currentSessionId, enabled, findProjectForDirectory, maxParents, pinnedSessionIds, scopeProjectId, sessionOrderRanks, worktreeByPath]);
 
   return items;
 };

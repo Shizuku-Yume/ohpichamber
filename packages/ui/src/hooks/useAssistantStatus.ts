@@ -1,14 +1,11 @@
 import React from 'react';
-import { z } from 'zod';
-import { isAutoModel } from '@/lib/routing/autoModel';
-import { useChatColumnSession } from '@/components/chat/chatColumnSession';
-import type { Message, Part, ReasoningPart, TextPart, ToolPart } from '@opencode-ai/sdk/v2';
+import { useChatSessionSelection } from '@/components/chat/chatColumnSession';
+import type { Message, Part, ToolCallPart } from '@openchamber/agent-contract';
 
 import type { MessageStreamPhase } from '@/stores/types/sessionTypes';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useDirectorySync, useSessionMessages, useSessionPermissions, useSessionQuestions, useSessionStatus } from '@/sync/sync-context';
-import { isFullySyntheticMessage } from '@/lib/messages/synthetic';
-import { useCurrentSessionActivity } from './useSessionActivity';
+import { useDirectorySync, useSessionMessages, useSessionPermissions, useSessionForms } from '@/sync/sync-context';
+import { useSessionActivity } from './useSessionActivity';
 
 type AssistantActivity = 'idle' | 'streaming' | 'tooling' | 'cooldown' | 'permission';
 
@@ -55,6 +52,11 @@ interface ActiveAssistantContext {
     model: ActiveAssistantModel | null;
 }
 
+interface ModelRef {
+    providerId: string;
+    modelId: string;
+}
+
 const DEFAULT_WORKING: WorkingSummary = {
     activity: 'idle',
     hasWorkingContext: false,
@@ -79,28 +81,43 @@ const DEFAULT_WORKING: WorkingSummary = {
 
 const EMPTY_PARTS: Part[] = [];
 const STATUS_SIGNATURE_SEPARATOR = '\u0000';
-const EDITING_TOOLS = new Set(['edit', 'write', 'multiedit', 'apply_patch']);
-const TOOL_STATUS_PHRASES: Record<string, string> = {
-    read: 'reading file',
-    write: 'writing file',
-    edit: 'editing file',
-    multiedit: 'editing files',
-    apply_patch: 'applying patch',
-    bash: 'running command',
-    grep: 'searching content',
-    glob: 'finding files',
-    list: 'listing directory',
-    task: 'delegating task',
-    webfetch: 'fetching URL',
-    websearch: 'searching web',
-    codesearch: 'web code search',
-    todowrite: 'updating todos',
-    todoread: 'reading todos',
-    skill: 'learning skill',
-    question: 'asking question',
-    plan_enter: 'switching to planning',
-    plan_exit: 'switching to building',
-};
+
+type ToolBucket = 'read' | 'search' | 'edit' | 'command' | 'lookup' | 'delegate' | 'question' | 'skill';
+
+// Several tools share one phrase, so parallel calls of the same kind can be
+// counted together ("reading 3 files"). The timeline names the exact tool.
+// v2 tool names: `shell` replaced `bash`, `subagent` replaced `task`, and
+// `todowrite`/`todoread`/`list`/`lsp` are gone.
+const TOOL_BUCKETS = new Map<string, ToolBucket>(Object.entries({
+    read: 'read',
+    'file-diff': 'read',
+    grep: 'search',
+    glob: 'search',
+    edit: 'edit',
+    write: 'edit',
+    patch: 'edit',
+    shell: 'command',
+    execute: 'command',
+    webfetch: 'lookup',
+    web_search: 'lookup',
+    codesearch: 'lookup',
+    subagent: 'delegate',
+    question: 'question',
+    skill: 'skill',
+} satisfies Record<string, ToolBucket>));
+
+// [one call, several calls]; `{count}` becomes the number of parallel calls in
+// the bucket. A search spans many files in one call, so it is not counted.
+const BUCKET_PHRASES = {
+    read: ['reading a file', 'reading {count} files'],
+    search: ['searching files', 'searching files'],
+    edit: ['editing a file', 'editing {count} files'],
+    command: ['running a command', 'running {count} commands'],
+    lookup: ['looking things up', 'looking things up'],
+    delegate: ['handing off a task', 'handing off {count} tasks'],
+    question: ['asking a question', 'asking a question'],
+    skill: ['picking up a skill', 'picking up {count} skills'],
+} satisfies Record<ToolBucket, readonly [string, string]>;
 const WORKING_PHRASES = [
     'working',
     'processing',
@@ -125,9 +142,20 @@ type ParsedStatusResult = {
     isGenericStatus: boolean;
 };
 
-const getToolStatusPhrase = (toolName: string): string => {
-    return TOOL_STATUS_PHRASES[toolName] ?? `using ${toolName}`;
+const getToolStatusPhrase = (toolName: string, count = 1): string => {
+    const bucket = TOOL_BUCKETS.get(toolName);
+    if (!bucket) {
+        return `using ${toolName}`;
+    }
+    const [one, many] = BUCKET_PHRASES[bucket];
+    return (count > 1 ? many : one).replace('{count}', String(count));
 };
+
+/**
+ * Parallel commands are counted together; canonical tool calls do not carry
+ * nested execute metadata, so the status remains at the declared tool name.
+ */
+const getRunningToolPhrase = (toolName: string, count: number): string => getToolStatusPhrase(toolName, count);
 
 const hashString = (value: string): number => {
     let hash = 0;
@@ -141,61 +169,48 @@ const getStableWorkingPhrase = (key: string): string => {
     return WORKING_PHRASES[hashString(key) % WORKING_PHRASES.length] ?? 'working';
 };
 
-const createParsedStatus = (parts: Part[], genericKey: string): ParsedStatusResult => {
+
+export const createParsedStatus = (parts: Part[], genericKey: string): ParsedStatusResult => {
+    const runningToolCounts = countRunningToolCalls(parts);
     let activePartType: ParsedStatusResult['activePartType'] = undefined;
     let activeToolName: string | undefined = undefined;
+    let activeToolPhrase: string | undefined = undefined;
 
-    if (!isFullySyntheticMessage(parts)) {
-        for (let index = parts.length - 1; index >= 0; index -= 1) {
-            const part = parts[index];
-            if (!part) continue;
+    for (let index = parts.length - 1; index >= 0; index -= 1) {
+        const part = parts[index];
+        if (!part) continue;
 
-            switch (part.type) {
-                case 'reasoning': {
-                    const time = part.time ?? getPartTimeInfo(part);
-                    const stillRunning = !time || typeof time.end === 'undefined';
-                    if (stillRunning && !activePartType) {
-                        activePartType = 'reasoning';
-                    }
-                    break;
-                }
-                case 'tool': {
-                    const toolStatus = part.state?.status;
-                    if ((toolStatus === 'running' || toolStatus === 'pending') && !activePartType) {
-                        const toolName = getToolDisplayName(part);
-                        if (EDITING_TOOLS.has(toolName)) {
-                            activePartType = 'editing';
-                            activeToolName = toolName;
-                        } else {
-                            activePartType = 'tool';
-                            activeToolName = toolName;
-                        }
-                    }
-                    break;
-                }
-                case 'text': {
-                    const rawContent = getLegacyTextContent(part) ?? '';
-                    if (typeof rawContent === 'string' && rawContent.trim().length > 0) {
-                        const time = getPartTimeInfo(part);
-                        const streamingPart = !time || typeof time.end === 'undefined';
-                        if (streamingPart && !activePartType) {
-                            activePartType = 'text';
-                        }
-                    }
-                    break;
-                }
-                default:
-                    break;
+        switch (part.type) {
+            case 'reasoning': {
+                // Canonical reasoning parts carry no completion marker. Do not
+                // infer that an otherwise settled part is still streaming.
+                break;
             }
+            case 'tool_call': {
+                const toolStatus = part.status;
+                if ((toolStatus === 'running' || toolStatus === 'pending_approval' || toolStatus === 'approved') && !activePartType) {
+                    const toolName = part.toolName;
+                    const bucket = TOOL_BUCKETS.get(toolName);
+                    activePartType = bucket === 'edit' ? 'editing' : 'tool';
+                    activeToolName = toolName;
+                    activeToolPhrase = getRunningToolPhrase(toolName, runningToolCounts.get(bucket ?? toolName) ?? 1);
+                }
+                break;
+            }
+            case 'text': {
+                // Canonical text parts carry no completion marker. Keep the
+                // neutral status rather than inventing streaming state.
+                break;
+            }
+            default:
+                break;
         }
     }
 
     const isGenericStatus = activePartType === undefined;
     const statusText = (() => {
-        if (activePartType === 'editing') return activeToolName === 'multiedit' ? getToolStatusPhrase(activeToolName) : 'editing file';
-        if (activePartType === 'tool' && activeToolName) return getToolStatusPhrase(activeToolName);
-        if (activePartType === 'reasoning') return 'thinking';
-        if (activePartType === 'text') return 'composing';
+        if (activePartType === 'editing') return activeToolPhrase ?? 'editing a file';
+        if (activePartType === 'tool' && activeToolName) return activeToolPhrase ?? getToolStatusPhrase(activeToolName);
         return getStableWorkingPhrase(genericKey);
     })();
 
@@ -223,131 +238,65 @@ const decodeParsedStatus = (signature: string): ParsedStatusResult => {
     };
 };
 
-const isReasoningPart = (part: Part): part is ReasoningPart => part.type === 'reasoning';
+const getToolDisplayName = (part: ToolCallPart): string => part.toolName;
 
-const isTextPart = (part: Part): part is TextPart => part.type === 'text';
-
-const getLegacyTextContent = (part: Part): string | undefined => {
-    if (isTextPart(part)) {
-        return part.text;
-    }
-    const candidate = part as Partial<{ text?: unknown; content?: unknown; value?: unknown }>;
-    if (typeof candidate.text === 'string') {
-        return candidate.text;
-    }
-    if (typeof candidate.content === 'string') {
-        return candidate.content;
-    }
-    if (typeof candidate.value === 'string') {
-        return candidate.value;
-    }
-    return undefined;
-};
-
-const getPartTimeInfo = (part: Part): { end?: number } | undefined => {
-    if (isTextPart(part) || isReasoningPart(part)) {
-        return part.time;
-    }
-    const candidate = part as Partial<{ time?: { end?: number } }>;
-    return candidate.time;
-};
-
-const getToolDisplayName = (part: ToolPart): string => {
-    if (part.tool) {
-        return part.tool;
-    }
-    const candidate = part as ToolPart & Partial<{ name?: unknown }>;
-    return typeof candidate.name === 'string' ? candidate.name : 'tool';
-};
-
-const modelRefSchema = z.object({ providerID: z.string().trim().min(1), modelID: z.string().trim().min(1) });
 /**
- * A user message names its model either as the SDK's `model` object, or, on the
- * optimistic copy the composer inserts before the server echoes it, as
- * top-level `providerID`/`modelID`. Both are read; the Auto sentinel is flagged.
+ * Parallel calls are common (three reads, two shell commands), and the last
+ * part alone hides the rest. Count every call that is still running or pending
+ * by bucket so the phrase can say "reading 3 files" instead.
  */
-const userMessageModelSchema = z.union([
-    z.object({ model: modelRefSchema }).transform(({ model }) => model),
-    modelRefSchema,
-]);
-
-const readUserMessageModel = (message: Message): { providerId: string; modelId: string; auto: boolean } | null => {
-    const parsed = userMessageModelSchema.safeParse(message);
-    if (!parsed.success) return null;
-    const providerId = parsed.data.providerID;
-    const modelId = parsed.data.modelID;
-    return { providerId, modelId, auto: isAutoModel(providerId, modelId) };
+const countRunningToolCalls = (parts: readonly Part[]): Map<string, number> => {
+    const counts = new Map<string, number>();
+    for (const part of parts) {
+        if (part.type !== 'tool_call') continue;
+        const status = part.status;
+        if (status !== 'running' && status !== 'pending_approval' && status !== 'approved') continue;
+        const toolName = getToolDisplayName(part);
+        const bucket = TOOL_BUCKETS.get(toolName) ?? toolName;
+        counts.set(bucket, (counts.get(bucket) ?? 0) + 1);
+    }
+    return counts;
 };
 
-const completedTimeSchema = z.object({ time: z.object({ completed: z.number() }) });
+/** True when a user prompt follows `index`, i.e. a turn is queued or starting. */
+const hasNewerPrompt = (messages: Message[], index: number): boolean => {
+    for (let cursor = messages.length - 1; cursor > index; cursor -= 1) {
+        if (messages[cursor]?.role === 'user') return true;
+    }
+    return false;
+};
 
-export const getActiveAssistantContext = (messages: Message[]): ActiveAssistantContext => {
-    let assistantId: string | null = null;
-    let parentId: string | null = null;
-
-    const newest = messages[messages.length - 1];
-    const newestModel = newest?.role === 'user' ? readUserMessageModel(newest) : null;
-
+/**
+ * Canonical messages do not expose completion timestamps. A newer prompt may
+ * follow either an active or finished assistant turn, so model attribution is
+ * intentionally neutral until another assistant message arrives.
+ */
+export const getActiveAssistantContext = (messages: Message[], _sessionModel?: ModelRef | null): ActiveAssistantContext => {
+    void _sessionModel;
     for (let index = messages.length - 1; index >= 0; index -= 1) {
         const message = messages[index];
         if (message?.role !== 'assistant') continue;
 
-        const candidate = message as Message & { parentID?: unknown };
-        assistantId = message.id;
-        parentId = typeof candidate.parentID === 'string' && candidate.parentID.trim().length > 0
-            ? candidate.parentID
-            : null;
-        break;
-    }
+        if (hasNewerPrompt(messages, index)) {
+            return { assistantId: message.messageId, model: null };
+        }
 
-    // The newest message is an unanswered user turn. While it was sent with
-    // Auto routing its model is not known yet, so no model is shown rather
-    // than the previous turn's. Once the previous turn has completed, the new
-    // turn's own model is the one about to run and is shown at once; a turn
-    // still running keeps its model, since the new message is only queued.
-    if (newest?.role === 'user' && newest.id !== parentId) {
-        if (newestModel?.auto) return { assistantId, model: null };
-        const previous = messages.find((message) => message.id === assistantId);
-        const previousCompleted = completedTimeSchema.safeParse(previous).success;
-        if (previousCompleted && newestModel) return { assistantId, model: { providerId: newestModel.providerId, modelId: newestModel.modelId } };
-    }
-
-    if (!assistantId || !parentId) {
-        return { assistantId, model: null };
-    }
-
-    for (let index = messages.length - 1; index >= 0; index -= 1) {
-        const message = messages[index];
-        if (message?.role !== 'user' || message.id !== parentId) continue;
-
-        const candidate = message as Message & {
-            model?: { providerID?: unknown; modelID?: unknown };
-        };
-        const providerId = typeof candidate.model?.providerID === 'string'
-            ? candidate.model.providerID.trim()
-            : '';
-        const modelId = typeof candidate.model?.modelID === 'string'
-            ? candidate.model.modelID.trim()
-            : '';
-
+        const providerId = message.providerId?.trim() ?? '';
+        const modelId = message.modelId?.trim() ?? '';
         return {
-            assistantId,
+            assistantId: message.messageId,
             model: providerId && modelId ? { providerId, modelId } : null,
         };
     }
 
-    return { assistantId, model: null };
+    return { assistantId: null, model: null };
 };
 
 export function useAssistantStatus(): AssistantStatusSnapshot {
     // Inside the chat column, follow the session the timeline shows rather
     // than the live selection, so the status chip changes together with the
     // conversation instead of a commit ahead of it.
-    const chatColumnSession = useChatColumnSession();
-    const liveSessionId = useSessionUIStore((state) => state.currentSessionId);
-    const liveSessionDirectory = useSessionUIStore((state) => state.currentSessionDirectory);
-    const currentSessionId = chatColumnSession ? chatColumnSession.sessionId : liveSessionId;
-    const currentSessionDirectory = chatColumnSession ? chatColumnSession.directory : liveSessionDirectory;
+    const { sessionId: currentSessionId, directory: currentSessionDirectory } = useChatSessionSelection();
 
     const rawSessionMessages = useSessionMessages(
         currentSessionId ?? '',
@@ -363,14 +312,16 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
     const lastAssistantStatusSignature = useDirectorySync(
         React.useCallback((state) => {
             const genericKey = `${currentSessionId ?? ''}:${lastAssistantId ?? ''}`;
-            const parts = lastAssistantId ? (state.part[lastAssistantId] ?? EMPTY_PARTS) : EMPTY_PARTS;
+            const parts = lastAssistantId
+                ? state.message[currentSessionId ?? '']?.find((message) => message.messageId === lastAssistantId)?.parts ?? EMPTY_PARTS
+                : EMPTY_PARTS;
             return encodeParsedStatus(createParsedStatus(parts, genericKey));
         }, [currentSessionId, lastAssistantId]),
         currentSessionDirectory ?? undefined,
     );
 
     const sessionPermissionRequests = useSessionPermissions(currentSessionId ?? '', currentSessionDirectory ?? undefined);
-    const sessionQuestionRequests = useSessionQuestions(currentSessionId ?? '', currentSessionDirectory ?? undefined);
+    const sessionFormRequests = useSessionForms(currentSessionId ?? '', currentSessionDirectory ?? undefined);
 
     const sessionAbortRecord = useSessionUIStore(
         React.useCallback((state) => {
@@ -381,17 +332,8 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
         }, [currentSessionId])
     );
 
-    const { phase: activityPhase, isWorking: isPhaseWorking } = useCurrentSessionActivity();
+    const { phase: activityPhase, isWorking: isPhaseWorking } = useSessionActivity(currentSessionId, currentSessionDirectory ?? undefined);
 
-    const currentSessionStatus = useSessionStatus(currentSessionId ?? '', currentSessionDirectory ?? undefined);
-
-    const sessionRetryAttempt = currentSessionStatus?.type === 'retry'
-        ? (currentSessionStatus as { type: 'retry'; attempt?: number }).attempt
-        : undefined;
-
-    const sessionRetryNext = currentSessionStatus?.type === 'retry'
-        ? (currentSessionStatus as { type: 'retry'; next?: number }).next
-        : undefined;
 
     const parsedStatus = React.useMemo<ParsedStatusResult>(() => {
         return decodeParsedStatus(lastAssistantStatusSignature);
@@ -423,7 +365,7 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
         const isWorking = isPhaseWorking;
         const isStreaming = activityPhase === 'busy';
         const isCooldown = false;
-        const isRetry = activityPhase === 'retry';
+        // Canonical runtime status does not expose retry timing or attempts.
 
         let activity: AssistantActivity = 'idle';
         if (isWorking) {
@@ -434,9 +376,7 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
             }
         }
 
-        const retryInfo = isRetry
-            ? { attempt: sessionRetryAttempt, next: sessionRetryNext }
-            : null;
+        const retryInfo = null;
 
         return {
             activity,
@@ -459,7 +399,7 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
             isComplete: false,
             retryInfo,
         };
-    }, [activityPhase, isPhaseWorking, parsedStatus, abortState, sessionRetryAttempt, sessionRetryNext]);
+    }, [activityPhase, isPhaseWorking, parsedStatus, abortState]);
 
     const forming = React.useMemo<FormingSummary>(() => {
         const isActive = isPhaseWorking && parsedStatus.activePartType === 'text';
@@ -472,13 +412,13 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
         }
 
         const hasPendingPermission = sessionPermissionRequests.length > 0;
-        const hasPendingQuestion = sessionQuestionRequests.length > 0;
+        const hasPendingForm = sessionFormRequests.length > 0;
 
-        if (!hasPendingPermission && !hasPendingQuestion) {
+        if (!hasPendingPermission && !hasPendingForm) {
             return baseWorking;
         }
 
-        if (hasPendingQuestion) {
+        if (hasPendingForm) {
             return {
                 ...baseWorking,
                 statusText: null,
@@ -499,7 +439,7 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
             canAbort: false,
             retryInfo: null,
         };
-    }, [baseWorking, sessionPermissionRequests, sessionQuestionRequests]);
+    }, [baseWorking, sessionPermissionRequests, sessionFormRequests]);
 
     return {
         activeModel: activeAssistant.model,

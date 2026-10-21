@@ -1,7 +1,5 @@
-import { readAuthFile } from '../../opencode/auth.js';
+import { credentialAccessToken } from './selected-credential.js';
 import {
-  getAuthEntry,
-  normalizeAuthEntry,
   buildResult,
   toUsageWindow,
   toNumber,
@@ -10,18 +8,10 @@ import {
 
 const providerId = 'openai';
 const providerName = 'OpenAI';
-const aliases = ['openai', 'codex', 'chatgpt'];
 
-const isConfigured = () => {
-  const auth = readAuthFile();
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  return Boolean(entry?.access || entry?.token);
-};
 
-export const fetchQuota = async () => {
-  const auth = readAuthFile();
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  const accessToken = entry?.access ?? entry?.token;
+export const fetchQuota = async ({ credential } = {}) => {
+  const accessToken = credentialAccessToken(credential);
 
   if (!accessToken) {
     return buildResult({
@@ -85,7 +75,7 @@ export const fetchQuota = async () => {
       providerName,
       ok: false,
       configured: true,
-      error: error instanceof Error ? error.message : 'Request failed'
+      error: 'Request failed'
     });
   }
 };

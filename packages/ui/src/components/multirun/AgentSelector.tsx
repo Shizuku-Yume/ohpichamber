@@ -8,15 +8,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { isPrimaryMode } from '@/components/chat/mobileControlsUtils';
-import { useConfigStore } from '@/stores/useConfigStore';
+import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useI18n } from '@/lib/i18n';
-
-export interface AgentSelectorProps {
-  /** Currently selected agent name (empty string for no agent) */
+interface AgentSelectorProps {
+  /** Currently selected native agent ID (empty string for no agent). */
   value: string;
   /** Called when agent selection changes */
-  onChange: (agentName: string) => void;
+  onChange: (agentId: string) => void;
   /** Optional className for the trigger */
   className?: string;
   /** Whether the selector is disabled */
@@ -29,7 +28,7 @@ export interface AgentSelectorProps {
 
 /**
  * Agent selector dropdown for selecting an agent for multi-run sessions.
- * Uses getVisibleAgents from useConfigStore to show available agents.
+ * Uses the directory-scoped canonical Agent roster.
  */
 export const AgentSelector: React.FC<AgentSelectorProps> = ({
   value,
@@ -40,46 +39,32 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
   portalToBody,
 }) => {
   const { t } = useI18n();
-  const getVisibleAgents = useConfigStore((state) => state.getVisibleAgents);
-  const loadAgents = useConfigStore((state) => state.loadAgents);
-  const defaultAgentName = useConfigStore((state) => state.currentAgentName);
-  const agents = getVisibleAgents();
-  const selectableAgents = React.useMemo(
-    () => agents.filter((agent) => isPrimaryMode(agent.mode)),
-    [agents]
-  );
+  const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
+  const selectableAgents = useAgentsStore((state) => selectAgentsForDirectory(state, currentDirectory));
+  const loadAgents = useAgentsStore((state) => state.loadAgents);
+  const defaultAgentId = useAgentsStore((state) => state.selectedAgentName);
 
-  // Load agents on mount
+  // Load agents on mount.
   React.useEffect(() => {
-    if (agents.length === 0) void loadAgents();
-  }, [agents.length, loadAgents]);
+    if (selectableAgents.length === 0) void loadAgents(currentDirectory);
+  }, [currentDirectory, loadAgents, selectableAgents.length]);
 
   // Ensure we always have a valid selection (defaults to current default agent, then first selectable agent).
   React.useEffect(() => {
-    if (disabled) {
-      return;
-    }
+    if (disabled) return;
 
     const trimmedValue = value.trim();
-    if (trimmedValue.length > 0 && selectableAgents.some((agent) => agent.name === trimmedValue)) {
-      return;
-    }
+    if (trimmedValue.length > 0 && selectableAgents.some((agent) => agent.agentId === trimmedValue)) return;
 
-    const candidateDefault =
-      typeof defaultAgentName === 'string' && defaultAgentName.trim().length > 0
-        ? defaultAgentName.trim()
-        : null;
-
-    if (candidateDefault && selectableAgents.some((agent) => agent.name === candidateDefault)) {
+    const candidateDefault = defaultAgentId?.trim() ? defaultAgentId.trim() : null;
+    if (candidateDefault && selectableAgents.some((agent) => agent.agentId === candidateDefault)) {
       onChange(candidateDefault);
       return;
     }
 
-    const firstAgent = selectableAgents[0]?.name;
-    if (firstAgent) {
-      onChange(firstAgent);
-    }
-  }, [defaultAgentName, disabled, onChange, selectableAgents, value]);
+    const firstAgent = selectableAgents[0]?.agentId;
+    if (firstAgent) onChange(firstAgent);
+  }, [defaultAgentId, disabled, onChange, selectableAgents, value]);
 
   const selectValue = value.trim().length > 0 ? value : undefined;
 
@@ -101,8 +86,8 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
           <SelectGroup>
             {selectableAgents.map((agent) => (
               <SelectItem
-                key={agent.name}
-                value={agent.name}
+                key={agent.agentId}
+                value={agent.agentId}
                 className="w-auto whitespace-nowrap"
               >
                 {agent.name}

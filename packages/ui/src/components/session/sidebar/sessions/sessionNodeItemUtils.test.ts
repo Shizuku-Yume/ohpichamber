@@ -1,25 +1,29 @@
 import { ensureChatsRootDirectory } from '@/lib/chatDirectories';
-import { opencodeClient } from '@/lib/opencode/client';
+import { hostFilesystem } from '@/lib/host-filesystem';
 import { describe, expect, test } from 'bun:test';
-import type { Session } from '@opencode-ai/sdk/v2';
+import type { Session } from '@openchamber/agent-contract';
+import type { WorktreeMetadata } from '@/types/worktree';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { getPinnedSessionKey } from '@/stores/useSessionPinnedStore';
+import { registerWorkspaceDirectory } from '@/stores/globalSessions';
 import {
   computeNodeStructureKey,
   canShowSessionWorktreeMenu,
   getSessionWorktreeMenuDisabled,
   nodeHasPinnedMembershipChange,
+  resolveSessionPrLookup,
+  resolveTooltipBranchLabel,
   selectFolderRootNodes,
-  selectQuestionBadgeSessionScopes,
+  selectBlockingBadgeSessionScopes,
   selectRowBadgeVisibilityClass,
 } from './sessionNodeItemUtils';
 import type { SessionNode } from '../types';
 
-const session = (id: string, title: string): Session => ({
-  id,
-  title,
-  time: { created: 1, updated: 1 },
-} as Session);
+const session = (sessionId: string, title: string): Session => ({
+  sessionId, rootSessionId: sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '/repo',
+  metadata: { title }, createdAt: 1, updatedAt: 1, epoch: '1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  metadataRevision: '1', archiveRevision: '0',
+});
 
 const rootWithChild = (childSession: Session): SessionNode => ({
   session: session('root', 'Root'),
@@ -36,24 +40,28 @@ describe('computeNodeStructureKey', () => {
 
   test('changes when a descendant session object changes', () => {
     const previous = session('child', 'Before');
-    const next = { ...previous, title: 'After' };
+    const next = session('child', 'After');
 
     expect(computeNodeStructureKey(rootWithChild(previous))).not.toBe(computeNodeStructureKey(rootWithChild(next)));
   });
 });
 
-describe('selectQuestionBadgeSessionScopes', () => {
-  const withDirectory = (node: SessionNode, directory: string | null): SessionNode => ({
-    ...node,
-    session: { ...node.session, directory } as Session,
-  });
+describe('selectBlockingBadgeSessionScopes', () => {
+  const withDirectory = (node: SessionNode, directory: string): SessionNode => {
+    const workspaceId = `wsp_${directory}`;
+    registerWorkspaceDirectory(workspaceId, directory);
+    return {
+      ...node,
+      session: { ...node.session, workspaceId, displayPath: directory },
+    };
+  };
 
   test('rolls up the hidden subtree by owning directory when a parent is collapsed', () => {
     const grandchild = withDirectory({ session: session('grandchild', 'Grandchild'), children: [], worktree: null }, '/worktrees/feature');
     const child = withDirectory({ session: session('child', 'Child'), children: [grandchild], worktree: null }, '/worktrees/feature');
     const root = withDirectory({ session: session('root', 'Root'), children: [child], worktree: null }, '/repo');
 
-    expect(selectQuestionBadgeSessionScopes(root, false, '/repo')).toEqual([
+    expect(selectBlockingBadgeSessionScopes(root, false, '/repo')).toEqual([
       { directory: '/repo', sessionIDs: ['root'] },
       { directory: '/worktrees/feature', sessionIDs: ['child', 'grandchild'] },
     ]);
@@ -63,7 +71,7 @@ describe('selectQuestionBadgeSessionScopes', () => {
     const child = withDirectory({ session: session('child', 'Child'), children: [], worktree: null }, '/worktrees/feature');
     const root = withDirectory({ session: session('root', 'Root'), children: [child], worktree: null }, '/repo');
 
-    expect(selectQuestionBadgeSessionScopes(root, true, '/repo')).toEqual([
+    expect(selectBlockingBadgeSessionScopes(root, true, '/repo')).toEqual([
       { directory: '/repo', sessionIDs: ['root'] },
     ]);
   });
@@ -71,7 +79,7 @@ describe('selectQuestionBadgeSessionScopes', () => {
   test('falls back to the group directory when the session has none', () => {
     const root: SessionNode = { session: session('root', 'Root'), children: [], worktree: null };
 
-    expect(selectQuestionBadgeSessionScopes(root, false, '/fallback')).toEqual([
+    expect(selectBlockingBadgeSessionScopes(root, false, '/fallback')).toEqual([
       { directory: '/fallback', sessionIDs: ['root'] },
     ]);
   });
@@ -120,12 +128,12 @@ describe('nodeHasPinnedMembershipChange', () => {
 describe('selectFolderRootNodes', () => {
   test('does not render assigned descendants again beside their assigned parent tree', () => {
     const grandchild: SessionNode = {
-      session: { ...session('grandchild', 'Grandchild'), parentID: 'child' } as Session,
+      session: { ...session('grandchild', 'Grandchild'), parentSessionId: 'child' },
       children: [],
       worktree: null,
     };
     const child: SessionNode = {
-      session: { ...session('child', 'Child'), parentID: 'root' } as Session,
+      session: { ...session('child', 'Child'), parentSessionId: 'root' },
       children: [grandchild],
       worktree: null,
     };
@@ -145,7 +153,7 @@ describe('selectFolderRootNodes', () => {
 
   test('keeps a child as a folder root when none of its ancestors are assigned', () => {
     const child: SessionNode = {
-      session: { ...session('child', 'Child'), parentID: 'root' } as Session,
+      session: { ...session('child', 'Child'), parentSessionId: 'root' },
       children: [],
       worktree: null,
     };
@@ -160,7 +168,7 @@ describe('selectFolderRootNodes', () => {
 
   test('keeps a child when an assigned ancestor is not available in the group', () => {
     const child: SessionNode = {
-      session: { ...session('child', 'Child'), parentID: 'missing-root' } as Session,
+      session: { ...session('child', 'Child'), parentSessionId: 'missing-root' },
       children: [],
       worktree: null,
     };
@@ -240,20 +248,52 @@ describe('canShowSessionWorktreeMenu', () => {
     expect(canShowSessionWorktreeMenu({
       isSubtaskSession: false,
       archivedBucket: false,
-      isVSCode: false,
       sessionDirectory: '/home/test/.config/openchamber/chats/2026-08-25/session-1',
     })).toBe(false);
 
     expect(canShowSessionWorktreeMenu({
       isSubtaskSession: false,
       archivedBucket: false,
-      isVSCode: false,
       sessionDirectory: '/repo',
     })).toBe(true);
   });
 });
 
-const originalHomeInfo = opencodeClient.getFilesystemHomeInfo;
-opencodeClient.getFilesystemHomeInfo = async () => ({ home: '/home/test' });
+describe('resolveTooltipBranchLabel', () => {
+  test('keeps a deliberate null branch filtered instead of leaking the raw worktree branch', () => {
+    // Recent/Timeline rows carry secondaryMeta: HEAD and the project-label
+    // duplicate are filtered there, so the raw branch must stay hidden.
+    expect(resolveTooltipBranchLabel({ projectLabel: 'App', branchLabel: null }, 'HEAD')).toBeNull();
+    expect(resolveTooltipBranchLabel({ projectLabel: 'App', branchLabel: null }, 'App')).toBeNull();
+    expect(resolveTooltipBranchLabel({ projectLabel: 'App', branchLabel: 'feature-1' }, 'stored-1')).toBe('feature-1');
+  });
+
+  test('falls back to the worktree branch only when secondaryMeta is absent', () => {
+    // Project and Chats rows pass no secondaryMeta and keep the fallback.
+    expect(resolveTooltipBranchLabel(null, 'HEAD')).toBe('HEAD');
+    expect(resolveTooltipBranchLabel(undefined, 'App')).toBe('App');
+    expect(resolveTooltipBranchLabel(null, null)).toBeNull();
+    expect(resolveTooltipBranchLabel(undefined, undefined)).toBeNull();
+  });
+});
+
+describe('resolveSessionPrLookup', () => {
+  const worktree = (path: string, branch: string): WorktreeMetadata => ({
+    path, projectDirectory: '/repo', branch, label: branch,
+  });
+
+  test('takes the row worktree directory and branch', () => {
+    expect(resolveSessionPrLookup(worktree('/worktrees/feature', 'feature-1')))
+      .toEqual({ directory: '/worktrees/feature', branch: 'feature-1' });
+  });
+
+  test('rejects rows with no worktree or branch', () => {
+    expect(resolveSessionPrLookup(null)).toBeNull();
+    expect(resolveSessionPrLookup(worktree('/worktrees/feature', '   '))).toBeNull();
+  });
+});
+
+const originalHomeInfo = hostFilesystem.getFilesystemHomeInfo;
+hostFilesystem.getFilesystemHomeInfo = async () => ({ home: '/home/test' });
 await ensureChatsRootDirectory();
-opencodeClient.getFilesystemHomeInfo = originalHomeInfo;
+hostFilesystem.getFilesystemHomeInfo = originalHomeInfo;

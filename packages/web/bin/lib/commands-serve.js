@@ -10,6 +10,7 @@ import { rotateLogFile } from './cli-log-files.js';
 import { discoverOpenChamberInstanceOnPort, isDesktopRuntimeForPort } from './cli-lifecycle.js';
 import { getPidFilePath, getInstanceFilePath, writePidFile, writeInstanceOptions, removePidFile, removeInstanceFile, isProcessRunning, terminateProcessTree } from './cli-process.js';
 import { isNetworkExposedBindHost } from '../../server/lib/security/bind-host.js';
+import { assignInjectedEnv } from '../../server/lib/injected-env.js';
 import {
   intro as clackIntro,
   outro as clackOutro,
@@ -26,7 +27,6 @@ const DAEMON_READY_TIMEOUT_MS = 30000;
 function createServeCommand({
   serverPath,
   bunBin,
-  checkOpenCodeCLI,
   getPreferredServerRuntime,
   setForegroundServerActive,
   setForegroundShutdown,
@@ -100,7 +100,6 @@ async function serveCommand(options) {
       }
     }
 
-    const opencodeBinary = await checkOpenCodeCLI(emitNotice);
     const preferredRuntime = getPreferredServerRuntime();
     const runtimeBin = preferredRuntime === 'bun' ? bunBin : process.execPath;
 
@@ -154,15 +153,12 @@ async function serveCommand(options) {
         );
       }
 
-      // Propagate resolved values into env before importing the server module.
-      if (opencodeBinary) {
-        process.env.OPENCODE_BINARY = opencodeBinary;
-      }
-      if (effectiveUiPassword) {
-        process.env.OPENCHAMBER_UI_PASSWORD = effectiveUiPassword;
-      }
-      process.env.OPENCHAMBER_HOST = effectiveHost;
-      process.env.OPENCHAMBER_RUNTIME = 'web';
+      // Propagate Host-owned settings before importing the in-process server.
+      assignInjectedEnv(process.env, {
+        OPENCHAMBER_UI_PASSWORD: effectiveUiPassword || undefined,
+        OPENCHAMBER_HOST: effectiveHost,
+        OPENCHAMBER_RUNTIME: 'web',
+      });
 
       // In --quiet mode, redirect stdout/stderr to the log file so that
       // server runtime output (console.log calls) does not pollute the
@@ -280,16 +276,14 @@ async function serveCommand(options) {
       detached: true,
       windowsHide: true,
       stdio: ['ignore', logFd, logFd, 'ipc'],
-      env: {
-        ...process.env,
+      // Record injected Host settings while preserving the user's environment.
+      env: assignInjectedEnv({ ...process.env }, {
         OPENCHAMBER_PORT: String(targetPort),
         OPENCHAMBER_RUNTIME: 'web',
-        OPENCODE_BINARY: opencodeBinary,
         OPENCHAMBER_HOST: effectiveHost,
-        ...(effectiveUiPassword ? { OPENCHAMBER_UI_PASSWORD: effectiveUiPassword } : {}),
-        ...(options.apiOnly === true ? { OPENCHAMBER_API_ONLY: 'true' } : {}),
-        ...(process.env.OPENCODE_SKIP_START ? { OPENCHAMBER_SKIP_OPENCODE_START: process.env.OPENCODE_SKIP_START } : {}),
-      },
+        OPENCHAMBER_UI_PASSWORD: effectiveUiPassword || undefined,
+        OPENCHAMBER_API_ONLY: options.apiOnly === true ? 'true' : undefined,
+      }),
     });
 
     child.unref();

@@ -1,77 +1,52 @@
-import type { Message, Part } from '@opencode-ai/sdk/v2';
+import type { Message } from '@openchamber/agent-contract';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { getCurrentIntlLocale } from '@/lib/i18n';
-import { isVSCodeRuntime, openDesktopPath, revealDesktopPath, saveDesktopMarkdownFile } from '@/lib/desktop';
+import { openDesktopPath, revealDesktopPath, saveDesktopMarkdownFile } from '@/lib/desktop';
 import { getRevealLabelKey } from '@/lib/utils';
 import { formatMessageText } from '@/lib/messages/messageMarkdown';
-
-export type SessionMessageRecord = { info: Message; parts: Part[] };
 
 export type ChildSessionExport = {
   title: string;
   agent?: string;
-  records: SessionMessageRecord[];
+  records: Message[];
   children: ChildSessionExport[];
 };
 
 function formatTimestamp(timestamp: number | undefined): string {
-  if (typeof timestamp !== 'number' || !Number.isFinite(timestamp)) {
-    return '';
-  }
-
+  if (typeof timestamp !== 'number' || !Number.isFinite(timestamp)) return '';
   const date = new Date(timestamp);
-  if (Number.isNaN(date.getTime())) {
-    return '';
-  }
-
+  if (Number.isNaN(date.getTime())) return '';
   const monthPart = date.toLocaleString(getCurrentIntlLocale(), { month: 'short' });
   const dayPart = date.getDate();
   const yearPart = date.getFullYear();
   const hours = String(date.getHours()).padStart(2, '0');
   const minutes = String(date.getMinutes()).padStart(2, '0');
-
   return `${monthPart} ${dayPart}, ${yearPart}, ${hours}:${minutes}`;
 }
 
-function formatAssistantModel(record: SessionMessageRecord): string {
-  if (record.info.role === 'user') {
-    return '';
-  }
-
-  const providerID = typeof record.info.providerID === 'string' ? record.info.providerID.trim() : '';
-  const modelID = typeof record.info.modelID === 'string' ? record.info.modelID.trim() : '';
-
-  if (providerID && modelID) {
-    return `${providerID}/${modelID}`;
-  }
-
-  return modelID || providerID;
+function formatAssistantModel(record: Message): string {
+  if (record.role !== 'assistant') return '';
+  const providerId = record.providerId?.trim() ?? '';
+  const modelId = record.modelId?.trim() ?? '';
+  return providerId && modelId ? `${providerId}/${modelId}` : modelId || providerId;
 }
 
-function formatMessageHeader(record: SessionMessageRecord): string {
-  const label = record.info.role === 'user' ? 'User' : 'Assistant';
-  const timestamp = formatTimestamp(record.info.time?.created);
+function formatMessageHeader(record: Message): string {
+  const label = record.role === 'user' ? 'User' : 'Assistant';
+  const timestamp = formatTimestamp(record.createdAt);
   const assistantModel = formatAssistantModel(record);
-  const details = timestamp && assistantModel
-    ? `${timestamp} (${assistantModel})`
-    : (timestamp || assistantModel);
-
+  const details = timestamp && assistantModel ? `${timestamp} (${assistantModel})` : (timestamp || assistantModel);
   return details ? `**${label}**\n\n*${details}*` : `**${label}**`;
 }
 
-/**
- * A message's text the way the Markdown export renders it. Guest message and
- * session items carry the same text, so an extension sees what the export
- * file would.
- */
-export function formatMessageRecordText(record: SessionMessageRecord): string {
-  return formatMessageText(record.parts, { user: record.info.role === 'user' });
+export function formatMessageRecordText(record: Message): string {
+  return formatMessageText(record.parts, { user: record.role === 'user' });
 }
 
-function formatMessageAsMarkdown(record: SessionMessageRecord): string {
+function formatMessageAsMarkdown(record: Message): string {
+  if (record.role === 'system') return '';
   const role = formatMessageHeader(record);
   const text = formatMessageRecordText(record);
-
   if (!text) return '';
   return `${role}\n\n${text}`;
 }
@@ -80,45 +55,22 @@ function formatChildSessionAsMarkdown(child: ChildSessionExport, depth: number):
   const heading = '#'.repeat(Math.min(depth + 1, 6));
   const agentLabel = child.agent ? ` — ${child.agent}` : '';
   const childHeader = `${heading} Sub-agent: ${child.title}${agentLabel}\n\n---\n\n`;
-
-  const childBody = child.records
-    .map(formatMessageAsMarkdown)
-    .filter(Boolean)
-    .join('\n\n---\n\n');
-
+  const childBody = child.records.map(formatMessageAsMarkdown).filter(Boolean).join('\n\n---\n\n');
   const parts = [childHeader + childBody];
-
-  for (const grandchild of child.children) {
-    parts.push(formatChildSessionAsMarkdown(grandchild, depth + 1));
-  }
-
+  for (const grandchild of child.children) parts.push(formatChildSessionAsMarkdown(grandchild, depth + 1));
   return parts.join('\n\n---\n\n');
 }
 
-export function formatSessionAsMarkdown(
-  messages: SessionMessageRecord[],
-  sessionTitle?: string | null,
-  childSessions?: ChildSessionExport[],
-): string {
+export function formatSessionAsMarkdown(messages: Message[], sessionTitle?: string | null, childSessions?: ChildSessionExport[]): string {
   const title = sessionTitle?.trim() || 'Session';
   const date = new Date().toISOString().split('T')[0];
-
   const header = `# ${title}\n\n*Exported on ${date}*\n\n---\n\n`;
-
-  const body = messages
-    .map(formatMessageAsMarkdown)
-    .filter(Boolean)
-    .join('\n\n---\n\n');
-
+  const body = messages.map(formatMessageAsMarkdown).filter(Boolean).join('\n\n---\n\n');
   let result = header + body;
-
   if (childSessions && childSessions.length > 0) {
-    const childMarkdown = childSessions
-      .map((child) => formatChildSessionAsMarkdown(child, 1))
-      .join('\n\n---\n\n');
+    const childMarkdown = childSessions.map((child) => formatChildSessionAsMarkdown(child, 1)).join('\n\n---\n\n');
     result += '\n\n---\n\n' + childMarkdown;
   }
-
   return result;
 }
 
@@ -134,30 +86,8 @@ export function downloadAsMarkdown(content: string, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
-export async function saveAsMarkdownDesktop(content: string, filename: string): Promise<string | null> {
-  const desktopPath = await saveDesktopMarkdownFile(filename, content);
-  if (desktopPath) {
-    return desktopPath;
-  }
-
-  if (!isVSCodeRuntime()) {
-    return null;
-  }
-
-  try {
-    const payload = await getRegisteredRuntimeAPIs()?.vscode?.saveMarkdown?.({ fileName: filename, content }) as { saved?: boolean; path?: string } | undefined;
-    if (!payload) {
-      return null;
-    }
-    if (payload.saved !== true) {
-      return null;
-    }
-
-    const savedPath = typeof payload.path === 'string' ? payload.path.trim() : '';
-    return savedPath.length > 0 ? savedPath : null;
-  } catch {
-    return null;
-  }
+export function saveAsMarkdownDesktop(content: string, filename: string): Promise<string | null> {
+  return saveDesktopMarkdownFile(filename, content);
 }
 
 export async function revealExportedMarkdown(path: string): Promise<boolean> {
@@ -170,11 +100,7 @@ export async function revealExportedMarkdown(path: string): Promise<boolean> {
       return false;
     }
   }
-
-  if (await revealDesktopPath(path)) {
-    return true;
-  }
-
+  if (await revealDesktopPath(path)) return true;
   return openDesktopPath(path);
 }
 
@@ -184,12 +110,7 @@ export function getExportRevealLabelKey() {
 
 export function buildExportFilename(sessionTitle?: string | null): string {
   const base = sessionTitle?.trim() || 'session';
-  const safe = base
-    .normalize('NFKC')
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 60);
+  const safe = base.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '').slice(0, 60);
   const normalizedBase = safe || 'session';
   const date = new Date().toISOString().split('T')[0];
   return `${normalizedBase}-${date}.md`;

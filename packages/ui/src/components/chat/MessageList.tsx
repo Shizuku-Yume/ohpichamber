@@ -1,5 +1,4 @@
 import React from 'react';
-import type { Part } from '@opencode-ai/sdk/v2';
 import { LegendList, type LegendListRef } from '@legendapp/list/react';
 
 import ChatMessage from './ChatMessage';
@@ -10,11 +9,11 @@ import { LiveTurnActivity } from './components/LiveTurnActivity';
 import { getTurnsWithLaterAssistant, hasLiveActivity } from './lib/turns/liveActivity';
 import type { ChatMessageEntry, TurnRecord, TurnGroupingContext } from './lib/turns/types';
 import { useTurnRecords } from './hooks/useTurnRecords';
-import { applyRetryOverlay } from './lib/turns/applyRetryOverlay';
+import { buildHistoryEntries, type TimelineEntry } from './lib/turns/timelineEntries';
 import { buildLiveStreamingEntry } from './lib/turns/streamingTailEntry';
-import { getNormalizedMessageForDisplay, hasCompactionPart } from './lib/messageDisplayNormalization';
+import { FULL_MESSAGE_WINDOW, TurnMessageWindowContext, createTurnMessageWindowStore } from './lib/turns/turnMessageWindow';
+import { attachToolResultsForDisplay, getNormalizedMessageForDisplay } from './lib/messageDisplayNormalization';
 import { useUIStore } from '@/stores/useUIStore';
-import { useFeatureFlagsStore } from '@/stores/useFeatureFlagsStore';
 import { isHiddenUserMessage } from './message/hiddenUserMessage';
 import { FadeInDisabledProvider } from './message/FadeInOnReveal';
 import { hasPendingUserSendAnimation, consumePendingUserSendAnimation } from '@/lib/userSendAnimation';
@@ -24,36 +23,25 @@ import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useSessionPartsForMessages } from '@/sync/sync-context';
 import type { ReviewTransferDirection } from '@/lib/reviewFlow';
 import { resolveTimelineIsAtEnd } from './lib/scroll/timelineScrollAnchoring';
+import { isReasoningRevealTarget } from './search/reasoningReveal';
 import {
-    USER_SHELL_MARKER,
-    isUserShellMarkerMessage,
-    getShellBridgeAssistantDetails,
-    type ShellBridgeDetails,
-} from './lib/shellBridge';
+    ANCHOR_HOLD_MAX_FRAMES,
+    ANCHOR_HOLD_STABLE_FRAMES,
+    captureMessageViewportAnchor,
+    type MessageViewportAnchor,
+    type ViewportAnchorAlignment,
+} from './lib/scroll/messageViewportAnchor';
 
 const EMPTY_STATIC_ENTRY_MESSAGES: ChatMessageEntry[] = [];
 const EMPTY_UNGROUPED_MESSAGE_IDS = new Set<string>();
+const EMPTY_ROW_MESSAGE_IDS: readonly string[] = [];
 
 // --- Timeline virtualization (@legendapp/list) -----------------------------
 // The timeline is a single virtualized list on every surface: history turns
 // AND the live streaming tail are rows of the same list, so the list owns one
 // coherent scroll position instead of arbitrating between a virtualizer and a
 // separately-rendered tail.
-//
-// Scroll behavior the list owns natively, which is why none of it exists here
-// any more:
-//   • `maintainScrollAtEnd` keeps the live edge pinned as rows grow.
-//   • `maintainVisibleContentPosition` preserves the read position when older
-//     history is prepended, replacing the manual anchor-hold and the mobile
-//     quiet-window prepend deferral.
 const TIMELINE_ESTIMATED_ENTRY_SIZE = 320;
-
-// Anchor hold for an explicit viewport restore (session re-entry): row
-// measurements settle over several frames, so a single restore can be
-// invalidated by the next measurement pass. Re-assert until it holds still for
-// STABLE_FRAMES consecutive frames, giving up at MAX_FRAMES.
-const ANCHOR_HOLD_STABLE_FRAMES = 30;
-const ANCHOR_HOLD_MAX_FRAMES = 180;
 
 // Presentation-only props forwarded to the scroll container the list renders.
 // Deliberately narrow: the list owns scroll and layout callbacks on that
@@ -76,230 +64,13 @@ const useStableEvent = <TArgs extends unknown[], TResult>(handler: (...args: TAr
     return React.useCallback((...args: TArgs) => handlerRef.current(...args), []);
 };
 
-const resolveMessageRole = (message: ChatMessageEntry): string | null => {
-    const info = message.info as unknown as { clientRole?: string | null | undefined; role?: string | null | undefined };
-    return (typeof info.clientRole === 'string' ? info.clientRole : null)
-        ?? (typeof info.role === 'string' ? info.role : null)
-        ?? null;
-};
-
-const getPartText = (part: Part): string => {
-    const text = (part as { text?: unknown }).text;
-    if (typeof text === 'string') {
-        return text;
-    }
-    const content = (part as { content?: unknown }).content;
-    if (typeof content === 'string') {
-        return content;
-    }
-    return '';
-};
-
-const normalizeCompactionSummaryMessage = (
-    message: ChatMessageEntry,
-    compactionCommandIds: Set<string>,
-): ChatMessageEntry => {
-    const role = resolveMessageRole(message);
-    if (role !== 'system') {
-        return message;
-    }
-
-    const parentID = getMessageParentId(message);
-    if (!parentID || !compactionCommandIds.has(parentID)) {
-        return message;
-    }
-
-    const info = message.info as unknown as { clientRole?: string | null | undefined };
-    if (info.clientRole === 'assistant') {
-        return message;
-    }
-
-    return {
-        ...message,
-        info: ({
-            ...(message.info as unknown as Record<string, unknown>),
-            clientRole: 'assistant',
-        } as unknown as typeof message.info),
-    };
-};
-
-const isAssistantMessageCompleted = (message: ChatMessageEntry): boolean => {
-    const info = message.info as { time?: { completed?: unknown }; status?: unknown };
-    const completed = info.time?.completed;
-    const status = info.status;
-    if (typeof completed !== 'number' || completed <= 0) {
-        return false;
-    }
-    if (typeof status === 'string') {
-        return status === 'completed';
-    }
-    return true;
-};
-
-const isUserSubtaskMessage = (message: ChatMessageEntry | undefined): boolean => {
-    if (!message) return false;
-    if (resolveMessageRole(message) !== 'user') return false;
-    return message.parts.some((part) => part?.type === 'subtask');
-};
-
-const getMessageId = (message: ChatMessageEntry | undefined): string | null => {
-    if (!message) return null;
-    const id = (message.info as unknown as { id?: unknown }).id;
-    return typeof id === 'string' && id.trim().length > 0 ? id : null;
-};
-
-const getMessageParentId = (message: ChatMessageEntry): string | null => {
-    const parentID = (message.info as unknown as { parentID?: unknown }).parentID;
-    return typeof parentID === 'string' && parentID.trim().length > 0 ? parentID : null;
-};
-
-const isInsideStuckSticky = (node: HTMLElement, container: HTMLElement, containerTop: number): boolean => {
-    if (typeof window === 'undefined') return false;
-
-    let current: HTMLElement | null = node;
-    while (current && current !== container) {
-        const computed = window.getComputedStyle(current);
-        if (computed.position === 'sticky' && current.getBoundingClientRect().top <= containerTop + 1) {
-            return true;
-        }
-        current = current.parentElement;
-    }
-
-    return false;
-};
-
-
-const readTaskSessionId = (toolPart: Part): string | null => {
-    const partRecord = toolPart as unknown as {
-        state?: {
-            metadata?: {
-                sessionId?: unknown;
-                sessionID?: unknown;
-            };
-            output?: unknown;
-        };
-    };
-    const metadata = partRecord.state?.metadata;
-    const fromMetadata =
-        (typeof metadata?.sessionID === 'string' && metadata.sessionID.trim().length > 0
-            ? metadata.sessionID.trim()
-            : null)
-        ?? (typeof metadata?.sessionId === 'string' && metadata.sessionId.trim().length > 0
-            ? metadata.sessionId.trim()
-            : null);
-    if (fromMetadata) return fromMetadata;
-
-    const output = partRecord.state?.output;
-    if (typeof output === 'string') {
-        const match = output.match(/task_id\s*:\s*([^\s<"']+)/i);
-        if (match?.[1]) {
-            return match[1];
-        }
-    }
-
-    return null;
-};
-
-const isSyntheticSubtaskBridgeAssistant = (message: ChatMessageEntry): { hide: boolean; taskSessionId: string | null } => {
-    if (resolveMessageRole(message) !== 'assistant') {
-        return { hide: false, taskSessionId: null };
-    }
-
-    if (message.parts.length !== 1) {
-        return { hide: false, taskSessionId: null };
-    }
-
-    const onlyPart = message.parts[0] as unknown as {
-        type?: unknown;
-        tool?: unknown;
-    } | null | undefined;
-
-    if (onlyPart?.type !== 'tool') {
-        return { hide: false, taskSessionId: null };
-    }
-
-    const toolName = typeof onlyPart.tool === 'string' ? onlyPart.tool.toLowerCase() : '';
-    if (toolName !== 'task') {
-        return { hide: false, taskSessionId: null };
-    }
-
-    return {
-        hide: true,
-        taskSessionId: readTaskSessionId(message.parts[0]),
-    };
-};
-
-const withSubtaskSessionId = (message: ChatMessageEntry, taskSessionId: string | null): ChatMessageEntry => {
-    if (!taskSessionId) return message;
-    const nextParts = message.parts.map((part) => {
-        if (part?.type !== 'subtask') return part;
-        const existing = (part as unknown as { taskSessionID?: unknown }).taskSessionID;
-        if (typeof existing === 'string' && existing.trim().length > 0) return part;
-        return {
-            ...part,
-            taskSessionID: taskSessionId,
-        } as Part;
-    });
-
-    return {
-        ...message,
-        parts: nextParts,
-    };
-};
-
-const withShellBridgeDetails = (message: ChatMessageEntry, details: ShellBridgeDetails | null): ChatMessageEntry => {
-    const command = typeof details?.command === 'string' ? details.command.trim() : '';
-    const output = typeof details?.output === 'string' ? details.output : '';
-    const status = typeof details?.status === 'string' ? details.status.trim() : '';
-
-    const nextParts: Part[] = [];
-    let injected = false;
-
-    for (const part of message.parts) {
-        if (!injected && part?.type === 'text') {
-            const text = (part as unknown as { text?: unknown }).text;
-            const synthetic = (part as unknown as { synthetic?: unknown }).synthetic;
-            if (synthetic === true && typeof text === 'string' && text.trim().startsWith(USER_SHELL_MARKER)) {
-                nextParts.push({
-                    type: 'text',
-                    text: '/shell',
-                    shellAction: {
-                        ...(command ? { command } : {}),
-                        ...(output ? { output } : {}),
-                        ...(status ? { status } : {}),
-                    },
-                } as unknown as Part);
-                injected = true;
-                continue;
-            }
-        }
-        nextParts.push(part);
-    }
-
-    if (!injected) {
-        nextParts.push({
-            type: 'text',
-            text: '/shell',
-            shellAction: {
-                ...(command ? { command } : {}),
-                ...(output ? { output } : {}),
-                ...(status ? { status } : {}),
-            },
-        } as unknown as Part);
-    }
-
-    return {
-        ...message,
-        parts: nextParts,
-    };
-};
-
 interface MessageListProps {
     sessionKey: string;
     messages: ChatMessageEntry[];
     sessionIsWorking?: boolean;
     activeStreamingMessageId?: string | null;
     activeStreamingPhase?: StreamPhase | null;
+    /** Canonical messages carry no retry record; retained for the chat caller contract. */
     retryOverlay?: {
         sessionId: string;
         message: string;
@@ -309,19 +80,12 @@ interface MessageListProps {
     isLoadingOlder: boolean;
     scrollToBottom?: () => void;
     directory?: string;
-    // The list owns its scroll container; the timeline scroll hook drives it
-    // through this ref and observes it through the callbacks below.
     registerList?: (list: LegendListRef | null) => void;
-    // True while a real gesture owns the scroll; releases the list's own
-    // end pinning so the state machine, not the library heuristic, decides.
     endPinningReleased?: boolean;
     composerOverlayHeight?: number;
     onIsAtEndChange?: (isAtEnd: boolean) => void;
     onListMetricsChange?: (metrics: { readonly footerSize: number }) => void;
     onTimelineDataChange?: () => void;
-    // Content that used to sit as siblings of the list inside the scroll
-    // container. The list owns that container now, so they render as its
-    // header/footer and scroll with the rows exactly as before.
     listHeader?: React.ReactNode;
     listFooter?: React.ReactNode;
     scrollContainerProps?: TimelineScrollContainerProps;
@@ -330,27 +94,44 @@ interface MessageListProps {
 export interface MessageListHandle {
     scrollToTurnId: (turnId: string, options?: { behavior?: ScrollBehavior }) => boolean;
     scrollToMessageId: (messageId: string, options?: { behavior?: ScrollBehavior }) => boolean;
-    captureViewportAnchor: () => { messageId: string; offsetTop: number } | null;
-    restoreViewportAnchor: (anchor: { messageId: string; offsetTop: number }) => boolean;
+    captureViewportAnchor: () => MessageViewportAnchor | null;
+    restoreViewportAnchor: (anchor: MessageViewportAnchor) => boolean;
+    alignViewportAnchor: (anchor: MessageViewportAnchor) => ViewportAnchorAlignment;
     holdViewportAnchor: (anchor: { messageId: string; offsetTop: number }) => void;
     isHistoryVirtualized: () => boolean;
     scrollToBottom: () => void;
 }
 
-type RenderEntry =
-    | {
-        kind: 'ungrouped';
-        key: string;
-        message: ChatMessageEntry;
-        previousMessage?: ChatMessageEntry;
-        nextMessage?: ChatMessageEntry;
-    }
-    | { kind: 'turn'; key: string; turn: TurnRecord; isLastTurn: boolean; hasLaterAssistant?: boolean; nextEntryFirstMessage?: ChatMessageEntry };
+type RenderEntry = TimelineEntry;
 
 type TurnUiState = { isExpanded: boolean; isLiveExpanded?: boolean };
 type ToggleTurnGroup = (turnId: string, mode?: 'sorted' | 'live') => void;
 
+// Turn group expansion outlives the list, like tool expansion in ChatMessage:
+// returning to a session shows its groups as they were left, which a restored
+// reading position inside an expanded group depends on. Turn IDs are message
+// IDs, unique across sessions. The defaults change meaning with the activity
+// render mode, so a mode switch drops everything.
+const TURN_UI_STATE_CACHE_MAX = 4000;
+const turnUiStateCache = new Map<string, TurnUiState>();
+let turnUiStateCacheMode: string | null = null;
 
+const readTurnUiStateCache = (activityRenderMode: string): Map<string, TurnUiState> => {
+    if (turnUiStateCacheMode !== activityRenderMode) {
+        turnUiStateCache.clear();
+        turnUiStateCacheMode = activityRenderMode;
+    }
+    return new Map(turnUiStateCache);
+};
+
+const writeTurnUiStateCache = (turnId: string, state: TurnUiState): void => {
+    turnUiStateCache.delete(turnId);
+    turnUiStateCache.set(turnId, state);
+    if (turnUiStateCache.size > TURN_UI_STATE_CACHE_MAX) {
+        const oldest = turnUiStateCache.keys().next().value;
+        if (oldest !== undefined) turnUiStateCache.delete(oldest);
+    }
+};
 
 interface MessageRowProps {
     message: ChatMessageEntry;
@@ -362,11 +143,10 @@ interface MessageRowProps {
     activeStreamingPhase?: StreamPhase | null;
     animateUserOnMount?: boolean;
     onUserAnimationConsumed?: (messageId: string) => void;
-    scrollToBottom?: () => void;
     reviewTransferDirection?: ReviewTransferDirection | null;
 }
 
-const MessageRow = React.memo<MessageRowProps>(({ 
+const MessageRow = React.memo<MessageRowProps>(({
     message,
     previousMessage,
     nextMessage,
@@ -376,9 +156,10 @@ const MessageRow = React.memo<MessageRowProps>(({
     activeStreamingPhase,
     animateUserOnMount,
     onUserAnimationConsumed,
-    scrollToBottom,
     reviewTransferDirection,
 }) => {
+    if (message.role === 'system') return null;
+
     return (
         <ChatMessage
             message={message}
@@ -386,7 +167,6 @@ const MessageRow = React.memo<MessageRowProps>(({
             nextMessage={nextMessage}
             animateUserOnMount={animateUserOnMount}
             onUserAnimationConsumed={onUserAnimationConsumed}
-            scrollToBottom={scrollToBottom}
             turnGroupingContext={turnGroupingContext}
             assistantHeaderMessageId={assistantHeaderMessageId}
             isInActiveTurn={isInActiveTurn}
@@ -398,13 +178,21 @@ const MessageRow = React.memo<MessageRowProps>(({
     const prevTurn = prev.turnGroupingContext;
     const nextTurn = next.turnGroupingContext;
 
-    return areRenderRelevantMessagesEqual(prev.message, next.message)
-        && areOptionalRenderRelevantMessagesEqual(prev.previousMessage, next.previousMessage)
-        && areOptionalRenderRelevantMessagesEqual(prev.nextMessage, next.nextMessage)
+    return areRenderRelevantMessagesEqual(
+            { info: prev.message, parts: prev.message.parts },
+            { info: next.message, parts: next.message.parts }
+        )
+        && areOptionalRenderRelevantMessagesEqual(
+            prev.previousMessage ? { info: prev.previousMessage, parts: prev.previousMessage.parts } : undefined,
+            next.previousMessage ? { info: next.previousMessage, parts: next.previousMessage.parts } : undefined
+        )
+        && areOptionalRenderRelevantMessagesEqual(
+            prev.nextMessage ? { info: prev.nextMessage, parts: prev.nextMessage.parts } : undefined,
+            next.nextMessage ? { info: next.nextMessage, parts: next.nextMessage.parts } : undefined
+        )
         && prev.animateUserOnMount === next.animateUserOnMount
         && prev.onUserAnimationConsumed === next.onUserAnimationConsumed
-        && prev.scrollToBottom === next.scrollToBottom
-        && areRelevantTurnGroupingContextsEqual(prevTurn, nextTurn, prev.message.info.id, resolveMessageRole(prev.message) === 'user')
+        && areRelevantTurnGroupingContextsEqual(prevTurn, nextTurn, prev.message.messageId, prev.message.role === 'user')
         && prev.assistantHeaderMessageId === next.assistantHeaderMessageId
         && prev.isInActiveTurn === next.isInActiveTurn
         && prev.activeStreamingPhase === next.activeStreamingPhase
@@ -423,7 +211,6 @@ interface TurnBlockProps {
     turnUiStates: Map<string, TurnUiState>;
     onToggleTurnGroup: ToggleTurnGroup;
     chatRenderMode: 'sorted' | 'live';
-    scrollToBottom?: () => void;
     stickyUserHeader?: boolean;
     shouldAnimateUserMessage: (message: ChatMessageEntry) => boolean;
     onUserAnimationConsumed: (messageId: string) => void;
@@ -432,7 +219,19 @@ interface TurnBlockProps {
     reviewTransferDirection?: ReviewTransferDirection | null;
 }
 
-const TurnBlock = React.memo(({
+const turnContainsMessageId = (turn: TurnRecord, messageId: string | null | undefined): boolean => {
+    if (!messageId) {
+        return false;
+    }
+
+    if (turn.userMessage.messageId === messageId) {
+        return true;
+    }
+
+    return turn.assistantMessages.some((assistant) => assistant.messageId === messageId);
+};
+
+export const TurnBlock = React.memo(({
     turn,
     hasLaterAssistant = false,
     isLastTurn,
@@ -442,7 +241,6 @@ const TurnBlock = React.memo(({
     turnUiStates,
     onToggleTurnGroup,
     chatRenderMode,
-    scrollToBottom,
     stickyUserHeader = true,
     shouldAnimateUserMessage,
     onUserAnimationConsumed,
@@ -450,12 +248,11 @@ const TurnBlock = React.memo(({
     activeStreamingPhase,
     reviewTransferDirection,
 }: TurnBlockProps) => {
-
-    const planModeEnabled = useFeatureFlagsStore((state) => state.planModeEnabled);
     const showReasoningTraces = useUIStore((state) => state.showReasoningTraces);
-    const userMessageHidden = React.useMemo(
-        () => isHiddenUserMessage(turn.userMessage, { planModeEnabled }),
-        [planModeEnabled, turn.userMessage]
+    // A hidden prompt has nothing to pin.
+    const turnHeaderCanStick = React.useMemo(
+        () => !isHiddenUserMessage(turn.userMessage),
+        [turn.userMessage]
     );
     const turnUiState = turnUiStates.get(turn.turnId) ?? { isExpanded: defaultActivityExpanded };
     const handleToggleTurnGroup = React.useCallback(() => {
@@ -469,24 +266,18 @@ const TurnBlock = React.memo(({
         const ordered = [turn.userMessage, ...turn.assistantMessages];
         const lookup = new Map<string, number>();
         ordered.forEach((message, index) => {
-            lookup.set(message.info.id, index);
+            lookup.set(message.messageId, index);
         });
         return { ordered, lookup };
     }, [turn.assistantMessages, turn.userMessage]);
 
+    // Authoritative: the streaming store names the one message still producing
+    // output. A turn does not infer completion from timestamps or notices.
     const streamingAssistantMessageId = React.useMemo(() => {
-        if (activeStreamingMessageId && turn.assistantMessages.some((assistant) => assistant.info.id === activeStreamingMessageId)) {
-            return activeStreamingMessageId;
-        }
-
-        for (let index = turn.assistantMessages.length - 1; index >= 0; index -= 1) {
-            const assistant = turn.assistantMessages[index];
-            if (!isAssistantMessageCompleted(assistant)) {
-                return assistant.info.id;
-            }
-        }
-
-        return null;
+        if (!activeStreamingMessageId) return null;
+        return turn.assistantMessages.some((assistant) => assistant.messageId === activeStreamingMessageId)
+            ? activeStreamingMessageId
+            : null;
     }, [activeStreamingMessageId, turn.assistantMessages]);
 
     const visibleAssistantMessages = React.useMemo(() => {
@@ -494,16 +285,16 @@ const TurnBlock = React.memo(({
             return turn.assistantMessages;
         }
 
-        const completed = turn.assistantMessages.filter(isAssistantMessageCompleted);
+        const completed = turn.assistantMessages.filter((assistant) => assistant.messageId !== streamingAssistantMessageId);
         if (completed.length === turn.assistantMessages.length) {
             return turn.assistantMessages;
         }
 
         if (streamingAssistantMessageId) {
-            const completedIds = new Set(completed.map((assistant) => assistant.info.id));
+            const completedIds = new Set(completed.map((assistant) => assistant.messageId));
             return turn.assistantMessages.filter((assistant) => (
-                completedIds.has(assistant.info.id)
-                || assistant.info.id === streamingAssistantMessageId
+                completedIds.has(assistant.messageId)
+                || assistant.messageId === streamingAssistantMessageId
             ));
         }
 
@@ -518,19 +309,21 @@ const TurnBlock = React.memo(({
         if (chatRenderMode !== 'sorted') {
             return turn.assistantMessages;
         }
-        return turn.assistantMessages.filter(isAssistantMessageCompleted);
-    }, [chatRenderMode, turn.assistantMessages]);
+        return streamingAssistantMessageId
+            ? turn.assistantMessages.filter((assistant) => assistant.messageId !== streamingAssistantMessageId)
+            : turn.assistantMessages;
+    }, [chatRenderMode, streamingAssistantMessageId, turn.assistantMessages]);
 
     const visibleAssistantIds = React.useMemo(() => {
         const ids = new Map<string, number>();
         visibleAssistantMessages.forEach((assistant, index) => {
-            ids.set(assistant.info.id, index);
+            ids.set(assistant.messageId, index);
         });
         return ids;
     }, [visibleAssistantMessages]);
 
     const completedAssistantIdSet = React.useMemo(() => {
-        return new Set(completedAssistantMessages.map((assistant) => assistant.info.id));
+        return new Set(completedAssistantMessages.map((assistant) => assistant.messageId));
     }, [completedAssistantMessages]);
 
     const visibleActivityMessageIdSet = React.useMemo(() => {
@@ -549,7 +342,7 @@ const TurnBlock = React.memo(({
         if (turnIsInActiveStream && streamingAssistantMessageId) {
             return streamingAssistantMessageId;
         }
-        return visibleAssistantMessages[0]?.info.id;
+        return visibleAssistantMessages[0]?.messageId;
     }, [streamingAssistantMessageId, turnIsInActiveStream, visibleAssistantMessages]);
 
     const visibleActivityParts = React.useMemo(() => {
@@ -591,14 +384,6 @@ const TurnBlock = React.memo(({
     }, [chatRenderMode, visibleActivityMessageIdSet, turn.activitySegments, turn.assistantMessages.length]);
 
     const turnGroupingContextBase = React.useMemo(() => {
-        const userCreatedAt = (turn.userMessage.info.time as { created?: number } | undefined)?.created;
-        // OpenCode 1.4.0 moved variant from top-level to model.variant on UserMessage.
-        // Prefer the new location, fall back to the legacy one for older servers.
-        const info = turn.userMessage.info as { variant?: unknown; model?: { variant?: unknown } } | undefined;
-        const rawVariant = info?.model?.variant ?? info?.variant;
-        const userMessageVariant = typeof rawVariant === 'string' && rawVariant.trim().length > 0
-            ? rawVariant
-            : undefined;
         return {
             turnId: turn.turnId,
             summaryBody: turn.summaryText,
@@ -609,26 +394,24 @@ const TurnBlock = React.memo(({
             hasReasoning: turn.hasReasoning,
             diffStats: turn.diffStats,
             changedFiles: turn.changedFiles,
-            userMessageCreatedAt: typeof userCreatedAt === 'number' ? userCreatedAt : undefined,
-            userMessageVariant,
+            userMessageCreatedAt: turn.userMessage.createdAt,
         };
-    }, [turn.changedFiles, turn.diffStats, turn.hasReasoning, turn.hasTools, turn.headerMessageId, turn.summaryText, turn.turnId, turn.userMessage.info, visibleActivityParts, visibleActivitySegments]);
+    }, [turn.changedFiles, turn.diffStats, turn.hasReasoning, turn.hasTools, turn.headerMessageId, turn.summaryText, turn.turnId, turn.userMessage.createdAt, visibleActivityParts, visibleActivitySegments]);
 
     const renderMessage = React.useCallback(
         (message: ChatMessageEntry) => {
-            const messageRole = resolveMessageRole(message);
-            const isUserMessage = messageRole === 'user';
-            const messageIndex = messageOrder.lookup.get(message.info.id);
-            const assistantIndex = visibleAssistantIds.get(message.info.id) ?? -1;
+            const isUserMessage = message.role === 'user';
+            const messageIndex = messageOrder.lookup.get(message.messageId);
+            const assistantIndex = visibleAssistantIds.get(message.messageId) ?? -1;
             const isAssistantMessage = assistantIndex >= 0;
             const isFirstAssistant = assistantIndex === 0;
             const isLastAssistant = assistantIndex === visibleAssistantMessages.length - 1;
-            const isActivityOwner = Boolean(activityOwnerMessageId) && message.info.id === activityOwnerMessageId;
-            const hasAnchoredActivitySegment = visibleActivitySegments.some((segment) => segment.anchorMessageId === message.info.id);
+            const isActivityOwner = Boolean(activityOwnerMessageId) && message.messageId === activityOwnerMessageId;
+            const hasAnchoredActivitySegment = visibleActivitySegments.some((segment) => segment.anchorMessageId === message.messageId);
             const shouldAttachFullTurnContext = chatRenderMode === 'sorted'
                 ? isAssistantMessage
                 : (isActivityOwner || isFirstAssistant || isLastAssistant);
-            const assistantHeaderMessageId = visibleAssistantMessages[0]?.info.id ?? turn.headerMessageId;
+            const assistantHeaderMessageId = visibleAssistantMessages[0]?.messageId ?? turn.headerMessageId;
 
             const previousMessage = isUserMessage
                 ? undefined
@@ -636,13 +419,14 @@ const TurnBlock = React.memo(({
                     ? (isFirstAssistant
                         ? turn.userMessage
                         : undefined)
-                    : (typeof messageIndex === 'number' && messageIndex > 0
+                    : (messageIndex !== undefined && messageIndex > 0
                         ? messageOrder.ordered[messageIndex - 1]
                         : undefined));
             const nextMessage = isAssistantMessage && isLastAssistant ? nextEntryFirstMessage : undefined;
 
-            const turnGroupingContext = isAssistantMessage
-                ? {
+            let turnGroupingContext: TurnGroupingContext | undefined;
+            if (isAssistantMessage) {
+                turnGroupingContext = {
                     turnId: turn.turnId,
                     activityOwnerMessageId,
                     isFirstAssistantInTurn: isFirstAssistant,
@@ -654,39 +438,37 @@ const TurnBlock = React.memo(({
                     isWorking: isLastTurn && sessionIsWorking && (
                         chatRenderMode === 'sorted'
                             ? hasAnchoredActivitySegment
-                            : message.info.id === streamingAssistantMessageId
+                            : message.messageId === streamingAssistantMessageId
                     ),
                     hasTools: turn.hasTools,
                     hasReasoning: turn.hasReasoning,
-                    ...(shouldAttachFullTurnContext ? {
-                        summaryBody: turnGroupingContextBase.summaryBody,
-                        activityParts: turnGroupingContextBase.activityParts,
-                        activityGroupSegments: turnGroupingContextBase.activityGroupSegments,
-                        headerMessageId: turnGroupingContextBase.headerMessageId,
-                        diffStats: turnGroupingContextBase.diffStats,
-                        changedFiles: turnGroupingContextBase.changedFiles,
-                        userMessageCreatedAt: turnGroupingContextBase.userMessageCreatedAt,
-                        userMessageVariant: turnGroupingContextBase.userMessageVariant,
-                        isGroupExpanded: turnUiState.isExpanded,
-                        toggleGroup: handleToggleTurnGroup,
-                    } : {}),
-                } satisfies TurnGroupingContext
-                : undefined;
+                };
+                if (shouldAttachFullTurnContext) {
+                    turnGroupingContext.summaryBody = turnGroupingContextBase.summaryBody;
+                    turnGroupingContext.activityParts = turnGroupingContextBase.activityParts;
+                    turnGroupingContext.activityGroupSegments = turnGroupingContextBase.activityGroupSegments;
+                    turnGroupingContext.headerMessageId = turnGroupingContextBase.headerMessageId;
+                    turnGroupingContext.diffStats = turnGroupingContextBase.diffStats;
+                    turnGroupingContext.changedFiles = turnGroupingContextBase.changedFiles;
+                    turnGroupingContext.userMessageCreatedAt = turnGroupingContextBase.userMessageCreatedAt;
+                    turnGroupingContext.isGroupExpanded = turnUiState.isExpanded;
+                    turnGroupingContext.toggleGroup = handleToggleTurnGroup;
+                }
+            }
 
             return (
                 <MessageRow
-                    key={message.info.id}
+                    key={message.messageId}
                     message={message}
                     previousMessage={previousMessage}
                     nextMessage={nextMessage}
                     turnGroupingContext={turnGroupingContext}
                     assistantHeaderMessageId={assistantHeaderMessageId}
-                    isInActiveTurn={Boolean(streamingAssistantMessageId) && message.info.id === streamingAssistantMessageId}
-                    activeStreamingPhase={message.info.id === streamingAssistantMessageId ? activeStreamingPhase : null}
+                    isInActiveTurn={Boolean(streamingAssistantMessageId) && message.messageId === streamingAssistantMessageId}
+                    activeStreamingPhase={message.messageId === streamingAssistantMessageId ? activeStreamingPhase : null}
                     reviewTransferDirection={reviewTransferDirection}
                     animateUserOnMount={shouldAnimateUserMessage(message)}
                     onUserAnimationConsumed={onUserAnimationConsumed}
-                    scrollToBottom={scrollToBottom}
                 />
             );
         },
@@ -695,7 +477,6 @@ const TurnBlock = React.memo(({
             nextEntryFirstMessage,
             messageOrder.lookup,
             messageOrder.ordered,
-            scrollToBottom,
             sessionIsWorking,
             chatRenderMode,
             turn.headerMessageId,
@@ -731,7 +512,7 @@ const TurnBlock = React.memo(({
     return (
         <TurnItem
             turn={renderableTurn}
-            stickyUserHeader={stickyUserHeader && !userMessageHidden}
+            stickyUserHeader={stickyUserHeader && turnHeaderCanStick}
             renderMessage={renderMessage}
             assistantContent={chatRenderMode === 'live' && !defaultActivityExpanded && hasLiveActivity(turn, showReasoningTraces) ? (
                 <LiveTurnActivity
@@ -752,7 +533,6 @@ interface UngroupedMessageRowProps {
     message: ChatMessageEntry;
     previousMessage?: ChatMessageEntry;
     nextMessage?: ChatMessageEntry;
-    scrollToBottom?: () => void;
     shouldAnimateUserMessage: (message: ChatMessageEntry) => boolean;
     onUserAnimationConsumed: (messageId: string) => void;
     activeStreamingMessageId?: string | null;
@@ -764,7 +544,6 @@ const UngroupedMessageRow = React.memo(({
     message,
     previousMessage,
     nextMessage,
-    scrollToBottom,
     shouldAnimateUserMessage,
     onUserAnimationConsumed,
     activeStreamingMessageId,
@@ -778,9 +557,8 @@ const UngroupedMessageRow = React.memo(({
             nextMessage={nextMessage}
             animateUserOnMount={shouldAnimateUserMessage(message)}
             onUserAnimationConsumed={onUserAnimationConsumed}
-            scrollToBottom={scrollToBottom}
-            isInActiveTurn={Boolean(activeStreamingMessageId) && message.info.id === activeStreamingMessageId}
-            activeStreamingPhase={message.info.id === activeStreamingMessageId ? activeStreamingPhase : null}
+            isInActiveTurn={Boolean(activeStreamingMessageId) && message.messageId === activeStreamingMessageId}
+            activeStreamingPhase={message.messageId === activeStreamingMessageId ? activeStreamingPhase : null}
             reviewTransferDirection={reviewTransferDirection}
         />
     );
@@ -790,7 +568,6 @@ UngroupedMessageRow.displayName = 'UngroupedMessageRow';
 
 interface MessageListEntryProps {
     entry: RenderEntry;
-    scrollToBottom?: () => void;
     stickyUserHeader?: boolean;
     sessionIsWorking: boolean;
     defaultActivityExpanded: boolean;
@@ -804,21 +581,8 @@ interface MessageListEntryProps {
     reviewTransferDirection?: ReviewTransferDirection | null;
 }
 
-const turnContainsMessageId = (turn: TurnRecord, messageId: string | null | undefined): boolean => {
-    if (!messageId) {
-        return false;
-    }
-
-    if (turn.userMessage.info.id === messageId) {
-        return true;
-    }
-
-    return turn.assistantMessages.some((assistant) => assistant.info.id === messageId);
-};
-
 const MessageListEntry = React.memo(({
     entry,
-    scrollToBottom,
     stickyUserHeader,
     sessionIsWorking,
     defaultActivityExpanded,
@@ -838,7 +602,6 @@ const MessageListEntry = React.memo(({
                 message={entry.message}
                 previousMessage={entry.previousMessage}
                 nextMessage={entry.nextMessage}
-                scrollToBottom={scrollToBottom}
                 shouldAnimateUserMessage={shouldAnimateUserMessage}
                 onUserAnimationConsumed={onUserAnimationConsumed}
                 activeStreamingMessageId={activeStreamingMessageId}
@@ -864,7 +627,6 @@ const MessageListEntry = React.memo(({
             activeStreamingMessageId={activeStreamingMessageId}
             activeStreamingPhase={activeStreamingPhase}
             reviewTransferDirection={reviewTransferDirection}
-            scrollToBottom={scrollToBottom}
             stickyUserHeader={stickyUserHeader}
         />
     );
@@ -876,7 +638,6 @@ MessageListEntry.displayName = 'MessageListEntry';
 // `renderItem` so the render callback keeps a stable identity — a changing
 // `renderItem` makes the list re-render every mounted row on every commit.
 type TimelineRowContextValue = {
-    scrollToBottom?: () => void;
     stickyUserHeader: boolean;
     defaultActivityExpanded: boolean;
     turnUiStates: Map<string, TurnUiState>;
@@ -886,13 +647,12 @@ type TimelineRowContextValue = {
     shouldAnimateUserMessage: (message: ChatMessageEntry) => boolean;
     onUserAnimationConsumed: (messageId: string) => void;
     reviewTransferDirection?: ReviewTransferDirection | null;
-    // The live tail row renders through StreamingTailContent, which subscribes
-    // to streaming parts; every other row renders statically.
     streamingTailKey: string | null;
     directory?: string;
     sessionIsWorking: boolean;
     activeStreamingMessageId: string | null;
     activeStreamingPhase: StreamPhase | null;
+    sessionKey: string;
 };
 
 const TimelineRowContext = React.createContext<TimelineRowContextValue | null>(null);
@@ -901,42 +661,24 @@ const TimelineRow = React.memo(({ entry }: { entry: RenderEntry }) => {
     const context = React.useContext(TimelineRowContext);
     if (!context) return null;
 
-    if (context.streamingTailKey === entry.key) {
-        return (
-            <StreamingTailContent
-                entry={entry}
-                directory={context.directory}
-                scrollToBottom={context.scrollToBottom}
-                stickyUserHeader={context.stickyUserHeader}
-                sessionIsWorking={context.sessionIsWorking}
-                defaultActivityExpanded={context.defaultActivityExpanded}
-                turnUiStates={context.turnUiStates}
-                onToggleTurnGroup={context.onToggleTurnGroup}
-                chatRenderMode={context.chatRenderMode}
-                showTurnChangedFiles={context.showTurnChangedFiles}
-                shouldAnimateUserMessage={context.shouldAnimateUserMessage}
-                onUserAnimationConsumed={context.onUserAnimationConsumed}
-                activeStreamingMessageId={context.activeStreamingMessageId}
-                activeStreamingPhase={context.activeStreamingPhase}
-                reviewTransferDirection={context.reviewTransferDirection}
-            />
-        );
-    }
-
+    const live = context.streamingTailKey === entry.key;
     return (
-        <MessageListEntry
+        <TimelineRowContent
             entry={entry}
-            scrollToBottom={context.scrollToBottom}
+            live={live}
+            directory={context.directory}
+            sessionKey={context.sessionKey}
             stickyUserHeader={context.stickyUserHeader}
-            sessionIsWorking={false}
+            sessionIsWorking={live && context.sessionIsWorking}
             defaultActivityExpanded={context.defaultActivityExpanded}
             turnUiStates={context.turnUiStates}
             onToggleTurnGroup={context.onToggleTurnGroup}
             chatRenderMode={context.chatRenderMode}
+            showTurnChangedFiles={context.showTurnChangedFiles}
             shouldAnimateUserMessage={context.shouldAnimateUserMessage}
             onUserAnimationConsumed={context.onUserAnimationConsumed}
-            activeStreamingMessageId={null}
-            activeStreamingPhase={null}
+            activeStreamingMessageId={live ? context.activeStreamingMessageId : null}
+            activeStreamingPhase={live ? context.activeStreamingPhase : null}
             reviewTransferDirection={context.reviewTransferDirection}
         />
     );
@@ -982,51 +724,12 @@ const TimelineList = React.memo(({
     rowContext,
 }: TimelineListProps) => {
     const listRef = React.useRef<LegendListRef | null>(null);
-    // With streaming auto-follow off, content growth must never move the
-    // viewport; explicit commands (the scroll-to-bottom pill, session open)
-    // still scroll through the imperative handle.
-    const streamingAutoFollowEnabled = useUIStore((state) => state.streamingAutoFollowEnabled);
     const isAtEndRef = React.useRef(true);
 
     const setListRef = React.useCallback((list: LegendListRef | null) => {
         listRef.current = list;
         registerList(list);
     }, [registerList]);
-
-    // A width change re-wraps every row. Suspend the list's end maintenance
-    // while the owning hook holds the measured end and decides whether to
-    // release the pin once the resize settles.
-    const [isWidthResizing, setIsWidthResizing] = React.useState(false);
-    React.useEffect(() => {
-        const node = listRef.current?.getScrollableNode();
-        if (!node) return;
-        let lastWidth: number | null = null;
-        let quietTimer: ReturnType<typeof setTimeout> | null = null;
-        const observer = new ResizeObserver((observerEntries) => {
-            const width = observerEntries[observerEntries.length - 1]?.contentRect.width;
-            if (typeof width !== 'number') return;
-            if (lastWidth === null) {
-                lastWidth = width;
-                return;
-            }
-            if (Math.abs(width - lastWidth) < 1) return;
-            lastWidth = width;
-            setIsWidthResizing(true);
-            if (quietTimer !== null) clearTimeout(quietTimer);
-            // Released after the owning hook's 350ms settle decision — while a
-            // pin release is still pending, re-enabled end maintenance would
-            // snap the viewport back before the hook can let it go.
-            quietTimer = setTimeout(() => {
-                quietTimer = null;
-                setIsWidthResizing(false);
-            }, 400);
-        });
-        observer.observe(node);
-        return () => {
-            observer.disconnect();
-            if (quietTimer !== null) clearTimeout(quietTimer);
-        };
-    }, []);
 
     // The list reports scroll continuously; only end-crossings are interesting,
     // so the edge is debounced to a state transition here rather than pushing a
@@ -1035,7 +738,7 @@ const TimelineList = React.memo(({
         const state = listRef.current?.getState();
         if (!state) return;
         const isAtEnd = resolveTimelineIsAtEnd(state);
-        if (typeof isAtEnd !== 'boolean' || isAtEnd === isAtEndRef.current) return;
+        if (isAtEnd === undefined || isAtEnd === isAtEndRef.current) return;
         isAtEndRef.current = isAtEnd;
         onIsAtEndChange(isAtEnd);
     }, [onIsAtEndChange]);
@@ -1064,26 +767,12 @@ const TimelineList = React.memo(({
                 // carry that state across.
                 recycleItems={false}
                 contentInsetEndAdjustment={composerOverlayHeight}
-                // Live only while the session streams: outside a stream the
-                // owning hook keeps a pinned reader on the end with same-frame
-                // writes, and the list's own correction runs a frame later
-                // against a content length that can still be stale (a
-                // re-wrap, a late measurement) — that is the visible bounce
-                // an idle reader saw on every panel toggle. Also off while the
-                // width resizes, where the hook holds the measured end itself.
-                maintainScrollAtEnd={!streamingAutoFollowEnabled || !rowContext.sessionIsWorking || isWidthResizing || endPinningReleased
-                    ? false
-                    // Animated: the block-step growth turns each correction
-                    // into a glide and reveal + scroll read as one motion.
-                    : {
-                        animated: true,
-                        on: { dataChange: true, itemLayout: true, layout: true, footerLayout: true },
-                    }}
+                // Off: the owning hook (useChatTimelineScroll) is the only
+                // writer that keeps the end in view, instantly at rest and as
+                // a glide while output streams.
+                maintainScrollAtEnd={false}
                 // A prepend first positions rows using estimated heights;
                 // later measurements must preserve the same visible row too.
-                // Keep size compensation active while reading history, including
-                // when scrolling mounts older rows above the viewport. A pinned
-                // reader is held on the end by the owning hook instead.
                 maintainVisibleContentPosition={{ data: true, size: endPinningReleased }}
                 onScroll={handleScroll}
                 onMetricsChange={onListMetricsChange}
@@ -1097,10 +786,13 @@ const TimelineList = React.memo(({
 
 TimelineList.displayName = 'TimelineList';
 
-const StreamingTailContent: React.FC<{
+// Every row renders through this one component, live tail or history, so a
+// row keeps its React tree when it moves between the two.
+const TimelineRowContent: React.FC<{
     entry: RenderEntry;
+    live: boolean;
     directory?: string;
-    scrollToBottom?: () => void;
+    sessionKey: string;
     stickyUserHeader: boolean;
     sessionIsWorking: boolean;
     defaultActivityExpanded: boolean;
@@ -1115,8 +807,9 @@ const StreamingTailContent: React.FC<{
     reviewTransferDirection?: ReviewTransferDirection | null;
 }> = ({
     entry,
+    live,
     directory,
-    scrollToBottom,
+    sessionKey,
     stickyUserHeader,
     sessionIsWorking,
     defaultActivityExpanded,
@@ -1134,23 +827,23 @@ const StreamingTailContent: React.FC<{
     // currently streaming: a finished step message's base record can lag the
     // part store, and rendering it from that stale snapshot briefly unmounts
     // its completed tool parts when the stream hands off to the next message.
+    // A history row subscribes to nothing.
     const tailMessageIds = React.useMemo(() => {
+        if (!live) return EMPTY_ROW_MESSAGE_IDS;
         if (entry.kind === 'turn') return entry.turn.assistantMessageIds;
-        return [entry.message.info.id];
-    }, [entry]);
-    const livePartsByMessageId = useSessionPartsForMessages(tailMessageIds, directory);
-    const planModeEnabled = useFeatureFlagsStore((state) => state.planModeEnabled);
-    const liveEntry = React.useMemo(() => buildLiveStreamingEntry(entry, {
+        return [entry.message.messageId];
+    }, [entry, live]);
+    const livePartsByMessageId = useSessionPartsForMessages(sessionKey, tailMessageIds, directory);
+    const rowEntry = React.useMemo(() => (live ? buildLiveStreamingEntry(entry, {
         livePartsByMessageId,
         showTextJustificationActivity: chatRenderMode === 'sorted',
         showTurnChangedFiles,
-        mergeHiddenUserTurns: { planModeEnabled },
-    }), [chatRenderMode, entry, livePartsByMessageId, showTurnChangedFiles, planModeEnabled]);
+        mergeHiddenUserTurns: true,
+    }) : entry), [chatRenderMode, entry, live, livePartsByMessageId, showTurnChangedFiles]);
 
     return (
         <MessageListEntry
-            entry={liveEntry}
-            scrollToBottom={scrollToBottom}
+            entry={rowEntry}
             stickyUserHeader={stickyUserHeader}
             sessionIsWorking={sessionIsWorking}
             defaultActivityExpanded={defaultActivityExpanded}
@@ -1166,7 +859,7 @@ const StreamingTailContent: React.FC<{
     );
 };
 
-StreamingTailContent.displayName = 'StreamingTailContent';
+TimelineRowContent.displayName = 'TimelineRowContent';
 
 const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
     sessionKey,
@@ -1174,8 +867,6 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
     sessionIsWorking = false,
     activeStreamingMessageId = null,
     activeStreamingPhase = null,
-    retryOverlay = null,
-    scrollToBottom,
     directory,
     registerList,
     endPinningReleased = false,
@@ -1197,117 +888,65 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
     const reviewTransferDirection = useGlobalSessionsStore((state) => {
         return state.reviewTransferBySessionId.get(sessionKey) ?? null;
     });
-    const [turnUiStates, setTurnUiStates] = React.useState<Map<string, TurnUiState>>(() => new Map());
+    const [turnUiStates, setTurnUiStates] = React.useState<Map<string, TurnUiState>>(() => readTurnUiStateCache(activityRenderMode));
     const userAnimationRef = React.useRef<{
         sessionKey: string | undefined;
         previousOrder: string[];
         animatedIds: Set<string>;
     }>({ sessionKey: undefined, previousOrder: [], animatedIds: new Set() });
-    const stableScrollToBottom = useStableEvent(() => {
-        scrollToBottom?.();
-    });
 
+    const turnUiStateModeRef = React.useRef(activityRenderMode);
     React.useEffect(() => {
-        setTurnUiStates(new Map());
-    }, [activityRenderMode, sessionKey]);
+        if (turnUiStateModeRef.current === activityRenderMode) return;
+        turnUiStateModeRef.current = activityRenderMode;
+        setTurnUiStates(readTurnUiStateCache(activityRenderMode));
+    }, [activityRenderMode]);
 
     const toggleTurnGroup = React.useCallback((turnId: string, mode: 'sorted' | 'live' = 'sorted') => {
         setTurnUiStates((previous) => {
             const next = new Map(previous);
             const current = next.get(turnId) ?? { isExpanded: defaultActivityExpanded };
-            next.set(turnId, mode === 'live'
+            const toggled = mode === 'live'
                 ? { ...current, isLiveExpanded: !current.isLiveExpanded }
-                : { ...current, isExpanded: !current.isExpanded });
+                : { ...current, isExpanded: !current.isExpanded };
+            next.set(turnId, toggled);
+            writeTurnUiStateCache(turnId, toggled);
             return next;
         });
     }, [defaultActivityExpanded]);
-
 
     const baseDisplayMessages = React.useMemo(() => streamPerfMeasure('ui.message_list.base_display_ms', () => {
         const seenIds = new Set<string>();
         const latestById = new Map<string, ChatMessageEntry>();
         const dedupedMessages: ChatMessageEntry[] = [];
         for (const message of messages) {
-            const messageId = message.info?.id;
-            if (typeof messageId === 'string') latestById.set(messageId, message);
+            if (message.role === 'system') {
+                continue;
+            }
+            latestById.set(message.messageId, message);
         }
 
         // Preserve the first occurrence's chronological position, but use the last
         // value because prepended history can overlap with newer live store data.
-        for (let index = 0; index < messages.length; index += 1) {
-            const message = messages[index];
-            const messageId = message.info?.id;
-            if (typeof messageId === 'string') {
-                if (seenIds.has(messageId)) {
-                    continue;
-                }
-                seenIds.add(messageId);
+        for (const message of messages) {
+            if (message.role === 'system') {
+                continue;
             }
-            dedupedMessages.push(getNormalizedMessageForDisplay(
-                typeof messageId === 'string' ? latestById.get(messageId) ?? message : message,
-            ));
+            const messageId = message.messageId;
+            if (seenIds.has(messageId)) {
+                continue;
+            }
+            seenIds.add(messageId);
+            dedupedMessages.push(getNormalizedMessageForDisplay(latestById.get(messageId) ?? message));
         }
 
-        const output: ChatMessageEntry[] = [];
-        const compactionCommandIds = new Set<string>();
-        for (let index = 0; index < dedupedMessages.length; index += 1) {
-            const current = dedupedMessages[index];
-            const currentWithRole = normalizeCompactionSummaryMessage(current, compactionCommandIds);
-            if (hasCompactionPart(current) || current.parts.some((part) => part.type === 'text' && getPartText(part).trim() === '/compact')) {
-                compactionCommandIds.add(current.info.id);
-            }
-            const previous = output.length > 0 ? output[output.length - 1] : undefined;
-
-            if (isUserSubtaskMessage(previous)) {
-                const bridge = isSyntheticSubtaskBridgeAssistant(currentWithRole);
-                if (bridge.hide) {
-                    output[output.length - 1] = withSubtaskSessionId(previous as ChatMessageEntry, bridge.taskSessionId);
-                    continue;
-                }
-            }
-
-            if (isUserShellMarkerMessage(previous)) {
-                const bridge = getShellBridgeAssistantDetails(currentWithRole, getMessageId(previous));
-                if (bridge.hide) {
-                    output[output.length - 1] = withShellBridgeDetails(previous as ChatMessageEntry, bridge.details);
-                    continue;
-                }
-            }
-
-            output.push(currentWithRole);
-        }
-
-        return output;
+        return attachToolResultsForDisplay(dedupedMessages, messages);
     }), [messages]);
 
-    // The list owns the scroll container. The DOM fallback covers the window
-    // between mount and the list handing us its node.
-    const resolveScrollContainer = React.useCallback((): HTMLElement | null => {
-        const listNode = listRef.current?.getScrollableNode();
-        if (listNode) {
-            return listNode;
-        }
-        if (typeof document === 'undefined') {
-            return null;
-        }
-        return document.querySelector<HTMLDivElement>('[data-scrollbar="chat"]');
-    }, []);
-
-    const displayMessages = React.useMemo(() => streamPerfMeasure('ui.message_list.retry_overlay_ms', () => {
-        return applyRetryOverlay(baseDisplayMessages, {
-            sessionId: retryOverlay?.sessionId ?? null,
-            message: retryOverlay?.message ?? 'Quota limit reached. Retrying automatically.',
-            confirmedAt: retryOverlay?.confirmedAt,
-            fallbackTimestamp: retryOverlay?.fallbackTimestamp ?? 0,
-        });
-    }), [baseDisplayMessages, retryOverlay]);
-
-    const planModeEnabled = useFeatureFlagsStore((state) => state.planModeEnabled);
-    const { projection, staticTurns, streamingTurn } = useTurnRecords(displayMessages, {
+    const { projection, staticTurns, streamingTurn } = useTurnRecords(baseDisplayMessages, {
         sessionKey,
         showTextJustificationActivity: chatRenderMode === 'sorted',
         showTurnChangedFiles,
-        planModeEnabled,
     });
     const hasUngroupedStaticEntries = projection.ungroupedMessageIds.size > 0;
     const tailHasAssistant = Boolean(streamingTurn?.assistantMessages.length);
@@ -1319,50 +958,8 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         }
         return retired;
     }, [chatRenderMode, defaultActivityExpanded, staticTurns, tailHasAssistant]);
-    const staticEntryMessages = hasUngroupedStaticEntries ? displayMessages : EMPTY_STATIC_ENTRY_MESSAGES;
+    const staticEntryMessages = hasUngroupedStaticEntries ? baseDisplayMessages : EMPTY_STATIC_ENTRY_MESSAGES;
     const staticEntryUngroupedIds = hasUngroupedStaticEntries ? projection.ungroupedMessageIds : EMPTY_UNGROUPED_MESSAGE_IDS;
-    const staticRenderEntries = React.useMemo<RenderEntry[]>(() => streamPerfMeasure('ui.message_list.render_entries_ms', () => {
-        const turnEntries = staticTurns.map((turn) => ({
-            kind: 'turn' as const,
-            key: `turn:${turn.turnId}`,
-            turn,
-            isLastTurn: turn.turnId === projection.lastTurnId,
-            hasLaterAssistant: turnsWithLaterAssistant.has(turn.turnId),
-        }));
-
-        if (staticEntryUngroupedIds.size === 0) {
-            return turnEntries;
-        }
-
-        const turnEntryByUserMessageId = new Map<string, RenderEntry>();
-        turnEntries.forEach((entry) => {
-            turnEntryByUserMessageId.set(entry.turn.userMessage.info.id, entry);
-        });
-
-        const orderedEntries: RenderEntry[] = [];
-        staticEntryMessages.forEach((message, index) => {
-            const turnEntry = turnEntryByUserMessageId.get(message.info.id);
-            if (turnEntry) {
-                orderedEntries.push(turnEntry);
-                return;
-            }
-
-            if (!staticEntryUngroupedIds.has(message.info.id)) {
-                return;
-            }
-
-            orderedEntries.push({
-                kind: 'ungrouped',
-                key: `msg:${message.info.id}`,
-                message,
-                previousMessage: index > 0 ? staticEntryMessages[index - 1] : undefined,
-                nextMessage: index < staticEntryMessages.length - 1 ? staticEntryMessages[index + 1] : undefined,
-            });
-        });
-
-        return orderedEntries;
-    }), [projection.lastTurnId, staticEntryMessages, staticEntryUngroupedIds, staticTurns, turnsWithLaterAssistant]);
-
     const trailingStreamingEntry = React.useMemo<RenderEntry | undefined>(() => {
         if (streamingTurn) {
             return {
@@ -1377,19 +974,19 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
             return undefined;
         }
 
-        const lastMessage = displayMessages[displayMessages.length - 1];
-        if (!lastMessage || !projection.ungroupedMessageIds.has(lastMessage.info.id)) {
+        const lastMessage = baseDisplayMessages[baseDisplayMessages.length - 1];
+        if (!lastMessage || !projection.ungroupedMessageIds.has(lastMessage.messageId)) {
             return undefined;
         }
 
         return {
             kind: 'ungrouped',
-            key: `msg:${lastMessage.info.id}`,
+            key: `msg:${lastMessage.messageId}`,
             message: lastMessage,
-            previousMessage: displayMessages.length > 1 ? displayMessages[displayMessages.length - 2] : undefined,
+            previousMessage: baseDisplayMessages.length > 1 ? baseDisplayMessages[baseDisplayMessages.length - 2] : undefined,
             nextMessage: undefined,
         } satisfies RenderEntry;
-    }, [displayMessages, projection.lastTurnId, projection.ungroupedMessageIds, streamingTurn]);
+    }, [baseDisplayMessages, projection.lastTurnId, projection.ungroupedMessageIds, streamingTurn]);
 
     if (trailingStreamingEntry) {
         streamPerfCount('ui.message_list.render.streaming');
@@ -1401,23 +998,22 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
     const trailingEntryFirstMessage = trailingStreamingEntry
         ? (trailingStreamingEntry.kind === 'turn' ? trailingStreamingEntry.turn.userMessage : trailingStreamingEntry.message)
         : undefined;
-    const historyEntries = React.useMemo<RenderEntry[]>(() => {
-        return staticRenderEntries.map((entry, index) => {
-            if (entry.kind !== 'turn') {
-                return entry;
-            }
-            const nextEntryFirstMessage = index < staticRenderEntries.length - 1
-                ? (() => {
-                    const nextEntry = staticRenderEntries[index + 1];
-                    return nextEntry.kind === 'turn' ? nextEntry.turn.userMessage : nextEntry.message;
-                })()
-                : trailingEntryFirstMessage;
-            if (!nextEntryFirstMessage) {
-                return entry;
-            }
-            return { ...entry, nextEntryFirstMessage };
-        });
-    }, [staticRenderEntries, trailingEntryFirstMessage]);
+    const previousHistoryEntriesRef = React.useRef<RenderEntry[]>([]);
+    const hasStreamingTurn = Boolean(streamingTurn);
+    const historyEntries = React.useMemo(() => streamPerfMeasure('ui.message_list.render_entries_ms', () => {
+        const entries = buildHistoryEntries({
+            staticTurns,
+            lastTurnId: projection.lastTurnId,
+            turnsWithLaterAssistant,
+            messages: staticEntryMessages,
+            ungroupedMessageIds: staticEntryUngroupedIds,
+            hasStreamingTurn,
+            trailingEntryFirstMessage,
+        }, previousHistoryEntriesRef.current);
+        previousHistoryEntriesRef.current = entries;
+        return entries;
+    }), [hasStreamingTurn, projection.lastTurnId, staticEntryMessages, staticEntryUngroupedIds, staticTurns, trailingEntryFirstMessage, turnsWithLaterAssistant]);
+
     // Every surface uses the same virtualized list for the whole timeline —
     // there is no small-list DOM path to transition out of, which is what used
     // to remount the history subtree mid-prepend.
@@ -1447,8 +1043,8 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
 
     const currentUserOrder = React.useMemo(() => {
         return messages
-            .filter((message) => resolveMessageRole(message) === 'user')
-            .map((message) => message.info.id);
+            .filter((message) => message.role === 'user')
+            .map((message) => message.messageId);
     }, [messages]);
 
     // Detect new user messages SYNCHRONOUSLY during render.
@@ -1484,45 +1080,104 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
     }
 
     const shouldAnimateUserMessage = React.useCallback((message: ChatMessageEntry): boolean => {
-        if (resolveMessageRole(message) !== 'user') return false;
-        return userAnimationRef.current.animatedIds.has(message.info.id);
+        if (message.role !== 'user') return false;
+        return userAnimationRef.current.animatedIds.has(message.messageId);
     }, []);
 
     const onUserAnimationConsumed = React.useCallback((messageId: string) => {
         userAnimationRef.current.animatedIds.delete(messageId);
     }, []);
 
-    const messageIndexMap = React.useMemo(() => {
-        const indexMap = new Map<string, number>();
-
+    // Row lookups for navigation, built in one pass over the rows. Assistant
+    // messages before a turn's last one are collapsible: in a collapsed turn
+    // their text sits inside the folded activity and has no row of its own.
+    const {
+        messageIndexMap,
+        turnIndexMap,
+        collapsibleTurnByMessageId,
+        turnByAssistantMessageId,
+    } = React.useMemo(() => {
+        const messageIndexes = new Map<string, number>();
+        const turnIndexes = new Map<string, number>();
+        const collapsible = new Map<string, string>();
+        const all = new Map<string, string>();
         allEntries.forEach((entry, index) => {
             if (entry.kind === 'ungrouped') {
-                indexMap.set(entry.message.info.id, index);
+                messageIndexes.set(entry.message.messageId, index);
                 return;
             }
-            indexMap.set(entry.turn.userMessage.info.id, index);
-            entry.turn.assistantMessages.forEach((message) => {
-                indexMap.set(message.info.id, index);
+            const { turnId, userMessage, assistantMessages } = entry.turn;
+            turnIndexes.set(turnId, index);
+            messageIndexes.set(userMessage.messageId, index);
+            assistantMessages.forEach((message, assistantIndex) => {
+                const messageId = message.messageId;
+                messageIndexes.set(messageId, index);
+                all.set(messageId, turnId);
+                if (assistantIndex < assistantMessages.length - 1) collapsible.set(messageId, turnId);
             });
         });
-
-        return indexMap;
+        return {
+            messageIndexMap: messageIndexes,
+            turnIndexMap: turnIndexes,
+            collapsibleTurnByMessageId: collapsible,
+            turnByAssistantMessageId: all,
+        };
     }, [allEntries]);
+    const turnUiStatesRef = React.useRef(turnUiStates);
+    turnUiStatesRef.current = turnUiStates;
 
-    const turnIndexMap = React.useMemo(() => {
-        const indexMap = new Map<string, number>();
-        allEntries.forEach((entry, index) => {
-            if (entry.kind === 'turn') {
-                indexMap.set(entry.turn.turnId, index);
-            }
-        });
-        return indexMap;
-    }, [allEntries]);
+    // The list remounts per session, so entering a session again mounts only
+    // the newest messages of its long turns.
+    const [turnMessageWindow] = React.useState(createTurnMessageWindowStore);
+    const turnMessageWindowEnabled = chatRenderMode === 'live';
+
+    const resolveScrollContainer = React.useCallback((): HTMLElement | null => {
+        const listNode = listRef.current?.getScrollableNode();
+        if (listNode) {
+            return listNode;
+        }
+        return document.querySelector<HTMLDivElement>('[data-scrollbar="chat"]');
+    }, []);
+
+    /**
+     * Mounts the whole turn holding a message that navigation is about to
+     * reach but that its turn has not mounted yet (see TurnMessageWindow).
+     */
+    const mountWindowedMessage = React.useCallback((messageId: string): void => {
+        if (!turnMessageWindowEnabled) return;
+        const turnId = turnByAssistantMessageId.get(messageId);
+        if (turnId) turnMessageWindow.setRange(turnId, FULL_MESSAGE_WINDOW);
+    }, [turnByAssistantMessageId, turnMessageWindow, turnMessageWindowEnabled]);
+
+    /**
+     * Opens the turn a linked or searched message is folded into, the way a
+     * browser's find opens a closed <details>. True when it had to open it:
+     * the row renders the message on a later frame. Both folds are opened,
+     * since which one hides the text depends on the chat render mode.
+     */
+    const revealFoldedMessage = React.useCallback((messageId: string): boolean => {
+        const turnId = isReasoningRevealTarget(messageId)
+            ? turnByAssistantMessageId.get(messageId)
+            : collapsibleTurnByMessageId.get(messageId);
+        if (!turnId) return false;
+        const current = turnUiStatesRef.current.get(turnId) ?? { isExpanded: defaultActivityExpanded };
+        if (current.isExpanded && current.isLiveExpanded) return false;
+        const opened = { ...current, isExpanded: true, isLiveExpanded: true };
+        writeTurnUiStateCache(turnId, opened);
+        setTurnUiStates((previous) => new Map(previous).set(turnId, opened));
+        return true;
+    }, [collapsibleTurnByMessageId, defaultActivityExpanded, turnByAssistantMessageId]);
 
     const findMessageElement = React.useCallback((messageId: string): HTMLElement | null => {
         const container = resolveScrollContainer();
         if (!container) {
             return null;
+        }
+        // A search hit in reasoning lands on the reasoning itself, which in
+        // sorted mode is drawn inside another message's activity.
+        if (isReasoningRevealTarget(messageId)) {
+            const reasoning = container.querySelector<HTMLElement>(`[data-reasoning-message-id="${messageId}"]`);
+            if (reasoning) return reasoning;
         }
         return container.querySelector(`[data-message-id="${messageId}"]`);
     }, [resolveScrollContainer]);
@@ -1542,8 +1197,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
 
         // Unanimated: an unmounted target's position is still an estimate, and
         // a smooth scroll would end at that stale offset once the real
-        // measurement replaces it. Mounted targets still take the smooth DOM
-        // path in scrollMessageElementIntoView.
+        // measurement replaces it.
         void list.scrollToIndex({ index, animated: false, viewPosition: 0 });
         return true;
     }, [allEntries.length]);
@@ -1558,7 +1212,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         desiredOffsetTop: number,
     ) => {
         const container = resolveScrollContainer();
-        if (!container || typeof window === 'undefined') {
+        if (!container) {
             return;
         }
         let frames = 0;
@@ -1614,11 +1268,40 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         return true;
     }, [findMessageElement, resolveScrollContainer]);
 
-    React.useEffect(() => {
-        if (!ref) {
-            return;
+    const alignViewportAnchor = React.useCallback((anchor: MessageViewportAnchor): ViewportAnchorAlignment => {
+        const index = messageIndexMap.get(anchor.messageId);
+        const container = resolveScrollContainer();
+        if (index === undefined || !container) {
+            return 'missing';
+        }
+        if (revealFoldedMessage(anchor.messageId)) {
+            scrollHistoryIndexIntoView(index);
+            return 'moved';
         }
 
+        const element = findMessageElement(anchor.messageId);
+        if (!element) {
+            // Not mounted: bring its row in from the estimate; the next step
+            // measures the real position.
+            mountWindowedMessage(anchor.messageId);
+            return scrollHistoryIndexIntoView(index) ? 'moved' : 'missing';
+        }
+        const delta = element.getBoundingClientRect().top
+            - container.getBoundingClientRect().top
+            - anchor.offsetTop;
+        if (Math.abs(delta) <= 0.5) {
+            return 'aligned';
+        }
+        const before = container.scrollTop;
+        container.scrollTop += delta;
+        // A message near either end of the timeline cannot reach the offset:
+        // the scroll is clamped, and where it stopped is as close as it gets.
+        return Math.abs(container.scrollTop - before) < 0.5 ? 'aligned' : 'moved';
+    }, [findMessageElement, messageIndexMap, mountWindowedMessage, resolveScrollContainer, revealFoldedMessage, scrollHistoryIndexIntoView]);
+
+    // Installed during layout so a parent's layout effect (session entry
+    // restore) already reaches this list, not the one it replaced.
+    React.useImperativeHandle(ref, () => {
         const handle: MessageListHandle = {
             scrollToTurnId: (turnId: string, options?: { behavior?: ScrollBehavior }) => {
                 const behavior = options?.behavior ?? 'auto';
@@ -1653,6 +1336,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
                     return false;
                 }
 
+                if (!findMessageElement(messageId)) mountWindowedMessage(messageId);
                 const didScroll = scrollMessageElementIntoView(messageId, behavior)
                     || scrollHistoryIndexIntoView(index);
                 if (didScroll && behavior !== 'smooth') {
@@ -1661,9 +1345,9 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
                 return didScroll;
             },
 
-            holdViewportAnchor: (anchor) => {
+            holdViewportAnchor: (anchor: { messageId: string; offsetTop: number }) => {
                 const container = resolveScrollContainer();
-                if (!container || typeof window === 'undefined') {
+                if (!container) {
                     return;
                 }
 
@@ -1708,72 +1392,12 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
 
             captureViewportAnchor: () => {
                 const container = resolveScrollContainer();
-                if (!container) {
-                    return null;
-                }
-
-                const containerRect = container.getBoundingClientRect();
-                const nodes: HTMLElement[] = Array.from(container.querySelectorAll<HTMLElement>('[data-message-id]'));
-                const firstVisible = nodes.find((node) => {
-                    const rect = node.getBoundingClientRect();
-                    if (rect.bottom <= containerRect.top + 1) {
-                        return false;
-                    }
-
-                    if (typeof window === 'undefined') {
-                        return true;
-                    }
-
-                    return !isInsideStuckSticky(node, container, containerRect.top);
-                }) ?? nodes.find((node) => node.getBoundingClientRect().bottom > containerRect.top + 1);
-                if (!firstVisible) {
-                    return null;
-                }
-
-                const messageId = firstVisible.dataset.messageId;
-                if (!messageId) {
-                    return null;
-                }
-
-                return {
-                    messageId,
-                    offsetTop: firstVisible.getBoundingClientRect().top - containerRect.top,
-                };
+                return container ? captureMessageViewportAnchor(container) : null;
             },
 
-            restoreViewportAnchor: (anchor: { messageId: string; offsetTop: number }) => {
-                const container = resolveScrollContainer();
-                if (!container) {
-                    return false;
-                }
+            restoreViewportAnchor: (anchor: MessageViewportAnchor) => alignViewportAnchor(anchor) !== 'missing',
 
-                if (!messageIndexMap.has(anchor.messageId)) {
-                    return false;
-                }
-
-                const applyAnchor = (): boolean => {
-                    const element = findMessageElement(anchor.messageId);
-                    if (!element) {
-                        return false;
-                    }
-                    const containerRect = container.getBoundingClientRect();
-                    const targetTop = element.getBoundingClientRect().top - containerRect.top;
-                    const delta = targetTop - anchor.offsetTop;
-                    if (delta !== 0) {
-                        container.scrollTop += delta;
-                    }
-                    return true;
-                };
-
-                if (!applyAnchor()) {
-                    const index = messageIndexMap.get(anchor.messageId);
-                    if (typeof index === 'number' && index < historyEntries.length) {
-                        return scrollHistoryIndexIntoView(index);
-                    }
-                }
-
-                return applyAnchor();
-            },
+            alignViewportAnchor,
 
             scrollToBottom: () => {
                 const list = listRef.current;
@@ -1788,23 +1412,10 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
                 container.scrollTop = container.scrollHeight + 4096;
             },
         };
+        return handle;
+    }, [alignViewportAnchor, findMessageElement, messageIndexMap, mountWindowedMessage, resolveScrollContainer, scrollHistoryIndexIntoView, scrollMessageElementIntoView, settleNavigationTarget, turnIndexMap]);
 
-        if (typeof ref === 'function') {
-            ref(handle);
-            return () => {
-                ref(null);
-            };
-        }
-
-        const objectRef = ref;
-        objectRef.current = handle;
-        return () => {
-            objectRef.current = null;
-        };
-    }, [findMessageElement, historyEntries.length, messageIndexMap, resolveScrollContainer, scrollHistoryIndexIntoView, scrollMessageElementIntoView, settleNavigationTarget, turnIndexMap, ref]);
-
-    const rowContext = React.useMemo(() => ({
-        scrollToBottom: stableScrollToBottom,
+    const rowContext = React.useMemo<TimelineRowContextValue>(() => ({
         stickyUserHeader,
         defaultActivityExpanded,
         turnUiStates,
@@ -1819,6 +1430,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         sessionIsWorking,
         activeStreamingMessageId,
         activeStreamingPhase,
+        sessionKey,
     }), [
         activeStreamingMessageId,
         activeStreamingPhase,
@@ -1828,9 +1440,9 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         onUserAnimationConsumed,
         reviewTransferDirection,
         sessionIsWorking,
+        sessionKey,
         shouldAnimateUserMessage,
         showTurnChangedFiles,
-        stableScrollToBottom,
         stickyUserHeader,
         toggleTurnGroup,
         trailingStreamingEntry?.key,
@@ -1843,21 +1455,23 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         // list's point of view, so fade-in is disabled for them — content
         // arriving inside the streaming tail keeps its own animations.
         <FadeInDisabledProvider disabled>
-            <TimelineList
-                key={sessionKey}
-                entries={allEntries}
-                streamingTailKey={trailingStreamingEntry?.key ?? null}
-                registerList={handleRegisterList}
-                composerOverlayHeight={composerOverlayHeight}
-                onIsAtEndChange={stableIsAtEndChange}
-                onListMetricsChange={stableListMetricsChange}
-                onTimelineDataChange={stableTimelineDataChange}
-                listHeader={listHeader}
-                listFooter={listFooter}
-                scrollContainerProps={scrollContainerProps}
-                rowContext={rowContext}
-                endPinningReleased={endPinningReleased}
-            />
+            <TurnMessageWindowContext.Provider value={turnMessageWindowEnabled ? turnMessageWindow : null}>
+                <TimelineList
+                    key={sessionKey}
+                    entries={allEntries}
+                    streamingTailKey={trailingStreamingEntry?.key ?? null}
+                    registerList={handleRegisterList}
+                    composerOverlayHeight={composerOverlayHeight}
+                    onIsAtEndChange={stableIsAtEndChange}
+                    onListMetricsChange={stableListMetricsChange}
+                    onTimelineDataChange={stableTimelineDataChange}
+                    listHeader={listHeader}
+                    listFooter={listFooter}
+                    scrollContainerProps={scrollContainerProps}
+                    rowContext={rowContext}
+                    endPinningReleased={endPinningReleased}
+                />
+            </TurnMessageWindowContext.Provider>
         </FadeInDisabledProvider>
     );
 });

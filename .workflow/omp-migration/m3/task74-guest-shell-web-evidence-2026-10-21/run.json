@@ -1,0 +1,295 @@
+{
+ "at": "2026-10-21T12:15:42.126Z",
+ "steps": [
+  {
+   "n": "app-ready",
+   "ready": true,
+   "text": "New session\nchats\nLoading sessions…\nwork\nT15-SHELL session\nT15-SHELL session\nPlan, build, or ask. @ to mention, $ for skills, / for commands\n\nLoading...\nLoading...\nSession\nProject\nwork\nmaster\nTurn stats",
+   "at": 1792584945685
+  },
+  {
+   "n": "shell-run",
+   "status": 200,
+   "body": {
+    "run": {
+     "runId": "f8dfdf7e-efa4-457c-9d1a-60534a05a555",
+     "sessionId": "37612532-0c6e-4f9c-8b03-1fab8b37c13b",
+     "status": "running",
+     "createdAt": 1792584946059
+    }
+   },
+   "at": 1792584946085
+  },
+  {
+   "n": "approval-found",
+   "found": true,
+   "approvalId": "e9231fa6-86ba-4143-8075-f6935e000fc3",
+   "at": 1792584948605
+  },
+  {
+   "n": "approval-reply",
+   "status": 200,
+   "decision": "approve",
+   "at": 1792584948613
+  },
+  {
+   "n": "shell-running",
+   "running": {
+    "jobId": "native:[\"Main\",\"bg_1\"]",
+    "sessionId": "37612532-0c6e-4f9c-8b03-1fab8b37c13b",
+    "epoch": "b65ee032-63eb-4e74-aa52-d3da79bf74a1",
+    "workerGeneration": "28bbd961-24a6-49fc-b3c1-8e0d58f67c93",
+    "workspaceId": "ws_955fa4b9-c4af-4146-b1a6-b86763fc47f5",
+    "projectId": "pro_0c05b779-2d62-48f4-8eb7-5f5f670e0ab7",
+    "command": "for i in $(seq 1 300); do echo t15-line-$i; sleep 1; done",
+    "background": true,
+    "startedAt": 1792584949536,
+    "outputCursor": "11",
+    "status": "running"
+   },
+   "at": 1792584950034
+  },
+  {
+   "n": "app-reloaded",
+   "ready": true,
+   "text": "New session\nchats\nStart a session\nwork\nT15-SHELL session\n2s\nT15-SHELL session\n\nT15-SHELL please run the long command\n\n8:15 PM\nbash\nfor i in $(seq 1 300); do echo t15-line-$i; sleep 1; done\n\nTask 15 fixture reply.\n\nt15-fixture\nT15 Fixture is working\nPlan, build, or ask. @ to mention, $ for skills, / for commands\n\nLoading...\nLoading...\nSession\nContext\n0.0%\nProject\nwork\nmaster\nTurn stats",
+   "at": 1792584956189
+  },
+  {
+   "n": "guest-button",
+   "found": true,
+   "pressed": "false",
+   "at": 1792584962024
+  },
+  {
+   "n": "guest-target",
+   "found": true,
+   "id": "772C519EDD1DAD9AA0508C8BC913E15E",
+   "at": 1792584966531
+  },
+  {
+   "n": "guest-ready",
+   "ready": true,
+   "text": "T15 Guest Shell\nboot: \"T15-GUEST-BOOT\"\nprojects: [{\"id\":\"path_L3RtcC9vaHBpLXRhc2s3NC9tMy1zbW9rZS9jaGF0cy93b3Jr\",\"name\":\"work\",\"directory\":\"/tmp/ohpi-task74/m3-smoke/chats/work\"}]\nsessions: [{\"id\":\"37612532-0c6e-4f9c-8b03-1fab8b37c13b\",\"title\":\"T15-SHELL session\",\"parentId\":null,\"items\":[]}]\nshells: {\"shells\":[{\"id\":\"native:[\\\"Main\\\",\\\"bg_1\\\"]\",\"sessionID\":\"37612532-0c6e-4f9c-8b03-1fab8b37c13b\",\"command\":\"for i in $(seq 1 300); do echo t15-line-$i; sleep 1; done\",\"startedAt\":1792584949536,\"background\":true}],\"ended\":[]}\nliveSessions: [{\"title\":\"T15-SHELL session\",\"items\":[]}]\nready: \"T15-GUEST-READY\"",
+   "state": {
+    "logs": [
+     "boot: \"T15-GUEST-BOOT\"",
+     "projects: [{\"id\":\"path_L3RtcC9vaHBpLXRhc2s3NC9tMy1zbW9rZS9jaGF0cy93b3Jr\",\"name\":\"work\",\"directory\":\"/tmp/ohpi-task74/m3-smoke/chats/work\"}]",
+     "sessions: [{\"id\":\"37612532-0c6e-4f9c-8b03-1fab8b37c13b\",\"title\":\"T15-SHELL session\",\"parentId\":null,\"items\":[]}]",
+     "shells: {\"shells\":[{\"id\":\"native:[\\\"Main\\\",\\\"bg_1\\\"]\",\"sessionID\":\"37612532-0c6e-4f9c-8b03-1fab8b37c13b\",\"command\":\"for i in $(seq 1 300); do echo t15-line-$i; sleep 1; done\",\"startedAt\":1792584949536,\"background\":true}],\"ended\":[]}",
+     "liveSessions: [{\"title\":\"T15-SHELL session\",\"items\":[]}]",
+     "ready: \"T15-GUEST-READY\""
+    ],
+    "projects": {
+     "kind": "projects",
+     "state": "ready",
+     "projects": [
+      {
+       "id": "path_L3RtcC9vaHBpLXRhc2s3NC9tMy1zbW9rZS9jaGF0cy93b3Jr",
+       "name": "work",
+       "directory": "/tmp/ohpi-task74/m3-smoke/chats/work"
+      }
+     ]
+    },
+    "project": {
+     "id": "path_L3RtcC9vaHBpLXRhc2s3NC9tMy1zbW9rZS9jaGF0cy93b3Jr",
+     "name": "work",
+     "directory": "/tmp/ohpi-task74/m3-smoke/chats/work"
+    },
+    "sessions": {
+     "kind": "sessions",
+     "projectId": "path_L3RtcC9vaHBpLXRhc2s3NC9tMy1zbW9rZS9jaGF0cy93b3Jr",
+     "state": "ready",
+     "coverage": [
+      {
+       "directory": "/tmp/ohpi-task74/m3-smoke/chats/work",
+       "state": "ready"
+      }
+     ],
+     "sessions": [
+      {
+       "id": "37612532-0c6e-4f9c-8b03-1fab8b37c13b",
+       "title": "T15-SHELL session",
+       "projectId": "path_L3RtcC9vaHBpLXRhc2s3NC9tMy1zbW9rZS9jaGF0cy93b3Jr",
+       "directory": "/tmp/ohpi-task74/m3-smoke/chats/work",
+       "parentId": null,
+       "createdAt": 1792584918933,
+       "updatedAt": 1792584950568,
+       "archivedAt": null,
+       "worktree": null,
+       "activity": "running",
+       "outcome": null,
+       "items": []
+      }
+     ]
+    },
+    "shellSessionId": "37612532-0c6e-4f9c-8b03-1fab8b37c13b",
+    "shells": {
+     "kind": "shells",
+     "scope": {
+      "kind": "session",
+      "sessionId": "37612532-0c6e-4f9c-8b03-1fab8b37c13b"
+     },
+     "shells": [
+      {
+       "id": "native:[\"Main\",\"bg_1\"]",
+       "sessionID": "37612532-0c6e-4f9c-8b03-1fab8b37c13b",
+       "command": "for i in $(seq 1 300); do echo t15-line-$i; sleep 1; done",
+       "startedAt": 1792584949536,
+       "background": true
+      }
+     ],
+     "ended": []
+    },
+    "stopped": true,
+    "shellId": "native:[\"Main\",\"bg_1\"]",
+    "readAttempts": [],
+    "liveSessions": {
+     "kind": "sessions",
+     "projectId": "path_L3RtcC9vaHBpLXRhc2s3NC9tMy1zbW9rZS9jaGF0cy93b3Jr",
+     "state": "ready",
+     "coverage": [
+      {
+       "directory": "/tmp/ohpi-task74/m3-smoke/chats/work",
+       "state": "ready"
+      }
+     ],
+     "sessions": [
+      {
+       "id": "37612532-0c6e-4f9c-8b03-1fab8b37c13b",
+       "title": "T15-SHELL session",
+       "projectId": "path_L3RtcC9vaHBpLXRhc2s3NC9tMy1zbW9rZS9jaGF0cy93b3Jr",
+       "directory": "/tmp/ohpi-task74/m3-smoke/chats/work",
+       "parentId": null,
+       "createdAt": 1792584918933,
+       "updatedAt": 1792584950568,
+       "archivedAt": null,
+       "worktree": null,
+       "activity": "running",
+       "outcome": null,
+       "items": []
+      }
+     ]
+    }
+   },
+   "at": 1792584966534
+  },
+  {
+   "n": "guest-shell",
+   "shells": {
+    "kind": "shells",
+    "scope": {
+     "kind": "session",
+     "sessionId": "37612532-0c6e-4f9c-8b03-1fab8b37c13b"
+    },
+    "shells": [
+     {
+      "id": "native:[\"Main\",\"bg_1\"]",
+      "sessionID": "37612532-0c6e-4f9c-8b03-1fab8b37c13b",
+      "command": "for i in $(seq 1 300); do echo t15-line-$i; sleep 1; done",
+      "startedAt": 1792584949536,
+      "background": true
+     }
+    ],
+    "ended": []
+   },
+   "shellOutput": {
+    "cursor": 219,
+    "output": "t15-line-1\nt15-line-2\nt15-line-3\nt15-line-4\nt15-line-5\nt15-line-6\nt15-line-7\nt15-line-8\nt15-line-9\nt15-line-10\nt15-line-11\nt15-line-12\nt15-line-13\nt15-line-14\nt15-line-15\nt15-line-16\nt15-line-17\nt15-line-18\nt15-line-19\n",
+    "skipped": false
+   },
+   "stopResult": {
+    "stopped": true
+   },
+   "stopped": true,
+   "text": "T15 Guest Shell\nboot: \"T15-GUEST-BOOT\"\nprojects: [{\"id\":\"path_L3RtcC9vaHBpLXRhc2s3NC9tMy1zbW9rZS9jaGF0cy93b3Jr\",\"name\":\"work\",\"directory\":\"/tmp/ohpi-task74/m3-smoke/chats/work\"}]\nsessions: [{\"id\":\"37612532-0c6e-4f9c-8b03-1fab8b37c13b\",\"title\":\"T15-SHELL session\",\"parentId\":null,\"items\":[]}]\nshells: {\"shells\":[{\"id\":\"native:[\\\"Main\\\",\\\"bg_1\\\"]\",\"sessionID\":\"37612532-0c6e-4f9c-8b03-1fab8b37c13b\",\"command\":\"for i in $(seq 1 300); do echo t15-line-$i; sleep 1; done\",\"startedAt\":1792584949536,\"background\":true}],\"ended\":[]}\nliveSessions: [{\"title\":\"T15-SHELL session\",\"items\":[]}]\nready: \"T15-GUEST-READY\"\nshellOutput: {\"cursor\":219,\"output\":\"t15-line-1\\nt15-line-2\\nt15-line-3\\nt15-line-4\\nt15-line-5\\nt15-line-6\\nt15-line-7\\nt15-line-8\\nt15-line-9\\nt15-line-10\\nt15-line-11\\nt15-line-12\\nt15-line-13\\nt15-line-14\\nt15-line-15\\nt15-line-16\\nt15-line-17\\nt15-line-18\\nt15-line-19\\n\",\"skipped\":false}\nshellStop: {\"stopped\":true}",
+   "at": 1792584969362
+  }
+ ],
+ "timing": {
+  "panelOpenedToGuestReplyMs": 2762,
+  "approvedToStopMs": 830,
+  "firstReadMs": 0,
+  "readAttempts": [],
+  "hostShellOutputApi": [
+   {
+    "method": "GET",
+    "url": "/api/agent/v1/sessions/37612532-0c6e-4f9c-8b03-1fab8b37c13b/shell/jobs/native%3A%5B%22Main%22%2C%22bg_1%22%5D/output?epoch=b65ee032-63eb-4e74-aa52-d3da79bf74a1&workerGeneration=28bbd961-24a6-49fc-b3c1-8e0d58f67c93&cursor=0&tailBytes=2048",
+    "start": 83262.249517,
+    "status": 200,
+    "end": 83264.29943,
+    "durationMs": 2050
+   }
+  ],
+  "hostShellStopApi": [
+   {
+    "method": "POST",
+    "url": "/api/agent/v1/sessions/37612532-0c6e-4f9c-8b03-1fab8b37c13b/shell/jobs/native%3A%5B%22Main%22%2C%22bg_1%22%5D/stop",
+    "start": 83264.301229,
+    "status": 200,
+    "end": 83265.129007,
+    "durationMs": 828
+   }
+  ]
+ },
+ "network": [
+  {
+   "method": "GET",
+   "url": "/api/agent/v1/workspaces/ws_955fa4b9-c4af-4146-b1a6-b86763fc47f5/shell/jobs",
+   "start": 83241.150292,
+   "status": 200,
+   "end": 83241.160501,
+   "durationMs": 10
+  },
+  {
+   "method": "GET",
+   "url": "/api/agent/v1/workspaces/ws_955fa4b9-c4af-4146-b1a6-b86763fc47f5/shell/jobs",
+   "start": 83241.395153,
+   "status": 200,
+   "end": 83245.484437,
+   "durationMs": 4089
+  },
+  {
+   "method": "GET",
+   "url": "/api/agent/v1/workspaces/ws_955fa4b9-c4af-4146-b1a6-b86763fc47f5/shell/jobs",
+   "start": 83249.222708,
+   "status": 200,
+   "end": 83249.231239,
+   "durationMs": 9
+  },
+  {
+   "method": "GET",
+   "url": "/api/agent/v1/workspaces/ws_955fa4b9-c4af-4146-b1a6-b86763fc47f5/shell/jobs",
+   "start": 83252.016237,
+   "status": 200,
+   "end": 83256.783382,
+   "durationMs": 4767
+  },
+  {
+   "method": "GET",
+   "url": "/api/agent/v1/sessions/37612532-0c6e-4f9c-8b03-1fab8b37c13b/shell/jobs/native%3A%5B%22Main%22%2C%22bg_1%22%5D/output?epoch=b65ee032-63eb-4e74-aa52-d3da79bf74a1&workerGeneration=28bbd961-24a6-49fc-b3c1-8e0d58f67c93&cursor=0&tailBytes=2048",
+   "start": 83262.249517,
+   "status": 200,
+   "end": 83264.29943,
+   "durationMs": 2050
+  },
+  {
+   "method": "POST",
+   "url": "/api/agent/v1/sessions/37612532-0c6e-4f9c-8b03-1fab8b37c13b/shell/jobs/native%3A%5B%22Main%22%2C%22bg_1%22%5D/stop",
+   "start": 83264.301229,
+   "status": 200,
+   "end": 83265.129007,
+   "durationMs": 828
+  }
+ ],
+ "afterStop": {
+  "status": 200,
+  "running": [],
+  "ended": [
+   {
+    "jobId": "native:[\"Main\",\"bg_1\"]",
+    "reason": "stopped"
+   }
+  ]
+ }
+}

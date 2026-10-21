@@ -1,6 +1,6 @@
 import React from 'react';
+import type { SkillRepositoryInstallRequest } from '@openchamber/agent-contract';
 import { toast } from '@/components/ui';
-
 import {
   Dialog,
   DialogContent,
@@ -17,171 +17,108 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Icon } from "@/components/icon/Icon";
+import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
-
-import type { SkillsCatalogItem } from '@/lib/api/types';
-import { useSkillsCatalogStore } from '@/stores/useSkillsCatalogStore';
+import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
+import { useSkillsCatalogStore, type SkillsCatalogItem } from '@/stores/useSkillsCatalogStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
-import { InstallConflictsDialog, type ConflictDecision, type SkillConflict } from './InstallConflictsDialog';
-import {
-  SKILL_LOCATION_OPTIONS,
-  locationPartsFrom,
-  locationValueFrom,
-  type SkillLocationValue,
-} from '../skillLocations';
+import { InstallConflictsDialog, type SkillConflict, type ConflictDecision } from './InstallConflictsDialog';
+
+type InstallInput = Omit<SkillRepositoryInstallRequest, 'expectedSourceRevision'>;
 
 interface InstallSkillDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  item: SkillsCatalogItem | null;
+  items: SkillsCatalogItem[];
 }
 
-export const InstallSkillDialog: React.FC<InstallSkillDialogProps> = ({ open, onOpenChange, item }) => {
+export const InstallSkillDialog: React.FC<InstallSkillDialogProps> = ({ open, onOpenChange, items }) => {
   const { t } = useI18n();
-  const installSkills = useSkillsCatalogStore((s) => s.installSkills);
-  const isInstalling = useSkillsCatalogStore((s) => s.isInstalling);
-  const [scope, setScope] = React.useState<'user' | 'project'>('user');
-  const [targetSource, setTargetSource] = React.useState<'opencode' | 'agents'>('opencode');
-  const projects = useProjectsStore((s) => s.projects);
-  const activeProjectId = useProjectsStore((s) => s.activeProjectId);
+  const installSkills = useSkillsCatalogStore(state => state.installSkills);
+  const loadSource = useSkillsCatalogStore(state => state.loadSource);
+  const isInstalling = useSkillsCatalogStore(state => state.isInstalling);
+  const projects = useProjectsStore(state => state.projects);
+  const activeProjectId = useProjectsStore(state => state.activeProjectId);
+  const settingsDirectory = useSettingsDirectory();
+  const [scope, setScope] = React.useState<'workspace' | 'agent'>('agent');
   const [targetProjectId, setTargetProjectId] = React.useState<string | null>(null);
-  const [conflictsOpen, setConflictsOpen] = React.useState(false);
   const [conflicts, setConflicts] = React.useState<SkillConflict[]>([]);
-  const [baseRequest, setBaseRequest] = React.useState<{
-    source: string;
-    subpath?: string;
-    scope: 'user' | 'project';
-    targetSource: 'opencode' | 'agents';
-    skillDir: string;
-    directoryOverride?: string | null;
-  } | null>(null);
+  const [conflictsOpen, setConflictsOpen] = React.useState(false);
+  const [baseRequest, setBaseRequest] = React.useState<{ input: InstallInput; directory: string } | null>(null);
 
   React.useEffect(() => {
     if (!open) return;
-    setScope('user');
-    setTargetSource('opencode');
+    setScope('agent');
     setTargetProjectId(activeProjectId);
-    setConflictsOpen(false);
     setConflicts([]);
+    setConflictsOpen(false);
     setBaseRequest(null);
   }, [open, activeProjectId]);
 
-  const locationLabelText = React.useCallback((value: SkillLocationValue) => {
-    switch (value) {
-      case 'project-opencode':
-        return t('settings.skills.location.option.projectOpencode.label');
-      case 'user-agents':
-        return t('settings.skills.location.option.userAgents.label');
-      case 'project-agents':
-        return t('settings.skills.location.option.projectAgents.label');
-      default:
-        return t('settings.skills.location.option.userOpencode.label');
-    }
-  }, [t]);
-
-  const locationDescriptionText = React.useCallback((value: SkillLocationValue) => {
-    switch (value) {
-      case 'project-opencode':
-        return t('settings.skills.location.option.projectOpencode.description');
-      case 'user-agents':
-        return t('settings.skills.location.option.userAgents.description');
-      case 'project-agents':
-        return t('settings.skills.location.option.projectAgents.description');
-      default:
-        return t('settings.skills.location.option.userOpencode.description');
-    }
-  }, [t]);
-
   const resolvedTargetProjectId = React.useMemo(() => {
-    if (projects.length === 0) {
-      return null;
-    }
-    if (targetProjectId && projects.some((p) => p.id === targetProjectId)) {
-      return targetProjectId;
-    }
-    if (activeProjectId && projects.some((p) => p.id === activeProjectId)) {
-      return activeProjectId;
-    }
+    if (projects.length === 0) return null;
+    if (targetProjectId && projects.some(project => project.id === targetProjectId)) return targetProjectId;
+    if (activeProjectId && projects.some(project => project.id === activeProjectId)) return activeProjectId;
     return projects[0]?.id ?? null;
   }, [activeProjectId, projects, targetProjectId]);
 
-  const directoryOverride = React.useMemo(() => {
-    if (scope !== 'project') {
-      return null;
-    }
-    const id = resolvedTargetProjectId;
-    if (!id) {
-      return null;
-    }
-    const project = projects.find((p) => p.id === id);
-    return project?.path ?? null;
-  }, [projects, resolvedTargetProjectId, scope]);
+  const selectedProject = projects.find(project => project.id === resolvedTargetProjectId) ?? null;
+  // The native install call always resolves one workspace; `workspace` scope
+  // writes into the chosen project while `agent` scope writes the global root.
+  const directory = scope === 'workspace' ? selectedProject?.path ?? null : settingsDirectory;
 
-  const doInstall = async (request: {
-    source: string;
-    subpath?: string;
-    scope: 'user' | 'project';
-    targetSource: 'opencode' | 'agents';
-    skillDir: string;
-    directoryOverride?: string | null;
-    conflictDecisions?: Record<string, ConflictDecision>;
-  }) => {
-    const result = await installSkills({
-      source: request.source,
-      subpath: request.subpath,
-      gitIdentityId: item?.gitIdentityId,
-      scope: request.scope,
-      targetSource: request.targetSource,
-      selections: [{ skillDir: request.skillDir }],
-      conflictPolicy: 'prompt',
-      conflictDecisions: request.conflictDecisions,
-    }, { directory: request.directoryOverride ?? null });
+  const doInstall = async (input: InstallInput, targetDirectory: string) => {
+    const result = await installSkills(input, { directory: targetDirectory });
+    if (!result.ok) {
+      if (result.error.kind === 'conflicts') {
+        setBaseRequest({ input, directory: targetDirectory });
+        setConflicts(result.error.conflicts ?? []);
+        setConflictsOpen(true);
+        return;
+      }
+      if (result.error.kind === 'authRequired') {
+        toast.error(result.error.message || t('settings.skills.catalog.installSkill.toast.authRequired'));
+        return;
+      }
+      toast.error(result.error.message || t('settings.skills.catalog.installSkill.toast.installFailed'));
+      return;
+    }
 
-    if (result.ok) {
+    if (result.commit && (!result.commit.apply || !['applied', 'no-active-workers'].includes(result.commit.apply.status))) {
+      toast.warning(t('settings.skills.page.status.sourceCommittedApplyFailed'));
+    } else if (result.skipped.length > 0) {
+      toast.warning(t('settings.skills.catalog.installSkill.toast.skipped', {
+        skills: result.skipped.map(entry => `${entry.skillName} (${entry.reason})`).join(', '),
+      }));
+    } else {
       toast.success(t('settings.skills.catalog.installSkill.toast.installed'));
-      onOpenChange(false);
-      return;
     }
-
-    if (result.error?.kind === 'conflicts') {
-      setBaseRequest({
-        source: request.source,
-        subpath: request.subpath,
-        scope: request.scope,
-        targetSource: request.targetSource,
-        skillDir: request.skillDir,
-        directoryOverride: request.directoryOverride ?? null,
-      });
-      setConflicts(result.error.conflicts);
-      setConflictsOpen(true);
-      return;
-    }
-
-    if (result.error?.kind === 'authRequired') {
-      toast.error(result.error.message || t('settings.skills.catalog.installSkill.toast.authRequired'));
-      return;
-    }
-
-    toast.error(result.error?.message || t('settings.skills.catalog.installSkill.toast.installFailed'));
+    onOpenChange(false);
+    await Promise.all([...new Set(items.map(item => item.sourceId))].filter(Boolean).map(sourceId => loadSource(sourceId, { refresh: true })));
   };
 
-  if (!item) {
-    return null;
-  }
+  if (items.length === 0) return null;
+
+  const canInstall = Boolean(directory)
+    && !isInstalling
+    && items.every(item => item.installable);
 
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{t('settings.skills.catalog.installSkill.title')}</DialogTitle>
+            <DialogTitle>
+              {items.length === 1 ? t('settings.skills.catalog.installSkill.title') : t('settings.skills.catalog.installFromRepo.title')}
+            </DialogTitle>
             <DialogDescription>
-              {t('settings.skills.catalog.installSkill.descriptionPrefix')}
-              {' '}
-              <span className="font-semibold text-foreground">{item.skillName}</span>
-              {' '}
-              {t('settings.skills.catalog.installSkill.descriptionSuffix')}
+              {items.length === 1 ? (
+                <>
+                  {t('settings.skills.catalog.installSkill.descriptionPrefix')}
+                  {' '}
+                  <span className="font-semibold text-foreground">{items[0].skillName}</span>
+                </>
+              ) : t('settings.skills.catalog.installFromRepo.selectedCount', { selected: items.length, total: items.length })}
             </DialogDescription>
           </DialogHeader>
 
@@ -189,36 +126,35 @@ export const InstallSkillDialog: React.FC<InstallSkillDialogProps> = ({ open, on
             <div className="flex flex-wrap items-center gap-2">
               <span className="typography-ui-label text-foreground">{t('settings.skills.catalog.installSkill.field.destination')}</span>
               <Select
-                value={locationValueFrom(scope, targetSource)}
-                onValueChange={(v) => {
-                  const next = locationPartsFrom(v as SkillLocationValue);
-                  setScope(next.scope);
-                  setTargetSource(next.source === 'agents' ? 'agents' : 'opencode');
+                value={scope}
+                onValueChange={value => {
+                  if (value === 'workspace' || value === 'agent') setScope(value);
                 }}
               >
                 <SelectTrigger className="w-fit gap-1.5">
-                  {scope === 'user' ? <Icon name="user-3" className="h-3.5 w-3.5" /> : <Icon name="folder" className="h-3.5 w-3.5" />}
-                  {targetSource === 'agents' ? <Icon name="robot-2" className="h-3.5 w-3.5" /> : null}
-                  <span>{locationLabelText(locationValueFrom(scope, targetSource))}</span>
+                  {scope === 'agent'
+                    ? <Icon name="user-3" className="h-3.5 w-3.5" />
+                    : <Icon name="folder" className="h-3.5 w-3.5" />}
+                  <span>{scope === 'agent' ? t('settings.common.scope.global') : t('settings.common.scope.project')}</span>
                 </SelectTrigger>
-                <SelectContent align="start">
-                  {SKILL_LOCATION_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value} className="pr-2 [&>span:first-child]:hidden">
-                      <div className="flex flex-col gap-0.5">
-                        <div className="flex items-center gap-2">
-                          {option.scope === 'user' ? <Icon name="user-3" className="h-3.5 w-3.5" /> : <Icon name="folder" className="h-3.5 w-3.5" />}
-                          {option.source === 'agents' ? <Icon name="robot-2" className="h-3.5 w-3.5" /> : null}
-                          <span>{locationLabelText(option.value)}</span>
-                        </div>
-                        <span className="typography-micro text-muted-foreground ml-5">{locationDescriptionText(option.value)}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
+                <SelectContent align="start" portalToBody>
+                  <SelectItem value="agent" className="pr-2 [&>span:first-child]:hidden">
+                    <div className="flex items-center gap-2">
+                      <Icon name="user-3" className="h-3.5 w-3.5" />
+                      <span>{t('settings.common.scope.global')}</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="workspace" className="pr-2 [&>span:first-child]:hidden">
+                    <div className="flex items-center gap-2">
+                      <Icon name="folder" className="h-3.5 w-3.5" />
+                      <span>{t('settings.common.scope.project')}</span>
+                    </div>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {scope === 'project' && (
+            {scope === 'workspace' ? (
               <div className="flex flex-wrap items-center gap-2">
                 <span className="typography-ui-label text-foreground">{t('settings.skills.catalog.installSkill.field.project')}</span>
                 {projects.length === 0 ? (
@@ -226,52 +162,47 @@ export const InstallSkillDialog: React.FC<InstallSkillDialogProps> = ({ open, on
                 ) : (
                   <Select
                     value={resolvedTargetProjectId ?? ''}
-                    onValueChange={(v) => setTargetProjectId(v)}
+                    onValueChange={value => setTargetProjectId(value)}
                     disabled={projects.length === 1}
                   >
                     <SelectTrigger className="w-fit">
                       <SelectValue placeholder={t('settings.skills.catalog.installSkill.field.chooseProjectPlaceholder')} />
                     </SelectTrigger>
-                    <SelectContent align="start">
-                      {projects.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.label || p.path}
+                    <SelectContent align="start" portalToBody>
+                      {projects.map(project => (
+                        <SelectItem key={project.id} value={project.id}>
+                          {project.label || project.path}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 )}
               </div>
-            )}
+            ) : null}
 
-            {item.warnings?.length ? (
+            {items.flatMap(item => item.warnings ?? []).length ? (
               <div className="typography-micro text-[var(--status-warning)] bg-[var(--status-warning)]/10 px-2 py-1.5 rounded">
-                {item.warnings.join(' · ')}
+                {items.flatMap(item => item.warnings ?? []).join(' · ')}
               </div>
             ) : null}
           </div>
 
           <DialogFooter>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => onOpenChange(false)}
-            >
+            <Button size="sm" variant="ghost" onClick={() => onOpenChange(false)}>
               {t('settings.common.actions.cancel')}
             </Button>
             <Button
               size="sm"
-              disabled={isInstalling || !item.installable || (scope === 'project' && !directoryOverride)}
-              onClick={() =>
+              disabled={!canInstall}
+              onClick={() => {
+                if (!directory) return;
                 void doInstall({
-                  source: item.repoSource,
-                  subpath: item.repoSubpath,
+                  sourceId: items[0].sourceId,
                   scope,
-                  targetSource,
-                  skillDir: item.skillDir,
-                  directoryOverride,
-                })
-              }
+                  selections: items.map(item => ({ skillDir: item.skillDir })),
+                  conflictPolicy: 'prompt',
+                }, directory);
+              }}
             >
               {isInstalling ? t('settings.skills.catalog.installSkill.actions.installing') : t('settings.skills.catalog.installSkill.actions.install')}
             </Button>
@@ -283,17 +214,12 @@ export const InstallSkillDialog: React.FC<InstallSkillDialogProps> = ({ open, on
         open={conflictsOpen}
         onOpenChange={setConflictsOpen}
         conflicts={conflicts}
-        onConfirm={(decisions) => {
+        onConfirm={(decisions: { [skillName: string]: ConflictDecision }) => {
           if (!baseRequest) return;
           void doInstall({
-            source: baseRequest.source,
-            subpath: baseRequest.subpath,
-            scope: baseRequest.scope,
-            targetSource: baseRequest.targetSource,
-            skillDir: baseRequest.skillDir,
-            conflictDecisions: decisions,
-            directoryOverride: baseRequest.directoryOverride ?? null,
-          });
+            ...baseRequest.input,
+            conflictDecisions: Object.entries(decisions).map(([skillName, decision]) => ({ skillName, decision })),
+          }, baseRequest.directory);
           setConflictsOpen(false);
         }}
       />

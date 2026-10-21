@@ -1,11 +1,13 @@
+import { parseNativeReadPath, toolDescription, toolInputPath } from '@/lib/toolHelpers';
+import type { ToolCallPart } from '@openchamber/agent-contract';
 import React from 'react';
 import { useMobileAppActions } from '@/apps/mobileAppContext';
 import { cn } from '@/lib/utils';
 import type { TurnActivityRecord as TurnActivityPart } from '../../lib/turns/types';
-import type { ToolPart as ToolPartType } from '@opencode-ai/sdk/v2';
 import type { StreamPhase } from '../types';
 import type { ToolPopupContent } from '../types';
 import ToolPart from './ToolPart';
+import { BlockLine } from './BlockLine';
 import { MinDurationShineText } from './MinDurationShineText';
 import { ToolRevealOnMount } from './ToolRevealOnMount';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
@@ -19,12 +21,12 @@ import { isExpandableTool, isStandaloneTool, isStaticTool } from './toolRenderUt
 import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useUIStore } from '@/stores/useUIStore';
-import { useSkillsStore } from '@/stores/useSkillsStore';
+
 import ReasoningPart from './ReasoningPart';
 import JustificationBlock from './JustificationBlock';
 import { areRenderRelevantPartsEqual } from '../renderCompare';
 import { getExternalFaviconUrl } from '@/lib/url';
-import { getDirectoryForFilePath, getRelativeFilePath, isFilePathWithinDirectory, normalizeFilePath, toAbsoluteFilePath } from '@/lib/path-utils';
+import { getDirectoryForFilePath, getRelativeFilePath, isFilePathWithinDirectory, toAbsoluteFilePath } from '@/lib/path-utils';
 
 const TOOL_ROW_TEXT_CLASS = '!text-[length:var(--text-meta)] !leading-5 sm:!leading-6 tracking-normal';
 const TOOL_ROW_TITLE_CLASS = cn('typography-meta font-medium', TOOL_ROW_TEXT_CLASS);
@@ -32,6 +34,9 @@ const TOOL_ROW_DESCRIPTION_CLASS = cn('typography-meta', TOOL_ROW_TEXT_CLASS);
 
 interface ProgressiveGroupProps {
     parts: TurnActivityPart[];
+    contextParts?: TurnActivityPart[];
+    sessionId?: string;
+    directory?: string | null;
     isExpanded: boolean;
     collapsedPreviewCount?: number;
     onToggle: () => void;
@@ -70,17 +75,9 @@ const ExternalLinkFavicon: React.FC<{ href: string }> = ({ href }) => {
 };
 
 const isActivityRunning = (activity: TurnActivityPart): boolean => {
-    if (activity.kind !== 'tool') return false;
-    const part = activity.part as ToolPartType;
-    const status = (part.state?.status as string) || undefined;
-    const isFinalized = status === 'completed' || status === 'error' || status === 'aborted' || status === 'failed' || status === 'timeout' || status === 'cancelled';
-    if (isFinalized) {
-        return false;
-    }
-    if (status === 'running' || status === 'pending' || status === 'started') {
-        return true;
-    }
-    return typeof activity.endedAt !== 'number';
+    const part = activity.part;
+    return activity.kind === 'tool' && part.type === 'tool_call'
+        && (part.status === 'pending_approval' || part.status === 'approved' || part.status === 'running');
 };
 
 /**
@@ -96,149 +93,14 @@ const sortPartsByTime = (parts: TurnActivityPart[]): TurnActivityPart[] => parts
  * Extract a short filename from a tool part's input (for aggregation display).
  */
 const getToolFileName = (activity: TurnActivityPart): string | null => {
-    const part = activity.part as ToolPartType;
-    const state = part.state as { input?: Record<string, unknown>; metadata?: Record<string, unknown> } | undefined;
-    const input = state?.input;
-    const metadata = state?.metadata;
-
-    const filePath =
-        (input?.filePath as string) ||
-        (input?.file_path as string) ||
-        (input?.path as string) ||
-        (metadata?.filePath as string) ||
-        (metadata?.file_path as string) ||
-        (metadata?.path as string);
-
-    if (typeof filePath === 'string' && filePath.trim().length > 0) {
-        const lastSlash = filePath.lastIndexOf('/');
-        return lastSlash >= 0 ? filePath.slice(lastSlash + 1) : filePath;
-    }
-
-    return null;
+    const path = getToolFilePath(activity);
+    const displayPath = path ? parseNativeReadPath(path).path : null;
+    return displayPath ? displayPath.slice(displayPath.lastIndexOf('/') + 1) : null;
 };
-
 const getToolFilePath = (activity: TurnActivityPart): string | null => {
-    const part = activity.part as ToolPartType;
-    const state = part.state as { input?: Record<string, unknown>; metadata?: Record<string, unknown> } | undefined;
-    const input = state?.input;
-    const metadata = state?.metadata;
-
-    const filePath =
-        (input?.filePath as string) ||
-        (input?.file_path as string) ||
-        (input?.path as string) ||
-        (metadata?.filePath as string) ||
-        (metadata?.file_path as string) ||
-        (metadata?.path as string);
-
-    return typeof filePath === 'string' && filePath.trim().length > 0 ? filePath : null;
+    return activity.part.type === 'tool_call' ? toolInputPath(activity.part.input) : null;
 };
 
-const getToolSkillDirectory = (activity: TurnActivityPart): string | null => {
-    const part = activity.part as ToolPartType;
-    const state = part.state as { metadata?: Record<string, unknown> } | undefined;
-    const dir = state?.metadata?.dir;
-
-    return typeof dir === 'string' && dir.trim().length > 0 ? dir : null;
-};
-
-const toTodoStatusKey = (value: unknown): 'pending' | 'in_progress' | 'completed' | 'cancelled' | null => {
-    if (typeof value !== 'string') {
-        return null;
-    }
-    const normalized = value.trim().toLowerCase();
-    if (normalized === 'pending') return 'pending';
-    if (normalized === 'in_progress' || normalized === 'in progress' || normalized === 'inprogress') return 'in_progress';
-    if (normalized === 'completed' || normalized === 'done') return 'completed';
-    if (normalized === 'cancelled' || normalized === 'canceled') return 'cancelled';
-    return null;
-};
-
-const formatTodoSummary = (todos: unknown[]): string | null => {
-    if (todos.length === 0) {
-        return '0 tasks';
-    }
-
-    let pending = 0;
-    let inProgress = 0;
-    for (const todo of todos) {
-        if (!todo || typeof todo !== 'object') {
-            continue;
-        }
-        const status = toTodoStatusKey((todo as { status?: unknown }).status);
-        if (!status) {
-            continue;
-        }
-        if (status === 'pending') pending += 1;
-        if (status === 'in_progress') inProgress += 1;
-    }
-
-    const activeCount = pending + inProgress;
-    if (activeCount === 0) {
-        return '0 tasks';
-    }
-
-    return `${activeCount} ${activeCount === 1 ? 'task' : 'tasks'}`;
-};
-
-const getTodoSummaryFromActivity = (activity: TurnActivityPart): string | null => {
-    const part = activity.part as ToolPartType;
-    const state = part.state as { input?: Record<string, unknown>; output?: unknown } | undefined;
-    const input = state?.input;
-    const output = state?.output;
-
-    if (Array.isArray(input?.todos)) {
-        const summary = formatTodoSummary(input.todos);
-        if (summary) return summary;
-    }
-
-    if (Array.isArray(output)) {
-        const summary = formatTodoSummary(output);
-        if (summary) return summary;
-    }
-
-    if (output && typeof output === 'object' && Array.isArray((output as { todos?: unknown }).todos)) {
-        const summary = formatTodoSummary((output as { todos: unknown[] }).todos);
-        if (summary) return summary;
-    }
-
-    if (typeof output === 'string' && output.trim().length > 0) {
-        try {
-            const parsed = JSON.parse(output) as unknown;
-            if (Array.isArray(parsed)) {
-                const summary = formatTodoSummary(parsed);
-                if (summary) return summary;
-            }
-            if (parsed && typeof parsed === 'object' && Array.isArray((parsed as { todos?: unknown }).todos)) {
-                const summary = formatTodoSummary((parsed as { todos: unknown[] }).todos);
-                if (summary) return summary;
-            }
-        } catch {
-            // Ignore non-JSON output.
-        }
-    }
-
-    return null;
-};
-
-const getToolReadOffset = (activity: TurnActivityPart): number | undefined => {
-    const part = activity.part as ToolPartType;
-    const state = part.state as { input?: Record<string, unknown>; metadata?: Record<string, unknown> } | undefined;
-    const input = state?.input;
-    const metadata = state?.metadata;
-
-    const rawOffset =
-        (typeof input?.offset === 'number' && Number.isFinite(input.offset) ? input.offset : undefined)
-        ?? (typeof input?.line === 'number' && Number.isFinite(input.line) ? input.line : undefined)
-        ?? (typeof metadata?.offset === 'number' && Number.isFinite(metadata.offset) ? metadata.offset : undefined)
-        ?? (typeof metadata?.line === 'number' && Number.isFinite(metadata.line) ? metadata.line : undefined);
-
-    if (typeof rawOffset !== 'number' || rawOffset <= 0) {
-        return undefined;
-    }
-
-    return Math.floor(rawOffset);
-};
 
 const renderReadFilePath = (displayPath: string, animate = true) => {
     const lastSlash = displayPath.lastIndexOf('/');
@@ -287,77 +149,24 @@ const renderReadFilePath = (displayPath: string, animate = true) => {
     );
 };
 
-const resolveSkillFilePath = (skillPathOrDir: string): string => {
-    const normalizedPath = normalizeFilePath(skillPathOrDir);
-    if (!normalizedPath) {
-        return '';
-    }
-
-    return normalizedPath.toLowerCase().endsWith('/skill.md') ? normalizedPath : `${normalizedPath}/SKILL.md`;
-};
 
 /**
- * Get a short description for a static tool (for aggregation display).
+ * Short description for a static tool row (aggregation display). Tool naming
+ * and per-tool input fields live in `@/lib/toolHelpers`; this only trims
+ * the result to the row's width and falls back to a bare file name.
  */
+const SHORT_DESCRIPTION_MAX = 50;
+
 const getToolShortDescription = (activity: TurnActivityPart): string | null => {
-    const part = activity.part as ToolPartType;
-    const toolName = part.tool?.toLowerCase() ?? '';
-    const state = part.state as { input?: Record<string, unknown>; metadata?: Record<string, unknown> } | undefined;
-    const input = state?.input;
-    const metadata = state?.metadata;
+    const part = activity.part;
+    if (part.type !== 'tool_call' && part.type !== 'tool_result') return null;
+    const described = toolDescription(part);
 
-    // For search tools, show pattern
-    if (toolName === 'grep' || toolName === 'search' || toolName === 'find' || toolName === 'ripgrep') {
-        const pattern = input?.pattern;
-        if (typeof pattern === 'string' && pattern.trim().length > 0) {
-            return pattern.length > 40 ? pattern.slice(0, 40) + '...' : pattern;
-        }
+    if (described?.kind === 'text') {
+        return described.value.length > SHORT_DESCRIPTION_MAX
+            ? `${described.value.slice(0, SHORT_DESCRIPTION_MAX)}...`
+            : described.value;
     }
-
-    // For glob, show pattern
-    if (toolName === 'glob') {
-        const pattern = input?.pattern;
-        if (typeof pattern === 'string' && pattern.trim().length > 0) {
-            return pattern.length > 40 ? pattern.slice(0, 40) + '...' : pattern;
-        }
-    }
-
-    // For web search tools, show query
-    if (toolName === 'websearch' || toolName === 'web-search' || toolName === 'search_web' || toolName === 'codesearch' || toolName === 'perplexity') {
-        const query = input?.query;
-        if (typeof query === 'string' && query.trim().length > 0) {
-            return query.length > 50 ? query.slice(0, 50) + '...' : query;
-        }
-    }
-
-    // For skill, show name
-    if (toolName === 'skill') {
-        const name = input?.name;
-        if (typeof name === 'string' && name.trim().length > 0) {
-            return name;
-        }
-    }
-
-    // For fetch-url tools, show URL
-    if (toolName === 'webfetch' || toolName === 'fetch' || toolName === 'curl' || toolName === 'wget') {
-        const url =
-            (typeof input?.url === 'string' && input.url) ||
-            (typeof input?.URL === 'string' && input.URL) ||
-            (typeof metadata?.url === 'string' && metadata.url) ||
-            (typeof metadata?.URL === 'string' && metadata.URL) ||
-            '';
-
-        if (typeof url === 'string' && url.trim().length > 0) {
-            return url.trim();
-        }
-    }
-
-    // For todo tools, show status summary without task names
-    if (toolName === 'todowrite' || toolName === 'todoread') {
-        return getTodoSummaryFromActivity(activity);
-    }
-
-    // Fallback: try filename
     return getToolFileName(activity);
 };
 
@@ -370,6 +179,9 @@ type AggregatedRow =
 
 interface ExpandableToolRowProps {
     activity: TurnActivityPart;
+    pairedCall?: ToolCallPart;
+    sessionId?: string;
+    directory?: string | null;
     isExpanded: boolean;
     isMobile: boolean;
     onToggleTool: (toolId: string) => void;
@@ -379,6 +191,9 @@ interface ExpandableToolRowProps {
 
 const ExpandableToolRow: React.FC<ExpandableToolRowProps> = ({
     activity,
+    pairedCall,
+    sessionId,
+    directory,
     isExpanded,
     isMobile,
     onToggleTool,
@@ -386,12 +201,17 @@ const ExpandableToolRow: React.FC<ExpandableToolRowProps> = ({
     animateTailText,
 }) => {
     const handleToggle = React.useCallback(() => {
-        onToggleTool(activity.id);
-    }, [activity.id, onToggleTool]);
+        onToggleTool(activity.part.partId);
+    }, [activity.part.partId, onToggleTool]);
+
+    if (activity.part.type !== 'tool_call' && activity.part.type !== 'tool_result') return null;
 
     const content = (
         <ToolPart
-            part={activity.part as ToolPartType}
+            part={activity.part}
+            pairedCall={pairedCall}
+            sessionId={sessionId}
+            directory={directory}
             isExpanded={isExpanded}
             onToggle={handleToggle}
             isMobile={isMobile}
@@ -416,10 +236,13 @@ const ExpandableToolRow: React.FC<ExpandableToolRowProps> = ({
 const MemoExpandableToolRow = React.memo(ExpandableToolRow, (prev, next) => {
     return prev.isExpanded === next.isExpanded
         && prev.isMobile === next.isMobile
+        && prev.sessionId === next.sessionId
+        && prev.directory === next.directory
+        && prev.pairedCall === next.pairedCall
         && prev.onToggleTool === next.onToggleTool
         && prev.onShowPopup === next.onShowPopup
         && prev.animateTailText === next.animateTailText
-        && prev.activity.id === next.activity.id
+        && prev.activity.part.partId === next.activity.part.partId
         && prev.activity.kind === next.activity.kind
         && prev.activity.endedAt === next.activity.endedAt
         && areRenderRelevantPartsEqual([prev.activity.part], [next.activity.part]);
@@ -470,7 +293,7 @@ const MemoStaticGroupedToolRow = React.memo(StaticGroupedToolRow, (prev, next) =
  * Expandable tools (edit, bash, write, question) stay as individual rows.
  * Unknown tools stay as individual expandable rows (fallback).
  */
-const aggregateRows = (parts: TurnActivityPart[]): AggregatedRow[] => {
+const aggregateRows = (parts: TurnActivityPart[], pairedResultKeys: ReadonlySet<string>): AggregatedRow[] => {
     const rows: AggregatedRow[] = [];
 
     let i = 0;
@@ -490,8 +313,26 @@ const aggregateRows = (parts: TurnActivityPart[]): AggregatedRow[] => {
         }
 
         // Tool part
-        const toolPart = activity.part as ToolPartType;
-        const toolName = toolPart.tool?.toLowerCase() ?? '';
+        const toolPart = activity.part;
+        if (toolPart.type !== 'tool_call' && toolPart.type !== 'tool_result') {
+            i++;
+            continue;
+        }
+        const toolName = toolPart.toolName;
+
+        // One operation renders one row: the matched result already carries the
+        // call as paired context, so the call must not also produce a header.
+        if (toolPart.type === 'tool_call' && pairedResultKeys.has(`${activity.turnId}\n${toolPart.toolCallId}\n${toolPart.toolName}`)) {
+            i++;
+            continue;
+        }
+
+        // Result bodies and errors remain inspectable even for compact read calls.
+        if (toolPart.type === 'tool_result') {
+            rows.push({ type: 'tool-expandable', activity });
+            i++;
+            continue;
+        }
 
         if (isStandaloneTool(toolName)) {
             // Standalone tools are rendered separately, skip
@@ -536,7 +377,7 @@ const areActivityListsEqual = (left: TurnActivityPart[], right: TurnActivityPart
         const leftActivity = left[index];
         const rightActivity = right[index];
 
-        if (leftActivity.id !== rightActivity.id) {
+        if (leftActivity.part.partId !== rightActivity.part.partId) {
             return false;
         }
 
@@ -559,18 +400,17 @@ const StaticToolRowInner: React.FC<{
 }> = ({ toolName, activities, animateTailText }) => {
     const showToolFileIcons = useUIStore((state) => state.showToolFileIcons);
     // Grouped rows share one normalized name; the registry wants the full
-    // name OpenCode reported, which every activity in the group carries.
+    // name the canonical part reported, which every activity in the group carries.
     const firstPart = activities[0]?.part;
-    const presentation = useGuestToolPresentation(firstPart?.type === 'tool' ? firstPart.tool : null);
+    const presentation = useGuestToolPresentation(firstPart?.type === 'tool_call' || firstPart?.type === 'tool_result' ? firstPart.toolName : null);
     const displayName = presentation?.name ?? getToolMetadata(toolName).displayName;
     const icon = getToolIcon(toolName, presentation);
-    const isReadGroup = toolName.toLowerCase() === 'read';
+    const isReadGroup = toolName === 'read';
     const runtime = React.useContext(RuntimeAPIContext);
     const mobileActions = useMobileAppActions();
     const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
-    const skills = useSkillsStore((state) => state.skills);
+
     const hasRunningActivity = React.useMemo(() => activities.some((activity) => isActivityRunning(activity)), [activities]);
-    const skillByName = React.useMemo(() => new Map(skills.map((skill) => [skill.name, skill])), [skills]);
 
     const descriptions = React.useMemo(() => {
         const descs: string[] = [];
@@ -583,31 +423,16 @@ const StaticToolRowInner: React.FC<{
         return descs;
     }, [activities]);
 
-    const skillEntries = React.useMemo(() => {
-        if (toolName.toLowerCase() !== 'skill') return [] as Array<{ name: string; path: string }>;
 
-        const entries: Array<{ name: string; path: string }> = [];
-        for (const activity of activities) {
-            const name = getToolShortDescription(activity);
-            if (!name) continue;
-
-            const skill = skillByName.get(name);
-            const rawPath = skill?.path || getToolSkillDirectory(activity);
-            const path = rawPath ? resolveSkillFilePath(rawPath) : '';
-            if (!path || entries.some((entry) => entry.name === name && entry.path === path)) continue;
-            entries.push({ name, path });
-        }
-
-        return entries;
-    }, [activities, skillByName, toolName]);
 
     const readFileEntries = React.useMemo(() => {
         if (!isReadGroup) return [] as Array<{ path: string; displayPath: string; offset?: number }>;
 
         const entries: Array<{ path: string; displayPath: string; offset?: number }> = [];
         for (const activity of activities) {
-            const filePath = getToolFilePath(activity);
-            const offset = getToolReadOffset(activity);
+            const rawPath = getToolFilePath(activity);
+            if (!rawPath) continue;
+            const { path: filePath, line: offset } = parseNativeReadPath(rawPath);
             if (!filePath) continue;
             if (entries.some((entry) => entry.path === filePath)) continue;
             const displayPath = getRelativeFilePath(filePath, currentDirectory);
@@ -663,14 +488,8 @@ const StaticToolRowInner: React.FC<{
         uiStore.openContextFile(contextDirectory, absolutePath);
     }, [currentDirectory, mobileActions, runtime]);
 
-    const normalizedToolName = toolName.toLowerCase();
-    const isSearchGroup = normalizedToolName === 'grep'
-        || normalizedToolName === 'search'
-        || normalizedToolName === 'find'
-        || normalizedToolName === 'ripgrep'
-        || normalizedToolName === 'glob';
-    const isFetchGroup = normalizedToolName === 'webfetch' || normalizedToolName === 'fetch' || normalizedToolName === 'curl' || normalizedToolName === 'wget';
-    const isSkillGroup = normalizedToolName === 'skill';
+    const isSearchGroup = toolName === 'grep' || toolName === 'find' || toolName === 'glob';
+    const isFetchGroup = toolName === 'fetch';
 
     return (
         <div
@@ -745,25 +564,7 @@ const StaticToolRowInner: React.FC<{
                     </a>
                 ))
                 : null}
-            {isSkillGroup && skillEntries.length > 0
-                ? skillEntries.map((entry, index) => (
-                    <button
-                        key={`${entry.name}-${entry.path}-${index}`}
-                        type="button"
-                        onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            handleFileClick(entry.path);
-                        }}
-                        className={cn('!min-h-0 min-w-0 flex-1 truncate whitespace-nowrap text-left hover:opacity-90', TOOL_ROW_DESCRIPTION_CLASS)}
-                        style={{ color: 'var(--tools-description)' }}
-                        title={entry.path}
-                    >
-                        {entry.name}
-                    </button>
-                ))
-                : null}
-            {!isReadGroup && !isSearchGroup && !isFetchGroup && !isSkillGroup && descriptions.length > 0 ? (
+            {!isReadGroup && !isSearchGroup && !isFetchGroup && descriptions.length > 0 ? (
                 <Text
                     variant={animateTailText ? 'generate-effect' : 'static'}
                     className={cn('min-w-0 flex-1 truncate whitespace-nowrap', TOOL_ROW_DESCRIPTION_CLASS)}
@@ -789,6 +590,7 @@ const InlineReasoningBlock = React.memo(({ activity, streamPhase }: {
     activity: TurnActivityPart;
     streamPhase: StreamPhase;
 }) => {
+    if (activity.part.type !== 'reasoning') return null;
     return (
         <ReasoningPart
             part={activity.part}
@@ -805,6 +607,7 @@ const InlineJustificationBlock = React.memo(({ activity, actions }: {
     activity: TurnActivityPart;
     actions?: React.ReactNode;
 }) => {
+    if (activity.part.type !== 'text') return null;
     return (
         <JustificationBlock
             part={activity.part}
@@ -816,6 +619,9 @@ const InlineJustificationBlock = React.memo(({ activity, actions }: {
 
 const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
     parts,
+    contextParts,
+    sessionId,
+    directory,
     isExpanded,
     collapsedPreviewCount = 0,
     onToggle,
@@ -841,12 +647,36 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
         return sortPartsByTime(parts);
     }, [parts, shouldRenderRows]);
 
+    const pairedResultKeys = React.useMemo(() => {
+        const keys = new Set<string>();
+        for (const activity of contextParts ?? parts) {
+            if (activity.part.type === 'tool_result') {
+                keys.add(`${activity.turnId}\n${activity.part.toolCallId}\n${activity.part.toolName}`);
+            }
+        }
+        return keys;
+    }, [contextParts, parts]);
+
     const rows = React.useMemo(() => {
         if (!shouldRenderRows) {
             return [] as AggregatedRow[];
         }
-        return aggregateRows(sortedParts);
-    }, [shouldRenderRows, sortedParts]);
+        return aggregateRows(sortedParts, pairedResultKeys);
+    }, [shouldRenderRows, sortedParts, pairedResultKeys]);
+
+    const callsByTurn = React.useMemo(() => {
+        const turns = new Map<string, Map<string, ToolCallPart>>();
+        for (const activity of contextParts ?? parts) {
+            if (activity.part.type !== 'tool_call') continue;
+            let calls = turns.get(activity.turnId);
+            if (!calls) {
+                calls = new Map();
+                turns.set(activity.turnId, calls);
+            }
+            calls.set(activity.part.toolCallId, activity.part);
+        }
+        return turns;
+    }, [contextParts, parts]);
 
     const previewHiddenCount = React.useMemo(() => {
         if (isExpanded || previewCount === 0) {
@@ -878,7 +708,7 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
         switch (row.type) {
             case 'reasoning':
                 return wrapRow(
-                    row.activity.id,
+                    row.activity.part.partId,
                     <>
                         <InlineReasoningBlock
                             activity={row.activity}
@@ -889,7 +719,7 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
 
             case 'justification':
                 return wrapRow(
-                    row.activity.id,
+                    row.activity.part.partId,
                     <>
                         <InlineJustificationBlock
                             activity={row.activity}
@@ -901,36 +731,46 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
             case 'tool-expandable':
                 return (
                     <MemoExpandableToolRow
-                        key={row.activity.id}
+                        key={row.activity.part.type === 'tool_result'
+                            ? callsByTurn.get(row.activity.turnId)?.get(row.activity.part.toolCallId)?.partId ?? row.activity.part.partId
+                            : row.activity.part.partId}
                         activity={row.activity}
-                        isExpanded={expandedTools.has(row.activity.id)}
+                        pairedCall={row.activity.part.type === 'tool_result' ? callsByTurn.get(row.activity.turnId)?.get(row.activity.part.toolCallId) : undefined}
+                        sessionId={sessionId}
+                        directory={directory}
+                        isExpanded={expandedTools.has(row.activity.part.partId)}
                         isMobile={isMobile}
                         onToggleTool={onToggleTool}
                         onShowPopup={onShowPopup}
-                        animateTailText={Boolean(animatedToolIds?.has(row.activity.id))}
+                        animateTailText={Boolean(animatedToolIds?.has(row.activity.part.partId))}
                     />
                 );
 
             case 'tool-static-group':
                 return (
                     <MemoStaticGroupedToolRow
-                        key={`static-${row.toolName}-${row.activities[0]?.id ?? index}`}
+                        key={`static-${row.toolName}-${row.activities[0]?.part.partId ?? index}`}
                         toolName={row.toolName}
                         activities={row.activities}
-                        animateTailText={row.activities.some((activity) => animatedToolIds?.has(activity.id))}
+                        animateTailText={row.activities.some((activity) => animatedToolIds?.has(activity.part.partId))}
                     />
                 );
 
             case 'tool-fallback':
                 return (
                     <MemoExpandableToolRow
-                        key={row.activity.id}
+                        key={row.activity.part.type === 'tool_result'
+                            ? callsByTurn.get(row.activity.turnId)?.get(row.activity.part.toolCallId)?.partId ?? row.activity.part.partId
+                            : row.activity.part.partId}
                         activity={row.activity}
-                        isExpanded={expandedTools.has(row.activity.id)}
+                        pairedCall={row.activity.part.type === 'tool_result' ? callsByTurn.get(row.activity.turnId)?.get(row.activity.part.toolCallId) : undefined}
+                        sessionId={sessionId}
+                        directory={directory}
+                        isExpanded={expandedTools.has(row.activity.part.partId)}
                         isMobile={isMobile}
                         onToggleTool={onToggleTool}
                         onShowPopup={onShowPopup}
-                        animateTailText={Boolean(animatedToolIds?.has(row.activity.id))}
+                        animateTailText={Boolean(animatedToolIds?.has(row.activity.part.partId))}
                     />
                 );
 
@@ -974,11 +814,7 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
                 </button>
                 {shouldShowRowsContainer ? (
                     <div className="relative ml-2 pl-3">
-                        <span
-                            aria-hidden="true"
-                            className="pointer-events-none absolute left-0 top-px bottom-0 w-px"
-                            style={{ backgroundColor: 'var(--tools-border)' }}
-                        />
+                        <BlockLine onToggle={onToggle} topOffset={1} />
                         {previewHiddenCount > 0 ? (
                             <button
                                 type="button"

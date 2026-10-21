@@ -1,0 +1,40 @@
+{
+  "task": "W10 static/canonical consolidation on a92",
+  "artifact": "a92fbb36ef3e554211da90ac667bc42350c27c05e0978f2edbb1b3fd48b70ef7",
+  "source": "8d179c4e2",
+  "sourceScan": {
+    "productionOldClientRefs": 0,
+    "oldLifecycleProxyConfigAuthCompositionRefs": 0,
+    "retiredUiRoutes": [
+      "/api/opencode/health",
+      "/api/config/opencode-resolution",
+      "/api/provider/disabled"
+    ]
+  },
+  "observedCanonicalRequests": [
+    "/api/agent/v1/sessions",
+    "/api/agent/v1/sessions/:id/runs",
+    "/api/agent/v1/sessions/:id/snapshot",
+    "/api/agent/v1/sessions/:id/events",
+    "/api/agent/v1/sessions/:id/metadata",
+    "/api/agent/v1/sessions/:id/queue",
+    "/api/agent/v1/sessions/:id/approvals",
+    "/api/agent/v1/sessions/:id/shell/jobs",
+    "/api/agent/v1/workspaces/:id/providers",
+    "/api/guests",
+    "/api/source-control"
+  ],
+  "legacyReachability": "Old client was deleted; no retained UI caller and no mandatory old-client probe. Actual matrix traffic used canonical API and Host routes only.",
+  "verdict": "PASS/UNCHANGED by source scan + Task36 productionOldClientRefs=0; no old-client probe invented.",
+  "counts": {
+    "rawEntries": 1537,
+    "rawUnique": 457,
+    "sanitizedUniqueEntries": 375,
+    "retiredLegacy": 0,
+    "canonicalAgent": 81,
+    "hostGuests": 3,
+    "sourceControl": 13
+  },
+  "entries": "network-a92.json sanitized method/path/status/type only",
+  "retiredLegacyUrls": []
+}

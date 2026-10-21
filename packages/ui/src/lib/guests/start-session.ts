@@ -14,7 +14,6 @@ import type { I18nKey, I18nParams } from '@/lib/i18n';
 import { generateBranchSlug } from '@/lib/git/branchNameGenerator';
 import { buildLinkedGuestIssue, type LinkedGuestIssue } from '@/lib/linkedIssues';
 import { parseModelIdentifier } from '@/lib/modelIdentifier';
-import { modelVariantNames } from '@/lib/modelVariants';
 import { resolveProjectRef } from '@/lib/worktreeSessionCreator';
 import { createWorktreeWithDefaults } from '@/lib/worktrees/worktreeCreate';
 import { waitForWorktreeBootstrap } from '@/lib/worktrees/worktreeBootstrap';
@@ -25,6 +24,7 @@ import { normalizePath } from '@/lib/pathNormalization';
 import { subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSelectionStore } from '@/sync/selection-store';
 import * as sessionActions from '@/sync/session-actions';
@@ -103,7 +103,6 @@ export type StartGuestSessionDeps = {
     branch: string,
     kind: 'pr' | 'standard',
   ) => Promise<CreatedSession | null>;
-  initializeSession: (sessionId: string) => void;
   setLinkedIssue: (sessionId: string, directory: string, issue: LinkedGuestIssue) => Promise<void>;
   sendFirstMessage: (sessionId: string, directory: string, text: string) => Promise<'sent' | 'no-model' | 'failed'>;
   closeSurfaces: () => void;
@@ -123,7 +122,6 @@ export const runStartGuestSession = async (
   if (!created) {
     return { ok: false, reason: plan.worktree ? 'worktree-failed' : 'create-failed' };
   }
-  deps.initializeSession(created.id);
   deps.closeSurfaces();
   await deps.setLinkedIssue(created.id, created.directory, plan.linked);
   if (!plan.text) {
@@ -138,15 +136,14 @@ const resolveDefaultAgentName = (): string | undefined => {
   if (configState.settingsDefaultAgent) {
     return configState.settingsDefaultAgent;
   }
-  const visibleAgents = configState.agents.filter((agent) => !agent.hidden);
+  const agents = selectAgentsForDirectory(useAgentsStore.getState(), configState.activeDirectoryKey);
   return (
     configState.currentAgentName
-    || visibleAgents.find((agent) => agent.mode === 'primary' || !agent.mode)?.name
-    || visibleAgents[0]?.name
+    || agents[0]?.agentId
   );
 };
 
-const resolveDefaultModelSelection = (): { providerID: string; modelID: string } | null => {
+const resolveDefaultModelSelection = (): { providerId: string; modelId: string } | null => {
   const parsed = parseModelIdentifier(useConfigStore.getState().settingsDefaultModel);
   if (!parsed) {
     return null;
@@ -154,27 +151,21 @@ const resolveDefaultModelSelection = (): { providerID: string; modelID: string }
   if (!useConfigStore.getState().getModelMetadata(parsed.providerId, parsed.modelId)) {
     return null;
   }
-  return { providerID: parsed.providerId, modelID: parsed.modelId };
+  return { providerId: parsed.providerId, modelId: parsed.modelId };
 };
 
-const resolveDefaultVariant = (providerID: string, modelID: string): string | undefined => {
+const resolveDefaultVariant = (providerId: string, modelId: string): string | undefined => {
   const configState = useConfigStore.getState();
   const settingsDefaultVariant = configState.settingsDefaultVariant;
-  const currentVariant = configState.currentProviderId === providerID && configState.currentModelId === modelID
+  const currentVariant = configState.currentProviderId === providerId && configState.currentModelId === modelId
     ? configState.currentVariant
     : undefined;
-  const provider = configState.providers.find((entry) => entry.id === providerID);
-  const model = provider?.models.find((entry) => entry.id === modelID);
-  const variantNames = modelVariantNames(model);
-  if (variantNames.length === 0) {
-    return settingsDefaultVariant || currentVariant || undefined;
-  }
-  if (settingsDefaultVariant && variantNames.includes(settingsDefaultVariant)) {
-    return settingsDefaultVariant;
-  }
-  if (currentVariant && variantNames.includes(currentVariant)) {
-    return currentVariant;
-  }
+  const provider = configState.providers.find((entry) => entry.providerId === providerId);
+  const model = provider?.models.find((entry) => entry.modelId === modelId);
+  const variantNames = model?.variants.map((entry) => entry.variant) ?? [];
+  if (variantNames.length === 0) return settingsDefaultVariant || currentVariant || undefined;
+  if (settingsDefaultVariant && variantNames.includes(settingsDefaultVariant)) return settingsDefaultVariant;
+  if (currentVariant && variantNames.includes(currentVariant)) return currentVariant;
   return undefined;
 };
 
@@ -182,13 +173,13 @@ const captureGuestSendSelection = () => {
   const configState = useConfigStore.getState();
   const lastUsedProvider = useSelectionStore.getState().lastUsedProvider;
   const defaultModel = resolveDefaultModelSelection();
-  const providerID = defaultModel?.providerID || configState.currentProviderId || lastUsedProvider?.providerID;
-  const modelID = defaultModel?.modelID || configState.currentModelId || lastUsedProvider?.modelID;
+  const providerId = defaultModel?.providerId || configState.currentProviderId || lastUsedProvider?.providerID;
+  const modelId = defaultModel?.modelId || configState.currentModelId || lastUsedProvider?.modelID;
   const agentName = resolveDefaultAgentName() || configState.currentAgentName || undefined;
-  if (!providerID || !modelID) {
+  if (!providerId || !modelId) {
     return null;
   }
-  return { providerID, modelID, agentName, variant: resolveDefaultVariant(providerID, modelID) };
+  return { providerId, modelId, agentName, variant: resolveDefaultVariant(providerId, modelId) };
 };
 
 const sendGuestFirstMessage = async (
@@ -201,8 +192,8 @@ const sendGuestFirstMessage = async (
   try {
     await useSessionUIStore.getState().sendMessage(
       text,
-      selection.providerID,
-      selection.modelID,
+      selection.providerId,
+      selection.modelId,
       selection.agentName,
       undefined,
       undefined,
@@ -405,16 +396,31 @@ export const startGuestSession = async (args: {
     }
     assertCurrent();
     failure = 'session-create-failed';
-    const session = await sessionActions.createSession(title, directory, null, undefined, undefined, navigation);
+    // v2 creates the session on a selection, so the first prompt runs on the
+    // model the extension asked for without a switch message in the transcript.
+    const session = await sessionActions.createSession(
+      title,
+      directory,
+      undefined,
+      undefined,
+      sendSelection
+        ? {
+            model: { providerId: sendSelection.providerId, modelId: sendSelection.modelId },
+            agent: sendSelection.agentName,
+            variant: sendSelection.variant,
+          }
+        : undefined,
+      navigation,
+    );
     assertCurrent();
     if (!session) return null;
-    createdDirectory = session.directory ?? directory;
+    createdDirectory = session.displayPath || directory;
     if (metadata) {
       const latest = project ? guestProjectWorktrees(project.path).find((entry) => entry.path === metadata?.path) : undefined;
       metadata = { ...metadata, worktreeStatus: latest?.worktreeStatus ?? metadata.worktreeStatus };
-      useSessionUIStore.getState().setWorktreeMetadata(session.id, metadata);
+      useSessionUIStore.getState().setWorktreeMetadata(session.sessionId, metadata);
     }
-    return { id: session.id, directory: createdDirectory };
+    return { id: session.sessionId, directory: createdDirectory };
   };
   try {
     const result = await runStartGuestSession(plan, {
@@ -432,9 +438,6 @@ export const startGuestSession = async (args: {
         assertCurrent();
         metadata = { ...metadata, kind, createdFromBranch: custom?.baseBranch };
         return createTargetSession(plan.title, metadata.path);
-      },
-      initializeSession: (sessionId) => {
-        useSessionUIStore.getState().initializeNewOpenChamberSession(sessionId, useConfigStore.getState().agents);
       },
       setLinkedIssue: async (sessionId, directory, issue) => {
         assertCurrent();

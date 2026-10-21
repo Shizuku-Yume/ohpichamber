@@ -1,7 +1,6 @@
-import type { Message, Session } from '@opencode-ai/sdk/v2/client';
-import { opencodeClient } from '@/lib/opencode/client';
+import type { Message, Session } from '@openchamber/agent-contract';
+import { canonicalClient, CanonicalApiError } from '@/api/canonicalClient';
 import { renderMagicPrompt } from '@/lib/magicPrompts';
-import { flattenAssistantTextParts } from '@/lib/messages/messageText';
 import {
   getOriginalSessionID,
   getReviewSessionID,
@@ -15,12 +14,15 @@ import { useAutoReviewStore, type AutoReviewRun } from '@/stores/useAutoReviewSt
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { usePermissionStore } from '@/stores/permissionStore';
-import { optimisticSend, patchSessionMetadata, waitForConnectionOrThrow } from '@/sync/session-actions';
+import { optimisticSend, patchSessionMetadata, sendMessage, waitForConnectionOrThrow } from '@/sync/session-actions';
 import { useSelectionStore } from '@/sync/selection-store';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { getSyncMessages, getSyncParts, getSyncSessionStatus, registerSessionDirectory } from '@/sync/sync-refs';
+import { getDirectoryState, getSyncMessages, registerSessionDirectory } from '@/sync/sync-refs';
 import { markPendingUserSendAnimation } from '@/lib/userSendAnimation';
 import { getRuntimeKey } from '@/lib/runtime-switch';
+import { fetchSessionKnowledge, reportSessionKnowledgeDelivered } from '@/lib/sessionKnowledgeApi';
+import { expandNativeFileResource } from '@/api/fileResourceExpansion';
+import { resolveWorkspaceDirectory } from '@/stores/globalSessions';
 
 const HANDOFF_TIMEOUT_MS = 180_000;
 const HANDOFF_POLL_MS = 400;
@@ -32,9 +34,9 @@ const activeAutoReviewLoops = new Set<string>();
 const activeAutoReviewForwardKeys = new Set<string>();
 
 type SessionModelContext = {
-  providerID: string;
-  modelID: string;
-  agent?: string;
+  providerId: string;
+  modelId: string;
+  agentId?: string;
   variant?: string;
 };
 
@@ -52,74 +54,46 @@ type AssistantTextMessage = {
   text: string;
 };
 
-const isMessageCompleted = (message: Message): boolean => {
-  const finish = (message as { finish?: unknown }).finish;
-  if (typeof finish === 'string' && finish.length > 0) return true;
-  const completed = (message as { time?: { completed?: unknown } }).time?.completed;
-  return typeof completed === 'number' && completed > 0;
-};
+const getMessageCreatedAt = (message: Message): number => message.createdAt;
 
-const getMessageCreatedAt = (message: Message): number => {
-  const created = (message as { time?: { created?: unknown } }).time?.created;
-  return typeof created === 'number' && Number.isFinite(created) ? created : 0;
-};
+const getMessageRole = (message: Message): string => message.role;
 
-const getMessageRole = (message: Message): string => {
-  const role = (message as { role?: unknown }).role;
-  return typeof role === 'string' ? role : '';
-};
+const getAssistantText = (message: Message): string => message.parts
+  .filter((part) => part.type === 'text')
+  .map((part) => part.content)
+  .join('');
 
-const getMessageParentID = (message: Message): string | null => {
-  const parentID = (message as { parentID?: unknown }).parentID;
-  return typeof parentID === 'string' && parentID.trim().length > 0 ? parentID : null;
-};
-
-const isCompactionCommandMessage = (message: Message, directory: string): boolean => {
-  const parts = getSyncParts(message.id, directory);
-  return parts.some((part) => {
-    const type = (part as { type?: unknown }).type;
-    if (type === 'compaction') return true;
-    if (type !== 'text') return false;
-    const text = (part as { text?: unknown }).text;
-    return typeof text === 'string' && text.trim() === '/compact';
-  });
-};
-
+const isCompactionCommandMessage = (message: Message): boolean => message.parts.some((part) =>
+  part.type === 'step_summary' && part.title.toLowerCase().includes('compact'));
 const getLatestAssistantTextMessage = (
   sessionID: string,
   directory: string,
   lastForwardedMessageID?: string,
   afterCreatedAt = 0,
-  expectedParentID?: string,
 ): AssistantTextMessage | null => {
   const messages = getSyncMessages(sessionID, directory);
-  const compactionCommandIDs = new Set<string>();
-  for (const message of messages) {
-    if (isCompactionCommandMessage(message, directory)) {
-      compactionCommandIDs.add(message.id);
-    }
-  }
-
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
-    if (message.id === lastForwardedMessageID) return null;
+    if (message.messageId === lastForwardedMessageID) return null;
     if (getMessageRole(message) !== 'assistant') continue;
-    if (!isMessageCompleted(message)) continue;
     if (getMessageCreatedAt(message) < afterCreatedAt - 1000) continue;
-    const parentID = getMessageParentID(message);
-    if (!isExpectedAutoReviewAssistantParent(message, expectedParentID)) continue;
-    if (parentID && compactionCommandIDs.has(parentID)) continue;
-    const text = flattenAssistantTextParts(getSyncParts(message.id, directory)).trim();
+    if (isCompactionCommandMessage(message)) continue;
+    const text = getAssistantText(message).trim();
     if (!text) continue;
-    return { id: message.id, text };
+    return { id: message.messageId, text };
   }
-
   return null;
 };
 
+/** A session is ready for handoff only after its latest native turn is terminal. */
 const isSessionIdle = (sessionID: string, directory: string): boolean => {
-  const status = getSyncSessionStatus(sessionID, directory);
-  return status?.type === 'idle';
+  const state = getDirectoryState(directory);
+  const snapshot = state?.snapshot[sessionID];
+  if (!snapshot || snapshot.session.runtimeStatus !== 'idle') return false;
+  const latestTurn = snapshot.turns.at(-1);
+  if (!latestTurn) return false;
+  return snapshot.activeRun === null
+    && (latestTurn.status === 'completed' || latestTurn.status === 'failed' || latestTurn.status === 'cancelled');
 };
 
 export const isAutoReviewRuntimeCurrent = (runtimeKey: string): boolean => runtimeKey === getRuntimeKey();
@@ -138,10 +112,6 @@ export const assertAutoReviewRuntimeStillCurrent = (expectedRuntimeKey?: string)
   }
 };
 
-const isRuntimeChangeError = (error: unknown): boolean => {
-  const message = error instanceof Error ? error.message : String(error);
-  return message.includes('runtime changed');
-};
 
 export const hasFinalReviewMarker = (text: string): boolean => {
   const lines = text.trim().split('\n').map((line) => line.trim()).filter(Boolean);
@@ -155,11 +125,6 @@ export const stripFinalReviewMarker = (text: string): string => {
     lines.pop();
   }
   return lines.join('\n').trim();
-};
-
-export const isExpectedAutoReviewAssistantParent = (message: Message, expectedParentID?: string): boolean => {
-  if (!expectedParentID) return true;
-  return getMessageParentID(message) === expectedParentID;
 };
 
 const getAutoReviewForwardKey = (run: AutoReviewRun, messageID: string): string => [
@@ -183,8 +148,15 @@ export const releaseAutoReviewForward = (key: string): void => {
 
 const autoReviewReviewerInstructions = (): Array<{ text: string; synthetic: true }> => [{
   synthetic: true,
-  text: `This review is part of an automatic review loop. If there are no remaining issues, end your response with this exact final line:\n${AUTO_REVIEW_FINAL_MARKER}\nIf you found issues that require changes, do not include that final status line.`,
+  text: `This review is part of an automatic review loop. When no blocker or non-blocker findings remain open, end your response with this exact final line:\n${AUTO_REVIEW_FINAL_MARKER}\nNits never keep the loop going: list them if useful and still end with that line. While a blocker or non-blocker remains open, leave the line out.`,
 }];
+
+// A review session starts with the same review rules as /workspace-review,
+// so its findings carry severities the loop's stop condition can rely on.
+const reviewSessionInstructions = async (autoReview: boolean | undefined): Promise<Array<{ text: string }>> => {
+  const reviewRules = { text: await renderMagicPrompt('session.review.instructions') };
+  return autoReview ? [reviewRules, ...autoReviewReviewerInstructions()] : [reviewRules];
+};
 
 const runAutoReviewLoop = async (originalSessionID: string): Promise<void> => {
   while (true) {
@@ -206,7 +178,6 @@ const runAutoReviewLoop = async (originalSessionID: string): Promise<void> => {
       run.directory,
       run.lastForwardedMessageID,
       run.waitAfterCreatedAt,
-      run.expectedAssistantParentID,
     );
     if (!latest) {
       await new Promise((resolve) => setTimeout(resolve, AUTO_REVIEW_POLL_MS));
@@ -287,10 +258,11 @@ export const resumeAutoReviewRun = (originalSessionID: string): void => {
   activeAutoReviewLoops.add(originalSessionID);
   void runAutoReviewLoop(run.originalSessionID).catch((error) => {
     console.error('[review-flow] auto-review loop failed', error);
+    const message = error instanceof Error ? error.message : String(error);
     useAutoReviewStore.getState().updateRun(run.originalSessionID, (current) => ({
       ...current,
-      status: isRuntimeChangeError(error) ? 'stopped' : 'error',
-      error: error instanceof Error ? error.message : String(error),
+      status: message.includes('runtime changed') ? 'stopped' : 'error',
+      error: message,
     }));
   }).finally(() => {
     activeAutoReviewLoops.delete(originalSessionID);
@@ -300,15 +272,21 @@ export const resumeAutoReviewRun = (originalSessionID: string): void => {
 const waitForAssistantText = async (sessionID: string, directory: string, afterCreatedAt: number): Promise<string> => {
   const deadline = Date.now() + HANDOFF_TIMEOUT_MS;
   while (Date.now() < deadline) {
+    // v2 completes every step, and a step that says "let me check" before a
+    // tool call has text too. Only the finished turn holds the handoff.
+    if (!isSessionIdle(sessionID, directory)) {
+      await new Promise((resolve) => setTimeout(resolve, HANDOFF_POLL_MS));
+      continue;
+    }
     const messages = getSyncMessages(sessionID, directory);
     const candidates = messages
       .filter((message) => getMessageRole(message) === 'assistant')
       .filter((message) => getMessageCreatedAt(message) >= afterCreatedAt - 1000)
-      .filter(isMessageCompleted)
+      .filter((message) => !isCompactionCommandMessage(message))
       .sort((left, right) => getMessageCreatedAt(right) - getMessageCreatedAt(left));
 
     for (const message of candidates) {
-      const text = flattenAssistantTextParts(getSyncParts(message.id, directory)).trim();
+      const text = getAssistantText(message).trim();
       if (text) return text;
     }
 
@@ -324,8 +302,8 @@ const resolveModelContext = (sessionID: string): SessionModelContext | null => {
   const agent = lastChoice?.agent || selection.getSessionAgentSelection(sessionID) || config.currentAgentName || undefined;
   const sessionModel = selection.getSessionModelSelection(sessionID);
   const agentModel = agent ? selection.getAgentModelForSession(sessionID, agent) : null;
-  const lastChoiceModel = lastChoice?.providerID && lastChoice.modelID
-    ? { providerId: lastChoice.providerID, modelId: lastChoice.modelID }
+  const lastChoiceModel = lastChoice?.providerId && lastChoice.modelId
+    ? { providerId: lastChoice.providerId, modelId: lastChoice.modelId }
     : null;
   const selectedModel = lastChoiceModel || agentModel || sessionModel || (config.currentProviderId && config.currentModelId
     ? { providerId: config.currentProviderId, modelId: config.currentModelId }
@@ -333,13 +311,12 @@ const resolveModelContext = (sessionID: string): SessionModelContext | null => {
   if (!selectedModel?.providerId || !selectedModel?.modelId) return null;
   if (lastChoiceModel) {
     return {
-      providerID: lastChoiceModel.providerId,
-      modelID: lastChoiceModel.modelId,
-      agent,
+      providerId: lastChoiceModel.providerId,
+      modelId: lastChoiceModel.modelId,
+      agentId: agent,
       variant: lastChoice?.variant,
     };
   }
-  // Variants are model-specific; only reuse one resolved for the same model.
   const selectionVariant = agent
     ? selection.getAgentModelVariantForSession(sessionID, agent, selectedModel.providerId, selectedModel.modelId)
     : undefined;
@@ -347,9 +324,9 @@ const resolveModelContext = (sessionID: string): SessionModelContext | null => {
     ? config.currentVariant
     : undefined;
   return {
-    providerID: selectedModel.providerId,
-    modelID: selectedModel.modelId,
-    agent,
+    providerId: selectedModel.providerId,
+    modelId: selectedModel.modelId,
+    agentId: agent,
     variant: selectionVariant || configVariant || undefined,
   };
 };
@@ -359,55 +336,72 @@ const sendPlainMessage = async (
   directory: string,
   text: string,
   modelContext?: SessionModelContext | null,
-  additionalParts?: Array<{ text: string; synthetic?: boolean }>,
+  /** Context items sent ahead of the prompt as synthetic messages. */
+  context?: Array<{ text: string }>,
   expectedRuntimeKey?: string,
 ): Promise<string> => {
-  assertAutoReviewRuntimeStillCurrent(expectedRuntimeKey);
-  const resolved = modelContext ?? resolveModelContext(sessionID);
-  if (!resolved) throw new Error('Select a model before sending review flow messages');
+  const runtimeKey = expectedRuntimeKey ?? getRuntimeKey();
+  const session = useGlobalSessionsStore.getState().entityById.get(sessionID);
+  const directoryOwner = session ? resolveWorkspaceDirectory(session.workspaceId) : undefined;
+  const assertCurrent = () => {
+    assertAutoReviewRuntimeStillCurrent(runtimeKey);
+    const current = useGlobalSessionsStore.getState().entityById.get(sessionID);
+    if (session && (!current || current.workspaceId !== session.workspaceId || current.epoch !== session.epoch || resolveWorkspaceDirectory(session.workspaceId) !== directoryOwner)) throw new Error('Review prompt scope changed');
+  };
+  assertCurrent();
+  const captured = modelContext ?? resolveModelContext(sessionID);
+  if (!captured) throw new Error('Select a model before sending review flow messages');
+  const expanded = await expandNativeFileResource(text, directory);
+  assertCurrent();
+  text = expanded?.content ?? text;
+  const resolved = { ...captured, ...expanded?.modelSelection, agentId: expanded?.agentId ?? captured.agentId };
   const selection = useSelectionStore.getState();
-  selection.saveSessionModelSelection(sessionID, resolved.providerID, resolved.modelID);
-  if (resolved.agent) {
-    selection.saveSessionAgentSelection(sessionID, resolved.agent);
-    selection.saveAgentModelForSession(sessionID, resolved.agent, resolved.providerID, resolved.modelID);
-    selection.saveAgentModelVariantForSession(sessionID, resolved.agent, resolved.providerID, resolved.modelID, resolved.variant);
+  selection.saveSessionModelSelection(sessionID, resolved.providerId, resolved.modelId);
+  if (resolved.agentId) {
+    selection.saveSessionAgentSelection(sessionID, resolved.agentId);
+    selection.saveAgentModelForSession(sessionID, resolved.agentId, resolved.providerId, resolved.modelId);
+    selection.saveAgentModelVariantForSession(sessionID, resolved.agentId, resolved.providerId, resolved.modelId, resolved.variant);
   }
+  // Review sessions are real work sessions, so they carry the project's
+  // standing context (pinned notes, memory) exactly as a composer send would.
+  const knowledge = await fetchSessionKnowledge(directory, sessionID);
+  assertCurrent();
+  const sendContext = knowledge.text ? [{ text: knowledge.text }, ...(context ?? [])] : context;
   markPendingUserSendAnimation(sessionID);
   let sentMessageID: string | null = null;
   await optimisticSend({
     sessionId: sessionID,
     content: text,
     directory,
-    providerID: resolved.providerID,
-    modelID: resolved.modelID,
-    agent: resolved.agent,
+    context: sendContext,
     onMessageID: (messageID) => {
       sentMessageID = messageID;
     },
-    beforeOptimisticInsert: () => assertAutoReviewRuntimeStillCurrent(expectedRuntimeKey),
+    beforeOptimisticInsert: assertCurrent,
     onOptimisticInsert: () => requestChatForceScrollBottom(sessionID),
-    send: (messageID) => {
-      assertAutoReviewRuntimeStillCurrent(expectedRuntimeKey);
-      return opencodeClient.sendMessage({
-        id: sessionID,
-        directory,
-        providerID: resolved.providerID,
-        modelID: resolved.modelID,
-        agent: resolved.agent,
-        variant: resolved.variant,
-        text,
-        additionalParts,
-        messageId: messageID,
-      }).then(() => undefined);
+    send: (_messageID, promptContext) => {
+      assertCurrent();
+      return sendMessage({
+        sessionId: sessionID,
+        runtimeKey,
+        request: {
+          input: { text, attachments: [], context: promptContext.map((item) => ({ kind: 'synthetic' as const, text: item.text })) },
+          options: { providerId: resolved.providerId, modelId: resolved.modelId, agentId: resolved.agentId ?? null, variant: resolved.variant ?? null, reasoningEffort: null },
+        },
+      });
     },
   });
+  assertCurrent();
   if (!sentMessageID) throw new Error('Failed to prepare review flow message');
+  if (knowledge.text) {
+    void reportSessionKnowledgeDelivered(directory, sessionID, knowledge.signature);
+  }
   return sentMessageID;
 };
 
 const requestChatForceScrollBottom = (sessionId: string): void => {
-  if (typeof window === 'undefined') return;
-  window.dispatchEvent(new CustomEvent('openchamber:chat-force-scroll-bottom', {
+  if (globalThis.window === undefined) return;
+  globalThis.window.dispatchEvent(new CustomEvent('openchamber:chat-force-scroll-bottom', {
     detail: { sessionId },
   }));
 };
@@ -415,84 +409,102 @@ const requestChatForceScrollBottom = (sessionId: string): void => {
 const openReviewSessionPanel = (directory: string, session: Session): void => {
   useUIStore.getState().openContextPanelTab(directory, {
     mode: 'chat',
-    dedupeKey: `session:${session.id}`,
-    label: session.title ?? null,
-    sessionTitleFallback: session.title ?? null,
+    dedupeKey: `session:${session.sessionId}`,
+    label: session.metadata?.title ?? null,
+    sessionTitleFallback: session.metadata?.title ?? null,
   });
 };
 
-const getSessionOrNull = async (sessionID: string, directory: string): Promise<Session | null> => {
+const readHostSession = async (sessionID: string): Promise<Session> => {
+  const runtimeKey = getRuntimeKey();
+  const snapshot = await canonicalClient.getSession(sessionID);
+  assertAutoReviewRuntimeStillCurrent(runtimeKey);
+  const sessions = await canonicalClient.listSessions(snapshot.session.workspaceId);
+  assertAutoReviewRuntimeStillCurrent(runtimeKey);
+  const session = sessions.items.find((entry) => entry.sessionId === sessionID);
+  if (!session || sessions.errors[sessionID] || sessions.errors[snapshot.session.workspaceId]) {
+    throw new Error('Host session projection is unavailable');
+  }
+  return session;
+};
+
+const getSessionOrNull = async (sessionID: string): Promise<Session | null> => {
   try {
-    return await opencodeClient.getSession(sessionID, directory);
-  } catch {
-    return null;
+    return await readHostSession(sessionID);
+  } catch (error) {
+    if (error instanceof CanonicalApiError && error.problem.status === 404) return null;
+    throw error;
   }
 };
 
 const getReviewSessionTitle = (original: Session): string => {
-  const implementationTitle = original.title?.trim() || original.id;
+  const implementationTitle = original.metadata?.title?.trim() || original.sessionId;
   return `Review: ${implementationTitle}`;
 };
 
 // A review session runs tools too (reads other directories, verifies with commands),
-// so a fresh one starts with the same auto-accept choice as the session it reviews.
-// Failure only leaves the reviewer prompting for permissions the way it did before.
+// so a fresh one starts with the same permission mode as the session it reviews.
+// Failure only leaves the reviewer on the default mode the server gave it.
 const inheritPermissionAutoAccept = async (originalSessionID: string, reviewSessionID: string): Promise<void> => {
   const permissions = usePermissionStore.getState();
-  if (!permissions.isSessionAutoAccepting(originalSessionID)) return;
+  // `ask` is copied too: otherwise the server's default could make the
+  // reviewer more permissive than the session it reviews.
+  const mode = permissions.getSessionMode(originalSessionID);
   try {
-    await permissions.setSessionAutoAccept(reviewSessionID, true);
+    await permissions.setSessionMode(reviewSessionID, mode);
   } catch (error) {
     console.warn('[review-flow] failed to inherit permission auto-accept for review session', error);
   }
 };
 
-const createOrReuseReviewSession = async (originalSessionID: string, directory: string, expectedRuntimeKey?: string): Promise<Session> => {
+const createOrReuseReviewSession = async (
+  originalSessionID: string,
+  directory: string,
+  selection: SessionModelContext,
+  expectedRuntimeKey?: string,
+): Promise<Session> => {
   assertAutoReviewRuntimeStillCurrent(expectedRuntimeKey);
-  const original = await opencodeClient.getSession(originalSessionID, directory);
+  const original = await readHostSession(originalSessionID);
   assertAutoReviewRuntimeStillCurrent(expectedRuntimeKey);
   const existingReviewID = getReviewSessionID(original);
   if (existingReviewID) {
-    const existing = await getSessionOrNull(existingReviewID, directory);
+    const existing = await getSessionOrNull(existingReviewID);
     assertAutoReviewRuntimeStillCurrent(expectedRuntimeKey);
     if (existing && isReviewSession(existing)) return existing;
-    await patchSessionMetadata(originalSessionID, directory, (metadata) => {
-      const next = { ...metadata };
-      const openchamber = next.openchamber;
-      if (openchamber && typeof openchamber === 'object' && !Array.isArray(openchamber)) {
-        const rest = { ...(openchamber as Record<string, unknown>) };
-        delete rest.reviewSessionID;
-        next.openchamber = rest;
-      }
-      return next;
-    });
+    await patchSessionMetadata(originalSessionID, directory, (metadata) => withoutReviewSessionLink(metadata, existingReviewID), expectedRuntimeKey);
   }
 
+  const review = (await canonicalClient.createSession({
+    projectId: original.projectId,
+    workspaceId: original.workspaceId,
+    options: { providerId: selection.providerId, modelId: selection.modelId, agentId: selection.agentId ?? null, variant: selection.variant ?? null, reasoningEffort: null },
+    metadata: withReviewSessionMarker({ title: getReviewSessionTitle(original) }, originalSessionID),
+  })).session;
   assertAutoReviewRuntimeStillCurrent(expectedRuntimeKey);
-  const review = await opencodeClient.createSession({
-    title: getReviewSessionTitle(original),
-    metadata: withReviewSessionMarker({}, originalSessionID),
-  }, directory);
-  assertAutoReviewRuntimeStillCurrent(expectedRuntimeKey);
-  registerSessionDirectory(review.id, directory);
+  registerSessionDirectory(review.sessionId, directory);
   try {
-    assertAutoReviewRuntimeStillCurrent(expectedRuntimeKey);
-    await patchSessionMetadata(originalSessionID, directory, (metadata) => withReviewSessionLink(metadata, review.id));
+    await patchSessionMetadata(originalSessionID, directory, (metadata) => withReviewSessionLink(metadata, review.sessionId), expectedRuntimeKey);
   } catch (error) {
     assertAutoReviewRuntimeStillCurrent(expectedRuntimeKey);
-    await opencodeClient.deleteSession(review.id, directory).catch((deleteError) => {
+    await canonicalClient.deleteSession(review.sessionId).catch((deleteError) => {
       console.warn('[review-flow] failed to delete unlinked review session after link failure', deleteError);
     });
     throw error;
   }
   useGlobalSessionsStore.getState().upsertSession(review);
-  await inheritPermissionAutoAccept(originalSessionID, review.id);
+  await inheritPermissionAutoAccept(originalSessionID, review.sessionId);
   return review;
 };
 
 export const startReviewFlow = async (input: StartReviewFlowInput): Promise<void> => {
   await waitForConnectionOrThrow();
   const expectedAutoReviewRuntimeKey = input.autoReview ? getRuntimeKey() : undefined;
+  const reviewSelection: SessionModelContext = {
+    providerId: input.providerId,
+    modelId: input.modelId,
+    agentId: input.agentId,
+    variant: input.variant,
+  };
   let reviewPrompt: string;
 
   if (input.generateHandoff ?? true) {
@@ -500,26 +512,21 @@ export const startReviewFlow = async (input: StartReviewFlowInput): Promise<void
     const instructionsText = await renderMagicPrompt('session.reviewHandoff.instructions');
     const startedAt = Date.now();
     await sendPlainMessage(input.originalSessionID, input.directory, visibleText, null, [
-      { text: instructionsText, synthetic: true },
+      { text: instructionsText },
     ], expectedAutoReviewRuntimeKey);
 
     const continueFromHandoff = async (): Promise<void> => {
       const handoff = await waitForAssistantText(input.originalSessionID, input.directory, startedAt);
       assertAutoReviewRuntimeStillCurrent(expectedAutoReviewRuntimeKey);
       const handoffReviewPrompt = await renderMagicPrompt('session.reviewSession.visible', { handoff });
-      const reviewSession = await createOrReuseReviewSession(input.originalSessionID, input.directory, expectedAutoReviewRuntimeKey);
+      const reviewSession = await createOrReuseReviewSession(input.originalSessionID, input.directory, reviewSelection, expectedAutoReviewRuntimeKey);
       const runtimeKey = expectedAutoReviewRuntimeKey ?? getRuntimeKey();
       const waitAfterCreatedAt = Date.now();
-      const sentMessageID = await sendPlainMessage(reviewSession.id, input.directory, handoffReviewPrompt, {
-        providerID: input.providerID,
-        modelID: input.modelID,
-        agent: input.agent,
-        variant: input.variant,
-      }, input.autoReview ? autoReviewReviewerInstructions() : undefined, input.autoReview ? runtimeKey : undefined);
+      const sentMessageID = await sendPlainMessage(reviewSession.sessionId, input.directory, handoffReviewPrompt, reviewSelection, await reviewSessionInstructions(input.autoReview), input.autoReview ? runtimeKey : undefined);
       if (input.autoReview) {
         startAutoReviewRun({
           originalSessionID: input.originalSessionID,
-          reviewSessionID: reviewSession.id,
+          reviewSessionID: reviewSession.sessionId,
           directory: input.directory,
           runtimeKey,
           status: 'running',
@@ -548,19 +555,14 @@ export const startReviewFlow = async (input: StartReviewFlowInput): Promise<void
     reviewPrompt = await renderMagicPrompt('session.reviewSessionWithoutHandoff.visible');
   }
 
-  const reviewSession = await createOrReuseReviewSession(input.originalSessionID, input.directory, expectedAutoReviewRuntimeKey);
+  const reviewSession = await createOrReuseReviewSession(input.originalSessionID, input.directory, reviewSelection, expectedAutoReviewRuntimeKey);
   const runtimeKey = expectedAutoReviewRuntimeKey ?? getRuntimeKey();
   const waitAfterCreatedAt = Date.now();
-  const sentMessageID = await sendPlainMessage(reviewSession.id, input.directory, reviewPrompt, {
-    providerID: input.providerID,
-    modelID: input.modelID,
-    agent: input.agent,
-    variant: input.variant,
-  }, input.autoReview ? autoReviewReviewerInstructions() : undefined, input.autoReview ? runtimeKey : undefined);
+  const sentMessageID = await sendPlainMessage(reviewSession.sessionId, input.directory, reviewPrompt, reviewSelection, await reviewSessionInstructions(input.autoReview), input.autoReview ? runtimeKey : undefined);
   if (input.autoReview) {
     startAutoReviewRun({
       originalSessionID: input.originalSessionID,
-      reviewSessionID: reviewSession.id,
+      reviewSessionID: reviewSession.sessionId,
       directory: input.directory,
       runtimeKey,
       status: 'running',
@@ -578,7 +580,7 @@ export const startReviewFlow = async (input: StartReviewFlowInput): Promise<void
 
 export const sendReviewFeedbackToOriginal = async (reviewSessionID: string, directory: string, reviewFeedback: string, expectedRuntimeKey?: string): Promise<string> => {
   assertAutoReviewRuntimeStillCurrent(expectedRuntimeKey);
-  const reviewSession = await opencodeClient.getSession(reviewSessionID, directory);
+  const reviewSession = await readHostSession(reviewSessionID);
   const originalSessionID = getOriginalSessionID(reviewSession);
   if (!originalSessionID) throw new Error('Original session is missing');
   const prompt = await renderMagicPrompt('session.reviewFeedbackToImplementer.visible', { review_feedback: reviewFeedback });
@@ -588,15 +590,17 @@ export const sendReviewFeedbackToOriginal = async (reviewSessionID: string, dire
 
 export const sendImplementationResponseToReviewer = async (originalSessionID: string, directory: string, implementationResponse: string, autoReview = false, expectedRuntimeKey?: string): Promise<string> => {
   assertAutoReviewRuntimeStillCurrent(expectedRuntimeKey);
-  const originalSession = await opencodeClient.getSession(originalSessionID, directory);
+  const originalSession = await readHostSession(originalSessionID);
   const reviewSessionID = getReviewSessionID(originalSession);
   if (!reviewSessionID) throw new Error('Review session is missing');
   let reviewSession: Session;
   try {
-    reviewSession = await opencodeClient.getSession(reviewSessionID, directory);
+    reviewSession = await readHostSession(reviewSessionID);
   } catch (error) {
     assertAutoReviewRuntimeStillCurrent(expectedRuntimeKey);
-    await patchSessionMetadata(originalSessionID, directory, (metadata) => withoutReviewSessionLink(metadata, reviewSessionID));
+    if (error instanceof CanonicalApiError && error.problem.status === 404) {
+      await patchSessionMetadata(originalSessionID, directory, (metadata) => withoutReviewSessionLink(metadata, reviewSessionID), expectedRuntimeKey);
+    }
     throw error;
   }
   const prompt = await renderMagicPrompt('session.implementationResponseToReviewer.visible', { implementation_response: implementationResponse });
@@ -610,8 +614,3 @@ export const sendImplementationResponseToReviewer = async (originalSessionID: st
 
 export type ReviewTransferDirection = 'review-to-original' | 'original-to-review';
 
-export const getReviewTransferDirection = (session: Session | null | undefined): ReviewTransferDirection | null => {
-  if (isReviewSession(session)) return 'review-to-original';
-  if (getReviewSessionID(session)) return 'original-to-review';
-  return null;
-};

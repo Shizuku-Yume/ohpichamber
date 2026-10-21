@@ -4,9 +4,17 @@
 [![GitHub release](https://img.shields.io/github/v/release/openchamber/openchamber?style=flat&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMiIgaGVpZ2h0PSIzMiIgZmlsbD0iI2YxZWNlYyIgdmlld0JveD0iMCAwIDI1NiAyNTYiPjxwYXRoIGQ9Ik0xMjgsMTI5LjA5VjIzMmE4LDgsMCwwLDEtMy44NC0xbC04OC00OC4xOGE4LDgsMCwwLDEtNC4xNi03VjgwLjE4YTgsOCwwLDAsMSwuNy0zLjI1WiIgb3BhY2l0eT0iMC4yIj48L3BhdGg%2BPHBhdGggZD0iTTIyMy42OCw2Ni4xNSwxMzUuNjgsMThhMTUuODgsMTUuODgsMCwwLDAtMTUuMzYsMGwtODgsNDguMTdhMTYsMTYsMCwwLDAtOC4zMiwxNHY5NS42NGExNiwxNiwwLDAsMCw4LjMyLDE0bDg4LDQ4LjE3YTE1Ljg4LDE1Ljg4LDAsMCwwLDE1LjM2LDBsODgtNDguMTdhMTYsMTYsMCwwLDAsOC4zMi0xNFY4MC4xOEExNiwxNiwwLDAsMCwyMjMuNjgsNjYuMTVaTTEyOCwzMmw4MC4zNCw0NC0yOS43NywxNi4zLTgwLjM1LTQ0Wk0xMjgsMTIwLDQ3LjY2LDc2bDMzLjktMTguNTYsODAuMzQsNDRaTTQwLDkwbDgwLDQzLjc4djg1Ljc5TDQwLDE3NS44MlptMTc2LDg1Ljc4aDBsLTgwLDQzLjc5VjEzMy44MmwzMi0xNy41MVYxNTJhOCw4LDAsMCwwLDE2LDBWMTA3LjU1TDIxNiw5MHY4NS43N1oiPjwvcGF0aD48L3N2Zz4%3D&logoColor=FFFCF0&labelColor=100F0F&color=205EA6)](https://github.com/openchamber/openchamber/releases/latest)
 [![Discord](https://img.shields.io/badge/Discord-join.svg?style=flat&labelColor=100F0F&color=8B7EC8&logo=discord&logoColor=FFFCF0)](https://discord.gg/ZYRSdnwwKA)
 
-Run [OpenCode](https://opencode.ai) in your browser. Install the CLI, open `localhost:3000`, done. Works on desktop browsers, tablets, and phones as a PWA.
+Web and PWA application and Host Gateway server runtime for OpenChamber.
 
-Full project overview, screenshots, and all features: [github.com/openchamber/openchamber](https://github.com/openchamber/openchamber)
+This package owns the browser UI build, the Host Gateway HTTP and WebSocket server, CLI executable (`openchamber`), and host service endpoints (filesystem, Git, PTY terminals, dev server discovery, dev tunnels, authentication, and push notifications).
+
+### Migration status
+
+OpenChamber's retained Host Gateway infrastructure is split between the dedicated `server/lib/host/` modules and the OpenCode integration directory; the extracted Host owner is documented in [`server/lib/host/DOCUMENTATION.md`](server/lib/host/DOCUMENTATION.md). The Host Gateway has no production proxy registration or Host-managed OpenCode lifecycle (`proxy.js` is unmounted in production in favor of the OMP Agent Service and Canonical API `/api/agent/v1`); remaining modules under `server/lib/opencode/` are retained Host infrastructure with no active managed OpenCode agent integration, while isolated-space OpenCode behavior is a separate M5 boundary.
+
+Production startup now starts the supervised Bun OMP Agent Service after the Host listener, Git credential-helper publication and shutdown handlers are ready. No OpenCode binary is required or automatically started. Canonical readiness is `/api/agent/v1/ready`; startup failure leaves canonical operations unavailable, without an alternate engine. Electron Agent Runtime staging is implemented and verified, while packaged Electron UI/runtime certification remains open; the OMP runtime inside a standalone npm installation remains unverified and out of M3 acceptance. Credential handoff is explicit and private; startup never imports credentials.
+
+Full project overview, screenshots, and architecture documents live in the repository root and `.workflow/omp-migration/`.
 
 ## Install
 
@@ -16,7 +24,24 @@ curl -fsSL https://raw.githubusercontent.com/openchamber/openchamber/main/script
 
 Or install manually: `bun add -g @openchamber/web` (or npm, pnpm, yarn).
 
-> **Prerequisites:** [OpenCode CLI](https://opencode.ai) installed, Node.js 22+.
+> **Runtime prerequisites:** Node.js 24.14+ for the Host, Bun 1.3.14+ on PATH for the supervised Agent Service, and built Agent Service entries with their installed pinned SDK/native dependencies. An OpenCode CLI is not a startup prerequisite. The upstream installer command above is inherited distribution guidance; the npm Web package is publicly declared, but the OMP runtime inside a standalone npm installation remains unverified and out of M3 acceptance.
+
+### Monorepo development scripts
+
+```bash
+# From repository root
+bun run build:web       # Build web assets and server dependencies
+bun run dev:web         # Watch and build web UI
+bun run dev:web:server  # Start server with watch mode
+bun run start:web       # Run production server
+
+# From packages/web
+bun run build           # Build builtin extensions and web assets
+bun run dev             # Watch and build
+bun run start           # Start via bin/cli.js serve
+```
+
+
 
 ## Usage
 
@@ -41,20 +66,16 @@ openchamber connect-url --port 3000  # Add this server to OpenChamber Desktop
 openchamber connect-url --server http://host:3000 --qr
 openchamber connect-url --port 3000 --qr
 openchamber logs                     # Follow latest instance logs
-OPENCODE_PORT=4096 OPENCODE_SKIP_START=true openchamber                    # Connect to external OpenCode server
-OPENCODE_HOST=https://myhost:4096 OPENCODE_SKIP_START=true openchamber  # Connect via custom host/HTTPS
 openchamber stop                     # Stop server
 openchamber update                   # Update to latest version
 ```
 
 `startup enable` snapshots your current environment into the native service so startup behaves like you launched `openchamber` from the same shell. This preserves provider tokens, PATH, SSH agent settings, and other CLI auth/config env vars. Use `--no-env-snapshot` for a minimal service env.
 
-When OpenChamber launches the local OpenCode server, it also registers a native
-`openchamber` agent tool for project, session, and scheduled-task orchestration.
-The tool is not injected when connecting to an external OpenCode server.
-Behavior settings can optionally inject a managed system-prompt optimizer on
-the next OpenCode restart. It is disabled by default and is not available for
-external OpenCode servers.
+The canonical Bun workers invoke retained Host capabilities through the private
+Host Action boundary. OpenCode tool injection, managed prompt optimizer and
+explicit restart/config controls are inherited migration blockers, not current
+automatic startup behavior or fallback engines.
 
 ### Tunnel behavior notes
 
@@ -98,36 +119,33 @@ openchamber serve --lan --port 3000 --ui-password your-password
 Generating a client token does not automatically password-protect the hosted browser UI. `--ui-password` protects browser access; the client token lets another OpenChamber app connect to this server.
 
 <details>
-<summary>Connect to external OpenCode server</summary>
+<summary>Host environment variables</summary>
 
-```bash
-OPENCODE_PORT=4096 OPENCODE_SKIP_START=true openchamber
-OPENCODE_HOST=https://myhost:4096 OPENCODE_SKIP_START=true openchamber
-```
+The Host starts the supervised Bun OMP Agent Service automatically behind `/api/agent/v1`.
 
 | Variable | Description |
 |----------|-------------|
-| `OPENCODE_HOST` | Full base URL of external server (overrides `OPENCODE_PORT`) |
-| `OPENCODE_PORT` | Port of external server |
-| `OPENCODE_SKIP_START` | Skip starting embedded OpenCode server |
-| `OPENCHAMBER_OPENCODE_HOSTNAME` | Bind hostname for managed OpenCode server (default: `127.0.0.1`, use `0.0.0.0` for LAN/remote access — trusted networks only). Invalid values are rejected with an error and fall back to loopback |
-| `OPENCHAMBER_HOST` | Bind hostname for the OpenChamber web server (default: `127.0.0.1`; use `0.0.0.0` for LAN/remote access — trusted networks only) |
+| `OPENCHAMBER_HOST` | Bind hostname for the OpenChamber web server (default: `127.0.0.1`; use `0.0.0.0` for LAN/remote access. trusted networks only) |
 | `OPENCHAMBER_VERBOSE_REQUEST_LOGS` | Set to `true` to log every HTTP request; disabled by default to keep user logs small |
+| `OPENCHAMBER_GITLAB_CLIENT_ID` | OAuth application ID used for GitLab device flow. Overrides the built-in application, which covers `gitlab.com` only; a self-managed instance needs its own. Personal access token and `glab` authentication remain available without it. |
 | `OPENCHAMBER_SKIP_API_COMPRESSION` | Set to `true` to disable gzip compression for `/api/*` responses |
-| `OPENCHAMBER_COMPRESS_API` | Set to `true` to force `/api/*` compression, or `false` to disable it. Desktop runtime disables API compression by default to reduce local sidecar CPU use |
+| `OPENCHAMBER_COMPRESS_API` | Set to `true` to force `/api/*` compression, or `false` to disable it. Desktop runtime disables API compression by default to reduce local CPU overhead |
 | `OPENCHAMBER_FS_UPLOAD_MAX_BYTES` | Maximum file upload size in bytes (default: 100 MiB) |
 | `OPENCHAMBER_TERMINAL_SHELL` | Preferred terminal shell executable used by the `Auto` setting before platform defaults |
+| `npm_config_registry` / `NPM_CONFIG_REGISTRY` | Registry used for plugin metadata and npm version checks. Scoped registry settings and the user's `.npmrc` are also honored. The lowercase value takes precedence when both are set. |
 
 </details>
 
 <details>
-<summary>Bind managed OpenCode to LAN / Tailscale</summary>
+<summary>Bind the Host Gateway to LAN / Tailscale</summary>
 
 ```bash
-OPENCHAMBER_OPENCODE_HOSTNAME=0.0.0.0 openchamber --port 3000
+openchamber serve --host 0.0.0.0 --port 3000 --ui-password your-password
 ```
 
-**Security note:** binding to `0.0.0.0` exposes the server on all network interfaces — use only on trusted networks and protect with firewall rules or `--ui-password`.
+The Agent Service stays private on loopback behind the authenticated Host. Protect
+network exposure with UI authentication and appropriate firewall rules; enterprise
+network policy still applies.
 
 </details>
 
@@ -160,7 +178,7 @@ Managed-local path note: `OPENCHAMBER_TUNNEL_CONFIG` must use a container path u
 
 **Data directory:** mount `data/` for persistent storage. Ensure permissions:
 ```bash
-mkdir -p data/openchamber data/opencode/share data/opencode/config data/ssh
+mkdir -p data/openchamber data/ssh
 chown -R 1000:1000 data/
 ```
 
@@ -179,28 +197,14 @@ openchamber stop        # Stop background server
 <details>
 <summary>systemd service (VPN / LAN access)</summary>
 
-Use `--foreground` to keep the CLI process alive so systemd (or any other process manager) can track and restart it. Combine with `OPENCODE_HOST` to connect to an OpenCode instance running as a separate service.
-
-**`~/.config/systemd/user/opencode.service`**
-```ini
-[Unit]
-Description=OpenCode Server
-
-[Service]
-Type=simple
-ExecStart=opencode serve --port 4095
-Environment="PATH=/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/home/YOU/.local/bin:/home/YOU/.npm-global/bin:/usr/local/bin:/usr/bin:/bin"
-Environment=SSH_AUTH_SOCK=%t/ssh-agent.socket
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=default.target
-```
+Use `--foreground` to keep the Node Host in-process so systemd (or another process
+manager) can track and restart it. The Host supervises the Bun Agent Service;
+there is no separate OpenCode service dependency. Ensure Bun and the built service
+dependencies are installed and reachable in the service environment.
 
 > **Why set `PATH` and `SSH_AUTH_SOCK`?**
-> systemd user services start with a minimal environment — no shell profile is sourced.
-> Without an explicit `PATH`, OpenCode won't find tools installed via Homebrew, npm, or `~/.local/bin`.
+> systemd user services start with a minimal environment. no shell profile is sourced.
+> Without an explicit `PATH`, Bun and tools installed via Homebrew, npm, or `~/.local/bin` may be unavailable to the service and its shells.
 > Without `SSH_AUTH_SOCK`, git operations over SSH (push, pull, clone) will fail.
 > `%t` expands to `$XDG_RUNTIME_DIR` (e.g. `/run/user/1000`), where most SSH agents write their socket.
 
@@ -208,13 +212,12 @@ WantedBy=default.target
 ```ini
 [Unit]
 Description=OpenChamber Web Server
-After=opencode.service
 
 [Service]
 Type=simple
 ExecStart=openchamber serve --port 3000 --host 0.0.0.0 --ui-password your-password --foreground
-Environment="OPENCODE_HOST=http://localhost:4095"
-Environment="OPENCODE_SKIP_START=true"
+Environment="PATH=/home/YOU/.bun/bin:/home/YOU/.local/bin:/usr/local/bin:/usr/bin:/bin"
+Environment=SSH_AUTH_SOCK=%t/ssh-agent.socket
 Restart=on-failure
 RestartSec=5
 
@@ -224,7 +227,7 @@ WantedBy=default.target
 
 ```bash
 systemctl --user daemon-reload
-systemctl --user enable --now opencode openchamber
+systemctl --user enable --now openchamber
 ```
 
 `--host 0.0.0.0` is required to listen on all interfaces (the default is `127.0.0.1`). Use `--host <ip>` or `OPENCHAMBER_HOST=<ip>` to bind to a specific interface instead.
@@ -233,18 +236,11 @@ systemctl --user enable --now opencode openchamber
 
 ## What makes the web version special
 
-- **Remote access** - Cloudflare tunnel with QR onboarding. Scan from your phone, start coding.
-- **Mobile-first PWA** - optimized chat controls, keyboard-safe layouts, drag-to-reorder projects
+- **Remote access** - Cloudflare tunnel with quick, managed-remote, and managed-local modes plus QR onboarding (direct UI password entry required)
+- **Mobile-first PWA** - optimized chat controls, keyboard-safe layouts, drag-to-reorder projects, and attachment-friendly UI
 - **Background notifications** - know when your agent finishes, even from another tab
-- **Self-update** - update and restart from the UI, server settings stay intact
-- **Cross-tab tracking** - session activity stays in sync across browser tabs
-
-- Cloudflare tunnel access with quick, managed-remote, and managed-local modes
-- One-scan onboarding with tunnel QR + password URL helpers
-- Mobile-first experience: optimized chat controls, keyboard-safe layouts, and attachment-friendly UI
-- Background notifications plus reliable cross-tab session activity tracking
-- Built-in self-update + restart flow that keeps your server settings intact
-
+- **Cross-tab tracking** - session activity stays in sync reliably across browser tabs
+- **Self-update** - update and restart flow from the UI that keeps server settings intact
 ## License
 
 MIT

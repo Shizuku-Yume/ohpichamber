@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { GUEST_ITEM_MESSAGE_TEXT_MAX, GUEST_ITEM_SESSION_MAX } from '@openchamber/sdk';
-import type { Message, Part } from '@opencode-ai/sdk/v2';
+import type { Message, Part } from '@openchamber/agent-contract';
 
 import {
   buildGuestMessageItem,
@@ -13,12 +13,29 @@ import type { InstalledGuest } from './types.ts';
 import { enabledGuestSurfaces } from './surfaces.ts';
 import { parseGuestCatalogJson } from './parse.ts';
 
-// SAFETY: the builders under test read only id, role, time.created, and the
-// text parts; the rest of an OpenCode message record never enters the item.
-const record = (id: string, role: 'user' | 'assistant', text: string, created = 1) => ({
-  info: { id, role, sessionID: 'ses-1', time: { created } } as Message,
-  parts: [{ id: `${id}-p`, sessionID: 'ses-1', messageID: id, type: 'text', text } as Part],
+const textPart = (partId: string, content: string): Part => ({ partId, type: 'text', content });
+
+const record = (messageId: string, role: 'user' | 'assistant', text: string, createdAt = 1): Message => {
+  const message: Message = {
+    messageId, sessionId: 'ses-1', turnId: `turn-${messageId}`, role, createdAt,
+    parts: [textPart(`${messageId}-p`, text)],
+  };
+  if (role === 'assistant') {
+    message.providerId = 'anthropic';
+    message.modelId = 'sonnet';
+  }
+  return message;
+};
+
+/** A plumbing role v2 interleaves with the conversation; it carries no text. */
+const plumbing = (messageId: string, createdAt: number): Message => ({
+  messageId, sessionId: 'ses-1', turnId: `turn-${messageId}`, role: 'system', createdAt, parts: [],
 });
+/** Canonical conversation records carry attached context as ordinary user text. */
+const attachedContext = (messageId: string, createdAt: number): Message => record(
+  messageId, 'user', 'Quoted from a.ts\nconst a = 1;\nlook at this', createdAt,
+);
+
 
 const session = { sessionId: 'ses-1', sessionTitle: '  Hello  ', directory: '/repo' };
 
@@ -36,7 +53,7 @@ describe('guestActionEntries', () => {
     const background = guest('background', { entry: undefined, backgroundEntry: 'background/index.html', actions: [
       { id: 'count', label: 'Count', where: 'message', mode: 'background' },
     ] });
-    const catalog = parseGuestCatalogJson(JSON.stringify({ guests: [background] }));
+    const catalog = parseGuestCatalogJson(JSON.stringify({ guests: [background] }))?.guests;
     if (!catalog) throw new Error('Expected a valid catalog');
     expect(catalog[0].backgroundEntry).toBe('background/index.html');
     expect(guestActionEntries(catalog, (path) => path).map((entry) => entry.action.id)).toEqual(['count']);
@@ -98,6 +115,19 @@ describe('buildGuestSessionItem', () => {
       { id: 'm3', role: 'assistant', text: 'Hello back', createdAt: 30 },
     ]);
     expect(item.truncated).toBeUndefined();
+  });
+
+  test('keeps attached context in the canonical user message and drops plumbing roles', () => {
+    const item = buildGuestSessionItem('summarize', session, [
+      attachedContext('c1', 5),
+      plumbing('s1', 6),
+      record('m1', 'user', 'Hi', 10),
+    ]);
+    expect(item.messages?.map((message) => ({ id: message.id, role: message.role }))).toEqual([
+      { id: 'c1', role: 'user' },
+      { id: 'm1', role: 'user' },
+    ]);
+    expect(item.messages?.[0].text).toContain('const a = 1;');
   });
 
   test('drops the oldest messages until the item fits and marks it truncated', () => {

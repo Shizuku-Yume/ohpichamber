@@ -1,0 +1,132 @@
+{
+ "at": "2026-10-21T12:43:30.554Z",
+ "login": 200,
+ "calls": {
+  "/api/source-control/github/auth/status": {
+   "status": 200,
+   "body": {
+    "connected": true,
+    "user": {
+     "login": "Shizuku-Yume",
+     "id": 135561100,
+     "avatarUrl": "https://avatars.githubusercontent.com/u/135561100?v=4",
+     "name": "ShizukuYume",
+     "email": null
+    },
+    "accounts": [
+     {
+      "id": "github.com#cli:135561100",
+      "credentialId": "[redacted]",
+      "credentialRevision": "[redacted]",
+      "providerUserId": "github.com#135561100",
+      "providerUserStatus": "available",
+      "user": {
+       "login": "Shizuku-Yume",
+       "id": 135561100,
+       "avatarUrl": "https://avatars.githubusercontent.com/u/135561100?v=4",
+       "name": "ShizukuYume",
+       "email": null
+      },
+      "current": true,
+      "source": "gh-cli",
+      "status": "valid"
+     }
+    ],
+    "ghCli": {
+     "available": true,
+     "disabled": false,
+     "active": true,
+     "user": {
+      "login": "Shizuku-Yume",
+      "id": 135561100,
+      "avatarUrl": "https://avatars.githubusercontent.com/u/135561100?v=4",
+      "name": "ShizukuYume",
+      "email": null
+     }
+    }
+   }
+  },
+  "/api/github/auth/status": {
+   "status": 200,
+   "body": {
+    "connected": true,
+    "user": {
+     "login": "Shizuku-Yume",
+     "id": 135561100,
+     "avatarUrl": "https://avatars.githubusercontent.com/u/135561100?v=4",
+     "name": "ShizukuYume",
+     "email": null
+    },
+    "accounts": [
+     {
+      "id": "github.com#cli:135561100",
+      "credentialId": "[redacted]",
+      "credentialRevision": "[redacted]",
+      "providerUserId": "github.com#135561100",
+      "providerUserStatus": "available",
+      "user": {
+       "login": "Shizuku-Yume",
+       "id": 135561100,
+       "avatarUrl": "https://avatars.githubusercontent.com/u/135561100?v=4",
+       "name": "ShizukuYume",
+       "email": null
+      },
+      "current": true,
+      "source": "gh-cli",
+      "status": "valid"
+     }
+    ],
+    "ghCli": {
+     "available": true,
+     "disabled": false,
+     "active": true,
+     "user": {
+      "login": "Shizuku-Yume",
+      "id": 135561100,
+      "avatarUrl": "https://avatars.githubusercontent.com/u/135561100?v=4",
+      "name": "ShizukuYume",
+      "email": null
+     }
+    }
+   }
+  }
+ },
+ "register": {
+  "status": 200,
+  "projects": [
+   {
+    "id": "path_L3RtcC9vaHBpLXRhc2sxNWIvY2hhdHMvd29yaw",
+    "path": "/tmp/ohpi-task15b/chats/work",
+    "addedAt": 1792586198658,
+    "lastOpenedAt": 1792586198658
+   }
+  ],
+  "activeProjectId": "path_L3RtcC9vaHBpLXRhc2sxNWIvY2hhdHMvd29yaw"
+ },
+ "binding": {
+  "status": 200,
+  "body": {
+   "repository": {
+    "supported": true,
+    "repositoryId": "repo_y9zButqk88I-67DDjSMZsasJJEZXpL7chvUGZonpILc",
+    "configRevision": "KR2roj_1EnivUHDdbwDlIsOxPPXw7HzJYMy_lNMIREI",
+    "bare": false,
+    "remotes": [
+     {
+      "name": "origin",
+      "fetch": {
+       "displayUrl": "https://github.com/openchamber/openchamber",
+       "fingerprint": "UUjOUtuvkhFQuZITAyrMJOQTesedz6pQtktE250FzIQ"
+      },
+      "push": {
+       "displayUrl": "https://github.com/openchamber/openchamber",
+       "fingerprint": "UUjOUtuvkhFQuZITAyrMJOQTesedz6pQtktE250FzIQ"
+      }
+     }
+    ]
+   },
+   "revision": 0,
+   "binding": null
+  }
+ }
+}

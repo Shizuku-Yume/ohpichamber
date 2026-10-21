@@ -2,14 +2,13 @@ import React from 'react';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { usePwaManifestSync } from '@/hooks/usePwaManifestSync';
 import { useMessageQueueHoldSync } from '@/hooks/useMessageQueueHoldSync';
-import { useQueuedMessageAutoSend } from '@/hooks/useQueuedMessageAutoSend';
 import { useSessionAutoCleanup } from '@/hooks/useSessionAutoCleanup';
+import { useMergedWorktreeCleanup } from '@/hooks/useMergedWorktreeCleanup';
 import { useWindowControlsOverlayLayout } from '@/hooks/useWindowControlsOverlayLayout';
 import { setOptimisticRefs } from '@/sync/session-actions';
 import { markSessionViewed } from '@/sync/notification-store';
 import { setExternallyViewedSession } from '@/sync/sync-context';
 import { useSync } from '@/sync/use-sync';
-import { isServerOwnedMessageQueue } from '@/stores/messageQueueStore';
 
 const MINI_CHAT_PRESENCE_CHANNEL = 'openchamber:mini-chat-presence';
 
@@ -64,20 +63,18 @@ const MiniChatPresenceBridge: React.FC = () => {
   return null;
 };
 
-export function SyncRuntimeEffects({ embeddedBackgroundWorkEnabled }: {
-  embeddedBackgroundWorkEnabled: boolean;
+export function SyncRuntimeEffects({ backgroundWorkEnabled }: {
+  backgroundWorkEnabled: boolean;
 }) {
-  useSessionAutoCleanup({ enabled: embeddedBackgroundWorkEnabled });
-  // Web, desktop, and mobile hand the queue to the OpenChamber server, which
-  // delivers it with or without a UI; only VS Code still sends from the UI.
-  useQueuedMessageAutoSend(embeddedBackgroundWorkEnabled && !isServerOwnedMessageQueue());
+  useSessionAutoCleanup({ enabled: backgroundWorkEnabled });
+  useMergedWorktreeCleanup({ enabled: backgroundWorkEnabled });
   useMessageQueueHoldSync();
 
   return <SyncOptimisticBridge />;
 }
 
-export function SyncAppEffects({ embeddedBackgroundWorkEnabled }: {
-  embeddedBackgroundWorkEnabled: boolean;
+export function SyncAppEffects({ backgroundWorkEnabled }: {
+  backgroundWorkEnabled: boolean;
 }) {
   usePwaManifestSync();
   useWindowControlsOverlayLayout();
@@ -85,7 +82,7 @@ export function SyncAppEffects({ embeddedBackgroundWorkEnabled }: {
 
   return (
     <>
-      <SyncRuntimeEffects embeddedBackgroundWorkEnabled={embeddedBackgroundWorkEnabled} />
+      <SyncRuntimeEffects backgroundWorkEnabled={backgroundWorkEnabled} />
       <MiniChatPresenceBridge />
     </>
   );

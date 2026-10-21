@@ -1,10 +1,10 @@
 # Canonical Agent API v1 contract
 
-This document defines the proposed Canonical Agent API v1 protocol (`/api/agent/v1`). It establishes the contract between OpenChamber client surfaces (Web, Desktop, Mobile, Guest extensions) and the Agent Service running on top of the Oh My Pi (OMP) SDK.
+This document defines the Canonical Agent API v1 protocol (`/api/agent/v1`) between client surfaces and the OMP-backed Agent Service.
 
-This contract is a proposed design specification. The TypeScript schemas and endpoint structures in this document are design models, not yet exported interfaces in the repository. The proposed target packages `packages/agent-contract` and `packages/agent-service` do not exist yet; the current `packages/sdk` owns the implemented Guest extension contract, including panel, lifecycle, file-editor, storage and service-provider APIs, rather than the proposed canonical agent contract.
+Wire DTOs and Zod schemas live in `packages/agent-contract`. The endpoint behavior below remains an implementation requirement until its owning M2/M3 task exercises it; schema acceptance is not proof of SDK, provider or transport behavior. `packages/sdk` continues to own the separate Guest extension contract, not the canonical agent contract.
 
-The [latest-upstream rebaseline](../specs/upstream-rebaseline.md) has adopted the application source. The [refreshed-source traceability](scope.md#refreshed-source-traceability) identifies additional consumers of this proposed protocol. M0 must establish actual OMP session, execution, approval, credential and completion behavior before these draft schemas become exported contracts.
+The [latest-upstream rebaseline](../specs/upstream-rebaseline.md), accepted M0 SDK evidence and completed M1 Host extraction precede this contract. [Development progress](../development.md) records their evidence and provider/platform limits. The [refreshed-source traceability](scope.md#refreshed-source-traceability) identifies retained consumers.
 
 Related migration documents:
 - Scope and boundaries: [scope.md](scope.md)
@@ -32,14 +32,14 @@ When requirements conflict, documents follow this strict hierarchy:
 5. **JSON-Safe Projections.** Raw OMP SDK objects, Circular references, Symbols, and Node.js or Bun stream handles must never cross process or network boundaries. The Agent Service projects SDK state into plain, JSON-serializable Data Transfer Objects (DTOs).
 6. **Path Isolation.** Client-facing payloads, attachments, and internal URIs must never expose host absolute filesystem paths. All files use opaque identifiers or repository-relative paths.
 
-## Refreshed-source obligations before contract freeze
+## Refreshed-source implementation obligations
 
 - Guest Shell execution is worker-local OMP `BashTool`/native `executeBash`, retained by `AsyncJobManager` and inspected/cancelled through `AgentSession`. The [Guest Shell artifact](m0/guest-shell.json) establishes real start, output, exits, stop, retention and disposal. The separate Guest SDK contract remains in `packages/sdk`; it is not an agent transcript or an interactive PTY. See [Guest Shell projection](#guest-shell-projection-and-ownership) for intentional service requirements.
-- Stateless completion serves Git/PR generation, titles, goals and walkthrough through current small-model callers. Probe text and structured completion, cancellation, model selection and errors before assigning canonical commands. The M0 capability fixture observed text, structured, cancellation and failure completion through controlled OMP mock/custom dispatch. That is SDK behavior only, not evidence for a public endpoint contract; canonical commands remain proposed. Host services must not become a second direct-provider engine. [M0 capability artifact](m0/capabilities-fixture.json)
+- Stateless completion serves Git/PR generation, titles, goals and walkthrough. Reuse the M0 controlled text, structured, cancellation and failure observations; task 12 must exercise the canonical service commands without turning Host services into a second provider engine. Real-provider structured conformance remains separate from the controlled SDK evidence. [M0 capability artifact](m0/capabilities-fixture.json)
 - SourceBoard session/worktree launch and environment overlays need directory-bound execution. The M0 isolation fixture passed dedicated workers but failed all shared-process cwd/env modes. Shared process is unsafe for ambient cwd/env in this observed fixture, so dedicated workers are the current evidence-backed boundary direction. This evidence does not change ADR-03 or any API schema. [M0 isolation artifact](m0/isolation-artifact.json)
 - The inherited bridge translates OpenCode text, reasoning, tool and execution events. Their names and 50 ms delta batching are not canonical contracts. Measure OMP ordering and fragment density; retain canonical cursors and authoritative resync semantics regardless of transport batching.
 - Isolated-space dispatch currently forwards the inherited runtime. Its tokens, untrusted identity/events, quarantined code transfer, and gatekeeper grants need an OMP mapping with live boundary evidence. Source import alone does not establish it.
-- Atomic JSON queue persistence is current source behavior. The target SQLite queue and its leases are a deliberate migration. Neither queue may duplicate the engine transcript or reinterpret fetch failure as authoritative empty state.
+- The Host prompt queue is implemented in SQLite (`host-metadata.sqlite`) with ordered leases, decimal revisions, captured attachments, idempotent delivery and explicit failure states; the inherited atomic JSON store is its converted predecessor. Neither queue duplicates the engine transcript or treats fetch failure as authoritative empty state. Later M4 queue orchestration remains feature work on the same Host persistence owner.
 - The exercised installable input is the pinned-source artifact set in [source-install.json](m0/source-install.json), not registry 18.8.9. Reuse prior observations only for unchanged exercised owners and retain the factory probe's exit 1. Installed identity and its limits are recorded in [development.md](../development.md#guest-shell-and-installable-sdk-evidence); task 08 must re-establish application resolutions.
 
 
@@ -58,7 +58,69 @@ Clients reach this API through the Host Gateway (Node.js/Electron), which authen
 | `GET` | `/api/agent/v1/health` | Service health status | Optional | Yes | JSON |
 | `GET` | `/api/agent/v1/ready` | Readiness and OMP SDK probe | Optional | Yes | JSON |
 | `GET` | `/api/agent/v1/capabilities` | Negotiate capabilities and features | Required | Yes | JSON |
-| `GET` | `/api/agent/v1/models` | List available models and modalities | Required | Yes | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/models` | Authorized workspace model catalog | Required | Yes | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/providers` | Provider configuration and non-secret credential presence | Required | Yes | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/agents` | Agent profile catalog | Required | Yes | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/agents` | Create an agent profile | Required | Yes (Revision) | JSON |
+| `PUT` | `/api/agent/v1/workspaces/:workspaceId/agents/:agentId` | Replace an agent profile | Required | Yes (Revision) | JSON |
+| `DELETE` | `/api/agent/v1/workspaces/:workspaceId/agents/:agentId` | Delete an agent profile | Required | Yes (Revision) | JSON |
+| `PUT` | `/api/agent/v1/workspaces/:workspaceId/providers/:providerId/config` | Persist provider configuration | Required | Yes (Revision) | JSON |
+| `DELETE` | `/api/agent/v1/workspaces/:workspaceId/providers/:providerId` | Delete provider configuration | Required | Yes (Revision) | JSON |
+| `PUT` | `/api/agent/v1/workspaces/:workspaceId/providers/:providerId/models/:modelId` | Persist model configuration | Required | Yes (Revision) | JSON |
+| `DELETE` | `/api/agent/v1/workspaces/:workspaceId/providers/:providerId/models/:modelId` | Delete model configuration | Required | Yes (Revision) | JSON |
+| `PUT` | `/api/agent/v1/workspaces/:workspaceId/providers/:providerId/credential` | Explicit credential write | Required | Yes (Revision) | JSON |
+| `DELETE` | `/api/agent/v1/workspaces/:workspaceId/providers/:providerId/credential/:credentialRef` | Explicit credential deletion | Required | Yes (Revision) | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/providers/oauth-methods` | Native provider login methods and their stored-provider identity | Required | Yes | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/providers/discover` | Discover models from a custom provider endpoint | Required | Yes | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/providers/:providerId/accounts` | Non-secret stored credential roster | Required | Yes | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/providers/:providerId/accounts` | Select, remove or label a stored account | Required | Yes (Revision) | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/providers/:providerId/oauth` | Start, read, advance, cancel or commit a native provider OAuth flow | Required | Yes (Revision/Generation) | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/providers/:providerId/config` | Custom provider configuration, header names and models | Required | Yes | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/cache-warming` | Workspace prompt-cache warming state | Required | Yes | JSON |
+| `PUT` | `/api/agent/v1/workspaces/:workspaceId/cache-warming` | Persist warming mode, then apply it to active roots | Required | Yes (Revision) | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/web-search` | Web search configuration and provider catalog | Required | Yes | JSON |
+| `PUT` | `/api/agent/v1/workspaces/:workspaceId/web-search` | Persist web search configuration | Required | Yes (Revision) | JSON |
+| `PUT` | `/api/agent/v1/workspaces/:workspaceId/web-search/credentials/:providerId` | Write one write-only provider credential | Required | Yes (Revision) | JSON |
+| `DELETE` | `/api/agent/v1/workspaces/:workspaceId/web-search/credentials/:providerId` | Remove one provider credential | Required | Yes (Revision) | JSON |
+| `GET` | `/api/agent/v1/usage` | Authorized historical usage summary | Required | Yes | JSON |
+| `GET` | `/api/agent/v1/usage/tools` | Authorized historical tool execution report | Required | Yes | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/commands` | Workspace and selected-agent command catalog | Required | Yes | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/commands` | Create a command file | Required | Yes (Revision) | JSON |
+| `PATCH` | `/api/agent/v1/workspaces/:workspaceId/commands/:commandId` | Replace a command file | Required | Yes (Revision) | JSON |
+| `DELETE` | `/api/agent/v1/workspaces/:workspaceId/commands/:commandId` | Remove a command file | Required | Yes (Revision) | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/commands/expand` | Expand a command with user arguments | Required | Yes | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/commands/expand-text` | Prepare raw composer input through the native command-then-template pipeline | Required | Yes | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/prompt-templates` | Workspace and selected-agent prompt template catalog | Required | Yes | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/prompt-templates` | Create a prompt template file | Required | Yes (Revision) | JSON |
+| `PATCH` | `/api/agent/v1/workspaces/:workspaceId/prompt-templates/:templateId` | Replace a prompt template file | Required | Yes (Revision) | JSON |
+| `DELETE` | `/api/agent/v1/workspaces/:workspaceId/prompt-templates/:templateId` | Remove a prompt template file | Required | Yes (Revision) | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/prompt-templates/expand` | Expand a prompt template with user arguments | Required | Yes | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/prompt-templates/expand-text` | Expand raw text through the native template loader | Required | Yes | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/skills/catalog` | Native discovered skill catalog for expansion | Required | Yes | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/skills/expand` | Expand a discovered skill prompt | Required | Yes | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/skills/files` | Host-owned authored skill source catalog | Required | Yes | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/skills/files/:skillId` | Authored skill files and their source revision | Required | Yes | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/skills/files/:skillId/:filePath` | One authored skill file | Required | Yes | JSON |
+| `PUT` | `/api/agent/v1/workspaces/:workspaceId/skills/files/:skillId/:filePath` | Write one authored skill file | Required | Yes (Revision) | JSON |
+| `DELETE` | `/api/agent/v1/workspaces/:workspaceId/skills/files/:skillId` | Remove an authored skill | Required | Yes (Revision) | JSON |
+| `DELETE` | `/api/agent/v1/workspaces/:workspaceId/skills/files/:skillId/:filePath` | Remove one authored skill file | Required | Yes (Revision) | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/skills/files/apply` | Apply the current Host skill source revision to active roots | Required | Yes (Revision) | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/skills/files/:skillId/rename` | Rename an authored skill | Required | Yes (Revision) | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/skills/repositories` | Trusted skill repository catalog | Required | Yes | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/skills/repositories/source` | Scan a curated repository source | Required | Yes | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/skills/repositories/scan` | Scan an explicit repository source | Required | Yes | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/skills/repositories/install` | Install selected repository skills through Host source commit | Required | Yes (Revision) | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/plugins` | Plugin, marketplace and local extension catalog | Required | Yes | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/plugins/install` | Install a native package or marketplace plugin | Required | Yes (Revision) | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/plugins/uninstall` | Uninstall a native plugin | Required | Yes (Revision) | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/plugins/apply` | Apply the committed plugin revision by restarting idle roots | Required | Yes (Revision) | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/plugins/marketplace` | Refresh and read native marketplace inventory | Required | Yes | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/plugins/doctor` | Native plugin diagnostics | Required | Yes | JSON |
+| `PATCH` | `/api/agent/v1/workspaces/:workspaceId/plugins/:pluginName` | Enable, disable or write global plugin settings | Required | Yes (Revision) | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/plugins/:pluginName/update` | Update an installed plugin | Required | Yes (Revision) | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/plugins/local/:extensionId` | Read confined local extension source | Required | Yes | JSON |
+| `PUT` | `/api/agent/v1/workspaces/:workspaceId/plugins/local/:extensionId` | Write confined local extension source | Required | Yes (Revision) | JSON |
+| `DELETE` | `/api/agent/v1/workspaces/:workspaceId/plugins/local/:extensionId` | Delete confined local extension source | Required | Yes (Revision) | JSON |
 | `GET` | `/api/agent/v1/sessions` | List sessions for an authorized opaque workspace identity | Required | Yes | JSON |
 | `POST` | `/api/agent/v1/sessions` | Create a new session | Required | Yes (Key) | JSON |
 | `GET` | `/api/agent/v1/sessions/:sessionId` | Get session metadata and status | Required | Yes | JSON |
@@ -87,10 +149,20 @@ Clients reach this API through the Host Gateway (Node.js/Electron), which authen
 | `PUT` | `/api/agent/v1/sessions/:sessionId/mcp/config` | Persist workspace MCP config, then apply across its active root workers | Required | Yes (Revision) | JSON |
 | `POST` | `/api/agent/v1/sessions/:sessionId/mcp/apply` | Apply current workspace config across its active root workers without restart | Required | Yes (Revision) | JSON |
 | `POST` | `/api/agent/v1/sessions/:sessionId/mcp/servers/:serverId/reconnect` | Reconnect one configured server in the addressed root worker | Required | Yes (Key) | JSON |
+| `GET` | `/api/agent/v1/sessions/:sessionId/mcp/servers/:serverId/oauth` | Read MCP server OAuth status and any active pending flow for the addressed root worker | Required | Yes | JSON |
+| `POST` | `/api/agent/v1/sessions/:sessionId/mcp/servers/:serverId/oauth` | Start, complete, cancel or disconnect MCP server OAuth in the addressed root worker | Required | Yes (Revision/Generation) | JSON |
 | `GET` | `/api/agent/v1/sessions/:sessionId/skills/catalog` | Addressed root worker's installed-source revisions and active skill catalog | Required | Yes | JSON |
-| `POST` | `/api/agent/v1/sessions/:sessionId/skills/install` | Host source commit plus scoped root-worker discovery outcomes | Required | Yes (Key) | JSON |
 | `POST` | `/api/agent/v1/sessions/:sessionId/skills/apply` | Apply installed workspace or selected-agent source revision across affected roots | Required | Yes (Revision) | JSON |
 | `POST` | `/api/agent/v1/sessions/:sessionId/skills/expand` | Expand from addressed root worker's generation/catalog; does not submit a prompt | Required | Yes | JSON |
+| `POST` | `/api/agent/v1/sessions/:sessionId/shell/jobs` | Start a worker-local Shell job | Required | No | JSON |
+| `GET` | `/api/agent/v1/sessions/:sessionId/shell/jobs` | Authorized session-tree Shell snapshot | Required | Yes | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/shell/jobs` | Authorized workspace Shell snapshot | Required | Yes | JSON |
+| `GET` | `/api/agent/v1/projects/:projectId/shell/jobs` | Authorized project Shell snapshot | Required | Yes | JSON |
+| `GET` | `/api/agent/v1/shell/jobs` | Shell snapshot within the full granted scope | Required | Yes | JSON |
+| `GET` | `/api/agent/v1/sessions/:sessionId/shell/jobs/:jobId/output` | Bounded UTF-8 output range | Required | Yes | JSON |
+| `POST` | `/api/agent/v1/sessions/:sessionId/shell/jobs/:jobId/stop` | Stop and observe actual job termination | Required | Yes | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/completions` | Stateless text or structured completion | Required | No | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/completions/:completionId/cancel` | Cancel the matching active completion | Required | Yes | JSON |
 
 ### Capability negotiation
 
@@ -158,6 +230,7 @@ The intentional extensions are `code`, the stable machine-readable error code; `
 ```
 
 Standard error codes:
+- `SERVICE_UNAVAILABLE`, `UNAUTHORIZED`, `INTERNAL_ERROR`, `INVALID_ORIGIN`, `enterprise_mode`, `UNSUPPORTED_MEDIA_TYPE` and `INVALID_REQUEST` retain the implemented Host readiness, authentication and request-boundary failures. `NOT_IMPLEMENTED` covers the deliberate unsupported-endpoint response.
 - `SESSION_NOT_FOUND`: Session does not exist or was deleted.
 - `RUN_ACTIVE`: Cannot start a new run while another run is active. Use `/steer`, `/follow-up`, or `/queue`.
 - `RUN_NOT_FOUND`: Referenced run ID does not exist.
@@ -165,335 +238,114 @@ Standard error codes:
 - `APPROVAL_CONFLICT` / `QUESTION_CONFLICT`: CAS version mismatch or request already resolved, HTTP 409.
 - `APPROVAL_EXPIRED` / `QUESTION_EXPIRED`: Request expired due to timeout or runtime restart, HTTP 410.
 - `IDEMPOTENCY_CONFLICT`: Command ID reused with conflicting payload parameters.
-- `RESYNC_REQUIRED`: Client event cursor is outside replay coverage, in another epoch or beyond the stream head, HTTP 410 before stream headers.
+- `RESYNC_REQUIRED`: Event or Shell output cursor is outside retained coverage or belongs to a retired epoch/generation, HTTP 410. Event-stream rejection happens before headers.
 - `INVALID_CURSOR`: Pagination or stream cursor cannot be parsed, HTTP 400.
 - `UNSUPPORTED_CAPABILITY`: Requested feature is not enabled or supported.
 - `SESSION_RESTORE_FAILED`: Saved model is unavailable or incompatible.
 - `PAYLOAD_TOO_LARGE`: Upload or input exceeds its limit.
 - `METADATA_CONFLICT` / `QUEUE_CONFLICT` / `CATALOG_CONFLICT`: Owning revision mismatch, HTTP 409 with the current authorized state.
 - `APPROVAL_POLICY_WRITE_FAILED`: Host policy persistence failed; request remains pending, HTTP 503.
-- `MCP_CONFIG_WRITE_FAILED` / `MCP_APPLY_FAILED` / `MCP_RECONNECT_FAILED` / `SKILL_INSTALL_FAILED` / `SKILL_APPLY_FAILED`: Explicit persistence/runtime failure with sanitized previous/current revision state, never empty success.
+- `MCP_CONFIG_READ_FAILED` / `MCP_CONFIG_WRITE_FAILED` / `MCP_APPLY_FAILED` / `MCP_RECONNECT_FAILED` / `MCP_CREDENTIAL_UNAVAILABLE` / `MCP_OAUTH_FAILED` / `MCP_OAUTH_CANCELLED` / `MCP_OAUTH_NOT_FOUND` / `WORKER_GENERATION_CONFLICT` / `SKILL_INSTALL_FAILED` / `SKILL_APPLY_FAILED`: Explicit persistence, credential, OAuth, generation or runtime failure with sanitized state, never empty success.
+- `METADATA_CORRUPT` / `METADATA_READ_FAILED` / `METADATA_WRITE_FAILED`: Explicit Host metadata failures; preserve previously committed state.
+- `MODEL_UNAVAILABLE` / `PROVIDER_UNAVAILABLE` / `PROVIDER_FAILURE` / `CONTEXT_LIMIT` / `STRUCTURED_OUTPUT_INVALID`: Completion/model selection failures, without provider secrets or raw exceptions.
+- `COMPLETION_NOT_FOUND`: No matching active completion exists for cancellation.
+- `PROVIDER_CONFIG_WRITE_FAILED` / `MODEL_CONFIG_WRITE_FAILED` / `CREDENTIAL_WRITE_FAILED`: Configuration or credential persistence failed; no success revision is published.
+- `SHELL_NOT_FOUND` / `SHELL_OUTPUT_UNAVAILABLE` / `SHELL_STOP_TIMEOUT`: Missing current job, unreadable retained output or failure to observe stop before its deadline.
 
 ---
 
 ## Identity and domain models
 
-The following TypeScript schemas represent the proposed wire contracts. These models are strict DTOs.
+[`packages/agent-contract/src/index.ts`](../../packages/agent-contract/src/index.ts) exports each wire type and its `<Type>Schema`. These strict schemas are the field-level authority; this document owns protocol semantics rather than a second copy of their TypeScript declarations.
 
-```typescript
-// Proposed types for packages/agent-contract
+| Domain | Schema owner | Contract |
+|---|---|---|
+| IDs, counters and cursors | `primitives.ts` | Opaque identities; unsigned-64 canonical decimal counters; epoch-qualified stream cursors; separate opaque pagination cursors |
+| Errors | `errors.ts` | Top-level RFC 7807 Problem Details and deliberate failure codes |
+| Projects, agent profiles and sessions | `session.ts` | Opaque project/workspace mappings; model binding, tool whitelist, optional prompt override and permission preset; live runtime status and active outer-run identity |
+| Host metadata | `metadata.ts` | Nullable metadata paired with its exact revision; typed `openchamber` operational fields and null-deletion patches |
+| Runs, turns, messages and parts | `session.ts`, `messages.ts` | One outer run may contain several turns; `Turn.runId` identifies that run; tool termination does not terminate it |
+| Captured prompts and attachments | `prompt.ts` | Independently nullable captured selection; ordered context; Host-owned `attachment://` references |
+| Approvals and questions | `requests.ts` | Positive CAS versions, epoch and worker generation; explicit terminal resolution or cancellation |
+| Atomic recovery and pages | `snapshot.ts`, `pagination.ts` | Runtime snapshot/cursor/active-run identity; complete pending replacement; branch-aware history and model/session pages |
+| Durable delivery | `queue.ts` | Host revision and ordered queued/leased items; immutable captured delivery configuration |
+| Provider, model, MCP and skill catalogs | `catalogs.ts` | Configuration/source revisions separate from per-root applied revisions; explicit mutation and partial-failure results |
+| Provider accounts, OAuth and custom discovery | `provider-management.ts` | Non-secret account roster and labels; native login-method identity; private OAuth flow/generation; custom header names and model discovery |
+| Cache warming | `warming.ts` | Workspace mode and revision; generation-qualified per-root outcomes; typed partial-write details |
+| Commands, prompt templates and authored skills | `file-resources.ts` | Selected-agent catalog revision; independent Host skill source revision; exact Markdown and canonical bindings |
+| Skill repositories | `skill-repositories.ts` | Trusted source catalog; authorized scan selections; committed install outcomes and structured conflicts |
+| Plugins and local extensions | `plugins.ts` | Native plugin-root revision; package/marketplace targets; global settings; explicit idle-restart outcomes |
+| Web search | `websearch.ts` | Native settings-owner revision; write-only credentials; persistence and per-worker outcomes |
+| Historical usage | `usage.ts` | Date/timezone-scoped reports; authorized opaque scopes; partial failures and unavailable metrics |
+| Guest Shell | `shell.ts` | Scope-qualified jobs, observed termination, bounded UTF-8 output cursors and restart invalidation |
+| Stateless completion | `completion.ts` | Explicit selected model; text/JSON format; distinct completed, cancelled and failed results |
+| Events | `events.ts` | Positive data-event sequence and unsequenced stream invalidation |
 
-export type EntityId = string;
-export type Counter = string; // Canonical unsigned 64-bit decimal, including "0"
+The Host privately maps `projectId` and `workspaceId` to validated cwd roots and worktrees. Session create/list commands accept those identities, not a public absolute `directory`. `displayPath` is a repository-relative display hint, never authorization. Private paths and SDK objects remain behind the Host/service boundary on every retained surface.
 
-export interface RuntimeSession {
-  sessionId: EntityId;
-  projectId: EntityId;
-  workspaceId: EntityId; // Opaque authorized workspace/worktree identity
-  displayPath: string;  // Project-relative display path, "." for its root
-  parentSessionId?: EntityId; // Present if spawned as a subagent
-  rootSessionId: EntityId;    // Equal to sessionId for root sessions
-  createdAt: number;
-  updatedAt: number;
-  archivedAt?: number;
-  epoch: string;              // Current session stream epoch
-  headSequence: Counter;
-}
+`RuntimeSession` contains `runtimeStatus` and nullable `activeRunId`, but no Host archive or metadata. Host-composed `Session` adds `archivedAt`, `archiveRevision`, nullable `metadata` and `metadataRevision`; confirmed missing metadata is exactly `null` at revision `"0"`. An operational record may omit `title`. Goals, work status, delivery receipts, context pins and multi-run membership stay under typed `openchamber` metadata, not a second scalar `goal` field. The Host projects a legacy multi-run private scope to an opaque identity before publication.
 
-export interface Session extends RuntimeSession {
-  metadata: SessionMetadata; // Host composition only, never service-writable
-  metadataRevision: Counter; // Revision of this exact metadata projection
-}
+Agent profile `allowedTools` has three distinct states: `null` inherits the SDK's captured native active default set, `[]` explicitly allows no model tools, and an array is the exact restriction. Canonical profile metadata preserves this distinction and the worker captures the inherited baseline before any profile selection. This is a worker execution-profile grant, not a Host policy snapshot field: `HostNativePolicySnapshot` carries only agent/profile and permission-preset identities, and the Host still authorizes every tool call independently.
 
-export interface SessionMetadata {
-  title: string; // The only title field and authoritative Host-owned value
-  folder?: string;
-  isPinned?: boolean;
-  color?: string;
-  icon?: string;
-  goal?: string;
-  notes?: string;
-}
+Agent profile mutations replace the complete profile at an expected owning revision. Omitted `systemPromptOverride` and `permissionPresetId` use the default prompt and policy; a preset ID selects an owning policy, not an unvalidated allow-mode shortcut. Provider/model mutations likewise carry their owning revision. Credential values occur only in an authenticated `ProviderCredentialWriteRequest`; catalogs, mutation results and events expose non-secret credential presence/references, never those values. Configured presence does not prove provider reachability.
 
-export interface SessionMetadataState {
-  sessionId: EntityId;
-  revision: Counter;
-  metadata: SessionMetadata;
-}
+## Workspace configuration and resource ownership
 
-export interface CapturedSendOptions {
-  providerId: string | null;
-  modelId: string | null;
-  agentId: EntityId | null;
-  variant: string | null;
-  reasoningEffort: string | null;
-}
+These route families are present in current source. They share Host authentication and workspace authorization with the rest of Canonical v1; worker-backed operations use private loopback dispatch. The named contract modules remain field-level authority; this section records ownership, revision boundaries and failure semantics only. Source implementation is not acceptance: Task 18 owns final checks and Task 36 owns connected W6-W10 evidence.
 
-export interface PromptAttachment {
-  attachmentId: EntityId;
-  name: string;
-  mediaType: string;
-  size: number;
-  uri: string; // attachment://<id>; Host-owned upload, never a filesystem path
-}
+| Area | Route family | Contract modules | Implementation owner |
+|---|---|---|---|
+| Native agent controls | `/workspaces/:workspaceId/agents` | `session.ts`, `catalogs.ts` | Task 46 |
+| Provider accounts, OAuth, custom configuration | `/workspaces/:workspaceId/providers/...` | `provider-management.ts`, `catalogs.ts` | Task 49 |
+| Cache warming | `/workspaces/:workspaceId/cache-warming` | `warming.ts` | Task 50 |
+| Commands, prompt templates, authored skills, skill repositories | `/workspaces/:workspaceId/{commands,prompt-templates,skills/...}` | `file-resources.ts`, `skill-repositories.ts`, `catalogs.ts` | Task 51 |
+| Plugins and local extensions | `/workspaces/:workspaceId/plugins/...` | `plugins.ts` | Task 52 |
+| Web search | `/workspaces/:workspaceId/web-search...` | `websearch.ts` | Task 53 |
+| Historical usage | `/usage`, `/usage/tools` | `usage.ts` | Task 54 |
 
-export type PromptContext =
-  | { kind: "context"; text: string; metadata: Record<string, unknown>; instructions?: string; deliveryReceiptId?: EntityId }
-  | { kind: "instruction" | "synthetic"; text: string };
+### Agent roster and profile controls
 
-export interface PromptInput {
-  text: string; // Captured resolved delivery text, not re-parsed against UI state
-  attachments: PromptAttachment[];
-  context: PromptContext[]; // Captured delivery order and payload
-  agentMention?: { agentId: EntityId };
-}
+`AgentCatalog` is the only selectable native roster. Each `Agent` binds `model` to canonical `providerId`/`modelId`, and exposes `allowedTools` plus optional `permissionPresetId`. `allowedTools` is tool availability, not authorization; the native SDK and Host approval path remain the authorization owners. `permissionPresetId` identifies an owning policy, not an allow-mode shortcut. Create, replace and delete use `AgentCreateRequest`, `AgentUpdateRequest`, `AgentDeleteRequest` and `AgentMutationResult` at the selected-agent catalog revision; the UI selects by native `agentId`/`name` and keeps favorites and cycling as client preferences. There is no second agent catalog or server-side selection mutation. Legacy `mode`, `hidden` and `displayName` are not canonical profile fields, and legacy sampling tooltip metadata has no canonical replacement; native per-profile model/variant selection remains the control surface. A successful empty roster is distinct from discovery or parse failure (`SERVICE_UNAVAILABLE`).
 
-export interface PromptRequest {
-  input: PromptInput;
-  options: CapturedSendOptions;
-}
+### Provider accounts, OAuth and custom configuration
 
-export interface QueueItemContent {
-  queueItemId: EntityId;
-  content: string; // Captured editable/display text
-  text: string; // Captured resolved delivery text
-  attachments: PromptAttachment[];
-  context: Array<{
-    index: number;
-    kind: PromptContext["kind"];
-    hasInstructions: boolean;
-    deliveryReceiptId?: EntityId;
-  }>; // Ordered payload descriptors; full text/metadata stays in the Host item
-  contextPreview?: string; // Bounded display-only summary, never delivery content
-  agentMention?: { agentId: EntityId };
-  options: CapturedSendOptions; // Same immutable selection as the durable PromptRequest
-  createdAt: number;
-}
+`GET .../providers/oauth-methods` returns `ProviderOAuthMethods`. Each method carries the native `methodId` and the `providerId`/`storeCredentialsAs` under which its credentials are stored. `POST .../providers/:providerId/oauth` uses the login-method identity in the path and accepts `ProviderOAuthRequest`: `start` requires `expectedRevision`; `status`, `input` and `cancel` require `flowId` plus the worker `generation`; `commit` additionally requires `expectedRevision` and is the only action that writes a credential. `ProviderOAuthResult` reports flow/generation, stored provider, revision and `status` (`pending`, `ready`, `authenticated`, `cancelled`, `failed`), always reports the manual-input flag, and while pending may carry the authorization URL, instructions, prompt and browser cookie names. Grants, tokens and cookies never appear in public records. Flows are worker-private and generation-bound; disconnect, worker close and explicit cancel abort them, and unrenewed pending/ready resources expire after a 60-second lease. Stale flow/generation is `WORKER_GENERATION_CONFLICT`, revision or lifecycle mismatch is `CATALOG_CONFLICT`, and a failed grant reports `error: OAUTH_FAILED` without raw provider errors. Enterprise mode refuses `start`, `input` and `commit` with `enterprise_mode`; status, cancel, account selection/removal/labels and the method read remain available.
 
-export type QueueItem = QueueItemContent & (
-  | { status: "queued" }
-  | { status: "leased"; lease: { leaseId: EntityId; expiresAt: number } }
-);
+`GET/POST .../providers/:providerId/accounts` reads or mutates `ProviderAccounts`. `ProviderAccountMutationRequest` supports `select`, `remove` and `label` under `expectedRevision`; an empty label clears it. Accounts expose an opaque `credentialRef`, method, optional label/email/accountId, active and disabled state. Labels are private application metadata, removal is per credential, and the selected account binds native model resolution. Secrets are never part of the roster.
 
-export interface QueueState {
-  sessionId: EntityId;
-  revision: Counter;
-  items: QueueItem[]; // Authoritative delivery order; includes captured configuration
-}
+Custom providers use `GET/PUT .../providers/:providerId/config` with `ProviderConfigurationRead` and `ProviderConfigureRequest`: name, HTTP(S) endpoint, protocol, nullable `credentialRef`, write-only `headers` and optional `models`. Readback exposes only `headerNames`, never header values or secrets. `POST .../providers/discover` accepts `ProviderModelDiscoveryRequest` and returns `ProviderModelDiscoveryResult`; endpoints reject embedded credentials, query strings and fragments. Provider entry, model/credential writes and discovery are refused in enterprise mode; existing account read/select/remove/label remains.
 
-export type TurnStatus =
-  | "pending"
-  | "running"
-  | "awaiting_approval"
-  | "awaiting_input"
-  | "completed"
-  | "failed"
-  | "cancelled";
+### Cache warming
 
-export interface Turn {
-  turnId: EntityId;
-  sessionId: EntityId;
-  status: TurnStatus;
-  userMessageId: EntityId;
-  assistantMessageIds: EntityId[];
-  startedAt: number;
-  finishedAt?: number;
-  error?: string;
-}
+`GET/PUT .../cache-warming` use `CacheWarmingState`, `CacheWarmingUpdateRequest` and `CacheWarmingApplyResult` at the catalog revision owned by the workspace's selected agent directory. `mode` is `off`, `streaming` or `idle`. `PUT` persists the mode first, then applies it to live root workers and reports generation-qualified `applied`/`failed` outcomes with aggregate `applied`, `partial`, `failed` or `no-active-workers`. Stopped roots are not started for fanout, and a stateless configuration worker is not execution proof. Configured mode is not proof that a request ran or a cache entry was reused. Session startup reapplies the latest effective workspace mode; live application uses a session override and does not rewrite configuration. Native scheduling and provider traffic stay in the SDK; no Host or UI keep-alive loop exists. If the native settings flush succeeds but the service revision commit fails, the response is HTTP 503 `SERVICE_UNAVAILABLE` with `CacheWarmingPartialWriteDetails`: the native configuration remains saved, the previous service revision is retained, and live application is `not-started`. The system does not claim atomic rollback across those two files.
 
-export interface Message {
-  messageId: EntityId;
-  sessionId: EntityId;
-  turnId: EntityId;
-  role: "user" | "assistant" | "system";
-  createdAt: number;
-  parts: Part[];
-}
+### Commands, prompt templates and authored skills
 
-export type Part =
-  | TextPart
-  | ReasoningPart
-  | ToolCallPart
-  | ToolResultPart
-  | AttachmentPart
-  | StepSummaryPart;
+Commands and prompt templates share the selected-agent catalog revision. `GET/POST /commands` and `PATCH/DELETE /commands/:commandId` use `CommandCatalogState`, `CommandCreateRequest`, `CommandUpdateRequest` and `CommandDeleteRequest`; templates use the matching `PromptTemplate*` schemas. Creates and updates write complete native Markdown files, typed `modelSelection`/`agentId`/`group` metadata lives in `openchamber` frontmatter, and unrelated frontmatter survives updates. The public `content` is the Markdown body, not a second frontmatter format. `POST /commands/expand` and `/prompt-templates/expand` return `FileResourceExpandResult` with canonical bindings. `POST /commands/expand-text` returns `FileResourcePromptInputResult` after the native command-then-template pipeline runs once; a no-match returns unchanged text, and prepared input is not expanded again at session dispatch.
 
-export interface TextPart {
-  type: "text";
-  partId: EntityId;
-  content: string;
-}
+Writable command and template files are confined to workspace `.omp/commands`/`.omp/prompts` or the selected agent directory's `commands`/`prompts`; inherited and external layers are read-only. The service never accepts a client filesystem path. Listing and expansion create no conversation and invoke no model.
 
-export interface ReasoningPart {
-  type: "reasoning";
-  partId: EntityId;
-  content: string;
-  signature?: string; // Optional cryptographic proof or provider token
-}
+Authoring skills is separate from execution catalogs. `GET .../skills/catalog` returns `FileResourceSkillCatalog` from native discovery, including content, scope, read-only/source state and an optional `authoredSkillId` that maps a managed file to the authoring catalog; `POST .../skills/expand` returns `FileResourceExpandResult`. These never grant write authority from a discovered name. `GET .../skills/files` returns `SkillFileCatalogState`; `GET .../skills/files/:skillId` returns `SkillFilesState`; a file read returns `SkillFileRead`. Per-skill state and file reads require an explicit `scope=workspace|agent` query selecting the Host source. `PUT .../skills/files/:skillId/:filePath`, `DELETE .../skills/files/:skillId[/:filePath]`, `POST .../skills/files/:skillId/rename` and `POST .../skills/files/apply` carry `expectedSourceRevision` and return `SkillInstallResult`. The Host owns the source revision and atomic filesystem commit; a write or rename advances it, while `apply` reapplies the current revision without writing. Mutations fan out to captured active roots. A committed source with incomplete application returns `SKILL_APPLY_FAILED` and retains the committed `SkillInstallResult`; active application is never inferred from the source revision.
 
-export type ToolStatus =
-  | "pending_approval"
-  | "approved"
-  | "running"
-  | "completed"
-  | "failed"
-  | "denied"
-  | "cancelled";
+`GET .../skills/repositories` returns `SkillRepositoryCatalog`; `POST .../skills/repositories/source` and `/scan` return `SkillRepositoryItems`; `POST .../skills/repositories/install` returns `SkillRepositoryInstallResult`. Install selections must match the curated repository's authorized scan results and are submitted by repository identity, not client filesystem paths. Conflict policy/decisions resolve existing names without silent overwrite, and a successful install carries the committed `SkillInstallResult` in `commit`; a structured `ok:false` error reports conflicts or source failures. Repository installation uses the same Host source commit and root fanout as authored files. The session-scoped `.../skills/catalog`, `.../skills/apply` and `.../skills/expand` routes remain the execution-catalog boundary and use `SkillsCatalogState`/`SkillsApplyResult`; they do not replace workspace authoring routes.
 
-export interface ToolCallPart {
-  type: "tool_call";
-  partId: EntityId;
-  toolCallId: EntityId;
-  toolName: string;
-  input: Record<string, unknown>;
-  status: ToolStatus;
-  approvalId?: EntityId;
-}
+### Plugins and local extensions
 
-export interface ToolResultPart {
-  type: "tool_result";
-  partId: EntityId;
-  toolCallId: EntityId;
-  toolName: string;
-  output?: unknown;
-  error?: string;
-  isError: boolean;
-}
+`GET .../plugins` returns `PluginCatalogState` with installed plugins, cached marketplace entries, confined local extension entries and per-root runtime states. Revision ownership is the actual native plugin/profile root, not a workspace or provider catalog revision; roots sharing that native owner share CAS and fanout. `PluginInstallRequest` distinguishes global package specs from marketplace `user`/`project` installs. `PluginUninstallRequest`, `PluginConfigureRequest` and `PluginUpdateRequest` address a package or marketplace target under `expectedRevision`. Settings writes explicitly target native global scope and replace declared nonsecret global values while omitted secrets remain private; project override files are read-only inputs. `PATCH` can also enable or disable. `LocalExtensionSource`, `LocalExtensionWriteRequest` and `LocalExtensionDeleteRequest` manage flat `.ts`/`.js`/`.mts`/`.mjs` files strictly under workspace `.omp/extensions/`, with syntax validation before atomic replacement. `PluginDoctorResult` reports typed checks and `PluginMarketplaceState` is an explicit cache refresh.
 
-export interface AttachmentPart {
-  type: "attachment";
-  partId: EntityId;
-  attachmentId: EntityId;
-  name: string;
-  mediaType: string;
-  size: number;
-  uri: string; // e.g. "attachment://att_4920"
-}
+`PluginMutationResult` separates committed persistence from active outcomes (`applied`, `partial`, `failed`, `no-active-workers`). Ordinary mutations do not restart active sessions; a root that needs newly loaded modules reports `RELOAD_REQUIRED` rather than fake success. `PluginApplyRequest` with `strategy: "restart-idle-sessions"` reuses the committed revision without incrementing it, refuses the whole preflight if any selected root is busy or has pending control work, and reports actual new worker generations. Package install/update/uninstall and marketplace refresh are refused in enterprise mode; catalog reads, enable/disable, diagnostics, settings and confined local authoring remain available.
 
-export interface StepSummaryPart {
-  type: "step_summary";
-  partId: EntityId;
-  title: string;
-  durationMs?: number;
-}
+### Web search
 
-export interface ApprovalRequest {
-  approvalId: EntityId;
-  sessionId: EntityId;
-  turnId: EntityId;
-  toolCallId: EntityId;
-  toolName: string;
-  actionType: "bash_command" | "file_write" | "network_request" | "custom_tool";
-  commandSummary: string;
-  details: Record<string, unknown>;
-  version: Counter; // Monotonic CAS counter, starting at "1"
-  epoch: string; // Session stream epoch at request creation
-  workerGeneration: string; // Opaque worker lifetime identity
-  status: "pending" | "approved" | "rejected" | "revoked" | "expired";
-  requestedAt: number;
-  resolvedAt?: number;
-  resolvedBy?: string;
-  policyTarget?: { toolName: string; pattern: string }; // Authorized service-derived match target
-  resolution?: ApprovalResolution;
-}
+`GET/PUT .../web-search` use `WebSearchConfigState` and `WebSearchUpdateRequest`; `PUT/DELETE .../web-search/credentials/:providerId` use `WebSearchCredentialWriteRequest` and `WebSearchCredentialDeleteRequest`. All mutations return `WebSearchMutationResult` with `WebSearchConfigState`, persistence status and `WebSearchWorkerApplyOutcome` entries. Configuration edits never carry API keys: credentials are write-only through their dedicated route and are never read back; the public provider catalog exposes configured/writable booleans, provider identity and non-secret endpoint/option fields only. Provider options are typed to the native providers that support them, and the primary provider cannot also appear in the fallback chain.
 
-export interface QuestionRequest {
-  questionId: EntityId;
-  sessionId: EntityId;
-  turnId: EntityId;
-  prompt: string;
-  schema?: Record<string, unknown>; // JSON schema for structured responses
-  version: Counter; // Incremented on resolution/expiry
-  epoch: string;
-  workerGeneration: string;
-  status: "pending" | "answered" | "cancelled" | "expired";
-  response?: unknown;
-  requestedAt: number;
-  answeredAt?: number;
-  resolvedAt?: number; // Also records cancellation or expiry
-  resolvedBy?: string;
-}
+Revision ownership is the native settings owner (selected agent directory), so a mutation fans out to every active root sharing that owner, including roots in other workspaces. Persistence failure returns `failed` without applying uncommitted settings. A persisted mutation with any worker failure returns `partial`; a persisted mutation with no failures, including zero live roots, returns `applied`. A revision conflict is `CATALOG_CONFLICT` with the current authorized state. Configuration edits do not themselves perform egress; credential writes are refused in enterprise mode while credential removal remains available, and every native search transport asks the Host to authorize `web-search` immediately before provider traffic.
 
-export interface RequestCAS {
-  version: Counter;
-  epoch: string;
-  workerGeneration: string;
-}
+### Historical usage
 
-export type ApprovalDecision =
-  | { decision: "approve" | "reject" }
-  | { decision: "always-allow"; policyScope: "session" }
-  | { decision: "always-deny"; policyScope: "workspace" };
+`GET /usage` returns `UsageStats`; `GET /usage/tools` returns `UsageToolsResponse`. Both accept `from` (inclusive) and `to` (exclusive) epoch-millisecond bounds with `from < to`, an omitted `to` meaning now, an explicit viewer IANA timezone, and optional canonical `workspaceId`/`projectId` filters. The Host supplies only the authorized opaque scope set over private transport; the supervisor intersects it with registered root and child session references. "All" means that intersection, never native home-directory discovery, and no client path or process-global statistics database participates. The cold worker reads exact registered transcripts and branch lineage without constructing an agent, provider registry or model loop.
 
-export type ApprovalReply = RequestCAS & ApprovalDecision;
-
-export interface ApprovalResolution {
-  decision: "approve" | "reject" | "always-allow" | "always-deny";
-  policy?: {
-    policyId: EntityId;
-    scope: "session" | "workspace";
-    revision: Counter;
-    persistence: "committed";
-  };
-}
-
-export type QuestionReply = RequestCAS & (
-  | { action: "answer"; response: unknown }
-  | { action: "cancel" }
-);
-
-export interface SessionSnapshot {
-  session: RuntimeSession; // No independently ordered Host metadata or queue
-  cursor: string; // Exactly `${session.epoch}:${session.headSequence}`
-  branch: { branchId: EntityId; branchVersion: Counter; leafMessageId: EntityId | null };
-  window: {
-    firstTurnId: EntityId | null;
-    lastTurnId: EntityId | null;
-    firstMessageId: EntityId | null;
-    lastMessageId: EntityId | null;
-    hasEarlier: boolean;
-  };
-  turns: Turn[];
-  messages: Message[];
-  approvals: ApprovalRequest[]; // Complete pending set, not constrained by window
-  questions: QuestionRequest[]; // Complete pending set, not constrained by window
-  requestRecovery: {
-    pendingSet: "replace";
-    priorEpochs: "expired"; // Collective expiry, including after service/Host restart
-  };
-}
-
-export interface Attachment {
-  attachmentId: EntityId;
-  name: string;
-  mediaType: string;
-  size: number;
-  uri: string; // "attachment://<id>"
-  createdAt: number;
-}
-
-export interface Model {
-  modelId: string;
-  provider: string;
-  name: string;
-  modalities: Array<"text" | "image" | "audio" | "embedding">;
-  contextWindow: number;
-  reasoningEffortSupported: boolean;
-}
-
-export interface Subagent {
-  subagentId: EntityId;
-  parentSessionId: EntityId;
-  childSessionId: EntityId;
-  role: string;
-  solutionSpace?: string; // Characterizes task openness, aligned with OMP task tool
-  status: "idle" | "running" | "completed" | "failed";
-}
-```
-
-The Host privately maps `projectId` and `workspaceId` to validated cwd roots and worktrees. Session create/list commands accept those identities, not a public absolute `directory`. `displayPath` is a display hint, never authorization. The same path restriction applies to direct Web, Electron, hosted mobile, Capacitor, relay and Guest projections, including errors and tool payloads. A trusted Host-to-worker cwd mapping stays private.
-
----
+`UsageStats` carries the range, session/subagent/prompt/step counts, tokens and cost, tool mode (`none`/`summary`/`detail`), activity days and per-day steps, per-model usage, and a `partial`/`errors` failure projection. `UsageToolsResponse` carries totals and detailed per-tool outcomes for the same window. `UsageTokens.reasoning` and `UsageToolUsage.durationP50` are `null` when persistence cannot supply them; tool outcomes account for successful, failed and unfinished calls. A failure of every selected source is an error, not an empty report; valid siblings survive with `partial` and sanitized per-source codes. Historical activity never establishes current runtime status.
 
 ## Streaming protocol and catch-up
 
@@ -522,6 +374,8 @@ SSE names and WebSocket `type` values use the same vocabulary. SDK events and in
 
 Each data event has `sessionId`, `epoch`, `sequence` and `timestamp`, plus its canonical payload. SSE `id` equals `${epoch}:${sequence}`. WebSocket data frames carry these same fields and a `type` equal to the SSE event name.
 
+`CanonicalEvent` is the transport-normalized record: its `type` comes from the SSE `event` name or the WebSocket JSON `type`. An SSE decoder combines that name with the JSON payload before schema validation. `part.started` includes `messageId`; `part.completed` carries the settled `part`. Deltas retain `{partId, delta}`. Runtime status publishes `{runtimeStatus, activeRunId}`, and outer-run terminal events contain no singular `turnId`.
+
 ```text
 id: ep_98a7:42
 event: part.delta
@@ -548,8 +402,9 @@ For example, an empty captured branch returns:
 
 ```json
 {
-  "session": {"sessionId":"sess_alpha","projectId":"project_1","workspaceId":"workspace_1","displayPath":".","rootSessionId":"sess_alpha","createdAt":1774201000000,"updatedAt":1774201000000,"epoch":"ep_2","headSequence":"0"},
+  "session": {"sessionId":"sess_alpha","projectId":"project_1","workspaceId":"workspace_1","displayPath":".","rootSessionId":"sess_alpha","createdAt":1774201000000,"updatedAt":1774201000000,"epoch":"ep_2","headSequence":"0","runtimeStatus":"idle","activeRunId":null},
   "cursor":"ep_2:0",
+  "activeRun":null,
   "branch":{"branchId":"branch_1","branchVersion":"1","leafMessageId":null},
   "window":{"firstTurnId":null,"lastTurnId":null,"firstMessageId":null,"lastMessageId":null,"hasEarlier":false},
   "turns":[],"messages":[],"approvals":[],"questions":[],
@@ -712,13 +567,30 @@ The M0 capability fixture observed direct approval/question request, resolve and
 
 ## Session topology, branching, and deletion
 
-### Branching versus filesystem rewind
+### Branching, leaf selection, and filesystem independence
 
 The protocol treats conversation history branching and filesystem modifications as completely separate concerns:
 
-1. **Branching.** Branching forks the message transcript at an earlier turn. The Agent Service creates a new linear history path from that turn.
-2. **No Filesystem Rollback.** Branching does not rewind files, delete created files, or revert Git commits made by tools in abandoned turns.
-3. **Explicit Host Operations.** If a user wishes to restore previous file states, they must execute explicit Host Git operations (e.g. `git restore` or worktree branch switching) through Host APIs.
+1. **Branching and leaf selection.** Branching forks the message transcript at an earlier turn. Same-session durable reversible tree leaf selection switches the active conversation branch within the native transcript tree. Abandoned branches remain intact on disk. Selecting an alternate leaf is non-destructive and persists across cold reopen. The OMP SDK is the sole transcript writer; OpenChamber never maintains a second transcript.
+2. **No Filesystem Rollback.** Branching and leaf selection do not rewind files, delete created files, or revert Git commits made by tools in abandoned turns.
+3. **Explicit Host Operations.** If a user wishes to restore previous file states, they must execute explicit Host Git operations (such as `git restore` or worktree branch switching) through Host APIs.
+4. **Transition rejection and state preservation.** Leaf selection requested during an active run, or with a stale selection owner or mismatched version, is rejected with an error. Failed selection attempts preserve the valid original selection state.
+5. **Privacy.** Public responses never include absolute host working-directory paths or private SDK entry identifiers.
+6. **Implementation status.** Native session control endpoints, leaf selection, and verification remain in progress and unverified.
+
+### Execution workspace relocation
+
+UI folder organization and session renaming update Host metadata only ([contracts.md#metadata-sidecar-and-transcript-ownership](contracts.md#metadata-sidecar-and-transcript-ownership)). Execution workspace relocation moves an execution session to a different workspace (SCOPE-8.3):
+
+1. **Authorized Host Resolution.** The Host Gateway validates and authorizes the target destination workspace path before dispatching to the Agent Service.
+2. **Service SDK Persistence and Worker Replacement.** Relocation executes service-owned SDK storage and working-directory persistence followed by orderly destination-cwd worker replacement to enforce destination scope.
+3. **Identity Persistence.** Canonical root session and descendant subagent identities persist unchanged across relocation.
+4. **Handle Expiry.** Previous worker epoch handles and pending approval or question handles expire upon worker replacement; stale handles cannot be resolved against the new worker.
+5. **Client Recovery.** The client recovers relocated session state via authoritative snapshot catch-up.
+6. **No Filesystem or Git Rollback.** Workspace relocation does not move repository files, rewind Git history, or revert changes in either the source or destination workspace.
+7. **Rejection and Preservation.** Relocation requests submitted during an active run, or targeting an invalid path, are rejected. Failure preserves the valid original workspace and worker state.
+8. **Privacy.** Public responses do not expose absolute host paths or private SDK entry identifiers.
+9. **Implementation status.** Native workspace relocation endpoints and Data Transfer Objects are under active implementation; they remain unverified and pending live proof. Exact endpoint and DTO names are established during implementation.
 
 ### History Pagination Across Branch Versions
 
@@ -771,11 +643,21 @@ OMP alone writes messages, reasoning, tool results and compaction history. The s
 
 ---
 
+## Stateless completion
+
+`POST /workspaces/:workspaceId/completions` accepts `CompletionRequest`; route identities are under `/api/agent/v1` and must match any body identity. The Host authorizes the workspace and selects the full provider/model before dispatch. The service uses the OMP completion API without creating an Agent session or transcript, switching providers, or falling back to a Host direct-provider client.
+
+The client supplies `completionId` so cancellation can address an active HTTP request. Format is text or a JSON schema; captured variant/reasoning selections and explicit overflow policy are independent of UI state. `CompletionResult` is exactly completed with output/usage, cancelled with a reason, or failed with a sanitized typed error. Failure/cancellation cannot carry successful output. Cancel returns `CompletionCancelResult` only after actual cancellation; unknown or terminal identities do not produce a fake acknowledgement. Dynamic JSON-schema conformance and provider support are task 12's runtime obligations, not guarantees supplied by parsing the request.
+
 ## Guest Shell projection and ownership
 
 The real SDK owner and observation limits are in [guest-shell.json](m0/guest-shell.json). `getAsyncJobSnapshot`, `inspectAsyncJob` and `cancelAsyncJob` are worker-local. Successful bash inspection synthesizes exit 0; nonzero exit 42 was observed. Inline strings can elide the middle, and an optional raw artifact is not a byte-cursor protocol. Configured retention was exercised; default retention and disk-overflow caps remain source-only.
 
 Task 12 owns the service registry/project/session index and Host/Guest capability checks, scoped running/ended snapshots, output tails/cursors with skipped-byte detection, terminal exit and stop/timeout reasons, restart invalidation and reconnect. Preserve the Guest newest-200 ended history independently of SDK time-based expiry. Agent-owner filtering alone is not project authorization. No canonical OpenCode Shell route or field alias is retained, and no empty lifecycle store substitutes for execution.
+
+The route matrix exposes session-tree, workspace, project and full-granted-scope `ShellSnapshot` reads. Public jobs identify an opaque scope, observation epoch and root worker generation, never a PID or SDK artifact path. The service separates running jobs from the newest 200 ended observations and returns explicit prior-epoch invalidation after restart.
+
+`ShellOutput` counts bytes in the service's emitted UTF-8 text stream: `requestedCursor + skippedBytes == startCursor`, then `startCursor + UTF8(output).byteLength == cursor`. Reads are bounded to 65,536 bytes; retained gaps and stale epochs/generations require recovery, not silent truncation or empty success. Output is merged, not a guessed stdout/stderr split. Stop succeeds only after an observed stopped termination; already-ended jobs and missed stop deadlines do not return a fabricated stop acknowledgement.
 
 The interrupted native descendant reproduction and dedicated Linux runner cleanup in [task 01](../done/omp-through-m3/01-m0-guest-shell.md) do not prove process cleanup for a shared Host or service supervisor. That owner needs its own M2 evidence.
 
@@ -797,7 +679,7 @@ Global installation targets the selected OMP agent directory's `skills/`, defaul
 
 ### Catalog records and operations
 
-Every catalog route is authorized against the path session's opaque workspace and private selected agent-directory mapping. A subagent resolves to its root's worker; it is not a separate apply target. One service-owned `MCPConfigurationState` persists config/revision per workspace. Applied catalogs/revisions belong to each root worker generation, including separate roots sharing one workspace; there is no workspace-wide applied-success flag. The service handles MCP operations and skill catalog/discovery/expansion. Host `skills/install` owns source trust/download/filesystem commits, then requests service discovery across the affected roots. Session-scoped paths identify the authorization/source context, not permission to leave sibling root workers stale.
+Every catalog route is authorized against the path session's opaque workspace and private selected agent-directory mapping. A subagent resolves to its root's worker; it is not a separate apply target. One service-owned `MCPConfigurationState` persists config/revision per workspace. Applied catalogs/revisions belong to each root worker generation, including separate roots sharing one workspace; there is no workspace-wide applied-success flag. The service handles MCP operations and skill catalog/discovery/expansion. The Host owns trusted source download and filesystem commits through the workspace skill file and repository routes below, then requests service discovery across the affected roots. Session-scoped paths identify the authorization/source context, not permission to leave sibling root workers stale.
 
 ```typescript
 export type MCPTransport =
@@ -962,9 +844,11 @@ The aggregate reports failure, root A keeps its applied revision/event, and root
 
 `POST .../mcp/servers/:serverId/reconnect` remains **single-root-worker**. It accepts `{persistedRevision, expectedCatalogRevision, workerGeneration}` plus `Idempotency-Key`, rejects stale generation first, and requires this root to have applied the current configuration with that enabled server. Otherwise return explicit conflict/unavailability rather than reconnecting under an unapplied config. It serializes with relevant workspace apply, does not advance persisted config, and returns `MCPCatalogRead` for the addressed root. Successful refresh advances that root's active catalog revision; failed reconnect reports `MCP_RECONNECT_FAILED` with its retained read state and emits no success for that root. Existing valid runtime remains until replacement is usable; actual loss is explicitly unavailable, never stale tools advertised as executable. Reconnect does not claim to refresh another root.
 
+`GET .../mcp/servers/:serverId/oauth` and `POST .../mcp/servers/:serverId/oauth` are **single-root-worker** operations for remote (`http` or `sse`) servers in the current persisted workspace configuration; subagent session IDs resolve to their root worker. `GET` returns `MCPOAuthResult` (`status: "pending"` with `authenticated` and `pendingFlow: {flowId, authorizationUrl, launchUrl?, instructions?}`, `status: "authenticated"` with `authenticated: true`, or `status: "unauthenticated"` with `authenticated: false`). `POST` accepts `MCPOAuthRequest` with `{persistedRevision: Counter, workerGeneration: EntityId}` and discriminated `action`: `start` (optional `oauth: MCPOAuthConfigInput`, where `authorizationUrl` and `tokenUrl` are supplied together or discovered together, and `clientSecret` stays input-only off `MCPOAuthPublicConfiguration`), `complete` (`flowId` and optional `callbackInput`, required for non-local redirects), `cancel` (`flowId`), or `disconnect`. Stale `workerGeneration` returns HTTP 409 `WORKER_GENERATION_CONFLICT`; a mismatched `persistedRevision` or a second concurrent `start` on the same server returns HTTP 409 `CATALOG_CONFLICT`; an unknown or settled `flowId` on `complete`/`cancel` returns HTTP 404 `MCP_OAUTH_NOT_FOUND`; cancelled flows return HTTP 409 `MCP_OAUTH_CANCELLED`; discovery, callback or persistence failures return HTTP 422 or 502 `MCP_OAUTH_FAILED`. `disconnect` aborts any pending flow, removes the stored OAuth credential from the worker's `AuthStorage`, disconnects the active server transport if applied so a revoked bearer cannot remain in use, and returns the updated `MCPOAuthResult`.
+
 #### Skill operations
 
-`GET .../skills/catalog` returns the addressed root's `SkillsCatalogState`. `POST .../skills/install` accepts `{sourceId: EntityId, skillId: EntityId, scope: "workspace" | "agent", expectedSourceRevision: Counter}` plus `Idempotency-Key`. Host-authorized IDs identify the trusted catalog/source, not arbitrary URLs or client filesystem paths. Host commits installation atomically and advances only the selected source's revision, then requests workspace or selected-agent-directory fan-out as above. The resulting `SkillInstallResult` always identifies that source commit separately from per-root apply results. Install failure preserves source files/revision and returns `SKILL_INSTALL_FAILED`; partial/failed discovery returns `SKILL_APPLY_FAILED` with `details: {result: SkillInstallResult}` retaining the committed source and all outcomes. Service absence after commit returns the same committed result with `apply:null` and explicit unavailability. No source commit masquerades as applied runtime success.
+`GET .../skills/catalog` returns the addressed root's `SkillsCatalogState`. Installation is not a session route: the Host commits trusted sources through the workspace `/skills/files` and `/skills/repositories/install` routes, advances only the selected source's revision, then requests workspace or selected-agent-directory fan-out as above; session `.../skills/apply` only reapplies an existing source revision. Host-authorized IDs identify the trusted catalog/source, not arbitrary URLs or client filesystem paths. The resulting `SkillInstallResult` always identifies that source commit separately from per-root apply results. Install failure preserves source files/revision and returns `SKILL_INSTALL_FAILED`; partial/failed discovery returns `SKILL_APPLY_FAILED` with `details: {result: SkillInstallResult}` retaining the committed source and all outcomes. Service absence after commit returns the same committed result with `apply:null` and explicit unavailability. No source commit masquerades as applied runtime success.
 
 `POST .../skills/apply` accepts `{scope: "workspace" | "agent", sourceRevision: Counter}`. The authorized path session determines that source identity; service verifies the current Host source revision, captures affected roots and each root's own current source pair, then returns `SkillsApplyResult`. Each successful root atomically publishes its filtered skill list, sets `appliedSources` to its captured pair and advances its catalog revision. A failed root preserves its previous valid applied pair/catalog; first-apply failure has `appliedSources:null` and is unavailable, not an empty success. Other successful roots remain applied.
 
@@ -1045,7 +929,6 @@ Status: 202 Accepted
 {
   "runId": "run_9012",
   "sessionId": "sess_alpha",
-  "turnId": "turn_301",
   "status": "pending",
   "createdAt": 1774201000100
 }
@@ -1061,11 +944,11 @@ Stream output:
 ```text
 id: ep_1a:11
 event: session.status
-data: {"sessionId":"sess_alpha","epoch":"ep_1a","sequence":"11","timestamp":1774201000200,"status":"running"}
+data: {"sessionId":"sess_alpha","epoch":"ep_1a","sequence":"11","timestamp":1774201000200,"runtimeStatus":"running","activeRunId":"run_9012"}
 
 id: ep_1a:12
 event: turn.started
-data: {"sessionId":"sess_alpha","epoch":"ep_1a","sequence":"12","timestamp":1774201000250,"turnId":"turn_301","userMessageId":"msg_u1"}
+data: {"sessionId":"sess_alpha","epoch":"ep_1a","sequence":"12","timestamp":1774201000250,"turnId":"turn_301","runId":"run_9012","userMessageId":"msg_u1"}
 
 id: ep_1a:13
 event: message.created
@@ -1073,7 +956,7 @@ data: {"sessionId":"sess_alpha","epoch":"ep_1a","sequence":"13","timestamp":1774
 
 id: ep_1a:14
 event: part.started
-data: {"sessionId":"sess_alpha","epoch":"ep_1a","sequence":"14","timestamp":1774201000350,"part":{"type":"text","partId":"prt_t1","content":""}}
+data: {"sessionId":"sess_alpha","epoch":"ep_1a","sequence":"14","timestamp":1774201000350,"messageId":"msg_a1","part":{"type":"text","partId":"prt_t1","content":""}}
 
 id: ep_1a:15
 event: part.delta
@@ -1089,15 +972,15 @@ data: {"sessionId":"sess_alpha","epoch":"ep_1a","sequence":"17","timestamp":1774
 
 id: ep_1a:18
 event: part.completed
-data: {"sessionId":"sess_alpha","epoch":"ep_1a","sequence":"18","timestamp":1774201001800,"partId":"prt_t1"}
+data: {"sessionId":"sess_alpha","epoch":"ep_1a","sequence":"18","timestamp":1774201001800,"part":{"type":"text","partId":"prt_t1","content":"Checking the token expiration logic in src/auth.ts."}}
 
 id: ep_1a:19
 event: turn.completed
-data: {"sessionId":"sess_alpha","epoch":"ep_1a","sequence":"19","timestamp":1774201001900,"turnId":"turn_301"}
+data: {"sessionId":"sess_alpha","epoch":"ep_1a","sequence":"19","timestamp":1774201001900,"turnId":"turn_301","runId":"run_9012"}
 
 id: ep_1a:20
 event: run.completed
-data: {"sessionId":"sess_alpha","epoch":"ep_1a","sequence":"20","timestamp":1774201002000,"runId":"run_9012","turnId":"turn_301","finishedAt":1774201002000}
+data: {"sessionId":"sess_alpha","epoch":"ep_1a","sequence":"20","timestamp":1774201002000,"runId":"run_9012","finishedAt":1774201002000}
 ```
 
 ### 4. Approval Request and CAS Resolution

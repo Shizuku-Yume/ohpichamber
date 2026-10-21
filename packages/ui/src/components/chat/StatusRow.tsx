@@ -1,5 +1,5 @@
 import React from "react";
-import { useSessionUIStore } from '@/sync/session-ui-store';
+import { useChatSessionSelection } from './chatColumnSession';
 import { WorkingPlaceholder } from "./message/parts/WorkingPlaceholder";
 
 // The floating assistant-status chip that hovers above the composer while the
@@ -33,7 +33,7 @@ export const StatusRow: React.FC<StatusRowProps> = ({
   modelName,
   providerId,
 }) => {
-  const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
+  const currentSessionId = useChatSessionSelection().sessionId;
 
   const shouldRenderPlaceholder = !abortActive;
   const hasContent = isWorking;
@@ -54,7 +54,7 @@ export const StatusRow: React.FC<StatusRowProps> = ({
       {/* The glass chip lives here, not on the container: the root above is
           an inline-size query container, whose width ignores its children —
           a shrink-to-fit wrapper around it always collapsed to zero. */}
-      <div className="oc-glass-popover inline-flex w-max max-w-full items-center gap-2 h-8 whitespace-nowrap rounded-full [corner-shape:round] px-3 [backdrop-filter:none]! [-webkit-backdrop-filter:none]!">
+      <div className="oc-glass-popover inline-flex w-max max-w-full items-center gap-2 h-8 whitespace-nowrap rounded-full [corner-shape:round] px-3">
         <div className="flex items-center min-w-0 gap-2 overflow-x-hidden">
           {shouldRenderPlaceholder ? (
             <WorkingPlaceholder

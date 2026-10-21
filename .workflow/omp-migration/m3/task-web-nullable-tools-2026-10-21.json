@@ -1,0 +1,68 @@
+{
+  "kind": "independent current-Web acceptance",
+  "scope": ["Settings Agents inherited-null -> Edit tools (no write) -> add read (array) -> Use native defaults (null)", "current sidebar native child navigation using known Task15 fixture grammar"],
+  "sourceHead": "b9fbb4bb0",
+  "sourceHeadDate": "2026-10-21T21:18:00+08:00",
+  "webDistIndexSha256": "f0c1802d04a21acbfa3fa2cde997e01fab8f75593825f978d1aa872181446b8b",
+  "webDistMtime": "2026-10-21T21:13:09+08:00",
+  "provenance": "Dist was built after UI fix 851a62d2a; only test/docs commits 9b9feacc6/2b4b80c72/b9fbb4bb0 followed. No runtime source delta. No rebuild performed by this run.",
+  "runtime": {
+    "host": "http://127.0.0.1:3241",
+    "browser": "isolated headless Chrome CDP 9381, user-data-dir /tmp/ohpi-w9b-chrome",
+    "fixture": "http://127.0.0.1:4631/v1, model w9b-fixture",
+    "home": "/tmp/ohpi-w9b/home",
+    "dataDir": "/tmp/ohpi-w9b/data",
+    "chatsDir": "/tmp/ohpi-w9b/chats",
+    "workspaceId": "ws_5bb371ec-0a14-4381-bfc1-8f31cda43bcb",
+    "projectId": "pro_be64a1c9-2f02-43e3-a5fa-1266343bc057"
+  },
+  "agentsTransition": {
+    "profile": "inherit-proof",
+    "initialCanonical": { "allowedTools": null, "source": "project .omp/agents/inherit-proof.md without tools key" },
+    "uiInitial": "Settings Agents selected inherit-proof; Allowed tools showed 'Inherits the native default tool set.'",
+    "enterEditTools": {
+      "action": "clicked Edit tools",
+      "result": "UI showed em dash and 'use native defaults'",
+      "agentMutationRequests": 0,
+      "writes": 0,
+      "proof": "No /agents PUT/POST was issued until Add read"
+    },
+    "addRead": {
+      "action": "typed read and clicked Add",
+      "request": "PUT /api/agent/v1/workspaces/ws_5bb371ec-0a14-4381-bfc1-8f31cda43bcb/agents/inherit-proof",
+      "status": 200,
+      "body": "{\"expectedRevision\":\"1\",\"agent\":{\"agentId\":\"inherit-proof\",\"name\":\"inherit-proof\",\"description\":\"Inherited tools UI proof\",\"model\":null,\"allowedTools\":[\"read\"],\"systemPromptOverride\":\"Return the inherited tools proof marker.\"}}"
+    },
+    "useNativeDefaults": {
+      "action": "clicked Use native defaults",
+      "request": "PUT /api/agent/v1/workspaces/ws_5bb371ec-0a14-4381-bfc1-8f31cda43bcb/agents/inherit-proof",
+      "status": 200,
+      "body": "{\"expectedRevision\":\"2\",\"agent\":{\"agentId\":\"inherit-proof\",\"name\":\"inherit-proof\",\"description\":\"Inherited tools UI proof\",\"model\":null,\"allowedTools\":null,\"systemPromptOverride\":\"Return the inherited tools proof marker.\"}}"
+    },
+    "finalReadback": { "agentId": "inherit-proof", "allowedTools": null },
+    "screenshots": [
+      { "path": "/tmp/ohpi-w9b/evidence/agents-inherited-after-reset.png", "sha256": "35d4abc12b9f5cf71afd45d1ea411a06b62dc44504b3a03abaf89062ec64f38d", "note": "full 780x437 screenshot" },
+      { "path": "/tmp/ohpi-w9b/evidence/agents-inherited-cropped.png", "sha256": "572b77f7805b717c64b4231ccf6d5ce4afc8b2de65b72394fa9a1e423a306101", "note": "cropped right panel, inherit-proof selected" }
+    ]
+  },
+  "nativeChild": {
+    "fixtureGrammar": "T15-TASK prompt -> task tool call {agent:'t15child', name:'t15-child-N', task:'Return the T15 child marker.'}, toolCallId call_t15; child returns final 'Task 15 fixture reply.'",
+    "parentSessionId": "40f7a311-15e8-4c45-98e2-df4b9d2d7f59",
+    "snapshotAfter": { "runtimeStatus": "idle", "headSequence": "24" },
+    "subagentsResponse": [
+      { "subagentId": "t15-child-2", "parentSessionId": "40f7a311-15e8-4c45-98e2-df4b9d2d7f59", "childSessionId": "01a15ea5-3291-72e3-b2eb-00ca9792db4a", "toolCallId": "call_t15", "role": "t15child", "status": "completed" }
+    ],
+    "parentHistory": "task call call_t15 completed; matching task_result isError=false",
+    "sidebar": "expanded T15-TASK session rendered nested t15child row",
+    "screenshot": { "path": "/tmp/ohpi-w9b/evidence/sidebar-child-expanded.png", "sha256": "5bc1bd89833ac8432754e9f21c3b5ef59a27620f018236af342f3893112c6e55", "note": "cropped sidebar; parent expanded and t15child nested" },
+    "excluded": "Earlier session 8712557b/run eeee544f was aborted after the local fixture harness threw a shadowed-variable TypeError; it is a fixture bug, not an app finding, and is not claimed as child evidence."
+  },
+  "notRun": ["Board and Guest rows were reused unchanged from existing receipts and not rerun.", "No packaged Electron; main owns 9350/9351/57123/4601 and packaged acceptance."],
+  "limits": ["Fixture log /tmp/ohpi-w9b/fixture.log contains raw provider context; it remains ephemeral under /tmp and was not copied into this receipt or evidence tree.", "Screenshots are cropped to the relevant UI; no full app transcript copied.", "No source/build/test/doc changes were made by this run."],
+  "cleanup": {
+    "attempted": "stopped fixture 4631, Chrome 9381, and Host 3241; checked ports free and no matching processes",
+    "portsAfter": "3241/9381/4631 free at cleanup",
+    "packagedUntouched": "9350/9351/57123/4601 and packaged instance were never contacted"
+  },
+  "result": "PASS for the two requested current-Web observations"
+}

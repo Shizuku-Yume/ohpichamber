@@ -4,17 +4,19 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
+import { SETTINGS_FIELD_LABEL_CLASS } from '@/components/sections/shared/SettingsSection';
 import { Icon } from "@/components/icon/Icon";
-import type { Session } from '@opencode-ai/sdk/v2';
+import type { Session } from '@openchamber/agent-contract';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSessions } from '@/sync/sync-context';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
-import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useDeviceInfo } from '@/lib/device';
 import { checkIsGitRepository } from '@/lib/gitApi';
 import {
   getProjectSetup,
+  saveProjectWorktreeDirectory,
   saveWorktreeSetupCommands,
   saveWorktreeSetupWaitEnabled,
   updateProjectSetup,
@@ -30,8 +32,9 @@ import {
   ProjectSettingsSubsection,
 } from '@/components/sections/projects/ProjectSettingsSubsection';
 import { useI18n } from '@/lib/i18n';
+import { useProjectWorktrees } from './useProjectWorktrees';
 
-export interface WorktreeSectionContentProps {
+interface WorktreeSectionContentProps {
   projectRef?: { id: string; path: string } | null;
   /**
    * 'all' renders setup commands + the worktree list (settings panel);
@@ -66,11 +69,12 @@ export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({ 
   const [isSharing, setIsSharing] = React.useState(false);
   const [reloadCounter, setReloadCounter] = React.useState(0);
   const [waitForSetupCommands, setWaitForSetupCommands] = React.useState(false);
+  const [worktreeDirectory, setWorktreeDirectory] = React.useState('');
+  const [savedWorktreeDirectory, setSavedWorktreeDirectory] = React.useState('');
+  const [isSavingWorktreeDirectory, setIsSavingWorktreeDirectory] = React.useState(false);
   const [isLoadingCommands, setIsLoadingCommands] = React.useState(false);
   const [commandsSnapshot, setCommandsSnapshot] = React.useState<string | null>(null);
   const [isGitRepoLocal, setIsGitRepoLocal] = React.useState<boolean | null>(null);
-  const [availableWorktrees, setAvailableWorktrees] = React.useState<WorktreeMetadata[]>([]);
-  const [isLoadingWorktrees, setIsLoadingWorktrees] = React.useState(false);
   const isSavingCommandsRef = React.useRef(false);
 
   const projectRef = React.useMemo(() => {
@@ -82,17 +86,6 @@ export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({ 
     }
     return { id: activeProject.id, path: projectPath };
   }, [activeProject?.id, projectPath, projectRefProp?.id, projectRefProp?.path]);
-
-  const refreshWorktrees = React.useCallback(async () => {
-    if (!projectRef || isGitRepoLocal === false) return;
-
-    try {
-      const worktrees = await listProjectWorktrees(projectRef);
-      setAvailableWorktrees(worktrees);
-    } catch {
-      // Ignore errors
-    }
-  }, [projectRef, isGitRepoLocal]);
 
   React.useEffect(() => {
     if (!projectPath) return;
@@ -115,41 +108,10 @@ export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({ 
     };
   }, [projectPath]);
 
-  React.useEffect(() => {
-    if (!projectRef) {
-      setAvailableWorktrees([]);
-      setIsLoadingWorktrees(false);
-      return;
-    }
-
-    if (isGitRepoLocal === false) {
-      setAvailableWorktrees([]);
-      setIsLoadingWorktrees(false);
-      return;
-    }
-
-    let cancelled = false;
-    setIsLoadingWorktrees(true);
-    setAvailableWorktrees([]);
-
-    (async () => {
-      try {
-        const worktrees = await listProjectWorktrees(projectRef);
-        if (cancelled) return;
-        setAvailableWorktrees(worktrees);
-      } catch {
-        // ignore
-      } finally {
-        if (!cancelled) {
-          setIsLoadingWorktrees(false);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [projectRef, isGitRepoLocal]);
+  const sessionsKey = React.useMemo(() => sessions.map((session) => session.sessionId).join(','), [sessions]);
+  const { availableWorktrees, isLoadingWorktrees } = useProjectWorktrees(
+    projectRef, isGitRepoLocal, sessionsKey, listProjectWorktrees,
+  );
 
   React.useEffect(() => {
     if (!projectRef) return;
@@ -172,6 +134,9 @@ export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({ 
           setSharedTrusted(setup.trust.hash !== null && setup.trust.trusted);
           setCommandsSnapshot(JSON.stringify(nextCommands));
           setWaitForSetupCommands(setup.setupWorktreeWait);
+          const directory = setup.personal.worktreeDirectory ?? '';
+          setWorktreeDirectory(directory);
+          setSavedWorktreeDirectory(directory);
         }
       } catch {
         if (!cancelled) {
@@ -179,6 +144,8 @@ export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({ 
           setSharedSetupCommands([]);
           setCommandsSnapshot(JSON.stringify(['']));
           setWaitForSetupCommands(false);
+          setWorktreeDirectory('');
+          setSavedWorktreeDirectory('');
         }
       } finally {
         if (!cancelled) {
@@ -345,17 +312,40 @@ export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({ 
     }
   }, [projectRef]);
 
+  const saveWorktreeDirectory = React.useCallback(async () => {
+    if (!projectRef || isSavingWorktreeDirectory) {
+      return;
+    }
+    const next = worktreeDirectory.trim();
+    if (next === savedWorktreeDirectory) {
+      setWorktreeDirectory(savedWorktreeDirectory);
+      return;
+    }
+    setIsSavingWorktreeDirectory(true);
+    try {
+      if (!(await saveProjectWorktreeDirectory(projectRef, worktreeDirectory))) {
+        toast.error(t('settings.openchamber.worktrees.directory.toast.saveFailed'));
+        setWorktreeDirectory(savedWorktreeDirectory);
+        return;
+      }
+      setSavedWorktreeDirectory(next);
+      setWorktreeDirectory(next);
+    } finally {
+      setIsSavingWorktreeDirectory(false);
+    }
+  }, [isSavingWorktreeDirectory, projectRef, savedWorktreeDirectory, t, worktreeDirectory]);
+
   const handleDeleteWorktree = React.useCallback((worktree: WorktreeMetadata) => {
     const normalize = (value: string): string => value.replace(/\\/g, '/').replace(/\/+$/, '');
     const normalizedWorktreePath = normalize(worktree.path);
 
     const directSessions = sessions.filter((session) => {
-      const metadata = getWorktreeMetadata(session.id);
+      const metadata = getWorktreeMetadata(session.sessionId);
       if (metadata?.path && normalize(metadata.path) === normalizedWorktreePath) {
         return true;
       }
 
-      const sessionDir = (session as { directory?: string }).directory;
+      const sessionDir = resolveGlobalSessionDirectory(session);
       if (sessionDir) {
         const normalizedSessionDir = normalize(sessionDir);
         if (normalizedSessionDir === normalizedWorktreePath) {
@@ -366,7 +356,7 @@ export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({ 
       return false;
     });
 
-    const directSessionIds = new Set(directSessions.map((s) => s.id));
+    const directSessionIds = new Set(directSessions.map((s) => s.sessionId));
 
     const allKnownSessions = [
       ...useGlobalSessionsStore.getState().activeSessions,
@@ -375,13 +365,13 @@ export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({ 
 
     const findSubsessions = (parentIds: Set<string>): Session[] => {
       const subsessions = allKnownSessions.filter((session) => {
-        const parentID = (session as Session & { parentID?: string | null }).parentID;
-        return parentID && parentIds.has(parentID);
+        const parentId = session.parentSessionId;
+        return parentId !== undefined && parentIds.has(parentId);
       });
       if (subsessions.length === 0) {
         return [];
       }
-      const subsessionIds = new Set(subsessions.map((s) => s.id));
+      const subsessionIds = new Set(subsessions.map((s) => s.sessionId));
       return [...subsessions, ...findSubsessions(subsessionIds)];
     };
 
@@ -389,10 +379,10 @@ export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({ 
 
     const seenIds = new Set<string>();
     const allSessions = [...directSessions, ...allSubsessions].filter((session) => {
-      if (seenIds.has(session.id)) {
+      if (seenIds.has(session.sessionId)) {
         return false;
       }
-      seenIds.add(session.id);
+      seenIds.add(session.sessionId);
       return true;
     });
 
@@ -402,13 +392,6 @@ export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({ 
       worktree,
     });
   }, [sessions, getWorktreeMetadata]);
-
-  const sessionsKey = React.useMemo(() => sessions.map(s => s.id).join(','), [sessions]);
-  React.useEffect(() => {
-    if (isGitRepoLocal && projectPath) {
-      refreshWorktrees();
-    }
-  }, [sessionsKey, isGitRepoLocal, projectPath, refreshWorktrees]);
 
   const setupTooltip = (
     <SettingsInfoHint>
@@ -464,6 +447,30 @@ export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({ 
           <p className="typography-meta text-muted-foreground">{t('settings.openchamber.worktrees.setup.loading')}</p>
         ) : (
           <div className={cn('space-y-2', PROJECT_SETTINGS_CONTROL_WIDTH)}>
+            <div data-settings-item="projects.worktree.directory" className="space-y-2 pb-1">
+              <div className="flex items-center gap-1.5">
+                <span className={SETTINGS_FIELD_LABEL_CLASS}>
+                  {t('settings.openchamber.worktrees.directory.label')}
+                </span>
+                <SettingsInfoHint>
+                  {t('settings.openchamber.worktrees.directory.info')}
+                </SettingsInfoHint>
+              </div>
+              <Input
+                value={worktreeDirectory}
+                onChange={(event) => setWorktreeDirectory(event.target.value)}
+                onBlur={() => void saveWorktreeDirectory()}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.currentTarget.blur();
+                  }
+                }}
+                placeholder={t('settings.openchamber.worktrees.directory.placeholder')}
+                aria-label={t('settings.openchamber.worktrees.directory.aria')}
+                disabled={isSavingWorktreeDirectory}
+                className="h-8 font-mono text-xs"
+              />
+            </div>
             {sharedSetupCommands.length > 0 ? (
               <div className="space-y-1 pb-1">
                 <p className="typography-meta text-muted-foreground">

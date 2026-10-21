@@ -1,7 +1,7 @@
 /**
  * Boundary parsers for settings values. Every value that arrives from the
- * server, the VS Code bridge, or browser storage passes through one of these
- * before it is trusted; `undefined` means "reject", never "default".
+ * server or browser storage passes through one of these before it is trusted;
+ * `undefined` means "reject", never "default".
  *
  * These are the value-level rules the registry (`./registry.ts`) attaches to
  * each key. They are zod schemas wrapped into one function shape so the
@@ -12,6 +12,7 @@
 import { z, type ZodType } from 'zod';
 
 import type { ProjectEntry } from '@/lib/api/types';
+import { isCustomProviderIcon, type CustomProviderIcon } from '@/lib/customProviderIcons';
 import { createProjectIdFromPath } from '@/lib/projectId';
 import { normalizePath } from '@/lib/pathNormalization';
 
@@ -126,6 +127,16 @@ const stringListRecord = looseObject.transform((record) => {
 export const parseStringRecordOfStringLists = fromSchema(
   stringListRecord.pipe(z.record(z.string(), z.array(z.string())).refine((record) => Object.keys(record).length > 0)),
 );
+
+export const parseCustomProviderIcons: SettingsParser<Record<string, CustomProviderIcon>> = (value) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const result: Record<string, CustomProviderIcon> = {};
+  for (const [providerID, icon] of Object.entries(value)) {
+    const normalizedProviderID = providerID.trim();
+    if (normalizedProviderID && isCustomProviderIcon(icon)) result[normalizedProviderID] = icon;
+  }
+  return result;
+};
 
 const modelRefSchema = z.object({
   providerID: nonEmptyTrimmed,

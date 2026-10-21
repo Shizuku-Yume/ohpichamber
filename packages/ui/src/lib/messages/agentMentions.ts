@@ -1,4 +1,4 @@
-import type { Agent } from "@opencode-ai/sdk/v2";
+import type { Agent } from '@openchamber/agent-contract';
 
 interface AgentMentionSource {
   value: string;
@@ -11,7 +11,7 @@ interface ParsedAgentMention {
   source?: AgentMentionSource;
 }
 
-export interface ParsedAgentResult {
+interface ParsedAgentResult {
   sanitizedText: string;
   mention: ParsedAgentMention | null;
 }
@@ -24,18 +24,18 @@ const isWordBoundaryChar = (char: string | null): boolean => {
 };
 
 export const parseAgentMentions = (rawText: string, agents: Agent[]): ParsedAgentResult => {
-  if (typeof rawText !== "string" || rawText.length === 0) {
+  if (rawText.length === 0) {
     return { sanitizedText: rawText, mention: null };
   }
 
-  const nonPrimaryAgents = agents.filter((agent) => agent.mode && agent.mode !== "primary");
-  if (nonPrimaryAgents.length === 0 || !rawText.includes("@")) {
+  if (agents.length === 0 || !rawText.includes("@")) {
     return { sanitizedText: rawText, mention: null };
   }
+  const selectableAgents = agents;
 
   let firstMention: ParsedAgentMention | null = null;
 
-  for (const agent of nonPrimaryAgents) {
+  for (const agent of selectableAgents) {
     const escapedAgentName = agent.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const pattern = new RegExp(`@${escapedAgentName}\\b`, "gi");
     let match: RegExpExecArray | null;

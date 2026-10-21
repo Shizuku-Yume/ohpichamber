@@ -1,19 +1,19 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
-import { opencodeClient } from '@/lib/opencode/client';
+import { hostFilesystem } from '@/lib/host-filesystem';
 import { switchRuntimeEndpoint } from '@/lib/runtime-switch';
-import { createChatDirectory, deleteChatDirectory, ensureChatsRootDirectory, getChatsRootFromDirectory, isChatDirectoryForHome, isChatDirectoryPath, warmChatsRootDirectory } from './chatDirectories';
+import { createChatDirectory, deleteChatDirectory, ensureChatsRootDirectory, getChatsRoot, getChatsRootFromDirectory, isChatDirectoryForHome, isChatDirectoryPath, subscribeChatsRoot, warmChatsRootDirectory } from './chatDirectories';
 
 let runtime = 0;
 const nextRuntime = () => switchRuntimeEndpoint({ apiBaseUrl: 'https://chats.test', runtimeKey: `chats-${++runtime}` });
-let home = spyOn(opencodeClient, 'getFilesystemHomeInfo');
-let mkdir = spyOn(opencodeClient, 'createDirectory');
+let home = spyOn(hostFilesystem, 'getFilesystemHomeInfo');
+let mkdir = spyOn(hostFilesystem, 'createDirectory');
 let request = spyOn(globalThis, 'fetch');
 const deleteRequests = () => request.mock.calls.filter(([input]) => String(input).includes('/fs/delete'));
 
 beforeEach(() => {
   nextRuntime();
-  home = spyOn(opencodeClient, 'getFilesystemHomeInfo').mockResolvedValue({ home: '/home/user', chatsRoot: '/srv/chats' });
-  mkdir = spyOn(opencodeClient, 'createDirectory').mockResolvedValue({ success: true, path: '/unused' });
+  home = spyOn(hostFilesystem, 'getFilesystemHomeInfo').mockResolvedValue({ home: '/home/user', chatsRoot: '/srv/chats' });
+  mkdir = spyOn(hostFilesystem, 'createDirectory').mockResolvedValue({ success: true, path: '/unused' });
   request = spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}'));
 });
 afterEach(() => { home.mockRestore(); mkdir.mockRestore(); request.mockRestore(); });
@@ -24,6 +24,18 @@ describe('server-owned chat directories', () => {
     nextRuntime();
     home.mockResolvedValue({ home: '/home/user' });
     expect((await createChatDirectory(new Date(2026, 8, 5))).startsWith('/home/user/.config/openchamber/chats/2026-09-05/session-')).toBe(true);
+  });
+
+  test('names no root until the server does, then tells subscribers', async () => {
+    // The home's legacy folder is not a stand-in: with OPENCHAMBER_DATA_DIR it
+    // does not exist, and opening it showed "Could not initialize workspace."
+    expect(getChatsRoot()).toBeNull();
+    let notified = 0;
+    const unsubscribe = subscribeChatsRoot(() => { notified += 1; });
+    await ensureChatsRootDirectory();
+    unsubscribe();
+    expect(getChatsRoot()).toBe('/srv/chats');
+    expect(notified).toBe(1);
   });
 
   test('classifies only exact configured and actual legacy roots after warming', async () => {

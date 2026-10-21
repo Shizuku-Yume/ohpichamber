@@ -1,0 +1,156 @@
+{
+ "at": "2026-10-21T12:41:43.391Z",
+ "base": "http://127.0.0.1:3240",
+ "steps": [
+  {
+   "n": "app-ready",
+   "ready": true,
+   "text": "New session\nchats\nStart a session\nwork\nStart a session\nWhat are we working on?\nChoose project\nPlan, build, or ask. @ to mention, $ for skills, / for commands\n\nLoading...\nLoading...\nExplore the codebase\nCatch me up\nWeigh my options\nStart feature planning\nCraft a Goal\nSchedule a Task\nDebug an issue\nReview my changes\nSession",
+   "at": 1792586506404
+  },
+  {
+   "n": "board-button",
+   "found": true,
+   "at": 1792586506405
+  },
+  {
+   "n": "board-opened",
+   "text": "New session\nchats\nStart a session\nwork\nStart a session\nupdate\nIssues and PRs\nissues\npull requests\nlinear\nwork\nOpen\n[Bug] Chevrons for nested items inside expandable chat entries are always looking downwards\n#5176\nRekkonnect\n6min ago\n1\nbug\n[Bug] Math expression rendering conflicts with markdown syntax\n#5166\nbilly4479\n7min ago\n1\nbug\n[Bug] Opening home as a project automatically selects `.oh-my-zsh` as its Git repository\n#5357\nskaldebane\n20min ago\n1\nbug\nplatform:linux\n+2\n[Bug] Mobile Chats section remains visible when disabled\n#5354\nskaldebane\n29min ago\n2\nbug\narea:sessions\n+2\n[Bug] Tray and sidebar disagree on which sessions get a row\n#5353\nMorningStar0709\n1h ago\n1\nbug\narea:sessions\n+1\n[Bug] SDK global file reads fail when the current project path contains non-Latin-1 characters\n#5179\nchenyuhao0628\n1h ago\n1\n[Bug] Scheduler tools fail with 404 Project not found for directory when called from a linked Git worktree\n#5164\nbashrusakh\n1h ago\n1\n[Bug] Linux: incomplete lsof discovery blocks previews of Docker-published ports\n#5346\nret1\n1h ago\n1\nbug\narea:remote\n+1\n[Bug] Permission and question prompts missing from main window but visible in Mini Chat\n#5342\njaneklb\n2h ago\n1\nbug\narea:chat-ui\n+2\nDependency Dashboard\n#1598\nrenovate\n3h ago\n1\n[Bug] Pierre code views ignore the Code font and Interface font size, and their line height doesn't scale\n#5333\nmossgowild\n3h ago\n1\nbug\narea:chat-ui\n+1\nScheduled tasks: allow choosing the branch to run on and whether to run in isolation (like multi-run)\n#1959\ntomzx\n4h ago\n7\nenhancement\narea:git\n+1\n[Bug] Freezes opening a long session\n#4607\nalexanderteplov\n5h ago\n3\nbug\nExtension panels never boot behind an SSO/forward-auth proxy (guest-frame CSP blocks the proxy's injected script)\n#5326\nTauNeutrino\n5h ago\n1\nbug\nplatform:web\n+1\n[Bug] Unterminated term",
+   "at": 1792586536928
+  },
+  {
+   "n": "search-input",
+   "found": true,
+   "at": 1792586536980
+  },
+  {
+   "n": "search-result",
+   "text": "New session\nchats\nStart a session\nwork\nStart a session\nupdate\nIssues and PRs\nissues\npull requests\nlinear\nwork\nOpen\nMobile Tree promotes subagent sessions to top-level rows when parent is in another worktree\n#5304\nsdhector\n16h ago\n1\nbug\narea:sessions\n+2\nOpen\nopenchamber/openchamber #5304\nGitHub\nMobile Tree promotes subagent sessions to top-level rows when parent is in another worktree\nAuthor\nsdhector\nUpdated\n16h ago\nLabels\nbug\narea:sessions\nplatform:mobile\nroot-cause:found\nSummary\n\nOn the mobile Tree view, a subagent session is rendered as a top-level row when its parent session is in a different worktree bucket. The data is correct: OpenCode stores parentID, and desktop/List views keep the session under its parent.\n\nThis is a display bug in the mobile Tree projection.\n\nReproduction\nCreate a parent session in a project root, for example /project.\nLet it spawn a subagent that runs in a worktree, for example /project/worktree.\nOpen the mobile session sheet in Tree view.\nThe subagent appears as a top-level row under the worktree instead of under its parent. The parent row does not contain it.\nExpected\n\nA session with a parent that exists should never become a top-level Tree row. It should either:\n\nbe rendered under the parent's bucket, or\nremain hidden behind the parent row.\nActual\n\nMobileSessionsSheet.tsx groups children only within the current worktree bucket. Any child whose parent is outside that bucket is explicitly treated as a root:\n\nts\n// Group children by parent within this bucket, and treat sessions whose parent\n// is not in this bucket as top-level so nothing is hidden.\nconst idsInBucket = new Set(bucket.sessions.map((entry) => entry.id));\nconst bucketRoots = bucket.sessions.filter((entry) => {\n  const parentId = getParentId(entry);\n  return !parentId || !idsInBucket.has(parentId);\n});\n\nVerified in 2.5.0 (6e3d996d) and current upstream main (2026-10-20).\n\nRegression test\n\nA focused source-level test using the exact predicate fails:\n\ntext\nactual:   [ 'ses_chil",
+   "has5304": true,
+   "at": 1792586539010
+  },
+  {
+   "n": "item-click",
+   "clicked": null,
+   "at": 1792586539012
+  },
+  {
+   "n": "preview",
+   "text": "New session\nchats\nStart a session\nwork\nStart a session\nupdate\nIssues and PRs\nissues\npull requests\nlinear\nwork\nOpen\nMobile Tree promotes subagent sessions to top-level rows when parent is in another worktree\n#5304\nsdhector\n16h ago\n1\nbug\narea:sessions\n+2\nOpen\nopenchamber/openchamber #5304\nGitHub\nMobile Tree promotes subagent sessions to top-level rows when parent is in another worktree\nAuthor\nsdhector\nUpdated\n16h ago\nLabels\nbug\narea:sessions\nplatform:mobile\nroot-cause:found\nSummary\n\nOn the mobile Tree view, a subagent session is rendered as a top-level row when its parent session is in a different worktree bucket. The data is correct: OpenCode stores parentID, and desktop/List views keep the session under its parent.\n\nThis is a display bug in the mobile Tree projection.\n\nReproduction\nCreate a parent session in a project root, for example /project.\nLet it spawn a subagent that runs in a worktree, for example /project/worktree.\nOpen the mobile session sheet in Tree view.\nThe subagent appears as a top-level row under the worktree instead of under its parent. The parent row does not contain it.\nExpected\n\nA session with a parent that exists should never become a top-level Tree row. It should either:\n\nbe rendered under the parent's bucket, or\nremain hidden behind the parent row.\nActual\n\nMobileSessionsSheet.tsx groups children only within the current worktree bucket. Any child whose parent is outside that bucket is explicitly treated as a root:\n\nts\n// Group children by parent within this bucket, and treat sessions whose parent\n// is not in this bucket as top-level so nothing is hidden.\nconst idsInBucket = new Set(bucket.sessions.map((entry) => entry.id));\nconst bucketRoots = bucket.sessions.filter((entry) => {\n  const parentId = getParentId(entry);\n  return !parentId || !idsInBucket.has(parentId);\n});\n\nVerified in 2.5.0 (6e3d996d) and current upstream main (2026-10-20).\n\nRegression test\n\nA focused source-level test using the exact predicate fails:\n\ntext\nactual:   [ 'ses_child' ]\nexpected: []\n\nThe child is promoted to a root row solely because its parent is in another bucket.\n\nSuggested fix\n\nUse the global session graph when deciding roots, not only the current bucket. If the parent exists, attach the child to the parent's bucket or exclude it from the top-level list. Add a regression test with:\n\nparent directory /project\nchild directory /project/worktree\nchild parentID pointing at the parent\n\nRelated: #2266 (subagent sessions rendering incorrectly after archiving a",
+   "hasAttach": false,
+   "tail": "subagent can sit in another worktree and still belongs to its parent\" (MobileSessionsSheet.tsx:1044-1057) — and the desktop sidebar decides roots from the global structure (globalSessionStructure.ts:115-143, consumed at sessionCollection.ts:182-203), where a session with a parentID is never a root. Confirmed for the reporter's scenario by code reading (bucket assignment + root predicate both match the report); not runtime-verified.\n\nCode path\n\nSuggested fix direction matches the code that already exists: use the global id set / childrenBySessionId when deciding bucketRoots, keeping the bucket-local fallback only for parents that truly don't exist. The regression test you sketched (parent /project, child /project/worktree, cross-bucket parentID) targets the right predicate. Related history: #2266 / PR #2271 fixed the analogous desktop split for archived parents.\n\ncomment\nattach to session",
+   "at": 1792586570068
+  },
+  {
+   "n": "attach-button",
+   "button": {
+    "rect": {
+     "x": 1360.5625,
+     "y": 813,
+     "w": 171.4375,
+     "h": 32
+    },
+    "display": "flex",
+    "visibility": "visible",
+    "opacity": "1",
+    "scrollY": 0
+   },
+   "at": 1792586593948
+  },
+  {
+   "n": "attach-menu",
+   "items": [
+    "New session",
+    "New session in worktree…"
+   ],
+   "at": 1792586595164
+  },
+  {
+   "n": "new-session-click",
+   "clicked": "New session",
+   "at": 1792586595254
+  },
+  {
+   "n": "draft",
+   "dom": {
+    "url": "http://127.0.0.1:3240/",
+    "title": "work | OpenChamber",
+    "composer": true,
+    "text": " New sessionchatsStart a sessionworkStart a session To pick up a draggable item, press the space bar. While dragging, use the arrow keys to move the item. Press space again to drop the item in its new position, or press escape to cancel. UpdateWhat are we working on in work?workmain#5304by sdhectorMobile Tree promotes subagent sessions to top-level rows when parent is in another worktreePlan, build, or ask. @ to mention, $ for skills, / for commandsAbliterated Modelt15childExplore the codebaseCatch me upWeigh my optionsStart feature planningCraft a GoalSchedule a TaskDebug an issueReview my changes To pick up a draggable item, press the space bar. While dragging, use the arrow keys to move the item. Press space again to drop the item in its new position, or press escape to cancel. SessionProjectworkmain1 file changed+6/−0UsageUsed To pick up a draggable item, press the space bar. While dragging, use the arrow keys to move the item. Press space again to drop the item in its new position, or press escape to cancel. // Fallback: hide loading screen after 10 seconds if React fails to load. // Desktop shells manage their own splash via the injected boot outcome; // do not force-remove for desktop windows. Electron's preload sets // __OPENCHAMBER_ELECTRON__ before any page script; a packaged launch can // hold the parser on /__runtime-config.js longer than 10s while the // local server starts, and removing the splash then leaves a blank window. setTimeout(function() { if (window.__OPENCHAMBER_ELECTRON__) { return; } if (typeof window.__OPENCHAMBER_LOCAL_ORIGIN__ === 'string' && window.__OPENCHAMBER_LOCAL_ORIGIN__.length > 0) { return; } var loading = document.getElementById('initial-loading'); if (loading) { console.warn('Loading screen timeout - forcing hide after 10s'); loading.classList.add('fade-out'); setTimeout(function() { loading.remove(); }, 300); } }, 10000); if (typeof process === 'undefined') { window.process = { env: {} }; } ",
+    "chips": [],
+    "projectButtons": [
+     "work",
+     "work",
+     "#5304by sdhectorMobile Tree promotes subagent sessions to top-level rows when parent is in another worktree"
+    ]
+   },
+   "at": 1792586597273
+  }
+ ],
+ "requests": [
+  {
+   "method": "GET",
+   "url": "/api/source-control/binding?directory=%2Ftmp%2Fohpi-task15b%2Fchats%2Fwork",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "url": "/api/source-control/instances",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "url": "/api/source-control/binding?directory=%2Ftmp%2Fohpi-task15b%2Fboard-current-data%2Fchats",
+   "status": 422
+  },
+  {
+   "method": "GET",
+   "url": "/api/source-control/github/auth/status?instance=github.com",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "url": "/api/source-control/gitlab/auth/status?instance=https%3A%2F%2Fgitlab.com",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "url": "/api/source-control/github/auth/status?instance=github.com",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "url": "/api/source-control/github/references?directory=%2Ftmp%2Fohpi-task15b%2Fchats%2Fwork&instance=github.com&repositoryId=repo_y9zButqk88I-67DDjSMZsasJJEZXpL7chvUGZonpILc&accountId=github.com%23cli%3A135561100&bindingRevision=0&primaryRemote=origin&kind=issue&state=open&people=any",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "url": "/api/source-control/github/references?directory=%2Ftmp%2Fohpi-task15b%2Fchats%2Fwork&instance=github.com&repositoryId=repo_y9zButqk88I-67DDjSMZsasJJEZXpL7chvUGZonpILc&accountId=github.com%23cli%3A135561100&bindingRevision=0&primaryRemote=origin&kind=pull&state=open&people=any",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "url": "/api/source-control/github/references/detail?directory=%2Ftmp%2Fohpi-task15b%2Fchats%2Fwork&instance=github.com&repositoryId=repo_y9zButqk88I-67DDjSMZsasJJEZXpL7chvUGZonpILc&accountId=github.com%23cli%3A135561100&bindingRevision=0&primaryRemote=origin&owner=openchamber&repo=openchamber&number=5176",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "url": "/api/source-control/github/references?directory=%2Ftmp%2Fohpi-task15b%2Fchats%2Fwork&instance=github.com&repositoryId=repo_y9zButqk88I-67DDjSMZsasJJEZXpL7chvUGZonpILc&accountId=github.com%23cli%3A135561100&bindingRevision=0&primaryRemote=origin&kind=issue&state=open&people=any&query=5304",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "url": "/api/source-control/github/references/detail?directory=%2Ftmp%2Fohpi-task15b%2Fchats%2Fwork&instance=github.com&repositoryId=repo_y9zButqk88I-67DDjSMZsasJJEZXpL7chvUGZonpILc&accountId=github.com%23cli%3A135561100&bindingRevision=0&primaryRemote=origin&owner=openchamber&repo=openchamber&number=5304",
+   "status": 200
+  }
+ ],
+ "checks": {
+  "attachButton": true,
+  "attachMenuNewSession": true,
+  "draftComposer": true,
+  "draftHas5304": true,
+  "draftHasProjectWork": true,
+  "draftHasBranch": true
+ },
+ "verdict": "PASS"
+}

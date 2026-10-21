@@ -142,7 +142,7 @@ mock.module('@/components/ui', () => ({
   },
 }));
 mock.module('@/components/icon/Icon', () => ({ Icon: ({ name, className }: { name: string; className?: string }) => React.createElement('span', { 'data-icon': name, className }) }));
-mock.module('@/hooks/useRuntimeAPIs', () => ({ useRuntimeAPIs: () => ({ terminal, runtime: { isVSCode: false, platform: 'web' } }) }));
+mock.module('@/hooks/useRuntimeAPIs', () => ({ useRuntimeAPIs: () => ({ terminal, runtime: { platform: 'web' } }) }));
 mock.module('@/lib/device', () => ({ useDeviceInfo: () => mockedDeviceInfo }));
 // Modules under test import other desktop helpers too; keep the real ones.
 const desktop = await import('@/lib/desktop');
@@ -162,7 +162,7 @@ mock.module('@/lib/openchamberConfig', () => ({
     projectActionsPrimaryId: null,
     draftStarters: [],
     shared: { status: 'missing', path: '.openchamber/project.json', setupWorktree: [], setupWorktreeWait: null, projectActions: [], draftStarters: [], plansDir: null },
-    personal: { setupWorktree: [], setupWorktreeWait: null, setupWorktreeMode: 'append', projectActions: mockedActionsState.actions, projectActionsPrimaryId: null, draftStarters: [], hiddenSharedActionIds: [], sharedTrust: null },
+    personal: { setupWorktree: [], setupWorktreeWait: null, setupWorktreeMode: 'append', worktreeDirectory: null, projectActions: mockedActionsState.actions, projectActionsPrimaryId: null, draftStarters: [], hiddenSharedActionIds: [], sharedTrust: null },
   }),
   updateProjectSetup: async () => true,
 }));

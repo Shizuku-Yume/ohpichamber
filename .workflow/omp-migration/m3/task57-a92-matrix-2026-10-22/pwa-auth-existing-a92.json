@@ -1,0 +1,57 @@
+{
+  "artifact": "a92fbb36ef3e554211da90ac667bc42350c27c05e0978f2edbb1b3fd48b70ef7",
+  "source": "8d179c4e2",
+  "surface": "same a92 2.2.0 web bundle/Host CLI",
+  "env": {
+    "HOME": "/tmp/ohpi-task18/home",
+    "OPENCHAMBER_DATA_DIR": "/tmp/ohpi-task18/data",
+    "OPENCHAMBER_CHATS_DIR": "/tmp/ohpi-task18/chats"
+  },
+  "unauthorized": {
+    "status": 200,
+    "contentType": "application/manifest+json; charset=utf-8",
+    "names": [
+      "Appearance Settings"
+    ],
+    "urls": [
+      "/?settings=appearance"
+    ]
+  },
+  "login": {
+    "status": 200,
+    "cookieIssued": true
+  },
+  "authenticatedSessionList": {
+    "workspacesStatus": 200,
+    "workspacesCount": 21,
+    "resolvedStatus": 200,
+    "resolvedWorkspaceId": "ws_162572d2-768b-4450-8125-48989e1db36b",
+    "sessionsStatus": 200,
+    "sessionsCount": 0,
+    "sessionsErrors": {
+      "ws_162572d2-768b-4450-8125-48989e1db36b": "SERVICE_UNAVAILABLE"
+    },
+    "globalSessionsStatus": 200,
+    "globalSessionsCount": 0,
+    "errorsSummary": {
+      "workspaces": "7 METADATA_READ_FAILED",
+      "scopedSessions": "1 SERVICE_UNAVAILABLE"
+    }
+  },
+  "authorized": {
+    "status": 200,
+    "contentType": "application/manifest+json; charset=utf-8",
+    "names": [
+      "Appearance Settings",
+      "T18-PACKAGED",
+      "T57-CHILD-CLEAN",
+      "T57-CHILD-CLEAN"
+    ],
+    "urls": [
+      "/?settings=appearance",
+      "/?session=2ba24f29-a198-4327-bbf5-54ccb9789df3",
+      "/?session=3a97efba-e839-429f-8e80-d81715e5a60e",
+      "/?session=ad39f768-7a58-4044-8bdc-939eaace9dd8"
+    ]
+  }
+}

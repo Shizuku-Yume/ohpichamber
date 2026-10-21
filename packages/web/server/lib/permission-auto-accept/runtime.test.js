@@ -1,182 +1,34 @@
 import { describe, expect, it, vi } from 'vitest';
+import { ApprovalRequestSchema, CanonicalEventSchema, RuntimeSessionSchema, SessionSnapshotSchema } from '@openchamber/agent-contract';
 import { createPermissionAutoAcceptRuntime } from './runtime.js';
 
-const createRuntime = ({ stored, fetchImpl, retryDelaysMs = [0], evaluatePermission, onPermissionReplied } = {}) => {
-  let settings = stored ?? { permissionAutoAccept: { sessions: {} } };
-  let eventHandler;
-  let statusHandler;
-  const runtime = createPermissionAutoAcceptRuntime({
-    globalEventHub: {
-      subscribeEvent(handler) { eventHandler = handler; return () => {}; },
-      subscribeStatus(handler) { statusHandler = handler; return () => {}; },
-    },
-    buildOpenCodeUrl: (path) => `http://opencode.test${path}`,
-    getOpenCodeAuthHeaders: () => ({}),
-    readSettingsFromDiskMigrated: async () => settings,
-    persistSettings: async (changes) => { settings = { ...settings, ...changes }; },
-    fetchImpl: fetchImpl ?? vi.fn(async () => new Response('[]')),
-    retryDelaysMs,
-    evaluatePermission,
-    onPermissionReplied,
-  });
-  runtime.start();
-  return {
-    runtime,
-    getSettings: () => settings,
-    emit: (payload, directory = '/project') => eventHandler({ payload, directory }),
-    connect: () => statusHandler({ type: 'connect' }),
-  };
+const timestamp = 1767225600000;
+const cas = { version: '1', epoch: 'epoch-1', workerGeneration: 'worker-1' };
+const session = ({ sessionId, parentSessionId, rootSessionId = parentSessionId ?? sessionId, runtimeStatus = 'running', activeRunId = 'run-1' }) => RuntimeSessionSchema.parse({ sessionId, projectId: 'project-1', workspaceId: 'workspace-1', displayPath: 'project', ...(parentSessionId ? { parentSessionId } : {}), rootSessionId, createdAt: timestamp, updatedAt: timestamp, epoch: 'epoch-1', headSequence: '1', runtimeStatus, activeRunId });
+const approval = (approvalId, sessionId = 'root', overrides = {}) => ApprovalRequestSchema.parse({ ...cas, approvalId, sessionId, turnId: 'turn-1', toolCallId: `tool-${approvalId}`, toolName: 'shell', actionType: 'bash_command', commandSummary: 'echo ok', details: {}, status: 'pending', requestedAt: timestamp, ...overrides });
+const event = (type, sessionId, extra = {}) => CanonicalEventSchema.parse({ type, sessionId, epoch: 'epoch-1', sequence: '1', timestamp, ...extra });
+const snapshot = (sessionId, approvals = []) => SessionSnapshotSchema.parse({ session: session({ sessionId }), cursor: 'epoch-1:1', activeRun: { runId: 'run-1', sessionId, status: 'running', createdAt: timestamp }, branch: { branchId: 'branch-1', branchVersion: '1', leafMessageId: null }, window: { firstTurnId: null, lastTurnId: null, firstMessageId: null, lastMessageId: null, hasEarlier: false }, turns: [], messages: [], approvals, questions: [], requestRecovery: { pendingSet: 'replace', priorEpochs: 'expired' } });
+const createRuntime = ({ stored, serviceRequest, retryDelaysMs = [0], evaluatePermission, onPermissionReplied, resolveLegacyEnabledMode, broadcastGlobalUiEvent, scopes = [{ workspaceId: 'workspace-1' }] } = {}) => {
+  let settings = stored ?? { permissionAutoAccept: { sessions: {} } }; let eventHandler; let statusHandler;
+  const request = serviceRequest ?? (async (path) => Response.json(path.includes('/snapshot') ? snapshot('root') : path.includes('/sessions?') ? { items: [], errors: [] } : {}));
+  const runtime = createPermissionAutoAcceptRuntime({ service: { request }, globalEventHub: { subscribeEvent(handler) { eventHandler = handler; return () => {}; }, subscribeStatus(handler) { statusHandler = handler; return () => {}; } }, resolveSessionScope: async () => ({ cwd: '/project' }), listWorkspaceScopes: async () => ({ items: scopes, errors: {} }), readSettingsFromDiskMigrated: async () => settings, persistSettings: async (changes) => { settings = { ...settings, ...changes }; }, retryDelaysMs, evaluatePermission, onPermissionReplied, resolveLegacyEnabledMode, broadcastGlobalUiEvent });
+  runtime.start(); return { runtime, getSettings: () => settings, emit: (payload) => eventHandler(payload), connect: () => statusHandler({ type: 'connect' }) };
 };
-
-const flush = async () => {
-  for (let index = 0; index < 20; index += 1) await Promise.resolve();
-};
+const flush = async () => { for (let index = 0; index < 20; index += 1) await Promise.resolve(); };
 
 describe('permission auto-accept runtime', () => {
-  it('persists explicit session policies across runtime restarts', async () => {
-    const first = createRuntime();
-    await first.runtime.setSessionPolicy('root', true);
-
-    const second = createRuntime({ stored: first.getSettings() });
-    await expect(second.runtime.load()).resolves.toEqual({
-      sessions: { root: true },
-      revision: 1,
-    });
-  });
-
-  it('increments the authoritative policy revision', async () => {
-    const { runtime, getSettings } = createRuntime();
-
-    await expect(runtime.setSessionPolicy('root', true)).resolves.toMatchObject({ revision: 1 });
-    await expect(runtime.setSessionPolicy('child', false)).resolves.toMatchObject({ revision: 2 });
-    expect(getSettings().permissionAutoAccept.revision).toBe(2);
-  });
-
-  it('uses nearest explicit ancestor policy for subagents', async () => {
-    const { runtime, emit } = createRuntime({
-      stored: { permissionAutoAccept: { sessions: { root: true, child: false } } },
-    });
-    emit({ type: 'session.created', properties: { info: { id: 'child', parentID: 'root' } } });
-    emit({ type: 'session.created', properties: { info: { id: 'grandchild', parentID: 'child' } } });
-    await expect(runtime.isSessionAutoAccepting('grandchild', '/project')).resolves.toBe(false);
-    await runtime.setSessionPolicy('child', true);
-    await expect(runtime.isSessionAutoAccepting('grandchild', '/project')).resolves.toBe(true);
-  });
-
-  it('fetches missing subagent lineage before replying', async () => {
-    const fetchImpl = vi.fn(async (url, init = {}) => {
-      const path = new URL(url).pathname;
-      if (path === '/permission') return new Response('[]');
-      if (path === '/session/child') return Response.json({ id: 'child', parentID: 'root', directory: '/project' });
-      if (init.method === 'POST') return Response.json({});
-      return new Response('', { status: 404 });
-    });
-    const { runtime } = createRuntime({
-      stored: { permissionAutoAccept: { sessions: { root: true } } },
-      fetchImpl,
-    });
-    await expect(runtime.processPermission({ id: 'perm', sessionID: 'child' }, '/project')).resolves.toBe(true);
-    expect(fetchImpl.mock.calls.some(([url, init]) => new URL(url).pathname === '/permission/perm/reply' && init.method === 'POST')).toBe(true);
-  });
-
-  it('retries a transient reply failure and deduplicates concurrent events', async () => {
-    let replyAttempts = 0;
-    const fetchImpl = vi.fn(async (url, init = {}) => {
-      const path = new URL(url).pathname;
-      if (path === '/permission') return new Response('[]');
-      if (path === '/permission/perm/reply' && init.method === 'POST') {
-        replyAttempts += 1;
-        return replyAttempts === 1 ? new Response('', { status: 503 }) : Response.json({});
-      }
-      return Response.json({ id: 'root' });
-    });
-    const { runtime } = createRuntime({
-      stored: { permissionAutoAccept: { sessions: { root: true } } },
-      fetchImpl,
-      retryDelaysMs: [0, 0],
-    });
-    const permission = { id: 'perm', sessionID: 'root' };
-    const first = runtime.processPermission(permission, '/project');
-    const second = runtime.processPermission(permission, '/project');
-    await expect(Promise.all([first, second])).resolves.toEqual([true, true]);
-    expect(replyAttempts).toBe(2);
-  });
-
-  it('reconciles pending permissions after reconnect', async () => {
-    const fetchImpl = vi.fn(async (url, init = {}) => {
-      const path = new URL(url).pathname;
-      if (path === '/permission') return Response.json([{ id: 'pending', sessionID: 'root' }]);
-      if (path === '/permission/pending/reply' && init.method === 'POST') return Response.json({});
-      return Response.json({ id: 'root' });
-    });
-    const { connect } = createRuntime({
-      stored: { permissionAutoAccept: { sessions: { root: true } } },
-      fetchImpl,
-    });
-    connect();
-    await flush();
-    expect(fetchImpl.mock.calls.some(([url]) => new URL(url).pathname === '/permission/pending/reply')).toBe(true);
-  });
-
-  it('accepts existing pending permissions when a session policy is enabled', async () => {
-    const fetchImpl = vi.fn(async (url, init = {}) => {
-      const parsed = new URL(url);
-      const path = parsed.pathname;
-      if (path === '/permission') {
-        return parsed.searchParams.get('directory') === '/project'
-          ? Response.json([
-            { id: 'root-pending', sessionID: 'root' },
-            { id: 'other-pending', sessionID: 'other' },
-          ])
-          : Response.json([]);
-      }
-      if (path === '/permission/root-pending/reply' && init.method === 'POST') return Response.json({});
-      if (path === '/session/other') return Response.json({ id: 'other' });
-      return new Response('', { status: 404 });
-    });
-    const { runtime } = createRuntime({ fetchImpl });
-
-    await runtime.setSessionPolicy('root', true, '/project');
-
-    const replyPaths = fetchImpl.mock.calls
-      .filter(([, init]) => init?.method === 'POST')
-      .map(([url]) => new URL(url).pathname);
-    expect(replyPaths).toEqual(['/permission/root-pending/reply']);
-    expect(fetchImpl.mock.calls.some(([url]) => new URL(url).searchParams.get('directory') === '/project')).toBe(true);
-    expect(await runtime.load()).toEqual({ sessions: { root: true }, revision: 1 });
-  });
-
-  it('leaves a request held by the safety net unanswered and forgets it once replied', async () => {
-    const fetchImpl = vi.fn(async () => new Response('[]'));
-    const verdicts = { held: { action: 'hold', score: 0.9, kind: 'git_history' }, safe: { action: 'accept', score: 0.1 } };
-    const evaluatePermission = vi.fn(async (permission) => verdicts[permission.id]);
-    const onPermissionReplied = vi.fn();
-    const { runtime, emit } = createRuntime({
-      stored: { permissionAutoAccept: { sessions: { root: true } } },
-      fetchImpl,
-      evaluatePermission,
-      onPermissionReplied,
-    });
-    await runtime.load();
-
-    emit({ type: 'permission.asked', properties: { id: 'held', sessionID: 'root', permission: 'bash', metadata: {} } });
-    emit({ type: 'permission.asked', properties: { id: 'safe', sessionID: 'root', permission: 'bash', metadata: {} } });
-    await flush();
-
-    const replies = fetchImpl.mock.calls.map(([url]) => String(url)).filter((url) => url.includes('/reply'));
-    expect(replies).toEqual(['http://opencode.test/permission/safe/reply?directory=%2Fproject']);
-    expect(evaluatePermission).toHaveBeenCalledTimes(2);
-
-    emit({ type: 'permission.replied', properties: { sessionID: 'root', requestID: 'held', reply: 'once' } });
-    expect(onPermissionReplied).toHaveBeenCalledWith('held');
-  });
-
-  it('does not consult the safety net for sessions that are not auto-accepting', async () => {
-    const evaluatePermission = vi.fn(async () => ({ action: 'hold' }));
-    const { runtime, emit } = createRuntime({ evaluatePermission });
-    await runtime.load();
-    emit({ type: 'permission.asked', properties: { id: 'p', sessionID: 'manual', permission: 'bash', metadata: {} } });
-    await flush();
-    expect(evaluatePermission).not.toHaveBeenCalled();
-  });
+  it('persists explicit session modes across runtime restarts', async () => { const first = createRuntime(); await first.runtime.setSessionPolicy('root', 'safety'); await first.runtime.setSessionPolicy('manual', 'ask'); const second = createRuntime({ stored: first.getSettings() }); await expect(second.runtime.load()).resolves.toEqual({ sessions: { root: true, manual: false }, modes: { root: 'safety', manual: 'ask' }, revision: 2 }); });
+  it('takes on/off from clients that predate the modes as auto and ask', async () => { const { runtime } = createRuntime(); await runtime.setSessionPolicy('on', true); await runtime.setSessionPolicy('off', false); expect((await runtime.load()).modes).toEqual({ on: 'auto', off: 'ask' }); await expect(runtime.setSessionPolicy('bad', 'always')).rejects.toThrow(TypeError); });
+  it('converts a pre-modes policy once, as safety when the old safety net was on', async () => { const resolveLegacyEnabledMode = vi.fn(async () => 'safety'); const first = createRuntime({ stored: { permissionAutoAccept: { sessions: { root: true, child: false }, revision: 3 } }, resolveLegacyEnabledMode }); expect((await first.runtime.load()).modes).toEqual({ root: 'safety', child: 'ask' }); const restarted = createRuntime({ stored: first.getSettings(), resolveLegacyEnabledMode }); await restarted.runtime.load(); expect(resolveLegacyEnabledMode).toHaveBeenCalledTimes(1); });
+  it('writes the default mode onto a new top-level session only', async () => { const { runtime, emit, getSettings } = createRuntime(); await runtime.load(); getSettings().permissionDefaultMode = 'safety'; emit(event('session.updated', 'root', { session: session({ sessionId: 'root' }) })); emit(event('session.updated', 'child', { session: session({ sessionId: 'child', parentSessionId: 'root' }) })); await flush(); await expect(runtime.resolveSessionMode('root', '/project')).resolves.toBe('safety'); expect((await runtime.load()).modes).toEqual({ root: 'safety' }); await expect(runtime.resolveSessionMode('child', '/project')).resolves.toBe('safety'); });
+  it('keeps a mode the creating flow already set over the default', async () => { const { runtime, emit, getSettings } = createRuntime(); await runtime.setSessionPolicy('root', 'ask'); getSettings().permissionDefaultMode = 'auto'; emit(event('session.updated', 'root', { session: session({ sessionId: 'root' }) })); await flush(); await expect(runtime.resolveSessionMode('root', '/project')).resolves.toBe('ask'); });
+  it('increments the authoritative policy revision', async () => { const { runtime, getSettings } = createRuntime(); await expect(runtime.setSessionPolicy('root', true)).resolves.toMatchObject({ revision: 1 }); await expect(runtime.setSessionPolicy('child', false)).resolves.toMatchObject({ revision: 2 }); expect(getSettings().permissionAutoAccept.revision).toBe(2); });
+  it('uses rootSessionId and nearest explicit ancestor policy for subagents', async () => { const { runtime, emit } = createRuntime({ stored: { permissionAutoAccept: { sessions: { root: true, child: false } } } }); emit(event('session.updated', 'child', { session: session({ sessionId: 'child', parentSessionId: 'root', rootSessionId: 'root' }) })); emit(event('session.updated', 'grandchild', { session: session({ sessionId: 'grandchild', parentSessionId: 'child', rootSessionId: 'root' }) })); await expect(runtime.isSessionAutoAccepting('grandchild', '/project')).resolves.toBe(false); await runtime.setSessionPolicy('child', true); await expect(runtime.isSessionAutoAccepting('grandchild', '/project')).resolves.toBe(true); });
+  it('retries a transient canonical reply and deduplicates concurrent events', async () => { let attempts = 0; const serviceRequest = vi.fn(async (path, init = {}) => { if (path.endsWith('/respond') && init.method === 'POST') { attempts += 1; if (attempts === 1) return new Response('', { status: 503 }); return Response.json({}); } if (path.includes('/snapshot')) return Response.json(snapshot('root')); return Response.json({ items: [], errors: [] }); }); const { runtime } = createRuntime({ stored: { permissionAutoAccept: { sessions: { root: true } } }, serviceRequest, retryDelaysMs: [0, 0] }); const pending = approval('perm'); const first = runtime.processPermission(pending, '/project'); const second = runtime.processPermission(pending, '/project'); await expect(Promise.all([first, second])).resolves.toEqual([true, true]); expect(attempts).toBe(2); });
+  it('reconciles pending approvals after reconnect in active sessions', async () => { const pending = approval('pending'); const serviceRequest = vi.fn(async (path, init = {}) => { if (path.includes('/sessions?')) return Response.json({ items: [session({ sessionId: 'root' })], errors: [] }); if (path.endsWith('/snapshot')) return Response.json(snapshot('root', [pending])); if (path.endsWith('/respond') && init.method === 'POST') return Response.json({}); return Response.json({}); }); const { connect } = createRuntime({ stored: { permissionAutoAccept: { sessions: { root: true } } }, serviceRequest }); connect(); await vi.waitFor(() => expect(serviceRequest.mock.calls.some(([path]) => path.endsWith('/respond'))).toBe(true)); });
+  it('leaves a request held by the safety net unanswered and forgets it once replied', async () => { const serviceRequest = vi.fn(async () => Response.json({})); const evaluatePermission = vi.fn(async (request) => request.approvalId === 'safe' ? { action: 'accept' } : { action: 'hold' }); const onPermissionReplied = vi.fn(); const { runtime, emit } = createRuntime({ stored: { permissionAutoAccept: { sessions: { root: 'safety' } } }, serviceRequest, evaluatePermission, onPermissionReplied }); emit(event('approval.requested', 'root', { approval: approval('held') })); emit(event('approval.requested', 'root', { approval: approval('safe') })); await flush(); await expect(runtime.isPermissionAutoAnswered('root', '/project', 'safe')).resolves.toBe(true); await expect(runtime.isPermissionAutoAnswered('root', '/project', 'held')).resolves.toBe(false); emit(event('approval.resolved', 'root', { approval: approval('held', 'root', { status: 'approved', version: '2', resolvedAt: timestamp, resolution: { decision: 'approve' } }) })); expect(onPermissionReplied).toHaveBeenCalledWith('held'); });
+  it('tells clients about every request left for the user, and only those', async () => { const broadcastGlobalUiEvent = vi.fn(); const { runtime, emit } = createRuntime({ stored: { permissionAutoAccept: { sessions: { root: 'safety' } } }, broadcastGlobalUiEvent, evaluatePermission: async () => ({ action: 'hold' }) }); emit(event('approval.requested', 'root', { approval: approval('held') })); await flush(); expect(broadcastGlobalUiEvent.mock.calls.some(([value]) => value.type === 'openchamber:permission-auto-accept.left-for-user')).toBe(true); });
+  it('never consults the safety net in an auto session', async () => { const serviceRequest = vi.fn(async () => Response.json({})); const evaluatePermission = vi.fn(async () => ({ action: 'hold' })); const { runtime } = createRuntime({ stored: { permissionAutoAccept: { sessions: { root: 'auto' } } }, serviceRequest, evaluatePermission }); await expect(runtime.processPermission(approval('p'), '/project')).resolves.toBe(true); expect(evaluatePermission).not.toHaveBeenCalled(); });
+  it('leaves a safety request for the user when the safety net gives no verdict', async () => { const serviceRequest = vi.fn(async () => Response.json({})); const { runtime } = createRuntime({ stored: { permissionAutoAccept: { sessions: { root: 'safety' } } }, serviceRequest, evaluatePermission: async () => ({ action: 'hold' }) }); await expect(runtime.processPermission(approval('p'), '/project')).resolves.toBe(true); });
+  it('does not consult the safety net for sessions that are not auto-accepting', async () => { const evaluatePermission = vi.fn(async () => ({ action: 'hold' })); const { runtime } = createRuntime({ evaluatePermission }); await expect(runtime.processPermission(approval('p', 'manual'), '/project')).resolves.toBe(false); expect(evaluatePermission).not.toHaveBeenCalled(); });
 });

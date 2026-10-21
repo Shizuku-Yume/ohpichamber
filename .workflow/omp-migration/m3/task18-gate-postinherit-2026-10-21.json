@@ -1,0 +1,152 @@
+{
+  "gate": "M3 final root acceptance (task 18 close receipt)",
+  "launch_head": "b9fbb4bb043c542763073c0c91848d070899d4d1",
+  "worktree": "/home/shizuku/Project/ohpichamber-worktrees/15-close-receipt",
+  "command": "bun run type-check && bun run lint && bun run build && bun run test && bun run dead-code && bun run docs:validate && .workflow/bin/workflow validate --no-color",
+  "status": "passed",
+  "exit_code": 0,
+  "interruption": {
+    "occurred": true,
+    "cause": "session restart killed background job bg_208 during the initial type-check phase",
+    "initial_started_at": "2026-10-21T13:37:11Z",
+    "partial_output_lines": 5,
+    "partial_phase": "type-check (root ui tsc -b plus mobile/agent-contract/sdk filter results printed; remainder not reached)",
+    "preserved_log": "/tmp/task18-gate-postinherit.interrupted.log",
+    "preserved_log_bytes": 241,
+    "preserved_log_sha256": "9403159d5d8baf71502ba29522e70d2ef01c7522b5ef438d658e19145950b5dd",
+    "no_rc_or_end_file_existed": true,
+    "no_chain_process_survived": true
+  },
+  "resumed": {
+    "resumed_at": "2026-10-21T14:03:49Z",
+    "finished_at": "2026-10-21T14:09:19Z",
+    "wall_seconds": 329.77,
+    "resumed_phases": [
+      "type-check (incomplete phase, restarted with incremental tsc cache)",
+      "lint",
+      "build",
+      "test",
+      "dead-code",
+      "docs:validate",
+      "workflow validate --no-color"
+    ],
+    "output_appended_to_preserved_log": true
+  },
+  "log": {
+    "path": "/tmp/task18-gate-postinherit.log",
+    "lines": 1169,
+    "bytes": 180729,
+    "sha256": "88993bbb27356ca7e26bb315e118dcb5737b04a80bf7b87278c96d8fd847cb90",
+    "stdout_stderr_combined": true
+  },
+  "checks": {
+    "type_check": {
+      "status": "passed",
+      "packages_exit_0": 7,
+      "packages": [
+        "mobile",
+        "agent-contract",
+        "sdk",
+        "ui",
+        "agent-service",
+        "web",
+        "electron"
+      ],
+      "notes": "root ui tsc -b succeeded; agent-service prepared source-derived declarations for 13 OMP packages"
+    },
+    "lint": {
+      "status": "passed",
+      "packages_exit_0": 7,
+      "packages": [
+        "mobile",
+        "agent-contract",
+        "sdk",
+        "agent-service",
+        "web",
+        "electron",
+        "ui"
+      ]
+    },
+    "build": {
+      "status": "passed",
+      "built": [
+        "agent-contract",
+        "agent-service",
+        "electron",
+        "sdk",
+        "ui",
+        "web",
+        "mobile build:assets"
+      ],
+      "non_fatal_warnings": [
+        "4 generated-CSS warnings: '::highlight' pseudo-element not recognized",
+        "dynamic-import-also-static-import reporter warnings",
+        "chunks larger than 500 kB after minification",
+        "3 empty generated chunks (vendor-reselect, vendor-motion, vendor-detect-node-es)"
+      ]
+    },
+    "test": {
+      "status": "passed",
+      "runners": {
+        "scripts": { "files_passed": 22, "files_total": 22 },
+        "sdk": { "files_passed": 23, "files_total": 23 },
+        "ui": { "files_passed": 803, "files_total": 803 },
+        "electron": { "files_passed": 44, "files_total": 44 },
+        "web_vitest": {
+          "files_passed": 369,
+          "files_skipped": 9,
+          "files_total": 378,
+          "tests_passed": 6078,
+          "tests_skipped": 135,
+          "tests_total": 6213,
+          "duration_seconds": 142.43
+        }
+      },
+      "totals": {
+        "files_passed": 1261,
+        "files_skipped": 9,
+        "files_total": 1270,
+        "individual_tests_reported_passed": 6078,
+        "individual_tests_reported_skipped": 135,
+        "individual_tests_reported_total": 6213,
+        "note": "scripts/sdk/ui/electron runners report file counts only; web vitest reports individual tests"
+      }
+    },
+    "dead_code": {
+      "status": "passed",
+      "tool": "knip@5.80.0",
+      "includes": [
+        "files",
+        "exports",
+        "nsExports",
+        "types",
+        "nsTypes",
+        "enumMembers",
+        "duplicates"
+      ],
+      "findings": 0,
+      "output_lines": 0
+    },
+    "docs_validate": {
+      "status": "passed",
+      "pages": 672,
+      "sidebar_links": 56
+    },
+    "workflow_validate": {
+      "status": "passed",
+      "task_files": 84,
+      "non_fatal_warnings": [
+        "Python DeprecationWarning: 'maxsplit' passed positionally (workflow-core.py:705)",
+        "Python DeprecationWarning: 'count' passed positionally (workflow-core.py:715)"
+      ]
+    }
+  },
+  "hygiene": {
+    "source_doc_test_edits": false,
+    "dependency_additions": false,
+    "git_commands_before_launch": "read-only rev-parse HEAD (b9fbb4bb043c542763073c0c91848d070899d4d1) and status --porcelain (clean) to confirm launch state",
+    "git_commands_during_gate_execution": false,
+    "unrelated_processes_touched": false,
+    "generated_build_outputs_allowed_by_scripts": true
+  }
+}

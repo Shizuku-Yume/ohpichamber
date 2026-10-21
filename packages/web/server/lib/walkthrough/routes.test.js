@@ -1,5 +1,12 @@
 import express from 'express';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  cancelWalkthroughGeneration as clientCancelWalkthroughGeneration,
+  fetchWalkthrough as clientFetchWalkthrough,
+  fetchWalkthroughStage as clientFetchWalkthroughStage,
+  generateWalkthrough as clientGenerateWalkthrough,
+} from '../../../../ui/src/lib/walkthrough/api.ts';
+import { configureRuntimeUrlResolver, getRuntimeUrlResolver, setRuntimeUrlResolver } from '../../../../ui/src/lib/runtime-url.ts';
 import { registerWalkthroughRoutes } from './routes.js';
 
 // These run over real HTTP on purpose. The bug this file exists for was
@@ -7,59 +14,102 @@ import { registerWalkthroughRoutes } from './routes.js';
 // response was dropped by a disconnect check that misread a healthy request.
 
 const SOURCE = { kind: 'working-tree', scope: 'all' };
+const PR_SOURCE = { kind: 'pr', number: 22 };
+const PR_CONTEXT = {
+  provider: 'github',
+  instance: 'github.com',
+  accountId: 'github.com#7',
+  repositoryId: 'repo-1',
+  bindingRevision: 4,
+  primaryRemote: 'upstream',
+};
 
 describe('walkthrough routes', () => {
   let server;
   let base;
   let releaseJob;
   let job;
+  let generationRequestCount;
 
   let lastArgs;
+  let getWalkthroughService;
+  let validateReadContext;
+  let resolveWorkspaceScope;
   let generateCalls = 0;
 
   const service = {
-    async getPullRequestDiff(directory, number, sourceRepo, options) {
-      lastArgs = { directory, number, sourceRepo, options };
+    async getPullRequestDiff(directory, number, readContext, options) {
+      lastArgs = { directory, number, readContext, options };
       if (number === 99) throw Object.assign(new Error('GitHub unavailable'), { statusCode: 503 });
       return { patch: number === 1 ? '' : 'diff --git a/a.ts b/a.ts\n' };
     },
-    async getPullRequestFileContents(directory, number, sourceRepo, file) {
-      lastArgs = { directory, number, sourceRepo, file };
+    async getPullRequestFileContents(directory, number, readContext, { sourceRepo, ...file }) {
+      lastArgs = { directory, number, readContext, sourceRepo, file };
       if (file.path === 'huge.bin') throw Object.assign(new Error('too large'), { statusCode: 413, code: 'file-too-large' });
       return { original: 'before', modified: 'after' };
     },
     async getWalkthrough(args) {
       lastArgs = args;
-      return { walkthrough: null, hunks: [], hunkCount: 0, generating: Boolean(job) };
+      const result = {
+        source: args.source,
+        walkthrough: null,
+        hunks: [],
+        hunkCount: 0,
+        generating: Boolean(job),
+      };
+      if (args.readContext) result.readContext = args.readContext;
+      return result;
     },
     async generateWalkthrough(args) {
       lastArgs = args;
+      generationRequestCount += 1;
       generateCalls += 1;
       if (job) return job;
       job = new Promise((resolve) => {
-        releaseJob = () => resolve({ walkthrough: { title: 'DONE' }, hunks: [], hunkCount: 1 });
+        releaseJob = () => {
+          const result = {
+            source: args.source,
+            walkthrough: { title: 'DONE' },
+            hunks: [],
+            hunkCount: 1,
+          };
+          if (args.readContext) result.readContext = args.readContext;
+          resolve(result);
+        };
       }).finally(() => { job = null; });
       return job;
     },
-    async cancelWalkthroughGeneration() {
-      return { cancelled: Boolean(job) };
+    async cancelWalkthroughGeneration(args) {
+      const result = { cancelled: Boolean(job) };
+      if (args.readContext) result.readContext = args.readContext;
+      return result;
+    },
+    async getRepositoryRootFor() {
+      return { repoRoot: '/repo', sourceKey: 'pr:22' };
+    },
+    getGenerationStage() {
+      return job ? 'asking' : null;
     },
   };
 
   const generate = (signal) => fetch(`${base}/api/walkthrough/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ directory: '/repo', source: SOURCE }),
+    body: JSON.stringify({ workspaceId: 'workspace', directory: '/repo', source: SOURCE }),
     signal,
   });
 
   beforeEach(async () => {
     job = null;
+    generationRequestCount = 0;
     releaseJob = undefined;
     lastArgs = undefined;
     const app = express();
     app.use(express.json());
-    registerWalkthroughRoutes(app, { getWalkthroughService: async () => service });
+    validateReadContext = vi.fn(async (context) => ({ ...context, instance: 'github.com' }));
+    resolveWorkspaceScope = vi.fn(async (workspaceId) => workspaceId === 'workspace' ? { workspaceId, cwd: '/repo' } : null);
+    getWalkthroughService = vi.fn(async () => service);
+    registerWalkthroughRoutes(app, { getWalkthroughService, validateReadContext, resolveWorkspaceScope });
     server = app.listen(0);
     await new Promise((resolve) => server.once('listening', resolve));
     base = `http://127.0.0.1:${server.address().port}`;
@@ -86,6 +136,7 @@ describe('walkthrough routes', () => {
   it('answers a generation request that nobody interrupted', async () => {
     const seen = generateCalls;
     const pending = generate();
+    await vi.waitFor(() => expect(generationRequestCount).toBe(1));
     await untilGenerateCalled(seen);
     releaseJob();
 
@@ -94,18 +145,40 @@ describe('walkthrough routes', () => {
     expect(body.walkthrough).toEqual({ title: 'DONE' });
   });
 
+  const prDiff = (source, context = PR_CONTEXT) => fetch(`${base}/api/walkthrough/pr-diff?${new URLSearchParams({
+    workspaceId: 'workspace',
+    directory: '/repo',
+    source: JSON.stringify(source),
+    ...Object.fromEntries(Object.entries(context).map(([key, value]) => [key, String(value)])),
+  })}`);
+
   it('serves the published PR snapshot with its repository, without generating', async () => {
     const source = { kind: 'pr', number: 42, sourceRepo: { owner: 'upstream', repo: 'project' } };
     const before = generateCalls;
-    const response = await fetch(`${base}/api/walkthrough/pr-diff?directory=/repo&source=${encodeURIComponent(JSON.stringify(source))}`);
+    const response = await prDiff(source);
     expect(response.headers.get('content-type')).toContain('text/plain');
     expect(await response.text()).toBe('diff --git a/a.ts b/a.ts\n');
-    expect(lastArgs).toEqual({ directory: '/repo', number: 42, sourceRepo: source.sourceRepo, options: { allowEmpty: true } });
+    // The account and repository come from the validated binding context; the
+    // named repository travels only as something to check against it.
+    expect(lastArgs).toEqual({
+      directory: '/repo',
+      number: 42,
+      readContext: expect.objectContaining({ accountId: PR_CONTEXT.accountId, primaryRemote: PR_CONTEXT.primaryRemote }),
+      options: { allowEmpty: true, sourceRepo: source.sourceRepo },
+    });
+    expect(validateReadContext).toHaveBeenCalledWith(expect.objectContaining({ directory: '/repo', accountId: PR_CONTEXT.accountId }));
     expect(generateCalls).toBe(before);
   });
 
+  it('reads no pull request diff without a validated binding context', async () => {
+    validateReadContext.mockRejectedValue(Object.assign(new Error('Binding changed'), { code: 'INVALID_SOURCE_CONTROL_READ_CONTEXT' }));
+    const response = await prDiff({ kind: 'pr', number: 42 });
+    expect(response.status).toBe(400);
+    expect(lastArgs).toBeUndefined();
+  });
+
   it('distinguishes empty PRs, upstream failure, and invalid sources', async () => {
-    const request = (source) => fetch(`${base}/api/walkthrough/pr-diff?directory=/repo&source=${encodeURIComponent(JSON.stringify(source))}`);
+    const request = (source) => prDiff(source);
     const empty = await request({ kind: 'pr', number: 1 });
     expect(empty.status).toBe(200);
     expect(await empty.text()).toBe('');
@@ -117,11 +190,25 @@ describe('walkthrough routes', () => {
 
   it('serves both sides of one PR file and passes GitHub failures through', async () => {
     const source = { kind: 'pr', number: 42, sourceRepo: { owner: 'upstream', repo: 'project' } };
-    const request = (params) => fetch(`${base}/api/walkthrough/pr-file?${new URLSearchParams({ directory: '/repo', source: JSON.stringify(source), ...params })}`);
+    const request = (params) => fetch(`${base}/api/walkthrough/pr-file?${new URLSearchParams({
+      workspaceId: 'workspace',
+      directory: '/repo',
+      source: JSON.stringify(source),
+      ...Object.fromEntries(Object.entries(PR_CONTEXT).map(([key, value]) => [key, String(value)])),
+      ...params,
+    })}`);
     const ok = await request({ path: 'new.ts', previousPath: 'old.ts', status: 'R' });
     expect(ok.status).toBe(200);
     expect(await ok.json()).toEqual({ original: 'before', modified: 'after' });
-    expect(lastArgs).toEqual({ directory: '/repo', number: 42, sourceRepo: source.sourceRepo, file: { path: 'new.ts', previousPath: 'old.ts', status: 'R' } });
+    // Same binding authority as the diff: the account comes from the
+    // validated context and the named repository is only checked against it.
+    expect(lastArgs).toEqual({
+      directory: '/repo',
+      number: 42,
+      readContext: expect.objectContaining({ accountId: PR_CONTEXT.accountId, primaryRemote: PR_CONTEXT.primaryRemote }),
+      sourceRepo: source.sourceRepo,
+      file: { path: 'new.ts', previousPath: 'old.ts', status: 'R' },
+    });
     expect((await request({ path: 'a.ts', status: 'M', source: JSON.stringify({ kind: 'branch', baseRef: 'main', headRef: 'x' }) })).status).toBe(400);
     expect((await request({ status: 'M' })).status).toBe(400);
     const huge = await request({ path: 'huge.bin', status: 'M' });
@@ -129,22 +216,37 @@ describe('walkthrough routes', () => {
     expect(await huge.json()).toMatchObject({ code: 'file-too-large' });
   });
 
+  it('reads no pull request file without a validated binding context', async () => {
+    validateReadContext.mockRejectedValue(Object.assign(new Error('Binding changed'), { code: 'INVALID_SOURCE_CONTROL_READ_CONTEXT' }));
+    const response = await fetch(`${base}/api/walkthrough/pr-file?${new URLSearchParams({
+      workspaceId: 'workspace',
+      directory: '/repo',
+      source: JSON.stringify({ kind: 'pr', number: 42 }),
+      path: 'a.ts',
+      status: 'M',
+    })}`);
+    expect(response.status).toBe(400);
+    expect(lastArgs).toBeUndefined();
+  });
+
   it('delivers the result to a client that reconnected after a refresh', async () => {
     const controller = new AbortController();
     const seen = generateCalls;
     generate(controller.signal).catch(() => {});
+    await vi.waitFor(() => expect(generationRequestCount).toBe(1));
     await untilGenerateCalled(seen);
     controller.abort();
     await new Promise((resolve) => setTimeout(resolve, 20));
 
     // The reloaded page sees work in progress and re-attaches to it.
     const read = await (await fetch(
-      `${base}/api/walkthrough?directory=/repo&source=${encodeURIComponent(JSON.stringify(SOURCE))}`,
+      `${base}/api/walkthrough?workspaceId=workspace&directory=/repo&source=${encodeURIComponent(JSON.stringify(SOURCE))}`,
     )).json();
     expect(read.generating).toBe(true);
 
     const seenBeforeReattach = generateCalls;
     const reattached = generate();
+    await vi.waitFor(() => expect(generationRequestCount).toBe(2));
     await untilGenerateCalled(seenBeforeReattach);
     releaseJob();
 
@@ -168,7 +270,7 @@ describe('walkthrough routes', () => {
   // that contains the language instruction.
   it('carries the requested language into the service', async () => {
     await fetch(
-      `${base}/api/walkthrough?directory=/repo&language=uk&source=${encodeURIComponent(JSON.stringify(SOURCE))}`,
+      `${base}/api/walkthrough?workspaceId=workspace&directory=/repo&language=uk&source=${encodeURIComponent(JSON.stringify(SOURCE))}`,
     );
     expect(lastArgs.language).toBe('uk');
 
@@ -176,8 +278,9 @@ describe('walkthrough routes', () => {
     const pending = fetch(`${base}/api/walkthrough/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ directory: '/repo', source: SOURCE, language: 'ja' }),
+      body: JSON.stringify({ workspaceId: 'workspace', directory: '/repo', source: SOURCE, language: 'ja' }),
     });
+    await vi.waitFor(() => expect(generationRequestCount).toBe(1));
     await untilGenerateCalled(seen);
     releaseJob();
     await pending;
@@ -187,7 +290,7 @@ describe('walkthrough routes', () => {
 
   it('ignores a language that is not a string', async () => {
     await fetch(
-      `${base}/api/walkthrough?directory=/repo&language[]=uk&source=${encodeURIComponent(JSON.stringify(SOURCE))}`,
+      `${base}/api/walkthrough?workspaceId=workspace&directory=/repo&language[]=uk&source=${encodeURIComponent(JSON.stringify(SOURCE))}`,
     );
 
     expect(lastArgs.language).toBeUndefined();
@@ -196,15 +299,103 @@ describe('walkthrough routes', () => {
   it('cancels through its own endpoint rather than a dropped connection', async () => {
     const seen = generateCalls;
     generate().catch(() => {});
+    await vi.waitFor(() => expect(generationRequestCount).toBe(1));
     await untilGenerateCalled(seen);
 
     const response = await fetch(`${base}/api/walkthrough/cancel`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ directory: '/repo', source: SOURCE }),
+      body: JSON.stringify({ workspaceId: 'workspace', directory: '/repo', source: SOURCE }),
     });
 
     expect(await response.json()).toEqual({ cancelled: true });
     releaseJob();
+  });
+
+  it.each([
+    ['read', () => fetch(`${base}/api/walkthrough?workspaceId=workspace&directory=/repo&source=${encodeURIComponent(JSON.stringify(PR_SOURCE))}`)],
+    ['generate', () => fetch(`${base}/api/walkthrough/generate`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ workspaceId: 'workspace', directory: '/repo', source: PR_SOURCE }),
+    })],
+    ['progress', () => fetch(`${base}/api/walkthrough/progress?workspaceId=workspace&directory=/repo&source=${encodeURIComponent(JSON.stringify(PR_SOURCE))}`)],
+    ['cancel', () => fetch(`${base}/api/walkthrough/cancel`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ workspaceId: 'workspace', directory: '/repo', source: PR_SOURCE }),
+    })],
+  ])('validates PR context before service work for %s', async (_name, request) => {
+    const failure = Object.assign(new Error('Source control read context is required'), {
+      code: 'INVALID_SOURCE_CONTROL_BINDING',
+    });
+    validateReadContext.mockRejectedValue(failure);
+
+    const response = await request();
+
+    expect(response.status).toBe(400);
+    expect(getWalkthroughService).not.toHaveBeenCalled();
+    expect(validateReadContext).toHaveBeenCalledWith(expect.objectContaining({
+      directory: '/repo',
+      provider: undefined,
+      bindingRevision: Number.NaN,
+    }));
+  });
+
+  it('passes the trusted immutable context to a PR read', async () => {
+    const query = new URLSearchParams({
+      workspaceId: 'workspace',
+      directory: '/repo',
+      source: JSON.stringify(PR_SOURCE),
+      ...Object.fromEntries(Object.entries(PR_CONTEXT).map(([key, value]) => [key, String(value)])),
+    });
+
+    await fetch(`${base}/api/walkthrough?${query}`);
+
+    expect(lastArgs.readContext).toEqual({ ...PR_CONTEXT, directory: '/repo' });
+    expect(validateReadContext.mock.invocationCallOrder[0])
+      .toBeLessThan(getWalkthroughService.mock.invocationCallOrder[0]);
+  });
+
+  it('accepts the UI client wire shape for every PR walkthrough route', async () => {
+    const previousResolver = getRuntimeUrlResolver();
+    configureRuntimeUrlResolver({ apiBaseUrl: base });
+    const target = { source: PR_SOURCE, context: { ...PR_CONTEXT, directory: '/repo' } };
+
+    try {
+      await clientFetchWalkthrough('/repo', target, { workspaceId: 'workspace' });
+
+      const generation = clientGenerateWalkthrough('/repo', target, { workspaceId: 'workspace' });
+      await vi.waitFor(() => expect(generationRequestCount).toBe(1));
+      releaseJob();
+      await generation;
+
+      expect(await clientFetchWalkthroughStage('/repo', target, undefined, 'workspace')).toBeNull();
+      await clientCancelWalkthroughGeneration('/repo', target, { workspaceId: 'workspace' });
+    } finally {
+      setRuntimeUrlResolver(previousResolver);
+    }
+
+    expect(validateReadContext).toHaveBeenCalledTimes(4);
+    for (const [context] of validateReadContext.mock.calls) {
+      expect(context).toEqual({ ...PR_CONTEXT, directory: '/repo' });
+    }
+  });
+
+  it('serves a GitLab merge request through the same validated context', async () => {
+    const gitlab = { ...PR_CONTEXT, provider: 'gitlab', instance: 'https://gitlab.com', accountId: 'occred:v1:gitlab:abc:r1' };
+    validateReadContext.mockResolvedValue({ ...gitlab, directory: '/repo' });
+    const response = await prDiff({ kind: 'pr', number: 3 }, gitlab);
+    expect(response.status).toBe(200);
+    expect(lastArgs.readContext).toMatchObject({ provider: 'gitlab', accountId: gitlab.accountId });
+  });
+
+  it('rejects a validated context from a provider it cannot read', async () => {
+    validateReadContext.mockResolvedValue({ ...PR_CONTEXT, directory: '/repo', provider: 'bitbucket', instance: 'https://bitbucket.org' });
+    const response = await fetch(`${base}/api/walkthrough/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspaceId: 'workspace', directory: '/repo', source: PR_SOURCE, ...PR_CONTEXT, provider: 'bitbucket', instance: 'https://bitbucket.org' }),
+    });
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({ code: 'UNSUPPORTED_WALKTHROUGH_PROVIDER' });
+    expect(getWalkthroughService).not.toHaveBeenCalled();
   });
 });

@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "task": "omp-through-m3/57",
+  "observedAt": "2026-10-21T15:24:38+08:00",
+  "status": "hover-and-completed-task-row-passed-packaged-electron-open",
+  "provenance": {
+    "host": "http://127.0.0.1:3220 (Task15 isolated runtime, not a dedicated Task57 host)",
+    "webDistIndexSha256": "d2c71cae09b8a3018cbc9c6ce301572828b9d935a1b96296f17d308198cf0065",
+    "sourceHead": "162d956fd plus the uncommitted Task15 slice",
+    "browser": "independent Chrome CDP 9362 (fast worker); did not use the coordinator's CDP 9346",
+    "sessionId": "16c0d827-b994-4a15-bf0c-5b6e13c3c602",
+    "rawReceipt": "/tmp/ohpi-task57/hover-fresh-20261021-152410.json",
+    "screenshot": "/tmp/ohpi-task57/evidence/15-hover-fresh-20261021-152410.png",
+    "screenshotSha256": "576176ca92c9b73a9886c74d7cd06ad60a703dcd952cab3e2a70d711d1af8da2",
+    "note": "Hover-only observation; no session/message mutation. The raw receipt itself does not assert a source commit, so this wrapper records the confirmed runtime provenance."
+  },
+  "observed": {
+    "toolRow": {
+      "text": "task t15-child-1",
+      "state": "completed",
+      "rowRect": { "x": 396, "y": 194, "w": 720, "h": 36 },
+      "viewport": { "w": 1600, "h": 913 },
+      "hoverMedia": true,
+      "pointerFine": true
+    },
+    "hoverDisclosure": {
+      "before": { "hovered": false, "spansOpacity": [1, 0] },
+      "after": { "hovered": true, "spansOpacity": [0, 1] },
+      "passed": true
+    },
+    "successfulChild": {
+      "subagentId": "t15-child-1",
+      "role": "t15child",
+      "status": "completed",
+      "subagentsPanel": "Subagents count 1 with a green checkmark beside t15child",
+      "sidebar": "nested t15child row visible under the T15-TASK parent after Expand subsessions"
+    }
+  },
+  "reusedEvidence": {
+    "quickOpen": "Fixed and observed before this slice at Task72 (948d5cd6c); not re-observed in this hover run.",
+    "toolOutputDialog": "Observed in the earlier Task57 Web run (Arguments/Output sections); not re-observed in this hover run.",
+    "diffPreviews": "Unified/split diff, stats and file actions observed in the earlier Task57 Web run; no Task57 source changed since the quick-open fix except the shared Task15 slice."
+  },
+  "remaining": [
+    "No current-HEAD packaged Electron AppImage exists in the active worktree; Task18 owns the clean final package build and one packaged run.",
+    "If the final packaged run does not re-observe quick-open/dialog/diff rows, Task57 may reuse the earlier Web observations only where the source path is unchanged and the final package bundles the current UI."
+  ]
+}

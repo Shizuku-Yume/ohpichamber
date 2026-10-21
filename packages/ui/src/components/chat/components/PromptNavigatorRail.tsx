@@ -1,11 +1,11 @@
 import React from 'react';
-import type { Part } from '@opencode-ai/sdk/v2';
+import type { Part } from '@openchamber/agent-contract';
 
 import { Icon } from '@/components/icon/Icon';
-import { useI18n, type I18nKey, type I18nParams } from '@/lib/i18n';
+import { useI18n } from '@/lib/i18n';
 import { useUIStore } from '@/stores/useUIStore';
 import { cn } from '@/lib/utils';
-import { getMessagePreview } from '../lib/messagePreview';
+import { useChatColumnActions } from '../chatColumnSession';
 
 type PromptEntry = {
     turnId: string;
@@ -58,13 +58,12 @@ const PANEL_HIDE_DELAY_MS = 160;
 const buildPromptEntries = (
     turnIds: string[],
     previewsByTurnId: Map<string, Part[]>,
-    t: (key: I18nKey, params?: I18nParams) => string,
 ): PromptEntry[] => {
     return turnIds.map((turnId) => {
         const parts = previewsByTurnId.get(turnId) ?? [];
         return {
             turnId,
-            preview: getMessagePreview(parts, PREVIEW_MAX_CHARS, t),
+            preview: parts.filter((part) => part.type === 'text').map((part) => part.content).join('\n').slice(0, PREVIEW_MAX_CHARS),
         };
     });
 };
@@ -96,7 +95,10 @@ export function PromptNavigatorRail({
     onLoadEarlier,
 }: PromptNavigatorRailProps) {
     const { t } = useI18n();
-    const isKeyboardNavOpen = useUIStore((state) => state.isPromptNavigatorPanelOpen);
+    // The keyboard shortcut drives the main chat's rail; a pinned column's
+    // rail neither opens on it nor closes it.
+    const { pinned } = useChatColumnActions();
+    const isKeyboardNavOpen = useUIStore((state) => (pinned ? false : state.isPromptNavigatorPanelOpen));
     const setPromptNavigatorPanelOpen = useUIStore((state) => state.setPromptNavigatorPanelOpen);
     const gutterRef = React.useRef<HTMLDivElement | null>(null);
     const navRef = React.useRef<HTMLElement | null>(null);
@@ -129,8 +131,8 @@ export function PromptNavigatorRail({
     }, []);
 
     const prompts = React.useMemo(
-        () => buildPromptEntries(turnIds, previewsByTurnId, t),
-        [previewsByTurnId, t, turnIds],
+        () => buildPromptEntries(turnIds, previewsByTurnId),
+        [previewsByTurnId, turnIds],
     );
 
     const visibleCount = Math.min(prompts.length, MAX_VISIBLE_TICKS);
@@ -325,8 +327,8 @@ export function PromptNavigatorRail({
     }, [scheduleHide, stopCarousel]);
 
     const closeKeyboardNav = React.useCallback(() => {
-        setPromptNavigatorPanelOpen(false);
-    }, [setPromptNavigatorPanelOpen]);
+        if (!pinned) setPromptNavigatorPanelOpen(false);
+    }, [pinned, setPromptNavigatorPanelOpen]);
 
     const handleSelect = React.useCallback((index: number | null) => {
         if (index === null) {
@@ -373,8 +375,8 @@ export function PromptNavigatorRail({
     }, [activeIndex, ensureWindowContains, isKeyboardNavOpen, prompts.length]);
 
     React.useEffect(() => () => {
-        setPromptNavigatorPanelOpen(false);
-    }, [setPromptNavigatorPanelOpen]);
+        if (!pinned) setPromptNavigatorPanelOpen(false);
+    }, [pinned, setPromptNavigatorPanelOpen]);
 
     const handleKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
         if (prompts.length === 0) {

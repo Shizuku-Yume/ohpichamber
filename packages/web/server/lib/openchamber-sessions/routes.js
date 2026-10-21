@@ -1,290 +1,37 @@
+import { randomUUID } from 'node:crypto';
 import express from 'express';
-import { createOpencodeClient } from '@opencode-ai/sdk/v2';
-import { createWorktree, getWorktreeBootstrapStatus, resolvePrimaryWorktreeRoot } from '../git/index.js';
-import { expandSnippets } from '../opencode/snippets.js';
-import { expandCommandGoalObjective, parseScheduledCommandPrompt } from '../scheduled-tasks/runtime.js';
-import { buildGoalIntroText, createSessionGoal } from '../session-goal/create.js';
+import { z } from 'zod';
+import { SessionCreateAckSchema, SessionCreateRequestSchema, RuntimeSessionSchema, SessionSchema, RunSchema, RunAbortRequestSchema, SessionDeleteAckSchema, PromptRequestSchema, CapturedSendOptionsSchema, SessionSnapshotSchema, HistoryPageSchema, SessionMetadataStateSchema, SessionMetadataPatchSchema, SteerRequestSchema, SteerAckSchema, FollowUpRequestSchema, FollowUpAckSchema, ProblemDetailsSchema, ProblemCodeSchema } from '@openchamber/agent-contract';
+import { EntityIdSchema } from '@openchamber/agent-contract';
+import { SessionBranchRequestSchema, SessionBranchResultSchema, SessionRelocateRequestSchema, SessionRelocateResultSchema } from '@openchamber/agent-contract';
+import { HostSessionRelocationPrepareSchema, HostSessionRelocationPreparedSchema, HostSessionRelocationFinalizeSchema, HostSessionRelocationFinalizedSchema, HostSessionRelocationPendingSchema } from '@openchamber/agent-service/private-protocol';
+
 import { OpenChamberControlError, asControlError } from '../openchamber-control/error.js';
-
-const asNonEmptyString = (value) => {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
+import { asNonEmptyString } from '../shared/guards.js';
+const SessionForkAckSchema = z.strictObject({ sessionId: z.string().min(1), rootSessionId: z.string().min(1), sessionFile: z.string().min(1), sourceSessionId: z.string().min(1), entryId: z.string().min(1).nullable(), mode: z.enum(['selected', 'full']) });
+const SessionForkRequestSchema = z.strictObject({ messageId: EntityIdSchema.optional(), mode: z.enum(['selected', 'full']) }).refine(
+  (input) => input.mode === 'selected' ? input.messageId !== undefined : input.messageId === undefined,
+  { message: 'Selected forks require a public message ID; full forks do not accept one' },
+);
+const SessionReopenScopeSchema = z.strictObject({ rootSessionId: z.string().min(1), projectId: z.string().min(1), workspaceId: z.string().min(1), cwd: z.string().min(1), agentDirectory: z.string().min(1), agentDirectoryId: z.string().min(1), displayPath: z.string().min(1), env: z.record(z.string(), z.string()).optional() });
+const parseCommand = (schema, payload) => {
+  const parsed = schema.safeParse(payload);
+  if (!parsed.success) throw new OpenChamberControlError('Session command is invalid', 400);
+  return parsed.data;
 };
 
-const splitModel = (value) => {
-  const model = asNonEmptyString(value);
-  if (!model) return null;
-  const slashIndex = model.indexOf('/');
-  if (slashIndex <= 0 || slashIndex === model.length - 1) return null;
-  return {
-    providerID: model.slice(0, slashIndex),
-    modelID: model.slice(slashIndex + 1),
-  };
-};
 
-const resolveRequestedModel = (payload) => {
-  const model = splitModel(payload?.model);
-  if (model) return model;
 
-  const providerID = asNonEmptyString(payload?.providerID);
-  const modelID = asNonEmptyString(payload?.modelID);
-  return providerID && modelID ? { providerID, modelID } : null;
-};
-
-const FALLBACK_PROVIDER_ID = 'opencode';
-const FALLBACK_MODEL_ID = 'big-pickle';
-const MIN_GOAL_TOKEN_BUDGET = 1_000;
-const MAX_GOAL_TOKEN_BUDGET = 100_000_000;
-
-const resolveGoalInput = (payload, prompt) => {
-  const enabled = payload?.goal === true;
-  if (payload?.goalTokenBudget !== undefined && !enabled) {
-    return { ok: false, error: 'goalTokenBudget requires goal' };
-  }
-  if (enabled && !prompt) {
-    return { ok: false, error: 'prompt is required when goal is enabled' };
-  }
-  if (payload?.goalTokenBudget === undefined) {
-    return { ok: true, enabled, tokenBudget: null };
-  }
-  const tokenBudget = payload.goalTokenBudget;
-  if (!Number.isSafeInteger(tokenBudget)
-    || tokenBudget < MIN_GOAL_TOKEN_BUDGET
-    || tokenBudget > MAX_GOAL_TOKEN_BUDGET) {
-    return { ok: false, error: `goalTokenBudget must be an integer from ${MIN_GOAL_TOKEN_BUDGET} to ${MAX_GOAL_TOKEN_BUDGET}` };
-  }
-  return { ok: true, enabled, tokenBudget };
-};
-
-const isPrimaryAgentMode = (mode) => !mode || mode === 'primary' || mode === 'all';
-
-const providerModels = (provider) => {
-  if (Array.isArray(provider?.models)) return provider.models;
-  if (provider?.models && typeof provider.models === 'object') return Object.values(provider.models);
-  return [];
-};
-
-const hasProviderModel = (providers, providerID, modelID) => {
-  return providers.some((provider) => provider?.id === providerID
-    && providerModels(provider).some((model) => model?.id === modelID));
-};
-
-const resolveVariant = (providers, providerID, modelID, variant) => {
-  const normalized = asNonEmptyString(variant);
-  if (!normalized) return undefined;
-  const provider = providers.find((entry) => entry?.id === providerID);
-  const model = providerModels(provider).find((entry) => entry?.id === modelID);
-  if (!model) return normalized;
-  return model?.variants && Object.prototype.hasOwnProperty.call(model.variants, normalized)
-    ? normalized
-    : undefined;
-};
-
-const parseConfigModel = (value) => splitModel(value);
-
-const resolveProjectDefaults = (settings, directory, projectId) => {
-  const projects = Array.isArray(settings?.projects) ? settings.projects : [];
-  const matchedProject = projectId
-    ? projects.find((entry) => entry?.id === projectId) || null
-    : projects.find((entry) => entry?.path === directory) || null;
-  return {
-    defaultAgent: asNonEmptyString(matchedProject?.defaultAgent),
-    defaultModel: asNonEmptyString(matchedProject?.defaultModel),
-    defaultVariant: asNonEmptyString(matchedProject?.defaultVariant),
-  };
-};
-
-const buildDirectoryHeaders = (directory) => ({
-  // OpenCode rejects non-ASCII header values; the official SDK sends this
-  // header percent-encoded, so match that wire format (non-ASCII checkout
-  // paths such as "Masaüstü" otherwise fail every dispatched prompt).
-  ...(directory ? { 'x-opencode-directory': encodeURIComponent(directory) } : {}),
-});
-
-const fetchJson = async (url, authHeaders, fallback, directory) => {
-  const response = await fetch(url.toString(), {
-    headers: { ...authHeaders, ...buildDirectoryHeaders(directory), accept: 'application/json' },
-  });
-  if (!response.ok) return fallback;
-  return response.json().catch(() => fallback);
-};
-
-const fetchSelectionInputs = async ({ buildOpenCodeUrl, authHeaders, directory, readSettingsFromDiskMigrated }) => {
-  const settings = await readSettingsFromDiskMigrated();
-  const providersUrl = new URL(buildOpenCodeUrl('/config/providers', ''));
-  providersUrl.searchParams.set('directory', directory);
-  const agentsUrl = new URL(buildOpenCodeUrl('/agent', ''));
-  agentsUrl.searchParams.set('directory', directory);
-  const configUrl = new URL(buildOpenCodeUrl('/config', ''));
-  configUrl.searchParams.set('directory', directory);
-
-  const [providersBody, agentsBody, configBody] = await Promise.all([
-    fetchJson(providersUrl, authHeaders, { providers: [] }, directory),
-    fetchJson(agentsUrl, authHeaders, [], directory),
-    fetchJson(configUrl, authHeaders, {}, directory),
-  ]);
-
-  return {
-    settings,
-    providers: Array.isArray(providersBody?.providers) ? providersBody.providers : [],
-    agents: Array.isArray(agentsBody) ? agentsBody : [],
-    opencodeDefaultAgent: asNonEmptyString(configBody?.default_agent) || asNonEmptyString(configBody?.defaultAgent),
-    opencodeDefaultModel: asNonEmptyString(configBody?.model),
-  };
-};
-
-const resolveDefaultSelection = ({ agents, providers, settings, projectDefaults, opencodeDefaultAgent, opencodeDefaultModel }) => {
-  const primaryAgents = agents.filter((agent) => isPrimaryAgentMode(agent?.mode) && agent?.hidden !== true);
-  let resolvedAgent = null;
-  const projectDefaultAgent = asNonEmptyString(projectDefaults?.defaultAgent);
-  const settingsDefaultAgent = asNonEmptyString(settings?.defaultAgent);
-  if (projectDefaultAgent) {
-    resolvedAgent = agents.find((agent) => agent?.name === projectDefaultAgent) || null;
-  }
-  if (!resolvedAgent && settingsDefaultAgent) {
-    resolvedAgent = agents.find((agent) => agent?.name === settingsDefaultAgent) || null;
-  }
-  if (!resolvedAgent && opencodeDefaultAgent) {
-    const candidate = agents.find((agent) => agent?.name === opencodeDefaultAgent) || null;
-    if (candidate && isPrimaryAgentMode(candidate.mode) && candidate.hidden !== true) {
-      resolvedAgent = candidate;
-    }
-  }
-  if (!resolvedAgent) {
-    resolvedAgent = primaryAgents.find((agent) => agent?.name === 'build') || primaryAgents[0] || agents[0] || null;
-  }
-
-  let model = null;
-  let variant;
-  const projectDefaultModel = parseConfigModel(projectDefaults?.defaultModel);
-  const settingsDefaultModel = parseConfigModel(settings?.defaultModel);
-  if (projectDefaultModel) {
-    model = projectDefaultModel;
-    variant = resolveVariant(providers, model.providerID, model.modelID, projectDefaults?.defaultVariant);
-  }
-  if (!model && settingsDefaultModel) {
-    model = settingsDefaultModel;
-    variant = resolveVariant(providers, model.providerID, model.modelID, settings?.defaultVariant);
-  }
-
-  if (!model && resolvedAgent?.model?.providerID && resolvedAgent?.model?.modelID) {
-    model = { providerID: resolvedAgent.model.providerID, modelID: resolvedAgent.model.modelID };
-    variant = resolveVariant(providers, model.providerID, model.modelID, resolvedAgent.variant);
-  }
-
-  const opencodeModel = parseConfigModel(opencodeDefaultModel);
-  if (!model && opencodeModel) {
-    model = opencodeModel;
-  }
-
-  if (!model && hasProviderModel(providers, FALLBACK_PROVIDER_ID, FALLBACK_MODEL_ID)) {
-    model = { providerID: FALLBACK_PROVIDER_ID, modelID: FALLBACK_MODEL_ID };
-  }
-
-  if (!model) {
-    const provider = providers[0];
-    const firstModel = providerModels(provider)[0];
-    if (provider?.id && firstModel?.id) {
-      model = { providerID: provider.id, modelID: firstModel.id };
-    }
-  }
-
-  return {
-    agent: resolvedAgent?.name,
-    model,
-    variant,
-  };
-};
-
-const runPromptAsync = async ({ baseUrl, authHeaders, sessionID, directory, payload }) => {
-  const promptUrl = new URL(`${baseUrl}/session/${encodeURIComponent(sessionID)}/prompt_async`);
-  promptUrl.searchParams.set('directory', directory);
-  const response = await fetch(promptUrl.toString(), {
-    method: 'POST',
-    headers: {
-      ...authHeaders,
-      ...buildDirectoryHeaders(directory),
-      'content-type': 'application/json',
-      accept: 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    const body = await response.text().catch(() => '');
-    throw new Error(`prompt_async failed (${response.status})${body ? `: ${body}` : ''}`);
-  }
-};
-
-const createSession = async ({ baseUrl, authHeaders, directory, title }) => {
-  const sessionUrl = new URL(`${baseUrl}/session`);
-  sessionUrl.searchParams.set('directory', directory);
-  const response = await fetch(sessionUrl.toString(), {
-    method: 'POST',
-    headers: {
-      ...authHeaders,
-      ...buildDirectoryHeaders(directory),
-      'content-type': 'application/json',
-      accept: 'application/json',
-    },
-    body: JSON.stringify({ directory, ...(title ? { title } : {}) }),
-  });
-
-  if (!response.ok) {
-    const body = await response.text().catch(() => '');
-    throw new Error(`session create failed (${response.status})${body ? `: ${body}` : ''}`);
-  }
-
-  const body = await response.json().catch(() => null);
-  const sessionID = body?.id || body?.data?.id;
-  if (!sessionID) {
-    throw new Error('failed to create session');
-  }
-  return sessionID;
-};
-
-const forkSession = async ({ client, sessionID, directory, messageID }) => {
-  const response = await client.session.fork({
-    sessionID,
-    directory,
-    ...(messageID ? { messageID } : {}),
-  });
-  const session = response?.data;
-  if (!session?.id) {
-    throw new Error('failed to fork session');
-  }
-  return session;
-};
-
-const latestCompletedAssistantMessageID = async ({ client, sessionID, directory }) => {
-  let response;
-  try {
-    response = await client.session.messages({ sessionID, directory, limit: 100 });
-  } catch {
-    return null;
-  }
-  const messages = Array.isArray(response?.data) ? response.data : [];
-  let latest = null;
-  for (const message of messages) {
-    const info = message?.info;
-    if (info?.role !== 'assistant' || !Number.isFinite(info?.time?.completed)) continue;
-    if (!latest || (info.time.created || 0) >= (latest.time?.created || 0)) latest = info;
-  }
-  return asNonEmptyString(latest?.id);
-};
 
 /**
  * Upper bound on one archive batch.
  *
- * The batch is applied one session at a time against OpenCode, so an unbounded
- * list would hold a request open for as long as the list is large. Callers with
- * more sessions than this send several batches and keep their own partial
- * results.
+ * The batch is a bounded amount of work on one request, and callers with more
+ * sessions than this send several batches and keep their own partial results.
  */
 const MAX_ARCHIVE_BATCH = 500;
 
-const parseArchiveRequest = (payload) => {
+const parseIdBatch = (payload) => {
   const rawIds = payload?.ids;
   if (!Array.isArray(rawIds) || rawIds.length === 0) {
     return { ok: false, error: 'ids must be a non-empty array of session ids' };
@@ -295,674 +42,351 @@ const parseArchiveRequest = (payload) => {
 
   const ids = [];
   for (const value of rawIds) {
-    const id = asNonEmptyString(value);
-    if (!id) return { ok: false, error: 'ids must contain non-empty session ids' };
-    ids.push(id);
+    const parsed = EntityIdSchema.safeParse(value);
+    if (!parsed.success) return { ok: false, error: 'ids must contain valid session ids' };
+    ids.push(parsed.data);
   }
+  return { ok: true, ids };
+};
+
+const parseArchiveRequest = (payload) => {
+  const parsed = parseIdBatch(payload);
+  if (!parsed.ok) return parsed;
 
   const archivedAt = payload?.archivedAt;
   if (archivedAt !== undefined && (!Number.isSafeInteger(archivedAt) || archivedAt <= 0)) {
     return { ok: false, error: 'archivedAt must be a positive integer timestamp' };
   }
 
-  return { ok: true, ids, archivedAt: archivedAt ?? Date.now() };
+  return { ok: true, ids: parsed.ids, archivedAt: archivedAt ?? Date.now() };
 };
 
-const resolveRequestedDirectory = async ({ payload, readSettingsFromDiskMigrated, sanitizeProjects, validateDirectoryPath }) => {
-  const projectID = asNonEmptyString(payload?.projectId) || asNonEmptyString(payload?.projectID);
-  if (projectID) {
-    const settings = await readSettingsFromDiskMigrated();
-    const projects = sanitizeProjects(settings?.projects || []);
-    const project = projects.find((entry) => entry.id === projectID) || null;
-    if (!project?.path) {
-      return { ok: false, status: 404, error: 'Project not found' };
-    }
-    const validated = await validateDirectoryPath(project.path);
-    return validated.ok
-      ? { ok: true, directory: validated.directory, projectId: projectID }
-      : { ok: false, status: 400, error: validated.error || 'Invalid project directory' };
-  }
 
-  const directory = asNonEmptyString(payload?.directory);
-  const validated = await validateDirectoryPath(directory);
-  if (!validated.ok) return { ok: false, status: 400, error: validated.error || 'Invalid directory' };
-  const settings = await readSettingsFromDiskMigrated();
-  const projects = sanitizeProjects(settings?.projects || []);
-  let project = projects.find((entry) => entry.path === validated.directory);
-  if (!project && projects.length > 0) {
-    const { root } = await resolvePrimaryWorktreeRoot(validated.directory);
-    project = projects.find((entry) => entry.path === root);
-  }
-  return { ok: true, directory: validated.directory, ...(project ? { projectId: project.id } : {}) };
-};
-
-const PROMPT_LANDED_TIMEOUT_MS = 5_000;
-const PROMPT_LANDED_POLL_MS = 150;
-
-// createWorktree returns while the worktree is still being populated in the
-// background (git reset --hard after a --no-checkout add). Dispatching a
-// prompt into a half-populated directory makes opencode's run die with
-// UnknownError (agent and config files are not there yet), so wait until the
-// bootstrap reaches git-ready (population done) or fails before creating the
-// session and dispatching.
-const WORKTREE_BOOTSTRAP_TIMEOUT_MS = 60_000;
-const WORKTREE_BOOTSTRAP_POLL_MS = 150;
-
-const waitForWorktreeBootstrapReady = async ({ directory }) => {
-  const deadline = Date.now() + WORKTREE_BOOTSTRAP_TIMEOUT_MS;
-  for (;;) {
-    const status = await getWorktreeBootstrapStatus(directory);
-    if (status?.status === 'failed') {
-      throw new OpenChamberControlError(`Worktree bootstrap failed: ${status.error || 'unknown error'}`, 500);
-    }
-    const phase = status?.phase;
-    if (status?.status === 'ready' || phase === 'git-ready' || phase === 'setup-ready') return;
-    if (Date.now() >= deadline) {
-      throw new OpenChamberControlError('Timed out waiting for the worktree bootstrap', 500);
-    }
-    await new Promise((resolve) => setTimeout(resolve, WORKTREE_BOOTSTRAP_POLL_MS));
-  }
-};
-
-const latestUserMessageID = async ({ client, sessionID, directory }) => {
-  let response;
-  try {
-    response = await client.session.messages({ sessionID, directory, limit: 100 });
-  } catch {
-    return { ok: false, messageID: null };
-  }
-  const messages = Array.isArray(response?.data) ? response.data : [];
-  let latest = null;
-  for (const message of messages) {
-    const info = message?.info;
-    if (info?.role !== 'user') continue;
-    if (!latest || (info.time?.created || 0) >= (latest.time?.created || 0)) latest = info;
-  }
-  return { ok: true, messageID: asNonEmptyString(latest?.id) };
-};
-
-// `prompt_async` answers 204 as soon as OpenCode forks the run, and every later
-// failure is reported only on the session event stream. Confirm the prompt was
-// actually recorded so `promptDispatched` never claims a dispatch that vanished.
-const waitForPromptLanded = async ({ client, sessionID, directory, baselineUserMessageID }) => {
-  const deadline = Date.now() + PROMPT_LANDED_TIMEOUT_MS;
-  for (;;) {
-    const latest = await latestUserMessageID({ client, sessionID, directory });
-    // A failed lookup is not authoritative evidence that the prompt was lost.
-    if (!latest.ok) return true;
-    if (latest.messageID && latest.messageID !== baselineUserMessageID) return true;
-    if (Date.now() >= deadline) return false;
-    await new Promise((resolve) => setTimeout(resolve, PROMPT_LANDED_POLL_MS));
-  }
-};
-
-const resolveWorktreeInput = (payload) => {
-  if (!payload?.worktree || typeof payload.worktree !== 'object') return null;
-  const name = asNonEmptyString(payload.worktree.name);
-  if (!name) return null;
-  const branchName = asNonEmptyString(payload.worktree.branchName);
-  const startRef = asNonEmptyString(payload.worktree.startRef);
-  return {
-    mode: 'new',
-    name,
-    ...(branchName ? { branchName } : {}),
-    ...(startRef ? { startRef } : {}),
-    ...(typeof payload.setUpstream === 'boolean' ? { setUpstream: payload.setUpstream } : {}),
+const createCanonicalSessionService = (dependencies) => {
+  const { service, resolveWorkspaceScope, resolveSessionScope, resolveHostSessionScope, listWorkspaceScopes, registerSessionScope, resolveAttachments, capturePrompt, beforeDispatch, onPromptAccepted, directCommandAdmissionStore, publishSessionEvent, archiveStore, sessionMetadataStore, persistSessionMetadata, broadcastGlobalUiEvent, onArchiveDeleted } = dependencies;
+  const { agentScopeStore, resolveHostRelocationScope } = dependencies;
+  const relocationControls = new Set();
+  const requiredFunctions = [service?.request, resolveWorkspaceScope, resolveSessionScope, resolveHostSessionScope,
+    registerSessionScope, resolveAttachments, capturePrompt, beforeDispatch, onPromptAccepted,
+    directCommandAdmissionStore?.claim, directCommandAdmissionStore?.accept];
+  if (!service || requiredFunctions.some((candidate) => !z.function().safeParse(candidate).success))
+    throw new Error('session routes require the Agent service, Host scope resolvers, registration, attachment, delivery and direct command admission owners');
+  const request = async (pathname, init = {}) => {
+    const response = await service.request(pathname, { ...init, headers: { accept: 'application/json', ...(init.headers || {}) } });
+    const body = await response.json().catch(() => null);
+    if (!response.ok) { const problem = ProblemDetailsSchema.safeParse(body); const error = new OpenChamberControlError(problem.success ? problem.data.detail : body?.detail || body?.error || 'Agent service request failed', response.status); error.code = problem.success ? problem.data.code : body?.code; throw error; }
+    return body;
   };
-};
-
-export const createOpenChamberSessionService = (dependencies) => {
-  const {
-    readSettingsFromDiskMigrated,
-    sanitizeProjects,
-    validateDirectoryPath,
-    buildOpenCodeUrl,
-    getOpenCodeAuthHeaders,
-    waitForOpenCodeReady,
-    emitSessionCreatedEvent,
-    createSessionGoal: createSessionGoalOverride,
-    sessionKnowledgeRuntime = null,
-    // Auto routing. Prompts dispatched here go straight to OpenCode, not
-    // through the proxy that rewrites the Auto sentinel, so the same hook runs
-    // on the body before it is sent. Null when routing is not wired in.
-    resolvePromptBody = null,
-  } = dependencies;
-
-  // Last user message of an existing session, as a selection to reuse. Returns
-  // null when the session has no user message carrying a model.
-  const fetchLastUserSelection = async ({ client, sessionID, directory }) => {
-    try {
-      const response = await client.session.messages({ sessionID, directory, limit: 20 });
-      const records = Array.isArray(response?.data) ? response.data : [];
-      for (let index = records.length - 1; index >= 0; index -= 1) {
-        const info = records[index]?.info;
-        if (info?.role !== 'user') continue;
-        const providerID = asNonEmptyString(info.model?.providerID);
-        const modelID = asNonEmptyString(info.model?.modelID);
-        if (!providerID || !modelID) continue;
-        return {
-          model: { providerID, modelID },
-          agent: asNonEmptyString(info.agent),
-          variant: asNonEmptyString(info.model?.variant),
-        };
-      }
-    } catch {
+  const scopeFor = async (sessionId) => {
+    const owner = resolveHostRelocationScope ? await resolveHostRelocationScope(sessionId) : null;
+    if (owner && agentScopeStore && await agentScopeStore.getRelocation(owner.rootSessionId)) {
+      if (relocationControls.has(owner.rootSessionId)) throw new OpenChamberControlError('Session relocation is in progress', 409, { code: 'COMMAND_IN_FLIGHT' });
+      relocationControls.add(owner.rootSessionId);
+      try { await recoverRelocation(owner.rootSessionId); } finally { relocationControls.delete(owner.rootSessionId); }
     }
-    return null;
+    const scope = await resolveSessionScope(sessionId);
+    if (!scope || scope.sessionId !== sessionId) throw new OpenChamberControlError('Session scope was not found', 404);
+    return scope;
   };
-
-  // Explicit model/agent/variant are never checked by `prompt_async`: an unknown
-  // agent makes the forked run fail silently, leaving a session with no message.
-  // Reject them before any session, worktree, or goal side effect happens.
-  const validateRequestedSelection = async ({ directory, requestedModel, requestedAgent, requestedVariant }) => {
-    if (!requestedModel && !requestedAgent && !requestedVariant) return;
-    const authHeaders = getOpenCodeAuthHeaders();
-    const { providers, agents } = await fetchSelectionInputs({
-      buildOpenCodeUrl,
-      authHeaders,
-      directory,
-      readSettingsFromDiskMigrated,
-    });
-
-    // An empty list means the lookup failed or returned nothing authoritative;
-    // it must not turn a valid selection into a rejection.
-    if (requestedAgent && agents.length > 0) {
-      const agent = agents.find((entry) => entry?.name === requestedAgent) || null;
-      if (!agent) {
-        throw new OpenChamberControlError(`Unknown agent '${requestedAgent}' for ${directory}`, 400);
-      }
-      if (!isPrimaryAgentMode(agent.mode)) {
-        throw new OpenChamberControlError(`Agent '${requestedAgent}' is a subagent and cannot receive a prompt directly`, 400);
-      }
-    }
-
-    if (requestedModel && providers.length > 0) {
-      if (!hasProviderModel(providers, requestedModel.providerID, requestedModel.modelID)) {
-        throw new OpenChamberControlError(
-          `Unknown model '${requestedModel.providerID}/${requestedModel.modelID}' for ${directory}`,
-          400,
-        );
-      }
-      if (requestedVariant
-        && !resolveVariant(providers, requestedModel.providerID, requestedModel.modelID, requestedVariant)) {
-        throw new OpenChamberControlError(
-          `Unknown variant '${requestedVariant}' for model '${requestedModel.providerID}/${requestedModel.modelID}'`,
-          400,
-        );
-      }
-    }
+  const hostScopeFor = async (sessionId) => { const scope = await resolveHostSessionScope(sessionId); if (!scope || scope.sessionId !== sessionId) throw new OpenChamberControlError('Session scope was not found', 404); return scope; };
+  const assertWritableScope = (scope) => {
+    if (scope.workspaceId.startsWith('archive_')) throw new OpenChamberControlError('Deleted-space sessions are permanently read-only', 409, { code: 'SESSION_READ_ONLY', retryable: false });
   };
-
-  const dispatchPrompt = async ({
-    client,
-    baseUrl,
-    authHeaders,
-    sessionID,
-    directory,
-    projectId,
-    prompt,
-    goalInput,
-    requestedModel,
-    requestedAgent,
-    requestedVariant,
-    reuseSessionSelection = false,
-  }) => {
-    let model = requestedModel;
-    let agent = requestedAgent;
-    let variant = requestedVariant;
-    if (reuseSessionSelection && (!model || !agent)) {
-      const previous = await fetchLastUserSelection({ client, sessionID, directory });
-      if (previous) {
-        if (!model && previous.model) {
-          model = previous.model;
-          if (variant == null) variant = previous.variant ?? undefined;
-        }
-        if (!agent && previous.agent) agent = previous.agent;
-      }
-    }
-    if (!model || !agent) {
-      const inputs = await fetchSelectionInputs({
-        buildOpenCodeUrl,
-        authHeaders,
-        directory,
-        readSettingsFromDiskMigrated,
-      });
-      const defaults = resolveDefaultSelection({
-        ...inputs,
-        projectDefaults: resolveProjectDefaults(inputs.settings, directory, projectId),
-      });
-      if (!model) {
-        model = defaults.model;
-        if (variant == null) variant = defaults.variant;
-      }
-      agent = agent || defaults.agent;
-    }
-    if (!model) {
-      const error = new Error('No model is configured or available for the requested directory');
-      error.statusCode = 400;
-      throw error;
-    }
-
-    const expandedPrompt = expandSnippets(prompt, directory);
-    const parsedCommand = parseScheduledCommandPrompt(prompt);
-    let resolvedCommand = null;
-    if (parsedCommand) {
-      try {
-        const response = await client.command.list({ directory });
-        const commands = Array.isArray(response?.data) ? response.data : [];
-        const command = commands.find((candidate) => candidate?.name === parsedCommand.command);
-        if (command) resolvedCommand = { ...parsedCommand, template: command.template };
-      } catch {
-      }
-    }
-    if (goalInput.enabled) {
-      const commandObjective = resolvedCommand
-        ? expandCommandGoalObjective(resolvedCommand.template, resolvedCommand.arguments)
-        : null;
-      await (createSessionGoalOverride || createSessionGoal)({
-        baseUrl,
-        authHeaders,
-        sessionID,
-        directory,
-        objective: commandObjective ?? expandedPrompt,
-        tokenBudget: goalInput.tokenBudget,
-        providerID: model.providerID,
-        modelID: model.modelID,
-        onWarning: (message, error) => console.warn(`[OpenChamberSessions] ${message}:`, error?.message || error),
-      });
-    }
-
-    const markGoalPartial = (error) => {
-      if (goalInput.enabled && error && typeof error === 'object') error.goalConfigured = true;
-      return error;
-    };
-
-    if (resolvedCommand) {
-      try {
-        await client.session.command({
-          sessionID,
-          directory,
-          command: resolvedCommand.command,
-          arguments: resolvedCommand.arguments,
-          ...(agent ? { agent } : {}),
-          model: `${model.providerID}/${model.modelID}`,
-          ...(variant ? { variant } : {}),
-        });
-      } catch (error) {
-        throw markGoalPartial(error);
-      }
-    } else {
-      const baseline = await latestUserMessageID({ client, sessionID, directory });
-      // A session the agent dispatched has no UI to attach the project's
-      // standing context, so it is asked for here. Never fails the dispatch:
-      // a session that runs without its background beats one that never runs.
-      const knowledge = sessionKnowledgeRuntime
-        ? await sessionKnowledgeRuntime.resolvePendingForSession(sessionID, directory)
-          .catch(() => ({ text: '', signature: '' }))
-        : { text: '', signature: '' };
-      const payload = {
-        model,
-        ...(agent ? { agent } : {}),
-        ...(variant ? { variant } : {}),
-        parts: [
-          ...(knowledge.text ? [{ type: 'text', text: knowledge.text, synthetic: true }] : []),
-          { type: 'text', text: expandedPrompt },
-          ...(goalInput.enabled
-            ? [{ type: 'text', text: buildGoalIntroText(goalInput.tokenBudget), synthetic: true }]
-            : []),
-        ],
-      };
-      await resolvePromptBody?.(payload, { sessionId: sessionID, directory });
-      try {
-        await runPromptAsync({ baseUrl, authHeaders, sessionID, directory, payload });
-      } catch (error) {
-        throw markGoalPartial(error);
-      }
-      if (knowledge.text && sessionKnowledgeRuntime) {
-        // After the prompt is accepted, so a rejected dispatch carries it again.
-        await sessionKnowledgeRuntime.recordDelivered(sessionID, directory, knowledge.signature)
-          .catch(() => undefined);
-      }
-      const landed = await waitForPromptLanded({
-        client,
-        sessionID,
-        directory,
-        baselineUserMessageID: baseline.messageID,
-      });
-      if (!landed) {
-        return {
-          model,
-          agent,
-          variant,
-          promptDispatched: false,
-          dispatchedAsCommand: false,
-          promptError: 'OpenCode accepted the prompt but it never appeared in the session',
-        };
-      }
-    }
-
-    return { model, agent, variant, promptDispatched: true, dispatchedAsCommand: Boolean(resolvedCommand) };
-  };
-
-  /**
-   * Archive a batch of sessions in one request.
-   *
-   * The UI archives every session linked to a worktree before removing it.
-   * Doing that from the browser costs one request per session plus a store
-   * reconciliation between each of them, which is what made deleting a
-   * worktree with many sessions take tens of seconds. Here the batch stays on
-   * the server, next to OpenCode, and the client reconciles once.
-   *
-   * Sessions are updated one at a time on purpose: they are archived against a
-   * single OpenCode instance, and a fan-out of concurrent writes would trade a
-   * UI stall for server event-loop starvation. One failed session never stops
-   * the batch — it is reported in `failedIds` while the rest still archive, so
-   * callers keep the partial-failure behaviour they already show.
-   */
-  const archive = async (payload = {}) => {
-    const parsed = parseArchiveRequest(payload);
-    if (!parsed.ok) {
-      throw new OpenChamberControlError(parsed.error, 400);
-    }
-
-    const resolvedDirectory = await resolveRequestedDirectory({
-      payload,
-      readSettingsFromDiskMigrated,
-      sanitizeProjects,
-      validateDirectoryPath,
-    });
-    if (!resolvedDirectory.ok) {
-      throw new OpenChamberControlError(resolvedDirectory.error, resolvedDirectory.status || 400);
-    }
-
-    if (typeof waitForOpenCodeReady === 'function') await waitForOpenCodeReady(10_000, 250);
-
-    const directory = resolvedDirectory.directory;
-    const baseUrl = buildOpenCodeUrl('/', '').replace(/\/$/, '');
-    const client = createOpencodeClient({ baseUrl, headers: getOpenCodeAuthHeaders() });
-
-    const archived = [];
-    const failedIds = [];
-    for (const sessionID of parsed.ids) {
-      try {
-        const response = await client.session.update({
-          sessionID,
-          directory,
-          time: { archived: parsed.archivedAt },
-        });
-        const session = response?.data;
-        if (session?.id) archived.push(session);
-        else failedIds.push(sessionID);
-      } catch (error) {
-        console.warn('[OpenChamberSessions] failed to archive session', sessionID, error);
-        failedIds.push(sessionID);
-      }
-    }
-
-    return { directory, archived, failedIds };
-  };
-
+  const emit = (event) => { try { publishSessionEvent?.(event); } catch {} try { broadcastGlobalUiEvent?.(event); } catch {} };
+  const metadata = { getState: (id) => sessionMetadataStore.getState(id), set: async (id, patch, directory = '') => persistSessionMetadata ? persistSessionMetadata(id, patch, { directory }) : sessionMetadataStore.setSessionMetadata(id, patch) };
   const create = async (payload = {}) => {
-    const title = asNonEmptyString(payload.title);
-    const prompt = asNonEmptyString(payload.prompt);
-    const goalInput = resolveGoalInput(payload, prompt);
-    if (!goalInput.ok) {
-      throw new OpenChamberControlError(goalInput.error, 400);
-    }
-    const model = resolveRequestedModel(payload);
-    const agent = asNonEmptyString(payload.agent);
-    const variant = asNonEmptyString(payload.variant);
-
-    const resolvedDirectory = await resolveRequestedDirectory({
-      payload,
-      readSettingsFromDiskMigrated,
-      sanitizeProjects,
-      validateDirectoryPath,
-    });
-    if (!resolvedDirectory.ok) {
-      throw new OpenChamberControlError(resolvedDirectory.error, resolvedDirectory.status || 400);
-    }
-
-    const worktreeInput = resolveWorktreeInput(payload);
-    let worktree = null;
-    let sessionDirectory = resolvedDirectory.directory;
-    if (payload?.worktree && !worktreeInput) {
-      throw new OpenChamberControlError('worktree.name is required when worktree is provided', 400);
-    }
-
-    if (typeof waitForOpenCodeReady === 'function') await waitForOpenCodeReady(10_000, 250);
-
-    if (prompt) {
-      await validateRequestedSelection({
-        directory: resolvedDirectory.directory,
-        requestedModel: model,
-        requestedAgent: agent,
-        requestedVariant: variant,
-      });
-    }
-
-    if (worktreeInput) {
-      worktree = await createWorktree(resolvedDirectory.directory, worktreeInput);
-      sessionDirectory = worktree.path;
-      await waitForWorktreeBootstrapReady({ directory: sessionDirectory });
-    }
-
-    const baseUrl = buildOpenCodeUrl('/', '').replace(/\/$/, '');
-    const authHeaders = getOpenCodeAuthHeaders();
-    const client = createOpencodeClient({ baseUrl, headers: authHeaders });
-    const sessionID = await createSession({
-      client,
-      baseUrl,
-      authHeaders,
-      directory: sessionDirectory,
-      ...(title ? { title } : {}),
-    });
-
-    let dispatch = { model, agent, variant, promptDispatched: false, dispatchedAsCommand: false };
-    if (prompt) {
-      dispatch = await dispatchPrompt({
-        client,
-        baseUrl,
-        authHeaders,
-        sessionID,
-        directory: sessionDirectory,
-        projectId: resolvedDirectory.projectId,
-        prompt,
-        goalInput,
-        requestedModel: model,
-        requestedAgent: agent,
-        requestedVariant: variant,
-      });
-    }
-
-    const result = {
-      sessionId: sessionID,
-      directory: sessionDirectory,
-      ...(resolvedDirectory.projectId ? { projectId: resolvedDirectory.projectId } : {}),
-      ...(title ? { title } : {}),
-      ...(worktree ? { worktree } : {}),
-      ...(prompt && dispatch.model ? { model: dispatch.model } : {}),
-      ...(prompt && dispatch.agent ? { agent: dispatch.agent } : {}),
-      ...(prompt && dispatch.variant ? { variant: dispatch.variant } : {}),
-      promptDispatched: dispatch.promptDispatched,
-      ...(dispatch.promptError ? { promptError: dispatch.promptError } : {}),
-      dispatchedAsCommand: dispatch.dispatchedAsCommand,
-      ...(goalInput.enabled ? { goalEnabled: true } : {}),
-      ...(goalInput.tokenBudget ? { goalTokenBudget: goalInput.tokenBudget } : {}),
-    };
-
-    try {
-      emitSessionCreatedEvent?.({
-        sessionID,
-        directory: sessionDirectory,
-        ...(resolvedDirectory.projectId ? { projectID: resolvedDirectory.projectId } : {}),
-        ...(title ? { title } : {}),
-        ...(worktree ? { worktree } : {}),
-        ...(prompt && dispatch.model ? { model: dispatch.model } : {}),
-        ...(prompt && dispatch.agent ? { agent: dispatch.agent } : {}),
-        ...(prompt && dispatch.variant ? { variant: dispatch.variant } : {}),
-        promptDispatched: dispatch.promptDispatched,
-        dispatchedAsCommand: dispatch.dispatchedAsCommand,
-        ...(goalInput.enabled ? { goalEnabled: true } : {}),
-        ...(goalInput.tokenBudget ? { goalTokenBudget: goalInput.tokenBudget } : {}),
-        createdAt: Date.now(),
-      });
-    } catch {
-    }
-
+    const parsed = SessionCreateRequestSchema.safeParse(payload);
+    if (!parsed.success) throw new OpenChamberControlError('Session create request is invalid', 400);
+    const { projectId, workspaceId, metadata: requestedMetadata } = parsed.data;
+    const options = CapturedSendOptionsSchema.parse(parsed.data.options);
+    const workspace = await resolveWorkspaceScope(workspaceId);
+    if (!workspace || workspace.projectId !== projectId) throw new OpenChamberControlError('Workspace does not belong to project', 404);
+    assertWritableScope(workspace);
+    const rootSessionId = randomUUID();
+    const workspaceDisplay = z.object({ displayPath: z.string().optional(), env: z.record(z.string(), z.string()).optional() }).passthrough().parse(workspace);
+    const displayPath = workspaceDisplay.displayPath && !workspaceDisplay.displayPath.startsWith('/') && !workspaceDisplay.displayPath.startsWith('\\') && !/^[A-Za-z]:/.test(workspaceDisplay.displayPath) ? workspaceDisplay.displayPath : 'workspace';
+    const sessionBootstrap = { rootSessionId, projectId, workspaceId, cwd: workspace.cwd, agentDirectory: workspace.agentDirectory, agentDirectoryId: workspace.agentDirectoryId, displayPath, options };
+    if (workspaceDisplay.env) sessionBootstrap.env = workspaceDisplay.env;
+    const body = await request('/internal/sessions', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(sessionBootstrap) });
+    const session = RuntimeSessionSchema.parse(body);
+    if (session.projectId !== projectId || session.workspaceId !== workspaceId || session.rootSessionId !== rootSessionId) throw new OpenChamberControlError('Agent service returned an out-of-scope session', 502);
+    if (!await registerSessionScope(session)) throw new OpenChamberControlError('Session scope registration failed', 500);
+    if (requestedMetadata) await metadata.set(session.sessionId, requestedMetadata, workspace.cwd);
+    const stored = await sessionMetadataStore.getState(session.sessionId);
+    const result = SessionCreateAckSchema.parse({ session: SessionSchema.parse({ ...session, metadata: stored?.metadata ?? null, metadataRevision: stored?.revision ?? '0', archiveRevision: '0' }) });
+    emit({ type: 'openchamber:session-created', properties: { sessionId: session.sessionId, projectId, workspaceId } });
     return result;
   };
-
-  const runExisting = async (action, sourceSessionId, payload = {}) => {
-    const sourceSessionID = asNonEmptyString(sourceSessionId);
-    const prompt = asNonEmptyString(payload.prompt);
-    if (!sourceSessionID) throw new OpenChamberControlError('sessionId is required', 400);
-    if (!prompt) throw new OpenChamberControlError('prompt is required', 400);
-    const goalInput = resolveGoalInput(payload, prompt);
-    if (!goalInput.ok) throw new OpenChamberControlError(goalInput.error, 400);
-    const requestedModel = resolveRequestedModel(payload);
-
-    let targetSessionID = sourceSessionID;
-    let targetSession = null;
-    let directory = null;
-    try {
-      const resolvedDirectory = await resolveRequestedDirectory({
-        payload,
-        readSettingsFromDiskMigrated,
-        sanitizeProjects,
-        validateDirectoryPath,
-      });
-      if (!resolvedDirectory.ok) {
-        throw new OpenChamberControlError(resolvedDirectory.error, resolvedDirectory.status || 400);
-      }
-      directory = resolvedDirectory.directory;
-      if (typeof waitForOpenCodeReady === 'function') await waitForOpenCodeReady(10_000, 250);
-
-      await validateRequestedSelection({
-        directory,
-        requestedModel,
-        requestedAgent: asNonEmptyString(payload.agent),
-        requestedVariant: asNonEmptyString(payload.variant),
-      });
-
-      const baseUrl = buildOpenCodeUrl('/', '').replace(/\/$/, '');
-      const authHeaders = getOpenCodeAuthHeaders();
-      const client = createOpencodeClient({ baseUrl, headers: authHeaders });
-      if (action === 'fork') {
-        targetSession = await forkSession({
-          client,
-          sessionID: sourceSessionID,
-          directory,
-          messageID: asNonEmptyString(payload.messageId) || undefined,
-        });
-        targetSessionID = targetSession.id;
-      }
-
-      const baselineAssistantMessageId = await latestCompletedAssistantMessageID({
-        client,
-        sessionID: targetSessionID,
-        directory,
-      });
-
-      const dispatch = await dispatchPrompt({
-        client,
-        baseUrl,
-        authHeaders,
-        sessionID: targetSessionID,
-        directory,
-        projectId: resolvedDirectory.projectId,
-        prompt,
-        goalInput,
-        requestedModel,
-        requestedAgent: asNonEmptyString(payload.agent),
-        requestedVariant: asNonEmptyString(payload.variant),
-        reuseSessionSelection: true,
-      });
-      const result = {
-        action,
-        sessionId: targetSessionID,
-        directory,
-        ...(action === 'fork' ? { sourceSessionId: sourceSessionID } : {}),
-        ...(targetSession?.title ? { title: targetSession.title } : {}),
-        ...(baselineAssistantMessageId ? { baselineAssistantMessageId } : {}),
-        model: dispatch.model,
-        ...(dispatch.agent ? { agent: dispatch.agent } : {}),
-        ...(dispatch.variant ? { variant: dispatch.variant } : {}),
-        promptDispatched: dispatch.promptDispatched,
-        ...(dispatch.promptError ? { promptError: dispatch.promptError } : {}),
-        dispatchedAsCommand: dispatch.dispatchedAsCommand,
-        ...(goalInput.enabled ? { goalEnabled: true } : {}),
-        ...(goalInput.tokenBudget ? { goalTokenBudget: goalInput.tokenBudget } : {}),
-      };
-
-      if (action === 'fork') {
-        try {
-          emitSessionCreatedEvent?.({
-            sessionID: targetSessionID,
-            directory,
-            sourceSessionID,
-            ...(targetSession?.title ? { title: targetSession.title } : {}),
-            model: dispatch.model,
-            ...(dispatch.agent ? { agent: dispatch.agent } : {}),
-            ...(dispatch.variant ? { variant: dispatch.variant } : {}),
-            promptDispatched: dispatch.promptDispatched,
-            dispatchedAsCommand: dispatch.dispatchedAsCommand,
-            ...(goalInput.enabled ? { goalEnabled: true } : {}),
-            ...(goalInput.tokenBudget ? { goalTokenBudget: goalInput.tokenBudget } : {}),
-            createdAt: Date.now(),
-          });
-        } catch {
-        }
-      }
-      return result;
-    } catch (error) {
-      const statusCode = Number(error?.statusCode) || 500;
-      const forkCreated = action === 'fork' && targetSessionID !== sourceSessionID;
-      const goalConfigured = error?.goalConfigured === true;
-      throw new OpenChamberControlError(
-        error instanceof Error ? error.message : `Failed to ${action} session`,
-        statusCode,
-        {
-        ...(forkCreated || goalConfigured
-          ? {
-            partial: true,
-            partialAction: forkCreated ? 'fork-created' : 'goal-configured',
-            sessionId: targetSessionID,
-            directory,
-          }
-          : {}),
-        },
-      );
+  const prepareDelivery = async (scope, requestBody, identity = {}) => { const capturedRequest = PromptRequestSchema.parse(await capturePrompt(scope, requestBody)); const capture = { ...identity, request: capturedRequest }; await beforeDispatch(scope, capture); const attachments = await resolveAttachments(scope, capturedRequest.input.attachments); return { ...capture, attachments }; };
+  const deliver = async (operation, sessionId, payload, commandId) => {
+    const scope = await scopeFor(sessionId);
+    assertWritableScope(scope);
+    const parsed = PromptRequestSchema.safeParse(operation === 'send' ? payload : payload?.request ?? payload);
+    if (!parsed.success || (operation !== 'send' && payload?.sessionId !== undefined && payload.sessionId !== sessionId)) {
+      throw new OpenChamberControlError('Prompt request is invalid', 400, { code: 'INVALID_REQUEST' });
     }
+    const requestBody = operation === 'steer' ? SteerRequestSchema.parse({ sessionId, request: parsed.data }).request
+      : operation === 'followUp' ? FollowUpRequestSchema.parse({ sessionId, request: parsed.data }).request : parsed.data;
+    if (commandId !== undefined && !EntityIdSchema.safeParse(commandId).success) {
+      throw new OpenChamberControlError('Command key is invalid', 400, { code: 'INVALID_REQUEST' });
+    }
+    const claim = commandId === undefined ? null : await directCommandAdmissionStore.claim(scope, commandId, operation, requestBody);
+    if (claim?.state === 'accepted') return claim.acknowledgment;
+    const deliveryRunId = randomUUID();
+    const deliveryIdentity = { deliveryRunId };
+    if (operation === 'send') deliveryIdentity.runId = deliveryRunId;
+    if (commandId !== undefined) deliveryIdentity.commandId = commandId;
+    const capture = await prepareDelivery(scope, requestBody, deliveryIdentity);
+    let acknowledgment;
+    let receipt;
+    try {
+      const pathname = operation === 'send' ? 'runs' : operation === 'steer' ? 'steer' : 'follow-up';
+      const body = operation === 'send' ? { type: 'prompt', runId: deliveryRunId, request: capture.request, attachments: capture.attachments }
+        : { request: capture.request, attachments: capture.attachments };
+      const response = await request(`/internal/sessions/${encodeURIComponent(sessionId)}/${pathname}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+      if (operation === 'send') {
+        const run = RunSchema.parse(response?.run);
+        if (run.sessionId !== sessionId || run.runId !== deliveryRunId) throw new Error('Native run acknowledgement does not match the admitted command');
+        acknowledgment = { run };
+        receipt = { runId: run.runId, deliveryRunId, run };
+      } else {
+        acknowledgment = (operation === 'steer' ? SteerAckSchema : FollowUpAckSchema).parse(response);
+        if (acknowledgment.sessionId !== sessionId) throw new Error('Native acknowledgement does not match the admitted session');
+        receipt = operation === 'steer' ? { runId: acknowledgment.runId, deliveryRunId, ack: acknowledgment }
+          : { deliveryRunId, followUpId: acknowledgment.followUpId, ack: acknowledgment };
+      }
+    } catch (error) {
+      // A failed transport or malformed acknowledgement cannot prove that native execution did not accept the command.
+      if (claim && !(error instanceof OpenChamberControlError && error.statusCode < 500)) {
+        throw new OpenChamberControlError('Command acceptance is uncertain; it will not be dispatched again', 409, { code: 'COMMAND_IN_FLIGHT', retryable: false });
+      }
+      throw error;
+    }
+    try {
+      const acceptedCapture = { ...capture, receipt };
+      if (receipt.runId) acceptedCapture.runId = receipt.runId;
+      await onPromptAccepted(scope, acceptedCapture, receipt);
+    } catch (error) {
+      if (claim) throw new OpenChamberControlError('Command was accepted but its delivery receipt is incomplete', 409, { code: 'COMMAND_IN_FLIGHT', retryable: false });
+      throw error;
+    }
+    // Keep the claim pending if this durable write fails, rather than authorizing an unsafe resend.
+    if (claim) await directCommandAdmissionStore.accept(scope, commandId, claim.claimId, acknowledgment);
+    return acknowledgment;
   };
-
-  return {
-    create,
-    archive,
-    send: (sessionID, payload) => runExisting('send', sessionID, payload),
-    fork: (sessionID, payload) => runExisting('fork', sessionID, payload),
+  const send = (sessionId, payload = {}, commandId) => deliver('send', sessionId, payload, commandId);
+  const steer = (sessionId, payload = {}, commandId) => deliver('steer', sessionId, payload, commandId);
+  const followUp = (sessionId, payload = {}, commandId) => deliver('followUp', sessionId, payload, commandId);
+  const fork = async (sessionId, payload = {}) => {
+    const source = await scopeFor(sessionId);
+    assertWritableScope(source);
+    const input = parseCommand(SessionForkRequestSchema, payload);
+    await reopen(source);
+    const entryId = input.mode === 'selected' ? asNonEmptyString((await request(`/internal/sessions/${encodeURIComponent(sessionId)}/native-entry/${encodeURIComponent(input.messageId)}`)).entryId) : null;
+    if (input.mode === 'selected' && !entryId) throw new OpenChamberControlError('Selected message is unavailable', 409);
+    const body = await request(`/internal/sessions/${encodeURIComponent(sessionId)}/fork`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sourceSessionId: sessionId, entryId, mode: input.mode }) });
+    const ack = SessionForkAckSchema.parse(body);
+    if (ack.sourceSessionId !== sessionId || ack.entryId !== entryId || ack.mode !== input.mode) throw new OpenChamberControlError('Fork acknowledgement does not match the requested source', 502);
+    const child = RuntimeSessionSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(ack.sessionId)}`));
+    if (child.sessionId !== ack.sessionId || child.rootSessionId !== ack.rootSessionId || child.projectId !== source.projectId || child.workspaceId !== source.workspaceId) throw new OpenChamberControlError('Fork acknowledgement is outside the source scope', 502);
+    if (!await registerSessionScope(child)) throw new OpenChamberControlError('Forked session scope registration failed', 500);
+    const stored = await sessionMetadataStore.getState(child.sessionId);
+    const archive = await archiveStore.getState(child.sessionId);
+    const projected = { ...child, metadata: stored?.metadata ?? null, metadataRevision: stored?.revision ?? '0', archiveRevision: archive?.revision ?? '0' };
+    if (archive?.archivedAt != null) projected.archivedAt = archive.archivedAt;
+    return SessionCreateAckSchema.parse({ session: SessionSchema.parse(projected) });
   };
+  const reopen = async (scope) => {
+    const privateScope = { rootSessionId: scope.rootSessionId, projectId: scope.projectId, workspaceId: scope.workspaceId, cwd: scope.cwd, agentDirectory: scope.agentDirectory, agentDirectoryId: scope.agentDirectoryId, displayPath: scope.displayPath ?? 'workspace' };
+    if (scope.env) privateScope.env = scope.env;
+    const bootstrap = SessionReopenScopeSchema.parse(privateScope);
+    const runtime = RuntimeSessionSchema.parse(await request(`/internal/sessions/${encodeURIComponent(bootstrap.rootSessionId)}/reopen`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(bootstrap) }));
+    if (runtime.sessionId !== bootstrap.rootSessionId || runtime.rootSessionId !== bootstrap.rootSessionId || runtime.projectId !== bootstrap.projectId || runtime.workspaceId !== bootstrap.workspaceId) throw new OpenChamberControlError('Session restore acknowledgement is outside the authorized scope', 502);
+  };
+  const open = async (id) => { const scope = await scopeFor(id); await reopen(scope); const snapshot = SessionSnapshotSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(id)}/snapshot`)); if (snapshot.session.sessionId !== id || snapshot.session.projectId !== scope.projectId || snapshot.session.workspaceId !== scope.workspaceId) throw new OpenChamberControlError('Session snapshot is outside the authorized scope', 502); return snapshot; };
+  const history = async (id, query = '') => { const scope = await scopeFor(id); await reopen(scope); const page = HistoryPageSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(id)}/history${query ? `?${query}` : ''}`)); if (page.sessionId !== id || page.turns.some(turn => turn.projectId !== undefined && turn.projectId !== scope.projectId) || page.messages.some(message => message.projectId !== undefined && message.projectId !== scope.projectId)) throw new OpenChamberControlError('Session history is outside the authorized scope', 502); return page; };
+  const list = async (workspaceId) => {
+    const scopePage = workspaceId ? { items: [{ workspaceId }], errors: {} } : await (listWorkspaceScopes instanceof Function ? listWorkspaceScopes() : Promise.reject(new OpenChamberControlError('Workspace enumeration is unavailable', 503)));
+    const parsedScopes = z.strictObject({ items: z.array(z.strictObject({ workspaceId: z.string().min(1) })), errors: z.record(z.string(), ProblemCodeSchema) }).parse(scopePage);
+    const pages = await Promise.all(parsedScopes.items.map(async ({ workspaceId: id }) => {
+      try {
+        const workspace = await resolveWorkspaceScope(id);
+        if (!workspace) throw new OpenChamberControlError('Workspace scope is unavailable during global session listing', workspaceId ? 404 : 503, { code: workspaceId ? 'SESSION_NOT_FOUND' : 'SERVICE_UNAVAILABLE' });
+        const raw = z.strictObject({ items: z.array(RuntimeSessionSchema), errors: z.array(z.strictObject({ sessionId: z.string().min(1), code: ProblemCodeSchema })) }).parse(await request(`/api/agent/v1/sessions?workspaceId=${encodeURIComponent(id)}`));
+        const sessionResults = await Promise.all(raw.items.map(async session => {
+          try {
+            if (session.projectId !== workspace.projectId || session.workspaceId !== id) throw new OpenChamberControlError('Agent service returned an out-of-scope session', 502, { code: 'INTERNAL_ERROR' });
+            const metadataState = await sessionMetadataStore.getState(session.sessionId);
+            const archiveState = await archiveStore.getState(session.sessionId);
+            if (!await registerSessionScope(session)) throw new OpenChamberControlError('Session scope registration failed', 500, { code: 'INTERNAL_ERROR' });
+            const projected = { ...session, metadata: metadataState?.metadata ?? null, metadataRevision: metadataState?.revision ?? '0', archiveRevision: archiveState?.revision ?? '0' };
+            if (archiveState?.archivedAt != null) projected.archivedAt = archiveState.archivedAt;
+            return { item: SessionSchema.parse(projected) };
+          } catch (error) {
+            const code = ProblemCodeSchema.safeParse(error?.code);
+            return { error: { sessionId: session.sessionId, code: code.success ? code.data : 'SERVICE_UNAVAILABLE' } };
+          }
+        }));
+        const items = sessionResults.flatMap(result => result.item ? [result.item] : []);
+        const sessionErrors = sessionResults.flatMap(result => result.error ? [result.error] : []);
+        return { items, errors: Object.fromEntries([...raw.errors, ...sessionErrors].map(error => [error.sessionId, error.code])) };
+      } catch (error) {
+        const code = ProblemCodeSchema.safeParse(error?.code);
+        return { items: [], errors: { [id]: code.success ? code.data : 'SERVICE_UNAVAILABLE' } };
+      }
+    }));
+    return z.strictObject({ items: z.array(SessionSchema), errors: z.record(z.string(), ProblemCodeSchema) }).parse({ items: pages.flatMap(page => page.items), errors: Object.assign({}, parsedScopes.errors, ...pages.map(page => page.errors)) });
+  };
+  const archive = async (payload = {}) => { const parsed = parseArchiveRequest(payload); if (!parsed.ok) throw new OpenChamberControlError(parsed.error, 400); const scopes = await Promise.all(parsed.ids.map((id) => hostScopeFor(id))); scopes.forEach(assertWritableScope); return archiveStore.archive(parsed.ids, parsed.archivedAt); };
+  const unarchive = async (payload = {}) => { const parsed = parseIdBatch(payload); if (!parsed.ok) throw new OpenChamberControlError(parsed.error, 400); const scopes = await Promise.all(parsed.ids.map((id) => hostScopeFor(id))); scopes.forEach(assertWritableScope); return archiveStore.unarchive(parsed.ids); };
+  const getMetadata = async (id) => { await hostScopeFor(id); const state = await sessionMetadataStore.getState(id); return SessionMetadataStateSchema.parse({ sessionId: id, revision: state?.revision ?? '0', metadata: state?.metadata ?? null }); };
+  const setMetadata = async (id, payload = {}) => { const scope = await hostScopeFor(id); assertWritableScope(scope); const patch = SessionMetadataPatchSchema.parse(payload); const result = await metadata.set(id, patch.changes, scope.cwd); return SessionMetadataStateSchema.parse({ sessionId: id, revision: result.revision, metadata: result.metadata }); };
+  const selectBranch = async (sessionId, payload = {}) => {
+    const input = parseCommand(SessionBranchRequestSchema, payload);
+    const scope = await scopeFor(sessionId);
+    assertWritableScope(scope);
+    await reopen(scope);
+    const result = SessionBranchResultSchema.parse(await request(`/internal/sessions/${encodeURIComponent(sessionId)}/branch`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) }));
+    if (result.sessionId !== sessionId || result.branch.branchId !== input.branchId || BigInt(result.branch.branchVersion) <= BigInt(input.branchVersion)
+      || (input.action === 'revert' ? result.branch.revert?.messageId !== input.messageId : result.branch.revert !== undefined))
+      throw new OpenChamberControlError('Branch acknowledgement does not match its requested owner and selection', 502);
+    return result;
+  };
+  const pendingRelocation = async (rootSessionId) => HostSessionRelocationPendingSchema.parse(await request(`/internal/sessions/${encodeURIComponent(rootSessionId)}/relocation`)).relocation;
+  const sameIntent = (intent, pending) => pending && pending.transactionId === intent.transactionId
+    && pending.sourceWorkspaceId === intent.sourceWorkspaceId && pending.destinationWorkspaceId === intent.destinationWorkspaceId;
+  const familyOwner = async (intent) => {
+    const family = await agentScopeStore.listSessionFamily(intent.rootSessionId);
+    if (!family.some((member) => member.sessionId === intent.rootSessionId)) throw new OpenChamberControlError('Relocation family is unavailable', 503);
+    if (family.every((member) => member.workspaceId === intent.sourceWorkspaceId)) return 'source';
+    if (family.every((member) => member.workspaceId === intent.destinationWorkspaceId)) return 'destination';
+    throw new OpenChamberControlError('Relocation Host ownership has changed', 503);
+  };
+  const assertRelocationRuntime = async (intent, runtime, workspaceId) => {
+    const scope = await agentScopeStore.getWorkspace(workspaceId);
+    if (!scope || runtime.sessionId !== intent.rootSessionId || runtime.rootSessionId !== intent.rootSessionId
+      || runtime.workspaceId !== workspaceId || runtime.projectId !== scope.projectId || (workspaceId === intent.destinationWorkspaceId && runtime.activeRunId !== null))
+      throw new OpenChamberControlError('Relocation acknowledgement is outside its captured Host owner', 502);
+  };
+  const finalizeRelocation = async (intent, action) => {
+    const result = HostSessionRelocationFinalizedSchema.parse(await request(`/internal/sessions/${encodeURIComponent(intent.rootSessionId)}/relocation/finalize`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(HostSessionRelocationFinalizeSchema.parse({ transactionId: intent.transactionId, action })),
+    }));
+    await assertRelocationRuntime(intent, result.session, action === 'commit' ? intent.destinationWorkspaceId : intent.sourceWorkspaceId);
+    return result.session;
+  };
+  const recoverRelocation = async (rootSessionId) => {
+    const intent = await agentScopeStore.getRelocation(rootSessionId);
+    if (!intent) return;
+    const owner = await familyOwner(intent);
+    const pending = await pendingRelocation(rootSessionId);
+    if (pending && !sameIntent(intent, pending)) throw new OpenChamberControlError('Native relocation intent does not match its Host owner', 503);
+    if (pending) await finalizeRelocation(intent, owner === 'destination' ? 'commit' : 'rollback');
+    else {
+      const runtime = RuntimeSessionSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(rootSessionId)}`));
+      await assertRelocationRuntime(intent, runtime, owner === 'destination' ? intent.destinationWorkspaceId : intent.sourceWorkspaceId);
+    }
+    await agentScopeStore.clearRelocation(intent);
+  };
+  const relocationResult = async (rootSessionId, workspaceId) => {
+    const family = await agentScopeStore.listSessionFamily(rootSessionId);
+    const sessions = await Promise.all(family.map(async (member) => {
+      const runtime = RuntimeSessionSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(member.sessionId)}`));
+      if (member.workspaceId !== workspaceId || runtime.sessionId !== member.sessionId || runtime.rootSessionId !== rootSessionId || runtime.workspaceId !== workspaceId || runtime.projectId !== member.projectId)
+        throw new OpenChamberControlError('Relocation family projection is outside its destination owner', 502);
+      const [stored, archive] = await Promise.all([sessionMetadataStore.getState(member.sessionId), archiveStore.getState(member.sessionId)]);
+      const session = { ...runtime, metadata: stored?.metadata ?? null, metadataRevision: stored?.revision ?? '0', archiveRevision: archive?.revision ?? '0' };
+      if (archive?.archivedAt != null) session.archivedAt = archive.archivedAt;
+      return SessionSchema.parse(session);
+    }));
+    return SessionRelocateResultSchema.parse({ sessions });
+  };
+  const relocate = async (sessionId, payload = {}) => {
+    const input = parseCommand(SessionRelocateRequestSchema, payload);
+    if (!agentScopeStore || !resolveHostRelocationScope) throw new OpenChamberControlError('Host relocation authority is unavailable', 503);
+    let source = await resolveHostRelocationScope(sessionId);
+    if (!source || source.sessionId !== sessionId) throw new OpenChamberControlError('Session scope was not found', 404);
+    assertWritableScope(source);
+    const rootSessionId = source.rootSessionId;
+    if (relocationControls.has(rootSessionId)) throw new OpenChamberControlError('Session relocation is in progress', 409, { code: 'COMMAND_IN_FLIGHT' });
+    relocationControls.add(rootSessionId);
+    try {
+      await recoverRelocation(rootSessionId);
+      source = await resolveHostRelocationScope(sessionId);
+      if (!source) throw new OpenChamberControlError('Session scope was not found', 404);
+      assertWritableScope(source);
+      const destination = await resolveWorkspaceScope(input.workspaceId);
+      if (!destination || destination.projectId !== source.projectId || destination.agentDirectoryId !== source.agentDirectoryId)
+        throw new OpenChamberControlError('Relocation destination is outside the source Host owner', 403);
+      assertWritableScope(destination);
+      if (destination.workspaceId === source.workspaceId) return relocationResult(rootSessionId, destination.workspaceId);
+      const intent = { rootSessionId, transactionId: randomUUID(), sourceWorkspaceId: source.workspaceId, destinationWorkspaceId: destination.workspaceId };
+      await agentScopeStore.createRelocation(intent);
+      try {
+        const destinationScope = { rootSessionId, projectId: destination.projectId, workspaceId: destination.workspaceId, cwd: destination.cwd, agentDirectory: destination.agentDirectory,
+          agentDirectoryId: destination.agentDirectoryId, displayPath: destination.displayPath ?? 'workspace' };
+        if (destination.env) destinationScope.env = destination.env;
+        const prepared = HostSessionRelocationPreparedSchema.parse(await request(`/internal/sessions/${encodeURIComponent(rootSessionId)}/relocation/prepare`, {
+          method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(HostSessionRelocationPrepareSchema.parse({
+            transactionId: intent.transactionId, sourceWorkspaceId: source.workspaceId,
+            destination: destinationScope,
+          })),
+        }));
+        if (prepared.transactionId !== intent.transactionId) throw new OpenChamberControlError('Relocation acknowledgement identified another transaction', 502);
+        await assertRelocationRuntime(intent, prepared.session, destination.workspaceId);
+        await agentScopeStore.rebindSessionFamily(intent);
+        await finalizeRelocation(intent, 'commit');
+        await agentScopeStore.clearRelocation(intent);
+      } catch (error) {
+        // An unreadable response is not proof of failure. Only a matching durable
+        // native intent permits rollback; a completed destination is reconciled.
+        const pending = await pendingRelocation(rootSessionId);
+        if (pending && !sameIntent(intent, pending)) throw new OpenChamberControlError('Native relocation recovery owner has changed', 503);
+        const owner = await familyOwner(intent);
+        if (!pending && owner === 'destination') {
+          const runtime = RuntimeSessionSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(rootSessionId)}`));
+          await assertRelocationRuntime(intent, runtime, destination.workspaceId);
+          await agentScopeStore.clearRelocation(intent);
+          return relocationResult(rootSessionId, destination.workspaceId);
+        }
+        if (pending) {
+          if (owner === 'destination') await agentScopeStore.rollbackSessionFamily(intent);
+          await finalizeRelocation(intent, 'rollback');
+        } else {
+          const runtime = RuntimeSessionSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(rootSessionId)}`));
+          await assertRelocationRuntime(intent, runtime, source.workspaceId);
+        }
+        await agentScopeStore.clearRelocation(intent);
+        throw error;
+      }
+      return relocationResult(rootSessionId, destination.workspaceId);
+    } finally { relocationControls.delete(rootSessionId); }
+  };
+  const control = async (sessionId, operation = {}) => { const scope = await scopeFor(sessionId); assertWritableScope(scope); if (operation?.type !== 'abort') throw new OpenChamberControlError('Unsupported session control operation', 400); const parsed = RunAbortRequestSchema.parse({ sessionId, runId: operation.runId }); const body = await request(`/api/agent/v1/sessions/${encodeURIComponent(parsed.sessionId)}/runs/${encodeURIComponent(parsed.runId)}/abort`, { method: 'POST' }); return { run: RunSchema.parse(body?.run) }; };
+  const remove = async (id) => { const scope = await scopeFor(id); const ack = SessionDeleteAckSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' })); if (ack.sessionId !== id) throw new OpenChamberControlError('Session deletion acknowledgement identified another session', 502); if (scope.workspaceId.startsWith('archive_')) await onArchiveDeleted?.(scope, ack); return ack; };
+  return { create, send, steer, followUp, fork, selectBranch, relocate, delete: remove, open, history, list, control, resolveDirectory: async (payload = {}) => { const scope = await resolveWorkspaceScope(payload.workspaceId); if (!scope) throw new OpenChamberControlError('Workspace was not found', 404); return scope.cwd; }, archive, unarchive, getMetadata, setMetadata, sessionMetadataStore, archiveStore };
 };
 
+
+
+export const createOpenChamberSessionService = (dependencies) => createCanonicalSessionService(dependencies);
 const sendServiceError = (res, error, fallback) => {
   const controlError = asControlError(error, fallback);
-  return res.status(controlError.statusCode).json({
-    error: controlError.message,
-    ...(controlError.partial === true ? {
-      partial: true,
-      partialAction: controlError.partialAction,
-      sessionId: controlError.sessionId,
-      directory: controlError.directory,
-    } : {}),
-  });
+  const status = controlError.statusCode >= 400 && controlError.statusCode <= 599 ? controlError.statusCode : 500;
+  const codeResult = ProblemCodeSchema.safeParse(error?.code);
+  const code = codeResult.success ? codeResult.data : status === 404 ? 'SESSION_NOT_FOUND' : status === 400 ? 'INVALID_REQUEST' : status === 401 || status === 403 ? 'UNAUTHORIZED' : status === 503 ? 'SERVICE_UNAVAILABLE' : 'INTERNAL_ERROR';
+  const problem = ProblemDetailsSchema.parse({ type: `urn:ohpichamber:problem:${code}`, title: 'Session operation failed', status, detail: controlError.message || fallback || 'Session operation failed', code, retryable: error?.retryable ?? status >= 500 });
+  return res.status(status).type('application/problem+json').json(problem);
 };
 
 export const registerOpenChamberSessionRoutes = (app, dependencies) => {
+  if (!dependencies.isRequestOriginAllowed) throw new Error('Session routes require isRequestOriginAllowed');
   const service = dependencies.sessionService || createOpenChamberSessionService(dependencies);
+
 
   app.post('/api/openchamber/sessions', express.json({ limit: '1mb' }), async (req, res) => {
     try {
-      return res.json(await service.create(req.body && typeof req.body === 'object' ? req.body : {}));
+      return res.json(await service.create(req.body ?? {}));
     } catch (error) {
       console.error('[OpenChamberSessions] failed to create session:', error);
       return sendServiceError(res, error, 'Failed to create session');
@@ -971,10 +395,40 @@ export const registerOpenChamberSessionRoutes = (app, dependencies) => {
 
   app.post('/api/openchamber/sessions/archive', express.json({ limit: '1mb' }), async (req, res) => {
     try {
-      return res.json(await service.archive(req.body && typeof req.body === 'object' ? req.body : {}));
+      return res.json(await service.archive(req.body ?? {}));
     } catch (error) {
       console.error('[OpenChamberSessions] failed to archive sessions:', error);
       return sendServiceError(res, error, 'Failed to archive sessions');
+    }
+  });
+
+  app.get('/api/openchamber/sessions/:sessionId/metadata', async (req, res) => {
+    try {
+      return res.json(await service.getMetadata(req.params.sessionId));
+    } catch (error) {
+      console.error('[OpenChamberSessions] failed to read session metadata:', error);
+      return sendServiceError(res, error, 'Failed to read session metadata');
+    }
+  });
+
+  app.patch('/api/openchamber/sessions/:sessionId/metadata', express.json({ limit: '1mb' }), async (req, res) => {
+    try {
+      return res.json(await service.setMetadata(
+        req.params.sessionId,
+        req.body ?? {},
+      ));
+    } catch (error) {
+      console.error('[OpenChamberSessions] failed to store session metadata:', error);
+      return sendServiceError(res, error, 'Failed to store session metadata');
+    }
+  });
+
+  app.post('/api/openchamber/sessions/unarchive', express.json({ limit: '1mb' }), async (req, res) => {
+    try {
+      return res.json(await service.unarchive(req.body ?? {}));
+    } catch (error) {
+      console.error('[OpenChamberSessions] failed to unarchive sessions:', error);
+      return sendServiceError(res, error, 'Failed to unarchive sessions');
     }
   });
 
@@ -983,13 +437,15 @@ export const registerOpenChamberSessionRoutes = (app, dependencies) => {
     express.json({ limit: '1mb' }),
     async (req, res) => {
       try {
-        return res.json(await service.send(req.params.sessionId, req.body));
+        return res.json(await service.send(req.params.sessionId, req.body, req.get('Idempotency-Key')));
       } catch (error) {
         console.error('[OpenChamberSessions] failed to send session:', error);
         return sendServiceError(res, error, 'Failed to send session');
       }
     },
   );
+  app.post('/api/openchamber/sessions/:sessionId/steer', express.json({ limit: '1mb' }), async (req, res) => { try { return res.json(await service.steer(req.params.sessionId, req.body || {}, req.get('Idempotency-Key'))); } catch (error) { return sendServiceError(res, error, 'Failed to steer session'); } });
+  app.post('/api/openchamber/sessions/:sessionId/follow-up', express.json({ limit: '1mb' }), async (req, res) => { try { return res.json(await service.followUp(req.params.sessionId, req.body || {}, req.get('Idempotency-Key'))); } catch (error) { return sendServiceError(res, error, 'Failed to submit session follow-up'); } });
   app.post(
     '/api/openchamber/sessions/:sessionId/fork',
     express.json({ limit: '1mb' }),
@@ -1002,4 +458,37 @@ export const registerOpenChamberSessionRoutes = (app, dependencies) => {
       }
     },
   );
+  app.get('/api/openchamber/sessions/:sessionId', async (req, res) => {
+    try { return res.json(await service.open(req.params.sessionId)); }
+    catch (error) { return sendServiceError(res, error, 'Failed to open session'); }
+  });
+  app.get('/api/openchamber/sessions/:sessionId/history', async (req, res) => {
+    try { return res.json(await service.history(req.params.sessionId, new URLSearchParams(req.query).toString())); }
+    catch (error) { return sendServiceError(res, error, 'Failed to read session history'); }
+  });
+  app.post('/api/openchamber/sessions/:sessionId/control', express.json({ limit: '1mb' }), async (req, res) => {
+    try { return res.json(await service.control(req.params.sessionId, req.body || {})); }
+    catch (error) { return sendServiceError(res, error, 'Failed to control session'); }
+  });
+};
+export const registerCanonicalSessionRoutes = (router, service) => {
+  const call = async (res, operation, fallback) => { try { res.json(await operation()); } catch (error) { sendServiceError(res, error, fallback); } };
+  router.post('/', express.json({ limit: '1mb' }), (req, res) => call(res, () => service.create(req.body || {}), 'Failed to create session'));
+  router.get('/', (req, res) => call(res, () => {
+    const workspace = EntityIdSchema.safeParse(req.query.workspaceId);
+    return service.list(workspace.success ? workspace.data : undefined);
+  }, 'Failed to list sessions'));
+  router.get('/:sessionId/snapshot', (req, res) => call(res, () => service.open(req.params.sessionId), 'Failed to open session snapshot'));
+  router.get('/:sessionId', (req, res) => call(res, () => service.open(req.params.sessionId), 'Failed to open session'));
+  router.get('/:sessionId/history', (req, res) => call(res, () => service.history(req.params.sessionId, new URLSearchParams(req.query).toString()), 'Failed to read session history'));
+  router.post('/:sessionId/runs', express.json({ limit: '1mb' }), (req, res) => call(res, () => service.send(req.params.sessionId, req.body || {}, req.get('Idempotency-Key')), 'Failed to submit session run'));
+  router.post('/:sessionId/steer', express.json({ limit: '1mb' }), (req, res) => call(res, () => service.steer(req.params.sessionId, req.body || {}, req.get('Idempotency-Key')), 'Failed to steer session'));
+  router.post('/:sessionId/follow-up', express.json({ limit: '1mb' }), (req, res) => call(res, () => service.followUp(req.params.sessionId, req.body || {}, req.get('Idempotency-Key')), 'Failed to submit session follow-up'));
+  router.post('/:sessionId/fork', express.json({ limit: '1mb' }), (req, res) => call(res, () => service.fork(req.params.sessionId, req.body || {}), 'Failed to fork session'));
+  router.post('/:sessionId/control', express.json({ limit: '1mb' }), (req, res) => call(res, () => service.control(req.params.sessionId, req.body || {}), 'Failed to control session'));
+  router.delete('/:sessionId', (req, res) => call(res, () => service.delete(req.params.sessionId), 'Failed to delete session'));
+  router.get('/:sessionId/metadata', (req, res) => call(res, () => service.getMetadata(req.params.sessionId), 'Failed to read session metadata'));
+  router.patch('/:sessionId/metadata', express.json({ limit: '1mb' }), (req, res) => call(res, () => service.setMetadata(req.params.sessionId, req.body || {}), 'Failed to write session metadata'));
+  router.post('/:sessionId/branch', express.json({ limit: '256kb' }), (req, res) => call(res, () => service.selectBranch(req.params.sessionId, req.body || {}), 'Failed to select session branch'));
+  router.post('/:sessionId/relocate', express.json({ limit: '256kb' }), (req, res) => call(res, () => service.relocate(req.params.sessionId, req.body || {}), 'Failed to relocate session'));
 };

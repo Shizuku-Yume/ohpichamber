@@ -1,0 +1,29 @@
+{
+  "task": "Task18 final post-repair root gate",
+  "observedAt": "2026-10-22T02:18:23+08:00",
+  "startingHead": "8d179c4e24d6f2208adff44ab6f3a4b34bed8642",
+  "command": "bun run type-check && bun run lint && bun run build && bun run test && bun run dead-code && bun run docs:validate && .workflow/bin/workflow validate --no-color",
+  "result": "PASS",
+  "exit": 0,
+  "phases": [
+    {"name": "type-check", "exit": 0, "packages": ["agent-contract", "agent-service", "sdk", "ui", "web", "electron", "mobile"]},
+    {"name": "lint", "exit": 0, "packages": ["agent-contract", "agent-service", "sdk", "ui", "web", "electron", "mobile"]},
+    {"name": "build", "exit": 0, "warnings": "4 pre-existing web CSS ::highlight warnings"},
+    {"name": "test", "exit": 0, "counts": {"scripts": "22/22 files", "sdk": "23/23 files", "ui": "803/803 files", "electron": "44/44 files", "web": "370 passed / 9 skipped files; 6086 passed / 135 skipped tests"}},
+    {"name": "dead-code", "exit": 0, "tool": "knip@5.80.0", "findings": 0},
+    {"name": "docs:validate", "exit": 0, "pages": 672, "sidebarLinks": 56},
+    {"name": "workflow", "exit": 0, "taskFiles": 84}
+  ],
+  "omissions": "Root bun run test omits packages/agent-contract and packages/agent-service suites. Reused focused W8 source-repair evidence: projection 16/16, agent-service 220 pass / 7 skip / 0 fail across 32 files, agent-service type-check exit 0. No AppImage was rebuilt by this gate.",
+  "artifact": {
+    "path": "packages/electron/dist/OpenChamber-2.2.0-linux-x86_64.AppImage",
+    "sha256": "a92fbb36ef3e554211da90ac667bc42350c27c05e0978f2edbb1b3fd48b70ef7",
+    "sourceHead": "8d179c4e2",
+    "buildLog": "/tmp/rebuild-w8fix2.log",
+    "extraction": "/tmp/appimage_extracted_a92fbb36ef3e554211da90ac667bc42350c27c05e0978f2edbb1b3fd48b70ef7/openchamber"
+  },
+  "log": {
+    "path": ".workflow/omp-migration/m3/task18-gate-final-2026-10-22.log",
+    "sha256": "997019b483bedb418778dcca8b8788f5000139aca48668c26d802ed834e653f2"
+  }
+}

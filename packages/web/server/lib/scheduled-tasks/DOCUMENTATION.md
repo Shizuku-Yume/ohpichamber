@@ -8,6 +8,32 @@ Server-owned scheduled task runtime and routes for OpenChamber-only automation.
 - Markdown loop discovery/parsing is owned by `packages/web/server/lib/scheduled-tasks/loops.js`.
 - Runtime orchestration and execution is owned by `packages/web/server/lib/scheduled-tasks/runtime.js`.
 - This module is OpenChamber feature logic; it is intentionally separate from OpenCode proxy/runtime internals.
+- The chats scope is owned by `packages/web/server/lib/scheduled-tasks/chats-scope.js`.
+
+## Chats scope
+
+Chats (sessions outside any project) can have scheduled tasks too. They are
+scheduled like one more project, with three differences:
+
+- **Identity.** The UI and the routes address the scope as `openchamber:chats`
+  (the UI's `CHAT_DRAFT_PROJECT_ID`). A colon is not a valid Windows file name,
+  so tasks are stored under the chats root's path id
+  (`createProjectIdFromPath(<chats root>)`, the same id agent memory uses for
+  chats). The service maps the public id to the storage id on the way in, and
+  `openchamber:scheduled-task-ran` events map it back on the way out.
+- **One new chat per run.** A project run works in the project path. A chats run
+  creates `<chats root>/<yyyy-mm-dd>/session-<uuid>`, the layout the UI uses for
+  a new chat, and starts the session there, so each run lands in the sidebar's
+  chats section as its own chat. If the session cannot be created, the empty
+  directory is removed. The run result carries the directory, so "Run now" can
+  open the new chat.
+- **No loop files.** The chats root is not a repository. User-scope loops
+  already run once per project, so the chats scope never discovers loops.
+- **Directory resolution.** `resolveProjectID({ directory })` maps any
+  directory inside the chats root to the chats scope, after checking registered
+  projects, so an agent working in a chat schedules into chats.
+
+The chats root is `OPENCHAMBER_CHATS_DIR` (default `<config root>/chats`). The
 
 ## Cross-instance occurrence claiming
 
@@ -73,14 +99,101 @@ Manual `runNow` does not claim a schedule occurrence. It also runs paused
 (`enabled: false`) tasks — that is the point of the button — while scheduled
 dispatches still skip disabled tasks, and completion never re-arms a paused task.
 
+## Existing-session tasks
+
+`targetSessionId` sends to an existing session instead of creating one.
+`existing-session.js` validates changed or enabled targets on save, and all
+targets on admission and send. A paused task can keep a stale target. The
+target must be active and belong to the task project or its linked worktree.
+Another registered project owns its exact checkout. Chats targets must remain
+inside the chats scope. Missing targets return 404; archived or foreign targets
+return 409, including through Run now.
+
+The prompt enters the ordinary server message queue with `scheduledTask`
+provenance. One project and task can have at most one waiting prompt. Run now
+on an already queued prompt records `skipped` and returns 409 with
+`busy: queued`. Admission sets `lastSessionId` to the target. Disable, delete
+and retarget cancel waiting prompts, but cannot recall a send already in flight.
+Saving an already-paused task with the same target keeps a prompt admitted by
+Run now. Cancellation on disable applies only to an enabled-to-disabled change.
+Scheduled once tasks are disabled after an admission attempt, including a
+failed attempt. An admitted prompt stays queued. Run now can still admit a
+paused task.
+
+An overlapping admission attempt records `skipped` before the active admission
+records `queued`. A later duplicate enqueue records `skipped` while the earlier
+prompt remains waiting. The card shows the last attempt's status in that case.
+
+Reuse status ends at queue send: `queued` becomes `sent`, `failed` or
+`cancelled`. The existing task state fields hold the result. There is no
+per-run history or assistant-completion tracking. `execution.useDefaults`
+leaves the target model and agent unchanged unless a native file invocation
+explicitly binds them. A pinned selection supplies the captured model and agent,
+with native file bindings taking precedence. Tasks without a target keep the
+new-session execution path below.
+
+Reuse preserves the target's goal and permission auto-accept policy. Task
+creation options for these policies are hidden in Existing mode and ignored
+by the reuse runtime. Transient queue send failures use the ordinary retry
+policy. Only definitive before-send target or task 404 or 409 refusals are
+terminal, including removed or retargeted tasks and moved targets. Model or
+prompt send errors use the ordinary retry path.
+
+## New-session selection
+
+A task either pins them (`execution.providerID`, `modelID`, `variant`, `agent`)
+or sets `execution.useDefaults: true`. Such a task reads the session defaults
+when each run starts (`session-defaults.js`: the project's `defaultModel` /
+`defaultVariant` / `defaultAgent`, then the global ones), so changing a default
+reaches it on its next run without editing it. With nothing set, nullable captured
+options leave native session selection to its existing owner. A pinned value
+stored next to `useDefaults` is kept only for when the task is pinned again.
+
+## Native file-resource prompts
+
+`file-resource-prompt.js` is the shared Host capture owner for both existing- and
+new-session scheduled execution. It receives the private Agent Service request
+owner and the Host workspace resolver through production composition. Before
+forwarding a leading `/` invocation, it revalidates workspace, project, Host
+project, working directory, and selected agent-directory identity against the
+authorized scope. The Node Host never imports the native SDK.
+
+- One canonical `POST /workspaces/:workspaceId/commands/expand-text` request sends
+  `{ text }` unchanged, including quoted arguments, line breaks and trailing
+  spaces. The worker owns the complete native command-then-template expansion
+  pipeline and reports `kind: command | template | text`; the Host does not
+  duplicate catalog precedence, parse arguments, or substitute Markdown.
+- Captured content is the worker result. Command/template model and agent
+  bindings override only their corresponding captured fields; variant and
+  reasoning effort are retained. No-match text remains unchanged, with no
+  speculative scheduled skill lookup or expansion.
+- Existing-session tasks expand once before queue capture/append. Queue display
+  content and persisted task definitions keep the original prompt; the durable
+  request contains expanded content and bindings. Queue drain revalidates task
+  and target ownership but never re-expands a mutable file.
+- New-session tasks expand before creating a session, use the captured bindings
+  for creation and send, and use the captured content for a requested goal.
+  Expansion failure creates no session and removes an empty managed-chat
+  directory through the existing cleanup boundary.
+- Scope, worker, schema, and expansion failures fail the scheduled attempt;
+  unexpanded text is not sent as a success fallback.
+
+Web/PWA and Electron use this Host execution owner. Hosted mobile and Capacitor
+schedule through the active authenticated Host and use the same execution path.
+Expansion stays inside the configured Host/Bun boundary and adds no external
+egress, listeners, provider-entry path, or enterprise-mode exception.
+
 ## Files
 
 - `packages/web/server/lib/scheduled-tasks/runtime.js`
   - Next-run computation (daily/weekly/cron compatibility)
   - Timer scheduling and queueing
   - Concurrency controls
-  - Session create + prompt_async execution
+  - Canonical session create + prompt execution
   - Emits OpenChamber task-run events
+
+- `packages/web/server/lib/scheduled-tasks/file-resource-prompt.js`
+  - Authorized, worker-owned native file prompt capture shared by new and existing sessions
 
 - `packages/web/server/lib/scheduled-tasks/loops.js`
   - Discovery of `.agents/loops/*.md` (project scope, ancestors up to the worktree root) and `~/.agents/loops/*.md` (user scope)
@@ -116,7 +229,7 @@ Field mapping (model: `packages/ui/src/lib/scheduledTasksApi.ts`):
 |---|---|
 | `name` | `name` (required, max 80 characters — longer names are rejected as malformed) |
 | `schedule` | `schedule.kind: "cron"` + `schedule.cron` (required, cron-only in the portable format) |
-| `enabled` | `enabled` (default `false` — a loop only runs when the file explicitly enables it; add `enabled: true` to activate) |
+| `enabled` | `enabled` (default `false` — a loop only runs when the file explicitly enables it; add `enabled: true` to activate). For a project-scope loop the file's word is not enough: it runs only once the user enabled it on this machine, see *Local approval* |
 | `model` | split on the first `/` into `execution.providerID` / `execution.modelID` (required) |
 | `agent` | `execution.agent` (optional) |
 | `timezone` | `schedule.timezone` (optional, IANA; defaults to the server zone) |
@@ -159,6 +272,23 @@ project write lock on every `syncProject` when the project path is known:
 - **Malformed files** (missing `name`/`schedule`/`model`/body, invalid cron,
   unreadable) are reported to the scheduler as `definition: null` entries and
   warned about; they never block valid loops in the same or other scopes.
+- **Local approval.** A project-scope loop arrives with the repository, so
+  `enabled: true` in its file is the author's suggestion. `reconcileLoopTasks`
+  keeps it disabled unless the per-machine project config holds an approval
+  (`loopApprovals`: file path -> `loopFingerprint`) matching the file's current
+  name, schedule and execution. Enabling a loop in the UI (the loop-file
+  endpoint) records that approval; disabling withdraws it. A pull that changes
+  what a loop runs or when changes its fingerprint, and the loop waits for a
+  new approval. User-scope loops (`~/.agents/loops`) need none. A task the
+  gate holds back is returned with `loopApproval`: `required` (never enabled
+  here) or `outdated` (enabled, then the file changed); the UI explains the
+  pause from it. The field is never stored.
+- **Agent tool and CLI.** `setEnabled` (behind `schedule.toggle` and
+  `openchamber schedule enable|disable`) changes a loop task the way the
+  Scheduled tasks checkbox does, through the loop file. It refuses (409) to
+  enable a paused project-scope loop: the approval is the user's decision in
+  Scheduled tasks, never an agent's or a script's. Disabling works for every
+  loop.
 - **Loop-file mutations.** The loop file remains authoritative. The scheduled-
   tasks UI opens it in the built-in file editor, updates its `enabled`
   frontmatter through the loop-file endpoint, and deletes the file through the

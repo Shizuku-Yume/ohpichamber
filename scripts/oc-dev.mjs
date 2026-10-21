@@ -13,7 +13,9 @@
  *
  * See `scripts/oc-dev.config.example.json` for the shape. The config can set
  * local device/app preferences such as `ios.deviceName`, `ios.useXcodeBeta`,
- * and `ios.xcodeAppName`, and can define `remoteDeployments`. Remote deploy
+ * `ios.xcodeAppName`, and `electron.opencodeConfigDir` (prefilled when the
+ * Electron start asks for a separate OpenCode config directory), and can
+ * define `remoteDeployments`. Remote deploy
  * menu entries are shown only when configured. Maintainer-only actions such as
  * release creation are hidden unless `features.releaseTools` is true.
  *
@@ -22,12 +24,13 @@
  * prompts for safety.
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { cancel, intro, isCancel, log, outro, select, text } from '@clack/prompts';
 import { RELEASE_PACKAGE_FILES } from './bump-version.mjs';
+import { pointSdkAtArchive } from './lib/sdk-override.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -56,8 +59,6 @@ Actions:
   start-electron-app               Start Electron app in dev mode
   prepare-opencode-cli             Download/cache bundled OpenCode CLI for Electron
   build-electron-app               Build Electron app artifacts
-  start-vscode-extension           Build + launch VS Code extension host
-  install-vscode-extension-local   Build, package, and install local VSIX
   create-release                   Validate and bump release version
 
 Options:
@@ -69,8 +70,10 @@ Options:
   --mobile-mode <ios-sim-local|ios-sim-lan|android-local|android-lan>
   --mobile-task <task>
   --adb-address <host:port>        Wireless ADB address for android-connect
-  --vsix-cleanup <delete|keep>
   --version <semver>
+  --opencode-config-dir <path>     OpenCode config directory for the started Electron app
+                                   (OPENCODE_CONFIG_DIR); lets a v2 checkout run beside a v1
+                                   install without sharing opencode.json
   -h, --help
 
 Mobile tasks:
@@ -120,11 +123,11 @@ function parseArgs(argv) {
       case '--adb-address':
         options.adbAddress = readValue();
         break;
-      case '--vsix-cleanup':
-        options.vsixCleanup = readValue();
-        break;
       case '--version':
         options.version = readValue();
+        break;
+      case '--opencode-config-dir':
+        options.opencodeConfigDir = readValue();
         break;
       default:
         if (arg.startsWith('-')) throw new Error(`Unknown option: ${arg}`);
@@ -167,6 +170,7 @@ function run(command, args, options = {}) {
   return result.stdout?.trim() || '';
 }
 
+
 function step(label, fn) {
   log.step(label);
   const result = fn();
@@ -177,7 +181,7 @@ function step(label, fn) {
 // The release notes source plus the files generated from it; all go into the release commit.
 // CHANGELOG.md is legacy (older installs read it for update notes); it is
 // refreshed only while it exists.
-const RELEASE_CHANGELOG_FILES = ['changelog', 'packages/vscode/CHANGELOG.md', ...(existsSync(path.join(repoRoot, 'CHANGELOG.md')) ? ['CHANGELOG.md'] : [])];
+const RELEASE_CHANGELOG_FILES = ['changelog', ...(existsSync(path.join(repoRoot, 'CHANGELOG.md')) ? ['CHANGELOG.md'] : [])];
 
 function printReleaseNextSteps(version) {
   log.success(`Release v${version} prepared locally`);
@@ -205,8 +209,6 @@ function normalizeAction(action = '') {
     'opencode-cli': 'prepare-opencode-cli',
     'electron-opencode-cli': 'prepare-opencode-cli',
     'electron-build': 'build-electron-app',
-    'vscode-dev': 'start-vscode-extension',
-    'vscode-install-local': 'install-vscode-extension-local',
     release: 'create-release',
   };
   return aliases[normalized] || normalized;
@@ -259,13 +261,6 @@ function detectLanIp() {
   return '';
 }
 
-function removeFilesByPrefixSuffix(directory, prefix, suffix) {
-  if (!existsSync(directory)) return;
-  for (const entry of readdirSync(directory)) {
-    if (!entry.startsWith(prefix) || !entry.endsWith(suffix)) continue;
-    unlinkSync(path.join(directory, entry));
-  }
-}
 
 function latestFileByExtensions(directory, extensions) {
   if (!existsSync(directory)) return '';
@@ -291,9 +286,13 @@ function installedWebCli(directory) {
   return existsSync(cliPath) ? cliPath : '';
 }
 
-function installedGlobalWebCli() {
+function globalBunDir() {
   const bunInstall = process.env.BUN_INSTALL || path.join(os.homedir(), '.bun');
-  return installedWebCli(path.join(bunInstall, 'install', 'global'));
+  return path.join(bunInstall, 'install', 'global');
+}
+
+function installedGlobalWebCli() {
+  return installedWebCli(globalBunDir());
 }
 
 function stopInstalledInstance(directory, port) {
@@ -338,7 +337,7 @@ function packageWeb() {
   return { webFile, sdkFile };
 }
 
-/** Node one-liner that points the SDK dependency at a tarball; runs locally and over ssh. */
+/** Node one-liner that points the SDK dependency at a tarball; runs over ssh. */
 function sdkOverrideScript(sdkPath) {
   return `node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));p.overrides={...(p.overrides||{}),'@openchamber/sdk':'file:${sdkPath}'};fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\\n')"`;
 }
@@ -388,20 +387,32 @@ async function deployWeb(options, config) {
     step('Preparing testing install directory', () => {
       resetDirectory(testingDir);
       run('bun', ['init', '-y'], { cwd: testingDir });
-      run('sh', ['-c', sdkOverrideScript(sdkFile)], { cwd: testingDir, label: 'point @openchamber/sdk at the local archive' });
+      pointSdkAtArchive(testingDir, sdkFile);
     });
     step('Installing testing package', () => run('bun', ['add', packageFile], { cwd: testingDir }));
     step(`Starting testing instance on ${TESTING_PORT}`, () => startInstalledInstance(testingDir, TESTING_PORT));
     return;
   }
 
-  step(`Stopping global instance on ${GLOBAL_PORT}`, () => run('openchamber', ['stop', '--port', GLOBAL_PORT], { allowFail: true, label: `stop global instance on ${GLOBAL_PORT}` }));
+  // The installed CLI, not `openchamber` from PATH: bun's global bin is often missing from PATH (Windows
+  // by default), and a stop that silently misses leaves the old server holding the port.
+  step(`Stopping global instance on ${GLOBAL_PORT}`, () => stopInstalledInstance(globalBunDir(), GLOBAL_PORT));
   step('Removing old global package', () => {
     run('bun', ['remove', '-g', '@openchamber/web'], { allowFail: true, label: 'remove @openchamber/web' });
     run('bun', ['remove', '-g', 'openchamber'], { allowFail: true, label: 'remove openchamber' });
   });
-  // A global install cannot carry an override, so it needs the SDK on npm (published with each release).
-  step('Installing package globally', () => run('bun', ['add', '-g', packageFile]));
+  step('Installing package globally', () => {
+    // Only for this install: `openchamber update` later runs `bun add -g` on the
+    // same manifest and must resolve the published SDK, not this checkout's tarball.
+    // That update re-resolves the lockfile but keeps the SDK this deploy put on disk
+    // while the version number matches; `bun remove -g @openchamber/web` first clears it.
+    const restoreManifest = pointSdkAtArchive(globalBunDir(), sdkFile);
+    try {
+      run('bun', ['add', '-g', packageFile]);
+    } finally {
+      restoreManifest();
+    }
+  });
   step(`Starting global instance on ${GLOBAL_PORT}`, () => {
     const cliPath = installedGlobalWebCli();
     if (!cliPath) throw new Error('Global OpenChamber CLI was not installed by bun add -g');
@@ -563,9 +574,51 @@ async function mobileTools(options, config) {
   }
 }
 
-function startElectronApp() {
+/**
+ * Environment for a started dev app. `OPENCODE_CONFIG_DIR` reaches the
+ * OpenChamber server and the managed OpenCode it spawns, so one machine can
+ * run a v2 checkout and a v1 install side by side: they share the sessions
+ * database (separate tables) but not the config file, which v1 rejects once
+ * v2 has written to it.
+ */
+function devAppEnv(opencodeConfigDir) {
+  if (!opencodeConfigDir) return {};
+  const configDir = path.resolve(opencodeConfigDir.replace(/^~(?=$|\/)/, os.homedir()));
+  if (!existsSync(configDir)) throw new Error(`OpenCode config directory not found: ${configDir}`);
+  log.info(`Using OpenCode config directory ${configDir}`);
+  return { OPENCODE_CONFIG_DIR: configDir };
+}
+
+/**
+ * The flag wins; otherwise an interactive run asks, with the last directory
+ * from `oc-dev.json` (`electron.opencodeConfigDir`) prefilled; a non-TTY run
+ * keeps OpenCode's default directory instead of hanging on a prompt.
+ */
+async function chooseOpencodeConfigDir(options, config) {
+  if (options.opencodeConfigDir) return options.opencodeConfigDir;
+  if (!isTty) return '';
+  const remembered = config.electron?.opencodeConfigDir || '';
+  const mode = await chooseValue('', [
+    { value: 'default', label: 'Default (~/.config/opencode)' },
+    { value: 'separate', label: 'Separate directory', hint: 'run this checkout beside a v1 install' },
+  ], 'OpenCode config for the Electron app');
+  if (mode === 'default') return '';
+  const value = await text({
+    message: 'OpenCode config directory',
+    initialValue: remembered || path.join(os.homedir(), '.config', 'opencode-v2'),
+    validate: (input) => (input.trim() ? undefined : 'Enter a directory path'),
+  });
+  if (isCancel(value)) {
+    cancel('Operation cancelled.');
+    process.exit(130);
+  }
+  return value.trim();
+}
+
+async function startElectronApp(options, config) {
+  const env = devAppEnv(await chooseOpencodeConfigDir(options, config));
   prepareOpenCodeCli();
-  run('bun', ['run', 'electron:dev']);
+  run('bun', ['run', 'electron:dev'], { env });
 }
 
 function prepareOpenCodeCli() {
@@ -581,36 +634,6 @@ function buildElectronApp() {
   if (artifact) run('open', [artifact]);
 }
 
-function startVsCodeExtension() {
-  const vscodeDir = path.join(repoRoot, 'packages/vscode');
-  removeFilesByPrefixSuffix(vscodeDir, 'openchamber-', '.vsix');
-  step('Building VS Code extension', () => run('bun', ['run', 'vscode:build']));
-  run('code', ['--extensionDevelopmentPath', vscodeDir]);
-}
-
-async function installVsCodeExtensionLocal(options) {
-  let cleanup = options.vsixCleanup;
-  if (!cleanup && isTty) {
-    cleanup = await chooseValue('', [
-      { value: 'delete', label: 'Delete VSIX after install' },
-      { value: 'keep', label: 'Keep VSIX after install' },
-    ], 'Select VSIX cleanup mode');
-  }
-  cleanup ||= 'delete';
-  if (!['delete', 'keep'].includes(cleanup)) throw new Error('Invalid --vsix-cleanup. Use delete or keep.');
-
-  const vscodeDir = path.join(repoRoot, 'packages/vscode');
-  step('Building VS Code extension', () => run('bun', ['run', '--cwd', 'packages/vscode', 'build']));
-  step('Removing found VSIX package(s) before install flow', () => removeFilesByPrefixSuffix(vscodeDir, 'openchamber-', '.vsix'));
-  step('Packaging VSIX', () => run('bunx', ['vsce', 'package', '--no-dependencies'], { cwd: vscodeDir }));
-  step('Installing VSIX locally', () => {
-    run('code', ['--uninstall-extension', 'fedaykindev.openchamber'], { label: 'uninstall old extension', allowFail: true });
-    run('code --install-extension packages/vscode/openchamber-*.vsix', [], { shell: true, label: 'install VSIX' });
-  });
-  if (cleanup === 'delete') {
-    step('Removing local VSIX package(s) after install', () => removeFilesByPrefixSuffix(vscodeDir, 'openchamber-', '.vsix'));
-  }
-}
 
 async function createRelease(options) {
   if (!options.config?.features?.releaseTools) {
@@ -644,8 +667,6 @@ async function chooseAction(config) {
     { value: 'start-electron-app', label: 'Start Electron app' },
     { value: 'prepare-opencode-cli', label: 'Prepare bundled OpenCode CLI' },
     { value: 'build-electron-app', label: 'Build Electron app' },
-    { value: 'start-vscode-extension', label: 'Start VS Code extension' },
-    { value: 'install-vscode-extension-local', label: 'Install VS Code extension locally' },
   ];
 
   if (config.features?.releaseTools) {
@@ -687,19 +708,13 @@ async function main() {
       await mobileTools(options, config);
       break;
     case 'start-electron-app':
-      startElectronApp();
+      await startElectronApp(options, config);
       break;
     case 'prepare-opencode-cli':
       prepareOpenCodeCli();
       break;
     case 'build-electron-app':
       buildElectronApp();
-      break;
-    case 'start-vscode-extension':
-      startVsCodeExtension();
-      break;
-    case 'install-vscode-extension-local':
-      await installVsCodeExtensionLocal(options);
       break;
     case 'create-release':
       options.config = config;

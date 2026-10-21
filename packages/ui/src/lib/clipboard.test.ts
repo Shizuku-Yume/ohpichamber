@@ -57,6 +57,40 @@ describe('copyMarkdownToClipboard', () => {
     expect(await writtenItem?.data['text/html']?.text()).toBe('<p><strong>bold</strong></p>');
   });
 
+  test('puts plain text in text/plain and leaves Markdown out when asked', async () => {
+    let writtenItem: { data: Record<string, Blob> } | undefined;
+    class FakeClipboardItem {
+      static supports(type: string): boolean {
+        return type === 'text/markdown';
+      }
+
+      readonly data: Record<string, Blob>;
+
+      constructor(data: Record<string, Blob>) {
+        this.data = data;
+      }
+    }
+
+    Object.defineProperty(globalThis, 'ClipboardItem', { configurable: true, value: FakeClipboardItem });
+    Object.defineProperty(globalThis, 'navigator', {
+      configurable: true,
+      value: {
+        clipboard: {
+          write: async (items: Array<{ data: Record<string, Blob> }>) => {
+            writtenItem = items[0];
+          },
+        },
+      },
+    });
+
+    const result = await copyMarkdownToClipboard('**bold**', '<p><strong>bold</strong></p>', { plainText: 'bold' });
+
+    expect(result).toEqual({ ok: true, method: 'clipboard' });
+    expect(Object.keys(writtenItem?.data ?? {}).sort()).toEqual(['text/html', 'text/plain']);
+    expect(await writtenItem?.data['text/plain']?.text()).toBe('bold');
+    expect(await writtenItem?.data['text/html']?.text()).toBe('<p><strong>bold</strong></p>');
+  });
+
   test('falls back to plain Markdown when a rich clipboard write fails', async () => {
     let fallbackText = '';
     class FakeClipboardItem {
@@ -115,14 +149,15 @@ describe('copyMarkdownToClipboard', () => {
     });
 
     const parts = [
-      { id: 'p0', sessionID: 's', messageID: 'm', type: 'text', text: '第一段' },
-      { id: 'p1', sessionID: 's', messageID: 'm', type: 'text', text: '第二段' },
-      { id: 'p2', sessionID: 's', messageID: 'm', type: 'text', text: '```js\nconsole.log(1)\n\n\nconsole.log(2)\n```' },
-      { id: 'p3', sessionID: 's', messageID: 'm', type: 'text', text: '第三段' },
+      { partId: 'p0', type: 'text', content: '第一段' },
+      { partId: 'p1', type: 'text', content: '第二段' },
+      { partId: 'p2', type: 'text', content: '```js\nconsole.log(1)\n\n\nconsole.log(2)\n```' },
+      { partId: 'p3', type: 'text', content: '第三段' },
     ];
 
-    // Same path as ChatMessage.tsx handleCopyMessage:
+    // SAFETY: This fixture intentionally mirrors the `parts` shape accepted by ChatMessage.tsx.
     const text = flattenAssistantTextParts(parts as Parameters<typeof flattenAssistantTextParts>[0]);
+    // SAFETY: marked.parse returns a string for this synchronous, non-pedantic invocation.
     const html = marked.parse(text, { gfm: true, breaks: false }) as string;
     const result = await copyMarkdownToClipboard(text, html);
 

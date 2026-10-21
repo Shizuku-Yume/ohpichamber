@@ -1,29 +1,19 @@
 import React from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { File as PierreFile, PatchDiff } from '@pierre/diffs/react';
+import { PatchDiff } from '@pierre/diffs/react';
 import { WorkerHighlightedCode } from '@/components/code/WorkerHighlightedCode';
 import { createPortal } from 'react-dom';
 
 import { cn } from '@/lib/utils';
 import { SimpleMarkdownRenderer } from '../MarkdownRenderer';
 import { toolDisplayStyles } from '@/lib/typography';
-import { getLanguageFromExtension } from '@/lib/toolHelpers';
+import { isSubagentTool } from '@/lib/toolHelpers';
 import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 import { ensurePierreThemeRegistered } from '@/lib/shiki/appThemeRegistry';
 import { getDefaultTheme } from '@/lib/theme/themes';
-import {
-    renderTodoOutput,
-    renderListOutput,
-    renderGrepOutput,
-    renderGlobOutput,
-    renderWebSearchOutput,
-    formatInputForDisplay,
-    parseReadToolOutput,
-    tryParseJsonOutput,
-} from './toolRenderers';
+import { renderGlobOutput, renderGrepOutput, renderWebSearchOutput, tryParseJsonOutput } from './toolRenderers';
 import type { ToolPopupContent, DiffViewMode } from './types';
 import { DiffViewToggle } from './DiffViewToggle';
-import { VirtualizedCodeBlock, type CodeLine } from './parts/VirtualizedCodeBlock';
 import { JsonTreeView } from '@/components/ui/JsonTreeView';
 import { Icon } from "@/components/icon/Icon";
 import { getToolIcon } from './parts/toolPresentation';
@@ -31,6 +21,8 @@ import { useGuestToolPresentation } from '@/lib/guests/tool-presentation';
 import { useI18n, type I18nKey, type I18nParams } from '@/lib/i18n';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { MermaidLoadFailure, getMermaidDataUrlSourcePromise, isCurrentMermaidLoadRequest, isMermaidLoadFailure, nextMermaidLoadRequestId } from './toolOutputDialogMermaid';
+import { MediaArtifact } from '@/components/views/files/previews/MediaArtifact';
+import { formatFileSize } from '@/lib/fileSize';
 
 interface ToolOutputDialogProps {
     popup: ToolPopupContent;
@@ -108,8 +100,8 @@ const usePierreThemeConfig = (): PierreThemeConfig => {
 type ViewportSize = { width: number; height: number };
 
 const getWindowViewport = (): ViewportSize => ({
-    width: typeof window !== 'undefined' ? window.innerWidth : 0,
-    height: typeof window !== 'undefined' ? window.innerHeight : 0,
+    width: window.innerWidth,
+    height: window.innerHeight,
 });
 
 const PREVIEW_VIEWPORT_LIMITS = {
@@ -191,10 +183,6 @@ const usePreviewOverlayState = (open: boolean) => {
         if (open) {
             setIsRendered(true);
             setIsTransitioning(true);
-            if (typeof window === 'undefined') {
-                setIsVisible(true);
-                return;
-            }
 
             const raf = window.requestAnimationFrame(() => {
                 setIsVisible(true);
@@ -212,10 +200,6 @@ const usePreviewOverlayState = (open: boolean) => {
 
         setIsVisible(false);
         setIsTransitioning(true);
-        if (typeof window === 'undefined') {
-            setIsRendered(false);
-            return;
-        }
 
         const timeoutId = window.setTimeout(() => {
             setIsRendered(false);
@@ -234,7 +218,7 @@ const usePreviewViewport = (open: boolean) => {
     const [viewport, setViewport] = React.useState<ViewportSize>(getWindowViewport);
 
     React.useEffect(() => {
-        if (!open || typeof window === 'undefined') {
+        if (!open) {
             return;
         }
 
@@ -252,17 +236,48 @@ const usePreviewViewport = (open: boolean) => {
     return viewport;
 };
 
-const ImagePreviewDialog: React.FC<{
+type PreviewMediaKind = 'image' | 'pdf' | 'audio' | 'video';
+
+/**
+ * Attachments forward their native MIME type. Browsers can render PDFs inline
+ * and play audio/video with their own controls; anything else keeps the image
+ * viewer it had before.
+ */
+const getPreviewMediaKind = (mimeType: string | undefined, filename: string | undefined): PreviewMediaKind => {
+    const mime = (mimeType ?? '').toLowerCase().split(';', 1)[0]?.trim() ?? '';
+    if (mime.startsWith('audio/')) return 'audio';
+    if (mime.startsWith('video/')) return 'video';
+    if (mime === 'application/pdf' || mime === 'application/x-pdf') return 'pdf';
+    if (mime.startsWith('image/')) return 'image';
+
+    const extension = filename?.split('.').pop()?.toLowerCase() ?? '';
+    if (extension === 'pdf') return 'pdf';
+    if (extension === 'mp3' || extension === 'wav' || extension === 'ogg' || extension === 'm4a'
+        || extension === 'aac' || extension === 'flac' || extension === 'opus') return 'audio';
+    if (extension === 'mp4' || extension === 'webm' || extension === 'mov' || extension === 'm4v'
+        || extension === 'ogv' || extension === 'mkv') return 'video';
+    return 'image';
+};
+
+interface PreviewGalleryItem {
+    url: string;
+    mimeType?: string;
+    filename?: string;
+    size?: number;
+}
+
+const MediaPreviewDialog: React.FC<{
     popup: ToolPopupContent;
     onOpenChange: (open: boolean) => void;
     isMobile: boolean;
 }> = ({ popup, onOpenChange, isMobile }) => {
     const { t } = useI18n();
-    const gallery = React.useMemo(() => {
+    const mediaKind = getPreviewMediaKind(popup.image?.mimeType, popup.image?.filename);
+    const gallery = React.useMemo<PreviewGalleryItem[]>(() => {
         const baseImage = popup.image;
-        if (!baseImage) return [] as Array<{ url: string; mimeType?: string; filename?: string; size?: number }>;
+        if (!baseImage || mediaKind !== 'image') return [];
         const fromPopup = Array.isArray(baseImage.gallery)
-            ? baseImage.gallery.filter((item): item is { url: string; mimeType?: string; filename?: string; size?: number } => Boolean(item?.url))
+            ? baseImage.gallery.filter((item): item is PreviewGalleryItem => Boolean(item?.url))
             : [];
 
         if (fromPopup.length > 0) {
@@ -275,10 +290,10 @@ const ImagePreviewDialog: React.FC<{
             filename: baseImage.filename,
             size: baseImage.size,
         }];
-    }, [popup.image]);
+    }, [mediaKind, popup.image]);
 
     const [currentIndex, setCurrentIndex] = React.useState(0);
-    const [imageNaturalSize, setImageNaturalSize] = React.useState<{ width: number; height: number } | null>(null);
+    const [mediaNaturalSize, setMediaNaturalSize] = React.useState<{ url: string; width: number; height: number } | null>(null);
     const { isRendered, isVisible, isTransitioning } = usePreviewOverlayState(popup.open);
     const viewport = usePreviewViewport(popup.open);
 
@@ -287,7 +302,7 @@ const ImagePreviewDialog: React.FC<{
             return;
         }
 
-        const requestedIndex = typeof popup.image?.index === 'number' ? popup.image.index : -1;
+        const requestedIndex = popup.image?.index ?? -1;
         if (requestedIndex >= 0 && requestedIndex < gallery.length) {
             setCurrentIndex(requestedIndex);
             return;
@@ -299,9 +314,16 @@ const ImagePreviewDialog: React.FC<{
         setCurrentIndex(matchingIndex >= 0 ? matchingIndex : 0);
     }, [gallery, popup.image?.index, popup.image?.url, popup.open]);
 
-    const currentImage = gallery[currentIndex] ?? gallery[0] ?? popup.image;
-    const imageTitle = currentImage?.filename || popup.title || 'Image preview';
-    const hasMultipleImages = gallery.length > 1;
+    const currentMedia = mediaKind === 'image'
+        ? gallery[currentIndex] ?? gallery[0] ?? popup.image
+        : popup.image;
+    const titleFallback = mediaKind === 'image' ? 'Image preview'
+        : mediaKind === 'pdf' ? 'PDF preview'
+        : mediaKind === 'audio' ? 'Audio preview'
+        : 'Video preview';
+    const mediaTitle = currentMedia?.filename || popup.title || titleFallback;
+    const hasMultipleImages = mediaKind === 'image' && gallery.length > 1;
+    const mediaSizeLabel = formatFileSize(currentMedia?.size);
 
     const showPrevious = React.useCallback(() => {
         if (gallery.length <= 1) return;
@@ -342,32 +364,56 @@ const ImagePreviewDialog: React.FC<{
         };
     }, [hasMultipleImages, onOpenChange, popup.open, showNext, showPrevious]);
 
-    React.useEffect(() => {
-        setImageNaturalSize(null);
-    }, [currentImage?.url]);
+    // The measured size belongs to one URL. Resetting it in an effect on URL
+    // change raced the load event of an already-cached image, which left the
+    // viewer stuck at its maximum box with wide dead margins around the image.
+    const currentMediaUrl = currentMedia?.url;
+    const currentNaturalSize = mediaNaturalSize && mediaNaturalSize.url === currentMediaUrl
+        ? mediaNaturalSize
+        : null;
 
     const imageDisplaySize = React.useMemo(() => {
         const maxWidth = Math.max(160, viewport.width * (isMobile ? 0.86 : 0.75));
         const maxHeight = Math.max(160, viewport.height * (isMobile ? 0.72 : 0.75));
 
-        if (!imageNaturalSize) {
+        if (!currentNaturalSize) {
             return {
                 width: Math.round(maxWidth),
                 height: Math.round(maxHeight),
             };
         }
 
-        const widthScale = maxWidth / imageNaturalSize.width;
-        const heightScale = maxHeight / imageNaturalSize.height;
+        const widthScale = maxWidth / currentNaturalSize.width;
+        const heightScale = maxHeight / currentNaturalSize.height;
         const scale = Math.min(widthScale, heightScale);
 
         return {
-            width: Math.max(1, Math.round(imageNaturalSize.width * scale)),
-            height: Math.max(1, Math.round(imageNaturalSize.height * scale)),
+            width: Math.max(1, Math.round(currentNaturalSize.width * scale)),
+            height: Math.max(1, Math.round(currentNaturalSize.height * scale)),
         };
-    }, [imageNaturalSize, isMobile, viewport.height, viewport.width]);
+    }, [currentNaturalSize, isMobile, viewport.height, viewport.width]);
 
-    if (!isRendered || !currentImage || typeof document === 'undefined') {
+    const mediaDisplaySize = React.useMemo(() => {
+        if (mediaKind === 'image') return imageDisplaySize;
+
+        const bounds = getPreviewViewportBounds(viewport, isMobile);
+        if (mediaKind === 'audio') {
+            return { width: Math.round(Math.min(480, bounds.maxWidth)), height: 220 };
+        }
+        if (mediaKind === 'pdf') {
+            return {
+                width: Math.round(Math.min(bounds.maxWidth, 1024)),
+                height: Math.round(Math.min(bounds.maxHeight, 900)),
+            };
+        }
+        const width = Math.round(bounds.maxWidth);
+        return {
+            width,
+            height: Math.round(Math.min(bounds.maxHeight, Math.max(180, width * 9 / 16))),
+        };
+    }, [imageDisplaySize, isMobile, mediaKind, viewport]);
+
+    if (!isRendered || !currentMedia) {
         return null;
     }
 
@@ -420,12 +466,15 @@ const ImagePreviewDialog: React.FC<{
                         isTransitioning && 'transition-opacity duration-150 ease-out',
                         isVisible ? 'opacity-100' : 'opacity-0'
                     )}
-                    style={{ width: `${imageDisplaySize.width}px` }}
+                    style={{ width: `${mediaDisplaySize.width}px` }}
                 >
                     <div className="flex items-center justify-between gap-2">
-                        <div className="min-w-0 flex-1 text-foreground typography-ui-header font-semibold truncate" title={imageTitle}>
-                            {imageTitle}
+                        <div className="min-w-0 flex-1 text-foreground typography-ui-header font-semibold truncate" title={mediaTitle}>
+                            {mediaTitle}
                         </div>
+                        {mediaSizeLabel ? (
+                            <span className="shrink-0 typography-meta text-muted-foreground">{mediaSizeLabel}</span>
+                        ) : null}
                         <button
                             type="button"
                             className="h-8 w-8 flex items-center justify-center rounded-lg text-muted-foreground/80 hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
@@ -436,26 +485,60 @@ const ImagePreviewDialog: React.FC<{
                         </button>
                     </div>
 
-                    <img
-                        src={currentImage.url}
-                        alt={imageTitle}
-                        className="block object-contain"
-                        style={{ width: `${imageDisplaySize.width}px`, height: `${imageDisplaySize.height}px` }}
-                        loading="lazy"
-                        onLoad={(event) => {
-                            const element = event.currentTarget;
-                            const width = element.naturalWidth;
-                            const height = element.naturalHeight;
-                            if (width > 0 && height > 0) {
-                                setImageNaturalSize((previous) => {
-                                    if (previous && previous.width === width && previous.height === height) {
-                                        return previous;
-                                    }
-                                    return { width, height };
-                                });
-                            }
-                        }}
-                    />
+                    {mediaKind === 'pdf' ? (
+                        <iframe
+                            src={currentMedia.url}
+                            title={mediaTitle}
+                            className="block w-full rounded-lg border border-border/30 bg-white"
+                            style={{ height: `${mediaDisplaySize.height ?? 480}px` }}
+                        />
+                    ) : mediaKind === 'audio' ? (
+                        <div
+                            className="w-full overflow-hidden rounded-lg border border-border/30 bg-[var(--surface-elevated)]"
+                            style={{ height: `${mediaDisplaySize.height ?? 220}px` }}
+                        >
+                            <MediaArtifact
+                                kind="audio"
+                                src={currentMedia.url}
+                                name={mediaTitle}
+                                sizeBytes={currentMedia.size ?? null}
+                            />
+                        </div>
+                    ) : mediaKind === 'video' ? (
+                        <div
+                            className="w-full overflow-hidden rounded-lg border border-border/30 bg-[var(--surface-background)]"
+                            style={{ height: `${mediaDisplaySize.height ?? 320}px` }}
+                        >
+                            <MediaArtifact
+                                kind="video"
+                                src={currentMedia.url}
+                                name={mediaTitle}
+                                sizeBytes={currentMedia.size ?? null}
+                            />
+                        </div>
+                    ) : (
+                        <img
+                            src={currentMedia.url}
+                            alt={mediaTitle}
+                            className="block object-contain"
+                            style={{ width: `${imageDisplaySize.width}px`, height: `${imageDisplaySize.height}px` }}
+                            loading="lazy"
+                            onLoad={(event) => {
+                                const element = event.currentTarget;
+                                const width = element.naturalWidth;
+                                const height = element.naturalHeight;
+                                const url = element.getAttribute('src') ?? '';
+                                if (width > 0 && height > 0) {
+                                    setMediaNaturalSize((previous) => {
+                                        if (previous && previous.url === url && previous.width === width && previous.height === height) {
+                                            return previous;
+                                        }
+                                        return { url, width, height };
+                                    });
+                                }
+                            }}
+                        />
+                    )}
                 </div>
             </div>
         </div>
@@ -499,90 +582,6 @@ const DialogUnifiedDiff: React.FC<{
 
 DialogUnifiedDiff.displayName = 'DialogUnifiedDiff';
 
-const DialogReadContent: React.FC<{
-    popup: ToolPopupContent;
-    pierreThemeConfig: PierreThemeConfig;
-}> = React.memo(({ popup, pierreThemeConfig }) => {
-    const parsedReadOutput = React.useMemo(() => parseReadToolOutput(popup.content), [popup.content]);
-
-    const inputMeta = popup.metadata?.input;
-    const inputObj = typeof inputMeta === 'object' && inputMeta !== null ? (inputMeta as Record<string, unknown>) : {};
-    const offset = typeof inputObj.offset === 'number' ? inputObj.offset : 0;
-    const filePath =
-        typeof inputObj.file_path === 'string'
-            ? inputObj.file_path
-            : typeof inputObj.filePath === 'string'
-                ? inputObj.filePath
-                : typeof inputObj.path === 'string'
-                    ? inputObj.path
-                    : 'read-output';
-
-    const fileContents = React.useMemo(() => parsedReadOutput.lines.map((line) => line.text).join('\n'), [parsedReadOutput]);
-    const detectedLanguage = React.useMemo(
-        () => popup.language || getLanguageFromExtension(filePath) || 'text',
-        [filePath, popup.language],
-    );
-
-    const codeLines: CodeLine[] = React.useMemo(() => {
-        const hasExplicitLineNumbers = parsedReadOutput.lines.some((line) => line.lineNumber !== null);
-        const result: CodeLine[] = [];
-        let nextLineNumber = offset;
-
-        for (const line of parsedReadOutput.lines) {
-            if (line.lineNumber !== null) {
-                nextLineNumber = line.lineNumber;
-            }
-            const shouldAssignFallback =
-                parsedReadOutput.type === 'file'
-                && !hasExplicitLineNumbers
-                && line.lineNumber === null
-                && !line.isInfo;
-            const effectiveLineNumber = line.lineNumber ?? (shouldAssignFallback
-                ? (nextLineNumber + 1)
-                : null);
-            if (typeof effectiveLineNumber === 'number') {
-                nextLineNumber = effectiveLineNumber;
-            }
-
-            result.push({
-                text: line.text,
-                lineNumber: effectiveLineNumber,
-                isInfo: line.isInfo,
-            });
-        }
-
-        return result;
-    }, [offset, parsedReadOutput]);
-
-    if (parsedReadOutput.type === 'file') {
-        return (
-            <PierreFile
-                file={{
-                    name: filePath,
-                    contents: fileContents,
-                    lang: detectedLanguage || undefined,
-                }}
-                options={{
-                    disableFileHeader: true,
-                    overflow: 'wrap',
-                    theme: pierreThemeConfig.theme,
-                    themeType: pierreThemeConfig.themeType,
-                }}
-                className="block w-full"
-            />
-        );
-    }
-
-    return (
-        <VirtualizedCodeBlock
-            lines={codeLines}
-            language={detectedLanguage}
-            maxHeight="70vh"
-        />
-    );
-});
-
-DialogReadContent.displayName = 'DialogReadContent';
 const MermaidPreviewDialog: React.FC<{
     popup: ToolPopupContent;
     onOpenChange: (open: boolean) => void;
@@ -629,9 +628,7 @@ const MermaidPreviewDialog: React.FC<{
             });
         };
 
-        const canParse = typeof URL.canParse === 'function'
-            ? URL.canParse(input)
-            : false;
+        const canParse = URL.canParse(input);
 
         if (canParse) {
             let pathname = decodeLoose(new URL(input).pathname || '');
@@ -684,9 +681,7 @@ const MermaidPreviewDialog: React.FC<{
                     });
             }
         } else {
-            const canParse = typeof URL.canParse === 'function'
-                ? URL.canParse(target.url, window.location.origin)
-                : false;
+            const canParse = URL.canParse(target.url, window.location.origin);
             const resolvedUrl = canParse ? new URL(target.url, window.location.origin) : null;
 
             if (!resolvedUrl || (resolvedUrl.protocol !== 'http:' && resolvedUrl.protocol !== 'https:')) {
@@ -756,7 +751,7 @@ const MermaidPreviewDialog: React.FC<{
                 return false;
             }
 
-            const aspectRatio = getSvgAspectRatio(svg as SVGElement);
+            const aspectRatio = getSvgAspectRatio(svg);
             if (!aspectRatio || !Number.isFinite(aspectRatio) || aspectRatio <= 0) {
                 return false;
             }
@@ -804,7 +799,7 @@ const MermaidPreviewDialog: React.FC<{
 
         return () => {
             window.cancelAnimationFrame(rafId);
-            if (typeof timeoutId === 'number') {
+            if (timeoutId !== undefined) {
                 window.clearTimeout(timeoutId);
             }
             observer.disconnect();
@@ -825,7 +820,7 @@ const MermaidPreviewDialog: React.FC<{
         return { width: Math.round(maxWidth), height: Math.round(availableDiagramHeight) };
     }, [diagramAspectRatio, isMobile, viewport]);
 
-    if (!isRendered || typeof document === 'undefined') {
+    if (!isRendered) {
         return null;
     }
 
@@ -932,8 +927,17 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
     const { t } = useI18n();
     const [diffViewMode, setDiffViewMode] = React.useState<DiffViewMode>('unified');
     const pierreThemeConfig = usePierreThemeConfig();
-    const popupToolName = typeof popup.metadata?.tool === 'string' ? popup.metadata.tool : null;
+    const popupToolName = popup.toolName ?? popup.toolResult?.toolName ?? null;
     const popupToolPresentation = useGuestToolPresentation(popupToolName);
+    const popupInput = popup.input;
+    const hasPopupInput = Boolean(popupInput && Object.keys(popupInput).length > 0);
+    const argumentsText = React.useMemo(() => {
+        if (!popupInput || Object.keys(popupInput).length === 0) return '';
+        // Deep inspection shows the complete canonical input. Tool-specific
+        // formatting would hide fields the native tool also received.
+        return JSON.stringify(popupInput, null, 2);
+    }, [popupInput]);
+    const popupError = popup.toolResult?.error;
 
     React.useEffect(() => {
         if (!popup.open) return;
@@ -941,7 +945,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
     }, [popup.open, popup.title]);
 
     if (popup.image) {
-        return <ImagePreviewDialog popup={popup} onOpenChange={onOpenChange} isMobile={isMobile} />;
+        return <MediaPreviewDialog popup={popup} onOpenChange={onOpenChange} isMobile={isMobile} />;
     }
 
     if (popup.mermaid) {
@@ -976,75 +980,39 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                 </div>
                 <div className="flex-1 min-h-0 rounded-xl border border-border/30 bg-muted/10 overflow-hidden">
                     <div className="tool-output-surface h-full max-h-[75vh] overflow-y-auto px-3 pr-4">
-                        {popup.metadata?.input && typeof popup.metadata.input === 'object' &&
-                            Object.keys(popup.metadata.input).length > 0 &&
-                            popup.metadata?.tool !== 'todowrite' &&
-                            popup.metadata?.tool !== 'todoread' &&
-                            popup.metadata?.tool !== 'apply_patch' ? (() => {
-                                const meta = popup.metadata!;
-                                const input = meta.input as Record<string, unknown>;
-
-                                const getInputValue = (key: string): string | null => {
-                                  const val = input[key];
-                                  return typeof val === 'string' ? val : (typeof val === 'number' ? String(val) : null);
-                                };
-                                return (
-                                <div className="border-b border-border/20 p-4 -mx-3">
-                                    <div className="typography-markdown font-medium text-muted-foreground mb-2 px-3">
-                                        {meta.tool === 'bash'
-                                            ? 'Command:'
-                                            : meta.tool === 'task'
-                                                ? 'Task Details:'
-                                                : 'Input:'}
-                                    </div>
-                                    {meta.tool === 'bash' && getInputValue('command') ? (
-                                        <div className="tool-input-surface bg-transparent rounded-xl border border-border/20 mx-3">
-                                            <WorkerHighlightedCode
-                                                language="bash"
-                                                code={getInputValue('command')!}
-                                                style={toolDisplayStyles.getPopupStyles()}
-                                                codeStyle={DIALOG_CODE_TAG_PROPS.style}
-                                                wrap
-                                            />
-                                        </div>
-                                    ) : meta.tool === 'task' && getInputValue('prompt') ? (
-                                        <div
-                                            className="tool-input-surface bg-transparent rounded-xl border border-border/20 font-mono whitespace-pre-wrap text-foreground/90 mx-3"
-                                            style={toolDisplayStyles.getPopupStyles()}
-                                        >
-                                            {getInputValue('description') ? `Task: ${getInputValue('description')}\n` : ''}
-                                            {getInputValue('subagent_type') ? `Agent Type: ${getInputValue('subagent_type')}\n` : ''}
-                                            {`Instructions:\n${getInputValue('prompt')}`}
-                                        </div>
-                                    ) : meta.tool === 'write' && getInputValue('content') ? (
-                                        <div className="tool-input-surface bg-transparent rounded-xl border border-border/20 mx-3">
-                                            <PierreFile
-                                                file={{
-                                                    name: getInputValue('filePath') || getInputValue('file_path') || 'new-file',
-                                                    contents: getInputValue('content')!,
-                                                    lang: getLanguageFromExtension(getInputValue('filePath') || getInputValue('file_path') || '') || undefined,
-                                                }}
-                                                options={{
-                                                    disableFileHeader: true,
-                                                    overflow: 'wrap',
-                                                    theme: pierreThemeConfig.theme,
-                                                    themeType: pierreThemeConfig.themeType,
-                                                }}
-                                                className="block w-full"
-                                            />
-                                        </div>
-                                    ) : (
-                                        <div
-                                            className="tool-input-surface bg-transparent rounded-xl border border-border/20 font-mono whitespace-pre-wrap text-foreground/90 mx-3"
-                                            style={toolDisplayStyles.getPopupStyles()}
-                                        >
-                                            {formatInputForDisplay(input, meta.tool as string)}
-                                        </div>
-                                    )}
+                        {hasPopupInput ? (
+                            <div className="border-b border-border/20 p-4">
+                                <div className="mb-2 typography-ui-label font-medium text-muted-foreground">
+                                    {t('chat.toolOutputDialog.arguments')}
                                 </div>
-                            );
-                            })() : null}
-
+                                <div className="tool-input-surface bg-transparent rounded-xl border border-border/20">
+                                    <WorkerHighlightedCode
+                                        language="json"
+                                        code={argumentsText}
+                                        style={toolDisplayStyles.getPopupStyles()}
+                                        codeStyle={DIALOG_CODE_TAG_PROPS.style}
+                                        wrap
+                                    />
+                                </div>
+                            </div>
+                        ) : null}
+                        {popupError ? (
+                            <div className="border-b border-border/20 p-4">
+                                <div className="mb-2 typography-ui-label font-medium text-muted-foreground">
+                                    {t('chat.toolPart.error')}
+                                </div>
+                                <div
+                                    className="typography-meta whitespace-pre-wrap rounded-xl border p-2"
+                                    style={{
+                                        backgroundColor: 'var(--status-error-background)',
+                                        color: 'var(--status-error)',
+                                        borderColor: 'var(--status-error-border)',
+                                    }}
+                                >
+                                    {popupError}
+                                </div>
+                            </div>
+                        ) : null}
                         {popup.isDiff ? (
                             <DialogUnifiedDiff
                                 popup={popup}
@@ -1053,87 +1021,44 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                             />
                         ) : popup.content ? (
                         <div className="p-4">
+                            <div className="mb-2 typography-ui-label font-medium text-muted-foreground">
+                                {t('chat.toolPart.output')}
+                            </div>
                             {(() => {
-                                const tool = popup.metadata?.tool;
-
-                                if (tool === 'todowrite' || tool === 'todoread') {
-                                    return (
-                                        renderTodoOutput(popup.content, {
-                                            total: t('chat.todo.total'),
-                                            inProgress: t('chat.todo.inProgress'),
-                                            pending: t('chat.todo.pending'),
-                                            completed: t('chat.todo.completed'),
-                                            cancelled: t('chat.todo.cancelled'),
-                                        }) || (
-                                            <WorkerHighlightedCode
-                                                language="json"
-                                                code={popup.content}
-                                                style={toolDisplayStyles.getPopupContainerStyles()}
-                                                codeStyle={DIALOG_CODE_TAG_PROPS.style}
-                                                wrap
-                                            />
-                                        )
+                                if (popupToolName === 'grep') {
+                                    return renderGrepOutput(popup.content, isMobile) ?? (
+                                        <WorkerHighlightedCode
+                                            language={popup.language || 'text'}
+                                            code={popup.content}
+                                            style={toolDisplayStyles.getPopupContainerStyles()}
+                                            codeStyle={DIALOG_CODE_TAG_PROPS.style}
+                                            wrap
+                                        />
                                     );
                                 }
 
-                                if (tool === 'list') {
-                                    return (
-                                        renderListOutput(popup.content) || (
-                                            <pre className="typography-markdown bg-muted/30 p-2 rounded-xl border border-border/20 font-mono whitespace-pre-wrap">
-                                                {popup.content}
-                                            </pre>
-                                        )
-                                );
-                                }
-
-                                if (tool === 'grep') {
-                                    return (
-                                        renderGrepOutput(popup.content, isMobile) || (
-                                            <pre className="typography-code bg-muted/30 p-2 rounded-xl border border-border/20 font-mono whitespace-pre-wrap">
-                                                {popup.content}
-                                            </pre>
-                                        )
+                                if (popupToolName === 'glob') {
+                                    return renderGlobOutput(popup.content, isMobile) ?? (
+                                        <WorkerHighlightedCode
+                                            language={popup.language || 'text'}
+                                            code={popup.content}
+                                            style={toolDisplayStyles.getPopupContainerStyles()}
+                                            codeStyle={DIALOG_CODE_TAG_PROPS.style}
+                                            wrap
+                                        />
                                     );
                                 }
 
-                                if (tool === 'glob') {
-                                    return (
-                                        renderGlobOutput(popup.content, isMobile) || (
-                                            <pre className="typography-code bg-muted/30 p-2 rounded-xl border border-border/20 font-mono whitespace-pre-wrap">
-                                                {popup.content}
-                                            </pre>
-                                        )
-                                    );
+                                if (popupToolName && (isSubagentTool(popupToolName) || popupToolName === 'ask')) {
+                                    return <SimpleMarkdownRenderer content={popup.content} variant="tool" />;
                                 }
 
-                                if (tool === 'task' || tool === 'reasoning') {
-                                    return (
-                                        <div className={tool === 'reasoning' ? "text-muted-foreground/70" : ""}>
-                                            <SimpleMarkdownRenderer content={popup.content} variant="tool" />
-                                        </div>
-                                    );
-                                }
-
-                                if (tool === 'web-search' || tool === 'websearch' || tool === 'search_web') {
-                                    return (
-                                        renderWebSearchOutput(popup.content) || (
-                                            <WorkerHighlightedCode
-                                                language="text"
-                                                code={popup.content}
-                                                style={toolDisplayStyles.getPopupContainerStyles()}
-                                                codeStyle={DIALOG_CODE_TAG_PROPS.style}
-                                                wrap
-                                            />
-                                        )
-                                    );
-                                }
-
-                                if (tool === 'read') {
-                                    return <DialogReadContent popup={popup} pierreThemeConfig={pierreThemeConfig} />;
+                                if (popupToolName === 'web_search') {
+                                    return renderWebSearchOutput(popup.toolResult?.output, { unstyled: true });
                                 }
 
                                 // JSON tree viewer for generic JSON outputs
-                                const jsonResult = popup.content ? tryParseJsonOutput(popup.content) : { data: null, isJson: false };
+                                const jsonResult = tryParseJsonOutput(popup.content);
                                 if (jsonResult.isJson) {
                                     return (
                                         <JsonTreeView
@@ -1168,4 +1093,6 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
     );
 };
 
-export default ToolOutputDialog;
+// Mounted by every chat message, which re-renders on each streamed chunk
+// while the popup state and handlers stay the same.
+export default React.memo(ToolOutputDialog);

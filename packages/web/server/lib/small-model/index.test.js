@@ -1,363 +1,95 @@
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
+import { configureAgentService, resetAgentService, completeSmallModel } from './client.js';
 
-// The settings override is read straight from disk at module load, so without
-// this the suite would resolve whatever small model the developer running it
-// happens to have configured.
-const TEMP_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'small-model-settings-'));
-process.env.OPENCHAMBER_DATA_DIR = TEMP_DATA_DIR;
-
-vi.mock('../opencode/auth.js', () => ({ readAuthFile: vi.fn() }));
-vi.mock('../opencode/shared.js', () => ({
-  readConfig: vi.fn(),
-  readConfigLayers: vi.fn(),
-}));
-vi.mock('./catalog.js', () => ({
-  getModelCatalog: vi.fn(),
-  getCatalogProvider: vi.fn(),
-}));
-vi.mock('./call.js', () => ({
-  DEDICATED_WIRE_FORMAT_PROVIDERS: new Set(['github-copilot', 'copilot', 'openai', 'anthropic', 'google']),
-  callSmallModel: vi.fn(),
-  resolveProviderLogin: vi.fn(async ({ auth, providerID }) => {
-    const entry = auth?.[providerID];
-    return entry && typeof entry === 'object' ? entry : null;
-  }),
-}));
-vi.mock('./runtime-providers.js', () => ({
-  getRuntimeProviderSnapshot: vi.fn(async () => null),
-}));
-
-const { generateSmallModelText, describeSmallModel, listAuthenticatedProviders } = await import('./index.js');
-const { readAuthFile } = await import('../opencode/auth.js');
-const { getRuntimeProviderSnapshot } = await import('./runtime-providers.js');
-const { readConfigLayers } = await import('../opencode/shared.js');
-const { getModelCatalog } = await import('./catalog.js');
-const { callSmallModel } = await import('./call.js');
-
-describe('unsupported small-model providers', () => {
-  beforeEach(() => {
-    readAuthFile.mockReturnValue({
-      'claude-code': {
-        type: 'oauth',
-        access: 'claude-cli-managed',
-        refresh: 'claude-cli-managed',
-      },
-    });
-    readConfigLayers.mockReturnValue({ mergedConfig: {} });
-    getModelCatalog.mockResolvedValue({});
-    callSmallModel.mockReset();
-    getRuntimeProviderSnapshot.mockResolvedValue(null);
-  });
-
-  it('rejects Claude Code with an actionable error before transport dispatch', async () => {
-    await expect(generateSmallModelText({
-      prompt: 'summarize this',
-      model: 'claude-code/haiku',
-    })).rejects.toMatchObject({
-      statusCode: 422,
-      code: 'small-model-provider-unsupported',
-    });
-    expect(callSmallModel).not.toHaveBeenCalled();
-  });
-
-  it('does not offer Claude Code in the Small Model picker', async () => {
-    expect(await listAuthenticatedProviders()).not.toContain('claude-code');
-  });
-
-  // A plugin can publish an OpenAI-compatible endpoint for Claude Code, but it
-  // is a façade over the Claude Agent SDK: every call spawns the CLI and
-  // spends the user's Claude subscription. The refusal is about that cost, so
-  // an available endpoint must not lift it.
-  it('still refuses Claude Code when a plugin publishes an HTTP endpoint for it', async () => {
-    getRuntimeProviderSnapshot.mockResolvedValue({
-      providers: new Map([['claude-code', { id: 'claude-code', apiKey: 'plugin-key', baseURL: 'http://127.0.0.1:60668/v1', anonymousZen: false }]]),
-      connected: new Set(['claude-code']),
-    });
-
-    await expect(generateSmallModelText({
-      prompt: 'summarize this',
-      model: 'claude-code/haiku',
-    })).rejects.toMatchObject({ code: 'small-model-provider-unsupported' });
-    expect(await listAuthenticatedProviders()).not.toContain('claude-code');
-
-    getRuntimeProviderSnapshot.mockResolvedValue(null);
-  });
-});
-
-describe('provider availability for the model pickers', () => {
-  beforeEach(() => {
-    readAuthFile.mockReturnValue({ openai: { type: 'api', key: 'sk-test' } });
-    readConfigLayers.mockReturnValue({ mergedConfig: {} });
-    getModelCatalog.mockResolvedValue({});
-    getRuntimeProviderSnapshot.mockResolvedValue(null);
-  });
-
-  const snapshot = (providers, connected) => ({
-    providers: new Map(providers.map((provider) => [provider.id, provider])),
-    connected: new Set(connected ?? providers.map((provider) => provider.id)),
-  });
-
-  it('offers a plugin provider that OpenCode resolved at runtime', async () => {
-    getRuntimeProviderSnapshot.mockResolvedValue(snapshot([
-      { id: 'llmapi', apiKey: 'plugin-key', baseURL: 'https://api.llmapi.ai/v1', anonymousZen: false },
-    ]));
-
-    expect(await listAuthenticatedProviders()).toEqual(expect.arrayContaining(['openai', 'llmapi']));
-  });
-
-  it('hides a provider with no endpoint to send a request to', async () => {
-    getRuntimeProviderSnapshot.mockResolvedValue(snapshot([
-      { id: 'endpointless', apiKey: 'plugin-key', baseURL: null, anonymousZen: false },
-    ]));
-
-    expect(await listAuthenticatedProviders()).not.toContain('endpointless');
-  });
-
-  it('never offers opencode zen without a real login', async () => {
-    // The zen sentinel is not a credential, so the snapshot carries no apiKey.
-    getRuntimeProviderSnapshot.mockResolvedValue(snapshot([
-      { id: 'opencode', apiKey: null, baseURL: 'https://opencode.ai/zen/v1', anonymousZen: true },
-    ]));
-
-    expect(await listAuthenticatedProviders()).not.toContain('opencode');
-  });
-
-  it('keeps the auth.json providers when OpenCode cannot be reached', async () => {
-    getRuntimeProviderSnapshot.mockResolvedValue(null);
-
-    expect(await listAuthenticatedProviders()).toContain('openai');
-  });
-});
-
-// 8k context leaves 4k input tokens after the output reserve → 16k chars.
-const CATALOG = {
-  anthropic: {
-    id: 'anthropic',
-    models: {
-      'claude-haiku-4-5': { id: 'claude-haiku-4-5', limit: { context: 8_000 }, structured_output: true },
-      'legacy-tiny': { id: 'legacy-tiny', limit: { context: 8_000 }, structured_output: false },
-      'unlisted-capability': { id: 'unlisted-capability', limit: { context: 8_000 } },
-    },
-  },
+const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'canonical-small-model-'));
+const previousDataDirectory = process.env.OPENCHAMBER_DATA_DIR;
+process.env.OPENCHAMBER_DATA_DIR = directory;
+const { generateSmallModelText, describeSmallModel } = await import('./index.js');
+const model = (provider, modelId) => ({ provider, modelId, name: modelId, modalities: ['text'], contextWindow: 8000, maxOutputTokens: 2000, reasoningEffortSupported: false, reasoningOptions: [], variants: [], pricing: null });
+let models;
+let calls;
+let completion;
+const install = (request) => configureAgentService({ request }, { resolveWorkspaceScope: async workspaceId => ({ workspaceId, cwd: '/authorized' }) });
+const transport = async (pathname, init = {}) => {
+  calls.push({ pathname, body: init.body ? JSON.parse(init.body) : null });
+  if (pathname.endsWith('/models')) return Response.json({ workspaceId: 'workspace-a', revision: '0', models });
+  if (pathname.endsWith('/providers')) return Response.json({ workspaceId: 'workspace-a', revision: '0', providers: [] });
+  if (pathname.endsWith('/completions')) {
+    const input = JSON.parse(init.body);
+    return Response.json({ completionId: input.completionId, selection: input.selection, ...completion });
+  }
+  throw new Error(`Unexpected route ${pathname}`);
 };
-
-const request = (overrides = {}) => ({
-  prompt: 'x'.repeat(20_000),
-  model: 'anthropic/claude-haiku-4-5',
-  directory: '/proj',
-  ...overrides,
+beforeEach(() => {
+  models = [model('selected', 'large'), model('other', 'haiku')];
+  calls = [];
+  completion = { status: 'completed', output: { kind: 'text', text: ' generated ' }, finishReason: 'complete', usage: null };
+  fs.writeFileSync(path.join(directory, 'settings.json'), '{}');
+  const preferences = path.join(directory, 'preferences.json');
+  if (fs.existsSync(preferences)) fs.unlinkSync(preferences);
+  install(transport);
 });
-
-describe('generateSmallModelText — oversized input', () => {
-  beforeEach(() => {
-    readAuthFile.mockReturnValue({ anthropic: { type: 'api', key: 'sk-ant' } });
-    readConfigLayers.mockReturnValue({ mergedConfig: {} });
-    getModelCatalog.mockResolvedValue(CATALOG);
-    callSmallModel.mockReset();
-    callSmallModel.mockResolvedValue('generated');
-  });
-
-  afterEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('truncates and flags the response by default', async () => {
-    const result = await generateSmallModelText(request());
-
-    expect(result.inputTruncated).toBe(true);
-    const sent = callSmallModel.mock.calls.at(-1)[0].prompt;
-    expect(sent.length).toBeLessThan(20_000);
-    expect(sent.endsWith('…')).toBe(true);
-  });
-
-  it('refuses without calling the provider when the caller cannot survive truncation', async () => {
-    await expect(generateSmallModelText(request({ onOverflow: 'error' })))
-      .rejects.toMatchObject({
-        statusCode: 413,
-        code: 'context-too-small',
-        requiredChars: 20_000,
-        availableChars: 16_000,
-      });
-
-    expect(callSmallModel).not.toHaveBeenCalled();
-  });
-
-  it('leaves an input that fits untouched under either policy', async () => {
-    const result = await generateSmallModelText(request({ prompt: 'short prompt', onOverflow: 'error' }));
-
-    expect(result.inputTruncated).toBeUndefined();
-    expect(callSmallModel.mock.calls.at(-1)[0].prompt).toBe('short prompt');
-  });
-
-  it('forwards schema, timeout, and abort signal to the transport', async () => {
-    const controller = new AbortController();
-    const schema = { type: 'object' };
-
-    await generateSmallModelText(request({
-      prompt: 'short',
-      responseSchema: schema,
-      timeoutMs: 240_000,
-      signal: controller.signal,
-    }));
-
-    expect(callSmallModel.mock.calls.at(-1)[0]).toMatchObject({
-      responseSchema: schema,
-      timeoutMs: 240_000,
-      signal: controller.signal,
-    });
-  });
-});
-
-describe('describeSmallModel — capability reporting', () => {
-  beforeEach(() => {
-    readAuthFile.mockReturnValue({ anthropic: { type: 'api', key: 'sk-ant' } });
-    readConfigLayers.mockReturnValue({ mergedConfig: { small_model: 'anthropic/claude-haiku-4-5' } });
-    getModelCatalog.mockResolvedValue(CATALOG);
-  });
-
-  afterEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('reports the input budget and a known structured-output capability', async () => {
-    const described = await describeSmallModel({ directory: '/proj' });
-
-    expect(described).toMatchObject({
-      providerID: 'anthropic',
-      modelID: 'claude-haiku-4-5',
-      inputCharBudget: 16_000,
-      contextTokens: 8_000,
-      contextKnown: true,
-      structuredOutput: true,
-      hasLogin: true,
-    });
-  });
-
-  it('reports hasLogin false when the resolved provider has no usable credential', async () => {
-    readAuthFile.mockReturnValue({});
-
-    const described = await describeSmallModel({ directory: '/proj' });
-
-    expect(described).toMatchObject({
-      providerID: 'anthropic',
-      modelID: 'claude-haiku-4-5',
-      hasLogin: false,
-    });
-  });
-
-  it('reports an explicit false so callers can block the model', async () => {
-    readConfigLayers.mockReturnValue({ mergedConfig: { small_model: 'anthropic/legacy-tiny' } });
-
-    const described = await describeSmallModel({ directory: '/proj' });
-
-    expect(described.structuredOutput).toBe(false);
-  });
-
-  it('reports null — not false — when the catalog omits the capability', async () => {
-    readConfigLayers.mockReturnValue({ mergedConfig: { small_model: 'anthropic/unlisted-capability' } });
-
-    const described = await describeSmallModel({ directory: '/proj' });
-
-    expect(described.structuredOutput).toBeNull();
-  });
-});
-
-// The input reserve and the requested output budget are the same number seen
-// from two sides; if they drift, a caller that asks for a large answer overruns
-// the model's context and the failure looks like a truncation bug.
-describe('output budget and input reserve', () => {
-  beforeEach(() => {
-    readAuthFile.mockReturnValue({ anthropic: { type: 'api', key: 'sk-ant' } });
-    readConfigLayers.mockReturnValue({ mergedConfig: {} });
-    getModelCatalog.mockResolvedValue({
-      anthropic: {
-        id: 'anthropic',
-        models: {
-          roomy: { id: 'roomy', limit: { context: 100_000, output: 8_000 } },
-          unlisted: { id: 'unlisted', limit: { context: 100_000 } },
-        },
-      },
-    });
-    callSmallModel.mockReset();
-    callSmallModel.mockResolvedValue('generated');
-  });
-
-  afterEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('caps the request at the model\'s advertised output limit', async () => {
-    await generateSmallModelText({
-      prompt: 'short',
-      model: 'anthropic/roomy',
-      maxOutputTokens: 24_000,
-    });
-
-    expect(callSmallModel.mock.calls.at(-1)[0].maxOutputTokens).toBe(8_000);
-  });
-
-  it('honours the requested budget when the catalog states no output limit', async () => {
-    await generateSmallModelText({
-      prompt: 'short',
-      model: 'anthropic/unlisted',
-      maxOutputTokens: 24_000,
-    });
-
-    expect(callSmallModel.mock.calls.at(-1)[0].maxOutputTokens).toBe(24_000);
-  });
-
-  it('reserves exactly the requested output budget from the input allowance', async () => {
-    // 100k context − 24k reserved for the answer = 76k tokens ≈ 304k chars.
-    await expect(generateSmallModelText({
-      prompt: 'x'.repeat(304_001),
-      model: 'anthropic/unlisted',
-      maxOutputTokens: 24_000,
-      onOverflow: 'error',
-    })).rejects.toMatchObject({ code: 'context-too-small', availableChars: 304_000 });
-
-    await expect(generateSmallModelText({
-      prompt: 'x'.repeat(303_999),
-      model: 'anthropic/unlisted',
-      maxOutputTokens: 24_000,
-      onOverflow: 'error',
-    })).resolves.toBeTruthy();
-  });
-
-  it('reports the same budget through describeSmallModel', async () => {
-    readConfigLayers.mockReturnValue({ mergedConfig: { small_model: 'anthropic/unlisted' } });
-
-    const described = await describeSmallModel({ directory: '/proj', outputReserveTokens: 24_000 });
-
-    expect(described.inputCharBudget).toBe(304_000);
-  });
-
-  // A caller that wants "as much room as this model allows" cannot name a
-  // number before knowing which model it got, so it hands over the decision.
-  it('lets the reserve be decided from the resolved model\'s limits', async () => {
-    readConfigLayers.mockReturnValue({ mergedConfig: { small_model: 'anthropic/roomy' } });
-
-    const described = await describeSmallModel({
-      directory: '/proj',
-      outputReserveTokens: ({ contextTokens, outputTokenLimit }) => Math.min(contextTokens / 10, outputTokenLimit),
-    });
-
-    // 100k context, 8k output limit -> 8k reserved, leaving 92k tokens.
-    expect(described.outputTokens).toBe(8_000);
-    expect(described.inputCharBudget).toBe(92_000 * 4);
-  });
-
-  it('reports the reserve it used so the caller can request the same number', async () => {
-    readConfigLayers.mockReturnValue({ mergedConfig: { small_model: 'anthropic/unlisted' } });
-
-    const described = await describeSmallModel({ directory: '/proj', outputReserveTokens: 24_000 });
-
-    expect(described.outputTokens).toBe(24_000);
-  });
-});
-
 afterAll(() => {
-  fs.rmSync(TEMP_DATA_DIR, { recursive: true, force: true });
+  resetAgentService();
+  if (previousDataDirectory === undefined) delete process.env.OPENCHAMBER_DATA_DIR;
+  else process.env.OPENCHAMBER_DATA_DIR = previousDataDirectory;
+  fs.rmSync(directory, { recursive: true, force: true });
+});
+
+describe('Host canonical utility completion owner', () => {
+  test('provider-local selection never dispatches to a different subscription', async () => {
+    const generated = await generateSmallModelText({ workspaceId: 'workspace-a', prompt: 'hello', preferredProviderID: 'selected', preferredModelID: 'large' });
+    expect(generated).toMatchObject({ text: 'generated', providerID: 'selected', modelID: 'large' });
+    const request = calls.find(call => call.pathname.endsWith('/completions')).body;
+    expect(request.selection).toEqual({ providerId: 'selected', modelId: 'large' });
+    expect(request.timeoutMs).toBe(60_000);
+    expect(calls.every(call => call.pathname.startsWith('/api/agent/v1/workspaces/workspace-a/'))).toBe(true);
+  });
+  test('missing selected provider remains unavailable without fallback execution', async () => {
+    await expect(generateSmallModelText({ workspaceId: 'workspace-a', prompt: 'hello', preferredProviderID: 'absent', preferredModelID: 'absent' })).rejects.toMatchObject({ statusCode: 404 });
+    expect(calls.some(call => call.pathname.endsWith('/completions'))).toBe(false);
+  });
+  test('explicit unavailable models and invalid profile overrides do not fall through to another model', async () => {
+    await expect(generateSmallModelText({ workspaceId: 'workspace-a', prompt: 'hello', model: 'other/missing', preferredProviderID: 'selected', preferredModelID: 'large' })).rejects.toMatchObject({ statusCode: 404 });
+    fs.writeFileSync(path.join(directory, 'settings.json'), JSON.stringify({ smallModelUseDefault: false, smallModelOverride: 'invalid-model-reference' }));
+    expect(await describeSmallModel({ workspaceId: 'workspace-a', preferredProviderID: 'selected', preferredModelID: 'large' })).toBeNull();
+    expect(calls.some(call => call.pathname.endsWith('/completions'))).toBe(false);
+  });
+  test('profile settings override resolves through the scoped profile reader', async () => {
+    fs.writeFileSync(path.join(directory, 'settings.json'), JSON.stringify({ smallModelUseDefault: false, smallModelOverride: 'other/haiku' }));
+    expect(await describeSmallModel({ workspaceId: 'workspace-a', preferredProviderID: 'selected', preferredModelID: 'large' })).toMatchObject({ providerID: 'other', modelID: 'haiku', source: 'settings' });
+  });
+  test('structured errors preserve the provider failure instead of valid empty output', async () => {
+    completion = { status: 'failed', error: { code: 'STRUCTURED_OUTPUT_INVALID', detail: 'Invalid provider output', retryable: false } };
+    await expect(generateSmallModelText({ workspaceId: 'workspace-a', prompt: 'hello', model: 'selected/large', responseSchema: { type: 'object' }, onOverflow: 'error' })).rejects.toMatchObject({ statusCode: 422, code: 'structured-output-invalid' });
+    expect(calls.find(call => call.pathname.endsWith('/completions')).body).toMatchObject({ format: { kind: 'json', schema: { type: 'object' } }, overflow: 'reject' });
+  });
+  test('output reserve and request budget agree and excessive strict input is rejected', async () => {
+    await generateSmallModelText({ workspaceId: 'workspace-a', prompt: 'hello', model: 'selected/large', maxOutputTokens: 3000 });
+    expect(calls.find(call => call.pathname.endsWith('/completions')).body.maxOutputTokens).toBe(2000);
+    await expect(generateSmallModelText({ workspaceId: 'workspace-a', prompt: 'x'.repeat(40_000), model: 'selected/large', onOverflow: 'error' })).rejects.toMatchObject({ statusCode: 413, code: 'context-too-small' });
+  });
+  test('cancellation calls the captured service owner while completion is pending', async () => {
+    const finished = Promise.withResolvers();
+    const entered = Promise.withResolvers();
+    let started;
+    install(async (pathname, init) => {
+      const body = JSON.parse(init.body);
+      if (pathname.endsWith('/completions')) { started = body; entered.resolve(); return finished.promise; }
+      expect(pathname).toBe(`/api/agent/v1/workspaces/workspace-a/completions/${started.completionId}/cancel`);
+      expect(body.completionId).toBe(started.completionId);
+      finished.resolve(Response.json({ completionId: started.completionId, selection: started.selection, status: 'cancelled', reason: 'requested' }));
+      return Response.json({ completionId: started.completionId, status: 'cancelled' });
+    });
+    const controller = new AbortController();
+    const input = { workspaceId: 'workspace-a', completionId: 'completion-a', selection: { providerId: 'selected', modelId: 'large' }, prompt: 'hello', format: { kind: 'text' }, overflow: 'reject', variant: null, reasoningEffort: null };
+    const pending = completeSmallModel(input, { signal: controller.signal });
+    await entered.promise;
+    install(async () => { throw new Error('Cancellation reached another service'); });
+    controller.abort();
+    expect(await pending).toMatchObject({ status: 'cancelled', reason: 'requested' });
+  });
 });

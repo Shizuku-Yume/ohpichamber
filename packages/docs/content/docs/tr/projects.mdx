@@ -25,10 +25,28 @@ Etkin yapmak için kenar çubuğundan bir proje seçin. Oturumlar, git, notlar g
 
 Özel ad, renk veya ikon vermek için **Settings → Projects** bölümünü açın. OpenChamber bir ikonu otomatik bulmaya çalışır. Ayrıntı için [Project icons](/project-icons/) sayfasına bakın.
 
-> VS Code içinde OpenChamber her zaman açık olan klasörü tek proje olarak kullanır. Bu yüzden ekleyecek ya da geçiş yapacak bir şey yoktur. Projects ayar sayfası orada gizlidir.
+
+## Proje ortamı
+
+Bir projenin araçları direnv, devenv ya da bir Nix shell'den geliyorsa Git hook'ları, terminal ve [proje eylemleri](/tr/project-actions/) onları kendi başına bulamaz. **Ayarlar → Projeler** bölümünü açın, projeyi seçin ve **Ortam** altında:
+
+- yalnızca bu projenin ihtiyaç duyduğu değişkenleri ekleyin
+- ya da bunları yazdıran bir **ortam komutu** ayarlayın, örneğin `direnv export json` veya `devenv print-dev-env --json`
+
+Komut proje klasöründe, bir worktree için de o worktree'nin kendi klasöründe çalışır. Son çalıştırmanın üzerinden birkaç dakika geçtiyse, commit yaptığınızda, terminal açtığınızda ya da bir eylem çalıştırdığınızda yeniden çalışır; **Yeniden çalıştır** onu hemen çalıştırır. Projenin yalnızca açık olması onu çalıştırmaz. Alanın altında son çalıştırmanın kaç değişken eklediğini ya da neden başarısız olduğunu görürsünüz. Başarısız bir çalıştırma hiçbir şey eklemez; Git ve terminal onsuz çalışmaya devam eder.
+
+Bu değişkenler, **Ayarlar → Genel → Ortam değişkenleri** içindekilere ek olarak Git'e, terminale, proje eylemlerine, worktree kurulumuna ve proje başına çalışan worker'lara gider ([Ortam değişkenleri](/tr/environment/) sayfasına bakın). Proje ortamı ve worktree kurulumu host proje yapılandırmasını izler ve projeye özel kalır.
+
+Komutu yalnızca siz belirlersiniz. Depodan okunmaz, bu yüzden klonlanmış bir depo OpenChamber'a hiçbir şey çalıştıramaz.
+
+## Depo yapılandırması ve kaynaklar
+
+Worktree kurulum komutlarını, proje eylemlerini, planları veya taslak başlatıcıları kod tabanını klonlayan ekip arkadaşlarıyla paylaşmak için bunları `.openchamber/project.json` dosyasına taşıyın (bkz. [Depo yapılandırması](/tr/repository-config/)). Proje kapsamındaki eğik çizgi komutları ve skill'ler depo içindeki `.omp/commands/` ve `.omp/skills/` dizinlerinde yer alır (bkz. [Komutlar](/commands-snippets/) ve [Skill'ler](/skills/)).
 
 ## İlgili
 
+- [Depo yapılandırması](/tr/repository-config/) — kurulum komutlarını, eylemleri, başlatıcıları ve planları depoda paylaşın
+- [Sohbetler](/tr/chats/) — hızlı sorular için projesiz oturumlar
 - [Project Notes, Todos & Plans](/notes-todos-plans/) — proje başına çalışma notları tutun
 - [Project Actions](/project-actions/) — sık çalıştırdığınız komutları kaydedin
 - [Context](/context/) — bir oturumun model belleğinin ne kadarını kullandığını görün

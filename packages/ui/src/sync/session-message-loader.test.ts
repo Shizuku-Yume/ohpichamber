@@ -1,611 +1,671 @@
-import { describe, expect, test } from "bun:test"
-import type { Message, OpencodeClient, Part } from "@opencode-ai/sdk/v2/client"
+import { afterEach, describe, expect, test } from "bun:test"
+import type { HistoryPage, SessionSnapshot } from "@openchamber/agent-contract"
 import { ChildStoreManager } from "./child-store"
-import { SessionMessageLoader } from "./session-message-loader"
-import {
-  createFirstVisibleSessionPerformanceTracker,
-  startSessionLoadPerformanceEvent,
-} from "./session-load-performance"
+import { SessionMessageLoader, type LoaderConfiguration } from "./session-message-loader"
+import { deferred, nativeApproval, nativeClient, nativeHistory, nativeHostSession, nativeMessage, nativeQuestion, nativeSnapshot } from "./session-message-loader-test-fixtures"
+import { clearRuntimeSessionPrefetch, getSessionPrefetch, setSessionPrefetch } from "./session-prefetch-cache"
+import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
 
-const createRecord = (sessionID: string, id = "msg_1", created = 1) => ({
-  info: { id, sessionID, role: "user", time: { created } } as Message,
-  parts: [{ id: `part_${id}`, messageID: id, sessionID, type: "text", text: "hello" }] as Part[],
-})
+const cleanups: Array<() => void> = []
+afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup() })
+const target = { directory: "/loader-repo", sessionId: "session-a" }
 
-const deferred = <T>() => {
-  let resolve!: (value: T) => void
-  const promise = new Promise<T>((next) => {
-    resolve = next
-  })
-  return { promise, resolve }
-}
-
-const response = (data: ReturnType<typeof createRecord>[], cursor?: string) => ({
-  data,
-  response: { headers: { get: (name: string) => name === "x-next-cursor" ? cursor ?? null : null } },
-})
-
-const createLoader = (messages: (input: {
-  sessionID: string
-  directory?: string
-  limit?: number
-  before?: string
-}) => Promise<unknown>) => {
+function setup(configuration: Partial<LoaderConfiguration> = {}) {
   const childStores = new ChildStoreManager()
-  const sdk = { session: { messages } } as unknown as OpencodeClient
-  const loader = new SessionMessageLoader(childStores, { sdk, runtimeKey: "runtime-a" })
-  return { childStores, loader }
+  const client = configuration.client ?? nativeClient()
+  const loader = new SessionMessageLoader(childStores, { runtimeKey: "runtime-a", ...configuration, client })
+  const store = childStores.ensureChild(target.directory, { bootstrap: false })
+  cleanups.push(() => { loader.dispose(); childStores.disposeAll() })
+  return { childStores, client, loader, store }
 }
 
-describe("SessionMessageLoader", () => {
-  test("opens a confirmed new session without fetching history", async () => {
+function historyWindow(): SessionSnapshot {
+  const snapshot = nativeSnapshot(target.sessionId, Array.from({ length: 10 }, (_, index) => nativeMessage(target.sessionId, `new-${index}`, index + 20)))
+  snapshot.window.hasEarlier = true
+  return snapshot
+}
+
+describe("canonical session snapshot loading", () => {
+  test("deduplicates foreground and speculative demands", async () => {
+    const pending = deferred<SessionSnapshot>()
     let calls = 0
-    const { childStores, loader } = createLoader(async () => {
-      calls += 1
-      return { error: { message: "not found" }, response: { status: 404 } }
-    })
-    const target = { directory: "/created-repo", sessionID: "session-created" }
-
-    loader.initializeCreatedSession(target)
-    await loader.ensure(target, { reason: "navigation" })
-    await loader.ensure(target, { reason: "reactive" })
-
-    expect(calls).toBe(0)
-    expect(loader.getSnapshot(target)).toMatchObject({ status: "ready", resolved: true, complete: true })
-    expect(childStores.getChild(target.directory)?.getState().message[target.sessionID]).toEqual([])
-
-    const record = createRecord(target.sessionID)
-    loader.optimisticAdd({ ...target, message: record.info, parts: record.parts })
-    await loader.ensure(target)
-    expect(calls).toBe(0)
-    expect(childStores.getChild(target.directory)?.getState().message[target.sessionID]).toEqual([record.info])
-
-    // Explicit recovery still reaches the server and exposes a real failure.
-    await loader.ensure(target, { force: true })
-    expect(calls).toBe(1)
-    expect(loader.getSnapshot(target).status).toBe("error")
-    expect(childStores.getChild(target.directory)?.getState().message[target.sessionID]).toEqual([record.info])
-    loader.dispose()
-    childStores.disposeAll()
-  })
-
-  test("creation supersedes an early history failure without losing the first prompt", async () => {
-    const pending = deferred<{ error: { message: string }; response: { status: number } }>()
-    const { childStores, loader } = createLoader(() => pending.promise)
-    const target = { directory: "/created-race", sessionID: "session-created" }
-    const earlyLoad = loader.ensure(target)
-
-    loader.initializeCreatedSession(target)
-    const record = createRecord(target.sessionID)
-    loader.optimisticAdd({ ...target, message: record.info, parts: record.parts })
-    pending.resolve({ error: { message: "not found" }, response: { status: 404 } })
-    await earlyLoad
-
-    expect(loader.getSnapshot(target).status).toBe("ready")
-    expect(childStores.getChild(target.directory)?.getState().message[target.sessionID]).toEqual([record.info])
-    expect(childStores.getChild(target.directory)?.getState().part[record.info.id]).toEqual(record.parts)
-    loader.dispose()
-    childStores.disposeAll()
-  })
-
-  test("creation preserves messages and history coverage received before its response", async () => {
-    const record = createRecord("session-created")
-    const { childStores, loader } = createLoader(async () => response([record], "older-cursor"))
-    const target = { directory: "/created-events", sessionID: "session-created" }
-    await loader.ensure(target)
-    const before = childStores.getChild(target.directory)?.getState()
-    const coverage = loader.getSnapshot(target)
-
-    loader.initializeCreatedSession(target)
-
-    expect(childStores.getChild(target.directory)?.getState()).toBe(before)
-    expect(loader.getSnapshot(target)).toBe(coverage)
-    loader.dispose()
-    childStores.disposeAll()
-  })
-
-  test("deduplicates navigation and reactive loading for the same target", async () => {
-    const pending = deferred<ReturnType<typeof response>>()
-    let calls = 0
-    const { childStores, loader } = createLoader(async () => {
-      calls += 1
-      return pending.promise
-    })
-    const target = { directory: "/repo", sessionID: "session-a" }
-
+    const { loader, store } = setup({ client: nativeClient({ getSnapshot: () => { calls += 1; return pending.promise } }) })
+    const prefetch = loader.prefetch(target)
     const navigation = loader.ensure(target, { reason: "navigation" })
-    const reactive = loader.ensure(target, { reason: "reactive" })
     expect(calls).toBe(1)
-
-    pending.resolve(response([createRecord(target.sessionID)]))
-    await Promise.all([navigation, reactive])
-
-    expect(loader.getSnapshot(target).status).toBe("ready")
-    expect(childStores.getChild(target.directory)?.getState().message[target.sessionID]?.length).toBe(1)
-    loader.dispose()
-    childStores.disposeAll()
-  })
-
-  test("leaves older history loading to explicit viewport demand", async () => {
-    const calls: Array<{ limit?: number; before?: string }> = []
-    const { childStores, loader } = createLoader(async ({ sessionID, limit, before }) => {
-      calls.push({ limit, before })
-      // Ten prompts satisfy the cold-navigation turn target without expansion.
-      return before
-        ? response([createRecord(sessionID, "msg_older", 1)])
-        : response(Array.from({ length: 10 }, (_, index) => createRecord(sessionID, `msg_${index + 2}`, index + 2)), "older-cursor")
-    })
-    const target = { directory: "/repo", sessionID: "session-a" }
-
-    await loader.ensure(target, { reason: "prefetch" })
-    await Promise.resolve()
-
-    expect(calls).toEqual([{ limit: 100, before: undefined }])
-    expect(loader.getSnapshot(target).cursor).toBe("older-cursor")
-
-    await loader.loadOlder(target)
-
-    expect(calls).toEqual([
-      { limit: 100, before: undefined },
-      { limit: 100, before: "older-cursor" },
-    ])
-    expect(childStores.getChild(target.directory)?.getState().message[target.sessionID]?.map((message) => message.id))
-      .toEqual(["msg_older", ...Array.from({ length: 10 }, (_, index) => `msg_${index + 2}`)])
-    loader.dispose()
-    childStores.disposeAll()
-  })
-
-  test("keeps a post-rollover tail after legacy messages for shared runtime identities", async () => {
-    const runtimes = ["web", "desktop", "vscode", "mobile"]
-    for (const runtimeKey of runtimes) {
-      const childStores = new ChildStoreManager()
-      const sdk = {
-        session: {
-          messages: async ({ sessionID }: { sessionID: string }) => response([
-            createRecord(sessionID, "msg_000000000000Current", 200),
-            createRecord(sessionID, "msg_ffffffffffffLegacy", 100),
-          ]),
-        },
-      } as unknown as OpencodeClient
-      const loader = new SessionMessageLoader(childStores, { sdk, runtimeKey })
-      const target = { directory: `/repo-${runtimeKey}`, sessionID: "session-a" }
-
-      await loader.ensure(target)
-
-      expect(childStores.getChild(target.directory)?.getState().message[target.sessionID]?.map((message) => message.id))
-        .toEqual(["msg_ffffffffffffLegacy", "msg_000000000000Current"])
-      loader.dispose()
-      childStores.disposeAll()
-    }
-  })
-
-  test("loads every history page for an explicit complete-history request", async () => {
-    const calls: Array<{ before?: string }> = []
-    const { childStores, loader } = createLoader(async ({ sessionID, before }) => {
-      calls.push({ before })
-      if (!before) return response([createRecord(sessionID, "msg_latest")], "cursor-2")
-      if (before === "cursor-2") return response([createRecord(sessionID, "msg_middle")], "cursor-1")
-      return response([createRecord(sessionID, "msg_oldest")])
-    })
-    const target = { directory: "/repo", sessionID: "session-a" }
-
-    await loader.loadComplete(target)
-
-    expect(calls).toEqual([
-      { before: undefined },
-      { before: "cursor-2" },
-      { before: "cursor-1" },
-    ])
-    expect(loader.getSnapshot(target).complete).toBe(true)
-    expect(childStores.getChild(target.directory)?.getState().message[target.sessionID]).toHaveLength(3)
-    loader.dispose()
-    childStores.disposeAll()
-  })
-
-  test("rejects a complete-history request when its initial load fails", async () => {
-    const { childStores, loader } = createLoader(async () => ({
-      error: { message: "rejected" },
-      response: { status: 400 },
-    }))
-    const target = { directory: "/repo", sessionID: "session-a" }
-
-    await expect(loader.loadComplete(target)).rejects.toThrow("session.messages failed (400): rejected")
-
-    loader.dispose()
-    childStores.disposeAll()
-  })
-
-  test("rejects a complete-history request when an older page fails", async () => {
-    const { childStores, loader } = createLoader(async ({ sessionID, before }) => before
-      ? { error: { message: "older rejected" }, response: { status: 400 } }
-      : response([createRecord(sessionID)], "older-cursor"))
-    const target = { directory: "/repo", sessionID: "session-a" }
-
-    await expect(loader.loadComplete(target)).rejects.toThrow("session.messages failed (400): older rejected")
-
-    expect(loader.getSnapshot(target).cursor).toBe("older-cursor")
-    loader.dispose()
-    childStores.disposeAll()
-  })
-
-  test("fetches authoritative coverage when renderable messages have no loader metadata", async () => {
-    let calls = 0
-    const { childStores, loader } = createLoader(async ({ sessionID }) => {
-      calls += 1
-      return response([createRecord(sessionID)])
-    })
-    const target = { directory: "/repo", sessionID: "session-a" }
-    childStores.ensureChild(target.directory, { bootstrap: false }).setState({
-      message: { [target.sessionID]: [createRecord(target.sessionID, "cached").info] },
-    })
-
-    await loader.loadComplete(target)
-
+    expect(prefetch).toBe(navigation)
+    pending.resolve(nativeSnapshot())
+    await navigation
+    expect(store.getState().message[target.sessionId]).toEqual(nativeSnapshot().messages)
+    expect(loader.getSnapshot(target)).toMatchObject({ status: "ready", complete: true, resolved: true })
+    await loader.ensure(target)
     expect(calls).toBe(1)
-    expect(loader.getSnapshot(target).complete).toBe(true)
-    loader.dispose()
-    childStores.disposeAll()
   })
 
-  test("rejects repeated pagination cursors instead of looping forever", async () => {
+  test("commits recovery snapshot atomically before reporting the exact SSE cursor", async () => {
+    const recovered = nativeSnapshot()
+    recovered.session.epoch = "epoch-recovered"
+    recovered.session.headSequence = "10000000000000000"
+    recovered.cursor = "epoch-recovered:10000000000000000"
+    recovered.approvals = [nativeApproval(target.sessionId, recovered.session.epoch)]
+    recovered.questions = [nativeQuestion(target.sessionId, recovered.session.epoch)]
+    const { loader, store } = setup({ client: nativeClient({ getSnapshot: async () => recovered }) })
+    store.setState({ message: { [target.sessionId]: [nativeMessage(target.sessionId, "old-message")] }, permission: { [target.sessionId]: [nativeApproval()] }, form: { [target.sessionId]: [nativeQuestion()] } })
+    const publications: string[][] = []
+    store.subscribe(state => { publications.push(state.message[target.sessionId]?.map(message => message.messageId) ?? []) })
+    let callbacks = 0
+    loader.configure({ client: nativeClient({ getSnapshot: async () => recovered }), runtimeKey: "runtime-a", onSnapshot: (reportedTarget, snapshot) => {
+      callbacks += 1
+      expect(reportedTarget).toEqual(target)
+      expect(snapshot).toBe(recovered)
+      expect(snapshot.cursor).toBe("epoch-recovered:10000000000000000")
+      expect(store.getState().snapshot[target.sessionId]?.session.epoch).toBe("epoch-recovered")
+      expect(store.getState().sessionCursor[target.sessionId]).toBe(snapshot.cursor)
+      expect(store.getState().message[target.sessionId]).toEqual(recovered.messages)
+      expect(store.getState().permission[target.sessionId]).toEqual(recovered.approvals)
+      expect(store.getState().form[target.sessionId]).toEqual(recovered.questions)
+    } })
+    await loader.refresh(target)
+    expect(callbacks).toBe(1)
+    expect(publications.every(ids => !ids.includes("old-message"))).toBe(true)
+    expect(loader.getSnapshot(target).cursor).toBeUndefined()
+  })
+
+  test("keeps a recovery refresh behind an in-flight initial snapshot load", async () => {
+    const initial = nativeSnapshot()
+    const recovered = { ...initial, session: { ...initial.session, headSequence: "5" }, cursor: `${initial.session.epoch}:5` }
+    const pending = deferred<SessionSnapshot>()
     let calls = 0
-    const { childStores, loader } = createLoader(async ({ sessionID, before }) => {
-      calls += 1
-      if (!before) return response([createRecord(sessionID, "latest")], "cursor-a")
-      if (before === "cursor-a") return response([createRecord(sessionID, "middle")], "cursor-b")
-      return response([createRecord(sessionID, "older")], "cursor-a")
-    })
-    const target = { directory: "/repo", sessionID: "session-a" }
-
-    await expect(loader.loadComplete(target)).rejects.toThrow("Session history pagination made no progress")
-
-    expect(calls).toBe(3)
-    loader.dispose()
-    childStores.disposeAll()
-  })
-
-  test("runs a requested tail refresh after an older in-flight load", async () => {
-    const initial = deferred<ReturnType<typeof response>>()
-    const refresh = deferred<ReturnType<typeof response>>()
-    let calls = 0
-    const limits: number[] = []
-    const { childStores, loader } = createLoader(async ({ limit }) => {
-      calls += 1
-      limits.push(limit ?? 0)
-      return calls === 1 ? initial.promise : refresh.promise
-    })
-    const target = { directory: "/repo", sessionID: "session-a" }
-
-    const loading = loader.ensure(target, { reason: "navigation" })
-    const refreshing = loader.refreshTail(target, 30)
-    const duplicateRefresh = loader.refreshTail(target, 80)
-    expect(calls).toBe(1)
-    expect(duplicateRefresh).toBe(refreshing)
-
-    initial.resolve(response([createRecord(target.sessionID, "msg_1")]))
-    await loading
-    await Promise.resolve()
-    expect(calls).toBe(2)
-    expect(limits).toEqual([100, 80])
-
-    refresh.resolve(response([createRecord(target.sessionID, "msg_2")]))
-    await Promise.all([refreshing, duplicateRefresh])
-
-    expect(childStores.getChild(target.directory)?.getState().message[target.sessionID]?.map((message) => message.id))
-      .toEqual(["msg_1", "msg_2"])
-    loader.dispose()
-    childStores.disposeAll()
-  })
-
-  test("preserves complete history coverage across a tail refresh", async () => {
-    let calls = 0
-    const { childStores, loader } = createLoader(async ({ sessionID }) => {
-      calls += 1
-      return calls === 1
-        ? response([createRecord(sessionID, "msg_1")])
-        : response([createRecord(sessionID, "msg_2")], "stale-tail-cursor")
-    })
-    const target = { directory: "/repo", sessionID: "session-a" }
-
-    await loader.ensure(target)
-    expect(loader.getSnapshot(target).complete).toBe(true)
-    expect(loader.getSnapshot(target).cursor).toBe(undefined)
-
-    await loader.refreshTail(target, 2)
-
-    expect(loader.getSnapshot(target).complete).toBe(true)
-    expect(loader.getSnapshot(target).cursor).toBe(undefined)
-    loader.dispose()
-    childStores.disposeAll()
-  })
-
-  test("does not deduplicate identical session IDs across directories", async () => {
-    const calls: string[] = []
-    const { childStores, loader } = createLoader(async ({ directory, sessionID }) => {
-      calls.push(directory ?? "")
-      return response([createRecord(sessionID)])
-    })
-
-    await Promise.all([
-      loader.ensure({ directory: "/repo-a", sessionID: "shared" }),
-      loader.ensure({ directory: "/repo-b", sessionID: "shared" }),
-    ])
-
-    expect(calls.sort()).toEqual(["/repo-a", "/repo-b"])
-    loader.dispose()
-    childStores.disposeAll()
-  })
-
-  test("loads older history with the selected directory's cursor for duplicate session IDs", async () => {
-    const providerDirectory = "/repo/provider"
-    const selectedDirectory = "/repo/selected-worktree"
-    const sessionID = "shared"
-    const calls: Array<{ directory?: string; before?: string }> = []
-    const { childStores, loader } = createLoader(async ({ directory, before }) => {
-      calls.push({ directory, before })
-      return before
-        ? response([createRecord(sessionID, `older-${directory}`)])
-        : response([createRecord(sessionID, `latest-${directory}`)], `${directory}-cursor`)
-    })
-
-    await Promise.all([
-      loader.ensure({ directory: providerDirectory, sessionID }),
-      loader.ensure({ directory: selectedDirectory, sessionID }),
-    ])
-
-    // Cold navigation extends each directory's window through its own cursor.
-    expect(calls.filter((call) => call.before)).toEqual([
-      { directory: providerDirectory, before: `${providerDirectory}-cursor` },
-      { directory: selectedDirectory, before: `${selectedDirectory}-cursor` },
-    ])
-    expect(loader.getSnapshot({ directory: selectedDirectory, sessionID }).complete).toBe(true)
-    calls.length = 0
-    await loader.loadOlder({ directory: selectedDirectory, sessionID })
-    expect(calls).toEqual([])
-    loader.dispose()
-    childStores.disposeAll()
-  })
-
-  test("exposes a retryable error without clearing an existing snapshot", async () => {
-    let fail = true
-    const { childStores, loader } = createLoader(async ({ sessionID }) => {
-      if (fail) return { error: { message: "rejected" }, response: { status: 400 } }
-      return response([createRecord(sessionID)])
-    })
-    const target = { directory: "/repo", sessionID: "session-a" }
-    const store = childStores.ensureChild(target.directory, { bootstrap: false })
-    store.setState({ message: { [target.sessionID]: [{ id: "cached", sessionID: target.sessionID, role: "user", time: { created: 0 } } as Message] } })
-
-    await loader.ensure(target, { force: true })
-    expect(loader.getSnapshot(target).status).toBe("error")
-    expect((loader.getSnapshot(target).error as Error & { status?: number }).status).toBe(400)
-    expect(store.getState().message[target.sessionID]?.[0]?.id).toBe("cached")
-
-    fail = false
-    await loader.ensure(target, { force: true })
-    expect(loader.getSnapshot(target).status).toBe("ready")
-    loader.dispose()
-    childStores.disposeAll()
-  })
-
-  test("propagates a zero response status on SDK errors", async () => {
-    const { childStores, loader } = createLoader(async () => ({
-      error: { message: "network rejected" },
-      response: { status: 0 },
-    }))
-    const target = { directory: "/repo", sessionID: "session-a" }
-
-    await loader.ensure(target, { force: true })
-
-    expect((loader.getSnapshot(target).error as Error & { status?: number }).status).toBe(0)
-    loader.dispose()
-    childStores.disposeAll()
-  })
-
-  test("prevents an evicted in-flight request from repopulating the store", async () => {
-    const pending = deferred<ReturnType<typeof response>>()
-    const { childStores, loader } = createLoader(async () => pending.promise)
-    const target = { directory: "/repo", sessionID: "session-a" }
-
-    const loading = loader.ensure(target)
-    loader.invalidateSession(target)
-    pending.resolve(response([createRecord(target.sessionID)]))
-    await loading
-
-    expect(childStores.getChild(target.directory)?.getState().message[target.sessionID]).toBe(undefined)
-    expect(loader.getSnapshot(target).status).toBe("idle")
-    loader.dispose()
-    childStores.disposeAll()
-  })
-
-  test("treats an empty successful response as resolved authoritative state", async () => {
-    const { childStores, loader } = createLoader(async () => response([]))
-    const target = { directory: "/repo", sessionID: "empty" }
-
-    await loader.ensure(target)
-
-    expect(loader.getSnapshot(target).resolved).toBe(true)
-    expect(loader.getSnapshot(target).complete).toBe(true)
-    expect(childStores.getChild(target.directory)?.getState().message[target.sessionID]).toEqual([])
-    loader.dispose()
-    childStores.disposeAll()
-  })
-
-  test("retries a missing message payload instead of treating it as an empty snapshot", async () => {
-    let calls = 0
-    const { childStores, loader } = createLoader(async ({ sessionID }) => {
-      calls += 1
-      return calls === 1 ? {} : response([createRecord(sessionID)])
-    })
-    const target = { directory: "/repo", sessionID: "session-a" }
-
-    await loader.ensure(target)
-
-    expect(calls).toBe(2)
-    expect(loader.getSnapshot(target).status).toBe("ready")
-    expect(childStores.getChild(target.directory)?.getState().message[target.sessionID]?.length).toBe(1)
-    loader.dispose()
-    childStores.disposeAll()
-  })
-
-  test("reports retries and every downloaded initial expansion record", async () => {
-    const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window")
-    const diagnosticWindow = {
-      location: { search: "" },
-      localStorage: {
-        getItem: (key: string) => key === "openchamber_session_load_perf" ? "1" : null,
+    const seen: Array<{ previous?: string; current: string }> = []
+    const { loader, store } = setup({
+      client: nativeClient({ getSnapshot: async () => (++calls === 1 ? pending.promise : recovered) }),
+      onSnapshot: (_target, snapshot, previous) => {
+        seen.push({ previous: previous?.session.headSequence, current: snapshot.session.headSequence })
       },
-    } as unknown as Window
-    Object.defineProperty(globalThis, "window", { configurable: true, value: diagnosticWindow })
-
-    const target = { directory: "/repo", sessionID: "session-a" }
-    let calls = 0
-    const { childStores, loader } = createLoader(async () => {
-      calls += 1
-      if (calls === 1) return {}
-      if (calls === 2) {
-        const assistant = createRecord(target.sessionID, "msg_assistant")
-        assistant.info = { ...assistant.info, role: "assistant" } as Message
-        return response([assistant], "older")
-      }
-      return response([createRecord(target.sessionID, "msg_user")])
     })
+    const initialLoad = loader.ensure(target)
+    const recovery = loader.refresh(target, undefined, { recovered: true })
+    expect(recovery).not.toBe(initialLoad)
+    pending.resolve(initial)
+    await initialLoad
+    await recovery
+    expect(seen).toEqual([{ previous: undefined, current: "4" }, { previous: "4", current: "5" }])
+    expect(store.getState().snapshot[target.sessionId]?.session.headSequence).toBe("5")
+  })
 
-    try {
-      await loader.ensure(target)
+  test("snapshot failure preserves authoritative state and reports one load failure without retry", async () => {
+    let calls = 0
+    const error = new Error("Host unavailable")
+    const { loader, store } = setup({ client: nativeClient({ getSnapshot: async () => { calls += 1; throw error } }) })
+    const old = nativeSnapshot()
+    const host = nativeHostSession(old)
+    store.setState({ snapshot: { [target.sessionId]: old }, message: { [target.sessionId]: old.messages }, session: [host], queue: { [target.sessionId]: { sessionId: target.sessionId, revision: "9", items: [] } } })
+    const before = store.getState()
+    await loader.refresh(target)
+    expect(store.getState()).toBe(before)
+    expect(loader.getSnapshot(target)).toMatchObject({ status: "error", error })
+    expect(calls).toBe(1)
+  })
 
-      const events = diagnosticWindow.__openchamberSessionLoadPerformance?.events ?? []
-      const initialEvent = events.find((event) => event.operation === "session-messages.initial")
-      const pageEvents = events.filter((event) => event.operation === "session-messages.page")
-      expect(calls).toBe(3)
-      expect(pageEvents.map((event) => event.requestLimit)).toEqual([100, 100])
-      expect(pageEvents.map((event) => event.cursorPresent)).toEqual([false, true])
-      expect(pageEvents.map((event) => event.recordCount)).toEqual([1, 1])
-      expect(initialEvent?.outcome).toBe("complete")
-      expect(initialEvent?.retryCount).toBe(1)
-      expect(initialEvent?.recordCount).toBe(2)
-      expect("runtimeKey" in initialEvent!).toBe(false)
-      expect("directory" in initialEvent!).toBe(false)
-      expect("sessionID" in initialEvent!).toBe(false)
-    } finally {
-      loader.dispose()
-      childStores.disposeAll()
-      if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow)
-      else Reflect.deleteProperty(globalThis, "window")
+  test("metadata and queue failures leave cached Host authorities intact while runtime recovers", async () => {
+    const snapshot = nativeSnapshot()
+    const host = nativeHostSession(snapshot)
+    const queue = { sessionId: target.sessionId, revision: "9", items: [] }
+    const { loader, store } = setup({ client: nativeClient({ getSessionMetadata: async () => { throw new Error("metadata failed") }, getQueue: async () => { throw new Error("queue failed") } }) })
+    store.setState({ session: [host], queue: { [target.sessionId]: queue } })
+    await loader.ensure(target)
+    expect(store.getState().session[0]?.metadata).toBe(host.metadata)
+    expect(store.getState().session[0]?.metadataRevision).toBe("5")
+    expect(store.getState().session[0]?.archiveRevision).toBe("8")
+    expect(store.getState().session[0]?.archivedAt).toBe(3)
+    expect(store.getState().queue[target.sessionId]).toBe(queue)
+    expect(loader.getSnapshot(target).status).toBe("ready")
+  })
+
+  test("one failed Host read does not prevent the other independent authority from updating", async () => {
+    const { loader, store } = setup({ client: nativeClient({ getSessionMetadata: async () => { throw new Error("metadata failed") }, getQueue: async sessionId => ({ sessionId, revision: "10", items: [] }) }) })
+    store.setState({ session: [nativeHostSession()], queue: { [target.sessionId]: { sessionId: target.sessionId, revision: "9", items: [] } } })
+    await loader.ensure(target)
+    expect(store.getState().session[0]?.metadataRevision).toBe("5")
+    expect(store.getState().queue[target.sessionId]?.revision).toBe("10")
+  })
+
+  test("missing Host projection uses a native session list, without synthesized metadata or archive", async () => {
+    const host = nativeHostSession()
+    const { loader, store } = setup({ client: nativeClient({ listSessions: async workspaceId => { expect(workspaceId).toBe("workspace-a"); return { items: [host], errors: {} } } }) })
+    await loader.ensure(target)
+    expect(store.getState().session[0]).toMatchObject({ metadata: host.metadata, metadataRevision: "5", archiveRevision: "8", archivedAt: 3 })
+    const unprojected = { ...target, sessionId: "session-unprojected" }
+    const failing = setup({ client: nativeClient({ listSessions: async () => { throw new Error("discovery failed") } }) })
+    // Directory managers hydrate the same persisted Host projection. A failed
+    // discovery for another session must not erase this valid sibling.
+    const priorSibling = failing.store.getState().session.find(item => item.sessionId === target.sessionId)
+    expect(priorSibling).toEqual(store.getState().session.find(item => item.sessionId === target.sessionId))
+    await failing.loader.ensure(unprojected)
+    expect(failing.store.getState().session.find(item => item.sessionId === unprojected.sessionId)).toBeUndefined()
+    expect(failing.store.getState().session.find(item => item.sessionId === target.sessionId)).toBe(priorSibling)
+    expect(failing.store.getState().snapshot[unprojected.sessionId]).toBeDefined()
+  })
+
+  test("metadata and archive revisions reconcile independently and never regress", async () => {
+    const oldHost = nativeHostSession()
+    const incoming = { ...oldHost, metadata: { title: "New title" }, metadataRevision: "6", archiveRevision: "1", archivedAt: undefined }
+    const { loader, store } = setup({ client: nativeClient({ listSessions: async () => ({ items: [incoming], errors: {} }), getSessionMetadata: async sessionId => ({ sessionId, metadata: { title: "Newer title" }, revision: "7" }) }) })
+    // A concurrent projection arrives while the missing-session list request is in flight.
+    const list = deferred<{ items: typeof incoming[]; errors: Record<string, never> }>()
+    const client = nativeClient({ listSessions: () => list.promise, getSessionMetadata: async sessionId => ({ sessionId, metadata: { title: "Newer title" }, revision: "7" }) })
+    loader.configure({ client, runtimeKey: "runtime-a" })
+    const load = loader.ensure(target)
+    await Promise.resolve()
+    await Promise.resolve()
+    store.setState({ session: [oldHost] })
+    list.resolve({ items: [incoming], errors: {} })
+    await load
+    expect(store.getState().session[0]?.metadata?.title).toBe("Newer title")
+    expect(store.getState().session[0]?.metadataRevision).toBe("7")
+    expect(store.getState().session[0]?.archiveRevision).toBe("8")
+    expect(store.getState().session[0]?.archivedAt).toBe(3)
+  })
+
+  test("rejects snapshot responses from an obsolete runtime", async () => {
+    const pending = deferred<SessionSnapshot>()
+    let callbacks = 0
+    const { loader, store } = setup({ client: nativeClient({ getSnapshot: () => pending.promise }), onSnapshot: () => { callbacks += 1 } })
+    const oldLoad = loader.ensure(target)
+    loader.configure({ client: nativeClient({ getSnapshot: async () => nativeSnapshot(target.sessionId, [nativeMessage(target.sessionId, "current")]) }), runtimeKey: "runtime-b", onSnapshot: () => { callbacks += 1 } })
+    await loader.ensure(target)
+    pending.resolve(nativeSnapshot(target.sessionId, [nativeMessage(target.sessionId, "obsolete")]))
+    await oldLoad
+    expect(store.getState().message[target.sessionId]?.map(message => message.messageId)).toEqual(["current"])
+    expect(callbacks).toBe(1)
+  })
+
+  test("rejects a response after directory store identity changes", async () => {
+    const pending = deferred<SessionSnapshot>()
+    const { loader, childStores, store } = setup({ client: nativeClient({ getSnapshot: () => pending.promise }) })
+    const load = loader.ensure(target)
+    expect(childStores.disposeDirectory(target.directory)).toBe(true)
+    const replacement = childStores.ensureChild(target.directory, { bootstrap: false })
+    pending.resolve(nativeSnapshot())
+    await load
+    expect(replacement).not.toBe(store)
+    expect(replacement.getState().message[target.sessionId]).toBeUndefined()
+    expect(store.getState().message[target.sessionId]).toBeUndefined()
+  })
+
+  test("clearDirectory and session invalidation reject stale generations", async () => {
+    for (const scope of ["directory", "session"] as const) {
+      const pending = deferred<SessionSnapshot>()
+      const { loader, store } = setup({ client: nativeClient({ getSnapshot: () => pending.promise }) })
+      const load = loader.ensure(target)
+      if (scope === "directory") loader.clearDirectory(target.directory)
+      else loader.invalidateSession(target)
+      pending.resolve(nativeSnapshot())
+      await load
+      expect(store.getState().message[target.sessionId]).toBeUndefined()
+      expect(loader.getSnapshot(target).resolved).toBe(false)
     }
+  })
+
+  test("isCurrent rejects late snapshot and Host writes", async () => {
+    const pending = deferred<SessionSnapshot>()
+    let current = true
+    const { loader, store } = setup({ client: nativeClient({ getSnapshot: () => pending.promise }), isCurrent: () => current })
+    const load = loader.ensure(target)
+    current = false
+    pending.resolve(nativeSnapshot())
+    await load
+    expect(store.getState().message[target.sessionId]).toBeUndefined()
+  })
+
+  test("late independent Host reads cannot publish into another runtime", async () => {
+    const metadata = deferred<{ sessionId: string; revision: string; metadata: { title: string } }>()
+    const { loader, store } = setup({ client: nativeClient({ getSessionMetadata: () => metadata.promise }) })
+    store.setState({ session: [nativeHostSession()] })
+    const load = loader.ensure(target)
+    await Promise.resolve()
+    await Promise.resolve()
+    loader.configure({ client: nativeClient(), runtimeKey: "runtime-b" })
+    metadata.resolve({ sessionId: target.sessionId, revision: "100", metadata: { title: "Obsolete" } })
+    await load
+    expect(store.getState().session[0]?.metadata?.title).toBe("Saved title")
+  })
+  test("does not resurrect a session deleted while its snapshot was in flight", async () => {
+    const pending = deferred<SessionSnapshot>()
+    const { loader, store } = setup({ client: nativeClient({ getSnapshot: () => pending.promise }) })
+    const load = loader.ensure(target)
+    store.setState({ sessionRevision: 1, sessionDeletedRevision: { [target.sessionId]: 1 } })
+    pending.resolve(nativeSnapshot())
+    await load
+    expect(store.getState().message[target.sessionId]).toBeUndefined()
+    expect(loader.getSnapshot(target)).toMatchObject({ status: "idle", resolved: false })
+  })
+
+})
+
+describe("native history coverage", () => {
+  test("a history demand waits for initial materialization and then loads older records", async () => {
+    const pending = deferred<SessionSnapshot>()
+    const snapshot = historyWindow()
+    const older = nativeMessage(target.sessionId, "older-after-initial", 0)
+    let calls = 0
+    const { loader, store } = setup({ client: nativeClient({ getSnapshot: () => pending.promise, getHistory: async () => ++calls === 1 ? nativeHistory(snapshot.messages, "older", snapshot) : nativeHistory([older], null, snapshot) }) })
+    const initial = loader.ensure(target)
+    const history = loader.loadOlder(target)
+    pending.resolve(snapshot)
+    await Promise.all([initial, history])
+    expect(calls).toBe(2)
+    expect(store.getState().message[target.sessionId]?.[0]).toBe(older)
+    expect(loader.getSnapshot(target).complete).toBe(true)
+  })
+
+  test("a queued history demand cannot cross runtime reconfiguration", async () => {
+    const pending = deferred<SessionSnapshot>()
+    let calls = 0
+    const { loader } = setup({ client: nativeClient({ getSnapshot: () => pending.promise, getHistory: async () => { calls += 1; return nativeHistory([]) } }) })
+    const initial = loader.ensure(target)
+    const history = loader.loadOlder(target)
+    loader.configure({ runtimeKey: "replacement-runtime", client: nativeClient() })
+    pending.resolve(historyWindow())
+    await Promise.all([initial, history])
+    expect(calls).toBe(0)
+    expect(loader.getSnapshot(target).resolved).toBe(false)
+  })
+
+  test("uses HistoryPage.nextCursor only, merging chronological messages, inline parts and turns", async () => {
+    const snapshot = historyWindow()
+    const older = nativeMessage(target.sessionId, "old", 1)
+    const requests: Array<{ cursor?: string; leafTurnId?: string; limit?: number } | undefined> = []
+    const reportedCursors: string[] = []
+    const { loader, store } = setup({ client: nativeClient({ getSnapshot: async () => snapshot, getHistory: async (_id, options) => {
+      requests.push(options)
+      return options?.cursor ? nativeHistory([older], null, snapshot) : nativeHistory([...snapshot.messages].reverse(), "opaque-history-page", snapshot)
+    } }), onSnapshot: (_target, committed) => reportedCursors.push(committed.cursor) })
+    await loader.ensure(target)
+    expect(loader.getSnapshot(target).cursor).toBe("opaque-history-page")
+    await loader.loadOlder(target)
+    expect(requests[1]?.cursor).toBe("opaque-history-page")
+    expect(requests[1]?.leafTurnId).toBeUndefined()
+    expect(reportedCursors).toEqual([snapshot.cursor])
+    expect(store.getState().sessionCursor[target.sessionId]).toBe(snapshot.cursor)
+    expect(store.getState().message[target.sessionId]?.[0]).toEqual(older)
+    expect(store.getState().message[target.sessionId]?.[0]?.parts[0]?.partId).toBe("part-old")
+    expect(store.getState().snapshot[target.sessionId]?.turns[0]?.turnId).toBe(older.turnId)
+    expect(loader.getSnapshot(target).complete).toBe(true)
+  })
+
+  test("history failure preserves visible history and cursor and never reports complete", async () => {
+    const snapshot = historyWindow()
+    let calls = 0
+    const { loader, store } = setup({ client: nativeClient({ getSnapshot: async () => snapshot, getHistory: async () => {
+      calls += 1
+      if (calls > 1) throw new Error("history failed")
+      return nativeHistory(snapshot.messages, "history-older", snapshot)
+    } }) })
+    await loader.ensure(target)
+    const messages = store.getState().message[target.sessionId]
+    await loader.loadOlder(target)
+    expect(store.getState().message[target.sessionId]).toBe(messages)
+    expect(loader.getSnapshot(target)).toMatchObject({ status: "error", cursor: "history-older", complete: false })
+    await expect(loader.loadComplete(target)).rejects.toThrow("history failed")
+    expect(calls).toBe(2)
+  })
+
+  test("rejects a history page from another branch identity or version", async () => {
+    for (const mismatch of ["branchId", "branchVersion"] as const) {
+      const snapshot = historyWindow()
+      let calls = 0
+      const { loader, store } = setup({ client: nativeClient({ getSnapshot: async () => snapshot, getHistory: async () => {
+        calls += 1
+        const page = nativeHistory(calls === 1 ? snapshot.messages : [nativeMessage(target.sessionId, "wrong-branch", 0)], "history-next", snapshot)
+        if (calls > 1) page.branch = { ...page.branch, [mismatch]: mismatch === "branchId" ? "branch-b" : "2" }
+        return page
+      } }) })
+      await loader.ensure(target)
+      const before = store.getState()
+      await loader.loadOlder(target)
+      expect(store.getState()).toBe(before)
+      expect(loader.getSnapshot(target)).toMatchObject({ status: "error", complete: false, cursor: "history-next" })
+    }
+  })
+
+  test("rejects in-flight history after the live branch changes", async () => {
+    const snapshot = historyWindow()
+    const pending = deferred<HistoryPage>()
+    let calls = 0
+    const { loader, store } = setup({ client: nativeClient({ getSnapshot: async () => snapshot, getHistory: () => ++calls === 1 ? Promise.resolve(nativeHistory(snapshot.messages, "older", snapshot)) : pending.promise }) })
+    await loader.ensure(target)
+    const load = loader.loadOlder(target)
+    store.setState({ snapshot: { [target.sessionId]: { ...store.getState().snapshot[target.sessionId]!, branch: { ...snapshot.branch, branchVersion: "2" } } } })
+    const before = store.getState()
+    pending.resolve(nativeHistory([nativeMessage(target.sessionId, "obsolete-history", 0)], null, snapshot))
+    await load
+    expect(store.getState()).toBe(before)
+    expect(loader.getSnapshot(target).complete).toBe(false)
+  })
+
+  test("generation invalidation refuses stale history", async () => {
+    const snapshot = historyWindow()
+    const pending = deferred<HistoryPage>()
+    let calls = 0
+    const { loader, store } = setup({ client: nativeClient({ getSnapshot: async () => snapshot, getHistory: () => ++calls === 1 ? Promise.resolve(nativeHistory(snapshot.messages, "older", snapshot)) : pending.promise }) })
+    await loader.ensure(target)
+    const load = loader.loadOlder(target)
+    loader.invalidateSession(target)
+    pending.resolve(nativeHistory([nativeMessage(target.sessionId, "obsolete-history", 0)], null, snapshot))
+    await load
+    expect(store.getState().message[target.sessionId]?.some(message => message.messageId === "obsolete-history")).toBe(false)
+    expect(loader.getSnapshot(target).resolved).toBe(false)
+  })
+
+  test("history does not overwrite newer live parts for overlapping native message IDs", async () => {
+    const snapshot = historyWindow()
+    const changed = { ...snapshot.messages[0]!, parts: [{ type: "text" as const, partId: snapshot.messages[0]!.parts[0]!.partId, content: "live update" }] }
+    let calls = 0
+    const { loader, store } = setup({ client: nativeClient({ getSnapshot: async () => snapshot, getHistory: async () => ++calls === 1 ? nativeHistory(snapshot.messages, "older", snapshot) : nativeHistory([snapshot.messages[0]!], null, snapshot) }) })
+    await loader.ensure(target)
+    store.setState({ message: { [target.sessionId]: [changed, ...snapshot.messages.slice(1)] } })
+    await loader.loadOlder(target)
+    expect(store.getState().message[target.sessionId]?.[0]).toBe(changed)
+    expect(changed.parts[0]?.content).toBe("live update")
+  })
+
+  test("coalesces a parent recovery refresh behind a history read and replaces old branch atomically", async () => {
+    const snapshot = historyWindow()
+    const pending = deferred<HistoryPage>()
+    let historyCalls = 0
+    let snapshotCalls = 0
+    const recovered = nativeSnapshot(target.sessionId, [nativeMessage(target.sessionId, "recovered")])
+    recovered.branch = { ...recovered.branch, branchId: "branch-b", branchVersion: "2" }
+    const { loader, store } = setup({ client: nativeClient({ getSnapshot: async () => ++snapshotCalls === 1 ? snapshot : recovered, getHistory: () => ++historyCalls === 1 ? Promise.resolve(nativeHistory(snapshot.messages, "older", snapshot)) : pending.promise }) })
+    await loader.ensure(target)
+    const older = loader.loadOlder(target)
+    const refresh = loader.refresh(target)
+    expect(loader.refresh(target)).toBe(refresh)
+    expect(snapshotCalls).toBe(1)
+    pending.resolve(nativeHistory([nativeMessage(target.sessionId, "old-history", 0)], null, snapshot))
+    await Promise.all([older, refresh])
+    expect(snapshotCalls).toBe(2)
+    expect(store.getState().message[target.sessionId]?.map(message => message.messageId)).toEqual(["recovered"])
+    expect(store.getState().snapshot[target.sessionId]?.branch).toEqual(recovered.branch)
+  })
+
+  test("loadComplete walks history to real terminal coverage", async () => {
+    const snapshot = historyWindow()
+    const cursors: Array<string | undefined> = []
+    const { loader } = setup({ client: nativeClient({ getSnapshot: async () => snapshot, getHistory: async (_id, options) => {
+      cursors.push(options?.cursor)
+      return options?.cursor ? nativeHistory([nativeMessage(target.sessionId, "oldest", 0)], null, snapshot) : nativeHistory(snapshot.messages, "older", snapshot)
+    } }) })
+    await loader.loadComplete(target)
+    expect(cursors).toEqual([undefined, "older"])
+    expect(loader.getSnapshot(target).complete).toBe(true)
   })
 })
 
-describe("session load performance diagnostics", () => {
-  test("rejects unknown raw labels and preserves approved input counts", () => {
-    const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window")
-    const diagnosticWindow = {
-      localStorage: {
-        getItem: (key: string) => key === "openchamber_session_load_perf" ? "1" : null,
-      },
-    } as unknown as Window
-    Object.defineProperty(globalThis, "window", { configurable: true, value: diagnosticWindow })
-
-    try {
-      const finishUnknown = startSessionLoadPerformanceEvent({
-        operation: "secret-operation",
-        caller: "secret-caller",
-        recordCount: 999,
-      })
-      finishUnknown("complete")
-      const finishVisible = startSessionLoadPerformanceEvent({
-        operation: "session-messages.visible",
-        caller: "selected-session",
-        recordCount: 30,
-      })
-      finishVisible("complete")
-
-      expect(diagnosticWindow.__openchamberSessionLoadPerformance?.events).toHaveLength(1)
-      const event = diagnosticWindow.__openchamberSessionLoadPerformance?.events[0]
-      expect(event?.operation).toBe("session-messages.visible")
-      expect(event?.caller).toBe("selected-session")
-      expect(event?.recordCount).toBe(30)
-      expect(JSON.stringify(diagnosticWindow.__openchamberSessionLoadPerformance)).not.toContain("secret")
-    } finally {
-      if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow)
-      else Reflect.deleteProperty(globalThis, "window")
-    }
+describe("native optimistic continuity", () => {
+  test("history echoes promote optimistic records and later rollback cannot remove them", async () => {
+    const snapshot = historyWindow()
+    const authoritative = nativeMessage(target.sessionId, "history-echo", 0)
+    let calls = 0
+    const { loader, store } = setup({ client: nativeClient({ getSnapshot: async () => snapshot, getHistory: async () => ++calls === 1 ? nativeHistory(snapshot.messages, "older", snapshot) : nativeHistory([authoritative], null, snapshot) }) })
+    await loader.ensure(target)
+    loader.optimisticAdd({ ...target, message: nativeMessage(target.sessionId, authoritative.messageId, 999) })
+    await loader.loadOlder(target)
+    loader.optimisticRemove({ ...target, messageId: authoritative.messageId })
+    expect(store.getState().message[target.sessionId]?.[0]).toBe(authoritative)
+    expect(store.getState().snapshot[target.sessionId]?.messages[0]).toBe(authoritative)
+    expect(store.getState().partOwner[target.sessionId]?.[authoritative.parts[0]!.partId]).toBe(authoritative.messageId)
   })
 
-  test("does not schedule visibility work while diagnostics are disabled", () => {
-    let requestedFrames = 0
-    let visibleMarks = 0
-    const tracker = createFirstVisibleSessionPerformanceTracker({
-      enabled: () => false,
-      requestFrame: () => {
-        requestedFrames += 1
-        return 1
-      },
-      cancelFrame: () => undefined,
-      markVisible: () => {
-        visibleMarks += 1
-      },
-    })
-
-    tracker.schedule("session-a", 10)
-
-    expect(requestedFrames).toBe(0)
-    expect(visibleMarks).toBe(0)
+  test("echoed optimistic messages receive authoritative timestamps and inline parts", async () => {
+    const pending = deferred<SessionSnapshot>()
+    const { loader, store } = setup({ client: nativeClient({ getSnapshot: () => pending.promise }) })
+    const load = loader.ensure(target)
+    const optimistic = nativeMessage(target.sessionId, "echo", 999)
+    loader.optimisticAdd({ ...target, message: optimistic })
+    const authoritative = nativeMessage(target.sessionId, "echo", 10)
+    pending.resolve(nativeSnapshot(target.sessionId, [authoritative]))
+    await load
+    expect(store.getState().message[target.sessionId]).toEqual([authoritative])
+    expect(store.getState().partOwner[target.sessionId]?.["part-echo"]).toBe("echo")
   })
 
-  test("reschedules an identity when its pending visibility frame was canceled", () => {
-    let nextFrame = 0
-    const frames = new Map<number, FrameRequestCallback>()
-    const marks: string[] = []
-    const tracker = createFirstVisibleSessionPerformanceTracker({
-      enabled: () => true,
-      requestFrame: (callback) => {
-        nextFrame += 1
-        frames.set(nextFrame, callback)
-        return nextFrame
-      },
-      cancelFrame: (frame) => {
-        frames.delete(frame)
-      },
-      markVisible: () => marks.push("visible"),
-      startEvent: () => () => undefined,
-    })
-
-    const cancelFirstA = tracker.schedule("session-a", 10)
-    cancelFirstA()
-    const cancelB = tracker.schedule("session-b", 10)
-    cancelB()
-    tracker.schedule("session-a", 10)
-    frames.get(3)?.(0)
-
-    expect(marks).toEqual(["visible"])
+  test("unconfirmed optimistic messages survive recovery and rollback clears their part ownership", async () => {
+    const { loader, store } = setup()
+    const optimistic = nativeMessage(target.sessionId, "optimistic", 10)
+    loader.optimisticAdd({ ...target, message: optimistic })
+    await loader.ensure(target)
+    expect(store.getState().message[target.sessionId]).toContain(optimistic)
+    loader.optimisticRemove({ ...target, messageId: optimistic.messageId })
+    expect(store.getState().message[target.sessionId]).not.toContain(optimistic)
+    expect(store.getState().partOwner[target.sessionId]?.["part-optimistic"]).toBeUndefined()
+  })
+  test("rollback does not remove an authoritative echoed message", async () => {
+    const authoritative = nativeMessage(target.sessionId, "promoted", 10)
+    const { loader, store } = setup({ client: nativeClient({ getSnapshot: async () => nativeSnapshot(target.sessionId, [authoritative]) }) })
+    loader.optimisticAdd({ ...target, message: nativeMessage(target.sessionId, "promoted", 999) })
+    await loader.ensure(target)
+    loader.optimisticRemove({ ...target, messageId: authoritative.messageId })
+    expect(store.getState().message[target.sessionId]).toEqual([authoritative])
   })
 
-  test("does not remeasure a completed identity after another session", () => {
-    let nextFrame = 0
-    const frames = new Map<number, FrameRequestCallback>()
-    const marks: string[] = []
-    const tracker = createFirstVisibleSessionPerformanceTracker({
-      enabled: () => true,
-      requestFrame: (callback) => {
-        nextFrame += 1
-        frames.set(nextFrame, callback)
-        return nextFrame
+
+  test("creating a session does not fake an authoritative runtime snapshot", async () => {
+    let calls = 0
+    const { loader, store } = setup({ client: nativeClient({ getSnapshot: async () => { calls += 1; return nativeSnapshot(target.sessionId, []) } }) })
+    loader.initializeCreatedSession(target)
+    expect(store.getState().message[target.sessionId]).toEqual([])
+    expect(store.getState().snapshot[target.sessionId]).toBeUndefined()
+    expect(loader.getSnapshot(target).resolved).toBe(false)
+    await loader.ensure(target)
+    expect(calls).toBe(1)
+    expect(loader.getSnapshot(target).complete).toBe(true)
+  })
+})
+
+describe("native selection recovery cache boundary", () => {
+  afterEach(() => clearRuntimeSessionPrefetch("runtime-a"))
+
+  test("invalidates speculative coverage without requiring a materialized loader entry", () => {
+    const { loader } = setup()
+    const other = { ...target, sessionId: "session-other" }
+    setSessionPrefetch({ ...target, runtimeKey: "runtime-a", limit: 100, complete: true })
+    setSessionPrefetch({ ...other, runtimeKey: "runtime-a", limit: 100, complete: true })
+    loader.invalidateSession(target)
+    expect(getSessionPrefetch(target.directory, target.sessionId, "runtime-a")).toBeUndefined()
+    expect(getSessionPrefetch(other.directory, other.sessionId, "runtime-a")?.complete).toBe(true)
+  })
+
+  test("discarded optimistic shadows cannot reappear after an empty authoritative selection", async () => {
+    const { loader, store } = setup({ client: nativeClient({ getSnapshot: async sessionId => nativeSnapshot(sessionId, []) }) })
+    const other = { ...target, sessionId: "session-other" }
+    const discarded = nativeMessage(target.sessionId, "discarded", 1)
+    const unrelated = nativeMessage(other.sessionId, "unrelated", 1)
+    loader.optimisticAdd({ ...target, message: discarded })
+    loader.optimisticAdd({ ...other, message: unrelated })
+    const unrelatedMessages = store.getState().message[other.sessionId]
+    loader.invalidateSession(target)
+    await loader.refresh(target)
+    expect(store.getState().message[target.sessionId]).toEqual([])
+    expect(store.getState().partOwner[target.sessionId]).toEqual({})
+    expect(store.getState().message[other.sessionId]).toBe(unrelatedMessages)
+    await loader.refresh(other)
+    expect(store.getState().message[other.sessionId]).toEqual([unrelated])
+  })
+
+  test("a no-op visible selection still clears discarded shadows and speculation", async () => {
+    const { loader, store } = setup({ client: nativeClient({ getSnapshot: async sessionId => nativeSnapshot(sessionId, []) }) })
+    loader.optimisticAdd({ ...target, message: nativeMessage(target.sessionId, "discarded", 1) })
+    store.setState({ message: { [target.sessionId]: [] } })
+    setSessionPrefetch({ ...target, runtimeKey: "runtime-a", limit: 100, complete: true })
+    loader.invalidateSession(target)
+    expect(getSessionPrefetch(target.directory, target.sessionId, "runtime-a")).toBeUndefined()
+    await loader.refresh(target)
+    expect(store.getState().message[target.sessionId]).toEqual([])
+  })
+
+  test("selection invalidation preserves only explicitly retained optimistic records", async () => {
+    const { loader, store } = setup({ client: nativeClient({ getSnapshot: async sessionId => nativeSnapshot(sessionId, []) }) })
+    const retained = nativeMessage(target.sessionId, "retained", 1)
+    const discarded = nativeMessage(target.sessionId, "discarded", 2)
+    loader.optimisticAdd({ ...target, message: retained })
+    loader.optimisticAdd({ ...target, message: discarded })
+    loader.invalidateSession(target, [retained])
+    await loader.refresh(target)
+    expect(store.getState().message[target.sessionId]).toEqual([retained])
+    expect(store.getState().partOwner[target.sessionId]).toEqual({ "part-retained": "retained" })
+  })
+
+  test("a fresh branch and epoch win over a snapshot started before selection invalidation", async () => {
+    const old = deferred<SessionSnapshot>()
+    const selected = nativeSnapshot(target.sessionId, [nativeMessage(target.sessionId, "selected", 1)])
+    selected.session.epoch = "epoch-selected"
+    selected.branch = { branchId: "branch-selected", branchVersion: "2", leafMessageId: "selected" }
+    selected.cursor = "opaque-selected-stream-cursor"
+    let calls = 0
+    const { loader, store } = setup({ client: nativeClient({ getSnapshot: () => ++calls === 1 ? old.promise : Promise.resolve(selected) }) })
+    const obsolete = loader.refresh(target)
+    loader.invalidateSession(target)
+    await loader.refresh(target)
+    const committed = store.getState()
+    old.resolve(nativeSnapshot(target.sessionId, [nativeMessage(target.sessionId, "discarded", 2)]))
+    await obsolete
+    expect(store.getState()).toBe(committed)
+    expect(store.getState().message[target.sessionId]?.map(message => message.messageId)).toEqual(["selected"])
+    expect(store.getState().snapshot[target.sessionId]?.branch).toEqual(selected.branch)
+    expect(store.getState().sessionEpoch[target.sessionId]).toBe("epoch-selected")
+    expect(store.getState().sessionCursor[target.sessionId]).toBe(selected.cursor)
+  })
+
+  test("a selected branch retaining earlier history replaces the old cursor with its own authority", async () => {
+    const previous = historyWindow()
+    const kept = nativeMessage(target.sessionId, "kept", 10)
+    const older = nativeMessage(target.sessionId, "older-selected", 1)
+    const selected = nativeSnapshot(target.sessionId, [kept])
+    selected.branch = { branchId: "selected-branch", branchVersion: "2", leafMessageId: kept.messageId }
+    selected.window.hasEarlier = true
+    let current = previous
+    const cursors: Array<string | undefined> = []
+    const { loader, store } = setup({ client: nativeClient({
+      getSnapshot: async () => current,
+      getHistory: async (_id, options) => {
+        cursors.push(options?.cursor)
+        return options?.cursor
+          ? nativeHistory([older], null, selected)
+          : nativeHistory(current.messages, current === previous ? "previous-branch-cursor" : "selected-branch-cursor", current)
       },
-      cancelFrame: (frame) => {
-        frames.delete(frame)
-      },
-      markVisible: () => marks.push("visible"),
-      startEvent: () => () => undefined,
+    }) })
+    await loader.ensure(target)
+    expect(loader.getSnapshot(target).cursor).toBe("previous-branch-cursor")
+    loader.invalidateSession(target, [kept])
+    expect(loader.getSnapshot(target)).toMatchObject({ resolved: false, cursor: undefined, complete: false })
+    current = selected
+    cleanups.push(loader.retainSessionHistory(target))
+    await loader.refresh(target)
+    expect(store.getState().message[target.sessionId]).toEqual([kept])
+    expect(loader.getSnapshot(target)).toMatchObject({ resolved: true, cursor: "selected-branch-cursor", complete: false })
+    await loader.loadOlder(target)
+    expect(cursors).toEqual([undefined, undefined, "selected-branch-cursor"])
+    expect(store.getState().message[target.sessionId]).toEqual([older, kept])
+    expect(loader.getSnapshot(target).complete).toBe(true)
+  })
+
+  test("an empty selected branch resets prior history completeness and never reuses its cursor", async () => {
+    const previous = historyWindow()
+    let current = previous
+    const history = nativeClient({
+      getSnapshot: async () => current,
+      getHistory: async () => nativeHistory(previous.messages, "old-branch-cursor", previous),
     })
+    const { loader, store } = setup({ client: history })
+    await loader.ensure(target)
+    expect(loader.getSnapshot(target)).toMatchObject({ resolved: true, cursor: "old-branch-cursor", complete: false })
+    loader.invalidateSession(target)
+    expect(loader.getSnapshot(target)).toMatchObject({ resolved: false, cursor: undefined, complete: false })
+    current = nativeSnapshot(target.sessionId, [])
+    current.branch = { branchId: "empty-selected-branch", branchVersion: "2", leafMessageId: null }
+    await loader.refresh(target)
+    expect(store.getState().message[target.sessionId]).toEqual([])
+    expect(loader.getSnapshot(target)).toMatchObject({ resolved: true, cursor: undefined, complete: true })
+  })
+})
 
-    tracker.schedule("session-a", 10)
-    frames.get(1)?.(0)
-    tracker.schedule("session-b", 10)
-    frames.get(2)?.(0)
-    tracker.schedule("session-a", 10)
+describe("history-only canonical child sessions", () => {
+  const childTarget = { directory: "/loader-repo", sessionId: "history-only-child" }
+  function seedChild() {
+    const original = useGlobalSessionsStore.getState()
+    const child = { ...nativeHostSession(nativeSnapshot(childTarget.sessionId)), parentSessionId: "session-root", rootSessionId: "session-root" }
+    useGlobalSessionsStore.getState().upsertSession(child)
+    cleanups.push(() => useGlobalSessionsStore.setState(original))
+    return child
+  }
 
-    expect(nextFrame).toBe(2)
-    expect(marks).toEqual(["visible", "visible"])
+  test("opens and paginates using history and the projected Host row, without snapshot or journal attachment", async () => {
+    const child = seedChild()
+    const recent = nativeMessage(childTarget.sessionId, "recent", 2)
+    const older = nativeMessage(childTarget.sessionId, "older", 1)
+    const calls: Array<string | undefined> = []
+    let forbiddenCalls = 0
+    const forbidden = async () => { forbiddenCalls += 1; throw new Error("Child snapshot/metadata/queue is unavailable") }
+    let snapshotCallbacks = 0
+    const { loader, store } = setup({ onSnapshot: () => { snapshotCallbacks += 1 }, client: nativeClient({
+      getSnapshot: forbidden, getSessionMetadata: forbidden, getQueue: forbidden,
+      getHistory: async (sessionId, options) => {
+        expect(sessionId).toBe(childTarget.sessionId)
+        calls.push(options?.cursor)
+        return nativeHistory(options?.cursor ? [older] : [recent], options?.cursor ? null : "older-page", nativeSnapshot(childTarget.sessionId))
+      },
+    }) })
+    await loader.ensure(childTarget)
+    expect(store.getState().session.find(row => row.sessionId === childTarget.sessionId)).toEqual(child)
+    expect(store.getState().message[childTarget.sessionId]).toEqual([recent])
+    expect(store.getState().snapshot[childTarget.sessionId]).toBeUndefined()
+    expect(store.getState().sessionCursor[childTarget.sessionId]).toBeUndefined()
+    expect(loader.getSnapshot(childTarget)).toMatchObject({ status: "ready", resolved: true, complete: false, cursor: "older-page" })
+    await loader.loadOlder(childTarget)
+    expect(store.getState().message[childTarget.sessionId]).toEqual([older, recent])
+    expect(loader.getSnapshot(childTarget)).toMatchObject({ status: "ready", complete: true })
+    expect(calls).toEqual([undefined, "older-page"])
+    expect(snapshotCallbacks).toBe(0)
+    expect(forbiddenCalls).toBe(0)
+  })
+
+  test("history failure preserves previous child messages", async () => {
+    seedChild()
+    const error = new Error("child history unavailable")
+    const { loader, store } = setup({ client: nativeClient({ getHistory: async () => { throw error } }) })
+    const messages = [nativeMessage(childTarget.sessionId)]
+    store.setState({ message: { [childTarget.sessionId]: messages } })
+    await loader.refresh(childTarget)
+    expect(store.getState().message[childTarget.sessionId]).toBe(messages)
+    expect(loader.getSnapshot(childTarget)).toMatchObject({ status: "error", error })
+  })
+
+  test("runtime reconfiguration rejects a delayed child history response", async () => {
+    seedChild()
+    const pending = deferred<HistoryPage>()
+    const { loader, store } = setup({ client: nativeClient({ getHistory: () => pending.promise }) })
+    const loading = loader.ensure(childTarget)
+    loader.configure({ runtimeKey: "runtime-b", client: nativeClient() })
+    pending.resolve(nativeHistory([nativeMessage(childTarget.sessionId)], null, nativeSnapshot(childTarget.sessionId)))
+    await loading
+    expect(store.getState().message[childTarget.sessionId]).toBeUndefined()
+    expect(store.getState().snapshot[childTarget.sessionId]).toBeUndefined()
+  })
+
+  test("older child history rejects another branch and preserves the visible page", async () => {
+    seedChild()
+    const recent = nativeMessage(childTarget.sessionId, "recent", 2)
+    const { loader, store } = setup({ client: nativeClient({ getHistory: async (_sessionId, options) => {
+      const page = nativeHistory([recent], options?.cursor ? null : "older-page", nativeSnapshot(childTarget.sessionId))
+      if (options?.cursor) page.branch = { ...page.branch, branchVersion: "2" }
+      return page
+    } }) })
+    await loader.ensure(childTarget)
+    const previous = store.getState().message[childTarget.sessionId]
+    await loader.loadOlder(childTarget)
+    expect(loader.getSnapshot(childTarget).status).toBe("error")
+    expect(store.getState().message[childTarget.sessionId]).toBe(previous)
   })
 })

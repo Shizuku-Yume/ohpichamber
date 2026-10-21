@@ -6,12 +6,14 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { createRoot, type Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
-import { createOpencodeClient, type Part, type AssistantMessage } from '@opencode-ai/sdk/v2';
+import { CanonicalClient } from '@/api/canonicalClient';
+import type { Part } from '@openchamber/agent-contract';
 import { I18nProvider, useI18nStore } from '@/lib/i18n';
 import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
 import type { RuntimeAPIs } from '@/lib/api/types';
 import { SyncProvider } from '@/sync/sync-context';
 import { useUIStore } from '@/stores/useUIStore';
+import { DedicatedMobileAppProvider, type MobileAppActions } from '@/apps/mobileAppContext';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { projectTurnRecords } from '../lib/turns/projectTurnRecords';
 import type { ChatMessageEntry, TurnChangedFile, TurnRecord } from '../lib/turns/types';
@@ -37,54 +39,57 @@ plugin({
 
 const unavailable = (): never => { throw new Error('Activity rendering must not call runtime APIs'); };
 const runtimeApis: RuntimeAPIs = {
-    runtime: { platform: 'web', isDesktop: false, isVSCode: false },
+    runtime: { platform: 'web', isDesktop: false },
     get terminal() { return unavailable(); },
     get git() { return unavailable(); },
+    get sourceControl() { return unavailable(); },
     get files() { return unavailable(); },
     get settings() { return unavailable(); },
     get permissions() { return unavailable(); },
     get notifications() { return unavailable(); },
-    get tools() { return unavailable(); },
 };
-const sdk = createOpencodeClient({ baseUrl: 'http://localhost', fetch: async () => new Response('[]', { headers: { 'Content-Type': 'application/json' } }) });
+const client = new CanonicalClient();
+// The answer's action bar also has an aria-expanded button, the branch menu
+// trigger, so the changed-file toggle is the one that opens no popup.
+const changedFilesToggle = () => document.querySelector<HTMLButtonElement>('[data-fixture-message="final"] button[aria-expanded]:not([aria-haspopup])');
 let MessageBody: typeof import('../message/MessageBody').default;
 
-function assistant(id: string, parts: Part[], finish?: string): ChatMessageEntry {
-    const info: AssistantMessage = {
-        id, sessionID: 'session', role: 'assistant', parentID: 'user', time: { created: 2, completed: finish ? 3 : undefined },
-        modelID: 'model', providerID: 'provider', mode: 'build', agent: 'build', path: { cwd: '/project', root: '/project' },
-        cost: 0, tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }, finish,
-    };
-    return { info, parts };
+function assistant(messageId: string, parts: Part[]): ChatMessageEntry {
+    return { messageId, sessionId: 'session', turnId: 'turn', role: 'assistant', createdAt: 2, parts };
 }
-function text(id: string, content: string): Part {
-    return { type: 'text', id, text: content, sessionID: 'session', messageID: 'message' };
+function text(partId: string, content: string): Part {
+    return { type: 'text', partId, content };
 }
-const readPart: Part = {
-    type: 'tool', tool: 'read', id: 'read', callID: 'read', sessionID: 'session', messageID: 'progress',
-    state: { status: 'completed', input: { filePath: '/project/source.ts' }, output: 'code', title: 'Read', metadata: {}, time: { start: 1, end: 2 } },
-};
+const readParts: Part[] = [
+    { type: 'tool_call', partId: 'read-call-part', toolCallId: 'read-call', toolName: 'read', input: { filePath: '/project/source.ts' }, status: 'completed' },
+    { type: 'tool_result', partId: 'read-result', toolCallId: 'read-call', toolName: 'read', output: 'code', isError: false },
+];
+const editParts: Part[] = [
+    { type: 'tool_call', partId: 'edit-call-part', toolCallId: 'edit-call', toolName: 'edit', input: { path: 'src/source.ts', old_string: 'old', new_string: 'new' }, status: 'completed' },
+    { type: 'tool_result', partId: 'edit-result', toolCallId: 'edit-call', toolName: 'edit', isError: false,
+      output: { content: [{ type: 'text', text: 'Updated src/source.ts' }], details: { path: '[workspace]/src/source.ts', diff: '-1|old\n+1|new\n+2|added', op: 'update' } } },
+];
+
 function turn(messages: ChatMessageEntry[]): TurnRecord {
     return projectTurnRecords([{
-        info: { id: 'user', sessionID: 'session', role: 'user', time: { created: 1 }, agent: 'build', model: { providerID: 'provider', modelID: 'model' } },
+        messageId: 'user', sessionId: 'session', turnId: 'turn', role: 'user', createdAt: 1,
         parts: [text('request', 'Request')],
-    }, ...messages]).turns[0];
+    }, ...messages], { showTurnChangedFiles: true }).turns[0];
 }
 
-function Harness({ record, retired = false, changedFiles, isLatestTurn = true }: {
+function Harness({ record, retired = false, changedFiles, isLatestTurn = true, mobileActions = null }: {
     record: TurnRecord;
     retired?: boolean;
     changedFiles?: TurnChangedFile[];
     isLatestTurn?: boolean;
+    mobileActions?: MobileAppActions | null;
 }) {
     const [expanded, setExpanded] = React.useState(false);
     const renderMessage = (message: ChatMessageEntry) => (
-        <div key={message.info.id} data-fixture-message={message.info.id}>
+        <div key={message.messageId} data-fixture-message={message.messageId}>
             <MessageBody
-                messageId={message.info.id} parts={message.parts} isUser={false}
-                isMessageCompleted={message.info.role === 'assistant' && Boolean(message.info.finish)}
-                messageFinish={message.info.role === 'assistant' ? message.info.finish : undefined}
-                isMobile={false} copiedCode={null} onCopyCode={() => undefined} expandedTools={new Set()}
+                messageId={message.messageId} parts={message.parts} isUser={false}
+                isMessageCompleted={isLatestTurn || retired} isMobile={mobileActions !== null} copiedCode={null} onCopyCode={() => undefined} expandedTools={new Set()}
                 onToggleTool={() => undefined} onShowPopup={() => undefined} streamPhase="completed" allowAnimation={false}
                 hasTextContent={message.parts.some((part) => part.type === 'text')} showReasoningTraces
                 turnGroupingContext={{
@@ -95,14 +100,17 @@ function Harness({ record, retired = false, changedFiles, isLatestTurn = true }:
             />
         </div>
     );
-    return <RuntimeAPIContext.Provider value={runtimeApis}>
-        <SyncProvider sdk={sdk} directory="/project">
+    const content = <RuntimeAPIContext.Provider value={runtimeApis}>
+        <SyncProvider client={client} directory="/project">
             <I18nProvider>
                 <LiveTurnActivity turn={record} hasLaterAssistant={retired} expanded={expanded}
                     onToggle={() => setExpanded((value) => !value)} renderMessage={renderMessage} />
             </I18nProvider>
         </SyncProvider>
     </RuntimeAPIContext.Provider>;
+    return mobileActions
+        ? <DedicatedMobileAppProvider actions={mobileActions}>{content}</DedicatedMobileAppProvider>
+        : content;
 }
 
 // The first test pays for loading the real message body and for its first
@@ -138,7 +146,11 @@ describe('live Activity with the real message body', () => {
         container = document.createElement('div');
         document.body.append(container);
         root = createRoot(container);
-        useUIStore.setState({ chatRenderMode: 'live', collapsibleThinkingBlocks: false, showSplitAssistantMessageActions: false });
+        useUIStore.setState({
+            chatRenderMode: 'live', collapsibleThinkingBlocks: false, showSplitAssistantMessageActions: false,
+            contextPanelByDirectory: {}, pendingDiffFile: 'existing.ts', pendingDiffScope: 'working',
+            pendingFileFocusPath: null, isMobile: false,
+        });
         useDirectoryStore.setState({ currentDirectory: '/project' });
         useI18nStore.getState().setLocale('en');
         MessageBody = (await import('../message/MessageBody')).default;
@@ -149,12 +161,12 @@ describe('live Activity with the real message body', () => {
     });
 
     test('keeps active prose and tools visible; stop folds history but leaves the answer', async () => {
-        const progress = assistant('progress', [text('progress-text', 'Checking the source'), readPart], 'tool-calls');
+        const progress = assistant('progress', [text('progress-text', 'Checking the source'), ...readParts]);
         await act(async () => root.render(<Harness record={turn([progress])} />));
         expect(container.textContent).toContain('Checking the source');
         expect(container.querySelector('[aria-controls]')).toBeNull();
         expect(container.textContent).not.toContain('Activity');
-        const final = assistant('final', [text('final-text', 'The final answer')], 'stop');
+        const final = assistant('final', [text('final-text', 'The final answer')]);
         await act(async () => root.render(<Harness record={turn([progress, final])} />));
         expect(container.textContent).toContain('The final answer');
         expect(container.textContent).not.toContain('Checking the source');
@@ -170,8 +182,8 @@ describe('live Activity with the real message body', () => {
     });
 
     test('keeps thinking in the final message inside Activity, not outside with the answer', async () => {
-        const thinking: Part = { type: 'reasoning', id: 'thinking', messageID: 'final', sessionID: 'session', text: 'Private reasoning content', time: { start: 1, end: 2 } };
-        const final = assistant('final', [thinking, text('final-text', 'Public answer')], 'stop');
+        const thinking: Part = { type: 'reasoning', partId: 'thinking', content: 'Private reasoning content' };
+        const final = assistant('final', [thinking, text('final-text', 'Public answer')]);
         await act(async () => root.render(<Harness record={turn([final])} />));
         expect(container.textContent).toContain('Public answer');
         expect(container.textContent).not.toContain('Private reasoning content');
@@ -181,7 +193,7 @@ describe('live Activity with the real message body', () => {
     });
 
     test('an interrupted turn folds all prose without fabricating a final answer', async () => {
-        const record = turn([assistant('progress', [text('progress-text', 'Still working'), readPart], 'tool-calls')]);
+        const record = turn([assistant('progress', [text('progress-text', 'Still working'), ...readParts])]);
         await act(async () => root.render(<Harness record={record} />));
         expect(container.textContent).toContain('Still working');
         expect(container.textContent).not.toContain('Activity');
@@ -193,14 +205,10 @@ describe('live Activity with the real message body', () => {
     });
 
     test('keeps file statistics visible when expanded and uses an ASCII minus', async () => {
-        const edit: Part = {
-            type: 'tool', tool: 'edit', id: 'edit', callID: 'edit', sessionID: 'session', messageID: 'progress',
-            state: { status: 'completed', input: { filePath: '/project/source.ts' }, output: '', title: 'Edit',
-                metadata: { diff: '@@ -1,1 +1,2 @@\n-old\n+new\n+added' }, time: { start: 1, end: 2 } },
-        };
+        const edit = editParts;
         await act(async () => root.render(<Harness record={turn([
-            assistant('progress', [edit], 'tool-calls'),
-            assistant('final', [text('answer', 'Done')], 'stop'),
+            assistant('progress', edit),
+            assistant('final', [text('answer', 'Done')]),
         ])} />));
         const header = container.querySelector<HTMLButtonElement>('button[aria-controls]');
         expect(header?.textContent).toContain('Changed 1 file');
@@ -210,73 +218,142 @@ describe('live Activity with the real message body', () => {
         expect(header?.textContent).toContain('+2/-1');
     });
 
-    test('shows at most four changed files until expanded, including at the threshold', async () => {
-        const record = turn([assistant('final', [text('answer', 'Done')], 'stop')]);
+    test('shows at most four changed files and folds the rest into one chip, including at the threshold', async () => {
+        const record = turn([assistant('final', [text('answer', 'Done')])]);
         for (const count of [0, 1, 3, 4, 5, 100]) {
             const files = Array.from({ length: count }, (_, index) => ({ file: `src/file-${index}.ts`, additions: 1, deletions: 0 }));
             await act(async () => root.render(<Harness record={record} changedFiles={files} />));
             expect(container.querySelectorAll('button[aria-label^="Open src/file-"]')).toHaveLength(Math.min(count, 4));
-            const trigger = container.querySelector<HTMLButtonElement>('[data-fixture-message="final"] button[aria-expanded]');
+            const toggle = changedFilesToggle();
             if (count <= 4) {
-                expect(trigger).toBeNull();
+                expect(toggle).toBeNull();
             } else {
-                expect(trigger?.textContent).toBe(`Show more (${count - 4})`);
-                expect(trigger?.getAttribute('aria-expanded')).toBe('false');
+                expect(toggle?.textContent).toBe(`+${count - 4}`);
+                expect(toggle?.getAttribute('aria-label')).toBe(`Other changed files (${count - 4})`);
+                expect(toggle?.getAttribute('aria-expanded')).toBe('false');
                 expect(container.textContent).not.toContain('file-4.ts');
             }
         }
     });
 
-    test('expands in source order, preserves state on updates and locale changes, then collapses with focus intact', async () => {
-        const record = turn([assistant('final', [text('answer', 'Done')], 'stop')]);
+    test('reveals the rest in source order, keeps them through updates and locale changes, then hides them with focus intact', async () => {
+        const record = turn([assistant('final', [text('answer', 'Done')])]);
         const files = Array.from({ length: 100 }, (_, index) => ({ file: `src/file-${index}.ts`, additions: 1, deletions: 0 }));
         await act(async () => root.render(<Harness record={record} changedFiles={files} />));
-        const trigger = container.querySelector<HTMLButtonElement>('[data-fixture-message="final"] button[aria-expanded]');
-        if (!trigger) throw new Error('Missing changed-file disclosure');
-        trigger.focus();
-        await act(async () => trigger.click());
-        expect(trigger.getAttribute('aria-expanded')).toBe('true');
-        expect(trigger.textContent).toBe('Collapse');
+        const toggle = changedFilesToggle();
+        if (!toggle) throw new Error('Missing changed-file toggle');
+        toggle.focus();
+        await act(async () => toggle.click());
+        expect(toggle.getAttribute('aria-expanded')).toBe('true');
+        expect(toggle.getAttribute('aria-label')).toBe('Show fewer files');
         expect(Array.from(container.querySelectorAll('button[aria-label^="Open src/file-"]'), (button) => button.getAttribute('title')))
-            .toEqual(files.map((file) => file.file));
-        expect(document.getElementById(trigger.getAttribute('aria-controls') ?? '')?.textContent).toContain('file-99.ts');
+            .toEqual(files.map((file) => `Open ${file.file}`));
+        expect(toggle.previousElementSibling?.getAttribute('title')).toBe('Open src/file-99.ts');
         await act(async () => root.render(<Harness record={record} changedFiles={[...files]} />));
-        expect(trigger.getAttribute('aria-expanded')).toBe('true');
+        expect(toggle.getAttribute('aria-expanded')).toBe('true');
         await act(async () => {
             useI18nStore.getState().setLocale('uk');
             await import('@/lib/i18n/messages/uk');
         });
-        expect(trigger.textContent).toBe('Згорнути');
-        await act(async () => trigger.click());
-        expect(trigger.getAttribute('aria-expanded')).toBe('false');
-        expect(trigger.textContent).toBe('Показати ще (96)');
-        expect(document.activeElement).toBe(trigger);
+        expect(toggle.getAttribute('aria-label')).toBe('Показати менше файлів');
+        await act(async () => toggle.click());
+        expect(toggle.getAttribute('aria-expanded')).toBe('false');
+        expect(toggle.textContent).toBe('+96');
+        expect(toggle.getAttribute('aria-label')).toBe('Інші змінені файли (96)');
+        expect(document.activeElement).toBe(toggle);
         expect(container.textContent).not.toContain('file-4.ts');
         expect(container.querySelectorAll('button[aria-label^="Відкрити src/file-"]')).toHaveLength(4);
     });
 
-    test('a file without line counts shows its name alone, and one outside the turn diff is not a button', async () => {
-        const record = turn([assistant('final', [text('answer', 'Done')], 'stop')]);
+    test('changed files open current file contents without substituting a working-tree diff', async () => {
+        const record = turn([assistant('final', [text('answer', 'Done')])]);
         await act(async () => root.render(<Harness record={record} changedFiles={[
             { file: 'src/a.ts' },
             { file: 'src/b.ts', additions: 1, deletions: 2 },
-            { file: 'src/c.ts', additions: 1, deletions: 0, inTurnDiff: false },
+            { file: 'src/c.ts', additions: 1, deletions: 0 },
         ]} />));
         expect(container.querySelector('button[aria-label="Open src/a.ts"]')?.textContent).toBe('a.ts');
         expect(container.querySelector('button[aria-label="Open src/b.ts"]')?.textContent).toBe('b.ts+1/-2');
-        expect(container.querySelector('button[aria-label="Open src/c.ts"]')).toBeNull();
-        expect(container.querySelector('span[title="src/c.ts"]')?.textContent).toBe('c.ts+1/-0');
+        const fileButton = container.querySelector<HTMLButtonElement>('button[aria-label="Open src/c.ts"]');
+        expect(fileButton?.textContent).toBe('c.ts+1/-0');
+        await act(async () => fileButton?.click());
+        const state = useUIStore.getState();
+        expect(state.pendingFileFocusPath).toBe('/project/src/c.ts');
+        expect(state.contextPanelByDirectory['/project']?.tabs.some((tab) => tab.mode === 'file' && tab.targetPath === '/project/src/c.ts')).toBe(true);
+        expect(state.contextPanelByDirectory['/project']?.tabs.some((tab) => tab.mode === 'diff')).toBe(false);
+        expect(state.pendingDiffScope).toBe('working');
+        expect(state.pendingDiffFile).toBe('existing.ts');
+    });
+
+    test('mobile changed files open the existing Files surface without opening Changes', async () => {
+        const record = turn([assistant('final', [text('answer', 'Done')])]);
+        let filesOpened = 0;
+        let changesOpened = 0;
+        const mobileActions: MobileAppActions = {
+            openFiles: () => { filesOpened += 1; },
+            openChanges: () => { changesOpened += 1; },
+            openSettings: () => undefined,
+            openSourceBoard: () => undefined,
+        };
+        useUIStore.setState({ isMobile: true });
+        await act(async () => root.render(<Harness record={record} changedFiles={[{ file: '/project/src/mobile.ts' }]} mobileActions={mobileActions} />));
+        await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Open /project/src/mobile.ts"]')?.click());
+        expect(filesOpened).toBe(1);
+        expect(changesOpened).toBe(0);
+        expect(useUIStore.getState().pendingFileFocusPath).toBe('/project/src/mobile.ts');
+        expect(useUIStore.getState().pendingDiffScope).toBe('working');
+        expect(useUIStore.getState().pendingDiffFile).toBe('existing.ts');
     });
 
     test('keeps historical files informational and withholds the list before stop', async () => {
         const files = Array.from({ length: 5 }, (_, index) => ({ file: `src/file-${index}.ts`, additions: 1, deletions: 0 }));
-        const final = assistant('final', [text('answer', 'Done')], 'tool-calls');
+        const final = assistant('final', [text('answer', 'Done')]);
         await act(async () => root.render(<Harness record={turn([final])} changedFiles={files} isLatestTurn={false} />));
         expect(container.textContent).not.toContain('file-0.ts');
-        await act(async () => root.render(<Harness record={turn([assistant('final', final.parts, 'stop')])} changedFiles={files} isLatestTurn={false} />));
+        await act(async () => root.render(<Harness record={turn([final])} changedFiles={files} isLatestTurn={false} retired />));
         expect(container.textContent).toContain('file-0.ts');
-        await act(async () => container.querySelector<HTMLButtonElement>('[data-fixture-message="final"] button[aria-expanded]')?.click());
+        await act(async () => changedFilesToggle()?.click());
         expect(container.textContent).toContain('file-4.ts');
         expect(container.querySelectorAll('button[aria-label^="Open src/file-"]')).toHaveLength(0);
+    });
+
+    test('renders one operation card for matched, running and failed tool parts', async () => {
+        const editCall: Part = {
+            type: 'tool_call', partId: 'live-edit-call', toolCallId: 'live-edit', toolName: 'edit',
+            input: { path: 'src/source.ts', old_string: 'old', new_string: 'new' }, status: 'completed',
+        };
+        const editResult: Part = {
+            type: 'tool_result', partId: 'live-edit-result', toolCallId: 'live-edit', toolName: 'edit', isError: false,
+            output: {
+                content: [{ type: 'text', text: 'Updated src/source.ts' }],
+                details: { path: '[workspace]/src/source.ts', diff: '-1|old\n+1|new\n+2|added', op: 'update' },
+            },
+        };
+        const progress = assistant('progress', [text('progress-text', 'Editing'), editCall, editResult]);
+        await act(async () => root.render(<Harness record={turn([progress])} />));
+        expect(container.querySelectorAll('[class*="group/tool"]')).toHaveLength(1);
+        expect(container.textContent).toContain('+2/-1');
+
+        const running: Part = {
+            type: 'tool_call', partId: 'running-call', toolCallId: 'running', toolName: 'bash',
+            input: { command: 'sleep 1' }, status: 'running',
+        };
+        await act(async () => root.render(<Harness record={turn([assistant('running-message', [running])])} />));
+        expect(container.querySelectorAll('[class*="group/tool"]')).toHaveLength(1);
+        expect(container.textContent).toContain('sleep 1');
+
+        const failedCall: Part = {
+            type: 'tool_call', partId: 'live-edit-call', toolCallId: 'live-edit', toolName: 'edit',
+            input: { path: 'src/source.ts' }, status: 'failed',
+        };
+        const failedResult: Part = {
+            type: 'tool_result', partId: 'live-edit-error', toolCallId: 'live-edit', toolName: 'edit',
+            isError: true, error: 'Permission denied',
+            output: { content: [{ type: 'text', text: 'Cannot edit src/source.ts' }] },
+        };
+        await act(async () => root.render(
+            <Harness record={turn([assistant('error-message', [failedCall, failedResult])])} />,
+        ));
+        expect(container.querySelectorAll('[class*="group/tool"]')).toHaveLength(1);
     });
 });

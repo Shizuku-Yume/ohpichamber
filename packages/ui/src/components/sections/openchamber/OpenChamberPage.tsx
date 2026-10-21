@@ -2,6 +2,8 @@ import React from 'react';
 import { OpenChamberVisualSettings } from './OpenChamberVisualSettings';
 import { AboutSettings } from './AboutSettings';
 import { SessionRetentionSettings } from './SessionRetentionSettings';
+import { MergedWorktreeCleanupSettings } from './MergedWorktreeCleanupSettings';
+import { SessionWorkSettings } from './SessionWorkSettings';
 import { PasskeySettings } from './PasskeySettings';
 import { AppLinkSecuritySettings } from './AppLinkSecuritySettings';
 import { DefaultsSettings } from './DefaultsSettings';
@@ -9,13 +11,15 @@ import { GitSettings } from './GitSettings';
 import { NotificationSettings } from './NotificationSettings';
 import { VoiceSettings } from './VoiceSettings';
 import { TunnelSettings } from './TunnelSettings';
-import { OpenCodeCliSettings } from './OpenCodeCliSettings';
+import { EnvironmentVariablesSettings } from './EnvironmentVariablesSettings';
+import { IsolatedSpacesSettings } from './IsolatedSpacesSettings';
+import { ISOLATED_SPACES_RELEASED } from '@/lib/spaces/release';
 import { OpenChamberToolsSettings } from './OpenChamberToolsSettings';
 import { DesktopNetworkSettings } from './DesktopNetworkSettings';
 import { KeyboardShortcutsSettings } from './KeyboardShortcutsSettings';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
 import { useDeviceInfo } from '@/lib/device';
-import { isDesktopLocalOriginActive, isDesktopShell, isVSCodeRuntime, isWebRuntime } from '@/lib/desktop';
+import { isDesktopLocalOriginActive, isDesktopShell, isWebRuntime } from '@/lib/desktop';
 import { isCapacitorApp } from '@/lib/platform';
 import { useI18n } from '@/lib/i18n';
 import { subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
@@ -41,7 +45,6 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
     const { isMobile } = useDeviceInfo();
     const runtimeEndpointEpoch = useRuntimeEndpointEpoch();
     const showAbout = isMobile && isWebRuntime();
-    const isVSCode = isVSCodeRuntime();
     const showDesktopNetworkSettings = isDesktopShell() && isDesktopLocalOriginActive();
 
     // If no section specified, show all (mobile/legacy behavior)
@@ -50,12 +53,14 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
             <SettingsPageLayout showSaveStatus className="openchamber-page-body space-y-3 sm:space-y-6">
                 <OpenChamberVisualSettings />
                 <DefaultsSettings key={runtimeEndpointEpoch} />
+                <SessionWorkSettings />
                 {showDesktopNetworkSettings && <DesktopNetworkSettings />}
-                {!isVSCode && <OpenCodeCliSettings />}
-                {!isVSCode && <OpenChamberToolsSettings />}
+                <EnvironmentVariablesSettings key={runtimeEndpointEpoch} />
+                <OpenChamberToolsSettings />
                 <SessionRetentionSettings />
+                <MergedWorktreeCleanupSettings />
                 <AppLinkSecuritySettings />
-                {isWebRuntime() && !isDesktopShell() && !isVSCode && !isCapacitorApp() && <PasskeySettings />}
+                {isWebRuntime() && !isDesktopShell() && !isCapacitorApp() && <PasskeySettings />}
                 {showAbout && <AboutSettings />}
             </SettingsPageLayout>
         );
@@ -82,6 +87,8 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
                 return <VoiceSectionContent />;
             case 'tunnel':
                 return <TunnelSectionContent />;
+            case 'spaces':
+                return <SpacesSectionContent />;
             default:
                 return null;
         }
@@ -98,6 +105,7 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
         notifications: t('settings.page.notifications.title'),
         voice: t('settings.page.voice.title'),
         tunnel: t('settings.page.tunnel.title'),
+        spaces: t('settings.openchamber.spaces.title'),
     }[section];
 
     const pageDescription = {
@@ -111,6 +119,7 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
         notifications: t('settings.page.notifications.description'),
         voice: t('settings.page.voice.description'),
         tunnel: t('settings.page.tunnel.description'),
+        spaces: undefined,
     }[section];
 
     return (
@@ -130,29 +139,29 @@ const ShortcutsSectionContent: React.FC = () => {
 };
 
 // General section: app-level settings — startup/tray/network, access password,
-// passkeys, OpenCode CLI binary, message stream transport, privacy.
+// passkeys, message stream transport, privacy.
 const GeneralSectionContent: React.FC = () => {
-    const isVSCode = isVSCodeRuntime();
     const runtimeEndpointEpoch = useRuntimeEndpointEpoch();
-    void runtimeEndpointEpoch;
     const showDesktopNetworkSettings = isDesktopShell() && isDesktopLocalOriginActive();
     // Passkeys only work against the browser's WebAuthn UI on the web surface —
-    // desktop shell, VS Code, and the Capacitor app never show the login screen.
-    const showPasskeySettings = isWebRuntime() && !isDesktopShell() && !isVSCode && !isCapacitorApp();
+    // desktop shell and the Capacitor app never show the login screen.
+    const showPasskeySettings = isWebRuntime() && !isDesktopShell() && !isCapacitorApp();
     return (
         <>
             {showDesktopNetworkSettings && <DesktopNetworkSettings />}
             {showPasskeySettings && <PasskeySettings />}
             <AppLinkSecuritySettings />
-            {!isVSCode && <OpenCodeCliSettings />}
-            {!isVSCode && <OpenChamberToolsSettings />}
+            {/* Remounts on a runtime switch: the names come from that server. */}
+            <EnvironmentVariablesSettings key={runtimeEndpointEpoch} />
+            <OpenChamberToolsSettings />
             <OpenChamberVisualSettings visibleSettings={[
                 'fileEditorKeymap',
-                ...(!isVSCode ? ['sessionTabs' as const] : []),
+                'sessionTabs',
                 'autoSaveEnabled',
-                ...(!isVSCode ? ['terminalQuickKeys' as const] : []),
-                ...(!isVSCode ? ['terminalShell' as const] : []),
-                ...(!isVSCode ? ['terminalLoginShell' as const] : []),
+                'confirmFileTreeMove',
+                'terminalQuickKeys',
+                'terminalShell',
+                'terminalLoginShell',
                 'messageTransport',
                 'reportUsage',
             ]} />
@@ -162,7 +171,6 @@ const GeneralSectionContent: React.FC = () => {
 
 // Visual section: Theme Mode, Font Size, Spacing, Input Bar Offset (mobile), Nav Rail
 const VisualSectionContent: React.FC = () => {
-    const isVSCode = isVSCodeRuntime();
     return <OpenChamberVisualSettings visibleSettings={[
         'theme',
         'windowControlsPosition',
@@ -170,7 +178,7 @@ const VisualSectionContent: React.FC = () => {
         'pwaOrientation',
         'mobileKeyboardMode',
         'timeFormat',
-        ...(!isVSCode ? ['weekStart' as const] : []),
+        'weekStart',
         'fontSize',
         'terminalFontSize',
         'editorFontSize',
@@ -183,7 +191,6 @@ const VisualSectionContent: React.FC = () => {
 
 // Chat section: User message rendering, Diff layout, Mobile status bar, Show reasoning traces, Follow-up behavior, Persist draft
 const ChatSectionContent: React.FC = () => {
-    const isVSCode = isVSCodeRuntime();
     return (
         <OpenChamberVisualSettings
             visibleSettings={[
@@ -199,14 +206,17 @@ const ChatSectionContent: React.FC = () => {
                 'expandedTools',
                 'collapsibleUserMessages',
                 'stickyUserHeader',
-                ...(!isVSCode ? ['promptNavigatorEnabled' as const] : []),
+                'promptNavigatorEnabled',
                 'wideChatLayout',
                 'codeBlockLineWrap',
+                'tableCellWrap',
+                'copyMessagesAsPlainText',
                 'splitAssistantMessageActions',
                 'subagentReadOnlyBanner',
                 'diffLayout',
                 'inputHistoryScope',
                 'inputHistoryLimit',
+                'messageSearch',
                 'dotfiles',
                 'fileViewerPreview',
                 'followUpBehavior',
@@ -224,7 +234,9 @@ const SessionsSectionContent: React.FC<{ runtimeEndpointEpoch: number }> = ({ ru
     return (
         <>
             <DefaultsSettings key={runtimeEndpointEpoch} />
+            <SessionWorkSettings />
             <SessionRetentionSettings />
+            <MergedWorktreeCleanupSettings />
         </>
     );
 };
@@ -241,15 +253,18 @@ const NotificationSectionContent: React.FC = () => {
 
 // Voice section: Language selection and continuous mode
 const VoiceSectionContent: React.FC = () => {
-    if (isVSCodeRuntime()) {
-        return null;
-    }
     return <VoiceSettings />;
 };
 
-const TunnelSectionContent: React.FC = () => {
-    if (isVSCodeRuntime()) {
+// Isolated spaces: the switch, the idle stop, the places with their disk, and the spaces without a
+// project. Available only when the feature is released.
+const SpacesSectionContent: React.FC = () => {
+    if (!ISOLATED_SPACES_RELEASED) {
         return null;
     }
+    return <IsolatedSpacesSettings />;
+};
+
+const TunnelSectionContent: React.FC = () => {
     return <TunnelSettings />;
 };

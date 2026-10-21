@@ -1,0 +1,150 @@
+{
+ "schemaVersion": 1,
+ "task": "omp-through-m3/current-web-board-acceptance",
+ "status": "passed-current-artifact-board-item-open-attach-new-session-draft",
+ "observedAt": "2026-10-21T12:41:43.391Z",
+ "source": {
+  "worktree": "/home/shizuku/Project/ohpichamber-worktrees/15-close-receipt",
+  "branch": "omp-through-m3/15-close-receipt-20261021",
+  "headAtReceipt": "09bdf1dc33c17658aaef0ced69f9ad5ddb0a0dfe",
+  "artifactSource": "current built Web dist from source 1dbe654c0; later source commits are docs plus an agent-service bundled-profile tools fix, with no Board/Web source change",
+  "webDistIndexSha256": "8bcdfd029600a4611ffb777bfb97ffa80132160651e7717ecf47aaacca1bbd2f",
+  "boardSourceBoundary": "git diff 1dbe654c0..HEAD is empty for packages/ui/src/components/sourceBoard, packages/ui/src/components/references, packages/web/server/lib/github and packages/web/server/lib/source-control",
+  "repoStatus": "clean; 0 changed repository paths; no source/docs/test/build edits"
+ },
+ "runtime": {
+  "surface": "Web, current built dist",
+  "host": "http://127.0.0.1:3240",
+  "isolatedHome": "/tmp/ohpi-task15b/board-home",
+  "isolatedData": "/tmp/ohpi-task15b/board-current-data",
+  "browser": "google-chrome headless CDP 9342",
+  "portsAfter": "3240 and 9342 closed"
+ },
+ "account": {
+  "authRoute": "GET /api/source-control/github/auth/status",
+  "connected": true,
+  "source": "gh-cli",
+  "login": "Shizuku-Yume",
+  "providerUserId": "github.com#135561100",
+  "accountId": "github.com#cli:135561100",
+  "ghCliActive": true,
+  "activationRoute": "POST /api/source-control/github/auth/activate {accountId}",
+  "secrets": "No token or credential string was read, printed or saved; auth-status.json redacts secret-shaped fields."
+ },
+ "project": {
+  "directory": "/tmp/ohpi-task15b/chats/work",
+  "settingsProjectId": "path_L3RtcC9vaHBpLXRhc2sxNWIvY2hhdHMvd29yaw",
+  "origin": "https://github.com/openchamber/openchamber",
+  "branch": "main",
+  "bindingStatus": 200,
+  "repositoryId": "repo_y9zButqk88I-67DDjSMZsasJJEZXpL7chvUGZonpILc",
+  "bindingRevision": 0
+ },
+ "scenario": {
+  "surfaceOpen": "sidebar button aria-label Issues and PRs",
+  "list": "real openchamber/openchamber issue rows from GET /api/source-control/github/references 200",
+  "search": "5304",
+  "selectedItem": "openchamber/openchamber#5304 Mobile Tree promotes subagent sessions to top-level rows when parent is in another worktree",
+  "detailRequest": "GET /api/source-control/github/references/detail ...number=5304 -> 200",
+  "attachMenu": [
+   "New session",
+   "New session in worktree\u2026"
+  ],
+  "action": "New session",
+  "draft": {
+   "url": "http://127.0.0.1:3240/",
+   "title": "work | OpenChamber",
+   "composer": true,
+   "text": " New sessionchatsStart a sessionworkStart a session To pick up a draggable item, press the space bar. While dragging, use the arrow keys to move the item. Press space again to drop the item in its new position, or press escape to cancel. UpdateWhat are we working on in work?workmain#5304by sdhectorMobile Tree promotes subagent sessions to top-level rows when parent is in another worktreePlan, build, or ask. @ to mention, $ for skills, / for commandsAbliterated Modelt15childExplore the codebaseCatch me upWeigh my optionsStart feature planningCraft a GoalSchedule a TaskDebug an issueReview my changes To pick up a draggable item, press the space bar. While dragging, use the arrow keys to move the item. Press space again to drop the item in its new position, or press escape to cancel. SessionProjectworkmain1 file changed+6/\u22120UsageUsed To pick up a draggable item, press the space bar. While d"
+  },
+  "requests": [
+   {
+    "method": "GET",
+    "path": "/api/source-control/binding?directory=%2Ftmp%2Fohpi-task15b%2Fchats%2Fwork",
+    "status": 200
+   },
+   {
+    "method": "GET",
+    "path": "/api/source-control/instances",
+    "status": 200
+   },
+   {
+    "method": "GET",
+    "path": "/api/source-control/binding?directory=%2Ftmp%2Fohpi-task15b%2Fboard-current-data%2Fchats",
+    "status": 422
+   },
+   {
+    "method": "GET",
+    "path": "/api/source-control/github/auth/status?instance=github.com",
+    "status": 200
+   },
+   {
+    "method": "GET",
+    "path": "/api/source-control/gitlab/auth/status?instance=https%3A%2F%2Fgitlab.com",
+    "status": 200
+   },
+   {
+    "method": "GET",
+    "path": "/api/source-control/github/auth/status?instance=github.com",
+    "status": 200
+   },
+   {
+    "method": "GET",
+    "path": "/api/source-control/github/references?directory=%2Ftmp%2Fohpi-task15b%2Fchats%2Fwork&instance=github.com&repositoryId=repo_y9zButqk88I-67DDjSMZsasJJEZXpL7chvUGZonpILc&accountId=github.com%23cli%3A135561100&bindingRevision=0&primaryRemote=origin&kind=issue&state=open&people=any",
+    "status": 200
+   },
+   {
+    "method": "GET",
+    "path": "/api/source-control/github/references?directory=%2Ftmp%2Fohpi-task15b%2Fchats%2Fwork&instance=github.com&repositoryId=repo_y9zButqk88I-67DDjSMZsasJJEZXpL7chvUGZonpILc&accountId=github.com%23cli%3A135561100&bindingRevision=0&primaryRemote=origin&kind=pull&state=open&people=any",
+    "status": 200
+   },
+   {
+    "method": "GET",
+    "path": "/api/source-control/github/references/detail?directory=%2Ftmp%2Fohpi-task15b%2Fchats%2Fwork&instance=github.com&repositoryId=repo_y9zButqk88I-67DDjSMZsasJJEZXpL7chvUGZonpILc&accountId=github.com%23cli%3A135561100&bindingRevision=0&primaryRemote=origin&owner=openchamber&repo=openchamber&number=5176",
+    "status": 200
+   },
+   {
+    "method": "GET",
+    "path": "/api/source-control/github/references?directory=%2Ftmp%2Fohpi-task15b%2Fchats%2Fwork&instance=github.com&repositoryId=repo_y9zButqk88I-67DDjSMZsasJJEZXpL7chvUGZonpILc&accountId=github.com%23cli%3A135561100&bindingRevision=0&primaryRemote=origin&kind=issue&state=open&people=any&query=5304",
+    "status": 200
+   },
+   {
+    "method": "GET",
+    "path": "/api/source-control/github/references/detail?directory=%2Ftmp%2Fohpi-task15b%2Fchats%2Fwork&instance=github.com&repositoryId=repo_y9zButqk88I-67DDjSMZsasJJEZXpL7chvUGZonpILc&accountId=github.com%23cli%3A135561100&bindingRevision=0&primaryRemote=origin&owner=openchamber&repo=openchamber&number=5304",
+    "status": 200
+   }
+  ],
+  "externalWrites": "none; all recorded requests were GET; no comment, issue, PR, merge or state mutation"
+ },
+ "checks": {
+  "attachButton": true,
+  "attachMenuNewSession": true,
+  "draftComposer": true,
+  "draftHas5304": true,
+  "draftHasProjectWork": true,
+  "draftHasBranch": true
+ },
+ "verdict": "PASS",
+ "screenshots": {
+  "01-board.png": "13a269b672d7169744dc2b05e155bf1f20248100ed0b153c7dc811a683f5618f",
+  "02-board-preview.png": "5be2480fb9329898a30c31b66336c309bb881846667ab191097ac14fc0ce0c5a",
+  "02b-board-attach-menu.png": "648440baf2924af2dc7ebc08162a959df5f67aa8b736b65c62306d85afa0e275",
+  "03-board-draft.png": "e22354b9004c487208a6323554bb915b9e65a95311ff79fd53c14d0902d3f9d0"
+ },
+ "evidenceFiles": {
+  "board-run.json": "ce798e74888cf38eb8278c1f1b113558ecfe86f1f1e51ee4efaa808dac3bdc5a",
+  "auth-status.json": "28bf7e5b8e67f033771b44f1afdcac270a19ec527255d5c65fc69213f5509e0b"
+ },
+ "cleanup": {
+  "services": "Host 3240 and Chrome CDP 9342 stopped; ports closed",
+  "chromeProfile": "created profile removed",
+  "accountCopy": "copied /tmp/ohpi-task15b/board-home/.config/gh removed after the run; original /home/shizuku/.config/gh was not modified",
+  "retained": "screenshots, board-run.json, auth-status.json, receipt.json under /tmp/ohpi-task15b/board-evidence"
+ },
+ "limits": [
+  "Web only; packaged Electron not run for this Board row",
+  "one real issue (#5304) opened and attached; no PR merge/comment/reply",
+  "draft not submitted; proves Board item open -> Attach to session -> New session draft with project/branch/linked item",
+  "the single 422 binding probe was for the isolated data chats directory before the registered project directory, followed by the authorized 200 binding for /tmp/ohpi-task15b/chats/work"
+ ]
+}

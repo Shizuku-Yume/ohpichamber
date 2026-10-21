@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createRoot } from 'react-dom/client';
 import { Window } from 'happy-dom';
-import { createOpencodeClient, type Part } from '@opencode-ai/sdk/v2';
+import type { Part } from '@openchamber/agent-contract';
 import { SyncProvider } from '@/sync/sync-context';
 
 import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
@@ -29,22 +29,18 @@ plugin({
 
 const unavailable = (): never => { throw new Error('Reasoning scrolling must not call runtime APIs'); };
 const runtimeApis: RuntimeAPIs = {
-  runtime: { platform: 'web', isDesktop: false, isVSCode: false },
+  runtime: { platform: 'web', isDesktop: false },
   get terminal() { return unavailable(); },
   get git() { return unavailable(); },
   get files() { return unavailable(); },
   get settings() { return unavailable(); },
   get permissions() { return unavailable(); },
   get notifications() { return unavailable(); },
-  get tools() { return unavailable(); },
+  get sourceControl() { return unavailable(); },
 };
-const sdk = createOpencodeClient({
-  baseUrl: 'http://localhost',
-  fetch: async () => new Response('[]', { headers: { 'Content-Type': 'application/json' } }),
-});
 const TestProviders = ({ children }: { children: React.ReactNode }) => (
   <RuntimeAPIContext.Provider value={runtimeApis}>
-    <SyncProvider sdk={sdk} directory="">
+    <SyncProvider directory="">
       <I18nProvider>{children}</I18nProvider>
     </SyncProvider>
   </RuntimeAPIContext.Provider>
@@ -179,6 +175,25 @@ describe('ReasoningTimelineBlock', () => {
     expect(markup).not.toContain('data-message-text-export-source');
   });
 
+  test('opens a collapsed block with its body in the first render when search asks for it', () => {
+    const markup = renderToStaticMarkup(
+      <TestProviders>
+        <ReasoningTimelineBlock
+          text={LONG_REASONING}
+          variant="thinking"
+          blockId="reasoning-reveal"
+          showDuration={false}
+          revealRequest={1}
+          reasoningMessageId="msg_reveal"
+        />
+      </TestProviders>,
+    );
+
+    expect(markup).toContain('aria-expanded="true"');
+    expect(markup).toContain('data-message-text-export-source');
+    expect(markup).toContain('data-reasoning-message-id="msg_reveal"');
+  });
+
   test('renders "Justification" label for justification variant when pre-expanded and not streaming', () => {
     const markup = renderToStaticMarkup(
       <TestProviders>
@@ -259,16 +274,10 @@ describe('ReasoningPart streaming gating (issue #2020)', () => {
 
   const BUSY_INDICATOR = 'animate-busy-wave';
 
-  const makeReasoningPart = (
-    time: ReasoningPartFixture['time'],
-    text: string = SHORT_REASONING,
-  ): ReasoningPartFixture => ({
-    id: 'prt_reasoning_2020',
-    sessionID: 'ses_2020',
-    messageID: 'msg_2020',
+  const makeReasoningPart = (text: string = SHORT_REASONING): ReasoningPartFixture => ({
     type: 'reasoning',
-    text,
-    time,
+    partId: 'prt_reasoning_2020',
+    content: text,
   });
 
   // Server rendering reads the UI store's initial state, which is
@@ -285,7 +294,7 @@ describe('ReasoningPart streaming gating (issue #2020)', () => {
     // Freshly opened completed session: cached part never received `time.end`
     // and no message-level stream phase is available. The full text is already
     // local, so the block must render as finished content on first paint.
-    const markup = renderPart(makeReasoningPart({ start: 1_000 }), undefined);
+    const markup = renderPart(makeReasoningPart(), undefined);
 
     expect(markup).not.toContain(BUSY_INDICATOR);
     expect(markup).toContain('aria-expanded="false"');
@@ -293,25 +302,48 @@ describe('ReasoningPart streaming gating (issue #2020)', () => {
   });
 
   test('reasoning without time.end in a completed message renders complete, not streaming', () => {
-    const markup = renderPart(makeReasoningPart({ start: 1_000 }), 'completed');
+    const markup = renderPart(makeReasoningPart(), 'completed');
 
     expect(markup).not.toContain(BUSY_INDICATOR);
     expect(markup).toContain('aria-expanded="false"');
     expect(markup).toContain(SHORT_REASONING);
   });
 
-  test('reasoning with time.end is never treated as streaming, even when the phase claims streaming', () => {
-    const markup = renderPart(makeReasoningPart({ start: 1_000, end: 2_000 }), 'streaming');
+  test('canonical reasoning carries no persisted timing: only a live phase streams it', () => {
+    // Canonical reasoning parts have no `time`, so the message-level live
+    // phase is the only authority that can mark this block as streaming.
+    const markup = renderPart(makeReasoningPart(), 'streaming');
 
-    expect(markup).not.toContain(BUSY_INDICATOR);
-    expect(markup).toContain('aria-expanded="false"');
-    expect(markup).toContain(SHORT_REASONING);
+    expect(markup).toContain(BUSY_INDICATOR);
   });
 
-  test('live in-progress reasoning still renders as streaming', () => {
+  // The setting reaches the block as `expandWhileStreaming`; server rendering
+  // reads the store's initial state, so the opted-in path renders the block.
+  const renderExpandingWhileStreaming = (): string => renderToStaticMarkup(
+    <TestProviders>
+      <ReasoningTimelineBlock
+        text={SHORT_REASONING}
+        variant="thinking"
+        blockId="prt_reasoning_2020"
+        time={{ start: 1_000 }}
+        isStreaming
+        expandWhileStreaming
+      />
+    </TestProviders>,
+  );
+
+  test('live in-progress reasoning renders as streaming, folded to its header by default', () => {
     // Genuinely live: the message-level stream phase reports streaming and the
-    // part has not ended. The block auto-expands and shows the busy indicator.
-    const markup = renderPart(makeReasoningPart({ start: 1_000 }), 'streaming');
+    // part has not ended. The header shows the busy indicator; the body stays
+    // folded so its closing at the end does not move the chat.
+    const markup = renderPart(makeReasoningPart(), 'streaming');
+
+    expect(markup).toContain(BUSY_INDICATOR);
+    expect(markup).toContain('aria-expanded="false"');
+  });
+
+  test('live in-progress reasoning opens while it streams when the setting asks for it', () => {
+    const markup = renderExpandingWhileStreaming();
 
     expect(markup).toContain(BUSY_INDICATOR);
     expect(markup).toContain('aria-expanded="true"');
@@ -321,7 +353,7 @@ describe('ReasoningPart streaming gating (issue #2020)', () => {
     // The box is capped while streaming too, so a long thought scrolls inside
     // its own box instead of growing the timeline; it is marked as a nested
     // scroller so an upward wheel over it scrolls the box before the chat.
-    const markup = renderPart(makeReasoningPart({ start: 1_000 }), 'streaming');
+    const markup = renderExpandingWhileStreaming();
 
     expect(markup).toContain('max-h-80');
     expect(markup).toContain('data-scrollable="true"');
@@ -331,8 +363,8 @@ describe('ReasoningPart streaming gating (issue #2020)', () => {
     // The streaming early-return keeps the block mounted before the block-level
     // reveal commits a first line. The header must read as busy and must not
     // paint an empty summary row.
-    const markup = renderPart(makeReasoningPart({ start: 1_000 }, ''), 'streaming');
-    const withText = renderPart(makeReasoningPart({ start: 1_000 }), undefined);
+    const markup = renderPart(makeReasoningPart(''), 'streaming');
+    const withText = renderPart(makeReasoningPart(), undefined);
 
     expect(markup).toContain(BUSY_INDICATOR);
     expect(markup).toContain('role="button"');
@@ -348,7 +380,7 @@ describe('ReasoningPart streaming gating (issue #2020)', () => {
     // remount a real client root instead, watching the busy indicator across
     // every commit.
     const dom = installDomStub();
-    const part = makeReasoningPart({ start: 1_000 });
+    const part = makeReasoningPart();
     const busySeen: boolean[] = [];
     const root = createRoot(dom.container);
 

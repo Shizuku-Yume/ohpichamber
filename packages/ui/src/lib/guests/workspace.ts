@@ -1,13 +1,13 @@
 import { HostRequestError, type GuestLoadState, type GuestSessionRecord, type GuestWorkspaceQuery, type GuestWorkspaceSnapshot, type GuestWorktree } from '@openchamber/sdk';
-import type { Session } from '@opencode-ai/sdk/v2';
+import type { Session as CanonicalSession } from '@openchamber/agent-contract';
 import { useProjectsStore } from '@/stores/useProjectsStore';
-import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { useGlobalSessionStatusStore } from '@/sync/global-session-status';
+import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useGlobalSessionStatusStore } from '@/sync/global-session-status';
 import { getAllSyncSessionMap, getDirectoryState, getSyncChildStores } from '@/sync/sync-refs';
-import { getLinkedIssues } from '@/lib/linkedIssues';
 import { normalizePath } from '@/lib/pathNormalization';
+import { getLinkedIssues } from '@/lib/linkedIssues';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { useUIStore } from '@/stores/useUIStore';
 import type { WorktreeMetadata } from '@/types/worktree';
@@ -22,44 +22,62 @@ export const guestProject = (projectId: string) => {
 export const guestProjectWorktrees = (directory: string): WorktreeMetadata[] => (
   useSessionUIStore.getState().availableWorktreesByProject.get(normalizePath(directory) ?? directory) ?? []
 );
+
+/**
+ * The Host directories a Guest project covers: its root plus registered
+ * worktrees. Guest project ids are settings ids; sessions carry Host project
+ * ids and a project-relative display path, so membership is by workspace
+ * directory rather than either of those fields.
+ */
+export const guestProjectDirectories = (projectId: string): ReadonlySet<string> => {
+  const project = useProjectsStore.getState().projects.find((entry) => entry.id === projectId);
+  if (!project) return new Set();
+  const directories = new Set<string>();
+  const root = normalizePath(project.path);
+  if (root) directories.add(root);
+  for (const worktree of guestProjectWorktrees(project.path)) {
+    const directory = normalizePath(worktree.path);
+    if (directory) directories.add(directory);
+  }
+  return directories;
+};
 const toWorktree = (entry: WorktreeMetadata): GuestWorktree => ({
   directory: entry.path, name: entry.name ?? entry.label, branch: entry.branch,
   status: entry.worktreeStatus === 'not-a-repo' ? 'invalid' : entry.worktreeStatus ?? 'ready',
 });
 const combinedState = (states: GuestLoadState[]): GuestLoadState => states.includes('error') ? 'error' : states.includes('loading') ? 'loading' : 'ready';
 
-const projectSession = (session: Session, projectId: string, guestId: string, worktrees: ReadonlyMap<string, GuestWorktree>): GuestSessionRecord => {
-  const directory = session.directory;
+const guestItems = (session: CanonicalSession, guestId: string): GuestSessionRecord['items'] => {
+  const items: GuestSessionRecord['items'] = [];
+  for (const entry of getLinkedIssues(session)) {
+    // Only this extension's links are guest data; the host id never leaves the host.
+    if (entry.kind !== 'guest' || entry.providerId !== guestId) continue;
+    items.push(entry.data === undefined ? { id: entry.identifier } : { id: entry.identifier, data: entry.data });
+  }
+  return items;
+};
+
+const projectSession = (session: CanonicalSession, directory: string, projectId: string, worktrees: ReadonlyMap<string, GuestWorktree>, guestId: string): GuestSessionRecord => {
+  const id = session.sessionId;
   const child = getDirectoryState(directory);
   const live = useGlobalSessionStatusStore.getState();
-  const globalStatus = live.statusById.get(session.id);
-  const status = (globalStatus && normalizePath(globalStatus.directory) === normalizePath(directory) ? globalStatus.status : undefined) ?? child?.session_status[session.id];
-  const observation = live.observedById.get(session.id);
-  const observed = observation && normalizePath(observation.directory) === normalizePath(directory) ? observation : undefined;
-  const attached = useSessionUIStore.getState().worktreeMetadata.get(session.id);
-  const worktree = worktrees.get(normalizePath(directory) ?? directory)
-    ?? (attached && normalizePath(attached.path) === normalizePath(directory) ? toWorktree(attached) : null);
-  const connected = useConfigStore.getState().isConnected;
+  const observed = live.observedById.get(id);
+  const liveStatus = live.statusById.get(id)?.status;
+  const attached = useSessionUIStore.getState().worktreeMetadata.get(id);
+  const worktree = worktrees.get(directory) ?? (attached && normalizePath(attached.path) === directory ? toWorktree(attached) : null);
   let activity: GuestSessionRecord['activity'] = 'unknown';
-  if (connected) {
-    if (status?.type === 'busy') activity = 'running';
-    else if (status?.type === 'retry') activity = 'retrying';
-    else if (status?.type === 'idle' || child?.sessionStatusReady || observed) activity = 'idle';
-    if (child?.permission[session.id]?.length) activity = 'waiting-permission';
-    else if (child?.question[session.id]?.length) activity = 'waiting-question';
+  if (useConfigStore.getState().isConnected) {
+    const childReady = child?.sessionStatusReady === true && child.sessionStatusInvalidated?.[id] !== true;
+    activity = liveStatus === 'running' || session.runtimeStatus === 'running' && liveStatus === undefined ? 'running'
+      : liveStatus === 'awaiting_approval' || session.runtimeStatus === 'awaiting_approval' && liveStatus === undefined ? 'waiting-permission'
+      : liveStatus === 'awaiting_input' || session.runtimeStatus === 'awaiting_input' && liveStatus === undefined ? 'waiting-question'
+      : childReady || observed ? 'idle' : 'unknown';
+    if (child?.permission[id]?.length) activity = 'waiting-permission';
+    else if (child?.form[id]?.length) activity = 'waiting-question';
   }
-  return {
-    id: session.id, title: session.title || session.id, projectId, directory,
-    parentId: session.parentID ?? null, createdAt: session.time.created, updatedAt: session.time.updated,
-    archivedAt: session.time.archived || null, worktree,
-    activity, outcome: activity === 'idle' ? observed?.outcome ?? null : null,
-    items: getLinkedIssues(session).flatMap((item) => {
-      if (item.kind !== 'guest' || item.providerId !== guestId) return [];
-      const reference: GuestSessionRecord['items'][number] = { id: item.identifier };
-      if (item.data !== undefined) reference.data = item.data;
-      return [reference];
-    }),
-  };
+  // The guest SDK has no cancelled outcome; do not label cancellation a failure.
+  const outcome = observed?.outcome;
+  return { id, title: session.metadata?.title ?? id, projectId, directory, parentId: session.parentSessionId ?? null, createdAt: session.createdAt, updatedAt: session.updatedAt, archivedAt: session.archivedAt ?? null, worktree, activity, outcome: activity === 'idle' && (outcome === 'completed' || outcome === 'failed') ? outcome : null, items: guestItems(session, guestId) };
 };
 
 /** Store projection only. Layout-owned sync and topology discovery supply hydration. */
@@ -75,7 +93,7 @@ export const readGuestWorkspace = (query: GuestWorkspaceQuery, guestId: string):
   const topologyState = project ? topology.worktreeDiscoveryByProject.get(path) ?? 'loading' : projects.hasServerSnapshot ? 'error' : 'loading';
   const worktrees = project ? guestProjectWorktrees(project.path).map(toWorktree) : [];
   if (query.kind === 'worktrees') return { ...query, state: topologyState, worktrees };
-  const directories = new Set(project ? [path, ...worktrees.map((worktree) => normalizePath(worktree.directory) ?? worktree.directory)] : []);
+  const directories = guestProjectDirectories(query.projectId);
   const manager = getSyncChildStores();
   const global = useGlobalSessionsStore.getState();
   const coverage = [...directories].map((directory) => {
@@ -83,27 +101,13 @@ export const readGuestWorkspace = (query: GuestWorkspaceQuery, guestId: string):
     const state: GuestLoadState = bootstrap === 'failed' || global.status === 'error' ? 'error' : global.status === 'ready' ? 'ready' : 'loading';
     return { directory, state };
   });
-  const records = new Map<string, Session>();
-  // Global records own complete membership, including archives. Child stores fill discovery gaps.
-  for (const directory of directories) {
-    for (const id of global.structure.activeIdsByDirectory.get(directory) ?? []) {
-      const session = global.entityById.get(id);
-      if (session) records.set(id, session);
-    }
-  }
-  for (const session of global.archivedSessions) {
-    if (directories.has(normalizePath(session.directory) ?? session.directory)) records.set(session.id, session);
-  }
-  for (const directory of directories) {
-    for (const session of getDirectoryState(directory)?.session ?? []) {
-      if (directories.has(normalizePath(session.directory) ?? session.directory)) {
-        if (!records.has(session.id)) records.set(session.id, session);
-      }
-    }
+  const records = new Map<string, { session: CanonicalSession; directory: string }>();
+  for (const session of getAllSyncSessionMap().values()) {
+    const directory = resolveGlobalSessionDirectory(session);
+    if (directory && directories.has(directory)) records.set(session.sessionId, { session, directory });
   }
   const worktreeByPath = new Map(worktrees.map((worktree) => [normalizePath(worktree.directory) ?? worktree.directory, worktree]));
-  return { ...query, state: combinedState([topologyState, ...coverage.map((entry) => entry.state)]), coverage,
-    sessions: [...records.values()].map((session) => projectSession(session, query.projectId, guestId, worktreeByPath)) };
+  return { ...query, state: combinedState([topologyState, ...coverage.map((entry) => entry.state)]), coverage, sessions: [...records.values()].map(({ session, directory }) => projectSession(session, directory, query.projectId, worktreeByPath, guestId)) };
 };
 
 type Observer = { listeners: Set<(snapshot: GuestWorkspaceSnapshot) => void>; snapshot: GuestWorkspaceSnapshot; dispose: () => void };
@@ -148,8 +152,9 @@ export const observeGuestWorkspace = (query: GuestWorkspaceQuery, guestId: strin
         manager.subscribeBootstrap(update),
         manager.subscribeAllSelected((state) => state.session, update),
         manager.subscribeAllSelected((state) => state.permission, update),
-        manager.subscribeAllSelected((state) => state.question, update),
+        manager.subscribeAllSelected((state) => state.form, update),
         manager.subscribeAllSelected((state) => state.sessionStatusReady, update),
+        manager.subscribeAllSelected((state) => state.sessionStatusInvalidated, update),
       );
     }
     current.dispose = () => { disposed = true; for (const unsubscribe of unsubs) unsubscribe(); observers.delete(key); };
@@ -165,7 +170,7 @@ export const observeGuestWorkspace = (query: GuestWorkspaceQuery, guestId: strin
 
 export const openGuestSession = (sessionId: string): void => {
   const session = getAllSyncSessionMap().get(sessionId) ?? useGlobalSessionsStore.getState().entityById.get(sessionId);
-  if (!session?.directory) throw new HostRequestError('NO_SESSION', 'Session is not available.');
-  useSessionUIStore.getState().setCurrentSession(sessionId, session.directory);
+  if (!session?.displayPath) throw new HostRequestError('NO_SESSION', 'Session is not available.');
+  useSessionUIStore.getState().setCurrentSession(sessionId, session.displayPath);
   useUIStore.getState().closeMainSurfaces();
 };

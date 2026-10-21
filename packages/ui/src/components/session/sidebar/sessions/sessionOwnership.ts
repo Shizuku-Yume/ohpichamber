@@ -1,6 +1,7 @@
-import type { Session } from '@opencode-ai/sdk/v2';
-import type { Project as OpenCodeProject } from '@opencode-ai/sdk/v2/client';
+import type { Session } from '@openchamber/agent-contract';
 import { getNormalizedParentDirectory, normalizePath } from '@/lib/pathNormalization';
+import type { SpaceMark } from '@/lib/spaces/spaces-store';
+import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 
 type Project = {
   id: string;
@@ -11,24 +12,14 @@ type Worktree = {
   path: string;
 };
 
-type SessionProjectMetadata = {
-  id?: string | null;
-  worktree?: string | null;
-};
-
-export type SessionOwnershipRecord = Session & {
-  directory?: string | null;
-  projectID?: string | null;
-  project?: SessionProjectMetadata | null;
-};
-
-type AuthoritativeOpenCodeProject = Pick<OpenCodeProject, 'id' | 'worktree'>;
 
 export type DirectoryOwner = {
   projectId: string;
   projectRoot: string;
   scopeDirectory: string;
-  kind: 'project' | 'worktree';
+  kind: 'project' | 'worktree' | 'space';
+  /** The isolated space that owns the scope, for `kind: 'space'`. */
+  spaceId?: string;
 };
 
 export type SessionOwnershipIndex = {
@@ -56,21 +47,12 @@ const setOwner = (owners: Map<string, DirectoryOwner>, directory: string, candid
   }
 };
 
-const resolveSessionDirectory = (session: SessionOwnershipRecord): string | null => {
-  return normalizePath(session.directory) ?? normalizePath(session.project?.worktree);
-};
-
-const getOpenCodeProjectId = (session: SessionOwnershipRecord): string | null => {
-  return session.projectID || session.project?.id || null;
-};
-
 export const createSessionOwnershipIndex = (
-  sessions: SessionOwnershipRecord[],
+  sessions: Session[],
   projects: Project[],
   availableWorktreesByProject: Map<string, Worktree[]>,
-  isVSCode: boolean,
-  archivedSessions: SessionOwnershipRecord[] = [],
-  authoritativeProjects: readonly AuthoritativeOpenCodeProject[] = [],
+  archivedSessions: Session[] = [],
+  spaces: readonly SpaceMark[] = [],
 ): SessionOwnershipIndex => {
   const ownerByDirectory = new Map<string, DirectoryOwner>();
   const projectByRoot = new Map<string, Project>();
@@ -90,59 +72,43 @@ export const createSessionOwnershipIndex = (
     });
   }
 
-  if (!isVSCode) {
-    for (const [projectPath, worktrees] of availableWorktreesByProject) {
-      const projectRoot = normalizePath(projectPath);
-      const project = projectRoot ? projectByRoot.get(projectRoot) : undefined;
-      if (!project || !projectRoot) continue;
-      for (const worktree of worktrees) {
-        const directory = normalizePath(worktree.path);
-        if (!directory) continue;
-        setOwner(ownerByDirectory, directory, {
-          projectId: project.id,
-          projectRoot,
-          scopeDirectory: directory,
-          kind: 'worktree',
-        });
-      }
+  for (const [projectPath, worktrees] of availableWorktreesByProject) {
+    const projectRoot = normalizePath(projectPath);
+    const project = projectRoot ? projectByRoot.get(projectRoot) : undefined;
+    if (!project || !projectRoot) continue;
+    for (const worktree of worktrees) {
+      const directory = normalizePath(worktree.path);
+      if (!directory) continue;
+      setOwner(ownerByDirectory, directory, {
+        projectId: project.id,
+        projectRoot,
+        scopeDirectory: directory,
+        kind: 'worktree',
+      });
     }
   }
 
-  // OpenCode project IDs are not OpenChamber's path-derived project IDs. Only
-  // project metadata whose canonical worktree is itself a configured root can
-  // bridge the two namespaces. Conflicting metadata stays unresolved.
-  const canonicalOwnerByOpenCodeProjectId = new Map<string, DirectoryOwner | null>();
-  const authoritativeProjectIds = new Set<string>();
-  const registerCanonicalOwner = (openCodeProjectId: string, worktree: string | null | undefined): void => {
-    const canonicalRoot = normalizePath(worktree ?? null);
-    const project = canonicalRoot ? projectByRoot.get(canonicalRoot) : undefined;
-    const candidate = project && canonicalRoot ? {
+  // An isolated space belongs to the registered project the host resolved for
+  // it; sessions without a registered owner stay out of every project.
+  for (const space of spaces) {
+    const projectRoot = normalizePath(space.projectDirectory);
+    const directory = normalizePath(space.directory);
+    const project = projectRoot ? projectByRoot.get(projectRoot) : undefined;
+    if (!project || !projectRoot || !directory) continue;
+    setOwner(ownerByDirectory, directory, {
       projectId: project.id,
-      projectRoot: canonicalRoot,
-      scopeDirectory: canonicalRoot,
-      kind: 'project' as const,
-    } : null;
-    if (!canonicalOwnerByOpenCodeProjectId.has(openCodeProjectId)) {
-      canonicalOwnerByOpenCodeProjectId.set(openCodeProjectId, candidate);
-      return;
-    }
-    const existing = canonicalOwnerByOpenCodeProjectId.get(openCodeProjectId);
-    if (!existing || !candidate || existing.projectRoot !== candidate.projectRoot) {
-      canonicalOwnerByOpenCodeProjectId.set(openCodeProjectId, null);
-    }
-  };
-
-  for (const project of authoritativeProjects) {
-    if (!project.id) continue;
-    authoritativeProjectIds.add(project.id);
-    registerCanonicalOwner(project.id, project.worktree);
+      projectRoot,
+      scopeDirectory: directory,
+      kind: 'space',
+      spaceId: space.id,
+    });
   }
-  for (const session of [...sessions, ...archivedSessions]) {
-    const openCodeProjectId = session.project?.id;
-    if (!openCodeProjectId || authoritativeProjectIds.has(openCodeProjectId)) continue;
-    const canonicalRoot = normalizePath(session.project?.worktree ?? null);
-    if (!canonicalRoot || !projectByRoot.has(canonicalRoot)) continue;
-    registerCanonicalOwner(openCodeProjectId, session.project?.worktree);
+
+  // Canonical project identity can retain sessions from deleted worktrees even
+  // when the current directory topology no longer contains their workspace.
+  const ownerByProjectId = new Map<string, DirectoryOwner>();
+  for (const owner of ownerByDirectory.values()) {
+    if (owner.kind === 'project') ownerByProjectId.set(owner.projectId, owner);
   }
 
   const resolvedOwners = new Map<string, DirectoryOwner | null>();
@@ -155,12 +121,6 @@ export const createSessionOwnershipIndex = (
     if (!directory) return null;
     if (resolvedOwners.has(directory)) {
       return resolvedOwners.get(directory) ?? null;
-    }
-
-    if (isVSCode) {
-      const owner = ownerByDirectory.get(directory) ?? null;
-      resolvedOwners.set(directory, owner);
-      return owner;
     }
 
     const visited: string[] = [];
@@ -183,17 +143,15 @@ export const createSessionOwnershipIndex = (
   };
 
   const bucket = (
-    input: SessionOwnershipRecord[],
+    input: Session[],
     target: Map<string, Session[]>,
     scopeTarget?: Map<string, Set<string>>,
   ): void => {
     for (const session of input) {
-      const exactOwner = resolveOwner(resolveSessionDirectory(session));
-      const owner = exactOwner ?? (!isVSCode
-        ? canonicalOwnerByOpenCodeProjectId.get(getOpenCodeProjectId(session) ?? '') ?? null
-        : null);
+      const exactOwner = resolveOwner(normalizePath(resolveGlobalSessionDirectory(session)));
+      const owner = exactOwner ?? ownerByProjectId.get(session.projectId) ?? null;
       if (!owner) continue;
-      bySessionId.set(session.id, owner);
+      bySessionId.set(session.sessionId, owner);
       const projectSessions = target.get(owner.projectId);
       if (projectSessions) {
         projectSessions.push(session);
@@ -203,15 +161,17 @@ export const createSessionOwnershipIndex = (
       if (!scopeTarget) continue;
       const scopeSessions = scopeTarget.get(owner.scopeDirectory);
       if (scopeSessions) {
-        scopeSessions.add(session.id);
+        scopeSessions.add(session.sessionId);
       } else {
-        scopeTarget.set(owner.scopeDirectory, new Set([session.id]));
+        scopeTarget.set(owner.scopeDirectory, new Set([session.sessionId]));
       }
     }
   };
 
   bucket(sessions, sessionsByProject, sessionsByScope);
-  bucket(archivedSessions, archivedSessionsByProject);
+  // The archive lists top-level sessions only: a subsession belongs to the
+  // agent run that spawned it and is restored with its parent, never alone.
+  bucket(archivedSessions.filter((session) => !session.parentSessionId), archivedSessionsByProject);
 
   return {
     bySessionId,

@@ -1,40 +1,34 @@
-import type { Agent } from '@opencode-ai/sdk/v2';
+import type { Agent } from '@openchamber/agent-contract';
 import { getProviderModelDisplayName, type DisplayProvider } from '@/lib/modelDisplay';
 
 export type MobileControlsPanel = 'model' | 'agent' | 'variant' | null;
 
-export const isPrimaryMode = (mode?: string) => mode === 'primary' || mode === 'all' || mode === undefined || mode === null;
-
-const getCyclablePrimaryAgents = (agents: Agent[]) => agents.filter((agent) => isPrimaryMode(agent.mode));
-
-export const getCycledPrimaryAgentName = (
-    agents: Agent[],
-    currentAgentName: string | undefined,
+/** Cycle through available favorites, or the complete enabled native roster. */
+export const getCycledAgentId = (
+    agents: readonly Pick<Agent, 'agentId'>[],
+    currentAgentId: string | undefined,
     direction: 1 | -1 = 1,
+    favoriteAgentIds: readonly string[] = [],
 ) => {
-    const primaryAgents = getCyclablePrimaryAgents(agents);
-    if (primaryAgents.length <= 1) {
-        return null;
-    }
-
-    const currentIndex = primaryAgents.findIndex((agent) => agent.name === currentAgentName);
-    const safeCurrentIndex = currentIndex >= 0 ? currentIndex : 0;
-    const nextIndex = (safeCurrentIndex + direction + primaryAgents.length) % primaryAgents.length;
-    return primaryAgents[nextIndex]?.name ?? null;
+    const favorites = agents.filter((agent) => favoriteAgentIds.includes(agent.agentId));
+    const candidates = favorites.length > 0 ? favorites : agents;
+    if (candidates.length === 0) return null;
+    const index = candidates.findIndex((agent) => agent.agentId === currentAgentId);
+    if (index < 0) return (direction === 1 ? candidates[0] : candidates[candidates.length - 1]).agentId;
+    if (candidates.length === 1) return null;
+    return candidates[(index + direction + candidates.length) % candidates.length].agentId;
 };
 
 const capitalizeLabel = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
 
-export const getAgentDisplayName = (agents: Agent[], agentName?: string) => {
-    if (agentName) {
-        const agent = agents.find((entry) => entry.name === agentName);
-        return agent ? capitalizeLabel(agent.name) : capitalizeLabel(agentName);
-    }
-
-    const primaryAgents = agents.filter((agent) => isPrimaryMode(agent.mode));
-    const buildAgent = primaryAgents.find((agent) => agent.name === 'build');
-    const fallbackAgent = buildAgent || primaryAgents[0] || agents[0];
-    return fallbackAgent ? capitalizeLabel(fallbackAgent.name) : 'Select agent';
+export const getAgentDisplayName = (
+    agents: readonly Pick<Agent, 'agentId' | 'name'>[],
+    agentId?: string,
+    fallbackLabel = '',
+) => {
+    if (agentId) return agents.find((agent) => agent.agentId === agentId)?.name ?? agentId;
+    const fallbackAgent = agents.find((agent) => agent.agentId === 'build') ?? agents[0];
+    return fallbackAgent?.name ?? fallbackLabel;
 };
 
 export const getModelDisplayName = (

@@ -1,160 +1,177 @@
 # Quota Module Documentation
 
 ## Purpose
-This module fetches quota and usage signals for supported providers in the web server runtime.
+This module fetches quota, credit, and usage signals for supported model providers in the web server runtime.
 
-Node server entrypoints apply `../network-defaults.js` before serving requests,
-including the daemon launched directly through `server/index.js`. Connection
-attempts get 5 seconds without changing address-family selection. The VS Code
-extension applies the same policy in its own process at activation.
+Node server entrypoints apply `../network-defaults.js` before serving requests, including the daemon launched through `server/index.js`. Connection attempts receive 5 seconds without changing address-family selection.
 
 ## Entrypoints and structure
-- `packages/web/server/lib/quota/index.js`: public entrypoint imported by `packages/web/server/index.js`.
-- `packages/web/server/lib/quota/routes.js`: Express route registration for quota endpoints.
-- `packages/web/server/lib/quota/providers/index.js`: provider registry, configured-provider list, and provider dispatcher.
+- `packages/web/server/lib/quota/index.js`: public entrypoint re-exporting the dispatcher and provider fetchers.
+- `packages/web/server/lib/quota/routes.js`: Express route registration for quota endpoints (`registerQuotaRoutes`).
+- `packages/web/server/lib/quota/providers/index.js`: provider registry, configured-provider filter, and coalescing dispatcher.
+- `packages/web/server/lib/quota/providers/selected-credential.js`: credential extraction (`credentialAccessToken`, `credentialRefreshToken`, `credentialExpiresAt`) and required context validation (`requireSelectedCredential`).
 - `packages/web/server/lib/quota/providers/google/`: Google-specific auth, API, and transform modules.
-- `packages/web/server/lib/quota/providers/claude/`: Claude credential discovery, usage transforms, and rate-limit handling.
-- `packages/web/server/lib/quota/utils/`: shared auth, transform, and formatting helpers.
+- `packages/web/server/lib/quota/providers/claude/`: Claude usage transforms and rate-limit handling.
+- `packages/web/server/lib/quota/utils/`: shared formatting and transform helpers.
+
+## Credential architecture and resolution flow
+
+Live quota fetches resolve provider credentials dynamically from the selected workspace context. The web server never reads legacy OpenCode `auth.json` or `opencode.json` files, and the obsolete `../opencode/auth.js` and `resolveConfigApiKey` utilities are removed.
+
+1. **Request context:**
+   Routes accept request context (`workspaceId`, `agentDirectoryId`, optional `providerId`, optional `credentialRef`) from query parameters or request body.
+2. **Catalog selection:**
+   Host `private-credential.js` (`createCatalogCredentialSelections`) validates the workspace scope via Host `resolveWorkspaceScope`, queries the workspace provider catalog from Agent Service (`GET /api/agent/v1/workspaces/:workspaceId/providers`), and maps native provider IDs to logical quota IDs using `QUOTA_PROVIDER_RELATIONS`:
+   - `anthropic` (method `oauth`) -> `claude`
+   - `openai-codex` (method `oauth`) -> `codex`
+   - `google-gemini-cli` / `google-antigravity` (method `oauth`) -> `google`
+   - `github-copilot` -> `github-copilot-addon` (and `github-copilot` directly)
+   - `charm-hyper` -> `hyper`
+   - `zai` -> `zai-coding-plan`
+   - `zhipu-coding-plan` -> `zhipuai-coding-plan`
+   - `kimi-code` -> `kimi-for-coding`
+   - `nanogpt` -> `nano-gpt`
+   - `minimax-code` -> `minimax-coding-plan`
+   - `minimax-code-cn` -> `minimax-cn-coding-plan`
+   - `wafer-serverless` -> `wafer`
+   - `xai-oauth` (method `oauth`) -> `xai`
+   - Native providers without an explicit alias mapping retain their native `providerId` (for example, `cline-pass`, `cursor`, `deepinfra`, `deepseek`, `openrouter`, `opencode-go`, `neuralwatt`, `kilo`, `zenmux`).
+   Selections are filtered against `listConfiguredQuotaProviders` in `providers/index.js` to ensure the registry supports each logical quota provider ID.
+3. **Secret resolution:**
+   `fetchQuotaForProvider` invokes `requireSelectedCredential({ ...selection, purpose: 'quota', resolveCredential })` in `providers/selected-credential.js`. Host `resolveCredential` calls the Agent Service internal endpoint `POST /internal/workspaces/:workspaceId/credentials/resolve`.
+4. **Agent Service storage owner:**
+   The dedicated Bun Agent Service worker owns `AuthStorage` and `NativeCredentials`:
+   - API key credentials: command-backed credentials (`!`) are rejected with 422; keys are resolved via `resolveConfigValue(credential.key)`.
+   - OAuth credentials: fresh access tokens are retrieved via `AuthStorage.oauth.accessById`, which handles OAuth token refresh automatically.
+5. **Secret boundary:**
+   Resolved credential material remains private to server memory and is never returned in HTTP responses to the browser.
 
 ## Supported provider IDs (dispatcher)
 
-These provider IDs are currently dispatchable via `fetchQuotaForProvider(providerId)` in `packages/web/server/lib/quota/providers/index.js`.
+These provider IDs are registered in `packages/web/server/lib/quota/providers/index.js` and dispatchable via `fetchQuotaForProvider(providerId)`:
 
-| Provider ID | Display name | Module | Auth aliases/keys |
+| Provider ID | Display name | Module | Credential source & authority |
 | --- | --- | --- | --- |
-| `claude` | Claude | `providers/claude/` | Claude Code Keychain entry, Claude Code credentials file, OpenCode `auth.json` (`anthropic`, `claude`), `CLAUDE_CODE_OAUTH_TOKEN` |
-| `cline-pass` | ClinePass | `providers/cline-pass.js` | `cline-pass` (API key under `key` or `token`) |
-| `codex` | Codex | `providers/codex.js` | `openai`, `codex`, `chatgpt` |
-| `command-code` | Command Code | `providers/command-code.js` | `command-code` OAuth/API credential in OpenCode `auth.json`, or `COMMAND_CODE_API_KEY` |
-| `cursor` | Cursor | `providers/cursor.js` | Environment/token files, OpenChamber-managed credentials, or explicit one-time Cursor import |
-| `deepseek` | DeepSeek | `providers/deepseek.js` | `deepseek` (API key under `key` or `token`) |
-| `exe-dev` | exe.dev | `providers/exe-dev.js` | Usage API token stored under `~/.config/openchamber/quota/` |
-| `google` | Google | `providers/google/index.js` | `google`, `google.oauth`, Antigravity accounts file |
-| `hyper` | Charm Hyper | `providers/hyper.js` | `hyper` (API key under `key` or `token`) |
-| `github-copilot` | GitHub Copilot | `providers/copilot.js` | `github-copilot`, `copilot` |
-| `github-copilot-addon` | GitHub Copilot Add-on | `providers/copilot.js` | `github-copilot`, `copilot` |
-| `kimi-for-coding` | Kimi for Coding | `providers/kimi.js` | `kimi-for-coding`, `kimi` |
-| `nano-gpt` | NanoGPT | `providers/nanogpt.js` | `nano-gpt`, `nanogpt`, `nano_gpt` |
-| `openrouter` | OpenRouter | `providers/openrouter.js` | `openrouter` |
-| `zai-coding-plan` | z.ai | `providers/zai.js` | `zai-coding-plan`, `zai`, `z.ai` |
-| `zhipuai-coding-plan` | Zhipu AI Coding Plan | `providers/zhipuai-coding-plan.js` | `zhipuai-coding-plan`, `zhipuai`, `zhipu` |
-| `minimax-coding-plan` | MiniMax Coding Plan (minimax.io) | `providers/minimax-coding-plan.js` / `providers/minimax-shared.js` | `minimax-coding-plan` |
-| `minimax-cn-coding-plan` | MiniMax Coding Plan (minimaxi.com) | `providers/minimax-cn-coding-plan.js` / `providers/minimax-shared.js` | `minimax-cn-coding-plan` |
-| `ollama-cloud` | Ollama Cloud | `providers/ollama-cloud.js` | Manual cookie pasted into Settings (`aid=...; __Secure-session=...` from `ollama.com`), stored under `~/.config/openchamber/quota/` |
-| `wafer` | Wafer.ai | `providers/wafer.js` | `wafer`, `wafer-ai`, `wafer_ai`, `wafer.ai` |
-| `opencode-go` | OpenCode Go | `providers/opencode-go.js` | `opencode-go` API key from OpenCode `auth.json` |
-| `neuralwatt` | NeuralWatt | `providers/neuralwatt.js` | `neuralwatt` (API key under `key` or `token`) |
-| `xai` | xAI | `providers/xai.js` | `xai` OAuth entry in OpenCode `auth.json` |
+| `claude` | Claude | `providers/claude/` | Native provider `anthropic`, OAuth method in Agent Service `AuthStorage`. Checks `credential.expires`. |
+| `cline-pass` | ClinePass | `providers/cline-pass.js` | Selected API key via Agent Service `AuthStorage`. |
+| `codex` | Codex | `providers/codex.js` | Native provider `openai-codex`, OAuth method in Agent Service `AuthStorage`. Optional `accountId` from credential. |
+| `cursor` | Cursor | `providers/cursor.js` | Selected API key or OAuth via Agent Service `AuthStorage`. Checks JWT / stored expiration. |
+| `deepinfra` | DeepInfra | `providers/deepinfra.js` | Selected API key via Agent Service `AuthStorage`. |
+| `deepseek` | DeepSeek | `providers/deepseek.js` | Selected API key via Agent Service `AuthStorage`. |
+| `exe-dev` | exe.dev | `providers/exe-dev.js` | Unsupported for selected credential quota (`isConfigured: () => false`). |
+| `google` | Google | `providers/google/index.js` | Native provider `google-gemini-cli` or `google-antigravity`, OAuth method in Agent Service `AuthStorage`. Requires `projectId`. |
+| `hyper` | Charm Hyper | `providers/hyper.js` | Native provider `charm-hyper`, API key via Agent Service `AuthStorage`. |
+| `zai-coding-plan` | z.ai | `providers/zai.js` | Native provider `zai`, API key via Agent Service `AuthStorage`. Supports gift reset activation. |
+| `zhipuai-coding-plan` | Zhipu AI Coding Plan | `providers/zhipuai-coding-plan.js` | Native provider `zhipu-coding-plan`, API key via Agent Service `AuthStorage`. |
+| `kimi-for-coding` | Kimi for Coding | `providers/kimi.js` | Native provider `kimi-code`, API key via Agent Service `AuthStorage`. Falls back to Moonshot balance on 401/403. |
+| `openrouter` | OpenRouter | `providers/openrouter.js` | Selected API key via Agent Service `AuthStorage`. Fixed endpoint `https://openrouter.ai/api/v1/key`. |
+| `nano-gpt` | NanoGPT | `providers/nanogpt.js` | Native provider `nanogpt`, API key via Agent Service `AuthStorage`. |
+| `github-copilot` | GitHub Copilot | `providers/copilot.js` | Native provider `github-copilot`, API key or OAuth via Agent Service `AuthStorage`. |
+| `github-copilot-addon` | GitHub Copilot Add-on | `providers/copilot.js` | Native provider `github-copilot`, API key or OAuth via Agent Service `AuthStorage`. |
+| `minimax-coding-plan` | MiniMax Coding Plan (minimax.io) | `providers/minimax-coding-plan.js` / `providers/minimax-shared.js` | Native provider `minimax-code`, API key via Agent Service `AuthStorage`. |
+| `minimax-cn-coding-plan` | MiniMax Coding Plan (minimaxi.com) | `providers/minimax-cn-coding-plan.js` / `providers/minimax-shared.js` | Native provider `minimax-code-cn`, API key via Agent Service `AuthStorage`. |
+| `ollama-cloud` | Ollama Cloud | `providers/ollama-cloud.js` | Unsupported for selected credential quota (`isConfigured: () => false`). |
+| `wafer` | Wafer.ai | `providers/wafer.js` | Native provider `wafer-serverless`, API key via Agent Service `AuthStorage`. |
+| `opencode-go` | OpenCode Go | `providers/opencode-go.js` | Selected API key via Agent Service `AuthStorage` for external OpenCode Go subscription API. Native OAuth is unsupported. |
+| `neuralwatt` | NeuralWatt | `providers/neuralwatt.js` | Selected API key via Agent Service `AuthStorage`. |
+| `kilo` | Kilo Code | `providers/kilo.js` | Selected API key via Agent Service `AuthStorage`. |
+| `zenmux` | ZenMux | `providers/zenmux.js` | Selected API key via Agent Service `AuthStorage`. |
+| `xai` | xAI | `providers/xai.js` | Native provider `xai-oauth`, OAuth method in Agent Service `AuthStorage`. Checks stored and JWT expiry. |
 
 ## Internal-only provider module
-- `providers/openai.js` exists for logic parity/reuse but is intentionally not registered for dispatcher ID routing.
+- `providers/openai.js`: logic parity and shared parsing helper module; intentionally not registered for dispatcher ID routing.
+
+## HTTP routes
+`packages/web/server/lib/quota/routes.js` registers Express endpoints under `/api/quota/*`:
+
+- `GET /api/quota/providers`:
+  Accepts workspace context via query parameters (`workspaceId`, `agentDirectoryId`, optional `providerId`, optional `credentialRef`). Returns `{ providers: string[] }` containing logical quota IDs supported by both the registry and the workspace catalog.
+- `GET /api/quota/:providerId`:
+  Resolves the workspace credential selection for `:providerId` and executes `fetchQuotaForProvider`. Returns standardized quota JSON or HTTP 503 if unavailable.
+- `POST /api/quota/:providerId/gift-reset/use`:
+  Supported only for `zai-coding-plan` (other provider IDs return HTTP 404). Accepts `{ recordId, resetType }` with workspace context in request body. Calls `useZaiGiftReset` to activate the package reset.
 
 ## Response contract
-All providers should return results via shared helpers to preserve API shape:
-- Required fields: `providerId`, `providerName`, `ok`, `configured`, `usage`, `fetchedAt`
-- Optional field: `error`
-- Unsupported provider requests should return `ok: false`, `configured: false`, `error: Unsupported provider`
+Provider modules return standardized results via shared helpers:
+- Required fields: `providerId`, `providerName`, `ok`, `configured`, `usage`, `fetchedAt`.
+- Optional field: `error`, `planLabel`.
+- Unsupported requests return `ok: false`, `configured: false`, `error: 'Unsupported provider'`.
+- `usage.windows` contains window records keyed by window identifier (such as `5h`, `weekly`, `monthly`, `credits_balance`).
+- Optional provider-specific data is exposed under `usage.models` (for example, Google and Claude).
+- Concurrent requests for the same provider and credential options are coalesced by `fetchQuotaForProvider` via `pendingFetches`.
 
-Provider modules must export `providerId`, `providerName`, `aliases`, `isConfigured(auth?)`, and `fetchQuota()`.
-`fetchQuota()` should return a quota result with `usage.windows` keyed by window name (for example `5h`, `7d`, `daily`) and optional provider-specific `usage.models` data.
+## Provider-specific semantics
 
-exe.dev, Ollama Cloud, and Cursor credentials are explicitly managed through Settings. exe.dev usage uses a separately generated HTTPS API token restricted to `billing credits usage` and aggregates every `exe-*` model provider into one monthly credit window. Generate the token with `ssh exe.dev "ssh-key generate-api-key --label=openchamber --exp=30d --cmds='billing credits usage'"`. OpenCode Go usage uses `GET https://opencode.ai/zen/go/v1/usage` with the `opencode-go` API key from OpenCode `auth.json` as a bearer token and the stable `x-opencode-session: openchamber-usage` workload id. The server validates managed credentials before atomic `0600` writes and never returns secrets through its API. OpenChamber never scans browser cookie stores or automatically reads Cursor storage; Cursor import is an explicit one-time user action and never modifies Cursor's database.
+### Claude
+Reports subscription limits from Anthropic's OAuth usage API:
+- **Endpoint:** `GET https://api.anthropic.com/api/oauth/usage` with header `anthropic-beta: oauth-2025-04-20`.
+- **Authentication:** Selected native `anthropic` OAuth credential from Agent Service `AuthStorage`. Checks `selectedCredential.expires` before sending requests.
+- **Rate limiting:** Anthropic rate limits aggressively. Successful usage payloads are cached in memory and served during 429 cooldowns (`Retry-After` header or 5 minutes up to 1 hour). The cache is keyed by sha256 fingerprint of access and refresh tokens.
+- **Refresh ownership:** OpenChamber does not initiate OAuth refresh or rotate tokens directly; token refresh is owned by Agent Service `AuthStorage`.
 
-Command Code usage resolves account scope through `GET /alpha/whoami`, then reads server-backed credit balances and five-hour/weekly limits from `GET /alpha/billing/credits?orgId=...`. Personal accounts return `org: null` and use `/alpha/billing/credits` without an `orgId`; organization accounts include their organization id. Web/Electron and VS Code read the standard `command-code` OpenCode auth entry (including OAuth `access`) or `COMMAND_CODE_API_KEY`; credentials remain in the owning runtime and are never returned to shared UI.
+### OpenCode Go
+OpenCode Go is an external subscription service (`https://opencode.ai/zen/go/v1/usage`), distinct from the retired OpenCode engine:
+- **Authentication:** Requires an API key bearer token with header `x-opencode-session: openchamber-usage`. Native OAuth credentials are explicitly rejected.
+- **Meters:** Parses `payload.usage` into rolling `5h`, `weekly`, and `monthly` windows based on percent and reset timestamp fields.
 
-On the first OpenCode Go usage refresh after upgrading, OpenChamber deletes the obsolete `quota/opencode-go.json` credential file without reading its cookie value.
+### xAI
+Reports SuperGrok billing configuration:
+- **Endpoint:** `POST https://grok.com/grok_api_v2.GrokBuildBilling/GetGrokCreditsConfig` (gRPC-web).
+- **Authentication:** Selected native `xai-oauth` OAuth credential from Agent Service `AuthStorage`. Checks `accessTokenExpired` (stored expiry or JWT `exp` with 120-second skew).
+- **Refresh ownership:** Native `AuthStorage` owns OAuth token rotation; the quota module consumes the current access token and returns an expired credential error when stale.
 
-## Claude credential and limit semantics
+### MiniMax M3 Token Plan & Coding Plan
+Supports both the M3 Token Plan and legacy Coding Plan endpoints:
+- **Endpoints:** Tries `https://api.minimax.io/v1/token_plan/remains` (international) or `https://api.minimaxi.com/v1/token_plan/remains` (China), falling back to `/v1/api/openplatform/coding_plan/remains`.
+- **Field semantics:** On the Token Plan endpoint, `current_interval_usage_count` represents remaining quota, so `used = total - remaining`. On the legacy Coding Plan endpoint, `usage_count` represents consumed quota.
+- **Model selection:** Selects chat model candidate from `model_remains` matching `MiniMax-M*`, then `general`/`chat`/`text`, then percentage candidates.
+- **Status check:** Window status `3` (`WINDOW_STATUS_INACTIVE`) indicates the window is not applicable for the current plan tier and is omitted.
 
-Claude quota reports the subscription limits Claude Code itself is bound by, read from `GET https://api.anthropic.com/api/oauth/usage`.
+### Google
+Evaluates Google Cloud quota buckets and models:
+- **Modules:** Split across `providers/google/index.js`, `auth.js`, `api.js`, and `transforms.js`.
+- **Authentication:** Requires an OAuth credential with `projectId` for native `google-gemini-cli` or `google-antigravity`. Checks token expiration before calling Google Cloud APIs.
 
-- **Credential sources**, in priority order: the macOS Keychain entry `Claude Code-credentials`, then `${CLAUDE_CONFIG_DIR:-~/.claude}/.credentials.json` (the Linux/WSL location), then the OpenCode `auth.json` entry, then `CLAUDE_CODE_OAUTH_TOKEN`. The Keychain wins on macOS because the credentials file there is a leftover Claude Code no longer updates.
-- **All sources are read-only.** OpenChamber never writes to Claude Code's credential store and never refreshes the OAuth token, because Anthropic does not support two live refresh tokens for one `client_id` — refreshing here would sign the user out of Claude Code. Credentials are read fresh per request so a Claude Code refresh is picked up immediately; an expired token yields an explicit "open Claude Code to sign in again" error rather than a bare 401.
-- **Limits come from the `limits` array**, keyed by `kind`: `session` maps to the `5h` window, `weekly_all` to `7d`, and `weekly_scoped` to a per-model `7d` window named by `scope.model.display_name`. The legacy `five_hour`/`seven_day` fields are only a fallback; `seven_day_sonnet`/`seven_day_opus` are no longer populated by Anthropic. Unrecognized limit kinds and Anthropic's rotating internal code names (`nimbus_quill`, `tangelo`, ...) are ignored rather than guessed at.
-- **Extra usage** is reported as the `extra_usage` window from `spend`, only while `spend.enabled` is true, with a money `valueLabel`.
-- **Rate limiting**: Anthropic returns 429 aggressively. The last successful usage payload is cached in memory and reserved during a cooldown (`Retry-After`, else five minutes, capped at one hour). The cache is keyed by a hash of the access and refresh tokens, so switching accounts drops it instead of showing the previous account's numbers.
-- **Runtime parity**: Web/Electron and VS Code preserve the last successful Claude values during the same bounded 429 cooldown. Quota dispatchers also coalesce concurrent refreshes for the same provider in each runtime, while requests for different providers remain parallel.
+### Codex
+Reports ChatGPT / Codex subscription windows:
+- **Endpoint:** `GET https://chatgpt.com/backend-api/wham/usage`.
+- **Authentication:** Selected native `openai-codex` OAuth credential. Attaches `ChatGPT-Account-Id` when `credential.accountId` is present.
+- **Windows:** Extracts primary and secondary rate limit windows, numeric credits balance (`credits_balance`), and business spend limits (`spend_control.individual_limit`).
 
-## Add a new provider (quick steps)
-1. Choose module shape based on complexity:
-   - Simple providers: create `packages/web/server/lib/quota/providers/<provider>.js`.
-   - Complex providers (multi-source auth, multiple API calls, non-trivial transforms): create `packages/web/server/lib/quota/providers/<provider>/` with split modules like Google (`index.js`, `auth.js`, `api.js`, `transforms.js`).
-2. Export `providerId`, `providerName`, `aliases`, `isConfigured`, and `fetchQuota`.
-3. Use shared helpers from `packages/web/server/lib/quota/utils/index.js` (`buildResult`, `toUsageWindow`, auth/conversion helpers) to keep payload shape consistent.
-4. Register the provider in `packages/web/server/lib/quota/providers/index.js`.
-5. If needed for direct use, export a named fetcher from `packages/web/server/lib/quota/providers/index.js` and `packages/web/server/lib/quota/index.js`.
-6. Update this file with the new provider ID, module path, and alias/auth details.
-7. Validate with `bun run type-check`, `bun run lint`, and `bun run build`.
+### Cursor
+Reports Cursor subscription and usage data:
+- **Endpoints:** `https://api2.cursor.sh/aiserver.v1.DashboardService/*` and `/auth/*`.
+- **Authentication:** Selected API key or OAuth credential. Verifies JWT expiration and stored expiry with a 5-minute buffer.
+- **Windows:** Extracts `billing_cycle`, `auto`, `api`, `plan_limit`, and on-demand spend. Falls back to enterprise team profile and spend endpoints when `planUsage` is absent.
 
-## MiniMax M3 / Token Plan migration
+### ZenMux
+Reports Pay As You Go credit balance:
+- **Endpoint:** `GET https://zenmux.ai/api/v1/management/payg/balance`.
+- **Authentication:** Selected API key via Agent Service `AuthStorage`. Extracts `data.total_credits` as USD balance.
 
-In 2025/2026 MiniMax rebranded "Coding Plan" to "Token Plan" alongside the M3 model release. The API underwent breaking changes:
+### Kimi for Coding
+Reports Kimi for Coding usage:
+- **Endpoint:** `GET https://api.kimi.com/coding/v1/usages`.
+- **Payload shapes:** Supports ratio-based `usages` payload (`limit_5h`, `limit_7d`, `limit_month_total`) and legacy counted payload (`limits[]`).
+- **Fallback:** On HTTP 401 or 403, attempts fallback to Moonshot platform balance (`GET https://api.moonshot.ai/v1/users/me/balance`) for pay-as-you-go platform keys.
 
-- **Endpoint fallback**: The provider tries `/v1/token_plan/remains` (M3) first, falling back to legacy `/v1/api/openplatform/coding_plan/remains`.
-- **Field semantics**: On the `token_plan/remains` endpoint, `current_interval_usage_count` returns **remaining** quota (not consumed). The provider computes `used = total - remaining` for this endpoint. The legacy `coding_plan/remains` endpoint retains the old semantics (`usage_count = consumed`).
-- **Percentage-based plans**: Legacy Coding Plan accounts return `current_interval_total_count: 0` but include `current_interval_remaining_percent`. The provider prefers this field when count fields are absent.
-- **model_remains array**: Now contains entries for multiple model categories (chat, speech, video, image). The provider selects the chat-model entry by matching `MiniMax-M*`, then `general`/`chat`/`text` by name, then any entry with a remaining percent.
-- **Window status**: The `current_interval_status` and `current_weekly_status` fields indicate whether a window is active. Status `3` means the window is not applicable for the current plan tier (e.g. legacy plans without weekly limits). The provider omits inactive windows.
+### OpenRouter
+Reports OpenRouter key credits and limits:
+- **Endpoint:** Fixed endpoint `GET https://openrouter.ai/api/v1/key`.
+- **Authentication:** Selected API key via Agent Service `AuthStorage`. Management keys (`is_management_key: true`) are rejected with an error indicating an inference API key is required.
 
-## ClinePass quota semantics
+### Zhipu AI & z.ai
+Report coding plan limits from monitor APIs:
+- **Endpoints:** `https://open.bigmodel.cn/api/monitor/usage/quota/limit` (Zhipu AI) and `https://api.z.ai/api/monitor/usage/quota/limit` (z.ai).
+- **Envelope validation:** Validates business failures inside HTTP 200 responses (`{ code, msg, success: false }`).
+- **Limit types:** Maps `TOKENS_LIMIT` and `CREDIT_LIMIT` to hourly and weekly windows, and `TIME_LIMIT` to MCP Tools monthly window.
+- **z.ai gift resets:** Discovers claimable package resets via `GET https://api.z.ai/api/biz/customer-package-reset/list?targetType=PERSONAL` and activates them via `POST /api/quota/:providerId/gift-reset/use`.
 
-ClinePass reads `data.limits` from its usage-limits endpoint. Web/Electron and
-VS Code accept only known window types with finite numeric or non-empty numeric
-string percentages. Invalid windows are skipped independently; no usable windows
-is a failed refresh, not zero usage. Both implementations choose a non-empty
-`key`, then `token`, and expose auth/fetch dependencies for focused tests.
-Saved UI provider-visibility lists remain authoritative; installations without a
-saved list include ClinePass through the provider registry.
-
-## Charm Hyper balance semantics
-
-`GET https://hyper.charm.land/v1/credits` returns a team's current Hypercredit balance, not a percentage or reset timestamp. The [Hyper FAQ](https://hyper.charm.land/faq) defines one Hypercredit as $0.05. Both runtimes expose `credits_balance` in dollars and `credits` as a numeric label under the UI's localized window title. Keep English unit text out of that numeric label.
-
-Web and VS Code accept finite numeric balances and non-empty numeric strings. Missing, blank, or malformed balances remain explicit failures; zero is valid. Credential lookup uses a non-empty string `key`, then `token`, so malformed or blank keys cannot mark the provider configured or hide a valid fallback token. Hyper fetchers accept `readAuth` and `fetchImpl` dependencies for tests without replacing filesystem or auth modules.
-
-## Kimi for Coding field semantics
-
-`GET https://api.kimi.com/coding/v1/usages` is inconsistent about which field carries consumption:
-- The weekly `usage` block returns `used` (consumed) with no `remaining` field.
-- Each `limits[].detail` rate-limit block returns `remaining` (available) with no `used` field.
-
-The provider computes `usedPercent` from whichever of `used`/`remaining` is present (`used` takes precedence when both exist) rather than assuming one field name. Both `packages/web/server/lib/quota/providers/kimi.js` and `packages/vscode/src/quotaProviders.ts` (`fetchKimiQuota`) must stay in sync — the VS Code extension duplicates this parsing logic rather than importing it.
-
-## Ollama Cloud settings-page shapes
-
-Ollama Cloud authentication uses two cookies (`aid` and `__Secure-session`) pasted together as one single-line Cookie header value. Ollama serves two different `/settings` page shapes and `parseOllamaSettingsHtml` supports both: session/weekly/premium-interaction windows (percent-based plans) and a `monthly` window derived from "Monthly usage: $X of $Y used" (cost-based plans) with a symmetric `$X / $Y` money `valueLabel` that reads correctly in both used/remaining display modes. The "Extra usage" credits block is surfaced as a balance-only `credits_balance` window with a plain money `valueLabel` when present, matching the Codex/DeepSeek credits treatment ("Credits Balance" in the UI); a $0 balance is omitted instead of showing an empty credits row. Keep `packages/web/server/lib/quota/providers/ollama-cloud.js` and `packages/vscode/src/quotaProviders.ts` (`parseOllamaSettingsHtml`) in sync — the VS Code extension duplicates this parsing logic rather than importing it.
-
-## GitHub Copilot quota semantics
-
-GitHub Copilot usage exposes only the `premium_interactions` snapshot as the
-`premium_interactions` window. Shared UI labels that window **AI Credits** and treats it as
-the provider's primary usage marker. Legacy chat-request quota and unlimited
-completion quota are intentionally omitted. Keep
-`packages/web/server/lib/quota/providers/copilot.js` and
-`packages/vscode/src/quotaProviders.ts` in sync.
-
-The `/copilot_internal/user` endpoint is undocumented; its quota semantics mirror
-what `microsoft/vscode-copilot-chat` consumes (`CopilotUserQuotaInfo`). Each
-snapshot carries `entitlement`, `remaining`, `unlimited`, and
-`percent_remaining`. Providers must honor these rules:
-
-- `unlimited: true` renders a percent-less window with an "Unlimited" value label.
-- Percent math requires a positive `entitlement`; entitlements of `0`, `-1`, or null are unusable.
-- When entitlement/remaining are unusable, fall back to `100 - percent_remaining`.
-- Snapshots other than `premium_interactions` (legacy annual plans) yield zero windows.
-
-## OpenRouter key semantics
-
-OpenRouter quota reads `GET https://openrouter.ai/api/v1/key`, which is documented as callable with any valid API key. `GET /api/v1/credits` is documented as "Management key required" and is not used. Calling `/credits` with a normal inference key has been observed to return HTTP 200 with `{total_credits:0, total_usage:0}` rather than an error; this behavior is not documented and is why the old implementation silently rendered "$0.00 left · $0.00 spent". A `/credits` fallback for unlimited keys would render the same zeros, so unlimited keys report `usage_monthly` instead.
-
-The documented `limit`, `limit_remaining`, and `limit_reset` fields are present and null on unlimited keys; null means unlimited, never missing data. For a limited key, window usage is `limit - limit_remaining`, not `usage`: `usage` is all-time and measures a different axis from the current reset window. Pairing `usage` with the current limit produces a wrong number. `limit_remaining` is server-computed and already honors `include_byok_in_limit`, so `byok_*` fields are ignored.
-
-Unlimited keys report `usage_monthly` in a `monthly` window with no percent. `limit_reset` is a period string (`daily`, `weekly`, `monthly`, or null), not a timestamp; `resetAt` is derived from the documented midnight-UTC boundaries, with weeks starting Monday. A set `limit` with a null `limit_reset` is a lifetime cap and maps to the `credits` window with no reset.
-
-Keep `packages/web/server/lib/quota/providers/openrouter.js` and `packages/vscode/src/quotaProviders.ts` in sync, as with the Kimi and Copilot providers; the VS Code extension duplicates this parsing logic rather than importing the web provider.
+### Ollama Cloud and exe.dev
+Both provider modules export `isConfigured: () => false` and return explicit errors indicating that selected credential quota is unsupported.
 
 ## Notes for contributors
-- Keep provider IDs stable; clients use them directly.
-- Avoid adding alias-based dispatch in `fetchQuotaForProvider`; dispatch currently expects exact provider IDs.
-- Keep Google behavior changes isolated and review `providers/google/*` together.
-- Z.ai Coding Plan exposes separate 5-hour and weekly token/credit limit entries plus a monthly `TIME_LIMIT` for MCP tools. The API renamed the limit type from `TOKENS_LIMIT` to `CREDIT_LIMIT` (same `unit`/`number` window semantics); `CREDIT_LIMIT` entries additionally carry `usage` (total), `currentValue` (consumed), and `remaining`, surfaced as a credit `valueLabel`, and the payload's `data.level` becomes `planLabel`. Web and VS Code must preserve these windows and stay in sync.
+- Provider modules must export `providerId`, `providerName`, `isConfigured(credential)`, and `fetchQuota(options)`.
+- Use shared helpers from `packages/web/server/lib/quota/utils/index.js` (`buildResult`, `toUsageWindow`, formatting helpers).
+- Tests must mock `resolveCredential` returning `{ type: 'api_key', key }` or `{ type: 'oauth', access, refresh, expires }`. Never hardcode secrets in tests or docs.
+- Verification is owned by package test suites; Task18 owns integrated workflow verification.

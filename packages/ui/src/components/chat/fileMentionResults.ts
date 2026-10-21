@@ -1,5 +1,5 @@
 import { scoreByFuzzyQuery } from '@/lib/search/fuzzySearch';
-import type { ProjectFileSearchHit } from '@/lib/opencode/client';
+import type { ProjectFileSearchHit } from '@/lib/host-filesystem';
 
 export type FileMentionHit = ProjectFileSearchHit & { kind: 'file' | 'directory' };
 
@@ -58,3 +58,14 @@ export function rankFileMentionResults(
     (scored) => scored.item,
   );
 }
+
+export function filterStaleRecentFiles<T extends { path: string }>(
+  files: readonly T[],
+  stalePaths: ReadonlySet<string>,
+): T[] {
+  if (stalePaths.size === 0) {
+    return [...files];
+  }
+  return files.filter((file) => !stalePaths.has(file.path));
+}
+

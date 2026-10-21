@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
+import type { Message } from '@openchamber/agent-contract';
 import type { TurnGroupingContext } from '../lib/turns/types';
-import { areRelevantTurnGroupingContextsEqual } from './renderCompare';
+import { areRelevantTurnGroupingContextsEqual, areRenderRelevantMessagesEqual } from './renderCompare';
 
 const finalAnswerContext: TurnGroupingContext = {
   turnId: 'turn',
@@ -35,11 +36,11 @@ describe('final answer divider context', () => {
 });
 
 describe('completed-turn changed files', () => {
-  const files = [{ file: 'src/a.ts', additions: 2, deletions: 1, inTurnDiff: false }];
+  const files = [{ file: 'src/a.ts', additions: 2, deletions: 1 }];
 
-  test('re-renders when the turn diff later lists a file whose counts did not change', () => {
+  test('re-renders when the changed file path changes without changing line counts', () => {
     const before = { ...finalAnswerContext, changedFiles: files };
-    const after = { ...finalAnswerContext, changedFiles: [{ ...files[0], inTurnDiff: true }] };
+    const after = { ...finalAnswerContext, changedFiles: [{ ...files[0], file: 'src/b.ts' }] };
     expect(areRelevantTurnGroupingContextsEqual(before, after, 'answer', false)).toBe(false);
   });
 
@@ -47,5 +48,21 @@ describe('completed-turn changed files', () => {
     const before = { ...finalAnswerContext, changedFiles: files };
     const after = { ...finalAnswerContext, changedFiles: [{ ...files[0] }] };
     expect(areRelevantTurnGroupingContextsEqual(before, after, 'answer', false)).toBe(true);
+  });
+});
+
+describe('message render comparison', () => {
+  const running: Message = {
+    messageId: 'msg_1', sessionId: 'ses_1', turnId: 'turn_1', role: 'assistant', createdAt: 1,
+    parts: [{ type: 'text', partId: 'part_1', content: 'Summary so far' }],
+  };
+
+  test('re-renders as message content changes', () => {
+    const grown: Message = { ...running, parts: [{ type: 'text', partId: 'part_1', content: 'Summary so far, with more' }] };
+    expect(areRenderRelevantMessagesEqual({ info: running, parts: running.parts }, { info: grown, parts: grown.parts })).toBe(false);
+  });
+
+  test('preserves an equivalent rebuilt record', () => {
+    expect(areRenderRelevantMessagesEqual({ info: running, parts: running.parts }, { info: { ...running }, parts: [...running.parts] })).toBe(true);
   });
 });

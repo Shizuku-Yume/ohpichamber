@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "task": "omp-through-m3/47",
+  "observedAt": "2026-10-21",
+  "status": "connected-recovery-invalidation-verified",
+  "baseCommit": "93d519221527e15cf52a5dde0d6ddf011c7527bb",
+  "environment": {
+    "worktree": "/home/shizuku/Project/ohpichamber-worktrees/m1-integration",
+    "branch": "omp-through-m3/recovery-20261013",
+    "head": "5532f16e7 (Task47 reopened record); source fix bba2cb6f2; current Web dist c438247e built from the worktree also containing unrelated uncommitted liveControl changes",
+    "webHost": "http://127.0.0.1:3164 (isolated HOME /tmp/ohpi-task47-home)",
+    "browser": "Chrome headless, CDP 9236",
+    "workspace": "/tmp/ohpi-task47-workdir",
+    "fixture": "http://127.0.0.1:4605/v1 model native-write",
+    "webDist": {
+      "indexSha256": "c438247e7abd698759fc8fe55e50a4b08ed147a86d213906732d9789fdfa478e",
+      "uiSourceNewerThanDist": 0
+    }
+  },
+  "setup": {
+    "agent": "writeonly (workspace .omp/agents/profile_writeonly.md; allowedTools read,write)",
+    "model": "m3write/native-write",
+    "prompt": "Create TASK47_NEW.md using the native write tool.",
+    "commands": [
+      "cd packages/web && HOME=/tmp/ohpi-task47-home XDG_CONFIG_HOME=/tmp/ohpi-task47-home/.config OPENCHAMBER_RELAY_HOST=off OPENCHAMBER_ALLOW_DEV_ORIGINS=1 bun server/index.js --port 3164",
+      "node /tmp/ohpi-task47-write-fixture.mjs",
+      "google-chrome --headless=new --remote-debugging-port=9236 --user-data-dir=/tmp/ohpi-task47-chrome --no-sandbox --disable-gpu --window-size=1600,1000"
+    ]
+  },
+  "observed": {
+    "sessionId": "8eeca0c2-b767-4990-8eaf-1d31145f3ad8",
+    "terminalStatus": "idle",
+    "nativeWrite": {
+      "file": "/tmp/ohpi-task47r-workdir/TASK47R_NEW.md",
+      "content": "# Task47R recovery write\n\nCreated while the session SSE stream was paused.\n",
+      "mtimeMs": 1792523442569.5938
+    },
+    "pageTimeline": {
+      "initialFsListAtPerformanceMs": 6282.3,
+      "preWriteQuietSeconds": 16,
+      "fsCallsDuringQuiet": 0,
+      "sendAtPerformanceMs": 32129.3,
+      "ssePausedAtPerformanceMs": 33794.4,
+      "droppedSseChunksWhilePaused": 8,
+      "filePresentAtPerformanceMs": 47818.9,
+      "pausedStateHead": 15,
+      "pausedStateStatus": "running",
+      "pausedUiHadToolRow": false,
+      "pausedTreeHadNewFile": false,
+      "controlledStreamErrorAtPerformanceMs": 47836.6,
+      "recoverySnapshotAtPerformanceMs": 48088.4,
+      "recoverySnapshotDeltaMs": 251.8,
+      "sseReconnectAtPerformanceMs": 48148,
+      "fsListAfterRecoveryAtPerformanceMs": 50096.8,
+      "fsListDeltaAfterSnapshotMs": 2008.4,
+      "fsListAfterRecoveryUrl": "/api/fs/list?path=%2Ftmp%2Fohpi-task47r-workdir&respectGitignore=true&directory=%2Ftmp%2Fohpi-task47r-workdir",
+      "fsListAfterRecoveryStack": "Object.listDirectory -> main-BfswuA6R.js:2:164819 -> Promise.all (applyFileTreeChanges 2 s batch)",
+      "fsListRequestsAfterRecovery": 1,
+      "finalSessionHead": 24,
+      "sessionEpoch": "c2a660a5-2fe0-4af4-909d-7e43029bc948",
+      "treeNewFileVisible": true,
+      "treeNewFileElement": {
+        "x": 1354,
+        "y": 271,
+        "width": 162,
+        "height": 19
+      }
+    },
+    "causality": {
+      "toolCompletionNotConsumedBeforeSnapshot": "SSE was paused before the delayed tool call; 8 chunks (tool_call/tool_result/final) were discarded, the UI had no write row while paused, and the file existed before the stream was ended. Recovery snapshot followed the stream error and hydrated the write.",
+      "snapshotThenInvalidation": "Controlled stream error 47836.6 ms -> application snapshot 48088.4 ms -> one /api/fs/list 50096.8 ms (2008.4 ms after snapshot), matching the 2 s applyFileTreeChanges batch. Head advanced from 15 while paused to 24 idle; no pre-write file-list request occurred.",
+      "ordinaryToolEventRuledOut": "The tool events were dropped before the browser consumed them; the file-list request followed the recovery snapshot, not a normal tool transition."
+    },
+    "domTimestampLimitation": "The exact UI new-file transition timestamp was not captured by the page probe (treeNewAt remained null), though the final DOM showed TASK47R_NEW.md at x=1354 and the screenshot records it.",
+    "screenshots": [
+      "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/task47r-recovery-after.png",
+      "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/task47r-recovery-final.png"
+    ]
+  },
+  "limitation": "The exact DOM transition timestamp is missing because the page probe did not record it. Causality is established by the controlled SSE pause/drop, the application recovery snapshot after the forced stream error, and exactly one file-list request 2.008 s after that snapshot; the final DOM and screenshot show the file.",
+  "sourceState": "Fix changes session-message-loader.ts (queued recovery when a recovered refresh arrives during an in-flight load), sync-context.tsx, session-message-loader.test.ts, sync-context-selection-boundary.test.tsx, and sync/files documentation. Focused loader + SyncProvider boundary tests 47 pass / 179 assertions; UI type-check/build, Web build (dist c438247e...), changed-path oxlint (2 unchanged baseline findings), dead-code baseline inventory complete.",
+  "cleanup": "Completed: Host 3164, Chrome CDP 9236, fixture 4605 and children stopped; isolated HOME, temporary workspace, Chrome profile and proof scripts removed; ports 3164/9236/4605 closed.",
+  "rootCauseFix": "EventPipeline recovery abandoned the live tool event. SessionMessageLoader now passes the previous snapshot only for pipeline recovery; SyncProvider compares epoch/headSequence after the snapshot commit and calls fileTreeChanges.unknownChange once for the addressed directory. Initial hydration and unchanged snapshots do not invalidate; no historical tool replay and no activeRun dependency."
+}

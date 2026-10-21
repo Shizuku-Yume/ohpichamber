@@ -1,108 +1,72 @@
 import express from 'express';
-import { normalizeCustomOpenAIBaseURL } from './base-url.js';
+import { normalizeCustomOpenAIBaseURL, normalizeSelectedOpenAIBaseURL } from './base-url.js';
 import { summarizeText, sanitizeForTTS, sanitizeForNote } from '../text/summarization.js';
 
 import { detectTextLanguage, languageOfLocale, pickVoiceForLanguage } from './language-detect.js';
+import { ENTERPRISE_MODE_ERROR, isEnterpriseMode } from '../enterprise-mode.js';
+import { describeVoiceKeys, readVoiceKey, updateVoiceKeys } from './voice-keys.js';
 
-export function registerTtsRoutes(app, { sayTTSCapability }) {
-  let ttsModulePromise = null;
-  const getTtsModule = async () => {
-    if (!ttsModulePromise) {
-      ttsModulePromise = import('./index.js');
-    }
-    return ttsModulePromise;
+// HTTP header values must be printable latin1; macOS voice names can be localized
+// (e.g. "Milena (Русский (Россия))") and Node rejects non-latin1 header content
+// outright. Percent-encode so the X-Speech-Voice header is always safe.
+export function speechVoiceHeaderValue(voice) {
+  return encodeURIComponent(voice);
+}
+
+export function registerTtsRoutes(app, { sayTTSCapability, ttsService, resolveTtsSelection }) {
+  if (!ttsService || typeof ttsService.isAvailable !== 'function') throw new TypeError('TTS routes require the configured TTS service');
+  if (typeof resolveTtsSelection !== 'function') throw new TypeError('TTS routes require selected credential context');
+  const selectionFor = async (req) => {
+    const selection = await resolveTtsSelection(req);
+    if (!selection || typeof selection !== 'object') throw new Error('Selected TTS credential is unavailable');
+    return selection;
   };
 
-  app.post('/api/voice/token', async (req, res) => {
-    console.log('[Voice] Token request received:', {
-      contentType: req.headers['content-type'] || null,
-    });
+  // Which voice keys are stored; the keys themselves never leave the server.
+  app.get('/api/voice/keys', (_req, res) => {
+    res.json(describeVoiceKeys());
+  });
+
+  app.put('/api/voice/keys', express.json({ limit: '16kb' }), (req, res) => {
     try {
-      const openaiApiKey = process.env.OPENAI_API_KEY;
-      console.log('[Voice] OpenAI API Key present:', !!openaiApiKey);
-
-      if (!openaiApiKey) {
-        return res.status(503).json({
-          allowed: false,
-          error: 'OpenAI voice service not configured. Set OPENAI_API_KEY environment variable.'
-        });
-      }
-
-      // Return success - OpenAI TTS is available
-      res.json({
-        allowed: true,
-        provider: 'openai',
-        message: 'OpenAI TTS is available'
-      });
+      res.json(updateVoiceKeys(req.body));
     } catch (error) {
-      console.error('[Voice] Token generation error:', error);
-      res.status(500).json({
-        allowed: false,
-        error: 'Voice service error'
-      });
+      res.status(400).json({ error: 'Invalid transcription key request' });
+    }
+  });
+
+  app.post('/api/voice/token', async (req, res) => {
+    try {
+      if (isEnterpriseMode()) return res.status(403).json({ allowed: false, error: ENTERPRISE_MODE_ERROR });
+      const selection = await selectionFor(req);
+      if (!await ttsService.isAvailable(selection)) return res.status(503).json({ allowed: false, error: 'Voice service unavailable' });
+      return res.json({ allowed: true, provider: 'openai', message: 'OpenAI TTS is available' });
+    } catch {
+      return res.status(503).json({ allowed: false, error: 'Voice service unavailable' });
     }
   });
 
   // Server-side TTS endpoint - streams audio from OpenAI TTS API
   app.post('/api/tts/speak', async (req, res) => {
     try {
-      const { text, voice = 'nova', model = 'gpt-4o-mini-tts', speed = 0.9, instructions, providerId, modelId, apiKey, baseURL } = req.body || {};
-
-      const normalizedBaseURLResult = normalizeCustomOpenAIBaseURL(baseURL);
-      if (normalizedBaseURLResult.error) {
-        return res.status(400).json({ error: normalizedBaseURLResult.error });
-      }
-      const normalizedBaseURL = normalizedBaseURLResult.value;
-
-      console.log('[TTS] Request received:', { voice, model, speed, textLength: text?.length, hasApiKey: !!apiKey, hasBaseURL: !!baseURL });
-
-      if (!text || typeof text !== 'string' || !text.trim()) {
-        return res.status(400).json({ error: 'Text is required' });
-      }
-
-      // Dynamically import the TTS service (ESM)
-      const { ttsService } = await getTtsModule();
-
-      // Check availability - server-configured key, client-provided key, or custom server URL
-      const hasServerKey = ttsService.isAvailable();
-      const hasClientKey = apiKey && typeof apiKey === 'string' && apiKey.trim().length > 0;
-      const hasCustomBaseURL = typeof normalizedBaseURL === 'string' && normalizedBaseURL.length > 0;
-      
-      if (!hasServerKey && !hasClientKey && !hasCustomBaseURL) {
-        return res.status(503).json({ 
-          error: 'TTS service not available. Please configure OpenAI in OpenCode, provide an API key, or set a custom server URL in settings.' 
-        });
-      }
-
-      let textToSpeak = text.trim();
-
-      // Historical summarize request fields are intentionally ignored. The
-      // model-backed summarization provider is retired.
-
-      const result = await ttsService.generateSpeechStream({
-        text: textToSpeak,
-        voice,
-        model,
-        speed,
-        instructions,
-        apiKey: hasClientKey ? apiKey.trim() : undefined,
-        baseURL: hasCustomBaseURL ? normalizedBaseURL : undefined,
-      });
-
+      const { text, voice = 'nova', model = 'gpt-4o-mini-tts', speed = 0.9, instructions, baseURL } = req.body || {};
+      if (!text || typeof text !== 'string' || !text.trim()) return res.status(400).json({ error: 'Text is required' });
+      const requested = normalizeCustomOpenAIBaseURL(baseURL);
+      if (requested.error) return res.status(400).json({ error: requested.error });
+      const selection = await selectionFor(req);
+      const normalized = normalizeSelectedOpenAIBaseURL(selection.baseURL);
+      if (normalized.error) return res.status(isEnterpriseMode() ? 403 : 503).json({ error: isEnterpriseMode() ? ENTERPRISE_MODE_ERROR : 'Selected TTS provider unavailable' });
+      if (requested.value && requested.value !== normalized.value) return res.status(400).json({ error: 'TTS endpoint must match the selected provider' });
+      if (isEnterpriseMode() && !normalized.value) return res.status(403).json({ error: ENTERPRISE_MODE_ERROR });
+      const result = await ttsService.generateSpeechStream({ ...selection, text: text.trim(), voice, model, speed, instructions, baseURL: normalized.value });
       res.setHeader('Content-Type', result.contentType);
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Content-Length', result.buffer.length);
-      res.send(result.buffer);
-      } catch (error) {
-        console.error('[TTS] Error:', error);
-        if (!res.headersSent) {
-          const { model: m, voice: v, baseURL: b } = req.body || {};
-          res.status(500).json({ 
-            error: error instanceof Error ? error.message : 'TTS generation failed',
-            detail: { model: m, voice: v, hasBaseURL: !!b },
-          });
-        }
-      }
+      return res.send(result.buffer);
+    } catch {
+      if (!res.headersSent) return res.status(503).json({ error: 'TTS service unavailable' });
+      return undefined;
+    }
   });
 
   app.post('/api/text/summarize', async (req, res) => {
@@ -121,32 +85,25 @@ export function registerTtsRoutes(app, { sayTTSCapability }) {
       });
 
       return res.json(result);
-    } catch (error) {
-      console.error('[Summarize] Error:', error);
+    } catch {
       const sanitized = typeof req.body?.mode === 'string' && req.body.mode === 'note'
         ? sanitizeForNote(req.body?.text || '')
         : sanitizeForTTS(req.body?.text || '');
-      return res.json({ summary: sanitized, summarized: false, reason: error.message });
+      return res.json({ summary: sanitized, summarized: false, reason: 'Summarization unavailable' });
     }
   });
 
        
   // TTS status endpoint
-  app.get('/api/tts/status', async (_req, res) => {
+  app.get('/api/tts/status', async (req, res) => {
     try {
-      const { ttsService } = await getTtsModule();
-      res.json({
-        available: ttsService.isAvailable(),
-        voices: [
-          'alloy', 'ash', 'ballad', 'coral', 'echo', 'fable',
-          'nova', 'onyx', 'sage', 'shimmer', 'verse', 'marin', 'cedar'
-        ]
-      });
-    } catch (error) {
-      res.status(500).json({ error: 'Failed to check TTS status' });
+      const selection = await selectionFor(req);
+      const enterpriseMode = isEnterpriseMode();
+      return res.json({ available: !enterpriseMode && await ttsService.isAvailable(selection), enterpriseMode, voices: ['alloy', 'ash', 'ballad', 'coral', 'echo', 'fable', 'nova', 'onyx', 'sage', 'shimmer', 'verse', 'marin', 'cedar'] });
+    } catch {
+      return res.status(503).json({ error: 'TTS service unavailable' });
     }
   });
-
   // The startup probe runs concurrently with server bootstrap. An unusually
   // early status request waits for that same authoritative result.
   app.get('/api/tts/say/status', async (_req, res) => {
@@ -215,7 +172,7 @@ export function registerTtsRoutes(app, { sayTTSCapability }) {
       
       // Send audio response
       res.setHeader('Content-Type', 'audio/mp4');
-      res.setHeader('X-Speech-Voice', voice);
+      res.setHeader('X-Speech-Voice', speechVoiceHeaderValue(voice));
       if (resolvedLanguage) res.setHeader('X-Speech-Language', resolvedLanguage);
       res.setHeader('Content-Length', audioBuffer.length);
       res.send(audioBuffer);
@@ -245,7 +202,7 @@ export function registerTtsRoutes(app, { sayTTSCapability }) {
           ? req.headers['x-language'].trim()
           : undefined;
         const authHeader = typeof req.headers['authorization'] === 'string' ? req.headers['authorization'].trim() : '';
-        const apiKey = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : undefined;
+        const apiKey = (authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : undefined) || readVoiceKey('stt');
 
         if (!req.body || !Buffer.isBuffer(req.body) || req.body.length === 0) {
           return res.status(400).json({ error: 'Audio data is required' });

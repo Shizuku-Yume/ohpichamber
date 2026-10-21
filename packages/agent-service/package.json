@@ -1,0 +1,42 @@
+{
+  "name": "@openchamber/agent-service",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./private-protocol": {
+      "types": "./src/supervisor/host-authorization-protocol.ts",
+      "default": "./dist/supervisor/host-authorization-protocol.js"
+    }
+  },
+  "scripts": {
+    "build": "bun build --target=bun --packages=external --root=src --outdir=dist src/index.ts src/worker/index.ts src/supervisor/host-authorization-protocol.ts",
+    "start": "bun --no-env-file src/index.ts",
+    "type-check": "bun scripts/prepare-sdk-types.mjs && tsc -p node_modules/.cache/omp-types/tsconfig.json",
+    "lint": "oxlint src scripts"
+  },
+  "dependencies": {
+    "@oh-my-pi/omp-stats": "file:../../vendor/omp/c9de2b02/tarballs/oh-my-pi-omp-stats-18.8.9.tgz",
+    "@oh-my-pi/omptype": "file:../../vendor/omp/c9de2b02/tarballs/oh-my-pi-omptype-18.8.9.tgz",
+    "@oh-my-pi/pi-agent-core": "file:../../vendor/omp/c9de2b02/tarballs/oh-my-pi-pi-agent-core-18.8.9.tgz",
+    "@oh-my-pi/pi-ai": "file:../../vendor/omp/c9de2b02/tarballs/oh-my-pi-pi-ai-18.8.9.tgz",
+    "@oh-my-pi/pi-catalog": "file:../../vendor/omp/c9de2b02/tarballs/oh-my-pi-pi-catalog-18.8.9.tgz",
+    "@oh-my-pi/pi-coding-agent": "file:../../vendor/omp/c9de2b02/tarballs/oh-my-pi-pi-coding-agent-18.8.9.tgz",
+    "@oh-my-pi/pi-mnemopi": "file:../../vendor/omp/c9de2b02/tarballs/oh-my-pi-pi-mnemopi-18.8.9.tgz",
+    "@oh-my-pi/pi-natives": "file:../../vendor/omp/c9de2b02/tarballs/oh-my-pi-pi-natives-18.8.9.tgz",
+    "@oh-my-pi/pi-tui": "file:../../vendor/omp/c9de2b02/tarballs/oh-my-pi-pi-tui-18.8.9.tgz",
+    "@oh-my-pi/pi-utils": "file:../../vendor/omp/c9de2b02/tarballs/oh-my-pi-pi-utils-18.8.9.tgz",
+    "@oh-my-pi/pi-wire": "file:../../vendor/omp/c9de2b02/tarballs/oh-my-pi-pi-wire-18.8.9.tgz",
+    "@oh-my-pi/snapcompact": "file:../../vendor/omp/c9de2b02/tarballs/oh-my-pi-snapcompact-18.8.9.tgz",
+    "@openchamber/agent-contract": "workspace:*",
+    "fastembed": "3.0.0",
+    "onnxruntime-node": "1.26.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14"
+  },
+  "engines": {
+    "bun": ">=1.3.14"
+  }
+}

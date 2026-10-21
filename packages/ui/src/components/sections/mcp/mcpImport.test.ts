@@ -1,60 +1,21 @@
 import { describe, expect, test } from 'bun:test';
-
 import { parseImportedMcpSnippet } from './mcpImport';
 
-describe('parseImportedMcpSnippet', () => {
-  test('imports OpenCode mcp wrapper config', () => {
-    const result = parseImportedMcpSnippet(JSON.stringify({
-      $schema: 'https://opencode.ai/config.json',
-      mcp: {
-        stitch: {
-          type: 'remote',
-          url: 'https://stitch.googleapis.com/mcp',
-          enabled: true,
-          headers: {
-            'X-Goog-Api-Key': 'test-key',
-          },
-        },
-      },
-    }));
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) throw new Error(result.error);
-    expect(result.name).toBe('stitch');
-    expect(result.type).toBe('remote');
-    expect(result.url).toBe('https://stitch.googleapis.com/mcp');
-    expect(result.enabled).toBe(true);
-    expect(result.headers).toEqual([{ key: 'X-Goog-Api-Key', value: 'test-key' }]);
+describe('native MCP snippet import', () => {
+  test('preserves stdio argument boundaries and credential references', () => {
+    const server = { serverId: 'tools', label: 'Tools', enabled: true, transport: { type: 'stdio', command: 'node', args: ['tools.js', 'two words'], envCredentialRefs: { API_KEY: 'credential_1' } } };
+    expect(parseImportedMcpSnippet(JSON.stringify(server))).toEqual(server);
   });
-
-  test('keeps existing mcpServers wrapper support', () => {
-    const result = parseImportedMcpSnippet(JSON.stringify({
-      mcpServers: {
-        localTool: {
-          command: 'node server.js',
-          args: ['--stdio'],
-        },
-      },
-    }));
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) throw new Error(result.error);
-    expect(result.name).toBe('localTool');
-    expect(result.type).toBe('local');
-    expect(result.command).toEqual(['node', 'server.js', '--stdio']);
+  test('keeps HTTP and SSE distinct', () => {
+    for (const type of ['http', 'sse']) {
+      const server = { serverId: 'tools', label: 'Tools', enabled: false, transport: { type, url: 'https://mcp.example.test' } };
+      expect(parseImportedMcpSnippet(JSON.stringify(server))).toEqual(server);
+    }
   });
-
-  test('rejects multiple OpenCode mcp wrapper entries', () => {
-    const result = parseImportedMcpSnippet(JSON.stringify({
-      mcp: {
-        one: { type: 'remote', url: 'https://one.example/mcp' },
-        two: { type: 'remote', url: 'https://two.example/mcp' },
-      },
-    }));
-
-    expect(result.ok).toBe(false);
-    if (result.ok) throw new Error('Expected import to fail');
-    expect(result.error).toContain('Paste one server at a time');
-    expect(result.error).toContain('servers in mcp');
+  test('does not import raw secrets or legacy engine controls into native configuration', () => {
+    const server = { serverId: 'tools', label: 'Tools', enabled: true, transport: { type: 'http', url: 'https://mcp.example.test', headers: { Authorization: 'raw-secret' } } };
+    expect(() => parseImportedMcpSnippet(JSON.stringify(server))).toThrow();
+    expect(() => parseImportedMcpSnippet(JSON.stringify({ ...server, protocol: 'legacy' }))).toThrow();
+    expect(() => parseImportedMcpSnippet('{')).toThrow();
   });
 });

@@ -167,16 +167,6 @@ const persistToLocalStorage = (settings: DesktopSettings) => {
     localStorage.removeItem('openchamber.pwaName');
   }
   setStoredMobileKeyboardMode(settings.mobileKeyboardMode);
-  if (typeof settings.openCodeUpdateToastDismissedVersion === 'string') {
-    const version = settings.openCodeUpdateToastDismissedVersion.trim();
-    if (version) {
-      localStorage.setItem('opencode-update-toast-dismissed-version', version);
-    } else {
-      localStorage.removeItem('opencode-update-toast-dismissed-version');
-    }
-  } else {
-    localStorage.removeItem('opencode-update-toast-dismissed-version');
-  }
   if (typeof settings.dictationEnabled === 'boolean') {
     localStorage.setItem('dictationEnabled', String(settings.dictationEnabled));
   } else {
@@ -204,9 +194,7 @@ export interface SettingsSyncedDetail {
       not filtered; listeners gate their adoption on this flag and keep their
       live state for the fields they own. */
   bootstrap: boolean;
-  /** Whether this sync may replace this window's theme preferences. VS Code
-      settings broadcasts remain bootstrap-grade for shared workspace pointers,
-      but must not copy one webview's theme into another webview. */
+  /** Whether this sync may replace this window's theme preferences. */
   adoptTheme: boolean;
 }
 
@@ -296,7 +284,7 @@ type SettingsWrite = {
   changes: Partial<DesktopSettings>;
 };
 /** Whether a settings write reached its store. A no-op (nothing to send) counts as ok. */
-export type SettingsWriteResult = { ok: boolean };
+type SettingsWriteResult = { ok: boolean };
 type SettingsMutation = { revision: number; changes: Partial<DesktopSettings> };
 type SettingsOperation = { revision: number };
 

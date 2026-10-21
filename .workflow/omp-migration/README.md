@@ -1,10 +1,10 @@
 # OMP migration development documents
 
-These documents define the proposed OMP-only migration of OhPiChamber. The source-aware review covers the pinned upstream baseline recorded in [the preservation inventory](../upstream-baseline.json). The [historical inventory](feature-inventory.md) retains its original observations. This design set does not claim that the Agent Service or Canonical API is implemented. Start with the repository [agent guide](../../AGENTS.md) for development rules and task-specific reading requirements.
+These documents define the adopted OMP-only migration of OhPiChamber. The source-aware review covers the pinned upstream baseline recorded in [the preservation inventory](../upstream-baseline.json). The [historical inventory](feature-inventory.md) retains its original observations. Implementation evidence belongs to [development.md](../development.md); this design set does not certify it. Start with the repository [agent guide](../../AGENTS.md) for development rules and task-specific reading requirements.
 
 Read [development progress and lessons](../development.md) for verified work, remaining gates, and findings from implementation. Keep progress there rather than treating this design set as a completion log.
 
-The [latest-upstream rebaseline](../specs/upstream-rebaseline.md) has adopted the application source and closed its prerequisite at the source/document boundary under the recorded maintainer decision. Unavailable runtime certification remains unverified, not passed. The maintainer accepted official-provider/OAuth and platform evidence limits under `decisions.md: 2026-10-12 - Enter M1 with the observed provider path and explicit OAuth limitation` and `decisions.md: 2026-10-12 - Leave unavailable platform evidence outside the M0 release condition`. Task29 is archived with a valid measured receipt and its defective disposable source discarded without reuse. Task31 supplied reviewed real public installed-SDK online model discovery evidence; gate03 accepts the M0 handoff for M1 after validation and archival. Host extraction and VS Code retirement are the next implementation slices, not completed work. Actual M2 credential handoff/gate23 and coordinated M3 legacy retirement remain required. Do not use unchanged historical assumptions or selective-import exclusions to constrain the refreshed source. [development.md](../development.md) owns current evidence, review state and the exact next step.
+The [latest-upstream rebaseline](../specs/upstream-rebaseline.md) has adopted the application source and closed its prerequisite at the source/document boundary under the recorded maintainer decision. Unavailable runtime certification remains unverified, not passed. M1 Host extraction, VS Code retirement, the M2 service and credential-handoff gates, and the M3 Canonical Client/UI cutover including task 17 legacy retirement are implemented. The final root gate passed at HEAD `8d179c4e2` on 2026-10-22 (all seven phases exit 0; `.workflow/omp-migration/m3/task18-gate-final-2026-10-22.json`); postgate source `8d179c4e2` has the a92 matrix PASS for W7 visual sanity, W8, W9 child/Board/Guest, W10 and PWA, and Task18/Task57 are archived. Coordinator final closure/review remains pending, so the spec stays in progress and no M3 pass is claimed yet. The earlier `b9fbb4bb0` gate and `068a` artifacts are historical.
 
 ## Decisions
 
@@ -20,7 +20,7 @@ The [latest-upstream rebaseline](../specs/upstream-rebaseline.md) has adopted th
 
 1. [scope.md](./scope.md). Product boundary, retained surfaces, removed VS Code scope, and feature ownership.
 2. [architecture.md](./architecture.md). Runtime topology, ownership, process boundaries, and design decisions.
-3. [contracts.md](./contracts.md). Proposed Canonical API, records, events, errors, and state transitions.
+3. [contracts.md](./contracts.md). Canonical API contract, records, events, errors, and state transitions.
 4. [implementation-plan.md](./implementation-plan.md). Milestones, work packages, gates, and acceptance evidence.
 5. [feature-inventory.md](./feature-inventory.md). The historical feature inventory, preserved for comparison and expanded through the post-rebaseline review.
 
@@ -34,6 +34,6 @@ The [latest-upstream rebaseline](../specs/upstream-rebaseline.md) has adopted th
 
 ## Non-goals of this document set
 
-These documents do not claim that the Agent Service, Canonical API, data migrations, or UI cutover already exist. They do not define a second compatibility layer for OpenCode. They do not make the removed VS Code extension a supported runtime.
+These documents define design and decisions; they do not by themselves certify the implemented Agent Service, Canonical API, data migrations or UI cutover. [development.md](../development.md) owns acceptance evidence. They do not define a second compatibility layer for OpenCode. They do not make the removed VS Code extension a supported runtime.
 
 Resolve migration design conflicts using the [document hierarchy in scope.md](./scope.md#document-hierarchy). The feature inventory is the historical baseline, not an override of the scope or contracts. Record product decision changes in `scope.md` and update affected design documents before changing implementation.

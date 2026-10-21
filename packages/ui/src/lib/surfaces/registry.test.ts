@@ -9,11 +9,9 @@ import {
 const baseOptions = {
   railOrder: [],
   planModeEnabled: true,
-  isVSCode: false,
   screenWidth: 1200,
   tabs: [],
-  linearConnected: true,
-  githubConnected: true,
+  sourceControlConnected: true,
 } as const;
 
 describe('getVisibleContextRailSurfaces', () => {
@@ -28,8 +26,7 @@ describe('getVisibleContextRailSurfaces', () => {
     expect(surfaces.some((surface) => surface.id === 'plan')).toBe(true);
   });
 
-  test('hides the walkthrough on VS Code and below the min width', () => {
-    expect(getVisibleContextRailSurfaces({ ...baseOptions, isVSCode: true }).some((s) => s.id === 'walkthrough')).toBe(false);
+  test('hides the walkthrough below the min width', () => {
     expect(
       getVisibleContextRailSurfaces({ ...baseOptions, screenWidth: WALKTHROUGH_MIN_WIDTH - 1 }).some((s) => s.id === 'walkthrough'),
     ).toBe(false);
@@ -38,12 +35,6 @@ describe('getVisibleContextRailSurfaces', () => {
     ).toBe(true);
   });
 
-  test('offers no browser surface inside VS Code', () => {
-    expect(getVisibleContextRailSurfaces(baseOptions).some((s) => s.id === 'browser')).toBe(true);
-    // Nothing that makes the panel worth having works there, so offering it
-    // would promise the panel people see on the desktop.
-    expect(getVisibleContextRailSurfaces({ ...baseOptions, isVSCode: true }).some((s) => s.id === 'browser')).toBe(false);
-  });
 
   test('hides content-driven surfaces until a matching tab exists', () => {
     const chat = CONTEXT_SURFACES.find((surface) => surface.id === 'chat');
@@ -66,24 +57,12 @@ describe('getVisibleContextRailSurfaces', () => {
     expect(surfaces.slice(0, 2).map((surface) => surface.id)).toEqual(['git', 'context']);
   });
 
-  test('places Linear right after the walkthrough in the default order', () => {
-    const ids = getVisibleContextRailSurfaces(baseOptions).map((surface) => surface.id);
-    const walkthrough = ids.indexOf('walkthrough');
-    expect(walkthrough).toBeGreaterThanOrEqual(0);
-    expect(ids.indexOf('linear')).toBe(walkthrough + 1);
-  });
-
   test('hides the pull request surface until GitHub is connected', () => {
-    expect(getVisibleContextRailSurfaces({ ...baseOptions, githubConnected: false }).some((s) => s.id === 'pr')).toBe(false);
-    expect(getVisibleContextRailSurfaces({ ...baseOptions, githubConnected: true }).some((s) => s.id === 'pr')).toBe(true);
+    expect(getVisibleContextRailSurfaces({ ...baseOptions, sourceControlConnected: false }).some((s) => s.id === 'pr')).toBe(false);
+    expect(getVisibleContextRailSurfaces({ ...baseOptions, sourceControlConnected: true }).some((s) => s.id === 'pr')).toBe(true);
   });
 
-  test('hides Linear until a workspace is connected', () => {
-    expect(getVisibleContextRailSurfaces({ ...baseOptions, linearConnected: false }).some((s) => s.id === 'linear')).toBe(false);
-    expect(getVisibleContextRailSurfaces({ ...baseOptions, linearConnected: true }).some((s) => s.id === 'linear')).toBe(true);
-  });
-
-  test('appends installed guest panels except on VS Code', () => {
+  test('appends installed guest panels', () => {
     const hello = {
       id: 'plugin:hello' as const,
       mode: 'plugin:hello' as const,
@@ -92,9 +71,8 @@ describe('getVisibleContextRailSurfaces', () => {
       labelKey: 'contextRail.surface.plugin' as const,
       descriptionKey: 'contextRail.surface.plugin.description' as const,
       availability: 'always' as const,
-      defaultWidthFraction: 0.45,
+      defaultWidth: 540,
     };
     expect(getVisibleContextRailSurfaces({ ...baseOptions, extras: [hello] }).some((s) => s.id === 'plugin:hello')).toBe(true);
-    expect(getVisibleContextRailSurfaces({ ...baseOptions, extras: [hello], isVSCode: true }).some((s) => s.id === 'plugin:hello')).toBe(false);
   });
 });

@@ -1,0 +1,2312 @@
+{
+  "artifact": "a92fbb36ef3e554211da90ac667bc42350c27c05e0978f2edbb1b3fd48b70ef7",
+  "capturedAt": "2026-10-21T17:53:06.781Z",
+  "surfaces": [
+    {
+      "label": "child-parent",
+      "snap": 200
+    },
+    {
+      "label": "child-session",
+      "snap": 404
+    },
+    {
+      "label": "w8-session",
+      "snap": 200
+    }
+  ],
+  "apiProbes": [
+    {
+      "label": "guest-list",
+      "url": "/api/guests",
+      "status": 200,
+      "ct": "application/json; charset=utf-8"
+    },
+    {
+      "label": "projects",
+      "url": "/api/agent/v1/projects",
+      "status": 200,
+      "ct": "application/json; charset=utf-8"
+    },
+    {
+      "label": "workspaces",
+      "url": "/api/agent/v1/workspaces",
+      "status": 200,
+      "ct": "application/json; charset=utf-8"
+    },
+    {
+      "label": "source-control",
+      "url": "/api/source-control",
+      "status": 404,
+      "ct": "text/html; charset=utf-8"
+    },
+    {
+      "label": "board-open-issues",
+      "url": "/api/source-control/issues?directory=%2Ftmp%2Fohpi-task15b%2Fchats%2Fwork&state=open",
+      "status": 404,
+      "ct": "text/html; charset=utf-8"
+    }
+  ],
+  "counts": {
+    "rawEntries": 1537,
+    "rawUnique": 457,
+    "sanitizedUniqueEntries": 375,
+    "retiredLegacy": 0,
+    "canonicalAgent": 81,
+    "hostGuests": 3,
+    "sourceControl": 13
+  },
+  "retiredLegacyPaths": [],
+  "entries": [
+    {
+      "method": "GET",
+      "path": "/index.html",
+      "status": 200,
+      "type": "Document"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/main-DQtEW90c.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-vite-runtime-DD1OZmLC.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-zod-D9sJ6SbM.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-scheduler-7OC5HNn7.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-react-CbQEJWPq.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-zustand-DblTIKCt.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-sonner-C2QH3HTv.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/katex.min-BV7KviD1.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/katex-C6q8Srv8.css",
+      "status": 200,
+      "type": "Stylesheet"
+    },
+    {
+      "method": "GET",
+      "path": "/manifest.webmanifest",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/auth/url-token",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/fs/home",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/session-folders",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "POST",
+      "path": "/auth/url-token",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/fs/home",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/session-folders",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/main-CgOJ_TFj.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/runtimeEndpointReset-Cp1o3Beh.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/useAppFontEffects-Ci9fZaQ-.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-simplewebauthn-browser-VDA66rT_.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/worktreeCreate-sNHyq2g4.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/worktreeManager-DN7dC7sM.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-class-variance-authority-5VPnzWs2.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-clsx-B-dksMZM.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-base-ui-v7wnryJK.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-floating-ui-utils-D6FqdtJt.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-floating-ui-dom-BTvzWks8.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-floating-ui-core-PuGzNPnN.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-floating-ui-react-dom-BFqhvOYA.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-use-sync-external-store-z5Nca0aP.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-dnd-kit-core-CQFUSQqL.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-dnd-kit-utilities-CPigaSrp.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-dnd-kit-accessibility-BbY76DOk.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-dnd-kit-sortable-DZ8SDl4r.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-tanstack-react-virtual-6hzzjEKz.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-tanstack-virtual-core-DPaNcJcT.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/sharedTrustConfirmation-DPPokG7e.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/permissionStore-CNWNVSi7.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-framer-motion-WLGjmC0Z.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-motion-dom-HXPOMxb7.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-motion-utils-BGh8QBgx.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-codemirror-commands-C4G_dPWe.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-codemirror-state-Dek9sMtw.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-marijn-find-cluster-break-DXwl3gUT.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-codemirror-view-1e0FQ6Wn.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-style-mod-NZ5MEPvj.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-w3c-keyname-Vcq4gwWv.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-crelt-C8TCjufn.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-codemirror-language-DufXoQvE.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-lezer-common-B3-cUCR_.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-lezer-highlight-CDMHUZ74.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-codemirror-lang-javascript-DbpEcZM0.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-lezer-javascript-D7Tj24ot.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-lezer-lr-bhwg1HMg.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-codemirror-autocomplete-BSHQHbKu.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-codemirror-lang-json-BzgckzmB.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-lezer-json-Iaex0UN-.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-codemirror-lang-css-Cayfb29q.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-lezer-css-C5xB6jxd.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-codemirror-lang-html-BQWerHsJ.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-lezer-html-C0I1p52t.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-codemirror-lang-markdown-D2TEBIvZ.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-lezer-markdown-C6g-d6P3.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-codemirror-language-data-CFwkGvyj.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-codemirror-lang-python-jAMtYiA9.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-lezer-python-CvuFxeZl.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-marked-CX41MkDF.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-marked-linkify-it-CXI_LHIE.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-linkify-it-DZCzzDkK.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-uc.micro-BAd0H0z4.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-remend-DcBOpbSu.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-katex-CBXxfSPY.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-dompurify-r8glNMJW.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-capacitor-core-B4EWRrHz.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-cmdk-CZc7FNNc.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-radix-ui-react-dialog-BJfQci_C.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-radix-ui-primitive-Dc_FVRD7.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-radix-ui-react-compose-refs-T6UCLzML.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-radix-ui-react-context-QwQLTy8q.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-radix-ui-react-id-JuqsK95C.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-radix-ui-react-use-layout-effect-D6dABvqY.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-radix-ui-react-use-controllable-state-CMCEFOj-.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-radix-ui-react-dismissable-layer-DzIXXt9e.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-radix-ui-react-primitive-Bk2H77ud.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-radix-ui-react-slot-DReG2vXH.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-radix-ui-react-use-callback-ref-CXonINiD.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-radix-ui-react-use-escape-keydown-D1C3qcWo.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-radix-ui-react-focus-scope-CK2s6UN_.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-radix-ui-react-portal-C8H047F5.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-radix-ui-react-presence-COda_1Pp.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-radix-ui-react-focus-guards-8iO7b5e7.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-react-remove-scroll-BsBYnb-b.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-tslib-De9GV7Vy.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-react-remove-scroll-bar-CAxbHZzN.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-react-style-singleton-BtCHsYup.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-get-nonce-C-Z93AgS.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-use-sidecar-2_lnQ1tM.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-use-callback-ref-fQS6vrKE.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-aria-hidden-DvXkyWUv.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/space-repair-DXdC03qc.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/branchNameGenerator-Ci_x5aui.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-legendapp-list-B6kf52gO.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-tailwind-merge-CPcsbTWB.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-fuse.js-Dw8P0qyA.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/openSessionFromRoute-B2XZNfj6.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/useRootScrollLock-Bi08ykzZ.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/moveWorkspacePath-ByojeQgY.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/sessionOwnership-FxOyeIph.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/main-BV3KOtdA.css",
+      "status": 200,
+      "type": "Stylesheet"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/MarkdownRendererImpl-C_5yFF8h.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-morphdom-B7dS_VPB.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-beautiful-mermaid-BqvupeP6.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-elkjs-D8T-fx22.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-entities-C3BA0AJP.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/textMateThemeFromAppTheme-Dbs2B7LL.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/themeResolver-BmJyTmjJ.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-pierre-theming-C6Z4M5_u.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-shikijs-core-CGM_jqPK.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-shikijs-types-CPSbSeK6.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-shikijs-vscode-textmate-BgLrS_2D.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-hast-util-to-html-BKBhbTDb.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-html-void-elements-CkdplsNl.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-property-information-rJCbAzvX.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-zwitch-C2o2j-tx.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-stringify-entities-CsH1VEn9.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-character-entities-legacy-BpoLgcEt.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-character-entities-html4-D7taRCQ7.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-ccount-c2V3InAJ.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-comma-separated-tokens-D8TqSuIK.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-space-separated-tokens-DD3iYX1K.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-hast-util-whitespace-D4Wp6AEg.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/auth/session",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/auth/passkey/status",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/config/themes",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/auth/session",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/auth/passkey/status",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/config/themes",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/fs/directory-stat",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/guests",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/projects/path_L3RtcC9vaHBpLXRhc2sxOC9jaGF0cw/config",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/config/settings",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/openchamber/spaces/archives",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/sessions/01a15f8e-9cb8-73ff-8ebf-51b66dda125b/history",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/FilesView-nu2bGbdK.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/shikiHighlight-DCVxyssp.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-codemirror-search-CvXM_pZg.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-replit-codemirror-vim-BlJRn-cW.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-replit-codemirror-vim-core-FHzKdNUS.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/MediaArtifact-CwuljqMI.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/appThemeRegistry-BwyXtVZZ.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/Virtualizer-ClHTIwiW.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/cleanLastNewline-Cn-sjpQk.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-shiki-Bbf2GEcE.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-shikijs-engine-oniguruma-DPWuIF1G.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-shikijs-engine-javascript-Cme4830A.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-oniguruma-to-es-DLBnFDCE.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-oniguruma-parser-C0D4_9rT.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-regex-BBWcyTkg.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-regex-utilities-2BQyy0xI.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-regex-recursion-JU4mF-dD.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-shikijs-transformers-CZWsLLKm.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/parseDiffFromFile-D4-kycCA.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-diff-C3JhlQdm.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/isFilePlainText-BXqvJJSA.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/Virtualizer-CMrCNEy2.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-react-drawio-Ds8Dd3aQ.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/useInlineCommentController-B-3Maumv.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/FilePreviewCommentMenu-Bf8ColgD.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/scheduledTasksApi-D163ozmP.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/DiffView-DtmAKEO9.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/patchFileDiff-Cy2jZ3wu.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/SubmoduleDiffSummary-B6P7xohx.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/PierreDiffViewer-rbUYSM8r.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/isDiffPlainText-D-ih8ym4.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/VirtualizedFileDiff-D0cQdcnK.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/changesTree-CePHbFcj.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/index-Bo_V7L6c.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-lru_map-BPPSVmZk.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/workerFactory-De9YXIdE.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/api/fs/directory-stat",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/guests",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/projects/path_L3RtcC9vaHBpLXRhc2sxOC9jaGF0cw/config",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/config/settings",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/openchamber/spaces/archives",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/sessions/01a15f8e-9cb8-73ff-8ebf-51b66dda125b/history",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "POST",
+      "path": "/api/agent/v1/workspaces/resolve",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/projects",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/workspaces",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/ready",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "POST",
+      "path": "/api/push/visibility",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/openchamber/enterprise-policy",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/sessions/3a97efba-e839-429f-8e80-d81715e5a60e/snapshot",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/terminal/sessions",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/git/primary-root",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/source-control/binding",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/sessions",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/workspaces/resolve",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/projects",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/workspaces",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/health",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/ready",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/openchamber/enterprise-policy",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/git/primary-root",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/source-control/binding",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/sessions",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "GET",
+      "path": "/api/openchamber/events",
+      "status": 200,
+      "type": "EventSource"
+    },
+    {
+      "method": "GET",
+      "path": "image/png;base64,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",
+      "status": 200,
+      "type": "Image"
+    },
+    {
+      "method": "GET",
+      "path": "/logos/t18fixture.svg",
+      "status": 304,
+      "type": "Image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/git/check",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/git/check",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "POST",
+      "path": "/api/tracked-items/interest",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/tracked-items/interest",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/markdown-shiki.worker-BCKlUCLx.js",
+      "status": null,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/vendor-pierre-theme-Bp7SdUL6.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/api/fs/stat",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/git/file-diff",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/fs/stat",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/git/file-diff",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/typescript-BPQ3VLAy.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/javascript-wDzz0qaB.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/tsx-COt5Ahok.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/jsx-g9-lgVsj.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/json-Cp-IABpG.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/markdown-Cvjx9yec.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/api/source-control/instances",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/linear/auth/status",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/config/settings",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/git/worktrees",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/git/status",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/source-control/instances",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "GET",
+      "path": "/api/quota/claude",
+      "status": 503,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/quota/cline-pass",
+      "status": 503,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/quota/codex",
+      "status": 503,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/quota/cursor",
+      "status": 503,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/quota/github-copilot",
+      "status": 503,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/quota/google",
+      "status": 503,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/quota/kimi-for-coding",
+      "status": 503,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/quota/nano-gpt",
+      "status": 503,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/quota/openrouter",
+      "status": 503,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/quota/zai-coding-plan",
+      "status": 503,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/quota/zhipuai-coding-plan",
+      "status": 503,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/quota/minimax-cn-coding-plan",
+      "status": 503,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/quota/minimax-coding-plan",
+      "status": 503,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/quota/ollama-cloud",
+      "status": 503,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/quota/wafer",
+      "status": 503,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/quota/opencode-go",
+      "status": 503,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/quota/deepinfra",
+      "status": 503,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/quota/deepseek",
+      "status": 503,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/quota/exe-dev",
+      "status": 503,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/quota/hyper",
+      "status": 503,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/quota/neuralwatt",
+      "status": 503,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/quota/kilo",
+      "status": 503,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/quota/zenmux",
+      "status": 503,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/quota/xai",
+      "status": 503,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/routing",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/linear/auth/status",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/git/worktrees",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/git/status",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/quota/claude",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/worker-DdhrXE7g.js",
+      "status": null,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/workspaces/ws_162572d2-768b-4450-8125-48989e1db36b/models",
+      "status": null,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/workspaces/ws_162572d2-768b-4450-8125-48989e1db36b/providers",
+      "status": null,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/workspaces/ws_162572d2-768b-4450-8125-48989e1db36b/agents",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/workspaces/ws_162572d2-768b-4450-8125-48989e1db36b/shell/jobs",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/quota/cline-pass",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/quota/codex",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/quota/cursor",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/quota/github-copilot",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/quota/google",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/quota/kimi-for-coding",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/quota/nano-gpt",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/quota/openrouter",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/quota/zai-coding-plan",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/quota/zhipuai-coding-plan",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/quota/minimax-cn-coding-plan",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/quota/minimax-coding-plan",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/quota/ollama-cloud",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/quota/wafer",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/quota/opencode-go",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/quota/deepinfra",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/quota/deepseek",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/quota/exe-dev",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/quota/hyper",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/quota/neuralwatt",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/quota/kilo",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/quota/zenmux",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/quota/xai",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/routing",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/sprite-HGQGInUp.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/api/openchamber/models-metadata",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/workspaces/ws_162572d2-768b-4450-8125-48989e1db36b/models",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/workspaces/ws_162572d2-768b-4450-8125-48989e1db36b/providers",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/workspaces/ws_162572d2-768b-4450-8125-48989e1db36b/agents",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/workspaces/ws_162572d2-768b-4450-8125-48989e1db36b/shell/jobs",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/openchamber/models-metadata",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/ToolOutputDialog-BP8v_n6h.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/PatchDiff-BySSLbWt.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/MarkdownImageGallery-ZICKJS6U.js",
+      "status": 200,
+      "type": "Script"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/sessions/3a97efba-e839-429f-8e80-d81715e5a60e/events",
+      "status": null,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/sessions/3a97efba-e839-429f-8e80-d81715e5a60e/metadata",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/sessions/3a97efba-e839-429f-8e80-d81715e5a60e/queue",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/sessions/3a97efba-e839-429f-8e80-d81715e5a60e/events",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "GET",
+      "path": "/api/source-control/github/auth/status",
+      "status": null,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/source-control/gitlab/auth/status",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/source-control/github/auth/status",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/source-control/gitlab/auth/status",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/sessions/3a97efba-e839-429f-8e80-d81715e5a60e/metadata",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/sessions/3a97efba-e839-429f-8e80-d81715e5a60e/queue",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/subagents",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/subagents",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/sessions/3a97efba-e839-429f-8e80-d81715e5a60e/snapshot",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "GET",
+      "path": "/api/projects/path_L3RtcC9vaHBpLXRhc2sxNWIvY2hhdHMvd29yaw/config",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/projects/path_L3RtcC9vaHBpLXRhc2sxNWIvY2hhdHMvd29yaw/config",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/terminal/sessions",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/workspaces/ws_162572d2-768b-4450-8125-48989e1db36b/agents",
+      "status": null,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/sessions/ad39f768-7a58-4044-8bdc-939eaace9dd8/snapshot",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/workspaces/ws_0505ba1b-2023-4246-8b16-a55e52221c93/models",
+      "status": null,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/workspaces/ws_0505ba1b-2023-4246-8b16-a55e52221c93/providers",
+      "status": null,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/workspaces/ws_0505ba1b-2023-4246-8b16-a55e52221c93/agents",
+      "status": null,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/workspaces/ws_0505ba1b-2023-4246-8b16-a55e52221c93/shell/jobs",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/sessions/ad39f768-7a58-4044-8bdc-939eaace9dd8/snapshot",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/workspaces/ws_0505ba1b-2023-4246-8b16-a55e52221c93/models",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/workspaces/ws_0505ba1b-2023-4246-8b16-a55e52221c93/providers",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/workspaces/ws_0505ba1b-2023-4246-8b16-a55e52221c93/agents",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/workspaces/ws_0505ba1b-2023-4246-8b16-a55e52221c93/shell/jobs",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/sessions/fe9b3f50-e17d-4240-ad1c-9855fe21d337/snapshot",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/sessions/fe9b3f50-e17d-4240-ad1c-9855fe21d337/snapshot",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/sessions/ad39f768-7a58-4044-8bdc-939eaace9dd8/events",
+      "status": null,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/sessions/ad39f768-7a58-4044-8bdc-939eaace9dd8/metadata",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/sessions/ad39f768-7a58-4044-8bdc-939eaace9dd8/queue",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/sessions/ad39f768-7a58-4044-8bdc-939eaace9dd8/events",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/sessions/ad39f768-7a58-4044-8bdc-939eaace9dd8/metadata",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/sessions/ad39f768-7a58-4044-8bdc-939eaace9dd8/queue",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/sessions/fe9b3f50-e17d-4240-ad1c-9855fe21d337/events",
+      "status": null,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/sessions/fe9b3f50-e17d-4240-ad1c-9855fe21d337/metadata",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/sessions/fe9b3f50-e17d-4240-ad1c-9855fe21d337/queue",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/sessions/fe9b3f50-e17d-4240-ad1c-9855fe21d337/events",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/sessions/fe9b3f50-e17d-4240-ad1c-9855fe21d337/metadata",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/sessions/fe9b3f50-e17d-4240-ad1c-9855fe21d337/queue",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "GET",
+      "path": "/api/guests/t15-guest/panel/index.html",
+      "status": 200,
+      "type": "Document"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/sessions/01a15f8e-9cb8-73ff-8ebf-51b66dda125b/snapshot",
+      "status": 404,
+      "type": "Fetch"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/sessions/01a15f8e-9cb8-73ff-8ebf-51b66dda125b/snapshot",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/sessions/0fa3a6af-d8e7-4f3a-bd6c-de7626757a0a/snapshot",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/sessions/0fa3a6af-d8e7-4f3a-bd6c-de7626757a0a/snapshot",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "GET",
+      "path": "/api/source-control/github/auth/status",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/sessions/0fa3a6af-d8e7-4f3a-bd6c-de7626757a0a/events",
+      "status": null,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/sessions/0fa3a6af-d8e7-4f3a-bd6c-de7626757a0a/metadata",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/sessions/0fa3a6af-d8e7-4f3a-bd6c-de7626757a0a/queue",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/sessions/2d260207-9d4a-45cb-ab29-77b281796e64/snapshot",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/sessions/0fa3a6af-d8e7-4f3a-bd6c-de7626757a0a/events",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/sessions/0fa3a6af-d8e7-4f3a-bd6c-de7626757a0a/metadata",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/sessions/0fa3a6af-d8e7-4f3a-bd6c-de7626757a0a/queue",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/sessions/2d260207-9d4a-45cb-ab29-77b281796e64/snapshot",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/sessions/2d260207-9d4a-45cb-ab29-77b281796e64/events",
+      "status": null,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/sessions/2d260207-9d4a-45cb-ab29-77b281796e64/metadata",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/sessions/2d260207-9d4a-45cb-ab29-77b281796e64/queue",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/sessions/2d260207-9d4a-45cb-ab29-77b281796e64/events",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/sessions/2d260207-9d4a-45cb-ab29-77b281796e64/metadata",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/sessions/2d260207-9d4a-45cb-ab29-77b281796e64/queue",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/sessions/2cfde89c-f6ce-46d1-8600-8cfe0b51ea35/snapshot",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/sessions/2cfde89c-f6ce-46d1-8600-8cfe0b51ea35/snapshot",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/sessions/2cfde89c-f6ce-46d1-8600-8cfe0b51ea35/events",
+      "status": null,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/sessions/2cfde89c-f6ce-46d1-8600-8cfe0b51ea35/metadata",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent/v1/sessions/2cfde89c-f6ce-46d1-8600-8cfe0b51ea35/queue",
+      "status": 200,
+      "type": "Fetch"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/sessions/2cfde89c-f6ce-46d1-8600-8cfe0b51ea35/events",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/sessions/2cfde89c-f6ce-46d1-8600-8cfe0b51ea35/metadata",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/agent/v1/sessions/2cfde89c-f6ce-46d1-8600-8cfe0b51ea35/queue",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "GET",
+      "path": "/api/openchamber/update-check",
+      "status": null,
+      "type": "Fetch"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/openchamber/update-check",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "GET",
+      "path": "/api/source-control",
+      "status": 404,
+      "type": "Fetch"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/source-control",
+      "status": 204,
+      "type": "Other"
+    },
+    {
+      "method": "GET",
+      "path": "/api/source-control/issues",
+      "status": 404,
+      "type": "Fetch"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/source-control/issues",
+      "status": 204,
+      "type": "Other"
+    }
+  ]
+}

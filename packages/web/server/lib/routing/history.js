@@ -6,7 +6,6 @@
  * head and tail, where the finding and the outcome sit. The new request itself
  * is never cut.
  */
-import { loadAssistContext } from '../session-assist/context.js';
 import { HISTORY_LIMITS } from './defaults.js';
 
 export const excerptHead = (text, limit) => (text.length <= limit ? text : `${text.slice(0, limit).trimEnd()} […]`);
@@ -21,14 +20,4 @@ export const turnsToHistory = (turns, limits = HISTORY_LIMITS) => {
     if (turn.assistant?.text) history.push({ role: 'assistant', text: excerptHeadTail(turn.assistant.text, limits.answerHead, limits.answerTail) });
   }
   return history;
-};
-
-/**
- * Empty when the session has no settled answer yet (a new session, or one
- * interrupted mid-turn) — routing then judges the request on its own. A read
- * failure is thrown so the caller can decide; it is not an empty history.
- */
-export const loadRoutingHistory = async ({ readPage, signal }) => {
-  const context = await loadAssistContext({ readPage, signal });
-  return context ? turnsToHistory(context.turns) : [];
 };

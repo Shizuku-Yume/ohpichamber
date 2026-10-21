@@ -1,17 +1,31 @@
 /**
- * Owns Jev routing at runtime: whether Auto is ready, rewriting a prompt body
- * that names the `openchamber/auto` model, and the safety net consulted before
- * a permission is auto-accepted. Every failure path keeps the user's own
- * behaviour: a prompt goes to the fallback model, a permission is accepted as
- * auto-accept would have, and the UI is told why.
+ * Owns Jev routing at runtime: which classification provider answers, whether
+ * Auto is ready, which model and agent a send that selected `openchamber/auto`
+ * runs on, and the safety net consulted in a `safety` permission session.
+ * Failure paths fall back to the user's own behaviour for routing (the
+ * fallback model) and to the user's own decision for the safety net: a request
+ * Jev could not check waits for the user, and the UI is told why.
+ *
+ * Host-owned routing chooses a real model before the Agent Service executes
+ * the request. The Auto sentinel is a Host selection, never an OMP model.
  */
-import { createOpencodeClient } from '@opencode-ai/sdk/v2';
 import { z } from 'zod';
-import { isRoutingFeatureAvailable } from './feature-flag.js';
-import { BUILTIN_CATEGORIES, isAutoModel } from './defaults.js';
+import { ApprovalRequestSchema, EntityIdSchema, ModelCatalogSchema, ProviderCatalogSchema } from '@openchamber/agent-contract';
+import { BUILTIN_CATEGORIES, ZEN_JEV_PROMOTION_ACTIVE } from './defaults.js';
 import { createRoutingStore, parseEffectiveConfig } from './store.js';
-import { buildPermissionRequest, buildRoutingRequest, createJevClient, decidePermission, decideRouting } from './jev.js';
-import { loadRoutingHistory } from './history.js';
+import { buildPermissionRequest, buildProbeRequest, buildRoutingRequest, createJevClient, decidePermission, decideRouting, isProbeAnswer } from './jev.js';
+import {
+  CLASSIFIER_SOURCES,
+  classifierEndpoint,
+  legacyClassifier,
+  parseCustomEndpointUrl,
+  readPinnedCustomEndpoint,
+  resolveClassifier,
+} from './classifier.js';
+import { turnsToHistory } from './history.js';
+import { loadSettledTurns } from '../session-assist/context.js';
+import { PROMPT_CACHE_TTL_MS, cacheHoldCategory } from './cache.js';
+import { ENTERPRISE_MODE_ERROR, isEnterpriseMode } from '../enterprise-mode.js';
 
 const HISTORY_TIMEOUT_MS = 2500;
 /** A held permission is remembered so reconnect reconciliation does not re-ask Jev. */
@@ -19,37 +33,42 @@ const PERMISSION_DECISION_TTL_MS = 15 * 60 * 1000;
 
 const errorMessage = (error) => (error instanceof Error ? error.message : String(error));
 
-const textPartSchema = z.object({ type: z.literal('text'), text: z.string(), synthetic: z.boolean().optional() });
-const commandBodySchema = z.object({ command: z.string(), arguments: z.string().optional() });
-const promptBodySchema = z.object({ parts: z.array(z.unknown()).optional() });
 
-/** The user's words for this send: text parts the composer authored, or the slash command. */
-export const requestTextOf = (body) => {
-  const command = commandBodySchema.safeParse(body);
-  if (command.success) {
-    const args = command.data.arguments?.trim();
-    return `/${command.data.command}${args ? ` ${args}` : ''}`;
-  }
-  const prompt = promptBodySchema.safeParse(body);
-  const parts = prompt.success ? prompt.data.parts ?? [] : [];
-  return parts
-    .map((part) => textPartSchema.safeParse(part))
-    .filter((part) => part.success && !part.data.synthetic)
-    .map((part) => part.data.text)
-    .join('\n\n')
-    .trim();
+
+const customEndpointInputSchema = z.object({
+  url: z.string().trim().min(1).max(2000),
+  model: z.string().trim().min(1).max(200),
+  key: z.string().trim().max(4000).nullable().optional(),
+});
+
+/** Project the persisted routing binding into captured native send options. */
+const toModelRef = (model, variant) => {
+  const ref = { providerId: model.providerID, modelId: model.modelID };
+  if (variant) ref.variant = variant;
+  return ref;
 };
+
 
 export function createRoutingRuntime({
   dataDir,
-  buildOpenCodeUrl,
-  getOpenCodeAuthHeaders,
+  service,
+  resolveWorkspaceScope,
+  resolveSessionScope,
   broadcastGlobalUiEvent,
   fetchImpl = fetch,
   store = createRoutingStore({ dataDir }),
   jev = createJevClient({ fetchImpl }),
+  resolveCredential,
+  zenPromotionActive = ZEN_JEV_PROMOTION_ACTIVE,
+  enterpriseMode = isEnterpriseMode,
+  readPinnedEndpoint = readPinnedCustomEndpoint,
+  listCatalogModels = null,
+  readSessionHistory = null,
   now = Date.now,
 }) {
+  if (!service || typeof service.request !== 'function') throw new Error('routing requires the Agent service');
+  if (typeof resolveWorkspaceScope !== 'function' || typeof resolveSessionScope !== 'function') throw new Error('routing requires Host scope resolvers');
+  if (typeof resolveCredential !== 'function') throw new Error('routing requires the selected credential resolver');
   const permissionDecisions = new Map();
 
   const broadcast = (type, properties) => {
@@ -62,124 +81,308 @@ export function createRoutingRuntime({
 
   const enabledCategories = (config) => config.categories.filter((category) => category.enabled);
 
-  /** What the client needs to decide whether to offer Auto and what the settings page shows. */
-  const describe = async () => {
-    const available = isRoutingFeatureAvailable();
-    if (!available) return { available: false, autoReady: false, tokenPresent: false, config: null, builtins: [] };
-    const [config, token] = await Promise.all([store.readConfig(), store.readToken()]);
-    const tokenPresent = Boolean(token);
-    const autoReady = config.enabled && tokenPresent && Boolean(config.fallback) && enabledCategories(config).length >= 2;
+  const scopeForWorkspace = async (workspaceId) => {
+    if (!EntityIdSchema.safeParse(workspaceId).success) throw Object.assign(new Error('A workspace identity is required'), { status: 400, code: 'INVALID_REQUEST' });
+    const scope = await resolveWorkspaceScope(workspaceId);
+    if (!scope || scope.workspaceId !== workspaceId || !EntityIdSchema.safeParse(scope.agentDirectoryId).success)
+      throw Object.assign(new Error('Workspace scope was not found'), { status: 403, code: 'UNAUTHORIZED' });
+    return scope;
+  };
+  const nativeSources = {
+    'zen-key': { providerId: 'opencode-zen', keyField: 'zenKey' },
+    openrouter: { providerId: 'openrouter', keyField: 'openrouterKey' },
+    vercel: { providerId: 'vercel-ai-gateway', keyField: 'vercelKey' },
+  };
+
+  /** Catalogs describe presence; only the source used for this request resolves a secret. */
+  const resolveAccess = async (scope = null, useCredential = false) => {
+    const [typesafeKey, stored, savedEndpoint] = await Promise.all([
+      store.readToken(), store.readClassifierSource(), store.readCustomEndpoint(),
+    ]);
+    const pinned = readPinnedEndpoint();
+    const customEndpoint = pinned ?? savedEndpoint;
+    const enterprise = enterpriseMode();
+    const selected = !enterprise ? stored : pinned && stored !== 'off' ? 'custom' : 'off';
+    const keys = { typesafeKey, customEndpoint };
+    const selections = {};
+    if (scope && !enterprise) {
+      const catalog = ProviderCatalogSchema.parse(await requestAgent(`/api/agent/v1/workspaces/${encodeURIComponent(scope.workspaceId)}/providers`));
+      if (catalog.workspaceId !== scope.workspaceId) throw Object.assign(new Error('Provider catalog belongs to another workspace'), { status: 403, code: 'UNAUTHORIZED' });
+      for (const [source, { providerId, keyField }] of Object.entries(nativeSources)) {
+        const provider = catalog.providers.find((entry) => entry.providerId === providerId);
+        if (provider?.auth.status !== 'configured' || provider.auth.method !== 'api-key') continue;
+        selections[source] = { workspaceId: scope.workspaceId, agentDirectoryId: scope.agentDirectoryId,
+          providerId, credentialRef: provider.auth.credentialRef, purpose: 'routing' };
+        keys[keyField] = true;
+      }
+    }
+    const classifier = resolveClassifier({ selected, ...keys, zenPromotionActive });
+    let endpoint = null;
+    if (useCredential && classifier.effective) {
+      const native = nativeSources[classifier.effective];
+      if (native) {
+        const credential = await resolveCredential(selections[classifier.effective]);
+        if (credential?.type !== 'api_key' || typeof credential.key !== 'string' || !credential.key)
+          throw Object.assign(new Error('Selected routing credential is unavailable'), { status: 422, code: 'CREDENTIAL_UNAVAILABLE' });
+        keys[native.keyField] = credential.key;
+      }
+      endpoint = classifierEndpoint(classifier.effective, keys);
+    }
+    return { classifier, endpoint, tokenPresent: Boolean(typesafeKey), customEndpoint, pinned: pinned !== null };
+  };
+
+  // What Settings shows of the custom endpoint: never the key itself.
+  const describeCustomEndpoint = (endpoint, pinned) => (endpoint
+    ? { url: endpoint.url, model: endpoint.model, keyPresent: Boolean(endpoint.key), pinned }
+    : null);
+
+  const pinnedEndpointError = () => Object.assign(
+    new Error('The custom endpoint is set by your administrator and cannot be changed here'),
+    { status: 409 },
+  );
+
+  /** What the client needs to decide whether to offer Auto and the safety net, and what Settings shows. */
+  const describe = async (workspaceId) => {
+    const scope = workspaceId === undefined ? null : await scopeForWorkspace(workspaceId);
+    const [config, access] = await Promise.all([store.readConfig(), resolveAccess(scope)]);
+    const jevAvailable = access.classifier.effective !== null;
+    const autoReady = jevAvailable && config.enabled && Boolean(config.fallback) && enabledCategories(config).length >= 2;
     // Built-in text travels with the config so "Reset" in Settings restores the shipped wording.
-    return { available, autoReady, tokenPresent, config, builtins: BUILTIN_CATEGORIES };
+    // `jevSource` is the two-value field clients from before the classifier
+    // pick parse, `classifier` what v2.0.2 clients parse, and `classification`
+    // the full picture.
+    return {
+      available: true,
+      autoReady,
+      jevAvailable,
+      tokenPresent: access.tokenPresent,
+      customEndpoint: describeCustomEndpoint(access.customEndpoint, access.pinned),
+      enterpriseMode: enterpriseMode(),
+      jevSource: access.classifier.effective === 'typesafe' ? 'typesafe' : 'zen-free',
+      classifier: legacyClassifier(access.classifier),
+      classification: access.classifier,
+      config,
+      builtins: BUILTIN_CATEGORIES,
+    };
   };
 
   const publishUpdated = async () => {
     const state = await describe();
-    broadcast('openchamber:routing.updated', { available: state.available, autoReady: state.autoReady, tokenPresent: state.tokenPresent });
+    broadcast('openchamber:routing.updated', {
+      available: state.available,
+      autoReady: state.autoReady,
+      jevAvailable: state.jevAvailable,
+      tokenPresent: state.tokenPresent,
+      jevSource: state.jevSource,
+    });
     return state;
   };
 
-  const readHistory = async ({ sessionId, directory }) => {
-    const baseUrl = buildOpenCodeUrl('/', '').replace(/\/$/, '');
-    const client = createOpencodeClient({ baseUrl, headers: getOpenCodeAuthHeaders(), throwOnError: true });
-    const signal = AbortSignal.timeout(HISTORY_TIMEOUT_MS);
-    return loadRoutingHistory({
-      signal,
-      readPage: (page) => client.session.messages({ sessionID: sessionId, directory, ...page }, { signal }),
+  const requestAgent = async (path, init = {}) => {
+    const response = await service.request(path, { ...init, headers: { accept: 'application/json', ...(init.headers || {}) } });
+    const body = await response.json().catch(() => null);
+    if (!response.ok) throw Object.assign(new Error(body?.detail || 'Agent service request failed'), { status: response.status, code: body?.code });
+    return body;
+  };
+  const scopeForSession = async (sessionId) => {
+    const scope = await resolveSessionScope(sessionId);
+    if (!scope) throw Object.assign(new Error('Session scope was not found'), { status: 404, code: 'SESSION_NOT_FOUND' });
+    return scope;
+  };
+  const readHistory = readSessionHistory ?? (async ({ sessionId }) => {
+    await scopeForSession(sessionId);
+    const completedAtByMessage = new Map();
+    const turns = await loadSettledTurns({
+      signal: AbortSignal.timeout(HISTORY_TIMEOUT_MS),
+      readPage: async ({ limit, cursor }) => {
+        const page = await requestAgent(`/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/history?${new URLSearchParams({ limit: String(limit), ...(cursor ? { cursor } : {}) })}`);
+        for (const turn of page.turns) {
+          if (turn.status !== 'completed' || !Number.isFinite(turn.finishedAt)) continue;
+          for (const messageId of turn.assistantMessageIds) completedAtByMessage.set(messageId, turn.finishedAt);
+        }
+        return page;
+      },
     });
+    const last = turns.at(-1)?.assistant;
+    const completedAt = completedAtByMessage.get(last?.id);
+    return {
+      history: turnsToHistory(turns),
+      lastAnswer: last?.providerId && last.modelId && Number.isFinite(completedAt)
+        ? { providerID: last.providerId, modelID: last.modelId, finishedAt: completedAt }
+        : null,
+    };
+  });
+
+  /** Hold downward moves only while the last settled model's prompt cache is warm. */
+  const cacheHold = async ({ config, chosen, composerAgent, lastAnswer }) => {
+    if (!config.preserveCache || !lastAnswer) return null;
+    const held = cacheHoldCategory({
+      categories: enabledCategories(config), fallback: config.fallback, composerAgent, chosen, current: lastAnswer,
+    });
+    if (!held) return null;
+    const idle = now() - lastAnswer.finishedAt;
+    if (idle < PROMPT_CACHE_TTL_MS) return held;
+    return null;
   };
 
   // A category without a model of its own means "the fallback pair"; a variant
   // only travels with the model it was chosen for.
-  const applyChoice = (body, config, choice) => {
+  const chooseSelection = (config, choice, composerAgent) => {
     const own = Boolean(choice?.model);
     const model = own ? choice.model : config.fallback.model;
     const variant = own ? choice.variant : config.fallback.variant;
-    // Keep the wire shape the route uses: a string on /command, an object on the prompt routes.
-    body.model = z.string().safeParse(body.model).success
-      ? `${model.providerID}/${model.modelID}`
-      : { providerID: model.providerID, modelID: model.modelID };
-    if (variant) body.variant = variant;
-    else delete body.variant;
-    if (choice?.agent) body.agent = choice.agent;
-    return { providerID: model.providerID, modelID: model.modelID, variant: variant ?? null, agent: choice?.agent ?? null };
+    return {
+      model: toModelRef(model, variant),
+      // A category agent replaces the composer's; an empty one keeps it.
+      agent: choice?.agent || composerAgent || null,
+      decision: { providerID: model.providerID, modelID: model.modelID, variant: variant ?? null, agent: choice?.agent ?? null },
+    };
+  };
+
+  const readCatalog = listCatalogModels ?? (async (workspaceId) => {
+    await scopeForWorkspace(workspaceId);
+    const catalog = ModelCatalogSchema.parse(await requestAgent(`/api/agent/v1/workspaces/${encodeURIComponent(workspaceId)}/models`));
+    if (catalog.workspaceId !== workspaceId) throw Object.assign(new Error('Model catalog belongs to another workspace'), { status: 403, code: 'UNAUTHORIZED' });
+    return catalog.models;
+  });
+
+  /**
+   * Drops a variant the canonical model catalog does not list. An unreadable
+   * catalog or a model not present in it cannot invalidate a saved variant.
+   */
+  const withKnownVariant = async (selection, workspaceId) => {
+    const variant = selection.model.variant;
+    if (!variant) return selection;
+    let models;
+    try { models = await readCatalog(workspaceId); }
+    catch (error) {
+      console.warn('[routing] model catalog unavailable, keeping the saved variant:', errorMessage(error));
+      return selection;
+    }
+    const { providerId, modelId } = selection.model;
+    const entry = models.find((model) => model.provider === providerId && model.modelId === modelId);
+    if (!entry || entry.variants.some((known) => known.variant === variant)) return selection;
+    console.warn(`[routing] ${providerId}/${modelId} has no "${variant}" thinking level; using its default`);
+    return { ...selection, model: { providerId, modelId }, decision: { ...selection.decision, variant: null } };
   };
 
   /**
-   * Rewrites `body.model` in place when it is the Auto sentinel. Returns the
-   * decision that was applied, or null when the body named a real model.
-   * Throws only when Auto cannot be honoured at all (no fallback configured):
-   * the sentinel must never reach OpenCode.
+   * Resolves one send that named the Auto sentinel. Returns the model and
+   * agent the send must use, or null when a real model was selected.
+   *
+   * The caller captures the resolved model and agent for native delivery.
+   * Without a configured fallback the request fails before any execution.
    */
-  const resolvePromptBody = async (body, { sessionId, directory }) => {
-    if (!isAutoModel(body?.model)) return null;
-    const state = await describe();
+  const resolveAutoSelection = async ({ sessionId, directory, workspaceId: requestedWorkspaceId, model, agent, requestText }) => {
+    if (model?.providerId !== 'openchamber' || model?.modelId !== 'auto') return null;
+    const sessionScope = await scopeForSession(sessionId);
+    const workspaceId = requestedWorkspaceId ?? sessionScope.workspaceId;
+    if (sessionScope.workspaceId !== workspaceId) throw Object.assign(new Error('Session workspace does not match routing workspace'), { status: 403, code: 'UNAUTHORIZED' });
+    const state = await describe(workspaceId);
     const config = state.config;
     if (!config?.fallback) {
       throw Object.assign(new Error('Auto routing is selected but no fallback model is configured'), { status: 400 });
     }
     const decision = { sessionId, at: now(), category: null, confidence: 0, reason: 'not-ready', ms: 0 };
+    let selection;
     if (state.autoReady) {
-      const request = requestTextOf(body);
       let history = [];
+      let lastAnswer = null;
       try {
-        history = await readHistory({ sessionId, directory });
+        ({ history, lastAnswer } = await readHistory({ sessionId, directory }));
       } catch (error) {
         console.warn('[routing] history unavailable, routing on the request alone:', errorMessage(error));
       }
+      const { endpoint } = await resolveAccess(await scopeForWorkspace(workspaceId), true);
       try {
-        const token = await store.readToken();
-        const { answers, ms } = await jev.ask(buildRoutingRequest({ categories: enabledCategories(config), history, request }), token);
+        // A provider removed between presence discovery and execution is not usable.
+        if (!endpoint) throw new Error('No classification provider is available');
+        const request = (requestText ?? '').trim();
+        const { answers, ms } = await jev.ask(buildRoutingRequest({ categories: enabledCategories(config), history, request }), endpoint);
         const result = decideRouting(answers.category, { categories: enabledCategories(config), minConfidence: config.minConfidence });
         decision.category = result.category?.id ?? null;
         decision.confidence = result.confidence;
         decision.reason = result.reason;
         decision.ms = ms;
-        Object.assign(decision, applyChoice(body, config, result.category));
+        const held = await cacheHold({ config, chosen: result.category, composerAgent: agent, lastAnswer });
+        if (held) {
+          // The send runs as the category the session is already on;
+          // `cacheHold.requested` keeps what Jev asked for.
+          decision.category = held.id;
+          decision.cacheHold = { requested: result.category.id };
+        }
+        selection = chooseSelection(config, held ?? result.category, agent);
       } catch (error) {
         decision.reason = 'error';
         decision.error = errorMessage(error);
-        Object.assign(decision, applyChoice(body, config, null));
+        selection = chooseSelection(config, null, agent);
       }
     } else {
-      Object.assign(decision, applyChoice(body, config, null));
+      selection = chooseSelection(config, null, agent);
     }
+    selection = await withKnownVariant(selection, workspaceId);
+    Object.assign(decision, selection.decision);
     broadcast('openchamber:routing.decision', decision);
-    return decision;
+    return { model: selection.model, agent: selection.agent, decision };
   };
 
+
   /**
-   * Consulted by permission auto-accept before it replies. `accept` keeps the
-   * reply; `hold` leaves the request for the user; `skipped` is `accept` with
-   * a reason the UI surfaces (Jev unreachable, bad key).
+   * Consulted by permission auto-accept in a `safety` session before it
+   * replies. `accept` replies; `hold` leaves the request for the user. Only a
+   * verdict from Jev accepts: with no classification provider the request
+   * waits quietly, the way an `ask` session's would; when Jev fails it waits
+   * too, and the UI is told why (`skipped`).
    */
   const evaluatePermission = async (permission, directory) => {
-    if (!permission?.id) return { action: 'accept' };
-    const cached = permissionDecisions.get(permission.id);
-    if (cached && now() - cached.at < PERMISSION_DECISION_TTL_MS) return cached.result;
-    const state = await describe();
-    if (!state.available || !state.config?.enabled || !state.config.safetyNet.enabled || !state.tokenPresent) return { action: 'accept' };
+    const parsed = ApprovalRequestSchema.safeParse(permission);
+    if (!parsed.success || parsed.data.status !== 'pending') return { action: 'hold' };
+    const approval = parsed.data;
+    const scope = await scopeForSession(approval.sessionId);
+    const workspaceScope = await scopeForWorkspace(scope.workspaceId);
+    const [config, presence] = await Promise.all([store.readConfig(), resolveAccess(workspaceScope)]);
+    if (!presence.classifier.effective) return { action: 'hold', unavailable: true };
+    const identity = JSON.stringify([approval.sessionId, approval.epoch, approval.workerGeneration, approval.version,
+      presence.classifier.effective, config.safetyNet.threshold]);
+    const cached = permissionDecisions.get(approval.approvalId);
+    if (cached?.identity === identity && now() - cached.at < PERMISSION_DECISION_TTL_MS) return cached.result;
+    const access = await resolveAccess(workspaceScope, true);
+    if (!access.endpoint) return { action: 'hold', unavailable: true };
     let result;
     try {
-      const token = await store.readToken();
-      const { answers } = await jev.ask(buildPermissionRequest(permission), token);
-      const verdict = decidePermission(answers, { threshold: state.config.safetyNet.threshold });
+      const { answers } = await jev.ask(buildPermissionRequest(approval), access.endpoint);
+      const verdict = decidePermission(answers, { threshold: config.safetyNet.threshold });
       result = verdict.hold
         ? { action: 'hold', score: verdict.score, kind: verdict.kind }
         : { action: 'accept', score: verdict.score, kind: verdict.kind };
-      if (verdict.hold) {
-        broadcast('openchamber:routing.permission-held', {
-          permissionId: permission.id, sessionId: permission.sessionID, directory: directory ?? null, score: verdict.score, kind: verdict.kind,
-        });
-      }
     } catch (error) {
-      result = { action: 'accept', skipped: errorMessage(error) };
+      // Not remembered: reconnect reconciliation asks Jev again, and may accept.
+      const skipped = errorMessage(error);
       broadcast('openchamber:routing.safety-skipped', {
-        permissionId: permission.id, sessionId: permission.sessionID, directory: directory ?? null, error: result.skipped,
+        permissionId: approval.approvalId, sessionId: approval.sessionId, directory: directory ?? null, error: skipped,
+      });
+      return { action: 'hold', skipped };
+    }
+    if (result.action === 'hold') {
+      broadcast('openchamber:routing.permission-held', {
+        permissionId: approval.approvalId, sessionId: approval.sessionId, directory: directory ?? null, score: result.score, kind: result.kind,
       });
     }
-    permissionDecisions.set(permission.id, { at: now(), result });
+    permissionDecisions.set(approval.approvalId, { at: now(), identity, result });
     return result;
+  };
+
+  /**
+   * Whether the old global safety-net switch was on. Asked once, when the
+   * permission policy converts its pre-modes `true` entries: those sessions
+   * were auto-accepting behind the safety net, so they become `safety`.
+   */
+  const legacySafetyNetEnabled = async () => {
+    try {
+      return (await store.readConfig()).safetyNet.enabled === true;
+    } catch {
+      return false;
+    }
   };
 
   const forgetPermission = (permissionId) => {
@@ -195,13 +398,101 @@ export function createRoutingRuntime({
   const setToken = async (token) => {
     const parsed = z.string().trim().min(1).max(4000).safeParse(token);
     if (!parsed.success) throw Object.assign(new Error('A Jev API key is required'), { status: 400 });
+    if (enterpriseMode()) throw Object.assign(new Error(ENTERPRISE_MODE_ERROR), { status: 403 });
     await store.writeToken(parsed.data);
+    // Pasting a key is choosing it.
+    await store.writeClassifierSource('typesafe');
     return publishUpdated();
   };
 
   const clearToken = async () => {
     await store.clearToken();
     return publishUpdated();
+  };
+
+  const setClassifierSource = async (source) => {
+    const parsed = z.enum(CLASSIFIER_SOURCES).safeParse(source);
+    if (!parsed.success) throw Object.assign(new Error(`Unknown classification provider: ${String(source)}`), { status: 400 });
+    const allowedInEnterprise = parsed.data === 'off' || (parsed.data === 'custom' && readPinnedEndpoint() !== null);
+    if (enterpriseMode() && !allowedInEnterprise) throw Object.assign(new Error(ENTERPRISE_MODE_ERROR), { status: 403 });
+    await store.writeClassifierSource(parsed.data);
+    return publishUpdated();
+  };
+
+  /**
+   * Saves the custom System One endpoint and picks it, the way saving a
+   * TypeSafe key does. `key`: a string replaces the saved one, null removes
+   * it, absent keeps it, so the URL or model can change without retyping it.
+   */
+  const setCustomEndpoint = async (input) => {
+    if (readPinnedEndpoint()) throw pinnedEndpointError();
+    if (enterpriseMode()) throw Object.assign(new Error(ENTERPRISE_MODE_ERROR), { status: 403 });
+    const parsed = customEndpointInputSchema.safeParse(input);
+    if (!parsed.success) throw Object.assign(new Error('A URL and a model are required'), { status: 400 });
+    const { model, key } = parsed.data;
+    const url = parseCustomEndpointUrl(parsed.data.url);
+    // An empty key field is the same as leaving it out.
+    const keepKey = key === undefined || key === '';
+    const savedKey = keepKey ? (await store.readCustomEndpoint())?.key : key;
+    const endpoint = { url, model };
+    if (savedKey) endpoint.key = savedKey;
+    await store.writeCustomEndpoint(endpoint);
+    // Saving is choosing it; removing only the key is not a choice of anything.
+    if (key !== null) await store.writeClassifierSource('custom');
+    return publishUpdated();
+  };
+
+  const clearCustomEndpoint = async () => {
+    if (readPinnedEndpoint()) throw pinnedEndpointError();
+    await store.clearCustomEndpoint();
+    return publishUpdated();
+  };
+
+  /**
+   * Sends one small Jev request and reports what came back, so Settings can
+   * show a broken setup before a feature quietly falls back. Without `draft`
+   * it tests the provider answering now; with one it tests the custom endpoint
+   * fields as typed, before they are saved (an empty key reuses the saved
+   * one). Nothing is stored either way.
+   */
+  const testClassifier = async (draft, workspaceId) => {
+    const scope = workspaceId === undefined ? null : await scopeForWorkspace(workspaceId);
+    let source;
+    let endpoint;
+    if (draft !== undefined) {
+      if (readPinnedEndpoint()) throw pinnedEndpointError();
+      if (enterpriseMode()) throw Object.assign(new Error(ENTERPRISE_MODE_ERROR), { status: 403 });
+      const parsed = customEndpointInputSchema.safeParse(draft);
+      if (!parsed.success) throw Object.assign(new Error('A URL and a model are required'), { status: 400 });
+      const key = parsed.data.key || (await store.readCustomEndpoint())?.key;
+      source = 'custom';
+      endpoint = classifierEndpoint('custom', {
+        customEndpoint: { url: parseCustomEndpointUrl(parsed.data.url), model: parsed.data.model, ...(key ? { key } : {}) },
+      });
+    } else {
+      const access = await resolveAccess(scope, true);
+      source = access.classifier.effective;
+      endpoint = access.endpoint;
+    }
+    if (!source || !endpoint) return { ok: false, reason: 'unavailable' };
+    try {
+      const { answers, ms } = await jev.ask(buildProbeRequest(), endpoint);
+      if (!isProbeAnswer(answers.probe)) return { ok: false, reason: 'unparsable', source, model: endpoint.model };
+      return { ok: true, source, model: endpoint.model, ms };
+    } catch (error) {
+      if (error?.code === 'timeout') return { ok: false, reason: 'timeout', source, model: endpoint.model };
+      if (typeof error?.status === 'number') return { ok: false, reason: 'http', status: error.status, source, model: endpoint.model };
+      if (error instanceof SyntaxError || /no answers/.test(errorMessage(error))) {
+        return { ok: false, reason: 'unparsable', source, model: endpoint.model };
+      }
+      return { ok: false, reason: 'network', message: errorMessage(error), source, model: endpoint.model };
+    }
+  };
+
+  /** Resolve the endpoint for an authorized workspace, or null when no provider is usable. */
+  const currentClassifierEndpoint = async (workspaceId) => {
+    const scope = await scopeForWorkspace(workspaceId);
+    return (await resolveAccess(scope, true)).endpoint;
   };
 
   /** Held permissions the UI can read back after a reload. */
@@ -213,5 +504,20 @@ export function createRoutingRuntime({
     return held;
   };
 
-  return { describe, resolvePromptBody, evaluatePermission, forgetPermission, heldPermissions, updateConfig, setToken, clearToken };
+  return {
+    describe,
+    classifierEndpoint: currentClassifierEndpoint,
+    resolveAutoSelection,
+    evaluatePermission,
+    forgetPermission,
+    heldPermissions,
+    legacySafetyNetEnabled,
+    updateConfig,
+    setToken,
+    clearToken,
+    setClassifierSource,
+    setCustomEndpoint,
+    clearCustomEndpoint,
+    testClassifier,
+  };
 }

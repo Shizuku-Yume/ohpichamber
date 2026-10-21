@@ -1,9 +1,8 @@
 /**
  * The composer's autocomplete popups.
  *
- * Four pickers, one at a time: the command palette, the inline skill picker,
- * the snippet picker and the file/agent mention picker. Which one is open is
- * decided by the prompt language, not here.
+ * Three pickers: native commands/templates, inline skills and file/agent mentions.
+ * Which one is open is decided by the prompt language, not here.
  *
  * They are positioned differently depending on the composer's shape. In the
  * normal composer each picker anchors itself to the composer edge, which its
@@ -13,12 +12,13 @@
  */
 
 import React from 'react';
+import { AnimatePresence } from 'motion/react';
 
 import { CommandAutocomplete, type CommandAutocompleteHandle, type CommandInfo } from '../../CommandAutocomplete';
 import { FileMentionAutocomplete, type FileMentionHandle } from '../../FileMentionAutocomplete';
 import { SkillAutocomplete, type SkillAutocompleteHandle } from '../../SkillAutocomplete';
-import { SnippetAutocomplete, type SnippetAutocompleteHandle } from '../../SnippetAutocomplete';
 import type { AutocompleteKind } from '../language/triggers';
+import { GlassPopupMotion } from './GlassPopupMotion';
 
 export interface AutocompleteOverlayPosition {
     top: number;
@@ -31,7 +31,6 @@ export interface AutocompleteOverlayPosition {
 const CARET_PLACED_WIDTH: Record<AutocompleteKind, number> = {
     mention: 520,
     command: 450,
-    snippet: 450,
     skill: 360,
 };
 
@@ -55,7 +54,7 @@ function caretStyle(
     };
 }
 
-export interface ComposerAutocompletePopupsProps {
+interface ComposerAutocompletePopupsProps {
     /** Which picker is open, if any. */
     open: AutocompleteKind | null;
     query: string;
@@ -63,19 +62,32 @@ export interface ComposerAutocompletePopupsProps {
     overlayPosition: AutocompleteOverlayPosition | null;
     commandRef: React.RefObject<CommandAutocompleteHandle | null>;
     skillRef: React.RefObject<SkillAutocompleteHandle | null>;
-    snippetRef: React.RefObject<SnippetAutocompleteHandle | null>;
     mentionRef: React.RefObject<FileMentionHandle | null>;
     onCommandSelect: (command: CommandInfo) => void;
     onSkillSelect: (skillName: string) => void;
-    onSnippetSelect: (snippet: unknown, trigger: string) => void;
     onFileSelect: (file: { name: string; path: string; relativePath?: string }) => void;
     onAgentSelect: (agentName: string) => void;
     onClose: () => void;
 }
 
-export function ComposerAutocompletePopups(props: ComposerAutocompletePopupsProps) {
+function ComposerAutocompletePopupsView(props: ComposerAutocompletePopupsProps) {
+    const { open } = props;
+    // The wrapper is a zero-height box over the anchor's top edge, so the
+    // picker's `bottom-full` and caret offsets resolve exactly as they would
+    // against the anchor itself.
+    return (
+        <AnimatePresence>
+            {open ? (
+                <GlassPopupMotion key={open} className="absolute inset-x-0 top-0 z-[100] h-0 origin-top-left">
+                    <AutocompletePopup {...props} open={open} />
+                </GlassPopupMotion>
+            ) : null}
+        </AnimatePresence>
+    );
+}
+
+function AutocompletePopup(props: ComposerAutocompletePopupsProps & { open: AutocompleteKind }) {
     const { open, query, overlayPosition, onClose } = props;
-    if (!open) return null;
 
     const style = caretStyle(open, overlayPosition);
 
@@ -100,16 +112,6 @@ export function ComposerAutocompletePopups(props: ComposerAutocompletePopupsProp
                     style={style}
                 />
             );
-        case 'snippet':
-            return (
-                <SnippetAutocomplete
-                    ref={props.snippetRef}
-                    searchQuery={query}
-                    onSnippetSelect={props.onSnippetSelect}
-                    onClose={onClose}
-                    style={style}
-                />
-            );
         case 'mention':
             return (
                 <FileMentionAutocomplete
@@ -123,3 +125,6 @@ export function ComposerAutocompletePopups(props: ComposerAutocompletePopupsProp
             );
     }
 }
+
+/** Memoized: the composer re-renders on every keystroke, and nothing here depends on the draft text. */
+export const ComposerAutocompletePopups = React.memo(ComposerAutocompletePopupsView);

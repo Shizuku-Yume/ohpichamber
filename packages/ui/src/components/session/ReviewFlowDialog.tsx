@@ -13,16 +13,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { isPrimaryMode } from '@/components/chat/mobileControlsUtils';
 import { useI18n } from '@/lib/i18n';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useAgentsStore } from '@/stores/useAgentsStore';
 
 export type ReviewFlowExecution = {
-  providerID: string;
-  modelID: string;
+  providerId: string;
+  modelId: string;
   variant: string;
-  agent: string;
+  agentId: string;
   generateHandoff: boolean;
   autoReview: boolean;
 };
@@ -36,20 +35,20 @@ type ReviewFlowDialogProps = {
 };
 
 const getInitialExecution = (params: {
-  providerID: string;
-  modelID: string;
+  providerId: string;
+  modelId: string;
   variant: string;
-  agent: string;
+  agentId: string;
 }): ReviewFlowExecution => ({
-  providerID: params.providerID,
-  modelID: params.modelID,
+  providerId: params.providerId,
+  modelId: params.modelId,
   variant: params.variant,
-  agent: params.agent,
+  agentId: params.agentId,
   generateHandoff: true,
   autoReview: false,
 });
 
-export function ReviewFlowDialog({
+function ReviewFlowDialogView({
   open,
   onOpenChange,
   projectDirectory,
@@ -58,7 +57,6 @@ export function ReviewFlowDialog({
 }: ReviewFlowDialogProps) {
   const { t } = useI18n();
   const loadProviders = useConfigStore((state) => state.loadProviders);
-  const loadConfigAgents = useConfigStore((state) => state.loadAgents);
   const loadAgentsStoreAgents = useAgentsStore((state) => state.loadAgents);
   const providers = useConfigStore((state) => state.providers);
   const currentProviderID = useConfigStore((state) => state.currentProviderId);
@@ -67,54 +65,45 @@ export function ReviewFlowDialog({
   const currentAgentName = useConfigStore((state) => state.currentAgentName || '');
 
   const [execution, setExecution] = React.useState<ReviewFlowExecution>(() => getInitialExecution({
-    providerID: currentProviderID,
-    modelID: currentModelID,
+    providerId: currentProviderID,
+    modelId: currentModelID,
     variant: currentVariant,
-    agent: currentAgentName,
+    agentId: currentAgentName,
   }));
 
   React.useEffect(() => {
     if (!open) return;
     void loadProviders({ directory: projectDirectory, source: 'reviewFlowDialog' });
-    void loadConfigAgents({ directory: projectDirectory });
-    void loadAgentsStoreAgents();
-  }, [open, loadProviders, loadConfigAgents, loadAgentsStoreAgents, projectDirectory]);
+    void loadAgentsStoreAgents(projectDirectory);
+  }, [open, loadProviders, loadAgentsStoreAgents, projectDirectory]);
 
   React.useEffect(() => {
     if (!open) return;
     setExecution(getInitialExecution({
-      providerID: currentProviderID,
-      modelID: currentModelID,
+      providerId: currentProviderID,
+      modelId: currentModelID,
       variant: currentVariant,
-      agent: currentAgentName,
+      agentId: currentAgentName,
     }));
   }, [open, currentProviderID, currentModelID, currentVariant, currentAgentName]);
 
   React.useEffect(() => {
     if (!open || providers.length === 0) return;
 
-    const provider = providers.find((item) => item.id === execution.providerID) ?? providers[0];
+    const provider = providers.find((item) => item.providerId === execution.providerId) ?? providers[0];
     const models = Array.isArray(provider?.models) ? provider.models : [];
-    const hasModel = models.some((item) => item.id === execution.modelID);
-    const fallbackModelID = models[0]?.id ?? '';
+    const hasModel = models.some((item) => item.modelId === execution.modelId);
+    const fallbackModelId = models[0]?.modelId ?? '';
+    if (provider?.providerId === execution.providerId && hasModel) return;
+    setExecution((prev) => ({ ...prev, providerId: provider?.providerId ?? '', modelId: hasModel ? prev.modelId : fallbackModelId, variant: '' }));
+  }, [open, providers, execution.providerId, execution.modelId]);
 
-    if (provider?.id === execution.providerID && hasModel) return;
-
-    setExecution((prev) => ({
-      ...prev,
-      providerID: provider?.id ?? '',
-      modelID: hasModel ? prev.modelID : fallbackModelID,
-      variant: '',
-    }));
-  }, [open, providers, execution.providerID, execution.modelID]);
-
-  const agentFilter = React.useCallback((agent: { mode?: string }) => isPrimaryMode(agent.mode), []);
 
   const variantOptions = React.useMemo(() => {
-    const provider = providers.find((item) => item.id === execution.providerID);
-    const model = provider?.models?.find((item) => item.id === execution.modelID) as { variants?: Record<string, unknown> } | undefined;
-    return model?.variants ? Object.keys(model.variants) : [];
-  }, [providers, execution.providerID, execution.modelID]);
+    const provider = providers.find((item) => item.providerId === execution.providerId);
+    const model = provider?.models?.find((item) => item.modelId === execution.modelId);
+    return model?.variants.map((entry) => entry.variant) ?? [];
+  }, [providers, execution.providerId, execution.modelId]);
 
   const hasVariantOptions = variantOptions.length > 0;
 
@@ -123,7 +112,7 @@ export function ReviewFlowDialog({
     setExecution((prev) => ({ ...prev, variant: '' }));
   }, [hasVariantOptions, execution.variant]);
 
-  const canConfirm = execution.providerID.trim().length > 0 && execution.modelID.trim().length > 0;
+  const canConfirm = execution.providerId.trim().length > 0 && execution.modelId.trim().length > 0;
 
   const handleSubmit = React.useCallback(() => {
     if (!canConfirm || submitting) return;
@@ -180,12 +169,12 @@ export function ReviewFlowDialog({
           <div className="flex min-w-0 flex-col gap-1.5">
             <span className="typography-meta font-medium text-muted-foreground">{t('chat.modelControls.model')}</span>
             <ModelSelector
-              providerId={execution.providerID}
-              modelId={execution.modelID}
+              providerId={execution.providerId}
+              modelId={execution.modelId}
               className="max-w-[320px] justify-between"
               dropdownPortalToBody
-              onChange={(providerID, modelID) => {
-                setExecution((prev) => ({ ...prev, providerID, modelID, variant: '' }));
+              onChange={(providerId, modelId) => {
+                setExecution((prev) => ({ ...prev, providerId, modelId, variant: '' }));
               }}
             />
           </div>
@@ -203,10 +192,10 @@ export function ReviewFlowDialog({
           <div className="flex flex-col gap-1.5">
             <span className="typography-meta font-medium text-muted-foreground">{t('sessions.scheduledTasks.editor.agent.label')}</span>
             <AgentSelector
-              agentName={execution.agent}
-              filter={agentFilter}
+              agentId={execution.agentId}
+              directory={projectDirectory ?? undefined}
               dropdownPortalToBody
-              onChange={(agent) => setExecution((prev) => ({ ...prev, agent }))}
+              onChange={(agent) => setExecution((prev) => ({ ...prev, agentId: agent }))}
             />
           </div>
         </div>
@@ -223,3 +212,6 @@ export function ReviewFlowDialog({
     </Dialog>
   );
 }
+
+/** Memoized: the composer re-renders on every keystroke, and nothing here depends on the draft text. */
+export const ReviewFlowDialog = React.memo(ReviewFlowDialogView);

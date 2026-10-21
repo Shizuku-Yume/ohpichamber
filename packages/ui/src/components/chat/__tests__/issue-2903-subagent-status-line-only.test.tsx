@@ -1,26 +1,18 @@
 /**
  * Regression coverage for https://github.com/openchamber/openchamber/issues/2903
  *
- * Busy embedded session-chat panels were rendering only the working-status row
- * ("…is running command") because ChatContainer gated message reads on the
- * same visibility flag used to keep the composer from stealing focus. When the
- * iframe booted inactive (or a visibility postMessage was lost),
- * useSessionMessageRecords returned [] while session status stayed busy — so
- * the empty-state branch was skipped and the transcript showed status only.
- *
- * Idle sessions hit the empty state instead (#2892). Same root cause.
- *
- * Fix: embedded session-chat keeps `messagesEnabled={true}` so history stays
- * subscribed while `active={embeddedBackgroundWorkEnabled}` still gates
- * composer focus and background work.
+ * Busy side-panel subagent chats were rendering only the working-status row
+ * ("…is running command") because message reads were gated off while session
+ * status stayed busy — so the empty-state branch was skipped and the
+ * transcript showed status only. Idle sessions hit the empty state instead
+ * (#2892). The chat then ran in an iframe whose visibility handshake could be
+ * lost; it now renders in the app, and this test renders the real sync provider
+ * tree to keep the cold-read gate honest.
  */
 import { describe, expect, mock, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import type { Message, Part } from '@opencode-ai/sdk/v2/client';
+import type { Message } from '@openchamber/agent-contract';
 
 mock.module('sonner', () => ({
   toast: { dismiss: () => undefined, error: () => undefined, info: () => undefined, success: () => undefined },
@@ -28,18 +20,18 @@ mock.module('sonner', () => ({
 mock.module('@/components/ui', () => ({
   toast: { info: () => undefined, error: () => undefined, success: () => undefined },
 }));
-mock.module('@/lib/opencode/client', () => ({
-  opencodeClient: {
+mock.module('@/lib/host-filesystem', () => ({
+  hostFilesystem: {
     getDirectory: () => '/repo',
     setDirectory: () => undefined,
-    getSdkClient: () => ({}),
-    getScopedSdkClient: () => ({}),
   },
 }));
+mock.module('@/lib/api/canonicalClient', () => ({ canonicalClient: {}, CanonicalApiError: Error }));
 mock.module('@/stores/permissionStore', () => ({
-  usePermissionStore: { getState: () => ({ isSessionAutoAccepting: () => false, hydrate: async () => undefined }) },
+  usePermissionStore: { getState: () => ({ getSessionMode: () => 'ask', hydrate: async () => undefined }) },
 }));
 mock.module('@/stores/useConfigStore', () => ({
+  markConfigCatalogStale: () => undefined,
   useConfigStore: {
     getState: () => ({ isConnected: true, hasEverConnected: true, settingsMessageStreamTransport: 'auto' }),
     setState: () => undefined,
@@ -49,16 +41,10 @@ mock.module('@/stores/useTodosPersistStore', () => ({
   useTodosPersistStore: { getState: () => ({ setSessionTodos: () => undefined }) },
 }));
 
-const { useSessionMessageRecords } = await import('@/sync/sync-context');
+const { SyncContext, SyncRuntimeContext, useSessionMessageRecords } = await import('@/sync/sync-context');
 const { ChildStoreManager } = await import('@/sync/child-store');
 const { getSessionMaterializationStatus } = await import('@/sync/materialization');
 import type { State } from '@/sync/types';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const appSource = readFileSync(join(__dirname, '..', '..', '..', 'App.tsx'), 'utf-8');
-const chatContainerSource = readFileSync(join(__dirname, '..', 'ChatContainer.tsx'), 'utf-8');
-const chatViewSource = readFileSync(join(__dirname, '..', '..', 'views', 'ChatView.tsx'), 'utf-8');
-const syncContextSource = readFileSync(join(__dirname, '..', '..', '..', 'sync', 'sync-context.tsx'), 'utf-8');
 
 const SESSION_ID = 'ses_subagent_2903';
 const DIRECTORY = '/repo';
@@ -108,75 +94,42 @@ const installMinimalDom = () => {
   };
 };
 
-const createMessage = (id: string, role: 'user' | 'assistant', created: number): Message => ({
-  id,
-  sessionID: SESSION_ID,
+const createMessage = (messageId: string, role: 'user' | 'assistant', createdAt: number): Message => ({
+  messageId,
+  sessionId: SESSION_ID,
+  turnId: role === 'user' ? messageId : `u_${createdAt - 1}`,
   role,
-  ...(role === 'assistant' ? { parentID: `u_${created}` } : {}),
-  time: { created },
-} as Message);
+  createdAt,
+  parts: [{ type: 'text', partId: `prt_${messageId}`, content: role === 'user' ? `prompt ${createdAt}` : `output ${createdAt}` }],
+});
 
-const createPart = (id: string, messageID: string, text: string): Part => ({
-  id,
-  messageID,
-  sessionID: SESSION_ID,
-  type: 'text',
-  text,
-} as Part);
-
-/** 14-message subagent transcript, matching the issue reproduction fixture. */
 const buildMaterializedSubagentSession = () => {
   const messages: Message[] = [];
-  const part: Record<string, Part[]> = {};
   for (let index = 0; index < 14; index += 1) {
     const created = index + 1;
     const role: 'user' | 'assistant' = created % 2 === 1 ? 'user' : 'assistant';
     const id = role === 'user' ? `u_${created}` : `a_${created}`;
     messages.push(createMessage(id, role, created));
-    part[id] = [createPart(`prt_${id}`, id, role === 'user' ? `prompt ${created}` : `output ${created}`)];
   }
-  return { messages, part };
+  return { messages };
 };
 
-// SAFETY: sync-context.tsx publishes exactly these two keys on globalThis
-// (SYNC_CONTEXT_GLOBAL_KEY / SYNC_RUNTIME_CONTEXT_GLOBAL_KEY) so every module
-// instance shares one context identity; the cast only adds those two optional
-// keys to the global object type, and the guards below re-check presence.
-const syncGlobals = globalThis as {
-  __openchamber_sync_context__?: React.Context<unknown>;
-  __openchamber_sync_runtime_context__?: React.Context<unknown>;
-};
-
-const syncContext = syncGlobals.__openchamber_sync_context__;
-
-if (!syncContext) {
-  throw new Error('sync context was not published on globalThis by @/sync/sync-context');
-}
-
-const syncRuntimeContext = syncGlobals.__openchamber_sync_runtime_context__;
-
-if (!syncRuntimeContext) {
-  throw new Error('sync runtime context was not published on globalThis by @/sync/sync-context');
-}
-
-describe('issue #2903 busy embedded subagent status-line-only', () => {
+describe('issue #2903 busy subagent status-line-only', () => {
   test('cold disabled reads hide a fully materialized 14-message subagent; enabled reads return all 14', async () => {
     const dom = installMinimalDom();
     const root: Root = createRoot(dom.container);
     const childStores = new ChildStoreManager();
     const store = childStores.ensureChild(DIRECTORY, { bootstrap: false });
-    const { messages, part } = buildMaterializedSubagentSession();
+    const { messages } = buildMaterializedSubagentSession();
     store.setState({
       status: 'complete',
       session: [{
-        id: SESSION_ID,
-        title: 'Audit Searchbar implementation',
-        time: { created: 1, updated: 1 },
-        version: '1',
-        directory: DIRECTORY,
-      } as State['session'][number]],
+        sessionId: SESSION_ID, projectId: 'project', workspaceId: 'workspace', displayPath: '.', rootSessionId: SESSION_ID,
+        createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+        metadata: { title: 'Audit Searchbar implementation' }, metadataRevision: '1', archiveRevision: '0',
+      }],
       message: { [SESSION_ID]: messages },
-      part,
+      partOwner: {},
     } as Partial<State>);
 
     expect(getSessionMaterializationStatus(store.getState(), SESSION_ID)).toEqual({
@@ -185,14 +138,14 @@ describe('issue #2903 busy embedded subagent status-line-only', () => {
       missingPartMessageIDs: [],
     });
 
-    const system = { childStores, messageLoader: {}, sdk: {}, runtimeKey: 'test', directory: DIRECTORY };
+    const system = { childStores, messageLoader: {}, client: {}, runtimeKey: 'test', directory: DIRECTORY };
     // Mirrors SyncProvider's own nesting: system context outer, runtime inner.
     // Directory-scoped hooks read the runtime context, so the harness must
     // provide it with a currentDirectory source for the store lookups.
     const runtime = {
       childStores,
       messageLoader: {},
-      sdk: {},
+      client: {},
       runtimeKey: 'test',
       currentDirectory: { get: () => DIRECTORY, subscribe: () => () => undefined },
     };
@@ -210,11 +163,13 @@ describe('issue #2903 busy embedded subagent status-line-only', () => {
       return null;
     };
 
+    const SystemContext = SyncContext as unknown as React.Context<unknown>;
+    const RuntimeContext = SyncRuntimeContext as unknown as React.Context<unknown>;
     const renderHarness = () =>
       React.createElement(
-        syncContext.Provider,
+        SystemContext.Provider,
         { value: system },
-        React.createElement(syncRuntimeContext.Provider, { value: runtime }, React.createElement(Harness)),
+        React.createElement(RuntimeContext.Provider, { value: runtime }, React.createElement(Harness)),
       );
 
     try {
@@ -232,50 +187,5 @@ describe('issue #2903 busy embedded subagent status-line-only', () => {
       await act(async () => root.unmount());
       dom.restore();
     }
-  });
-
-  test('sync gate still returns empty on cold disabled reads', () => {
-    const hookStart = syncContextSource.indexOf('export function useSessionMessageRecords(');
-    const hookBody = syncContextSource.slice(hookStart, hookStart + 1800);
-    expect(hookBody).toContain('if (options?.enabled === false)');
-    expect(hookBody).toContain('EMPTY_SESSION_MESSAGE_RECORDS');
-    expect(hookBody).toContain('snapshotRef.current.sessionID === sessionID ? snapshotRef.current.list');
-  });
-
-  test('embedded session-chat keeps message history enabled while visibility gates active', () => {
-    expect(appSource).toContain('messagesEnabled={true}');
-    expect(appSource).toContain('active={embeddedBackgroundWorkEnabled}');
-    expect(appSource).toContain('const [isEmbeddedVisible, setIsEmbeddedVisible] = React.useState(false);');
-    expect(chatViewSource).toContain('messagesEnabled?: boolean');
-    expect(chatContainerSource).toContain('messagesEnabled: messagesEnabledProp');
-    expect(chatContainerSource).toContain('const messagesEnabled = messagesEnabledProp ?? active;');
-    expect(chatContainerSource).toContain('enabled: messagesEnabled');
-    expect(chatContainerSource.includes('enabled: active')).toBe(false);
-    expect(chatContainerSource).toContain('if (!messagesEnabled || !currentSessionId) return;');
-    expect(chatContainerSource).toContain('void ensureSessionRenderable(currentSessionId);');
-  });
-
-  test('the empty and idle branch leaves the status row to the busy path', () => {
-    // A busy session with no messages yet must fall through to the viewport so
-    // StatusRowContainer is the only thing on screen. The idle branch returns
-    // before it and must not render one of its own. The empty state itself no
-    // longer lives here: the draft surface owns it since the draft transition
-    // animation landed.
-    expect(chatContainerSource).toContain('if (sessionMessages.length === 0 && !sessionIsWorking)');
-    expect(chatContainerSource).toContain('<StatusRowContainer />');
-
-    const emptyIdleGuard = 'if (sessionMessages.length === 0 && !sessionIsWorking)';
-    const emptyIdleReturn = chatContainerSource.indexOf(emptyIdleGuard);
-    expect(emptyIdleReturn).toBeGreaterThan(-1);
-    const emptyIdleBlock = chatContainerSource.slice(
-      emptyIdleReturn,
-      emptyIdleReturn + 1600,
-    );
-    expect(emptyIdleBlock).not.toContain('<StatusRowContainer />');
-  });
-
-  test('visibility handshake remains as defense-in-depth for background work', () => {
-    expect(appSource).toContain('requestEmbeddedSessionVisibility();');
-    expect(appSource).toContain('EMBEDDED_VISIBILITY_UPDATE');
   });
 });

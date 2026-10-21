@@ -1,9 +1,11 @@
-import { createOpencodeClient } from '@opencode-ai/sdk/v2';
+import path from 'node:path';
 import { DateTime } from 'luxon';
 import { CronExpressionParser } from 'cron-parser';
-import { expandSnippets } from '../opencode/snippets.js';
+import { CapturedSendOptionsSchema, PromptRequestSchema, SessionCreateAckSchema } from '@openchamber/agent-contract';
 import { buildGoalIntroText, createSessionGoal } from '../session-goal/create.js';
 import { discoverLoops } from './loops.js';
+import { createExistingSessionTasks, createScheduledTaskContext } from './existing-session.js';
+import { createScheduledPromptExpander } from './file-resource-prompt.js';
 
 const DEFAULT_GLOBAL_CONCURRENCY = 4;
 const DEFAULT_PROJECT_CONCURRENCY = 2;
@@ -70,55 +72,6 @@ const safeErrorMessage = (error, maxLength = 2_000) => {
     return 'Unknown error';
   }
   return trimmed.length > maxLength ? trimmed.slice(0, maxLength) : trimmed;
-};
-
-export const parseScheduledCommandPrompt = (prompt) => {
-  if (typeof prompt !== 'string') {
-    return null;
-  }
-
-  const trimmed = prompt.trim();
-  if (!trimmed.startsWith('/')) {
-    return null;
-  }
-
-  const firstLine = trimmed.split(/\r?\n/, 1)[0] || '';
-  const [head, ...tail] = firstLine.split(/\s+/);
-  const commandName = (head || '').slice(1).trim();
-  if (!commandName) {
-    return null;
-  }
-
-  return {
-    command: commandName,
-    arguments: tail.join(' ').trim(),
-  };
-};
-
-export const expandCommandGoalObjective = (template, argumentsText) => {
-  if (typeof template !== 'string' || !template.trim()) {
-    return null;
-  }
-
-  const rawArguments = String(argumentsText ?? '');
-  if (template.includes('$ARGUMENTS')) {
-    return template.replaceAll('$ARGUMENTS', rawArguments);
-  }
-
-  const positions = [...template.matchAll(/\$(\d+)/g)].map((match) => Number(match[1]));
-  if (positions.length > 0) {
-    const parsedArguments = [...rawArguments.matchAll(/"([^"]*)"|'([^']*)'|(\S+)/g)]
-      .map((match) => match[1] ?? match[2] ?? match[3] ?? '');
-    const lastPosition = Math.max(...positions);
-    return template.replace(/\$(\d+)/g, (_match, value) => {
-      const position = Number(value);
-      return position === lastPosition
-        ? parsedArguments.slice(position - 1).join(' ')
-        : (parsedArguments[position - 1] ?? '');
-    });
-  }
-
-  return rawArguments ? `${template}\n\n${rawArguments}` : template;
 };
 
 export const computeNextRunAt = (task, nowMs = Date.now()) => {
@@ -249,17 +202,46 @@ export const createScheduledTasksRuntime = (deps) => {
   const {
     projectConfigRuntime,
     listProjects,
-    buildOpenCodeUrl,
-    getOpenCodeAuthHeaders,
-    waitForOpenCodeReady,
+    sessionService,
+    service,
+    resolveWorkspaceScope,
+    resolveSessionScope,
+    listWorkspaceScopes,
+    createChatWorkspace,
     emitTaskRunEvent,
     setSessionAutoAccept,
-    sessionKnowledgeRuntime = null,
+    persistSessionGoal = null,
+    chatsScope = null,
+    readSessionDefaults = null,
+    messageQueueRuntime,
+    isSessionArchived,
     logger = console,
     maxGlobalConcurrency = DEFAULT_GLOBAL_CONCURRENCY,
     maxProjectConcurrency = DEFAULT_PROJECT_CONCURRENCY,
     maxRunDurationMs = DEFAULT_MAX_RUN_MS,
   } = deps;
+  const expandPrompt = createScheduledPromptExpander({ service, resolveWorkspaceScope });
+
+  const existingSessionTasks = createExistingSessionTasks({
+    projectConfigRuntime, messageQueueRuntime, sessionService, resolveSessionScope,
+    isSessionArchived, emitTaskRunEvent, expandPrompt,
+  });
+
+  // A pinned task runs on what it stores; one that follows the session
+  // defaults reads them now, so changing a default reaches it on its next run.
+  const resolveRunSelection = async (projectID, task) => {
+    if (task.execution.useDefaults) {
+      if (typeof readSessionDefaults !== 'function') throw new Error('Session defaults are unavailable');
+      return CapturedSendOptionsSchema.parse(await readSessionDefaults(projectID));
+    }
+    return CapturedSendOptionsSchema.parse({
+      providerId: task.execution.providerID ?? null,
+      modelId: task.execution.modelID ?? null,
+      agentId: task.execution.agent ?? null,
+      variant: task.execution.variant ?? null,
+      reasoningEffort: null,
+    });
+  };
 
   let started = false;
   const tasksByProject = new Map();
@@ -364,13 +346,23 @@ export const createScheduledTasksRuntime = (deps) => {
     }
   };
 
+  const isChatsScope = (projectID) => Boolean(chatsScope) && projectID === chatsScope.id;
+
+  const listScopes = async () => {
+    const projects = await listProjects();
+    if (!chatsScope || projects.some((project) => project?.id === chatsScope.id)) {
+      return projects;
+    }
+    return [...projects, { id: chatsScope.id, path: chatsScope.root }];
+  };
+
   const ensureProjectPath = async (projectID) => {
     if (projectPathByID.has(projectID)) {
       return projectPathByID.get(projectID) || null;
     }
 
     try {
-      const projects = await listProjects();
+      const projects = await listScopes();
       const project = projects.find((item) => item?.id === projectID && item?.path);
       if (project?.path) {
         projectPathByID.set(projectID, project.path);
@@ -387,7 +379,9 @@ export const createScheduledTasksRuntime = (deps) => {
     const projectPath = projectPathByID.get(projectID) || null;
 
     let tasks;
-    if (projectPath) {
+    // The chats root is not a repository: user-scope loops already run once
+    // per project, and discovering them here would add one more run each.
+    if (projectPath && !isChatsScope(projectID)) {
       // Reconcile `.agents/loops` definitions with the persisted task list:
       // loop files are authoritative while present, removed files unschedule
       // their task, and runtime state is preserved (see loops.js).
@@ -407,7 +401,7 @@ export const createScheduledTasksRuntime = (deps) => {
   };
 
   const syncAllProjects = async () => {
-    const projects = await listProjects();
+    const projects = await listScopes();
     const activeProjectIDs = new Set();
     projectPathByID.clear();
     for (const project of projects) {
@@ -461,181 +455,60 @@ export const createScheduledTasksRuntime = (deps) => {
     return projectRunning < maxProjectConcurrency;
   };
 
-  const buildPromptAsyncPayload = (task, projectPath, knowledgeText = '') => ({
-    model: {
-      providerID: task.execution.providerID,
-      modelID: task.execution.modelID,
-    },
-    ...(task.execution.agent ? { agent: task.execution.agent } : {}),
-    ...(task.execution.variant ? { variant: task.execution.variant } : {}),
-    parts: [
-      // Standing project context first, so the prompt reads against it. A
-      // scheduled run has no UI to attach this, which is why it is asked for
-      // here rather than assembled by whoever is sending.
-      ...(knowledgeText ? [{ type: 'text', text: knowledgeText, synthetic: true }] : []),
-      {
-        type: 'text',
-        text: expandSnippets(task.execution.prompt, projectPath),
-      },
-      ...(task.execution.goalEnabled
-        ? [{ type: 'text', text: buildGoalIntroText(task.execution.goalTokenBudget), synthetic: true }]
-        : []),
-    ],
-  });
-
-  const runPromptAsync = async ({ baseUrl, authHeaders, sessionID, projectPath, task }) => {
-    // Never allowed to fail the run: a task that executes without its
-    // background is a lesser loss than a task that does not execute.
-    const knowledge = sessionKnowledgeRuntime
-      ? await sessionKnowledgeRuntime.resolvePendingForSession(sessionID, projectPath)
-        .catch(() => ({ text: '', signature: '' }))
-      : { text: '', signature: '' };
-
-    const promptUrl = new URL(`${baseUrl}/session/${encodeURIComponent(sessionID)}/prompt_async`);
-    promptUrl.searchParams.set('directory', projectPath);
-    const response = await fetch(promptUrl.toString(), {
-      method: 'POST',
-      headers: {
-        ...authHeaders,
-        'content-type': 'application/json',
-        accept: 'application/json',
-      },
-      body: JSON.stringify(buildPromptAsyncPayload(task, projectPath, knowledge.text)),
-    });
-
-    if (!response.ok) {
-      const body = await response.text().catch(() => '');
-      throw new Error(`prompt_async failed (${response.status})${body ? `: ${body}` : ''}`);
-    }
-
-    // Recorded only after the prompt is accepted, so a failed dispatch carries
-    // the context again on the next run.
-    if (knowledge.text && sessionKnowledgeRuntime) {
-      await sessionKnowledgeRuntime.recordDelivered(sessionID, projectPath, knowledge.signature)
-        .catch(() => undefined);
-    }
+  const resolveProjectWorkspace = async (projectID, projectPath) => {
+    if (typeof listWorkspaceScopes !== 'function' || typeof resolveWorkspaceScope !== 'function') throw new Error('Workspace scope service is unavailable');
+    const page = await listWorkspaceScopes();
+    if (!page || !Array.isArray(page.items) || !page.errors) throw new Error('Workspace scope enumeration failed');
+    const scopes = await Promise.all(page.items.map(async ({ workspaceId }) => {
+      try { return await resolveWorkspaceScope(workspaceId); }
+      catch { return null; }
+    }));
+    const matches = scopes.filter((scope) => scope?.hostProjectId === projectID && path.resolve(scope.cwd) === path.resolve(projectPath));
+    if (matches.length !== 1) throw new Error('Scheduled project workspace is unavailable or ambiguous');
+    return matches[0];
   };
 
-  const resolveScheduledCommand = async ({ client, projectPath, task }) => {
-    const parsed = parseScheduledCommandPrompt(task?.execution?.prompt);
-    if (!parsed) {
-      return null;
-    }
-
-    let commands = [];
-    try {
-      const response = await client.command.list({ directory: projectPath });
-      commands = Array.isArray(response?.data) ? response.data : [];
-    } catch {
-      return null;
-    }
-
-    const command = commands.find((candidate) => candidate?.name === parsed.command);
-    return command ? { ...parsed, template: command.template } : null;
-  };
-
-  const runScheduledCommand = async ({ client, projectPath, sessionID, task, command }) => {
-    await client.session.command({
-      sessionID,
-      directory: projectPath,
-      command: command.command,
-      arguments: command.arguments,
-      ...(task.execution.agent ? { agent: task.execution.agent } : {}),
-      model: `${task.execution.providerID}/${task.execution.modelID}`,
-      ...(task.execution.variant ? { variant: task.execution.variant } : {}),
-    });
-
-  };
-
-  const runTaskWithWatchdog = async (projectID, task, reason) => {
+  const runTaskWithWatchdog = async (projectID, task, reason, onSessionCreated) => {
     const startedAt = Date.now();
-    const title = formatScheduledSessionTitle(task, startedAt);
-    const projectPath = projectPathByID.get(projectID);
-    if (!projectPath) {
-      throw new Error('project path is unavailable');
-    }
-
-    if (typeof waitForOpenCodeReady === 'function') {
-      await waitForOpenCodeReady(10_000, 250);
-    }
-
-    const baseUrl = buildOpenCodeUrl('/', '').replace(/\/$/, '');
-    const authHeaders = getOpenCodeAuthHeaders();
-    const client = createOpencodeClient({
-      baseUrl,
-      headers: authHeaders,
-    });
-
-    const sessionResponse = await client.session.create({
-      directory: projectPath,
-      title,
-    });
-    const sessionID = sessionResponse?.data?.id;
-    if (!sessionID) {
-      throw new Error('failed to create session');
-    }
-
+    const projectPath = await ensureProjectPath(projectID);
+    if (!projectPath) throw new Error('Project path is unavailable');
+    if (typeof sessionService?.create !== 'function' || typeof sessionService?.send !== 'function') throw new Error('Canonical session service is unavailable');
+    const options = await resolveRunSelection(projectID, task);
+    const workspace = isChatsScope(projectID)
+      ? await (typeof createChatWorkspace === 'function' ? createChatWorkspace() : Promise.reject(new Error('Managed chat workspace service is unavailable')))
+      : await resolveProjectWorkspace(projectID, projectPath);
+    if (!workspace?.workspaceId || !workspace.projectId || !workspace.cwd || workspace.hostProjectId !== projectID) throw new Error('Scheduled workspace is not authorized');
+    let sessionID;
+    let prompt;
     try {
-      emitTaskRunEvent?.({
-        projectID,
-        taskID: task.id,
-        ranAt: startedAt,
-        status: 'running',
-        sessionID,
-      });
-    } catch {
+      prompt = await expandPrompt(workspace, PromptRequestSchema.parse({ input: { text: task.execution.prompt, attachments: [], context: [] }, options }));
+      const created = SessionCreateAckSchema.parse(await sessionService.create({
+        projectId: workspace.projectId, workspaceId: workspace.workspaceId, options: prompt.options,
+        metadata: { title: formatScheduledSessionTitle(task, startedAt) },
+      }));
+      sessionID = created.session.sessionId;
+      if (created.session.projectId !== workspace.projectId || created.session.workspaceId !== workspace.workspaceId) throw new Error('Scheduled session scope mismatch');
+    } catch (error) {
+      if (isChatsScope(projectID)) await chatsScope.discardChatDirectory(workspace.cwd);
+      throw error;
     }
-
-    if (task.execution.permissionAutoAccept && typeof setSessionAutoAccept === 'function') {
-      // Enroll before the prompt goes out so the very first permission request
-      // is already auto-approved. Enrollment failure must not kill the run —
-      // the task still executes, permissions just wait for the user.
-      try {
-        await setSessionAutoAccept(sessionID, true, projectPath);
-      } catch (error) {
-        logger.warn?.('[scheduled-tasks] failed to enable permission auto-accept for session', sessionID, error?.message ?? error);
-      }
+    await onSessionCreated?.(sessionID);
+    emitTaskRunEvent?.({ projectID, taskID: task.id, ranAt: startedAt, status: 'running', sessionID });
+    if (task.execution.permissionAutoAccept) {
+      if (typeof setSessionAutoAccept !== 'function') throw new Error('Permission policy service is unavailable');
+      try { await setSessionAutoAccept(sessionID, true, workspace.cwd); }
+      catch (error) { logger.warn?.('[scheduled-tasks] permission auto-accept enrollment failed; approvals remain manual', sessionID, error?.message ?? error); }
     }
-
-    const scheduledCommand = await resolveScheduledCommand({ client, projectPath, task });
-
+    const context = [createScheduledTaskContext({ projectId: projectID, taskId: task.id, sessionId: sessionID, workspaceId: workspace.workspaceId, mode: 'new', triggeredAt: startedAt })];
     if (task.execution.goalEnabled) {
-      const commandObjective = scheduledCommand
-        ? expandCommandGoalObjective(scheduledCommand.template, scheduledCommand.arguments)
-        : null;
-      await createSessionGoal({
-        baseUrl,
-        authHeaders,
-        sessionID,
-        directory: projectPath,
-        objective: commandObjective ?? expandSnippets(task.execution.prompt, projectPath),
-        tokenBudget: task.execution.goalTokenBudget,
-        providerID: task.execution.providerID,
-        modelID: task.execution.modelID,
-        onWarning: (message, error) => console.warn(`[scheduled-tasks] ${message}:`, error?.message || error),
-      });
+      await createSessionGoal({ persistSessionGoal, sessionID, scope: workspace, objective: prompt.input.text,
+        tokenBudget: task.execution.goalTokenBudget, providerID: prompt.options.providerId ?? undefined, modelID: prompt.options.modelId ?? undefined });
+      context.push({ kind: 'synthetic', text: buildGoalIntroText(task.execution.goalTokenBudget) });
     }
-
-    if (scheduledCommand) {
-      await runScheduledCommand({ client, projectPath, sessionID, task, command: scheduledCommand });
-    } else {
-      await runPromptAsync({
-        baseUrl,
-        authHeaders,
-        sessionID,
-        projectPath,
-        task,
-      });
-    }
-
+    const result = await sessionService.send(sessionID, PromptRequestSchema.parse({ input: { ...prompt.input, context }, options: prompt.options }));
+    if (!result?.run || result.run.sessionId !== sessionID) throw new Error('Scheduled prompt acknowledgement is invalid');
     const finishedAt = Date.now();
-    return {
-      sessionID,
-      durationMs: Math.max(0, finishedAt - startedAt),
-      reason,
-      startedAt,
-      finishedAt,
-    };
+    return { sessionID, directory: workspace.cwd, durationMs: Math.max(0, finishedAt - startedAt), reason, startedAt, finishedAt };
   };
 
   const releaseRunningSlot = (projectID, taskKey) => {
@@ -690,6 +563,27 @@ export const createScheduledTasksRuntime = (deps) => {
       return { ok: false, skipped: true };
     }
 
+    if (task.targetSessionId) {
+      if (!existingSessionTasks) return { ok: false, error: 'Existing-session scheduling is unavailable', statusCode: 503 };
+      const nextRunAt = computeNextRunAt(task, Math.max(Date.now(), (scheduledFor ?? 0) + 1));
+      const result = await existingSessionTasks.run(projectID, task, reason, scheduledFor, nextRunAt);
+      if (reason === 'scheduled') {
+        if (task.schedule.kind === 'once' && result.task && !result.skipped) {
+          try {
+            const consumed = await projectConfigRuntime.upsertScheduledTask(projectID, { ...result.task, enabled: false });
+            updateInMemoryTask(projectID, consumed.task);
+          } catch (consumeError) {
+            logger.warn?.('[ScheduledTasks] failed to consume one-time task', {
+              projectID,
+              taskID,
+              error: safeErrorMessage(consumeError),
+            });
+          }
+        } else scheduleFutureRun(projectID, taskID, nextRunAt);
+      }
+      return result;
+    }
+
     const taskKey = buildTaskKey(projectID, taskID);
     if (runningTaskKeys.has(taskKey)) {
       return { ok: false, running: true };
@@ -719,6 +613,8 @@ export const createScheduledTasksRuntime = (deps) => {
           lastRunAt: runStartedAt,
           lastStatus: 'running',
           lastError: undefined,
+          // Set again once this run creates its session.
+          lastSessionId: undefined,
           updatedAt: runStartedAt,
           // Always set nextRunAt so a past once-slot is cleared when there is
           // no following occurrence (omitting the key would leave the past value).
@@ -745,18 +641,7 @@ export const createScheduledTasksRuntime = (deps) => {
 
         let claimResult;
         try {
-          if (typeof projectConfigRuntime.updateScheduledTaskStateIf === 'function') {
-            claimResult = await projectConfigRuntime.updateScheduledTaskStateIf(
-              projectID,
-              taskID,
-              canClaimOccurrence,
-              claimPatch,
-            );
-          } else {
-            // Fallback for older test doubles: unconditional update (single-instance only).
-            claimResult = await projectConfigRuntime.updateScheduledTaskState(projectID, taskID, claimPatch);
-            claimResult = { ...claimResult, updated: Boolean(claimResult?.task) };
-          }
+          claimResult = await projectConfigRuntime.updateScheduledTaskStateIf(projectID, taskID, canClaimOccurrence, claimPatch);
         } catch (claimError) {
           const message = safeErrorMessage(claimError);
           logger.warn?.('[ScheduledTasks] occurrence claim failed', {
@@ -774,35 +659,12 @@ export const createScheduledTasksRuntime = (deps) => {
             updatedAt: Date.now(),
           };
           try {
-            if (typeof projectConfigRuntime.updateScheduledTaskStateIf === 'function') {
-              const recorded = await projectConfigRuntime.updateScheduledTaskStateIf(
-                projectID,
-                taskID,
-                (candidate) => {
-                  const lastScheduledFor = candidate.state?.lastScheduledFor;
-                  if (
-                    Number.isFinite(lastScheduledFor)
-                    && Math.abs(lastScheduledFor - scheduledFor) <= TASK_DUE_SLACK_MS
-                  ) {
-                    return false;
-                  }
-                  return true;
-                },
-                claimFailurePatch,
-              );
-              if (recorded.task) {
-                updateInMemoryTask(projectID, recorded.task);
-              }
-            } else {
-              const recorded = await projectConfigRuntime.updateScheduledTaskState(
-                projectID,
-                taskID,
-                claimFailurePatch,
-              );
-              if (recorded.task) {
-                updateInMemoryTask(projectID, recorded.task);
-              }
-            }
+            const recorded = await projectConfigRuntime.updateScheduledTaskStateIf(
+              projectID, taskID,
+              (candidate) => !Number.isFinite(candidate.state?.lastScheduledFor) || Math.abs(candidate.state.lastScheduledFor - scheduledFor) > TASK_DUE_SLACK_MS,
+              claimFailurePatch,
+            );
+            if (recorded.task) updateInMemoryTask(projectID, recorded.task);
           } catch {
             updateInMemoryTask(projectID, {
               ...task,
@@ -839,6 +701,7 @@ export const createScheduledTasksRuntime = (deps) => {
             lastRunAt: runStartedAt,
             lastStatus: 'running',
             lastError: undefined,
+            lastSessionId: undefined,
             updatedAt: runStartedAt,
           });
           if (startResult.task) {
@@ -857,11 +720,30 @@ export const createScheduledTasksRuntime = (deps) => {
 
       let status = 'success';
       let sessionID;
+      let sessionDirectory;
       let durationMs = 0;
       let errorMessage;
+      // Known as soon as the run creates its session, so a run that fails or
+      // times out afterwards still points at the session it left behind.
+      let createdSessionID;
+      const recordCreatedSession = async (id) => {
+        createdSessionID = id;
+        try {
+          const recorded = await projectConfigRuntime.updateScheduledTaskState(projectID, taskID, { lastSessionId: id });
+          if (recorded.task) {
+            updateInMemoryTask(projectID, recorded.task);
+          }
+        } catch (error) {
+          logger.warn?.('[ScheduledTasks] failed to record the run session', {
+            projectID,
+            taskID,
+            error: safeErrorMessage(error),
+          });
+        }
+      };
 
       try {
-        const runPromise = runTaskWithWatchdog(projectID, task, reason);
+        const runPromise = runTaskWithWatchdog(projectID, task, reason, recordCreatedSession);
         let timeoutID;
         const timeoutPromise = new Promise((_, reject) => {
           timeoutID = setTimeout(() => {
@@ -875,6 +757,7 @@ export const createScheduledTasksRuntime = (deps) => {
           }
         });
         sessionID = result.sessionID;
+        sessionDirectory = result.directory;
         durationMs = result.durationMs;
         status = 'success';
         logger.info?.(
@@ -922,7 +805,7 @@ export const createScheduledTasksRuntime = (deps) => {
         lastStatus: status,
         lastDurationMs: durationMs,
         lastError: status === 'error' ? errorMessage : undefined,
-        lastSessionId: status === 'success' ? sessionID : undefined,
+        lastSessionId: sessionID ?? createdSessionID,
         nextRunAt: Number.isFinite(nextRunAt) ? nextRunAt : undefined,
         updatedAt: finishedAt,
       };
@@ -959,7 +842,7 @@ export const createScheduledTasksRuntime = (deps) => {
             lastStatus: status,
             lastDurationMs: durationMs,
             lastError: status === 'error' ? errorMessage : undefined,
-            lastSessionId: status === 'success' ? sessionID : undefined,
+            lastSessionId: sessionID ?? createdSessionID,
             nextRunAt: Number.isFinite(nextRunAt) ? nextRunAt : undefined,
             updatedAt: finishedAt,
           },
@@ -993,6 +876,7 @@ export const createScheduledTasksRuntime = (deps) => {
           ok: status === 'success',
           status,
           sessionID,
+          directory: sessionDirectory,
           task: stateResult.task || recoveredTask,
           error: status === 'error' ? errorMessage : undefined,
           persistError: message,
@@ -1015,6 +899,7 @@ export const createScheduledTasksRuntime = (deps) => {
         ok: status === 'success',
         status,
         sessionID,
+        directory: sessionDirectory,
         task: stateResult.task || null,
         error: errorMessage,
       };
@@ -1128,5 +1013,9 @@ export const createScheduledTasksRuntime = (deps) => {
     syncProject,
     runNow,
     getStatus,
+    validateTarget: (projectID, sessionID) => existingSessionTasks.validateTarget(projectID, sessionID),
+    beforeScheduledTaskSend: (scope, capture) => existingSessionTasks.beforeSend(scope, capture),
+    onScheduledTaskResult: (provenance, status, error) => existingSessionTasks.result(provenance, status, error),
+    cancelWaitingPrompt: (projectID, taskID) => existingSessionTasks?.cancel(projectID, taskID),
   };
 };

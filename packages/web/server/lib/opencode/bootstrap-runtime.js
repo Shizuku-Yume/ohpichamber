@@ -1,3 +1,6 @@
+import { registerNotificationEmitRoutes } from '../notifications/emit-route.js';
+import { registerCanonicalHostRoutes } from '../host/canonical-routes.js';
+
 export const createBootstrapRuntime = (dependencies) => {
   const {
     createUiAuth,
@@ -7,7 +10,6 @@ export const createBootstrapRuntime = (dependencies) => {
     registerTtsRoutes,
     registerNotificationRoutes,
     registerOpenChamberRoutes,
-    registerAgentToolRoutes = () => {},
     express,
   } = dependencies;
 
@@ -35,6 +37,9 @@ export const createBootstrapRuntime = (dependencies) => {
       readSettingsFromDiskMigrated,
       normalizeTunnelSessionTtlMs,
       sayTTSCapability,
+      ttsService,
+      resolveTtsSelection,
+      canonicalAgentRoutes,
       ensurePushInitialized,
       ensureGlobalWatcherStarted,
       getOrCreateVapidKeys,
@@ -59,11 +64,11 @@ export const createBootstrapRuntime = (dependencies) => {
       openchamberDataDir,
       modelsDevApiUrl,
       modelsMetadataCacheTtl,
-      fetchFreeZenModels,
-      getCachedZenModels,
       setAutoAcceptSession,
-      agentToolRuntime,
+      pluginNotificationEmitter,
       desktopUpdater,
+      skipBodyParsing,
+      isRequestOriginAllowed,
     } = options;
 
     const uiAuthController = createUiAuth({
@@ -90,9 +95,21 @@ export const createBootstrapRuntime = (dependencies) => {
       uiAuthController,
     });
 
-    registerCommonRequestMiddleware(app, { express, verboseRequestLogs });
+    registerCommonRequestMiddleware(app, { express, verboseRequestLogs, skipBodyParsing });
 
-    registerAgentToolRoutes(app, { express, agentToolRuntime });
+    registerCanonicalHostRoutes(app, {
+      ...canonicalAgentRoutes,
+      express,
+      uiAuthController,
+      tunnelAuthController,
+      isRequestOriginAllowed,
+    });
+
+
+    const notificationEmitRoutes = registerNotificationEmitRoutes(app, {
+      express,
+      emitter: pluginNotificationEmitter,
+    });
 
     registerAuthAndAccessRoutes(app, {
       express,
@@ -110,7 +127,9 @@ export const createBootstrapRuntime = (dependencies) => {
       normalizeTunnelSessionTtlMs,
     });
 
-    registerTtsRoutes(app, { sayTTSCapability });
+    notificationEmitRoutes.registerApiRoute();
+
+    registerTtsRoutes(app, { sayTTSCapability, ttsService, resolveTtsSelection });
 
     registerNotificationRoutes(app, {
       uiAuthController,
@@ -153,8 +172,6 @@ export const createBootstrapRuntime = (dependencies) => {
       modelsDevApiUrl,
       modelsMetadataCacheTtl,
       readSettingsFromDiskMigrated,
-      fetchFreeZenModels,
-      getCachedZenModels,
       desktopUpdater,
     });
 

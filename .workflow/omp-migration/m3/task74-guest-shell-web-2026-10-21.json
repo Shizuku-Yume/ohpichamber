@@ -1,0 +1,185 @@
+{
+ "schemaVersion": 1,
+ "task": "omp-through-m3/current-web-guest-shell-smoke",
+ "status": "passed-current-artifact-guest-shell-read-stop",
+ "observedAt": "2026-10-21T12:15:42.126Z",
+ "source": {
+  "worktree": "/home/shizuku/Project/ohpichamber-worktrees/15-close-receipt",
+  "branch": "omp-through-m3/15-close-receipt-20261021",
+  "head": "888cb28a0fbd22320cd1a10772223825eb6093d7",
+  "sourceEqualsGateCommit": "git diff 1dbe654c0..HEAD excluding .workflow is empty; HEAD advanced only by docs commits",
+  "webDistIndexSha256": "8bcdfd029600a4611ffb777bfb97ffa80132160651e7717ecf47aaacca1bbd2f",
+  "agentServiceDistSha256": "8a5a4d84bd463f34d1ff8e5f33b357ae0e14d4b4de5410ba33826988ecccf78f",
+  "agentServiceWorkerDistSha256": "eeb2a1c194e62450504bcda042fdc1e8134c4637f9744447b5ab4b9966e059ec",
+  "dirty": "none in repository source; smoke scripts and receipt live under /tmp/ohpi-task74/m3-smoke"
+ },
+ "runtime": {
+  "surface": "Web (Chrome headless), current built dist",
+  "webHost": "http://127.0.0.1:3230",
+  "isolatedHome": "/tmp/ohpi-task74/m3-smoke/home",
+  "isolatedDataDir": "/tmp/ohpi-task74/m3-smoke/data",
+  "chats": "/tmp/ohpi-task74/m3-smoke/chats/work",
+  "browser": "google-chrome headless, CDP 9341 (CDP_PORT=9341)",
+  "fixtureProvider": "http://127.0.0.1:4630/v1 model t15fixture/t15-fixture",
+  "guestFixture": "/tmp/ohpi-task74-guest (panel id t15-guest)",
+  "ports": "Host 3230, fixture 4630, Chrome CDP 9341; all were free before start and are stopped after capture"
+ },
+ "project": {
+  "registeredDirectory": "/tmp/ohpi-task74/m3-smoke/chats/work",
+  "guestProjectId": "path_L3RtcC9vaHBpLXRhc2s3NC9tMy1zbW9rZS9jaGF0cy93b3Jr",
+  "canonicalProjectId": "pro_0c05b779-2d62-48f4-8eb7-5f5f670e0ab7",
+  "workspaceId": "ws_955fa4b9-c4af-4146-b1a6-b86763fc47f5",
+  "sessionId": "37612532-0c6e-4f9c-8b03-1fab8b37c13b"
+ },
+ "guest": {
+  "id": "t15-guest",
+  "grants": [
+   "sessions",
+   "shells"
+  ],
+  "readyMarker": "T15-GUEST-READY"
+ },
+ "scenario": {
+  "runId": "f8dfdf7e-efa4-457c-9d1a-60534a05a555",
+  "approvalId": "e9231fa6-86ba-4143-8075-f6935e000fc3",
+  "approvalReply": {
+   "status": 200,
+   "decision": "approve"
+  },
+  "job": {
+   "jobId": "native:[\"Main\",\"bg_1\"]",
+   "sessionId": "37612532-0c6e-4f9c-8b03-1fab8b37c13b",
+   "epoch": "b65ee032-63eb-4e74-aa52-d3da79bf74a1",
+   "workerGeneration": "28bbd961-24a6-49fc-b3c1-8e0d58f67c93",
+   "workspaceId": "ws_955fa4b9-c4af-4146-b1a6-b86763fc47f5",
+   "projectId": "pro_0c05b779-2d62-48f4-8eb7-5f5f670e0ab7",
+   "command": "for i in $(seq 1 300); do echo t15-line-$i; sleep 1; done",
+   "background": true,
+   "startedAt": 1792584949536,
+   "outputCursor": "11",
+   "status": "running"
+  },
+  "guestShellOutput": {
+   "cursor": 219,
+   "output": "t15-line-1\nt15-line-2\nt15-line-3\nt15-line-4\nt15-line-5\nt15-line-6\nt15-line-7\nt15-line-8\nt15-line-9\nt15-line-10\nt15-line-11\nt15-line-12\nt15-line-13\nt15-line-14\nt15-line-15\nt15-line-16\nt15-line-17\nt15-line-18\nt15-line-19\n",
+   "skipped": false
+  },
+  "guestStopResult": {
+   "stopped": true
+  },
+  "guestErrors": {
+   "shellOutputError": null,
+   "stopError": null
+  },
+  "canonicalAfterStop": {
+   "status": 200,
+   "running": [],
+   "ended": [
+    {
+     "jobId": "native:[\"Main\",\"bg_1\"]",
+     "reason": "stopped"
+    }
+   ]
+  },
+  "timing": {
+   "panelOpenedToGuestReplyMs": 2762,
+   "approvedToStopMs": 830,
+   "firstReadMs": 0,
+   "readAttempts": [],
+   "hostShellOutputApi": [
+    {
+     "method": "GET",
+     "url": "/api/agent/v1/sessions/37612532-0c6e-4f9c-8b03-1fab8b37c13b/shell/jobs/native%3A%5B%22Main%22%2C%22bg_1%22%5D/output?epoch=b65ee032-63eb-4e74-aa52-d3da79bf74a1&workerGeneration=28bbd961-24a6-49fc-b3c1-8e0d58f67c93&cursor=0&tailBytes=2048",
+     "start": 83262.249517,
+     "status": 200,
+     "end": 83264.29943,
+     "durationMs": 2050
+    }
+   ],
+   "hostShellStopApi": [
+    {
+     "method": "POST",
+     "url": "/api/agent/v1/sessions/37612532-0c6e-4f9c-8b03-1fab8b37c13b/shell/jobs/native%3A%5B%22Main%22%2C%22bg_1%22%5D/stop",
+     "start": 83264.301229,
+     "status": 200,
+     "end": 83265.129007,
+     "durationMs": 828
+    }
+   ]
+  },
+  "network": [
+   {
+    "method": "GET",
+    "url": "/api/agent/v1/workspaces/ws_955fa4b9-c4af-4146-b1a6-b86763fc47f5/shell/jobs",
+    "start": 83241.150292,
+    "status": 200,
+    "end": 83241.160501,
+    "durationMs": 10
+   },
+   {
+    "method": "GET",
+    "url": "/api/agent/v1/workspaces/ws_955fa4b9-c4af-4146-b1a6-b86763fc47f5/shell/jobs",
+    "start": 83241.395153,
+    "status": 200,
+    "end": 83245.484437,
+    "durationMs": 4089
+   },
+   {
+    "method": "GET",
+    "url": "/api/agent/v1/workspaces/ws_955fa4b9-c4af-4146-b1a6-b86763fc47f5/shell/jobs",
+    "start": 83249.222708,
+    "status": 200,
+    "end": 83249.231239,
+    "durationMs": 9
+   },
+   {
+    "method": "GET",
+    "url": "/api/agent/v1/workspaces/ws_955fa4b9-c4af-4146-b1a6-b86763fc47f5/shell/jobs",
+    "start": 83252.016237,
+    "status": 200,
+    "end": 83256.783382,
+    "durationMs": 4767
+   },
+   {
+    "method": "GET",
+    "url": "/api/agent/v1/sessions/37612532-0c6e-4f9c-8b03-1fab8b37c13b/shell/jobs/native%3A%5B%22Main%22%2C%22bg_1%22%5D/output?epoch=b65ee032-63eb-4e74-aa52-d3da79bf74a1&workerGeneration=28bbd961-24a6-49fc-b3c1-8e0d58f67c93&cursor=0&tailBytes=2048",
+    "start": 83262.249517,
+    "status": 200,
+    "end": 83264.29943,
+    "durationMs": 2050
+   },
+   {
+    "method": "POST",
+    "url": "/api/agent/v1/sessions/37612532-0c6e-4f9c-8b03-1fab8b37c13b/shell/jobs/native%3A%5B%22Main%22%2C%22bg_1%22%5D/stop",
+    "start": 83264.301229,
+    "status": 200,
+    "end": 83265.129007,
+    "durationMs": 828
+   }
+  ],
+  "guestPanelText": "T15 Guest Shell\nboot: \"T15-GUEST-BOOT\"\nprojects: [{\"id\":\"path_L3RtcC9vaHBpLXRhc2s3NC9tMy1zbW9rZS9jaGF0cy93b3Jr\",\"name\":\"work\",\"directory\":\"/tmp/ohpi-task74/m3-smoke/chats/work\"}]\nsessions: [{\"id\":\"37612532-0c6e-4f9c-8b03-1fab8b37c13b\",\"title\":\"T15-SHELL session\",\"parentId\":null,\"items\":[]}]\nshells: {\"shells\":[{\"id\":\"native:[\\\"Main\\\",\\\"bg_1\\\"]\",\"sessionID\":\"37612532-0c6e-4f9c-8b03-1fab8b37c13b\",\"command\":\"for i in $(seq 1 300); do echo t15-line-$i; sleep 1; done\",\"startedAt\":1792584949536,\"background\":true}],\"ended\":[]}\nliveSessions: [{\"title\":\"T15-SHELL session\",\"items\":[]}]\nready: \"T15-GUEST-READY\"\nshellOutput: {\"cursor\":219,\"output\":\"t15-line-1\\nt15-line-2\\nt15-line-3\\nt15-line-4\\nt15-line-5\\nt15-line-6\\nt15-line-7\\nt15-line-8\\nt15-line-9\\nt15-line-10\\nt15-line-11\\nt15-line-12\\nt15-line-13\\nt15-line-14\\nt15-line-15\\nt15-line-16\\nt15-line-17\\nt15-line-18\\nt15-line-19\\n\",\"skipped\":false}\nshellStop: {\"stopped\":true}"
+ },
+ "screenshots": {
+  "01-guest-ready.png": "3458bb7248290c3482686da549e98bcfa56239bfdc8b4a8e612986a48f66a3e8",
+  "02-guest-shell-output-stop.png": "1d5bba7fb61e3ec1770ecdd21147a0afab6b9afb3c45ca45524efb034bd35233"
+ },
+ "commands": [
+  "HOME=.../home XDG_CONFIG_HOME=.../home/.config OPENCHAMBER_DATA_DIR=.../data OPENCHAMBER_UI_PASSWORD=... OPENCHAMBER_RELAY_HOST=off OPENCHAMBER_ALLOW_DEV_ORIGINS=1 bun server/index.js --port 3230",
+  "bun /tmp/ohpi-task74/fixture.mjs",
+  "google-chrome --headless=new --remote-debugging-port=9341 --user-data-dir=.../chrome --no-sandbox --disable-gpu --window-size=1600,1000 about:blank",
+  "bun /tmp/ohpi-task74/m3-smoke/setup.mjs",
+  "CDP_PORT=9341 bun /tmp/ohpi-task74/m3-smoke/run.mjs"
+ ],
+ "notes": [
+  "Provider configuration request uses the current strict schema: models is a sibling of configuration, not nested in it.",
+  "cdp.mjs defaults to 9340; CDP_PORT=9341 is required so ensurePage and the guest iframe target read use the same CDP endpoint.",
+  "This is a current-artifact observation at 888cb28a0 / web dist 8bcdfd02..., distinct from the prior source-compatible Task74 receipt at 0152a0718 / dist d2c71cae....",
+  "Guest Shell read/stop passed through the Guest UI bridge; no direct canonical shell route, grant bypass or raised timeout was used."
+ ],
+ "limits": [
+  "Web only; packaged Electron was not run for this path.",
+  "One project/session and one background shell; no worktree session or guest item links were re-observed.",
+  "Hosted and Capacitor Guest surfaces remain unsupported as before."
+ ],
+ "cleanup": "Host 3230, fixture 4630 and Chrome CDP 9341 are stopped; isolated HOME/data/chats/chrome/evidence retained under /tmp/ohpi-task74/m3-smoke."
+}

@@ -1,4 +1,4 @@
-import { opencodeClient } from '@/lib/opencode/client';
+import { hostFilesystem } from '@/lib/host-filesystem';
 import { normalizePath } from '@/lib/pathNormalization';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { getRuntimeKey } from '@/lib/runtime-switch';
@@ -7,6 +7,7 @@ export const CHAT_DRAFT_PROJECT_ID = 'openchamber:chats';
 type ChatRoots = { configured: string; legacy: string; canonicalConfigured: string; canonicalLegacy: string };
 const chatsRootByRuntime = new Map<string, Promise<ChatRoots>>();
 const chatsRootCacheByRuntime = new Map<string, ChatRoots>();
+const chatsRootListeners = new Set<() => void>();
 
 const joinPath = (base: string, ...parts: string[]): string =>
   [base.replace(/[\\/]+$/, ''), ...parts].join('/');
@@ -46,15 +47,26 @@ export function isChatDirectoryForHome(directory: string | null | undefined, hom
   return Boolean(normalized && legacy && isWithinRoot(normalized, legacy));
 }
 
-export function getChatsRootForHome(home: string | null | undefined): string | null {
-  return cachedRoots()?.configured ?? legacyRootForHome(home);
+/**
+ * The chats root the server named, or null until it has. Never a guess: with
+ * OPENCHAMBER_DATA_DIR the root is outside the home, and the home's legacy
+ * folder does not exist, so a guessed root failed to open.
+ */
+export function getChatsRoot(): string | null {
+  return cachedRoots()?.configured ?? null;
+}
+
+/** Notifies once the server names a chats root for a runtime. */
+export function subscribeChatsRoot(listener: () => void): () => void {
+  chatsRootListeners.add(listener);
+  return () => chatsRootListeners.delete(listener);
 }
 
 async function getChatRoots(): Promise<ChatRoots> {
   const runtimeKey = getRuntimeKey();
   const existing = chatsRootByRuntime.get(runtimeKey);
   if (existing) return existing;
-  const pending = opencodeClient.getFilesystemHomeInfo().then(({ home, chatsRoot, canonicalChatsRoot, canonicalLegacyChatsRoot }) => {
+  const pending = hostFilesystem.getFilesystemHomeInfo().then(({ home, chatsRoot, canonicalChatsRoot, canonicalLegacyChatsRoot }) => {
     const legacy = legacyRootForHome(home);
     const configured = normalizePath(chatsRoot) ?? legacy;
     if (!legacy || !configured) throw new Error('Unable to resolve chat directories');
@@ -65,6 +77,7 @@ async function getChatRoots(): Promise<ChatRoots> {
       canonicalLegacy: normalizePath(canonicalLegacyChatsRoot) ?? legacy,
     };
     chatsRootCacheByRuntime.set(runtimeKey, roots);
+    for (const listener of chatsRootListeners) listener();
     return roots;
   }).catch((error) => {
     chatsRootByRuntime.delete(runtimeKey);
@@ -79,6 +92,15 @@ export async function ensureChatsRootDirectory(): Promise<void> {
   await getChatRoots();
 }
 
+/**
+ * The chats root from the server's answer itself. The cache behind
+ * `getChatsRoot` is keyed by the runtime key at request time, which can still
+ * change while the page starts up.
+ */
+export async function resolveChatsRootDirectory(): Promise<string> {
+  return (await getChatRoots()).configured;
+}
+
 export function warmChatsRootDirectory(): Promise<void> {
   return ensureChatsRootDirectory().catch(() => undefined);
 }
@@ -90,7 +112,7 @@ export async function createChatDirectory(now = new Date()): Promise<string> {
   const date = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
   const id = globalThis.crypto?.randomUUID?.() ?? `${now.getTime()}-${Math.random().toString(36).slice(2)}`;
   const directory = joinPath(roots.configured, date, `session-${id}`);
-  await opencodeClient.createDirectory(directory);
+  await hostFilesystem.createDirectory(directory);
   return directory;
 }
 

@@ -5,94 +5,71 @@
  * session-actions) use them to read child-store domain data without hooks.
  */
 
-import type { Config, OpencodeClient } from "@opencode-ai/sdk/v2/client"
+import type { Part } from "@openchamber/agent-contract"
+import { getRuntimeKey } from "@/lib/runtime-switch"
 import type { ChildStoreManager } from "./child-store"
-import { getSessionMaterializationStatus } from "./materialization"
+import { getSessionMaterializationStatus, type SessionMaterializationStatus } from "./materialization"
 import type { State } from "./types"
 
 let _childStores: ChildStoreManager | null = null
 let _directory: string = ""
-let _registerSessionDirectory: ((sessionID: string, directory: string) => void) | null = null
-const configListeners = new Set<(directory: string, config: Config) => void>()
+let boundRuntimeKey = ""
+const registeredSessionDirectories = new Map<string, string>()
 let cachedSessionManager: ChildStoreManager | null = null
 let cachedSessionSlices = new Map<string, State["session"]>()
 let cachedSessionsById = new Map<string, State["session"][number]>()
 let cachedSessionDirectoryById = new Map<string, string>()
 
 export function setSyncRefs(
-  _sdk: OpencodeClient,
   childStores: ChildStoreManager,
   directory: string,
-  registerSessionDirectory?: (sessionID: string, directory: string) => void,
 ) {
-  _childStores = childStores
-  if (cachedSessionManager !== childStores) {
+  if (_childStores !== childStores) {
+    registeredSessionDirectories.clear()
     cachedSessionManager = null
     cachedSessionSlices = new Map()
     cachedSessionsById = new Map()
     cachedSessionDirectoryById = new Map()
   }
+  _childStores = childStores
+  boundRuntimeKey = getRuntimeKey()
   _directory = directory
-  if (registerSessionDirectory) {
-    _registerSessionDirectory = registerSessionDirectory
-  }
 }
 
-/** Pre-register a session→directory mapping in the routing index.
- *  Called from session-actions when creating sessions so SSE events
- *  arriving before session.created can be routed correctly. */
-export function registerSessionDirectory(sessionID: string, directory: string) {
-  _registerSessionDirectory?.(sessionID, directory)
+/** Remember explicit session routing before directory discovery catches up. */
+export function registerSessionDirectory(sessionId: string, directory: string) {
+  if (sessionId && directory) registeredSessionDirectories.set(sessionId, directory)
 }
 
 export function getSyncChildStores(): ChildStoreManager {
-  if (!_childStores) throw new Error("ChildStoreManager not initialized — is SyncProvider mounted?")
+  if (!_childStores || boundRuntimeKey !== getRuntimeKey()) throw new Error("ChildStoreManager not initialized for this runtime — is SyncProvider mounted?")
   return _childStores
 }
 
 /** Read current directory's child store state. Returns undefined if not bootstrapped. */
 export function getDirectoryState(directory?: string): State | undefined {
   const stores = _childStores
-  if (!stores) return undefined
+  if (!stores || boundRuntimeKey !== getRuntimeKey()) return undefined
   const dir = directory || _directory
   if (!dir) return undefined
   return stores.getState(dir)
 }
 
-/** Read resolved OpenCode config from a directory child store, if bootstrapped. */
-export function getSyncConfig(directory?: string): Config | undefined {
-  const config = getDirectoryState(directory)?.config
-  return config && Object.keys(config).length > 0 ? config : undefined
-}
-
-export function subscribeToSyncConfigChanges(listener: (directory: string, config: Config) => void): () => void {
-  configListeners.add(listener)
-  return () => {
-    configListeners.delete(listener)
-  }
-}
-
-export function emitSyncConfigChanged(directory: string, config: Config): void {
-  if (!directory) return
-  for (const listener of configListeners) {
-    listener(directory, config)
-  }
-}
 
 /** Read sessions from current directory's child store */
-export function getSyncSessions(directory?: string) {
+export function getSyncSessions(directory?: string): State["session"] {
   return getDirectoryState(directory)?.session ?? []
 }
 
 /** Read sessions across all initialized child stores */
-export function getAllSyncSessions() {
+export function getAllSyncSessions(): State["session"] {
   return Array.from(getAllSyncSessionMap().values())
 }
 
 /** Read the cached cross-directory session index, rebuilding only when a session slice changes. */
 export function getAllSyncSessionMap(): ReadonlyMap<string, State["session"][number]> {
   const stores = _childStores
-  if (!stores) return cachedSessionsById
+  if (!stores || boundRuntimeKey !== getRuntimeKey()) return new Map()
 
   let changed = cachedSessionManager !== stores || cachedSessionSlices.size !== stores.children.size
   for (const [directory, store] of stores.children) {
@@ -110,9 +87,9 @@ export function getAllSyncSessionMap(): ReadonlyMap<string, State["session"][num
     const sessions = store.getState().session
     nextSlices.set(directory, sessions)
     for (const session of sessions) {
-      if (!session?.id) continue
-      nextSessionsById.set(session.id, session)
-      nextDirectoriesById.set(session.id, directory)
+      if (!session?.sessionId) continue
+      nextSessionsById.set(session.sessionId, session)
+      nextDirectoriesById.set(session.sessionId, directory)
     }
   }
   cachedSessionManager = stores
@@ -122,41 +99,33 @@ export function getAllSyncSessionMap(): ReadonlyMap<string, State["session"][num
   return cachedSessionsById
 }
 
-/**
- * Directory of a child store that holds this session.
- *
- * This reports containment, not ownership, and a session can be held by more
- * than one store: a project's session list includes the sessions of its
- * worktrees so the sidebar can group them, so the parent repository holds
- * worktree sessions too. Ownership comes from the session record's own
- * directory; this is the fallback for a record that carries none. Returns
- * `null` when no initialized child store contains the session, which means
- * "unknown", never "no directory".
- */
+/** Native workspace ownership is registered by the directory loader and actions.
+ * A child store is a directory-scoped owner; public records contain no Host path. */
 export function getSyncSessionDirectory(sessionId: string): string | null {
-  if (!sessionId) return null
+  if (!sessionId || boundRuntimeKey !== getRuntimeKey()) return null
   getAllSyncSessionMap()
-  return cachedSessionDirectoryById.get(sessionId) ?? null
+  return registeredSessionDirectories.get(sessionId) ?? cachedSessionDirectoryById.get(sessionId) ?? null
 }
 
 /** Read messages for a session from current directory's child store */
-export function getSyncMessages(sessionId: string, directory?: string) {
+export function getSyncMessages(sessionId: string, directory?: string): State["message"][string] {
   return getDirectoryState(directory)?.message[sessionId] ?? []
 }
 
 /** Read renderability of a session snapshot from current directory's child store */
-export function getSyncSessionMaterializationStatus(sessionId: string, directory?: string) {
+export function getSyncSessionMaterializationStatus(sessionId: string, directory?: string): SessionMaterializationStatus {
   const state = getDirectoryState(directory)
   if (!state) return { hasMessages: false, renderable: false, missingPartMessageIDs: [] }
   return getSessionMaterializationStatus(state, sessionId)
 }
 
 /** Read parts for a message from current directory's child store */
-export function getSyncParts(messageId: string, directory?: string) {
-  return getDirectoryState(directory)?.part[messageId] ?? []
-}
-
-/** Read session status from current directory's child store */
-export function getSyncSessionStatus(sessionId: string, directory?: string) {
-  return getDirectoryState(directory)?.session_status[sessionId]
+export function getSyncParts(messageId: string, directory?: string): Part[] {
+  const messages = getDirectoryState(directory)?.message
+  if (!messages) return []
+  for (const sessionMessages of Object.values(messages)) {
+    const message = sessionMessages.find((item) => item.messageId === messageId)
+    if (message) return message.parts
+  }
+  return []
 }

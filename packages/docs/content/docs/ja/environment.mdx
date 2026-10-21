@@ -1,11 +1,21 @@
 ---
 title: 環境変数
-description: 環境変数で OpenChamber と OpenCode 連携を設定します。
+description: OpenChamber を環境変数で設定します。
 ---
-
 # 環境変数
 
 OpenChamber は起動時にこれらの環境変数を読み取ります。スタートアップサービスでは、`openchamber startup enable` がデフォルトで現在の環境をスナップショットするため、サービスに使わせたい変数を変更した後は再実行してください。
+
+## エージェントセッション、Git、ターミナル用の変数
+
+エージェントセッション、Git、ターミナル、[プロジェクトアクション](/ja/project-actions/) に独自の変数（API トークンやデータベースアドレスなど）を渡すには、OpenChamber を起動する前に export するのではなく、**設定 → 一般 → 環境変数** に追加します。値は OpenChamber を実行しているマシンのデータディレクトリ内にある `environment.json` に保存され、あなたのユーザーのみが読み取れます。設定画面では一度保存した値を再表示しません。置き換えや削除はできますが、再読み取りはできません。
+
+- エージェントセッションは起動時にこれらを受け取ります。
+- Git、ターミナル、プロジェクトアクションは次回の実行時にこれらを受け取ります。
+
+プロジェクトは **設定 → プロジェクト** で独自の変数や、`direnv export json` のように変数を出力するコマンドを追加できます。[プロジェクト](/ja/projects/#プロジェクト環境) を参照してください。
+
+以下はすべて、OpenChamber 自体が起動時に読み取るものです。
 
 ## OpenChamber サーバー
 
@@ -13,13 +23,33 @@ OpenChamber は起動時にこれらの環境変数を読み取ります。ス�
 
 OpenChamber Web サーバーのバインドアドレスです。他のマシンからアクセスできるようにするには `0.0.0.0` を使います。
 
+### `OPENCHAMBER_LAN_URL`
+
+ネットワーク上の他のデバイスが OpenChamber に接続するためのアドレスです（例: `http://192.168.1.20:3000`）。ペアリングリンクと QR コードは、OpenChamber が自分で検出したアドレスの代わりにこれを使います。検出が間違う場合に設定してください。たとえば Docker では、OpenChamber にはコンテナ内部のアドレスしか見えません。
+
 ### `OPENCHAMBER_UI_PASSWORD`
 
 ブラウザ UI のパスワードです。localhost 以外にバインドする場合、トンネルを使う場合、またはリバースプロキシの背後で実行する場合に使います。
 
+### `OPENCHAMBER_UI_SESSION_TTL_HOURS`
+
+「このデバイスを信頼する」がオフのときのブラウザのサインイン有効期間（時間）です。既定値は `12` です。
+
+### `OPENCHAMBER_UI_TRUSTED_SESSION_TTL_DAYS`
+
+信頼したデバイスでのサインイン有効期間（日）です。既定値は `7` です。
+
+### `OPENCODE_JWT_SECRET`
+
+Host UI セッショントークンの署名に使用するシークレットを上書きします。この設定は Host のセッション署名を構成するものであり、エージェントランタイムには影響しません。この値は非公開に保ってください。設定されている場合、OpenChamber は署名シークレットをローテーションできないため、グローバルサインアウトは利用できません。
+
 ### `OPENCHAMBER_API_ONLY`
 
 `true` または `1` に設定すると、OpenChamber をヘッドレスモードで起動します。デスクトップおよびモバイルクライアント向けの API ルートは利用できますが、ブラウザ UI は配信されません。
+
+### `OPENCHAMBER_FRAME_ANCESTORS`
+
+自分のページのフレーム内に OpenChamber を表示できるオリジンをスペース区切りで指定します（例: `https://dash.example.com`）。`*` はすべてのサイトを許可します。既定では OpenChamber 自身とそのデスクトップ・モバイルアプリだけが埋め込めるため、他のサイトがボタンの上に重ねることはできません。
 
 ### `OPENCHAMBER_DATA_DIR`
 
@@ -29,7 +59,7 @@ OpenChamber が保存するものはすべてこのディレクトリ配下に�
 
 ### `OPENCHAMBER_CHATS_DIR`
 
-プロジェクトを持たないチャット用に OpenChamber が作成する管理チャットディレクトリの場所を変更します。デフォルトは `~/.config/openchamber/chats` です。OpenChamber と OpenCode を別のユーザーで実行している場合は、OpenCode サーバーが読み取れるディレクトリを指定してください。既存のチャットは移動されません。
+プロジェクトのないチャット用に OpenChamber が作成する管理チャットディレクトリの場所を変更します。デフォルトは `~/.config/openchamber/chats` です。既存のチャットは移動されません。
 
 ### `OPENCHAMBER_COMPRESS_API`
 
@@ -51,51 +81,11 @@ API レスポンス圧縮を制御します。`true` または `1` で強制的�
 
 自動検出が間違っている場合に、更新操作で使うパッケージマネージャーを強制します。
 
-## OpenCode サーバー
+## プロキシ
 
-### `OPENCODE_HOST`
+### `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`
 
-OpenChamber を既存の OpenCode サーバーに接続します。値は明示的なポートを含み、パス、クエリ、ハッシュを含まない `http` または `https` の origin である必要があります。`OPENCODE_HOST` は `OPENCODE_PORT` より優先されます。
-
-### `OPENCODE_PORT`
-
-OpenCode サーバーのポートを設定します。管理対象 OpenCode では管理対象ポートの要求になり、`OPENCODE_SKIP_START=true` ではそのポートの外部サーバーに接続します。
-
-### `OPENCODE_SKIP_START`
-
-`true` に設定すると、OpenChamber が独自の OpenCode サーバーを起動しません。
-
-### `OPENCHAMBER_OPENCODE_HOSTNAME`
-
-OpenChamber が管理する OpenCode サーバーのバインドホスト名です。デフォルトは `127.0.0.1` です。
-
-### `OPENCODE_BINARY`
-
-OpenChamber が実行する `opencode` 実行ファイルへのパスです。
-
-### `OPENCODE_CONFIG`
-
-特定の OpenCode 設定ファイルへのパスです。
-
-### `OPENCODE_CONFIG_DIR`
-
-エージェント、スキル、スニペット、設定検出に使う特定の OpenCode 設定ディレクトリへのパスです。
-
-### `OPENCODE_DATA_DIR`
-
-管理対象 OpenCode サーバーのカスタムデータディレクトリです。
-
-### `OPENCODE_WSL_DISTRO`
-
-Windows 上の OpenCode 連携に使う WSL ディストリビューションを選びます。
-
-### `OPENCHAMBER_OPENCODE_WSL_DISTRO`
-
-WSL ディストリビューション選択用の OpenChamber 固有エイリアスです。両方が設定されている場合は `OPENCODE_WSL_DISTRO` が優先されます。
-
-### `OPENCODE_JWT_SECRET`
-
-UI 認証トークンの署名に使うシークレットです。永続的なサービス配置では長いランダム値を使ってください。
+利用上限やスキルカタログなど、OpenChamber 自身が送るリクエストをプロキシ経由にします。小文字の変数名も使えます。`NO_PROXY` のホストは直接接続し、`localhost`、`127.0.0.1`、`::1` は常に直接接続するため、サインインのコールバックやローカル接続はそのまま動作します。
 
 ## ターミナルと Git
 
@@ -119,7 +109,7 @@ Git に基づくファイル読み取りキャッシュの有効期間（ミリ�
 
 ### `OPENAI_API_KEY`
 
-OpenAI 互換サービスを呼び出す OpenChamber の音声機能で使う API キーです。
+OpenChamber の音声機能が OpenAI 本体を呼び出すときに使う API キーです。カスタムの OpenAI 互換サーバーには送信されません。そのサーバーには設定で専用のキーを指定してください。
 
 ### `OPENCHAMBER_ALLOW_REMOTE_OPENAI_COMPAT_URLS`
 
@@ -139,6 +129,3 @@ OpenChamber のトンネルコマンドで使う ngrok 認証トークンです�
 
 Bun のインストールルートです。OpenChamber はデーモン起動と更新のために `bin/bun` を探す際に使います。
 
-### `VITE_OPENCODE_URL`
-
-Vite でビルドされた Web アプリ向けのビルド時 API base URL です。通常の CLI またはデスクトップ利用では、ほとんどのユーザーは設定する必要がありません。

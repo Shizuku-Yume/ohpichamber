@@ -1,14 +1,18 @@
 import React, { useRef, memo } from 'react';
-import { useInputStore } from '@/sync/input-store';
+import type { AttachmentPart, Part } from '@openchamber/agent-contract';
+import { canonicalClient } from '@/api/canonicalClient';
+import { isCapacitorMobileApp } from '@/apps/mobileNativeChrome';
+import { shareFileFromNativeApp } from '@/lib/nativeFileShare';
+import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
+import { useDraftAttachedFiles, useInputStore } from '@/sync/input-store';
+import type { ChatDraftIdentity } from '@/lib/chatDraftPersistence';
 import type { AttachedFile } from '@/sync/session-ui-store';
 import { useUIStore } from '@/stores/useUIStore';
-import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { toast } from '@/components/ui';
 import { cn } from '@/lib/utils';
-import { openExternalUrl } from '@/lib/url';
-import { isDrawioFile } from '@/lib/toolHelpers';
+import { formatFileSize } from '@/lib/fileSize';
+import { getLanguageFromExtension } from '@/lib/toolHelpers';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import { Icon } from "@/components/icon/Icon";
 import { useI18n } from '@/lib/i18n';
@@ -20,8 +24,6 @@ const FileAttachmentButton = memo(() => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const addAttachedFile = useInputStore((state) => state.addAttachedFile);
   const isMobile = useUIStore((state) => state.isMobile);
-  const runtimeApis = useRuntimeAPIs();
-  const isVSCodeRuntime = runtimeApis.runtime.isVSCode;
   const buttonSizeClass = isMobile ? 'h-9 w-9' : 'h-7 w-7';
   const iconSizeClass = isMobile ? 'h-5 w-5' : 'h-[18px] w-[18px]';
 
@@ -47,50 +49,6 @@ const FileAttachmentButton = memo(() => {
     }
   };
 
-  const handleVSCodePick = async () => {
-    try {
-      const data = (await runtimeApis.vscode?.pickFiles?.()) as {
-        files?: Array<{ name: string; mimeType?: string; dataUrl?: string }>;
-        skipped?: Array<{ name?: string; reason?: string }>;
-      } | undefined;
-      const picked = Array.isArray(data?.files) ? data.files : [];
-      const skipped = Array.isArray(data?.skipped) ? data.skipped : [];
-
-      if (skipped.length > 0) {
-        const summary = skipped.map((s: { name?: string; reason?: string }) => `${s?.name || t('chat.fileAttachment.fileFallback')}: ${s?.reason || t('chat.fileAttachment.skippedFallback')}`).join('\n');
-        toast.error(t('chat.fileAttachment.toast.someFilesSkipped', { summary }));
-      }
-
-      const asFiles = picked
-        .map((file: { name: string; mimeType?: string; dataUrl?: string }) => {
-          if (!file?.dataUrl) return null;
-          try {
-            const [meta, base64] = file.dataUrl.split(',');
-            const mime = file.mimeType || (meta?.match(/data:(.*);base64/)?.[1] || 'application/octet-stream');
-            if (!base64) return null;
-            const binary = atob(base64);
-            const bytes = new Uint8Array(binary.length);
-            for (let i = 0; i < binary.length; i++) {
-              bytes[i] = binary.charCodeAt(i);
-            }
-            const blob = new Blob([bytes], { type: mime });
-            return new File([blob], file.name || t('chat.fileAttachment.fileFallback'), { type: mime });
-          } catch (err) {
-            console.error('Failed to decode VS Code picked file', err);
-            return null;
-          }
-        })
-        .filter(Boolean) as File[];
-
-      if (asFiles.length > 0) {
-        await attachFiles(asFiles);
-      }
-    } catch (error) {
-      console.error('VS Code file pick failed', error);
-      toast.error(error instanceof Error ? error.message : t('chat.fileAttachment.toast.vscodePickFailed'));
-    }
-  };
-
   return (
     <>
       <input
@@ -104,7 +62,7 @@ const FileAttachmentButton = memo(() => {
         <TooltipTrigger asChild>
           <button
             type="button"
-            onClick={isVSCodeRuntime ? handleVSCodePick : () => fileInputRef.current?.click()}
+            onClick={() => fileInputRef.current?.click()}
             className={cn(
               'flex items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
               'hover:bg-muted text-muted-foreground',
@@ -138,8 +96,7 @@ const ImagePreview = memo(({ file, onRemove, onShowPopup, gallery, index = 0 }: 
   const isLocalImagePreview =
     file.source !== 'server' &&
     file.mimeType.startsWith('image/') &&
-    typeof file.dataUrl === 'string' &&
-    file.dataUrl.startsWith('data:image/');
+    file.dataUrl?.startsWith('data:image/');
 
   const imageUrl = isLocalImagePreview ? file.dataUrl : (file.serverPath || '');
 
@@ -163,12 +120,6 @@ const ImagePreview = memo(({ file, onRemove, onShowPopup, gallery, index = 0 }: 
       open: true,
       title: displayName || 'Image',
       content: '',
-      metadata: {
-        tool: 'image-preview',
-        filename: displayName,
-        mime: file.mimeType,
-        size: file.size,
-      },
       image: {
         url: imageUrl,
         mimeType: file.mimeType,
@@ -252,13 +203,6 @@ const useFileDetails = (file: AttachedFile) => {
     return parts.length > 1 ? parts[parts.length - 1].toLowerCase() : '';
   };
 
-  const formatFileSize = (bytes: number) => {
-    if (!Number.isFinite(bytes) || bytes <= 0) return '';
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-  };
-
   const extractFilename = (path: string): string => {
     const normalized = path.replace(/\\/g, '/');
     const parts = normalized.split('/');
@@ -285,12 +229,6 @@ const FileChip = memo(({ file, onRemove }: FileChipProps) => {
   return (
     <button
       type="button"
-      onClick={(e) => {
-        // Prevent click from bubbling if clicking the remove button
-        if ((e.target as HTMLElement).closest('[data-remove-button]')) {
-          return;
-        }
-      }}
       className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-border/80 bg-background pl-2 pr-1 text-xs text-foreground text-left hover:opacity-90 transition-opacity"
       title={displayName}
     >
@@ -314,89 +252,18 @@ const FileChip = memo(({ file, onRemove }: FileChipProps) => {
 
 FileChip.displayName = 'FileChip';
 
-const VSCodeFileChip = memo(({ file, onRemove }: FileChipProps) => {
-  const { t } = useI18n();
-  const { displayName, extension } = useFileDetails(file);
-
-  // Detect selection-style attachments: ends with ":N" or ":N-M"
-  const isSelectionAttachment = /:\d+(?:-\d+)?$/.test(displayName);
-
-  return (
-    <button
-      type="button"
-      onClick={(e) => {
-        // Prevent click from bubbling if clicking the remove button
-        if ((e.target as HTMLElement).closest('[data-remove-button]')) {
-          return;
-        }
-      }}
-      className="inline-flex items-center gap-1 text-xs pr-1 rounded-sm border border-solid bg-transparent text-foreground not-italic hover:opacity-90 transition-colors text-left"
-      style={{ borderColor: 'var(--interactive-border)' }}
-      title={file.vscodePath}
-    >
-      <span
-        data-remove-button
-        onClick={(e) => {
-          e.stopPropagation();
-          onRemove();
-        }}
-        className="flex items-center justify-center h-5 w-5 flex-shrink-0 hover:bg-[var(--interactive-hover)] rounded-full transition-colors cursor-pointer"
-        aria-label={t('chat.fileAttachment.activeEditor.remove')}
-        title={t('chat.fileAttachment.activeEditor.remove')}
-      >
-        <Icon name="close" className="h-4 w-4 text-muted-foreground" />
-      </span>
-        <FileTypeIcon filePath={file.filename} extension={extension} className="h-4 w-4" />
-        <span className={cn('text-foreground', isSelectionAttachment ? 'whitespace-nowrap' : 'truncate max-w-[200px]')}>
-          {displayName}
-        </span>
-    </button>
-  );
-});
-
-VSCodeFileChip.displayName = 'VSCodeFileChip';
-
 interface AttachedFilesListProps {
   onShowPopup?: (content: ToolPopupContent) => void;
   className?: string;
+  /** The composer draft whose files to show; its own even while another composer holds the slot. */
+  draftIdentity?: ChatDraftIdentity | null;
 }
 
-export const AttachedVSCodeFileChips = memo(({ onShowPopup }: AttachedFilesListProps) => {
-  const attachedFiles = useInputStore((state) => state.attachedFiles);
+export const AttachedFilesList = memo(({ onShowPopup, className, draftIdentity }: AttachedFilesListProps) => {
+  const attachedFiles = useDraftAttachedFiles(draftIdentity);
   const removeAttachedFile = useInputStore((state) => state.removeAttachedFile);
 
-  const vscodeFiles = attachedFiles.filter((file) => file.source === 'vscode');
-
-  if (vscodeFiles.length === 0) return null;
-
-  const images = vscodeFiles.filter((f) => f.mimeType.startsWith('image/'));
-  const otherFiles = vscodeFiles.filter((f) => !f.mimeType.startsWith('image/'));
-  const imageGallery = images.map((file) => ({
-    url: file.dataUrl || file.serverPath || '',
-    mimeType: file.mimeType,
-    filename: file.filename,
-    size: file.size,
-  })).filter((image) => image.url);
-
-  return (
-    <div className="flex items-center gap-2 flex-wrap">
-      {images.map((file, index) => (
-        <ImagePreview key={file.id} file={file} onRemove={() => removeAttachedFile(file.id)} onShowPopup={onShowPopup} gallery={imageGallery} index={index} />
-      ))}
-      {otherFiles.map((file) => (
-        <VSCodeFileChip key={file.id} file={file} onRemove={() => removeAttachedFile(file.id)} />
-      ))}
-    </div>
-  );
-});
-
-AttachedVSCodeFileChips.displayName = 'AttachedVSCodeFileChips';
-
-export const AttachedFilesList = memo(({ onShowPopup, className }: AttachedFilesListProps) => {
-  const attachedFiles = useInputStore((state) => state.attachedFiles);
-  const removeAttachedFile = useInputStore((state) => state.removeAttachedFile);
-
-  const localFiles = attachedFiles.filter((file) => file.source !== 'server' && file.source !== 'vscode');
+  const localFiles = attachedFiles.filter((file) => file.source !== 'server');
 
   if (localFiles.length === 0) return null;
 
@@ -445,323 +312,354 @@ export const AttachedFilesList = memo(({ onShowPopup, className }: AttachedFiles
 
 AttachedFilesList.displayName = 'AttachedFilesList';
 
-export const ActiveEditorFileSuggestion = memo(() => {
+type AttachmentImageState =
+  | { kind: 'loading' }
+  | { kind: 'ready'; url: string }
+  | { kind: 'failed' };
+
+const NativeAttachmentThumbnail = memo(({ part, workspaceId, runtimeKey, compact, onReady, onOpen }: {
+  part: AttachmentPart;
+  workspaceId: string | undefined;
+  runtimeKey: string;
+  compact: boolean;
+  onReady: (attachmentId: string, url: string | null) => void;
+  onOpen: () => void;
+}) => {
   const { t } = useI18n();
-  const activeEditorFile = useInputStore((s) => s.activeEditorFile);
-  const attachedFiles = useInputStore((s) => s.attachedFiles)
-  const addVSCodeFileAttachment = useInputStore((s) => s.addVSCodeFileAttachment)
-  const addVSCodeSelectionAttachment = useInputStore((s) => s.addVSCodeSelectionAttachment)
-  const isVSCodeRuntime = useRuntimeAPIs().runtime.isVSCode;
+  const [state, setState] = React.useState<AttachmentImageState>({ kind: 'loading' });
+  const objectUrlRef = React.useRef<string | null>(null);
+  const sizeText = formatFileSize(part.size);
 
-  if (!isVSCodeRuntime || !activeEditorFile) return null;
+  const fail = React.useCallback(() => {
+    const url = objectUrlRef.current;
+    objectUrlRef.current = null;
+    if (url) {
+      onReady(part.attachmentId, null);
+      URL.revokeObjectURL(url);
+    }
+    setState({ kind: 'failed' });
+  }, [onReady, part.attachmentId]);
 
-  const { filePath, fileName, relativePath, selection, fileSize } = activeEditorFile;
+  React.useEffect(() => {
+    if (!workspaceId) {
+      setState({ kind: 'failed' });
+      return;
+    }
+    let active = true;
+    setState({ kind: 'loading' });
+    void canonicalClient.readAttachment(workspaceId, part.attachmentId).then((blob) => {
+      if (!active || getRuntimeKey() !== runtimeKey) return;
+      const url = URL.createObjectURL(blob);
+      objectUrlRef.current = url;
+      setState({ kind: 'ready', url });
+      onReady(part.attachmentId, url);
+    }).catch(() => {
+      if (active && getRuntimeKey() === runtimeKey) setState({ kind: 'failed' });
+    });
+    return () => {
+      active = false;
+      const url = objectUrlRef.current;
+      objectUrlRef.current = null;
+      if (url) {
+        onReady(part.attachmentId, null);
+        URL.revokeObjectURL(url);
+      }
+    };
+  }, [workspaceId, runtimeKey, part.attachmentId, onReady]);
 
-  // Normalize to forward slashes for comparison
-  const isFileAttached = attachedFiles.some(
-    (f) => f.source === 'vscode' && f.vscodeSource === 'file' && (f.vscodePath || '') === filePath
-  )
+  const failed = state.kind === 'failed';
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          aria-label={part.name}
+          disabled={state.kind !== 'ready'}
+          onClick={onOpen}
+          title={failed ? t('filesView.error.readFileFailed') : undefined}
+          className={cn(
+            'relative overflow-hidden border border-border/40 bg-muted/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-ring',
+            compact
+              ? 'flex-none snap-start h-12 w-12 sm:h-14 sm:w-14 md:h-16 md:w-16 rounded-lg'
+              : 'group aspect-video w-full rounded-lg',
+          )}
+        >
+          {state.kind === 'ready' ? (
+            <img
+              src={state.url}
+              alt={part.name}
+              className="h-full w-full object-cover"
+              loading="lazy"
+              onError={fail}
+            />
+          ) : (
+            <span className="flex h-full w-full items-center justify-center bg-muted/30 text-muted-foreground">
+              <Icon name="file-image" className="h-6 w-6" />
+            </span>
+          )}
+          {!compact && state.kind === 'ready' && (
+            <>
+              <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
+              <span className="pointer-events-none absolute inset-x-0 bottom-0 p-2 text-left text-white opacity-0 transition-opacity group-hover:opacity-100">
+                <span className="block truncate text-xs font-medium">{part.name}</span>
+                {sizeText && <span className="block text-xs opacity-80">{sizeText}</span>}
+              </span>
+            </>
+          )}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={6} className="typography-meta px-2 py-1">
+        {failed ? t('filesView.error.readFileFailed') : `${part.name}${sizeText ? ` (${sizeText})` : ''}`}
+      </TooltipContent>
+    </Tooltip>
+  );
+});
 
-  // Compute selection label using a compact range (single line shown as "N" not "N-N")
-  let selectionRange = ''
-  if (selection) {
-    selectionRange = selection.startLine === selection.endLine
-      ? `${selection.startLine}`
-      : `${selection.startLine}-${selection.endLine}`
+NativeAttachmentThumbnail.displayName = 'NativeAttachmentThumbnail';
+
+const NativeAttachmentChip = memo(({ part, compact, onOpen, onDownload }: {
+  part: AttachmentPart;
+  compact: boolean;
+  onOpen: (part: AttachmentPart) => void;
+  onDownload: (part: AttachmentPart) => void;
+}) => {
+  const { t } = useI18n();
+  const sizeText = formatFileSize(part.size);
+  const downloadLabel = t('sidebarFilesTree.menu.download');
+  const extension = part.name.split('.').pop() || '';
+  const isPdf = part.mediaType.includes('pdf');
+
+  if (compact) {
+    return (
+      <div className="inline-flex max-w-full items-stretch overflow-hidden rounded-lg border border-border/30 bg-muted/30 typography-meta">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={() => onOpen(part)}
+              className="inline-flex min-w-0 items-center gap-1 px-2 py-0.5 text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-ring"
+            >
+              {isPdf ? (
+                <Icon name="file-pdf" className="h-3.5 w-3.5 text-muted-foreground" />
+              ) : (
+                <FileTypeIcon filePath={part.name} extension={extension} className="h-3.5 w-3.5 text-muted-foreground" />
+              )}
+              <span className="block max-w-[140px] truncate" title={part.name}>{part.name}</span>
+              {sizeText && <span className="shrink-0 text-muted-foreground">{sizeText}</span>}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{part.name}{sizeText ? ` (${sizeText})` : ''}</p>
+          </TooltipContent>
+        </Tooltip>
+        <button
+          type="button"
+          onClick={() => onDownload(part)}
+          aria-label={downloadLabel}
+          title={downloadLabel}
+          className="flex w-5 shrink-0 items-center justify-center border-l border-border/30 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        >
+          <Icon name="download" className="h-3 w-3" />
+        </button>
+      </div>
+    );
   }
-  const selectionLabel = selection ? `${relativePath}:${selectionRange}` : ''
-  const isSelectionAttached = !!selectionLabel && attachedFiles.some(
-    (f) => f.source === 'vscode' && f.vscodeSource === 'selection' && f.filename === selectionLabel && f.vscodePath === filePath
-  )
-
-  // Nothing to show — file is already attached and there's no (or already-attached) selection
-  if (isFileAttached && (!selection || isSelectionAttached)) return null;
-
-  const ext = fileName.split('.').pop() || '';
-  // Always show only the filename in the suggestion UI
-  const displayName = fileName;
-
-  const handleAddFile = () => {
-    addVSCodeFileAttachment(filePath, fileName, fileSize);
-  };
-
-  const handlePinSelection = async () => {
-    if (!selection) return;
-    const blob = new Blob([selection.text], { type: 'text/plain' });
-    const file = new File([blob], selectionLabel, { type: 'text/plain' });
-    await addVSCodeSelectionAttachment(filePath, file);
-  };
-
-  // If there is a selection, prefer showing the pin-selection UI only.
-  const showSelectionPin = !!selection && !isSelectionAttached;
-  const showFileAdd = !showSelectionPin && !isFileAttached;
-
-  if (!showSelectionPin && !showFileAdd) return null;
 
   return (
-    <div className="inline-flex items-center">
-      {showSelectionPin && (
-        <div
-          className="inline-flex items-center gap-1 text-xs pr-1 rounded-sm italic text-muted-foreground border border-dashed bg-transparent"
-          style={{ borderColor: 'var(--interactive-border)' }}
-          title={relativePath}
-        >
+    <div className="flex items-center gap-2 rounded-lg border border-border/40 bg-muted/10 text-left text-sm transition-colors hover:bg-muted/20">
+      <Tooltip>
+        <TooltipTrigger asChild>
           <button
             type="button"
-            title={t('chat.fileAttachment.activeEditor.pinSelection')}
-            aria-label={t('chat.fileAttachment.activeEditor.pinSelection')}
-            onClick={() => { void handlePinSelection(); }}
-            className="flex items-center justify-center h-5 w-5 flex-shrink-0 hover:bg-[var(--interactive-hover)] rounded-full transition-colors cursor-pointer"
+            onClick={() => onOpen(part)}
+            className="flex min-w-0 flex-1 items-center gap-2 p-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-ring"
           >
-            <Icon name="pushpin-2" className="h-4 w-4" />
+            <span className="flex-shrink-0">
+              {isPdf ? (
+                <Icon name="file-pdf" className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <Icon name="file" className="h-4 w-4 text-muted-foreground" />
+              )}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate font-medium">{part.name}</span>
+              {sizeText && <span className="block text-xs text-muted-foreground">{sizeText}</span>}
+            </span>
           </button>
-          <FileTypeIcon filePath={fileName} extension={ext} className="h-4 w-4 flex-shrink-0" />
-          <span className="text-xs whitespace-nowrap">{`${displayName}:${selectionRange}`}</span>
-        </div>
-      )}
-      {showFileAdd && (
-        <div
-          className="inline-flex items-center gap-1 text-xs pr-1 rounded-sm italic text-muted-foreground border border-dashed bg-transparent"
-          style={{ borderColor: 'var(--interactive-border)' }}
-          title={relativePath}
-        >
-          <button
-            type="button"
-            title={t('chat.fileAttachment.activeEditor.addFile', { name: displayName })}
-            aria-label={t('chat.fileAttachment.activeEditor.addFile', { name: displayName })}
-            onClick={handleAddFile}
-            className="flex items-center justify-center h-5 w-5 flex-shrink-0 hover:bg-[var(--interactive-hover)] rounded-full transition-colors cursor-pointer"
-          >
-            <Icon name="add" className="h-4 w-4" />
-          </button>
-          <FileTypeIcon filePath={fileName} extension={ext} className="h-4 w-4 flex-shrink-0" />
-          <span className="text-xs truncate max-w-[220px]">{displayName}</span>
-        </div>
-      )}
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>{part.name}{sizeText ? ` (${sizeText})` : ''}</p>
+        </TooltipContent>
+      </Tooltip>
+      <button
+        type="button"
+        onClick={() => onDownload(part)}
+        aria-label={downloadLabel}
+        title={downloadLabel}
+        className="mr-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <Icon name="download" className="h-4 w-4" />
+      </button>
     </div>
   );
 });
 
-ActiveEditorFileSuggestion.displayName = 'ActiveEditorFileSuggestion';
-
-interface FilePart {
-  type: string;
-  mime?: string;
-  url?: string;
-  filename?: string;
-  size?: number;
-  source?: Record<string, unknown>;
-}
-
-const GITHUB_ISSUE_LINK_MIME = 'application/vnd.github.issue-link';
-const GITHUB_PR_LINK_MIME = 'application/vnd.github.pull-request-link';
-const LINEAR_ISSUE_LINK_MIME = 'application/vnd.openchamber.linear-issue-link';
-const GUEST_ISSUE_LINK_MIME = 'application/vnd.openchamber.guest-issue-link';
-const GUEST_PR_LINK_MIME = 'application/vnd.openchamber.guest-pr-link';
-
-type IssueLinkKind = 'github-issue' | 'github-pr' | 'linear-issue' | 'guest-issue' | 'guest-pr';
-
-const getIssueLinkKind = (file: FilePart): IssueLinkKind | null => {
-  if (file.mime === GITHUB_ISSUE_LINK_MIME) {
-    return 'github-issue';
-  }
-  if (file.mime === GITHUB_PR_LINK_MIME) {
-    return 'github-pr';
-  }
-  if (file.mime === LINEAR_ISSUE_LINK_MIME) {
-    return 'linear-issue';
-  }
-  if (file.mime === GUEST_ISSUE_LINK_MIME) {
-    return 'guest-issue';
-  }
-  if (file.mime === GUEST_PR_LINK_MIME) {
-    return 'guest-pr';
-  }
-  return null;
-};
-
-const issueLinkIcon = (kind: IssueLinkKind): 'github' | 'git-pull-request' | 'linear' | 'attachment-2' => {
-  if (kind === 'github-pr' || kind === 'guest-pr') return 'git-pull-request';
-  if (kind === 'linear-issue') return 'linear';
-  if (kind === 'guest-issue') return 'attachment-2';
-  return 'github';
-};
+NativeAttachmentChip.displayName = 'NativeAttachmentChip';
 
 interface MessageFilesDisplayProps {
-  files: FilePart[];
+  files: readonly Part[];
+  workspaceId: string | undefined;
   onShowPopup?: (content: ToolPopupContent) => void;
   compact?: boolean;
+  className?: string;
 }
 
-export const MessageFilesDisplay = memo(({ files, onShowPopup, compact = false }: MessageFilesDisplayProps) => {
+export const MessageFilesDisplay = memo(({ files, workspaceId, onShowPopup, compact = false, className }: MessageFilesDisplayProps) => {
   const { t } = useI18n();
-
-  const fileItems = files.filter(f => f.type === 'file' && (f.mime || f.url));
-
-  const extractFilename = (path?: string): string => {
-    if (!path) return 'Unnamed file';
-
-    const normalized = path.replace(/\\/g, '/');
-    const parts = normalized.split('/');
-    const filename = parts[parts.length - 1];
-
-    return filename || path;
-  };
-
-  const resolveDisplayName = React.useCallback((file: FilePart): string => {
-    const isGitHubLink = getIssueLinkKind(file) !== null;
-    if (isGitHubLink && typeof file.filename === 'string' && file.filename.trim().length > 0) {
-      return file.filename.trim();
-    }
-    return extractFilename(file.filename || file.url);
+  const runtimeKey = React.useSyncExternalStore(subscribeRuntimeEndpointChanged, getRuntimeKey, getRuntimeKey);
+  const scope = JSON.stringify([runtimeKey, workspaceId]);
+  const attachments = files.filter((part): part is AttachmentPart => part.type === 'attachment');
+  const currentFiles = React.useRef(files);
+  currentFiles.current = files;
+  const scopeRef = React.useRef(scope);
+  scopeRef.current = scope;
+  const [images, setImages] = React.useState<{ scope: string; urls: Map<string, string> }>(() => ({ scope, urls: new Map() }));
+  const popupUrl = React.useRef<{ attachmentId: string; url: string } | null>(null);
+  const clearPopupUrl = React.useCallback(() => {
+    if (popupUrl.current) URL.revokeObjectURL(popupUrl.current.url);
+    popupUrl.current = null;
   }, []);
-
-  const formatFileSize = (bytes?: number) => {
-    if (!bytes || !Number.isFinite(bytes) || bytes <= 0) return '';
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  const generation = React.useRef(0);
+  React.useEffect(() => {
+    generation.current += 1;
+    return () => {
+      generation.current += 1;
+      clearPopupUrl();
+    };
+  }, [scope, clearPopupUrl]);
+  React.useEffect(() => {
+    const popup = popupUrl.current;
+    if (popup && !files.some((part) => part.type === 'attachment' && part.attachmentId === popup.attachmentId)) clearPopupUrl();
+  }, [files, clearPopupUrl]);
+  const onImageReady = React.useCallback((attachmentId: string, url: string | null) => {
+    setImages((current) => {
+      const urls = new Map(current.scope === scope ? current.urls : []);
+      if (url) urls.set(attachmentId, url);
+      else urls.delete(attachmentId);
+      return { scope, urls };
+    });
+  }, [scope]);
+  const openImage = (attachmentId: string) => {
+    if (!onShowPopup || images.scope !== scope) return;
+    const gallery = attachments.flatMap((part) => {
+      const url = images.urls.get(part.attachmentId);
+      return url ? [{ url, mimeType: part.mediaType, filename: part.name, size: part.size }] : [];
+    });
+    const url = images.urls.get(attachmentId);
+    const index = gallery.findIndex((image) => image.url === url);
+    const image = gallery[index];
+    if (image) {
+      generation.current += 1;
+      clearPopupUrl();
+      onShowPopup({ open: true, title: image.filename, content: '', image: { ...image, gallery, index } });
+    }
   };
-
-  const imageFiles = fileItems.filter(f => f.mime?.startsWith('image/') && f.url);
-  const otherFiles = fileItems.filter(f => !f.mime?.startsWith('image/'));
-
-  const imageGallery = React.useMemo(
-    () =>
-      imageFiles.flatMap((file) => {
-        if (!file.url) return [];
-        const filename = resolveDisplayName(file) || 'Image';
-        return [{
-          url: file.url,
-          mimeType: file.mime,
-          filename,
-          size: file.size,
-        }];
-      }),
-    [imageFiles, resolveDisplayName]
-  );
-
-  const handleImageClick = React.useCallback((index: number) => {
-    if (!onShowPopup) {
+  const showFilePopup = async (part: AttachmentPart) => {
+    if (!onShowPopup) return;
+    if (!workspaceId) {
+      toast.error(t('filesView.error.readFileFailed'));
       return;
     }
+    generation.current += 1;
+    const requestGeneration = generation.current;
+    const current = () => requestGeneration === generation.current && getRuntimeKey() === runtimeKey
+      && currentFiles.current.some((item) => item.type === 'attachment' && item.attachmentId === part.attachmentId);
+    try {
+      const blob = await canonicalClient.readAttachment(workspaceId, part.attachmentId);
+      if (!current()) return;
+      if (part.mediaType.startsWith('text/') || part.mediaType === 'application/json') {
+        const content = await blob.text();
+        if (!current()) return;
+        clearPopupUrl();
+        onShowPopup({ open: true, title: part.name, content, language: getLanguageFromExtension(part.name) || undefined });
+        return;
+      }
+      clearPopupUrl();
+      const url = URL.createObjectURL(blob);
+      popupUrl.current = { attachmentId: part.attachmentId, url };
+      onShowPopup({ open: true, title: part.name, content: '', image: { url, mimeType: part.mediaType, filename: part.name, size: part.size } });
+    } catch {
+      if (current()) toast.error(t('filesView.error.readFileFailed'));
+    }
+  };
+  const downloadAttachment = React.useCallback(async (part: AttachmentPart) => {
+    if (!workspaceId) {
+      toast.error(t('filesView.error.readFileFailed'));
+      return;
+    }
+    const requestScope = scope;
+    const current = () => scopeRef.current === requestScope && getRuntimeKey() === runtimeKey
+      && currentFiles.current.some((item) => item.type === 'attachment' && item.attachmentId === part.attachmentId);
+    let url: string | null = null;
+    try {
+      const blob = await canonicalClient.readAttachment(workspaceId, part.attachmentId);
+      if (!current()) return;
+      if (isCapacitorMobileApp()) {
+        await shareFileFromNativeApp(new File([blob], part.name, { type: part.mediaType || blob.type || 'application/octet-stream' }));
+        return;
+      }
+      url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = part.name;
+      anchor.rel = 'noopener';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+    } catch {
+      if (current()) toast.error(t('filesView.toast.saveFailed'));
+    } finally {
+      const createdUrl = url;
+      if (createdUrl) setTimeout(() => URL.revokeObjectURL(createdUrl), 0);
+    }
+  }, [scope, runtimeKey, t, workspaceId]);
+  if (attachments.length === 0) return null;
 
-    const file = imageGallery[index];
-    if (!file?.url) return;
-
-    const filename = file.filename || 'Image';
-
-    onShowPopup({
-      open: true,
-      title: filename,
-      content: '',
-      metadata: {
-        tool: 'image-preview',
-        filename,
-        mime: file.mimeType,
-        size: file.size,
-      },
-      image: {
-        url: file.url,
-        mimeType: file.mimeType,
-        filename,
-        size: file.size,
-        gallery: imageGallery,
-        index,
-      },
-    });
-  }, [imageGallery, onShowPopup]);
-
-  if (fileItems.length === 0) return null;
+  const renderThumbnail = (part: AttachmentPart) => (
+    <NativeAttachmentThumbnail
+      key={`${scope}:${part.partId}`}
+      part={part}
+      workspaceId={workspaceId}
+      runtimeKey={runtimeKey}
+      compact={compact}
+      onReady={onImageReady}
+      onOpen={() => openImage(part.attachmentId)}
+    />
+  );
+  const renderChip = (part: AttachmentPart) => (
+    <NativeAttachmentChip
+      key={`${scope}:${part.partId}`}
+      part={part}
+      compact={compact}
+      onOpen={(file) => { void showFilePopup(file); }}
+      onDownload={(file) => { void downloadAttachment(file); }}
+    />
+  );
 
   if (compact) {
+    const imageAttachments = attachments.filter((part) => part.mediaType.startsWith('image/'));
+    const fileAttachments = attachments.filter((part) => !part.mediaType.startsWith('image/'));
     return (
-      <div className="space-y-1.5 mt-1.5">
-        {otherFiles.length > 0 && (
+      <div className={cn('space-y-1.5', className ?? 'mt-1.5')}>
+        {fileAttachments.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
-            {otherFiles.map((file, index) => {
-              const fileName = resolveDisplayName(file);
-              const ext = fileName.split('.').pop() || '';
-              const sizeText = formatFileSize(file.size);
-              const issueLinkKind = getIssueLinkKind(file);
-              return (
-                <Tooltip key={`file-${file.url || file.filename || index}`}>
-                  <TooltipTrigger asChild>
-                    {issueLinkKind && file.url ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void openExternalUrl(file.url || '');
-                        }}
-                        className="inline-flex items-center bg-muted/30 border border-border/30 typography-meta gap-1 px-2 py-0.5 rounded-lg text-foreground hover:text-primary transition-colors"
-                      >
-                        <Icon name={issueLinkIcon(issueLinkKind)} className="text-muted-foreground h-3.5 w-3.5" />
-                        <div className="overflow-hidden max-w-[220px]">
-                          <span className="truncate block" title={fileName}>{fileName}</span>
-                        </div>
-                      </button>
-                    ) : (
-                      <div className="inline-flex items-center bg-muted/30 border border-border/30 typography-meta gap-1 px-2 py-0.5 rounded-lg">
-                        {file.mime?.includes('pdf') ? (
-                          <Icon name="file-pdf" className="text-muted-foreground h-3.5 w-3.5" />
-                        ) : (
-                          <FileTypeIcon filePath={fileName} extension={ext} className="text-muted-foreground h-3.5 w-3.5" />
-                        )}
-                        <div className="overflow-hidden max-w-[140px]">
-                          <span className="truncate block" title={fileName}>{fileName}</span>
-                        </div>
-                      </div>
-                    )}
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{fileName}{sizeText ? ` (${sizeText})` : ''}</p>
-                  </TooltipContent>
-                </Tooltip>
-              );
-            })}
+            {fileAttachments.map(renderChip)}
           </div>
         )}
-
-        {imageFiles.length > 0 && (
+        {imageAttachments.length > 0 && (
           <div className="overflow-x-auto -mx-1 px-1 py-0.5 scrollbar-thin">
             <div className="flex snap-x snap-mandatory gap-2">
-              {imageFiles.map((file, index) => {
-                const filename = resolveDisplayName(file) || 'Image';
-
-                return (
-                  <Tooltip key={`img-${file.url || file.filename || index}`}>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        onClick={() => handleImageClick(index)}
-                        className="relative flex-none border border-border/40 bg-muted/10 overflow-hidden snap-start h-12 w-12 sm:h-14 sm:w-14 md:h-16 md:w-16 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-ring"
-                        aria-label={filename}
-                      >
-                        {file.url ? (
-                          <img
-                            src={file.url}
-                            alt={filename}
-                            className="h-full w-full object-cover"
-                            loading="lazy"
-                            onError={(e) => {
-                              const target = e.target as HTMLImageElement;
-                              target.style.visibility = 'hidden';
-                            }}
-                          />
-                        ) : (
-                          <div className="h-full w-full flex items-center justify-center bg-muted/30 text-muted-foreground">
-                            <Icon name="file-image" className="h-6 w-6" />
-                          </div>
-                        )}
-                        <span className="sr-only">{filename}</span>
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" sideOffset={6} className="typography-meta px-2 py-1">
-                      {filename}
-                    </TooltipContent>
-                  </Tooltip>
-                );
-              })}
+              {imageAttachments.map(renderThumbnail)}
             </div>
           </div>
         )}
@@ -770,206 +668,12 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup, compact = false }
   }
 
   return (
-    <div className={cn(
-      "grid gap-2",
-      compact ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2"
-    )}>
-      {fileItems.map((file, index) => {
-        const fileName = resolveDisplayName(file);
-        const isImage = file.mime?.startsWith('image/');
-        const sizeText = formatFileSize(file.size);
-        const issueLinkKind = getIssueLinkKind(file);
-
-        if (isImage && file.url) {
-          return (
-            <div
-              key={file.url || `${fileName}-${index}`}
-              className="relative aspect-video rounded-lg border border-border/40 bg-muted/10 overflow-hidden group"
-            >
-              <img
-                src={file.url}
-                alt={fileName}
-                className="h-full w-full object-cover"
-                loading="lazy"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-              <div className="absolute bottom-0 left-0 right-0 p-2 text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                <p className="text-xs font-medium truncate">{fileName}</p>
-                {sizeText && <p className="text-xs opacity-80">{sizeText}</p>}
-              </div>
-            </div>
-          );
-        }
-
-        if (issueLinkKind && file.url) {
-          return (
-            <Tooltip key={file.url || `${fileName}-${index}`}>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void openExternalUrl(file.url || '');
-                  }}
-                  className={cn(
-                    "flex items-center gap-2 p-2 rounded-lg border border-border/40 bg-muted/10 hover:bg-muted/20 transition-colors text-left",
-                    compact ? "text-xs" : "text-sm"
-                  )}
-                >
-                  <div className="flex-shrink-0">
-                    <Icon name={issueLinkIcon(issueLinkKind)} className={cn("text-muted-foreground", compact ? "h-3.5 w-3.5" : "h-4 w-4")} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{fileName}</p>
-                    {sizeText && <p className="text-xs text-muted-foreground">{sizeText}</p>}
-                  </div>
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{fileName}{sizeText ? ` (${sizeText})` : ''}</p>
-              </TooltipContent>
-            </Tooltip>
-          );
-        }
-
-        const source = file.source;
-        const sourceType = typeof source?.type === 'string' ? source.type : undefined;
-        const sourcePath = source && typeof (source as Record<string, unknown>).path === 'string' ? (source as Record<string, unknown>).path as string : undefined;
-        const filePath = sourceType === 'file' && sourcePath ? sourcePath : (file.url || '');
-        const isDrawio = filePath && isDrawioFile(filePath);
-
-        if (isDrawio) {
-          return (
-            <Tooltip key={file.url || `${fileName}-${index}`}>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const directory = useDirectoryStore.getState().currentDirectory;
-                    if (directory) {
-                      useUIStore.getState().openContextFile(directory, filePath);
-                    }
-                  }}
-                  className={cn(
-                    "flex items-center gap-2 p-2 rounded-lg border border-border/40 bg-muted/10 hover:bg-muted/20 transition-colors text-left cursor-pointer",
-                    compact ? "text-xs" : "text-sm"
-                  )}
-                >
-                  <Icon name="file" className={cn("text-muted-foreground shrink-0", compact ? "h-3.5 w-3.5" : "h-4 w-4")} />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{fileName}</p>
-                    <p className="text-xs text-status-info">{t('chat.fileAttachment.openInDiagram')}</p>
-                  </div>
-                  <Icon name="external-link" className={cn("text-muted-foreground shrink-0", compact ? "h-3 w-3" : "h-3.5 w-3.5")} />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{t('chat.fileAttachment.openInDiagram')}</p>
-              </TooltipContent>
-            </Tooltip>
-          );
-        }
-
-        return (
-          <Tooltip key={file.url || `${fileName}-${index}`}>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={() => {
-                  if (onShowPopup && file.url) {
-                    onShowPopup({
-                      open: true,
-                      title: fileName,
-                      content: '',
-                      image: {
-                        url: file.url,
-                        mimeType: file.mime,
-                        filename: fileName,
-                      },
-                    });
-                  }
-                }}
-                className={cn(
-                  "flex items-center gap-2 p-2 rounded-lg border border-border/40 bg-muted/10 hover:bg-muted/20 transition-colors text-left",
-                  compact ? "text-xs" : "text-sm"
-                )}
-              >
-                <div className="flex-shrink-0">
-                  {file.mime?.startsWith('image/') ? (
-                    <Icon name="file-image" className={cn("text-muted-foreground", compact ? "h-3.5 w-3.5" : "h-4 w-4")} />
-                  ) : file.mime?.includes('pdf') ? (
-                    <Icon name="file-pdf" className={cn("text-muted-foreground", compact ? "h-3.5 w-3.5" : "h-4 w-4")} />
-                  ) : (
-                    <Icon name="file" className={cn("text-muted-foreground", compact ? "h-3.5 w-3.5" : "h-4 w-4")} />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate">{fileName}</p>
-                  {sizeText && <p className="text-xs text-muted-foreground">{sizeText}</p>}
-                </div>
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>{fileName}{sizeText ? ` (${sizeText})` : ''}</p>
-            </TooltipContent>
-          </Tooltip>
-        );
-      })}
+    <div className={cn('grid grid-cols-1 sm:grid-cols-2 gap-2', className)}>
+      {attachments.map((part) => (
+        part.mediaType.startsWith('image/') ? renderThumbnail(part) : renderChip(part)
+      ))}
     </div>
   );
 });
 
 MessageFilesDisplay.displayName = 'MessageFilesDisplay';
-
-interface ImageGalleryProps {
-  urls: string[];
-  caption?: string;
-  onShowPopup?: (content: ToolPopupContent) => void;
-}
-
-const ImageGallery = memo(({ urls, caption, onShowPopup }: ImageGalleryProps) => {
-  if (urls.length === 0) return null;
-
-  const getGridCols = () => {
-    if (urls.length === 1) return 'grid-cols-1';
-    if (urls.length === 2) return 'grid-cols-2';
-    if (urls.length <= 4) return 'grid-cols-2';
-    return 'grid-cols-3';
-  };
-
-  return (
-    <div className="space-y-2">
-      <div className={cn("grid gap-2", getGridCols())}>
-        {urls.map((url, index) => (
-          <button
-            key={url}
-            type="button"
-            onClick={() => onShowPopup?.({
-              open: true,
-              title: caption || `Image ${index + 1} of ${urls.length}`,
-              content: '',
-              image: {
-                url,
-                gallery: urls.map(u => ({ url: u })),
-                index,
-              },
-            })}
-            className="relative aspect-square rounded-lg border border-border/40 bg-muted/10 overflow-hidden group"
-          >
-            <img
-              src={url}
-              alt={caption || `Image ${index + 1}`}
-              className="h-full w-full object-cover transition-transform group-hover:scale-105"
-              loading="lazy"
-            />
-            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
-          </button>
-        ))}
-      </div>
-      {caption && (
-        <p className="text-sm text-muted-foreground italic">{caption}</p>
-      )}
-    </div>
-  );
-});
-
-ImageGallery.displayName = 'ImageGallery';

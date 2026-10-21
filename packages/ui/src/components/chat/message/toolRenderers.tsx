@@ -1,15 +1,11 @@
+import type { JsonValue, ToolResultPart } from '@openchamber/agent-contract';
 
 import { cn } from '@/lib/utils';
 import { typography } from '@/lib/typography';
-import { formatToolInput, detectToolOutputLanguage } from '@/lib/toolHelpers';
 import { SimpleMarkdownRenderer } from '../MarkdownRenderer';
-import { Icon } from "@/components/icon/Icon";
+import { parseNativeSearchOutput } from '@/lib/native-web-search';
+import { WebSearchResults } from './parts/WebSearchResults';
 
-const cleanOutput = (output: string) => {
-    let cleaned = output.replace(/^<file>\s*\n?/, '').replace(/\n?<\/file>\s*$/, '');
-    cleaned = cleaned.replace(/^\s*\d{5}\|\s?/gm, '');
-    return cleaned.trim();
-};
 
 export const coerceToText = (value: unknown, fallback = ''): string => {
     if (typeof value === 'string') return value;
@@ -20,6 +16,38 @@ export const coerceToText = (value: unknown, fallback = ''): string => {
     } catch {
         return fallback;
     }
+};
+
+/** SDK result envelopes are retained verbatim by the canonical projection. */
+export const nativeToolResultContent = (result: ToolResultPart | undefined): {
+    text: string;
+    images: Array<{ mediaType: string; data: string }>;
+    details?: JsonValue;
+} => {
+    const output = result?.output;
+    if (output === null) return { text: 'null', images: [] };
+    if (!output || typeof output !== 'object' || Array.isArray(output) || !Array.isArray(output.content)) {
+        return { text: coerceToText(output), images: [] };
+    }
+    const text: string[] = [];
+    const images: Array<{ mediaType: string; data: string }> = [];
+    for (const block of output.content) {
+        if (block && typeof block === 'object' && !Array.isArray(block)) {
+            if (block.type === 'text' && typeof block.text === 'string') {
+                text.push(block.text);
+                continue;
+            }
+            if (block.type === 'image' && typeof block.data === 'string' && typeof block.mimeType === 'string'
+                && ['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(block.mimeType)
+                && block.data.length <= 14 * 1024 * 1024) {
+                images.push({ mediaType: block.mimeType, data: block.data });
+                continue;
+            }
+        }
+        // Unrecognized content is still inspectable rather than silently discarded.
+        text.push(coerceToText(block));
+    }
+    return { text: text.join('\n'), images, details: output.details };
 };
 
 // Guards the renderer process against V8 "Zone Allocation failed" OOM crashes
@@ -44,71 +72,6 @@ export const capToolOutputText = (
     return output.slice(0, maxChars) + notice;
 };
 
-const hasLspDiagnostics = (output: string): boolean => {
-    if (!output) return false;
-    return output.includes('<diagnostics')
-        || output.includes('<file_diagnostics>')
-        || output.includes('LSP errors detected')
-        || output.includes('This file has errors');
-};
-
-const stripLspDiagnostics = (output: string): string => {
-    if (!output) return '';
-    return output
-        .replace(/\n{0,2}LSP errors detected[\s\S]*?<diagnostics[^>]*>[\s\S]*?<\/diagnostics>/g, '')
-        .replace(/\n{0,2}This file has errors[\s\S]*?<\/file_diagnostics>/g, '')
-        .replace(/<diagnostics[^>]*>[\s\S]*?<\/diagnostics>/g, '')
-        .replace(/<file_diagnostics>[\s\S]*?<\/file_diagnostics>/g, '')
-        .trim();
-};
-
-const formatInputForDisplay = (input: Record<string, unknown>, toolName?: string) => {
-    if (!input || typeof input !== 'object') {
-        return String(input);
-    }
-    return formatToolInput(input, toolName || '');
-};
-
-const getPatchText = (value: unknown): string | undefined => {
-    if (typeof value === 'string') {
-        const trimmed = value.trim();
-        return trimmed.length > 0 ? trimmed : undefined;
-    }
-
-    if (value && typeof value === 'object') {
-        const patch = (value as { patch?: unknown }).patch;
-        if (typeof patch === 'string') {
-            const trimmed = patch.trim();
-            return trimmed.length > 0 ? trimmed : undefined;
-        }
-    }
-
-    return undefined;
-};
-
-const getToolMetadataPatch = (metadata?: Record<string, unknown>): string | undefined => {
-    if (!metadata || typeof metadata !== 'object') {
-        return undefined;
-    }
-
-    const topLevelPatch = getPatchText((metadata as { patch?: unknown }).patch) ?? getPatchText(metadata.diff);
-    if (topLevelPatch) {
-        return topLevelPatch;
-    }
-
-    const files = Array.isArray((metadata as { files?: unknown }).files) ? (metadata as { files: unknown[] }).files : [];
-    for (const file of files) {
-        if (!file || typeof file !== 'object') {
-            continue;
-        }
-        const patch = getPatchText((file as { patch?: unknown }).patch) ?? getPatchText((file as { diff?: unknown }).diff);
-        if (patch) {
-            return patch;
-        }
-    }
-
-    return undefined;
-};
 
 export const tryParseJsonOutput = (output: string): { data: unknown; isJson: boolean } => {
     if (!output || typeof output !== 'string') {
@@ -137,142 +100,6 @@ export const tryParseJsonOutput = (output: string): { data: unknown; isJson: boo
         return { data: null, isJson: false };
     } catch {
         return { data: null, isJson: false };
-    }
-};
-
-export const formatEditOutput = (output: string, toolName: string, metadata?: Record<string, unknown>): string => {
-    let cleaned = cleanOutput(output);
-
-    if ((toolName === 'edit' || toolName === 'multiedit' || toolName === 'write' || toolName === 'apply_patch') && hasLspDiagnostics(cleaned)) {
-        cleaned = stripLspDiagnostics(cleaned);
-    }
-
-    if ((toolName === 'edit' || toolName === 'multiedit' || toolName === 'apply_patch') && cleaned.trim().length === 0) {
-        const diff = getToolMetadataPatch(metadata);
-        if (diff) {
-            return diff;
-        }
-    }
-
-    return cleaned;
-};
-
-interface ParsedReadOutputLine {
-    text: string;
-    lineNumber: number | null;
-    isInfo: boolean;
-}
-
-export interface ParsedReadToolOutput {
-    type: 'file' | 'directory' | 'unknown';
-    lines: ParsedReadOutputLine[];
-}
-
-export const parseReadToolOutput = (output: string): ParsedReadToolOutput => {
-    const typeMatch = output.match(/<type>(file|directory)<\/type>/i);
-    const detectedType = (typeMatch?.[1]?.toLowerCase() ?? 'unknown') as ParsedReadToolOutput['type'];
-
-    const contentMatch = output.match(/<content>([\s\S]*?)<\/content>/i);
-    const rawContent = contentMatch?.[1] ?? output;
-    const normalizedContent = rawContent.replace(/\r\n/g, '\n');
-    const rawLines = normalizedContent.split('\n');
-
-    const isTruncationInfoLine = (text: string): boolean => {
-        return /\(\s*File has more lines\..*offset.*\)/i.test(text.trim());
-    };
-
-    const parsedLines = rawLines.map((line): ParsedReadOutputLine => {
-        const trimmed = line.trim();
-        const isInfo = (trimmed.startsWith('(') && trimmed.endsWith(')')) || isTruncationInfoLine(trimmed);
-
-        if (detectedType !== 'directory') {
-            const numberedMatch = line.match(/^(\d+):\s?(.*)$/);
-            if (numberedMatch) {
-                const numberedText = numberedMatch[2];
-                const numberedTrimmed = numberedText.trim();
-                const numberedIsInfo =
-                    (numberedTrimmed.startsWith('(') && numberedTrimmed.endsWith(')'))
-                    || isTruncationInfoLine(numberedTrimmed);
-                return {
-                    lineNumber: numberedIsInfo ? null : Number(numberedMatch[1]),
-                    text: numberedText,
-                    isInfo: numberedIsInfo,
-                };
-            }
-        }
-
-        return {
-            lineNumber: null,
-            text: line,
-            isInfo,
-        };
-    });
-
-    const lines = parsedLines.filter((line, index, arr) => {
-        if (line.text.trim().length > 0) {
-            return true;
-        }
-
-        const prev = arr[index - 1];
-        const next = arr[index + 1];
-        const adjacentToInfo = Boolean(prev?.isInfo || next?.isInfo);
-        const hasNumber = line.lineNumber !== null;
-
-        // Drop numbered blank lines wrapped around helper/info rows.
-        if (adjacentToInfo && hasNumber) {
-            return false;
-        }
-
-        return true;
-    });
-
-    return {
-        type: detectedType,
-        lines,
-    };
-};
-
-export const renderListOutput = (output: string, options?: { unstyled?: boolean }) => {
-    try {
-        const lines = output.trim().split('\n').filter(Boolean);
-        if (lines.length === 0) return null;
-
-        const items: Array<{ name: string; depth: number; isFile: boolean }> = [];
-        lines.forEach((line) => {
-            const match = line.match(/^(\s*)(.+)$/);
-            if (match) {
-                const [, spaces, name] = match;
-                const depth = Math.floor(spaces.length / 2);
-                const isFile = !name.endsWith('/');
-                items.push({
-                    name: name.replace(/\/$/, ''),
-                    depth,
-                    isFile,
-                });
-            }
-        });
-
-        return (
-            <div
-                className={cn(
-                    'w-full min-w-0 font-mono space-y-0.5',
-                    options?.unstyled ? null : 'p-3 bg-muted/20 rounded-xl border border-border/30'
-                )}
-                style={typography.tool.popup}
-            >
-                {items.map((item, idx) => (
-                    <div key={idx} className="min-w-0" style={{ paddingLeft: `${item.depth * 20}px` }}>
-                        {item.isFile ? (
-                            <span className="text-foreground/90 block truncate">{item.name}</span>
-                        ) : (
-                            <span className="font-semibold text-foreground block truncate">{item.name}/</span>
-                        )}
-                    </div>
-                ))}
-            </div>
-        );
-    } catch {
-        return null;
     }
 };
 
@@ -401,160 +228,16 @@ export const renderGlobOutput = (output: string, isMobile: boolean, options?: { 
     }
 };
 
-type Todo = {
-    id?: string;
-    content: string;
-    status: 'in_progress' | 'pending' | 'completed' | 'cancelled';
-    priority?: 'high' | 'medium' | 'low';
-};
-
-export const renderTodoOutput = (
-    output: string,
-    labels: {
-        total: string;
-        inProgress: string;
-        pending: string;
-        completed: string;
-        cancelled: string;
-    },
-    options?: { unstyled?: boolean },
-) => {
+export const renderWebSearchOutput = (output: JsonValue | undefined, options?: { unstyled?: boolean }) => {
     try {
-        const raw: unknown = JSON.parse(output);
-        if (!Array.isArray(raw)) {
-            return null;
-        }
-        const todos: Todo[] = raw.filter(
-            (t): t is Todo =>
-                !!t &&
-                typeof t === 'object' &&
-                typeof (t as { content?: unknown }).content === 'string' &&
-                typeof (t as { status?: unknown }).status === 'string',
-        );
-        if (todos.length === 0) {
-            return null;
-        }
-
-        const todosByStatus = todos.reduce((acc, t) => {
-            const status = t.status as keyof typeof acc;
-            if (status in acc) acc[status].push(t);
-            return acc;
-        }, { in_progress: [] as Todo[], pending: [] as Todo[], completed: [] as Todo[], cancelled: [] as Todo[] });
-
-        const getPriorityDot = (priority?: string) => {
-            const baseClasses = 'w-2 h-2 rounded-full flex-shrink-0 mt-1';
-            switch (priority) {
-                case 'high':
-                    return <div className={baseClasses} style={{ backgroundColor: 'var(--status-error)' }} />;
-                case 'medium':
-                    return <div className={baseClasses} style={{ backgroundColor: 'var(--primary)' }} />;
-                case 'low':
-                    return <div className={baseClasses} style={{ backgroundColor: 'var(--status-info)' }} />;
-                default:
-                    return <div className={baseClasses} style={{ backgroundColor: 'var(--muted-foreground)', opacity: 0.5 }} />;
-            }
-        };
-
-        return (
-            <div
-                className={cn(
-                    'space-y-3 w-full min-w-0',
-                    options?.unstyled ? null : 'p-3 bg-muted/20 rounded-xl border border-border/30'
-                )}
-                style={typography.tool.popup}
-            >
-                <div className="flex gap-4 typography-meta pb-2 border-b border-border/20">
-                    <span className="font-medium" style={{ color: 'var(--muted-foreground)' }}>{labels.total}: {todos.length}</span>
-                    {todosByStatus.in_progress.length > 0 && (
-                        <span className="font-medium" style={{ color: 'var(--foreground)' }}>{labels.inProgress}: {todosByStatus.in_progress.length}</span>
-                    )}
-                    {todosByStatus.pending.length > 0 && (
-                        <span style={{ color: 'var(--muted-foreground)' }}>{labels.pending}: {todosByStatus.pending.length}</span>
-                    )}
-                    {todosByStatus.completed.length > 0 && (
-                        <span style={{ color: 'var(--status-success)' }}>{labels.completed}: {todosByStatus.completed.length}</span>
-                    )}
-                    {todosByStatus.cancelled.length > 0 && (
-                        <span style={{ color: 'var(--muted-foreground)', opacity: 0.5 }}>{labels.cancelled}: {todosByStatus.cancelled.length}</span>
-                    )}
+        const parsed = parseNativeSearchOutput(output);
+        if (parsed) {
+            return (
+                <div className={cn('w-full min-w-0', options?.unstyled ? null : 'p-2 bg-muted/20 rounded-xl border border-border/20')}>
+                    <WebSearchResults output={parsed} />
                 </div>
-
-                {todosByStatus.in_progress.length > 0 && (
-                    <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: 'var(--foreground)' }} />
-                            <span className="typography-meta font-semibold text-foreground uppercase tracking-wide">{labels.inProgress}</span>
-                        </div>
-                        <div className="space-y-1.5 pl-4">
-                            {todosByStatus.in_progress.map((todo, idx) => (
-                                <div key={todo.id || idx} className="flex items-start gap-2">
-                                    {getPriorityDot(todo.priority)}
-                                    <span className="typography-code text-foreground flex-1 leading-relaxed">{coerceToText(todo.content)}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {todosByStatus.pending.length > 0 && (
-                    <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-muted-foreground/50" />
-                            <span className="typography-meta font-semibold text-muted-foreground uppercase tracking-wide">{labels.pending}</span>
-                        </div>
-                        <div className="space-y-1.5 pl-4">
-                            {todosByStatus.pending.map((todo, idx) => (
-                                <div key={todo.id || idx} className="flex items-start gap-2">
-                                    {getPriorityDot(todo.priority)}
-                                    <span className="typography-code text-foreground flex-1 leading-relaxed">{coerceToText(todo.content)}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {todosByStatus.completed.length > 0 && (
-                    <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                            <Icon name="check" className="w-3 h-3"  style={{ color: 'var(--status-success)' }}/>
-                            <span className="typography-meta font-semibold uppercase tracking-wide" style={{ color: 'var(--status-success)' }}>{labels.completed}</span>
-                        </div>
-                        <div className="space-y-1.5 pl-4">
-                            {todosByStatus.completed.map((todo, idx) => (
-                                <div key={todo.id || idx} className="flex items-start gap-2">
-                                    <Icon name="check" className="w-3 h-3 mt-0.5 flex-shrink-0"  style={{ color: 'var(--status-success)', opacity: 0.7 }}/>
-                                    <span className="typography-code text-foreground flex-1 leading-relaxed">{coerceToText(todo.content)}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {todosByStatus.cancelled.length > 0 && (
-                    <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                            <span className="w-3 h-3 text-muted-foreground/50">×</span>
-                            <span className="typography-meta font-semibold text-muted-foreground/50 uppercase tracking-wide">{labels.cancelled}</span>
-                        </div>
-                        <div className="space-y-1.5 pl-4">
-                            {todosByStatus.cancelled.map((todo, idx) => (
-                                <div key={todo.id || idx} className="flex items-start gap-2">
-                                    <span className="w-3 h-3 text-muted-foreground/50 mt-0.5 flex-shrink-0">×</span>
-                                    <span className="typography-code text-muted-foreground/50 line-through flex-1 leading-relaxed">{coerceToText(todo.content)}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-            </div>
-        );
-    } catch {
-        return null;
-    }
-};
-
-export const renderWebSearchOutput = (output: string, options?: { unstyled?: boolean }) => {
-    try {
+            );
+        }
         return (
             <div
                 className={cn(
@@ -563,7 +246,7 @@ export const renderWebSearchOutput = (output: string, options?: { unstyled?: boo
                 )}
                 style={typography.tool.popup}
             >
-                <SimpleMarkdownRenderer content={output} variant="tool" />
+                <SimpleMarkdownRenderer content={coerceToText(output)} variant="tool" />
             </div>
         );
     } catch {
@@ -579,7 +262,7 @@ interface UnifiedDiffLine {
     content: string;
 }
 
-export interface UnifiedDiffHunk {
+interface UnifiedDiffHunk {
     file: string;
     oldStart: number;
     newStart: number;
@@ -645,9 +328,3 @@ export const parseDiffToUnified = (diffText: string): UnifiedDiffHunk[] => {
 
     return hunks;
 };
-
-export const detectLanguageFromOutput = (output: string, toolName: string, input?: Record<string, unknown>) => {
-    return detectToolOutputLanguage(toolName, output, input);
-};
-
-export { formatInputForDisplay };

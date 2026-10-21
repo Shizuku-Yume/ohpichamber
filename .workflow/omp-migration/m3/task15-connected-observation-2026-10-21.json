@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "task": "omp-through-m3/15",
+  "observedAt": "2026-10-21T15:18:00+08:00",
+  "status": "connected-observation-passed",
+  "head": "162d956fd",
+  "sourceChanges": [
+    "packages/web/server/lib/host/worker-operation-authorizer.js (+ test, DOCUMENTATION.md): admit only non-isolated native `task` delegation after scope/agent/preset/explicit-deny checks; isolated children are refused because SDK isolation drops the programmatic authorization extensions, and caller-supplied child names must be one safe path segment. Non-isolated child tool calls still re-enter the Host authorizer.",
+    "packages/agent-service/src/supervisor/service.ts (+ session-native.test.ts): contain a rejected subagent lifecycle projection inside the offending worker instead of an unhandled rejection that exits the service."
+  ],
+  "build": {
+    "worktree": "/home/shizuku/Project/ohpichamber-worktrees/15-close-receipt",
+    "webDist": { "path": "packages/web/dist/index.html", "sha256": "d2c71cae09b8a3018cbc9c6ce301572828b9d935a1b96296f17d308198cf0065" },
+    "agentService": { "path": "packages/agent-service/dist/index.js", "sha256": "db41752a88e9385f85a4deecb66651e12e649a1c2767c83c38e27be6f1bc8d9f" },
+    "contract": "bun run --cwd packages/agent-contract build exit 0",
+    "agentServiceBuild": "bun run --cwd packages/agent-service build exit 0",
+    "webBuild": "bun run --cwd packages/web build exit 0"
+  },
+  "environment": {
+    "host": "http://127.0.0.1:3220 (isolated HOME=/tmp/ohpi-task15b/home, OPENCHAMBER_DATA_DIR=/tmp/ohpi-task15b/data)",
+    "fixture": "http://127.0.0.1:4610/v1, provider/model t15fixture/t15-fixture",
+    "browser": "Google Chrome headless, CDP 9346, viewport class mobile-pointer device-tablet",
+    "workspace": "/tmp/ohpi-task15b/chats/work",
+    "projectId": "pro_86c8517e-4725-4712-860e-6ad2f1f1a788",
+    "workspaceId": "ws_8a1ba970-b836-4c6e-a7f9-4d0dee8d462c"
+  },
+  "tests": [
+    { "command": "cd packages/web && bunx vitest run server/lib/host/worker-operation-authorizer.test.js", "result": "19 passed (19), 471 ms" },
+    { "command": "cd packages/agent-service && bun test src/worker/session-native.test.ts -t 'native child tool calls'", "result": "1 pass, 15 filtered, 3 expect(), 11.12 s" }
+  ],
+  "states": {
+    "loading": {
+      "settings": { "text": "Loading web search settings…", "screenshot": "/tmp/ohpi-task15b/evidence/32-websearch-loading.png", "sha256": "4f27a406489686775e5b0fe35445861c69e746fa67ab24eeea499a7bdace62c0", "note": "Owned observation; the earlier sidebar Loading sessions… screenshot 24 is excluded because a concurrent browser click/reload preceded it." }
+    },
+    "empty": {
+      "surface": "Settings → Snippets",
+      "text": ["Snippets", "Total: 0", "Select a snippet", "Choose a snippet from the sidebar to edit it."],
+      "screenshot": "/tmp/ohpi-task15b/evidence/28-settings-snippets.png",
+      "sha256": "c69fc1412cdfec07daa108684abe334b5d87cfa5b776168467374bfac12c77ef"
+    },
+    "unavailable": {
+      "setup": "Stopped the Bun Agent Service pid 486497 with SIGTERM; Host canonical readiness then returned HTTP 503.",
+      "surface": "Settings → Web search",
+      "text": "Could not read search settings. Previous settings are preserved.",
+      "aria": "role=alert with a Retry action; the previously loaded provider/fallback/API-key settings remained rendered",
+      "screenshot": "/tmp/ohpi-task15b/evidence/34-websearch-unavailable.png",
+      "sha256": "8dc87b8c539408484fd0ec5a417544c44595ca4ed2e4acdce84dee2fdaa0d416"
+    },
+    "partial": {
+      "reused": true,
+      "provenance": ".workflow/omp-migration/m3/task54-stats-2026-10-21.json",
+      "surface": "Settings → Usage",
+      "text": ["Some sessions could not be read. These statistics are incomplete.", "e688a444-0835-4bd9-b9dd-2c76a235edc6: USAGE_SESSION_CORRUPT", "A's Sessions 1 / Tokens 460 preserved"],
+      "screenshot": "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/task54-stats-partial.png",
+      "sha256": "c881875dc503ff3f6de90f6313e06af23dd299d9b63772bbb378fe9f8461e375"
+    }
+  },
+  "childHierarchy": {
+    "parentSessionId": "16c0d827-b994-4a15-bf0c-5b6e13c3c602",
+    "parentTitle": "T15-TASK session",
+    "childSessionId": "01a15d4d-792d-770a-bbfe-32cb3414d892",
+    "subagentId": "t15-child-1",
+    "role": "t15child",
+    "status": "completed",
+    "toolCallId": "call_t15",
+    "api": "GET /api/agent/v1/subagents?sessionId=16c0d827-b994-4a15-bf0c-5b6e13c3c602 returned 200 with the completed child; the child row remained after a Host restart",
+    "sidebar": "After clicking the hover-revealed `Expand subsessions` control, the sidebar rendered `t15child` nested under its T15-TASK parent",
+    "screenshot": "/tmp/ohpi-task15b/evidence/25-sidebar-child-expanded.png",
+    "sha256": "580fb882a2dc04da53ff2919051f450172fbcc94603db46b6767351bb8827e76",
+    "history": "The parent task tool call projected as completed; the child native transcript contains the task prompt and fixture replies",
+    "failureContainment": "A duplicate child identity had previously produced an unhandled rejection in the Bun service and HTTP 503; the current service stops only the offending root, and the successful rerun used a unique child identity."
+  },
+  "searchLabelsAriaTheme": {
+    "settingsSearch": {
+      "control": "input[aria-label=\"Search settings\"]",
+      "query": "providers",
+      "result": "settings filtered to the Providers page content",
+      "screenshot": "/tmp/ohpi-task15b/evidence/29-settings-search.png",
+      "sha256": "85525fb99c4defdb28666e9b61d4531f92b9ebdef0256319b48c6b4dcdb0b040"
+    },
+    "theme": {
+      "controls": "buttons role=radio aria-label System/Light/Dark",
+      "observed": {
+        "system": { "htmlClass": "light", "bodyBackground": "rgb(253, 252, 250)", "themeMode": "system" },
+        "dark": { "htmlClass": "dark", "bodyBackground": "rgb(18, 15, 14)", "themeMode": "dark", "selected": ["Dark"] },
+        "restoredSystem": { "htmlClass": "light", "bodyBackground": "rgb(253, 252, 250)", "themeMode": "system" }
+      },
+      "screenshots": ["/tmp/ohpi-task15b/evidence/30-settings-appearance.png", "/tmp/ohpi-task15b/evidence/31-settings-dark.png"],
+      "sha256": ["0d9c058d484d3e9a73d61431b320116edd83890580e70dcbf76ceccf07986ae2"],
+      "audit": "No migration-driven search/label/ARIA/theme change was required; existing controls remain labelled and functional on the migrated Settings surface."
+    }
+  },
+  "limitations": [
+    "The partial state is proven by the archived Task54 Settings → Usage connected observation, not by a new Task15 run.",
+    "The browser session used a mobile-pointer/tablet viewport class; desktop-only hover behavior was not part of this Task15 run.",
+    "Host filesystem, Board launch, Guest projection and Guest shell output/stop were not repeated; their current receipts are recorded in the Task15 closure audit and Task73/74."
+  ],
+  "cleanup": "Host 3220, fixture 4610 and Chrome CDP 9346 remained running after the anomaly/restore check so the next gate step can reuse the isolated runtime; no repository cleanup was required.",
+  "review": {
+    "briefA": "pass; no blocking findings",
+    "briefB": "pass; no blocking findings",
+    "security": "pass after fix; the first review blocked isolated task delegation and the fix now refuses flat/batch isolation and unsafe child names. Nonblocking follow-up: cross-root subagent-id collisions can still stop the later root via the containment catch; identity scoping is left as a separate hardening item."
+  }
+}

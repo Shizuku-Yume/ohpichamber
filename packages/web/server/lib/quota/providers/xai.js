@@ -1,17 +1,13 @@
-import { readAuthFile, writeAuthFile } from '../../opencode/auth.js';
+import { credentialAccessToken, credentialRefreshToken } from './selected-credential.js';
 import { buildResult, toUsageWindow } from '../utils/index.js';
 
 export const providerId = 'xai';
 export const providerName = 'xAI';
 
 const USAGE_URL = 'https://grok.com/grok_api_v2.GrokBuildBilling/GetGrokCreditsConfig';
-const TOKEN_URL = 'https://auth.x.ai/oauth2/token';
-const CLIENT_ID = 'b1a00492-073a-47ea-816f-4c329264a828';
-const REFRESH_SKEW_MS = 120_000;
+const ACCESS_EXPIRY_SKEW_MS = 120_000;
 const REQUEST_TIMEOUT_MS = 15_000;
 const EMPTY_GRPC_WEB_BODY = new Uint8Array([0, 0, 0, 0, 0]);
-
-let refreshPromise = null;
 
 const nonEmptyString = (value) => {
   if (typeof value !== 'string') return null;
@@ -19,20 +15,6 @@ const nonEmptyString = (value) => {
   return trimmed ? trimmed : null;
 };
 
-const readXaiAuth = () => {
-  try {
-    const entry = readAuthFile()?.xai;
-    if (!entry || typeof entry !== 'object' || entry.type !== 'oauth') {
-      return { entry: null, error: null };
-    }
-    if (!nonEmptyString(entry.access) && !nonEmptyString(entry.refresh)) {
-      return { entry: null, error: null };
-    }
-    return { entry, error: null };
-  } catch {
-    return { entry: null, error: 'Failed to read xAI OAuth credentials' };
-  }
-};
 
 const decodeJwtClaims = (token) => {
   try {
@@ -44,84 +26,26 @@ const decodeJwtClaims = (token) => {
   }
 };
 
-const tokenNeedsRefresh = (entry) => {
+const accessTokenExpired = (entry) => {
   const access = nonEmptyString(entry.access);
   if (!access) return true;
 
-  const refreshDeadline = Date.now() + REFRESH_SKEW_MS;
+  const expiryDeadline = Date.now() + ACCESS_EXPIRY_SKEW_MS;
   const storedExpiry = Number(entry.expires);
-  if (Number.isFinite(storedExpiry) && storedExpiry <= refreshDeadline) return true;
+  if (Number.isFinite(storedExpiry) && storedExpiry <= expiryDeadline) return true;
 
   const jwtExpiry = Number(decodeJwtClaims(access)?.exp) * 1000;
-  return Number.isFinite(jwtExpiry) && jwtExpiry <= refreshDeadline;
+  return Number.isFinite(jwtExpiry) && jwtExpiry <= expiryDeadline;
 };
 
-const refreshXaiOauth = async (entry) => {
-  if (!refreshPromise) {
-    refreshPromise = (async () => {
-      const refreshToken = nonEmptyString(entry.refresh);
-      if (!refreshToken) {
-        throw new Error('xAI OAuth entry has no usable refresh token');
-      }
-
-      const response = await fetch(TOKEN_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          client_id: CLIENT_ID,
-          refresh_token: refreshToken,
-          grant_type: 'refresh_token'
-        }),
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
-      });
-
-      if (!response.ok) {
-        throw new Error(`xAI OAuth refresh failed with HTTP ${response.status}`);
-      }
-
-      let payload;
-      try {
-        payload = await response.json();
-      } catch {
-        throw new Error('xAI OAuth refresh returned invalid JSON');
-      }
-
-      const access = nonEmptyString(payload?.access_token);
-      if (!access) {
-        throw new Error('xAI OAuth refresh returned no access token');
-      }
-
-      const expiresIn = payload?.expires_in ?? 3600;
-      if (typeof expiresIn !== 'number' || !Number.isFinite(expiresIn)) {
-        throw new Error('xAI OAuth refresh returned an invalid expiry');
-      }
-      const expires = Date.now() + expiresIn * 1000;
-      const refreshed = {
-        ...entry,
-        type: 'oauth',
-        access,
-        refresh: nonEmptyString(payload?.refresh_token) ?? refreshToken,
-        expires
-      };
-
-      const auth = readAuthFile();
-      auth.xai = refreshed;
-      writeAuthFile(auth);
-      return refreshed;
-    })().finally(() => {
-      refreshPromise = null;
-    });
+// Native AuthStorage owns OAuth refresh and refresh-token rotation. Quota reads
+// consume its exact selected access token without mutating the native credential.
+const requireFreshAccess = (entry) => {
+  const access = nonEmptyString(entry.access);
+  if (!access || accessTokenExpired(entry)) {
+    throw new Error('xAI access token expired — send a Grok message or re-authorize');
   }
-
-  return refreshPromise;
-};
-
-const ensureFreshAccess = async (entry) => {
-  if (!tokenNeedsRefresh(entry)) return entry;
-  if (!nonEmptyString(entry.refresh)) {
-    throw new Error('xAI OAuth access token is expired and has no usable refresh token');
-  }
-  return refreshXaiOauth(entry);
+  return access;
 };
 
 const readVarint = (bytes, state) => {
@@ -312,8 +236,8 @@ const parseUsage = (bytes) => {
   return { usedPercent, resetAt };
 };
 
-const fetchUsage = async (accessToken) => {
-  const response = await fetch(USAGE_URL, {
+const fetchUsage = async (accessToken, fetchImpl) => {
+  const response = await fetchImpl(USAGE_URL, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -340,19 +264,10 @@ const fetchUsage = async (accessToken) => {
   return parseUsage(new Uint8Array(await response.arrayBuffer()));
 };
 
-export const isConfigured = () => Boolean(readXaiAuth().entry);
+export const isConfigured = (credential) => credential?.type === 'oauth' && Boolean(credentialAccessToken(credential) || credentialRefreshToken(credential));
 
-export const fetchQuota = async () => {
-  const { entry, error: authError } = readXaiAuth();
-  if (authError) {
-    return buildResult({
-      providerId,
-      providerName,
-      ok: false,
-      configured: true,
-      error: authError
-    });
-  }
+export const fetchQuota = async ({ credential, fetchImpl = fetch } = {}) => {
+  const entry = isConfigured(credential) ? credential : null;
   if (!entry) {
     return buildResult({
       providerId,
@@ -362,12 +277,11 @@ export const fetchQuota = async () => {
       error: 'Not configured'
     });
   }
+  if (accessTokenExpired(entry)) return buildResult({ providerId, providerName, ok: false, configured: true, error: 'Selected xAI OAuth credential expired; re-authentication required' });
 
   try {
-    const freshEntry = await ensureFreshAccess(entry);
-    const accessToken = nonEmptyString(freshEntry.access);
-    if (!accessToken) throw new Error('xAI OAuth entry has no usable access token');
-    const usage = await fetchUsage(accessToken);
+    const accessToken = requireFreshAccess(entry);
+    const usage = await fetchUsage(accessToken, fetchImpl);
 
     return buildResult({
       providerId,
@@ -390,7 +304,7 @@ export const fetchQuota = async () => {
       providerName,
       ok: false,
       configured: true,
-      error: error instanceof Error ? error.message : 'Request failed'
+      error: 'Request failed'
     });
   }
 };

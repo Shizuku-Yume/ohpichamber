@@ -1,17 +1,13 @@
 /**
  * Which autocomplete a caret position asks for.
  *
- * The composer has four pickers (command, skill, snippet, file/agent mention)
- * and the rule that opens each of them used to be inlined in a single 90-line
- * `updateAutocompleteState` callback, duplicating the boundary logic that
- * `scanPrefixTokens` and `scanMentions` already own. This module answers the
- * one question the composer actually asks — "given the text and the caret,
- * what should be open?" — as a pure function, so the editor layer only has to
- * report the caret and render the result.
+ * Three pickers: native commands/templates, inline skills and file/agent mentions.
+ * This module owns the caret trigger rules, not expansion or authorization.
+ * The editor reports text and caret position, then renders the selected picker.
  *
- * Exactly one trigger can be active, and order matters: the command palette
- * (a leading `/`) outranks the inline skill picker, which outranks snippets,
- * which outrank mentions. That precedence is the previous behavior, preserved.
+ * Exactly one trigger is active: a leading slash command/template invocation,
+ * then inline `$skill`, then file/agent mentions. Comment fields expose their
+ * own leading-slash template picker through matchSnippetTrigger.
  */
 
 import {
@@ -19,7 +15,7 @@ import {
     type FileMentionAutocompleteInputSource,
 } from '../../fileMentionAutocompleteState';
 
-export type AutocompleteKind = 'command' | 'skill' | 'snippet' | 'mention';
+export type AutocompleteKind = 'command' | 'skill' | 'mention';
 
 export interface AutocompleteTrigger {
     kind: AutocompleteKind;
@@ -64,13 +60,13 @@ function matchCommandPalette(value: string, cursorPosition: number): Autocomplet
 }
 
 /**
- * An inline `/skill` or `#snippet` still being typed: the nearest sigil before
- * the caret, at a word boundary, with no separator between it and the caret.
+ * A `$skill` still being typed: the nearest sigil before the
+ * caret, at a word boundary, with no separator between it and the caret.
  */
 function matchInlineToken(
     value: string,
     cursorPosition: number,
-    sigil: '/' | '#',
+    sigil: '$',
     kind: AutocompleteKind,
 ): AutocompleteTrigger | null {
     const textBeforeCursor = value.substring(0, cursorPosition);
@@ -82,6 +78,14 @@ function matchInlineToken(
     if (query.includes(' ') || query.includes('\n')) return null;
 
     return { kind, query };
+}
+
+/**
+ * A native `/template` query at the start of a comment field.
+ * Argument substitution is owned by the worker, not by this picker.
+ */
+export function matchSnippetTrigger(value: string, cursorPosition: number): string | null {
+    return matchCommandPalette(value, cursorPosition)?.query ?? null;
 }
 
 /**
@@ -97,8 +101,7 @@ export function resolveAutocompleteTrigger(
     if (context.inputMode === 'shell') return null;
 
     return matchCommandPalette(value, cursorPosition)
-        ?? matchInlineToken(value, cursorPosition, '/', 'skill')
-        ?? matchInlineToken(value, cursorPosition, '#', 'snippet')
+        ?? matchInlineToken(value, cursorPosition, '$', 'skill')
         ?? matchMention(value, cursorPosition, context);
 }
 

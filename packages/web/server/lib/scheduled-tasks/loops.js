@@ -3,8 +3,7 @@
  *
  * Loops are git-commit-able markdown files with YAML frontmatter, discovered
  * from `.agents/loops/*.md` (project scope, including ancestor directories up
- * to the worktree root) and `~/.agents/loops/*.md` (user scope), mirroring the
- * skills discovery pattern (`packages/web/server/lib/opencode/skills.js`).
+ * to the worktree root) and `~/.agents/loops/*.md` (user scope).
  *
  * File format:
  *
@@ -37,6 +36,8 @@
  * the markdown file; it continues to live in the project config/state store.
  */
 
+import { asNonEmptyString } from '../shared/guards.js';
+import { createHash } from 'crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -45,14 +46,6 @@ import { MAX_TASK_NAME_LENGTH } from '../projects/project-config.js';
 
 const LOOP_DIR_NAME = 'loops';
 const USER_LOOP_ROOT = () => path.join(os.homedir(), '.agents', LOOP_DIR_NAME);
-
-const asNonEmptyString = (value) => {
-  if (typeof value !== 'string') {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-};
 
 /**
  * Split a `provider/model` string into its two parts. Splits on the first `/`
@@ -140,6 +133,14 @@ export const parseLoopDefinition = (filePath) => {
   };
 };
 
+/**
+ * What a local approval of a project loop covers: everything that decides
+ * what runs and when. `enabled` is left out, it is what the approval gates.
+ */
+export const loopFingerprint = (definition) => createHash('sha256')
+  .update(JSON.stringify({ name: definition.name, schedule: definition.schedule, execution: definition.execution }))
+  .digest('hex');
+
 export const setLoopFileEnabled = (filePath, enabled) => {
   if (!parseLoopDefinition(filePath)) {
     return false;
@@ -209,7 +210,7 @@ export const discoverLoops = (projectPath) => {
     if (existing && (existing.scope === 'project' || scope === 'user')) {
       continue;
     }
-    byName.set(definition.name, { scope, filePath, definition });
+    byName.set(definition.name, { scope, filePath, definition, fingerprint: loopFingerprint(definition) });
   }
   for (const entry of byName.values()) {
     loops.push(entry);

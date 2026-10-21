@@ -9,8 +9,10 @@ import { useUpdateStore } from '@/stores/useUpdateStore';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { createWorktreeSession } from '@/lib/worktreeSessionCreator';
-import { showOpenCodeStatus } from '@/lib/openCodeStatus';
+import { useI18n } from '@/lib/i18n';
+import { showRuntimeStatus } from '@/lib/runtimeStatus';
 import { addSelectionToChat } from '@/lib/addSelectionToChat';
+import { navigateSessionHistory } from '@/lib/sessionNavigationHistory';
 
 const getActiveElementSelectedText = (): string => {
   if (typeof document === 'undefined') {
@@ -96,6 +98,7 @@ type MenuAction =
 export const useMenuActions = (
   onToggleMemoryDebug?: () => void
 ) => {
+  const { t } = useI18n();
   const openNewSessionDraft = useSessionUIStore((s) => s.openNewSessionDraft);
   const toggleCommandPalette = useUIStore((s) => s.toggleCommandPalette);
   const setCommandPaletteOpen = useUIStore((s) => s.setCommandPaletteOpen);
@@ -142,7 +145,7 @@ export const useMenuActions = (
     if (sessions.length === 0) return;
 
     const currentSessionId = useSessionUIStore.getState().currentSessionId;
-    const currentIndex = sessions.findIndex((session) => session.id === currentSessionId);
+    const currentIndex = sessions.findIndex((session) => session.sessionId === currentSessionId);
     let nextIndex = direction > 0 ? 0 : sessions.length - 1;
     if (currentIndex >= 0) {
       nextIndex = (currentIndex + direction + sessions.length) % sessions.length;
@@ -151,7 +154,7 @@ export const useMenuActions = (
     if (!nextSession) return;
 
     setSessionSwitcherOpen(false);
-    useSessionUIStore.getState().setCurrentSession(nextSession.id);
+    useSessionUIStore.getState().setCurrentSession(nextSession.sessionId);
   }, [setSessionSwitcherOpen]);
 
   const navigateProject = React.useCallback((direction: -1 | 1) => {
@@ -294,12 +297,14 @@ export const useMenuActions = (
           onToggleMemoryDebug?.();
           break;
 
+        // Same history as the Back/Forward shortcuts, which this menu's
+        // accelerators shadow on Windows and Linux.
         case 'go-back':
-          useDirectoryStore.getState().goBack();
+          navigateSessionHistory(-1);
           break;
 
         case 'go-forward':
-          useDirectoryStore.getState().goForward();
+          navigateSessionHistory(1);
           break;
 
         case 'previous-session':
@@ -323,8 +328,8 @@ export const useMenuActions = (
           break;
 
         case 'download-logs': {
-          void showOpenCodeStatus().catch(() => {
-            toast.error('Failed to collect OpenCode status');
+          void showRuntimeStatus().catch(() => {
+            toast.error(t('runtimeStatusDialog.toast.collectFailed'));
           });
           break;
         }
@@ -344,6 +349,7 @@ export const useMenuActions = (
       toggleCommandPalette,
       toggleHelpDialog,
       toggleSidebar,
+      t,
     ]
   );
 

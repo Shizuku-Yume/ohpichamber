@@ -1,19 +1,19 @@
-import { readAuthFile } from '../../opencode/auth.js';
+import { credentialAccessToken } from './selected-credential.js';
 import {
-  getAuthEntry,
-  normalizeAuthEntry,
   buildResult,
   toUsageWindow,
   toNumber,
   asObject,
+  asNonEmptyString,
   formatMoney
 } from '../utils/index.js';
 
 export const providerId = 'openrouter';
 export const providerName = 'OpenRouter';
-export const aliases = ['openrouter'];
-const OPENROUTER_QUOTA_URL = 'https://openrouter.ai/api/v1/key';
+
+const OPENROUTER_API_BASE = 'https://openrouter.ai/api/v1';
 const PERIOD_SECONDS = { daily: 86400, weekly: 604800, monthly: 30 * 86400 };
+
 
 export const resolveResetAt = (limitReset, nowMs) => {
   const now = new Date(nowMs);
@@ -30,16 +30,10 @@ export const resolveResetAt = (limitReset, nowMs) => {
   return null;
 };
 
-export const isConfigured = () => {
-  const auth = readAuthFile();
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  return Boolean(entry?.key || entry?.token);
-};
+export const isConfigured = (credential) => Boolean(credentialAccessToken(credential));
 
-export const fetchQuota = async () => {
-  const auth = readAuthFile();
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  const apiKey = entry?.key ?? entry?.token;
+export const fetchQuota = async ({ credential } = {}) => {
+  const apiKey = credentialAccessToken(credential);
 
   if (!apiKey) {
     return buildResult({
@@ -54,7 +48,7 @@ export const fetchQuota = async () => {
   const timeoutSignal = AbortSignal.timeout(15_000);
 
   try {
-    const response = await fetch(OPENROUTER_QUOTA_URL, {
+    const response = await fetch(`${OPENROUTER_API_BASE}/key`, {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -181,7 +175,7 @@ export const fetchQuota = async () => {
         ? 'Request timed out'
         : isParseError
           ? 'Invalid response from provider'
-          : (error instanceof Error ? error.message : 'Request failed')
+          : ('Request failed')
     });
   }
 };

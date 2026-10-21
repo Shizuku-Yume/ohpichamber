@@ -2,9 +2,9 @@
 
 ## What this project is
 
-OhPiChamber is an OpenChamber fork. The immediate goal is to adopt the latest upstream repository as the code baseline and preserve/restore the fork's customization. See the [rebaseline spec](specs/upstream-rebaseline.md) and recover its next task through the workflow.
+OhPiChamber is an OpenChamber fork. The [active effort](specs/omp-through-m3.md) migrates the adopted application baseline to OMP through M3 acceptance. The [rebaseline spec](specs/upstream-rebaseline.md) records the closed source/document prerequisite and unverified runtime certification. Recover the next task through the workflow.
 
-The pinned upstream application source has been adopted; unavailable runtime certification remains explicit. M0 SDK evidence and the recorded provider/platform limits are accepted for entry into M1 Host extraction and VS Code extension retirement. Application execution still uses the inherited OpenCode integration. The target is OMP-only across Web/PWA, Electron, mobile and Guest SDK surfaces; the Agent Service, Canonical API and client cutover remain proposed. [development.md](development.md) owns current evidence; the [old upstream assessment](upstream-review.md) is historical research, not a selective-import policy.
+The pinned upstream application source has been adopted; unavailable runtime certification remains explicit. M0 SDK evidence and the recorded provider/platform limits were accepted, M1 Host extraction, durable operational metadata, authenticated credential preflight and VS Code extension retirement are complete, and the M2 service and credential-handoff gates are verified. The M3 Canonical Client cutover and task 17 legacy lifecycle retirement are implemented: retained UI, settings, Board, Guest Shell and utility callers use the canonical API, and the Host/Electron composition roots carry no legacy execution owner. The final root gate passed at HEAD `8d179c4e2` on 2026-10-22 (all seven phases exit 0; `.workflow/omp-migration/m3/task18-gate-final-2026-10-22.json`); postgate source `8d179c4e2` has the a92 matrix PASS for W7 visual sanity, W8, W9 child/Board/Guest, W10 and PWA (`.workflow/omp-migration/m3/task57-a92-matrix-2026-10-22/`). Task18 and Task57 are archived. Limits: packaged live-region at 400 ms is inconclusive while the Web announcement was observed; PWA auth proof is the Web Host with existing packaged state, not packaged Electron password auth; child snapshot 404 is intentional. Coordinator final closure/review remains pending, so the spec stays in progress and no M3 pass is claimed yet. [development.md](development.md) owns current evidence; the old `b9fbb4bb0` gate and `068a` artifacts are historical, and the [old upstream assessment](upstream-review.md) is historical research, not a selective-import policy.
 
 ## Starting a conversation
 
@@ -28,7 +28,7 @@ bun run lint
 `packages/electron` - native desktop shell and privileged boundary.
 `packages/mobile` - Capacitor shell and mobile surface.
 `packages/sdk` - Guest SDK contract and examples.
-`.workflow/omp-migration` - OMP migration scope, architecture, proposed contracts, and gates.
+`.workflow/omp-migration` - OMP migration scope, architecture, implemented contract and design records, and gates.
 `.workflow/isolated-spaces` - inherited sandbox design and dated experiments, subject to OMP migration decisions.
 `.workflow/development.md` - current progress, evidence limits, and next step.
 `.workflow/upstream-review.md` - historical pinned selective-sync assessment.
@@ -47,8 +47,8 @@ Do not add OMP compatibility layers, dual-engine selectors or fallback engines, 
 
 ## Branches and landing
 
-Landing: direct
+Landing: local-merge
 
 Local Git work follows the landing mode below. GitHub commands still require explicit user instruction under the root guide. Preserve unrelated worktree changes and use focused commits.
 
-Work lands on the current branch. `.workflow/merge-strategy.md` describes alternate task-branch modes. Parallel implementation needs separate worktrees; parallel read-only research does not.
+Task branches integrate into the effort branch, and the effort gate merges that branch to main. `.workflow/merge-strategy.md` describes alternate task-branch modes. Parallel implementation needs separate worktrees; parallel read-only research does not.

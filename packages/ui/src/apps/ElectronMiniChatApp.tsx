@@ -11,15 +11,16 @@ import { usePushVisibilityBeacon } from '@/hooks/usePushVisibilityBeacon';
 import { useWindowTitle } from '@/hooks/useWindowTitle';
 import { useRoutingSync } from '@/hooks/useRoutingSync';
 import { useRootScrollLock } from '@/hooks/useRootScrollLock';
-import { opencodeClient } from '@/lib/opencode/client';
 import type { RuntimeAPIs } from '@/lib/api/types';
-import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { useAgentsStore } from '@/stores/useAgentsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useGitStore } from '@/stores/useGitStore';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { SyncProvider, useSessions } from '@/sync/sync-context';
 import { useSync } from '@/sync/use-sync';
+import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { SyncRuntimeEffects } from './AppEffects';
 import { useAppFontEffects } from './useAppFontEffects';
 import { useMiniChatKeyboardShortcuts } from '@/hooks/useMiniChatKeyboardShortcuts';
@@ -74,9 +75,8 @@ const MiniChatBootstrap: React.FC<{ config: MiniChatConfig }> = ({ config }) => 
   const isInitialized = useConfigStore((state) => state.isInitialized);
   const isConnected = useConfigStore((state) => state.isConnected);
   const loadProviders = useConfigStore((state) => state.loadProviders);
-  const loadAgents = useConfigStore((state) => state.loadAgents);
-  const providersCount = useConfigStore((state) => state.providers.length);
-  const agentsCount = useConfigStore((state) => state.agents.length);
+  const loadAgents = useAgentsStore((state) => state.loadAgents);
+  const providersLoaded = useConfigStore((state) => state.providersLoaded);
   const sync = useSync();
 
   React.useEffect(() => {
@@ -125,9 +125,9 @@ const MiniChatBootstrap: React.FC<{ config: MiniChatConfig }> = ({ config }) => 
 
   React.useEffect(() => {
     if (!isConnected) return;
-    if (providersCount === 0) void loadProviders({ source: 'electronMiniChat:recovery' });
-    if (agentsCount === 0) void loadAgents({ source: 'electronMiniChat:recovery' });
-  }, [agentsCount, isConnected, loadAgents, loadProviders, providersCount]);
+    if (!providersLoaded) void loadProviders({ source: 'electronMiniChat:recovery' });
+    void loadAgents(currentDirectory);
+  }, [currentDirectory, isConnected, loadAgents, loadProviders, providersLoaded]);
 
   const sessionBootstrappedRef = React.useRef(false);
   React.useEffect(() => {
@@ -142,12 +142,12 @@ const MiniChatBootstrap: React.FC<{ config: MiniChatConfig }> = ({ config }) => 
       sessionBootstrappedRef.current = true;
       return;
     }
-    const session = sessions.find((entry) => entry.id === config.sessionId);
+    const session = sessions.find((entry) => entry.sessionId === config.sessionId);
     if (!session) {
-      void sync.ensureSessionRenderable(config.sessionId);
+      void sync.ensureSessionRenderable(config.sessionId, false, config.directory ?? undefined);
       return;
     }
-    const directory = (session as { directory?: string | null }).directory ?? config.directory;
+    const directory = resolveGlobalSessionDirectory(session) ?? config.directory;
     setCurrentSession(config.sessionId, directory);
     sessionBootstrappedRef.current = true;
   }, [config, currentSessionId, sessions, setCurrentSession, sync]);
@@ -160,10 +160,11 @@ const MiniChatBootstrap: React.FC<{ config: MiniChatConfig }> = ({ config }) => 
       const sessionId = typeof detail?.sessionId === 'string' ? detail.sessionId.trim() : '';
       if (!sessionId) return;
       if (useSessionUIStore.getState().currentSessionId === sessionId) return;
-      const sessionDirectory = (sessions.find((entry) => entry.id === sessionId) as { directory?: string | null } | undefined)?.directory?.trim();
+      const session = sessions.find((entry) => entry.sessionId === sessionId);
+      const sessionDirectory = session ? resolveGlobalSessionDirectory(session) : null;
       const directory = sessionDirectory
         || (typeof detail?.directory === 'string' && detail.directory.trim().length > 0 ? detail.directory.trim() : null);
-      void sync.ensureSessionRenderable(sessionId);
+      void sync.ensureSessionRenderable(sessionId, false, directory ?? undefined);
       setCurrentSession(sessionId, directory);
       sessionBootstrappedRef.current = true;
     };
@@ -311,7 +312,7 @@ const useSessionUnavailable = (config: MiniChatConfig): boolean => {
       setTimedOut(false);
       return;
     }
-    if (sessions.some((entry) => entry.id === config.sessionId)) {
+    if (sessions.some((entry) => entry.sessionId === config.sessionId)) {
       setTimedOut(false);
       return;
     }
@@ -326,9 +327,6 @@ export function ElectronMiniChatApp({ apis }: ElectronMiniChatAppProps) {
   const config = React.useMemo(() => readMiniChatConfig(), []);
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
 
-  React.useEffect(() => {
-    opencodeClient.setDirectory(currentDirectory || config.directory || undefined);
-  }, [config.directory, currentDirectory]);
 
   React.useEffect(() => {
     registerRuntimeAPIs(apis);
@@ -344,7 +342,7 @@ export function ElectronMiniChatApp({ apis }: ElectronMiniChatAppProps) {
 
   return (
     <ErrorBoundary>
-      <SyncProvider sdk={opencodeClient.getSdkClient()} directory={currentDirectory || config.directory || ''}>
+      <SyncProvider directory={currentDirectory || config.directory || ''}>
         <RuntimeAPIProvider apis={apis}>
           <TooltipProvider delayDuration={300} skipDelayDuration={150}>
             <div className="h-full text-foreground bg-background">
@@ -367,7 +365,7 @@ const ElectronMiniChatContent: React.FC<{ config: MiniChatConfig }> = ({ config 
     <>
       <MiniChatBootstrap config={config} />
       <MiniChatPresencePublisher />
-      <SyncRuntimeEffects embeddedBackgroundWorkEnabled={true} />
+      <SyncRuntimeEffects backgroundWorkEnabled={true} />
       <MiniChatLayout mode={config.mode} autoOpenDraft={config.mode === 'draft'} unavailable={sessionUnavailable} />
     </>
   );

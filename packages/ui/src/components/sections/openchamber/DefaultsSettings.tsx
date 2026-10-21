@@ -1,4 +1,5 @@
 import React from 'react';
+import { canonicalClient } from '@/api/canonicalClient';
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
 import { AgentSelector } from '@/components/sections/commands/AgentSelector';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -12,18 +13,23 @@ import {
   SETTINGS_SELECT_ROW_TRIGGER_CLASS,
   SETTINGS_SELECT_SIZE,
   SETTINGS_OPTION_STACK_CLASS,
+  SETTINGS_FIELDS_STACK_CLASS,
 } from '@/components/sections/shared/SettingsSection';
+import { SessionWarmingCheckbox } from './SessionWarmingCheckbox';
+import { PermissionDefaultModeField } from './PermissionDefaultModeField';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
 import { loadDesktopSettings, updateDesktopSettings } from '@/lib/persistence';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useUIStore } from '@/stores/useUIStore';
+import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { useSelectionStore } from '@/sync/selection-store';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useI18n } from '@/lib/i18n';
 import { parseModelIdentifier } from '@/lib/modelIdentifier';
 import { isAutoModel } from '@/lib/routing/autoModel';
-import { runtimeFetch } from '@/lib/runtime-fetch';
-import { isPrimaryMode } from '@/components/chat/mobileControlsUtils';
+import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 
 const getDisplayModel = (
   storedModel: string | undefined
@@ -36,8 +42,9 @@ const getDisplayModel = (
   return { providerId: '', modelId: '' };
 };
 
-export const DefaultsSettings: React.FC = () => {
-  const { t } = useI18n();
+ export const DefaultsSettings: React.FC = () => {
+   const { t } = useI18n();
+  const settingsDirectory = useSettingsDirectory();
   const setProvider = useConfigStore((state) => state.setProvider);
   const setModel = useConfigStore((state) => state.setModel);
   const setAgent = useConfigStore((state) => state.setAgent);
@@ -57,10 +64,12 @@ export const DefaultsSettings: React.FC = () => {
   const agentIsPicked = useConfigStore((state) => state.agentSelectionSource === 'manual');
   // An agent picked for this chat brings the model its config pins, and a pin
   // outranks the global default the same way it does in `setAgent`.
+  const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
+  const agents = useAgentsStore((state) => selectAgentsForDirectory(state, currentDirectory));
   const pickedAgentPinsModel = useConfigStore((state) => {
     if (state.agentSelectionSource !== 'manual') return false;
-    const agent = state.agents.find((candidate) => candidate.name === state.currentAgentName);
-    return Boolean(agent?.model?.providerID && agent.model.modelID);
+    const agent = agents.find((candidate) => candidate.agentId === state.currentAgentName);
+    return Boolean(agent?.model?.providerId && agent.model.modelId);
   });
   const chatHasOwnModel = Boolean(
     pickedAgentPinsModel
@@ -69,6 +78,8 @@ export const DefaultsSettings: React.FC = () => {
   const chatHasOwnAgent = Boolean(
     agentIsPicked && currentSessionId && getSessionAgentSelection(currentSessionId),
   );
+  const showChatsSection = useSessionDisplayStore((state) => state.showChatsSection);
+  const setShowChatsSection = useSessionDisplayStore((state) => state.setShowChatsSection);
   const showDeletionDialog = useUIStore((state) => state.showDeletionDialog);
   const setShowDeletionDialog = useUIStore((state) => state.setShowDeletionDialog);
   const providers = useConfigStore((state) => state.providers);
@@ -128,7 +139,7 @@ export const DefaultsSettings: React.FC = () => {
         setCurrentVariant(undefined);
 
         if (providerId && modelId) {
-          const provider = providers.find((p) => p.id === providerId);
+          const provider = providers.find((p) => p.providerId === providerId);
           // Auto is not a provider OpenCode lists; the picker only offers it while the server can honour it.
           if (provider || isAutoModel(providerId, modelId)) {
             setProvider(providerId);
@@ -248,38 +259,35 @@ export const DefaultsSettings: React.FC = () => {
     [walkthroughModelOverride]
   );
   React.useEffect(() => {
-    // Both pickers offer the same providers — the walkthrough runs through the
-    // small model — and the walkthrough picker is always visible, so this is
-    // always worth fetching. The server answers with the providers it has a
-    // credential and an endpoint for, including plugin-registered ones that
-    // exist only inside the running OpenCode.
     let cancelled = false;
+    if (!settingsDirectory) {
+      setSmallModelProviders([]);
+      return () => { cancelled = true; };
+    }
     (async () => {
       try {
-        const response = await runtimeFetch('/api/small-model', { method: 'GET', headers: { Accept: 'application/json' } });
-        if (!response.ok) return;
-        const payload = await response.json().catch(() => null) as { authenticatedProviders?: unknown } | null;
-        if (!cancelled && Array.isArray(payload?.authenticatedProviders)) {
-          setSmallModelProviders(payload.authenticatedProviders.filter((id): id is string => typeof id === 'string'));
+        const workspace = await canonicalClient.resolveWorkspace(settingsDirectory);
+        const catalog = await canonicalClient.getProviders(workspace.workspaceId);
+        if (!cancelled) {
+          setSmallModelProviders(catalog.providers
+            .filter((provider) => provider.auth.status === 'configured')
+            .map((provider) => provider.providerId));
         }
       } catch {
-        // Fail closed: never offer providers whose credentials were not verified.
+        // Fail closed: unavailable canonical catalogs must not offer providers.
+        if (!cancelled) setSmallModelProviders([]);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [settingsDirectory]);
 
   const availableVariants = React.useMemo(() => {
     if (!parsedModel.providerId || !parsedModel.modelId) return [];
-    const provider = providers.find((p) => p.id === parsedModel.providerId);
-    const model = provider?.models.find((m: Record<string, unknown>) => (m as { id?: string }).id === parsedModel.modelId) as
-      | { variants?: Record<string, unknown> }
-      | undefined;
-    const variants = model?.variants;
-    if (!variants) return [];
-    return Object.keys(variants);
+    const provider = providers.find((p) => p.providerId === parsedModel.providerId);
+    const model = provider?.models.find((m) => m.modelId === parsedModel.modelId);
+    return model?.variants.map((variant) => variant.variant) ?? [];
   }, [parsedModel.modelId, parsedModel.providerId, providers]);
 
   const supportsVariants = availableVariants.length > 0;
@@ -292,7 +300,7 @@ export const DefaultsSettings: React.FC = () => {
     <>
       <SettingsSection title={t('settings.openchamber.defaults.title')} divider={false}>
         <div className="space-y-0">
-          <div className="mt-0 mb-1 typography-meta text-muted-foreground">
+          <div className="mt-0 mb-4 typography-meta text-muted-foreground">
             {t('settings.openchamber.defaults.summaryPrefix')}
             {' '}
             {parsedModel.providerId ? (
@@ -301,7 +309,7 @@ export const DefaultsSettings: React.FC = () => {
                 {supportsVariants ? ` (${defaultVariant ?? t('settings.openchamber.defaults.option.defaultLowercase')})` : ''}
               </span>
             ) : (
-              <span className="text-foreground">{t('settings.openchamber.defaults.summaryOpenCodeDefault')}</span>
+              <span className="text-foreground">{t('settings.openchamber.defaults.summaryRuntimeDefault')}</span>
             )}
             {defaultAgent && (
               <>
@@ -311,7 +319,7 @@ export const DefaultsSettings: React.FC = () => {
             )}
           </div>
 
-          <div>
+          <div className={SETTINGS_FIELDS_STACK_CLASS}>
             <SettingsFieldRow
               settingsItem="sessions.default-model"
               label={t('settings.openchamber.defaults.field.defaultModel')}
@@ -351,12 +359,13 @@ export const DefaultsSettings: React.FC = () => {
               label={t('settings.openchamber.defaults.field.defaultAgent')}
             >
               <AgentSelector
-                agentName={defaultAgent || ''}
+                agentId={defaultAgent || ''}
                 onChange={handleAgentChange}
-                filter={(agent) => isPrimaryMode(agent.mode)}
                 className={SETTINGS_CUSTOM_TRIGGER_CLASS}
               />
             </SettingsFieldRow>
+
+            <PermissionDefaultModeField agentName={defaultAgent} />
           </div>
 
           <SettingsInset className={SETTINGS_OPTION_STACK_CLASS}>
@@ -367,6 +376,17 @@ export const DefaultsSettings: React.FC = () => {
               label={t('settings.openchamber.defaults.field.showDeletionDialog')}
               ariaLabel={t('settings.openchamber.defaults.field.showDeletionDialogAria')}
             />
+            <SessionWarmingCheckbox />
+            <SettingsCheckboxRow
+                settingsItem="sessions.show-chats"
+                checked={showChatsSection}
+                onChange={(checked) => {
+                  setShowChatsSection(checked);
+                  void updateDesktopSettings({ sidebarShowChatsSection: checked });
+                }}
+                label={t('settings.openchamber.defaults.field.showChats')}
+                ariaLabel={t('settings.openchamber.defaults.field.showChats')}
+              />
           </SettingsInset>
 
           <div className="space-y-3 pt-6">

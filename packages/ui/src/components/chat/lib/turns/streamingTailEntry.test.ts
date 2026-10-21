@@ -1,38 +1,17 @@
 import { describe, expect, test } from 'bun:test';
-import type { Message, Part } from '@opencode-ai/sdk/v2';
+import type { Part } from '@openchamber/agent-contract';
 
+import { attachToolResultsForDisplay } from '../messageDisplayNormalization';
 import { buildLiveStreamingEntry, type StreamingTailEntry } from './streamingTailEntry';
 import type { ChatMessageEntry, TurnRecord } from './types';
 
-const message = (id: string, role: 'user' | 'assistant', parentID?: string, parts: Part[] = []): ChatMessageEntry => ({
-    info: {
-        id,
-        role,
-        sessionID: 'ses_1',
-        ...(parentID ? { parentID } : {}),
-        time: { created: 1 },
-    } as Message,
-    parts,
+const message = (id: string, role: ChatMessageEntry['role'], turnId?: string, parts: Part[] = []): ChatMessageEntry => ({
+    messageId: id, sessionId: 'ses_1', turnId: turnId ?? id, role, createdAt: 1, parts,
 });
 
-const textPart = (id: string, text: string): Part => ({
-    id,
-    type: 'text',
-    text,
-} as Part);
+const textPart = (id: string, text: string): Part => ({ type: 'text', partId: id, content: text });
 
-const syntheticTextPart = (id: string, text: string): Part => ({
-    id,
-    type: 'text',
-    text,
-    synthetic: true,
-} as Part);
-
-const reasoningPart = (id: string, text: string): Part => ({
-    id,
-    type: 'reasoning',
-    text,
-} as Part);
+const reasoningPart = (id: string, text: string): Part => ({ type: 'reasoning', partId: id, content: text });
 
 const turnEntry = (assistant: ChatMessageEntry): StreamingTailEntry => {
     const user = message('user_1', 'user');
@@ -44,9 +23,9 @@ const turnEntry = (assistant: ChatMessageEntry): StreamingTailEntry => {
             turnId: 'user_1',
             userMessageId: 'user_1',
             userMessage: user,
-            headerMessageId: assistant.info.id,
+            headerMessageId: assistant.messageId,
             messages: [],
-            assistantMessageIds: [assistant.info.id],
+            assistantMessageIds: [assistant.messageId],
             assistantMessages: [assistant],
             activityParts: [],
             activitySegments: [],
@@ -111,21 +90,75 @@ describe('buildLiveStreamingEntry', () => {
         expect(next.message.parts).toBe(liveParts);
     });
 
-    test('normalizes live tail parts with the display filtering path', () => {
+    test('keeps contract step_summary parts and drops a non-object live entry', () => {
         const stale = message('assistant_1', 'assistant', 'user_1', [textPart('part_1', 'old')]);
         const entry = turnEntry(stale);
         const visible = textPart('part_visible', 'visible');
-        const synthetic = syntheticTextPart('part_synthetic', 'hidden while streaming');
+        const summary: Part = { type: 'step_summary', partId: 'part_summary', title: 'Done' };
+        // SAFETY: the live store is untyped at runtime; JSON.parse supplies the non-part value normalizeParts must reject.
+        const invalid = JSON.parse('null') as Part;
 
         const next = buildLiveStreamingEntry(entry, {
-            livePartsByMessageId: { assistant_1: [synthetic, visible] },
+            livePartsByMessageId: { assistant_1: [invalid, summary, visible] },
             showTextJustificationActivity: true,
             showTurnChangedFiles: false,
         });
 
         expect(next.kind).toBe('turn');
         if (next.kind !== 'turn') return;
-        expect(next.turn.assistantMessages[0]?.parts).toEqual([visible]);
+        expect(next.turn.assistantMessages[0]?.parts).toEqual([summary, visible]);
+    });
+
+    test('keeps display-paired tool results when live parts omit the system result', () => {
+        const call: Part = {
+            type: 'tool_call', partId: 'edit-call', toolCallId: 'edit-1', toolName: 'edit',
+            input: { path: 'NOTES.md' }, status: 'completed',
+        };
+        const result: Part = {
+            type: 'tool_result', partId: 'edit-result', toolCallId: 'edit-1', toolName: 'edit',
+            output: { content: [{ type: 'text', text: 'updated' }], details: { diff: '-old\n+new', op: 'update' } },
+            isError: false,
+        };
+        const rawAssistant = message('assistant_1', 'assistant', 'user_1', [call]);
+        const system = message('system_1', 'system', 'user_1', [result]);
+        const display = attachToolResultsForDisplay([rawAssistant], [rawAssistant, system])[0]!;
+        expect(display.parts).toHaveLength(2);
+        const entry = turnEntry(display);
+
+        // The live part store still carries the result on the system message,
+        // so the assistant's live parts contain only the call.
+        const next = buildLiveStreamingEntry(entry, {
+            livePartsByMessageId: { assistant_1: [call] },
+            showTextJustificationActivity: true,
+            showTurnChangedFiles: false,
+        });
+
+        expect(next.kind).toBe('turn');
+        if (next.kind !== 'turn') return;
+        expect(next.turn.assistantMessages[0]?.parts).toEqual([call, result]);
+        expect(next.turn.activityParts.some((activity) => activity.part === result)).toBe(true);
+    });
+
+    test('never duplicates a tool result that is already in live parts', () => {
+        const call: Part = {
+            type: 'tool_call', partId: 'edit-call', toolCallId: 'edit-1', toolName: 'edit',
+            input: { path: 'NOTES.md' }, status: 'completed',
+        };
+        const result: Part = {
+            type: 'tool_result', partId: 'edit-result', toolCallId: 'edit-1', toolName: 'edit',
+            output: { content: [{ type: 'text', text: 'updated' }] }, isError: false,
+        };
+        const assistant = message('assistant_1', 'assistant', 'user_1', [call, result]);
+
+        const next = buildLiveStreamingEntry(turnEntry(assistant), {
+            livePartsByMessageId: { assistant_1: [call, result] },
+            showTextJustificationActivity: true,
+            showTurnChangedFiles: false,
+        });
+
+        expect(next.kind).toBe('turn');
+        if (next.kind !== 'turn') return;
+        expect(next.turn.assistantMessages[0]?.parts.map((part) => part.partId)).toEqual(['edit-call', 'edit-result']);
     });
 
     test('keeps a finished step message on its live parts after the stream moves on', () => {
@@ -161,5 +194,26 @@ describe('buildLiveStreamingEntry', () => {
         });
 
         expect(next).toBe(entry);
+    });
+});
+
+describe('buildLiveStreamingEntry reuse across publishes', () => {
+    const options = (liveParts: Part[]) => ({
+        livePartsByMessageId: { asst_1: liveParts },
+        showTextJustificationActivity: false,
+        showTurnChangedFiles: false,
+    });
+
+    test('an unchanged record and live parts normalize to the same message object', () => {
+        const record = message('asst_1', 'assistant', 'user_1', [textPart('p1', 'old')]);
+        const entry: StreamingTailEntry = { kind: 'ungrouped', key: 'asst_1', message: record };
+        const liveParts = [textPart('p1', 'new text')];
+
+        const first = buildLiveStreamingEntry(entry, options(liveParts));
+        const second = buildLiveStreamingEntry(entry, options(liveParts));
+        expect(first.kind === 'ungrouped' && second.kind === 'ungrouped' && first.message === second.message).toBe(true);
+
+        const changed = buildLiveStreamingEntry(entry, options([textPart('p1', 'newer text')]));
+        expect(changed.kind === 'ungrouped' && first.kind === 'ungrouped' && changed.message !== first.message).toBe(true);
     });
 });

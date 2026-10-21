@@ -18,12 +18,15 @@ import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { SortableTabsStrip } from '@/components/ui/sortable-tabs-strip';
+import { ContextMenuItem } from '@/components/ui/context-menu';
+import { TerminalTabRenameDialog } from '@/components/terminal/TerminalTabRenameDialog';
 import { Icon } from "@/components/icon/Icon";
 import type { IconName } from '@/components/icon/icons';
 import { useDeviceInfo } from '@/lib/device';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { terminalSnapshotSize } from '@/lib/terminalApi';
-import { extractTerminalPreviewUrl, isTerminalPreviewUrlAvailable } from '@/lib/terminalPreview';
+import { extractProxiedPorts, extractTerminalPreviewUrl, isTerminalPreviewUrlAvailable } from '@/lib/terminalPreview';
+import { reachesDevServersThroughTunnel } from '@/lib/browser/devTunnel';
 import { useI18n } from '@/lib/i18n';
 import { PROJECT_ACTION_ICONS } from '@/lib/projectActions';
 import { useInlineCommentDraftStore } from '@/stores/useInlineCommentDraftStore';
@@ -34,6 +37,9 @@ import { observeTerminalSessions } from '@/lib/terminalSessionObserver';
 type TerminalViewProps = {
     visible?: boolean;
     directory?: string | null;
+    /** Closing the last tab closes the terminal surface instead of opening a
+        fresh tab; the host removes it, and reopening starts a new terminal. */
+    onLastTabClosed?: () => void;
 };
 
 const FALLBACK_TERMINAL_SIZE = { cols: 80, rows: 24 } as const;
@@ -93,7 +99,7 @@ const resolveTabIconName = (iconKey: string | null): IconName => {
     return matchedIcon?.Icon ?? 'terminal';
 };
 
-export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory }) => {
+export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, onLastTabClosed }) => {
     const { t } = useI18n();
     const { terminal, runtime } = useRuntimeAPIs();
     const { currentTheme } = useThemeSystem();
@@ -106,8 +112,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory }
     const { isMobile, isTablet, hasTouchOnlyPointer } = useDeviceInfo();
     const isTouchTerminal = isMobile || isTablet;
     const useTouchTerminalInput = (isTouchTerminal || hasTouchOnlyPointer) && runtime.platform === 'web';
-    // Tabs are supported for web + desktop runtimes, including mobile (not VSCode).
-    const enableTabs = runtime.platform !== 'vscode';
     const showTerminalQuickKeysOnDesktop = useUIStore((state) => state.showTerminalQuickKeysOnDesktop);
     const showQuickKeys = isTouchTerminal || showTerminalQuickKeysOnDesktop;
 
@@ -125,6 +129,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory }
     const createTab = useTerminalStore((s) => s.createTab);
     const setActiveTab = useTerminalStore((s) => s.setActiveTab);
     const closeTab = useTerminalStore((s) => s.closeTab);
+    const setTabLabel = useTerminalStore((s) => s.setTabLabel);
+    const moveTab = useTerminalStore((s) => s.moveTab);
     const setTabSessionId = useTerminalStore((s) => s.setTabSessionId);
     const reconcileServerSessions = useTerminalStore((s) => s.reconcileServerSessions);
     const captureStartedActionMutationRevisions = useTerminalStore((s) => s.captureStartedActionMutationRevisions);
@@ -137,13 +143,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory }
 
     const openContextPreview = useUIStore((state) => state.openContextPreview);
 
-    const activeTabId = React.useMemo(() => {
-        if (!directoryTerminalState) return null;
-        if (enableTabs) {
-            return directoryTerminalState.activeTabId ?? directoryTerminalState.tabs[0]?.id ?? null;
-        }
-        return directoryTerminalState.tabs[0]?.id ?? null;
-    }, [directoryTerminalState, enableTabs]);
+    const activeTabId = React.useMemo(() => directoryTerminalState?.activeTabId ?? directoryTerminalState?.tabs[0]?.id ?? null, [directoryTerminalState]);
 
     const activeTab = React.useMemo(() => {
         if (!directoryTerminalState) return undefined;
@@ -209,9 +209,13 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory }
     const previewScanTailRef = React.useRef('');
     const pendingPreviewProbeUrlsRef = React.useRef<Set<string>>(new Set());
     const previewProbeGenerationRef = React.useRef(0);
+    // Loopback ports portless announced a named address for; the server's own
+    // announcement of that port must not replace the name.
+    const previewProxiedPortsRef = React.useRef<number[]>([]);
 
     const resetTerminalPreviewScan = React.useCallback(() => {
         previewScanTailRef.current = '';
+        previewProxiedPortsRef.current = [];
         pendingPreviewProbeUrlsRef.current.clear();
         previewProbeGenerationRef.current += 1;
     }, []);
@@ -249,8 +253,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory }
 
     React.useEffect(() => {
         if (!terminalSessionId || !terminal.updateAppearance) return;
-        void terminal.updateAppearance(terminalSessionId, terminalAppearanceRef.current).catch(() => {});
-    }, [currentTheme.colors.surface.background, currentTheme.colors.syntax.base.foreground, currentTheme.metadata.variant, terminal, terminalSessionId]);
+        void terminal.updateAppearance(terminalSessionId, terminalAppearanceRef.current, terminalDirectory).catch(() => {});
+    }, [currentTheme.colors.surface.background, currentTheme.colors.syntax.base.foreground, currentTheme.metadata.variant, terminal, terminalDirectory, terminalSessionId]);
 
     React.useEffect(() => {
         activeTabIdRef.current = activeTabId;
@@ -325,7 +329,13 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory }
                 return;
             }
 
-            const candidate = extractTerminalPreviewUrl(completeText);
+            for (const port of extractProxiedPorts(completeText)) {
+                if (!previewProxiedPortsRef.current.includes(port)) previewProxiedPortsRef.current.push(port);
+            }
+            const candidate = extractTerminalPreviewUrl(completeText, {
+                proxiedPorts: previewProxiedPortsRef.current,
+                namedAddressesReachable: !reachesDevServersThroughTunnel(),
+            });
             if (!candidate || pendingPreviewProbeUrlsRef.current.has(candidate)) {
                 return;
             }
@@ -466,7 +476,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory }
                         setTabSessionId(directory, tabId, null);
                         disconnectStream();
                     },
-                }
+                },
+                directory,
             );
 
             streamCleanupRef.current = () => {
@@ -520,7 +531,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory }
             const owningTab = useTerminalStore.getState().getDirectoryState(directory)?.tabs.find((entry) => entry.id === tabId);
             if (!owningTab) {
                 try {
-                    await terminal.close(session.sessionId);
+                    await terminal.close(session.sessionId, directory);
                 } catch { /* ignored */ }
                 return;
             }
@@ -533,7 +544,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory }
                 viewportSize &&
                 (viewportSize.cols !== initialSize.cols || viewportSize.rows !== initialSize.rows)
             ) {
-                void terminal.resize({ sessionId: session.sessionId, ...viewportSize }).catch(() => {});
+                void terminal.resize({ sessionId: session.sessionId, ...viewportSize, directory }).catch(() => {});
             }
             // Storing the session ID reruns the session effect. Let that
             // effect own stream startup.
@@ -596,9 +607,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory }
                 return;
             }
 
-            const tabId = enableTabs
-                ? (state.activeTabId ?? state.tabs[0]?.id ?? null)
-                : (state.tabs[0]?.id ?? null);
+            const tabId = state.activeTabId ?? state.tabs[0]?.id ?? null;
             if (!tabId) {
                 return;
             }
@@ -653,7 +662,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory }
         activeTabId,
         hasOpenedTerminalViewport,
         createTerminalSession,
-        enableTabs,
         terminalHydrated,
         ensureDirectory,
         setConnecting,
@@ -692,9 +700,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory }
         if (isActionTab) return;
 
         const state = useTerminalStore.getState().getDirectoryState(terminalDirectory);
-        const tabId = enableTabs
-            ? (activeTabId ?? state?.activeTabId ?? state?.tabs[0]?.id ?? null)
-            : (state?.tabs[0]?.id ?? null);
+        const tabId = activeTabId ?? state?.activeTabId ?? state?.tabs[0]?.id ?? null;
         if (!tabId) return;
         const originalSessionId = state?.tabs.find((tab) => tab.id === tabId)?.terminalSessionId ?? null;
         if (!originalSessionId || !terminal.restartSession) return;
@@ -734,7 +740,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory }
         } finally {
             setIsRestarting(false);
         }
-    }, [activeTabId, disconnectStream, terminalDirectory, enableTabs, isActionTab, isRestarting, resetTerminalPreviewScan, setTabLifecycle, setTabSessionId, startStream, t, terminal, terminalLoginShell, terminalShell]);
+    }, [activeTabId, disconnectStream, terminalDirectory, isActionTab, isRestarting, resetTerminalPreviewScan, setTabLifecycle, setTabSessionId, startStream, t, terminal, terminalLoginShell, terminalShell]);
 
     const handleHardRestart = React.useCallback(async () => {
         // Keep semantics: “close tab -> new clean tab”.
@@ -802,13 +808,63 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory }
             setConnectionError(null);
             setIsFatalError(false);
             setIsReconnectPending(false);
-            const sessionId = useTerminalStore.getState().getDirectoryState(terminalDirectory)?.tabs.find((tab) => tab.id === tabId)?.terminalSessionId;
+            const tabs = useTerminalStore.getState().getDirectoryState(terminalDirectory)?.tabs ?? [];
+            const sessionId = tabs.find((tab) => tab.id === tabId)?.terminalSessionId;
+            const isLastTab = tabs.length === 1 && tabs[0]?.id === tabId;
             void (async () => {
-                if (sessionId) await terminal.close(sessionId);
+                if (sessionId) await terminal.close(sessionId, terminalDirectory);
+                // Removing the surface in the same update unmounts this view
+                // before the store's replacement tab could start a shell.
+                if (isLastTab) onLastTabClosed?.();
                 closeTab(terminalDirectory, tabId);
             })().catch((error) => setConnectionError(error instanceof Error ? error.message : t('terminalView.error.sessionEnded')));
         },
-        [activeTabId, closeTab, disconnectStream, terminalDirectory, t, terminal]
+        [activeTabId, closeTab, disconnectStream, onLastTabClosed, terminalDirectory, t, terminal]
+    );
+
+    const handleReorderTab = React.useCallback(
+        (tabId: string, overTabId: string) => {
+            if (!terminalDirectory) return;
+            moveTab(terminalDirectory, tabId, overTabId);
+        },
+        [moveTab, terminalDirectory]
+    );
+
+    const [renamingTabId, setRenamingTabId] = React.useState<string | null>(null);
+    const renamingTab = renamingTabId
+        ? directoryTerminalState?.tabs.find((tab) => tab.id === renamingTabId)
+        : undefined;
+
+    const handleRenameTab = React.useCallback(
+        (label: string) => {
+            if (!terminalDirectory || !renamingTabId) return;
+            setTabLabel(terminalDirectory, renamingTabId, label);
+        },
+        [renamingTabId, setTabLabel, terminalDirectory]
+    );
+
+    // Project action tabs are named by their action and renamed on every run,
+    // so only plain terminals offer Rename.
+    const renderTabContextMenu = React.useCallback(
+        ({ id, close }: { id: string; close: () => void }): React.ReactNode => {
+            const tab = directoryTerminalState?.tabs.find((entry) => entry.id === id);
+            if (!tab) return null;
+            return (
+                <>
+                    {tab.purpose.type === 'terminal' ? (
+                        <ContextMenuItem onClick={() => setRenamingTabId(id)}>
+                            <Icon name="edit" className="mr-2 size-4" />
+                            {t('terminalView.tabs.menu.rename')}
+                        </ContextMenuItem>
+                    ) : null}
+                    <ContextMenuItem onClick={close}>
+                        <Icon name="close" className="mr-2 size-4" />
+                        {t('terminalView.tabs.closeTabTitle')}
+                    </ContextMenuItem>
+                </>
+            );
+        },
+        [directoryTerminalState?.tabs, t]
     );
 
     const handleViewportInput = React.useCallback(
@@ -828,7 +884,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory }
             const terminalId = terminalIdRef.current;
             if (!terminalId) return;
 
-            void terminal.sendInput(terminalId, payload).catch((error) => {
+            void terminal.sendInput(terminalId, payload, directoryRef.current).catch((error) => {
                 if (!isReconnectPending) {
                     setConnectionError(
                         error instanceof Error ? error.message : t('terminalView.error.sendInputFailed')
@@ -874,7 +930,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory }
             }
             const terminalId = terminalIdRef.current;
             if (!terminalId) return;
-            void terminal.resize({ sessionId: terminalId, cols, rows }).catch(() => {});
+            void terminal.resize({ sessionId: terminalId, cols, rows, directory }).catch(() => {});
         },
         [createTerminalSession, isTerminalVisible, terminal]
     );
@@ -1037,10 +1093,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory }
 
     const quickKeysDisabled = !terminalSessionId || isConnecting || isRestarting || isReconnectPending;
     const shouldRenderViewport = hasOpenedTerminalViewport;
-    // Without tabs (VS Code) only the first tab exists; with tabs every open tab stays mounted.
-    const mountedTabIds = enableTabs
-        ? (directoryTerminalState?.tabs ?? []).map((tab) => tab.id)
-        : (activeTabId ? [activeTabId] : []);
+    // Every open tab stays mounted.
+    const mountedTabIds = (directoryTerminalState?.tabs ?? []).map((tab) => tab.id);
     const quickKeySize: 'lg' | 'xs' = isTouchTerminal ? 'lg' : 'xs';
     const quickKeyIconClass = isTouchTerminal ? 'w-10 p-0' : 'w-9 p-0';
     const preserveTerminalFocus = (event: React.PointerEvent<HTMLButtonElement>) => {
@@ -1161,8 +1215,13 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory }
 
     return (
         <div className="flex h-full flex-col overflow-hidden bg-[var(--surface-background)]">
+            <TerminalTabRenameDialog
+                currentLabel={renamingTab?.label ?? null}
+                onRename={handleRenameTab}
+                onClose={() => setRenamingTabId(null)}
+            />
             <div className={cn('app-region-no-drag sticky top-0 z-20 shrink-0 bg-[var(--surface-background)] text-xs', isTouchTerminal ? 'px-3 py-1.5' : 'pl-3 pr-1.5 py-1')}>
-                {enableTabs && directoryTerminalState ? (
+                {directoryTerminalState ? (
                     <div className="flex items-center gap-2 pl-1 pr-1">
                         <div className={cn('min-w-0 flex-1', isTouchTerminal ? 'h-8' : 'h-7')}>
                             <SortableTabsStrip
@@ -1170,6 +1229,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory }
                                 activeId={activeTabId}
                                 onSelect={handleSelectTab}
                                 onClose={handleCloseTab}
+                                onReorder={handleReorderTab}
+                                tabContextMenu={renderTabContextMenu}
                                 layoutMode="scrollable"
                                 variant="default"
                                 className="h-full bg-transparent"
@@ -1233,13 +1294,13 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory }
                     </div>
                 ) : null}
 
-                {!isTouchTerminal && showQuickKeys && enableTabs && directoryTerminalState ? (
+                {!isTouchTerminal && showQuickKeys && directoryTerminalState ? (
                     <div className="mt-2 flex flex-wrap items-center gap-1 pl-1 pr-1">
                         {quickKeysControls}
                     </div>
                 ) : null}
 
-                {!isTouchTerminal && showQuickKeys && (!enableTabs || !directoryTerminalState) ? (
+                {!isTouchTerminal && showQuickKeys && !directoryTerminalState ? (
                     <div className="mt-2 flex flex-wrap items-center gap-1">
                         {quickKeysControls}
                     </div>

@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, test } from 'bun:test';
-import type { Session } from '@opencode-ai/sdk/v2';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import type { Session } from '@openchamber/agent-contract';
 
+import { registerWorkspaceDirectory, resetWorkspaceDirectories } from '@/stores/globalSessions';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 
@@ -10,12 +11,22 @@ const SESSION_ID = 'ses_linear_open';
 const PROJECT_DIR = '/projects/linear-from-url';
 const OTHER_DIR = '/projects/linear-from-url-other';
 
-const buildSession = (id: string, directory: string): Session => ({
-  id,
-  title: id,
-  directory,
-  time: { created: 1, updated: 2 },
-} as Session);
+const buildSession = (sessionId: string, displayPath: string): Session => ({
+  sessionId,
+  projectId: 'project-linear',
+  workspaceId: 'workspace-linear',
+  displayPath,
+  rootSessionId: sessionId,
+  createdAt: 1,
+  updatedAt: 2,
+  epoch: 'epoch-linear',
+  headSequence: '0',
+  runtimeStatus: 'idle',
+  activeRunId: null,
+  metadata: null,
+  metadataRevision: '0',
+  archiveRevision: '0',
+});
 
 describe('openSessionFromRoute', () => {
   beforeEach(() => {
@@ -29,7 +40,12 @@ describe('openSessionFromRoute', () => {
     });
   });
 
+  // Canonical sessions carry no filesystem path: the route resolves a session's
+  // directory from the workspace registry, so the fixture binds it explicitly.
+  afterEach(() => resetWorkspaceDirectories());
+
   test('selects the routed session once the global list knows its directory', async () => {
+    registerWorkspaceDirectory('workspace-linear', PROJECT_DIR);
     useGlobalSessionsStore.setState({
       activeSessions: [buildSession(SESSION_ID, PROJECT_DIR)],
       archivedSessions: [],
@@ -44,6 +60,7 @@ describe('openSessionFromRoute', () => {
   });
 
   test('replaces a guessed directory once the global list knows the owner', async () => {
+    registerWorkspaceDirectory('workspace-linear', OTHER_DIR);
     const id = 'ses_linear_guessed';
     useSessionUIStore.getState().setCurrentSession(id);
     const guessed = useSessionUIStore.getState().currentSessionDirectory;

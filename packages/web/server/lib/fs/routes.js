@@ -1,5 +1,8 @@
 import { createRealpathCache } from '../path-realpath-cache.js';
+import { redactGitText } from '../git/redaction.js';
 import { resolveByteRange } from './byte-range.js';
+import { createWorkspaceFileNameIndex } from './workspace-file-names.js';
+import { createFsSearchRuntime } from './search.js';
 import nodeFsPromises from 'node:fs/promises';
 import nodePath from 'node:path';
 
@@ -15,6 +18,49 @@ const pruneOutsideFileGrants = () => {
       outsideFileGrants.delete(token);
     }
   }
+};
+
+const PREVIEW_GRANT_IDLE_TTL_MS = 10 * 60 * 1000;
+const PREVIEW_GRANT_MAX_ENTRIES = 256;
+const PREVIEW_SANDBOX_POLICY = 'sandbox allow-scripts allow-forms allow-popups allow-modals allow-downloads';
+
+/**
+ * Grants for HTML previews. A grant names the workspace base the page's files
+ * resolve against and the read root its script may read bytes from. It stays
+ * valid while the page keeps loading files and lapses after ten idle minutes.
+ */
+const createPreviewGrants = ({ crypto = globalThis.crypto, now = () => Date.now() } = {}) => {
+  const grants = new Map();
+
+  const prune = () => {
+    const at = now();
+    for (const [id, grant] of grants.entries()) {
+      if (grant.expiresAt <= at) grants.delete(id);
+    }
+    while (grants.size >= PREVIEW_GRANT_MAX_ENTRIES) {
+      grants.delete(grants.keys().next().value);
+    }
+  };
+
+  return {
+    mint: ({ base, readRoot }) => {
+      prune();
+      const grant = crypto.randomUUID();
+      const expiresAt = now() + PREVIEW_GRANT_IDLE_TTL_MS;
+      grants.set(grant, { base, readRoot, expiresAt });
+      return { grant, expiresAt };
+    },
+    use: (id) => {
+      const grant = grants.get(id);
+      if (!grant) return null;
+      if (grant.expiresAt <= now()) {
+        grants.delete(id);
+        return null;
+      }
+      grant.expiresAt = now() + PREVIEW_GRANT_IDLE_TTL_MS;
+      return grant;
+    },
+  };
 };
 
 const isOsPermissionError = (error) => (
@@ -270,45 +316,19 @@ const resolveWorkspacePathFromWorktrees = async ({ targetPath, baseDirectory, pa
 
 const resolveWorkspacePathFromContext = async ({ req, targetPath, resolveProjectDirectory, path, os, fsPromises, normalizeDirectoryPath, managedRoots }) => {
   const resolvedProject = await resolveProjectDirectory(req);
-  if (!resolvedProject.directory) {
-    return { ok: false, error: resolvedProject.error || 'Active workspace is required' };
-  }
-
-  const resolved = resolveWorkspacePath({
-    targetPath,
-    baseDirectory: resolvedProject.directory,
-    path,
-    os,
-    normalizeDirectoryPath,
-    managedRoots,
-  });
-  if (resolved.ok || resolved.error !== 'Path is outside of active workspace') {
-    return resolved;
-  }
-
-  // The active project directory is validated with fs.realpath, so the base is
-  // canonical while the client (and the file tree) addresses files under the
-  // user-visible root, which may itself be a symlink. Retry against the raw
-  // directory the client asked for so those paths stay addressable. Symlink
-  // resolution still happens afterwards, and the routes that need canonical
-  // containment re-check it against this base.
-  const requestedBase = resolvedProject.requestedDirectory;
-  if (typeof requestedBase === 'string' && requestedBase && requestedBase !== resolvedProject.directory) {
-    const lexical = resolveWorkspacePath({
-      targetPath,
-      baseDirectory: requestedBase,
-      path,
-      os,
-      normalizeDirectoryPath,
-      managedRoots,
+  // Managed chats do not require a configured project. Each base is an
+  // independently authorized root, not a fallback to the user's home.
+  const bases = [resolvedProject.directory, ...managedRoots, resolvedProject.requestedDirectory];
+  for (const baseDirectory of bases) {
+    if (!baseDirectory) continue;
+    const resolved = resolveWorkspacePath({
+      targetPath, baseDirectory, path, os, normalizeDirectoryPath, managedRoots: [],
     });
-    if (lexical.ok) {
-      return lexical;
-    }
+    if (resolved.ok || resolved.error !== 'Path is outside of active workspace') return resolved;
   }
 
-  // Keep legacy lexical paths valid, but also accept the canonical roots
-  // returned by /fs/home. Never infer filesystem identity from letter case.
+  // Keep lexical aliases addressable, then check filesystem-confirmed roots.
+  // Write routes retain their canonical-target containment checks.
   let resolutionError;
   for (const root of managedRoots) {
     try {
@@ -320,6 +340,10 @@ const resolveWorkspacePathFromContext = async ({ req, targetPath, resolveProject
     } catch (error) {
       resolutionError ??= error;
     }
+  }
+  if (!resolvedProject.directory) {
+    if (resolutionError) throw resolutionError;
+    return { ok: false, error: resolvedProject.error || 'Active workspace is required' };
   }
   const worktree = await resolveWorkspacePathFromWorktrees({
     targetPath,
@@ -345,14 +369,34 @@ const GIT_DIRS_SKIP_LIST = new Set(['node_modules', 'dist', 'build', '.venv', 't
 // containing a `.git` entry — a directory, a worktree pointer file, or a
 // symlink). A repository boundary stops descent: nested repos inside repos
 // are not reported. The root itself, when it is a repo, yields no results.
+// Symlinked directories are followed, the way the file tree follows them: a
+// parent folder of links to repositories kept elsewhere is a common way to
+// group them into one project. Each real directory is walked once, so a link
+// loop or two links to one repository cannot repeat it, and repositories are
+// reported under the path the link gives them inside the project.
 const findGitDirectories = async ({ rootPath, fsPromises, path: pathModule, maxDepth, maxDirs }) => {
   const results = [];
+  const walkedRealPaths = new Set();
   let visited = 0;
 
   const walk = async (dir, depth) => {
     if (visited >= maxDirs) {
       return;
     }
+
+    let realPath;
+    try {
+      realPath = await fsPromises.realpath(dir);
+    } catch (error) {
+      if (dir === rootPath) {
+        throw error;
+      }
+      return;
+    }
+    if (walkedRealPaths.has(realPath)) {
+      return;
+    }
+    walkedRealPaths.add(realPath);
 
     let dirents;
     try {
@@ -374,7 +418,7 @@ const findGitDirectories = async ({ rootPath, fsPromises, path: pathModule, maxD
         isRepoBoundary = true;
         continue;
       }
-      if (!dirent.isDirectory() || dirent.isSymbolicLink()) {
+      if (!dirent.isDirectory() && !dirent.isSymbolicLink()) {
         continue;
       }
       if (GIT_DIRS_SKIP_LIST.has(dirent.name)) {
@@ -382,6 +426,13 @@ const findGitDirectories = async ({ rootPath, fsPromises, path: pathModule, maxD
       }
       if (depth >= maxDepth) {
         continue;
+      }
+      if (dirent.isSymbolicLink()) {
+        // A link to a file, or a dangling one, is not a place to look.
+        const target = await fsPromises.stat(pathModule.join(dir, dirent.name)).catch(() => null);
+        if (!target?.isDirectory()) {
+          continue;
+        }
       }
       subdirectories.push(dirent.name);
     }
@@ -414,41 +465,7 @@ const deriveCloneDirectoryName = (remoteUrl) => {
   return match?.[1]?.trim() || '';
 };
 
-const resolveCloneGitIdentity = async (gitIdentityId) => {
-  const id = typeof gitIdentityId === 'string' ? gitIdentityId.trim() : '';
-  if (!id) return null;
-  const { getProfile, getGlobalIdentity } = await import('../git/index.js');
-  if (id === 'global') {
-    const globalIdentity = await getGlobalIdentity();
-    if (!globalIdentity?.userName || !globalIdentity?.userEmail) return null;
-    return {
-      id: 'global',
-      name: 'Global Identity',
-      userName: globalIdentity.userName,
-      userEmail: globalIdentity.userEmail,
-      sshKey: globalIdentity.sshCommand ? globalIdentity.sshCommand.replace('ssh -i ', '') : null,
-    };
-  }
-  return getProfile(id) || null;
-};
-
-const escapeCloneSshKeyPath = (sshKeyPath) => {
-  const raw = String(sshKeyPath || '').trim();
-  if (!raw) return '';
-  const normalized = process.platform === 'win32' ? raw.replace(/\\/g, '/') : raw;
-  const dangerousChars = /[`$!"';&|<>(){}[\]*?#~]/;
-  if (dangerousChars.test(normalized)) {
-    throw new Error(`SSH key path contains invalid characters: ${raw}`);
-  }
-  if (process.platform === 'win32') {
-    const driveMatch = normalized.match(/^([A-Za-z]):\//);
-    const unixPath = driveMatch ? `/${driveMatch[1].toLowerCase()}${normalized.slice(2)}` : normalized;
-    return `'${unixPath}'`;
-  }
-  return `'${normalized.replace(/'/g, "'\\''")}'`;
-};
-
-const resolveReadPathFromContext = async ({ req, targetPath, resolveProjectDirectory, path, os, fsPromises, normalizeDirectoryPath, managedRoots }) => {
+const resolveReadPathFromContext = async ({ req, targetPath, scope, resolveProjectDirectory, path, os, fsPromises, normalizeDirectoryPath, managedRoots }) => {
   if (req.query?.allowOutsideWorkspace === 'true') {
     const normalized = normalizeDirectoryPath(targetPath);
     if (!normalized || typeof normalized !== 'string') {
@@ -470,14 +487,11 @@ const resolveReadPathFromContext = async ({ req, targetPath, resolveProjectDirec
   });
 };
 
-const runCommandInDirectory = ({ shell, shellFlag, command, resolvedCwd, spawn, buildAugmentedPath, commandTimeoutMs }) => {
+const runCommandInDirectory = ({ shell, shellFlag, command, resolvedCwd, spawn, execEnv, commandTimeoutMs }) => {
   return new Promise((resolve) => {
     let stdout = '';
     let stderr = '';
     let timedOut = false;
-
-    const envPath = buildAugmentedPath();
-    const execEnv = { ...process.env, PATH: envPath };
 
     const child = spawn(shell, [shellFlag, command], {
       cwd: resolvedCwd,
@@ -553,6 +567,8 @@ export const registerFsRoutes = (app, dependencies) => {
     resolveGitBinaryForSpawn,
     openchamberUserConfigRoot,
     managedChatsRoot,
+    cloneRepository,
+    environmentRuntime = null,
   } = dependencies;
   // Chat worktrees may live outside every project workspace; both managed
   // roots stay valid filesystem targets.
@@ -560,6 +576,7 @@ export const registerFsRoutes = (app, dependencies) => {
     ? path.resolve(managedChatsRoot.trim())
     : path.join(openchamberUserConfigRoot, 'chats');
   const managedRoots = [path.resolve(openchamberUserConfigRoot), chatsRoot];
+  const previewGrants = createPreviewGrants({ crypto });
   const realpathCache = createRealpathCache({
     realpath: fsPromises.realpath.bind(fsPromises),
   });
@@ -667,15 +684,20 @@ export const registerFsRoutes = (app, dependencies) => {
       }
     }
 
-    const runPromise = runCommandInDirectory({
+    const runPromise = (async () => runCommandInDirectory({
       shell,
       shellFlag,
       command,
       resolvedCwd,
       spawn,
-      buildAugmentedPath,
+      // The user's and the project's variables (lib/environment) on top of
+      // the terminal's PATH. Git reads the UI repeats on its own never run
+      // the project's environment command; anything else may.
+      execEnv: environmentRuntime
+        ? await environmentRuntime.applyToDirectory(resolvedCwd, { ...process.env, PATH: buildAugmentedPath() }, { refresh: !isCacheableGitReadCommand(command) })
+        : { ...process.env, PATH: buildAugmentedPath() },
       commandTimeoutMs,
-    }).then((result) => {
+    }))().then((result) => {
       // Only cache successful results — failures may be transient.
       if (cacheKey && result && result.success) {
         setGitReadCacheEntry(cacheKey, result);
@@ -779,6 +801,24 @@ export const registerFsRoutes = (app, dependencies) => {
         if (!resolved.ok) {
           return res.status(400).json({ error: resolved.error });
         }
+        const canonicalTarget = await canonicalDirectoryPath(resolved.resolved, fsPromises, path);
+        let authorized = false;
+        let resolutionError;
+        for (const root of [resolved.base, ...managedRoots]) {
+          try {
+            const canonicalRoot = await canonicalDirectoryPath(root, fsPromises, path);
+            if (isPathWithinRoot(canonicalTarget, canonicalRoot, path, os)) {
+              authorized = true;
+              break;
+            }
+          } catch (error) {
+            resolutionError ??= error;
+          }
+        }
+        if (!authorized) {
+          if (resolutionError) throw resolutionError;
+          return res.status(400).json({ error: 'Path is outside of active workspace' });
+        }
         resolvedPath = resolved.resolved;
       }
 
@@ -794,10 +834,17 @@ export const registerFsRoutes = (app, dependencies) => {
   });
 
   app.post('/api/fs/clone', async (req, res) => {
+    if (req.body?.unverifiedConfirmed !== true) {
+      return res.status(409).json({ code: 'GIT_NETWORK_OPERATION_REQUIRED',
+        error: 'Use a planned clone with explicit transport selection, or explicitly confirm unverified System Git.' });
+    }
     try {
       const { remoteUrl, destinationPath, gitIdentityId } = req.body ?? {};
       const remote = typeof remoteUrl === 'string' ? remoteUrl.trim() : '';
       const destination = typeof destinationPath === 'string' ? destinationPath.trim() : '';
+      const selectedGitIdentityId = Object.prototype.toString.call(gitIdentityId) === '[object String]'
+        ? gitIdentityId.trim() || undefined
+        : undefined;
       if (!remote) {
         return res.status(400).json({ error: 'Repository URL is required' });
       }
@@ -840,15 +887,6 @@ export const registerFsRoutes = (app, dependencies) => {
         return res.status(400).json({ error: 'Destination path must include a directory name' });
       }
 
-      const identity = await resolveCloneGitIdentity(gitIdentityId);
-      const gitArgs = ['clone', '--', remote, directoryName];
-      const sshKeyPath = typeof identity?.sshKey === 'string' ? identity.sshKey.trim() : '';
-      if (sshKeyPath) {
-        gitArgs.unshift(`core.sshCommand=ssh -i ${escapeCloneSshKeyPath(sshKeyPath)} -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=accept-new`);
-        gitArgs.unshift('-c');
-      }
-
-      await fsPromises.mkdir(parentPath, { recursive: true });
       try {
         await fsPromises.access(resolvedDestination);
         return res.status(409).json({ error: 'Destination path already exists' });
@@ -858,47 +896,46 @@ export const registerFsRoutes = (app, dependencies) => {
         }
       }
 
-      const output = await new Promise((resolve, reject) => {
-        const child = spawn(resolveGitBinaryForSpawn(), gitArgs, {
-          cwd: parentPath,
-          windowsHide: true,
-          stdio: ['ignore', 'pipe', 'pipe'],
-          env: {
-            ...process.env,
-            PATH: buildAugmentedPath ? buildAugmentedPath(process.env.PATH || '') : process.env.PATH,
-            GIT_TERMINAL_PROMPT: '0',
-          },
-        });
-
-        let stdout = '';
-        let stderr = '';
-        child.stdout.on('data', (data) => { stdout += data.toString(); });
-        child.stderr.on('data', (data) => { stderr += data.toString(); });
-        child.on('error', reject);
-        child.on('close', (code) => {
-          const combined = `${stdout}\n${stderr}`.trim();
-          if (code === 0) {
-            resolve(combined);
-            return;
-          }
-          const message = combined || `git clone failed with exit code ${code}`;
-          reject(new Error(message));
-        });
+      if (!(cloneRepository instanceof Function)) {
+        return res.status(501).json({ error: 'Repository cloning is unavailable' });
+      }
+      const result = await cloneRepository({
+        remoteUrl: remote,
+        destinationPath: resolvedDestination,
+        gitIdentityId: selectedGitIdentityId,
+        unverifiedConfirmed: true,
       });
-
-      if (identity?.userName && identity?.userEmail) {
-        try {
-          const { setLocalIdentity } = await import('../git/index.js');
-          await setLocalIdentity(resolvedDestination, identity);
-        } catch (error) {
-          console.warn('Failed to apply git identity after clone:', error);
-        }
+      if (result.state === 'partial' && result.completedSteps?.includes('checked-out')) {
+        return res.status(200).json({ success: false, state: 'partial', setupRequired: true,
+          path: resolvedDestination, operationId: result.operationId,
+          error: 'Checkout retained. Open Git setup to finish; do not clone again.' });
+      }
+      if (result.state !== 'succeeded') {
+        const conflict = result.error?.code === 'CONFLICT';
+        const message = conflict
+          ? 'Destination path already exists'
+          : redactGitText(result.error?.message || 'Failed to clone repository', {
+            secrets: [remote, resolvedDestination],
+          });
+        return res.status(conflict ? 409 : 500).json({ error: message });
       }
 
-      return res.json({ success: true, path: resolvedDestination, output });
+      return res.json({
+        success: true,
+        path: resolvedDestination,
+        output: redactGitText(result.output || '', { secrets: [remote, resolvedDestination] }),
+      });
     } catch (error) {
-      console.error('Failed to clone repository:', error);
-      return res.status(500).json({ error: error.message || 'Failed to clone repository' });
+      if (error?.code === 'INVALID_GIT_IDENTITY') {
+        return res.status(400).json({ error: 'Selected Git identity is unavailable' });
+      }
+      if (error?.status === 400 || error?.code === 'INVALID_GIT_NETWORK_OPERATION') {
+        return res.status(400).json({ error: 'Repository URL is invalid' });
+      }
+      if (error?.code === 'CONFLICT' || error?.status === 409) {
+        return res.status(409).json({ error: 'Destination path already exists' });
+      }
+      return res.status(500).json({ error: 'Failed to clone repository' });
     }
   });
 
@@ -931,6 +968,64 @@ export const registerFsRoutes = (app, dependencies) => {
       }
       return res.status(500).json({ error: 'Failed to stat directory' });
     }
+  });
+
+  const filesystemSearch = createFsSearchRuntime({ fsPromises, path, spawn, resolveGitBinaryForSpawn });
+  app.get('/api/fs/search', async (req, res) => {
+    const directory = typeof req.query.directory === 'string' ? req.query.directory.trim() : '';
+    const query = typeof req.query.query === 'string' ? req.query.query : '';
+    const type = req.query.type ?? 'file';
+    const limit = req.query.limit === undefined ? 60 : Number(req.query.limit);
+    if (!directory || (type !== 'file' && type !== 'directory') || !Number.isInteger(limit) || limit < 1 || limit > 1000) {
+      return res.status(400).json({ error: 'A directory, file or directory type, and limit between 1 and 1000 are required' });
+    }
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    res.on('close', abort);
+    try {
+      const resolved = await resolveWorkspacePathFromContext({
+        req, targetPath: directory, resolveProjectDirectory, path, os, fsPromises, normalizeDirectoryPath, managedRoots,
+      });
+      if (!resolved.ok) return res.status(400).json({ error: resolved.error });
+      const canonicalRoot = await fsPromises.realpath(resolved.resolved);
+      const canonicalBase = await fsPromises.realpath(resolved.base);
+      if (!isPathWithinRoot(canonicalRoot, canonicalBase, path, os)) {
+        return res.status(400).json({ error: 'Path is outside of active workspace' });
+      }
+      const stats = await fsPromises.stat(canonicalRoot);
+      if (!stats.isDirectory()) return res.status(400).json({ error: 'Specified path is not a directory', reason: 'not-directory' });
+      const hits = await filesystemSearch.searchFilesystemFiles(resolved.resolved, {
+        query, limit, type, includeHidden: req.query.includeHidden === 'true',
+        respectGitignore: req.query.respectGitignore !== 'false', signal: controller.signal, strict: true,
+      });
+      if (!controller.signal.aborted) return res.json(hits);
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      if (isOsPermissionError(error)) return sendOsPermissionDenied(res, 'Access to directory denied');
+      if (error.code === 'ENOENT' || error.code === 'ENOTDIR') {
+        return res.status(404).json({ error: 'Directory not found', reason: 'not-found' });
+      }
+      return res.status(500).json({ error: 'Failed to search directory' });
+    } finally {
+      controller.abort();
+      res.off('close', abort);
+    }
+  });
+
+  // A bare file name an agent wrote without its folder (`Foo.tsx:12`): the
+  // workspace files with that name. One cached git listing per workspace
+  // answers every name (see workspace-file-names.js).
+  const workspaceFileNames = createWorkspaceFileNameIndex({ spawn, resolveGitBinary: resolveGitBinaryForSpawn });
+  app.get('/api/fs/find-by-name', async (req, res) => {
+    const name = typeof req.query.name === 'string' ? req.query.name.trim() : '';
+    if (!name || name.length > 255 || name === '.' || name === '..' || /[/\\*?[\]:]/.test(name)) {
+      return res.status(400).json({ error: 'A plain file name is required' });
+    }
+    const project = await resolveProjectDirectory(req);
+    if (!project.directory) {
+      return res.status(400).json({ error: project.error || 'Active workspace is required' });
+    }
+    return res.json({ paths: await workspaceFileNames.find(project.directory, name) });
   });
 
   app.get('/api/fs/stat', async (req, res) => {
@@ -1099,32 +1194,49 @@ export const registerFsRoutes = (app, dependencies) => {
       res.setHeader('Referrer-Policy', 'no-referrer');
       res.setHeader('Accept-Ranges', 'bytes');
 
-      // A byte span is streamed from disk rather than read whole: the audio
-      // and video players ask for one on every seek, and a recording can be
-      // hundreds of megabytes.
+      // The file is streamed from disk, never read whole: the audio and video
+      // players ask for a span on every seek, and a recording or a PDF can be
+      // hundreds of megabytes the server would otherwise hold in memory.
       const range = resolveByteRange(req.headers?.range, stats.size);
       if (range.kind === 'unsatisfiable') {
         res.setHeader('Content-Range', `bytes */${stats.size}`);
         return res.status(416).end();
       }
+      res.type(mimeType);
+      // An empty file has no byte to read, and a read stream over `0..-1` would fail.
+      if (stats.size === 0) {
+        res.setHeader('Content-Length', '0');
+        return res.end();
+      }
+      // Opened before any span header is set, so a failed open answers a clean error.
+      const handle = await fsPromises.open(canonicalPath, 'r');
+      const span = range.kind === 'range' ? range : { start: 0, end: stats.size - 1 };
       if (range.kind === 'range') {
-        const handle = await fsPromises.open(canonicalPath, 'r');
         res.status(206);
-        res.setHeader('Content-Range', `bytes ${range.start}-${range.end}/${stats.size}`);
-        res.setHeader('Content-Length', String(range.end - range.start + 1));
-        res.type(mimeType);
-        // The handle closes with the stream, on success and on failure alike.
-        const stream = handle.createReadStream({ start: range.start, end: range.end });
+        res.setHeader('Content-Range', `bytes ${span.start}-${span.end}/${stats.size}`);
+      }
+      res.setHeader('Content-Length', String(span.end - span.start + 1));
+      // pipe() leaves the source paused when a media player disconnects.
+      // Destroy it too so autoClose releases the FileHandle before GC.
+      try {
+        const stream = handle.createReadStream({ start: span.start, end: span.end });
+        const onResponseClose = () => stream.destroy();
+        res.once('close', onResponseClose);
+        stream.once('close', () => res.removeListener('close', onResponseClose));
         stream.on('error', (error) => {
-          console.error('Failed to stream raw file range:', error);
+          console.error('Failed to stream raw file:', error);
           res.destroy(error);
         });
-        stream.pipe(res);
-        return undefined;
+        if (res.destroyed) {
+          stream.destroy();
+        } else {
+          stream.pipe(res);
+        }
+      } catch (error) {
+        await handle.close();
+        throw error;
       }
-
-      const content = await fsPromises.readFile(canonicalPath);
-      return res.type(mimeType).send(content);
+      return undefined;
     } catch (error) {
       const err = error;
       if (err && typeof err === 'object' && err.code === 'ENOENT') {
@@ -1138,22 +1250,57 @@ export const registerFsRoutes = (app, dependencies) => {
     }
   });
 
-  app.get(/^\/api\/fs\/serve\/(.+)$/, async (req, res) => {
-    const rawPath = req.params[0] || '';
-    if (!rawPath) {
-      return res.status(400).json({ error: 'Path is required' });
+  // An HTML preview is untrusted content: it runs in an opaque-origin sandbox
+  // and reaches its own files through a grant carried in the URL path, so
+  // relative URLs keep it and no session credential is ever in the page's URL.
+  app.post('/api/fs/preview', async (req, res) => {
+    try {
+      // The workspace resolver normalizes and rejects a missing or non-string path.
+      const resolved = await resolveReadPathFromContext({
+        req,
+        targetPath: req.body?.path,
+        resolveProjectDirectory,
+        path,
+        os,
+        fsPromises,
+        normalizeDirectoryPath,
+        managedRoots,
+      });
+      if (!resolved.ok) {
+        return res.status(400).json({ error: resolved.error });
+      }
+      const canonicalPage = await fsPromises.realpath(resolved.resolved);
+      const stats = await fsPromises.stat(canonicalPage);
+      if (!stats.isFile()) {
+        return res.status(400).json({ error: 'Specified path is not a file' });
+      }
+      const isManagedBase = managedRoots.some((root) => path.resolve(root) === resolved.base);
+      const readRoot = isManagedBase
+        ? path.dirname(canonicalPage)
+        : await fsPromises.realpath(resolved.base);
+      return res.json(previewGrants.mint({ base: resolved.base, readRoot }));
+    } catch (error) {
+      if (error instanceof Error && error.code === 'ENOENT') {
+        return res.status(404).json({ error: 'File not found' });
+      }
+      if (isOsPermissionError(error)) {
+        return sendOsPermissionDenied(res, 'Access to file denied');
+      }
+      console.error('Failed to grant file preview:', error);
+      return res.status(500).json({ error: 'Failed to grant file preview' });
+    }
+  });
+
+  app.get(/^\/api\/fs\/preview\/([^/]+)\/(.+)$/, async (req, res) => {
+    const grant = previewGrants.use(req.params[0]);
+    if (!grant) {
+      return res.status(403).json({ error: 'Preview grant is invalid or expired' });
     }
 
     try {
-      if (req.query?.allowOutsideWorkspace === 'true') {
-        return res.status(403).json({ error: 'allowOutsideWorkspace is not permitted for this endpoint' });
-      }
-
-      const filePath = path.resolve('/', rawPath);
-      const resolved = await resolveReadPathFromContext({
-        req,
-        targetPath: filePath,
-        resolveProjectDirectory,
+      const resolved = resolveWorkspacePath({
+        targetPath: path.resolve('/', req.params[1]),
+        baseDirectory: grant.base,
         path,
         os,
         normalizeDirectoryPath,
@@ -1178,6 +1325,14 @@ export const registerFsRoutes = (app, dependencies) => {
       const content = await fsPromises.readFile(canonicalPath);
       res.setHeader('Cache-Control', 'no-store');
       res.setHeader('X-Content-Type-Options', 'nosniff');
+      // Opened directly in a tab, the page is still an opaque-origin sandbox.
+      res.setHeader('Content-Security-Policy', PREVIEW_SANDBOX_POLICY);
+      // Embedding (img, stylesheet, classic script) needs no CORS. Reading a
+      // file's bytes from script (fetch, fonts, module scripts) is CORS, and
+      // the opaque page may do that only inside its read root.
+      if (isPathWithinRoot(canonicalPath, grant.readRoot, path, os) && !res.getHeader('Access-Control-Allow-Origin')) {
+        res.setHeader('Access-Control-Allow-Origin', 'null');
+      }
       return res.type(mimeType).send(content);
     } catch (error) {
       const err = error;
@@ -1452,12 +1607,32 @@ export const registerFsRoutes = (app, dependencies) => {
         return res.status(400).json({ error: 'Source and destination must share the same workspace root' });
       }
 
+      if (
+        resolvedOld.resolved !== resolvedNew.resolved
+        && isPathWithinRoot(resolvedNew.resolved, resolvedOld.resolved, path, os)
+      ) {
+        return res.status(400).json({ error: 'Cannot move a folder into itself' });
+      }
+
+      // fs.rename silently replaces an existing file. A destination that is the
+      // source itself is a case-only rename on a case-insensitive filesystem.
+      const [sourceStats, destinationStats] = await Promise.all([
+        fsPromises.lstat(resolvedOld.resolved),
+        fsPromises.lstat(resolvedNew.resolved).catch((error) => {
+          if (error?.code === 'ENOENT') return null;
+          throw error;
+        }),
+      ]);
+      if (destinationStats && (destinationStats.dev !== sourceStats.dev || destinationStats.ino !== sourceStats.ino)) {
+        return res.status(409).json({ error: 'Destination path already exists', reason: 'already-exists' });
+      }
+
       await fsPromises.rename(resolvedOld.resolved, resolvedNew.resolved);
       return res.json({ success: true, path: resolvedNew.resolved });
     } catch (error) {
       const err = error;
       if (err && typeof err === 'object' && err.code === 'ENOENT') {
-        return res.status(404).json({ error: 'Source path not found' });
+        return res.status(404).json({ error: 'Source path not found', reason: 'not-found' });
       }
       if (isOsPermissionError(err)) {
         return sendOsPermissionDenied(res, 'Access denied');
@@ -1487,8 +1662,11 @@ export const registerFsRoutes = (app, dependencies) => {
       } else if (platform === 'win32') {
         const stat = await fsPromises.stat(resolved);
         const escapedPath = resolved.replace(/'/g, "''");
-        const explorerArg = stat.isDirectory() ? escapedPath : `/select,${escapedPath}`;
-        const command = `Start-Process -FilePath explorer.exe -ArgumentList '${explorerArg}'`;
+        // A folder opens through its default handler, so a replacement file
+        // manager gets it; only Explorer can select a file inside its folder.
+        const command = stat.isDirectory()
+          ? `Start-Process -FilePath '${escapedPath}'`
+          : `Start-Process -FilePath explorer.exe -ArgumentList '/select,${escapedPath}'`;
         await new Promise((resolve, reject) => {
           const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], {
             windowsHide: true,

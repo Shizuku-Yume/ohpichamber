@@ -1,15 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 import os from 'os';
 import path from 'path';
-import { mkdtemp, rm, mkdir, writeFile } from 'fs/promises';
+import { mkdtemp, rm, mkdir, writeFile, stat, readdir, symlink } from 'fs/promises';
 import {
   computeNextRunAt,
-  expandCommandGoalObjective,
   formatScheduledSessionTitle,
-  parseScheduledCommandPrompt,
   createScheduledTasksRuntime,
 } from './runtime.js';
 import { createProjectConfigRuntime } from '../projects/project-config.js';
+import { createChatsScope } from './chats-scope.js';
+import { loopFingerprint, parseLoopDefinition } from './loops.js';
 
 describe('scheduled-tasks runtime helpers', () => {
   it.each([
@@ -110,28 +110,6 @@ describe('scheduled-tasks runtime helpers', () => {
     expect(title).toBe('Morning Sync 2025-03-10 07:05');
   });
 
-  it('parses slash command prompt for scheduled command mode', () => {
-    expect(parseScheduledCommandPrompt('/review src/components')).toEqual({
-      command: 'review',
-      arguments: 'src/components',
-    });
-  });
-
-  it('returns null when prompt is not a slash command', () => {
-    expect(parseScheduledCommandPrompt('Summarize open issues')).toBeNull();
-    expect(parseScheduledCommandPrompt('/')).toBeNull();
-  });
-
-  it('expands command arguments into the goal objective', () => {
-    expect(expandCommandGoalObjective(
-      'Run the issue pipeline for $ARGUMENTS. Verify $ARGUMENTS is represented by the PR.',
-      'LIN-123 --draft',
-    )).toBe('Run the issue pipeline for LIN-123 --draft. Verify LIN-123 --draft is represented by the PR.');
-    expect(expandCommandGoalObjective(undefined, 'LIN-123')).toBeNull();
-    expect(expandCommandGoalObjective('Move $1 to $2', '"src old" dist extra')).toBe('Move src old to dist extra');
-    expect(expandCommandGoalObjective('Review the requested scope.', 'auth module'))
-      .toBe('Review the requested scope.\n\nauth module');
-  });
 });
 
 describe('scheduled-tasks runtime syncProject wiring', () => {
@@ -155,12 +133,7 @@ describe('scheduled-tasks runtime syncProject wiring', () => {
     createTaskID: () => 'task-fixed-id',
   });
 
-  const createRuntimeDeps = (overrides = {}) => ({
-    buildOpenCodeUrl: () => 'http://localhost',
-    getOpenCodeAuthHeaders: () => ({}),
-    waitForOpenCodeReady: async () => {},
-    ...overrides,
-  });
+  const createRuntimeDeps = (overrides = {}) => overrides;
 
   it('reconciles discovered loops when the project path is known', async () => {
     const { tempRoot, repoPath, cleanup } = await createTempProject();
@@ -181,14 +154,36 @@ Run daily.
         listProjects: async () => [{ id: 'proj', path: repoPath }],
       });
 
+      const loopFile = path.join(repoPath, '.agents', 'loops', 'daily.md');
       await runtime.syncProject('proj');
 
-      const tasks = await projectConfigRuntime.listScheduledTasks('proj');
+      // `enabled: true` came with the repository: listed, not scheduled.
+      let tasks = await projectConfigRuntime.listScheduledTasks('proj');
       expect(tasks).toHaveLength(1);
       expect(tasks[0].id).toBe('loop:project:daily');
-      expect(tasks[0].loopFile).toBe(path.join(repoPath, '.agents', 'loops', 'daily.md'));
+      expect(tasks[0].loopFile).toBe(loopFile);
+      expect(tasks[0].enabled).toBe(false);
+
+      // Approved on this machine, this version runs.
+      await projectConfigRuntime.setLoopApproval('proj', loopFile, loopFingerprint(parseLoopDefinition(loopFile)));
+      await runtime.syncProject('proj');
+      tasks = await projectConfigRuntime.listScheduledTasks('proj');
+      expect(tasks[0].enabled).toBe(true);
       // syncTaskSchedule computed and persisted the next run for the enabled task.
       expect(tasks[0].state.nextRunAt).toBeGreaterThan(0);
+
+      // A changed prompt is a new version and waits for a new approval.
+      await writeFile(loopFile, `---
+name: daily
+schedule: "0 9 * * *"
+enabled: true
+model: openai/gpt-5
+---
+Run something else.
+`, 'utf8');
+      await runtime.syncProject('proj');
+      tasks = await projectConfigRuntime.listScheduledTasks('proj');
+      expect(tasks[0].enabled).toBe(false);
     } finally {
       await cleanup();
     }
@@ -246,12 +241,11 @@ Run daily.
       });
       await mkdir(path.join(tempRoot, 'config'), { recursive: true });
       await writeFile(projectConfigRuntime.resolveProjectConfigPath('broken'), '{ not json', 'utf8');
+      const healthyLoop = path.join(healthyPath, '.agents', 'loops', 'daily.md');
+      await projectConfigRuntime.setLoopApproval('healthy', healthyLoop, loopFingerprint(parseLoopDefinition(healthyLoop)));
 
       const warnings = [];
       const runtime = createScheduledTasksRuntime({
-        buildOpenCodeUrl: () => 'http://localhost',
-        getOpenCodeAuthHeaders: () => ({}),
-        waitForOpenCodeReady: async () => {},
         projectConfigRuntime,
         listProjects: async () => [
           { id: 'broken', path: brokenPath },
@@ -271,5 +265,156 @@ Run daily.
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
     }
+  });
+});
+
+describe('canonical scheduled execution', () => {
+  const workspace = { hostProjectId: 'host-project', projectId: 'opaque-project', workspaceId: 'opaque-workspace', cwd: '/repo' };
+  const session = (scope, id = 'session') => ({ sessionId: id, rootSessionId: id, projectId: scope.projectId, workspaceId: scope.workspaceId,
+    displayPath: '.', createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+    metadata: null, metadataRevision: '0', archiveRevision: '0' });
+  const setup = (execution = {}, extra = {}) => {
+    let task = { id: 'task', name: 'Daily', enabled: false, schedule: { kind: 'daily', times: ['09:00'], timezone: 'UTC' },
+      execution: { prompt: 'Do the work', providerID: 'provider', modelID: 'model', agent: 'agent', variant: 'high', ...execution }, state: {} };
+    const sent = [];
+    const created = [];
+    const projectConfigRuntime = {
+      listScheduledTasks: async () => [task], reconcileLoopTasks: async () => [task],
+      updateScheduledTaskState: async (_project, _task, patch) => { task = { ...task, state: { ...task.state, ...patch } }; return { task }; },
+    };
+    const sessionService = {
+      create: async (request) => { created.push(request); return { session: session(workspace) }; },
+      send: async (sessionId, request) => { sent.push(request); return { run: { sessionId, runId: 'run', status: 'running', createdAt: 1 } }; },
+    };
+    const runtime = createScheduledTasksRuntime({ projectConfigRuntime, listProjects: async () => [{ id: 'host-project', path: '/repo' }],
+      listWorkspaceScopes: async () => ({ items: [{ workspaceId: workspace.workspaceId }], errors: {} }),
+      resolveWorkspaceScope: async () => workspace, sessionService, logger: { warn() {}, info() {} }, ...extra });
+    return { runtime, sessionService, created, sent, stored: () => task };
+  };
+
+  it('uses opaque scopes and captures pinned selection without treating acknowledgement as transcript completion', async () => {
+    const h = setup();
+    await h.runtime.syncProject('host-project');
+    const result = await h.runtime.runNow('host-project', 'task');
+    expect(result).toMatchObject({ ok: true, sessionID: 'session' });
+    expect(h.created[0]).toMatchObject({ projectId: 'opaque-project', workspaceId: 'opaque-workspace',
+      options: { providerId: 'provider', modelId: 'model', agentId: 'agent', variant: 'high', reasoningEffort: null } });
+    expect(h.sent[0].input.context[0]).toMatchObject({ kind: 'context', metadata: { scheduledTask: { projectId: 'host-project', taskId: 'task', mode: 'new' } } });
+    expect(h.stored().state.lastStatus).toBe('success');
+    h.runtime.stop();
+  });
+
+  it('expands native input before creation and sends its captured bindings without changing task text', async () => {
+    const raw = '/deploy "release one"  trailing  ';
+    const service = { request: vi.fn(async () => Response.json({ kind: 'template', content: '# Expanded\n\n  Markdown\n',
+      modelSelection: { providerId: 'bound-provider', modelId: 'bound-model' }, agentId: 'bound-agent' })) };
+    const h = setup({ prompt: raw }, { service });
+    await h.runtime.syncProject('host-project');
+    try {
+      expect(await h.runtime.runNow('host-project', 'task')).toMatchObject({ ok: true });
+      expect(service.request).toHaveBeenCalledTimes(1);
+      expect(service.request.mock.calls[0][0]).toBe('/api/agent/v1/workspaces/opaque-workspace/commands/expand-text');
+      expect(JSON.parse(service.request.mock.calls[0][1].body)).toEqual({ text: raw });
+      const captured = { providerId: 'bound-provider', modelId: 'bound-model', agentId: 'bound-agent', variant: 'high', reasoningEffort: null };
+      expect(h.created[0].options).toEqual(captured);
+      expect(h.sent[0].options).toEqual(captured);
+      expect(h.sent[0].input.text).toBe('# Expanded\n\n  Markdown\n');
+      expect(h.sent[0].input.context[0].metadata.scheduledTask.mode).toBe('new');
+      expect(h.stored().execution.prompt).toBe(raw);
+    } finally { h.runtime.stop(); }
+  });
+
+  it('does not create or send a session when native expansion fails', async () => {
+    const h = setup({ prompt: '/deploy args' }, { service: { request: vi.fn(async () => { throw new Error('Worker expansion unavailable'); }) } });
+    await h.runtime.syncProject('host-project');
+    try {
+      expect(await h.runtime.runNow('host-project', 'task')).toMatchObject({ ok: false, error: 'Worker expansion unavailable' });
+      expect(h.created).toEqual([]);
+      expect(h.sent).toEqual([]);
+      expect(h.stored().execution.prompt).toBe('/deploy args');
+    } finally { h.runtime.stop(); }
+  });
+
+  it('reports unavailable defaults instead of switching to invented model defaults', async () => {
+    const h = setup({ useDefaults: true }, { readSessionDefaults: async () => { throw new Error('Settings read failed'); } });
+    await h.runtime.syncProject('host-project');
+    expect(await h.runtime.runNow('host-project', 'task')).toMatchObject({ ok: false, error: 'Settings read failed' });
+    expect(h.created).toEqual([]);
+    expect(h.sent).toEqual([]);
+  });
+
+  it('rejects foreign or ambiguous workspaces before session creation', async () => {
+    const h = setup({}, { resolveWorkspaceScope: async () => ({ ...workspace, hostProjectId: 'foreign' }) });
+    await h.runtime.syncProject('host-project');
+    expect(await h.runtime.runNow('host-project', 'task')).toMatchObject({ ok: false });
+    expect(h.created).toEqual([]);
+  });
+
+  it('keeps the created session identity when provider dispatch fails', async () => {
+    const h = setup();
+    h.sessionService.send = async () => { throw new Error('Provider unavailable'); };
+    await h.runtime.syncProject('host-project');
+    expect(await h.runtime.runNow('host-project', 'task')).toMatchObject({ ok: false, status: 'error' });
+    expect(h.stored().state).toMatchObject({ lastSessionId: 'session', lastStatus: 'error' });
+  });
+
+  it('uses each real managed-chat workspace and cleans only an empty failed creation directory', async () => {
+    const temp = await mkdtemp(path.join(os.tmpdir(), 'scheduled-chats-'));
+    const chatsScope = createChatsScope(path.join(temp, 'chats'));
+    const scopes = [];
+    const h = setup({}, { chatsScope, createChatWorkspace: async () => {
+      const scope = { ...workspace, hostProjectId: chatsScope.id, cwd: await chatsScope.createChatDirectory(), workspaceId: `chat-${scopes.length}` };
+      scopes.push(scope); return scope;
+    } });
+    h.sessionService.create = async (request) => ({ session: session(scopes.find((scope) => scope.workspaceId === request.workspaceId)) });
+    try {
+      await h.runtime.syncProject(chatsScope.id);
+      const first = await h.runtime.runNow(chatsScope.id, 'task');
+      const second = await h.runtime.runNow(chatsScope.id, 'task');
+      expect(first.ok).toBe(true);
+      expect(second.directory).not.toBe(first.directory);
+      await expect(stat(first.directory)).resolves.toBeTruthy();
+      h.sessionService.create = async () => { throw new Error('Service unavailable'); };
+      expect(await h.runtime.runNow(chatsScope.id, 'task')).toMatchObject({ ok: false });
+      await expect(stat(scopes.at(-1).cwd)).rejects.toMatchObject({ code: 'ENOENT' });
+      await expect(stat(first.directory)).resolves.toBeTruthy();
+    } finally { h.runtime.stop(); await rm(temp, { recursive: true, force: true }); }
+  });
+
+  it('cleans an empty managed-chat directory when native expansion fails before creation', async () => {
+    const temp = await mkdtemp(path.join(os.tmpdir(), 'scheduled-chat-expansion-'));
+    const chatsScope = createChatsScope(path.join(temp, 'chats'));
+    let admitted;
+    const h = setup({ prompt: '/deploy args' }, {
+      chatsScope,
+      service: { request: vi.fn(async () => { throw new Error('Native expansion unavailable'); }) },
+      resolveWorkspaceScope: async () => admitted,
+      createChatWorkspace: async () => {
+        admitted = { ...workspace, hostProjectId: chatsScope.id, workspaceId: 'new-chat', cwd: await chatsScope.createChatDirectory() };
+        return admitted;
+      },
+    });
+    try {
+      await h.runtime.syncProject(chatsScope.id);
+      expect(await h.runtime.runNow(chatsScope.id, 'task')).toMatchObject({ ok: false, error: 'Native expansion unavailable' });
+      expect(h.created).toEqual([]);
+      expect(h.sent).toEqual([]);
+      await expect(stat(admitted.cwd)).rejects.toMatchObject({ code: 'ENOENT' });
+    } finally { h.runtime.stop(); await rm(temp, { recursive: true, force: true }); }
+  });
+});
+describe('managed chat directory authority', () => {
+  it('rejects a date-directory alias before creating any child outside the managed root', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'scheduled-chat-boundary-'));
+    const chats = path.join(root, 'chats');
+    const outside = path.join(root, 'outside');
+    await mkdir(chats);
+    await mkdir(outside);
+    const scope = createChatsScope(chats);
+    try {
+      await symlink(outside, path.join(chats, '2026-10-14'), process.platform === 'win32' ? 'junction' : 'dir');
+      await expect(scope.createChatDirectory(new Date(2026, 9, 14))).rejects.toThrow('not authorized');
+      expect(await readdir(outside)).toEqual([]);
+    } finally { await rm(root, { recursive: true, force: true }); }
   });
 });

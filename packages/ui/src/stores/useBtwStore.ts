@@ -1,6 +1,7 @@
+import type { PermissionMode } from './utils/permissionAutoAccept';
 import { create } from 'zustand';
-import type { Agent } from '@opencode-ai/sdk/v2';
-
+import type { Agent, Model, Provider } from '@openchamber/agent-contract';
+import { isAutoModel } from '@/lib/routing/autoModel';
 type BtwModelSelection = { providerId: string; modelId: string };
 export type BtwSelection = {
   agent: string | undefined;
@@ -8,22 +9,47 @@ export type BtwSelection = {
   variant: string | null | undefined;
 };
 
-export const resolveBtwSelection = ({ agents, savedAgent, savedModel, savedVariant, composerModel, composerVariant }: {
-  agents: readonly Pick<Agent, 'name' | 'hidden' | 'mode'>[];
+/**
+ * Whether a saved btw model can still be used, judged against the catalog the
+ * model picker renders. Auto is never in that catalog: it is valid exactly
+ * while routing can honour it, as `hasProviderModel` in useConfigStore says.
+ * An empty catalog has not loaded (or failed to), so it cannot say a model is
+ * gone: there is no check then and the saved model wins.
+ */
+export const btwModelAvailability = (
+  providers: readonly (Provider & { models: readonly Model[] })[],
+  autoReady: boolean,
+): ((model: BtwModelSelection) => boolean) | undefined => {
+  if (providers.length === 0) return undefined;
+  return ({ providerId, modelId }) => {
+    if (isAutoModel(providerId, modelId)) return autoReady;
+    const provider = providers.find((candidate) => candidate.providerId === providerId);
+    return Boolean(provider?.models.some((model) => model.modelId === modelId));
+  };
+};
+
+export const resolveBtwSelection = ({ agents, savedAgent, savedModel, savedVariant, composerModel, composerVariant, isModelAvailable }: {
+  agents: readonly Pick<Agent, 'agentId' | 'name'>[];
   savedAgent: string | null;
   savedModel: BtwModelSelection | null;
   savedVariant?: string | null;
   composerModel: BtwModelSelection | null;
   composerVariant: string | null | undefined;
+  /** Live-catalog check; when omitted the saved model wins, as before. */
+  isModelAvailable?: (model: BtwModelSelection) => boolean;
 }): BtwSelection => {
-  const selectable = agents.filter((agent) => !agent.hidden && (agent.mode === 'primary' || agent.mode === 'all'));
-  const agent = selectable.find((candidate) => candidate.name === savedAgent)
-    ?? selectable.find((candidate) => candidate.name === 'plan')
-    ?? selectable[0];
+  const agent = agents.find((candidate) => candidate.agentId === savedAgent)
+    ?? agents.find((candidate) => candidate.name === 'plan')
+    ?? agents[0];
+  // A saved model from before a provider rename or catalog change must not
+  // win over the composer's live one: the fork would be switched onto a slug
+  // no provider serves and its first prompt dies without reaching the catch
+  // that shows the failure toast (#4353).
+  const savedUsable = savedModel !== null && (isModelAvailable === undefined || isModelAvailable(savedModel));
   return {
-    agent: agent?.name,
-    model: savedModel ?? composerModel,
-    variant: savedModel ? savedVariant : composerVariant,
+    agent: agent?.agentId,
+    model: savedUsable ? savedModel : composerModel,
+    variant: savedUsable ? savedVariant : composerVariant,
   };
 };
 
@@ -49,7 +75,8 @@ type BtwPanelUIState = {
   creating?: boolean;
   destroying?: boolean;
   pending?: boolean;
-  pendingAutoAccept?: boolean;
+  /** The shield button's choice for the fork; absent means the new session takes the default from Settings. */
+  pendingPermissionMode?: PermissionMode;
   pendingSend?: symbol;
 };
 

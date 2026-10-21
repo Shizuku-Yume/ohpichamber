@@ -1,13 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../opencode/auth.js', () => ({
-  readAuthFile: () => ({ openrouter: { key: 'test-token' } }),
-}));
+const credential = { type: 'api_key', key: 'test-token' };
+
 
 import { fetchQuota, resolveResetAt } from './openrouter.js';
 
+
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 const mockResponse = (body, init = {}) => ({
@@ -55,7 +56,7 @@ describe('OpenRouter quota provider', () => {
   it('builds a monthly window from the documented payload', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(mockResponse(DOCUMENTED_PAYLOAD)));
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential });
     const window = result.usage.windows.monthly;
 
     expect(result.ok).toBe(true);
@@ -83,7 +84,7 @@ describe('OpenRouter quota provider', () => {
       }
     })));
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential });
     const window = result.usage.windows.daily;
 
     expect(window).toBeDefined();
@@ -106,7 +107,7 @@ describe('OpenRouter quota provider', () => {
       }
     })));
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential });
     const window = result.usage.windows.monthly;
 
     expect(window.usedPercent).toBeNull();
@@ -120,7 +121,7 @@ describe('OpenRouter quota provider', () => {
       data: { limit: 30, limit_remaining: 25, limit_reset: null, usage_monthly: 5 }
     })));
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential });
     const window = result.usage.windows.credits;
 
     expect(window).toBeDefined();
@@ -133,7 +134,7 @@ describe('OpenRouter quota provider', () => {
       data: { limit: 30, limit_remaining: 25, limit_reset: 'yearly', usage_monthly: 5 }
     })));
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential });
     const window = result.usage.windows.credits;
 
     expect(window).toBeDefined();
@@ -146,7 +147,7 @@ describe('OpenRouter quota provider', () => {
       data: { limit: 30, limit_remaining: 25, limit_reset: 'weekly', usage_monthly: 5 }
     })));
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential });
     const window = result.usage.windows.weekly;
 
     expect(window).toBeDefined();
@@ -171,8 +172,8 @@ describe('OpenRouter quota provider', () => {
       .mockResolvedValueOnce(mockResponse(withByokPayload));
     vi.stubGlobal('fetch', fetchMock);
 
-    const withoutByok = await fetchQuota();
-    const withByok = await fetchQuota();
+    const withoutByok = await fetchQuota({ credential });
+    const withByok = await fetchQuota({ credential });
 
     expect(withByok.usage.windows.monthly.valueLabel)
       .toBe(withoutByok.usage.windows.monthly.valueLabel);
@@ -185,7 +186,7 @@ describe('OpenRouter quota provider', () => {
       data: { is_management_key: true }
     })));
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential });
 
     expect(result.ok).toBe(false);
     expect(result.configured).toBe(true);
@@ -196,7 +197,7 @@ describe('OpenRouter quota provider', () => {
   it.each([401, 403])('maps %s to a session-expired error', async (status) => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status }));
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential });
 
     expect(result.ok).toBe(false);
     expect(result.error).toBe('Session expired — please re-authenticate with OpenRouter');
@@ -209,7 +210,7 @@ describe('OpenRouter quota provider', () => {
       json: async () => { throw new SyntaxError('Unexpected token'); },
     }));
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential });
 
     expect(result.ok).toBe(false);
     expect(result.error).toBe('Invalid response from provider');
@@ -218,7 +219,7 @@ describe('OpenRouter quota provider', () => {
   it('reports a normalized timeout error', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new DOMException('The operation timed out.', 'TimeoutError')));
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential });
 
     expect(result.ok).toBe(false);
     expect(result.error).toBe('Request timed out');
@@ -227,7 +228,7 @@ describe('OpenRouter quota provider', () => {
   it('returns no-quota-data when data is missing', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(mockResponse({})));
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential });
 
     expect(result.ok).toBe(false);
     expect(result.configured).toBe(true);
@@ -238,7 +239,7 @@ describe('OpenRouter quota provider', () => {
   it('returns no-quota-data when data is empty', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(mockResponse({ data: {} })));
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential });
 
     expect(result.ok).toBe(false);
     expect(result.configured).toBe(true);
@@ -249,7 +250,7 @@ describe('OpenRouter quota provider', () => {
   it.each([null, []])('returns no-quota-data when data is %s', async (data) => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(mockResponse({ data })));
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential });
 
     expect(result.ok).toBe(false);
     expect(result.configured).toBe(true);
@@ -262,7 +263,7 @@ describe('OpenRouter quota provider', () => {
       data: { limit: 30, limit_remaining: null, usage_monthly: 5 }
     })));
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential });
 
     expect(result.ok).toBe(false);
     expect(result.error).toBe('No quota data in response');
@@ -273,7 +274,7 @@ describe('OpenRouter quota provider', () => {
       data: { limit: 0, limit_remaining: 0, limit_reset: 'monthly', usage_monthly: 0 }
     })));
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential });
     const window = result.usage.windows.monthly;
 
     expect(result.ok).toBe(true);
@@ -285,11 +286,19 @@ describe('OpenRouter quota provider', () => {
     const fetchMock = vi.fn().mockResolvedValue(mockResponse(DOCUMENTED_PAYLOAD));
     vi.stubGlobal('fetch', fetchMock);
 
-    await fetchQuota();
+    await fetchQuota({ credential });
 
     const requestedUrl = fetchMock.mock.calls[0][0];
     expect(requestedUrl).toBe('https://openrouter.ai/api/v1/key');
     expect(requestedUrl).not.toContain('/api/v1/credits');
+  });
+
+  it('does not redirect the selected credential to legacy config endpoints', async () => {
+    vi.stubEnv('OPENCODE_CONFIG', '/legacy/config/must-not-be-read.json');
+    const fetchMock = vi.fn().mockResolvedValue(mockResponse(DOCUMENTED_PAYLOAD));
+    vi.stubGlobal('fetch', fetchMock);
+    await fetchQuota({ credential });
+    expect(fetchMock.mock.calls[0][0]).toBe('https://openrouter.ai/api/v1/key');
   });
 
   it('resolves daily reset at the next UTC day across year boundaries', () => {
@@ -321,7 +330,7 @@ describe('OpenRouter quota provider', () => {
       data: { limit: 30, limit_remaining: -1, limit_reset: 'monthly', usage_monthly: 31 }
     })));
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential });
     const window = result.usage.windows.monthly;
 
     expect(window.usedPercent).toBe(100);

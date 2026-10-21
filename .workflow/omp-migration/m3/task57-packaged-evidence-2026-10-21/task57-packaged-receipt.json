@@ -1,0 +1,132 @@
+{
+  "task": "Task57 packaged acceptance",
+  "observedAt": "2026-10-21T23:00:43+08:00",
+  "artifact": {
+    "path": "packages/electron/dist/OpenChamber-2.2.0-linux-x86_64.AppImage",
+    "sha256": "04dd539f1b6ad3e4c77fea861060b72f9d64c3ceb7010721c56a059cc537a0c2",
+    "bytes": 606802672,
+    "source": "Artifact under test per packaged runbook (851a62d2a build; working tree b9fbb4bb0 docs/tests only)."
+  },
+  "runtime": {
+    "cdpPort": 9350,
+    "home": "/tmp/ohpi-task18/home",
+    "data": "/tmp/ohpi-task18/data",
+    "chats": "/tmp/ohpi-task18/chats",
+    "fixture": "http://127.0.0.1:4611/v1",
+    "model": "T18 Fixture",
+    "t18fixture": "t18fixture/t18-fixture",
+    "sessionId": "4e7eb031-34b6-400e-8d8e-9bff6bbbf4bf",
+    "auth": "disabled for this packaged run"
+  },
+  "observed": {
+    "diff": {
+      "turnIds": [
+        "586da323-e06e-4abf-b471-8496d83da585",
+        "65088f50-b3d5-4741-954d-23efb0dfd0ef"
+      ],
+      "tool": "edit NOTES.md",
+      "canonical": {
+        "isError": false,
+        "path": "[workspace]/NOTES.md",
+        "diff": "-1|Task 57 original line.\n+1|Task 57 edited line.",
+        "text": "[NOTES.md] 1:Task 57 edited line."
+      },
+      "ui": {
+        "stats": "+1/-1",
+        "unified": "pkg-diff-open.png shows the removed and added lines stacked with one gutter and +1/-1.",
+        "split": "pkg-diff-split.png shows old and new columns side by side with +1/-1.",
+        "quickOpen": "The quick-open action opened the NOTES.md context-file panel showing exactly 'Task 57 edited line.'"
+      },
+      "screenshots": [
+        {"file": "/tmp/ohpi-task18/pkg-diff-open.png", "sha256": "bca0d05985c2ee703f1ef24f48a937d0324665ea3e9ea704c34250fc4ba55245", "bytes": 153546},
+        {"file": "/tmp/ohpi-task18/pkg-diff-split.png", "sha256": "00f31be299fe61ba678806a85932cd9998126d5ed99b476457bd8f6281755012", "bytes": 159150},
+        {"file": "/tmp/ohpi-task18/pkg-quickopen.png", "sha256": "24fea2bb77c9bafaf5d373a8e1e011f4cb3eb8ee44c861fb13bd8d7b709ffd60", "bytes": 201698}
+      ]
+    },
+    "bashDialog": {
+      "turnId": "5db6bf5c-3fdb-4ff7-abed-7e6c198debe1",
+      "arguments": {"command": "sleep 20; echo packaged-sleep-done"},
+      "output": "packaged-sleep-done",
+      "wallTimeMs": 20083.03,
+      "screenshot": {"file": "/tmp/ohpi-task18/pkg-bash-dialog.png", "sha256": "4e132fb21aa4fc702ebd44516113c0440ad565024e8716aacd090981bfb674f8", "bytes": 209819}
+    },
+    "bashApproval": {
+      "screenshot": {"file": "/tmp/ohpi-task18/pkg-bash-approval.png", "sha256": "1bce00bfa2153b1972c80a0a736cb3a8fb70f7c93c3a0778e343c24eef84e11f", "bytes": 197051},
+      "ui": "Permission required / bash / The native tool operation requires approval. / deny / always allow / allow once.",
+      "result": "Allow once selected; the later canonical tool call reached running status."
+    },
+    "bashRunning": {
+      "turnId": "a00234fc-e988-4ac5-8dbb-b8a81b0669bc",
+      "messageId": "26366cc2-a46a-4cda-823a-1d5826d28b0e",
+      "partId": "26366cc2-a46a-4cda-823a-1d5826d28b0e:0",
+      "toolCallId": "t18-sleep",
+      "canonicalRequest": "PART_STATUS=beforeAbort; snapshot status=running; activeRunId=50c4e1a1-ab5f-448b-9b4b-092ad3a0aad0; headSequence=125; part.type=tool_call; part.toolName=bash; part.status=running; input.command=sleep 20; echo packaged-sleep-done",
+      "ui": {
+        "visible": "Latest turn shows bash sleep 20; echo packaged-sleep-done with a visibly dimmed title and the red square Stop control.",
+        "matchingToolPartSpan": "computed opacity 0.7; class contains 'transition-opacity duration-200 opacity-70'; text 'bash'; x=477,y=915.4",
+        "liveRegion": "NOT OBSERVED: all [aria-live] nodes were empty at this running measurement; no 'is using bash' or 'running a command' announcement was captured."
+      },
+      "screenshot": {"file": "/tmp/ohpi-task18/pkg-bash-running-canonical.png", "sha256": "09e3555306810c2939244a37770ac40e67d2741d22190987636f620a1765e7be", "bytes": 176479}
+    },
+    "bashAbort": {
+      "turnId": "a00234fc-e988-4ac5-8dbb-b8a81b0669bc",
+      "canonical": "After Stop, snapshot status=idle; activeRunId=null; headSequence=134; tool_call status=failed; tool_result isError=true; tool_result text='Command aborted'; error='Tool execution failed'.",
+      "ui": "Stop disappeared. The initially collapsed row looked neutral; after expansion/reload it showed 'Command aborted' and 'Error: Tool execution failed'.",
+      "screenshots": [
+        {"file": "/tmp/ohpi-task18/pkg-bash-canonical-after-stop.png", "sha256": "59125377c5566f9d852173af7de29dd1ebf7ca6edb2f45be7ba35f0326423a36", "bytes": 176845, "note": "Immediately after Stop, collapsed row; Stop absent."},
+        {"file": "/tmp/ohpi-task18/pkg-bash-cancelled-row-final.png", "sha256": "b8493ae69f8bd228eb9ebd60b3401af6ddf1f3b52ede22b9a2a0ea532c86933d", "bytes": 236557, "note": "Expanded final row shows Command aborted / Tool execution failed and no Stop."}
+      ]
+    },
+    "w8Reload": {
+      "prompts": [
+        {"text": "T18-W8 reload midrun", "turnId": "6138e88f-8361-4831-a742-881d8df7c38e", "userId": "bfdbde04-28d6-47dc-b301-a690626db061", "assistantId": "e0dafb82-e7ce-4e59-9e93-3c5e4644cb7a", "assistantPartId": "e0dafb82-e7ce-4e59-9e93-3c5e4644cb7a:0", "content": "w8 snapshot recovery after reload done"},
+        {"text": "T18-W8 reload midrun 2", "turnId": "2b748016-8b3f-4345-8a93-aa1800c50c54", "userId": "4738e50c-b22b-41e7-8fd3-84c58f6c3839", "assistantId": "016127ea-e221-49f1-b0db-e1325b2521b6", "assistantPartId": "016127ea-e221-49f1-b0db-e1325b2521b6:0", "content": "w8 snapshot recovery after reload done"}
+      ],
+      "preReload": "Stop generating was present before refresh. Exact pre-reload headSequence was not captured.",
+      "postReloadActive": "status=running; activeRunId=669997fe-866a-4490-896d-bf9474f305d8; headSequence=69; Stop present; prompt count 1; no duplicate turn.",
+      "final": "status=idle; activeRunId=null; headSequence=81/134; each turn contains exactly one user part and one assistant part; no duplicate part IDs.",
+      "transientObservation": "An intermediate screenshot taken about 2.6s after reload visibly showed 'w8w8 snapshot recovery after reload' (duplicated leading token, missing 'done'). The final stable DOM/screenshot shows the correct single 'w8 snapshot recovery after reload done'. This is recorded as a transient visual duplication, not a canonical duplicate.",
+      "screenshots": [
+        {"file": "/tmp/ohpi-task18/pkg-w8-active-after-reload.png", "sha256": "50ec5a919583a31352a36b2897ebb54e3dd2cd1ee0c41073b1095bbd46e92b56", "bytes": 158190},
+        {"file": "/tmp/ohpi-task18/pkg-w8-complete-after-reload.png", "sha256": "b4e3b0e684c0e8e8d28fda65f6e80dcfd227b2edce6dd36a755f8557caa6e72d", "bytes": 177852, "note": "Intermediate 'w8w8' artifact."},
+        {"file": "/tmp/ohpi-task18/pkg-w8-final-stable.png", "sha256": "e62826261066bd21551509944fab8c28b6c85392c94fec31c870d1c90ccd0ab5", "bytes": 176156, "note": "Final stable correct text."}
+      ]
+    },
+    "fixtureCorrection": {
+    "file": "/tmp/task18-fixture.mjs",
+    "change": "Child prompt branch /Return the T18 child marker\\./ now returns native yield (id t18-yield) with args {data:{marker:'T18 child marker'}}, matching installed packages/16/src/tools/yield.ts buildYieldParameters/looseRecordSchema (data object, additionalProperties:true) and the Task15 fixture transport shape. Fixture restarted (PID 1102570).",
+    "oneChildPrompt": "T18-TASK native child yield at 11:08 PM created child session 01a15f01-4edc-74f7-8f7b-f3d9f7a57dac. Child JSONL shows assistant toolCall yield with {data:{marker:'T18 child marker'}}; the tool result is 'Host policy refused the tool operation' (isError=true); parent subagent t18-child-1-2 status=failed.",
+    "conclusion": "Fixture correction is validated only up to the native yield call. Child completion/sidebar/history/back remain unobserved until the host-policy yield gap and UI/child-route gaps are fixed."
+  },
+  "nativeChild": {
+      "turnId": "b1267679-c660-4393-b85a-fc76c7bf13a0",
+      "taskRow": "task t18-child-1; expanded arguments: agent=scout, name=t18-child-1, task='Return the T18 child marker.'",
+      "childListApi": "GET /api/agent/v1/subagents?sessionId=4e7eb031... returns t18-child-1 childSessionId=01a15eec... status=failed and t18-child-1-2 childSessionId=01a15f01... toolCallId=t18-task role=scout status=failed.",
+      "childSnapshot": "GET /api/agent/v1/sessions/01a15eec.../snapshot returns HTTP 404 SESSION_NOT_FOUND ('Session not found'); the child is present only in the subagents map, not in root references. New child 01a15f01... has the same unresolved route class.",
+      "ui": "Inline task block says 'Spawned agent t18-child-1' and 'completed: subagent yielded successfully'; it shows only generic 'Packaged write completed.' text, not the T18 child marker. The work-status panel was opened and shows Session/Context/Usage only; no Subagents section. Sidebar has no child row and reports session-refresh errors.",
+      "status": "PARTIAL / NOT ACCEPTED: corrected fixture reaches native yield, but host policy refuses the yield; child route returns 404 and sidebar child history/back remain unobserved.",
+      "screenshots": [
+        {"file": "/tmp/ohpi-task18/pkg-task-child-expanded.png", "sha256": "da126fbb755d78b1f5bac3d352f57a610dddd7db429548eed8cf61b1ce7299dc", "bytes": 225582},
+        {"file": "/tmp/ohpi-task18/pkg-task-subagents-panel.png", "sha256": "5ed199da58e06a8efaa4fcc24e512ca433b5e4fe8cbfa11b2a75624b40a993ed", "bytes": 239164, "note": "Work-status panel open; no Subagents section. Cancelled bash error is visible in this state."}
+      ]
+    }
+  },
+  "sourceDiagnosis": {
+    "toolRunningLiveRegion": "Intended announcer is StatusRowContainer -> StatusRow -> WorkingPlaceholder (role=status, aria-live=polite/polite, aria-label); MessageList.tsx has no aria-live or announcer and only supplies isWorking to turn grouping (438-442). ToolPart's MinDurationShineText is visual-only and has no live semantics. ToolPart.tsx:1253-1261; MinDurationShineText.tsx:82-89; WorkingPlaceholder.tsx:233-260; StatusRow.tsx:38-43,59-71. useAssistantStatus maps shell/execute to 'running a command', unknown bash to 'using bash' (useAssistantStatus.ts:91-107,145-149); tests cover shell, not bash (useAssistantStatus.test.ts:131,140), and no test asserts the status row's live region. The observed empty [aria-live] was measured 400 ms after approval, inside WorkingPlaceholder's 1200 ms STATUS_DISPLAY_TIME_MS debounce; when isWorking turns false it clears displayedText, and StatusRow returns null when !isWorking or suppresses the placeholder when abortActive. That observation is therefore inconclusive, not a confirmed persistent gap. Intended announcer remains StatusRow/WorkingPlaceholder; a post-1200 ms read or source test is required before claiming failure.",
+    "toolRunningOwnerAndFix": "Owner: packages/ui/src/components/chat/StatusRow.tsx + StatusRowContainer.tsx + packages/ui/src/hooks/useAssistantStatus.ts. Smallest fix: keep ToolPart visual-only, but ensure WorkingPlaceholder is mounted and gets the running tool phrase while canonical runtime status is running (investigate stale abortActive/isWorking or statusText suppression); add a regression test for a running canonical bash part asserting role=status/aria-live and 'T18 Fixture is using bash' (or add bash to TOOL_BUCKETS if 'running a command' is desired).",
+    "nativeChildFailure": "Initial fixture observation (preserved): task input agent=scout/name=t18-child-1/task='Return the T18 child marker.'; child model t18fixture/t18-fixture returned plain 'Packaged write completed.' without yield and exited after reminders; parent async-result line 150 status='failed (exit 1)', error='SYSTEM WARNING: Subagent exited without calling yield tool after 3 reminders.' The inline 'completed: subagent yielded successfully' is a static spawn-feedback legend (task-spawn-feedback.md) while the initial task result details say async.state='running'; source owner packages/electron/resources/agent-runtime/packages/16/src/task/index.ts:1143-1157 + prompts/tools/task-spawn-feedback.md + task-async-contract.md. Correction staged only in /tmp/task18-fixture.mjs: child prompt now returns yield {data:{marker:'T18 child marker'}}. One rerun (T18-TASK native child yield, 11:08) shows child session 01a15f01... issued that exact yield, but the tool result was 'Host policy refused the tool operation' (isError=true), so the fixture is no longer the final blocker.",
+    "nativeChildHostPolicy": "Product gap: packages/web/server/lib/host/worker-operation-authorizer.js has no yield exemption. yield is neither nativeTool nor ask/task/provider.use, so it falls through to policy.toolRequests and is refused for a background child; child cannot submit a result. Owner: packages/web/server/lib/host/worker-operation-authorizer.js. Smallest fix: add `if (request.toolName === 'yield') return allowed;` beside ask/task (yield is an internal result submission, no machine capability), and add an authorizer test that a child yield request is allowed. This is independent of child registration/404.",
+    "nativeChildRoute": "Product gap: childSessionId 01a15eec... is in session-references.subagents, not root references. packages/agent-service/src/sessions/registry.ts snapshot() delegates to journal() -> get() (lines 311-315, 432-435, 906-914), and get() only resolves root references, so child snapshot returns 404 SESSION_NOT_FOUND even though runtime() supports child IDs (190-203). Owner: packages/agent-service/src/sessions/registry.ts. Smallest fix: resolve childSessionId from this.subagents and serve the child session file/projection (or otherwise route child history); add a child snapshot route test.",
+    "nativeChildUiLink": "Separate UI gap: packages/ui/src/components/chat/message/parts/ToolPart.tsx:1329 renders TaskToolSessions only when !result, so the child link disappears as soon as the task tool result exists. Owner: ToolPart.tsx TaskToolSessions condition. Smallest fix: remove !result && so subagent links render with a result; add regression test with both paired call and tool_result present. WorkStatusSubagentsSection also showed no child because UI live-session sync did not include the child; not required once the task-row link/route works."
+  },
+  "gates": {
+    "diffDialogQuickOpen": "PASS (observed)",
+    "bashApproval": "PASS (observed; Allow once leads to running)",
+    "bashRunningVisual": "PASS (canonical part running; computed ToolPart title opacity 0.7; visible dimmed row and Stop)",
+    "bashLiveRegion": "INCONCLUSIVE: empty live region measured inside the 1200ms debounce window; intended announcer is StatusRow/WorkingPlaceholder. Do not tick until post-debounce/source test.",
+    "bashAbortCanonical": "PASS canonical failed + Command aborted; visual error requires expansion; initial collapsed row was neutral",
+    "w8Reload": "PASS final/no duplicate part IDs; transient visual 'w8w8' artifact recorded",
+    "nativeChild": "ACTIVE: corrected fixture now issues native yield, but host policy refuses yield; child link hidden by ToolPart !result; child snapshot route 404. Fixture failure preserved; no sidebar child history/back observed.",
+    "guestBoard": "NOT RERUN in this pass; prior evidence must be reused or gate remains active"
+  }
+}

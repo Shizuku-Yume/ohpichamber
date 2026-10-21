@@ -14,14 +14,13 @@ export const buildGoalIntroText = (tokenBudget) => {
     + '\n</system-reminder>';
 };
 
-const fitObjective = async ({ objective, directory, sessionID, providerID, modelID, warn }) => {
+const fitObjective = async ({ objective, workspaceId, sessionID, providerID, modelID, warn }) => {
   if (objective.length <= GOAL_OBJECTIVE_CHAR_LIMIT) return objective;
 
   let distilled = null;
   try {
     const { generateSmallModelText } = await import('../small-model/index.js');
     const generated = await generateSmallModelText({
-      restrictToPreferredProvider: true,
       prompt: objective,
       system: [
         'You distill a large task description into the COMPLETION CRITERIA a progress auditor will judge against.',
@@ -31,7 +30,7 @@ const fitObjective = async ({ objective, directory, sessionID, providerID, model
         'Stay under 4000 characters.',
         'Write in the same language as the task text.',
       ].join('\n'),
-      directory,
+      workspaceId,
       sessionID,
       preferredProviderID: providerID,
       preferredModelID: modelID,
@@ -47,16 +46,20 @@ const fitObjective = async ({ objective, directory, sessionID, providerID, model
 };
 
 export const createSessionGoal = async ({
-  baseUrl,
-  authHeaders,
+  scope,
+  workspaceId,
   sessionID,
-  directory,
   objective,
   tokenBudget = null,
   providerID,
   modelID,
   onWarning,
+  persistSessionGoal,
 }) => {
+  const trustedScope = scope && typeof scope === 'object' ? scope : null;
+  const resolvedWorkspaceId = typeof trustedScope?.workspaceId === 'string' ? trustedScope.workspaceId : workspaceId;
+  const resolvedDirectory = typeof trustedScope?.cwd === 'string' ? trustedScope.cwd : null;
+  if (!resolvedDirectory) throw new Error('goal mode needs a Host session scope with cwd');
   const warn = (message, error) => {
     if (typeof onWarning === 'function') {
       onWarning(message, error);
@@ -66,7 +69,7 @@ export const createSessionGoal = async ({
   };
   const objectiveText = await fitObjective({
     objective: String(objective ?? '').trim(),
-    directory,
+    workspaceId: resolvedWorkspaceId,
     sessionID,
     providerID,
     modelID,
@@ -98,17 +101,9 @@ export const createSessionGoal = async ({
     createdAt: now,
     updatedAt: now,
   };
-  const url = new URL(`${baseUrl}/session/${encodeURIComponent(sessionID)}`);
-  url.searchParams.set('directory', directory);
-  const response = await fetch(url.toString(), {
-    method: 'PATCH',
-    headers: {
-      ...authHeaders,
-      'content-type': 'application/json',
-      accept: 'application/json',
-    },
-    body: JSON.stringify({ metadata: { openchamber: { goal } } }),
-  });
-  if (!response.ok) throw new Error(`goal metadata patch failed (${response.status})`);
+  if (typeof persistSessionGoal !== 'function') {
+    throw new Error('goal mode needs a session metadata store to save the goal in');
+  }
+  await persistSessionGoal(sessionID, resolvedDirectory, goal);
   return goal;
 };

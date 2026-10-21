@@ -9,8 +9,9 @@ import {
   type GuestSessionItemMessage,
 } from '@openchamber/sdk';
 
+import type { Message } from '@openchamber/agent-contract';
 import type { IconName } from '@/components/icon/icons';
-import { formatMessageRecordText, type SessionMessageRecord } from '@/lib/exportSession';
+import { formatMessageRecordText } from '@/lib/exportSession';
 
 import { isGuestActive } from './capabilities.ts';
 import { guestPackageIconSrc, resolveGuestIconName } from './icon.ts';
@@ -65,9 +66,16 @@ export const guestActionWantsMessages = (action: GuestActionContribution): boole
   action.payload?.includes('messages') ?? false
 );
 
-const recordRole = (record: SessionMessageRecord): GuestItemRole => (
-  record.info.role === 'user' ? 'user' : 'assistant'
+/** Only assistant replies are sent as assistant items; system messages are omitted. */
+const recordRole = (record: Message): GuestItemRole => (
+  record.role === 'assistant' ? 'assistant' : 'user'
 );
+
+/** A message's text the way the Markdown export writes it. */
+const recordText = (record: Message): string => {
+  if (record.role === 'system') return '';
+  return formatMessageRecordText(record);
+};
 
 type SessionRef = {
   sessionId: string;
@@ -78,26 +86,26 @@ type SessionRef = {
 export const buildGuestMessageItem = (
   action: string,
   session: SessionRef,
-  record: SessionMessageRecord,
+  record: Message,
 ): GuestMessageItem => ({
   kind: 'message',
   action,
   sessionId: session.sessionId,
   sessionTitle: session.sessionTitle?.trim() || session.sessionId,
   directory: session.directory ?? null,
-  messageId: record.info.id,
+  messageId: record.messageId,
   role: recordRole(record),
-  text: formatMessageRecordText(record).slice(0, GUEST_ITEM_MESSAGE_TEXT_MAX),
+  text: recordText(record).slice(0, GUEST_ITEM_MESSAGE_TEXT_MAX),
 });
 
-const toSessionItemMessage = (record: SessionMessageRecord): GuestSessionItemMessage | null => {
-  const text = formatMessageRecordText(record);
+const toSessionItemMessage = (record: Message): GuestSessionItemMessage | null => {
+  const text = recordText(record);
   if (!text) return null;
   return {
-    id: record.info.id,
+    id: record.messageId,
     role: recordRole(record),
     text: text.slice(0, GUEST_ITEM_MESSAGE_TEXT_MAX),
-    createdAt: record.info.time?.created ?? 0,
+    createdAt: record.createdAt,
   };
 };
 
@@ -111,7 +119,7 @@ const toSessionItemMessage = (record: SessionMessageRecord): GuestSessionItemMes
 export const buildGuestSessionItem = (
   action: string,
   session: SessionRef,
-  records?: readonly SessionMessageRecord[],
+  records?: readonly Message[],
 ): GuestSessionItem => {
   const item: GuestSessionItem = {
     kind: 'session',

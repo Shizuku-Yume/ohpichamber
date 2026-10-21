@@ -1,0 +1,35 @@
+{
+  "artifact": "a92fbb36ef3e554211da90ac667bc42350c27c05e0978f2edbb1b3fd48b70ef7",
+  "parentSession": "3a97efba-e839-429f-8e80-d81715e5a60e",
+  "parentSnapshotStatus": 200,
+  "parentRuntimeStatus": "idle",
+  "parentHeadSequence": "24",
+  "taskResultStatus": "completed",
+  "taskResultOutput": "<task-result id=\"t15-child-1\" agent=\"t15child\" status=\"completed\" duration=\"3.4s\">\n<meta lines=\"1\" size=\"88B\" />\n<output>\nTask 15 fixture reply.Task 15 fixture reply.Task 15 fixture reply.Task 15 fixture reply.\n</output>\n</task-result>",
+  "subagentsStatus": 200,
+  "subagents": [
+    {
+      "subagentId": "t15-child-1",
+      "parentSessionId": "3a97efba-e839-429f-8e80-d81715e5a60e",
+      "childSessionId": "01a15f8e-9cb8-73ff-8ebf-51b66dda125b",
+      "toolCallId": "call_t15",
+      "role": "t15child",
+      "status": "completed"
+    }
+  ],
+  "childSessionId": "01a15f8e-9cb8-73ff-8ebf-51b66dda125b",
+  "childHistoryStatus": 200,
+  "childHistoryMessageCount": 5,
+  "taskRowLink": true,
+  "childPageUrl": "openchamber-ui://app/index.html?session=01a15f8e-9cb8-73ff-8ebf-51b66dda125b",
+  "backUrl": "openchamber-ui://app/index.html?session=3a97efba-e839-429f-8e80-d81715e5a60e",
+  "sidebarNested": true,
+  "screenshots": [
+    "child-ui-a92.png",
+    "child-panel-a92.png",
+    "child-page-a92.png",
+    "child-back-a92.png",
+    "child-sidebar-a92.png"
+  ],
+  "note": "Task result completed; subagent record completed with childSessionId; child history 200; task-row external-link link rendered; child page selected and browser back returned to parent; nested t15child sidebar row rendered. Snapshot 404 is informational and not an acceptance criterion."
+}

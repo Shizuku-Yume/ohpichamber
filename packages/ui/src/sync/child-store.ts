@@ -7,6 +7,8 @@ import { normalizePath } from "@/lib/pathNormalization"
 import { startSessionLoadPerformanceEvent } from "./session-load-performance"
 import { countSyncPerformance } from "./performance-diagnostics"
 import { isFilesystemError } from "@/lib/api/files-errors"
+import { updateChangedStreamingSessions } from "./streaming"
+import { isRetryableBootstrapError } from "./retry"
 
 export type DirectoryStore = State & {
   /** Apply a partial state update */
@@ -18,12 +20,12 @@ export type DirectoryStore = State & {
 type BlockingRequestSubscriber = () => void
 type BlockingRequestSubscribers = WeakMap<StoreApi<DirectoryStore>, Map<string, Set<BlockingRequestSubscriber>>>
 const permissionSubscribersByStore: BlockingRequestSubscribers = new WeakMap()
-const questionSubscribersByStore: BlockingRequestSubscribers = new WeakMap()
+const formSubscribersByStore: BlockingRequestSubscribers = new WeakMap()
 
 type SessionMessageChange = {
   messagesChanged: boolean
   reset: boolean
-  partMessageIDs: readonly string[]
+  partMessageIds: readonly string[]
 }
 
 type SessionMessageSubscriber = (change: SessionMessageChange) => void
@@ -80,21 +82,38 @@ export function subscribeDirectoryPermission(
   return subscribeBlockingRequest(permissionSubscribersByStore, store, sessionID, listener)
 }
 
-export function subscribeDirectoryQuestion(
+export function subscribeDirectoryPermissions(
+  store: StoreApi<DirectoryStore>,
+  sessionIDs: readonly string[],
+  listener: BlockingRequestSubscriber,
+): () => void {
+  return subscribeBlockingRequests(permissionSubscribersByStore, store, sessionIDs, listener)
+}
+
+export function subscribeDirectoryForm(
   store: StoreApi<DirectoryStore>,
   sessionID: string,
   listener: BlockingRequestSubscriber,
 ): () => void {
-  return subscribeBlockingRequest(questionSubscribersByStore, store, sessionID, listener)
+  return subscribeBlockingRequest(formSubscribersByStore, store, sessionID, listener)
 }
 
-export function subscribeDirectoryQuestions(
+export function subscribeDirectoryForms(
+  store: StoreApi<DirectoryStore>,
+  sessionIDs: readonly string[],
+  listener: BlockingRequestSubscriber,
+): () => void {
+  return subscribeBlockingRequests(formSubscribersByStore, store, sessionIDs, listener)
+}
+
+function subscribeBlockingRequests(
+  subscribersByStore: BlockingRequestSubscribers,
   store: StoreApi<DirectoryStore>,
   sessionIDs: readonly string[],
   listener: BlockingRequestSubscriber,
 ): () => void {
   const unsubscribers = [...new Set(sessionIDs.filter(Boolean))].map((sessionID) => (
-    subscribeBlockingRequest(questionSubscribersByStore, store, sessionID, listener)
+    subscribeBlockingRequest(subscribersByStore, store, sessionID, listener)
   ))
   return () => {
     for (const unsubscribe of unsubscribers) unsubscribe()
@@ -127,7 +146,7 @@ function subscribeBlockingRequest(
 
 const notifyChangedBlockingRequests = <T,>(
   subscribersByStore: BlockingRequestSubscribers,
-  counter: "permissionChangeCallbacks" | "questionChangeCallbacks",
+  counter: "permissionChangeCallbacks" | "formChangeCallbacks",
   store: StoreApi<DirectoryStore>,
   current: Record<string, T>,
   previous: Record<string, T>,
@@ -136,8 +155,8 @@ const notifyChangedBlockingRequests = <T,>(
   const subscribers = subscribersByStore.get(store)
   if (!subscribers || subscribers.size === 0) return
   const changedListeners = new Set<BlockingRequestSubscriber>()
-  for (const [sessionID, listeners] of subscribers) {
-    if (current[sessionID] === previous[sessionID]) continue
+  for (const [sessionId, listeners] of subscribers) {
+    if (current[sessionId] === previous[sessionId]) continue
     for (const listener of listeners) changedListeners.add(listener)
   }
   for (const listener of changedListeners) {
@@ -158,37 +177,50 @@ const notifyChangedSessionMessages = (
 
   const notifications = new Map<string, SessionMessageChange>()
   if (current.message !== previous.message) {
-    for (const sessionID of subscribers.keys()) {
-      if (current.message[sessionID] === previous.message[sessionID]) continue
-      notifications.set(sessionID, { messagesChanged: true, reset: false, partMessageIDs: [] })
+    for (const [sessionId, listeners] of subscribers) {
+      const messages = current.message[sessionId]
+      const previousMessages = previous.message[sessionId]
+      if (messages === previousMessages) continue
+      const pendingMessageIds = pendingParts?.get(sessionId)
+      const isPartOnlyChange = Boolean(
+        pendingMessageIds
+        && messages
+        && previousMessages
+        && messages.length === previousMessages.length
+        && messages.every((message, index) => (
+          message.messageId === previousMessages[index]?.messageId
+          && (pendingMessageIds.has(message.messageId) || message === previousMessages[index])
+        )),
+      )
+      notifications.set(sessionId, {
+        messagesChanged: !isPartOnlyChange,
+        reset: false,
+        partMessageIds: isPartOnlyChange ? [...pendingMessageIds!] : [],
+      })
+      if (listeners.size === 0) notifications.delete(sessionId)
     }
   }
 
-  if (current.part !== previous.part) {
-    if (pendingParts && pendingParts.size > 0) {
-      for (const [sessionID, messageIDs] of pendingParts) {
-        if (!subscribers.has(sessionID)) continue
-        const existing = notifications.get(sessionID)
-        notifications.set(sessionID, {
-          messagesChanged: existing?.messagesChanged ?? false,
-          reset: existing?.reset ?? false,
-          partMessageIDs: [...messageIDs],
-        })
-      }
-    } else {
-      for (const sessionID of subscribers.keys()) {
-        const existing = notifications.get(sessionID)
-        notifications.set(sessionID, {
-          messagesChanged: existing?.messagesChanged ?? false,
-          reset: true,
-          partMessageIDs: existing?.partMessageIDs ?? [],
-        })
-      }
+  if (pendingParts && pendingParts.size > 0) {
+    for (const [sessionId, messageIds] of pendingParts) {
+      if (!subscribers.has(sessionId)) continue
+      const existing = notifications.get(sessionId)
+      if (existing?.partMessageIds.length) continue
+      notifications.set(sessionId, {
+        messagesChanged: existing?.messagesChanged ?? false,
+        reset: existing?.reset ?? false,
+        partMessageIds: [...messageIds],
+      })
+    }
+  } else if (current.message !== previous.message && notifications.size === 0) {
+    for (const sessionId of subscribers.keys()) {
+      if (current.message[sessionId] === previous.message[sessionId]) continue
+      notifications.set(sessionId, { messagesChanged: true, reset: false, partMessageIds: [] })
     }
   }
 
-  for (const [sessionID, change] of notifications) {
-    const listeners = subscribers.get(sessionID)
+  for (const [sessionId, change] of notifications) {
+    const listeners = subscribers.get(sessionId)
     if (!listeners) continue
     for (const listener of listeners) {
       countSyncPerformance("sessionMessageChangeCallbacks")
@@ -207,6 +239,7 @@ export type DirectoryBootstrapReason =
   | "project-expanded"
   | "worktree-expanded"
   | "server-connected"
+  | "location-shutdown"
   | "action-demand"
 
 export type DirectoryBootstrapDemand = {
@@ -227,7 +260,7 @@ export type DirectoryBootstrapContext = DirectoryBootstrapDemand & {
 
 type DirectoryInitialization =
   | { state: "running" | "complete"; token: symbol }
-  | { state: "failed"; token: symbol; reason: DirectoryBootstrapFailureReason }
+  | { state: "failed"; token: symbol; reason: DirectoryBootstrapFailureReason; retryable: boolean }
 
 const BOOTSTRAP_PRIORITY: Record<DirectoryBootstrapPriority, number> = {
   selected: 0,
@@ -254,6 +287,22 @@ type ManualBootstrapDemand = {
   revision: number
 }
 
+/** Live state an event gap can leave wrong: a running turn or a pending request. */
+function holdsLiveState(state: State | undefined): boolean {
+  if (!state) return false
+  if (hasPendingBlockingRequests(state)) return true
+  for (const status of Object.values(state.session_status ?? {})) {
+    if (status !== "idle" && status !== "unavailable") return true
+  }
+  return false
+}
+
+/** Whether the store lists one of these sessions or holds a status for it. */
+function ownsAnySession(state: State, sessionIds: ReadonlySet<string>): boolean {
+  if (state.session.some((session) => sessionIds.has(session.sessionId))) return true
+  return Object.keys(state.session_status ?? {}).some((sessionId) => sessionIds.has(sessionId))
+}
+
 function createDirectoryStore(directory: string): StoreApi<DirectoryStore> {
   // Restore cached metadata from localStorage
   const cached = readDirCache(directory)
@@ -265,6 +314,7 @@ function createDirectoryStore(directory: string): StoreApi<DirectoryStore> {
 
   const store = create<DirectoryStore>()((set) => ({
     ...INITIAL_STATE,
+    path: { ...INITIAL_STATE.path, directory },
     vcs: cached.vcs ?? INITIAL_STATE.vcs,
     projectMeta: cached.projectMeta ?? INITIAL_STATE.projectMeta,
     icon: cached.icon ?? INITIAL_STATE.icon,
@@ -283,8 +333,9 @@ function createDirectoryStore(directory: string): StoreApi<DirectoryStore> {
     if (state.icon !== prev.icon) persistIcon(directory, state.icon)
     if (state.session !== prev.session) persistSessions(directory, state.session)
     notifyChangedBlockingRequests(permissionSubscribersByStore, "permissionChangeCallbacks", store, state.permission, prev.permission)
-    notifyChangedBlockingRequests(questionSubscribersByStore, "questionChangeCallbacks", store, state.question, prev.question)
+    notifyChangedBlockingRequests(formSubscribersByStore, "formChangeCallbacks", store, state.form, prev.form)
     notifyChangedSessionMessages(store, state, prev)
+    updateChangedStreamingSessions(state, prev)
   })
 
   return store
@@ -305,6 +356,10 @@ export class ChildStoreManager {
   private readonly bootstrapStates = new Map<string, DirectoryBootstrapState>()
   private readonly bootstrapFailures = new Map<string, DirectoryBootstrapFailureReason>()
   private readonly initializations = new Map<string, DirectoryInitialization>()
+  /** Recovery signals received while an environment initialization is in flight. */
+  private readonly initializationRetryRequested = new Set<string>()
+  /** Stores that may have missed events and re-read on their next demand. */
+  private readonly staleDirectories = new Set<string>()
 
   private onBootstrap?: (context: DirectoryBootstrapContext) => Promise<void> | void
   private onDispose?: (directory: string) => void
@@ -478,6 +533,127 @@ export class ChildStoreManager {
     this.queueBootstrap(nextDemand)
   }
 
+  /**
+   * A session stream restarted, so initialized stores may have missed events.
+   * Re-read only directories in use or showing live/request state immediately;
+   * the rest stay stale and re-read when foreground demand returns. Workspace
+   * resolution and catalogs remain owned by the directory bootstrap lanes.
+   *
+   * Returns the directories queued now.
+   */
+  refreshAfterStreamRestart(currentDirectory?: string | null): ReadonlySet<string> {
+    const queued = new Set<string>()
+    if (this.disposed) return queued
+    for (const [directory, store] of this.children) {
+      // A store that never finished a bootstrap has its first one pending.
+      if (store.getState().status === "loading") continue
+      this.staleDirectories.add(directory)
+    }
+    const current = currentDirectory ? normalizePath(currentDirectory) : null
+    if (current && this.staleDirectories.has(current)) {
+      this.requestBootstrap({ directory: current, priority: "selected", reason: "server-connected", force: true })
+      queued.add(current)
+    }
+    // A run that starts deletes its directory from the set; iterate a copy.
+    for (const directory of [...this.staleDirectories]) {
+      // Already queued, or a run that started after the gap covers it.
+      if (queued.has(directory) || !this.staleDirectories.has(directory)) continue
+      const demand = this.aggregateBootstrapDemand(directory)
+      if (demand && demand.priority !== "background") {
+        this.queueBootstrap({ ...demand, force: true })
+        queued.add(directory)
+        continue
+      }
+      if (!holdsLiveState(this.children.get(directory)?.getState())) continue
+      // Background priority runs one directory at a time behind foreground work.
+      this.queueBootstrap({ directory, priority: "background", reason: "server-connected", force: true })
+      queued.add(directory)
+    }
+    return queued
+  }
+
+  /**
+   * `refreshAfterStreamRestart` judges stores by what they showed before the
+   * gap, so a store that looked idle misses a turn that started, or a
+   * approval or question asked during it. The caller supplies canonical active
+   * session identities. Stale stores that own one of those sessions
+   * re-read now at background priority; the rest stay deferred.
+   *
+   * Returns the directories queued now.
+   */
+  refreshStaleDirectoriesWithActiveSessions(activeSessionIDs: ReadonlySet<string>): ReadonlySet<string> {
+    const queued = new Set<string>()
+    if (this.disposed || activeSessionIDs.size === 0) return queued
+    for (const directory of [...this.staleDirectories]) {
+      // Already queued by the restart pass or by demand since.
+      if (this.bootstrapQueue.has(directory) || !this.staleDirectories.has(directory)) continue
+      const state = this.children.get(directory)?.getState()
+      if (!state || !ownsAnySession(state, activeSessionIDs)) continue
+      this.queueBootstrap({ directory, priority: "background", reason: "server-connected", force: true })
+      queued.add(directory)
+    }
+    return queued
+  }
+
+  /**
+   * OpenCode answered for the first time. A bootstrap that failed before then
+   * most likely failed because OpenCode was still starting, and a failed
+   * bootstrap is not retried without force. Foreground demand re-reads now;
+   * other failed stores re-read on their next foreground demand. Complete
+   * stores are left alone: each directory read starts that directory's
+   * location, so only failed ones are worth one.
+   *
+   * A workspace admission can still be settling when the connection signal
+   * arrives. Mark that in-flight, workspace-less run for one replacement after
+   * it records its failure; this avoids losing the first recovery attempt to a
+   * promise-settlement race without duplicating a healthy workspace bootstrap.
+   * A failed admission with no remaining demand receives the same bounded
+   * retry, because it has no workspace that a foreground consumer can revisit.
+   *
+   * Returns the directories queued now.
+   */
+  retryFailedBootstraps(): ReadonlySet<string> {
+    const queued = new Set<string>()
+    if (this.disposed) return queued
+    for (const [directory, state] of [...this.bootstrapStates]) {
+      if (state === "running") {
+        const running = this.runningBootstraps.get(directory)
+        const store = this.children.get(directory)
+        if (running && !store?.getState().workspace) running.rerunRequested = true
+        continue
+      }
+      if (state !== "failed") continue
+      const demand = this.aggregateBootstrapDemand(directory)
+      const store = this.children.get(directory)
+      if (demand && demand.priority !== "background") {
+        this.queueBootstrap({ ...demand, force: true })
+        queued.add(directory)
+        continue
+      }
+      if (!demand && !store?.getState().workspace) {
+        this.queueBootstrap({ directory, priority: "selected", reason: "server-connected", force: true })
+        queued.add(directory)
+        continue
+      }
+      this.staleDirectories.add(directory)
+    }
+    for (const [directory, initialization] of [...this.initializations]) {
+      if (initialization.state === "running") {
+        this.initializationRetryRequested.add(directory)
+        continue
+      }
+      if (initialization.state !== "failed" || !initialization.retryable || queued.has(directory)) continue
+      if (this.bootstrapStates.get(directory) === "failed") continue
+      if (this.bootstrapStates.get(directory) === "queued" || this.bootstrapStates.get(directory) === "running") continue
+      if (this.bootstrapQueue.has(directory) || this.runningBootstraps.has(directory)) continue
+      const demand = this.aggregateBootstrapDemand(directory)
+        ?? { directory, priority: "selected" as const, reason: "server-connected" as const }
+      this.queueBootstrap({ ...demand, force: true })
+      queued.add(directory)
+    }
+    return queued
+  }
+
   setBootstrapDemand(owner: string, demands: DirectoryBootstrapDemand[]): void {
     if (!owner || this.disposed) return
     const next = new Map<string, DirectoryBootstrapDemand>()
@@ -564,8 +740,11 @@ export class ChildStoreManager {
     this.pumpBootstrapQueue()
   }
 
-  private queueBootstrap(demand: DirectoryBootstrapDemand, notify = true): boolean {
-    const directory = demand.directory
+  private queueBootstrap(input: DirectoryBootstrapDemand, notify = true): boolean {
+    const directory = input.directory
+    // Foreground demand for a stale store means it is in use again: re-read it.
+    const reuse = !input.force && input.priority !== "background" && this.staleDirectories.has(directory)
+    const demand = reuse ? { ...input, force: true } : input
     const store = this.children.get(directory)
     const state = this.bootstrapStates.get(directory)
     if (!demand.force && (state === "complete" || state === "failed" || store?.getState().status === "complete")) {
@@ -618,6 +797,8 @@ export class ChildStoreManager {
       const next = this.nextBootstrap()
       if (!next) return
       this.bootstrapQueue.delete(next.directory)
+      // This run reads after the gap; a later failure is recorded as failed.
+      this.staleDirectories.delete(next.directory)
       const token = {}
       const running: RunningBootstrap = {
         ...next,
@@ -716,15 +897,24 @@ export class ChildStoreManager {
     this.notifyBootstrapSubscribers()
     void initialization.then(() => {
       if (!canCommit()) return finish("stale")
+      this.initializationRetryRequested.delete(directory)
       this.initializations.set(directory, { state: "complete", token })
       finish("complete")
       this.notifyBootstrapSubscribers()
     }, (error) => {
       if (!canCommit()) return finish("stale")
+      const retryable = isRetryableBootstrapError(error)
+      const retryRequested = this.initializationRetryRequested.delete(directory)
       this.initializations.set(directory, {
         state: "failed", token,
         reason: isFilesystemError(error) && error.reason === "os-permission" ? "os-permission" : "generic",
+        retryable,
       })
+      if (retryable && retryRequested && !this.disposed && isCurrent()) {
+        const demand = this.aggregateBootstrapDemand(directory)
+          ?? { directory, priority: "selected" as const, reason: "server-connected" as const }
+        this.queueBootstrap({ ...demand, force: true })
+      }
       finish("error")
       this.notifyBootstrapSubscribers()
     })
@@ -753,6 +943,8 @@ export class ChildStoreManager {
     this.bootstrapFailures.delete(directory)
     this.directoryBootstrapRuns.delete(directory)
     this.initializations.delete(directory)
+    this.initializationRetryRequested.delete(directory)
+    this.staleDirectories.delete(directory)
     for (const demands of this.bootstrapDemandsByOwner.values()) demands.delete(directory)
     this.children.delete(directory)
     this.notifyRegistrySubscribers()
@@ -819,6 +1011,8 @@ export class ChildStoreManager {
     this.bootstrapStates.clear()
     this.bootstrapFailures.clear()
     this.initializations.clear()
+    this.initializationRetryRequested.clear()
+    this.staleDirectories.clear()
     this.directoryBootstrapRuns.clear()
     this.bootstrapDemandsByOwner.clear()
     this.manualBootstrapDemands.clear()

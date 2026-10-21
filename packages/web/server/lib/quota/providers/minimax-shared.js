@@ -1,12 +1,8 @@
-import { readAuthFile } from '../../opencode/auth.js';
-import {
-  getAuthEntry,
-  normalizeAuthEntry,
-  buildResult,
-  toUsageWindow,
-  toNumber,
-  toTimestamp,
-} from '../utils/index.js';
+import { credentialAccessToken } from './selected-credential.js';
+import { buildResult,
+toUsageWindow,
+toNumber,
+toTimestamp, } from '../utils/index.js'
 
 // Status 3 indicates the window is not applicable for the current plan tier.
 const WINDOW_STATUS_INACTIVE = 3;
@@ -137,17 +133,11 @@ const calculateUsage = (model, isTokenPlan) => {
   };
 };
 
-export const createMiniMaxCodingPlanProvider = ({ providerId, providerName, aliases, tokenPlanUrl, codingPlanUrl }) => {
-  const isConfigured = () => {
-    const auth = readAuthFile();
-    const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-    return Boolean(entry?.key || entry?.token);
-  };
+export const createMiniMaxCodingPlanProvider = ({ providerId, providerName, tokenPlanUrl, codingPlanUrl }) => {
+  const isConfigured = (credential) => Boolean(credentialAccessToken(credential));
 
-  const fetchQuota = async () => {
-    const auth = readAuthFile();
-    const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-    const apiKey = entry?.key ?? entry?.token;
+  const fetchQuota = async ({ credential } = {}) => {
+    const apiKey = credentialAccessToken(credential);
 
     if (!apiKey) {
       return buildResult({
@@ -235,7 +225,7 @@ export const createMiniMaxCodingPlanProvider = ({ providerId, providerName, alia
         providerName,
         ok: false,
         configured: true,
-        error: error instanceof Error ? error.message : 'Request failed',
+        error: 'Request failed',
       });
     }
   };
@@ -243,7 +233,6 @@ export const createMiniMaxCodingPlanProvider = ({ providerId, providerName, alia
   return {
     providerId,
     providerName,
-    aliases,
     isConfigured,
     fetchQuota,
   };

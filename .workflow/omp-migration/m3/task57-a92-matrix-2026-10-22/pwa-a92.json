@@ -1,0 +1,45 @@
+{
+  "artifact": "a92fbb36ef3e554211da90ac667bc42350c27c05e0978f2edbb1b3fd48b70ef7",
+  "instance": "same a92 2.2.0 web bundle/Host CLI; existing packaged state HOME=/tmp/ohpi-task18/home DATA=/tmp/ohpi-task18/data CHATS=/tmp/ohpi-task18/chats; ephemeral OPENCHAMBER_UI_PASSWORD; no credential persisted",
+  "unauthorized": {
+    "status": 200,
+    "contentType": "application/manifest+json; charset=utf-8",
+    "names": [
+      "Appearance Settings"
+    ],
+    "urls": [
+      "/?settings=appearance"
+    ]
+  },
+  "login": {
+    "status": 200,
+    "hasSetCookie": true
+  },
+  "authorized": {
+    "status": 200,
+    "contentType": "application/manifest+json; charset=utf-8",
+    "names": [
+      "Appearance Settings",
+      "T18-PACKAGED",
+      "T57-CHILD-CLEAN",
+      "T57-CHILD-CLEAN"
+    ],
+    "urls": [
+      "/?settings=appearance",
+      "/?session=2ba24f29-a198-4327-bbf5-54ccb9789df3",
+      "/?session=3a97efba-e839-429f-8e80-d81715e5a60e",
+      "/?session=ad39f768-7a58-4044-8bdc-939eaace9dd8"
+    ]
+  },
+  "authenticatedSessionList": {
+    "workspacesStatus": 200,
+    "resolvedStatus": 200,
+    "workspaceId": "ws_162572d2-768b-4450-8125-48989e1db36b",
+    "sessionsStatus": 200,
+    "sessionsScopedErrors": {
+      "ws_162572d2-768b-4450-8125-48989e1db36b": "SERVICE_UNAVAILABLE"
+    },
+    "globalSessionsStatus": 200
+  },
+  "verdict": "PASS: unauthenticated manifest is 200 application/manifest+json with ONLY Appearance Settings; password login issues a cookie; authenticated manifest is 200 and contains at least one actual title and ?session= URL (T18-PACKAGED, T57-CHILD-CLEAN x2). No password/cookie/token persisted."
+}

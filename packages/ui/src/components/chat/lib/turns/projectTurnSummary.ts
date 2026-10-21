@@ -1,42 +1,18 @@
-import type { SnapshotFileDiff } from '@opencode-ai/sdk/v2';
+import { getLiveFinalMessage } from './liveActivity';
 import { summarizeLiveActivity } from './liveActivitySummary';
 import type { ChatMessageEntry, TurnChangedFile, TurnDiffStats, TurnSummaryRecord } from './types';
 
-interface SummaryDiff {
-    file?: string | null;
-    additions?: number | null;
-    deletions?: number | null;
-}
-
-interface UserSummaryPayload {
-    body?: string | null;
-    diffs?: SummaryDiff[] | null;
-}
-
-const getTextFromPart = (part: unknown): string | undefined => {
-    const text = (part as { text?: unknown }).text;
-    if (typeof text === 'string' && text.trim().length > 0) {
-        return text;
-    }
-    const content = (part as { content?: unknown }).content;
-    if (typeof content === 'string' && content.trim().length > 0) {
-        return content;
-    }
-    return undefined;
-};
-
-const isCompactionSummaryMessage = (message: ChatMessageEntry): boolean => {
-    return (message.info as { summary?: unknown }).summary === true;
-};
+const getTextFromPart = (part: ChatMessageEntry['parts'][number]): string | undefined => (
+    (part.type === 'text' || part.type === 'reasoning') && part.content.trim().length > 0
+        ? part.content : undefined
+);
 
 export const projectTurnSummary = (assistantMessages: ChatMessageEntry[]): TurnSummaryRecord => {
     for (let messageIndex = assistantMessages.length - 1; messageIndex >= 0; messageIndex -= 1) {
         const assistantMessage = assistantMessages[messageIndex];
         if (!assistantMessage) continue;
-        if (isCompactionSummaryMessage(assistantMessage)) continue;
 
-        const finish = (assistantMessage.info as { finish?: string | null }).finish;
-        if (finish !== 'stop') continue;
+        if (!getLiveFinalMessage([assistantMessage])) continue;
 
         for (let partIndex = assistantMessage.parts.length - 1; partIndex >= 0; partIndex -= 1) {
             const part = assistantMessage.parts[partIndex];
@@ -47,8 +23,8 @@ export const projectTurnSummary = (assistantMessages: ChatMessageEntry[]): TurnS
 
             return {
                 text,
-                sourceMessageId: assistantMessage.info.id,
-                sourcePartId: part.id ?? `${assistantMessage.info.id}-part-${partIndex}-text`,
+                sourceMessageId: assistantMessage.messageId,
+                sourcePartId: part.partId,
             };
         }
     }
@@ -56,7 +32,6 @@ export const projectTurnSummary = (assistantMessages: ChatMessageEntry[]): TurnS
     for (let messageIndex = assistantMessages.length - 1; messageIndex >= 0; messageIndex -= 1) {
         const assistantMessage = assistantMessages[messageIndex];
         if (!assistantMessage) continue;
-        if (isCompactionSummaryMessage(assistantMessage)) continue;
 
         for (let partIndex = assistantMessage.parts.length - 1; partIndex >= 0; partIndex -= 1) {
             const part = assistantMessage.parts[partIndex];
@@ -67,8 +42,8 @@ export const projectTurnSummary = (assistantMessages: ChatMessageEntry[]): TurnS
 
             return {
                 text,
-                sourceMessageId: assistantMessage.info.id,
-                sourcePartId: part.id ?? `${assistantMessage.info.id}-part-${partIndex}-text`,
+                sourceMessageId: assistantMessage.messageId,
+                sourcePartId: part.partId,
             };
         }
     }
@@ -76,88 +51,48 @@ export const projectTurnSummary = (assistantMessages: ChatMessageEntry[]): TurnS
     return {};
 };
 
-export const projectTurnDiffStats = (userMessage: ChatMessageEntry): TurnDiffStats | undefined => {
-    const summary = (userMessage.info as { summary?: UserSummaryPayload | null }).summary;
-    const diffs = summary?.diffs;
-    if (!Array.isArray(diffs) || diffs.length === 0) {
+/**
+ * "+N −M across F files" for a turn, summed from the edits the turn itself
+ * made. v1 read these numbers off a working-tree snapshot on the user
+ * message; v2 has none, so the tool-call patches are the source, and a file
+ * whose patch carried no line counts contributes only to the file count.
+ */
+export const projectTurnDiffStats = (changedFiles: TurnChangedFile[] | undefined): TurnDiffStats | undefined => {
+    if (!changedFiles || changedFiles.length === 0) {
         return undefined;
     }
 
     let additions = 0;
     let deletions = 0;
-    let files = 0;
 
-    diffs.forEach((diff) => {
-        if (!diff) return;
-
-        const diffAdditions = typeof diff.additions === 'number' ? diff.additions : 0;
-        const diffDeletions = typeof diff.deletions === 'number' ? diff.deletions : 0;
-
-        if (diffAdditions !== 0 || diffDeletions !== 0) {
-            files += 1;
-        }
-
-        additions += diffAdditions;
-        deletions += diffDeletions;
-    });
-
-    if (files === 0) {
-        return undefined;
+    for (const change of changedFiles) {
+        additions += change.additions ?? 0;
+        deletions += change.deletions ?? 0;
     }
 
     return {
         additions,
         deletions,
-        files,
+        files: changedFiles.length,
     };
 };
 
 /**
- * Files this turn changed, as evidenced by its own edit/write/patch calls.
+ * Files this turn changed, as evidenced by its own edit/write calls.
  *
- * The user message's `summary.diffs` is a snapshot of the whole working tree
- * between turn start and end, so it also lists edits made by other sessions
- * or by hand in the same directory. It is therefore not used to decide which
- * files belong to the turn, only to supply line counts for a file the turn
- * touched: those match the turn diff view a file pill opens, and they fall
- * back to the tool call's own patch when the snapshot has no entry.
- *
- * One exception: edits a turn delegated to subagents live in child sessions
- * this projection cannot see, and the snapshot is their only record. When
- * the turn ran subagents, snapshot entries no own tool call touched are
- * appended after the turn's own files.
+ * Native execution supplies no filesystem snapshot. Line counts come from
+ * each call's patch; files changed only in a child session are not listed here.
  */
 export const projectTurnChangedFiles = (
     assistantMessages: ChatMessageEntry[],
-    userMessage: ChatMessageEntry,
 ): TurnChangedFile[] | undefined => {
     const summary = summarizeLiveActivity(assistantMessages);
-    const snapshotDiffs = userMessage.info.role === 'user' ? userMessage.info.summary?.diffs ?? [] : [];
-    const snapshotByFile = new Map<string, SnapshotFileDiff>();
-    for (const diff of snapshotDiffs) {
-        if (diff.file) snapshotByFile.set(diff.file, diff);
-    }
 
-    const files = summary.changedFiles.map((change): TurnChangedFile => {
-        const snapshot = snapshotByFile.get(change.path);
-        if (!snapshot) {
-            return change.additions !== undefined && change.deletions !== undefined
-                ? { file: change.path, additions: change.additions, deletions: change.deletions, inTurnDiff: false }
-                : { file: change.path, inTurnDiff: false };
-        }
-        // A snapshot without line changes (a binary write) has nothing to count.
-        return snapshot.additions === 0 && snapshot.deletions === 0
-            ? { file: change.path, inTurnDiff: true }
-            : { file: change.path, additions: snapshot.additions, deletions: snapshot.deletions, inTurnDiff: true };
-    });
-
-    if (summary.subagents > 0) {
-        const own = new Set(files.map((file) => file.file));
-        for (const diff of snapshotDiffs) {
-            if (!diff.file || own.has(diff.file) || (diff.additions === 0 && diff.deletions === 0)) continue;
-            files.push({ file: diff.file, additions: diff.additions, deletions: diff.deletions, inTurnDiff: true });
-        }
-    }
+    const files = summary.changedFiles.map((change): TurnChangedFile => (
+        change.additions !== undefined && change.deletions !== undefined
+            ? { file: change.path, additions: change.additions, deletions: change.deletions }
+            : { file: change.path }
+    ));
 
     return files.length > 0 ? files : undefined;
 };

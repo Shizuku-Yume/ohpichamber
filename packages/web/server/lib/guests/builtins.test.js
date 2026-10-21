@@ -47,7 +47,7 @@ const fixture = async () => {
   await fs.writeFile(path.join(bundle, 'registry.json'), JSON.stringify({ version: 1, extensions: [{ id, directory: 'fixture' }] }));
   releases.push(await registerBuiltInGuests({ persistPath, root: bundle }));
   const app = express();
-  registerGuestRoutes(app, { openchamberDataDir: data, openchamberVersion: '1.23.2', resolveGitBinaryForSpawn: () => 'git', resolveOptionalProjectDirectory: () => ({ directory: project }) });
+  registerGuestRoutes(app, { openchamberDataDir: data, openchamberVersion: '1.23.2', resolveGitBinaryForSpawn: () => 'git', resolveOptionalProjectDirectory: () => ({ directory: project }), resolveWorkspaceScope: async (workspaceId) => ({ workspaceId, cwd: project }) });
   return { root, bundle, packageRoot, persistPath, api: request(app) };
 };
 
@@ -69,6 +69,10 @@ describe('app-owned extensions', () => {
     expect([...guest.capabilities.granted].sort()).toEqual([...guest.capabilities.requested].sort());
     expect(guest.capabilities.granted).toContain('files');
     expect(guest.capabilities.granted).toContain('network');
+    expect(guest.storageId).toMatch(/^[0-9a-f-]{36}$/);
+    const firstStorageId = guest.storageId;
+    expect((await api.get('/api/guests').expect(200)).body.guests[0].storageId).toBe(firstStorageId);
+    expect((await readExtensionStore(persistPath)).storageIds[id]).toBe(firstStorageId);
     expect((await readExtensionStore(persistPath)).capabilityGrants).toEqual({});
     await api.post(`/api/guests/${id}/files`).send({ op: 'read', path: 'README.md' }).expect(200);
     const deniedModel = await api.post(`/api/guests/${id}/generate`).send({ prompt: 'not declared' }).expect(400);

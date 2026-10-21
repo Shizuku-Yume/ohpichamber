@@ -1,157 +1,109 @@
-import type { Message, OpencodeClient, Part } from "@opencode-ai/sdk/v2/client"
+import type { StoreApi } from "zustand"
+import type { HistoryPage, Message, Run, Session, SessionSnapshot, Turn } from "@openchamber/agent-contract"
+import type { CanonicalClient } from "@/api/canonicalClient"
 import type { ChildStoreManager, DirectoryStore } from "./child-store"
-import { retry } from "./retry"
-import { mergeOptimisticPage, type OptimisticItem } from "./optimistic"
+import { compareCounters, installHostSession, installQueue, installSessionMetadata, installSessionSnapshot } from "./event-reducer"
 import { findMessageIndex, insertMessageChronologically, sortMessagesChronologically } from "./message-ordering"
-import { stripMessageDiffSnapshots } from "./sanitize"
-import { getSessionMaterializationStatus, materializeSessionSnapshots } from "./materialization"
-import {
-  clearDirectorySessionPrefetch,
-  clearRuntimeSessionPrefetch,
-  clearSessionPrefetch,
-  getSessionPrefetch,
-  setSessionPrefetch,
-} from "./session-prefetch-cache"
-import { isVSCodeRuntime } from "@/lib/desktop"
+import { mergeMessages, mergeOptimisticPage, type OptimisticItem } from "./optimistic"
+import { clearDirectorySessionPrefetch, clearRuntimeSessionPrefetch, clearSessionPrefetch, getSessionPrefetch, setSessionPrefetch } from "./session-prefetch-cache"
 import { isMobileSurfaceRuntime } from "@/lib/runtimeSurface"
 import { normalizePath } from "@/lib/pathNormalization"
+import { registerWorkspaceDirectory } from "@/stores/globalSessions"
+import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
 import { startSessionLoadPerformanceEvent } from "./session-load-performance"
 import { dropSessionCaches } from "./session-cache"
 import { SessionCacheRetention } from "./session-cache-retention"
-import { SESSION_CACHE_LIMIT } from "./types"
+import { SESSION_CACHE_LIMIT, type State } from "./types"
 
-const SKIP_PARTS = new Set(["patch", "step-start", "step-finish"])
-// One agent turn can span well over a hundred tool steps, so the first
-// request is sized to hold a long last turn without a follow-up read.
-const INITIAL_MESSAGE_PAGE_SIZE = 100
-const CONSTRAINED_INITIAL_MESSAGE_PAGE_SIZE = 50
-const HISTORY_MESSAGE_PAGE_SIZE = 100
-// Extra pages one interactive history action may read to reach a user prompt.
-const HISTORY_TURN_ALIGNMENT_EXTRA_PAGES = 2
-// Cold navigation aims for this many user-led turns within the expansion bounds.
+const HISTORY_PAGE_SIZE = 100
 const INITIAL_USER_TURNS = 10
 const CONSTRAINED_SESSION_CACHE_LIMIT = 6
-// Cold navigation extends the first page backward through the cursor, one
-// page at a time, until INITIAL_USER_TURNS prompts are present or this many
-// records are held. Nothing already downloaded is requested again.
-const INITIAL_WINDOW_MAX_RECORDS = 300
-const CONSTRAINED_INITIAL_WINDOW_MAX_RECORDS = 200
 
-export type SessionMessageTarget = {
-  directory: string
-  sessionID: string
-}
-
+export type SessionMessageTarget = { directory: string; sessionId: string }
 export type SessionMessageLoadKind = "initial" | "older" | "refresh" | "prefetch"
 export type SessionMessageLoadStatus = "idle" | "loading" | "ready" | "error"
-
 export type SessionMessageLoadState = {
   status: SessionMessageLoadStatus
   loadingKind: SessionMessageLoadKind | null
   error: Error | null
   resolved: boolean
   limit: number
+  /** HistoryPage.nextCursor only. Never an SSE cursor. */
   cursor: string | undefined
   complete: boolean
   generation: number
   updatedAt: number | undefined
 }
-
+export type LoaderConfiguration = {
+  client: CanonicalClient
+  runtimeKey: string
+  onSnapshot?: (target: SessionMessageTarget, snapshot: SessionSnapshot, recoveryPrevious?: SessionSnapshot) => void
+  isCurrent?: () => boolean
+}
 type LoaderEntry = {
   snapshot: SessionMessageLoadState
   listeners: Set<() => void>
   inflight: Promise<void> | null
   queuedRefresh: Promise<void> | null
-  queuedRefreshLimit: number
+  queuedRecovery: Promise<void> | null
   optimistic: Map<string, OptimisticItem>
-  /** History was dropped by retention; events since then are not coverage. */
   evicted: boolean
+  historyBranch?: Branch
 }
-
-type FetchedPage = {
-  session: Message[]
-  partsByMessageID: Map<string, Part[]>
-  cursor: string | undefined
-  complete: boolean
-}
-
-type LoadPerformanceDetails = {
-  retryCount: number
-  recordCount: number
-}
-
-type LoaderConfiguration = {
-  sdk: OpencodeClient
-  runtimeKey: string
-}
-
-const isConstrainedRuntime = () => isVSCodeRuntime() || isMobileSurfaceRuntime()
-const getInitialPageSize = () => isConstrainedRuntime()
-  ? CONSTRAINED_INITIAL_MESSAGE_PAGE_SIZE
-  : INITIAL_MESSAGE_PAGE_SIZE
-const getInitialWindowMaxRecords = () => isConstrainedRuntime()
-  ? CONSTRAINED_INITIAL_WINDOW_MAX_RECORDS
-  : INITIAL_WINDOW_MAX_RECORDS
-
-const isUserMessage = (message: Message): boolean => {
-  const candidate = message as Message & { clientRole?: unknown; role?: unknown }
-  const role = typeof candidate.clientRole === "string" ? candidate.clientRole : candidate.role
-  return role === "user"
-}
-
-const hasUserMessage = (messages: Message[]): boolean => messages.some(isUserMessage)
-
-const hasInitialTurns = (messages: Message[]): boolean => {
-  let turns = 0
-  for (const message of messages) {
-    if (isUserMessage(message) && ++turns === INITIAL_USER_TURNS) return true
-  }
-  return false
-}
-
-const formatSdkError = (error: unknown): string => {
-  if (error instanceof Error) return error.message
-  if (typeof error === "string") return error
-  if (error && typeof error === "object" && "message" in error) {
-    const message = (error as { message?: unknown }).message
-    if (typeof message === "string" && message) return message
-  }
-  return "Session messages could not be loaded"
-}
-
-const assertSdkSuccess = (result: {
-  error?: unknown
-  response?: { status?: number }
-}, operation: string): void => {
-  if (!result.error) return
-  const status = result.response?.status
-  const message = `${operation} failed${status ? ` (${status})` : ""}: ${formatSdkError(result.error)}`
-  const error = new Error(message) as Error & { status?: number }
-  if (status !== undefined) error.status = status
-  throw error
-}
-
-const filterIdentifiedParts = (parts: Part[]): Part[] => parts
-  .filter((part) => Boolean(part?.id))
+type ChildStore = StoreApi<DirectoryStore>
+type Branch = SessionSnapshot["branch"]
 
 const createDefaultState = (generation = 0): SessionMessageLoadState => ({
-  status: "idle",
-  loadingKind: null,
-  error: null,
-  resolved: false,
-  limit: getInitialPageSize(),
-  cursor: undefined,
-  complete: false,
-  generation,
-  updatedAt: undefined,
+  status: "idle", loadingKind: null, error: null, resolved: false,
+  limit: isMobileSurfaceRuntime() ? 50 : 100, cursor: undefined, complete: false,
+  generation, updatedAt: undefined,
 })
-
 export const EMPTY_SESSION_MESSAGE_LOAD_STATE = createDefaultState()
 
+function partOwners(messages: readonly Message[]): Record<string, string> {
+  const owners: Record<string, string> = {}
+  for (const message of messages) for (const part of message.parts) owners[part.partId] = message.messageId
+  return owners
+}
+
+/**
+ * Run control is a live observation, not transcript history, so a snapshot
+ * read that started before a run acknowledgement cannot release the run that
+ * acknowledgement bound. The exception is deliberately exact: an accepted
+ * acknowledgement changed run control after the read started (`runControlRevision`,
+ * not the broader session event revision), the read belongs to the same epoch,
+ * its head did not advance past the live head, it reports no active run, and
+ * the live state still binds one. A genuinely newer read, an epoch switch, a
+ * settled run, an unrelated session update, or a different bound run keeps the
+ * snapshot authoritative.
+ */
+function preserveInFlightRunControl(
+  previous: SessionSnapshot | undefined,
+  projected: Session | undefined,
+  pendingRun: Run | undefined,
+  snapshot: SessionSnapshot,
+  state: State,
+  requestedRunControlRevision: number,
+): SessionSnapshot {
+  // Before the first snapshot lands, an acknowledgement binds the projected
+  // session row; that row is the previous head and binding for this window.
+  const previousSession = previous?.session ?? projected
+  if (!previousSession
+    || (state.runControlRevision?.[snapshot.session.sessionId] ?? 0) <= requestedRunControlRevision
+    || previousSession.epoch !== snapshot.session.epoch
+    || compareCounters(snapshot.session.headSequence, previousSession.headSequence) > 0
+    || snapshot.session.activeRunId !== null
+    || previousSession.activeRunId === null) return snapshot
+  return {
+    ...snapshot,
+    session: { ...snapshot.session, runtimeStatus: previousSession.runtimeStatus, activeRunId: previousSession.activeRunId },
+    activeRun: previous?.activeRun ?? pendingRun ?? snapshot.activeRun,
+  }
+}
+
 export class SessionMessageLoader {
-  private sdk: OpencodeClient
-  private runtimeKey: string
-  private sdkEpoch = 0
+  private configuration: LoaderConfiguration
+  private configurationGeneration = 0
   private disposed = false
   private readonly entries = new Map<string, LoaderEntry>()
   private retention: SessionCacheRetention | null = null
@@ -159,49 +111,36 @@ export class SessionMessageLoader {
   private readonly historyReaders = new Map<string, number>()
   private readonly renderedSessions = new Map<string, number>()
 
-  constructor(
-    private readonly childStores: ChildStoreManager,
-    configuration: LoaderConfiguration,
-  ) {
-    this.sdk = configuration.sdk
-    this.runtimeKey = configuration.runtimeKey
+  constructor(private readonly childStores: ChildStoreManager, configuration: LoaderConfiguration) {
+    this.configuration = configuration
   }
 
   configure(configuration: LoaderConfiguration): void {
-    if (this.sdk === configuration.sdk && this.runtimeKey === configuration.runtimeKey) return
-    const runtimeChanged = this.runtimeKey !== configuration.runtimeKey
-    const previousRuntimeKey = this.runtimeKey
-    this.sdk = configuration.sdk
-    this.runtimeKey = configuration.runtimeKey
-    this.sdkEpoch += 1
-    for (const entry of this.entries.values()) {
+    const previous = this.configuration
+    this.configuration = configuration
+    if (previous.client === configuration.client && previous.runtimeKey === configuration.runtimeKey
+      && previous.onSnapshot === configuration.onSnapshot && previous.isCurrent === configuration.isCurrent) return
+    this.configurationGeneration += 1
+    const entries = [...this.entries.values()]
+    if (previous.runtimeKey !== configuration.runtimeKey) {
+      this.entries.clear()
+      this.historyReaders.clear()
+      this.renderedSessions.clear()
+      clearRuntimeSessionPrefetch(previous.runtimeKey)
+    }
+    for (const entry of entries) {
       entry.snapshot = {
-        ...entry.snapshot,
-        status: entry.snapshot.resolved ? "ready" : "idle",
-        loadingKind: null,
-        error: null,
-        generation: entry.snapshot.generation + 1,
+        ...entry.snapshot, generation: entry.snapshot.generation + 1,
+        status: entry.snapshot.resolved ? "ready" : "idle", loadingKind: null, error: null,
       }
       entry.inflight = null
+      entry.queuedRefresh = null
+      entry.queuedRecovery = null
       this.notify(entry)
-    }
-    if (runtimeChanged) {
-      this.entries.clear()
-      clearRuntimeSessionPrefetch(previousRuntimeKey)
     }
   }
 
-  /**
-   * Re-enable a loader which was disposed by a transient React effect cleanup.
-   *
-   * React Strict Mode runs effect setup, cleanup, then setup again in
-   * development. The provider owns one ref-stable loader across that sequence,
-   * so the second setup must be able to accept new work after the first cleanup
-   * invalidated its in-flight requests.
-   */
-  activate(): void {
-    this.disposed = false
-  }
+  activate(): void { this.disposed = false }
 
   startCacheRetention(options: {
     idleTtlMs?: number
@@ -213,18 +152,15 @@ export class SessionMessageLoader {
     this.retention?.dispose()
     this.releaseDerivedCache = options.releaseDerivedCache
     const retention = new SessionCacheRetention(this.childStores, {
-      limit: isConstrainedRuntime() ? CONSTRAINED_SESSION_CACHE_LIMIT : SESSION_CACHE_LIMIT,
-      idleTtlMs: options.idleTtlMs,
-      isCurrent: options.isCurrent,
-      isViewed: options.isViewed,
-      isProtected: (target) => {
+      limit: isMobileSurfaceRuntime() ? CONSTRAINED_SESSION_CACHE_LIMIT : SESSION_CACHE_LIMIT,
+      idleTtlMs: options.idleTtlMs, isCurrent: options.isCurrent, isViewed: options.isViewed,
+      isProtected: target => {
         const key = this.keyFor(target)
         const entry = this.entries.get(key)
         return options.isActive(target) || Boolean(this.historyReaders.get(key))
-          || Boolean(this.renderedSessions.get(key))
-          || Boolean(entry?.inflight) || Boolean(entry?.optimistic.size)
+          || Boolean(this.renderedSessions.get(key)) || Boolean(entry?.inflight) || Boolean(entry?.optimistic.size)
       },
-      evict: (target) => this.evictSessionHistory(target),
+      evict: target => this.evictSessionHistory(target),
     })
     this.retention = retention
     return () => {
@@ -243,7 +179,6 @@ export class SessionMessageLoader {
     if (normalized) this.retention?.schedule(normalized)
   }
 
-  /** Hold history for an imperative reader or a transcript still on screen. */
   retainSessionHistory(target: SessionMessageTarget, reason: "read" | "rendered" = "read"): () => void {
     const normalized = this.normalizeTarget(target)
     if (!normalized) return () => undefined
@@ -265,77 +200,44 @@ export class SessionMessageLoader {
     const store = this.childStores.getChild(target.directory)
     if (!store) return
     const current = store.getState()
+    const runControlActiveRun = current.runControlActiveRun ? { ...current.runControlActiveRun } : undefined
+    if (runControlActiveRun) delete runControlActiveRun[target.sessionId]
     const draft = {
-      message: { ...current.message }, part: { ...current.part },
-      session_status: { ...current.session_status }, session_diff: { ...current.session_diff },
-      todo: { ...current.todo }, permission: { ...current.permission }, question: { ...current.question },
+      message: { ...current.message }, snapshot: { ...current.snapshot }, partOwner: { ...current.partOwner },
+      session_status: { ...current.session_status }, permission: { ...current.permission }, form: { ...current.form },
+      sessionEpoch: { ...current.sessionEpoch }, sessionCursor: { ...current.sessionCursor },
+      sessionStatusInvalidated: current.sessionStatusInvalidated ? { ...current.sessionStatusInvalidated } : undefined,
+      runControlActiveRun,
     }
     this.invalidateSession(target)
     this.getEntry(target).evicted = true
-    clearSessionPrefetch(target.directory, [target.sessionID], this.runtimeKey)
-    dropSessionCaches(draft, [target.sessionID])
+    dropSessionCaches(draft, [target.sessionId])
     this.releaseDerivedCache(target)
     store.setState(draft)
   }
 
+  /** Creation establishes visible empty history, not runtime or request authority. */
   initializeCreatedSession(target: SessionMessageTarget): void {
     const normalized = this.normalizeTarget(target)
     if (!normalized || this.disposed) return
     const store = this.childStores.ensureChild(normalized.directory, { bootstrap: false })
     const current = store.getState()
-    // The create response establishes an empty transcript, but events or a
-    // prompt may already have materialized a newer snapshot while it travelled.
-    if (current.message[normalized.sessionID] !== undefined) return
-    const entry = this.getEntry(normalized)
-    this.bumpGeneration(entry)
-    entry.inflight = null
-    store.setState({ message: { ...current.message, [normalized.sessionID]: [] } })
-    this.patchEntry(entry, {
-      status: "ready",
-      loadingKind: null,
-      error: null,
-      resolved: true,
-      cursor: undefined,
-      complete: true,
-      updatedAt: Date.now(),
-    })
-    this.persistCoverage(normalized, entry.snapshot)
+    if (current.message[normalized.sessionId] !== undefined) return
+    store.setState({ message: { ...current.message, [normalized.sessionId]: [] } })
   }
 
-  ensure(
-    target: SessionMessageTarget,
-    options?: { force?: boolean; reason?: "navigation" | "reactive" | "prefetch" },
-  ): Promise<void> {
+  ensure(target: SessionMessageTarget, options?: { force?: boolean; reason?: "navigation" | "reactive" | "prefetch" }): Promise<void> {
     const normalized = this.normalizeTarget(target)
     if (!normalized || this.disposed) return Promise.resolve()
     const entry = this.getEntry(normalized)
     const store = this.childStores.ensureChild(normalized.directory, { bootstrap: false })
-    const materialization = getSessionMaterializationStatus(store.getState(), normalized.sessionID)
     if (options?.reason !== "prefetch") this.touchSessionCache(normalized)
-    // Messages that arrived by event after an eviction are renderable but are
-    // not history coverage: the earlier transcript must be fetched again.
-    if (!options?.force && materialization.renderable && !entry.evicted) {
-      if (!entry.snapshot.resolved) {
-        this.patchEntry(entry, {
-          status: "ready",
-          error: null,
-          resolved: true,
-          limit: Math.max(entry.snapshot.limit, store.getState().message[normalized.sessionID]?.length ?? 0),
-        })
-      }
-      return entry.inflight ?? Promise.resolve()
-    }
     if (entry.inflight) {
-      if (options?.reason !== "prefetch" && entry.snapshot.loadingKind === "prefetch") {
-        this.patchEntry(entry, { loadingKind: "initial" })
-      }
+      if (options?.reason !== "prefetch" && entry.snapshot.loadingKind === "prefetch") this.patchEntry(entry, { loadingKind: "initial" })
       return entry.inflight
     }
-    if (options?.force) this.bumpGeneration(entry)
-    const kind: SessionMessageLoadKind = options?.reason === "prefetch" ? "prefetch" : "initial"
-    return this.startLoad(normalized, entry, store, kind, async (isCurrent, performance) => {
-      await this.loadInitial(normalized, entry, store, isCurrent, performance)
-    })
+    if (!options?.force && entry.snapshot.resolved && !entry.evicted && store.getState().snapshot[normalized.sessionId]) return Promise.resolve()
+    return this.startSnapshotLoad(normalized, entry, store, options?.reason === "prefetch" ? "prefetch" : "initial")
   }
 
   prefetch(target: SessionMessageTarget): Promise<void> {
@@ -346,55 +248,113 @@ export class SessionMessageLoader {
     return this.ensure(normalized, { reason: "prefetch" })
   }
 
-  loadOlder(target: SessionMessageTarget): Promise<void> {
-    return this.loadOlderPage(target, "interactive")
+  refresh(target: SessionMessageTarget, snapshot?: SessionSnapshot, options?: { recovered?: boolean }): Promise<void> {
+    const normalized = this.normalizeTarget(target)
+    if (!normalized || this.disposed) return Promise.resolve()
+    if (snapshot) this.invalidateSession(normalized)
+    const entry = this.getEntry(normalized)
+    if (entry.inflight) {
+      if (options?.recovered) {
+        if (entry.queuedRecovery) return entry.queuedRecovery
+        const generation = entry.snapshot.generation
+        const configurationGeneration = this.configurationGeneration
+        const key = this.keyFor(normalized)
+        const queued = entry.inflight.then(() => {
+          if (this.disposed || configurationGeneration !== this.configurationGeneration
+            || generation !== entry.snapshot.generation || this.entries.get(key) !== entry) return
+          return this.refresh(normalized, undefined, { recovered: true })
+        })
+        entry.queuedRecovery = queued
+        const clear = () => { if (entry.queuedRecovery === queued) entry.queuedRecovery = null }
+        void queued.then(clear, clear)
+        return queued
+      }
+      if (entry.snapshot.loadingKind !== "older") return entry.inflight
+      if (entry.queuedRefresh) return entry.queuedRefresh
+      const generation = entry.snapshot.generation
+      const configurationGeneration = this.configurationGeneration
+      const key = this.keyFor(normalized)
+      const queued = entry.inflight.then(() => {
+        if (entry.queuedRefresh === queued) entry.queuedRefresh = null
+        if (this.disposed || configurationGeneration !== this.configurationGeneration
+          || generation !== entry.snapshot.generation || this.entries.get(key) !== entry) return
+        return this.refresh(normalized)
+      })
+      entry.queuedRefresh = queued
+      return queued
+    }
+    const store = this.childStores.ensureChild(normalized.directory, { bootstrap: false })
+    return this.startSnapshotLoad(normalized, entry, store, "refresh", snapshot, options?.recovered === true)
   }
 
-  private loadOlderPage(target: SessionMessageTarget, mode: "interactive" | "complete"): Promise<void> {
+  loadOlder(target: SessionMessageTarget): Promise<void> {
     const normalized = this.normalizeTarget(target)
     if (!normalized || this.disposed) return Promise.resolve()
     const entry = this.getEntry(normalized)
-    if (entry.inflight) {
-      if (entry.snapshot.loadingKind === "older") return entry.inflight
-      return entry.inflight.then(() => this.loadOlderPage(normalized, mode))
-    }
-    if (entry.snapshot.complete || !entry.snapshot.cursor) return Promise.resolve()
-    const store = this.childStores.ensureChild(normalized.directory, { bootstrap: false })
-    const cursor = entry.snapshot.cursor
-    return this.startLoad(normalized, entry, store, "older", async (isCurrent, performance) => {
-      let page = await this.fetchPage(normalized, HISTORY_MESSAGE_PAGE_SIZE, cursor, "older", performance)
-      if (!isCurrent()) return
-      const visited = new Set([cursor])
-      // An interactive batch tries to start on a user prompt so the oldest
-      // visible turn is whole. Every fetched record is kept, and the server
-      // cursor stays authoritative; the extra reads are bounded.
-      for (let extra = 0; mode === "interactive" && extra < HISTORY_TURN_ALIGNMENT_EXTRA_PAGES; extra += 1) {
-        if (page.complete || !page.session[0] || isUserMessage(page.session[0])) break
-        if (!page.cursor || visited.has(page.cursor)) throw new Error("Session history pagination made no progress")
-        visited.add(page.cursor)
-        const older = await this.fetchPage(normalized, HISTORY_MESSAGE_PAGE_SIZE, page.cursor, "older", performance)
-        if (!isCurrent()) return
-        if (older.session.length === 0 && !older.complete) throw new Error("Session history pagination made no progress")
-        page = {
-          session: [...older.session, ...page.session],
-          partsByMessageID: new Map([...page.partsByMessageID, ...older.partsByMessageID]),
-          cursor: older.cursor,
-          complete: older.complete,
-        }
+    if (entry.inflight && entry.snapshot.loadingKind === "older") return entry.inflight
+    const childStore = this.childStores.ensureChild(normalized.directory, { bootstrap: false })
+    if (this.knownChild(normalized, childStore)) {
+      if (entry.inflight || !entry.snapshot.resolved) {
+        const configurationGeneration = this.configurationGeneration
+        const generation = entry.snapshot.generation
+        const pending = entry.inflight ?? this.ensure(normalized)
+        return pending.then(() => {
+          if (this.disposed || configurationGeneration !== this.configurationGeneration
+            || generation !== entry.snapshot.generation || entry.snapshot.status !== "ready"
+            || !(this.configuration.isCurrent?.() ?? true)) return
+          return this.loadOlder(normalized)
+        })
       }
-      // Commit the whole batch atomically. A failed follow-up read keeps the
-      // previous visible history and its retry cursor intact.
-      const committed = this.commitPage(normalized, entry, store, page, "prepend", isCurrent)
-      if (!committed || !isCurrent()) return
+      if (entry.snapshot.complete) return Promise.resolve()
+      return this.startChildHistoryLoad(normalized, entry, childStore, "older")
+    }
+    if (entry.inflight || !this.childStores.getChild(normalized.directory)?.getState().snapshot[normalized.sessionId]) {
+      const generation = entry.snapshot.generation
+      const configurationGeneration = this.configurationGeneration
+      const key = this.keyFor(normalized)
+      const pending = entry.inflight ?? this.ensure(normalized)
+      return pending.then(() => {
+        if (this.disposed || configurationGeneration !== this.configurationGeneration
+          || generation !== entry.snapshot.generation || this.entries.get(key) !== entry
+          || entry.snapshot.status !== "ready" || !(this.configuration.isCurrent?.() ?? true)) return
+        return this.loadOlder(normalized)
+      })
+    }
+    if (entry.snapshot.complete) return Promise.resolve()
+    const store = this.childStores.ensureChild(normalized.directory, { bootstrap: false })
+    const snapshot = store.getState().snapshot[normalized.sessionId]
+    if (!snapshot) return this.ensure(normalized)
+    const branch = snapshot.branch
+    const epoch = snapshot.session.epoch
+    const cursor = entry.snapshot.cursor
+    const client = this.configuration.client
+    return this.startLoad(normalized, entry, store, "older", async isCurrent => {
+      let page = await client.getHistory(normalized.sessionId, {
+        cursor, leafTurnId: cursor ? undefined : snapshot.window.lastTurnId ?? undefined, limit: HISTORY_PAGE_SIZE,
+      })
+      if (!isCurrent()) return
+      this.assertHistoryBranch(store, normalized.sessionId, epoch, branch, page)
+      const visited = new Set<string>()
+      if (cursor) visited.add(cursor)
+      let messages = sortMessagesChronologically(page.messages)
+      let turns = page.turns
+      for (let extra = 0; page.nextCursor !== null; extra += 1) {
+        if (visited.has(page.nextCursor) || page.messages.length === 0) throw new Error("Session history pagination made no progress")
+        if (!messages[0] || messages[0].role === "user") break
+        if (extra >= 2 && messages.some(message => message.role === "user")) break
+        visited.add(page.nextCursor)
+        const older = await client.getHistory(normalized.sessionId, { cursor: page.nextCursor, limit: HISTORY_PAGE_SIZE })
+        if (!isCurrent()) return
+        this.assertHistoryBranch(store, normalized.sessionId, epoch, branch, older)
+        messages = mergeMessages(messages, sortMessagesChronologically(older.messages))
+        turns = this.mergeTurns(turns, older.turns)
+        page = older
+      }
+      this.commitHistory(normalized, store, { ...page, messages, turns })
       this.patchEntry(entry, {
-        status: "ready",
-        loadingKind: null,
-        error: null,
-        resolved: true,
-        limit: Math.max(entry.snapshot.limit, committed.messages.length),
-        cursor: page.cursor,
-        complete: page.complete,
-        updatedAt: Date.now(),
+        status: "ready", loadingKind: null, error: null, resolved: true,
+        limit: Math.max(entry.snapshot.limit, store.getState().message[normalized.sessionId]?.length ?? 0),
+        cursor: page.nextCursor ?? undefined, complete: page.nextCursor === null, updatedAt: Date.now(),
       })
       this.persistCoverage(normalized, entry.snapshot)
     })
@@ -404,87 +364,24 @@ export class SessionMessageLoader {
     const normalized = this.normalizeTarget(target)
     if (!normalized || this.disposed) throw new Error("Session message loader is unavailable")
     const release = this.retainSessionHistory(normalized)
-    try {
-      const initial = this.getSnapshot(normalized)
-      await this.ensure(normalized, { force: !initial.resolved })
-
-      const visitedCursors = new Set<string>()
-      while (true) {
-        const snapshot = this.getSnapshot(normalized)
-        if (snapshot.status === "error") throw snapshot.error ?? new Error("Session history could not be loaded")
-        if (snapshot.complete) return
-        if (!snapshot.cursor) throw new Error("Session history coverage is unresolved")
-        if (visitedCursors.has(snapshot.cursor)) {
-          throw new Error("Session history pagination made no progress")
-        }
-        visitedCursors.add(snapshot.cursor)
-
-        await this.loadOlderPage(normalized, "complete")
-      }
-    } finally {
-      release()
-    }
-  }
-
-  refreshTail(target: SessionMessageTarget, limit: number): Promise<void> {
-    const normalized = this.normalizeTarget(target)
-    if (!normalized || this.disposed) return Promise.resolve()
+    const configurationGeneration = this.configurationGeneration
+    const key = this.keyFor(normalized)
     const entry = this.getEntry(normalized)
-    if (entry.inflight) {
-      entry.queuedRefreshLimit = Math.max(entry.queuedRefreshLimit, limit)
-      if (entry.queuedRefresh) return entry.queuedRefresh
-      const inflight = entry.inflight
-      const entryKey = this.keyFor(normalized)
-      const generation = entry.snapshot.generation
-      const sdkEpoch = this.sdkEpoch
-      const clearQueuedRefresh = () => {
-        if (entry.queuedRefresh !== queuedRefresh) return
-        entry.queuedRefresh = null
-        entry.queuedRefreshLimit = 0
+    const generation = entry.snapshot.generation
+    try {
+      await this.ensure(normalized)
+      const visited = new Set<string | undefined>()
+      while (true) {
+        if (this.disposed || configurationGeneration !== this.configurationGeneration
+          || this.entries.get(key) !== entry || entry.snapshot.generation !== generation) throw new Error("Session history load became stale")
+        const state = entry.snapshot
+        if (state.status === "error") throw state.error ?? new Error("Session history could not be loaded")
+        if (state.complete) return
+        if (visited.has(state.cursor)) throw new Error("Session history pagination made no progress")
+        visited.add(state.cursor)
+        await this.loadOlder(normalized)
       }
-      const queuedRefresh = inflight.then(() => {
-        if (
-          this.disposed
-          || this.sdkEpoch !== sdkEpoch
-          || entry.snapshot.generation !== generation
-          || this.entries.get(entryKey) !== entry
-        ) {
-          clearQueuedRefresh()
-          return
-        }
-        const refreshLimit = entry.queuedRefreshLimit
-        clearQueuedRefresh()
-        return this.refreshTail(normalized, refreshLimit)
-      })
-      entry.queuedRefresh = queuedRefresh
-      return queuedRefresh
-    }
-    const store = this.childStores.ensureChild(normalized.directory, { bootstrap: false })
-    this.bumpGeneration(entry)
-    return this.startLoad(normalized, entry, store, "refresh", async (isCurrent, performance) => {
-      const previousCoverage = entry.snapshot.resolved
-        ? { cursor: entry.snapshot.cursor, complete: entry.snapshot.complete }
-        : null
-      const page = await this.fetchPage(normalized, Math.max(1, limit), undefined, "refresh", performance)
-      if (!isCurrent()) return
-      const committed = this.commitPage(normalized, entry, store, page, "merge", isCurrent)
-      if (!committed || !isCurrent()) return
-      const coverage = previousCoverage ?? page
-      this.patchEntry(entry, {
-        status: "ready",
-        loadingKind: null,
-        error: null,
-        resolved: true,
-        limit: Math.max(entry.snapshot.limit, committed.messages.length),
-        // A tail refresh uses a deliberately small window. Its cursor only
-        // describes that window, so it must not replace the established
-        // history coverage and spuriously expose "load older".
-        cursor: coverage.cursor,
-        complete: coverage.complete,
-        updatedAt: Date.now(),
-      })
-      this.persistCoverage(normalized, entry.snapshot)
-    })
+    } finally { release() }
   }
 
   getSnapshot(target: SessionMessageTarget): SessionMessageLoadState {
@@ -500,122 +397,119 @@ export class SessionMessageLoader {
     return () => entry.listeners.delete(listener)
   }
 
-  optimisticAdd(input: SessionMessageTarget & { message: Message; parts: Part[] }): void {
+  optimisticAdd(input: SessionMessageTarget & { message: Message }): void {
     const target = this.normalizeTarget(input)
-    if (!target) return
+    if (!target || this.disposed || input.message.sessionId !== target.sessionId) return
     const entry = this.getEntry(target)
-    entry.optimistic.set(input.message.id, { message: input.message, parts: filterIdentifiedParts(input.parts) })
+    entry.optimistic.set(input.message.messageId, { message: input.message })
     const store = this.childStores.ensureChild(target.directory, { bootstrap: false })
     const current = store.getState()
-    const messages = current.message[target.sessionID] ? [...current.message[target.sessionID]] : []
-    if (findMessageIndex(messages, input.message.id) < 0) {
-      insertMessageChronologically(messages, input.message)
-    }
+    const messages = [...(current.message[target.sessionId] ?? [])]
+    if (findMessageIndex(messages, input.message.messageId) < 0) insertMessageChronologically(messages, input.message)
     store.setState({
-      message: { ...current.message, [target.sessionID]: messages },
-      part: { ...current.part, [input.message.id]: filterIdentifiedParts(input.parts) },
+      message: { ...current.message, [target.sessionId]: messages },
+      partOwner: { ...current.partOwner, [target.sessionId]: partOwners(messages) },
     })
   }
 
-  optimisticRemove(input: SessionMessageTarget & { messageID: string }): void {
+  optimisticRemove(input: SessionMessageTarget & { messageId: string }): void {
     const target = this.normalizeTarget(input)
-    if (!target) return
+    if (!target || this.disposed) return
     const entry = this.getEntry(target)
-    entry.optimistic.delete(input.messageID)
-    const store = this.childStores.ensureChild(target.directory, { bootstrap: false })
+    const pending = entry.optimistic.get(input.messageId)
+    entry.optimistic.delete(input.messageId)
+    const store = this.childStores.getChild(target.directory)
+    if (!store || (!pending && entry.snapshot.resolved)) return
     const current = store.getState()
-    const existing = current.message[target.sessionID]
-    const messages = existing ? existing.filter((message) => message.id !== input.messageID) : undefined
-    const part = { ...current.part }
-    delete part[input.messageID]
-    store.setState({
-      ...(messages ? { message: { ...current.message, [target.sessionID]: messages } } : {}),
-      part,
-    })
+    const existing = current.message[target.sessionId]
+    if (!existing) return
+    // Once the server has echoed the ID, the visible record is authoritative;
+    // rollback must not delete the promoted message. Before the first
+    // authoritative snapshot, a confirmed client record remains removable.
+    const promoted = existing.find(message => message.messageId === input.messageId)
+    if (pending && promoted && promoted !== pending.message) return
+    const messages = existing.filter(message => message.messageId !== input.messageId)
+    store.setState({ message: { ...current.message, [target.sessionId]: messages }, partOwner: { ...current.partOwner, [target.sessionId]: partOwners(messages) } })
   }
 
-  optimisticConfirm(input: SessionMessageTarget & { messageID: string }): void {
+  optimisticConfirm(input: SessionMessageTarget & { messageId: string }): void {
     const target = this.normalizeTarget(input)
-    if (!target) return
-    this.getEntry(target).optimistic.delete(input.messageID)
+    if (target) this.getEntry(target).optimistic.delete(input.messageId)
   }
 
-  invalidateSession(target: SessionMessageTarget): void {
+  invalidateSession(target: SessionMessageTarget, preservedMessages: readonly Message[] = []): void {
     const normalized = this.normalizeTarget(target)
     if (!normalized) return
+    clearSessionPrefetch(normalized.directory, [normalized.sessionId], this.configuration.runtimeKey)
     const entry = this.entries.get(this.keyFor(normalized))
     if (!entry) return
-    this.bumpGeneration(entry)
+    entry.snapshot = createDefaultState(entry.snapshot.generation + 1)
     entry.inflight = null
-    entry.optimistic.clear()
-    entry.snapshot = createDefaultState(entry.snapshot.generation)
-    clearSessionPrefetch(normalized.directory, [normalized.sessionID], this.runtimeKey)
+    entry.queuedRefresh = null
+    entry.queuedRecovery = null
+    const preserved = new Set(preservedMessages.map(message => message.messageId))
+    for (const messageId of entry.optimistic.keys()) if (!preserved.has(messageId)) entry.optimistic.delete(messageId)
     this.notify(entry)
   }
 
   invalidateDirectory(directory: string): void {
-    const normalizedDirectory = normalizePath(directory)
-    if (!normalizedDirectory) return
-    const prefix = `${this.runtimeKey}\n${normalizedDirectory}\n`
-    clearDirectorySessionPrefetch(normalizedDirectory, this.runtimeKey)
+    const normalized = normalizePath(directory)
+    if (!normalized) return
+    clearDirectorySessionPrefetch(normalized, this.configuration.runtimeKey)
     for (const [key, entry] of this.entries) {
-      if (!key.startsWith(prefix)) continue
-      this.bumpGeneration(entry)
+      if (!key.startsWith(`${this.configuration.runtimeKey}\n${normalized}\n`)) continue
+      entry.snapshot = createDefaultState(entry.snapshot.generation + 1)
       entry.inflight = null
+      entry.queuedRefresh = null
+      entry.queuedRecovery = null
       entry.optimistic.clear()
       this.entries.delete(key)
       this.notify(entry)
     }
   }
 
+  clearDirectory(directory: string): void { this.invalidateDirectory(directory) }
+
   dispose(): void {
     this.disposed = true
+    this.configurationGeneration += 1
     this.retention?.dispose()
     this.retention = null
-    this.sdkEpoch += 1
     for (const entry of this.entries.values()) {
-      this.bumpGeneration(entry)
+      entry.snapshot = createDefaultState(entry.snapshot.generation + 1)
       entry.inflight = null
+      entry.queuedRefresh = null
+      entry.queuedRecovery = null
       entry.optimistic.clear()
       this.notify(entry)
     }
     this.entries.clear()
-    clearRuntimeSessionPrefetch(this.runtimeKey)
+    this.historyReaders.clear()
+    this.renderedSessions.clear()
+    clearRuntimeSessionPrefetch(this.configuration.runtimeKey)
   }
 
   private normalizeTarget(target: SessionMessageTarget): SessionMessageTarget | null {
     const directory = normalizePath(target.directory)
-    if (!directory || !target.sessionID) return null
-    return { directory, sessionID: target.sessionID }
+    return directory && target.sessionId ? { directory, sessionId: target.sessionId } : null
   }
 
   private keyFor(target: SessionMessageTarget): string {
-    return `${this.runtimeKey}\n${target.directory}\n${target.sessionID}`
+    return `${this.configuration.runtimeKey}\n${target.directory}\n${target.sessionId}`
   }
 
   private getEntry(target: SessionMessageTarget): LoaderEntry {
     const key = this.keyFor(target)
     const existing = this.entries.get(key)
     if (existing) return existing
-    const prefetched = getSessionPrefetch(target.directory, target.sessionID, this.runtimeKey)
+    const prefetched = getSessionPrefetch(target.directory, target.sessionId, this.configuration.runtimeKey)
+    const stored = this.childStores.getChild(target.directory)?.getState().snapshot[target.sessionId]
     const entry: LoaderEntry = {
-      snapshot: prefetched
-        ? {
-            ...createDefaultState(),
-            status: "ready",
-            resolved: true,
-            limit: prefetched.limit,
-            cursor: prefetched.cursor,
-            complete: prefetched.complete,
-            updatedAt: prefetched.at,
-          }
-        : createDefaultState(),
-      listeners: new Set(),
-      inflight: null,
-      queuedRefresh: null,
-      queuedRefreshLimit: 0,
-      optimistic: new Map(),
-      evicted: false,
+      snapshot: prefetched && stored ? {
+        ...createDefaultState(), status: "ready", resolved: true, limit: prefetched.limit,
+        cursor: prefetched.cursor, complete: prefetched.complete, updatedAt: prefetched.at,
+      } : createDefaultState(),
+      listeners: new Set(), inflight: null, queuedRefresh: null, queuedRecovery: null, optimistic: new Map(), evicted: false,
     }
     this.entries.set(key, entry)
     return entry
@@ -626,232 +520,221 @@ export class SessionMessageLoader {
     this.notify(entry)
   }
 
-  private bumpGeneration(entry: LoaderEntry): number {
-    const generation = entry.snapshot.generation + 1
-    entry.snapshot = { ...entry.snapshot, generation }
-    return generation
-  }
+  private notify(entry: LoaderEntry): void { for (const listener of entry.listeners) listener() }
 
-  private notify(entry: LoaderEntry): void {
-    for (const listener of entry.listeners) listener()
-  }
-
-  private startLoad(
-    target: SessionMessageTarget,
-    entry: LoaderEntry,
-    store: { getState: () => DirectoryStore; setState: DirectoryStoreSetter },
-    kind: SessionMessageLoadKind,
-    run: (isCurrent: () => boolean, performance: LoadPerformanceDetails) => Promise<void>,
-  ): Promise<void> {
+  private startLoad(target: SessionMessageTarget, entry: LoaderEntry, store: ChildStore,
+    kind: SessionMessageLoadKind, run: (isCurrent: () => boolean) => Promise<void>): Promise<void> {
     const generation = entry.snapshot.generation
-    const sdkEpoch = this.sdkEpoch
-    const finishPerformanceEvent = startSessionLoadPerformanceEvent({
-      operation: kind === "prefetch" ? "session-prefetch" : `session-messages.${kind}`,
-      caller: kind,
-    })
-    const isCurrent = () => (
-      !this.disposed
-      && this.sdkEpoch === sdkEpoch
-      && entry.snapshot.generation === generation
-      && this.childStores.getChild(target.directory) === store
-    )
-    const performance = { retryCount: 0, recordCount: 0 }
+    const configurationGeneration = this.configurationGeneration
+    const configuration = this.configuration
+    const key = this.keyFor(target)
+    const isCurrent = () => !this.disposed && configurationGeneration === this.configurationGeneration
+      && entry.snapshot.generation === generation && this.entries.get(key) === entry
+      && this.childStores.getChild(target.directory) === store && (configuration.isCurrent?.() ?? true)
+    const finish = startSessionLoadPerformanceEvent({ operation: kind === "prefetch" ? "session-prefetch" : `session-messages.${kind}`, caller: kind })
     this.patchEntry(entry, { status: "loading", loadingKind: kind, error: null })
-    let loadPromise: Promise<void>
-    try {
-      loadPromise = run(isCurrent, performance)
-    } catch (error) {
-      loadPromise = Promise.reject(error)
-    }
-    const promise = loadPromise
-      .then(() => finishPerformanceEvent(isCurrent() ? "complete" : "stale", performance))
+    const promise = run(isCurrent).then(() => finish(isCurrent() ? "complete" : "stale", { retryCount: 0, recordCount: store.getState().message[target.sessionId]?.length ?? 0 }))
       .catch((error: unknown) => {
-        if (!isCurrent()) {
-          finishPerformanceEvent("stale", performance)
-          return
-        }
-        finishPerformanceEvent("error", performance)
-        this.patchEntry(entry, {
-          status: "error",
-          loadingKind: null,
-          error: error instanceof Error ? error : new Error(formatSdkError(error)),
-        })
-      })
-      .finally(() => {
+        finish(isCurrent() ? "error" : "stale", { retryCount: 0, recordCount: 0 })
+        if (isCurrent()) this.patchEntry(entry, { status: "error", loadingKind: null, error: error instanceof Error ? error : new Error("Session history could not be loaded") })
+      }).finally(() => {
         if (entry.inflight === promise) entry.inflight = null
-        this.scheduleCacheRetention(target.directory)
+        if (isCurrent()) this.scheduleCacheRetention(target.directory)
       })
     entry.inflight = promise
     return promise
   }
 
-  private async loadInitial(
-    target: SessionMessageTarget,
-    entry: LoaderEntry,
-    store: { getState: () => DirectoryStore; setState: DirectoryStoreSetter },
-    isCurrent: () => boolean,
-    performance?: LoadPerformanceDetails,
-  ): Promise<void> {
-    const storeMessageCount = store.getState().message[target.sessionID]?.length ?? 0
-    // Cold navigation aims for several whole turns; history readers and
-    // sessions that already hold messages only need one user boundary.
-    const coldNavigation = (storeMessageCount === 0 || entry.evicted) && !this.historyReaders.get(this.keyFor(target))
-    const hasBoundary = coldNavigation ? hasInitialTurns : hasUserMessage
-    const firstLimit = Math.max(entry.snapshot.limit, storeMessageCount, getInitialPageSize())
-    const firstPage = await this.fetchPage(target, firstLimit, undefined, "initial-page", performance)
-    if (!isCurrent()) return
-    let acceptedPage = firstPage
+  private knownChild(target: SessionMessageTarget, store: ChildStore) {
+    const session = useGlobalSessionsStore.getState().entityById.get(target.sessionId)
+      ?? store.getState().session.find(session => session.sessionId === target.sessionId)
+    return session?.parentSessionId ? session : undefined
+  }
 
-    const visited = new Set<string>()
-    while (!acceptedPage.complete && !hasBoundary(acceptedPage.session)
-      && acceptedPage.session.length < getInitialWindowMaxRecords()) {
-      const cursor = acceptedPage.cursor
-      if (!cursor || visited.has(cursor)) break
-      visited.add(cursor)
-      const remaining = getInitialWindowMaxRecords() - acceptedPage.session.length
-      const older = await this.fetchPage(target, Math.min(HISTORY_MESSAGE_PAGE_SIZE, remaining), cursor, "initial-page", performance)
+  private startChildHistoryLoad(target: SessionMessageTarget, entry: LoaderEntry, store: ChildStore, kind: SessionMessageLoadKind): Promise<void> {
+    const client = this.configuration.client
+    const child = this.knownChild(target, store)
+    if (!child) return Promise.resolve()
+    const cursor = kind === "older" ? entry.snapshot.cursor : undefined
+    return this.startLoad(target, entry, store, kind, async isCurrent => {
+      const requestedRevision = store.getState().sessionRevision ?? 0
+      const page = await client.getHistory(target.sessionId, { cursor, limit: HISTORY_PAGE_SIZE })
       if (!isCurrent()) return
-      if (older.session.length === 0 && !older.complete) break
-      acceptedPage = {
-        session: [...older.session, ...acceptedPage.session],
-        partsByMessageID: new Map([...acceptedPage.partsByMessageID, ...older.partsByMessageID]),
-        cursor: older.cursor,
-        complete: older.complete,
+      if (page.sessionId !== target.sessionId || page.messages.some(message => message.sessionId !== target.sessionId)
+        || page.turns.some(turn => turn.sessionId !== target.sessionId)) throw new Error("Child history identified another session")
+      if (kind === "older" && entry.historyBranch && (page.branch.branchId !== entry.historyBranch.branchId
+        || page.branch.branchVersion !== entry.historyBranch.branchVersion)) throw new Error("Session history branch changed")
+      if (page.nextCursor !== null && (page.nextCursor === cursor || page.messages.length === 0)) throw new Error("Session history pagination made no progress")
+      const current = store.getState()
+      const deletedRevision = current.sessionDeletedRevision?.[target.sessionId]
+      if (deletedRevision !== undefined && deletedRevision >= requestedRevision) {
+        this.patchEntry(entry, { status: "idle", loadingKind: null, resolved: false })
+        return
       }
-    }
-
-    // Publish the chosen window once.
-    const committed = this.commitPage(target, entry, store, acceptedPage, "merge", isCurrent)
-    if (!committed || !isCurrent()) return
-    entry.evicted = false
-    this.patchEntry(entry, {
-      status: "ready",
-      loadingKind: null,
-      error: null,
-      resolved: true,
-      limit: committed.messages.length,
-      cursor: acceptedPage.cursor,
-      complete: acceptedPage.complete,
-      updatedAt: Date.now(),
+      const incoming = sortMessagesChronologically(page.messages)
+      const messages = kind === "older" ? mergeMessages(current.message[target.sessionId] ?? [], incoming) : incoming
+      const next = installHostSession(current, this.knownChild(target, store) ?? child)
+      store.setState({ ...next, message: { ...next.message, [target.sessionId]: messages },
+        partOwner: { ...next.partOwner, [target.sessionId]: partOwners(messages) } })
+      entry.historyBranch = page.branch
+      entry.evicted = false
+      this.patchEntry(entry, { status: "ready", loadingKind: null, error: null, resolved: true,
+        cursor: page.nextCursor ?? undefined, complete: page.nextCursor === null, limit: messages.length, updatedAt: Date.now() })
+      this.persistCoverage(target, entry.snapshot)
+      // No synthetic snapshot or journal cursor: Task32 exposes child history only.
     })
-    this.persistCoverage(target, entry.snapshot)
   }
 
-  private async fetchPage(
-    target: SessionMessageTarget,
-    limit: number,
-    before?: string,
-    caller: "initial-page" | "older" | "refresh" = "initial-page",
-    performance?: LoadPerformanceDetails,
-  ): Promise<FetchedPage> {
-    const finishPagePerformance = startSessionLoadPerformanceEvent({
-      operation: "session-messages.page",
-      caller,
-      requestLimit: limit,
-      cursorPresent: before !== undefined,
-    })
-    let attempts = 0
-    let recordCount = 0
-    try {
-      const result = await retry(async () => {
-        attempts += 1
-        const response = await this.sdk.session.messages({
-          sessionID: target.sessionID,
-          directory: target.directory,
-          limit,
-          before,
-        })
-        assertSdkSuccess(response, "session.messages")
-        const data = response.data
-        if (!Array.isArray(data)) {
-          const error = new Error("session.messages returned no data") as Error & { status?: number }
-          error.status = 503
-          throw error
-        }
-        return { data, response: response.response }
-      })
-      const records = result.data.filter((record: { info?: { id?: string } }) => Boolean(record?.info?.id))
-      recordCount = records.length
-      if (performance) performance.recordCount += recordCount
-      const session = sortMessagesChronologically(
-        records.map((record: { info: Message }) => stripMessageDiffSnapshots(record.info)),
-      )
-      const partsByMessageID = new Map<string, Part[]>()
-      for (const record of records as Array<{ info: { id: string }; parts?: Part[] }>) {
-        partsByMessageID.set(record.info.id, filterIdentifiedParts(record.parts ?? []))
+  private startSnapshotLoad(target: SessionMessageTarget, entry: LoaderEntry, store: ChildStore, kind: "initial" | "refresh" | "prefetch", suppliedSnapshot?: SessionSnapshot, recovered = false): Promise<void> {
+    if (this.knownChild(target, store)) return this.startChildHistoryLoad(target, entry, store, kind)
+    const client = this.configuration.client
+    const onSnapshot = this.configuration.onSnapshot
+    return this.startLoad(target, entry, store, kind, async isCurrent => {
+      const requestedRevision = store.getState().sessionRevision ?? 0
+      const requestedRunControlRevision = store.getState().runControlRevision?.[target.sessionId] ?? 0
+      const knownWorkspace = store.getState().workspace
+      const [snapshot, workspace] = await Promise.all([
+        suppliedSnapshot ? Promise.resolve(suppliedSnapshot) : client.getSnapshot(target.sessionId),
+        knownWorkspace ? Promise.resolve(knownWorkspace) : client.resolveWorkspace(target.directory),
+      ])
+      if (!isCurrent()) return
+      const current = store.getState()
+      const deletedRevision = current.sessionDeletedRevision?.[target.sessionId]
+      const sessionPresent = current.session.some(session => session.sessionId === target.sessionId)
+      if ((deletedRevision !== undefined && !sessionPresent && deletedRevision >= requestedRevision)
+        || (deletedRevision !== undefined && deletedRevision > requestedRevision)) {
+        this.patchEntry(entry, { status: "idle", loadingKind: null, error: null, resolved: false, cursor: undefined, complete: false })
+        return
       }
-      const cursor = result.response?.headers?.get?.("x-next-cursor") ?? undefined
-      finishPagePerformance("complete", { retryCount: Math.max(0, attempts - 1), recordCount })
-      return { session, partsByMessageID, cursor, complete: !cursor }
-    } catch (error) {
-      finishPagePerformance("error", { retryCount: Math.max(0, attempts - 1), recordCount })
-      throw error
-    } finally {
-      if (performance) performance.retryCount += Math.max(0, attempts - 1)
-    }
+      if (snapshot.session.sessionId !== target.sessionId || snapshot.session.workspaceId !== workspace.workspaceId || current.workspace && current.workspace.workspaceId !== workspace.workspaceId) throw new Error("Session snapshot does not belong to the requested workspace")
+      registerWorkspaceDirectory(workspace.workspaceId, target.directory)
+      const old = current.snapshot[target.sessionId]
+      if (old?.session.epoch === snapshot.session.epoch && compareCounters(snapshot.session.headSequence, old.session.headSequence) < 0) throw new Error("Session snapshot is older than the live state")
+      const read = preserveInFlightRunControl(old, current.session.find((item) => item.sessionId === target.sessionId), current.runControlActiveRun?.[target.sessionId], snapshot, current, requestedRunControlRevision)
+      const resolved: State = current.workspace ? current : { ...current, workspace, project: workspace.projectId, path: { ...current.path, directory: target.directory, workspaceId: workspace.workspaceId, projectId: workspace.projectId } }
+      let next = installSessionSnapshot(resolved, { ...read, messages: sortMessagesChronologically(read.messages) })
+      const optimistic = mergeOptimisticPage({ session: next.message[target.sessionId] ?? [], complete: !read.window.hasEarlier }, [...entry.optimistic.values()])
+      for (const messageId of optimistic.confirmed) entry.optimistic.delete(messageId)
+      if (entry.optimistic.size > 0) next = { ...next, message: { ...next.message, [target.sessionId]: optimistic.session }, partOwner: { ...next.partOwner, [target.sessionId]: partOwners(optimistic.session) } }
+      // The installed snapshot now owns run control, including any run the
+      // projected-only branch carried over from an acknowledgement.
+      if (next.runControlActiveRun !== undefined && Object.hasOwn(next.runControlActiveRun, target.sessionId)) {
+        const runControlActiveRun = { ...next.runControlActiveRun }
+        delete runControlActiveRun[target.sessionId]
+        next = { ...next, runControlActiveRun }
+      }
+      store.setState(next)
+      entry.evicted = false
+      this.patchEntry(entry, {
+        resolved: true, cursor: undefined, complete: !read.window.hasEarlier,
+        limit: next.message[target.sessionId]?.length ?? 0, updatedAt: Date.now(),
+      })
+      // Recovery, requests, runtime and the SSE cursor are visible before attaching SSE.
+      if (!isCurrent()) return
+      onSnapshot?.(target, read, recovered ? old : undefined)
+      if (!isCurrent()) return
+      const hostReads = this.loadHostState(target, store, read, client, isCurrent)
+      // The runtime snapshot has no pagination cursor. Read native history to establish one.
+      try {
+        if (read.window.hasEarlier) await this.loadInitialHistory(target, entry, store, read, client, isCurrent)
+        if (!isCurrent()) return
+        this.patchEntry(entry, { status: "ready", loadingKind: null, error: null })
+        this.persistCoverage(target, entry.snapshot)
+      } finally { await hostReads }
+    })
   }
 
-  private commitPage(
-    target: SessionMessageTarget,
-    entry: LoaderEntry,
-    store: { getState: () => DirectoryStore; setState: DirectoryStoreSetter },
-    page: FetchedPage,
-    mode: "merge" | "prepend",
-    isCurrent: () => boolean,
-  ): { messages: Message[] } | null {
-    if (!isCurrent()) return null
-    const merged = mergeOptimisticPage({
-      session: page.session,
-      part: [...page.partsByMessageID].map(([id, part]) => ({ id, part })),
-      cursor: page.cursor,
-      complete: page.complete,
-    }, [...entry.optimistic.values()])
-    for (const messageID of merged.confirmed) entry.optimistic.delete(messageID)
-    const mergedPartsByMessageID = new Map(merged.part.map((candidate) => [candidate.id, candidate.part] as const))
-    const materialized = materializeSessionSnapshots(
-      store.getState(),
-      target.sessionID,
-      merged.session.map((info) => ({
-        info,
-        parts: page.partsByMessageID.get(info.id)
-          ?? mergedPartsByMessageID.get(info.id)
-          ?? [],
-      })),
-      { skipPartTypes: SKIP_PARTS, mode },
-    )
-    if (!isCurrent()) return null
-    if (materialized.messagesChanged || materialized.partsChanged) {
-      store.setState({
-        ...(materialized.messagesChanged ? { message: materialized.message } : {}),
-        ...(materialized.partsChanged ? { part: materialized.part } : {}),
-      })
+  private async loadHostState(target: SessionMessageTarget, store: ChildStore, snapshot: SessionSnapshot, client: CanonicalClient, isCurrent: () => boolean): Promise<void> {
+    const requestedRevision = store.getState().sessionRevision ?? 0
+    const missingSession = !store.getState().session.some(session => session.sessionId === target.sessionId)
+    const sessions = missingSession ? client.listSessions(snapshot.session.workspaceId).catch(() => null) : Promise.resolve(null)
+    const metadata = client.getSessionMetadata(target.sessionId).catch(() => null)
+    const queue = client.getQueue(target.sessionId).catch(() => null)
+    const [hostList, hostMetadata, hostQueue] = await Promise.all([sessions, metadata, queue])
+    if (!isCurrent()) return
+    let next: State = store.getState()
+    const deletedRevision = next.sessionDeletedRevision?.[target.sessionId]
+    const deletedAfterRead = deletedRevision !== undefined && (deletedRevision > requestedRevision
+      || (!next.session.some(session => session.sessionId === target.sessionId) && deletedRevision >= requestedRevision))
+    const hostSession = deletedAfterRead ? undefined : hostList?.items.find(session => session.sessionId === target.sessionId)
+    const runtime = next.snapshot[target.sessionId]?.session
+    if (!deletedAfterRead && hostSession && runtime && hostSession.workspaceId === runtime.workspaceId) next = installHostSession(next, { ...hostSession, ...runtime })
+    if (!deletedAfterRead && hostMetadata) next = installSessionMetadata(next, hostMetadata)
+    if (!deletedAfterRead && hostQueue) next = installQueue(next, hostQueue)
+    if (next !== store.getState()) store.setState(next)
+  }
+
+  private async loadInitialHistory(target: SessionMessageTarget, entry: LoaderEntry, store: ChildStore, snapshot: SessionSnapshot, client: CanonicalClient, isCurrent: () => boolean): Promise<void> {
+    const maxRecords = isMobileSurfaceRuntime() ? 200 : 300
+    const firstLimit = isMobileSurfaceRuntime() ? 50 : 100
+    const reader = Boolean(this.historyReaders.get(this.keyFor(target)))
+    const targetTurns = reader ? 1 : INITIAL_USER_TURNS
+    let page = await client.getHistory(target.sessionId, { leafTurnId: snapshot.window.lastTurnId ?? undefined, limit: firstLimit })
+    if (!isCurrent()) return
+    this.assertHistoryBranch(store, target.sessionId, snapshot.session.epoch, snapshot.branch, page)
+    const visited = new Set<string>()
+    let messages = sortMessagesChronologically(page.messages)
+    let turns = page.turns
+    while (page.nextCursor !== null) {
+      const userTurns = messages.filter(message => message.role === "user").length
+      if (userTurns >= targetTurns || (userTurns > 0 && messages.length >= maxRecords)) break
+      const cursor = page.nextCursor
+      if (visited.has(cursor) || page.messages.length === 0) throw new Error("Session history pagination made no progress")
+      visited.add(cursor)
+      const limit = userTurns === 0 ? HISTORY_PAGE_SIZE : Math.min(HISTORY_PAGE_SIZE, maxRecords - messages.length)
+      const older = await client.getHistory(target.sessionId, { cursor, limit })
+      if (!isCurrent()) return
+      this.assertHistoryBranch(store, target.sessionId, snapshot.session.epoch, snapshot.branch, older)
+      messages = mergeMessages(messages, sortMessagesChronologically(older.messages))
+      turns = this.mergeTurns(turns, older.turns)
+      page = older
     }
-    return { messages: materialized.messages }
+    if (page.nextCursor !== null && page.messages.length === 0) throw new Error("Session history pagination made no progress")
+    this.commitHistory(target, store, { ...page, messages, turns })
+    this.patchEntry(entry, { cursor: page.nextCursor ?? undefined, complete: page.nextCursor === null, limit: store.getState().message[target.sessionId]?.length ?? 0, updatedAt: Date.now() })
+  }
+
+  private assertHistoryBranch(store: ChildStore, sessionId: string, epoch: string, branch: Branch, page: HistoryPage): void {
+    const current = store.getState().snapshot[sessionId]
+    if (!current || current.session.epoch !== epoch || current.branch.branchId !== branch.branchId
+      || current.branch.branchVersion !== branch.branchVersion || page.sessionId !== sessionId
+      || page.branch.branchId !== branch.branchId || page.branch.branchVersion !== branch.branchVersion) throw new Error("Session history branch changed")
+  }
+
+  private mergeTurns(existing: Turn[], incoming: Turn[]): Turn[] {
+    const ids = new Set(existing.map(turn => turn.turnId))
+    const added = incoming.filter(turn => !ids.has(turn.turnId))
+    return added.length === 0 ? existing : [...existing, ...added].sort((left, right) => left.startedAt - right.startedAt || left.turnId.localeCompare(right.turnId))
+  }
+
+  private commitHistory(target: SessionMessageTarget, store: ChildStore, page: HistoryPage): void {
+    const current = store.getState()
+    const snapshot = current.snapshot[target.sessionId]
+    const entry = this.getEntry(target)
+    const incoming = sortMessagesChronologically(page.messages)
+    const echoed = new Set(incoming.map(message => message.messageId))
+    const existing = current.message[target.sessionId] ?? []
+    const retained = existing.filter(message => !echoed.has(message.messageId) || entry.optimistic.get(message.messageId)?.message !== message)
+    const messages = mergeMessages(retained.length === existing.length ? existing : retained, incoming)
+    for (const messageId of echoed) entry.optimistic.delete(messageId)
+    const authoritativeMessages = mergeMessages(snapshot.messages, incoming)
+    const turns = this.mergeTurns(snapshot.turns, page.turns)
+    if (messages === current.message[target.sessionId] && authoritativeMessages === snapshot.messages && turns === snapshot.turns) return
+    store.setState({
+      message: messages === current.message[target.sessionId] ? current.message : { ...current.message, [target.sessionId]: messages },
+      snapshot: { ...current.snapshot, [target.sessionId]: {
+        ...snapshot, messages: authoritativeMessages, turns,
+        window: { ...snapshot.window, firstTurnId: turns[0]?.turnId ?? null, lastTurnId: turns.at(-1)?.turnId ?? null, firstMessageId: authoritativeMessages[0]?.messageId ?? null, lastMessageId: authoritativeMessages.at(-1)?.messageId ?? null, hasEarlier: page.nextCursor !== null },
+      } },
+      partOwner: messages === current.message[target.sessionId] ? current.partOwner : { ...current.partOwner, [target.sessionId]: partOwners(messages) },
+    })
   }
 
   private persistCoverage(target: SessionMessageTarget, state: SessionMessageLoadState): void {
-    setSessionPrefetch({
-      directory: target.directory,
-      sessionID: target.sessionID,
-      limit: state.limit,
-      cursor: state.cursor,
-      complete: state.complete,
-      at: state.updatedAt,
-      runtimeKey: this.runtimeKey,
-    })
+    setSessionPrefetch({ directory: target.directory, sessionId: target.sessionId, limit: state.limit, cursor: state.cursor, complete: state.complete, at: state.updatedAt, runtimeKey: this.configuration.runtimeKey })
   }
 }
 
-type DirectoryStoreSetter = (
-  partial: Partial<DirectoryStore> | ((state: DirectoryStore) => Partial<DirectoryStore> | DirectoryStore),
-) => void
-
 let imperativeLoader: SessionMessageLoader | null = null
-
-export function setImperativeSessionMessageLoader(loader: SessionMessageLoader | null): void {
-  imperativeLoader = loader
-}
-
-export function getImperativeSessionMessageLoader(): SessionMessageLoader | null {
-  return imperativeLoader
-}
+export function setImperativeSessionMessageLoader(loader: SessionMessageLoader | null): void { imperativeLoader = loader }
+export function getImperativeSessionMessageLoader(): SessionMessageLoader | null { return imperativeLoader }

@@ -1,434 +1,261 @@
-/**
- * Custom provider form helpers.
- * Mirrors OpenCode web UI validation and request construction so a provider
- * can be defined from Settings without code changes.
- */
+import { ModelSchema, ProviderConfigureRequestSchema, ProviderModelDiscoveryRequestSchema } from '@openchamber/agent-contract';
+import type { Model, ProviderConfigurationRead, ProviderConfigureRequest, ProviderModelDiscoveryRequest, ProviderModelDiscoveryResult } from '@openchamber/agent-contract';
+import type { I18nKey } from '@/lib/i18n';
+import type { CustomProviderIcon } from '@/lib/customProviderIcons';
 
-export const CUSTOM_PROVIDER_PROTOCOLS = {
-  'openai-chat': '@ai-sdk/openai-compatible',
-  'openai-responses': '@ai-sdk/openai',
-  'anthropic-messages': '@ai-sdk/anthropic',
-} as const;
-export type CustomProviderProtocol = keyof typeof CUSTOM_PROVIDER_PROTOCOLS;
-export type CustomProviderNpm = (typeof CUSTOM_PROVIDER_PROTOCOLS)[CustomProviderProtocol];
 export const CUSTOM_PROVIDER_ID = '__custom_provider__';
-const PROVIDER_ID_PATTERN = /^[a-z0-9][a-z0-9-_]*$/;
-const BASE_URL_PATTERN = /^https?:\/\//;
-const ENV_KEY_PATTERN = /^\{env:([^}]+)\}$/;
+export const CUSTOM_PROVIDER_PROTOCOLS = ['chat-completions', 'responses', 'messages', 'generate-content'] as const;
 
-export type CustomProviderTranslator = (
-  key: string,
-  vars?: Record<string, string | number | boolean>,
-) => string;
+export type CustomProviderProtocol = (typeof CUSTOM_PROVIDER_PROTOCOLS)[number];
 
-export type ModelRow = {
+export const isCustomProviderProtocol = (value: string): value is CustomProviderProtocol =>
+  CUSTOM_PROVIDER_PROTOCOLS.some((protocol) => protocol === value);
+
+export interface ModelRow {
   row: string;
-  id: string;
+  modelId: string;
   name: string;
-};
-
-export type HeaderRow = {
-  row: string;
-  key: string;
-  value: string;
-};
-
-export type CustomProviderFormState = {
-  providerID: string;
+  contextWindow: string;
+  maxOutputTokens: string;
+  modalities: Model['modalities'];
+  toolsSupported?: boolean;
+  /** Canonical fields the controls do not edit (reasoning, pricing, status, enabled). */
+  base?: Model;
+}
+export interface HeaderRow { row: string; name: string; value: string }
+export interface CustomProviderFormState {
+  providerId: string;
   name: string;
+  endpoint: string;
   protocol: CustomProviderProtocol;
-  baseURL: string;
+  credentialRef: string | null;
   apiKey: string;
-  models: ModelRow[];
+  replaceHeaders: boolean;
+  headerNames: string[];
   headers: HeaderRow[];
-};
+  models: ModelRow[];
+  icon: CustomProviderIcon | null;
+}
+export interface CustomProviderPersistPlan {
+  request: ProviderConfigureRequest;
+  apiKey: string;
+  icon: CustomProviderIcon | null;
+}
 
-export type FieldErrors = {
-  providerID?: string;
+export type CustomProviderTranslator = (key: I18nKey) => string;
+
+export interface CustomProviderFieldErrors {
+  providerId?: string;
   name?: string;
-  baseURL?: string;
-  apiKey?: string;
-};
-
-export type ModelFieldErrors = {
-  id?: string;
+  endpoint?: string;
+}
+export interface ModelFieldErrors {
+  modelId?: string;
   name?: string;
-};
-
-export type HeaderFieldErrors = {
-  key?: string;
+  contextWindow?: string;
+  maxOutputTokens?: string;
+}
+export interface HeaderFieldErrors {
+  name?: string;
   value?: string;
-};
-
-export type CustomProviderConfig = {
-  npm: CustomProviderNpm;
-  name: string;
-  env?: string[];
-  options: {
-    baseURL: string;
-    headers?: Record<string, string>;
-  };
-  models: Record<string, { name: string }>;
-};
-
-export type CustomProviderPersistPlan = {
-  providerID: string;
-  name: string;
-  /** Literal API key to send via auth.set; omitted when using {env:VAR} or empty. */
-  apiKey?: string;
-  config: CustomProviderConfig;
-};
-
-export type ValidateCustomProviderInput = {
-  form: CustomProviderFormState;
-  t: CustomProviderTranslator;
-  existingProviderIDs: ReadonlySet<string>;
-  disabledProviders?: readonly string[];
-  /** When editing this provider id, treat it as an allowed update target. */
-  editingProviderID?: string;
-  /**
-   * When true, empty apiKey is allowed because auth.json already has a credential
-   * (edit path). Still requires env or key when false.
-   */
-  allowExistingAuth?: boolean;
-};
-
-export type ValidateCustomProviderResult = {
-  err: FieldErrors;
+}
+export interface CustomProviderValidation {
+  fields: CustomProviderFieldErrors;
   models: ModelFieldErrors[];
   headers: HeaderFieldErrors[];
-  result?: CustomProviderPersistPlan;
-};
-
-export type ProviderLikeForCustomForm = {
-  id: string;
-  name?: string;
-  env?: string[];
-  options?: Record<string, unknown> | null;
-  models?: Array<{ id?: string; name?: string; api?: { npm?: string } }> | Record<string, unknown>;
-};
-
-let rowCounter = 0;
-
-const nextRow = (): string => `row-${rowCounter++}`;
-
-export const createModelRow = (): ModelRow => ({
-  row: nextRow(),
-  id: '',
-  name: '',
-});
-
-export const createHeaderRow = (): HeaderRow => ({
-  row: nextRow(),
-  key: '',
-  value: '',
-});
-
-export const createEmptyCustomProviderForm = (): CustomProviderFormState => ({
-  providerID: '',
-  name: '',
-  protocol: 'openai-chat',
-  baseURL: '',
-  apiKey: '',
-  models: [createModelRow()],
-  headers: [createHeaderRow()],
-});
-
-function protocolFromNpm(npm: string | undefined): CustomProviderProtocol {
-  switch (npm) {
-    case '@ai-sdk/openai':
-      return 'openai-responses';
-    case '@ai-sdk/anthropic':
-      return 'anthropic-messages';
-    default:
-      return 'openai-chat';
-  }
+  valid: boolean;
 }
 
-function parseEnvApiKey(apiKey: string): { env?: string; key?: string } {
-  const trimmed = apiKey.trim();
-  if (!trimmed) {
-    return {};
-  }
-  const envMatch = trimmed.match(ENV_KEY_PATTERN);
-  const env = envMatch?.[1]?.trim();
-  if (env) {
-    return { env };
-  }
-  return { key: trimmed };
-}
+const HEADER_NAME_PATTERN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
 
-export function isCustomOpenAICompatibleProvider(provider: ProviderLikeForCustomForm): boolean {
-  const options = provider.options && typeof provider.options === 'object' ? provider.options : null;
-  const baseURL = typeof options?.baseURL === 'string' ? options.baseURL.trim() : '';
-  if (baseURL && BASE_URL_PATTERN.test(baseURL)) {
-    return true;
-  }
-
-  const models = Array.isArray(provider.models)
-    ? provider.models
-    : (provider.models && typeof provider.models === 'object'
-      ? Object.values(provider.models)
-      : []);
-
-  return models.some((model) => {
-    if (!model || typeof model !== 'object') {
-      return false;
-    }
-    const api = 'api' in model && model.api && typeof model.api === 'object'
-      ? model.api as { npm?: unknown }
-      : null;
-    return typeof api?.npm === 'string' && new Set<string>(Object.values(CUSTOM_PROVIDER_PROTOCOLS)).has(api.npm);
-  });
-}
-
-export type ProviderConfigSourcesLike = {
-  user?: { exists?: boolean };
-  project?: { exists?: boolean };
-  custom?: { exists?: boolean };
+const positiveInteger = (value: string): boolean => {
+  const parsed = Number(value.trim());
+  return /^[0-9]+$/.test(value.trim()) && Number.isSafeInteger(parsed) && parsed > 0;
 };
 
-export type ProviderConfigScope = 'user' | 'project' | 'custom';
-
-/**
- * True when a provider both looks OpenAI-compatible-custom and is defined in a
- * user/project/custom OpenCode config layer. Catalog-only providers often share
- * the same npm/baseURL signals and must not get Edit / config overrides.
- */
-export function isConfigDefinedCustomProvider(
-  provider: ProviderLikeForCustomForm,
-  sources: ProviderConfigSourcesLike | null | undefined,
-): boolean {
-  if (!sources) {
+const isHttpEndpoint = (value: string): boolean => {
+  try {
+    const endpoint = new URL(value);
+    return (endpoint.protocol === 'http:' || endpoint.protocol === 'https:')
+      && endpoint.username === '' && endpoint.password === '' && endpoint.search === '' && endpoint.hash === '';
+  } catch {
     return false;
   }
-  const inConfigLayer = Boolean(
-    sources.user?.exists || sources.project?.exists || sources.custom?.exists,
-  );
-  return inConfigLayer && isCustomOpenAICompatibleProvider(provider);
-}
+};
 
-/**
- * Effective writable config layer for a provider, matching OpenCode merge
- * precedence: custom > project > user.
- */
-export function resolveProviderConfigScope(
-  sources: ProviderConfigSourcesLike | null | undefined,
-): ProviderConfigScope {
-  if (sources?.custom?.exists) {
-    return 'custom';
-  }
-  if (sources?.project?.exists) {
-    return 'project';
-  }
-  return 'user';
-}
+const isCanonicalModel = (model: Model | ProviderModelDiscoveryResult['models'][number] | undefined): model is Model =>
+  model !== undefined && 'modalities' in model;
 
-export function providerToCustomFormState(provider: ProviderLikeForCustomForm): CustomProviderFormState {
-  const options = provider.options && typeof provider.options === 'object' ? provider.options : {};
-  const baseURL = typeof options.baseURL === 'string' ? options.baseURL : '';
-  const headersRaw = options.headers && typeof options.headers === 'object' && !Array.isArray(options.headers)
-    ? options.headers as Record<string, unknown>
-    : {};
-  const headerRows = Object.entries(headersRaw)
-    .filter((entry): entry is [string, string] => typeof entry[0] === 'string' && typeof entry[1] === 'string')
-    .map(([key, value]) => ({ row: nextRow(), key, value }));
-
-  const modelEntries = Array.isArray(provider.models)
-    ? provider.models
-    : (provider.models && typeof provider.models === 'object'
-      ? Object.entries(provider.models).map(([id, value]) => ({
-          id,
-          name: value && typeof value === 'object' && 'name' in value && typeof (value as { name?: unknown }).name === 'string'
-            ? (value as { name: string }).name
-            : id,
-        }))
-      : []);
-
-  const models = modelEntries.length > 0
-    ? modelEntries.map((model) => ({
-        row: nextRow(),
-        id: typeof model?.id === 'string' ? model.id : '',
-        name: typeof model?.name === 'string' ? model.name : (typeof model?.id === 'string' ? model.id : ''),
-      }))
-    : [createModelRow()];
-
-  const envName = Array.isArray(provider.env)
-    ? provider.env.find((entry) => typeof entry === 'string' && entry.trim().length > 0)?.trim()
-    : undefined;
-
-  const modelWithApi = modelEntries.find(
-    (model): model is { id?: string; name?: string; api?: { npm?: string } } => 'api' in model,
-  );
-
+export function createModelRow(model?: Model | ProviderModelDiscoveryResult['models'][number]): ModelRow {
+  const canonical = isCanonicalModel(model) ? { ...model } : undefined;
+  const { modelId = '', name = '', contextWindow, maxOutputTokens } = model ?? {};
   return {
-    providerID: provider.id,
-    name: typeof provider.name === 'string' && provider.name.trim() ? provider.name : provider.id,
-    protocol: protocolFromNpm(modelWithApi?.api?.npm),
-    baseURL,
-    apiKey: envName ? `{env:${envName}}` : '',
-    models,
-    headers: headerRows.length > 0 ? headerRows : [createHeaderRow()],
+    row: crypto.randomUUID(),
+    modelId,
+    name,
+    contextWindow: contextWindow === undefined ? '' : String(contextWindow),
+    maxOutputTokens: maxOutputTokens === undefined ? '' : String(maxOutputTokens),
+    modalities: canonical ? [...canonical.modalities] : ['text'],
+    toolsSupported: canonical?.toolsSupported,
+    base: canonical,
   };
 }
 
+export function createHeaderRow(): HeaderRow {
+  return { row: crypto.randomUUID(), name: '', value: '' };
+}
+
+export function createEmptyCustomProviderForm(
+  initial?: ProviderConfigurationRead,
+  icon: CustomProviderIcon | null = null,
+): CustomProviderFormState {
+  return {
+    providerId: initial?.configuration.providerId ?? '',
+    name: initial?.configuration.name ?? '',
+    endpoint: initial?.configuration.endpoint ?? '',
+    protocol: initial?.configuration.protocol ?? 'chat-completions',
+    credentialRef: initial?.configuration.credentialRef ?? null,
+    apiKey: '',
+    replaceHeaders: !initial,
+    headerNames: initial?.headerNames ?? [],
+    headers: initial ? [] : [createHeaderRow()],
+    models: initial ? initial.models.map(createModelRow) : [createModelRow()],
+    icon,
+  };
+}
+
+/** Omission preserves stored headers; an explicitly empty replacement removes them. */
+export function providerHeaderWrite(form: CustomProviderFormState): Record<string, string> | undefined {
+  if (!form.replaceHeaders) return undefined;
+  const headers: Record<string, string> = {};
+  const names = new Set<string>();
+  for (const row of form.headers) {
+    const name = row.name.trim();
+    if (!name && !row.value) continue;
+    if (!name || names.has(name.toLowerCase())) throw new Error('Invalid or duplicate header');
+    names.add(name.toLowerCase());
+    headers[name] = row.value;
+  }
+  return headers;
+}
+
 /**
- * Validates form input and builds the auth + OpenCode provider config payloads.
+ * Field-level checks the editor can point at. The canonical build still runs
+ * afterwards, because model reasoning/variant invariants belong to its schema.
  */
-export function validateCustomProvider(input: ValidateCustomProviderInput): ValidateCustomProviderResult {
-  const providerID = input.form.providerID.trim();
-  const name = input.form.name.trim();
-  const baseURL = input.form.baseURL.trim();
-  const { env, key } = parseEnvApiKey(input.form.apiKey);
-  const disabledProviders = input.disabledProviders ?? [];
-  const editingProviderID = input.editingProviderID?.trim();
+export function validateCustomProviderForm(
+  form: CustomProviderFormState,
+  existingProviderIDs: ReadonlySet<string>,
+  editing: boolean,
+  t: CustomProviderTranslator,
+): CustomProviderValidation {
+  const fields: CustomProviderFieldErrors = {};
+  const providerId = form.providerId.trim();
+  const name = form.name.trim();
+  const endpoint = form.endpoint.trim();
 
-  const idError = !providerID
-    ? input.t('settings.providers.page.custom.error.providerID.required')
-    : !PROVIDER_ID_PATTERN.test(providerID)
-      ? input.t('settings.providers.page.custom.error.providerID.format')
-      : undefined;
+  if (!providerId) fields.providerId = t('settings.providers.page.custom.error.providerID.required');
+  else if (!/^[a-z0-9][a-z0-9_-]*$/.test(providerId)) fields.providerId = t('settings.providers.page.custom.error.providerID.format');
+  else if (!editing && existingProviderIDs.has(providerId)) fields.providerId = t('settings.providers.page.custom.error.providerID.exists');
 
-  const nameError = !name
-    ? input.t('settings.providers.page.custom.error.name.required')
-    : undefined;
+  if (!name) fields.name = t('settings.providers.page.custom.error.name.required');
 
-  const urlError = !baseURL
-    ? input.t('settings.providers.page.custom.error.baseURL.required')
-    : !BASE_URL_PATTERN.test(baseURL)
-      ? input.t('settings.providers.page.custom.error.baseURL.format')
-      : undefined;
+  if (!endpoint) fields.endpoint = t('settings.providers.page.custom.error.baseURL.required');
+  else if (!isHttpEndpoint(endpoint)) fields.endpoint = t('settings.providers.page.custom.error.baseURL.format');
 
-  const credentialsSatisfied = Boolean(env || key || (editingProviderID && input.allowExistingAuth && editingProviderID === providerID));
-  const apiKeyError = credentialsSatisfied
-    ? undefined
-    : input.t('settings.providers.page.custom.error.apiKey.required');
-
-  const disabled = disabledProviders.includes(providerID);
-  const isSelfEdit = Boolean(editingProviderID && editingProviderID === providerID);
-  const existsError = idError || isSelfEdit
-    ? undefined
-    : input.existingProviderIDs.has(providerID) && !disabled
-      ? input.t('settings.providers.page.custom.error.providerID.exists')
-      : undefined;
-
-  const seenModels = new Set<string>();
-  const modelErrors = input.form.models.map((model) => {
-    const id = model.id.trim();
-    const modelIdError = !id
-      ? input.t('settings.providers.page.custom.error.required')
-      : seenModels.has(id)
-        ? input.t('settings.providers.page.custom.error.duplicate')
-        : (() => {
-            seenModels.add(id);
-            return undefined;
-          })();
-    const modelNameError = !model.name.trim()
-      ? input.t('settings.providers.page.custom.error.required')
-      : undefined;
-    return { id: modelIdError, name: modelNameError };
-  });
-
-  const modelsValid = modelErrors.every((entry) => !entry.id && !entry.name);
-  const modelConfig = Object.fromEntries(
-    input.form.models.map((model) => [model.id.trim(), { name: model.name.trim() }]),
-  );
-
-  const seenHeaders = new Set<string>();
-  const headerErrors = input.form.headers.map((header) => {
-    const headerKey = header.key.trim();
-    const headerValue = header.value.trim();
-    if (!headerKey && !headerValue) {
-      return {};
+  const models = form.models.map((row): ModelFieldErrors => {
+    const errors: ModelFieldErrors = {};
+    if (!row.modelId.trim()) errors.modelId = t('settings.providers.page.custom.error.required');
+    if (!row.name.trim()) errors.name = t('settings.providers.page.custom.error.required');
+    if (!row.contextWindow.trim()) errors.contextWindow = t('settings.providers.page.custom.error.required');
+    else if (!positiveInteger(row.contextWindow)) errors.contextWindow = t('settings.providers.page.custom.error.positiveInteger');
+    if (!row.maxOutputTokens.trim()) errors.maxOutputTokens = t('settings.providers.page.custom.error.required');
+    else if (!positiveInteger(row.maxOutputTokens)) errors.maxOutputTokens = t('settings.providers.page.custom.error.positiveInteger');
+    else if (positiveInteger(row.contextWindow) && Number(row.maxOutputTokens) > Number(row.contextWindow)) {
+      errors.maxOutputTokens = t('settings.providers.native.invalidConfiguration');
     }
-    const keyError = !headerKey
-      ? input.t('settings.providers.page.custom.error.required')
-      : seenHeaders.has(headerKey.toLowerCase())
-        ? input.t('settings.providers.page.custom.error.duplicate')
-        : (() => {
-            seenHeaders.add(headerKey.toLowerCase());
-            return undefined;
-          })();
-    const valueError = !headerValue
-      ? input.t('settings.providers.page.custom.error.required')
-      : undefined;
-    return { key: keyError, value: valueError };
+    return errors;
   });
-
-  const headersValid = headerErrors.every((entry) => !entry.key && !entry.value);
-  const headerConfig = Object.fromEntries(
-    input.form.headers
-      .map((header) => ({ key: header.key.trim(), value: header.value.trim() }))
-      .filter((header) => header.key && header.value)
-      .map((header) => [header.key, header.value]),
-  );
-
-  const err: FieldErrors = {
-    providerID: idError ?? existsError,
-    name: nameError,
-    baseURL: urlError,
-    apiKey: apiKeyError,
-  };
-
-  const ok = !idError && !existsError && !nameError && !urlError && !apiKeyError && modelsValid && headersValid;
-  if (!ok) {
-    return { err, models: modelErrors, headers: headerErrors };
+  const seenModelIds = new Set<string>();
+  for (const [index, row] of form.models.entries()) {
+    const modelId = row.modelId.trim();
+    if (!modelId) continue;
+    if (seenModelIds.has(modelId)) models[index]!.modelId = t('settings.providers.page.custom.error.duplicate');
+    else seenModelIds.add(modelId);
   }
 
+  const headers = form.replaceHeaders
+    ? form.headers.map((row): HeaderFieldErrors => {
+      const errors: HeaderFieldErrors = {};
+      const headerName = row.name.trim();
+      if (!headerName && !row.value) return errors;
+      if (!headerName) errors.name = t('settings.providers.page.custom.error.required');
+      else if (!HEADER_NAME_PATTERN.test(headerName)) errors.name = t('settings.providers.native.invalidConfiguration');
+      if (!row.value) errors.value = t('settings.providers.page.custom.error.required');
+      return errors;
+    })
+    : [];
+  if (form.replaceHeaders) {
+    const seenHeaders = new Set<string>();
+    for (const [index, row] of form.headers.entries()) {
+      const headerName = row.name.trim().toLowerCase();
+      if (!headerName) continue;
+      if (seenHeaders.has(headerName)) headers[index]!.name = t('settings.providers.page.custom.error.duplicate');
+      else seenHeaders.add(headerName);
+    }
+  }
+
+  const valid = !fields.providerId && !fields.name && !fields.endpoint
+    && models.every((errors) => !errors.modelId && !errors.name && !errors.contextWindow && !errors.maxOutputTokens)
+    && headers.every((errors) => !errors.name && !errors.value);
+  return { fields, models, headers, valid };
+}
+
+export function buildCustomProviderRequest(form: CustomProviderFormState, expectedRevision: string): CustomProviderPersistPlan {
+  const providerId = form.providerId.trim();
+  if (!/^[a-z0-9][a-z0-9_-]*$/.test(providerId)) throw new Error('Invalid provider ID');
+  const models = form.models.map((row) => {
+    // All canonical metadata survives editing. Discovery supplies no fabricated limits.
+    const model = {
+      ...(row.base ?? { reasoningEffortSupported: false, reasoningOptions: [], variants: [], pricing: null }),
+      provider: providerId,
+      modelId: row.modelId.trim(),
+      name: row.name.trim(),
+      contextWindow: row.contextWindow.trim() ? Number(row.contextWindow) : 0,
+      maxOutputTokens: row.maxOutputTokens.trim() ? Number(row.maxOutputTokens) : 0,
+      modalities: row.modalities,
+    };
+    // Omission preserves the native runner's own tool-support default.
+    if (row.toolsSupported === undefined) return ModelSchema.parse(model);
+    return ModelSchema.parse({ ...model, toolsSupported: row.toolsSupported });
+  });
+  if (new Set(models.map((model) => model.modelId)).size !== models.length) throw new Error('Duplicate model ID');
   return {
-    err,
-    models: modelErrors,
-    headers: headerErrors,
-    result: {
-      providerID,
-      name,
-      apiKey: key,
-      config: {
-        npm: CUSTOM_PROVIDER_PROTOCOLS[input.form.protocol],
-        name,
-        ...(env ? { env: [env] } : {}),
-        options: {
-          baseURL,
-          ...(Object.keys(headerConfig).length > 0 ? { headers: headerConfig } : {}),
-        },
-        models: modelConfig,
+    apiKey: form.apiKey,
+    icon: form.icon,
+    request: ProviderConfigureRequestSchema.parse({
+      expectedRevision,
+      configuration: {
+        providerId,
+        name: form.name.trim(),
+        endpoint: form.endpoint.trim(),
+        protocol: form.protocol,
+        credentialRef: form.credentialRef,
       },
-    },
+      headers: providerHeaderWrite(form),
+      models,
+    }),
   };
 }
 
-/**
- * Builds the OpenCode auth.set request body when a literal API key is present.
- */
-export function buildAuthSetRequest(plan: CustomProviderPersistPlan): {
-  providerID: string;
-  auth: { type: 'api'; key: string };
-} | null {
-  if (!plan.apiKey) {
-    return null;
-  }
-  return {
-    providerID: plan.providerID,
-    auth: { type: 'api', key: plan.apiKey },
+export function buildProviderDiscoveryRequest(form: CustomProviderFormState, editing: boolean): ProviderModelDiscoveryRequest {
+  const request: ProviderModelDiscoveryRequest = {
+    endpoint: form.endpoint.trim(),
+    protocol: form.protocol,
+    headers: providerHeaderWrite(form),
   };
-}
-
-/**
- * Builds the OpenChamber provider upsert request body (config persistence).
- * `scope` selects the OpenCode config layer (user/project/custom). Create
- * defaults to user; edit must pass the provider's effective existing layer.
- */
-export function buildProviderUpsertRequest(
-  plan: CustomProviderPersistPlan,
-  options?: { scope?: ProviderConfigScope },
-): {
-  providerID: string;
-  config: CustomProviderConfig;
-  scope: ProviderConfigScope;
-} {
-  return {
-    providerID: plan.providerID,
-    config: plan.config,
-    scope: options?.scope ?? 'user',
-  };
+  if (editing) request.providerId = form.providerId;
+  if (form.apiKey) request.apiKey = form.apiKey;
+  if (form.credentialRef) request.credentialRef = form.credentialRef;
+  return ProviderModelDiscoveryRequestSchema.parse(request);
 }

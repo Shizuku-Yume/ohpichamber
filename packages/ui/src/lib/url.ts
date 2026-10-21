@@ -1,5 +1,3 @@
-import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
-
 type DesktopBridgeGlobal = {
   openExternal?: (url: string) => Promise<unknown>;
 };
@@ -99,7 +97,10 @@ export const isLoopbackHttpUrl = (url: string): boolean => {
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     return false;
   }
-  return LOOPBACK_HOSTNAMES.has(parsed.hostname.toLowerCase());
+  // WHATWG URL keeps brackets on IPv6 hostnames (`[::1]`), but LOOPBACK_HOSTNAMES
+  // stores the bare form (`::1`). Strip brackets before the membership check.
+  const hostname = parsed.hostname.toLowerCase().replace(/^\[(.*)\]$/, '$1');
+  return LOOPBACK_HOSTNAMES.has(hostname);
 };
 
 const LOOPBACK_URL_PATTERN
@@ -160,22 +161,13 @@ const openValidatedExternalUrl = async (url: string): Promise<boolean> => {
 
   const normalizedTarget = parsed.toString();
 
-  const runtimeApis = getRegisteredRuntimeAPIs();
-  if (runtimeApis?.runtime?.isVSCode && runtimeApis.vscode?.openExternalUrl) {
-    try {
-      await runtimeApis.vscode.openExternalUrl(normalizedTarget);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
   const desktop = (window as unknown as { __OPENCHAMBER_DESKTOP__?: DesktopBridgeGlobal }).__OPENCHAMBER_DESKTOP__;
   if (desktop?.openExternal) {
     try {
       await desktop.openExternal(normalizedTarget);
       return true;
     } catch {
+      if (isAppLinkUrl(normalizedTarget)) return false;
       // Fall through to window.open
     }
   }

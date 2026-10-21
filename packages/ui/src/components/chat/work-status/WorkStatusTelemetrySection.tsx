@@ -47,9 +47,9 @@ export const WorkStatusTelemetrySection: React.FC<Props> = ({ sessionId, directo
   const syncDirectory = useSyncDirectory();
   const scope = JSON.stringify([runtimeKey, normalizePath(directory ?? syncDirectory), sessionId]);
   const status = useDirectorySync(
-    React.useCallback((state) => sessionId
-      ? state.session_status[sessionId]?.type ?? (state.sessionStatusReady ? 'idle' : 'unknown')
-      : 'unknown', [sessionId]),
+    React.useCallback((state) => sessionId && !state.sessionStatusInvalidated?.[sessionId]
+      ? state.session_status[sessionId] ?? 'unavailable'
+      : 'unavailable', [sessionId]),
     directory ?? undefined,
   );
   const eligibleForStats = Boolean(sessionId && expanded && status === 'idle');
@@ -71,10 +71,10 @@ export const WorkStatusTelemetrySection: React.FC<Props> = ({ sessionId, directo
     if (eligibleForStats) {
       setRetained({ scope, stats: computed });
     } else {
-      setRetained((previous) => previous?.scope === scope && status !== 'unknown' ? previous : null);
+      setRetained((previous) => previous?.scope === scope && status !== 'unavailable' ? previous : null);
     }
   }, [scope, status, eligibleForStats, computed]);
-  const stats = eligibleForStats ? computed : status !== 'unknown' && retained?.scope === scope ? retained.stats : null;
+  const stats = eligibleForStats ? computed : status !== 'unavailable' && retained?.scope === scope ? retained.stats : null;
   const summary = stats && stats.responseTokensPerSecond !== null
     ? formatThroughputRate(stats.responseTokensPerSecond)
     : undefined;
@@ -105,6 +105,13 @@ export const WorkStatusTelemetrySection: React.FC<Props> = ({ sessionId, directo
               label={t('chat.workStatus.telemetry.speed')}
               description={t('chat.workStatus.telemetry.speedDescription')}
               value={<WorkStatusValue>{formatThroughputRate(stats.tokensPerSecond)}</WorkStatusValue>}
+            />
+          ) : null}
+          {stats.elapsedDurationMs !== null ? (
+            <TelemetryRow
+              label={t('chat.workStatus.telemetry.elapsed')}
+              description={t('chat.workStatus.telemetry.elapsedDescription')}
+              value={<WorkStatusValue>{formatTelemetryDuration(stats.elapsedDurationMs)}</WorkStatusValue>}
             />
           ) : null}
 
@@ -140,13 +147,12 @@ export const WorkStatusTelemetrySection: React.FC<Props> = ({ sessionId, directo
             />
           ) : null}
 
-          {stats.inputTokens !== null && stats.outputTokens !== null && stats.reasoningTokens !== null && stats.totalGeneratedTokens !== null ? (
+          {stats.inputTokens !== null && stats.outputTokens !== null && stats.totalGeneratedTokens !== null ? (
             <TelemetryRow
               label={t('chat.workStatus.telemetry.tokens')}
               description={t('chat.workStatus.telemetry.tokensDescription', {
                 input: stats.inputTokens.toLocaleString(getCurrentIntlLocale()),
                 output: stats.outputTokens.toLocaleString(getCurrentIntlLocale()),
-                reasoning: stats.reasoningTokens.toLocaleString(getCurrentIntlLocale()),
               })}
               value={(
                 <WorkStatusValue>

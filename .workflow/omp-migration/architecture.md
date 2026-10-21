@@ -1,6 +1,6 @@
 # Target architecture and system design
 
-This document specifies the proposed target architecture, process topology, state ownership boundaries, and architectural decision records for OhPiChamber. The [refreshed-source traceability](scope.md#refreshed-source-traceability) records current inherited capabilities and the boundaries to migrate. The final target adopts Oh My Pi as the sole agent execution engine, replaces OpenCode runtime dependencies, and retires the VS Code extension form while retaining Web, Electron Desktop, Mobile and Guest SDK surfaces. Proposed process and package locations below are not implemented source paths.
+This document specifies the target architecture, process topology, state ownership boundaries, and architectural decision records for OhPiChamber. The [refreshed-source traceability](scope.md#refreshed-source-traceability) records current inherited capabilities and the boundaries to migrate. The final target adopts Oh My Pi as the sole agent execution engine, replaces OpenCode runtime dependencies, and retires the VS Code extension form while retaining Web, Electron Desktop, Mobile and Guest SDK surfaces. The canonical process and package boundaries are implemented in the assembled source; later-milestone target locations remain design, not claims that every planned path exists.
 
 ## Document authority and precedence
 
@@ -52,8 +52,8 @@ Codebase references point to paths relative to the repository root, such as `../
 - **Context:** Systems that wrap an external AI engine often attempt to duplicate session history in their own application database, creating desynchronization bugs during context compaction, branching, or rollbacks.
 - **Decision:** OMP alone owns the transcript, execution results and compaction history. Host operational metadata and Agent Service projections follow [contracts.md](contracts.md#metadata-sidecar-and-transcript-ownership). The Host also owns durable delivery and scheduled tasks. OpenChamber never maintains a second transcript.
 - **Rationale:** OMP's `SessionManager` manages append-only transcript persistence on disk. Writing a second transcript in SQLite introduces synchronization latency, double writes, and ordering conflicts during compaction or aborts. The Agent Service projects OMP's transcript on demand into Canonical API Data Transfer Objects (DTOs).
-- **Consequences:** Deleting an OMP session removes its underlying transcript file. Moving or renaming sessions in the UI updates metadata records in the Host database without mutating the internal OMP transcript file.
-- **Current source versus target:** The inherited prompt queue uses atomic `message-queue.json` writes with a revision counter. The target SQLite queue is a later Host Gateway persistence cutover, not an existing implementation. Preserve ordered delivery, captured attachments, leases and explicit corrupt-file/failure handling while migrating it.
+- **Consequences:** Deleting an OMP session removes its underlying transcript file. Renaming sessions or organizing them into UI folders updates operational metadata in the Host database without mutating the internal OMP transcript file. Execution workspace relocation (SCOPE-8.3) updates execution working directory scope through authorized Host destination resolution, service-owned SDK storage and working-directory persistence, and orderly destination-cwd worker replacement. Canonical root and descendant identities persist across relocation, old worker epoch and approval handles expire, and the client recovers state via authoritative snapshot catch-up. OpenChamber never maintains a second transcript, and workspace relocation performs no filesystem or Git rollback.
+- **Current source versus target:** The Host prompt queue is implemented in SQLite (`host-metadata.sqlite`) with ordered leases, decimal revisions, captured attachments, idempotent delivery and explicit failure states; Task11 converted the inherited atomic `message-queue.json` store and Task22 composed its authenticated dispatch. That queue is current Host ownership, not a later persistence cutover. Preserve these invariants; later M4 queue orchestration remains feature work, not a second persistence owner.
 
 ### ADR-05: Host Gatekeeper as the authoritative security boundary
 
@@ -676,7 +676,8 @@ These pure OpenCode owners are deleted at coordinated M3 task 17, only after M1 
 - `proxy.js`, `proxy.test.js`: Reverse proxy routing requests to OpenCode HTTP ports.
 - `opencode-resolution-runtime.js`: Resolves system OpenCode binary paths.
 - `routes-directory.test.js`: Tests for OpenCode directory-scoped proxies.
-- `config-entity-routes.js`, `config-mutation-response.js`: OpenCode JSON configuration routes.
+- `config-mutation-response.js`: legacy OpenCode JSON configuration response helpers.
+`config-entity-routes.js` was removed in M3 task 17 after a repository-wide search found no production registration or caller.
 
 ---
 

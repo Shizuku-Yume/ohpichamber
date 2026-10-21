@@ -1,222 +1,84 @@
 import { describe, expect, test } from 'bun:test';
-import { requiresProviderAuth, shouldLoadAvailableProviders } from './providerAvailability';
-import {
-  getOAuthAuthMethods,
-  normalizeAuthType,
-  parseAuthPayload,
-requiresOpenCodeRestartAfterOAuth,
-  providerHasCredentials,
-  shouldAutoOpenAuthPanel,
-  shouldShowApiKeyAuth,
-  shouldShowModelsSection,
-} from './providerAuth';
+import type { Provider, ProviderOAuthMethods } from '@openchamber/agent-contract';
+import { getProviderCardStatus, oauthMethodsForProvider, requiresProviderAuth, shouldAutoOpenAuthPanel } from './providerAuth';
+import { listConnectableProviders, splitConnectableProviders } from './connectableProviders';
+import { providerHeaderWrite, createEmptyCustomProviderForm } from './custom-provider-form';
 
-describe('ProvidersPage available provider loading', () => {
-  test('loads available providers only in add-provider mode', () => {
-    expect(shouldLoadAvailableProviders(false)).toBe(false);
-    expect(shouldLoadAvailableProviders(true)).toBe(true);
-  });
+const methods: ProviderOAuthMethods['methods'] = [
+  { methodId: 'console-login', providerId: 'native-console', name: 'Console', storeCredentialsAs: 'openai' },
+  { methodId: 'other-login', providerId: 'other', name: 'Other', storeCredentialsAs: 'anthropic' },
+];
+
+const provider = (overrides: Partial<Provider> = {}): Provider => ({
+  providerId: 'openai',
+  name: 'OpenAI',
+  endpoint: null,
+  protocol: null,
+  authMethods: ['api-key'],
+  auth: { status: 'missing' },
+  ...overrides,
 });
 
-describe('ProvidersPage provider authentication', () => {
-  test('does not require credentials for a custom provider defined in config', () => {
-    expect(requiresProviderAuth(true, false, true)).toBe(false);
-    expect(requiresProviderAuth(true, false, false)).toBe(true);
-    expect(requiresProviderAuth(true, true, false)).toBe(false);
-  });
-});
-
-describe('provider auth method helpers', () => {
-  test('normalizeAuthType recognizes oauth and api labels', () => {
-    expect(normalizeAuthType({ type: 'oauth', label: 'Login with Cursor' })).toBe('oauth');
-    expect(normalizeAuthType({ type: 'api', label: 'API Key' })).toBe('api');
-    expect(normalizeAuthType({ label: 'OAuth browser login' })).toBe('oauth');
-    expect(normalizeAuthType({ name: 'API key' })).toBe('api');
+describe('native provider management UI contracts', () => {
+  test('keeps OAuth method identity separate from stored provider identity', () => {
+    expect(oauthMethodsForProvider(methods, 'openai')).toEqual([methods[0]]);
+    expect(oauthMethodsForProvider(methods, 'console-login')).toEqual([]);
   });
 
-  test('parseAuthPayload keeps only object auth method entries', () => {
-    expect(parseAuthPayload({
-      cursor: [{ type: 'oauth', label: 'Cursor' }, 'skip'],
-      openai: null,
-    })).toEqual({
-      cursor: [{ type: 'oauth', label: 'Cursor' }],
-    });
-    expect(parseAuthPayload(null)).toEqual({});
+  test('a stored credential reads as connected while environment credentials are labelled separately', () => {
+    expect(getProviderCardStatus(provider({
+      auth: { status: 'configured', credentialRef: 'credential_1', method: 'api-key', source: 'stored-credential' },
+    }))).toEqual({ kind: 'connected' });
+    expect(getProviderCardStatus(provider({
+      auth: { status: 'configured', credentialRef: 'credential_1', method: 'api-key', source: 'external-environment' },
+    }))).toEqual({ kind: 'environment' });
+    expect(getProviderCardStatus(provider())).toEqual({ kind: 'signInNeeded' });
+    expect(getProviderCardStatus(provider({ authMethods: [] }))).toBe(null);
   });
 
-  test('shouldShowApiKeyAuth hides API key for oauth-only providers', () => {
-    expect(shouldShowApiKeyAuth([{ type: 'oauth', label: 'Cursor OAuth' }])).toBe(false);
-    expect(shouldShowApiKeyAuth([
-      { type: 'api', label: 'API Key' },
-      { type: 'oauth', label: 'ChatGPT' },
-    ])).toBe(true);
-    expect(shouldShowApiKeyAuth([{ type: 'api', label: 'API Key' }])).toBe(true);
-    // Unknown / unloaded methods keep the legacy API key fallback.
-    expect(shouldShowApiKeyAuth([])).toBe(true);
+  test('credential forms auto-open only for a missing credential the user has not dismissed', () => {
+    expect(requiresProviderAuth(provider())).toBe(true);
+    expect(requiresProviderAuth(provider({
+      auth: { status: 'configured', credentialRef: 'credential_1', method: 'oauth', source: 'stored-credential' },
+    }))).toBe(false);
+    expect(shouldAutoOpenAuthPanel({ provider: provider(), userDismissed: false, editingConfiguration: false })).toBe(true);
+    expect(shouldAutoOpenAuthPanel({ provider: provider(), userDismissed: true, editingConfiguration: false })).toBe(false);
+    expect(shouldAutoOpenAuthPanel({ provider: provider(), userDismissed: false, editingConfiguration: true })).toBe(false);
   });
 
-  test('getOAuthAuthMethods preserves original method indexes', () => {
-    const methods = [
-      { type: 'api', label: 'API Key' },
-      { type: 'oauth', label: 'OAuth' },
-      { type: 'oauth', label: 'Device' },
+  test('connectable providers exclude anything with credentials and keep popular entries first', () => {
+    const providers = [
+      provider({ providerId: 'zeta', name: 'Zeta' }),
+      provider({ providerId: 'openai', name: 'OpenAI' }),
+      provider({
+        providerId: 'anthropic',
+        name: 'Anthropic',
+        auth: { status: 'configured', credentialRef: 'credential_1', method: 'oauth', source: 'stored-credential' },
+      }),
+      provider({ providerId: 'alpha', name: 'Alpha' }),
     ];
-    expect(getOAuthAuthMethods(methods)).toEqual([
-      { method: methods[1], methodIndex: 1 },
-      { method: methods[2], methodIndex: 2 },
-    ]);
-    expect(getOAuthAuthMethods([{ type: 'oauth', label: 'Cursor' }])).toEqual([
-      { method: { type: 'oauth', label: 'Cursor' }, methodIndex: 0 },
-    ]);
+    const connectable = listConnectableProviders(providers);
+    expect(connectable.map((entry) => entry.id)).toEqual(['alpha', 'openai', 'zeta']);
+    const groups = splitConnectableProviders(connectable);
+    expect(groups.popular.map((entry) => entry.id)).toEqual(['openai']);
+    expect(groups.popular[0]?.recommended).toBe(true);
+    expect(groups.others.map((entry) => entry.id)).toEqual(['alpha', 'zeta']);
   });
 
-  test('Claude CLI OAuth does not require an OpenCode restart', () => {
-    expect(requiresOpenCodeRestartAfterOAuth('claude-code')).toBe(false);
-    expect(requiresOpenCodeRestartAfterOAuth('github-copilot')).toBe(true);
-  });
-});
-
-describe('provider credential state helpers', () => {
-  test('providerHasCredentials requires key, options.apiKey, declared env, or auth source', () => {
-    // Built-in catalog entry with no credential signal at all.
-    expect(providerHasCredentials({ key: undefined, authSourceExists: false })).toBe(false);
-    expect(providerHasCredentials({ key: '', authSourceExists: false })).toBe(false);
-    expect(providerHasCredentials({ key: '   ', authSourceExists: false })).toBe(false);
-
-    // OpenCode reports an active credential via provider.key.
-    expect(providerHasCredentials({ key: 'sk-...', authSourceExists: false })).toBe(true);
-    // Auth.json provenance alone is enough while sources are authoritative.
-    expect(providerHasCredentials({ key: undefined, authSourceExists: true })).toBe(true);
-  });
-
-  test('providerHasCredentials counts declared env vars for multi-variable providers', () => {
-    // Bedrock/Azure/Vertex resolve credentials from several env vars, so
-    // OpenCode never sets Provider.key for them; the declared env list is the
-    // only signal that the provider is configured.
-    expect(providerHasCredentials({ key: undefined, authSourceExists: false, envDeclared: true })).toBe(true);
-    expect(providerHasCredentials({ key: undefined, authSourceExists: false, envDeclared: false })).toBe(false);
-  });
-
-  test('providerHasCredentials treats options.apiKey as a usable credential', () => {
-    // Config-defined providers ship provider.options to the client but never
-    // reach Provider.key, so the only authoritative signal is options.apiKey.
-    expect(providerHasCredentials({ key: undefined, authSourceExists: false, optionsApiKey: 'sk-config' })).toBe(true);
-    expect(providerHasCredentials({ key: undefined, authSourceExists: false, optionsApiKey: '' })).toBe(false);
-    expect(providerHasCredentials({ key: undefined, authSourceExists: false, optionsApiKey: '   ' })).toBe(false);
-    expect(providerHasCredentials({ key: undefined, authSourceExists: false, optionsApiKey: null })).toBe(false);
-  });
-
-  test('env-less OAuth-only provider without credentials opens panel and hides models', () => {
-    const hasCredentials = providerHasCredentials({
-      key: undefined,
-      authSourceExists: false,
+  test('does not expose header values while editing configured header names', () => {
+    const form = createEmptyCustomProviderForm({
+      revision: '1',
+      configuration: { providerId: 'custom', name: 'Custom', endpoint: 'https://example.com', protocol: 'responses', credentialRef: null },
+      headerNames: ['Authorization', 'X-Tenant'],
+      models: [],
     });
-    expect(hasCredentials).toBe(false);
-    expect(shouldAutoOpenAuthPanel({
-      sourcesLoaded: true,
-      hasCredentials,
-      userDismissed: false,
-    })).toBe(true);
-    expect(shouldShowModelsSection({
-      modelCount: 1,
-      sourcesLoaded: true,
-      hasCredentials,
-    })).toBe(false);
+    expect(form.headerNames).toEqual(['Authorization', 'X-Tenant']);
+    expect(form.headers).toEqual([]);
+    expect(providerHeaderWrite(form)).toBeUndefined();
   });
 
-  test('provider with stored auth or key shows Connected and models', () => {
-    const fromKey = providerHasCredentials({ key: 'sk-live', authSourceExists: false });
-    const fromAuth = providerHasCredentials({ key: undefined, authSourceExists: true });
-    expect(fromKey).toBe(true);
-    expect(fromAuth).toBe(true);
-    expect(shouldAutoOpenAuthPanel({
-      sourcesLoaded: true,
-      hasCredentials: fromKey,
-      userDismissed: false,
-    })).toBe(false);
-    expect(shouldShowModelsSection({
-      modelCount: 3,
-      sourcesLoaded: true,
-      hasCredentials: fromAuth,
-    })).toBe(true);
-  });
-
-  test('editable custom provider keeps models visible even with no credentials signal', () => {
-    // Config-defined custom providers (e.g. local LM Studio/Ollama style)
-    // are user-editable in place; a stale 'Credentials missing' must not
-    // hide their models section. Without the exemption, a keyless local
-    // custom provider regresses to 'Credentials missing' with models hidden.
-    const hasCredentials = providerHasCredentials({
-      key: undefined,
-      authSourceExists: false,
-      optionsApiKey: null,
-    });
-    expect(hasCredentials).toBe(false);
-    expect(shouldShowModelsSection({
-      modelCount: 1,
-      sourcesLoaded: true,
-      hasCredentials: false,
-      isEditableCustomProvider: true,
-    })).toBe(true);
-    expect(shouldShowModelsSection({
-      modelCount: 1,
-      sourcesLoaded: true,
-      hasCredentials: false,
-      isEditableCustomProvider: false,
-    })).toBe(false);
-  });
-
-  test('auth save followed by providers refresh recognizes credentials without stale missing state', () => {
-    // Pre-save: sources say no auth, provider has no key yet.
-    const before = providerHasCredentials({
-      key: undefined,
-      authSourceExists: false,
-    });
-    expect(before).toBe(false);
-    expect(shouldShowModelsSection({
-      modelCount: 2,
-      sourcesLoaded: true,
-      hasCredentials: before,
-    })).toBe(false);
-
-    // After reloadOpenCodeConfiguration, providers array gets a key even if the
-    // sources snapshot has not been refetched yet.
-    const afterProvidersRefresh = providerHasCredentials({
-      key: 'oauth-token-present',
-      authSourceExists: false,
-    });
-    expect(afterProvidersRefresh).toBe(true);
-    expect(shouldAutoOpenAuthPanel({
-      sourcesLoaded: true,
-      hasCredentials: afterProvidersRefresh,
-      userDismissed: false,
-    })).toBe(false);
-    expect(shouldShowModelsSection({
-      modelCount: 2,
-      sourcesLoaded: true,
-      hasCredentials: afterProvidersRefresh,
-    })).toBe(true);
-
-    // After sources refetch completes, auth.exists also becomes true.
-    expect(providerHasCredentials({
-      key: 'oauth-token-present',
-      authSourceExists: true,
-    })).toBe(true);
-  });
-
-  test('explicit hide keeps the auth panel closed while credentials are still missing', () => {
-    expect(shouldAutoOpenAuthPanel({
-      sourcesLoaded: true,
-      hasCredentials: false,
-      userDismissed: true,
-    })).toBe(false);
-  });
-
-  test('models stay visible while sources are still loading', () => {
-    expect(shouldShowModelsSection({
-      modelCount: 4,
-      sourcesLoaded: false,
-      hasCredentials: false,
-    })).toBe(true);
+  test('explicit header replacement can clear all write-only values', () => {
+    const form = { ...createEmptyCustomProviderForm(), replaceHeaders: true, headers: [] };
+    expect(providerHeaderWrite(form)).toEqual({});
   });
 });

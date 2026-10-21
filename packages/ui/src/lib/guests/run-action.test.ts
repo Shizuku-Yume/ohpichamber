@@ -12,7 +12,7 @@ import { parseGuestCatalogJson } from './parse';
 import { runGuestAction, useGuestActionHostStore } from './run-action';
 import { useGuestsStore } from './store';
 import { runGuestSessionAction } from './session-action';
-import type { SessionMessageRecord } from '@/lib/exportSession';
+import type { Message } from '@openchamber/agent-contract';
 
 const item: GuestMessageItem = { kind: 'message', action: 'count', sessionId: 's1', sessionTitle: 'Session', directory: '/repo', messageId: 'm1', role: 'assistant', text: 'Hello' };
 const entry: GuestActionEntry = {
@@ -44,8 +44,8 @@ describe('guest action execution', () => {
   });
 
   test('catalog round-trip retains the execution mode', () => {
-    expect(parseGuestCatalogJson(JSON.stringify({ guests: [entry.guest] }))?.[0]?.actions).toEqual([entry.action]);
-    expect(parseGuestCatalogJson(JSON.stringify({ guests: [{ ...entry.guest, actions: [{ ...entry.action, mode: 'invalid' }] }] }))).toBeNull();
+    expect(parseGuestCatalogJson(JSON.stringify({ guests: [entry.guest] }))?.guests[0]?.actions).toEqual([entry.action]);
+    expect(parseGuestCatalogJson(JSON.stringify({ guests: [{ ...entry.guest, actions: [{ ...entry.action, mode: 'invalid' }] }] }))?.unreadable).toHaveLength(1);
   });
 
   test('background actions deliver the captured item once and preserve visible surfaces', async () => {
@@ -110,8 +110,8 @@ describe('guest action execution', () => {
       { ...entry.guest, actions: [{ ...entry.action, roles: ['user'] as const }] },
     ]) {
       const parsed = parseGuestCatalogJson(JSON.stringify({ guests: [guest] }));
-      if (!parsed) throw new Error('Invalid fixture');
-      useGuestsStore.getState().replaceCatalog(parsed, getRuntimeKey());
+      if (!parsed || parsed.unreadable.length > 0) throw new Error('Invalid fixture');
+      useGuestsStore.getState().replaceCatalog(parsed.guests, getRuntimeKey());
       await runGuestAction(entry, item, t);
       expect(useGuestActionHostStore.getState().requests).toEqual([]);
     }
@@ -164,8 +164,8 @@ describe('guest action execution', () => {
       currentRequest().complete({ ok: true });
       await empty;
 
-      let finish: (records: SessionMessageRecord[]) => void = () => {};
-      const history = new Promise<SessionMessageRecord[]>((resolve) => { finish = resolve; });
+      let finish: (records: Message[]) => void = () => {};
+      const history = new Promise<Message[]>((resolve) => { finish = resolve; });
       const stale = runGuestSessionAction({ ...input, loadRecords: () => history });
       dom.dispatchEvent(new dom.CustomEvent('openchamber:runtime-endpoint-changed'));
       finish([]);

@@ -15,20 +15,6 @@ import {
 const GOOGLE_FIVE_HOUR_WINDOW_SECONDS = 5 * 60 * 60;
 const GOOGLE_DAILY_WINDOW_SECONDS = 24 * 60 * 60;
 
-export const parseGoogleRefreshToken = (rawRefreshToken) => {
-  const refreshToken = asNonEmptyString(rawRefreshToken);
-  if (!refreshToken) {
-    return { refreshToken: null, projectId: null, managedProjectId: null };
-  }
-
-  const [rawToken = '', rawProject = '', rawManagedProject = ''] = refreshToken.split('|');
-  return {
-    refreshToken: asNonEmptyString(rawToken),
-    projectId: asNonEmptyString(rawProject),
-    managedProjectId: asNonEmptyString(rawManagedProject)
-  };
-};
-
 const resolveGoogleWindow = (sourceId, resetAt) => {
   if (sourceId === 'gemini') {
     return { label: 'daily', seconds: GOOGLE_DAILY_WINDOW_SECONDS };

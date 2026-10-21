@@ -13,18 +13,23 @@ import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { toast } from '@/components/ui';
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
 import { AgentSelector } from '@/components/sections/commands/AgentSelector';
-import { isPrimaryMode } from '@/components/chat/mobileControlsUtils';
 import { CommandAutocomplete, type CommandAutocompleteHandle, type CommandInfo } from '@/components/chat/CommandAutocomplete';
 import { FileMentionAutocomplete, type FileMentionHandle } from '@/components/chat/FileMentionAutocomplete';
-import { SnippetAutocomplete, type SnippetAutocompleteHandle } from '@/components/chat/SnippetAutocomplete';
 import { Icon } from "@/components/icon/Icon";
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { useAgentsStore } from '@/stores/useAgentsStore';
+import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import type { ScheduledTask } from '@/lib/scheduledTasksApi';
 import { useI18n } from '@/lib/i18n';
 import { isValidCronExpression, getNextRuns, CRON_EXAMPLES } from '@/lib/cron';
 import { canonicalizeTimezone } from '@/lib/timezones';
+import { resolveGlobalSessionDirectory, useGlobalSessionsStore, refreshGlobalSessions } from '@/stores/useGlobalSessionsStore';
+import { useAllLiveSessions } from '@/sync/sync-context';
+import { useSessionUIStore } from '@/sync/session-ui-store';
+import { CHAT_DRAFT_PROJECT_ID, isChatDirectoryPath } from '@/lib/chatDirectories';
+import { SettingsStackedField } from '@/components/sections/shared/SettingsSection';
 
 const WEEKDAY_INDEXES = [0, 1, 2, 3, 4, 5, 6] as const;
 
@@ -457,6 +462,8 @@ const isSameCalendarDay = (a: Date, b: Date) => (
 
 type ScheduledTaskDraft = {
   id?: string;
+  sessionMode: 'new' | 'existing';
+  targetSessionId: string;
   name: string;
   enabled: boolean;
   schedule: {
@@ -474,6 +481,8 @@ type ScheduledTaskDraft = {
     modelID: string;
     variant: string;
     agent: string;
+    /** Model, thinking level and agent follow the session defaults at run time. */
+    useDefaults: boolean;
     goalEnabled: boolean;
     goalTokenBudget: number | null;
     permissionAutoAccept: boolean;
@@ -510,6 +519,8 @@ const toDraft = (
   if (!task) {
     return {
       name: '',
+      sessionMode: 'new',
+      targetSessionId: '',
       enabled: true,
       schedule: {
         kind: 'daily',
@@ -526,6 +537,7 @@ const toDraft = (
         modelID: defaults.modelID,
         variant: defaults.variant,
         agent: defaults.agent,
+        useDefaults: false,
         goalEnabled: false,
         goalTokenBudget: null,
         permissionAutoAccept: false,
@@ -535,6 +547,8 @@ const toDraft = (
 
   return {
     id: task.id,
+    sessionMode: task.targetSessionId ? 'existing' : 'new',
+    targetSessionId: task.targetSessionId || '',
     name: task.name,
     enabled: task.enabled,
     schedule: {
@@ -558,10 +572,13 @@ const toDraft = (
     },
     execution: {
       prompt: task.execution.prompt,
-      providerID: task.execution.providerID,
-      modelID: task.execution.modelID,
+      // A task that followed the defaults may store no model; the picker then
+      // starts from the current defaults if it is pinned again.
+      providerID: task.execution.providerID || defaults.providerID,
+      modelID: task.execution.modelID || defaults.modelID,
       variant: task.execution.variant || '',
       agent: task.execution.agent || '',
+      useDefaults: task.execution.useDefaults === true,
       goalEnabled: task.execution.goalEnabled === true,
       goalTokenBudget: typeof task.execution.goalTokenBudget === 'number' && task.execution.goalTokenBudget > 0
         ? task.execution.goalTokenBudget
@@ -573,13 +590,14 @@ const toDraft = (
 };
 
 const validateDraft = (draft: ScheduledTaskDraft, t: ReturnType<typeof useI18n>['t']): string | null => {
+  if (draft.sessionMode === 'existing' && !draft.targetSessionId) return t('sessions.scheduledTasks.editor.targetRequired');
   if (!draft.name.trim()) {
     return t('sessions.scheduledTasks.editor.validation.taskNameRequired');
   }
   if (!draft.execution.prompt.trim()) {
     return t('sessions.scheduledTasks.editor.validation.promptRequired');
   }
-  if (!draft.execution.providerID.trim() || !draft.execution.modelID.trim()) {
+  if (!draft.execution.useDefaults && (!draft.execution.providerID.trim() || !draft.execution.modelID.trim())) {
     return t('sessions.scheduledTasks.editor.validation.modelRequired');
   }
 
@@ -726,13 +744,33 @@ const CronScheduleSection: React.FC<{
 export function ScheduledTaskEditorDialog(props: {
   open: boolean;
   task: ScheduledTask | null;
+  projectId: string;
   onOpenChange: (open: boolean) => void;
   onSave: (draft: Partial<ScheduledTask>) => Promise<void>;
 }) {
   const { open, task, onOpenChange, onSave } = props;
   const { t, locale } = useI18n();
+  const globalSessions = useGlobalSessionsStore((state) => state.activeSessions);
+  const liveSessions = useAllLiveSessions();
+  const projects = useProjectsStore((state) => state.projects);
+  const worktrees = useSessionUIStore((state) => state.availableWorktreesByProject);
+  const sessions = React.useMemo(() => {
+    const merged = new Map(globalSessions.map((session) => [session.sessionId, session]));
+    for (const session of liveSessions) merged.set(session.sessionId, session);
+    const project = projects.find((entry) => entry.id === props.projectId);
+    const roots = [project?.path, ...(worktrees.get(props.projectId) ?? []).map((tree) => tree.path)]
+      .filter((root): root is string => root !== undefined);
+    return [...merged.values()].filter((session) => session.archivedAt === undefined && (
+      props.projectId === CHAT_DRAFT_PROJECT_ID ? isChatDirectoryPath(resolveGlobalSessionDirectory(session) ?? '')
+        : roots.some((root) => resolveGlobalSessionDirectory(session) === root || resolveGlobalSessionDirectory(session)?.startsWith(`${root}/`))
+    ));
+  }, [globalSessions, liveSessions, projects, worktrees, props.projectId]);
+  React.useEffect(() => {
+    if (open) void refreshGlobalSessions().catch(() => undefined);
+  }, [open]);
   const loadProviders = useConfigStore((state) => state.loadProviders);
-  const loadAgents = useConfigStore((state) => state.loadAgents);
+  const loadAgents = useAgentsStore((state) => state.loadAgents);
+  const projectDirectory = projects.find((project) => project.id === props.projectId)?.path ?? null;
   const providers = useConfigStore((state) => state.providers);
   const currentProviderID = useConfigStore((state) => state.currentProviderId);
   const currentModelID = useConfigStore((state) => state.currentModelId);
@@ -756,8 +794,6 @@ export function ScheduledTaskEditorDialog(props: {
   const [mentionQuery, setMentionQuery] = React.useState('');
   const [showCommandAutocomplete, setShowCommandAutocomplete] = React.useState(false);
   const [commandQuery, setCommandQuery] = React.useState('');
-  const [showSnippetAutocomplete, setShowSnippetAutocomplete] = React.useState(false);
-  const [snippetQuery, setSnippetQuery] = React.useState('');
   const [calendarMonth, setCalendarMonth] = React.useState<Date>(() => {
     const initialDate = parseISODateToLocal(task?.schedule?.date || '') || new Date();
     return new Date(initialDate.getFullYear(), initialDate.getMonth(), 1);
@@ -766,7 +802,6 @@ export function ScheduledTaskEditorDialog(props: {
   const promptTextareaRef = React.useRef<HTMLTextAreaElement>(null);
   const mentionRef = React.useRef<FileMentionHandle>(null);
   const commandRef = React.useRef<CommandAutocompleteHandle>(null);
-  const snippetRef = React.useRef<SnippetAutocompleteHandle>(null);
   const localeUse24Hour = React.useMemo(() => getUses24Hour(locale), [locale]);
   const localeWeekStartsOn = React.useMemo(() => getWeekStartsOn(locale), [locale]);
   const use24Hour = React.useMemo(() => {
@@ -800,8 +835,8 @@ export function ScheduledTaskEditorDialog(props: {
       return;
     }
     void loadProviders({ source: 'scheduledTaskEditor' });
-    void loadAgents({ source: 'scheduledTaskEditor' });
-  }, [open, loadProviders, loadAgents]);
+    void loadAgents(projectDirectory);
+  }, [open, loadProviders, loadAgents, projectDirectory]);
 
   React.useEffect(() => {
     if (!open) {
@@ -842,9 +877,9 @@ export function ScheduledTaskEditorDialog(props: {
   }, [isDatePickerOpen]);
 
   const variantOptions = React.useMemo(() => {
-    const provider = providers.find((item) => item.id === draft.execution.providerID);
-    const model = provider?.models?.find((item) => item.id === draft.execution.modelID) as { variants?: Record<string, unknown> } | undefined;
-    return model?.variants ? Object.keys(model.variants) : [];
+    const provider = providers.find((item) => item.providerId === draft.execution.providerID);
+    const model = provider?.models?.find((item) => item.modelId === draft.execution.modelID);
+    return model?.variants.map((entry) => entry.variant) ?? [];
   }, [providers, draft.execution.providerID, draft.execution.modelID]);
   const hasVariantOptions = variantOptions.length > 0;
   const selectedVariantValue = React.useMemo(() => {
@@ -969,7 +1004,6 @@ export function ScheduledTaskEditorDialog(props: {
         setCommandQuery(value.substring(1, commandEnd));
         setShowCommandAutocomplete(true);
         setShowFileMention(false);
-        setShowSnippetAutocomplete(false);
         return;
       }
     }
@@ -977,20 +1011,6 @@ export function ScheduledTaskEditorDialog(props: {
     setShowCommandAutocomplete(false);
 
     const textBeforeCursor = value.substring(0, cursorPosition);
-    const lastHashSymbol = textBeforeCursor.lastIndexOf('#');
-    if (lastHashSymbol !== -1) {
-      const charBefore = lastHashSymbol > 0 ? textBeforeCursor[lastHashSymbol - 1] : null;
-      const textAfterHash = textBeforeCursor.substring(lastHashSymbol + 1);
-      const isWordBoundary = !charBefore || /\s/.test(charBefore);
-      if (isWordBoundary && !textAfterHash.includes(' ') && !textAfterHash.includes('\n')) {
-        setSnippetQuery(textAfterHash);
-        setShowSnippetAutocomplete(true);
-        setShowFileMention(false);
-        return;
-      }
-    }
-
-    setShowSnippetAutocomplete(false);
 
     const lastAtSymbol = textBeforeCursor.lastIndexOf('@');
     if (lastAtSymbol !== -1) {
@@ -1078,7 +1098,6 @@ export function ScheduledTaskEditorDialog(props: {
     setPromptValue(nextPrompt);
     setShowCommandAutocomplete(false);
     setCommandQuery('');
-    setShowSnippetAutocomplete(false);
 
     requestAnimationFrame(() => {
       const currentTextarea = promptTextareaRef.current;
@@ -1091,30 +1110,6 @@ export function ScheduledTaskEditorDialog(props: {
     });
   }, [setPromptValue, updateAutocompleteState]);
 
-  const handleSnippetSelect = React.useCallback((_snippet: unknown, trigger: string) => {
-    const promptValue = draft.execution.prompt;
-    const textarea = promptTextareaRef.current;
-    const cursorPosition = textarea?.selectionStart ?? promptValue.length;
-    const textBeforeCursor = promptValue.substring(0, cursorPosition);
-    const lastHashSymbol = textBeforeCursor.lastIndexOf('#');
-    const startIndex = lastHashSymbol !== -1 ? lastHashSymbol : cursorPosition;
-    const nextPrompt = `${promptValue.substring(0, startIndex)}#${trigger} ${promptValue.substring(cursorPosition)}`;
-    const nextCursor = startIndex + trigger.length + 2;
-
-    setPromptValue(nextPrompt);
-    setShowSnippetAutocomplete(false);
-    setSnippetQuery('');
-
-    requestAnimationFrame(() => {
-      const currentTextarea = promptTextareaRef.current;
-      if (currentTextarea) {
-        currentTextarea.selectionStart = nextCursor;
-        currentTextarea.selectionEnd = nextCursor;
-        currentTextarea.focus();
-      }
-      updateAutocompleteState(nextPrompt, nextCursor);
-    });
-  }, [draft.execution.prompt, setPromptValue, updateAutocompleteState]);
 
   const handlePromptKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (showCommandAutocomplete && commandRef.current) {
@@ -1132,13 +1127,7 @@ export function ScheduledTaskEditorDialog(props: {
       }
     }
 
-    if (showSnippetAutocomplete && snippetRef.current) {
-      if (event.key === 'Enter' || event.key === 'ArrowUp' || event.key === 'ArrowDown' || event.key === 'Escape' || event.key === 'Tab') {
-        event.preventDefault();
-        snippetRef.current.handleKeyDown(event.key);
-      }
-    }
-  }, [showCommandAutocomplete, showFileMention, showSnippetAutocomplete]);
+  }, [showCommandAutocomplete, showFileMention]);
 
   const handleSubmit = React.useCallback(async () => {
     const validationError = validateDraft(draft, t);
@@ -1150,6 +1139,7 @@ export function ScheduledTaskEditorDialog(props: {
     const payload: Partial<ScheduledTask> = {
       ...(draft.id ? { id: draft.id } : {}),
       name: draft.name.trim(),
+      targetSessionId: draft.sessionMode === 'existing' ? draft.targetSessionId : '',
       enabled: draft.enabled,
       schedule: {
         kind: draft.schedule.kind,
@@ -1168,6 +1158,7 @@ export function ScheduledTaskEditorDialog(props: {
       },
       execution: {
         prompt: draft.execution.prompt,
+        ...(draft.execution.useDefaults ? { useDefaults: true } : {}),
         providerID: draft.execution.providerID,
         modelID: draft.execution.modelID,
         ...(draft.execution.variant.trim() ? { variant: draft.execution.variant.trim() } : {}),
@@ -1178,8 +1169,8 @@ export function ScheduledTaskEditorDialog(props: {
           ? { goalTokenBudget: draft.execution.goalTokenBudget }
           : {}),
       },
-      ...(draft.state ? { state: draft.state } : {}),
     };
+    if (draft.state && draft.sessionMode === 'new') payload.state = draft.state;
 
     setSaving(true);
     try {
@@ -1207,6 +1198,29 @@ export function ScheduledTaskEditorDialog(props: {
 
   const formBody = (
     <div className="flex flex-col gap-5">
+      <SettingsStackedField label={t('sessions.scheduledTasks.editor.sessionMode')}>
+        <Select value={draft.sessionMode} onValueChange={(value: 'new' | 'existing') => setDraft((prev) => ({
+          ...prev, sessionMode: value,
+        }))}>
+          <SelectTrigger size="settings"><SelectValue>{draft.sessionMode === 'existing' ? t('sessions.scheduledTasks.editor.existingSession') : t('sessions.scheduledTasks.editor.newSession')}</SelectValue></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="new">{t('sessions.scheduledTasks.editor.newSession')}</SelectItem>
+            <SelectItem value="existing">{t('sessions.scheduledTasks.editor.existingSession')}</SelectItem>
+          </SelectContent>
+        </Select>
+      </SettingsStackedField>
+      {draft.sessionMode === 'existing' ? (
+        <SettingsStackedField label={t('sessions.scheduledTasks.editor.targetSession')} info={t('sessions.scheduledTasks.editor.targetHint')}>
+          <Select value={draft.targetSessionId} onValueChange={(targetSessionId) => setDraft((prev) => ({ ...prev, targetSessionId }))}>
+            <SelectTrigger size="settings"><SelectValue placeholder={t('sessions.scheduledTasks.editor.targetSession')}>
+              {sessions.find((session) => session.sessionId === draft.targetSessionId)?.metadata?.title || draft.targetSessionId || undefined}
+            </SelectValue></SelectTrigger>
+            <SelectContent>
+              {sessions.map((session) => <SelectItem key={session.sessionId} value={session.sessionId}>{session.metadata?.title || session.sessionId}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </SettingsStackedField>
+      ) : null}
                 <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
                   <div className="flex flex-col gap-1">
                     <FieldLabel htmlFor="sched-name" required>{t('sessions.scheduledTasks.editor.taskName.label')}</FieldLabel>
@@ -1496,6 +1510,22 @@ export function ScheduledTaskEditorDialog(props: {
             </div>
           )}
 
+          <label className="inline-flex cursor-pointer items-center gap-2">
+            <Checkbox
+              checked={draft.execution.useDefaults}
+              onChange={(useDefaults) => setDraft((prev) => ({
+                ...prev,
+                execution: { ...prev.execution, useDefaults },
+              }))}
+              ariaLabel={t('sessions.scheduledTasks.editor.useDefaults.label')}
+            />
+            <span className="typography-meta">{t('sessions.scheduledTasks.editor.useDefaults.label')}</span>
+          </label>
+
+          {draft.execution.useDefaults ? (
+            <p className="typography-meta text-muted-foreground">{draft.sessionMode === 'existing' ? t('sessions.scheduledTasks.editor.targetHint') : t('sessions.scheduledTasks.editor.useDefaults.hint')}</p>
+          ) : (
+          <>
           <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
             <div className="flex min-w-0 flex-col gap-1">
               <FieldLabel required>{t('sessions.scheduledTasks.editor.model.label')}</FieldLabel>
@@ -1551,8 +1581,8 @@ export function ScheduledTaskEditorDialog(props: {
           <div className="flex min-w-0 flex-col gap-1">
             <FieldLabel>{t('sessions.scheduledTasks.editor.agent.label')}</FieldLabel>
             <AgentSelector
-              agentName={draft.execution.agent}
-              filter={(agent) => isPrimaryMode(agent.mode)}
+              agentId={draft.execution.agent}
+              directory={projectDirectory ?? undefined}
               onChange={(agent) => setDraft((prev) => ({
                 ...prev,
                 execution: {
@@ -1562,6 +1592,8 @@ export function ScheduledTaskEditorDialog(props: {
               }))}
             />
           </div>
+          </>
+          )}
 
           <div className="flex flex-col gap-1">
             <FieldLabel htmlFor="sched-prompt" required>{t('sessions.scheduledTasks.editor.prompt.label')}</FieldLabel>
@@ -1615,25 +1647,10 @@ export function ScheduledTaskEditorDialog(props: {
                 />
               ) : null}
 
-              {showSnippetAutocomplete ? (
-                <SnippetAutocomplete
-                  ref={snippetRef}
-                  searchQuery={snippetQuery}
-                  onSnippetSelect={handleSnippetSelect}
-                  onClose={() => setShowSnippetAutocomplete(false)}
-                  style={{
-                    left: 0,
-                    top: 'auto',
-                    bottom: 'calc(100% + 6px)',
-                    marginBottom: 0,
-                    maxWidth: '100%',
-                  }}
-                />
-              ) : null}
             </div>
           </div>
 
-          {draft.execution.goalEnabled ? (
+          {draft.sessionMode === 'new' && draft.execution.goalEnabled ? (
           <div className="flex flex-wrap items-center gap-x-8 gap-y-2">
               <label className="inline-flex cursor-pointer items-center gap-2">
                 <Checkbox
@@ -1679,6 +1696,7 @@ export function ScheduledTaskEditorDialog(props: {
       </label>
 
       <div className="flex items-center gap-2">
+        {draft.sessionMode === 'new' ? <>
         <Tooltip>
           <TooltipTrigger asChild>
             <button
@@ -1721,6 +1739,7 @@ export function ScheduledTaskEditorDialog(props: {
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={6}>{t('sessions.scheduledTasks.editor.goal.label')}</TooltipContent>
         </Tooltip>
+        </> : null}
         <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)} disabled={saving}>
           {t('sessions.scheduledTasks.editor.actions.cancel')}
         </Button>

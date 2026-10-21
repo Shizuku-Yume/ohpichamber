@@ -25,10 +25,28 @@ Wähle ein Projekt in der Seitenleiste aus, um es aktiv zu machen. Alles — Ses
 
 Öffne **Einstellungen → Projekte**, um einem Projekt einen eigenen Namen, eine Farbe oder ein Symbol zu geben. OpenChamber versucht, automatisch ein Symbol zu finden — siehe [Projekt-Symbole](/project-icons/).
 
-> In VS Code verwendet OpenChamber immer den Ordner, den du geöffnet hast, als einziges Projekt. Es gibt dort also nichts hinzuzufügen oder umzuschalten. Die Seite mit den Projekteinstellungen ist dort ausgeblendet.
+
+## Projektumgebung
+
+Wenn die Werkzeuge eines Projekts aus direnv, devenv oder einer Nix-Shell kommen, finden Git-Hooks, das Terminal und [Projektaktionen](/de/project-actions/) sie nicht von selbst. Öffne **Einstellungen → Projekte** und wähle das Projekt aus. Unter **Umgebung** kannst du:
+
+- Variablen hinzufügen, die nur dieses Projekt braucht
+- oder einen **Umgebungsbefehl** festlegen, der sie ausgibt, zum Beispiel `direnv export json` oder `devenv print-dev-env --json`
+
+Der Befehl läuft im Projektordner und für einen Worktree in dessen eigenem Ordner. Er läuft erneut, wenn du committest, ein Terminal öffnest oder eine Aktion ausführst und der letzte Lauf ein paar Minuten zurückliegt, und **Erneut ausführen** startet ihn sofort. Nur weil das Projekt geöffnet ist, läuft er nicht. Unter dem Feld siehst du, wie viele Variablen der letzte Lauf hinzugefügt hat oder warum er fehlgeschlagen ist. Ein fehlgeschlagener Lauf fügt nichts hinzu, und Git und das Terminal arbeiten ohne ihn weiter.
+
+Diese Variablen gehen an Git, das Terminal, Projektaktionen, das Worktree-Setup und Worker pro Projekt, zusätzlich zu denen unter **Einstellungen → Allgemein → Umgebungsvariablen** (siehe [Umgebungsvariablen](/de/environment/)). Projektumgebung und Worktree-Setup folgen der Host-Projektkonfiguration und bleiben auf das Projekt beschränkt.
+
+Den Befehl legst nur du fest. Er wird nicht aus dem Repository gelesen, ein geklontes Repository kann OpenChamber also nichts ausführen lassen.
+
+## Repository-Konfiguration und Ressourcen
+
+Um Worktree-Setup-Befehle, Projektaktionen, Pläne oder Entwurfs-Starter mit Teammitgliedern zu teilen, die die Codebasis klonen, verschiebe sie in `.openchamber/project.json` (siehe [Repository-Konfiguration](/de/repository-config/)). Projektspezifische Slash-Befehle und Skills liegen unter `.omp/commands/` und `.omp/skills/` im Repository (siehe [Befehle](/commands-snippets/) und [Skills](/skills/)).
 
 ## Verwandtes
 
+- [Repository-Konfiguration](/de/repository-config/) — Setup-Befehle, Aktionen, Starter und Pläne im Repository teilen
+- [Chats](/de/chats/) — Sitzungen ohne Projekt, für schnelle Fragen
 - [Projektnotizen, Todos & Pläne](/notes-todos-plans/) — Arbeitsnotizen pro Projekt behalten
 - [Projektaktionen](/project-actions/) — Befehle speichern, die du oft ausführst
 - [Kontext](/context/) — sehen, wie viel des Modellgedächtnisses eine Session verbraucht

@@ -1,26 +1,98 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+import { z } from 'zod';
+import type { Message, Part, StepSummaryPart } from '@openchamber/agent-contract';
 import { useSessionUIStore, getRememberedSessionDirectory } from '@/sync/session-ui-store';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
-import { opencodeClient } from '@/lib/opencode/client';
+import { canonicalClient } from '@/api/canonicalClient';
+import { hostFilesystem } from '@/lib/host-filesystem';
 import { checkIsGitRepository } from '@/lib/gitApi';
 import { streamDebugEnabled } from '@/stores/utils/streamDebug';
-import { copyTextToClipboard as copyPlainTextToClipboard } from '@/lib/clipboard';
+import { copyTextToClipboard as copyPlainTextToClipboard, type ClipboardCopyResult } from '@/lib/clipboard';
 import { getSyncSessions, getSyncMessages, getSyncParts, getAllSyncSessions, getSyncSessionDirectory, getDirectoryState } from '@/sync/sync-refs';
 import {
   describeSessionDirectorySources,
   resolveSessionDirectoryFromSources,
+  type SessionDirectoryResolution,
+  type SessionDirectorySource,
 } from '@/sync/session-directory-resolution';
 import { useSessionWorktreeStore } from '@/sync/session-worktree-store';
-import { getRecentSendFailures } from '@/sync/send-failure-log';
-import { getRecentSessionErrors } from '@/sync/session-error-log';
-import { buildOpenCodeStatusReport } from '@/lib/openCodeStatus';
+import { getRecentSendFailures, type SendFailureRecord } from '@/sync/send-failure-log';
+import { getRecentSessionErrors, type SessionErrorRecord } from '@/sync/session-error-log';
+import { buildRuntimeStatusReport } from '@/lib/runtimeStatus';
 import { getAttachedSessionDirectory } from '@/sync/session-worktree-contract';
 import { useStreamingStore } from '@/sync/streaming';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 
-export interface DebugMessageInfo {
+const DebugLocationSchema = z.object({ directory: z.string().optional(), worktree: z.string().optional() });
+const DebugHostHealthSchema = z.object({
+  status: z.string(),
+  openchamberVersion: z.string().optional(),
+  runtime: z.string().optional(),
+  agentService: z.object({ phase: z.string(), pid: z.number().nullable(), port: z.number().nullable() }).optional(),
+});
+type DebugHostHealthReport =
+  | {
+      status: number;
+      ok: boolean;
+      hostStatus: string | null;
+      version: string | null;
+      runtime: string | null;
+      agentService: z.infer<typeof DebugHostHealthSchema>['agentService'] | null;
+    }
+  | { error: string };
+
+
+type SessionDirectoryReport = {
+  sessionId: string;
+  isCurrentSession: boolean;
+  routedDirectory: string | null;
+  resolvedFrom: SessionDirectorySource;
+  conflict: SessionDirectoryResolution['conflict'];
+  sources: Array<{ source: SessionDirectorySource; directory: string }>;
+  details: {
+    owningChildStore: string | null;
+    sessionDisplayPath: string | null;
+    sessionIndexed: boolean;
+    currentSessionDirectory: string | null;
+    rememberedForRuntime: string | null;
+    persistedAcrossRestarts: string | null;
+    activeDirectory: string | null;
+    hostDirectory: string | null;
+  };
+};
+
+type CompletionStatusReport = {
+  messageId: string;
+  supported: false;
+  unsupportedReason: string;
+  completed: null;
+  status: null;
+  hasCompletedFlag: null;
+  hasStopReason: null;
+  messageIsComplete: null;
+  stepSummaries: StepSummaryPart[];
+  raw: Message;
+};
+
+type AppStatusReport = {
+  runtime: { platform: string | null; isDesktop: boolean; hasRuntimeApis: boolean; desktopServerOrigin: string | null };
+  location: { href: string | null; origin: string | null } | null;
+  directories: Record<string, unknown>;
+  projects: Record<string, unknown>;
+  sessions: Record<string, unknown>;
+  worktrees: Record<string, unknown>;
+  git: { isGitRepo: boolean | null; error?: string };
+  localStorage: Record<string, unknown>;
+  host: Record<string, unknown>;
+  agentService: Record<string, unknown>;
+  openchamber: Record<string, unknown>;
+  recentSendFailures: SendFailureRecord[];
+  recentSessionErrors: SessionErrorRecord[];
+  currentSessionDirectoryResolution: SessionDirectoryReport | null;
+};
+
+interface DebugMessageInfo {
   messageId: string;
   role: string;
   timestamp: number;
@@ -31,11 +103,12 @@ export interface DebugMessageInfo {
     text?: string;
     textLength?: number;
     tool?: string;
-    state?: any;
+    state?: string;
+    isStepMarker?: boolean;
   }>;
   isEmpty: boolean;
   isEmptyResponse: boolean;
-  raw: any;
+  raw: Message;
 }
 
 export const debugUtils = {
@@ -58,36 +131,36 @@ export const debugUtils = {
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i];
       if (msg.role === 'assistant') {
-        const msgParts = getSyncParts(msg.id) || [];
-        const parts = msgParts.map((part: any) => {
-          const info: any = {
-            id: part.id,
+        const msgParts = getSyncParts(msg.messageId);
+        const parts = msgParts.map((part) => {
+          const info: DebugMessageInfo['parts'][number] = {
+            id: part.partId,
             type: part.type,
           };
 
           if (part.type === 'text') {
-            info.text = part.text;
-            info.textLength = part.text?.length || 0;
-          } else if (part.type === 'tool') {
-            info.tool = part.tool;
-            info.state = part.state?.status;
-          } else if (part.type === 'step-start' || part.type === 'step-finish') {
+            info.text = part.content;
+            info.textLength = part.content.length;
+          } else if (part.type === 'tool_call' || part.type === 'tool_result') {
+            info.tool = part.toolName;
+            info.state = part.type === 'tool_call' ? part.status : part.isError ? 'failed' : 'completed';
+          } else if (part.type === 'step_summary') {
             info.isStepMarker = true;
           }
 
           return info;
         });
 
-         const hasText = parts.some((p: any) => p.type === 'text' && p.text && p.text.trim().length > 0);
-        const hasTools = parts.some((p: any) => p.type === 'tool');
-        const hasStepMarkers = parts.some((p: any) => p.type === 'step-start' || p.type === 'step-finish');
+        const hasText = parts.some((p) => p.type === 'text' && p.text && p.text.trim().length > 0);
+        const hasTools = parts.some((p) => p.type === 'tool_call' || p.type === 'tool_result');
+        const hasStepMarkers = parts.some((p) => p.type === 'step_summary');
         const isEmpty = parts.length === 0;
         const isEmptyResponse = !hasText && !hasTools && (!isEmpty || hasStepMarkers);
 
         const info: DebugMessageInfo = {
-          messageId: msg.id,
+          messageId: msg.messageId,
           role: msg.role,
-          timestamp: (msg as any).time?.created || 0,
+          timestamp: msg.createdAt,
           partsCount: parts.length,
           parts,
           isEmpty,
@@ -115,8 +188,7 @@ export const debugUtils = {
           console.warn('[WARNING] Message has parts but NO meaningful content (empty text, no tools)!');
 
           if (hasStepMarkers && !hasText && !hasTools) {
-            console.warn('[CRITICAL] CLAUDE EMPTY RESPONSE BUG: Only step-start/step-finish markers, no actual content!');
-            console.log('This is a known issue with Claude models (anthropic provider)');
+            console.warn('[CRITICAL] EMPTY RESPONSE: Only step summaries, no actual content!');
             console.log('Recommendation: Send a follow-up message or try a different model');
           }
         }
@@ -135,37 +207,21 @@ export const debugUtils = {
     return value.substring(0, maxLength) + '…';
   },
 
-  truncateMessages(messages: any[]): any[] {
+  truncateMessages(messages: Message[]): Message[] {
     return messages.map((msg) => ({
       ...msg,
-      parts: (getSyncParts(msg.id) || []).map((part: any) => {
-        const truncatedPart: any = { ...part };
-
-        if ('text' in part) {
-          truncatedPart.text = this.truncateString(part.text);
+      parts: getSyncParts(msg.messageId).map((part): Part => {
+        if (part.type === 'text' || part.type === 'reasoning') {
+          return { ...part, content: this.truncateString(part.content) ?? '' };
         }
-        if ('textPreview' in part) {
-          truncatedPart.textPreview = this.truncateString(part.textPreview);
+        if (part.type === 'tool_result') {
+          return {
+            ...part,
+            output: typeof part.output === 'string' ? this.truncateString(part.output) : part.output,
+            error: this.truncateString(part.error),
+          };
         }
-
-        if (part.state) {
-          truncatedPart.state = { ...part.state };
-
-          if ('output' in part.state) {
-            truncatedPart.state.output = this.truncateString(part.state.output);
-          }
-          if ('error' in part.state) {
-            truncatedPart.state.error = this.truncateString(part.state.error);
-          }
-          if (part.state.metadata && 'preview' in part.state.metadata) {
-            truncatedPart.state.metadata = {
-              ...part.state.metadata,
-              preview: this.truncateString(part.state.metadata.preview),
-            };
-          }
-        }
-
-        return truncatedPart;
+        return part;
       }),
     }));
   },
@@ -176,7 +232,7 @@ export const debugUtils = {
     return state?.message[sessionId]?.length ?? -1;
   },
 
-  getAllMessages(truncate: boolean = false) {
+  getAllMessages(truncate: boolean = false): Message[] {
     const state = useSessionUIStore.getState();
     const currentSessionId = state.currentSessionId;
 
@@ -189,26 +245,26 @@ export const debugUtils = {
     console.log(`[MESSAGES] Total messages in session: ${messages.length}`);
 
     messages.forEach((msg, idx) => {
-      const msgParts = getSyncParts(msg.id) || [];
-      console.log(`[${idx}] ${msg.role} - ${msg.id} - ${msgParts.length} parts`);
+      const msgParts = getSyncParts(msg.messageId);
+      console.log(`[${idx}] ${msg.role} - ${msg.messageId} - ${msgParts.length} parts`);
     });
 
-    return truncate ? this.truncateMessages(messages as any[]) : messages;
+    return truncate ? this.truncateMessages(messages) : messages;
   },
 
-  async getAppStatus() {
+  async getAppStatus(): Promise<AppStatusReport> {
     const directoryState = useDirectoryStore.getState();
     const sessionState = useSessionUIStore.getState();
     const projectsState = useProjectsStore.getState();
     const currentDirectory = directoryState.currentDirectory || null;
-    const opencodeDirectory = opencodeClient.getDirectory() ?? null;
+    const hostDirectory = hostFilesystem.getDirectory() ?? null;
 
     const sessions = getSyncSessions();
     const sessionDirectories = new Set<string>();
     const sessionDirectoryCounts: Record<string, number> = {};
 
     sessions.forEach((session) => {
-      const directory = (session as { directory?: string | null }).directory;
+      const directory = getSyncSessionDirectory(session.sessionId);
       if (typeof directory === 'string' && directory.trim().length > 0) {
         sessionDirectories.add(directory);
         sessionDirectoryCounts[directory] = (sessionDirectoryCounts[directory] ?? 0) + 1;
@@ -246,13 +302,6 @@ export const debugUtils = {
       }
     };
 
-    const safeText = async (resp: Response) => {
-      try {
-        return await resp.text();
-      } catch {
-        return null;
-      }
-    };
 
     const safeFetchJson = async (url: string): Promise<unknown> => {
       try {
@@ -266,59 +315,49 @@ export const debugUtils = {
     let pathInfo: unknown = null;
     let projectInfo: unknown = null;
     let settingsInfo: unknown = null;
-    let opencodeHealth: unknown = null;
+    let hostHealth: DebugHostHealthReport | null = null;
+    let agentServiceReadiness: { ready: boolean; error?: string } = { ready: false };
 
-    try {
-      const pathResult = await opencodeClient.getSdkClient().path.get(
-        currentDirectory ? { directory: currentDirectory } : undefined
-      );
-      pathInfo = pathResult.error ? { error: pathResult.error } : pathResult.data;
-    } catch (error) {
-      pathInfo = { error: error instanceof Error ? error.message : String(error) };
+    if (currentDirectory) {
+      try {
+        const workspace = await canonicalClient.resolveWorkspace(currentDirectory);
+        pathInfo = {
+          directory: currentDirectory,
+          worktree: workspace.displayPath,
+          workspaceId: workspace.workspaceId,
+          projectId: workspace.projectId,
+        };
+      } catch (error) {
+        pathInfo = { error: error instanceof Error ? error.message : String(error) };
+      }
+    } else {
+      pathInfo = { error: 'No active workspace directory' };
     }
-
-    try {
-      const projectResult = await opencodeClient.getSdkClient().project.current(
-        currentDirectory ? { directory: currentDirectory } : undefined
-      );
-      projectInfo = projectResult.error ? { error: projectResult.error } : projectResult.data;
-    } catch (error) {
-      projectInfo = { error: error instanceof Error ? error.message : String(error) };
-    }
+    const locationInfo = DebugLocationSchema.safeParse(pathInfo).data;
+    projectInfo = projectsState.getActiveProject();
 
     settingsInfo = await safeFetchJson('/api/config/settings');
 
     try {
-      const resp = await runtimeFetch('/api/health');
-      const contentType = resp.headers.get('content-type') || '';
-      const body = await safeText(resp);
-      const isJson = contentType.toLowerCase().includes('application/json');
-      let parsed: Record<string, unknown> | null = null;
-      if (isJson && body) {
-        try {
-          const candidate = JSON.parse(body) as unknown;
-          if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) {
-            parsed = candidate as Record<string, unknown>;
-          }
-        } catch {
-          parsed = null;
-        }
-      }
-      opencodeHealth = {
+      const resp = await runtimeFetch('/health');
+      const body = await safeJson(resp);
+      const health = DebugHostHealthSchema.safeParse(body).data;
+      hostHealth = {
         status: resp.status,
         ok: resp.ok,
-        contentType,
-        type: isJson ? 'json' : 'html',
-        openCodePort: parsed?.openCodePort ?? null,
-        openCodeRunning: parsed?.openCodeRunning ?? null,
-        openCodeSecureConnection: parsed?.openCodeSecureConnection ?? null,
-        openCodeAuthSource: parsed?.openCodeAuthSource ?? null,
-        isOpenCodeReady: parsed?.isOpenCodeReady ?? null,
-        lastOpenCodeError: parsed?.lastOpenCodeError ?? null,
-        preview: body ? body.slice(0, 120) : null,
+        hostStatus: health?.status ?? null,
+        version: health?.openchamberVersion ?? null,
+        runtime: health?.runtime ?? null,
+        agentService: health?.agentService ?? null,
       };
     } catch (error) {
-      opencodeHealth = { error: error instanceof Error ? error.message : String(error) };
+      hostHealth = { error: error instanceof Error ? error.message : String(error) };
+    }
+
+    try {
+      agentServiceReadiness = { ready: await canonicalClient.checkReady() };
+    } catch {
+      agentServiceReadiness = { ready: false, error: 'readiness request failed' };
     }
 
     let gitCheck: { isGitRepo: boolean | null; error?: string } = { isGitRepo: null };
@@ -343,7 +382,6 @@ export const debugUtils = {
       runtime: {
         platform: runtimeApis?.runtime?.platform ?? null,
         isDesktop: isDesktopRuntime,
-        isVSCode: Boolean(runtimeApis?.runtime?.isVSCode),
         hasRuntimeApis: Boolean(runtimeApis),
         desktopServerOrigin: null,
       },
@@ -355,9 +393,9 @@ export const debugUtils = {
         : null,
       directories: {
         currentDirectory,
-        opencodeDirectory: (pathInfo as { directory?: string; worktree?: string } | null)?.directory
-          || (pathInfo as { worktree?: string } | null)?.worktree
-          || opencodeDirectory,
+        hostDirectory: locationInfo?.directory
+          || locationInfo?.worktree
+          || hostDirectory,
         homeDirectory: directoryState.homeDirectory || null,
         isHomeReady: directoryState.isHomeReady,
         hasPersistedDirectory: directoryState.hasPersistedDirectory,
@@ -382,11 +420,12 @@ export const debugUtils = {
       },
       git: gitCheck,
       localStorage: localStorageSnapshot,
-      opencode: {
+      host: {
         pathInfo,
         projectInfo,
-        health: opencodeHealth,
+        health: hostHealth,
       },
+      agentService: agentServiceReadiness,
       openchamber: {
         settingsInfo,
       },
@@ -394,8 +433,7 @@ export const debugUtils = {
       // this session, so a "my message disappeared" report is not a rejected
       // send and needs a different explanation.
       recentSendFailures: getRecentSendFailures(),
-      // Same reasoning: empty means OpenCode reported no failed turn in this
-      // app session.
+      // Same reasoning: empty means this app session recorded no session error.
       recentSessionErrors: getRecentSessionErrors(),
       currentSessionDirectoryResolution: sessionState.currentSessionId
         ? this.diagnoseSessionDirectory(sessionState.currentSessionId)
@@ -407,11 +445,11 @@ export const debugUtils = {
   },
 
   /**
-   * The same text the status report dialog (Ctrl/Cmd+Shift+L) shows, for a
-   * console or remote session that cannot press the shortcut.
+   * The same text the Runtime Status dialog shows, for a console or remote
+   * session that cannot open the dialog.
    */
-  async statusReport() {
-    const text = await buildOpenCodeStatusReport();
+  async statusReport(): Promise<string> {
+    const text = await buildRuntimeStatusReport();
     console.log(text);
     return text;
   },
@@ -420,7 +458,7 @@ export const debugUtils = {
    * Prompt sends that were rejected and rolled back in this app session.
    * Newest first; empty means no send was rejected.
    */
-  getRecentSendFailures() {
+  getRecentSendFailures(): SendFailureRecord[] {
     const failures = getRecentSendFailures();
     if (failures.length === 0) {
       console.log('[OK] No prompt sends were rejected in this session.');
@@ -437,7 +475,7 @@ export const debugUtils = {
    * here explains a prompt that vanishes without an error: it was posted
    * against a directory that does not own the session.
    */
-  diagnoseSessionDirectory(sessionId?: string) {
+  diagnoseSessionDirectory(sessionId?: string): SessionDirectoryReport | null {
     const sessionState = useSessionUIStore.getState();
     const targetSessionId = sessionId ?? sessionState.currentSessionId;
 
@@ -451,8 +489,7 @@ export const debugUtils = {
     );
     const worktreeMetadata = sessionState.worktreeMetadata.get(targetSessionId)?.path ?? null;
     const owningStoreDirectory = getSyncSessionDirectory(targetSessionId);
-    const sessionRecord = getAllSyncSessions().find((session) => session.id === targetSessionId);
-    const recordDirectory = (sessionRecord as { directory?: string | null } | undefined)?.directory ?? null;
+    const sessionRecord = getAllSyncSessions().find((session) => session.sessionId === targetSessionId);
     const selected = targetSessionId === sessionState.currentSessionId
       ? sessionState.currentSessionDirectory
       : null;
@@ -462,11 +499,8 @@ export const debugUtils = {
     const sources = {
       attachment,
       worktreeMetadata,
-      // Record first, matching the resolver: holding a session proves
-      // containment, not ownership, so the parent repository holds its
-      // worktrees' sessions too. Reporting membership first made this
-      // diagnostic contradict the routing it exists to explain.
-      authoritative: recordDirectory ?? owningStoreDirectory,
+      // Native routing comes from workspace ownership, not public display paths.
+      authoritative: owningStoreDirectory,
       selected,
       remembered: remembered.runtime,
     };
@@ -483,13 +517,13 @@ export const debugUtils = {
       sources: describeSessionDirectorySources(sources),
       details: {
         owningChildStore: owningStoreDirectory,
-        sessionRecordDirectory: recordDirectory,
+        sessionDisplayPath: sessionRecord?.displayPath ?? null,
         sessionIndexed: Boolean(sessionRecord),
         currentSessionDirectory: sessionState.currentSessionDirectory,
         rememberedForRuntime: remembered.runtime,
         persistedAcrossRestarts: remembered.persisted,
         activeDirectory: useDirectoryStore.getState().currentDirectory ?? null,
-        opencodeClientDirectory: opencodeClient.getDirectory() ?? null,
+        hostDirectory: hostFilesystem.getDirectory() ?? null,
       },
     };
 
@@ -508,16 +542,16 @@ export const debugUtils = {
     return report;
   },
 
-  async buildDiagnosticsReport() {
+  async buildDiagnosticsReport(): Promise<string> {
     const report = await this.getAppStatus();
     return JSON.stringify(report, null, 2);
   },
 
-  async copyTextToClipboard(text: string) {
+  async copyTextToClipboard(text: string): Promise<ClipboardCopyResult> {
     return copyPlainTextToClipboard(text);
   },
 
-  async copyDiagnosticsReport() {
+  async copyDiagnosticsReport(): Promise<ClipboardCopyResult & { report: string }> {
     const report = await this.buildDiagnosticsReport();
     const result = await this.copyTextToClipboard(report);
     return { ...result, report } as const;
@@ -566,7 +600,7 @@ export const debugUtils = {
     };
   },
 
-  findEmptyMessages() {
+  findEmptyMessages(): Message[] {
     const state = useSessionUIStore.getState();
     const currentSessionId = state.currentSessionId;
 
@@ -579,11 +613,11 @@ export const debugUtils = {
     const emptyMessages = messages
       .filter((msg) => msg.role === 'assistant')
       .filter((msg) => {
-        const parts = getSyncParts(msg.id) || [];
+        const parts = getSyncParts(msg.messageId);
         const hasTextContent = parts.some(
-          (p: any) => p.type === 'text' && p.text && p.text.trim().length > 0
+          (p) => p.type === 'text' && p.content.trim().length > 0
         );
-        const hasTools = parts.some((p: any) => p.type === 'tool');
+        const hasTools = parts.some((p) => p.type === 'tool_call' || p.type === 'tool_result');
 
         return parts.length === 0 || (!hasTextContent && !hasTools);
       });
@@ -591,13 +625,13 @@ export const debugUtils = {
     console.log(`[INSPECT] Found ${emptyMessages.length} empty assistant messages`);
 
     emptyMessages.forEach((msg, idx) => {
-      const parts = getSyncParts(msg.id) || [];
+      const parts = getSyncParts(msg.messageId);
       console.log(`[${idx}] Empty message:`, {
-        messageId: msg.id,
+        messageId: msg.messageId,
         partsCount: parts.length,
-        provider: (msg as any).providerID,
-        model: (msg as any).modelID,
-        timestamp: (msg as any).time?.created,
+        provider: msg.providerId,
+        model: msg.modelId,
+        timestamp: msg.createdAt,
       });
     });
 
@@ -640,107 +674,46 @@ export const debugUtils = {
       ? messages
       : messages.filter((msg) => msg.role === 'assistant');
 
+    // Canonical messages have creation timestamps, but no completion or part
+    // timestamps. Missing timing support must not be reported as a failed turn.
+    const unsupportedReason = 'Canonical messages do not expose completion or part timestamps.';
     const summary = {
       totalMessages: messages.length,
       analyzedMessages: targetMessages.length,
-      completedMissing: 0,
-      completedBeforeTool: 0,
-      completedBeforeReasoning: 0,
-      runningToolsWhenCompleted: 0,
-      reasoningOpenWhenCompleted: 0,
+      supported: false,
+      unsupportedReason,
+      completedMissing: null,
+      completedBeforeTool: null,
+      completedBeforeReasoning: null,
+      runningToolsWhenCompleted: null,
+      reasoningOpenWhenCompleted: null,
       withTools: 0,
       withReasoning: 0,
     };
 
-    const toNumber = (value: unknown): number | null =>
-      typeof value === 'number' && Number.isFinite(value) ? value : null;
-
-    const getLatestTimestamp = (timestamps: Array<number | null>): number | null => {
-      const filtered = timestamps.filter((value): value is number => typeof value === 'number');
-      return filtered.length > 0 ? Math.max(...filtered) : null;
-    };
-
     const rows = targetMessages.map((message, index) => {
-      const info = message as any;
-      const parts = getSyncParts(message.id) || [];
-
-      const timeInfo = (info.time ?? {}) as { completed?: number };
-      const completedAt = toNumber(timeInfo.completed);
-      const hasCompleted = completedAt !== null;
-
-      const toolParts = parts.filter((part: any) => part.type === 'tool');
-      const reasoningParts = parts.filter((part: any) => part.type === 'reasoning');
-
-      const latestToolTimestamp = getLatestTimestamp(
-        toolParts.map((part: any) =>
-          toNumber(part.state?.time?.end ?? part.state?.time?.start)
-        )
-      );
-      const latestReasoningTimestamp = getLatestTimestamp(
-        reasoningParts.map((part: any) => toNumber(part.time?.end ?? part.time?.start))
-      );
-      const latestPartTimestamp = getLatestTimestamp(
-        [latestToolTimestamp, latestReasoningTimestamp].filter((value) => value !== null)
-      );
-
-      const hasRunningTool = toolParts.some((part: any) =>
-        ['pending', 'running', 'started'].includes(part.state?.status)
-      );
-      const reasoningIncomplete = reasoningParts.some(
-        (part: any) => typeof part.time?.end !== 'number'
-      );
-
-      if (toolParts.length > 0) {
-        summary.withTools += 1;
-      }
-      if (reasoningParts.length > 0) {
-        summary.withReasoning += 1;
-      }
-
-      if (!hasCompleted) {
-        summary.completedMissing += 1;
-      }
-
-      const completedBeforeTool = Boolean(
-        hasCompleted &&
-        typeof latestToolTimestamp === 'number' &&
-        completedAt! < latestToolTimestamp
-      );
-      if (completedBeforeTool) {
-        summary.completedBeforeTool += 1;
-      }
-
-      const completedBeforeReasoning = Boolean(
-        hasCompleted &&
-        typeof latestReasoningTimestamp === 'number' &&
-        completedAt! < latestReasoningTimestamp
-      );
-      if (completedBeforeReasoning) {
-        summary.completedBeforeReasoning += 1;
-      }
-
-      if (hasCompleted && hasRunningTool) {
-        summary.runningToolsWhenCompleted += 1;
-      }
-      if (hasCompleted && reasoningIncomplete) {
-        summary.reasoningOpenWhenCompleted += 1;
-      }
-
+      const parts = getSyncParts(message.messageId);
+      const hasTools = parts.some((part) => part.type === 'tool_call' || part.type === 'tool_result');
+      const hasReasoning = parts.some((part) => part.type === 'reasoning');
+      if (hasTools) summary.withTools += 1;
+      if (hasReasoning) summary.withReasoning += 1;
       return {
         index,
-        messageId: info.id,
-        role: info.role,
-        completedAt,
-        latestToolTimestamp,
-        latestReasoningTimestamp,
-        latestPartTimestamp,
-        completed_missing: !hasCompleted,
-        completed_before_tool: completedBeforeTool,
-        completed_before_reasoning: completedBeforeReasoning,
-        running_tools_when_completed: Boolean(hasCompleted && hasRunningTool),
-        reasoning_open_when_completed: Boolean(hasCompleted && reasoningIncomplete),
-        has_tools: toolParts.length > 0,
-        has_reasoning: reasoningParts.length > 0,
+        messageId: message.messageId,
+        role: message.role,
+        supported: false,
+        unsupportedReason,
+        completedAt: null,
+        latestToolTimestamp: null,
+        latestReasoningTimestamp: null,
+        latestPartTimestamp: null,
+        completed_missing: null,
+        completed_before_tool: null,
+        completed_before_reasoning: null,
+        running_tools_when_completed: null,
+        reasoning_open_when_completed: null,
+        has_tools: hasTools,
+        has_reasoning: hasReasoning,
       };
     });
 
@@ -755,7 +728,7 @@ export const debugUtils = {
     return { summary, rows };
   },
 
-   checkCompletionStatus() {
+  checkCompletionStatus(): CompletionStatusReport | null {
     const state = useSessionUIStore.getState();
     const currentSessionId = state.currentSessionId;
 
@@ -773,26 +746,23 @@ export const debugUtils = {
     }
 
     const lastMessage = assistantMessages[assistantMessages.length - 1];
-    const lastParts = getSyncParts(lastMessage.id) || [];
-    const stepFinishParts = lastParts.filter((p: any) => p.type === 'step-finish');
-    const hasStopReason = (lastMessage as any).finish === 'stop';
+    const lastParts = getSyncParts(lastMessage.messageId);
+    const stepSummaries = lastParts.filter((p) => p.type === 'step_summary');
+    const unsupportedReason = 'Canonical messages do not expose completion timestamps, status, or stop reasons.';
+    const completedAt = null;
+    const messageStatus = null;
+    const hasCompletedFlag = null;
+    const hasStopReason = null;
+    const messageIsComplete = null;
 
-    const timeInfo = (lastMessage as any).time;
-    const completedAt = timeInfo?.completed;
-    const messageStatus = (lastMessage as any).status;
-    const hasCompletedFlag = (typeof completedAt === 'number' && completedAt > 0) || messageStatus === 'completed';
-    const messageIsComplete = Boolean(hasCompletedFlag && hasStopReason);
-
-     const streamingState = useStreamingStore.getState();
-    const streamingMessageId = (lastMessage as any).sessionID
-      ? streamingState.streamingMessageIds.get((lastMessage as any).sessionID as string) ?? null
-      : null;
-    const lifecycle = streamingState.messageStreamStates.get(lastMessage.id);
-    const isStreamingCandidate = lastMessage.id === streamingMessageId;
+    const streamingState = useStreamingStore.getState();
+    const streamingMessageId = streamingState.streamingMessageIds.get(lastMessage.sessionId) ?? null;
+    const lifecycle = streamingState.messageStreamStates.get(lastMessage.messageId);
+    const isStreamingCandidate = lastMessage.messageId === streamingMessageId;
 
     console.log('[SUMMARY] Completion Status:');
-    console.log('Message ID:', lastMessage.id);
-    console.log('time.completed:', completedAt, '(type:', typeof completedAt, ')');
+    console.log('Message ID:', lastMessage.messageId);
+    console.log('Completion diagnostics unsupported:', unsupportedReason);
     console.log('status:', messageStatus);
     console.log('hasCompletedFlag:', hasCompletedFlag);
     console.log('hasStopReason:', hasStopReason);
@@ -800,23 +770,25 @@ export const debugUtils = {
     console.log('lifecycle phase:', lifecycle?.phase);
     console.log('isStreamingCandidate:', isStreamingCandidate);
     console.log('streamingMessageId:', streamingMessageId);
-    console.log('Step-finish parts:', stepFinishParts);
+    console.log('Step summaries:', stepSummaries);
 
     return {
-      messageId: lastMessage.id,
+      messageId: lastMessage.messageId,
+      supported: false,
+      unsupportedReason,
       completed: completedAt,
       status: messageStatus,
       hasCompletedFlag,
       hasStopReason,
       messageIsComplete,
-      stepFinishParts,
+      stepSummaries,
       raw: lastMessage,
     };
   },
 };
 
 if (typeof window !== 'undefined') {
-  (window as any).__opencodeDebug = debugUtils;
+  Object.assign(window, { __opencodeDebug: debugUtils });
   if (streamDebugEnabled()) {
     console.log('[DEBUG] OpenCode Debug Utils loaded! Use window.__opencodeDebug in console');
     console.log('Available commands:');

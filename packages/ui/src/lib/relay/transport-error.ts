@@ -18,6 +18,9 @@
  */
 
 const AMBIGUOUS_TRANSPORT_FLAG = '__openchamberAmbiguousTransport';
+const definiteRejections = new WeakSet<Error>();
+
+export const isDefiniteTransportFailure = (error: Error): boolean => definiteRejections.has(error);
 
 /**
  * Mark an error as "dispatched, outcome unknown". Returns the same error so it

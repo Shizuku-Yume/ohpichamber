@@ -14,24 +14,15 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
  * before creating a session, so the second instance skips.
  */
 
-const sdk = vi.hoisted(() => ({
-  sessionCreates: [],
-  createOpencodeClient: () => ({
-    session: {
-      create: async () => {
-        sdk.sessionCreates.push(Date.now());
-        return { data: { id: `sess-${sdk.sessionCreates.length}` } };
-      },
-    },
-    command: { list: async () => ({ data: [] }) },
-  }),
-}));
-
-vi.mock('@opencode-ai/sdk/v2', () => ({
-  createOpencodeClient: sdk.createOpencodeClient,
-}));
-
 import { createScheduledTasksRuntime } from './runtime.js';
+
+const dispatches = { sessionCreates: [] };
+let dispatchGate = null;
+const workspace = { projectId: 'canonical-project', workspaceId: 'canonical-workspace', hostProjectId: 'p1', cwd: '/repo' };
+const installSessionService = (gate = null) => { dispatchGate = gate; };
+const sessionRecord = (sessionId) => ({ sessionId, projectId: workspace.projectId, workspaceId: workspace.workspaceId,
+  rootSessionId: sessionId, displayPath: '.', createdAt: Date.now(), updatedAt: Date.now(), epoch: 'epoch', headSequence: '0',
+  runtimeStatus: 'idle', activeRunId: null, metadata: null, metadataRevision: '0', archiveRevision: '0' });
 
 const UTC = (y, mo, d, h, mi, s = 0) => Date.UTC(y, mo, d, h, mi, s);
 const MINUTE = 60_000;
@@ -96,9 +87,12 @@ const createSharedProjectConfigRuntime = (initialTask) => {
 const createRuntimeDeps = (projectConfigRuntime) => ({
   projectConfigRuntime,
   listProjects: vi.fn(async () => [{ id: 'p1', path: '/repo' }]),
-  buildOpenCodeUrl: () => 'http://127.0.0.1:9999/',
-  getOpenCodeAuthHeaders: () => ({}),
-  waitForOpenCodeReady: async () => {},
+  listWorkspaceScopes: async () => ({ items: [{ workspaceId: workspace.workspaceId }], errors: {} }),
+  resolveWorkspaceScope: async () => workspace,
+  sessionService: {
+    create: async () => { dispatches.sessionCreates.push(Date.now()); return { session: sessionRecord(`sess-${dispatches.sessionCreates.length}`) }; },
+    send: async (sessionId) => { if (dispatchGate) await dispatchGate; return { run: { sessionId, runId: 'run', status: 'running', createdAt: Date.now() } }; },
+  },
   emitTaskRunEvent: vi.fn(),
   setSessionAutoAccept: async () => {},
   logger: { info: () => {}, warn: () => {}, error: () => {} },
@@ -116,10 +110,24 @@ const startInstances = async (count, task) => {
 };
 
 describe('issue 2710: daily scheduled task double execution at the configured time', () => {
+  it('records service dispatch failure instead of an empty success', async () => {
+    const task = makeTask({ kind: 'daily', times: ['23:59'] });
+    const projectConfigRuntime = createSharedProjectConfigRuntime(task);
+    const deps = createRuntimeDeps(projectConfigRuntime);
+    deps.sessionService.send = async () => { throw new Error('Agent Service is unavailable'); };
+    const runtime = createScheduledTasksRuntime(deps);
+    try {
+      await runtime.start();
+      const result = await runtime.runNow('p1', 'task-1');
+      expect(result).toMatchObject({ ok: false, status: 'error' });
+      expect((await projectConfigRuntime.listScheduledTasks('p1'))[0].state.lastStatus).toBe('error');
+    } finally { runtime.stop(); }
+  });
+
   beforeEach(() => {
     vi.useFakeTimers();
-    sdk.sessionCreates.length = 0;
-    globalThis.fetch = vi.fn(async () => ({ ok: true, text: async () => '' }));
+    dispatches.sessionCreates.length = 0;
+    installSessionService();
   });
 
   afterEach(() => {
@@ -132,8 +140,8 @@ describe('issue 2710: daily scheduled task double execution at the configured ti
     const { runtimes } = await startInstances(1, makeTask({ kind: 'daily', times: ['15:00'] }));
     await vi.advanceTimersByTimeAsync(HOUR + 3_000);
 
-    expect(sdk.sessionCreates.length).toBe(1);
-    const firedAt = new Date(sdk.sessionCreates[0]);
+    expect(dispatches.sessionCreates.length).toBe(1);
+    const firedAt = new Date(dispatches.sessionCreates[0]);
     expect(firedAt.getUTCHours()).toBe(15);
 
     runtimes.forEach((runtime) => runtime.stop());
@@ -144,9 +152,9 @@ describe('issue 2710: daily scheduled task double execution at the configured ti
     const { runtimes } = await startInstances(1, makeTask({ kind: 'daily', times: ['15:00'] }));
     await vi.advanceTimersByTimeAsync((4 * 24 * HOUR) + 3_000);
 
-    expect(sdk.sessionCreates.length).toBe(4);
+    expect(dispatches.sessionCreates.length).toBe(4);
     const byHourBucket = new Map();
-    for (const timestamp of sdk.sessionCreates) {
+    for (const timestamp of dispatches.sessionCreates) {
       const date = new Date(timestamp);
       expect(date.getUTCHours()).toBe(15);
       expect(date.getUTCMinutes()).toBe(0);
@@ -168,8 +176,8 @@ describe('issue 2710: daily scheduled task double execution at the configured ti
     );
     await vi.advanceTimersByTimeAsync(HOUR + 3_000);
 
-    expect(sdk.sessionCreates.length).toBe(1);
-    const firedAt = new Date(sdk.sessionCreates[0]);
+    expect(dispatches.sessionCreates.length).toBe(1);
+    const firedAt = new Date(dispatches.sessionCreates[0]);
     expect(firedAt.getUTCHours()).toBe(15);
     expect(firedAt.getUTCMinutes()).toBe(0);
     expect(projectConfigRuntime.updateScheduledTaskStateIf).toHaveBeenCalled();
@@ -187,7 +195,7 @@ describe('issue 2710: daily scheduled task double execution at the configured ti
     }));
     await vi.advanceTimersByTimeAsync((25 * HOUR) + 3_000);
 
-    expect(sdk.sessionCreates.length).toBe(1);
+    expect(dispatches.sessionCreates.length).toBe(1);
 
     runtimes.forEach((runtime) => runtime.stop());
   });
@@ -197,7 +205,7 @@ describe('issue 2710: daily scheduled task double execution at the configured ti
     const { runtimes } = await startInstances(2, makeTask({ kind: 'cron', cron: '*/5 * * * *' }));
     await vi.advanceTimersByTimeAsync(3 * MINUTE);
 
-    expect(sdk.sessionCreates.length).toBe(1);
+    expect(dispatches.sessionCreates.length).toBe(1);
 
     runtimes.forEach((runtime) => runtime.stop());
   });
@@ -211,7 +219,7 @@ describe('issue 2710: daily scheduled task double execution at the configured ti
     }));
     await vi.advanceTimersByTimeAsync(HOUR + 3_000);
 
-    expect(sdk.sessionCreates.length).toBe(1);
+    expect(dispatches.sessionCreates.length).toBe(1);
 
     runtimes.forEach((runtime) => runtime.stop());
   });
@@ -229,14 +237,14 @@ describe('issue 2710: daily scheduled task double execution at the configured ti
 
     await vi.advanceTimersByTimeAsync(HOUR + 3_000);
 
-    expect(sdk.sessionCreates.length).toBe(0);
+    expect(dispatches.sessionCreates.length).toBe(0);
     expect(runtime.getStatus().runningScheduledTasksCount).toBe(0);
     expect(runtime.getStatus().hasRunningScheduledTasks).toBe(false);
 
     // Manual runNow must not be stuck behind a permanently "running" claim failure.
     const manual = await runtime.runNow('p1', 'task-1');
     expect(manual.ok).toBe(true);
-    expect(sdk.sessionCreates.length).toBe(1);
+    expect(dispatches.sessionCreates.length).toBe(1);
 
     runtime.stop();
   });
@@ -263,7 +271,7 @@ describe('issue 2710: daily scheduled task double execution at the configured ti
 
     // Initial completion write + best-effort retry.
     expect(completionWrites).toBeGreaterThanOrEqual(2);
-    expect(sdk.sessionCreates.length).toBe(1);
+    expect(dispatches.sessionCreates.length).toBe(1);
     expect(runtime.getStatus().runningScheduledTasksCount).toBe(0);
 
     const manual = await runtime.runNow('p1', 'task-1');
@@ -316,7 +324,7 @@ describe('issue 2710: daily scheduled task double execution at the configured ti
     const manual = await runtime.runNow('p1', 'task-1');
     expect(manual.ok).toBe(false);
     expect(manual.reason).toBe('start-state-failed');
-    expect(sdk.sessionCreates.length).toBe(0);
+    expect(dispatches.sessionCreates.length).toBe(0);
     expect(runtime.getStatus().runningScheduledTasksCount).toBe(0);
 
     runtime.stop();
@@ -340,7 +348,7 @@ describe('issue 2710: daily scheduled task double execution at the configured ti
 
     await vi.advanceTimersByTimeAsync(5_000);
 
-    expect(sdk.sessionCreates.length).toBe(1);
+    expect(dispatches.sessionCreates.length).toBe(1);
 
     runtimeA.stop();
     runtimeB.stop();
@@ -356,7 +364,7 @@ describe('issue 2710: daily scheduled task double execution at the configured ti
     const runtimeA = createScheduledTasksRuntime(createRuntimeDeps(projectConfigRuntime));
     await runtimeA.start();
     await vi.advanceTimersByTimeAsync(HOUR + 3_000);
-    expect(sdk.sessionCreates.length).toBe(1);
+    expect(dispatches.sessionCreates.length).toBe(1);
 
     // Advance to day-2 afternoon, still outside slack, so A re-arms for 15:00.
     await vi.advanceTimersByTimeAsync((23 * HOUR) - 3_000);
@@ -367,7 +375,7 @@ describe('issue 2710: daily scheduled task double execution at the configured ti
 
     await vi.advanceTimersByTimeAsync(5_000);
 
-    expect(sdk.sessionCreates.length).toBe(2);
+    expect(dispatches.sessionCreates.length).toBe(2);
 
     runtimeA.stop();
     runtimeB.stop();
@@ -380,10 +388,7 @@ describe('issue 2710: daily scheduled task double execution at the configured ti
     const fetchGate = new Promise((resolve) => {
       releaseFetch = resolve;
     });
-    globalThis.fetch = vi.fn(async () => {
-      await fetchGate;
-      return { ok: true, text: async () => '' };
-    });
+    installSessionService(fetchGate);
 
     const { runtimes, projectConfigRuntime } = await startInstances(2, makeTask({
       kind: 'once',
@@ -393,21 +398,21 @@ describe('issue 2710: daily scheduled task double execution at the configured ti
 
     await vi.advanceTimersByTimeAsync(HOUR + 3_000);
 
-    // Winner claimed and is blocked in prompt_async; exactly one session.
-    expect(sdk.sessionCreates.length).toBe(1);
+    // Winner claimed and is blocked in the prompt dispatch; exactly one session.
+    expect(dispatches.sessionCreates.length).toBe(1);
     const claimsAfterFire = projectConfigRuntime.updateScheduledTaskStateIf.mock.calls.length;
     expect(claimsAfterFire).toBeGreaterThanOrEqual(1);
 
     // Advance through many jitter windows. Loser must not keep re-entering claim.
     await vi.advanceTimersByTimeAsync(60_000);
     expect(projectConfigRuntime.updateScheduledTaskStateIf.mock.calls.length).toBe(claimsAfterFire);
-    expect(sdk.sessionCreates.length).toBe(1);
+    expect(dispatches.sessionCreates.length).toBe(1);
 
     releaseFetch();
     await Promise.resolve();
     await vi.advanceTimersByTimeAsync(5_000);
 
-    expect(sdk.sessionCreates.length).toBe(1);
+    expect(dispatches.sessionCreates.length).toBe(1);
     expect(runtimes.every((runtime) => runtime.getStatus().runningScheduledTasksCount === 0)).toBe(true);
 
     runtimes.forEach((runtime) => runtime.stop());
@@ -467,7 +472,7 @@ describe('issue 2710: daily scheduled task double execution at the configured ti
     await runtime.start();
     await vi.advanceTimersByTimeAsync(HOUR + 3_000);
 
-    expect(sdk.sessionCreates.length).toBe(0);
+    expect(dispatches.sessionCreates.length).toBe(0);
     const tasks = await projectConfigRuntime.listScheduledTasks('p1');
     expect(tasks[0].state.lastStatus).toBe('error');
     expect(tasks[0].state.lastError).toMatch(/Scheduled claim failed/);
@@ -496,12 +501,12 @@ describe('issue 2710: daily scheduled task double execution at the configured ti
 
     // The scheduler must not fire a disabled task on its own.
     await vi.advanceTimersByTimeAsync(HOUR + 3_000);
-    expect(sdk.sessionCreates.length).toBe(0);
+    expect(dispatches.sessionCreates.length).toBe(0);
 
     const manual = await runtime.runNow('p1', 'task-1');
     expect(manual.ok).toBe(true);
     expect(manual.sessionID).toBeTruthy();
-    expect(sdk.sessionCreates.length).toBe(1);
+    expect(dispatches.sessionCreates.length).toBe(1);
     expect(runtime.getStatus().runningScheduledTasksCount).toBe(0);
 
     // Completion records state but leaves the task paused with no next run.

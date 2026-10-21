@@ -5,7 +5,6 @@ import { buildSettingsSearchResults } from './search';
 const t = (key: I18nKey): string => key;
 
 const runtimeCtx = {
-  isVSCode: false,
   isWeb: true,
   isDesktop: false,
   isMobile: false,
@@ -13,11 +12,35 @@ const runtimeCtx = {
   isMac: false,
   isWindows: false,
   isLinux: false,
-  isWindowsArm64: false,
   routingAvailable: false,
+  enterpriseMode: false,
+  jevBlockedByEnterprise: false,
 };
 
 describe('settings search', () => {
+  test('finds double-paste on every shared Settings surface', () => {
+    for (const query of ['double paste', 'ctrl v', 'cmd v']) {
+      for (const context of [runtimeCtx, { ...runtimeCtx, isDesktop: true }, { ...runtimeCtx, isMobile: true }]) {
+        const results = buildSettingsSearchResults({ query, runtimeCtx: context, t, getPageTitle: (page) => page });
+        expect(results.find((result) => result.id === 'chat.large-text-paste')?.page).toBe('chat');
+      }
+    }
+  });
+  test('finds the Claude Code integration by name and package on retained surfaces', () => {
+    for (const query of ['claude', '@openchamber/opencode-claude']) {
+      for (const context of [runtimeCtx, { ...runtimeCtx, isDesktop: true }, { ...runtimeCtx, isMobile: true }]) {
+        const results = buildSettingsSearchResults({
+          query,
+          runtimeCtx: context,
+          t,
+          getPageTitle: (page) => page,
+        });
+
+        expect(results.some((result) => result.id === 'integrations.third-party.opencode-claude')).toBe(true);
+      }
+    }
+  });
+
   test('Enter-to-send is searchable only outside mobile', () => {
     for (const isMobile of [false, true]) {
       const results = buildSettingsSearchResults({
@@ -31,8 +54,8 @@ describe('settings search', () => {
     }
   });
 
-  test('finds the scrollbar preference on every surface', () => {
-    for (const context of [runtimeCtx, { ...runtimeCtx, isDesktop: true }, { ...runtimeCtx, isVSCode: true }, { ...runtimeCtx, isMobile: true }]) {
+  test('finds the scrollbar preference on every retained surface', () => {
+    for (const context of [runtimeCtx, { ...runtimeCtx, isDesktop: true }, { ...runtimeCtx, isMobile: true }]) {
       const results = buildSettingsSearchResults({
         query: 'scrollbar',
         runtimeCtx: context,
@@ -77,18 +100,28 @@ describe('settings search', () => {
     expect(results.some((result) => result.id === 'chat.input-history-limit')).toBe(true);
   });
 
-  test('hides Linear connect in VS Code', () => {
+
+  test('keeps repository controls out of Settings search and indexes account connection controls', () => {
     const results = buildSettingsSearchResults({
-      query: 'linear',
-      runtimeCtx: { ...runtimeCtx, isVSCode: true },
+      query: 'source control account',
+      runtimeCtx,
       t,
       getPageTitle: (page) => page,
     });
 
-    expect(results.some((result) => result.id === 'integrations.linear')).toBe(false);
-    expect(results.some((result) => result.id === 'integrations.linear.add-workspace')).toBe(false);
-    expect(results.some((result) => result.id === 'integrations.linear.mapping')).toBe(false);
+    expect(results.some((result) => result.id === 'git.source-control-account')).toBe(false);
+    expect(results.some((result) => result.id.includes('github.com#'))).toBe(false);
+
+    const connectResults = buildSettingsSearchResults({
+      query: 'connect account',
+      runtimeCtx,
+      t,
+      getPageTitle: (page) => page,
+    });
+    expect(connectResults.some((result) => result.id === 'git.github-connect')).toBe(true);
+    expect(connectResults.some((result) => result.id === 'git.gitlab-connect')).toBe(true);
   });
+
 
   test('finds guest extension panels on the integrations page', () => {
     const results = buildSettingsSearchResults({
@@ -97,18 +130,7 @@ describe('settings search', () => {
       t,
       getPageTitle: (page) => page,
     });
-
     expect(results.some((result) => result.id === 'integrations.guests')).toBe(true);
   });
 
-  test('hides guest extension panels in VS Code', () => {
-    const results = buildSettingsSearchResults({
-      query: 'clickup',
-      runtimeCtx: { ...runtimeCtx, isVSCode: true },
-      t,
-      getPageTitle: (page) => page,
-    });
-
-    expect(results.some((result) => result.id === 'integrations.guests')).toBe(false);
-  });
 });

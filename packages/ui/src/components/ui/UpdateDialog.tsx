@@ -23,12 +23,14 @@ interface UpdateDialogProps {
   info: UpdateInfo | null;
   downloading: boolean;
   downloaded: boolean;
+  /** Desktop install is being applied — the restart is already in flight */
+  installing?: boolean;
   progress: UpdateProgress | null;
   error: string | null;
   onDownload: () => void;
   onRestart: () => void;
   /** Runtime type to show different UI for desktop vs web */
-  runtimeType?: 'desktop' | 'web' | 'vscode' | 'mobile' | null;
+  runtimeType?: 'desktop' | 'web' | 'mobile' | null;
 }
 
 const GITHUB_RELEASES_URL = 'https://github.com/openchamber/openchamber/releases';
@@ -117,6 +119,7 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
   info,
   downloading,
   downloaded,
+  installing = false,
   progress,
   error,
   onDownload,
@@ -423,7 +426,17 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
               </button>
             )}
 
-            {!isWebRuntime && !isMobileRuntime && downloaded && (
+            {!isWebRuntime && !isMobileRuntime && downloaded && installing && (
+              <button
+                disabled
+                className="flex items-center justify-center gap-2 px-5 py-2 rounded-md text-sm font-medium bg-[var(--status-success)]/50 text-white cursor-not-allowed"
+              >
+                <Icon name="loader" className="h-4 w-4 animate-spin" />
+                {t('updateDialog.status.restarting')}
+              </button>
+            )}
+
+            {!isWebRuntime && !isMobileRuntime && downloaded && !installing && (
               <button
                 onClick={onRestart}
                 className="flex items-center justify-center gap-2 px-5 py-2 rounded-md text-sm font-medium bg-[var(--status-success)] text-white hover:opacity-90 transition-opacity"

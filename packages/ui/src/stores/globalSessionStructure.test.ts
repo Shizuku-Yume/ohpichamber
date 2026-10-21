@@ -1,43 +1,59 @@
-import { describe, expect, test } from 'bun:test';
-import type { Session } from '@opencode-ai/sdk/v2';
+import { beforeEach, expect, test } from 'bun:test';
+import type { Session } from '@openchamber/agent-contract';
+import { registerWorkspaceDirectory, resetWorkspaceDirectories } from './globalSessions';
+import { applyGlobalSessionStructureMutations, buildGlobalSessionStructure, resolveGlobalSessionDirectory } from './globalSessionStructure';
 
-import { mergeSessionDirectoryMetadata } from './globalSessionStructure';
-
-type SessionWithProjectMetadata = Session & {
-  project?: { id?: string; worktree?: string } | null;
-};
-
-const sessionWithProjectMetadata = (
-  projectID: string,
-  project: SessionWithProjectMetadata['project'],
-): SessionWithProjectMetadata => ({
-  id: 'session',
-  slug: 'session',
-  projectID,
-  directory: '/workspace',
-  title: 'Session',
-  version: '1',
-  time: { created: 1, updated: 1 },
-  project,
+const session = (sessionId: string, extra: Partial<Session> = {}): Session => ({
+  sessionId, projectId: 'pro_one', workspaceId: 'wsp_one', displayPath: 'repo',
+  rootSessionId: sessionId, createdAt: 1, updatedAt: 2, epoch: 'epoch', headSequence: '0',
+  runtimeStatus: 'idle', activeRunId: null, metadata: null, metadataRevision: '0', archiveRevision: '0', ...extra,
 });
 
-describe('mergeSessionDirectoryMetadata', () => {
-  test('retains project identity when a lighter record omits it', () => {
-    const existing = sessionWithProjectMetadata('opencode-project', { id: 'opencode-project', worktree: '/workspace' });
-    const incoming = sessionWithProjectMetadata('opencode-project', { worktree: '/workspace' });
+beforeEach(() => {
+  resetWorkspaceDirectories();
+  registerWorkspaceDirectory('wsp_one', '/repo');
+  registerWorkspaceDirectory('wsp_other', '/other');
+});
 
-    expect(mergeSessionDirectoryMetadata(incoming, existing)).toEqual({
-      ...incoming,
-      project: { id: 'opencode-project', worktree: '/workspace' },
-    });
-  });
+test('indexes native parents, roots and authorized directories', () => {
+  const parent = session('ses_parent');
+  const child = session('ses_child', { parentSessionId: 'ses_parent', rootSessionId: 'ses_parent' });
+  const unknown = session('ses_unknown', { workspaceId: 'wsp_unknown', displayPath: 'repo/subdir' });
+  const structure = buildGlobalSessionStructure([parent, child, unknown]);
+  expect(structure.activeRootIds).toEqual(['ses_parent', 'ses_unknown']);
+  expect(structure.activeChildrenByParentId.get('ses_parent')).toEqual(['ses_child']);
+  expect(structure.activeIdsByDirectory.get('/repo')).toEqual(['ses_parent', 'ses_child']);
+  expect(resolveGlobalSessionDirectory(unknown)).toBeNull();
+});
 
-  test('does not pair an incoming project worktree with a conflicting previous ID', () => {
-    const existing = sessionWithProjectMetadata('old-project', { id: 'old-project', worktree: '/workspace/old' });
-    const incoming = sessionWithProjectMetadata('new-project', { id: 'new-project', worktree: '/workspace/new' });
+test('metadata-only changes preserve structural references', () => {
+  const record = session('ses_one');
+  const structure = buildGlobalSessionStructure([record]);
+  expect(applyGlobalSessionStructureMutations(structure, [{ sessionId: 'ses_one', previous: record, next: { ...record, metadata: { title: 'New' }, metadataRevision: '1' } }])).toBe(structure);
+});
 
-    expect(mergeSessionDirectoryMetadata(incoming, existing)).toEqual({
-      ...incoming,
-    });
-  });
+test('a workspace move changes only addressed directory buckets', () => {
+  const moved = session('ses_moved');
+  const unrelated = session('ses_unrelated', { workspaceId: 'wsp_unrelated' });
+  registerWorkspaceDirectory('wsp_unrelated', '/unrelated');
+  const structure = buildGlobalSessionStructure([moved, unrelated]);
+  const next = applyGlobalSessionStructureMutations(structure, [{ sessionId: moved.sessionId, previous: moved, next: { ...moved, workspaceId: 'wsp_other' } }]);
+  expect(next.activeIdsByDirectory.has('/repo')).toBe(false);
+  expect(next.activeIdsByDirectory.get('/other')).toEqual(['ses_moved']);
+  expect(next.activeIdsByDirectory.get('/unrelated')).toBe(structure.activeIdsByDirectory.get('/unrelated'));
+  expect(next.activeRootIds).toBe(structure.activeRootIds);
+});
+
+test('archive and delete remove native hierarchy membership', () => {
+  const parent = session('ses_parent');
+  const child = session('ses_child', { parentSessionId: 'ses_parent', rootSessionId: 'ses_parent' });
+  const structure = buildGlobalSessionStructure([parent, child]);
+  const next = applyGlobalSessionStructureMutations(structure, [
+    { sessionId: child.sessionId, previous: child, next: { ...child, archivedAt: 0 } },
+    { sessionId: parent.sessionId, previous: parent, next: null },
+  ]);
+  expect(next.activeSessionIds).toEqual([]);
+  expect(next.activeRootIds).toEqual([]);
+  expect(next.activeChildrenByParentId.size).toBe(0);
+  expect(next.activeIdsByDirectory.size).toBe(0);
 });

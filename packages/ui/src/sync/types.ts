@@ -1,92 +1,92 @@
 import type {
-  Agent,
-  Config,
-  LspStatus,
+  ApprovalRequest,
   Message,
-  Part,
-  Path,
-  PermissionRequest,
   Project,
-  ProviderAuthResponse,
-  ProviderListResponse,
   QuestionRequest,
   Session,
-  SessionStatus,
-  Todo,
-  VcsInfo,
-} from "@opencode-ai/sdk/v2/client"
+  SessionRuntimeStatus,
+  SessionSnapshot,
+  Run,
+  QueueState,
+  CatalogUpdate,
+  ShellJob,
+  Workspace,
+  ModelCatalog,
+  ProviderCatalog,
+  AgentCatalog,
+} from "@openchamber/agent-contract"
 
-export type FileDiff = {
-  file?: string
-  status?: string
-  additions?: number
-  deletions?: number
-  patch?: string
-  [key: string]: unknown
+/** Resolved filesystem context retained for UI routing and directory selection. */
+export type Path = {
+  directory: string
+  worktree: string
+  home: string
+  projectId?: string
+  workspaceId?: string
 }
 
 export type ProjectMeta = {
   name?: string
-  icon?: {
-    override?: string
-    color?: string
-  }
-  commands?: {
-    start?: string
-  }
+  icon?: { override?: string; color?: string }
+  commands?: { start?: string }
 }
 
-/** Per-directory store state */
+/** Per-directory canonical runtime state. Host metadata is revisioned on Session. */
 export type State = {
   status: "loading" | "partial" | "complete"
-  agent: Agent[]
   project: string
   projectMeta: ProjectMeta | undefined
   icon: string | undefined
-  provider: ProviderListResponse
-  config: Config
   path: Path
+  workspace: Workspace | undefined
+  models?: ModelCatalog
+  providers?: ProviderCatalog
+  agents?: AgentCatalog
+  discoveryErrors?: Record<string, string>
   session: Session[]
   sessionTotal: number
   sessionListSource?: "empty" | "persisted" | "live" | "authoritative"
   sessionRevision?: number
   sessionEventRevision?: Record<string, number>
+  /** Bumped only when an accepted run acknowledgement changes run control. */
+  runControlRevision?: Record<string, number>
+  /**
+   * Accepted live run for a session that has no snapshot yet. The projected
+   * session row carries only `activeRunId`; the full run keeps the snapshot
+   * invariant when the first in-flight snapshot is admitted.
+   */
+  runControlActiveRun?: Record<string, Run>
+  sessionEpoch: Record<string, string>
+  sessionCursor: Record<string, string>
   sessionDeletedRevision?: Record<string, number>
-  session_status: Record<string, SessionStatus>
-  /** A successful status snapshot makes omitted sessions authoritatively idle. */
+  session_status: Record<string, SessionRuntimeStatus>
   sessionStatusReady?: boolean
-  session_diff: Record<string, FileDiff[]>
-  todo: Record<string, Todo[]>
-  permission: Record<string, PermissionRequest[]>
-  question: Record<string, QuestionRequest[]>
-  lsp: LspStatus[]
-  vcs: VcsInfo | undefined
+  sessionStatusInvalidated?: Record<string, true>
+  snapshot: Record<string, SessionSnapshot>
+  queue: Record<string, QueueState>
+  catalog: Record<string, CatalogUpdate>
+  shell: Record<string, ShellJob>
+  partOwner: Record<string, Record<string, string>>
+  permission: Record<string, ApprovalRequest[]>
+  form: Record<string, QuestionRequest[]>
+  vcs: unknown
   limit: number
   message: Record<string, Message[]>
-  part: Record<string, Part[]>
 }
 
-/** Global store state */
 export type GlobalState = {
   ready: boolean
   error?: InitError
   path: Path
   projects: Project[]
-  providers: ProviderListResponse
-  providerAuth: ProviderAuthResponse
-  config: Config
+  workspaces: Workspace[]
+  discoveryErrors: Record<string, string>
   reload: undefined | "pending" | "complete"
-  sessionTodo: Record<string, Todo[]>
 }
 
-type InitError = {
-  type: "init"
-  message: string
-}
+type InitError = { type: "init"; message: string }
 
-export type DirState = {
-  lastAccessAt: number
-}
+export type DirState = { lastAccessAt: number }
 
 export type EvictPlan = {
   stores: string[]
@@ -109,55 +109,48 @@ export type DisposeCheck = {
 }
 
 export const MAX_DIR_STORES = 30
-/**
- * Directories touched within this window are never overflow-eviction victims.
- *
- * Sidebar rows call `ensureChild` during render but only take their pin in an
- * effect after commit. Without a grace window, expanding a project with more
- * worktrees than `MAX_DIR_STORES` evicted directories that were actively
- * rendering, which recreated them, which issued another bootstrap request, in
- * an endless loop (issue #1472). The limit is therefore a soft target: a burst
- * of live directories overflows briefly rather than thrashing, and the cache is
- * bounded by idle-time eviction instead.
- */
 export const EVICTION_GRACE_MS = 30 * 1000
 export const DIR_IDLE_TTL_MS = 20 * 60 * 1000
 export const SESSION_CACHE_LIMIT = 20
+
+const EMPTY_PATH: Path = { directory: "", worktree: "", home: "" }
 
 export const INITIAL_STATE: State = {
   project: "",
   projectMeta: undefined,
   icon: undefined,
-  provider: { all: [], connected: [], default: {} },
-  config: {},
-  path: { state: "", config: "", worktree: "", directory: "", home: "" },
+  path: EMPTY_PATH,
+  workspace: undefined,
   status: "loading",
-  agent: [],
   session: [],
   sessionTotal: 0,
   sessionListSource: "empty",
   sessionRevision: 0,
   sessionEventRevision: {},
+  runControlRevision: {},
+  runControlActiveRun: {},
+  sessionEpoch: {},
+  sessionCursor: {},
   sessionDeletedRevision: {},
+  snapshot: {},
+  queue: {},
+  catalog: {},
+  shell: {},
+  partOwner: {},
   session_status: {},
-  session_diff: {},
-  todo: {},
   permission: {},
-  question: {},
-  lsp: [],
+  form: {},
   vcs: undefined,
   limit: 5,
   message: {},
-  part: {},
 }
 
 export const INITIAL_GLOBAL_STATE: GlobalState = {
   ready: false,
-  path: { state: "", config: "", worktree: "", directory: "", home: "" },
+  path: EMPTY_PATH,
   projects: [],
-  providers: { all: [], connected: [], default: {} },
-  providerAuth: {},
-  config: {},
+  workspaces: [],
+  discoveryErrors: {},
   reload: undefined,
-  sessionTodo: {},
 }
+

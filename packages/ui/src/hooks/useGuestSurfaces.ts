@@ -2,7 +2,6 @@ import React from 'react';
 import { hasGuestPage, resolveAttachMode, type AttachMode } from '@openchamber/sdk';
 
 import type { IconName } from '@/components/icon/icons';
-import { isVSCodeRuntime } from '@/lib/desktop';
 import { isMobileSurfaceRuntime } from '@/lib/runtimeSurface';
 import { guestActionEntries, type GuestActionEntry } from '@/lib/guests/actions';
 import { isGuestActive } from '@/lib/guests/capabilities';
@@ -11,6 +10,7 @@ import { guestPackageIconSrc, resolveGuestIconName } from '@/lib/guests/icon';
 import { enabledGuestSurfaces } from '@/lib/guests/surfaces';
 import { loadGuestCatalog } from '@/lib/guests/load-catalog';
 import { useGuestsStore } from '@/lib/guests/store';
+import type { InstalledGuest } from '@/lib/guests/types';
 import { getRuntimeUrlResolver } from '@/lib/runtime-url';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import type { ContextSurfaceDescriptor } from '@/lib/surfaces/registry';
@@ -55,14 +55,30 @@ export const useGuestSurfaces = (): ContextSurfaceDescriptor[] => {
 export const useGuestPages = () => {
   const guests = useGuestsStore((state) => state.guests);
   return React.useMemo(() => {
-    if (isVSCodeRuntime() || isMobileSurfaceRuntime()) return [];
+    if (isMobileSurfaceRuntime()) return [];
     return guests.filter((guest) => guest.pageEntry && isGuestActive(guest));
   }, [guests]);
 };
 
+const EMPTY_STATUS_SECTIONS: InstalledGuest[] = [];
+
 /**
- * Message and session menu entries from active guests. Empty on VS Code and
- * mobile, which never mount guests. Reads the store only: every transcript
+ * Active guests that contribute a Work Status section. Empty on mobile,
+ * which never mounts guests (the panel itself is web/desktop only).
+ * Reads the store only; the rail owns loading the catalog.
+ */
+export const useGuestStatusSections = (): InstalledGuest[] => {
+  const guests = useGuestsStore((state) => state.guests);
+  return React.useMemo(() => {
+    if (isMobileSurfaceRuntime()) return EMPTY_STATUS_SECTIONS;
+    const sections = guests.filter((guest) => guest.statusEntry && isGuestActive(guest));
+    return sections.length > 0 ? sections : EMPTY_STATUS_SECTIONS;
+  }, [guests]);
+};
+
+/**
+ * Message and session menu entries from active guests. Empty on mobile,
+ * which never mounts guests. Reads the store only: every transcript
  * row and sidebar row calls this, and the rail (`useGuestSurfaces`) already
  * owns loading the catalog and following runtime switches. The store is
  * emptied on a switch, so a memo on `guests` alone stays current.
@@ -71,7 +87,7 @@ export const useGuestActions = (): GuestActionEntry[] => {
   const guests = useGuestsStore((state) => state.guests);
 
   return React.useMemo(() => {
-    if (isVSCodeRuntime() || isMobileSurfaceRuntime()) return EMPTY_ACTIONS;
+    if (isMobileSurfaceRuntime()) return EMPTY_ACTIONS;
     const entries = guestActionEntries(guests, getRuntimeUrlResolver().authenticatedAsset);
     return entries.length > 0 ? entries : EMPTY_ACTIONS;
   }, [guests]);
@@ -79,14 +95,14 @@ export const useGuestActions = (): GuestActionEntry[] => {
 
 /**
  * Slash commands from active guests, minus any name in `reservedNames` (the
- * composer's own commands, OpenCode commands, skills). Empty on VS Code and
- * mobile. Store read only, like `useGuestActions`.
+ * composer's own commands, OpenCode commands, skills). Empty on mobile.
+ * Store read only, like `useGuestActions`.
  */
 export const useGuestCommands = (reservedNames: ReadonlySet<string>): GuestCommandEntry[] => {
   const guests = useGuestsStore((state) => state.guests);
 
   return React.useMemo(() => {
-    if (isVSCodeRuntime() || isMobileSurfaceRuntime()) return EMPTY_COMMANDS;
+    if (isMobileSurfaceRuntime()) return EMPTY_COMMANDS;
     const entries = guestCommandEntries(guests, reservedNames);
     return entries.length > 0 ? entries : EMPTY_COMMANDS;
   }, [guests, reservedNames]);
@@ -96,7 +112,7 @@ export const useGuestAttachItems = (): GuestAttachItem[] => {
   const { guests, runtimeKey } = useGuestCatalog();
 
   return React.useMemo(() => {
-    if (isVSCodeRuntime() || isMobileSurfaceRuntime()) return [];
+    if (isMobileSurfaceRuntime()) return [];
     const authenticatedAsset = getRuntimeUrlResolver().authenticatedAsset;
     const items: GuestAttachItem[] = [];
     for (const guest of guests) {

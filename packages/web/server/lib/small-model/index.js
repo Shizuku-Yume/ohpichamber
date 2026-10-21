@@ -1,21 +1,17 @@
-import fs from 'fs';
+import { randomUUID } from 'node:crypto';
+import fs from 'node:fs';
 import os from 'os';
 import path from 'path';
-import { readAuthFile } from '../opencode/auth.js';
-import { readConfigLayers } from '../opencode/shared.js';
-import { getModelCatalog } from './catalog.js';
-import { resolveSmallModel, parseModelRef, isUsableAuthEntry, getAuthEntryForProvider } from './resolve.js';
-import { DEDICATED_WIRE_FORMAT_PROVIDERS, callSmallModel, resolveProviderLogin } from './call.js';
-import { readMergedSettingsSync } from '../opencode/settings-files.js';
-import { getRuntimeProviderSnapshot } from './runtime-providers.js';
+import { z } from 'zod';
+import { readMergedSettingsSync } from '../host/settings-files.js';
+import {
+  completeSmallModel,
+  findModelInfo,
+  getAgentService,
+  listModelInfos,
+  listProviderInfos,
+} from './client.js';
 
-// Never a small model, whatever the transport looks like. A plugin can publish
-// an OpenAI-compatible endpoint for Claude Code, but it is a façade over the
-// Claude Agent SDK, which spawns the Claude Code CLI per request and spends
-// the user's Claude subscription rate limit. Paying that for a session title
-// or a summary is the wrong trade, so the refusal is unconditional rather than
-// conditional on an endpoint existing.
-const CLAUDE_CODE_PROVIDER = 'claude-code';
 
 const OPENCHAMBER_SETTINGS_FILE = path.join(
   process.env.OPENCHAMBER_DATA_DIR
@@ -24,19 +20,31 @@ const OPENCHAMBER_SETTINGS_FILE = path.join(
   'settings.json',
 );
 
-// OpenChamber's own settings: when the user unchecks "use default small model"
-// their explicit override outranks every other resolution step.
+const modelRefSchema = z.string();
+const nonEmptyTextSchema = z.string().refine(value => value.trim().length > 0);
+
+// The scoped OpenChamber profile override outranks provider-local discovery.
 const readSmallModelSettingsOverride = () => {
   const settings = readMergedSettingsSync({ fs, path, settingsFilePath: OPENCHAMBER_SETTINGS_FILE });
   if (settings.smallModelUseDefault !== false) return null;
-  const override = typeof settings.smallModelOverride === 'string' ? settings.smallModelOverride.trim() : '';
+  const parsed = modelRefSchema.safeParse(settings.smallModelOverride);
+  const override = parsed.success ? parsed.data.trim() : '';
   return override || null;
 };
 
-// Rough safety clamp so a huge input never blows the model's context window.
-// Token estimate is ~4 chars/token; when the catalog has no limit for the
-// model (Copilot/codex utility models are not listed) a conservative default
-// applies.
+function parseModelRef(value) {
+  const parsed = modelRefSchema.safeParse(value);
+  if (!parsed.success) return null;
+  const trimmed = parsed.data.trim();
+  const slash = trimmed.indexOf('/');
+  if (slash <= 0 || slash === trimmed.length - 1) return null;
+  return {
+    providerID: trimmed.slice(0, slash),
+    modelID: trimmed.slice(slash + 1),
+  };
+}
+
+// Conservative estimate for Host input budgeting against canonical limits.
 const DEFAULT_CONTEXT_TOKENS = 64_000;
 const OUTPUT_RESERVE_TOKENS = 4_000;
 
@@ -45,10 +53,10 @@ const OUTPUT_RESERVE_TOKENS = 4_000;
  * to leave for the answer. The reserve must match the output budget the caller
  * will actually request, or the two disagree and the model overruns its context.
  */
-export const getModelInputCharBudget = ({ catalog, providerID, modelID, outputReserveTokens }) => {
-  const limit = catalog?.[providerID]?.models?.[modelID]?.limit;
-  const known = Number(limit?.context) > 0;
-  const contextTokens = known ? Number(limit.context) : DEFAULT_CONTEXT_TOKENS;
+const getModelInputCharBudget = ({ modelInfo, outputReserveTokens }) => {
+  const context = Number(modelInfo?.contextWindow);
+  const known = context > 0;
+  const contextTokens = known ? context : DEFAULT_CONTEXT_TOKENS;
   const reserve = Number(outputReserveTokens) > 0 ? Number(outputReserveTokens) : OUTPUT_RESERVE_TOKENS;
   const inputBudgetTokens = Math.max(1_000, contextTokens - reserve);
   return { maxChars: inputBudgetTokens * 4, contextTokens, contextKnown: known };
@@ -56,21 +64,22 @@ export const getModelInputCharBudget = ({ catalog, providerID, modelID, outputRe
 
 /**
  * The output budget to actually request: what the caller asked for, capped by
- * what the model admits it can emit. Asking for more than `limit.output` is
- * rejected outright by some providers and silently ignored by others.
+ * what the model admits it can emit.
+ *
+ * The canonical completion receives this same budget as maxOutputTokens.
  */
-const resolveOutputTokens = ({ catalog, providerID, modelID, maxOutputTokens }) => {
+const resolveOutputTokens = ({ modelInfo, maxOutputTokens }) => {
   const requested = Number(maxOutputTokens) > 0 ? Number(maxOutputTokens) : 0;
   if (!requested) return undefined;
-  const limit = Number(catalog?.[providerID]?.models?.[modelID]?.limit?.output);
+  const limit = Number(modelInfo?.maxOutputTokens);
   return limit > 0 ? Math.min(requested, limit) : requested;
 };
 
 // `truncate` keeps the historical behavior for callers whose prompt losing its
 // tail is survivable (summaries, commit messages). `error` is for callers whose
 // output would be quietly wrong on a clipped input — they need the failure.
-const clampPromptToModelLimit = ({ prompt, catalog, providerID, modelID, onOverflow, outputReserveTokens }) => {
-  const { maxChars } = getModelInputCharBudget({ catalog, providerID, modelID, outputReserveTokens });
+const clampPromptToModelLimit = ({ prompt, modelInfo, providerID, modelID, onOverflow, outputReserveTokens }) => {
+  const { maxChars } = getModelInputCharBudget({ modelInfo, outputReserveTokens });
   if (prompt.length <= maxChars) {
     return { prompt, truncated: false };
   }
@@ -83,175 +92,123 @@ const clampPromptToModelLimit = ({ prompt, catalog, providerID, modelID, onOverf
   return { prompt: `${prompt.slice(0, maxChars)}…`, truncated: true };
 };
 
-const readConfiguredSmallModel = (workingDirectory) => {
-  try {
-    const { mergedConfig } = readConfigLayers(workingDirectory);
-    const value = mergedConfig?.small_model;
-    return typeof value === 'string' ? value : null;
-  } catch {
-    return null;
-  }
+
+/** Product family preference used only within the caller's chosen provider. */
+const SMALL_MODEL_FAMILY_PRIORITY = ['gpt-luna', 'gemini-flash-lite', 'gemini-flash', 'claude-haiku'];
+
+/** Canonical model IDs supply the family used for utility preference. */
+const familyOf = (model) => {
+  const id = String(model?.modelId ?? '').toLowerCase();
+  if (id.includes('luna')) return 'gpt-luna';
+  if (id.includes('flash-lite') || id.includes('flash_lite')) return 'gemini-flash-lite';
+  if (id.includes('flash')) return 'gemini-flash';
+  if (id.includes('haiku')) return 'claude-haiku';
+  return null;
 };
 
-/**
- * Generates text with the user's small model, resolved and authenticated
- * entirely server-side from the OpenCode config and auth store.
- */
-export async function generateSmallModelText({ prompt, system, maxOutputTokens, model, directory, sessionID, preferredProviderID, preferredModelID, restrictToPreferredProvider = false, responseSchema, timeoutMs, signal, onOverflow = 'truncate' }) {
-  if (typeof prompt !== 'string' || !prompt.trim()) {
-    throw Object.assign(new Error('prompt is required'), { statusCode: 400 });
+
+const pickSmallModel = (models, accept) => {
+  const candidates = models
+    .filter((model) => model && accept(model)
+      && model.enabled !== false
+      && (model.status === undefined || ['active', 'alpha', 'beta'].includes(model.status))
+      && model.modalities.includes('text'));
+  for (const family of SMALL_MODEL_FAMILY_PRIORITY) {
+    const found = candidates.find((model) => familyOf(model) === family);
+    if (found) return { providerID: found.provider, modelID: found.modelId };
   }
+  return null;
+};
 
-  const auth = readAuthFile();
-  const catalog = await getModelCatalog().catch(() => ({}));
-
+const usableModel = (model) => Boolean(model && model.enabled !== false && model.status !== 'deprecated' && model.modalities.includes('text'));
+/** Resolve only from explicit intent and the authorized workspace catalog. */
+const resolveSmallModel = async ({ client, workspaceId, model, preferredProviderID, preferredModelID }) => {
+  const models = await listModelInfos(client, workspaceId);
   const explicit = parseModelRef(model);
-  const resolved = explicit
-    ? { ...explicit, source: 'request' }
-    : resolveSmallModel({
-      auth,
-      catalog,
-      settingsSmallModel: readSmallModelSettingsOverride(),
-      configSmallModel: readConfiguredSmallModel(directory),
-      preferredProviderID,
-      preferredModelID,
-    });
+  if (nonEmptyTextSchema.safeParse(model).success && !explicit) throw Object.assign(new Error('Invalid background model selection'), { statusCode: 400, code: 'INVALID_REQUEST' });
+  if (explicit) return usableModel(findModelInfo(models, explicit.providerID, explicit.modelID)) ? { ...explicit, source: 'request' } : null;
 
-  if (!resolved) {
-    throw Object.assign(
-      new Error('No small model available — no authenticated provider has a suitable model'),
-      { statusCode: 404 },
-    );
+  const override = readSmallModelSettingsOverride();
+  const fromSettings = parseModelRef(override);
+  if (override && !fromSettings) return null;
+  if (fromSettings) {
+    const info = findModelInfo(models, fromSettings.providerID, fromSettings.modelID);
+    return usableModel(info) ? { ...fromSettings, source: 'settings' } : null;
   }
 
-  if (resolved.providerID === CLAUDE_CODE_PROVIDER) {
-    throw Object.assign(
-      new Error('Claude Code cannot be used for background small-model actions. Choose another Small Model in Settings → Sessions.'),
-      { statusCode: 422, code: 'small-model-provider-unsupported' },
-    );
+  if (preferredProviderID) {
+    const small = pickSmallModel(models, (candidate) => candidate.provider === preferredProviderID);
+    if (small) return { ...small, source: 'session-provider-small' };
+    if (preferredModelID && usableModel(findModelInfo(models, preferredProviderID, preferredModelID))) {
+      return { providerID: preferredProviderID, modelID: preferredModelID, source: 'session-model' };
+    }
+    return null;
   }
 
-  // Callers with a session context can forbid silently switching providers:
-  // an explicit user choice (settings override, opencode config, request
-  // model) is always allowed, anything else must stay on the session's
-  // provider.
-  if (restrictToPreferredProvider
-    && !['settings', 'config', 'request'].includes(resolved.source)
-    && resolved.providerID !== preferredProviderID) {
-    throw Object.assign(
-      new Error('No small model available within the session provider'),
-      { statusCode: 404 },
-    );
-  }
+  const fallback = pickSmallModel(models, () => true);
+  return fallback ? { ...fallback, source: 'catalog-small' } : null;
+};
 
-  const outputTokens = resolveOutputTokens({
-    catalog,
+
+
+const completionError = (result, resolved) => {
+  const detail = result.error?.detail || 'Small-model completion failed';
+  const statusCode = result.error?.code === 'CONTEXT_LIMIT' ? 413
+    : result.error?.code === 'STRUCTURED_OUTPUT_INVALID' ? 422
+      : result.error?.code === 'MODEL_UNAVAILABLE' ? 404 : 502;
+  return Object.assign(new Error(detail), {
+    statusCode,
+    code: result.error?.code?.toLowerCase().replaceAll('_', '-'),
     providerID: resolved.providerID,
     modelID: resolved.modelID,
-    maxOutputTokens,
   });
+};
 
-  const clamped = clampPromptToModelLimit({
-    prompt: prompt.trim(),
-    catalog,
-    providerID: resolved.providerID,
-    modelID: resolved.modelID,
-    onOverflow,
-    outputReserveTokens: outputTokens,
-  });
+/** Generate through the canonical stateless completion route. */
+export async function generateSmallModelText({ prompt, system, maxOutputTokens, model, workspaceId, preferredProviderID, preferredModelID, responseSchema, timeoutMs, signal, onOverflow = 'truncate' }) {
+  if (!nonEmptyTextSchema.safeParse(prompt).success) throw Object.assign(new Error('prompt is required'), { statusCode: 400 });
+  if (!nonEmptyTextSchema.safeParse(workspaceId).success) throw Object.assign(new Error('workspaceId is required'), { statusCode: 400 });
+  const client = getAgentService();
+  if (!client) throw Object.assign(new Error('Agent service is unavailable'), { statusCode: 503, code: 'SERVICE_UNAVAILABLE' });
 
-  const text = await callSmallModel({
-    auth,
-    catalog,
-    workingDirectory: directory,
-    sessionID,
-    providerID: resolved.providerID,
-    modelID: resolved.modelID,
-    prompt: clamped.prompt,
-    system: typeof system === 'string' && system.trim() ? system.trim() : undefined,
-    maxOutputTokens: outputTokens,
-    responseSchema,
-    timeoutMs,
-    signal,
-  });
+  const resolved = await resolveSmallModel({ client, workspaceId, model, preferredProviderID, preferredModelID });
+  if (!resolved) throw Object.assign(new Error(preferredProviderID ? 'No small model available within the session provider' : 'No small model is available in the workspace catalog'), { statusCode: 404, code: 'MODEL_UNAVAILABLE' });
 
-  return {
-    text: text.trim(),
-    providerID: resolved.providerID,
-    modelID: resolved.modelID,
-    source: resolved.source,
-    ...(clamped.truncated ? { inputTruncated: true } : {}),
+  const models = await listModelInfos(client, workspaceId);
+  const modelInfo = findModelInfo(models, resolved.providerID, resolved.modelID);
+  const outputTokens = resolveOutputTokens({ modelInfo, maxOutputTokens });
+  const clamped = clampPromptToModelLimit({ prompt: prompt.trim(), modelInfo, providerID: resolved.providerID, modelID: resolved.modelID, onOverflow, outputReserveTokens: outputTokens });
+  const request = {
+    completionId: randomUUID(), workspaceId,
+    selection: { providerId: resolved.providerID, modelId: resolved.modelID },
+    prompt: clamped.prompt, format: responseSchema ? { kind: 'json', schema: responseSchema } : { kind: 'text' },
+    overflow: onOverflow === 'error' ? 'reject' : 'truncate', variant: null, reasoningEffort: null,
+    timeoutMs: Number(timeoutMs) > 0 ? Number(timeoutMs) : 60_000,
   };
+  if (outputTokens) request.maxOutputTokens = outputTokens;
+  const parsedSystem = nonEmptyTextSchema.safeParse(system);
+  if (parsedSystem.success) request.system = parsedSystem.data.trim();
+  const result = await completeSmallModel(request, { signal });
+  if (result.status === 'cancelled') throw Object.assign(new Error(`Small-model completion ${result.reason}`), { statusCode: 499, code: `completion-${result.reason}` });
+  if (result.status === 'failed') throw completionError(result, resolved);
+  const text = result.output.kind === 'json' ? JSON.stringify(result.output.value) : result.output.text;
+  const output = { text: text.trim(), providerID: resolved.providerID, modelID: resolved.modelID, source: resolved.source };
+  if (clamped.truncated) output.inputTruncated = true;
+  return output;
 }
 
 /**
- * Provider ids the small model can actually call — an auth.json login, or a
- * credential and endpoint the running OpenCode resolved for a plugin. Used by
- * the Small Model and Changes Walkthrough pickers to hide providers that would
- * only ever fail (e.g. opencode free models without a token).
+ * Providers with enabled workspace models. Canonical provider records supply
+ * identity and auth state; this helper never reads legacy engine config.
  */
-export async function listAuthenticatedProviders() {
-  try {
-    const auth = readAuthFile();
-    const ids = new Set(
-      Object.keys(auth || {}).filter((providerID) => isUsableAuthEntry(auth[providerID])),
-    );
-    // The catalog id is github-copilot while legacy auth entries may sit
-    // under the copilot alias.
-    if (isUsableAuthEntry(getAuthEntryForProvider(auth, 'github-copilot'))) {
-      ids.add('github-copilot');
-    }
-    // Kept separate so a runtime lookup that goes wrong costs the providers it
-    // would have added, never the logins already established from disk.
-    try {
-      for (const providerID of await listRuntimeCallableProviders()) ids.add(providerID);
-    } catch {
-      // The auth.json set below stands on its own.
-    }
-    ids.delete(CLAUDE_CODE_PROVIDER);
-    return Array.from(ids);
-  } catch {
-    return [];
-  }
+export async function listAuthenticatedProviders(workspaceId) {
+  const client = getAgentService();
+  if (!client) throw Object.assign(new Error('Agent service is unavailable'), { statusCode: 503, code: 'SERVICE_UNAVAILABLE' });
+  const [providers, models] = await Promise.all([listProviderInfos(client, workspaceId), listModelInfos(client, workspaceId)]);
+  const enabled = new Set(models.filter((model) => model?.enabled !== false).map((model) => model.provider));
+  return providers.filter((provider) => enabled.has(provider.providerId)).map((provider) => provider.providerId);
 }
 
-/**
- * Providers that only the running OpenCode knows about — plugin-registered
- * ones, and any whose endpoint is resolved at startup.
- *
- * The test is the same one applied to an auth.json login: a credential we may
- * use and somewhere to send it. Whether the endpoint answers the protocol we
- * speak is not knowable from any field OpenCode reports, and guessing it wrong
- * removes a working model from the picker with nothing to explain it.
- */
-async function listRuntimeCallableProviders() {
-  const snapshot = await getRuntimeProviderSnapshot();
-  if (!snapshot) return [];
-  const ids = [];
-  for (const id of snapshot.connected) {
-    const provider = snapshot.providers.get(id);
-    // No credential we may use — including the zen sentinel, whose free models
-    // belong to OpenCode's own server.
-    if (!provider?.apiKey || !provider.baseURL) continue;
-    // Reached through a dedicated wire format and already covered by the
-    // auth.json scan above.
-    if (DEDICATED_WIRE_FORMAT_PROVIDERS.has(id)) continue;
-    ids.push(id);
-  }
-  return ids;
-}
-
-/**
- * Reports which model would be used, without calling it.
- *
- * `inputCharBudget` and `structuredOutput` let callers refuse work before
- * spending a request: the walkthrough needs both a big enough context and
- * schema-shaped output, and would rather tell the user to pick another model
- * than send a doomed prompt. `structuredOutput` is deliberately tri-state —
- * the catalog omits the field for roughly half of all models (aggregators and
- * proxies especially), and treating "unknown" as "unsupported" would hide
- * models that work fine.
- */
 /**
  * The reserve, resolved against the model that was actually picked.
  *
@@ -261,62 +218,30 @@ async function listRuntimeCallableProviders() {
  * the eventual request the same number by construction.
  */
 const resolveReserveTokens = (outputReserveTokens, limits) => (
-  typeof outputReserveTokens === 'function' ? outputReserveTokens(limits) : outputReserveTokens
+  outputReserveTokens instanceof Function ? outputReserveTokens(limits) : outputReserveTokens
 );
 
-export async function describeSmallModel({ directory, preferredProviderID, preferredModelID, outputReserveTokens, overrideModel } = {}) {
-  const auth = readAuthFile();
-  const catalog = await getModelCatalog().catch(() => ({}));
-  // A caller with its own model setting (the diff walkthrough) outranks the
-  // small-model chain entirely — it asked for this model on purpose.
-  const explicit = parseModelRef(overrideModel);
-  const resolved = explicit
-    ? { ...explicit, source: 'request' }
-    : resolveSmallModel({
-      auth,
-      catalog,
-      settingsSmallModel: readSmallModelSettingsOverride(),
-      configSmallModel: readConfiguredSmallModel(directory),
-      preferredProviderID,
-      preferredModelID,
-    });
-  if (!resolved) return resolved;
-
-  const entry = catalog?.[resolved.providerID]?.models?.[resolved.modelID];
-  const outputTokenLimit = Number(entry?.limit?.output) > 0 ? Number(entry.limit.output) : null;
-  // Two passes: the first only to learn the context, which a caller-supplied
-  // reserve function needs before it can answer.
-  const { contextTokens, contextKnown } = getModelInputCharBudget({
-    catalog,
-    providerID: resolved.providerID,
-    modelID: resolved.modelID,
-  });
+/**
+ * Reports which model would be used, without calling it.
+ *
+ */
+export async function describeSmallModel({ workspaceId, preferredProviderID, preferredModelID, outputReserveTokens, overrideModel } = {}) {
+  const client = getAgentService();
+  if (!client) throw Object.assign(new Error('Agent service is unavailable'), { statusCode: 503, code: 'SERVICE_UNAVAILABLE' });
+  const resolved = await resolveSmallModel({ client, workspaceId, model: overrideModel, preferredProviderID, preferredModelID });
+  if (!resolved) return null;
+  const models = await listModelInfos(client, workspaceId);
+  const modelInfo = findModelInfo(models, resolved.providerID, resolved.modelID);
+  const outputTokenLimit = Number(modelInfo?.maxOutputTokens) > 0 ? Number(modelInfo.maxOutputTokens) : null;
+  const { contextTokens, contextKnown } = getModelInputCharBudget({ modelInfo });
   const reserveTokens = resolveReserveTokens(outputReserveTokens, { contextTokens, outputTokenLimit });
-  const { maxChars } = getModelInputCharBudget({
-    catalog,
-    providerID: resolved.providerID,
-    modelID: resolved.modelID,
-    outputReserveTokens: reserveTokens,
-  });
-
-  // Settings/config/request overrides can name a provider with no usable login.
-  // Report that here so readiness can refuse before the user pays for a 401.
-  const hasLogin = Boolean(await resolveProviderLogin({
-    auth,
-    workingDirectory: directory,
-    providerID: resolved.providerID,
-  }));
-
+  const { maxChars } = getModelInputCharBudget({ modelInfo, outputReserveTokens: reserveTokens });
   return {
     ...resolved,
-    hasLogin,
     inputCharBudget: maxChars,
     contextTokens,
     contextKnown,
-    // What the caller should ask for, so the request and the reserve above
-    // cannot drift apart.
     outputTokens: Number(reserveTokens) > 0 ? Number(reserveTokens) : null,
-    structuredOutput: typeof entry?.structured_output === 'boolean' ? entry.structured_output : null,
     outputTokenLimit,
   };
 }

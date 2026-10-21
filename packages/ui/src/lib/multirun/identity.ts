@@ -1,53 +1,34 @@
-import type { Session } from '@opencode-ai/sdk/v2';
-import { z } from 'zod';
-import { normalizePath } from '@/lib/pathNormalization';
+import type { Session, SessionMetadata, SessionMetadataPatch } from '@openchamber/agent-contract';
+import { SessionMetadataSchema } from '@openchamber/agent-contract';
 import { parseMultiRunSessionTitle } from './title';
+import { omitKeys } from '@/lib/omitKeys';
 
-const identifier = z.string().min(1).refine((value) => value === value.trim());
-const groupSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('id'), id: z.uuid() }),
-  z.object({ kind: z.literal('legacy'), scope: identifier }),
-]);
-const membershipSchema = z.object({
-  version: z.literal(1),
-  sessionID: identifier.nullable(),
-  group: groupSchema,
-  groupSlug: identifier,
-  runGroup: z.string().regex(/^g[1-9]\d*$/).optional(),
-  providerID: identifier,
-  modelID: identifier,
-  index: z.number().int().positive().safe().optional(),
-  role: z.enum(['run', 'fusion']),
-}).refine((value) => value.group.kind !== 'legacy' || value.role === 'fusion');
-const openchamberSchema = z.looseObject({});
-const membershipEnvelopeSchema = z.object({ multirun: membershipSchema });
-
-export type MultiRunMembership = z.infer<typeof membershipSchema>;
+type StoredMembership = NonNullable<NonNullable<SessionMetadata['openchamber']>['multirun']>;
+export type MultiRunMembership = StoredMembership;
 export type MultiRunIdentity = Omit<MultiRunMembership, 'version' | 'sessionID'> & { key: string };
 
 export const multiRunGroupKey = (group: MultiRunMembership['group'], groupSlug: string): string =>
   group.kind === 'id' ? JSON.stringify(['id', group.id]) : JSON.stringify(['legacy', group.scope, groupSlug]);
 
 export function getMultiRunMembership(session: Session): MultiRunMembership | null {
-  const envelope = membershipEnvelopeSchema.safeParse(session.metadata?.openchamber);
-  return envelope.success && envelope.data.multirun.sessionID === session.id ? envelope.data.multirun : null;
+  const parsed = SessionMetadataSchema.safeParse(session.metadata);
+  const membership = parsed.success ? parsed.data.openchamber?.multirun : undefined;
+  return membership?.sessionID === session.sessionId ? membership : null;
 }
 
 /** A present marker is authoritative, even if pending, invalid, or inherited by a fork. */
-export function getMultiRunIdentity(session: Session, legacyDirectory = session.directory): MultiRunIdentity | null {
-  const parsedOpenchamber = openchamberSchema.safeParse(session.metadata?.openchamber);
-  const openchamber = parsedOpenchamber.success ? parsedOpenchamber.data : null;
+export function getMultiRunIdentity(session: Session, legacyScope = session.projectId): MultiRunIdentity | null {
+  const openchamber = session.metadata?.openchamber;
   if (openchamber && Object.hasOwn(openchamber, 'multirun')) {
     const membership = getMultiRunMembership(session);
     if (!membership) return null;
-    const { group, groupSlug, runGroup, providerID, modelID, index, role } = membership;
-    return { group, groupSlug, runGroup, providerID, modelID, index, role, key: multiRunGroupKey(group, groupSlug) };
+    const identity = omitKeys(membership, ['version', 'sessionID']);
+    return { ...identity, key: multiRunGroupKey(membership.group, membership.groupSlug) };
   }
-  if (session.parentID || openchamber?.kind === 'btw' || openchamber?.kind === 'review') return null;
-  const title = parseMultiRunSessionTitle(session.title);
-  const scope = normalizePath(legacyDirectory);
-  if (!title || !scope) return null;
-  const group: MultiRunMembership['group'] = { kind: 'legacy', scope };
+  if (session.parentSessionId || openchamber?.kind === 'btw' || openchamber?.kind === 'review') return null;
+  const title = parseMultiRunSessionTitle(session.metadata?.title ?? '');
+  if (!title || !legacyScope) return null;
+  const group: MultiRunMembership['group'] = { kind: 'legacy', scope: legacyScope };
   return {
     group, groupSlug: title.groupSlug, runGroup: title.runGroup,
     providerID: title.providerID, modelID: title.modelID, index: title.index,
@@ -56,26 +37,24 @@ export function getMultiRunIdentity(session: Session, legacyDirectory = session.
   };
 }
 
-export function withMultiRunMembership(session: Pick<Session, 'metadata'>, membership: MultiRunMembership): NonNullable<Session['metadata']> {
-  const parsed = openchamberSchema.safeParse(session.metadata?.openchamber);
-  const openchamber = parsed.success ? parsed.data : {};
-  return {
+export function withMultiRunMembership(session: Pick<Session, 'metadata'>, membership: MultiRunMembership): SessionMetadata {
+  return SessionMetadataSchema.parse({
     ...session.metadata,
-    openchamber: { ...openchamber, multirun: membershipSchema.parse(membership) },
-  };
+    openchamber: { ...session.metadata?.openchamber, multirun: membership },
+  });
 }
 
-export const isFusionSource = (anchor: MultiRunIdentity, candidate: MultiRunIdentity | null): boolean =>
-  candidate !== null && candidate.role === 'run' && candidate.key === anchor.key
-  && candidate.runGroup === anchor.runGroup;
+/** Host merge patches preserve unrelated operational metadata. */
+export const multiRunMembershipPatch = (membership: MultiRunMembership): SessionMetadataPatch => ({
+  changes: { openchamber: { multirun: membership } },
+});
 
-/** Compare only the metadata this feature renders, without scanning other sessions. */
 export function sameMultiRunIdentity(a: Session, b: Session): boolean {
-  if (a.id === b.id && a.metadata === b.metadata && a.title === b.title && a.directory === b.directory && a.parentID === b.parentID) return true;
+  if (a.sessionId === b.sessionId && a.metadata === b.metadata && a.workspaceId === b.workspaceId && a.parentSessionId === b.parentSessionId) return true;
   const left = getMultiRunIdentity(a);
   const right = getMultiRunIdentity(b);
   if (!left || !right) return left === right;
   return left.key === right.key && left.runGroup === right.runGroup && left.role === right.role
     && left.groupSlug === right.groupSlug && left.providerID === right.providerID
-    && left.modelID === right.modelID && left.index === right.index;
+    && left.modelID === right.modelID && left.index === right.index && left.title === right.title;
 }

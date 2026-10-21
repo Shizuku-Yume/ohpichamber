@@ -8,6 +8,7 @@
   "workspaces": {
     ".": {
       "entry": [
+        "oxlint.config.ts",
         "postcss.config.js",
         "scripts/**/*.{js,cjs,mjs,ts}"
       ],
@@ -18,7 +19,6 @@
     },
     "packages/ui": {
       "entry": [
-        "src/apps/renderVSCodeApp.tsx",
         "src/**/*.bench.{ts,tsx}",
         "src/**/*.{test,spec}.{js,cjs,mjs,jsx,ts,tsx}",
         "src/**/__tests__/**/*.{js,cjs,mjs,jsx,ts,tsx}"
@@ -50,7 +50,6 @@
         "preload.mjs",
         "tray.mjs",
         "ssh-manager.mjs",
-        "opencode-cwd.mjs",
         "*.{test,spec}.{js,cjs,mjs}",
         "scripts/**/*.{js,cjs,mjs}"
       ],
@@ -59,29 +58,37 @@
         "scripts/**/*.{js,cjs,mjs}"
       ]
     },
-    "packages/vscode": {
-      "entry": [
-        "webview/main.tsx",
-        "src/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}",
-        "webview/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}"
-      ],
-      "project": [
-        "src/**/*.{ts,tsx}",
-        "webview/**/*.{ts,tsx}"
-      ]
-    },
     "packages/sdk": {
       "entry": [
         "src/index.ts",
         "src/ui/index.ts",
         "src/schemas.ts",
-        "scripts/bundle-guest.ts",
         "src/**/*.{test,spec}.ts",
         "scripts/**/*.{test,spec}.ts"
       ],
       "project": [
         "src/**/*.ts",
         "scripts/**/*.ts"
+      ]
+    },
+    "packages/agent-contract": {
+      "entry": [
+        "src/index.ts",
+        "src/**/*.{test,spec}.ts"
+      ],
+      "project": [
+        "src/**/*.ts"
+      ]
+    },
+    "packages/agent-service": {
+      "entry": [
+        "src/worker/index.ts",
+        "src/**/*.{test,spec}.ts",
+        "scripts/*.mjs"
+      ],
+      "project": [
+        "src/**/*.ts",
+        "scripts/*.mjs"
       ]
     },
     "packages/mobile": {

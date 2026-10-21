@@ -27,8 +27,8 @@ const host = connectHost();
 | `theme.tokens` | アプリの色(サーフェス、テキスト、操作状態、primary、success/warning/error/info)、`font`、`mono`、`radius`。UI をマウントする前に `applyHostReady` に渡してください。 |
 | `locale` | アプリの言語タグ |
 | `directory` | 現在のプロジェクトディレクトリ、または `null` |
-| `session` | `{ id, title, busy }` または `null`。タイトルがなければセッション ID になります。`busy` はライブの状態です。セッションが持っていれば `model` と `agent`(OpenCode のエージェント)も含まれます。 |
-| `surface` | レールは `panel`、添付ウィンドウは `dialog`、全画面は `page` |
+| `session` | `{ id, title, busy }` または `null`。タイトルがなければセッション ID になります。`busy` はライブの状態です。セッションが持っていれば `model` と `agent`(セッションの agent)も含まれます。 |
+| `surface` | レールは `panel`、添付ウィンドウは `dialog`、全画面は `page`、Work Status パネルは `status`、Files のファイルエディターは `file` |
 | `item` | この画面が何のために開かれたか、または `null`。ユーザーがクリックした添付済みの項目(`attach` に渡したのと同じフィールド、`data` を含む)、または宣言したアクションから来たメッセージ(`kind: "message"`)かセッション(`kind: "session"`)。[アクション](/sdk/#アクションコマンドバッジ) を参照。 |
 | `connection` | あなたの連携の `{ connected, account }` |
 | `settings` | `integration.settings` で宣言した入力欄の値 |
@@ -65,6 +65,14 @@ const host = connectHost();
 | `generate({ prompt, system?, maxOutputTokens? })` | ユーザーの Small Model による一回限りのテキスト。`{ text }` を返す。`model` 権限が必要。 |
 | `onResolve(handler)` | スラッシュコマンドのハンドラーを登録する。`{ command, args }` を受け取り、添付する項目または `null` を返す。 |
 | `setBadge(count)` | レールのアイコンに数字(0 から 999)を表示する。`null` で消す |
+| `openCommit(sha)` | 現在のプロジェクトのそのコミットで Diff ビューを開く。`sha` は 7〜64 文字の 16 進数で、コミットは OpenChamber 自身が読み込みます。 |
+| `setHeight(px)` | Work Status セクションの高さを設定する。OpenChamber は 24〜320 ピクセルに収め、それより高い内容はページ内でスクロールします。他の場所では無視されます。 |
+| `onFileOpen(listener)` | ファイルエディター: 編集するファイルを受け取る。`{ path, name, readOnly }` に加えて、`encoding: "text"` なら `content`、`encoding: "binary"` なら `bytes` が入ります。ページ内の Cmd/Ctrl+S でも保存されるようになります。 |
+| `onFileSnapshot(handler)` | ファイルエディター: 編集済みのファイル全体を `{ content, version }`(バイナリエディターなら `{ bytes, version }`)で返す。OpenChamber は保存時と、ソース表示や全画面に切り替える前に呼び出します。 |
+| `onFileSaved(listener)` | ファイルエディター: その `version` のスナップショットがディスクに書き込まれた。`reportFileChange` で応答してください。 |
+| `reportFileChange({ dirty, edited })` | ファイルエディター: 未保存の変更があるか、ドキュメントが今変わったかを OpenChamber に伝える |
+| `requestFileSave()` | ファイルエディター: Cmd/Ctrl+S と同じように今すぐ保存する |
+| `reportFileUnsupported()` | ファイルエディター: このファイルはここでは開けないので、代わりにソースを表示する |
 
 ## attach、startSession、sessionLink
 
@@ -145,6 +153,22 @@ host.onSessionLifecycle((event) => {
 
 `host.storage.get(key)`、`set(key, value)`、`delete(key)`、`keys()` は追加権限なしで独自 JSON を接続先サーバーに保存します。未保存は `undefined`、保存した null は null です。キーは1〜128文字、値は UTF-8 で64 KiB、全体は2 MiB・2,000キーまでです。プロジェクト別データにはキーにプロジェクト ID を含めます。書き込みは直列化されアトミックで、失敗時は既存データを保持します。アンインストールで削除されます。
 
+## バックグラウンドシェル
+
+`shells` 権限を使うと、セッションとそのサブエージェント、登録済みプロジェクト、またはすべてのセッションを対象として、バックグラウンドで実行中のシェルコマンドを監視できます。OpenChamber はローカルストアから応答し、ネットワーク経由の読み取りは発生しません。
+
+| 呼び出し | 動作 |
+| --- | --- |
+| `onRunningShells(scope, listener)` | スコープ内のシェルコマンドを購読します。`{ kind: 'session', sessionId }` はセッションとそのサブエージェント、`{ kind: 'project', projectId }` は登録済みプロジェクト、`{ kind: 'global' }` はすべてのセッションを対象とします。古い順に並んだ実行中のコマンド(各 `background` フラグ付き)と終了したコマンドを受け取ります。購読解除関数を返します。 |
+| `readShellOutput(shellId, { cursor?, tailBytes? })` | 実行中または終了したコマンドの出力を 1 ページ分読み取ります。`cursor` を指定しない場合、末尾から `tailBytes`(最大 65536) 前から開始します。`{ output, cursor, skipped }` を返します。 |
+| `stopShell(shellId)` | エージェントに停止通知を先に送り、その後コマンドを削除します。 |
+
+スナップショットは `{ kind: "shells", scope, shells, ended }` で、`scope` は購読のスコープを反映します。実行中の各シェルは `{ id, sessionID, command, startedAt, background }` で、最大 200 件、古い順です。`background` はターンが終了を待たないジョブの場合に `true` です。
+
+`ended` は OpenChamber が終了を確認したコマンドを、終了が古い順に最大 200 件(最新のものが残る)リストします。各項目には、コマンドが終了コードを返して終了した場合に `status`、`endedAt`、`exit` が追加されます。ステータスは `exited`、`timeout`、シグナルによる `killed`、ユーザーによる `stopped`、または再接続中に終了が発生した場合の `unknown` です。OpenChamber はこのリストをメモリ内にのみ保持します。アプリのリロード後は空になるため、パネルで表示する内容は拡張機能ストレージに保存してください。
+
+ホストは終了したコマンドの出力を、ディレクトリあたり最新 25 件の終了コマンド分保持します。停止されたコマンドの出力は直ちに破棄されます。OpenChamber が認識したことのないシェル、またはホストが保持しなくなった出力を読み取ろうとすると `NOT_FOUND` になります。実行中でないシェルを停止しようとした場合も同様です。未承認の `shells` 権限は `NOT_GRANTED` になります。
+
 ## request
 
 ```ts
@@ -186,7 +210,7 @@ const result = await host.serviceRequest({ method: "GET", path: "/containers" })
 const { content } = await host.readFile("package.json");
 await host.writeFile("notes/today.md", "# Today\n");
 const { entries } = await host.listDir("src");
-const info = await host.stat("~/.config/opencode/opencode.json");
+const info = await host.stat("~/.config/openchamber/config.json");
 ```
 
 上限: パスは 1024 文字まで、内容は 2,000,000 文字まで、一覧は 2000 件まで。内容の上限を超えると `FILE_TOO_LARGE` です。
@@ -217,12 +241,13 @@ const { text } = await host.generate({ prompt: notes, system: "Summarize in one 
 | `NO_SERVICE` | ローカルサービスが未宣言、未承認、または未起動 |
 | `NOT_GRANTED` | この呼び出しに必要な権限をユーザーが承認していない |
 | `SERVICE_FAILED` | ローカルサービスがクラッシュした、または ready にならなかった |
-| `NO_DIRECTORY` | 開いているプロジェクトがない状態で相対ファイルパスを使った |
-| `NOT_FOUND` | 存在しないファイルに対する `readFile` |
+| `NO_DIRECTORY` | 開いているプロジェクトがない状態で相対ファイルパスを使った、または開いているプロジェクトがない状態で `openCommit` を呼んだ |
+| `NOT_FOUND` | 存在しないファイルに対する `readFile`、またはプロジェクトにないコミットへの `openCommit` |
 | `FILE_TOO_LARGE` | 読み込みまたは書き込み時にファイル内容が上限を超えた |
 | `DENIED` | オペレーティングシステムがファイル操作を拒否した |
 | `NO_MODEL` | 利用できる Small Model がない状態での `generate` |
 | `MODEL_FAILED` | Small Model がエラーを返した |
+| `UNSUPPORTED` | この OpenChamber では実行できない呼び出し。例: Diff ビューがない場所での `openCommit` |
 
 ## 関連
 

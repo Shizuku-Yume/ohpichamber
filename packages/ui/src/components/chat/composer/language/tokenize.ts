@@ -38,12 +38,22 @@ export interface ComposerLanguageContext {
     knownAgentNames: ReadonlySet<string>;
     /** Mention paths confirmed by the picker, a drop, or a restored draft. */
     confirmedMentions: ReadonlySet<string>;
-    /** Lowercased command, skill and built-in names invocable with `/`. */
+    /** Lowercased command and built-in names invocable with `/`. */
     knownSlashNames: ReadonlySet<string>;
-    /** Lowercased snippet names and aliases invocable with `#`. */
+    /** Native prompt template names invocable with a leading `/`. */
     knownSnippetTriggers: ReadonlySet<string>;
     /** Filenames of the currently attached files, cited inline as `[name]`. */
     attachmentFilenames: readonly string[];
+    /**
+     * Names cited before their file finished attaching. A live set, like
+     * `confirmedMentions`: filled before the citation text is inserted, so the
+     * chip appears with the text instead of a frame later.
+     */
+    pendingAttachmentFilenames?: ReadonlySet<string>;
+    /** Lowercased skill names invocable with `$`; a completed `$skill` token renders as a chip. Empty when absent. */
+    knownSkillNames?: ReadonlySet<string>;
+    /** Theme variant for the file-type icons on citation chips; dark when absent. */
+    fileIconVariant?: 'light' | 'dark';
 }
 
 /** Mention ranges alone — the composer also needs these to resolve references. */
@@ -52,7 +62,7 @@ export function tokenizeMentions(
     context: Pick<ComposerLanguageContext, 'knownAgentNames' | 'confirmedMentions'>,
 ): MentionRange[] {
     const ranges: MentionRange[] = [];
-    for (const token of scanMentions(text)) {
+    for (const token of scanMentions(text, context.confirmedMentions)) {
         const kind = classifyMention(token.name, context);
         if (kind) ranges.push({ start: token.start, end: token.end, kind });
     }
@@ -81,7 +91,13 @@ export function tokenizeComposer(
         ranges.push({ start: token.start, end: token.end, style: 'mentionCommand' });
     }
 
-    for (const token of filterKnownTokens(scanPrefixTokens(text, '#'), context.knownSnippetTriggers)) {
+    if (context.knownSkillNames) {
+        for (const token of filterKnownTokens(scanPrefixTokens(text, '$'), context.knownSkillNames)) {
+            ranges.push({ start: token.start, end: token.end, style: 'mentionCommand' });
+        }
+    }
+
+    for (const token of filterKnownTokens(scanPrefixTokens(text, '/'), context.knownSnippetTriggers)) {
         ranges.push({ start: token.start, end: token.end, style: 'mentionSnippet' });
     }
 

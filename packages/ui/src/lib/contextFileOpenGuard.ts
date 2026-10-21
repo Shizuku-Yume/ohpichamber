@@ -2,19 +2,20 @@ import type { FilesAPI } from '@/lib/api/types';
 import { MAX_OPEN_FILE_LINES, countLinesWithLimit } from '@/lib/fileOpenLimits';
 import { getCurrentIntlLocale } from '@/lib/i18n';
 import { formatMessage, useI18nStore } from '@/lib/i18n/store';
+import { isFilePathWithinDirectory } from '@/lib/path-utils';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { isBinaryFile, isImageFile, isPdfFile, looksLikeBinaryText } from '@/lib/toolHelpers';
 
 const t = (key: Parameters<typeof formatMessage>[1], params?: Parameters<typeof formatMessage>[2]) =>
   formatMessage(useI18nStore.getState().dictionary, key, params);
 
-export type ContextFileOpenFailureReason = 'too-large' | 'missing' | 'unreadable' | 'binary';
+type ContextFileOpenFailureReason = 'too-large' | 'missing' | 'unreadable' | 'binary';
 
-export type ContextFileOpenValidationResult =
+type ContextFileOpenValidationResult =
   | { ok: true }
   | { ok: false; reason: ContextFileOpenFailureReason };
 
-export type ContextFileOpenOptions = {
+type ContextFileOpenOptions = {
   directory?: string;
 };
 
@@ -40,10 +41,15 @@ const readFileContent = async (
   path: string,
   options?: ContextFileOpenOptions,
 ): Promise<string> => {
+  // A referenced file outside the active workspace (a skill, an agent output
+  // under /tmp) is a legitimate read. Without the flag the server rejects it
+  // and the caller reports the file as unreadable.
+  const allowOutsideWorkspace = Boolean(options?.directory && !isFilePathWithinDirectory(path, options.directory));
   if (files.readFile) {
     const result = await files.readFile(path, {
       optional: true,
       directory: options?.directory,
+      allowOutsideWorkspace,
     });
     return result.content ?? '';
   }
@@ -52,10 +58,13 @@ const readFileContent = async (
   if (options?.directory) {
     params.set('directory', options.directory);
   }
-  const response = await runtimeFetch(`/api/fs/read?${params.toString()}`, {
+  if (allowOutsideWorkspace) {
+    params.set('allowOutsideWorkspace', 'true');
+  }
+  const response = await runtimeFetch('/api/fs/read', {
+    query: params,
     // Avoid conditional requests (304 + empty body).
     cache: 'no-store',
-    headers: options?.directory ? { 'x-opencode-directory': options.directory } : undefined,
   });
   if (!response.ok) {
     const errorPayload = await response.json().catch(() => ({ error: response.statusText }));

@@ -5,7 +5,11 @@ import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
 import type { NestedRepoDiscovery } from '@/stores/useGitStore';
 
+import { InitializeGitButton } from './InitializeGitButton';
+
 type NestedRepoResolutionStatesProps = {
+  /** Project root the surface resolves from; the one Git gets initialized in. */
+  root: string | null;
   /** Probe of the project root: `false` means nested resolution applies. */
   rootIsGitRepo: boolean | null;
   /**
@@ -27,11 +31,12 @@ type NestedRepoResolutionStatesProps = {
  * has finished — either the root is a repository or the operating directory
  * probed as one — so the consumer can proceed into its own content.
  *
- * A runtime without the discovery route (VS Code) reports "unsupported": the
+ * A runtime without the discovery route reports "unsupported": the
  * honest state there is the plain not-a-repository empty state, without a
  * retry that can never succeed.
  */
 export const NestedRepoResolutionStates: React.FC<NestedRepoResolutionStatesProps> = ({
+  root,
   rootIsGitRepo,
   resolvedIsGitRepo,
   nestedRepos,
@@ -78,6 +83,7 @@ export const NestedRepoResolutionStates: React.FC<NestedRepoResolutionStatesProp
         <p className="typography-meta mt-1 text-muted-foreground">
           {t('gitView.empty.notGitRepositoryDescription')}
         </p>
+        {root ? <InitializeGitButton directory={root} /> : null}
         {emptyStateFooter}
       </div>
     );

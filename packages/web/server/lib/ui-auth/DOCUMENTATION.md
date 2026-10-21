@@ -21,10 +21,19 @@ Browsers key a cookie jar on the host only, never the port (RFC 6265). Two OpenC
 
 Compatibility: upgrading renames the cookie for any explicit-port host, so already-signed-in browser sessions must log in once again. No on-disk format changes.
 
+## Guest URL-token scope
+
+`POST /auth/url-token?scope=guest:<id>` issues a short-lived token for assets served from that guest's package path. The token authorizes only `GET /api/guests/<id>/<file>` requests whose path ends in a supported asset extension. It does not authorize the same guest's OAuth, service, or other API routes. The package-file route still validates the guest id and resolves the file inside the installed package.
+
+`ui-auth.test.js` covers an allowed guest asset and denial of same-guest API routes, other guests, and system paths.
+
 ## Public exports (ui-auth.js)
-- `createUiAuth({ password, cookieName, sessionTtlMs, readSettingsFromDiskMigrated })`: creates UI auth controller with methods:
+- `readSessionTtlMs(raw, unitMs, fallbackMs)`: parses a positive session lifetime from an environment value, else the fallback. Defaults come from `OPENCHAMBER_UI_SESSION_TTL_HOURS` (12) and `OPENCHAMBER_UI_TRUSTED_SESSION_TTL_DAYS` (7, used when the user ticks "trust this device").
+- `createUiAuth({ password, cookieName, sessionTtlMs, trustedSessionTtlMs, readSettingsFromDiskMigrated, clientAuthController, requireClientAuth })`: creates UI auth controller with methods:
   - `enabled`
   - `requireAuth(req, res, next)`
+  - `requireSessionAuth(req, res, next)`
+  - `resolveAuthContext(req, res, { allowClientAuth = true, allowUrlToken = true, allowAnonymousSession = true })`: resolves existing credentials. Canonical protected routes set `allowUrlToken: false` and `allowAnonymousSession: false` to prevent identity synthesis.
   - `handleSessionStatus(req, res)`
   - `handleSessionCreate(req, res)`
   - `handlePasskeyStatus(req, res)`
@@ -50,3 +59,11 @@ Compatibility: upgrading renames the cookie for any explicit-port host, so alrea
   - `beginAuthentication(req)`
   - `finishAuthentication(payload)`
   - `dispose()`
+
+## Canonical authenticated identities and passwordless Web
+
+Default passwordless Web/PWA remains an open deployment policy: `GET /auth/session` reports `authenticated: true, disabled: true` and bootstraps a signed `ui-passwordless` cookie. Cookie signing, expiry verification, HttpOnly/SameSite flags, port scope and persistence reuse the existing jose/JWT-secret owner; there is no new session store or required password. Previously issued unsigned random identity cookies are replaced on bootstrap and never accepted as verified canonical credentials. Canonical capabilities/preflight validate existing signed credentials and never mint cookies themselves. When `requireClientAuth` is configured, passwordless cookies do not provide canonical authority.
+
+Password login and passkey login continue to issue `ui-session` JWTs. Verification checks the token's signed type against the current password mode: a passwordless-issued token cannot gain protected authority when a password is enabled, and a password-protected token is not used as the passwordless identity. Paired bearer credentials keep their existing durable validator. Tunnel authority remains with the separate tunnel controller. Internal Agent Service secrets never authenticate an external UI request. Host session-secret diagnostics omit the secret path and raw exceptions.
+
+The retained surface and strict canonical preflight contract are owned by [`../host/DOCUMENTATION.md`](../host/DOCUMENTATION.md#canonical-status-and-credential-preflight). Its regression suite covers default bootstrap, unsigned-cookie rejection and passwordless-token nonpromotion as well as real password/pairing/tunnel boundaries; verification is pending coordinator integration.

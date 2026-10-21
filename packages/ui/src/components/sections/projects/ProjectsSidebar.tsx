@@ -7,11 +7,10 @@ import { SettingsSidebarItem } from '@/components/sections/shared/SettingsSideba
 import { Icon } from "@/components/icon/Icon";
 import { PROJECT_COLOR_MAP, PROJECT_ICON_MAP, ProjectIconImage } from '@/lib/projectMeta';
 import { cn } from '@/lib/utils';
-import { isVSCodeRuntime } from '@/lib/desktop';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useI18n } from '@/lib/i18n';
-import { SETTINGS_PANEL_TITLE_CLASS } from '@/components/sections/shared/SettingsSection';
+import { SETTINGS_SECTION_TITLE_CLASS } from '@/components/sections/shared/SettingsSection';
 
 export const ProjectsSidebar: React.FC<{ onItemSelect?: () => void }> = ({ onItemSelect }) => {
   const { t } = useI18n();
@@ -20,7 +19,6 @@ export const ProjectsSidebar: React.FC<{ onItemSelect?: () => void }> = ({ onIte
   const setSelectedId = useUIStore((state) => state.setSettingsProjectsSelectedId);
   const { currentTheme } = useThemeSystem();
 
-  const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
 
   const handleAddProject = React.useCallback(() => {
     sessionEvents.requestDirectoryDialog();
@@ -44,10 +42,9 @@ export const ProjectsSidebar: React.FC<{ onItemSelect?: () => void }> = ({ onIte
       variant="background"
       header={
         <div className={cn('border-b px-3', 'pt-4 pb-3')}>
-          <h2 className={`${SETTINGS_PANEL_TITLE_CLASS} mb-3`}>{t('settings.page.projects.title')}</h2>
+          <h2 className={`${SETTINGS_SECTION_TITLE_CLASS} mb-3`}>{t('settings.page.projects.title')}</h2>
           <div className="flex items-center justify-between gap-2">
             <span className="typography-meta text-muted-foreground">{t('settings.projects.sidebar.total', { count: projects.length })}</span>
-            {!isVSCode && (
               <Button
                 type="button"
                 variant="ghost"
@@ -58,7 +55,6 @@ export const ProjectsSidebar: React.FC<{ onItemSelect?: () => void }> = ({ onIte
               >
                 <Icon name="add" className="size-4" />
               </Button>
-            )}
           </div>
         </div>
       }

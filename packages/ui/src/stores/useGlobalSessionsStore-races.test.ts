@@ -1,281 +1,341 @@
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import type { Session, Subagent } from '@openchamber/agent-contract';
+import { canonicalClient } from '@/api/canonicalClient';
+import { hostFilesystem } from '@/lib/host-filesystem';
 import { ensureChatsRootDirectory } from '@/lib/chatDirectories';
-import { afterEach, beforeEach, describe, expect, test } from "bun:test"
-import type { OpencodeClient, Session } from "@opencode-ai/sdk/v2"
+import { switchRuntimeEndpoint } from '@/lib/runtime-switch';
+import { flushPendingSessionWrites } from '@/sync/persist-cache';
+import { registerWorkspaceDirectory, resolveWorkspaceDirectory } from './globalSessions';
+import type { SessionDiscoveryResult } from './globalSessions';
+import { useGlobalSessionsStore } from './useGlobalSessionsStore';
 
-import { opencodeClient } from "@/lib/opencode/client"
-import { useGlobalSessionsStore } from "./useGlobalSessionsStore"
+const deferred = <T>() => {
+  const result = Promise.withResolvers<T>();
+  void result.promise.catch(() => undefined);
+  return result;
+};
 
-type Deferred<T> = {
-  promise: Promise<T>
-  resolve: (value: T) => void
-  reject: (reason: unknown) => void
-}
+const session = (sessionId: string, extra: Partial<Session> = {}): Session => ({
+  sessionId, projectId: 'pro_repo', workspaceId: 'wsp_repo', displayPath: 'repo', rootSessionId: sessionId,
+  createdAt: 1, updatedAt: 2, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  metadata: { title: sessionId }, metadataRevision: '1', archiveRevision: '0', ...extra,
+});
+const ids = (records: readonly Session[]) => records.map((record) => record.sessionId).sort();
+let runtime = 0;
+let request = deferred<SessionDiscoveryResult>();
+let list = spyOn(canonicalClient, 'listSessions');
+let resolveWorkspace = spyOn(canonicalClient, 'resolveWorkspace');
+let home = spyOn(hostFilesystem, 'getFilesystemHomeInfo');
+let subagents = spyOn(canonicalClient, 'listSubagents');
 
-const deferred = <T>(): Deferred<T> => {
-  let resolve!: (value: T) => void
-  let reject!: (reason: unknown) => void
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res
-    reject = rej
-  })
-  return { promise, resolve, reject }
-}
+beforeEach(async () => {
+  flushPendingSessionWrites();
+  switchRuntimeEndpoint({ apiBaseUrl: 'https://native-global-races.test', runtimeKey: `native-global-races-${++runtime}` });
+  home = spyOn(hostFilesystem, 'getFilesystemHomeInfo').mockResolvedValue({ home: '/home/user', chatsRoot: '/srv/chats' });
+  await ensureChatsRootDirectory();
+  request = deferred<SessionDiscoveryResult>();
+  list = spyOn(canonicalClient, 'listSessions').mockImplementation(() => request.promise);
+  subagents = spyOn(canonicalClient, 'listSubagents').mockResolvedValue([]);
+  resolveWorkspace = spyOn(canonicalClient, 'resolveWorkspace').mockImplementation(async (directory) => ({
+    workspaceId: directory === '/repo' ? 'wsp_repo' : directory === '/other' ? 'wsp_other' : 'wsp_hint',
+    projectId: directory === '/other' ? 'pro_other' : 'pro_repo', name: 'Workspace',
+  }));
+  useGlobalSessionsStore.getState().resetForRuntimeSwitch();
+  useGlobalSessionsStore.getState().applySnapshot([], [], 'idle');
+  registerWorkspaceDirectory('wsp_repo', '/repo');
+  registerWorkspaceDirectory('wsp_other', '/other');
+});
 
-let listRequest: Deferred<Session[]>
+afterEach(() => {
+  list.mockRestore();
+  resolveWorkspace.mockRestore();
+  home.mockRestore();
+  subagents.mockRestore();
+});
 
-// The store issues one inclusive (`archived: true`) paginated request per
-// load/refresh scope and splits active/archived client-side, so restored
-// sessions (`time.archived` falsy-but-present) stay visible in the active
-// list. The mock serves that single request.
-const sdk = {
-  experimental: {
-    session: {
-      list: async () => ({
-        data: await listRequest.promise,
-        response: { headers: new Headers() },
-      }),
-    },
-  },
-} as unknown as OpencodeClient
-const originalGetSdkClient = opencodeClient.getSdkClient
+describe('native global mutation reconciliation', () => {
+  test('keeps a create after discovery starts', async () => {
+    const loading = useGlobalSessionsStore.getState().loadSessions();
+    useGlobalSessionsStore.getState().upsertSession(session('ses_created'));
+    request.resolve({ items: [], errors: {} });
+    const committed = await loading;
+    expect(ids(committed.activeSessions)).toEqual(['ses_created']);
+  });
 
-const session = (id: string, title = id, archived?: number): Session => ({
-  id,
-  title,
-  time: { created: 1, updated: 1, ...(archived !== undefined ? { archived } : {}) },
-} as Session)
+  test('does not resurrect a deletion or an absent-entity tombstone', async () => {
+    const stale = session('ses_deleted');
+    useGlobalSessionsStore.getState().applySnapshot([stale], []);
+    const loading = useGlobalSessionsStore.getState().loadSessions();
+    useGlobalSessionsStore.getState().removeSessions(['ses_deleted', 'ses_absent']);
+    request.resolve({ items: [stale, session('ses_absent')], errors: {} });
+    await loading;
+    expect(useGlobalSessionsStore.getState().entityById.size).toBe(0);
+  });
 
-describe("global session mutation reconciliation", () => {
-  beforeEach(() => {
-    listRequest = deferred<Session[]>()
-    opencodeClient.getSdkClient = () => sdk
-    useGlobalSessionsStore.getState().resetForRuntimeSwitch()
-  })
+  test('keeps archive and Host title mutations newer than discovery', async () => {
+    const stale = session('ses_one');
+    useGlobalSessionsStore.getState().applySnapshot([stale], []);
+    const loading = useGlobalSessionsStore.getState().loadSessions();
+    useGlobalSessionsStore.getState().upsertSession({ ...stale, metadata: { title: 'New' }, metadataRevision: '2' });
+    useGlobalSessionsStore.getState().archiveSessions(['ses_one'], 10);
+    request.resolve({ items: [stale], errors: {} });
+    await loading;
+    const state = useGlobalSessionsStore.getState();
+    expect(state.activeSessions).toEqual([]);
+    expect(state.archivedSessions[0]?.archivedAt).toBe(10);
+    expect(state.archivedSessions[0]?.metadata?.title).toBe('New');
+  });
 
-  afterEach(() => {
-    opencodeClient.getSdkClient = originalGetSdkClient
-  })
+  test('uses commit-time state and fills only unlisted live gaps after failure', async () => {
+    const known = session('ses_known', { metadata: { openchamber: { work: { state: 'done' } } } });
+    useGlobalSessionsStore.getState().applySnapshot([known], []);
+    const loading = useGlobalSessionsStore.getState().loadSessions([
+      { ...known, metadata: { openchamber: { work: { state: 'open' } } } }, session('ses_live'),
+    ]);
+    useGlobalSessionsStore.getState().upsertSession(session('ses_created'));
+    request.reject(new Error('offline'));
+    await loading;
+    const state = useGlobalSessionsStore.getState();
+    expect(ids(state.activeSessions)).toEqual(['ses_created', 'ses_known', 'ses_live']);
+    expect(state.entityById.get('ses_known')?.metadata?.openchamber?.work?.state).toBe('done');
+    expect(state.status).toBe('error');
+  });
 
-  test("keeps a session created after a full load starts", async () => {
-    const loading = useGlobalSessionsStore.getState().loadSessions()
-    useGlobalSessionsStore.getState().upsertSession(session("created"))
+  test('restores without a legacy zero archive marker', async () => {
+    const archived = session('ses_restored', { archivedAt: 5, archiveRevision: '1' });
+    useGlobalSessionsStore.getState().applySnapshot([], [archived]);
+    const loading = useGlobalSessionsStore.getState().refreshSessionsForDirectories(['/repo']);
+    const restored = { ...archived };
+    delete restored.archivedAt;
+    useGlobalSessionsStore.getState().upsertSession({ ...restored, archiveRevision: '2' });
+    request.resolve({ items: [archived], errors: {} });
+    await loading;
+    expect(ids(useGlobalSessionsStore.getState().activeSessions)).toEqual(['ses_restored']);
+    expect(useGlobalSessionsStore.getState().archivedSessions).toEqual([]);
+  });
 
-    listRequest.resolve([])
-    await loading
+  test('a native workspace move survives a refresh of its old directory', async () => {
+    const source = session('ses_moved');
+    useGlobalSessionsStore.getState().applySnapshot([source], []);
+    const refreshing = useGlobalSessionsStore.getState().refreshSessionsForDirectories(['/repo']);
+    useGlobalSessionsStore.getState().upsertSession({ ...source, workspaceId: 'wsp_other', projectId: 'pro_other' });
+    request.resolve({ items: [source], errors: {} });
+    await refreshing;
+    expect(useGlobalSessionsStore.getState().sessionsByDirectory.has('/repo')).toBe(false);
+    expect(useGlobalSessionsStore.getState().sessionsByDirectory.get('/other')?.[0]?.sessionId).toBe('ses_moved');
+  });
 
-    expect(useGlobalSessionsStore.getState().activeSessions.map((item) => item.id)).toEqual(["created"])
-  })
+  test('an archived record is never replaced by an older live fallback', async () => {
+    const archived = session('ses_archived', { archivedAt: 5 });
+    useGlobalSessionsStore.getState().applySnapshot([], [archived]);
+    const loading = useGlobalSessionsStore.getState().loadSessions([session('ses_archived')]);
+    request.reject(new Error('offline'));
+    await loading;
+    expect(useGlobalSessionsStore.getState().activeSessions).toEqual([]);
+    expect(ids(useGlobalSessionsStore.getState().archivedSessions)).toEqual(['ses_archived']);
+  });
 
-  test("does not resurrect a session deleted after a full load starts", async () => {
-    const stale = session("deleted")
-    useGlobalSessionsStore.getState().applySnapshot([stale], [])
-    const loading = useGlobalSessionsStore.getState().loadSessions()
-    useGlobalSessionsStore.getState().removeSessions([stale.id])
+  test('runtime reset rejects stale discovery and clears native bindings', async () => {
+    const started = Promise.withResolvers<void>();
+    list.mockImplementation(() => { started.resolve(); return request.promise; });
+    const loading = useGlobalSessionsStore.getState().loadSessions();
+    await started.promise;
+    useGlobalSessionsStore.getState().resetForRuntimeSwitch();
+    request.resolve({ items: [session('ses_stale')], errors: {} });
+    await loading;
+    const state = useGlobalSessionsStore.getState();
+    expect(state.entityById.size).toBe(0);
+    expect(state.status).toBe('idle');
+    expect(state.hasLoaded).toBe(false);
+    expect(resolveWorkspaceDirectory('wsp_repo')).toBeNull();
+  });
 
-    listRequest.resolve([stale])
-    await loading
+  test('a retired workspace resolution cannot bind a directory or list another runtime', async () => {
+    const started = Promise.withResolvers<void>();
+    const resolved = Promise.withResolvers<{ workspaceId: string; projectId: string; name: string }>();
+    resolveWorkspace.mockImplementation(() => { started.resolve(); return resolved.promise; });
+    const refreshing = useGlobalSessionsStore.getState().refreshSessionsForDirectories(['/repo']);
+    await started.promise;
+    useGlobalSessionsStore.getState().resetForRuntimeSwitch();
+    resolved.resolve({ workspaceId: 'wsp_old', projectId: 'pro_repo', name: 'Old workspace' });
+    await refreshing;
+    expect(resolveWorkspaceDirectory('wsp_old')).toBeNull();
+    expect(list.mock.calls).toHaveLength(0);
+    expect(useGlobalSessionsStore.getState().status).toBe('idle');
+  });
+});
 
-    expect(useGlobalSessionsStore.getState().activeSessions).toEqual([])
-    expect(useGlobalSessionsStore.getState().archivedSessions).toEqual([])
-  })
+describe('native discovery completeness scopes', () => {
+  test('an entity failure preserves its owner while healthy siblings reconcile', async () => {
+    const failed = session('ses_failed', { archivedAt: 4 });
+    useGlobalSessionsStore.getState().applySnapshot([session('ses_removed'), session('ses_healthy')], [failed]);
+    request.resolve({ items: [session('ses_healthy', { metadata: { title: 'Fresh' }, metadataRevision: '2' })], errors: { ses_failed: 'METADATA_READ_FAILED' } });
+    await useGlobalSessionsStore.getState().loadSessions();
+    const state = useGlobalSessionsStore.getState();
+    expect(state.entityById.get('ses_failed')).toBe(failed);
+    expect(state.entityById.has('ses_removed')).toBe(false);
+    expect(state.entityById.get('ses_healthy')?.metadata?.title).toBe('Fresh');
+    expect(state.status).toBe('error');
+    expect(state.hasLoaded).toBe(true);
+  });
 
-  test("keeps an archive mutation newer than both list requests", async () => {
-    const stale = session("archived")
-    useGlobalSessionsStore.getState().applySnapshot([stale], [])
-    const loading = useGlobalSessionsStore.getState().loadSessions()
-    useGlobalSessionsStore.getState().archiveSessions([stale.id], 10)
+  test('a failed workspace preserves its records but not missing healthy-workspace siblings', async () => {
+    useGlobalSessionsStore.getState().upsertSessions([session('ses_failed'), session('ses_removed', { workspaceId: 'wsp_other', projectId: 'pro_other' })]);
+    request.resolve({ items: [], errors: { wsp_repo: 'SERVICE_UNAVAILABLE' } });
+    await useGlobalSessionsStore.getState().loadSessions();
+    expect(ids(useGlobalSessionsStore.getState().activeSessions)).toEqual(['ses_failed']);
+    expect(useGlobalSessionsStore.getState().hasLoaded).toBe(false);
+  });
 
-    listRequest.resolve([stale])
-    await loading
+  test('directory entity errors preserve only failed sessions in that directory', async () => {
+    const failed = session('ses_failed', { archivedAt: 4 });
+    useGlobalSessionsStore.getState().applySnapshot([session('ses_removed')], [failed, session('ses_archived_removed', { archivedAt: 3 })]);
+    request.resolve({ items: [session('ses_new')], errors: { ses_failed: 'METADATA_READ_FAILED' } });
+    await useGlobalSessionsStore.getState().refreshSessionsForDirectories(['/repo']);
+    expect(ids(useGlobalSessionsStore.getState().activeSessions)).toEqual(['ses_new']);
+    expect(ids(useGlobalSessionsStore.getState().archivedSessions)).toEqual(['ses_failed']);
+  });
 
-    expect(useGlobalSessionsStore.getState().activeSessions).toEqual([])
-    expect(useGlobalSessionsStore.getState().archivedSessions[0]?.time.archived).toBe(10)
-  })
+  test('relative and display-path candidates never reach workspace resolution', async () => {
+    await useGlobalSessionsStore.getState().refreshSessionsForDirectories(['repo', './repo', 'C:repo']);
+    expect(resolveWorkspace.mock.calls).toHaveLength(0);
+    expect(list.mock.calls).toHaveLength(0);
+  });
 
-  test("keeps a newer title when an older response finishes last", async () => {
-    const stale = session("updated", "Old")
-    useGlobalSessionsStore.getState().applySnapshot([stale], [])
-    const loading = useGlobalSessionsStore.getState().loadSessions()
-    useGlobalSessionsStore.getState().upsertSession(session("updated", "New"))
+  test('a failed directory does not block successful empty siblings', async () => {
+    useGlobalSessionsStore.getState().applySnapshot([session('ses_failed'), session('ses_removed', { workspaceId: 'wsp_other', projectId: 'pro_other' })], []);
+    list.mockImplementation(async (workspaceId) => {
+      if (workspaceId === 'wsp_repo') throw new Error('offline');
+      return { items: [], errors: {} };
+    });
+    await useGlobalSessionsStore.getState().refreshSessionsForDirectories(['/repo', '/other']);
+    expect(ids(useGlobalSessionsStore.getState().activeSessions)).toEqual(['ses_failed']);
+  });
 
-    listRequest.resolve([stale])
-    await loading
+  test.each(['ses_uncached', 'wsp_uncached'])('an uncached native failure %s does not block healthy missing records from reconciling', async (failedIdentity) => {
+    useGlobalSessionsStore.getState().upsertSession(session('ses_removed'));
+    request.resolve({ items: [session('ses_new')], errors: { [failedIdentity]: 'METADATA_READ_FAILED' } });
+    await useGlobalSessionsStore.getState().loadSessions();
+    expect(ids(useGlobalSessionsStore.getState().activeSessions)).toEqual(['ses_new']);
+    expect(useGlobalSessionsStore.getState().hasLoaded).toBe(false);
+  });
+});
 
-    expect(useGlobalSessionsStore.getState().activeSessions[0]?.title).toBe("New")
-  })
+describe('canonical sidebar child discovery', () => {
+  const child = (status: Subagent['status'] = 'running'): Subagent => ({
+    subagentId: 'sub_worker', parentSessionId: 'ses_root', childSessionId: 'ses_child', role: 'Worker', status,
+  });
+  const discover = async (directory: boolean) => {
+    list.mockResolvedValue({ items: [session('ses_root')], errors: {} });
+    return directory ? useGlobalSessionsStore.getState().refreshSessionsForDirectories(['/repo'])
+      : useGlobalSessionsStore.getState().loadSessions();
+  };
 
-  test("uses commit-time state when the load fails", async () => {
-    const created = session("created")
-    const loading = useGlobalSessionsStore.getState().loadSessions()
-    useGlobalSessionsStore.getState().upsertSession(created)
+  test.each([false, true])('projects canonical children and indexes hierarchy (directory=%s)', async (directory) => {
+    subagents.mockResolvedValue([child()]);
+    await discover(directory);
+    const state = useGlobalSessionsStore.getState();
+    expect(state.entityById.get('ses_child')).toEqual(session('ses_child', {
+      parentSessionId: 'ses_root', rootSessionId: 'ses_root', metadata: { title: 'Worker' },
+      runtimeStatus: 'idle', activeRunId: null,
+    }));
+    expect(state.structure.activeRootIds).toEqual(['ses_root']);
+    expect(state.structure.activeChildrenByParentId.get('ses_root')).toEqual(['ses_child']);
+    expect(ids(state.sessionsByDirectory.get('/repo') ?? [])).toEqual(['ses_child', 'ses_root']);
+    expect(subagents.mock.calls.map(([id]) => id)).toEqual(['ses_root']);
+    const first = state.entityById.get('ses_child');
+    await discover(directory);
+    expect(useGlobalSessionsStore.getState().entityById.get('ses_child')).toEqual(first);
+  });
 
-    listRequest.reject(new Error("unavailable"))
-    await loading
+  test.each([false, true])('failed child discovery preserves known children, successful omission removes them (directory=%s)', async (directory) => {
+    subagents.mockResolvedValue([child('completed')]);
+    await discover(directory);
+    const previous = useGlobalSessionsStore.getState().entityById.get('ses_child');
+    expect(previous).toMatchObject({ runtimeStatus: 'idle', activeRunId: null });
+    subagents.mockRejectedValue(new Error('child discovery offline'));
+    await discover(directory);
+    expect(useGlobalSessionsStore.getState().entityById.get('ses_child')).toBe(previous);
+    subagents.mockResolvedValue([]);
+    await discover(directory);
+    expect(useGlobalSessionsStore.getState().entityById.has('ses_child')).toBe(false);
+    expect(useGlobalSessionsStore.getState().structure.activeChildrenByParentId.has('ses_root')).toBe(false);
+  });
 
-    expect(useGlobalSessionsStore.getState().activeSessions).toEqual([created])
-    expect(useGlobalSessionsStore.getState().status).toBe("error")
-  })
+  test('directory root omission alone cannot erase a previously discovered child', async () => {
+    subagents.mockResolvedValue([child()]);
+    await discover(true);
+    list.mockResolvedValue({ items: [], errors: {} });
+    await useGlobalSessionsStore.getState().refreshSessionsForDirectories(['/repo']);
+    expect(useGlobalSessionsStore.getState().entityById.has('ses_child')).toBe(true);
+  });
 
-  test("splits a restored session into the active list", async () => {
-    const loading = useGlobalSessionsStore.getState().loadSessions()
+  test('successful child omission cannot be undone by a stale live-directory fallback', async () => {
+    subagents.mockResolvedValue([child()]);
+    await discover(true);
+    const previous = useGlobalSessionsStore.getState().activeSessions;
+    subagents.mockResolvedValue([]);
+    await useGlobalSessionsStore.getState().refreshSessionsForDirectories(['/repo'], previous);
+    expect(useGlobalSessionsStore.getState().entityById.has('ses_child')).toBe(false);
+  });
 
-    listRequest.resolve([session("active"), session("archived", "archived", 5), session("restored", "restored", 0)])
-    await loading
+  test('bounds concurrent child reads across active roots', async () => {
+    list.mockResolvedValue({ items: [session('ses_a'), session('ses_b'), session('ses_c')], errors: {} });
+    const firstTwo = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<Subagent[]>();
+    let active = 0;
+    let maximum = 0;
+    subagents.mockImplementation(async () => {
+      active += 1;
+      maximum = Math.max(maximum, active);
+      if (active === 2) firstTwo.resolve();
+      try { return await release.promise; }
+      finally { active -= 1; }
+    });
+    const loading = useGlobalSessionsStore.getState().loadSessions();
+    await firstTwo.promise;
+    expect(subagents.mock.calls).toHaveLength(2);
+    release.resolve([]);
+    await loading;
+    expect(subagents.mock.calls).toHaveLength(3);
+    expect(maximum).toBe(2);
+  });
 
-    expect(useGlobalSessionsStore.getState().activeSessions.map((item) => item.id)).toEqual(["active", "restored"])
-    expect(useGlobalSessionsStore.getState().archivedSessions.map((item) => item.id)).toEqual(["archived"])
-    expect(useGlobalSessionsStore.getState().status).toBe("ready")
-  })
+  test.each([false, true])('runtime switch ignores delayed child responses (directory=%s)', async (directory) => {
+    const started = Promise.withResolvers<void>();
+    const pending = Promise.withResolvers<Subagent[]>();
+    subagents.mockImplementation(() => { started.resolve(); return pending.promise; });
+    const loading = discover(directory);
+    await started.promise;
+    useGlobalSessionsStore.getState().resetForRuntimeSwitch();
+    useGlobalSessionsStore.getState().applySnapshot([], [], 'idle');
+    pending.resolve([child()]);
+    await loading;
+    expect(useGlobalSessionsStore.getState().entityById.size).toBe(0);
+    expect(useGlobalSessionsStore.getState().status).toBe('idle');
+  });
 
-  test("does not undo a move while refreshing the source directory", async () => {
-    const source = { ...session("moved"), directory: "/source" } as Session
-    const destination = { ...source, directory: "/destination" } as Session
-    useGlobalSessionsStore.getState().applySnapshot([source], [])
-    const refreshing = useGlobalSessionsStore.getState().refreshSessionsForDirectories(["/source"])
-    useGlobalSessionsStore.getState().upsertSession(destination)
+  test('rejects conflicting parent and child identities and skips child and archived discovery', async () => {
+    const existingChild = session('ses_other_child', { parentSessionId: 'ses_other', rootSessionId: 'ses_other' });
+    useGlobalSessionsStore.getState().upsertSession(existingChild);
+    list.mockResolvedValue({ items: [session('ses_root'), session('ses_archived', { archivedAt: 3 }), existingChild], errors: {} });
+    subagents.mockResolvedValue([
+      { ...child(), parentSessionId: 'ses_wrong' },
+      { ...child(), childSessionId: 'ses_root' },
+      { ...child(), childSessionId: 'ses_other_child' },
+    ]);
+    await useGlobalSessionsStore.getState().loadSessions();
+    expect(subagents.mock.calls.map(([id]) => id)).toEqual(['ses_root']);
+    expect(useGlobalSessionsStore.getState().entityById.has('ses_child')).toBe(false);
+    expect(useGlobalSessionsStore.getState().entityById.get('ses_other_child')?.parentSessionId).toBe('ses_other');
+  });
 
-    listRequest.resolve([source])
-    await refreshing
-
-    expect(useGlobalSessionsStore.getState().sessionsByDirectory.get("/source")).toBe(undefined)
-    expect(useGlobalSessionsStore.getState().sessionsByDirectory.get("/destination")?.[0]?.id).toBe("moved")
-  })
-
-  test("keeps a restore mutation newer than the directory refresh", async () => {
-    const archived = { ...session("restored", "restored", 5), directory: "/source" } as Session
-    useGlobalSessionsStore.getState().applySnapshot([], [archived])
-    const refreshing = useGlobalSessionsStore.getState().refreshSessionsForDirectories(["/source"])
-    useGlobalSessionsStore.getState().upsertSession({ ...archived, time: { ...archived.time, archived: 0 } })
-
-    // The server still reports the pre-restore row for this directory.
-    listRequest.resolve([archived])
-    await refreshing
-
-    expect(useGlobalSessionsStore.getState().activeSessions.map((item) => item.id)).toEqual(["restored"])
-    expect(useGlobalSessionsStore.getState().archivedSessions).toEqual([])
-  })
-})
-
-describe("paginated global session load", () => {
-  const PAGE_SIZE = 500
-  let secondPage: Deferred<Session[]>
-  let listCalls: number
-
-  const firstPage = Array.from({ length: PAGE_SIZE }, (_, index) => ({
-    ...session(`page1-${index}`),
-    time: { created: 1, updated: 1000 - index },
-  }) as Session)
-
-  const pagedSdk = {
-    experimental: {
-      session: {
-        list: async (options: { cursor?: number }) => {
-          listCalls += 1
-          return {
-            data: options.cursor === undefined ? firstPage : await secondPage.promise,
-            response: { headers: new Headers() },
-          }
-        },
-      },
-    },
-  } as unknown as OpencodeClient
-
-  const until = async (predicate: () => boolean): Promise<void> => {
-    for (let attempt = 0; attempt < 200; attempt += 1) {
-      if (predicate()) return
-      await new Promise((resolve) => setTimeout(resolve, 5))
-    }
-    throw new Error("condition never became true")
-  }
-
-  beforeEach(() => {
-    secondPage = deferred<Session[]>()
-    listCalls = 0
-    opencodeClient.getSdkClient = () => pagedSdk
-    useGlobalSessionsStore.getState().resetForRuntimeSwitch()
-  })
-
-  afterEach(() => {
-    opencodeClient.getSdkClient = originalGetSdkClient
-  })
-
-  test("shows the first page before pagination finishes", async () => {
-    const loading = useGlobalSessionsStore.getState().loadSessions()
-    await until(() => useGlobalSessionsStore.getState().activeSessions.length > 0)
-
-    const partial = useGlobalSessionsStore.getState()
-    expect(partial.activeSessions).toHaveLength(PAGE_SIZE)
-    expect(partial.status).toBe("loading")
-    expect(partial.hasLoaded).toBe(false)
-    expect(listCalls).toBe(2)
-
-    secondPage.resolve([{ ...session("page2-0"), time: { created: 1, updated: 400 } } as Session])
-    await loading
-
-    const complete = useGlobalSessionsStore.getState()
-    expect(complete.activeSessions).toHaveLength(PAGE_SIZE + 1)
-    expect(complete.activeSessions.some((item) => item.id === "page2-0")).toBe(true)
-    expect(complete.status).toBe("ready")
-    expect(complete.hasLoaded).toBe(true)
-  })
-
-  test("keeps the persisted seed visible while pagination continues", async () => {
-    const seeded = session("seeded")
-    useGlobalSessionsStore.getState().upsertSession(seeded)
-
-    const loading = useGlobalSessionsStore.getState().loadSessions()
-    await until(() => useGlobalSessionsStore.getState().activeSessions.length > 1)
-
-    expect(useGlobalSessionsStore.getState().activeSessions.some((item) => item.id === "seeded")).toBe(true)
-
-    secondPage.resolve([])
-    await loading
-  })
-
-  test("keeps an archive made between the first page and completion", async () => {
-    const loading = useGlobalSessionsStore.getState().loadSessions()
-    await until(() => useGlobalSessionsStore.getState().activeSessions.length > 0)
-
-    useGlobalSessionsStore.getState().archiveSessions(["page1-0"], 42)
-
-    secondPage.resolve([])
-    await loading
-
-    const state = useGlobalSessionsStore.getState()
-    expect(state.activeSessions.some((item) => item.id === "page1-0")).toBe(false)
-    expect(state.archivedSessions.map((item) => item.id)).toEqual(["page1-0"])
-    expect(state.status).toBe("ready")
-  })
-
-  test("keeps the first page when a later page fails", async () => {
-    const loading = useGlobalSessionsStore.getState().loadSessions()
-    await until(() => useGlobalSessionsStore.getState().activeSessions.length > 0)
-
-    secondPage.reject(new Error("unavailable"))
-    await loading
-
-    const state = useGlobalSessionsStore.getState()
-    expect(state.activeSessions).toHaveLength(PAGE_SIZE)
-    expect(state.status).toBe("error")
-  })
-
-  test("drops the pages when the runtime switches mid-load", async () => {
-    const loading = useGlobalSessionsStore.getState().loadSessions()
-    await until(() => useGlobalSessionsStore.getState().activeSessions.length > 0)
-
-    useGlobalSessionsStore.getState().resetForRuntimeSwitch()
-    secondPage.resolve([{ ...session("page2-0"), time: { created: 1, updated: 400 } } as Session])
-    await loading
-
-    const state = useGlobalSessionsStore.getState()
-    expect(state.activeSessions).toEqual([])
-    expect(state.archivedSessions).toEqual([])
-    expect(state.hasLoaded).toBe(false)
-    expect(state.status).toBe("idle")
-  })
-})
-
-const originalHomeInfo = opencodeClient.getFilesystemHomeInfo;
-opencodeClient.getFilesystemHomeInfo = async () => ({ home: '/home/user' });
-await ensureChatsRootDirectory();
-opencodeClient.getFilesystemHomeInfo = originalHomeInfo;
+  test('title projection remains valid when root metadata is confirmed missing', async () => {
+    list.mockResolvedValue({ items: [session('ses_root', { metadata: null, metadataRevision: '0' })], errors: {} });
+    subagents.mockResolvedValue([child('failed')]);
+    await useGlobalSessionsStore.getState().loadSessions();
+    expect(useGlobalSessionsStore.getState().entityById.get('ses_child')).toMatchObject({
+      metadata: { title: 'Worker' }, metadataRevision: '1', runtimeStatus: 'idle', activeRunId: null,
+    });
+  });
+});

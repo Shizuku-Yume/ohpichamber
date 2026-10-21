@@ -1,7 +1,4 @@
 import { describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 
 import { useUIStore } from '@/stores/useUIStore';
@@ -13,15 +10,42 @@ import {
   SETTINGS_KEYS,
   SETTINGS_REGISTRY,
   applySettingsToStores,
-  buildSettingsRegistrySnapshot,
   parseSettingsDocument,
   readAutoSaveSnapshot,
 } from './registry';
-import { renderSettingsRegistrySnapshot, SETTINGS_REGISTRY_SNAPSHOT_PATHS } from './registry-snapshot';
-
-const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', '..');
 
 describe('settings registry', () => {
+  test('round-trips all large text paste modes through settings and local persistence', async () => {
+    const options = useUIStore.persist.getOptions();
+    const original = useUIStore.getState();
+    let saved: Parameters<NonNullable<typeof options.storage>['setItem']>[1] = { state: original, version: options.version };
+    try {
+      useUIStore.persist.setOptions({ storage: { getItem: () => saved, setItem: (_name, value) => { saved = value; }, removeItem: () => undefined } });
+      for (const mode of ['ask', 'attach', 'inline', 'inline-double-paste']) {
+        const parsed = parseSettingsDocument(JSON.parse(JSON.stringify({ largeTextPasteBehavior: mode })));
+        expect(parsed).toEqual({ largeTextPasteBehavior: mode });
+        if (!parsed) throw new Error('Expected valid mode');
+        applySettingsToStores(parsed);
+        expect(useUIStore.getState().largeTextPasteBehavior).toBe(mode);
+        expect(readAutoSaveSnapshot().largeTextPasteBehavior).toBe(mode);
+        const persisted = saved;
+        useUIStore.persist.setOptions({ storage: { getItem: () => persisted, setItem: () => undefined, removeItem: () => undefined } });
+        useUIStore.getState().setLargeTextPasteBehavior('ask');
+        await useUIStore.persist.rehydrate();
+        expect(useUIStore.getState().largeTextPasteBehavior).toBe(mode);
+        useUIStore.persist.setOptions({ storage: { getItem: () => saved, setItem: (_name, value) => { saved = value; }, removeItem: () => undefined } });
+      }
+      expect(parseSettingsDocument({ largeTextPasteBehavior: 'invalid' })).toEqual({});
+    } finally {
+      useUIStore.persist.setOptions(options);
+      useUIStore.setState(original, true);
+    }
+  });
+  test('accepts only interface languages the UI ships', () => {
+    expect(parseSettingsDocument({ locale: 'zh-CN' })).toEqual({ locale: 'zh-CN' });
+    expect(parseSettingsDocument({ locale: 'xx' })).toEqual({});
+    expect(parseSettingsDocument({ locale: 3 })).toEqual({});
+  });
   test('project paths retain absolute Windows roots across parsing and serialization', () => {
     const parsed = parseSettingsDocument({ projects: [
       { path: 'c:\\', label: 'Drive' },
@@ -179,18 +203,4 @@ describe('settings registry', () => {
     expect(useUIStore.getState().workStatusHiddenSectionsExplicit).toBe(true);
   });
 
-  test('the checked-in JSON snapshots match the registry (run `bun run settings-registry:generate`)', () => {
-    const rendered = renderSettingsRegistrySnapshot();
-    for (const relativePath of SETTINGS_REGISTRY_SNAPSHOT_PATHS) {
-      expect(readFileSync(resolve(repoRoot, relativePath), 'utf8')).toBe(rendered);
-    }
-  });
-
-  test('the snapshot names every key of every table', () => {
-    const snapshot = buildSettingsRegistrySnapshot();
-    const keys = Object.keys(snapshot.fields);
-    expect(keys.length).toBe(SETTINGS_KEYS.length + LOCAL_DEVICE_KEYS.length + DESKTOP_SHELL_KEYS.length);
-    for (const key of LOCAL_DEVICE_KEYS) expect(snapshot.fields[key]).toEqual({ scope: 'device', local: true });
-    for (const key of DESKTOP_SHELL_KEYS) expect(snapshot.fields[key].owner).toBe('desktop-shell');
-  });
 });

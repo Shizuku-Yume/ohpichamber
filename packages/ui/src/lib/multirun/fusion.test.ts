@@ -1,67 +1,145 @@
-import { expect, test } from 'bun:test';
-import { createOpencodeClient, type Session } from '@opencode-ai/sdk/v2';
-import { loadFusionOutputs, type FusionSource } from './fusion';
-import { getMultiRunIdentity, withMultiRunMembership } from './identity';
+import { afterEach, describe, expect, spyOn, test } from 'bun:test';
+import type { Session } from '@openchamber/agent-contract';
+import { canonicalClient } from '@/api/canonicalClient';
+import * as keep from './keep';
+import { withMultiRunMembership } from './identity';
+import { buildMultiRunIndex } from './runs';
+import { fusionModeFor, NoFusionOutputsError, shouldInlineDiffs, startRunFusion } from './fusion';
+import * as laneData from './laneData';
+import * as creation from './createSession';
+import * as observation from './observation';
+import * as prompts from '@/lib/magicPrompts';
+import * as actions from '@/sync/session-actions';
+import { registerWorkspaceDirectory } from '@/stores/globalSessions';
+import { switchRuntimeEndpoint } from '@/lib/runtime-switch';
 
-const session: Session = {
-  id: 'run', slug: 'run', directory: '/repo', projectID: 'project', version: '1',
-  title: 'renamed freely', time: { created: 1, updated: 1 },
-  metadata: withMultiRunMembership({}, {
-    version: 1, sessionID: 'run', group: { kind: 'id', id: '9f512893-6e63-4e49-a534-5de733ca103e' },
-    groupSlug: 'bench', role: 'run', providerID: 'openrouter', modelID: 'vendor/model',
-  }),
-};
-const identity = getMultiRunIdentity(session);
-if (!identity) throw new Error('Fixture must have membership');
-const source: FusionSource = { session, identity, directory: '/repo', projectDirectory: '/repo' };
+describe('fusionModeFor', () => {
+  const changed = { files: 3, insertions: 10, deletions: 2 };
+  const clean = { files: 0, insertions: 0, deletions: 0 };
 
-test('fusion loads the selected session by ID and uses its current last assistant output', async () => {
-  const paths: string[] = [];
-  const client = createOpencodeClient({ baseUrl: 'http://fusion.test', fetch: async (request) => {
-    const url = new URL(new Request(request).url);
-    paths.push(url.pathname);
-    expect(url.searchParams.get('directory')).toBe('/repo');
-    if (!url.pathname.endsWith('/message')) return Response.json({ ...session, title: 'renamed again' });
-    return Response.json([
-      { info: { role: 'assistant' }, parts: [{ type: 'text', text: 'older' }] },
-      { info: { role: 'user' }, parts: [{ type: 'text', text: 'question' }] },
-      { info: { role: 'assistant' }, parts: [{ type: 'text', text: 'latest result' }] },
-    ]);
-  } });
-  const result = await loadFusionOutputs(client, [source], source.identity, () => {});
-  expect(result.map((item) => item.text)).toEqual(['latest result']);
-  expect(result[0].source.session.title).toBe('renamed again');
-  expect(paths).toEqual(['/session/run', '/session/run/message']);
+  test('code when every source has a worktree and at least one changed files', () => {
+    expect(fusionModeFor([
+      { hasWorktree: true, diff: changed },
+      { hasWorktree: true, diff: clean },
+    ])).toBe('code');
+  });
+
+  test('answers when any source shares a directory', () => {
+    expect(fusionModeFor([
+      { hasWorktree: true, diff: changed },
+      { hasWorktree: false, diff: null },
+    ])).toBe('answers');
+  });
+
+  test('answers when no source changed anything or the changes are unknown', () => {
+    expect(fusionModeFor([
+      { hasWorktree: true, diff: clean },
+      { hasWorktree: true, diff: null },
+    ])).toBe('answers');
+    expect(fusionModeFor([])).toBe('answers');
+  });
 });
 
-test('fusion stops before fetching output when a selected ID no longer owns membership', async () => {
-  const paths: string[] = [];
-  const client = createOpencodeClient({ baseUrl: 'http://fusion.test', fetch: async (request) => {
-    paths.push(new URL(new Request(request).url).pathname);
-    return Response.json({ ...session, id: 'fork' });
-  } });
-  await expect(loadFusionOutputs(client, [source], source.identity, () => {})).rejects.toThrow('membership changed');
-  expect(paths).toEqual(['/session/run']);
+describe('shouldInlineDiffs', () => {
+  test('inlines only while the diffs fit a tenth of the context window', () => {
+    // 12 tokens per changed line: 1,000 lines ≈ 12,000 tokens.
+    expect(shouldInlineDiffs(1_000, 200_000)).toBe(true);
+    expect(shouldInlineDiffs(2_000, 200_000)).toBe(false);
+  });
+
+  test('never inlines without a known context window', () => {
+    expect(shouldInlineDiffs(1, undefined)).toBe(false);
+    expect(shouldInlineDiffs(1, 0)).toBe(false);
+  });
 });
 
-test('fusion read failure is not silently treated as an empty source', async () => {
-  const client = createOpencodeClient({ baseUrl: 'http://fusion.test', fetch: async (request) => {
-    if (new URL(new Request(request).url).pathname.endsWith('/message')) return Response.json({ message: 'unavailable' }, { status: 503 });
-    return Response.json(session);
-  } });
-  await expect(loadFusionOutputs(client, [source], source.identity, () => {})).rejects.toThrow();
+const spies: Array<{ mockRestore(): void }> = [];
+afterEach(() => { for (const spy of spies.splice(0)) spy.mockRestore(); });
+function sessionFixture(sessionId: string): Session {
+  const session: Session = { sessionId, rootSessionId: sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '.', createdAt: 1, updatedAt: 1,
+    epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, metadata: {}, metadataRevision: '1', archiveRevision: '0' };
+  session.metadata = withMultiRunMembership(session, { version: 1, sessionID: sessionId, group: { kind: 'id', id: '9f512893-6e63-4e49-a534-5de733ca103e' }, groupSlug: 'run', role: 'run', providerID: 'provider', modelID: 'model' });
+  return session;
+}
+function sourceFixture() {
+  const sessions = ['a', 'b'].map(sessionFixture);
+  const run = [...buildMultiRunIndex(sessions, (session) => session.projectId).runs.values()][0];
+  spies.push(spyOn(keep, 'resolveRunMemberLocation').mockResolvedValue(null));
+  const create = spyOn(canonicalClient, 'createSession');
+  spies.push(create);
+  return { sessions, create, input: { run, sourceIds: ['a', 'b'], judge: { providerId: 'judge', modelId: 'model' }, sessionById: new Map(sessions.map((session) => [session.sessionId, session])) } };
+}
+
+describe('canonical fusion source authority', () => {
+  test('a listed source error aborts rather than dropping the source', async () => {
+    const api = sourceFixture();
+    spies.push(spyOn(canonicalClient, 'listSessions').mockResolvedValue({ items: api.sessions, errors: { a: 'read_failed' } }));
+    await expect(startRunFusion(api.input)).rejects.toThrow('Fusion source could not be read');
+    expect(api.create.mock.calls.length).toBe(0);
+  });
+  test('fresh changed membership invalidates cached source selection', async () => {
+    const api = sourceFixture();
+    spies.push(spyOn(canonicalClient, 'listSessions').mockResolvedValue({ items: api.sessions.map((session) => ({ ...session, metadata: null })), errors: {} }));
+    await expect(startRunFusion(api.input)).rejects.toThrow('Fusion source membership changed');
+    expect(api.create.mock.calls.length).toBe(0);
+  });
+  test('successfully empty native histories do not create a fusion', async () => {
+    const api = sourceFixture();
+    spies.push(spyOn(canonicalClient, 'listSessions').mockResolvedValue({ items: api.sessions, errors: {} }));
+    spies.push(spyOn(canonicalClient, 'getHistory').mockImplementation(async (sessionId) => ({ sessionId, branch: { branchId: 'branch', branchVersion: '1', leafMessageId: null }, messages: [], turns: [], nextCursor: null })));
+    await expect(startRunFusion(api.input)).rejects.toBeInstanceOf(NoFusionOutputsError);
+    expect(api.create.mock.calls.length).toBe(0);
+  });
+  test('history errors abort before creating a result', async () => {
+    const api = sourceFixture();
+    spies.push(spyOn(canonicalClient, 'listSessions').mockResolvedValue({ items: api.sessions, errors: {} }));
+    spies.push(spyOn(canonicalClient, 'getHistory').mockRejectedValue(new Error('History failed')));
+    await expect(startRunFusion(api.input)).rejects.toThrow('History failed');
+    expect(api.create.mock.calls.length).toBe(0);
+  });
 });
 
-test('a runtime switch during source lookup stops the next request', async () => {
-  let switched = false;
-  let requests = 0;
-  const client = createOpencodeClient({ baseUrl: 'http://fusion.test', fetch: async () => {
-    requests += 1;
-    switched = true;
-    return Response.json(session);
-  } });
-  await expect(loadFusionOutputs(client, [source], source.identity, () => {
-    if (switched) throw new Error('Runtime changed');
-  })).rejects.toThrow('Runtime changed');
-  expect(requests).toBe(1);
+describe('fusion native primary delivery', () => {
+  test.each(['command', 'template', 'text', 'failure', 'stale', 'plain'] as const)('expands generated primary once without touching context: %s', async (mode) => {
+    switchRuntimeEndpoint({ apiBaseUrl: 'http://fusion.test', runtimeKey: 'fusion-test' });
+    registerWorkspaceDirectory('workspace', '/repo');
+    const api = sourceFixture();
+    spies.push(spyOn(canonicalClient, 'listSessions').mockResolvedValue({ items: api.sessions, errors: {} }));
+    spies.push(spyOn(laneData, 'loadLaneLastReply').mockResolvedValue('Source reply /literal'));
+    spies.push(spyOn(laneData, 'loadLaneFirstPrompt').mockResolvedValue({ messageId: 'user', turnId: 'turn', text: '/original task', files: [] }));
+    const text = mode === 'plain' ? 'Fuse the answers\n#literal' : '/fusion "two words"\n trailing  ';
+    spies.push(spyOn(prompts, 'renderMagicPrompt').mockImplementation(async (key) => key === 'session.fusion.visible' ? text : 'Generated instructions /literal'));
+    const fusion = { ...sessionFixture('fusion'), metadata: null };
+    spies.push(spyOn(creation, 'createMultiRunSession').mockResolvedValue(fusion));
+    spies.push(spyOn(observation, 'observeLaneSession').mockResolvedValue(undefined));
+    spies.push(spyOn(canonicalClient, 'resolveWorkspace').mockResolvedValue({ projectId: 'project', workspaceId: 'workspace', name: 'repo' }));
+    const send = spyOn(actions, 'sendMessage').mockResolvedValue(undefined);
+    spies.push(send);
+    const requests: Request[] = [];
+    spies.push(spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+      const request = new Request(new URL(url instanceof Request ? url.url : String(url), 'http://test'), init);
+      // The runtime endpoint switch fires a swallowed auth-token mint on the
+      // same global fetch; only the expansion call is this test's subject.
+      if (new URL(request.url).pathname !== '/api/agent/v1/workspaces/workspace/commands/expand-text') return Response.json({});
+      requests.push(request);
+      expect(await request.json()).toEqual({ text });
+      if (mode === 'failure') return new Response('unavailable', { status: 503 });
+      if (mode === 'stale') registerWorkspaceDirectory('workspace', '/moved');
+      return Response.json(mode === 'command' || mode === 'template' ? { kind: mode, content: '/expanded once', modelSelection: { providerId: 'bound', modelId: 'bound-model' }, agentId: 'bound-agent' } : { kind: 'text', content: text });
+    }));
+    const result = startRunFusion({ ...api.input, judge: { ...api.input.judge, variant: 'high', agent: 'judge-agent' } });
+    if (mode === 'failure' || mode === 'stale') {
+      await expect(result).rejects.toThrow();
+      expect(send).not.toHaveBeenCalled();
+      return;
+    }
+    expect(await result).toMatchObject({ sessionId: 'fusion', directory: '/repo', mode: 'answers' });
+    expect(requests).toHaveLength(mode === 'plain' ? 0 : 1);
+    const matched = mode === 'command' || mode === 'template';
+    const request = send.mock.calls[0][0].request;
+    expect(request.options).toEqual({ providerId: matched ? 'bound' : 'judge', modelId: matched ? 'bound-model' : 'model', agentId: matched ? 'bound-agent' : 'judge-agent', variant: 'high', reasoningEffort: null });
+    expect(request.input.text).toBe(matched ? '/expanded once' : text);
+    expect(request.input.context.some(part => part.text.includes('/original task'))).toBe(true);
+    expect(request.input.context.some(part => part.text.includes('Source reply /literal'))).toBe(true);
+  });
 });

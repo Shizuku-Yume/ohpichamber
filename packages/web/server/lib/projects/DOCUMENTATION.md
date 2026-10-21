@@ -10,7 +10,7 @@ that writes it:
 | Keys | Owner | Reached through |
 |---|---|---|
 | `version`, `scheduledTasks` | `project-config.js` (scheduled-task runtime) | `/api/projects/:projectId/scheduled-tasks/*` |
-| `setup-worktree`, `setup-worktree-wait`, `projectActions`, `projectActionsPrimaryId`, `draftStarters`, `projectPath` | `project-setup.js` via `readProjectSetup` / `updateProjectSetup` on the same runtime | `GET/PUT /api/projects/:projectId/config` (`routes.js`) |
+| `setup-worktree`, `setup-worktree-wait`, `projectActions`, `projectActionsPrimaryId`, `draftStarters`, `projectPath`, `worktreeDirectory` | `project-setup.js` via `readProjectSetup` / `updateProjectSetup` on the same runtime | `GET/PUT /api/projects/:projectId/config` (`routes.js`) |
 
 Notes, todos, and plans moved out of this file to `packages/web/server/lib/project-context`.
 
@@ -29,6 +29,16 @@ blocks so a page can edit the personal file without copying a teammate's entry i
 | `projectActionsPrimaryId` | personal only |
 | `draftStarters` | union by `type:name`, shared first, every entry carries `source` |
 | `plansDir` | shared only |
+
+`personal.worktreeDirectory` is the personal folder where new Git worktrees for
+the project are created; there is no shared counterpart. A PUT accepts a string
+or `null` (and a blank string clears it). Git resolves a relative value against
+the project's primary worktree, a leading `~` against the home directory, and an
+absolute value as-is. When it is null, Git uses the Host data-dir default
+(`<OpenChamber data dir>/worktree/<git project id>`); it does not read OpenCode's
+configuration or data directory. `readWorktreeDirectory` on the runtime is the
+canonical reader Git receives through Host composition
+(`configureProjectWorktreeDirectory`).
 
 A shared file that exists but cannot be parsed (or names a `plansDir` outside the
 repo) is `shared.status: "invalid"` with a `reason`; the personal setup is still
@@ -64,14 +74,14 @@ UI (`packages/ui/src/lib/sharedTrustConfirmation.ts`).
 ## Modules
 
 - `project-id.js` — `createProjectIdFromPath` / `projectPathFromId`: the path-derived id (`path_<base64url>`) that names the file, and the checkout path back from it. The shared UI derives the same id (`packages/ui/src/lib/projectId.ts`); both sides must agree. `projectConfigFileStemOf`: the stem that names the file and the sibling folder for an id, see the file name invariant below.
-- `project-config.js` — `createProjectConfigRuntime`: raw read, atomic write, the cross-process file lock (Electron and a CLI `serve` can share one projects dir), scheduled-task normalization, and the project-setup read/update.
-- `project-setup.js` — sanitizers, the shared-file parser (`parseSharedProjectConfig`, `normalizePlansDir`), the merge (`mergeProjectSetup`), and the personal view for the setup keys. Mirrored in the VS Code extension host (`packages/vscode/src/project-setup.ts`), which owns the same file when the webview has no OpenChamber server; keep the two in sync.
+- `project-config.js` — `createProjectConfigRuntime`: raw read, atomic write, the cross-process file lock (Electron and a CLI `serve` can share one projects dir), scheduled-task normalization, the project-setup read/update, and `readWorktreeDirectory` (the personal Git worktree folder).
+- `project-setup.js` — sanitizers, the shared-file parser (`parseSharedProjectConfig`, `normalizePlansDir`), the merge (`mergeProjectSetup`), and the personal view for the setup keys (including `worktreeDirectory`).
 - `routes.js` — the setup routes. `/api/projects` is on the JSON-body allowlist in `opencode/core-routes.js`.
 
 ## Invariants
 
 - **Every write is a locked read-modify-write of the whole document.** Keys the writer does not own, and keys from newer builds, come back out unchanged. A setup update and a scheduled-task update never clobber each other.
 - **A wrongly shaped key is a 400, not a silent drop.** `projectSetupPatchToStored` throws; the file is untouched. Values inside a well-shaped key are sanitized (trimmed, capped, deduplicated) rather than rejected.
-- **The file name is bounded, and so is the folder beside it.** The file is `<projectId>.json` and the per-project folder is `<projectId>/` while the id is at most 200 characters. A `path_<base64url>` id grows with the checkout path, so a deeply nested project (a path of roughly 150 characters or more) would otherwise get a name beyond the 255-byte limit and every write, lock, and temp file would fail with ENAMETOOLONG. Such an id is stored as `path_sha256_<hex digest of the id>.json` instead, with the folder `path_sha256_<digest>/` beside it (`projectConfigFileStemOf`; every composer of either path goes through it: `project-config.js`, `project-context/runtime.js`, `agent-memory/runtime.js`, and the id migration and orphan recovery in `opencode/settings-runtime.js`). The digest keeps the `path_` prefix so orphan recovery skips it. A file an older build managed to write under the long name is still read when the bounded file is missing and is moved to the bounded name by the next write; a malformed one is a read failure, not an empty project. A folder an older build created under the raw id (possible only for ids of 201 to 255 characters; longer names never got one) is moved into the bounded folder once at startup, by the project id migration in `opencode/settings-runtime.js`, with `context.json` merged by entry identity when both exist. The VS Code extension host mirrors both the naming rule and the legacy read-then-move for the file (`bridge-project-setup-runtime.ts`), because a VS Code-only user has no server to do it; it never touches the folder.
-- **The client never composes the path.** `packages/ui/src/lib/openchamberConfig.ts` speaks only HTTP; the same code serves web, desktop, VS Code, and the phone, including a phone on a remote instance.
+- **The file name is bounded, and so is the folder beside it.** The file is `<projectId>.json` and the per-project folder is `<projectId>/` while the id is at most 200 characters. A `path_<base64url>` id grows with the checkout path, so a deeply nested project (a path of roughly 150 characters or more) would otherwise get a name beyond the 255-byte limit and every write, lock, and temp file would fail with ENAMETOOLONG. Such an id is stored as `path_sha256_<hex digest of the id>.json` instead, with the folder `path_sha256_<digest>/` beside it (`projectConfigFileStemOf`; every composer of either path goes through it: `project-config.js`, `project-context/runtime.js`, `agent-memory/runtime.js`, and the id migration and orphan recovery in `host/settings-runtime.js`). The digest keeps the `path_` prefix so orphan recovery skips it. A file an older build managed to write under the long name is still read when the bounded file is missing and is moved to the bounded name by the next write; a malformed one is a read failure, not an empty project. A folder an older build created under the raw id (possible only for ids of 201 to 255 characters; longer names never got one) is moved into the bounded folder once at startup, by the project id migration in `host/settings-runtime.js`, with `context.json` merged by entry identity when both exist.
+- **The client never composes the path.** `packages/ui/src/lib/openchamberConfig.ts` speaks only HTTP; the same code serves web, desktop, and the phone, including a phone on a remote instance.
 - **`OPENCHAMBER_DATA_DIR` moves this directory too.** Every OpenChamber folder hangs off the one root; a custom root gets `projects/`, `themes/`, and `speech-models/` copied in from `~/.config/openchamber` once at startup (copied, not moved: a second instance beside the default one must not strip it) (`lib/data-dir-migration.js`). A scratch server started with its own data dir therefore never touches the real project configs.

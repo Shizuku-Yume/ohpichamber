@@ -1,6 +1,5 @@
 import React from 'react';
 import { GUEST_TOOL_TEMPLATE_VALUE_MAX, type GuestToolContribution, type JsonValue } from '@openchamber/sdk';
-import type { ToolStateCompleted } from '@opencode-ai/sdk/v2';
 
 import { isGuestActive } from './capabilities.ts';
 import { useGuestsStore } from './store.ts';
@@ -77,7 +76,7 @@ export const resolveGuestToolPresentation = (fullToolName: string | undefined | 
 /**
  * The rule for one rendered tool part. Subscribes to the catalog array only,
  * which changes on load, install, pause, approval, and runtime switch, never
- * while a tool streams. VS Code and mobile keep the store empty, so this is
+ * while a tool streams. Mobile keeps the store empty, so this is
  * `null` there.
  */
 export const useGuestToolPresentation = (fullToolName: string | undefined | null): GuestToolRule | null => {
@@ -170,20 +169,9 @@ const templateOutputValue = (output: string | undefined): TemplateValue => {
     return output;
   }
 };
+/** Tool input and metadata are JSON objects and need no assertion. */
+type ToolStateData = { [key: string]: JsonValue };
 
-/** Tool input and metadata as the OpenCode SDK types them: an open object. */
-type ToolStateData = ToolStateCompleted['input'];
-
-/**
- * Tool input and metadata were decoded from the JSON the server sent, so
- * they are JSON values; this is the one place the registry says so.
- */
-const templateDataValue = (value: ToolStateData | undefined): TemplateValue => {
-  if (value === undefined) return undefined;
-  // SAFETY: `value` was produced by JSON.parse of an OpenCode tool part, so every
-  // nested value is a JSON value; the SDK just does not carry that in its type.
-  return value as { [key: string]: JsonValue };
-};
 
 type GuestToolHeader = {
   title: string | null;
@@ -205,9 +193,9 @@ export const renderGuestToolHeader = (
     || (rule.subtitle && TEMPLATE_NEEDS_OUTPUT.test(rule.subtitle)),
   );
   const context: TemplateContext = {
-    input: templateDataValue(data.input),
+    input: data.input,
     output: needsOutput ? templateOutputValue(data.output) : undefined,
-    metadata: templateDataValue(data.metadata),
+    metadata: data.metadata,
   };
   const renderedTitle = rule.title ? renderTemplate(rule.title, context) : '';
   const renderedSubtitle = rule.subtitle ? renderTemplate(rule.subtitle, context) : '';
@@ -218,10 +206,11 @@ export const renderGuestToolHeader = (
 };
 
 /** Rows for `output: "table"`: the parsed output array, or its `items` array. `null` when neither. */
-export const guestToolTableRows = (output: TemplateValue): JsonValue[] | null => {
-  if (isJsonArray(output)) return output;
-  if (isJsonObject(output)) {
-    const items = output.items;
+export const guestToolTableRows = (output: string | undefined): JsonValue[] | null => {
+  const value = templateOutputValue(output);
+  if (isJsonArray(value)) return value;
+  if (isJsonObject(value)) {
+    const items = value.items;
     if (isJsonArray(items)) return items;
   }
   return null;

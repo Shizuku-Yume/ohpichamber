@@ -1,12 +1,14 @@
+import { isString } from '../shared/guards.js';
 import { getRepositoryRoot } from '../git/service.js';
 import { describeSmallModel, generateSmallModelText } from '../small-model/index.js';
 import { buildDigest } from './digest.js';
 import { indexHunks } from './hunks.js';
 import { normalizeLanguage } from './languages.js';
-import { buildPrompt, JSON_SHAPE_INSTRUCTION } from './prompt.js';
+import { buildPrompt } from './prompt.js';
 import { normalizeWalkthrough, parseModelJson, responseSchema } from './schema.js';
 import {
   buildCacheKey,
+  canonicalReadContext,
   pruneMissingRepositories,
   readCachedWalkthrough,
   readPointer,
@@ -14,7 +16,7 @@ import {
   writePointer,
 } from './store.js';
 import { readWalkthroughModelOverride } from './model-settings.js';
-import { loadSourceSections, parseSource, sourceKey, WalkthroughSourceError } from './sources.js';
+import { loadSourceSections, parseSource, sourceKey } from './sources.js';
 
 // Walkthrough generation is always user-initiated and never automatic: it costs
 // tokens, and a background regeneration on every keystroke would be a way to
@@ -89,19 +91,38 @@ const fail = (message, statusCode, extra = {}) =>
 // that comes back attaches to the running job instead of starting a second one,
 // and cancelling is an explicit request rather than a side effect of leaving.
 const jobs = new Map();
-
-// Providers that answered a schema request with a 4xx. Retrying the schema on
-// every generation means paying for a call we already know will fail, so the
-// refusal is remembered and the fallback goes first next time.
-//
-// Process-lifetime only, on purpose: a provider that gains structured-output
-// support should not need a settings change to be tried again — a restart is
-// enough, and the cost of one wasted first attempt after that is small.
 const schemaRefusedBy = new Set();
 
-const modelKey = (model) => `${model.providerID}/${model.modelID}`;
+const addReadContext = (result, readContext) => {
+  if (readContext) result.readContext = readContext;
+  return result;
+};
 
-const jobKey = (repoRoot, sourceKeyValue) => `${repoRoot}\0${sourceKeyValue}`;
+const jobKey = (repoRoot, sourceKeyValue, readContext) => readContext
+  ? JSON.stringify({
+    repoRoot,
+    sourceKey: sourceKeyValue,
+    readContext: canonicalReadContext(readContext),
+  })
+  : `${repoRoot}\0${sourceKeyValue}`;
+
+const readContextForSource = (source, readContext) => {
+  if (source.kind !== 'pr') return undefined;
+  const valid = readContext
+    && (readContext.provider === 'github' || readContext.provider === 'gitlab')
+    && isString(readContext.instance)
+    && isString(readContext.accountId)
+    && isString(readContext.repositoryId)
+    && Number.isInteger(readContext.bindingRevision)
+    && isString(readContext.directory)
+    && isString(readContext.primaryRemote);
+  if (!valid) {
+    throw fail('A trusted GitHub or GitLab read context is required for pull request walkthroughs', 400, {
+      code: 'INVALID_SOURCE_CONTROL_READ_CONTEXT',
+    });
+  }
+  return Object.freeze(canonicalReadContext(readContext));
+};
 
 /**
  * Coarse stages, reported so a long wait is legible.
@@ -111,8 +132,8 @@ const jobKey = (repoRoot, sourceKeyValue) => `${repoRoot}\0${sourceKeyValue}`;
  * would imply progress where there is none. `retrying` appears only when a
  * provider rejects the schema and the prompt-side fallback runs.
  */
-const setStage = (repoRoot, sourceKeyValue, stage) => {
-  const job = jobs.get(jobKey(repoRoot, sourceKeyValue));
+const setStage = (repoRoot, sourceKeyValue, stage, readContext) => {
+  const job = jobs.get(jobKey(repoRoot, sourceKeyValue, readContext));
   if (job) job.stage = stage;
 };
 
@@ -120,38 +141,41 @@ const setStage = (repoRoot, sourceKeyValue, stage) => {
  * Current stage of a running generation, or `null` when nothing is running.
  * Reads memory only — no git, no network — so it is cheap to poll.
  */
-export function getGenerationStage(repoRoot, sourceKeyValue) {
-  return jobs.get(jobKey(repoRoot, sourceKeyValue))?.stage ?? null;
+export function getGenerationStage(repoRoot, sourceKeyValue, readContext) {
+  return jobs.get(jobKey(repoRoot, sourceKeyValue, readContext))?.stage ?? null;
 }
 
 /**
  * Whether a generation is currently running for a source. Lets a reconnecting
  * client show progress instead of an empty panel.
  */
-export function isGenerating(repoRoot, sourceKeyValue) {
-  return jobs.has(jobKey(repoRoot, sourceKeyValue));
+export function isGenerating(repoRoot, sourceKeyValue, readContext) {
+  return jobs.has(jobKey(repoRoot, sourceKeyValue, readContext));
 }
 
 /**
  * Resolve the pair the job registry is keyed by, for callers that need to look
  * a job up without doing any diff work.
  */
-export async function getRepositoryRootFor(directory, rawSource) {
+/** @public */
+export async function getRepositoryRootFor(directory, rawSource, rawReadContext) {
   const source = parseSource(rawSource);
-  return { repoRoot: await getRepositoryRoot(directory), sourceKey: sourceKey(source) };
+  const readContext = readContextForSource(source, rawReadContext);
+  return { repoRoot: await getRepositoryRoot(directory), sourceKey: sourceKey(source), readContext };
 }
 
 /**
  * Stop a running generation. Only an explicit request does this — leaving the
  * page does not.
  */
-export async function cancelWalkthroughGeneration({ directory, source: rawSource }) {
+export async function cancelWalkthroughGeneration({ directory, source: rawSource, readContext: rawReadContext }) {
   const source = parseSource(rawSource);
+  const readContext = readContextForSource(source, rawReadContext);
   const repoRoot = await getRepositoryRoot(directory);
-  const job = jobs.get(jobKey(repoRoot, sourceKey(source)));
-  if (!job) return { cancelled: false };
+  const job = jobs.get(jobKey(repoRoot, sourceKey(source), readContext));
+  if (!job) return addReadContext({ cancelled: false }, readContext);
   job.controller.abort();
-  return { cancelled: true };
+  return addReadContext({ cancelled: true }, readContext);
 }
 
 const modelLabel = (model) => `${model.providerID}/${model.modelID}`;
@@ -165,10 +189,17 @@ const modelLabel = (model) => `${model.providerID}/${model.modelID}`;
  * saved setting, which in turn outranks the small-model chain — the user picking
  * a roomier model for a risky change is the most specific intent there is.
  */
-const resolveModel = (directory, explicitModel) => describeSmallModel({
+// `providerID` / `modelID` are the user's composer: without a model of its
+// own choosing, the walkthrough stays on that provider rather than on
+// whichever provider happens to be connected, and on that model when the
+// provider has no small one.
+const resolveModel = (workspaceId, directory, explicitModel, providerID, modelID) => describeSmallModel({
+  workspaceId,
   directory,
   outputReserveTokens: walkthroughOutputTokens,
   overrideModel: explicitModel || readWalkthroughModelOverride(),
+  preferredProviderID: providerID || undefined,
+  preferredModelID: modelID || undefined,
 });
 
 export const __testing = { generationTimeoutMs, walkthroughOutputTokens };
@@ -176,8 +207,8 @@ export const __testing = { generationTimeoutMs, walkthroughOutputTokens };
 /**
  * Current diff for a source, parsed into files and hunks.
  */
-async function loadCurrentDiff(directory, source, deps) {
-  const { sections } = await loadSourceSections(directory, source, deps);
+async function loadCurrentDiff(directory, source, deps, readContext) {
+  const { sections } = await loadSourceSections(directory, source, { ...deps, readContext });
   const built = buildDigest(sections);
   return built;
 }
@@ -233,19 +264,20 @@ const serializeHunks = (files) => files.flatMap((file) => file.hunks.map((hunk) 
  * Read the last walkthrough for a source, resolved against the current diff.
  * Never generates and never spends tokens.
  */
-export async function getWalkthrough({ directory, source: rawSource, model: explicitModel, language: rawLanguage }, deps = {}) {
+export async function getWalkthrough({ workspaceId, directory, source: rawSource, model: explicitModel, providerID, modelID, language: rawLanguage, readContext: rawReadContext }, deps = {}) {
   const source = parseSource(rawSource);
+  const readContext = readContextForSource(source, rawReadContext);
   const repoRoot = await getRepositoryRoot(directory);
   const key = sourceKey(source);
   const language = normalizeLanguage(rawLanguage);
 
-  const pointer = readPointer(repoRoot, key);
+  const pointer = readPointer(repoRoot, key, readContext);
   // One diff, one model lookup, both answers. These used to be separate
   // endpoints the client called in parallel, which meant every panel open ran
   // the whole git pipeline twice.
   const [built, model] = await Promise.all([
-    loadCurrentDiff(directory, source, deps),
-    resolveModel(directory, explicitModel).catch(() => null),
+    loadCurrentDiff(directory, source, deps, readContext),
+    resolveModel(workspaceId, directory, explicitModel, providerID, modelID).catch(() => null),
   ]);
   const { files } = built;
   const hunkIndex = indexHunks(files);
@@ -256,8 +288,9 @@ export async function getWalkthrough({ directory, source: rawSource, model: expl
     hunks: serializeHunks(files),
     hunkCount: hunkIndex.size,
     readiness,
-    generating: isGenerating(repoRoot, key),
+    generating: isGenerating(repoRoot, key, readContext),
   };
+  addReadContext(base, readContext);
 
   // Ask the cache for *this* request before falling back to the pointer.
   //
@@ -275,6 +308,7 @@ export async function getWalkthrough({ directory, source: rawSource, model: expl
       modelID: model.modelID,
       language,
       files,
+      readContext,
     })
     : null;
 
@@ -296,7 +330,7 @@ export async function getWalkthrough({ directory, source: rawSource, model: expl
       sourceKey: key,
       cacheKey: requestedKey,
       generatedAt: requested.generatedAt,
-    });
+    }, readContext);
   }
 
   return {
@@ -331,12 +365,6 @@ function computeReadiness({ model, digest, files, fileCount, hunkCount, generate
     return { ready: false, reason, model, generatedFileCount };
   }
 
-  // A resolved override/config model can still have no usable login. Refuse up
-  // front and omit the model — offering an unauthenticated selection in the
-  // picker is what made the old raw auth error feel like a product bug.
-  if (model.hasLogin === false) {
-    return { ready: false, reason: 'no-provider-login' };
-  }
 
   // Built with the same language the generation would use: the instruction is
   // part of the prompt, so a readiness answer computed without it would be
@@ -344,9 +372,6 @@ function computeReadiness({ model, digest, files, fileCount, hunkCount, generate
   const { prompt, system } = buildPrompt({ digest, fileCount, hunkCount, source, language });
   const requiredChars = prompt.length + system.length;
 
-  if (model.structuredOutput === false) {
-    return { ready: false, reason: 'structured-output-unsupported', model, requiredChars };
-  }
 
   if (requiredChars > model.inputCharBudget) {
     return {
@@ -368,45 +393,37 @@ function computeReadiness({ model, digest, files, fileCount, hunkCount, generate
  * which also means returning to a previous state of the working tree costs
  * nothing.
  */
-export async function generateWalkthrough({ directory, source: rawSource, force = false, model: explicitModel, language: rawLanguage }, deps = {}) {
+export async function generateWalkthrough({ workspaceId, directory, source: rawSource, force = false, model: explicitModel, providerID, modelID, language: rawLanguage, readContext: rawReadContext }, deps = {}) {
   const source = parseSource(rawSource);
+  const readContext = readContextForSource(source, rawReadContext);
   const repoRoot = await getRepositoryRoot(directory);
   const key = sourceKey(source);
   const language = normalizeLanguage(rawLanguage);
 
   // Attach to a running job rather than starting a second one. A user who
   // refreshed and pressed the button again wants the answer, not two bills.
-  const existing = jobs.get(jobKey(repoRoot, key));
+  const existing = jobs.get(jobKey(repoRoot, key, readContext));
   if (existing) return existing.promise;
 
   const controller = new AbortController();
-  const promise = runGeneration({ directory, source, repoRoot, key, force, explicitModel, language, signal: controller.signal }, deps)
+  const promise = runGeneration({ workspaceId, directory, source, repoRoot, key, force, explicitModel, providerID, modelID, language, readContext, signal: controller.signal }, deps)
     .finally(() => {
-      if (jobs.get(jobKey(repoRoot, key))?.controller === controller) {
-        jobs.delete(jobKey(repoRoot, key));
+      if (jobs.get(jobKey(repoRoot, key, readContext))?.controller === controller) {
+        jobs.delete(jobKey(repoRoot, key, readContext));
       }
     });
 
-  jobs.set(jobKey(repoRoot, key), { controller, promise, stage: 'collecting' });
+  jobs.set(jobKey(repoRoot, key, readContext), { controller, promise, stage: 'collecting' });
   return promise;
 }
 
-async function runGeneration({ directory, source, repoRoot, key, force, explicitModel, language, signal }, deps) {
+async function runGeneration({ workspaceId, directory, source, repoRoot, key, force, explicitModel, providerID, modelID, language, readContext, signal }, deps) {
 
-  const model = await resolveModel(directory, explicitModel);
-  if (!model) {
-    throw fail('No model is available — sign in to a provider first', 404, { code: 'no-model' });
-  }
-  if (model.hasLogin === false) {
-    throw fail(
-      `No OpenCode login found for provider "${model.providerID}" — sign in or choose a different model`,
-      401,
-      { code: 'no-provider-login', model },
-    );
-  }
+  const model = await resolveModel(workspaceId, directory, explicitModel, providerID, modelID);
+  if (!model) throw fail('No model is available in the workspace catalog', 404, { code: 'no-model' });
 
-  const { digest, files, idByAlias, fileCount, hunkCount, generatedFileCount } = await loadCurrentDiff(directory, source, deps);
-  setStage(repoRoot, key, 'asking');
+  const { digest, files, idByAlias, fileCount, hunkCount, generatedFileCount } = await loadCurrentDiff(directory, source, deps, readContext);
+  setStage(repoRoot, key, 'asking', readContext);
   if (hunkCount === 0) {
     if (files.length > 0 && generatedFileCount === files.length) {
       throw fail('Only generated files changed — there is nothing to review', 400, { code: 'only-generated' });
@@ -421,6 +438,7 @@ async function runGeneration({ directory, source, repoRoot, key, force, explicit
     modelID: model.modelID,
     language,
     files,
+    readContext,
   });
 
   const hunkIndex = indexHunks(files);
@@ -433,8 +451,8 @@ async function runGeneration({ directory, source, repoRoot, key, force, explicit
         sourceKey: key,
         cacheKey,
         generatedAt: cached.generatedAt,
-      });
-      return {
+      }, readContext);
+      return addReadContext({
         source,
         walkthrough: cached.walkthrough,
         model: cached.model,
@@ -444,7 +462,7 @@ async function runGeneration({ directory, source, repoRoot, key, force, explicit
         hunks: serializeHunks(files),
         hunkCount,
         ...resolveAgainstCurrent(cached.walkthrough, hunkIndex),
-      };
+      }, readContext);
     }
   }
 
@@ -452,7 +470,7 @@ async function runGeneration({ directory, source, repoRoot, key, force, explicit
   // keep what is still true instead of starting from a blank page. The old
   // anchors are deliberately not included — they belong to code that has moved.
   let previousWalkthrough = null;
-  const pointer = readPointer(repoRoot, key);
+  const pointer = readPointer(repoRoot, key, readContext);
   if (pointer) {
     const previousEntry = readCachedWalkthrough(pointer.cacheKey);
     if (previousEntry && previousEntry.cacheKey !== cacheKey) {
@@ -462,107 +480,36 @@ async function runGeneration({ directory, source, repoRoot, key, force, explicit
 
   const { prompt, system } = buildPrompt({ digest, fileCount, hunkCount, source, previousWalkthrough, language });
 
-  if (model.structuredOutput === false) {
-    throw fail(
-      `${modelLabel(model)} cannot produce structured output — choose a different small model`,
-      409,
-      { code: 'structured-output-unsupported', model },
-    );
-  }
 
-  const run = (options) => generateSmallModelText({
-    prompt: options.prompt,
-    system: options.system,
+  const requestOptions = {
+    prompt,
+    system,
     directory,
-    sessionID: `openchamber-walkthrough-${cacheKey}`,
+    workspaceId,
     model: `${model.providerID}/${model.modelID}`,
-    responseSchema: options.responseSchema,
     onOverflow: 'error',
     timeoutMs: generationTimeoutMs(hunkCount),
-    // The number the input budget was already reduced by, not a fresh guess.
     maxOutputTokens: model.outputTokens ?? MIN_OUTPUT_TOKENS,
     signal,
-  });
-
-  // Roughly half the catalog does not declare `structured_output`, and some of
-  // those providers reject the schema outright. A rejected request shape is not
-  // a dead end: the shape can travel in the prompt instead, and the response
-  // parser is already tolerant of imperfect JSON.
-  const withSchema = () => run({ prompt, system, responseSchema });
-  const withoutSchema = () => run({
-    prompt,
-    system: `${system}\n${JSON_SHAPE_INSTRUCTION}`,
-    responseSchema: undefined,
-  });
-
-  const asRequestFailure = (error) => {
-    if (error?.code === 'context-too-small') {
-      return fail(error.message, 409, {
-        code: 'context-too-small',
-        model,
-        requiredChars: error.requiredChars,
-        availableChars: error.availableChars,
-      });
-    }
-    if (error?.code === 'output-exhausted') {
-      return fail(error.message, 409, { code: 'output-exhausted', model });
-    }
-    if (error?.code === 'no-provider-login') {
-      return fail(error.message, 401, { code: 'no-provider-login', model });
-    }
-    return null;
   };
-
-  const refusesSchema = (error) => error?.code === 'structured-output-unsupported'
-    || (Number(error?.status) >= 400 && Number(error?.status) < 500);
-
+  const modelKey = modelLabel(model);
   let raw;
-  let usedSchema = false;
-
-  if (schemaRefusedBy.has(modelKey(model))) {
-    // Already known to refuse: skip straight to the fallback rather than pay
-    // for a call whose failure is a foregone conclusion.
-    setStage(repoRoot, key, 'retrying');
-    try {
-      raw = await withoutSchema();
-    } catch (error) {
-      throw asRequestFailure(error) ?? error;
-    }
-  } else {
-    try {
-      raw = await withSchema();
-      usedSchema = true;
-    } catch (error) {
-      const failure = asRequestFailure(error);
-      if (failure) throw failure;
-      if (!refusesSchema(error)) throw error;
-
-      schemaRefusedBy.add(modelKey(model));
-      setStage(repoRoot, key, 'retrying');
-      try {
-        raw = await withoutSchema();
-      } catch (fallbackError) {
-        throw asRequestFailure(fallbackError) ?? fallbackError;
-      }
-    }
+  try {
+    raw = await generateSmallModelText({ ...requestOptions, responseSchema: schemaRefusedBy.has(modelKey) ? undefined : responseSchema });
+  } catch (error) {
+    const status = error?.statusCode ?? error?.status;
+    if (schemaRefusedBy.has(modelKey) || !responseSchema || !Number.isInteger(status) || status < 400 || status >= 500) throw error;
+    schemaRefusedBy.add(modelKey);
+    setStage(repoRoot, key, 'retrying', readContext);
+    raw = await generateSmallModelText({ ...requestOptions, responseSchema: undefined });
   }
 
-  setStage(repoRoot, key, 'assembling');
+  setStage(repoRoot, key, 'assembling', readContext);
 
   let walkthrough;
   try {
     walkthrough = normalizeWalkthrough(parseModelJson(raw.text), idByAlias);
   } catch (error) {
-    // Without schema support the model was asked for JSON in prose and did not
-    // deliver: that is a capability problem the user can fix by switching model,
-    // so it gets the picker rather than a parser error.
-    if (!usedSchema) {
-      throw fail(
-        `${modelLabel(model)} could not return the structured response a walkthrough needs`,
-        409,
-        { code: 'structured-output-unsupported', model },
-      );
-    }
     throw fail(
       `${modelLabel(model)} did not return a usable walkthrough — try a different small model`,
       502,
@@ -580,13 +527,14 @@ async function runGeneration({ directory, source, repoRoot, key, force, explicit
     language,
     walkthrough,
   };
+  addReadContext(entry, readContext);
 
   // A failed write costs a regeneration next time; it must never fail the
   // request that already produced a good walkthrough.
   writeCachedWalkthrough(cacheKey, entry);
-  writePointer(repoRoot, key, { repoRoot, sourceKey: key, cacheKey, generatedAt });
+  writePointer(repoRoot, key, { repoRoot, sourceKey: key, cacheKey, generatedAt }, readContext);
 
-  return {
+  return addReadContext({
     source,
     walkthrough,
     model: entry.model,
@@ -596,7 +544,5 @@ async function runGeneration({ directory, source, repoRoot, key, force, explicit
     hunks: serializeHunks(files),
     hunkCount,
     ...resolveAgainstCurrent(walkthrough, hunkIndex),
-  };
+  }, readContext);
 }
-
-export { WalkthroughSourceError };

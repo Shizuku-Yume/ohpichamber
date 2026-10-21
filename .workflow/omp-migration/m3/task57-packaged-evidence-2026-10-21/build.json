@@ -1,0 +1,15 @@
+{
+  "artifact": "packages/electron/dist/OpenChamber-2.2.0-linux-x86_64.AppImage",
+  "sha256": "068a152b8557e69c92eddbd1d4aaa3c745412826980eb55dcd336a0701916847",
+  "sourceHead": "1446a6b54",
+  "buildLog": "build-068a152b.log",
+  "buildExit": 1,
+  "buildExitReason": "electron-builder GitHub publish step: GH_TOKEN unset; AppImage was written",
+  "extraction": "/tmp/appimage_extracted_068a152b8557e69c92eddbd1d4aaa3c745412826980eb55dcd336a0701916847/openchamber",
+  "extractedChecks": {
+    "snapshot_blob.bin": 365488,
+    "v8_context_snapshot.bin": 740048,
+    "resources.pak": 7422300,
+    "vk_swiftshader_icd.json": 107
+  }
+}

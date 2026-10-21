@@ -1,5 +1,4 @@
-import type { Part } from '@opencode-ai/sdk/v2';
-import { readContextPart, type ContextPartPayload } from './contextParts';
+import type { Part } from '@openchamber/agent-contract';
 import { extractTerminalContexts } from './terminalContext';
 
 /** Preserve both the source and the reply when a model context needs a limit. */
@@ -24,60 +23,23 @@ function quoteContext(source: string, body: string, comment: string, fieldLimit?
   return `${source}\n\n${quote}${comment.trim() ? `\n\n**User comment:**\n\n${excerpt(comment)}` : ''}`;
 }
 
-function formatContext(payload: ContextPartPayload, originalText: string, fieldLimit?: number): string {
-  switch (payload.kind) {
-    case 'code-comment':
-      return quoteContext(
-        `Quoted from \`${payload.fileLabel}\`, lines ${payload.startLine}-${payload.endLine}${payload.side ? `, ${payload.side}` : ''}:`,
-        payload.code, payload.text, fieldLimit, payload.language,
-      );
-    case 'file-quote':
-      return quoteContext(
-        `Quoted from \`${payload.fileLabel}\`${payload.startLine != null ? `, lines ${payload.startLine}-${payload.endLine ?? payload.startLine}` : ''}:`,
-        payload.quote, payload.text, fieldLimit,
-      );
-    case 'chat-quote':
-      return quoteContext('Quoted from an earlier message:', payload.quote, payload.text, fieldLimit);
-    case 'browser-annotation':
-      return quoteContext(`Browser annotation on ${payload.pageUrl}:`, payload.prompt, payload.text, fieldLimit);
-    case 'pr-comment':
-      return quoteContext(`GitHub PR comment, ${payload.label}:`, payload.body, payload.text, fieldLimit);
-    case 'pr-check':
-      return quoteContext(`GitHub PR check, ${payload.label}:`, payload.output, payload.text, fieldLimit, '');
-    case 'terminal':
-      return quoteContext(`Terminal ${payload.terminalLabel}, lines ${payload.startLine}-${payload.endLine}:`, payload.output, '', fieldLimit, '');
-    case 'github-issue':
-    case 'github-pr':
-    case 'linear-issue':
-    case 'guest-issue':
-    case 'guest-pr':
-      return fieldLimit ? excerptMarkdown(originalText, fieldLimit) : originalText;
-  }
-}
-
-/** User-attached synthetic parts are content; other synthetic prompts are optional. */
+/** Model-facing text from canonical transcript parts. */
 export function formatMessageText(
   parts: readonly Part[],
-  options: { user?: boolean; excludeSynthetic?: boolean; fieldLimit?: number } = {},
+  options: { user?: boolean; fieldLimit?: number } = {},
 ): string {
   const blocks: string[] = [];
   for (const part of parts) {
-    if (part.type !== 'text' || (options.excludeSynthetic && part.ignored)) continue;
-    const context = options.user ? readContextPart(part) : null;
-    if (context) {
-      blocks.push(formatContext(context, part.text, options.fieldLimit));
-      continue;
-    }
-    if (options.excludeSynthetic && part.synthetic) continue;
+    if (part.type !== 'text') continue;
     if (!options.user) {
-      blocks.push(options.fieldLimit ? excerptMarkdown(part.text, options.fieldLimit) : part.text);
+      blocks.push(options.fieldLimit ? excerptMarkdown(part.content, options.fieldLimit) : part.content);
       continue;
     }
-    const terminal = extractTerminalContexts(part.text);
+    const terminal = extractTerminalContexts(part.content);
     blocks.push(options.fieldLimit ? excerptMarkdown(terminal.visibleText, options.fieldLimit) : terminal.visibleText);
     for (const item of terminal.contexts) {
       blocks.push(quoteContext(`Terminal ${item.terminalLabel}, lines ${item.startLine}-${item.endLine}:`, item.text, '', options.fieldLimit, ''));
     }
   }
-  return blocks.map((block) => block.trim()).filter(Boolean).join('\n\n');
+  return blocks.map((block) => block?.trim() ?? '').filter(Boolean).join('\n\n');
 }

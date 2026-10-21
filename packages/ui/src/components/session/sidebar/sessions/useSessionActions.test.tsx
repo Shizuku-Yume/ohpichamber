@@ -1,21 +1,17 @@
 import { describe, expect, test } from 'bun:test';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { Session } from '@opencode-ai/sdk/v2';
+import type { Session } from '@openchamber/agent-contract';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { I18nProvider } from '@/lib/i18n';
 import type { DeleteSessionConfirmState } from '../shell/ConfirmDialogs';
 import { useSessionActions } from './useSessionActions';
 import { installHookTestDom } from '../test-utils/testDom';
 
-const session = (id: string): Session => ({
-  id,
-  slug: id,
-  projectID: 'project',
-  title: id,
-  version: '1',
-  directory: '/workspace',
-  time: { created: 1, updated: 1 },
+const session = (sessionId: string): Session => ({
+  sessionId, rootSessionId: sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '/workspace',
+  createdAt: 1, updatedAt: 1, epoch: '1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  metadata: { title: sessionId }, metadataRevision: '0', archiveRevision: '0',
 });
 
 describe('explicit session row behavior', () => {
@@ -63,8 +59,6 @@ describe('explicit session row behavior', () => {
         editingOccurrenceKey: 'project:session:same-session',
         editTitle,
         setEditTitle,
-        copiedSessionId: null,
-        setCopiedSessionId: () => undefined,
       });
       capture.editingId = editingId;
       capture.editingRowKey = editingRowKey;
@@ -130,8 +124,6 @@ describe('explicit session row behavior', () => {
         editingOccurrenceKey: 'project:session:root',
         editTitle,
         setEditTitle,
-        copiedSessionId: null,
-        setCopiedSessionId: () => undefined,
       });
       return null;
     };

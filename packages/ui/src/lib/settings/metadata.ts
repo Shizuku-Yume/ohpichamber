@@ -1,5 +1,6 @@
 import type { SidebarSection } from '@/constants/sidebar';
 import type { IconName } from '@/components/icon/icons';
+import { ISOLATED_SPACES_RELEASED } from '@/lib/spaces/release';
 
 export type SettingsPageSlug =
   | 'home'
@@ -7,6 +8,7 @@ export type SettingsPageSlug =
   | 'projects'
   | 'remote-instances'
   | 'providers'
+  | 'web-search'
   | 'usage'
   | 'agents'
   | 'behavior'
@@ -26,6 +28,7 @@ export type SettingsPageSlug =
   | 'notifications'
   | 'voice'
   | 'tunnel'
+  | 'isolated-spaces'
   | 'about'
   | 'integrations'
   | 'extensions';
@@ -37,12 +40,15 @@ type SettingsPageGroup =
   | 'content';
 
 export interface SettingsRuntimeContext {
-  isVSCode: boolean;
   isWeb: boolean;
   isDesktop: boolean;
   isMobile: boolean;
-  /** Whether this server build has Jev routing (`OPENCHAMBER_ROUTING_ENABLE`). */
+  /** Whether this runtime has Jev routing, which needs the OpenChamber server. */
   routingAvailable: boolean;
+  /** The server runs in enterprise mode: pages for what it refuses are hidden. */
+  enterpriseMode: boolean;
+  /** Enterprise mode keeps Jev off (no administrator's endpoint), so pages that only configure Jev are hidden. */
+  jevBlockedByEnterprise: boolean;
 }
 
 export interface SettingsPageMeta {
@@ -84,14 +90,20 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
     group: 'projects',
     kind: 'single',
     keywords: ['ssh', 'remote', 'instances', 'tunnels', 'forwarding', 'connection'],
-    isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
     slug: 'providers',
     title: 'Providers',
     group: 'opencode',
-    kind: 'split',
+    kind: 'single',
     keywords: ['provider', 'providers', 'models', 'model', 'api key', 'api keys', 'openai', 'anthropic', 'ollama', 'credentials'],
+  },
+  {
+    slug: 'web-search',
+    title: 'Web search',
+    group: 'opencode',
+    kind: 'single',
+    keywords: ['web search', 'websearch', 'search', 'internet', 'exa', 'tavily', 'firecrawl', 'parallel', 'tinyfish'],
   },
   {
     slug: 'usage',
@@ -112,7 +124,7 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
     title: 'Behavior',
     group: 'opencode',
     kind: 'single',
-    keywords: ['behavior', 'agents.md', 'system prompt', 'global rules', 'instructions', 'override'],
+    keywords: ['behavior', 'response style', 'tone', 'instructions', 'custom instructions'],
   },
   {
     slug: 'commands',
@@ -125,14 +137,14 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
     slug: 'mcp',
     title: 'MCP',
     group: 'opencode',
-    kind: 'split',
+    kind: 'single',
     keywords: ['mcp', 'model context protocol', 'servers', 'tools', 'remote', 'stdio'],
   },
   {
     slug: 'plugins',
     title: 'Plugins',
     group: 'opencode',
-    kind: 'split',
+    kind: 'single',
     keywords: ['plugin', 'plugins', 'addons', 'npm', 'opencode-wakatime'],
   },
   {
@@ -154,8 +166,7 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
     title: 'Git',
     group: 'projects',
     kind: 'single',
-    keywords: ['git', 'identity', 'identities', 'ssh', 'profiles', 'credentials', 'keys', 'commit', 'gitmoji'],
-    isAvailable: (ctx) => !ctx.isVSCode,
+    keywords: ['git', 'github', 'gitlab', 'identity', 'identities', 'ssh', 'profiles', 'credentials', 'keys', 'commit', 'gitmoji', 'oauth', 'prs', 'issues'],
   },
   {
     slug: 'appearance',
@@ -177,7 +188,6 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
     group: 'general',
     kind: 'single',
     keywords: ['keyboard', 'hotkeys', 'shortcuts', 'bindings'],
-    isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
     slug: 'sessions',
@@ -193,7 +203,7 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
     kind: 'single',
     description: 'Pick the right model for each message automatically, and get asked before risky actions in auto-accepted sessions.',
     keywords: ['routing', 'auto', 'jev', 'typesafe', 'model routing', 'categories', 'safety net', 'auto-accept', 'fallback'],
-    isAvailable: (ctx) => !ctx.isVSCode && ctx.routingAvailable,
+    isAvailable: (ctx) => ctx.routingAvailable && !ctx.jevBlockedByEnterprise,
   },
   {
     slug: 'magic-prompts',
@@ -201,7 +211,6 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
     group: 'content',
     kind: 'split',
     keywords: ['prompts', 'templates', 'git', 'github', 'review', 'commit', 'pull request'],
-    isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
     slug: 'snippets',
@@ -212,17 +221,26 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
   },
 
   { slug: 'notifications', title: 'Notifications', group: 'general', kind: 'single', keywords: ['alerts', 'native', 'summary', 'summarization'], },
-  { slug: 'voice', title: 'Voice', group: 'general', kind: 'single', keywords: ['tts', 'speech', 'voice'], isAvailable: (ctx) => !ctx.isVSCode },
-  { slug: 'tunnel', title: 'External Tunnel', group: 'projects', kind: 'single', keywords: ['tunnel', 'external', 'cloudflare', 'qr', 'remote', 'mobile', 'share'], isAvailable: (ctx) => !ctx.isVSCode },
-  { slug: 'about', title: 'About', group: 'general', kind: 'single', keywords: ['about', 'version', 'updates', 'release', 'changelog'], isAvailable: (ctx) => ctx.isMobile && !ctx.isVSCode },
-  { slug: 'integrations', title: 'Integrations', group: 'general', kind: 'single', keywords: ['integration', 'connect', 'oauth', 'github', 'linear', 'extension'], isAvailable: (ctx) => !ctx.isVSCode },
+  { slug: 'voice', title: 'Voice', group: 'general', kind: 'single', keywords: ['tts', 'speech', 'voice'] },
+  { slug: 'tunnel', title: 'External Tunnel', group: 'projects', kind: 'single', keywords: ['tunnel', 'external', 'cloudflare', 'qr', 'remote', 'mobile', 'share'], isAvailable: (ctx) => !ctx.enterpriseMode },
+  {
+    slug: 'isolated-spaces',
+    title: 'Isolated spaces',
+    group: 'projects',
+    kind: 'single',
+    keywords: ['isolated', 'space', 'spaces', 'container', 'docker', 'colima', 'sandbox', 'disk', 'clean up', 'image'],
+    // Hidden from everyone until the feature's first release.
+    isAvailable: () => ISOLATED_SPACES_RELEASED,
+  },
+  { slug: 'about', title: 'About', group: 'general', kind: 'single', keywords: ['about', 'version', 'updates', 'release', 'changelog'], isAvailable: (ctx) => ctx.isMobile },
+  { slug: 'integrations', title: 'Integrations', group: 'general', kind: 'single', keywords: ['integration', 'connect', 'oauth', 'github', 'linear', 'extension', 'claude', 'plugin'] },
   {
     slug: 'extensions',
     title: 'Extensions',
     group: 'general',
     kind: 'single',
     keywords: ['extension', 'extensions', 'guest', 'panel', 'rail', 'folder', 'zip', 'git', 'url'],
-    isAvailable: (ctx) => !ctx.isVSCode && !ctx.isMobile,
+    isAvailable: (ctx) => !ctx.isMobile,
   },
 ] as const;
 
@@ -292,6 +310,8 @@ export function getSettingsNavIcon(slug: SettingsPageSlug): IconName | null {
 
     case 'providers':
       return 'cloud';
+    case 'web-search':
+      return 'global';
     case 'agents':
       return 'ai-agent';
     case 'behavior':
@@ -314,7 +334,7 @@ export function getSettingsNavIcon(slug: SettingsPageSlug): IconName | null {
     case 'integrations':
       return 'plug';
     case 'extensions':
-      return 'apps';
+      return 'puzzle';
 
     case 'usage':
       return 'bar-chart-2';
@@ -322,6 +342,8 @@ export function getSettingsNavIcon(slug: SettingsPageSlug): IconName | null {
       return 'mic';
     case 'tunnel':
       return 'home-office';
+    case 'isolated-spaces':
+      return 'box-3';
     case 'about':
       return 'information';
     case 'home':

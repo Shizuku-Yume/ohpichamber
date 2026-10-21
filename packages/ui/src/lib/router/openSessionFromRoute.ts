@@ -1,5 +1,15 @@
 import { ensureGlobalSessionsLoaded, resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
+import { requestMessageFocus } from './messageFocus';
+
+/**
+ * Opens a session link and, for a message link, asks the session's timeline
+ * to show that message: on entry, or right away if the session is open.
+ */
+export function openSessionLink(sessionId: string, messageId: string | null): Promise<void> {
+  if (messageId) requestMessageFocus(sessionId, messageId);
+  return openSessionFromRoute(sessionId);
+}
 
 /**
  * Select a session named by `/?session=`. Cold loads often do not know the
@@ -23,7 +33,7 @@ export async function openSessionFromRoute(sessionId: string): Promise<void> {
   if (latest.currentSessionId !== id) return;
 
   const session = [...snapshot.activeSessions, ...snapshot.archivedSessions]
-    .find((entry) => entry.id === id);
+    .find((entry) => entry.sessionId === id);
   if (!session) return;
 
   const directory = resolveGlobalSessionDirectory(session);

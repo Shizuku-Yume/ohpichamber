@@ -6,12 +6,14 @@
  */
 
 import { buildResult } from '../utils/index.js';
+import { requireSelectedCredential } from './selected-credential.js';
 
 import * as claude from './claude/index.js';
 import * as clinePass from './cline-pass.js';
 import * as codex from './codex.js';
 import * as copilot from './copilot.js';
 import * as cursor from './cursor.js';
+import * as deepinfra from './deepinfra.js';
 import * as deepseek from './deepseek.js';
 import * as exeDev from './exe-dev.js';
 import * as google from './google/index.js';
@@ -25,6 +27,8 @@ import * as zhipuaiCodingPlan from './zhipuai-coding-plan.js';
 import * as minimaxCodingPlan from './minimax-coding-plan.js';
 import * as minimaxCnCodingPlan from './minimax-cn-coding-plan.js';
 import * as neuralwatt from './neuralwatt.js';
+import * as kilo from './kilo.js';
+import * as zenmux from './zenmux.js';
 import * as ollamaCloud from './ollama-cloud.js';
 import * as wafer from './wafer.js';
 import * as opencodeGo from './opencode-go.js';
@@ -54,6 +58,12 @@ const registry = {
     providerName: cursor.providerName,
     isConfigured: cursor.isConfigured,
     fetchQuota: cursor.fetchQuota
+  },
+  deepinfra: {
+    providerId: deepinfra.providerId,
+    providerName: deepinfra.providerName,
+    isConfigured: deepinfra.isConfigured,
+    fetchQuota: deepinfra.fetchQuota
   },
   deepseek: {
     providerId: deepseek.providerId,
@@ -157,6 +167,18 @@ const registry = {
     isConfigured: neuralwatt.isConfigured,
     fetchQuota: neuralwatt.fetchQuota
   },
+  kilo: {
+    providerId: kilo.providerId,
+    providerName: kilo.providerName,
+    isConfigured: kilo.isConfigured,
+    fetchQuota: kilo.fetchQuota
+  },
+  zenmux: {
+    providerId: zenmux.providerId,
+    providerName: zenmux.providerName,
+    isConfigured: zenmux.isConfigured,
+    fetchQuota: zenmux.fetchQuota
+  },
   xai: {
     providerId: xai.providerId,
     providerName: xai.providerName,
@@ -168,56 +190,38 @@ const registry = {
 const pendingFetches = new Map();
 
 
-export const listConfiguredQuotaProviders = () => {
-  const configured = [];
-
-  for (const [id, provider] of Object.entries(registry)) {
-    try {
-      if (provider.isConfigured()) {
-        configured.push(id);
-      }
-    } catch {
-      // Ignore provider-specific config errors in list API.
-    }
+/**
+ * Provider selections are supplied by the Host's selected workspace catalog.
+ * This registry never enumerates or reads a credential store itself.
+ */
+export const listConfiguredQuotaProviders = async ({ selections = [] } = {}) => {
+  const providerIds = new Set();
+  for (const selection of selections) {
+    const providerId = selection?.quotaProviderId ?? selection?.providerId;
+    if (Object.hasOwn(registry, providerId)) providerIds.add(providerId);
   }
-
-  return configured;
+  return [...providerIds];
 };
 
-const fetchQuotaForProviderUncoalesced = async (providerId) => {
+const fetchQuotaForProviderUncoalesced = async (providerId, options = {}) => {
   const provider = registry[providerId];
-
-  if (!provider) {
-    return buildResult({
-      providerId,
-      providerName: providerId,
-      ok: false,
-      configured: false,
-      error: 'Unsupported provider'
-    });
-  }
-
+  if (!provider) return buildResult({ providerId, providerName: providerId, ok: false, configured: false, error: 'Unsupported provider' });
   try {
-    return await provider.fetchQuota();
+    const credential = await requireSelectedCredential({ ...options, purpose: 'quota' });
+    return await provider.fetchQuota({ ...options, credential });
   } catch (error) {
-    return buildResult({
-      providerId: provider.providerId,
-      providerName: provider.providerName,
-      ok: false,
-      configured: true,
-      error: error instanceof Error ? error.message : 'Request failed'
-    });
+    return buildResult({ providerId: provider.providerId, providerName: provider.providerName, ok: false, configured: false, error: 'Request failed' });
   }
 };
 
-export const fetchQuotaForProvider = (providerId) => {
-  const existing = pendingFetches.get(providerId);
+export const fetchQuotaForProvider = (providerId, options = {}) => {
+  const requestKey = JSON.stringify([providerId, options.providerId, options.workspaceId, options.agentDirectoryId, options.credentialRef]);
+  const existing = pendingFetches.get(requestKey);
   if (existing) return existing;
-
-  const pending = fetchQuotaForProviderUncoalesced(providerId).finally(() => {
-    if (pendingFetches.get(providerId) === pending) pendingFetches.delete(providerId);
+  const pending = fetchQuotaForProviderUncoalesced(providerId, options).finally(() => {
+    if (pendingFetches.get(requestKey) === pending) pendingFetches.delete(requestKey);
   });
-  pendingFetches.set(providerId, pending);
+  pendingFetches.set(requestKey, pending);
   return pending;
 };
 
@@ -226,6 +230,7 @@ export const fetchOpenaiQuota = openai.fetchQuota;
 export const fetchGoogleQuota = google.fetchGoogleQuota;
 export const fetchCodexQuota = codex.fetchQuota;
 export const fetchCursorQuota = cursor.fetchQuota;
+export const fetchDeepinfraQuota = deepinfra.fetchQuota;
 export const fetchDeepseekQuota = deepseek.fetchQuota;
 export const fetchHyperQuota = hyper.fetchQuota;
 export const fetchCopilotQuota = copilot.fetchQuota;
@@ -233,7 +238,6 @@ export const fetchCopilotAddonQuota = copilot.fetchQuotaAddon;
 export const fetchKimiQuota = kimi.fetchQuota;
 export const fetchOpenRouterQuota = openrouter.fetchQuota;
 export const fetchZaiQuota = zai.fetchQuota;
-const fetchZhipuaiCodingPlanQuota = zhipuaiCodingPlan.fetchQuota;
 export const fetchNanoGptQuota = nanogpt.fetchQuota;
 export const fetchMinimaxCodingPlanQuota = minimaxCodingPlan.fetchQuota;
 export const fetchMinimaxCnCodingPlanQuota = minimaxCnCodingPlan.fetchQuota;

@@ -1,4 +1,4 @@
-import { ACTIVITY_STANDALONE_TOOL_NAMES } from './constants';
+import { isQuestionTool, isSubagentTool } from '@/lib/toolHelpers';
 import type {
     ChatMessageEntry,
     TurnActivityGroup,
@@ -6,39 +6,6 @@ import type {
     TurnPartRecord,
 } from './types';
 
-const isStandaloneTool = (toolName: unknown): boolean => {
-    return typeof toolName === 'string' && ACTIVITY_STANDALONE_TOOL_NAMES.has(toolName.toLowerCase());
-};
-
-const getPartEndTime = (part: unknown): number | undefined => {
-    const stateEnd = (part as { state?: { time?: { end?: unknown } } }).state?.time?.end;
-    if (typeof stateEnd === 'number') {
-        return stateEnd;
-    }
-    const timeEnd = (part as { time?: { end?: unknown } }).time?.end;
-    return typeof timeEnd === 'number' ? timeEnd : undefined;
-};
-
-const getPartText = (part: unknown): string | undefined => {
-    const text = (part as { text?: unknown }).text;
-    if (typeof text === 'string' && text.trim().length > 0) {
-        return text;
-    }
-    const content = (part as { content?: unknown }).content;
-    if (typeof content === 'string' && content.trim().length > 0) {
-        return content;
-    }
-    return undefined;
-};
-
-const getMessageFinish = (message: ChatMessageEntry): string | undefined => {
-    const finish = (message.info as { finish?: unknown }).finish;
-    return typeof finish === 'string' ? finish : undefined;
-};
-
-const isCompactionSummaryMessage = (message: ChatMessageEntry): boolean => {
-    return (message.info as { summary?: unknown }).summary === true;
-};
 
 const buildTurnPartRecord = (
     turnId: string,
@@ -47,12 +14,11 @@ const buildTurnPartRecord = (
     partIndex: number,
 ): TurnPartRecord => {
     return {
-        id: part.id ?? `${messageId}-part-${partIndex}-${part.type}`,
+        id: part.partId,
         turnId,
         messageId,
         part,
         partIndex,
-        endedAt: getPartEndTime(part),
     };
 };
 
@@ -78,62 +44,51 @@ export const projectTurnActivity = (input: ProjectActivityInput): ProjectActivit
 
     input.assistantMessages.forEach((message) => {
         message.parts.forEach((part) => {
-            if (part.type === 'tool') {
+            if (part.type === 'tool_call' || part.type === 'tool_result') {
                 hasTools = true;
                 return;
             }
 
-            if (part.type === 'reasoning' && getPartText(part)) {
+            if (part.type === 'reasoning' && part.content.trim().length > 0) {
                 hasReasoning = true;
             }
         });
     });
 
     const taskMessageById = new Map<string, string>();
+    const standaloneCallIds = new Set<string>();
     const taskOrder: string[] = [];
     const partsByAfterTool = new Map<string | null, TurnActivityRecord[]>();
     let currentAfterToolPartId: string | null = null;
 
     input.assistantMessages.forEach((message) => {
-        const finish = getMessageFinish(message);
-        const messageHasTool = message.parts.some((part) => part.type === 'tool');
-        // A turn blocked on a question never reaches finish === 'stop' (the
-        // user must answer first). Treating the text the model produced
-        // before the question as 'justification' would bury it inside the
-        // collapsible Activity group — the context stays invisible until the
-        // turn completes (OPE-199). Keep it inline like OpenCode.
+        const messageHasTool = message.parts.some((part) => part.type === 'tool_call' || part.type === 'tool_result');
+        // Keep context for unanswered questions inline rather than burying it
+        // in the collapsible activity group.
         const messageHasQuestion = message.parts.some((part) => (
-            part.type === 'tool'
-            && typeof part.tool === 'string'
-            && part.tool === 'question'
+            (part.type === 'tool_call' || part.type === 'tool_result') && isQuestionTool(part.toolName)
         ));
-        const messageIsCompactionSummary = isCompactionSummaryMessage(message);
 
         message.parts.forEach((part, partIndex) => {
-            const isTool = part.type === 'tool';
+            const isTool = part.type === 'tool_call' || part.type === 'tool_result';
 
             const text = part.type === 'reasoning' || part.type === 'text'
-                ? getPartText(part)
+                ? part.content.trim().length > 0 ? part.content : undefined
                 : undefined;
-            const partId = part.id ?? `${message.info.id}-part-${partIndex}-${part.type}`;
-
-            const toolName = isTool
-                ? (part as { tool?: unknown }).tool
-                : undefined;
-            const standaloneTool = isTool && isStandaloneTool(toolName);
-            if (standaloneTool) {
-                const toolPartId = partId;
-                if (!taskMessageById.has(toolPartId)) {
-                    taskMessageById.set(toolPartId, message.info.id);
-                    taskOrder.push(toolPartId);
-                }
-                currentAfterToolPartId = toolPartId;
+            const partId = part.partId;
+            const standaloneTool = (part.type === 'tool_call' || part.type === 'tool_result')
+                && isSubagentTool(part.toolName);
+            if (standaloneTool && (part.type === 'tool_call'
+                || (part.type === 'tool_result' && !standaloneCallIds.has(part.toolCallId)))) {
+                standaloneCallIds.add(part.toolCallId);
+                taskMessageById.set(partId, message.messageId);
+                taskOrder.push(partId);
+                currentAfterToolPartId = partId;
             }
 
             const isConfirmedSummaryText = part.type === 'text'
                 && typeof text === 'string'
-                && finish === 'stop'
-                && input.summarySourceMessageId === message.info.id
+                && input.summarySourceMessageId === message.messageId
                 && input.summarySourcePartId === partId;
 
             let kind: TurnActivityRecord['kind'] | null = null;
@@ -148,13 +103,8 @@ export const projectTurnActivity = (input: ProjectActivityInput): ProjectActivit
                 && part.type === 'text'
                 && text
                 && !messageHasQuestion
-                && (
-                    messageIsCompactionSummary
-                    || (
-                        !isConfirmedSummaryText
-                        && (messageHasTool || (typeof finish === 'string' && finish !== 'stop'))
-                    )
-                )
+                && !isConfirmedSummaryText
+                && messageHasTool
             ) {
                 kind = 'justification';
             }
@@ -164,12 +114,12 @@ export const projectTurnActivity = (input: ProjectActivityInput): ProjectActivit
             }
 
             const activity: TurnActivityRecord = {
-                ...buildTurnPartRecord(input.turnId, message.info.id, part, partIndex),
+                ...buildTurnPartRecord(input.turnId, message.messageId, part, partIndex),
                 kind,
             };
             activityParts.push(activity);
 
-            if (kind === 'tool' && standaloneTool) {
+            if (kind === 'tool' && standaloneTool && taskMessageById.has(partId)) {
                 return;
             }
 
@@ -193,9 +143,9 @@ export const projectTurnActivity = (input: ProjectActivityInput): ProjectActivit
 
         let firstWithAny: string | undefined;
         for (const message of input.assistantMessages) {
-            const count = countByMessage.get(message.info.id) ?? 0;
+            const count = countByMessage.get(message.messageId) ?? 0;
             if (count > 0 && !firstWithAny) {
-                firstWithAny = message.info.id;
+                firstWithAny = message.messageId;
             }
         }
 

@@ -144,3 +144,38 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** no
 - **Revisit when:** official provider/OAuth credentials become available, or real service credential handoff requires a provider behavior not yet established.
 - **Effort:** omp-through-m3
+
+## 2026-10-13 - Remove the M2 queue and consumer acceptance cycle
+
+- **Decided:** unblock task 22 on tasks 10 and 12 (`Blocked by: 10, 12`) so server-consumer composition builds directly on task 11's already-committed `sqlite-store.js` and `canonical-runtime.js` source, pause task 11 with `Blocked by: 09, 22` for its final composed queue verification after task 22 lands, and require both tasks 11 and 22 at M2 gate 23 (`Blocked by: 11, 22`). No tasks are deleted or renumbered, and W1–W10 acceptance criteria and product scope are unchanged.
+- **Instead of:** keeping task 22 formally blocked on task 11 while task 11's Progress keeps task 11 open until task 22 composes public Host routes, attachment conversion and service event consumers, or archiving task 11 early on its isolated-worktree receipt alone.
+- **Because:** task 11's SQLite queue owner and canonical dispatcher source are already committed on the integration branch, whereas its remaining acceptance items require the composed Host consumer boundary owned by task 22. Ordering 10/12 acceptance → 22 composition → 11 final composed acceptance → gate 23 breaks the circular dependency without weakening any queue, credential-handoff or gate check.
+- **Mine:** yes
+- **Revisit when:** task 22 composition reveals a missing storage primitive in task 11 that must be implemented before server consumers can wire to the queue owner.
+- **Effort:** omp-through-m3
+## 2026-10-18 - Canonical agent profiles are the selectable UI roster
+
+- **Decided:** Treat every enabled native `Agent` returned by the canonical workspace catalog as a visible/selectable profile in shared UI. Use `name` as its display label, `description` for supporting text, and do not preserve the legacy `hidden`, `mode`, or `displayName` filters.
+- **Instead of:** Keep the legacy OpenCode catalog presentation fields through an adapter or block the caller migration until an equivalent field set is added to the Canonical API.
+- **Because:** The native service discovers enabled project, user, extension, and bundled agent definitions and projects only the JSON-safe `Agent` fields. The target contract has no hidden/mode/display metadata, and fabricating those values would create a second authority. Direct use of the native roster keeps the canonical contract authoritative and makes the loss of legacy internal-agent filtering explicit.
+- **Mine:** yes
+- **Revisit when:** The canonical Agent contract adds an intentional visibility or role policy that is required by a retained product surface.
+- **Effort:** omp-through-m3
+
+## 2026-10-18 - Native agent controls and ConfigStore catalog retirement
+
+- **Decided:** Cut ModelControls and App startup to `useAgentsStore`, retire the duplicate OpenCode agent catalog in `useConfigStore`, and remove client-side `PermissionRuleset` simulation. ModelControls displays native `allowedTools` tool availability and `permissionPresetId`, retains canonical model/variant selection, binds profile default models via `providerId`/`modelId`, and cycles native `agentId`/`name`. Host approval controls remain unchanged, the native SDK owns authorization policy, and no new Canonical contract fields are created for retired legacy mode or HTTP sampling metadata.
+- **Instead of:** Waiting indefinitely for hypothetical canonical schemas matching OpenCode's client-side permission ruleset and HTTP sampling, or creating compatibility adapters and pass-through shims.
+- **Because:** The selectable UI roster was settled in `2026-10-18 - Canonical agent profiles are the selectable UI roster`. Legacy sampling was only tooltip metadata, and `allowedTools` denotes tool availability rather than authorization rules. Authorization is enforced by the native SDK and Host approval boundary. Removing duplicate agent loading stops legacy `/api/agent` polling loops during startup while preserving empty-catalog versus error state semantics.
+- **Mine:** yes
+- **Revisit when:** Native SDK or canonical contracts introduce dedicated tool-policy or preset catalog schemas required by retained product surfaces.
+- **Effort:** omp-through-m3
+
+## 2026-10-21 - Finish M3 by owning the observed dirty work and closing the gate cycle
+
+- **Decided:** Assign the observed unowned behavior to Tasks 64-68: live Agent Service session reopen (64), in-flight snapshot and reconnect run-control continuity (65), a spike on the failing workspace-admission recovery test (66), bounded directory startup catalog recovery/retry (67, blocked by 65 and 66), and the native Web Search provider-catalog fix (68). Block Task 52 on 64; block Tasks 56-59 on 65 and 67; block Task 60 on 65, 67 and 68; block Task 61 on 65 and 67. Remove Task 18 from Task 15's blockers and resume Task 15 on archived Task 36 evidence after 65/67 land. Make Task 18 wait on every open M3 deliverable (15, 52, 56-61 and 64-68).
+- **Instead of:** Leaving the uncommitted live-reopen, live-control, startup-retry and catalog work unowned for the gate to absorb, or keeping Task 15 blocked by the Task 18 gate it must precede.
+- **Because:** No open task owned that behavior; the committed Task 62 snapshot-race test is red at HEAD, the startup retry ignores Task 17's failing workspace-admission test, and the Web Search catalog defect has no owner. Task 15 could never close while waiting on Task 18. Task 18 must run once against rebuilt artifacts after this work lands, not against the current dirty tree or the superseded `598bf582…` AppImage and `c438247e…` Web dist.
+- **Mine:** yes
+- **Revisit when:** A dirty path turns out to belong to a different owner, or a task's implementation shows the behavior is already fully committed and the task can be dropped without losing the evidence.
+- **Effort:** omp-through-m3

@@ -1,13 +1,13 @@
-import type { Session } from '@opencode-ai/sdk/v2';
 import React from 'react';
 import type { SessionNode } from '../types';
 import { useGlobalSessionStatusStore } from '@/sync/global-session-status';
 import { useGlobalBlockingRequestsStore } from '@/sync/global-blocking-requests';
+import { useBackgroundShellsStore } from '@/sync/background-shells';
 import { useNotificationStore } from '@/sync/notification-store';
 
 // Ordered by how much the user is needed: a blocked turn outranks a running
 // one, which outranks something merely unread.
-export type CollapsedActivityState = 'permission' | 'question' | 'active' | 'unread' | null;
+export type CollapsedActivityState = 'permission' | 'form' | 'active' | 'unread' | null;
 
 const mergeCollapsedActivityStates = (
   current: CollapsedActivityState,
@@ -24,12 +24,11 @@ const getSessionNodeActivityState = (
   unreadSessionIds: Set<string>,
   includeUnreadSubtasks: boolean,
 ): CollapsedActivityState => {
-  if (activeSessionIds.has(node.session.id)) return 'active';
+  if (activeSessionIds.has(node.session.sessionId)) return 'active';
 
   let state: CollapsedActivityState = null;
-  // SAFETY: SessionNode sessions are SDK Session records; parentID is the optional hierarchy field.
-  const isSubtask = Boolean((node.session as Session & { parentID?: string | null }).parentID);
-  if (unreadSessionIds.has(node.session.id) && (includeUnreadSubtasks || !isSubtask)) state = 'unread';
+  const isSubtask = Boolean(node.session.parentSessionId);
+  if (unreadSessionIds.has(node.session.sessionId) && (includeUnreadSubtasks || !isSubtask)) state = 'unread';
 
   for (const child of node.children) {
     state = mergeCollapsedActivityStates(
@@ -61,6 +60,9 @@ export const getSessionNodesActivityState = (
 
 type SessionActivityProps = {
   nodes: readonly SessionNode[];
+  // Sessions not present as nodes whose pending requests still count, such as
+  // the hidden subagents of timeline rows.
+  blockingSessionIds?: readonly string[];
   includeUnreadSubtasks: boolean;
 };
 
@@ -68,8 +70,8 @@ const collectActivityIds = (nodes: readonly SessionNode[], includeUnreadSubtasks
   const active = new Set<string>();
   const unread = new Set<string>();
   const visit = (node: SessionNode, isSubtask: boolean): void => {
-    active.add(node.session.id);
-    if (!isSubtask || includeUnreadSubtasks) unread.add(node.session.id);
+    active.add(node.session.sessionId);
+    if (!isSubtask || includeUnreadSubtasks) unread.add(node.session.sessionId);
     node.children.forEach((child) => visit(child, true));
   };
   nodes.forEach((node) => visit(node, false));
@@ -78,15 +80,28 @@ const collectActivityIds = (nodes: readonly SessionNode[], includeUnreadSubtasks
 
 export const useCollapsedSessionActivityState = ({
   nodes,
+  blockingSessionIds,
   includeUnreadSubtasks,
   enabled = true,
 }: SessionActivityProps & { enabled?: boolean }): CollapsedActivityState => {
   const ids = React.useMemo(() => collectActivityIds(enabled ? nodes : [], includeUnreadSubtasks), [enabled, includeUnreadSubtasks, nodes]);
+  const blockingIds = React.useMemo(
+    () => (blockingSessionIds && blockingSessionIds.length > 0 ? new Set([...ids.active, ...blockingSessionIds]) : ids.active),
+    [blockingSessionIds, ids.active],
+  );
   const active = useGlobalSessionStatusStore(React.useCallback((state): CollapsedActivityState => {
     if (!enabled) return null;
     for (const sessionId of ids.active) {
-      const status = state.statusById.get(sessionId)?.status.type;
-      if (status === 'busy' || status === 'retry') return 'active';
+      const status = state.statusById.get(sessionId)?.status;
+      if (status === 'running') return 'active';
+    }
+    return null;
+  }, [enabled, ids.active]));
+  // A session idling while its background command runs is still at work.
+  const waitingOnShell = useBackgroundShellsStore(React.useCallback((state): CollapsedActivityState => {
+    if (!enabled) return null;
+    for (const sessionId of ids.active) {
+      if (state.sessionIds.has(sessionId)) return 'active';
     }
     return null;
   }, [enabled, ids.active]));
@@ -104,13 +119,13 @@ export const useCollapsedSessionActivityState = ({
   const blocked = useGlobalBlockingRequestsStore(React.useCallback((state): CollapsedActivityState => {
     if (!enabled) return null;
     let result: CollapsedActivityState = null;
-    for (const sessionId of ids.active) {
+    for (const sessionId of blockingIds) {
       const pending = state.bySession.get(sessionId);
       if (!pending) continue;
       if (pending.permissions.length > 0) return 'permission';
-      if (pending.questions.length > 0) result = 'question';
+      if (pending.forms.length > 0) result = 'form';
     }
     return result;
-  }, [enabled, ids.active]));
-  return blocked ?? active ?? unread;
+  }, [enabled, blockingIds]));
+  return blocked ?? active ?? waitingOnShell ?? unread;
 };

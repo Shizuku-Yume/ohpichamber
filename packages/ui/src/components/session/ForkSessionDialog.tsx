@@ -13,10 +13,8 @@ import { AgentSelector } from '@/components/sections/commands/AgentSelector';
 import { ThinkingPill } from '@/components/session/ThinkingPill';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useAgentsStore } from '@/stores/useAgentsStore';
-import { isPrimaryMode } from '@/components/chat/mobileControlsUtils';
 import { EXECUTION_FORK_DEFAULT_INSTRUCTIONS, EXECUTION_FORK_GOAL_INSTRUCTIONS } from '@/lib/messages/executionMeta';
 import { useI18n } from '@/lib/i18n';
-import { isVSCodeRuntime } from '@/lib/desktop';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useGitStore, useIsGitRepo } from '@/stores/useGitStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
@@ -53,7 +51,6 @@ export function ForkSessionDialog(props: ForkSessionDialogProps) {
   const ensureGitStatus = useGitStore((state) => state.ensureStatus);
 
   const loadProviders = useConfigStore((state) => state.loadProviders);
-  const loadConfigAgents = useConfigStore((state) => state.loadAgents);
   const loadAgentsStoreAgents = useAgentsStore((state) => state.loadAgents);
   const providers = useConfigStore((state) => state.providers);
   const currentProviderID = useConfigStore((state) => state.currentProviderId);
@@ -68,9 +65,7 @@ export function ForkSessionDialog(props: ForkSessionDialogProps) {
   const [instructions, setInstructions] = React.useState(EXECUTION_FORK_DEFAULT_INSTRUCTIONS);
   const [createWorktree, setCreateWorktree] = React.useState(false);
   const [runAsGoal, setRunAsGoal] = React.useState(false);
-  const showCreateWorktree = !isVSCodeRuntime() && isGitRepository === true;
-  // The goal loop lives in the web server; VS Code only renders goal state.
-  const showRunAsGoal = React.useMemo(() => !isVSCodeRuntime(), []);
+  const showCreateWorktree = isGitRepository === true;
 
   // Toggling goal mode swaps the prefilled instructions between the
   // report-back default and the assertive execute-to-completion variant —
@@ -87,9 +82,8 @@ export function ForkSessionDialog(props: ForkSessionDialogProps) {
   React.useEffect(() => {
     if (!open) return;
     void loadProviders({ directory: projectDirectory, source: 'forkSessionDialog' });
-    void loadConfigAgents({ directory: projectDirectory });
-    void loadAgentsStoreAgents();
-  }, [open, loadProviders, loadConfigAgents, loadAgentsStoreAgents, projectDirectory]);
+    void loadAgentsStoreAgents(projectDirectory);
+  }, [open, loadProviders, loadAgentsStoreAgents, projectDirectory]);
 
   React.useEffect(() => {
     if (!open || !resolvedWorktreeProjectDirectory || !git) return;
@@ -114,24 +108,23 @@ export function ForkSessionDialog(props: ForkSessionDialogProps) {
   React.useEffect(() => {
     if (!open || providers.length === 0) return;
 
-    const provider = providers.find((item) => item.id === providerID) ?? providers[0];
+    const provider = providers.find((item) => item.providerId === providerID) ?? providers[0];
     const models = Array.isArray(provider?.models) ? provider.models : [];
-    const hasModel = models.some((item) => item.id === modelID);
-    const fallbackModelID = models[0]?.id ?? '';
+    const hasModel = models.some((item) => item.modelId === modelID);
+    const fallbackModelID = models[0]?.modelId ?? '';
 
-    if (provider?.id === providerID && hasModel) return;
+    if (provider?.providerId === providerID && hasModel) return;
 
-    setProviderID(provider?.id ?? '');
+    setProviderID(provider?.providerId ?? '');
     setModelID(hasModel ? modelID : fallbackModelID);
     setVariant('');
   }, [open, providers, providerID, modelID]);
 
-  const agentFilter = React.useCallback((candidate: { mode?: string }) => isPrimaryMode(candidate.mode), []);
 
   const variantOptions = React.useMemo(() => {
-    const provider = providers.find((item) => item.id === providerID);
-    const model = provider?.models?.find((item) => item.id === modelID) as { variants?: Record<string, unknown> } | undefined;
-    return model?.variants ? Object.keys(model.variants) : [];
+    const provider = providers.find((item) => item.providerId === providerID);
+    const model = provider?.models?.find((item) => item.modelId === modelID);
+    return model?.variants.map((entry) => entry.variant) ?? [];
   }, [providers, providerID, modelID]);
 
   const hasVariantOptions = variantOptions.length > 0;
@@ -153,9 +146,9 @@ export function ForkSessionDialog(props: ForkSessionDialogProps) {
       agent,
       instructions,
       createWorktree: showCreateWorktree && createWorktree,
-      runAsGoal: showRunAsGoal && runAsGoal,
+      runAsGoal,
     });
-  }, [canConfirm, submitting, onConfirm, providerID, modelID, variant, agent, instructions, showCreateWorktree, createWorktree, showRunAsGoal, runAsGoal]);
+  }, [canConfirm, submitting, onConfirm, providerID, modelID, variant, agent, instructions, showCreateWorktree, createWorktree, runAsGoal]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -203,8 +196,8 @@ export function ForkSessionDialog(props: ForkSessionDialogProps) {
           <div className="flex flex-col gap-1.5">
             <span className="typography-meta font-medium text-muted-foreground">{t('sessions.scheduledTasks.editor.agent.label')}</span>
             <AgentSelector
-              agentName={agent}
-              filter={agentFilter}
+              agentId={agent}
+              directory={projectDirectory ?? undefined}
               dropdownPortalToBody
               onChange={setAgent}
             />
@@ -221,7 +214,7 @@ export function ForkSessionDialog(props: ForkSessionDialogProps) {
           </div>
         </div>
 
-        <div className={`flex items-center gap-3 ${showCreateWorktree || showRunAsGoal ? 'justify-between' : 'justify-end'}`}>
+        <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
             {showCreateWorktree ? (
               <div className="flex min-w-0 items-center gap-2">
@@ -241,7 +234,6 @@ export function ForkSessionDialog(props: ForkSessionDialogProps) {
                 </button>
               </div>
             ) : null}
-            {showRunAsGoal ? (
               <div className="flex min-w-0 items-center gap-2">
                 <Checkbox
                   checked={runAsGoal}
@@ -258,7 +250,6 @@ export function ForkSessionDialog(props: ForkSessionDialogProps) {
                   {t('sessions.scheduledTasks.editor.goal.label')}
                 </button>
               </div>
-            ) : null}
           </div>
           <div className="flex items-center justify-end gap-2">
             <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)} disabled={submitting}>

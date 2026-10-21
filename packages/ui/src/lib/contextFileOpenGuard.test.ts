@@ -1,7 +1,13 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 
 import type { FilesAPI } from '@/lib/api/types';
 import { validateContextFileOpen } from './contextFileOpenGuard';
+
+const originalFetch = globalThis.fetch;
+
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+});
 
 const filesApi = (content: string): FilesAPI =>
   ({
@@ -33,5 +39,66 @@ describe('validateContextFileOpen', () => {
 
   test('allows ordinary text files', async () => {
     expect(await validateContextFileOpen(filesApi('hello\nworld\n'), '/repo/notes.txt')).toEqual({ ok: true });
+  });
+
+  test('reads outside-workspace paths with allowOutsideWorkspace', async () => {
+    const reads: Array<{ path: string; allowOutsideWorkspace: boolean | undefined }> = [];
+    const files: FilesAPI = {
+      listDirectory: async () => ({ directory: '/', entries: [] }),
+      search: async () => [],
+      createDirectory: async () => ({ success: true, path: '/' }),
+      readFile: async (path, options) => {
+        reads.push({ path, allowOutsideWorkspace: options?.allowOutsideWorkspace });
+        return { content: 'hello\n', path };
+      },
+    };
+
+    expect(await validateContextFileOpen(files, '/tmp/notes.txt', { directory: '/repo' })).toEqual({ ok: true });
+    expect(reads).toEqual([{ path: '/tmp/notes.txt', allowOutsideWorkspace: true }]);
+  });
+
+  test('does not set allowOutsideWorkspace for in-workspace paths', async () => {
+    const reads: Array<{ allowOutsideWorkspace: boolean | undefined }> = [];
+    const files: FilesAPI = {
+      listDirectory: async () => ({ directory: '/', entries: [] }),
+      search: async () => [],
+      createDirectory: async () => ({ success: true, path: '/' }),
+      readFile: async (path, options) => {
+        reads.push({ allowOutsideWorkspace: options?.allowOutsideWorkspace });
+        return { content: 'hello\n', path };
+      },
+    };
+
+    expect(await validateContextFileOpen(files, '/repo/notes.txt', { directory: '/repo' })).toEqual({ ok: true });
+    expect(reads[0]?.allowOutsideWorkspace).toBe(false);
+  });
+});
+
+describe('validateContextFileOpen transport fallback', () => {
+  test('sends the directory as the query and never an engine header', async () => {
+    const calls: Array<{ url: string; headers: Headers }> = [];
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({
+        url: input instanceof Request ? input.url : input.toString(),
+        headers: new Headers(init?.headers),
+      });
+      return new Response('hello\n');
+    }) as typeof fetch;
+
+    const files = {
+      listDirectory: async () => ({ directory: '/', entries: [] }),
+      search: async () => [],
+      createDirectory: async () => ({ success: true, path: '/' }),
+    } as unknown as FilesAPI;
+
+    expect(await validateContextFileOpen(files, '/tmp/notes.txt', { directory: '/repo' })).toEqual({ ok: true });
+
+    expect(calls).toHaveLength(1);
+    const url = new URL(calls[0].url, 'http://localhost');
+    expect(url.pathname).toBe('/api/fs/read');
+    expect(url.searchParams.get('path')).toBe('/tmp/notes.txt');
+    expect(url.searchParams.get('directory')).toBe('/repo');
+    expect(url.searchParams.get('allowOutsideWorkspace')).toBe('true');
+    expect(calls[0].headers.has('x-opencode-directory')).toBe(false);
   });
 });

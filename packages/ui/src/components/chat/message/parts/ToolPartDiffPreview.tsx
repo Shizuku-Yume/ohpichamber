@@ -64,14 +64,20 @@ const usePierreThemeConfig = () => {
     };
 };
 
-class DiffPreviewErrorBoundary extends React.Component<{
+interface DiffPreviewErrorBoundaryProps {
     resetKey: string;
     fallback: React.ReactNode;
     children: React.ReactNode;
-}, { hasError: boolean }> {
-    state = { hasError: false };
+}
 
-    static getDerivedStateFromError(): { hasError: boolean } {
+interface DiffPreviewErrorState {
+    hasError: boolean;
+}
+
+class DiffPreviewErrorBoundary extends React.Component<DiffPreviewErrorBoundaryProps, DiffPreviewErrorState> {
+    state: DiffPreviewErrorState = { hasError: false };
+
+    static getDerivedStateFromError(): DiffPreviewErrorState {
         return { hasError: true };
     }
 

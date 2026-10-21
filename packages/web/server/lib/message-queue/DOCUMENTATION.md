@@ -5,9 +5,8 @@
 Owns the messages a user queued while a session was busy, and sends them the
 moment the session goes idle. The queue lives in the web server so a closed
 tab, a locked phone, or a dropped connection no longer strands it. Structural
-template: `permission-auto-accept` — the server is authoritative, the shared UI
-renders a projection, and VS Code (which has no server of its own) keeps its
-UI-side queue and foreground auto-send hook.
+template: `permission-auto-accept` — the server is authoritative and the shared UI
+renders a projection.
 
 ## Files
 
@@ -21,6 +20,46 @@ session-knowledge runtime; routes registered in
 `opencode/feature-routes-runtime.js` (before the generic OpenCode proxy) with
 JSON bodies enabled in `opencode/core-routes.js`; stopped by
 `opencode/shutdown-runtime.js`.
+
+## Canonical delivery owner
+
+`sqlite-store.js` persists captured `PromptRequest` records in the Node Host's
+`host-metadata.sqlite`. Queue revisions are unsigned-64 decimal strings. Append
+commands retain their idempotent response for 24 hours; reorder and delete compare
+the authorized queue revision. Only the head can be claimed, and a claim prevents
+another delivery or a conflicting edit. Projections omit context payloads and
+retain Host attachment references, never SDK objects or provider credentials.
+
+`canonical-runtime.js` sends the captured request and Host-resolved files to the
+private Bun service with the claim's run ID. Acceptance removes the queue item;
+the next item still waits for authoritative session idleness. Expired unsent
+claims can retry. A submitted claim is reconciled against live state or native
+history before acknowledgement. A lost generation without proof of acceptance
+fails explicitly rather than resending an action whose side effects are unknown.
+Shutdown aborts outstanding HTTP requests, drains admitted operations and closes
+the owned SQLite connection.
+
+The explicit `convertLegacy` operation imports `message-queue.json` by owner.
+Its Host callbacks resolve workspace scope, retain uploaded files and capture
+scheduled-task selection. Successful owner receipts prevent replay after a queue
+is emptied. Failed owners remain failures, not empty queues; valid SQLite owners
+remain readable. The source bytes are retained unchanged.
+
+These owners are implemented and exercised independently of the application
+composition. Task22 must wire the authenticated canonical routes, scope and
+attachment owners, accepted context receipts and service events, then remove the
+inherited `runtime.js` callers. The application still uses that inherited owner;
+task11 and the M2 gate are not closed by the storage proof alone.
+
+The focused Node regressions cover durable claims, idempotent replay, revisions,
+retry/failure, failed writes, malformed sibling records and partial conversion.
+A disposable scenario ran two separate Node Hosts, the actual Bun service and
+the pinned public SDK against one loopback provider. It recovered the first
+accepted-but-unacknowledged claim through native history, delivered the second
+captured request and observed exactly two provider requests. Attachments,
+context and captured model selection survived both Host and service restart.
+No application UI, Electron packaging or remote surface was exercised here.
+
 
 ## Auto routing
 
@@ -172,6 +211,3 @@ by the route family's 50 MB JSON limit.
 ## UI ownership
 
 `packages/ui/src/stores/messageQueueStore.ts` is the projection: see its
-section in `packages/ui/src/stores/DOCUMENTATION.md`. VS Code intentionally
-does not use this module; with all OpenChamber webviews closed, queued
-messages there are not delivered.

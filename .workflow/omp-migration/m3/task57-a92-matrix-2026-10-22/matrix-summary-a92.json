@@ -1,0 +1,39 @@
+{
+  "task": "Task18/Task57 a92 final matrix",
+  "artifact": {
+    "sha256": "a92fbb36ef3e554211da90ac667bc42350c27c05e0978f2edbb1b3fd48b70ef7",
+    "source": "8d179c4e2"
+  },
+  "verdicts": {
+    "W1-W6": "REUSED unchanged from archived M0/M1/M2/Task36.",
+    "W7": "PASS visual sanity on a92: persisted edit/bash/sleep rows render.",
+    "W8": "PASS: midrun reload; part.started content empty; one delta \"w8\"; final full token; stable DOM/history one token.",
+    "W9": "PASS: Web/Task57 reused; packaged Board #5304 draft, Guest shell start/read/stop, child task completed, subagents completed childSessionId, task-row external-link, child page/back, nested sidebar row.",
+    "W10": "PASS: actual CDP Network capture across child/W8 plus Host/Board/Guest probes; 0 retired legacy URLs; canonical/Host only.",
+    "PWA": "PASS"
+  },
+  "pwa": "PASS: unauthorized manifest only Appearance Settings; password login cookie; authorized manifest 200 with actual titles T18-PACKAGED, T57-CHILD-CLEAN x2 and ?session= URLs. Existing packaged state used; no credential persisted.",
+  "sidebar": "7 METADATA_READ_FAILED visible only in old polluted data; unrelated stale fixture error, not product bug; chats group visible.",
+  "child": "PASS. Snapshot 404 informational only, not named acceptance criterion.",
+  "evidence": [
+    "child-a92.json",
+    "child-a92-summary.json",
+    "child-ui-a92.png",
+    "child-panel-a92.png",
+    "child-page-a92.png",
+    "child-back-a92.png",
+    "child-sidebar-a92.png",
+    "network-a92.json",
+    "w10-a92.json",
+    "w8-a92.json",
+    "w8-a92-stable.png",
+    "board-run-a92.json",
+    "board-draft-a92.png",
+    "guest-shell-a92.json",
+    "guest-shell-a92.png",
+    "pwa-a92.json",
+    "task57-sanity-a92.json",
+    "task57-sanity-a92.png",
+    "pwa-auth-existing-a92.json"
+  ]
+}

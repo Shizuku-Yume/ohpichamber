@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { isVSCodeRuntime } from '@/lib/desktop';
 import { useI18n } from '@/lib/i18n';
 import { subscribeRuntimeEndpointWillChange } from '@/lib/runtime-switch';
 import { useIsSessionAiRenamePending, useSessionAiRename } from '@/sync/use-session-ai-rename';
+import { useSmallModelAvailability } from '@/hooks/useSmallModelAvailability';
+import type { SmallModelAvailabilityScope } from '@/stores/useSmallModelStore';
 
 /** Menus and mobile swipe actions check history only while their controls are open. */
 export function useSessionAiRenameAction(sessionID: string, directory: string | null | undefined, open: boolean) {
@@ -11,27 +12,38 @@ export function useSessionAiRenameAction(sessionID: string, directory: string | 
   const { prepare, rename } = useSessionAiRename(sessionID, directory);
   const pending = useIsSessionAiRenamePending(sessionID, directory);
   const [availability, setAvailability] = useState<'checking' | 'ready' | 'empty' | 'error'>('checking');
-  const unsupported = isVSCodeRuntime();
+  const [prepared, setPrepared] = useState<{ sessionId: string; directory: string; scope: SmallModelAvailabilityScope }>();
+  const scope = prepared?.sessionId === sessionID && prepared.directory === directory ? prepared.scope : undefined;
+  // Renaming runs on the small model; without one the item is disabled with
+  // the reason rather than failing after the click.
+  const smallModel = useSmallModelAvailability(directory, open && availability === 'ready' && Boolean(scope), scope);
+  const noSmallModel = availability === 'ready' && Boolean(scope) && smallModel === 'unavailable';
 
   useEffect(() => {
-    if (!open || !directory || unsupported || pending) return;
+    if (!open || !directory || pending) return;
     const controller = new AbortController();
     const unsubscribe = subscribeRuntimeEndpointWillChange(() => controller.abort());
     setAvailability('checking');
-    void prepare(controller.signal).then(({ turns }) => {
-      if (!controller.signal.aborted) setAvailability(turns.length ? 'ready' : 'empty');
+    setPrepared(undefined);
+    void prepare(controller.signal).then(({ session, turns }) => {
+      if (controller.signal.aborted) return;
+      const finalMessage = turns.at(-1)?.assistant;
+      if (!turns.length) { setAvailability('empty'); return; }
+      if (!finalMessage?.providerId || !finalMessage.modelId) { setAvailability('error'); return; }
+      setPrepared({ sessionId: sessionID, directory, scope: { workspaceId: session.workspaceId, preferred: { providerId: finalMessage.providerId, modelId: finalMessage.modelId } } });
+      setAvailability('ready');
     }).catch(() => {
       if (!controller.signal.aborted) setAvailability('error');
     });
     return () => { controller.abort(); unsubscribe(); };
-  }, [directory, open, pending, prepare, unsupported]);
+  }, [directory, open, pending, prepare, sessionID]);
 
-  const disabled = unsupported || !directory || pending || availability === 'checking' || availability === 'empty';
-  const hint = unsupported ? t('sessions.aiRename.unsupported')
-    : pending ? t('sessions.aiRename.generating')
-      : availability === 'checking' ? t('sessions.aiRename.checking')
-        : availability === 'empty' ? t('sessions.aiRename.noCompletedTurns')
-          : t('sessions.aiRename.action');
+  const disabled = !directory || pending || noSmallModel || availability === 'checking' || availability === 'empty';
+  const hint = pending ? t('sessions.aiRename.generating')
+      : noSmallModel ? t('sessions.aiRename.noSmallModel')
+        : availability === 'checking' ? t('sessions.aiRename.checking')
+          : availability === 'empty' ? t('sessions.aiRename.noCompletedTurns')
+            : t('sessions.sidebar.session.menuHint.aiRename');
   const run = useCallback(() => {
     void rename().catch(() => toast.error(t('sessions.aiRename.failed')));
   }, [rename, t]);

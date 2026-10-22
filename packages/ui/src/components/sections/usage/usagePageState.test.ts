@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { ProviderResult, UsageWindow } from '@/types';
-import { resolveUsagePanelState } from './usagePageState';
+import { resolveUsagePanelState, usageQuotaReady } from './usagePageState';
 
 const window: UsageWindow = {
   usedPercent: 42,
@@ -58,5 +58,14 @@ describe('UsagePage panel state', () => {
 
     expect(state.empty).toBe(false);
     expect(state.error).toBeNull();
+  });
+});
+
+describe('usage quota readiness', () => {
+  test('requires both an initialized catalog and a workspace', () => {
+    expect(usageQuotaReady(false, '')).toBe(false);
+    expect(usageQuotaReady(true, '')).toBe(false);
+    expect(usageQuotaReady(false, 'ws_1')).toBe(false);
+    expect(usageQuotaReady(true, 'ws_1')).toBe(true);
   });
 });

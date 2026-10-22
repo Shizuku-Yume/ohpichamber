@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, spyOn, test } from '
 import type { ProviderResult, QuotaProviderId } from '@/types';
 import { fetchQuota } from '@/lib/quota/fetchQuota';
 import { useQuotaStore } from './useQuotaStore';
+import { useConfigStore } from './useConfigStore';
 
 const result = (providerId: QuotaProviderId = 'claude'): ProviderResult => ({
   providerId, providerName: providerId, ok: true, configured: true, fetchedAt: 123,
@@ -22,6 +23,7 @@ let handleRequest: (url: string, signal?: AbortSignal | null) => Promise<Respons
 const network = spyOn(globalThis, 'fetch');
 
 beforeEach(() => {
+  useConfigStore.setState({ workspaceId: 'ws_quota_test' });
   useQuotaStore.getState().resetForRuntimeSwitch();
   handleRequest = async () => json(result());
   network.mockImplementation((input, init) => handleRequest(input.toString(), init?.signal));
@@ -58,7 +60,7 @@ describe('quota refresh failure is not empty success', () => {
   test('another provider succeeding does not clear a failed provider or its error', async () => {
     await useQuotaStore.getState().fetchProviderQuota('claude');
     handleRequest = async url => {
-      if (url.endsWith('/claude')) throw new Error('claude unreachable');
+      if (String(url).split('?')[0].endsWith('/claude')) throw new Error('claude unreachable');
       await pause();
       return json(result('codex'));
     };
@@ -173,5 +175,73 @@ describe('quota request deadline', () => {
     controller.abort();
     await expect(fetchQuota('claude', { signal: controller.signal })).rejects.toThrow('aborted');
     expect(network.mock.calls).toHaveLength(0);
+  });
+});
+
+describe('workspace-scoped quota context', () => {
+  test('a directory switch drops the old workspace results before the next catalog resolves', async () => {
+    const ensure = useQuotaStore.getState().ensureLoadedForRuntime;
+    useQuotaStore.setState({ ensureLoadedForRuntime: async () => {} });
+    try {
+      useConfigStore.setState({ isInitialized: true, workspaceId: 'ws_quota_test', activeDirectoryKey: 'dir_a' });
+      await useQuotaStore.getState().fetchProviderQuota('claude');
+      expect(useQuotaStore.getState().results).toHaveLength(1);
+
+      useConfigStore.setState({ activeDirectoryKey: 'dir_b', workspaceId: '' });
+      expect(useQuotaStore.getState().results).toEqual([]);
+      expect(useQuotaStore.getState().refreshErrors).toEqual({});
+    } finally {
+      useQuotaStore.setState({ ensureLoadedForRuntime: ensure });
+    }
+  });
+
+  test('a workspace published before initialization triggers a load once initialized', async () => {
+    let ensured = 0;
+    const ensure = useQuotaStore.getState().ensureLoadedForRuntime;
+    useQuotaStore.setState({ ensureLoadedForRuntime: async () => { ensured += 1; } });
+    try {
+      useConfigStore.setState({ isInitialized: false, workspaceId: 'ws_quota_test' });
+      expect(ensured).toBe(0);
+      useConfigStore.setState({ isInitialized: true });
+      expect(ensured).toBe(1);
+    } finally {
+      useQuotaStore.setState({ ensureLoadedForRuntime: ensure });
+    }
+  });
+
+  test('an in-flight request from the previous workspace cannot land after a switch', async () => {
+    const ensure = useQuotaStore.getState().ensureLoadedForRuntime;
+    useQuotaStore.setState({ ensureLoadedForRuntime: async () => {} });
+    try {
+      const marked = (usedPercent: number) => ({
+        ...result(),
+        usage: { windows: { session: { ...result().usage!.windows.session, usedPercent } } },
+      });
+      useConfigStore.setState({ isInitialized: true, activeDirectoryKey: 'dir_a', workspaceId: 'ws_a' });
+      const previous = deferredResponse();
+      handleRequest = async (url) => String(url).includes('workspaceId=ws_a') ? previous.promise : json(marked(22));
+      const pendingPrevious = useQuotaStore.getState().fetchProviderQuota('claude');
+      await pause();
+
+      useConfigStore.setState({ activeDirectoryKey: 'dir_b', workspaceId: '' });
+      useConfigStore.setState({ workspaceId: 'ws_b' });
+      await useQuotaStore.getState().fetchProviderQuota('claude');
+
+      previous.complete(json(marked(11)));
+      await pendingPrevious;
+      expect(useQuotaStore.getState().results).toHaveLength(1);
+      expect(useQuotaStore.getState().results[0].usage?.windows.session.usedPercent).toBe(22);
+    } finally {
+      useQuotaStore.setState({ ensureLoadedForRuntime: ensure });
+    }
+  });
+
+  test('runtime switch clears workspace results', async () => {
+    useConfigStore.setState({ isInitialized: true, activeDirectoryKey: 'dir_a', workspaceId: 'ws_a' });
+    await useQuotaStore.getState().fetchProviderQuota('claude');
+    expect(useQuotaStore.getState().results).toHaveLength(1);
+    useQuotaStore.getState().resetForRuntimeSwitch();
+    expect(useQuotaStore.getState().results).toEqual([]);
+    expect(useQuotaStore.getState().loadedWorkspaceId).toBeNull();
   });
 });

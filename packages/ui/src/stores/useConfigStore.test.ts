@@ -445,6 +445,21 @@ describe('useConfigStore provider persistence', () => {
     expect(state.selectionSource).toBe('manual');
   });
 
+  test('switching to a fresh cached directory still resolves its workspace', async () => {
+    liveProviderIdsByDirectory.set(DIRECTORY, 'root');
+    liveProviderIdsByDirectory.set(OTHER_DIRECTORY, 'other');
+
+    await useConfigStore.getState().activateDirectory(OTHER_DIRECTORY);
+    expect(useConfigStore.getState().workspaceId).toBe(`workspace:${OTHER_DIRECTORY}`);
+    await useConfigStore.getState().activateDirectory(DIRECTORY);
+    expect(useConfigStore.getState().workspaceId).toBe(`workspace:${DIRECTORY}`);
+
+    const resolvesBefore = resolvedWorkspaceDirectories.length;
+    await useConfigStore.getState().activateDirectory(OTHER_DIRECTORY);
+    expect(useConfigStore.getState().workspaceId).toBe(`workspace:${OTHER_DIRECTORY}`);
+    expect(resolvedWorkspaceDirectories.slice(resolvesBefore)).toContain(OTHER_DIRECTORY);
+  });
+
   for (const cached of [false, true]) for (const override of ['high', null]) {
     test(`manual draft model and ${override ?? 'Default'} thinking survive switching to a ${cached ? 'cached' : 'new'} worktree`, async () => {
       const worktree = '/workspace/manual-model-worktree';

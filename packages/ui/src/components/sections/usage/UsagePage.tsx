@@ -3,6 +3,7 @@ import { UsageCard } from './UsageCard';
 import { QuotaCredentials } from './QuotaCredentials';
 import { QUOTA_PROVIDERS } from '@/lib/quota';
 import { useQuotaAutoRefresh, useQuotaStore } from '@/stores/useQuotaStore';
+import { useConfigStore } from '@/stores/useConfigStore';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import {
@@ -21,7 +22,7 @@ import {
   SettingsSection,
   SettingsCheckboxRow,
 } from '@/components/sections/shared/SettingsSection';
-import { resolveUsagePanelState } from './usagePageState';
+import { resolveUsagePanelState, usageQuotaReady } from './usagePageState';
 
 const formatTime = (timestamp: number | null, timeFormatPreference: TimeFormatPreference) => {
   if (!timestamp) return '-';
@@ -45,6 +46,9 @@ export const UsagePage: React.FC = () => {
   const setSelectedProvider = useQuotaStore((state) => state.setSelectedProvider);
   const loadSettings = useQuotaStore((state) => state.loadSettings);
   const fetchAllQuotas = useQuotaStore((state) => state.fetchAllQuotas);
+  const isInitialized = useConfigStore((state) => state.isInitialized);
+  const workspaceId = useConfigStore((state) => state.workspaceId);
+  const catalogReady = usageQuotaReady(isInitialized, workspaceId);
   const isLoading = useQuotaStore((state) => state.isLoading);
   const lastUpdated = useQuotaStore((state) => state.lastUpdated);
   const refreshErrors = useQuotaStore((state) => state.refreshErrors);
@@ -58,8 +62,15 @@ export const UsagePage: React.FC = () => {
 
   React.useEffect(() => {
     void loadSettings();
+  }, [loadSettings]);
+
+  // Quota reads need the resolved workspace. Mount can precede catalog
+  // readiness, so wait for the workspace instead of firing an empty-context
+  // request that would leave the page blank until the periodic refresh.
+  React.useEffect(() => {
+    if (!catalogReady || !workspaceId) return;
     void fetchAllQuotas();
-  }, [loadSettings, fetchAllQuotas]);
+  }, [catalogReady, workspaceId, fetchAllQuotas]);
 
   React.useEffect(() => {
     if (selectedProviderId) {

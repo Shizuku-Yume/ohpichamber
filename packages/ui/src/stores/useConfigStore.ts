@@ -986,6 +986,7 @@ subscribeRuntimeEndpointChanged((detail) => {
         lastInitFailure: null,
         providers: [],
         providersLoaded: false,
+        workspaceId: '',
         currentProviderId: '',
         currentModelId: '',
         currentAgentName: undefined,
@@ -1159,6 +1160,8 @@ interface ConfigStore {
 
     providers: ProviderWithModelList[];
     providersLoaded: boolean;
+    /** Workspace whose catalogs `providers` describes; empty before the first live load. */
+    workspaceId: string;
     currentProviderId: string;
     currentModelId: string;
     currentVariant: string | undefined;
@@ -1412,6 +1415,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
 
                 providers: [],
                 providersLoaded: false,
+                workspaceId: "",
                 currentProviderId: "",
                 currentModelId: "",
                 currentVariant: undefined,
@@ -1674,6 +1678,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
 
                     set((state) => {
                         const snapshot = state.directoryScoped[directoryKey];
+                        const directoryChanged = state.activeDirectoryKey !== directoryKey;
                         const carryManualModel = options?.preserveManualModel && state.activeDirectoryKey !== directoryKey
                             && state.selectionSource === 'manual' && Boolean(state.currentProviderId && state.currentModelId);
                         const manualModel = carryManualModel ? {
@@ -1701,6 +1706,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                             snapshotHadProviders = snapshot.providers.length > 0;
                             return {
                                 activeDirectoryKey: directoryKey,
+                                workspaceId: directoryChanged ? "" : state.workspaceId,
                                 directoryScoped: carried ? {
                                     ...state.directoryScoped,
                                     [directoryKey]: { ...snapshot, ...carried },
@@ -1722,6 +1728,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
 
                         return {
                             activeDirectoryKey: directoryKey,
+                            workspaceId: directoryChanged ? "" : state.workspaceId,
                             directoryScoped: carried ? {
                                 ...state.directoryScoped,
                                 [directoryKey]: {
@@ -1753,10 +1760,18 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                     // populated the pickers, refresh in the background so the UI
                     // stays instant but never shows stale provider/agent data for
                     // longer than one fetch. Only block when there is nothing to show.
+                    // A directory switch clears the workspace identity, so even a
+                    // fresh provider snapshot must resolve again: the snapshot
+                    // keeps the pickers painted, but quota and catalog consumers
+                    // need the new directory's workspace before they can read.
+                    const directoryChanged = previousDirectoryKey !== directoryKey;
                     const requiredLoads: Promise<void | boolean>[] = [];
                     if (snapshotHadProviders) {
-                        if (isConfigFresh(_providersLoadedAt, directoryKey)) {
+                        if (!directoryChanged && isConfigFresh(_providersLoadedAt, directoryKey)) {
                             markStartupTrace('activateDirectory:providersFresh', { directoryKey });
+                        } else if (directoryChanged) {
+                            markStartupTrace('activateDirectory:resolveNewDirectory', { directoryKey });
+                            requiredLoads.push(get().loadProviders({ directory: fromDirectoryKey(directoryKey), source: 'activateDirectory:directoryChange' }));
                         } else {
                             markStartupTrace('activateDirectory:refreshProvidersBackground', { directoryKey });
                             void get().loadProviders({ directory: fromDirectoryKey(directoryKey), source: 'activateDirectory:refresh' });
@@ -1987,6 +2002,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                                         && state.currentModelId === nextSnapshot.currentModelId
                                         && state.currentVariant === nextSnapshot.currentVariant
                                         && state.selectedProviderId === nextSnapshot.selectedProviderId
+                                        && state.workspaceId === workspace.workspaceId
                                     ))
                                 ) {
                                     return state;
@@ -2002,6 +2018,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                                 if (state.activeDirectoryKey === directoryKey) {
                                     nextState.providers = nextProviders;
                                     nextState.providersLoaded = true;
+                                    nextState.workspaceId = workspace.workspaceId;
                                     nextState.defaultProviders = nextDefaults;
                                     nextState.currentProviderId = nextSnapshot.currentProviderId;
                                     nextState.currentModelId = nextSnapshot.currentModelId;
@@ -3209,7 +3226,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                             }
                             const configDirectoryKey = toDirectoryKey(configDirectory);
                             if (get().activeDirectoryKey !== configDirectoryKey) {
-                                set({ activeDirectoryKey: configDirectoryKey });
+                                set({ activeDirectoryKey: configDirectoryKey, workspaceId: "" });
                                 void hydrateConfigCatalogFromCache(configDirectoryKey);
                             }
 

@@ -16,7 +16,8 @@ const QUOTA_REFRESH_INTERVAL_MS = 3 * 60 * 1000;
 // response in flight for the previous instance cannot land in the new one.
 let quotaGeneration = 0;
 let inFlightRuntimeLoad: Promise<void> | null = null;
-const quotaRequests = new Map<QuotaProviderId, { controller: AbortController; promise: Promise<boolean> }>();
+const quotaRequests = new Map<string, { controller: AbortController; promise: Promise<boolean> }>();
+const quotaRequestKey = (workspaceId: string, providerId: QuotaProviderId) => `${workspaceId}\0${providerId}`;
 let quotaAutoRefreshConsumers = 0;
 let quotaAutoRefreshInterval: number | null = null;
 
@@ -31,6 +32,8 @@ interface QuotaStore extends QuotaSettingsState {
   results: ProviderResult[];
   /** Instance whose quotas `results` describes, or `null` when nothing is loaded. */
   loadedRuntimeKey: string | null;
+  /** Workspace whose quota results the loaded instance describes. */
+  loadedWorkspaceId: string | null;
   selectedProviderId: QuotaProviderId | null;
   isLoading: boolean;
   isFetchingProvider: Record<string, boolean>;
@@ -103,6 +106,7 @@ export const useQuotaStore = create<QuotaStore>()(
     (set, get) => ({
       results: [],
       loadedRuntimeKey: null,
+      loadedWorkspaceId: null,
       selectedProviderId: null,
       isLoading: false,
       isFetchingProvider: {},
@@ -146,13 +150,21 @@ export const useQuotaStore = create<QuotaStore>()(
       },
 
       fetchProviderQuota: async (providerId) => {
-        const existing = quotaRequests.get(providerId);
+        // Quota selection is workspace-scoped. Without a resolved workspace the
+        // Host would reject the request as missing context, so wait for the
+        // catalog owner to publish one instead of turning that into an error.
+        const workspaceId = useConfigStore.getState().workspaceId;
+        if (!workspaceId) return false;
+        // Coalescing is scoped too: a request for workspace A must never be
+        // handed to a caller that is now asking for workspace B.
+        const requestKey = quotaRequestKey(workspaceId, providerId);
+        const existing = quotaRequests.get(requestKey);
         if (existing) return existing.promise;
         const generation = quotaGeneration;
         const controller = new AbortController();
         const promise = Promise.resolve().then(async () => {
           try {
-            const result = await fetchQuota(providerId, { signal: controller.signal });
+            const result = await fetchQuota(providerId, { signal: controller.signal, workspaceId });
             if (generation !== quotaGeneration) return false;
             // A reachable instance can still report that its provider request
             // failed. Configuration is known, but there is no new usage sample.
@@ -181,7 +193,7 @@ export const useQuotaStore = create<QuotaStore>()(
             set(state => ({ refreshErrors: { ...state.refreshErrors, [providerId]: message }, error: message }));
             return false;
           } finally {
-            if (quotaRequests.get(providerId)?.controller === controller) quotaRequests.delete(providerId);
+            if (quotaRequests.get(requestKey)?.controller === controller) quotaRequests.delete(requestKey);
             if (generation === quotaGeneration) {
               set((state) => ({
                 isFetchingProvider: { ...state.isFetchingProvider, [providerId]: false },
@@ -190,7 +202,7 @@ export const useQuotaStore = create<QuotaStore>()(
             }
           }
         });
-        quotaRequests.set(providerId, { controller, promise });
+        quotaRequests.set(requestKey, { controller, promise });
         set(state => ({ isLoading: true, isFetchingProvider: { ...state.isFetchingProvider, [providerId]: true } }));
         return promise;
       },
@@ -201,8 +213,9 @@ export const useQuotaStore = create<QuotaStore>()(
         // Wait for the instance to report itself initialised. Asking earlier
         // gets an honest-looking "not configured" for every provider, which is
         // then cached as if it were the answer.
-        if (!useConfigStore.getState().isInitialized) return;
-        if (get().loadedRuntimeKey === runtimeKey) return;
+        const config = useConfigStore.getState();
+        if (!config.isInitialized || !config.workspaceId) return;
+        if (get().loadedRuntimeKey === runtimeKey && get().loadedWorkspaceId === config.workspaceId) return;
         if (inFlightRuntimeLoad) return inFlightRuntimeLoad;
 
         const generation = quotaGeneration;
@@ -216,7 +229,7 @@ export const useQuotaStore = create<QuotaStore>()(
           // up front meant a load that failed on a cold or briefly unreachable
           // instance was never attempted again — Usage would stay empty until
           // the three-minute refresh, or forever after a switch.
-          if (answered && generation === quotaGeneration) set({ loadedRuntimeKey: runtimeKey });
+          if (answered && generation === quotaGeneration) set({ loadedRuntimeKey: runtimeKey, loadedWorkspaceId: config.workspaceId });
         })().finally(() => { if (generation === quotaGeneration) inFlightRuntimeLoad = null; });
 
         return inFlightRuntimeLoad;
@@ -235,6 +248,7 @@ export const useQuotaStore = create<QuotaStore>()(
           ...defaultQuotaSettings(),
           results: [],
           loadedRuntimeKey: null,
+          loadedWorkspaceId: null,
           selectedProviderId: null,
           isLoading: false,
           isFetchingProvider: {},
@@ -330,3 +344,18 @@ export const useQuotaAutoRefresh = () => {
     };
   }, []);
 };
+
+
+// Quota results are workspace-scoped. Track readiness as one scope: a catalog
+// that is still initializing, or a directory switch whose catalog has not
+// re-resolved yet, has no usable workspace. Any change — including
+// ready→empty during a switch — aborts in-flight requests and clears results,
+// then loads once the new workspace is published.
+let observedQuotaScope = '';
+useConfigStore.subscribe((state) => {
+  const nextScope = state.isInitialized ? state.workspaceId : '';
+  if (nextScope === observedQuotaScope) return;
+  observedQuotaScope = nextScope;
+  useQuotaStore.getState().resetForRuntimeSwitch();
+  if (nextScope) void useQuotaStore.getState().ensureLoadedForRuntime();
+});

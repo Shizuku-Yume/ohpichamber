@@ -20,7 +20,7 @@ export type QuotaGiftResetType = 'FIVE_HOUR' | 'WEEK';
 /** The deadline covers response bodies too, including transports that ignore abort. */
 export const fetchQuota = async (
   providerId: QuotaProviderId,
-  { signal, timeoutMs = 30_000 }: { signal?: AbortSignal; timeoutMs?: number } = {},
+  { signal, timeoutMs = 30_000, workspaceId }: { signal?: AbortSignal; timeoutMs?: number; workspaceId?: string } = {},
 ): Promise<ProviderResult> => {
   const controller = new AbortController();
   const abort = () => controller.abort(new DOMException('The operation was aborted.', 'AbortError'));
@@ -35,7 +35,10 @@ export const fetchQuota = async (
   });
   const readResult = async () => {
     controller.signal.throwIfAborted();
-    const response = await runtimeFetch(`/api/quota/${encodeURIComponent(providerId)}`, { signal: controller.signal });
+    const response = await runtimeFetch(`/api/quota/${encodeURIComponent(providerId)}`, {
+      signal: controller.signal,
+      ...(workspaceId ? { query: { workspaceId } } : {}),
+    });
     const payload = await response.json();
     if (!response.ok) {
       const failure = z.object({ error: z.string() }).safeParse(payload);

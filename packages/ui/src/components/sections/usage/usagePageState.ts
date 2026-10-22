@@ -31,3 +31,7 @@ export const resolveUsagePanelState = (
       : null;
   return { usage, error, empty: !result || !result.configured };
 };
+
+/** Quota reads require both an initialized catalog and its resolved workspace. */
+export const usageQuotaReady = (isInitialized: boolean, workspaceId: string): boolean =>
+  isInitialized && workspaceId.length > 0;

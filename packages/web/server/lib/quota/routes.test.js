@@ -31,6 +31,20 @@ describe('selected quota routes', () => {
     expect(response.body).toMatchObject({ providerId: 'claude', providerName: 'Claude', ok: false, configured: false, usage: null });
     expect(response.body.error).toBeUndefined();
   });
+  it('wires the unconfigured result through the production quota module', async () => {
+    const resolveUnavailable = async () => {
+      throw Object.assign(new Error('no stored credential'), { code: 'CREDENTIAL_UNAVAILABLE', status: 422 });
+    };
+    const productionApp = createApp({
+      getQuotaProviders: () => import('./index.js'),
+      resolveQuotaSelection: resolveUnavailable,
+    });
+    const configured = await request(productionApp).get('/api/quota/claude');
+    expect(configured.status).toBe(200);
+    expect(configured.body).toMatchObject({ providerId: 'claude', providerName: 'Claude', ok: false, configured: false, usage: null });
+    expect(configured.body.error).toBeUndefined();
+    expect((await request(productionApp).get('/api/quota/not-a-quota-provider')).status).toBe(503);
+  });
   it('does not turn an unsupported provider into an unconfigured success', async () => {
     const response = await request(createApp({
       resolveQuotaSelection: async () => {

@@ -8,6 +8,7 @@
 /** @public */
 export {
   listConfiguredQuotaProviders,
+  buildUnconfiguredQuotaResult,
   fetchQuotaForProvider,
   fetchClaudeQuota,
   fetchOpenaiQuota,

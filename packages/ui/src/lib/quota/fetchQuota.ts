@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { ProviderResult, QuotaProviderId } from '@/types';
-import { runtimeFetch } from '@/lib/runtime-fetch';
+import { runtimeFetch, type RuntimeFetchOptions } from '@/lib/runtime-fetch';
 
 const windowSchema = z.object({
   usedPercent: z.number().nullable(),
@@ -35,10 +35,9 @@ export const fetchQuota = async (
   });
   const readResult = async () => {
     controller.signal.throwIfAborted();
-    const response = await runtimeFetch(`/api/quota/${encodeURIComponent(providerId)}`, {
-      signal: controller.signal,
-      ...(workspaceId ? { query: { workspaceId } } : {}),
-    });
+    const options: RuntimeFetchOptions = { signal: controller.signal };
+    if (workspaceId) options.query = { workspaceId };
+    const response = await runtimeFetch(`/api/quota/${encodeURIComponent(providerId)}`, options);
     const payload = await response.json();
     if (!response.ok) {
       const failure = z.object({ error: z.string() }).safeParse(payload);

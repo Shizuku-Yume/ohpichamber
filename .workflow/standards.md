@@ -21,7 +21,7 @@ bun run lint
 
 Real path: build and run the app the way a user gets it (`bun run electron:build` and launch the packaged app, or `bun run dev` for the Web surface), then drive the visible UI: send a chat that completes through a real provider. Real provider settings come from `~/.config/ohpichamber/omp-m0-provider.env` (operator-managed, outside the repository; load it with `source`).
 
-Evidence: `/home/shizuku/Project/ohpichamber-omp-artifacts/<task>-<date>/`, outside the repository. Never a temporary directory.
+Evidence: `/home/shizuku/Project/ohpichamber-omp-artifacts/`, outside the repository, one directory per task and date (for example `task78-2026-10-24/`). Never a temporary directory.
 
 ## Layout
 

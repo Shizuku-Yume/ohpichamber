@@ -1,6 +1,6 @@
 import type { ProviderResult } from '@/types';
 
-export interface UsagePanelState {
+interface UsagePanelState {
   /** The selected provider's usage sample, or null when it has none. */
   usage: ProviderResult['usage'];
   /** A real failure message; null for an unconfigured provider. */

@@ -14,7 +14,7 @@ export const credentialExpiresAt = (credential) => credential?.type === 'oauth' 
  * configured, so callers do not show a connection as unconfigured.
  */
 export const SELECTED_CREDENTIAL_UNAVAILABLE = 'CREDENTIAL_UNAVAILABLE';
-export const SELECTED_CREDENTIAL_RESOLUTION_FAILED = 'CREDENTIAL_RESOLUTION_FAILED';
+const SELECTED_CREDENTIAL_RESOLUTION_FAILED = 'CREDENTIAL_RESOLUTION_FAILED';
 const credentialResolutionError = (code) => Object.assign(new Error('Selected credential unavailable'), { code });
 
 export const requireSelectedCredential = async ({ resolveCredential, workspaceId, agentDirectoryId, providerId, credentialRef, purpose }) => {

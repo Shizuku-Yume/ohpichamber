@@ -21,6 +21,7 @@ import {
   SettingsSection,
   SettingsCheckboxRow,
 } from '@/components/sections/shared/SettingsSection';
+import { resolveUsagePanelState } from './usagePageState';
 
 const formatTime = (timestamp: number | null, timeFormatPreference: TimeFormatPreference) => {
   if (!timestamp) return '-';
@@ -75,15 +76,12 @@ export const UsagePage: React.FC = () => {
 
   const providerMeta = QUOTA_PROVIDERS.find((provider) => provider.id === selectedProviderId);
   const providerName = providerMeta?.name ?? selectedProviderId ?? t('settings.usage.sidebar.title');
-  const usage = selectedResult?.usage;
   const refreshError = selectedProviderId ? refreshErrors[selectedProviderId] : undefined;
-  const selectedProviderError = refreshError
-    ? usage
-      ? t('header.services.usageRefreshFailedStale', { error: refreshError })
-      : refreshError
-    : selectedResult?.configured && !selectedResult.ok
-      ? selectedResult.error
-      : null;
+  const { usage, error: selectedProviderError, empty: showEmptyState } = resolveUsagePanelState(
+    selectedResult,
+    refreshError,
+    (error) => t('header.services.usageRefreshFailedStale', { error }),
+  );
   const showInDropdown = selectedProviderId ? dropdownProviderIds.includes(selectedProviderId) : false;
   const credentialProviderId = selectedProviderId === 'exe-dev'
     || selectedProviderId === 'ollama-cloud'
@@ -91,7 +89,6 @@ export const UsagePage: React.FC = () => {
     || selectedProviderId === 'zenmux'
     ? selectedProviderId
     : null;
-  const hasCredentialsForm = credentialProviderId !== null;
   const handleDropdownToggle = React.useCallback((enabled: boolean) => {
     if (!selectedProviderId) {
       return;
@@ -194,7 +191,9 @@ export const UsagePage: React.FC = () => {
         />
       </SettingsSection>
 
-      {!selectedResult && (
+      {/* A provider without a stored credential is a normal empty state, not
+          a refresh failure. Real failures keep their own error banner below. */}
+      {showEmptyState && (
         <p className="typography-ui-label text-foreground pb-8">{t('settings.usage.page.state.noData')}</p>
       )}
 
@@ -206,16 +205,6 @@ export const UsagePage: React.FC = () => {
         <div className="mb-8 rounded-lg border border-[var(--status-error-border)] bg-[var(--status-error-background)] px-4 py-3">
           <p className="typography-ui-label font-medium text-[var(--status-error)]">{t('settings.usage.page.state.refreshFailedTitle')}</p>
           <p className="typography-meta text-[var(--status-error)]/80 mt-1">{selectedProviderError}</p>
-        </div>
-      )}
-
-      {/* Providers with an inline credentials form don't need the "go to Providers" banner — the form IS the fix. */}
-      {selectedResult && !selectedResult.configured && !hasCredentialsForm && (
-        <div className="mb-8 rounded-lg border border-[var(--status-warning-border)] bg-[var(--status-warning-background)] px-4 py-3">
-          <p className="typography-ui-label font-medium text-[var(--status-warning)]">{t('settings.usage.page.state.providerNotConfiguredTitle')}</p>
-          <p className="typography-meta text-[var(--status-warning)]/80 mt-1">
-            {t('settings.usage.page.state.providerNotConfiguredDescription')}
-          </p>
         </div>
       )}
 

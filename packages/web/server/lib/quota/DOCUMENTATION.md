@@ -38,7 +38,7 @@ Live quota fetches resolve provider credentials dynamically from the selected wo
    - Native providers without an explicit alias mapping retain their native `providerId` (for example, `cline-pass`, `cursor`, `deepinfra`, `deepseek`, `openrouter`, `opencode-go`, `neuralwatt`, `kilo`, `zenmux`).
    Selections are filtered against `listConfiguredQuotaProviders` in `providers/index.js` to ensure the registry supports each logical quota provider ID.
 3. **Secret resolution:**
-   `fetchQuotaForProvider` invokes `requireSelectedCredential({ ...selection, purpose: 'quota', resolveCredential })` in `providers/selected-credential.js`. Host `resolveCredential` calls the Agent Service internal endpoint `POST /internal/workspaces/:workspaceId/credentials/resolve`.
+   `fetchQuotaForProvider` invokes `requireSelectedCredential({ ...selection, purpose: 'quota', resolveCredential })` in `providers/selected-credential.js`. Host `resolveCredential` calls the Agent Service internal endpoint `POST /internal/workspaces/:workspaceId/credentials/resolve`. A missing selected record (`CREDENTIAL_UNAVAILABLE`) becomes an unconfigured result; every other resolution failure keeps the provider configured and returns a sanitized error.
 4. **Agent Service storage owner:**
    The dedicated Bun Agent Service worker owns `AuthStorage` and `NativeCredentials`:
    - API key credentials: command-backed credentials (`!`) are rejected with 422; keys are resolved via `resolveConfigValue(credential.key)`.
@@ -87,7 +87,7 @@ These provider IDs are registered in `packages/web/server/lib/quota/providers/in
 - `GET /api/quota/providers`:
   Accepts workspace context via query parameters (`workspaceId`, `agentDirectoryId`, optional `providerId`, optional `credentialRef`). Returns `{ providers: string[] }` containing logical quota IDs supported by both the registry and the workspace catalog.
 - `GET /api/quota/:providerId`:
-  Resolves the workspace credential selection for `:providerId` and executes `fetchQuotaForProvider`. Returns standardized quota JSON or HTTP 503 if unavailable.
+  Resolves the workspace credential selection for `:providerId` and executes `fetchQuotaForProvider`. A known provider with no selected credential returns HTTP 200 with `ok: false`, `configured: false`, `usage: null` and no `error`, so the UI shows its normal empty state. A configured provider whose credential resolution or provider request fails returns `configured: true` with a sanitized `error`. Unsupported providers, scope failures and catalog/service failures return HTTP 503.
 - `POST /api/quota/:providerId/gift-reset/use`:
   Supported only for `zai-coding-plan` (other provider IDs return HTTP 404). Accepts `{ recordId, resetType }` with workspace context in request body. Calls `useZaiGiftReset` to activate the package reset.
 
@@ -96,6 +96,8 @@ Provider modules return standardized results via shared helpers:
 - Required fields: `providerId`, `providerName`, `ok`, `configured`, `usage`, `fetchedAt`.
 - Optional field: `error`, `planLabel`.
 - Unsupported requests return `ok: false`, `configured: false`, `error: 'Unsupported provider'`.
+- An unconfigured provider returns `ok: false`, `configured: false`, `usage: null` and no `error`.
+- A configured provider failure returns `ok: false`, `configured: true` and a sanitized `error`; the last successful sample is not replaced by the failure.
 - `usage.windows` contains window records keyed by window identifier (such as `5h`, `weekly`, `monthly`, `credits_balance`).
 - Optional provider-specific data is exposed under `usage.models` (for example, Google and Claude).
 - Concurrent requests for the same provider and credential options are coalesced by `fetchQuotaForProvider` via `pendingFetches`.

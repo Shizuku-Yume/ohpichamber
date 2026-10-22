@@ -24,10 +24,28 @@ describe('selected quota dispatcher', () => {
     expect(result.ok).toBe(true);
     expect(JSON.stringify(result)).not.toContain('selected-key');
   });
+  it('treats a missing selected credential as unconfigured without an error', async () => {
+    const fetchImpl = vi.fn();
+    const result = await fetchQuotaForProvider('cline-pass', { ...selection, resolveCredential: async () => {
+      throw Object.assign(new Error('no stored record'), { code: 'CREDENTIAL_UNAVAILABLE' });
+    }, fetchImpl });
+    expect(result).toMatchObject({ ok: false, configured: false, usage: null });
+    expect(result.error).toBeUndefined();
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+  it('keeps a configured provider credential-resolution failure visible', async () => {
+    const fetchImpl = vi.fn();
+    const result = await fetchQuotaForProvider('cline-pass', { ...selection, resolveCredential: async () => {
+      throw Object.assign(new Error('agent service down'), { code: 'SERVICE_UNAVAILABLE' });
+    }, fetchImpl });
+    expect(result).toMatchObject({ ok: false, configured: true, error: 'Selected credential unavailable' });
+    expect(JSON.stringify(result)).not.toContain('agent service down');
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
   it('never fetches or falls back when the selected resolver fails', async () => {
     const fetchImpl = vi.fn();
     const result = await fetchQuotaForProvider('cline-pass', { ...selection, resolveCredential: async () => { throw new Error('Selected credential unavailable'); }, fetchImpl });
-    expect(result.ok).toBe(false);
+    expect(result).toMatchObject({ ok: false, configured: true, error: 'Selected credential unavailable' });
     expect(fetchImpl).not.toHaveBeenCalled();
   });
   it('resolves the selected native descriptor without quota-provider alias lookup', async () => {

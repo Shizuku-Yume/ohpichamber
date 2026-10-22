@@ -117,12 +117,26 @@ describe('quota refresh failure is not empty success', () => {
     }
   });
 
-  test('authoritative unconfigured success replaces old configuration', async () => {
+  test('authoritative unconfigured success replaces old configuration and clears the failure', async () => {
     await useQuotaStore.getState().fetchProviderQuota('claude');
     handleRequest = async () => json({ ...result(), configured: false, usage: null });
     expect(await useQuotaStore.getState().fetchProviderQuota('claude')).toBe(true);
     expect(useQuotaStore.getState().results[0].configured).toBe(false);
     expect(useQuotaStore.getState().results[0].usage).toBeNull();
+    expect(useQuotaStore.getState().refreshErrors).toEqual({});
+    expect(useQuotaStore.getState().error).toBeNull();
+  });
+
+  test('a failed provider followed by an unconfigured answer clears the error', async () => {
+    handleRequest = async () => { throw new Error('network down'); };
+    await useQuotaStore.getState().fetchProviderQuota('claude');
+    expect(useQuotaStore.getState().refreshErrors.claude).toBe('network down');
+
+    handleRequest = async () => json({ ...result(), ok: false, configured: false, usage: null });
+    expect(await useQuotaStore.getState().fetchProviderQuota('claude')).toBe(true);
+    expect(useQuotaStore.getState().results[0]).toMatchObject({ configured: false, usage: null });
+    expect(useQuotaStore.getState().refreshErrors).toEqual({});
+    expect(useQuotaStore.getState().error).toBeNull();
   });
 
   test('a provider failure reported inside HTTP 200 also preserves the last usage sample', async () => {

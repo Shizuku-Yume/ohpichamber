@@ -21,6 +21,29 @@ describe('selected quota routes', () => {
     const response = await request(createApp()).get('/api/quota/providers');
     expect(response.body).toEqual({ providers: ['deepseek'] });
   });
+  it('returns a normal unconfigured result when no provider credential is selected', async () => {
+    const response = await request(createApp({
+      resolveQuotaSelection: async () => {
+        throw Object.assign(new Error('no stored credential'), { code: 'CREDENTIAL_UNAVAILABLE', status: 422 });
+      },
+    })).get('/api/quota/claude');
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ providerId: 'claude', providerName: 'Claude', ok: false, configured: false, usage: null });
+    expect(response.body.error).toBeUndefined();
+  });
+  it('does not turn an unsupported provider into an unconfigured success', async () => {
+    const response = await request(createApp({
+      resolveQuotaSelection: async () => {
+        throw Object.assign(new Error('no stored credential'), { code: 'CREDENTIAL_UNAVAILABLE', status: 422 });
+      },
+    })).get('/api/quota/not-a-quota-provider');
+    expect(response.status).toBe(503);
+  });
+  it('keeps a configured provider failure visible', async () => {
+    const response = await request(createApp()).get('/api/quota/deepseek');
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ providerId: 'deepseek', ok: false, configured: true, error: 'Selected credential unavailable' });
+  });
   it('returns no private error content when scope resolution fails', async () => {
     const response = await request(createApp({ resolveQuotaSelection: async () => { throw new Error('private-secret'); } })).get('/api/quota/deepseek');
     expect(response.status).toBe(503);

@@ -7,12 +7,26 @@ export const credentialAccessToken = (credential) => {
 };
 export const credentialRefreshToken = (credential) => credential?.type === 'oauth' ? asText(credential.refresh) : null;
 export const credentialExpiresAt = (credential) => credential?.type === 'oauth' && Number.isFinite(credential.expires) ? credential.expires : null;
+/**
+ * A missing credential record is a configuration state, not a provider
+ * failure. Host credential resolution uses the same code for "no record".
+ * Every other resolution failure is a real error and keeps the provider
+ * configured, so callers do not show a connection as unconfigured.
+ */
+export const SELECTED_CREDENTIAL_UNAVAILABLE = 'CREDENTIAL_UNAVAILABLE';
+export const SELECTED_CREDENTIAL_RESOLUTION_FAILED = 'CREDENTIAL_RESOLUTION_FAILED';
+const credentialResolutionError = (code) => Object.assign(new Error('Selected credential unavailable'), { code });
+
 export const requireSelectedCredential = async ({ resolveCredential, workspaceId, agentDirectoryId, providerId, credentialRef, purpose }) => {
-  if (typeof resolveCredential !== 'function') throw new Error('Selected credential resolver unavailable');
-  if (![workspaceId, agentDirectoryId, providerId, credentialRef, purpose].every((value) => typeof value === 'string' && value.trim())) throw new Error('Selected credential context is required');
+  if (typeof resolveCredential !== 'function') throw credentialResolutionError(SELECTED_CREDENTIAL_RESOLUTION_FAILED);
+  if (![workspaceId, agentDirectoryId, providerId, credentialRef, purpose].every((value) => typeof value === 'string' && value.trim())) throw credentialResolutionError(SELECTED_CREDENTIAL_RESOLUTION_FAILED);
   try {
     const credential = await resolveCredential({ workspaceId, agentDirectoryId, providerId, credentialRef, purpose });
-    if (!credentialAccessToken(credential)) throw new Error('Unavailable credential');
+    if (!credentialAccessToken(credential)) throw credentialResolutionError(SELECTED_CREDENTIAL_UNAVAILABLE);
     return credential;
-  } catch { throw new Error('Selected credential unavailable'); }
+  } catch (error) {
+    throw credentialResolutionError(error?.code === SELECTED_CREDENTIAL_UNAVAILABLE
+      ? SELECTED_CREDENTIAL_UNAVAILABLE
+      : SELECTED_CREDENTIAL_RESOLUTION_FAILED);
+  }
 };

@@ -6,7 +6,10 @@
  */
 
 import { buildResult } from '../utils/index.js';
-import { requireSelectedCredential } from './selected-credential.js';
+import {
+  requireSelectedCredential,
+  SELECTED_CREDENTIAL_UNAVAILABLE,
+} from './selected-credential.js';
 
 import * as claude from './claude/index.js';
 import * as clinePass from './cline-pass.js';
@@ -203,14 +206,37 @@ export const listConfiguredQuotaProviders = async ({ selections = [] } = {}) => 
   return [...providerIds];
 };
 
+/** A provider outside the registry is unsupported, not unconfigured. */
+export const buildUnconfiguredQuotaResult = (providerId) => {
+  const provider = registry[providerId];
+  if (!provider) return null;
+  return buildResult({
+    providerId: provider.providerId,
+    providerName: provider.providerName,
+    ok: false,
+    configured: false,
+  });
+};
+
 const fetchQuotaForProviderUncoalesced = async (providerId, options = {}) => {
   const provider = registry[providerId];
   if (!provider) return buildResult({ providerId, providerName: providerId, ok: false, configured: false, error: 'Unsupported provider' });
+  let credential;
   try {
-    const credential = await requireSelectedCredential({ ...options, purpose: 'quota' });
-    return await provider.fetchQuota({ ...options, credential });
+    credential = await requireSelectedCredential({ ...options, purpose: 'quota' });
   } catch (error) {
-    return buildResult({ providerId: provider.providerId, providerName: provider.providerName, ok: false, configured: false, error: 'Request failed' });
+    // No stored credential is an ordinary configuration state. Any other
+    // resolution failure belongs to a provider the catalog already reported
+    // as connected, so it must stay visible instead of looking unconfigured.
+    if (error?.code === SELECTED_CREDENTIAL_UNAVAILABLE) {
+      return buildResult({ providerId: provider.providerId, providerName: provider.providerName, ok: false, configured: false });
+    }
+    return buildResult({ providerId: provider.providerId, providerName: provider.providerName, ok: false, configured: true, error: 'Selected credential unavailable' });
+  }
+  try {
+    return await provider.fetchQuota({ ...options, credential });
+  } catch {
+    return buildResult({ providerId: provider.providerId, providerName: provider.providerName, ok: false, configured: true, error: 'Request failed' });
   }
 };
 

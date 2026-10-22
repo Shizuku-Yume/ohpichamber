@@ -1,6 +1,6 @@
 import express from 'express';
 import { giftResetTypes, useZaiGiftReset } from './providers/zai.js';
-import { requireSelectedCredential } from './providers/selected-credential.js';
+import { requireSelectedCredential, SELECTED_CREDENTIAL_UNAVAILABLE } from './providers/selected-credential.js';
 
 export function registerQuotaRoutes(app, { getQuotaProviders, resolveQuotaSelection, listQuotaSelections, resolveCredential }) {
   if (typeof getQuotaProviders !== 'function' || typeof resolveQuotaSelection !== 'function' || typeof listQuotaSelections !== 'function' || typeof resolveCredential !== 'function') throw new TypeError('Quota routes require selected workspace catalogs and credential resolver');
@@ -13,9 +13,21 @@ export function registerQuotaRoutes(app, { getQuotaProviders, resolveQuotaSelect
   });
   app.get('/api/quota/:providerId', async (req, res) => {
     try {
-      const selection = await resolveQuotaSelection(req, req.params.providerId);
-      const { fetchQuotaForProvider } = await getQuotaProviders();
-      return res.json(await fetchQuotaForProvider(req.params.providerId, { ...selection, resolveCredential }));
+      const providers = await getQuotaProviders();
+      let selection;
+      try {
+        selection = await resolveQuotaSelection(req, req.params.providerId);
+      } catch (error) {
+        // A provider with no stored credential is a normal, empty state.
+        // Anything else (service/scope/credential-resolution failure) stays
+        // an explicit failure instead of becoming "not configured".
+        const unconfigured = error?.code === SELECTED_CREDENTIAL_UNAVAILABLE
+          ? providers.buildUnconfiguredQuotaResult(req.params.providerId)
+          : null;
+        if (unconfigured) return res.json(unconfigured);
+        throw error;
+      }
+      return res.json(await providers.fetchQuotaForProvider(req.params.providerId, { ...selection, resolveCredential }));
     } catch { return res.status(503).json({ error: 'Selected quota credential unavailable' }); }
   });
   app.post('/api/quota/:providerId/gift-reset/use', express.json({ limit: '16kb' }), async (req, res) => {

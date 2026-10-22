@@ -120,13 +120,18 @@ These stores act like centralized keyed caches. UI should consume narrow slices 
 `useQuotaStore` keeps the last authoritative provider results separately from
 `refreshErrors`. Transport failures and configured-provider errors preserve the
 last usage sample and its timestamp. An explicit unconfigured response replaces
-old configuration; a first-load transport failure leaves it unknown. Concurrent
-refreshes share one request per provider. Runtime reset aborts those requests,
-and generation checks prevent their completions from changing the next runtime.
-`lib/quota/fetchQuota.ts` validates response payloads and bounds the complete
-request, including JSON body delivery. Compact usage cards and Settings display
-refresh errors alongside retained data. The mobile popover makes at most one
-refresh attempt per opening, so a failed first load cannot create a retry loop.
+old configuration and clears that provider's refresh error; it is not displayed
+as a failure. A first-load transport failure leaves configuration unknown.
+Concurrent refreshes share one request per provider. Runtime reset aborts those
+requests, and generation checks prevent their completions from changing the
+next runtime. `lib/quota/fetchQuota.ts` validates response payloads and bounds
+the complete request, including JSON body delivery. Compact usage cards and
+Settings display refresh errors alongside retained data. The Usage page resolves
+the selected provider through `components/sections/usage/usagePageState.ts`: an
+unconfigured provider shows the normal empty state, while a configured provider
+keeps its visible error and marks retained data as stale. The mobile popover
+makes at most one refresh attempt per opening, so a failed first load cannot
+create a retry loop.
 
 `useSmallModelStore` derives background generation availability from the
 canonical workspace model catalog and effective profile Small Model override.

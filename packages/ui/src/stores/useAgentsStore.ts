@@ -11,6 +11,8 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useProjectsStore } from "@/stores/useProjectsStore";
 import { compareCounters } from '@/sync/event-reducer';
 import { getRuntimeKey } from "@/lib/runtime-switch";
+import { waitForAgentServiceConnection } from "./waitForAgentServiceConnection";
+import { isRetryableBootstrapError } from "@/sync/retry";
 
 /**
  * Directory a call operates on. Settings can browse another project without
@@ -49,6 +51,13 @@ const getConfigDirectory = (): string | null => {
 
 const AGENTS_LOAD_CACHE_TTL_MS = 5000;
 const DEFAULT_AGENTS_CACHE_KEY = '__default__';
+const AGENT_RECOVERY_ATTEMPTS = 3;
+const AGENT_RECOVERY_BACKOFF_MS = [250, 500] as const;
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const getAgentRecoveryKey = (directory: string): string => `${getRuntimeKey()}\0${getAgentsCacheKey(directory)}`;
+const agentRecoveryInFlight = new Map<string, Promise<void>>();
+const agentRecoverySettled = new Set<string>();
 const agentsLastLoadedAt = new Map<string, number>();
 // Each invalidation starts a new load generation. A read that began before the
 // latest invalidation (a delete, a catalog event) may carry the list from
@@ -81,6 +90,8 @@ interface AgentsStore {
   setSelectedAgent: (name: string | null) => void;
   setAgentDraft: (draft: Agent | null) => void;
   loadAgents: (directory?: string | null) => Promise<boolean>;
+  /** Retries one errored directory after the Agent Service reports ready. */
+  retryAgentsWhenReady: (directory?: string | null) => Promise<void>;
   resetForRuntimeSwitch: () => void;
   createAgent: (agent: Agent, directory?: string | null) => Promise<AgentMutationResult>;
   updateAgent: (agent: Agent, directory?: string | null, expectedRevision?: string) => Promise<AgentMutationResult>;
@@ -113,6 +124,7 @@ export const useAgentsStore: UseBoundStore<StoreApi<AgentsStore>> = create<Agent
   };
   const publishCatalog = (directory: string, catalog: AgentCatalog) => {
     const key = getAgentsCacheKey(directory);
+    agentRecoverySettled.delete(getAgentRecoveryKey(directory));
     set((state) => {
       const previous = state.revisionsByDirectory[key];
       if (previous !== undefined && compareCounters(catalog.revision, previous) < 0) return state;
@@ -179,6 +191,7 @@ export const useAgentsStore: UseBoundStore<StoreApi<AgentsStore>> = create<Agent
     resetForRuntimeSwitch: () => {
       agentsGeneration += 1;
       agentsLastLoadedAt.clear(); agentsLoadInFlight.clear(); agentsLoadGeneration.clear();
+      agentRecoveryInFlight.clear(); agentRecoverySettled.clear();
       set({ agents: [], agentsByDirectory: {}, revisionsByDirectory: {}, errorsByDirectory: {}, agentDraft: null, isLoading: false });
     },
     loadAgents: async (requestedDirectory) => {
@@ -207,7 +220,15 @@ export const useAgentsStore: UseBoundStore<StoreApi<AgentsStore>> = create<Agent
           agentsLastLoadedAt.set(key, Date.now());
           return true;
         } catch (error) {
-          if (current()) fail(key, error);
+          if (current()) {
+            fail(key, error);
+            if (directory) agentRecoverySettled.delete(getAgentRecoveryKey(directory));
+            // Only the current config scope gets automatic recovery; a
+            // session-pinned directory keeps its normal caller-driven load.
+            if (directory && isRetryableBootstrapError(error) && resolveDirectory() === directory) {
+              setTimeout(() => { void useAgentsStore.getState().retryAgentsWhenReady(directory); }, 0);
+            }
+          }
           return false;
         } finally {
           if (currentRuntime()) set({ isLoading: false });
@@ -220,6 +241,44 @@ export const useAgentsStore: UseBoundStore<StoreApi<AgentsStore>> = create<Agent
       finally { if (agentsLoadInFlight.get(key) === entry) agentsLoadInFlight.delete(key); }
       if (!currentRuntime()) return false;
       return current() ? loaded : get().loadAgents(directory);
+    },
+    retryAgentsWhenReady: async (requestedDirectory) => {
+      const directory = resolveDirectory(requestedDirectory);
+      if (!directory) return;
+      const key = getAgentsCacheKey(directory);
+      if (!get().errorsByDirectory[key]) return;
+      const recoveryKey = getAgentRecoveryKey(directory);
+      if (agentRecoverySettled.has(recoveryKey)) return;
+      const existing = agentRecoveryInFlight.get(recoveryKey);
+      if (existing) return existing;
+
+      const generation = agentsGeneration;
+      const runtimeKey = getRuntimeKey();
+      const isCurrent = () => generation === agentsGeneration && runtimeKey === getRuntimeKey()
+        && resolveDirectory() === directory;
+      const promise = (async () => {
+        if (!isCurrent()) return;
+        let ready: boolean;
+        try {
+          ready = await waitForAgentServiceConnection(undefined, { isCurrent });
+        } catch {
+          return;
+        }
+        if (!ready || !isCurrent()) return;
+        for (let attempt = 0; attempt < AGENT_RECOVERY_ATTEMPTS; attempt += 1) {
+          if (!isCurrent()) return;
+          if (!get().errorsByDirectory[key]) return;
+          if (await get().loadAgents(directory)) return;
+          if (attempt + 1 < AGENT_RECOVERY_ATTEMPTS) {
+            await sleep(AGENT_RECOVERY_BACKOFF_MS[Math.min(attempt, AGENT_RECOVERY_BACKOFF_MS.length - 1)]);
+          }
+        }
+        if (isCurrent() && get().errorsByDirectory[key]) agentRecoverySettled.add(recoveryKey);
+      })().finally(() => {
+        if (agentRecoveryInFlight.get(recoveryKey) === promise) agentRecoveryInFlight.delete(recoveryKey);
+      });
+      agentRecoveryInFlight.set(recoveryKey, promise);
+      return promise;
     },
     createAgent: (agent, directory) => mutate(directory, undefined, (workspaceId, expectedRevision) => canonicalClient.createAgent(workspaceId, { expectedRevision, agent })),
     updateAgent: (agent, directory, revision) => mutate(directory, revision, (workspaceId, expectedRevision) => canonicalClient.updateAgent(workspaceId, { expectedRevision, agent })),
@@ -250,3 +309,28 @@ if (!unsubscribeAgentsConfigChanges) {
     }
   });
 }
+
+// The config store can be connected before the Agent Service finishes starting.
+// Once both report ready, give one errored directory a bounded recovery; the
+// canonical readiness waiter inside retryAgentsWhenReady is the actual gate.
+let agentReadinessConnected = false;
+// useConfigStore and this store import each other. Subscribing at module
+// evaluation would touch the other binding before its initialization; defer
+// until both module graphs have finished evaluating.
+queueMicrotask(() => {
+  useConfigStore.subscribe((state) => {
+    const ready = state.isInitialized && state.connectionPhase === 'connected';
+    if (!ready) {
+      agentReadinessConnected = false;
+      return;
+    }
+    if (agentReadinessConnected) return;
+    agentReadinessConnected = true;
+    agentRecoverySettled.clear();
+    const directory = resolveDirectory();
+    if (!directory) return;
+    if (useAgentsStore.getState().errorsByDirectory[getAgentsCacheKey(directory)]) {
+      void useAgentsStore.getState().retryAgentsWhenReady(directory);
+    }
+  });
+});

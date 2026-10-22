@@ -18,7 +18,10 @@ const SLOW_HEALTH_POLL_MAX_MS = 2000;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-export async function waitForAgentServiceConnection(delayMs?: number): Promise<void> {
+export async function waitForAgentServiceConnection(
+  delayMs?: number,
+  options: { isCurrent?: () => boolean } = {},
+): Promise<boolean> {
   const initialPause = delayMs !== undefined && delayMs > 0
     ? Math.min(delayMs, FAST_HEALTH_POLL_INTERVAL_MS)
     : 0;
@@ -32,10 +35,15 @@ export async function waitForAgentServiceConnection(delayMs?: number): Promise<v
   let lastError: Error | string | null = null;
 
   while (Date.now() - start < MAX_HEALTH_WAIT_MS) {
+    if (options.isCurrent && !options.isCurrent()) return false;
     attempt += 1;
 
     try {
-      if (await canonicalClient.checkReady()) return;
+      if (await canonicalClient.checkReady()) {
+        // A directory/runtime change during the probe retires this waiter
+        // instead of probing or loading under the old owner.
+        return options.isCurrent ? options.isCurrent() : true;
+      }
       lastError = new Error("Agent Service readiness probe reported not ready");
     } catch (error) {
       lastError = error instanceof Error ? error : String(error);

@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, spyOn, test, type Mock } from 'bun:test';
 import { Window } from 'happy-dom';
 import type { Agent, AgentCatalog, AgentMutationResult } from '@openchamber/agent-contract';
-import { canonicalClient } from '@/api/canonicalClient';
+import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
 import type { CanonicalClient } from '@/api/canonicalClient';
 
 const browser = new Window({ url: 'http://localhost/' });
@@ -21,6 +21,7 @@ const fetchSpy = spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ da
 // Store imports read browser storage during module initialization; install happy-dom first.
 const { useAgentsStore, invalidateAgentsLoadCache, selectAgentsForDirectory, selectAgentCatalogStatus } = await import('@/stores/useAgentsStore');
 const { useProjectsStore } = await import('./useProjectsStore');
+const { useConfigStore } = await import('./useConfigStore');
 const DIRECTORY = '/workspace/project';
 const OTHER_DIRECTORY = '/workspace/other';
 const WORKSPACE = 'project-workspace';
@@ -40,9 +41,11 @@ let getAgents: Mock<CanonicalClient['getAgents']>;
 let createAgent: Mock<CanonicalClient['createAgent']>;
 let updateAgent: Mock<CanonicalClient['updateAgent']>;
 let deleteAgent: Mock<CanonicalClient['deleteAgent']>;
+let checkReady: Mock<CanonicalClient['checkReady']>;
 
 beforeEach(() => {
   fetchSpy.mockReset().mockResolvedValue(Response.json({ data: [] }));
+  checkReady = spyOn(canonicalClient, 'checkReady').mockResolvedValue(true);
   useProjectsStore.setState({ projects: [{ id: 'project', path: DIRECTORY }], activeProjectId: 'project' });
   useAgentsStore.getState().resetForRuntimeSwitch();
   useAgentsStore.setState({ selectedAgentName: null });
@@ -62,12 +65,31 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  checkReady.mockRestore();
   resolveWorkspace.mockRestore(); getAgents.mockRestore();
   createAgent.mockRestore(); updateAgent.mockRestore(); deleteAgent.mockRestore();
 });
 afterAll(() => { fetchSpy.mockRestore(); browser.close(); });
 
 const agents = (directory = DIRECTORY): Agent[] => selectAgentsForDirectory(useAgentsStore.getState(), directory);
+const transient = () => new CanonicalApiError({
+  type: 'urn:test:unavailable', title: 'Agent Service unavailable', status: 503,
+  detail: 'Agent Service is starting', code: 'SERVICE_UNAVAILABLE', retryable: true,
+});
+const nonRetryable = (message: string) => new CanonicalApiError({
+  type: 'urn:ohpichamber:problem:INVALID_REQUEST', title: 'Rejected', status: 400,
+  detail: message, code: 'INVALID_REQUEST', retryable: false,
+});
+const settleProjectDirectory = async () => {
+  // The projects store hydrates asynchronously in the browser test harness;
+  // wait for that write so the recovery directory guard has a stable owner.
+  await new Promise((resolve) => setTimeout(resolve, 350));
+  useProjectsStore.setState({ projects: [{ id: 'project', path: DIRECTORY }], activeProjectId: 'project' });
+};
+const waitFor = async (predicate: () => boolean, timeoutMs = 3000) => {
+  const start = Date.now();
+  while (!predicate() && Date.now() - start < timeoutMs) await new Promise((resolve) => setTimeout(resolve, 25));
+};
 
 describe('native agent catalogs', () => {
   test('readiness is directory-scoped and a successful empty catalog is ready', async () => {
@@ -84,7 +106,7 @@ describe('native agent catalogs', () => {
     getAgents.mockResolvedValue(catalog([agent('retained')], '1'));
     await useAgentsStore.getState().loadAgents(DIRECTORY);
     invalidateAgentsLoadCache(DIRECTORY);
-    getAgents.mockRejectedValueOnce(new Error('Service unavailable'));
+    getAgents.mockRejectedValueOnce(nonRetryable('Service unavailable'));
     expect(await useAgentsStore.getState().loadAgents(DIRECTORY)).toBe(false);
     expect(selectAgentCatalogStatus(useAgentsStore.getState(), DIRECTORY)).toBe('error');
     expect(agents()).toEqual([agent('retained')]);
@@ -125,7 +147,7 @@ describe('native agent catalogs', () => {
     getAgents.mockResolvedValue(catalog([previous], '7'));
     await useAgentsStore.getState().loadAgents(DIRECTORY);
     invalidateAgentsLoadCache(DIRECTORY);
-    getAgents.mockRejectedValueOnce(new Error('Catalog unavailable'));
+    getAgents.mockRejectedValueOnce(nonRetryable('Catalog unavailable'));
     expect(await useAgentsStore.getState().loadAgents(DIRECTORY)).toBe(false);
     expect(agents()).toEqual([previous]);
     expect(useAgentsStore.getState().revisionsByDirectory[DIRECTORY]).toBe('7');
@@ -138,7 +160,7 @@ describe('native agent catalogs', () => {
   });
 
   test('workspace resolution failure does not request or replace a catalog', async () => {
-    resolveWorkspace.mockRejectedValue(new Error('Unknown workspace'));
+    resolveWorkspace.mockRejectedValue(nonRetryable('Unknown workspace'));
     expect(await useAgentsStore.getState().loadAgents(DIRECTORY)).toBe(false);
     expect(getAgents).not.toHaveBeenCalled();
     expect(useAgentsStore.getState().revisionsByDirectory[DIRECTORY]).toBeUndefined();
@@ -216,7 +238,7 @@ describe('native agent CRUD', () => {
   });
 
   test('failed initial catalog lookup prevents writes with an invented revision', async () => {
-    getAgents.mockRejectedValue(new Error('Catalog unavailable'));
+    getAgents.mockRejectedValue(nonRetryable('Catalog unavailable'));
     expect(await useAgentsStore.getState().createAgent(agent('new'), DIRECTORY)).toEqual({ ok: false, error: 'Catalog unavailable' });
     expect(createAgent).not.toHaveBeenCalled();
   });
@@ -281,5 +303,92 @@ describe('native agent load generations', () => {
     expect(await second).toBe(true);
     expect(getAgents).toHaveBeenCalledTimes(1);
     expect(agents()).toEqual([agent('build')]);
+  });
+});
+
+
+describe('agent catalog startup recovery', () => {
+  test('retries a transient startup failure once the Agent Service is ready', async () => {
+    await settleProjectDirectory();
+    getAgents.mockRejectedValueOnce(transient()).mockResolvedValue(catalog([agent('recovered')], '2'));
+    expect(await useAgentsStore.getState().loadAgents(DIRECTORY)).toBe(false);
+    expect(selectAgentCatalogStatus(useAgentsStore.getState(), DIRECTORY)).toBe('error');
+
+    await waitFor(() => selectAgentCatalogStatus(useAgentsStore.getState(), DIRECTORY) === 'ready');
+    expect(agents()).toEqual([agent('recovered')]);
+    expect(useAgentsStore.getState().errorsByDirectory[DIRECTORY]).toBeFalsy();
+    expect(checkReady).toHaveBeenCalled();
+    expect(getAgents).toHaveBeenCalledTimes(2);
+  });
+
+  test('keeps the real error visible after the bounded recovery attempts fail', async () => {
+    await settleProjectDirectory();
+    getAgents.mockRejectedValue(transient());
+    expect(await useAgentsStore.getState().loadAgents(DIRECTORY)).toBe(false);
+    await waitFor(() => getAgents.mock.calls.length >= 4, 4000);
+    expect(getAgents).toHaveBeenCalledTimes(4);
+    expect(selectAgentCatalogStatus(useAgentsStore.getState(), DIRECTORY)).toBe('error');
+    expect(useAgentsStore.getState().errorsByDirectory[DIRECTORY]).toContain('Agent Service is starting');
+  });
+
+  test('a directory switch cancels recovery before the old directory is retried', async () => {
+    await settleProjectDirectory();
+    const readiness = deferred<boolean>();
+    checkReady.mockReturnValue(readiness.promise);
+    getAgents.mockRejectedValueOnce(transient());
+    expect(await useAgentsStore.getState().loadAgents(DIRECTORY)).toBe(false);
+
+    useProjectsStore.setState({
+      projects: [{ id: 'project', path: DIRECTORY }, { id: 'other', path: OTHER_DIRECTORY }],
+      activeProjectId: 'other',
+    });
+    readiness.resolve(true);
+    await new Promise((resolve) => setTimeout(resolve, 80));
+
+    expect(getAgents).toHaveBeenCalledTimes(1);
+    expect(selectAgentCatalogStatus(useAgentsStore.getState(), DIRECTORY)).toBe('error');
+    expect(selectAgentCatalogStatus(useAgentsStore.getState(), OTHER_DIRECTORY)).toBe('loading');
+  });
+
+  test('a non-retryable ProblemDetails stays visible without retrying', async () => {
+    await settleProjectDirectory();
+    getAgents.mockRejectedValue(nonRetryable('Forbidden'));
+    expect(await useAgentsStore.getState().loadAgents(DIRECTORY)).toBe(false);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(getAgents).toHaveBeenCalledTimes(1);
+    expect(selectAgentCatalogStatus(useAgentsStore.getState(), DIRECTORY)).toBe('error');
+    expect(useAgentsStore.getState().errorsByDirectory[DIRECTORY]).toContain('Forbidden');
+  });
+
+  test('a connected transition rearms recovery after the first bounded run exhausted', async () => {
+    await settleProjectDirectory();
+    useConfigStore.setState({ isInitialized: true, connectionPhase: 'connected' });
+    getAgents.mockRejectedValue(transient());
+    expect(await useAgentsStore.getState().loadAgents(DIRECTORY)).toBe(false);
+    await waitFor(() => getAgents.mock.calls.length >= 4, 4000);
+    expect(selectAgentCatalogStatus(useAgentsStore.getState(), DIRECTORY)).toBe('error');
+
+    getAgents.mockResolvedValue(catalog([agent('reconnected')], '5'));
+    useConfigStore.setState({ connectionPhase: 'reconnecting' });
+    useConfigStore.setState({ isInitialized: true, connectionPhase: 'connected' });
+
+    await waitFor(() => selectAgentCatalogStatus(useAgentsStore.getState(), DIRECTORY) === 'ready');
+    expect(agents()).toEqual([agent('reconnected')]);
+    expect(useAgentsStore.getState().errorsByDirectory[DIRECTORY]).toBeFalsy();
+  });
+
+  test('a runtime reset during the readiness wait prevents the old catalog from publishing', async () => {
+    await settleProjectDirectory();
+    const readiness = deferred<boolean>();
+    checkReady.mockReturnValue(readiness.promise);
+    getAgents.mockRejectedValueOnce(transient());
+    expect(await useAgentsStore.getState().loadAgents(DIRECTORY)).toBe(false);
+
+    useAgentsStore.getState().resetForRuntimeSwitch();
+    readiness.resolve(true);
+    await new Promise((resolve) => setTimeout(resolve, 80));
+
+    expect(getAgents).toHaveBeenCalledTimes(1);
+    expect(agents()).toEqual([]);
   });
 });

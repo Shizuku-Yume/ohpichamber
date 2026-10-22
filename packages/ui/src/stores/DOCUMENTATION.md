@@ -617,6 +617,16 @@ the active Host transport. An unavailable workspace/catalog is a failed read,
 not an empty catalog; the previous list remains available and the settings UI
 shows the failure. Runtime switches clear catalog revisions and drafts.
 
+A retryable read failure during cold start or reconnect is not left as a
+permanent `error`: once the config catalog reports `isInitialized` and
+`connectionPhase === 'connected'`, the store waits for the canonical Agent
+Service readiness probe and retries that same directory at most three times
+with short backoff. Success publishes the roster and clears the error; an
+exhausted retry keeps the real failure visible. A directory or runtime change
+retires the old recovery before another probe or load, request coalescing stays
+per directory, and runtime switches clear recovery state. A non-retryable
+ProblemDetails is left visible without automatic retry.
+
 Agent create/update/delete use native `Agent` records and catalog
 `expectedRevision`. Mutation acknowledgements update the scoped list and its
 revision without waiting for a second read. Retired reads cannot resurrect a

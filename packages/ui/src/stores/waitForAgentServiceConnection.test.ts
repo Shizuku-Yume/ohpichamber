@@ -25,7 +25,7 @@ type Outcome =
   | { status: 'rejected'; error: unknown };
 
 /** Advances the faked clock in steps, flushing the promise chain, until the wait settles. */
-const driveToSettlement = async (promise: Promise<void>, stepMs = 100, maxSteps = 400): Promise<Outcome> => {
+const driveToSettlement = async (promise: Promise<unknown>, stepMs = 100, maxSteps = 400): Promise<Outcome> => {
   let outcome: Outcome | null = null;
   void promise.then(
     () => { outcome = { status: 'fulfilled' }; },
@@ -59,6 +59,11 @@ describe('waitForAgentServiceConnection', () => {
     await waitForAgentServiceConnection();
 
     expect(checkReadyCallTimes).toHaveLength(1);
+  });
+
+  test('a retired owner stops before probing', async () => {
+    expect(await waitForAgentServiceConnection(undefined, { isCurrent: () => false })).toBe(false);
+    expect(checkReadyCallTimes).toHaveLength(0);
   });
 
   test('an initial delay is capped at one fast poll interval before the first probe', async () => {

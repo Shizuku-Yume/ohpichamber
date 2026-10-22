@@ -13,7 +13,7 @@
 **Read first:** `packages/agent-service/src/worker/catalog-models.ts` (`readModels`, `readProviders`, `provider`), the pinned `ModelRegistry.getAvailable`/`getAll`/`#createProviderAvailabilityCheck` in `vendor/omp/c9de2b02/tarballs/oh-my-pi-pi-coding-agent-18.8.9.tgz`, and the existing catalog fixture in `catalog-models.test.ts`.
 **Covers:** W6, W9
 
-**Related:** Task 75 (unconfigured quota reports empty, not an error) is a separate bugfix owned by the quota lane. It edits `packages/web/server/lib/quota/*` and the quota UI/store; this task does not touch those paths and is not blocked by it.
+**Related:** Task 75 (`done/omp-through-m3/75-quota-unconfigured-empty.md`, commit `f3be60e81`) makes an unconfigured quota request an empty state, not an error. It edits `packages/web/server/lib/quota/*` and the usage UI/store; this task does not touch those paths and neither blocks the other.
 
 **Check:** `bun test packages/agent-service/src/worker/catalog-models.test.ts` → the new availability test fails before the change (unconfigured bundled providers appear) and passes after; a configured custom provider and a keyless custom provider stay in the catalog while an unconfigured bundled provider is absent from `ModelCatalog` but still present in `ProviderCatalog`.
 

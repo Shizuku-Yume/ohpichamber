@@ -107,10 +107,10 @@ To run the real provider test, load the local fish configuration and run the pro
 
 ```fish
 source ~/.config/ohpichamber/omp-m0-provider.env
-bun run scripts/omp-m0/run.mjs --suite capabilities --fixture --real-provider --output /tmp/omp-m0-real-provider.json
+bun run scripts/omp-m0/run.mjs --suite capabilities --fixture --real-provider --output /home/shizuku/Project/ohpichamber-omp-artifacts/omp-m0-real-provider.json
 ```
 
-`~/.config/ohpichamber/omp-m0-provider.env` is the operator-managed local configuration containing the already-approved provider settings. It stays outside the repository. The probe reads the exported values, sends one short completion request, and writes only the sanitized result to `/tmp/omp-m0-real-provider.json`.
+`~/.config/ohpichamber/omp-m0-provider.env` is the operator-managed local configuration containing the already-approved provider settings. It stays outside the repository. The probe reads the exported values, sends one short completion request, and writes only the sanitized result to the evidence directory named in [standards.md](standards.md).
 
 ## Next implementation step
 

@@ -7,7 +7,7 @@
 
 The adopted application executes through the Host-supervised Bun Agent Service. The compiled Canonical contract, M1 Host boundaries, the M2 service and credential-handoff gates, and the M3 Canonical Client cutover with task 17 legacy retirement are implemented. The final root gate passed at `8d179c4e2` on 2026-10-22 (all seven phases exit 0; `.workflow/omp-migration/m3/task18-gate-final-2026-10-22.json`), and the a92 matrix PASS covers W7 visual sanity, W8, W9 child/Board/Guest, W10 and PWA. The technical W1-W10 gate is complete and Task18/Task57 technical work is archived; final maintainer acceptance is pending. M4 orchestration and M5 packaged/mobile/Docker release certification remain open and are not passed by this effort. The maintainer requested migration through M3 acceptance, using concurrent OMP sessions where task boundaries permit and avoiding repeated checks or speculative defensive code.
 
-[Development progress](../development.md) remains the owner of observed evidence, accepted limits and the exact next step. This effort continues that work rather than acquiring upstream source or repeating accepted probes.
+[Development progress](../development.md) keeps the observed evidence and accepted limits; this spec's header and its tasks hold the effort's state, and `.workflow/bin/workflow next` gives what can start. This effort continues that work rather than acquiring upstream source or repeating accepted probes.
 
 ## What it does
 

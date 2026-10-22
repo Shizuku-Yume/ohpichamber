@@ -12,7 +12,7 @@ Load the project's context, classify the request, and route it. Runs once per se
 ## 1. Load project context
 
 Read silently:
-1. `.workflow/standards.md` — commands, layout, project conventions.
+1. `.workflow/standards.md` — commands, layout, project conventions. If it still holds unfilled `<...>` placeholders, inspect the repository's build, test and lint configs (`package.json`, `pyproject.toml`, `Cargo.toml`, `Makefile`, CI workflows) and top-level layout, fill in `.workflow/standards.md`, and note what you filled in for confirmation in step 5.
 2. Check that `.workflow/glossary.md` and `.workflow/decisions.md` exist, but do not preload them. After classification or once the area to touch is known, grep relevant glossary and decision terms; read the newest decision entries and any linked supersession entries as needed.
 
 A missing file goes in the report; a project without decisions or glossary is new, not broken. This keeps the session entry point small while preserving the evidence-before-questions rule.
@@ -20,6 +20,7 @@ A missing file goes in the report; a project without decisions or glossary is ne
 ## 2. Check workflow state
 
 - `.workflow/bin/workflow next --no-color` — ready tasks ranked by priority, and above them every started task: paused, needing replanning, in progress, or finished but not landed, with the branch it lives on. Under `Landing: pr`, `git fetch -q` first so teammates' task branches show. Read `.workflow/tasks/*/` files directly when you need more.
+- State is read from one tree. When `next` says it is reading a branch behind the main branch, or that an effort integrates on another branch, read that branch (`next` there, or `git show <branch>:<path>`) before saying where the project stands, and name the branch you read.
 - A paused task is interrupted work: offer to resume it before starting anything new. Under `local-merge` and `pr` its handoff is in the task file on its branch, so check out that branch first.
 - `Status: blocked` is a plan waiting to be fixed (CONVENTIONS §5).
 - `grep -rl 'Hotfix:' .workflow/tasks/` — hotfix follow-up tasks still waiting for the proper fix (CONVENTIONS §4).

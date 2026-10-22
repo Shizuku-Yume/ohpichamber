@@ -6,6 +6,9 @@ read those, not the whole file.
 **Precedence.** When rules disagree: the user's current instruction, then
 `.workflow/standards.md` and the repository's existing conventions (commit style in
 `git log`, lint and formatter config, CONTRIBUTING), then this file, then `STYLE.md`.
+An instruction to go faster or test less cuts repetition: reruns of unchanged checks,
+re-reviews, replayed history. It does not cut a task's `Check` or the real-path run,
+because those are what done means; skipping one needs the user to name it.
 
 ---
 
@@ -89,27 +92,32 @@ AGENTS.md                        workflow block points here
 ```
 **Status:** proposed | in progress | done
 **Priority:** critical | high | normal | low
+**Integration branch:** <effort>/integration
 ```
 `Priority` is optional (default `normal`) and lives only in the spec header: `next`
 ranks an effort's ready tasks by it, and a `Priority` on a task file does nothing
 (`validate` says so). `urgent` is accepted as another name for `critical`. A typo
-ranks as `normal`, so `validate` warns about a value it does not know. A lone bugfix,
-spike or `maintenance` work needs no spec. Update a spec in place when code changes
-its facts.
+ranks as `normal`, so `validate` warns about a value it does not know.
+`Integration branch` is optional: the effort's tasks land there instead of on the
+main branch, and the whole effort lands on main at `flow-close`
+(`merge-strategy.md`). A lone bugfix, spike or `maintenance` work needs no spec.
+Update a spec in place when code changes its facts.
 
 **Rules:**
 - Run the CLI as `.workflow/bin/workflow <command>` from the project root. It is
   committed and needs nothing on PATH, so it works in every clone, CI and cloud agent.
 - Read the files directly. Active work: `.workflow/bin/workflow next` (ready tasks by
-  priority, plus paused and blocked ones) or `.workflow/tasks/`. Prior decisions: the
+  priority, plus paused and blocked ones; it names the branch it read when that is
+  not the main branch) or `.workflow/tasks/`. Prior decisions: the
   newest entries at the end of `decisions.md`, plus `grep -n -i '<term>'
   .workflow/decisions.md` for the area you will touch (`grep -n 'Effort:\*\* <slug>'`
   for one effort). Debt: read or grep `technical-debt.md`.
 - `standards.md` is the entry point. Keep it under one screen.
 - **Planning documents get committed.** A skill that writes decisions, glossary,
-  specs, maps or tasks commits them when it finishes, onto the main branch, before any
-  task branch is cut; under `Landing: pr` they go through a PR. A task starts only once
-  its task file is committed on the main branch.
+  specs, maps or tasks commits them when it finishes, onto the landing branch (the
+  main branch, or the effort's integration branch once it exists), before any task
+  branch is cut; under `Landing: pr` they go through a PR. A task starts only once its
+  task file is committed on the landing branch.
 - `decisions.md` defines its entry format at the top (five fields: `Decided`, `Instead
   of`, `Because`, `Mine`, `Revisit when`). Cite an entry by heading: `decisions.md:
   <date> - <title>`. The file is strictly append-only with one exception: a new entry
@@ -126,6 +134,10 @@ its facts.
   already modified or untracked belong to someone else. Record them in `## Progress`
   as `Dirty at start: <paths>` (or `none`) and keep them out of every commit; stage
   the task's own paths by name (`git add -- <paths>`). If the task needs one, ask.
+- **Evidence lives where it survives.** Logs, screenshots and receipts that prove a
+  Check go where `standards.md` says, never in a temporary directory; `## Progress`
+  cites them by path. A rerun that replaces a receipt says so in one line, so only
+  one receipt per Check is current.
 
 ### 2.1 Task files
 
@@ -140,7 +152,9 @@ the paths above, not this.
 - Required (`validate` errors): `Effort` (slug `[a-z0-9]+(-[a-z0-9]+)*`, same as the
   directory); `Blocked by` (`None`, or a comma list of `NN` or `<effort>/NN`,
   numbers only); `Check` (command and the result that means it works, or a
-  `## Check` section).
+  `## Check` section). A Check proves what it runs against: a fixture, mock or
+  recorded reply proves the stand-in. When the behaviour depends on a real service,
+  provider or device, the Check runs against it, or says which stand-in remains.
 - Expected from `flow-break`, not machine-checked: `Delivers`, `Files`, `Read
   first`, and the `Done when` checklist.
 - `Task type:` (default `feature`) sets what the Check proves. `feature`, `bugfix`:
@@ -155,9 +169,12 @@ the paths above, not this.
 - Sections: `## Progress` (dirty paths at start, Check result before the change,
   root cause, review findings and outcomes, pause handoff), `## Blocked` (§5),
   `## Findings` (spike answers).
-- Inside `done/<effort>/` the same problems are only warnings.
+- Inside `done/<effort>/` the same problems are only warnings, except in a file being
+  archived now: every checklist item is ticked, or deleted with the reason in
+  `## Progress`, and the file records `Check after:` (a spike: `## Findings`).
 - Archive the task to `done/<effort>/` in the same commit as its code and docs. A
-  blocker archived in HEAD is finished: its dependents become ready unchanged.
+  blocker archived on the landing branch is finished: its dependents become ready
+  unchanged.
 
 After editing tasks or decisions, run `.workflow/bin/workflow validate`. Errors
 block; fix the file, not the validator.
@@ -227,6 +244,7 @@ This is the only routing table; `flow-start` and the skills point here.
 |-----------|-------|
 | Session start, context lost, or next step unclear | `flow-start` |
 | Vague requirements, design questions, or "grill me" | `flow-grill` |
+| Work that replaces existing behaviour (port, migration, rewrite, engine swap) | `flow-grill`, starting from the behaviour map (its step 2) |
 | Too foggy to plan; questions depend on unanswered questions | `flow-map` |
 | Decisions settled, need writing down | `flow-spec` |
 | Spec or settled conversation needs tasks (even one) | `flow-break` |
@@ -262,16 +280,27 @@ justified it.
 | Object | States | Who moves it |
 |--------|--------|--------------|
 | Map `maps/<slug>.md` | `charting` → `working` → `clear` | `flow-map`: `working` once the first question is answered, `clear` when no question or fog is left |
-| Spec `specs/<effort>.md` (the effort's state) | `proposed` → `in progress` → `done` | `flow-spec` writes `proposed`; `flow-implement` sets `in progress` when the effort's first task starts, and sets it back from `done` when a later task joins a closed effort; `flow-close` sets `done` |
+| Spec `specs/<effort>.md` (the effort's state) | `proposed` → `in progress` → `done` | `flow-spec` writes `proposed`; `flow-implement` sets `in progress` when the effort's first task starts, and sets it back from `done` when a later task joins a closed effort; `flow-close` sets `done` once the user has accepted the effort |
 | Task `tasks/<effort>/<NN>-<slug>.md` | drafted → `active` → (`paused` or `blocked`) → archived | `flow-break` drafts it (no `Status`); `flow-implement` sets `active` on start, `paused` when the session stops early (handoff below), `blocked` when the plan is wrong (§5); `flow-break` amend clears `blocked`; `flow-implement` archives it and drops `Status` |
 | Debt entry in `technical-debt.md` | listed → removed | `flow-architect` (or any skill that finds one) adds it; the fixing task deletes it in its commit; if the user declines, delete it and append a decision entry (`Decided: not fixing <symptom>`, `Mine: no`) so reviews don't re-propose it |
+
+**One place for each state.** A task's state lives in its task file, an effort's in
+its spec header, and what can start next comes from `next`. Other documents link to
+them instead of restating them: a progress narrative goes in the task's
+`## Progress`, and a superseded plan leaves the spec (git keeps the old text; a
+reversed decision gets an entry). A task is done when it has landed on the landing
+branch; an effort with a spec is done when the user has accepted it at `flow-close`.
+Report anything short of that by what it is: finished on a branch, checks passing,
+waiting for acceptance.
 
 An effort without a spec has no status: it is done when its last task lands, with no
 `flow-close`. Under `local-merge` and `pr` a started task's file, with its `Status`,
 `## Progress` and `## Blocked`, lives on the task branch until it lands; `next` reads
 task branches, so claimed, paused and blocked tasks show from the main branch
-(`merge-strategy.md`). `next` never offers a started task as ready; resume a `paused`
-one before starting anything new.
+(`merge-strategy.md`). An effort with an integration branch shows on the main branch
+as one line saying where it integrates; run `next` on that branch for its tasks.
+`next` never offers a started task as ready; resume a `paused` one before starting
+anything new.
 
 **Reopening a closed effort.** An effort whose spec says `done` can still gain work:
 a follow-up, a bug the effort caused, a fix too big for the close. Adding a task to
@@ -283,10 +312,10 @@ follow-up work is a new effort instead, with its own spec.
 
 **Pause handoff.** The resuming session never saw this one. Before setting
 `Status: paused`, `## Progress` says: what is done, the next concrete step, open review
-findings, the branch or worktree, and where uncommitted work is (in the tree, or a
-stash named `<effort>/<NN> paused`). Under `local-merge` and `pr`, commit the task file
-alone on its branch so `next` can read it; under `pr`, push it. A next session that
-would need this conversation means the handoff is incomplete.
+findings, the `Review boundary` line, the branch or worktree, and where uncommitted
+work is (in the tree, or a stash named `<effort>/<NN> paused`). Under `local-merge` and
+`pr`, commit the task file alone on its branch so `next` can read it; under `pr`, push
+it. A next session that would need this conversation means the handoff is incomplete.
 
 ---
 
@@ -295,11 +324,14 @@ would need this conversation means the handoff is incomplete.
 Shared by every review path (`flow-verify`, `flow-implement`, `flow-close`, the fast
 paths); skills point here. What to look for lives in the `workflow-reviewer` brief.
 
-**Security pass.** Runs whenever a change touches authentication, authorisation, input
-reaching a query or shell, secrets, file paths, or another trust boundary, on every
-path and every `flow-implement` level. Use a security-review agent if the
-harness has one, else a subagent briefed for it. When it doesn't apply, say so in one
-line.
+**Security pass.** Runs when the change touches a trust boundary: authentication or
+authorisation, credentials, untrusted input reaching a shell, query, path, URL or
+process, a listener or egress, or permission state. Untrusted means outside this
+project's own code and configuration. Review the boundary closure — the changed lines
+and the changed functions' direct callers and callees at those boundaries — not the
+whole change set. Name the boundaries reviewed, or say in one line that none applies.
+Use a `security-reviewer` agent when the harness has one, else a subagent with
+`.agents/agents/security-reviewer.md`.
 
 **The reviewer classifies** each finding `blocking` or `nonblocking`; that label
 stands.
@@ -308,10 +340,22 @@ stands.
 decision entry with `Mine: no`. Declining a nonblocking finding needs a `Mine: yes`
 entry only when the choice qualifies under §1.2.
 
-**Fixes get rechecked.** Keep the reviewed change set identifiable, fix the finding,
-and rerun the affected check. If the fix changes scope or introduces a new risk,
-return to the same reviewer role with that delta. Do not create a separate review
-round for routine changes solely because of line count.
+**The round has a boundary.** A round covers one change set: a comparison point, its
+paths, and the deliverable and trust boundaries it touches. The reviewer names that
+boundary in its report; it goes into `## Progress` as
+`Review boundary: <point> + <paths>; round: N; briefs: A,B,sec; boundaries: <names|none>;
+findings: n blocking / n nonblocking`. A new comparison point — a rebase, a landing, an
+integration merge, a resumed task — starts a new round.
+
+**Inside or outside.** A fix is inside the boundary when the point, the paths and the
+deliverable are unchanged and it adds no caller, sink or trust boundary. Anything else
+is outside and moves the boundary.
+
+**Fixes get rechecked.** Rerun the affected check and the check the finding came from.
+A fix inside the boundary needs no new round. One delta round with the same role,
+batched with every other open finding from that boundary, covers a `blocking` finding
+and any fix that moves the boundary (the security pass re-runs with it) — never a
+nonblocking finding, and never a routine change because of line count.
 
 **Findings are kept.** Each blocking finding and its outcome (fixed, or accepted with
 the decision heading) goes into the task's `## Progress`, so `flow-close` can see
@@ -344,3 +388,28 @@ a lint rule, a CI step — in that same change, instead of waiting for `flow-clo
 
 Cause still unknown after reproducing? Finding it is a `spike` task ("what causes
 <symptom>?", time box stated as what to stop after); the fix task is `Blocked by` it.
+
+---
+
+## 9. Delegation
+
+A session may hand a task, or part of one, to a subagent or another session. The work
+moves; the proof does not.
+
+- **The task's owner proves it.** Whoever archives a task has seen its `Check` fail
+  before and pass after, run the real path once, and run its review (§7). A subagent
+  told to skip checks is building a piece; the owner runs them on the assembled task
+  before archiving.
+- **A Check stays with its task.** No task archives on the promise that another task,
+  such as a gate, will check it later. Moving or deferring a Check changes the plan:
+  it goes through §5 and needs the user's decision, recorded as an entry with
+  `Mine: no`.
+- **Briefs name the tree.** A brief gives the absolute worktree path, the task file
+  and the paths the subagent may change; the subagent confirms
+  `git rev-parse --show-toplevel` before its first edit. Parallel subagents never
+  share a working tree, and when they run the product they don't share its
+  mutable state either: ports, profiles, databases, fixture and evidence paths.
+- **A coordinator stays light.** A session driving many tasks toward a goal picks,
+  briefs, lands and accepts; each task is built in its own fresh session or
+  subagent from its task file. After a compaction or resume, reread `next` and the
+  active task files before acting: a summary is not the record.

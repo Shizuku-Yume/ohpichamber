@@ -45,3 +45,5 @@ Review: security pass not triggered — this is a read-only availability filter 
 ## Integration evidence
 
 Cherry-picked as `e1c164d4e` onto clean main `7b495354b`. Installed a93 (sha256 `7af84e69…`) real UI: the chat model picker listed exactly one provider, CLIProxyAPI, with its 12 enabled models (GPT-6 Astra/Luna, GPT-6.1 Sol, Claude Opus/Fable, Gemini 3.x, DeepSeek V4.1 Flash, image models). Settings → Providers still listed the full directory (92 unconfigured, 3 connected, CLIProxyAPI from environment) and its CLIProxyAPI detail showed all 12 custom models. No model prompt was sent.
+
+**Post-rebase verification (2026-10-22):** `catalog-models.test.ts` passed 31/31 and the Agent Service type-check passed. The model catalog source had no `oxlint` findings in the changed-file run.

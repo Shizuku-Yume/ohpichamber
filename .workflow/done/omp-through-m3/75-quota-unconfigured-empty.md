@@ -48,4 +48,6 @@ Third reviewer edge: `activateDirectory` cleared `workspaceId`, but a fresh cach
 
 Integrated AppImage smoke (a93, sha256 `7af84e69…`): Settings → Usage listed the quota providers (Claude, Cursor, Google and others as `未设置`); selecting Claude, Cursor and Google each showed `暂无用量数据。` with no `刷新用量数据失败`, no credential-unavailable text and no not-configured banner. The quota route returned `{ok:false, configured:false, usage:null}` for an unconfigured provider in the same run. No completion or external discovery request was sent.
 
+**Post-rebase verification (2026-10-22):** Web quota route/provider tests passed 41/41; quota-store tests passed 16/16; usage-page and config-store tests passed 120/120. UI and Web type-checks passed. The scoped `oxlint` check caught the new conditional query spread in `fetchQuota`; request options now add `query` explicitly, and `bunx oxlint packages/ui/src/lib/quota/fetchQuota.ts` passes. The wider changed-file lint still reports the pre-existing findings recorded above.
+
 **Finished:** 2026-10-22T03:55:00Z

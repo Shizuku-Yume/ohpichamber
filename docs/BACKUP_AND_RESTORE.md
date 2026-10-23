@@ -283,6 +283,19 @@ A coherent snapshot requires either:
    ROLLBACK_DIR="$(mktemp -d "$RESTORE_DIR/.host-restore-rollback.XXXXXX")" || { echo "Error: Failed to create restore rollback directory" >&2; exit 1; }
    chmod 700 "$ROLLBACK_DIR" || { echo "Error: Failed to restrict restore rollback directory permissions" >&2; exit 1; }
 
+   # Reject non-regular fixed destination entries. `mv` treats a directory (or
+   # a symlink to one) as a destination directory and would report success
+   # without replacing the expected database path.
+   for install_file in $INSTALL_FILES; do
+     install_target="$RESTORE_DIR/$install_file"
+     if [ -e "$install_target" ] || [ -L "$install_target" ]; then
+       if [ -L "$install_target" ] || [ ! -f "$install_target" ]; then
+         echo "Error: Existing restore target is not a regular file: $install_target" >&2
+         exit 1
+       fi
+     fi
+   done
+
    for db_file in "host-metadata.sqlite" "host-approval-policies.sqlite"; do
      backup_db="$BACKUP_DEST/$db_file"
      if [ ! -f "$backup_db" ]; then

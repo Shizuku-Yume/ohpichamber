@@ -40,7 +40,11 @@ const writeFileSet = (dir, files) => {
 };
 const snapshotFiles = (dir) => Object.fromEntries(restoreFileNames.map((name) => {
   const file = path.join(dir, name);
-  return [name, fs.existsSync(file) ? { content: fs.readFileSync(file, 'utf8'), mode: fs.statSync(file).mode & 0o777 } : null];
+  const stats = fs.lstatSync(file, { throwIfNoEntry: false });
+  if (!stats) return [name, null];
+  if (stats.isSymbolicLink()) return [name, { kind: 'symlink', target: fs.readlinkSync(file) }];
+  if (!stats.isFile()) return [name, { kind: 'directory' }];
+  return [name, { content: fs.readFileSync(file, 'utf8'), mode: stats.mode & 0o777 }];
 }));
 const makeFailingBin = (root) => {
   const bin = path.join(root, 'bin');
@@ -483,6 +487,31 @@ describe('documented Host restore staging', () => {
       failureEnv: { FAIL_MV_BASENAME: 'host-approval-policies.sqlite' },
       expectedStderr: 'Failed to install staged host-approval-policies.sqlite',
     });
+  });
+
+  posixTest('rejects non-regular fixed destination entries without touching other files', () => {
+    for (const kind of ['directory', 'symlink']) {
+      const root = makeDir('restore-non-regular-');
+      const backupDir = path.join(root, 'backup');
+      const restoreDir = path.join(root, 'restore');
+      writeFileSet(backupDir, backupFiles);
+      writeFileSet(restoreDir, oldFiles);
+      const target = path.join(restoreDir, 'host-approval-policies.sqlite');
+      fs.rmSync(target);
+      if (kind === 'directory') {
+        fs.mkdirSync(target);
+      } else {
+        fs.mkdirSync(path.join(restoreDir, 'symlink-target'));
+        fs.symlinkSync('symlink-target', target);
+      }
+      const before = snapshotFiles(restoreDir);
+
+      const result = runDocumentedRestore({ root, backupDir, restoreDir });
+      expect(result.status, result.stderr).not.toBe(0);
+      expect(result.stderr).toContain('Existing restore target is not a regular file');
+      expect(snapshotFiles(restoreDir)).toEqual(before);
+      expect(leftoverStageDirs(restoreDir)).toEqual([]);
+    }
   });
 
   posixTest('preserves the rollback directory when rollback itself fails (no state-file append dependency)', () => {

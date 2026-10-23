@@ -2,15 +2,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-export const openCodeDataDirectory = ({ platform = process.platform, env = process.env, homeDirectory = os.homedir() } = {}) => {
-  if (platform === 'win32') {
-    const appData = env.APPDATA?.trim();
-    return appData ? path.join(appData, 'opencode') : null;
-  }
-  if (!homeDirectory) return null;
-  if (platform === 'darwin') return path.join(homeDirectory, 'Library', 'Application Support', 'opencode');
-  const dataHome = env.XDG_DATA_HOME?.trim() || path.join(homeDirectory, '.local', 'share');
-  return path.join(dataHome, 'opencode');
+// OpenCode v1.2.25 resolves its data directory the same way on every platform:
+// packages/opencode/src/global/index.ts joins `xdgData` from `xdg-basedir` with
+// "opencode". `xdg-basedir` uses XDG_DATA_HOME verbatim and falls back to ~/.local/share.
+export const openCodeDataDirectory = ({ env = process.env, homeDirectory = os.homedir() } = {}) => {
+  const dataHome = env.XDG_DATA_HOME || (homeDirectory ? path.join(homeDirectory, '.local', 'share') : null);
+  return dataHome ? path.join(dataHome, 'opencode') : null;
 };
 
 export const hasLegacyOpenCodeData = ({ existsSync = fs.existsSync, ...options } = {}) => {

@@ -10,24 +10,35 @@ afterEach(() => {
 });
 
 describe('legacy OpenCode presence-only probe', () => {
-  it('checks only the resolved directory and exposes only a boolean', () => {
-    const checked = [];
-    expect(hasLegacyOpenCodeData({ platform: 'linux', env: {}, homeDirectory: '/fake-home', existsSync: value => { checked.push(value); return true; } })).toBe(true);
-    expect(checked).toEqual(['/fake-home/.local/share/opencode']);
+  it('resolves the XDG data directory under the home directory', () => {
+    expect(openCodeDataDirectory({ env: {}, homeDirectory: '/fake-home' })).toBe('/fake-home/.local/share/opencode');
   });
 
-  it('resolves trusted data roots', () => {
-    expect(openCodeDataDirectory({ platform: 'linux', env: { XDG_DATA_HOME: '/custom-data' }, homeDirectory: '/fake-home' })).toBe('/custom-data/opencode');
-    expect(openCodeDataDirectory({ platform: 'darwin', env: {}, homeDirectory: '/fake-home' })).toBe('/fake-home/Library/Application Support/opencode');
-    expect(openCodeDataDirectory({ platform: 'win32', env: { APPDATA: '/app-data' }, homeDirectory: '/fake-home' })).toBe('/app-data/opencode');
+  it('uses XDG_DATA_HOME exactly as given', () => {
+    expect(openCodeDataDirectory({ env: { XDG_DATA_HOME: '/custom data' }, homeDirectory: '/fake-home' })).toBe('/custom data/opencode');
+    expect(openCodeDataDirectory({ env: { XDG_DATA_HOME: ' /custom-data ' }, homeDirectory: '/fake-home' })).toBe(' /custom-data /opencode');
+    expect(openCodeDataDirectory({ env: { XDG_DATA_HOME: '' }, homeDirectory: '/fake-home' })).toBe('/fake-home/.local/share/opencode');
+  });
+
+  it('resolves nothing only when neither XDG_DATA_HOME nor a home directory is available', () => {
+    expect(openCodeDataDirectory({ env: {}, homeDirectory: '' })).toBeNull();
+    expect(openCodeDataDirectory({ env: { XDG_DATA_HOME: '/custom-data' }, homeDirectory: '' })).toBe('/custom-data/opencode');
+  });
+
+  it('checks only the resolved directory and exposes only a boolean', () => {
+    const checked = [];
+    expect(hasLegacyOpenCodeData({ env: {}, homeDirectory: '/fake-home', existsSync: value => { checked.push(value); return true; } })).toBe(true);
+    expect(checked).toEqual(['/fake-home/.local/share/opencode']);
   });
 
   it('distinguishes clean HOME from an existing OpenCode directory without reading entries', () => {
     const homeDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'legacy-presence-'));
     homes.push(homeDirectory);
-    const options = { platform: 'linux', env: {}, homeDirectory };
+    const options = { env: {}, homeDirectory };
     expect(hasLegacyOpenCodeData(options)).toBe(false);
-    fs.mkdirSync(path.join(homeDirectory, '.local', 'share', 'opencode'), { recursive: true });
+    const legacyDirectory = path.join(homeDirectory, '.local', 'share', 'opencode');
+    fs.mkdirSync(legacyDirectory, { recursive: true });
+    fs.writeFileSync(path.join(legacyDirectory, 'sentinel.json'), '{"unread":true}');
     expect(hasLegacyOpenCodeData(options)).toBe(true);
   });
 });

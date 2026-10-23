@@ -4,7 +4,7 @@ import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import { z } from 'zod';
 import { ApprovalReplySchema, QuestionReplySchema, RuntimeSessionSchema, SessionBranchRequestSchema, SubagentSchema } from '@openchamber/agent-contract';
-import type { ApprovalReply, HistoryPageRequest, ProblemCode, QuestionReply, RuntimeSession, SessionBranchRequest, Subagent, UsageQueryResult } from '@openchamber/agent-contract';
+import type { ApprovalReply, HistoryPageRequest, ProblemCode, QuestionReply, RuntimeSession, SessionBranchRequest, SessionSnapshot, Subagent, UsageQueryResult } from '@openchamber/agent-contract';
 import { WorkerBootstrapSchema } from '../protocol.ts';
 import type { UsageSessionReference, WorkerBootstrap, WorkerInteraction, WorkerOperation, WorkerPolicyRequest } from '../protocol.ts';
 import { HostSessionBootstrapSchema, HostSessionRelocationFinalizeSchema, HostSessionRelocationPrepareSchema, type HostSessionRelocationPrepare } from '../supervisor/host-authorization-protocol.ts';
@@ -50,6 +50,10 @@ export class SessionRegistry {
   private readonly pendingRuns = new Set<string>();
   private readonly deleting = new Set<string>();
   private readonly controls = new Set<string>();
+  // Deleted-space sessions are never opened, so the journal that produced their
+  // snapshot has to outlive that request for the stream that follows it.
+  private readonly coldJournals = new Map<string, SessionJournal>();
+  private readonly coldSnapshotOpenings = new Map<string, Promise<SessionSnapshot>>();
   private closing = false;
 
   constructor(stateDirectory: string, private readonly workers: WorkerRegistry, policyCommit?: ApprovalPolicyCommit, private readonly policyLoad?: ApprovalPolicyLoad) {
@@ -189,6 +193,9 @@ export class SessionRegistry {
   runtime(sessionId: string): RuntimeSession {
     const child = [...this.subagents.values()].find(record => record.childSessionId === sessionId);
     if (child) {
+      this.get(child.rootSessionId);
+      const cold = this.coldJournals.get(sessionId);
+      if (cold) return cold.runtime();
       const root = this.runtime(child.rootSessionId);
       const runtimeStatus = root.runtimeStatus === 'unavailable' ? 'unavailable'
         : child.status === 'running' && root.activeRunId !== null ? root.runtimeStatus : 'idle';
@@ -196,11 +203,12 @@ export class SessionRegistry {
       return RuntimeSessionSchema.parse({ ...root, sessionId: child.childSessionId, rootSessionId: child.rootSessionId, parentSessionId: child.parentSessionId, runtimeStatus, activeRunId });
     }
     const entry = this.get(sessionId);
+    const cold = this.coldJournals.get(sessionId);
+    if (cold) return cold.runtime();
     if (entry.state === 'unloaded') return structuredClone(entry.runtime);
     if (!entry.opened) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
     return entry.opened.journal.runtime();
   }
-
   list(workspaceId: string): SessionList {
     const references = this.references.list(workspaceId);
     const items: RuntimeSession[] = [];
@@ -309,7 +317,10 @@ export class SessionRegistry {
   }
 
   journal(sessionId: string): SessionJournal {
-    const entry = this.get(sessionId);
+    const child = [...this.subagents.values()].find(record => record.childSessionId === sessionId);
+    const entry = this.get(child?.rootSessionId ?? sessionId);
+    const cold = this.coldJournals.get(sessionId);
+    if (cold) return cold;
     if (entry.state === 'unloaded' || !entry.opened) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
     return entry.opened.journal;
   }
@@ -430,18 +441,43 @@ export class SessionRegistry {
   }
 
   async snapshot(sessionId: string) {
+    this.ensureOpen();
     const child = [...this.subagents.values()].find(record => record.childSessionId === sessionId);
-    const entry = this.entries.get(child?.rootSessionId ?? sessionId);
+    const rootSessionId = child?.rootSessionId ?? sessionId;
+    const entry = this.entries.get(rootSessionId);
     if (entry?.state !== 'unloaded' || !entry.reference.deletedSpace) return this.journal(sessionId).snapshot();
+    const existing = this.coldJournals.get(sessionId);
+    if (existing) return existing.snapshot();
+    const opening = this.coldSnapshotOpenings.get(sessionId);
+    if (opening) return opening;
+    const operation = this.openColdSnapshot(sessionId, rootSessionId, entry, child);
+    this.coldSnapshotOpenings.set(sessionId, operation);
+    void operation.finally(() => { this.coldSnapshotOpenings.delete(sessionId); }).catch(() => {});
+    return operation;
+  }
+
+  private async openColdSnapshot(sessionId: string, rootSessionId: string, entry: Extract<Entry, { state: 'unloaded' }>, child: ChildRecord | undefined) {
     const { projection, manager } = await this.coldProjection(sessionId);
     try {
+      // The journal is cached rather than closed here: the stream that follows
+      // this snapshot must replay from the same epoch the cursor names.
+      if (this.closing || this.deleting.has(rootSessionId) || this.entries.get(rootSessionId) !== entry) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
       const journal = new SessionJournal({ sessionId, rootSessionId: entry.reference.rootSessionId,
         parentSessionId: child?.parentSessionId, projectId: entry.reference.projectId, workspaceId: entry.reference.workspaceId, displayPath: entry.reference.displayPath }, projection.seed());
       journal.unavailable();
-      const snapshot = journal.snapshot();
-      const session = this.runtime(sessionId);
-      return { ...snapshot, session, cursor: `${session.epoch}:${session.headSequence}` };
+      this.coldJournals.set(sessionId, journal);
+      return journal.snapshot();
     } finally { await manager.close(); }
+  }
+
+  private releaseColdJournals(rootSessionId: string, children: ChildRecord[]): void {
+    const ids = new Set([rootSessionId, ...children.map(child => child.childSessionId)]);
+    for (const id of ids) {
+      const journal = this.coldJournals.get(id);
+      if (!journal) continue;
+      journal.close();
+      this.coldJournals.delete(id);
+    }
   }
 
   private async coldDelete(sessionId: string) {
@@ -452,6 +488,7 @@ export class SessionRegistry {
     try {
       await rm(reference.deletedSpace.directory, { recursive: true, force: true });
       await this.references.removeArchive(reference.rootSessionId);
+      this.releaseColdJournals(reference.rootSessionId, children);
       this.entries.delete(reference.rootSessionId);
       for (const child of children) this.subagents.delete(child.subagentId);
       return { sessionId, deletedSessionIds: [reference.rootSessionId, ...children.map(child => child.childSessionId)] };
@@ -856,10 +893,13 @@ export class SessionRegistry {
 
   async close(): Promise<void> {
     this.closing = true;
+    await Promise.allSettled(this.coldSnapshotOpenings.values());
     for (const entry of this.entries.values()) if (entry.state !== 'unloaded') {
       this.interactions.closeSession(entry.input.rootSessionId);
       entry.opened?.journal.close();
     }
+    for (const journal of this.coldJournals.values()) journal.close();
+    this.coldJournals.clear();
     await Promise.allSettled(this.openings.values());
     await this.workers.close();
     await this.references.close();

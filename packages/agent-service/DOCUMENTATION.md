@@ -11,6 +11,7 @@ The Agent Service owns workspace MCP configuration and routes sessionless worksp
 ## Native session archives
 
 `SessionRegistry.archiveManifest()` is the host-authorized, read-only inventory of native chats. `exportArchive()` emits a bounded uncompressed ustar bundle containing the selected transcript, descendants, tool artifacts, subagent outputs, and referenced blobs; it never parses transcripts in Node. `importArchive()` validates the complete manifest before staging and installs immutable deleted-space references. Imported roots and descendants remain cold until explicitly reopened, and deleted-space mutations return `SESSION_READ_ONLY` (HTTP 409). Archive transfers are bounded to 256 MiB and five minutes per operation; save/restore uses a thirty-minute host window.
+A cold deleted-space snapshot retains one journal per root or child session in memory so its cursor remains the same across repeated snapshots and can be validated by the following SSE request. Root archive deletion closes and releases those journals; service shutdown closes any remaining cold journals. The cache is process-local and does not make an archived runtime writable or reopen its worker.
 
 ## Live session reopen
 

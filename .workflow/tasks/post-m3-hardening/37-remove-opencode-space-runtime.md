@@ -1,4 +1,4 @@
-# 29: Remove the OpenCode space runtime and keep spaces unreleased
+# 37: Remove the OpenCode space runtime and keep spaces unreleased
 
 **Effort:** post-m3-hardening
 **Task type:** feature
@@ -39,7 +39,7 @@
 - Drafted from task 08's maintainer decision on 2026-10-23. No source changed, no code started, no test or Docker run.
 - Owner: a dedicated future Spaces Removal owner/lane, not lane F and not an existing lane; the director/maintainer must assign it. This task stays a draft and cannot start until that assignment.
 - Coordination: task 10 is coordination only. It moves the retained modules and docs and leaves `proxy.js` and its tests in place; this task owns their deletion, and lane A is not the deletion implementer. The feature is hidden, so no grant-screen or copy change is required. If a wording change becomes necessary, coordinate with lane G and stop before editing their files; do not create a tracking task for UI work. Task 15 owns `Dockerfile:60`, which still installs `@opencode/cli@2.0.25`; this task does not edit it.
-- Landing order: task 08 is independent and lands in Lane F order (08 -> 17 -> 21 -> 22 -> 28) once its own review, rebase and full `bun run test` gates pass; it does not wait for this task. This task is gated only on lane A task 01 (active, not landed), then task 10, then the assigned owner. Do not start this draft before the owner assignment.
+- Landing order: task 08 is independent and lands in Lane F order (08 -> 17 -> 21 -> 22 -> 28) once its own review, rebase and full `bun run test` gates pass; it does not wait for this task. This task is gated only on lane A task 01 (archived and landed at `ecdeb110d`), then task 10, then the assigned owner. Main currently has an unrelated dirty path; do not start this draft before the owner assignment and a clean landing state.
 - Decision recording: the option B decision lives in task 08's Progress. This lane may not edit `decisions.md`, the spec or the glossary; the maintainer or their owner records it there.
 - Evidence limit: the audit behind task 08 is source-only. No Docker, runtime, test or network evidence exists for this task yet.
 

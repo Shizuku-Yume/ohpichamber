@@ -9,7 +9,7 @@
 **Question:** what would it cost to run isolated spaces on OMP, versus removing the OpenCode space runtime while spaces stay unreleased?
 **Time box:** one read-only source inventory and one source-referenced cost comparison; no Docker probe, no implementation.
 
-**Delivers:** Answer to: what would it cost to run isolated spaces on OMP, versus removing the OpenCode space runtime while spaces stay unreleased? Records the maintainer's option B decision and drafts the removal follow-up, task 29.
+**Delivers:** Answer to: what would it cost to run isolated spaces on OMP, versus removing the OpenCode space runtime while spaces stay unreleased? Records the maintainer's option B decision and drafts the removal follow-up, task 37.
 
 **Blocked by:** None
 **Files:** `packages/web/server/lib/spaces/` (`space-opencode.js`, `tools-filler.js`, `tools.js` lines 56-71); `packages/web/server/lib/opencode/proxy.js` and its live docker tests `spaces/places/grants.docker.live.test.js`, `sessions.docker.live.test.js`; `packages/web/package.json` (`@opencode/client`/`@opencode/schema`); `packages/ui/src/lib/spaces/release.ts`
@@ -17,7 +17,7 @@
 **Read first:** `.workflow/specs/post-m3-hardening.md`; `.workflow/isolated-spaces/DESIGN.md`; `.agents/skills/isolated-space-boundary/SKILL.md`; `.workflow/omp-migration/scope.md` (isolated spaces rows); `/home/shizuku/Project/ohpichamber-omp-artifacts/post-m3-review-2026-10-23/PlanGapAnalysis.md` finding 2
 **Covers:** H7
 
-**Check:** `## Findings` answers the question with source references about what ties spaces to OpenCode (in-container CLI/plugin install, `opencode.json`, version read from `@opencode/client`, proxy-based live tests); the maintainer's decision B is recorded; and task 29 is drafted at the verified next task number.
+**Check:** `## Findings` answers the question with source references about what ties spaces to OpenCode (in-container CLI/plugin install, `opencode.json`, version read from `@opencode/client`, proxy-based live tests); the maintainer's decision B is recorded; and task 37 is drafted at the verified next task number.
 
 ## Done when
 
@@ -35,28 +35,28 @@
 - Evidence: `/home/shizuku/Project/ohpichamber-omp-artifacts/lane-f/08-2026-10-23/` (`opencode-coupling-inventory.json`, `opencode-coupling-inventory.md`, `inventory-run.log`; `inventory.mjs.sha256` retains the scanner hash). The read-only scanner was removed after the JSON, logs and hash were kept.
 - No source, spec, decisions, development, glossary or package file changed. No test or Docker probe ran: the landing rule and the director's probe permission gate both still apply.
 - Maintainer decision (2026-10-23): **B** — remove the OpenCode space runtime and keep spaces unreleased until the OMP space runtime is built. Recorded in this task only; no `decisions.md`, spec or glossary edit, because this lane may change task files only.
-- Follow-up task draft: `.workflow/tasks/post-m3-hardening/29-remove-opencode-space-runtime.md`. Drafted, not started, unassigned until the maintainer designates a dedicated Spaces Removal owner/lane (not lane F or an existing lane).
+- Follow-up task draft: `.workflow/tasks/post-m3-hardening/37-remove-opencode-space-runtime.md`. Drafted, not started, unassigned until the maintainer designates a dedicated Spaces Removal owner/lane (not lane F or an existing lane).
 
 ### Decision and pause handoff (2026-10-23)
 
 - Decision: the maintainer chose **B** — remove the OpenCode space runtime and keep spaces unreleased until the OMP space runtime is built. Options A and B are costed below; B is the decided path.
 - Status is `paused` pending lane A task 01 landing and a clean `main`; then this task rebases and full `bun run test` must be green at the landing commit. It is not complete, archive-ready or landed.
-- Follow-up: `.workflow/tasks/post-m3-hardening/29-remove-opencode-space-runtime.md` is drafted and not started. Owner: a dedicated future Spaces Removal owner/lane, not lane F and not an existing lane; the director/maintainer must assign it. Task 29 owns deleting `lib/opencode/proxy.js` and its three unit tests; task 10 moves the retained modules and docs but leaves the proxy and its tests in place, so lane A is not the deletion implementer. The feature is hidden, so no grant-screen or copy change is required; any wording change is lane G coordination only, and stops before their edit. Task 15 owns `Dockerfile:60`.
-- Landing gate: lane A task 01 is active, not landed; `main` is clean at `f72010e3e`. This task cannot land until 01 lands, this task rebases, full `bun run test` is green at the landing commit, and review passes. The ticks above record that the findings and draft exist, not that landing gates passed.
-- Branch/worktree: `post-m3-hardening/08-isolated-spaces-runtime` in `/home/shizuku/Project/ohpichamber-worktrees/lane-f-spikes`, cut from `main`. Base `f72010e3ef453a5218c3464b674b86c0ccc00a04`; implementation snapshot `27321b952`; this pause/decision commit is discoverable on the branch. Dirty at start: none. At review: this task file's edits and the new task 29 file; this commit stages only those two paths. No stash for this task.
+- Follow-up: `.workflow/tasks/post-m3-hardening/37-remove-opencode-space-runtime.md` is drafted and not started. Owner: a dedicated future Spaces Removal owner/lane, not lane F and not an existing lane; the director/maintainer must assign it. Task 37 owns deleting `lib/opencode/proxy.js` and its three unit tests; task 10 moves the retained modules and docs but leaves the proxy and its tests in place, so lane A is not the deletion implementer. The feature is hidden, so no grant-screen or copy change is required; any wording change is lane G coordination only, and stops before their edit. Task 15 owns `Dockerfile:60`.
+- Landing gate: lane A task 01 is archived and landed at `ecdeb110d`; `main` has an unrelated uncommitted change in `packages/agent-service/src/sessions/registry.ts`. This task may rebase and run its full gate on committed `ecdeb110d`, but cannot land until the main worktree is clean and the maintainer grants landing permission. Review must pass.
+- Branch/worktree: `post-m3-hardening/08-isolated-spaces-runtime` in `/home/shizuku/Project/ohpichamber-worktrees/lane-f-spikes`, cut from `main`. Base `f72010e3ef453a5218c3464b674b86c0ccc00a04`; implementation snapshot `27321b952`; this pause/decision commit is discoverable on the branch. Dirty at start: none; main's unrelated dirty path is preserved. At review: this task file's edits and the renamed task 37 file; this commit stages only those two paths. No stash for this task.
 - Evidence limit: the inventory and audit are source-only. No Docker probe, runtime start, test run or network fetch ran. The two source-level readiness and archive consequences are labelled inference, not observed failures.
 - Checklist: the Done-when items are ticked because the findings and the follow-up draft exist. The task still does not land until the gates above pass.
-- Review boundary: base `f72010e3ef453a5218c3464b674b86c0ccc00a04` + tasks 08/29 only; round 2. Brief A (contract) and Brief B (quality) both PASS after the prior Brief B blockers were fixed and rerun: boundaries none, findings 0 blocking / 0 remaining nonblocking. Neither is a runtime or security review, and `agent://lane-f-evidence` is not a `flow-verify` review. No implementation test or Docker result is claimed.
-- Check after: Findings inventory/options + user B + task 29 draft satisfied; `workflow validate` 117 tasks, exit 0; full root `bun run test` and real Docker NOT run.
+- Review boundary: base `f72010e3e` + tasks 08/37 only; round 2. Brief A (contract) and Brief B (quality) both PASS after the prior Brief B blockers were fixed and rerun: boundaries none, findings 0 blocking / 0 remaining nonblocking. Neither is a runtime or security review, and `agent://lane-f-evidence` is not a `flow-verify` review. No implementation test or Docker result is claimed.
+- Check after: Findings inventory/options + user B + task 37 draft satisfied; `workflow validate` 117 tasks, exit 0; full root `bun run test` and real Docker NOT run.
 - Lane F order is 08 -> 17 -> 21 -> 22 -> 28. Do not start 17 until 08 is landed.
 - Shared-document sync deliberately not done: this lane may change task files only, so the B decision is not written to the spec, `decisions.md`, `development.md` or the glossary. The maintainer or their owner, outside Lane F, must record it there; this task does not require unrelated docs.
-- This pause/decision record commits task 08 and task 29 only. No landing, test, rebase, Docker or archive was done; landing waits for lane A 01, a clean main, then rebase and full `bun run test`.
+- This pause/decision record commits task 08 and task 37 only. No landing, test, rebase, Docker or archive was done; landing waits for lane A 01, a clean main, then rebase and full `bun run test`.
 
 ## Findings
 
 **Answered question:** what would it cost to run isolated spaces on OMP, versus removing the OpenCode space runtime while spaces stay unreleased?
 
-**Answer:** Option A is a subsystem effort, not a hardening task: the space image, tools volume and in-space server would all have to ship and supervise a private Bun Agent Service, and the dispatcher's session/event contract would change. Option B is a bounded removal across `spaces/`, the unmounted legacy proxy and two web dependencies, at the cost of leaving no agent runtime in spaces. The maintainer chose **B** on 2026-10-23: remove the OpenCode space runtime and keep `ISOLATED_SPACES_RELEASED = false` (`packages/ui/src/lib/spaces/release.ts:6`) until OMP spaces are built as their own effort. The follow-up is task 29.
+**Answer:** Option A is a subsystem effort, not a hardening task: the space image, tools volume and in-space server would all have to ship and supervise a private Bun Agent Service, and the dispatcher's session/event contract would change. Option B is a bounded removal across `spaces/`, the unmounted legacy proxy and two web dependencies, at the cost of leaving no agent runtime in spaces. The maintainer chose **B** on 2026-10-23: remove the OpenCode space runtime and keep `ISOLATED_SPACES_RELEASED = false` (`packages/ui/src/lib/spaces/release.ts:6`) until OMP spaces are built as their own effort. The follow-up is task 37.
 
 ### Method
 
@@ -127,7 +127,7 @@ Read-only source inventory at `f72010e3e` by `inventory.mjs`. Counts: 80 files u
 - Keep `x-opencode-directory` only as long as the dispatcher and UI still speak it; it is a wire header, not an engine runtime. Removing it is a UI-contract change, not required for the runtime removal.
 - Product consequence: spaces have no agent inside. Model grants and login grants cannot work; server grant routes must refuse them while unreleased, and the hidden UI needs no change. The feature stays behind `ISOLATED_SPACES_RELEASED = false`; do not add a fallback engine or a compatibility alias.
 - Fail-closed check: if the registry-shipped `@openchamber/web` still refuses to start without `opencode` (the historical stage-0 behaviour), removal must make space creation fail with a clear unreleased/unsupported state rather than leave a half-running container. This source tree has no such startup check; the published package is unverified without network access.
-- Coordination: task 29 owns `proxy.js` deletion; task 10 moves the retained `lib/opencode/` modules and leaves the proxy in place, so lane A is not the deletion implementer. No lane owns `packages/web/server/lib/spaces/`; the maintainer must assign a dedicated Spaces Removal owner/lane. The feature is hidden, so no grant-screen change is required; any wording change is lane G coordination only, and stops before their edit.
+- Coordination: task 37 owns `proxy.js` deletion; task 10 moves the retained `lib/opencode/` modules and docs but leaves the proxy and its tests in place, so lane A is not the deletion implementer. No lane owns `packages/web/server/lib/spaces/`; the maintainer must assign a dedicated Spaces Removal owner/lane. The feature is hidden, so no grant-screen change is required; any wording change is lane G coordination only, and stops before their edit.
 - Tests: `bun run test` must stay green, and the old proxy unit tests go away with the fixture. This is a net test-count reduction that must be named in the follow-up, not hidden.
 
 **What the live Docker tests need after `proxy.js` is gone**
@@ -143,7 +143,7 @@ Read-only source inventory at `f72010e3e` by `inventory.mjs`. Counts: 80 files u
 
 ### Recommendation
 
-**B was chosen by the maintainer on 2026-10-23.** It is the decided option, and task 29 drafts its removal. The reasoning:
+**B was chosen by the maintainer on 2026-10-23.** It is the decided option, and task 37 drafts its removal. The reasoning:
 
 - Spaces are unreleased (`release.ts:6`); the spec already rejected releasing them on OpenCode.
 - The proxy is unmounted legacy test scaffolding, and `@opencode/client` is only a version pin, so most of the removal is deleting dead weight rather than a cutover.
@@ -152,9 +152,9 @@ Read-only source inventory at `f72010e3e` by `inventory.mjs`. Counts: 80 files u
 
 **Condition:** B must not leave spaces reachable in a half-working state. The follow-up must make create/start fail closed with the release flag and name the removed capability.
 
-### Chosen follow-up (task 29)
+### Chosen follow-up (task 37)
 
-**B: remove the OpenCode space runtime and keep spaces unreleased** is drafted as `.workflow/tasks/post-m3-hardening/29-remove-opencode-space-runtime.md` (verified next unused number: 28 was the highest when drafted). It remains a draft, unassigned, and does not start until the maintainer assigns a dedicated Spaces Removal owner/lane.
+**B: remove the OpenCode space runtime and keep spaces unreleased** is drafted as `.workflow/tasks/post-m3-hardening/37-remove-opencode-space-runtime.md` (assigned next task number by the maintainer's D12 update). It remains a draft, unassigned, and does not start until the maintainer assigns a dedicated Spaces Removal owner/lane.
 
 - Scope: the Option B edit surface above; a server-owned release gate (`packages/ui/src/lib/spaces/release.ts` is display-only) that refuses create/start/repair before any place or container start and the 120-second readiness wait; refusal of model/login grants; fail-closed tools fill when a private/workspace dependency cannot resolve; proxy deletion; the live-suite migrations; docs.
 - Coordination: lane A is not the deletion implementer; task 10 leaves `proxy.js` and its tests in place. No UI change is required while the feature is hidden; a wording change would be lane G coordination only, with no new tracking task.

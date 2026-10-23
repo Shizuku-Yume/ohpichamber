@@ -85,9 +85,9 @@ describe('legacy notice rendered behavior', () => {
     switchRuntimeEndpoint({ apiBaseUrl: 'http://task20.test', clientToken: 'task20', runtimeKey: 'task20-configure' });
     globalThis.fetch = async () => Response.json({ present: true });
     await renderNotice();
-    const configure = [...container.querySelectorAll('a')].find(link => link.textContent === 'Configure providers');
+    const configure = [...container.querySelectorAll('button')].find(button => button.textContent === 'Configure providers');
     expect(configure).toBeDefined();
-    await act(async () => configure.dispatchEvent(new browser.MouseEvent('click', { bubbles: true, cancelable: true })));
+    await act(async () => configure.click());
     expect(useUIStore.getState().settingsProvidersConnectRequested).toBe(true);
     expect(useUIStore.getState().settingsPage).toBe('providers');
     expect(useUIStore.getState().isSettingsDialogOpen).toBe(true);

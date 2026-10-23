@@ -60,7 +60,7 @@ export const LegacyDataNotice: React.FC = () => {
     dismissLegacyNotice(runtimeKey);
     setDismissed(true);
   };
-  const configureProviders = (event: React.MouseEvent<HTMLAnchorElement>) => {
+  const configureProviders = () => {
     const ui = useUIStore.getState();
     ui.setSettingsProvidersConnectRequested(true);
     ui.setSettingsPage('providers');
@@ -72,7 +72,7 @@ export const LegacyDataNotice: React.FC = () => {
       <h2 className="typography-ui-header">{t('startup.legacyNotice.title')}</h2>
       <p className="mt-2 typography-body text-muted-foreground">{t('startup.legacyNotice.descriptionGeneric')}</p>
       <div className="mt-4 flex flex-wrap gap-2">
-        <Button asChild><a href="/?settings=providers" onClick={configureProviders}>{t('startup.legacyNotice.action')}</a></Button>
+        <Button onClick={configureProviders}>{t('startup.legacyNotice.action')}</Button>
         <Button variant="outline" onClick={dismiss}>{t('startup.legacyNotice.dismiss')}</Button>
       </div>
     </aside>

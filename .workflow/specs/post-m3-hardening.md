@@ -55,7 +55,7 @@ Work runs in lanes. Each lane is one conversation in its own worktree under `/ho
 
 | Lane | Tasks, in order | Owns | Waits for |
 |---|---|---|---|
-| A Baseline | 01 → 02 → 03 → 10 → 19 | quota/agents stores, `selected-credential.js`, root `package.json` `test`, `oc-review.yml`, M3 receipts, `lib/opencode/` moves, Host SQLite stores | nothing |
+| A Baseline | 01 → 02 → 03 → 10 → 19 | quota/agents/`useConfigStore.ts`/`agentConfigBridge.ts` stores, `selected-credential.js`, root `package.json` `test`, `oc-review.yml`, M3 receipts, `lib/opencode/` moves, Host SQLite stores | nothing |
 | B Agent lifecycle | 04 → 05 → 16 → 13 → 18 | `agent-service-supervisor.js`, `agent-runtime.js`, `agent-service/src/supervisor/workers.ts`, process-registry/pidfd modules | 13 waits for C's 07 finding on worker descendants; 18 waits for F's 17 |
 | C Streams and triage | 06 → 07 → bugfixes 07 drafts | `agent-service/src/supervisor/service.ts` stream path, `sessions/registry.ts`, `globalSessions.ts`/`useGlobalSessionsStore.ts`, `session-actions.ts` `optimisticSend`, contracts route text | a worker-descendant fix goes to lane B as task 13, not to C |
 | D Release | 12 → 11 → 14 → 15 → 27 | `.github/workflows/` except `oc-review.yml`, `scripts/oc-dev.mjs`, `packages/electron/scripts/`, Electron packaging config, `Dockerfile`, `scripts/docker-entrypoint.sh`, `vendor/omp/` docs | 14 asks open question 4; 12's follow-up asks question 5 |

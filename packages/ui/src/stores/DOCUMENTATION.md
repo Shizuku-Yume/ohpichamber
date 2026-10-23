@@ -617,6 +617,13 @@ the active Host transport. An unavailable workspace/catalog is a failed read,
 not an empty catalog; the previous list remains available and the settings UI
 shows the failure. Runtime switches clear catalog revisions and drafts.
 
+The dependency is one-way at the store level: `useConfigStore` imports
+`useAgentsStore` and owns the readiness subscription. A small
+`agentConfigBridge` module carries the selection reader and readiness listener
+registrations, so neither store calls into the other while a module is
+evaluating, even though the import graph stays cyclic through
+`session-ui-store`.
+
 A retryable read failure during cold start or reconnect is not left as a
 permanent `error`: once the config catalog reports `isInitialized` and
 `connectionPhase === 'connected'`, the store waits for the canonical Agent

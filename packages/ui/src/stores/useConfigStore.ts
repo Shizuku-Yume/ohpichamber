@@ -5,6 +5,7 @@ import type { StoreApi, UseBoundStore } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 import type { Agent, Model, ModelCatalog, Provider, ProviderAuthState, ProviderCatalog } from '@openchamber/agent-contract';
 import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
+import { notifyAgentReadiness, registerAgentSelectionReader } from '@/stores/agentConfigBridge';
 import { canonicalClient } from '@/api/canonicalClient';
 import type { DesktopSettings } from "@/lib/desktop";
 import { hostFilesystem } from '@/lib/host-filesystem';
@@ -3396,6 +3397,16 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
 if (typeof window !== "undefined") {
     window.__zustand_config_store__ = useConfigStore;
 }
+
+// The agents store cannot import this module back. This store owns the
+// connection state, so it supplies the selection reader catalog publication
+// needs and forwards readiness transitions to the agents store hook.
+registerAgentSelectionReader(() => useConfigStore.getState());
+useConfigStore.subscribe((state, previous) => {
+    if (state.isInitialized === previous.isInitialized
+        && state.connectionPhase === previous.connectionPhase) return;
+    notifyAgentReadiness(state);
+});
 
 // Show the last known catalogs of the active directory while OpenCode starts.
 // After persist hydration, which restores the active directory key.

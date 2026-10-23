@@ -6,6 +6,7 @@ import { useQuotaStore } from './useQuotaStore';
 test('Electron dev loads usage through its same-origin proxy before Settings opens', async () => {
   const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
   const previousInitialized = useConfigStore.getState().isInitialized;
+  const previousWorkspaceId = useConfigStore.getState().workspaceId;
   const events = new EventTarget();
   Object.defineProperty(globalThis, 'window', {
     configurable: true,
@@ -25,7 +26,7 @@ test('Electron dev loads usage through its same-origin proxy before Settings ope
     if (path === '/api/config/settings?surface=desktop') {
       return Response.json({ usageDropdownProviders: ['codex'] });
     }
-    if (path === '/api/quota/codex') {
+    if (path === '/api/quota/codex?workspaceId=workspace-local') {
       return Response.json({
         providerId: 'codex', providerName: 'Codex', ok: true, configured: true, fetchedAt: 123,
         usage: { windows: { '5h': {
@@ -40,21 +41,22 @@ test('Electron dev loads usage through its same-origin proxy before Settings ope
   try {
     // Electron deliberately omits the API base when Vite proxies the backend.
     initializeRuntimeEndpoint({ apiBaseUrl: '', runtimeKey: null });
-    useConfigStore.setState({ isInitialized: true });
+    useConfigStore.setState({ isInitialized: true, workspaceId: 'workspace-local' });
     useQuotaStore.getState().resetForRuntimeSwitch();
     await useQuotaStore.getState().ensureLoadedForRuntime();
 
-    expect(requests).toEqual(['/api/config/settings?surface=desktop', '/api/quota/codex']);
+    expect(requests).toEqual(['/api/config/settings?surface=desktop', '/api/quota/codex?workspaceId=workspace-local']);
     expect(getRuntimeKey()).toBe('local');
     expect(getRuntimeApiBaseUrl()).toBe('');
     expect(useQuotaStore.getState().loadedRuntimeKey).toBe('local');
+    expect(useQuotaStore.getState().loadedWorkspaceId).toBe('workspace-local');
     expect(useQuotaStore.getState().results[0]?.usage?.windows['5h'].remainingPercent).toBe(58);
 
     await useQuotaStore.getState().ensureLoadedForRuntime();
     expect(requests).toHaveLength(2);
   } finally {
     useQuotaStore.getState().resetForRuntimeSwitch();
-    useConfigStore.setState({ isInitialized: previousInitialized });
+    useConfigStore.setState({ isInitialized: previousInitialized, workspaceId: previousWorkspaceId });
     network.mockRestore();
     if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
     else Reflect.deleteProperty(globalThis, 'window');

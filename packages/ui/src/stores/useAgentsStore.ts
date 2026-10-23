@@ -6,13 +6,13 @@ import { canonicalClient } from '@/api/canonicalClient';
 import { hostFilesystem } from '@/lib/host-filesystem';
 import { emitConfigChange, scopeMatches, subscribeToConfigChanges } from "@/lib/configSync";
 import { createDeferredSafeJSONStorage } from "./utils/safeStorage";
-import { useConfigStore } from "@/stores/useConfigStore";
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useProjectsStore } from "@/stores/useProjectsStore";
 import { compareCounters } from '@/sync/event-reducer';
 import { getRuntimeKey } from "@/lib/runtime-switch";
 import { waitForAgentServiceConnection } from "./waitForAgentServiceConnection";
 import { isRetryableBootstrapError } from "@/sync/retry";
+import { readAgentSelection, registerAgentReadinessListener, type AgentReadinessState } from "./agentConfigBridge";
 
 /**
  * Directory a call operates on. Settings can browse another project without
@@ -135,7 +135,10 @@ export const useAgentsStore: UseBoundStore<StoreApi<AgentsStore>> = create<Agent
         ...(directory === getConfigDirectory() ? { agents: catalog.agents } : {}),
       };
     });
-    const config = useConfigStore.getState();
+    const config = readAgentSelection();
+    // The reader is absent only before the config store has registered; the
+    // published catalog is still valid.
+    if (!config) return;
     if (config.activeDirectoryKey === directory
         && !useSessionUIStore.getState().currentSessionId
         && config.selectionSource === 'auto' && config.agentSelectionSource === 'auto'
@@ -311,26 +314,24 @@ if (!unsubscribeAgentsConfigChanges) {
 }
 
 // The config store can be connected before the Agent Service finishes starting.
-// Once both report ready, give one errored directory a bounded recovery; the
-// canonical readiness waiter inside retryAgentsWhenReady is the actual gate.
+// The config store owns that transition and calls this hook; once both report
+// ready, give one errored directory a bounded recovery. The canonical readiness
+// waiter inside retryAgentsWhenReady is the actual gate.
 let agentReadinessConnected = false;
-// useConfigStore and this store import each other. Subscribing at module
-// evaluation would touch the other binding before its initialization; defer
-// until both module graphs have finished evaluating.
-queueMicrotask(() => {
-  useConfigStore.subscribe((state) => {
-    const ready = state.isInitialized && state.connectionPhase === 'connected';
-    if (!ready) {
-      agentReadinessConnected = false;
-      return;
-    }
-    if (agentReadinessConnected) return;
-    agentReadinessConnected = true;
-    agentRecoverySettled.clear();
-    const directory = resolveDirectory();
-    if (!directory) return;
-    if (useAgentsStore.getState().errorsByDirectory[getAgentsCacheKey(directory)]) {
-      void useAgentsStore.getState().retryAgentsWhenReady(directory);
-    }
-  });
-});
+const syncAgentReadiness = (state: AgentReadinessState): void => {
+  const ready = state.isInitialized && state.connectionPhase === 'connected';
+  if (!ready) {
+    agentReadinessConnected = false;
+    return;
+  }
+  if (agentReadinessConnected) return;
+  agentReadinessConnected = true;
+  agentRecoverySettled.clear();
+  const directory = resolveDirectory();
+  if (!directory) return;
+  if (useAgentsStore.getState().errorsByDirectory[getAgentsCacheKey(directory)]) {
+    void useAgentsStore.getState().retryAgentsWhenReady(directory);
+  }
+};
+
+registerAgentReadinessListener(syncAgentReadiness);

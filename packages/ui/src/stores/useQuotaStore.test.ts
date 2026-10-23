@@ -3,6 +3,7 @@ import type { ProviderResult } from "@/types"
 
 let runtimeKey = "url:https://instance-a"
 let isInitialized = true
+let workspaceId = "workspace-a"
 const fetched: string[] = []
 
 type StubPayload = { usageDropdownProviders: string[] } | ProviderResult
@@ -32,7 +33,7 @@ mock.module("@/lib/runtime-fetch", () => ({
 const configStoreModule = await import("@/stores/useConfigStore")
 mock.module("@/stores/useConfigStore", () => ({
   ...configStoreModule,
-  useConfigStore: { ...configStoreModule.useConfigStore, getState: () => ({ isInitialized }) },
+  useConfigStore: { ...configStoreModule.useConfigStore, getState: () => ({ isInitialized, workspaceId }) },
 }))
 
 const { useQuotaStore } = await import("./useQuotaStore")
@@ -41,6 +42,7 @@ describe("Usage quotas are loaded once per ready instance", () => {
   beforeEach(() => {
     runtimeKey = "url:https://instance-a"
     isInitialized = true
+    workspaceId = "workspace-a"
     fetched.length = 0
     quotaRequestsFail = false
     useQuotaStore.getState().resetForRuntimeSwitch()
@@ -68,6 +70,35 @@ describe("Usage quotas are loaded once per ready instance", () => {
     await useQuotaStore.getState().ensureLoadedForRuntime()
 
     expect(fetched.length).toBe(afterFirst)
+  })
+
+  test("nothing is fetched before the instance publishes its workspace", async () => {
+    workspaceId = ""
+    await useQuotaStore.getState().ensureLoadedForRuntime()
+
+    expect(fetched).toHaveLength(0)
+    expect(useQuotaStore.getState().loadedWorkspaceId).toBeNull()
+
+    workspaceId = "workspace-a"
+    await useQuotaStore.getState().ensureLoadedForRuntime()
+
+    expect(fetched.length).toBeGreaterThan(0)
+    expect(useQuotaStore.getState().loadedWorkspaceId).toBe("workspace-a")
+  })
+
+  test("a workspace change reloads the same instance for the new workspace", async () => {
+    await useQuotaStore.getState().ensureLoadedForRuntime()
+    const afterFirst = fetched.length
+    expect(afterFirst).toBeGreaterThan(0)
+    expect(useQuotaStore.getState().loadedWorkspaceId).toBe("workspace-a")
+
+    workspaceId = "workspace-b"
+    fetched.length = 0
+    await useQuotaStore.getState().ensureLoadedForRuntime()
+
+    expect(fetched.length).toBeGreaterThan(0)
+    expect(useQuotaStore.getState().loadedRuntimeKey).toBe("url:https://instance-a")
+    expect(useQuotaStore.getState().loadedWorkspaceId).toBe("workspace-b")
   })
 
   test("a switch drops the previous instance's quotas and reloads for the new one", async () => {

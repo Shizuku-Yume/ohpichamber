@@ -14,19 +14,21 @@ export const credentialExpiresAt = (credential) => credential?.type === 'oauth' 
  * configured, so callers do not show a connection as unconfigured.
  */
 export const SELECTED_CREDENTIAL_UNAVAILABLE = 'CREDENTIAL_UNAVAILABLE';
+/** The caller did not supply the ownership context the resolver needs. */
+export const SELECTED_CREDENTIAL_CONTEXT_REQUIRED = 'CREDENTIAL_CONTEXT_REQUIRED';
 const SELECTED_CREDENTIAL_RESOLUTION_FAILED = 'CREDENTIAL_RESOLUTION_FAILED';
-const credentialResolutionError = (code) => Object.assign(new Error('Selected credential unavailable'), { code });
+const credentialResolutionError = (code, message) => Object.assign(new Error(message), { code });
 
 export const requireSelectedCredential = async ({ resolveCredential, workspaceId, agentDirectoryId, providerId, credentialRef, purpose }) => {
-  if (typeof resolveCredential !== 'function') throw credentialResolutionError(SELECTED_CREDENTIAL_RESOLUTION_FAILED);
-  if (![workspaceId, agentDirectoryId, providerId, credentialRef, purpose].every((value) => typeof value === 'string' && value.trim())) throw credentialResolutionError(SELECTED_CREDENTIAL_RESOLUTION_FAILED);
+  if (typeof resolveCredential !== 'function') throw credentialResolutionError(SELECTED_CREDENTIAL_CONTEXT_REQUIRED, 'Selected credential context is required');
+  if (![workspaceId, agentDirectoryId, providerId, credentialRef, purpose].every((value) => typeof value === 'string' && value.trim())) throw credentialResolutionError(SELECTED_CREDENTIAL_CONTEXT_REQUIRED, 'Selected credential context is required');
   try {
     const credential = await resolveCredential({ workspaceId, agentDirectoryId, providerId, credentialRef, purpose });
-    if (!credentialAccessToken(credential)) throw credentialResolutionError(SELECTED_CREDENTIAL_UNAVAILABLE);
+    if (!credentialAccessToken(credential)) throw credentialResolutionError(SELECTED_CREDENTIAL_UNAVAILABLE, 'Selected credential unavailable');
     return credential;
   } catch (error) {
-    throw credentialResolutionError(error?.code === SELECTED_CREDENTIAL_UNAVAILABLE
-      ? SELECTED_CREDENTIAL_UNAVAILABLE
-      : SELECTED_CREDENTIAL_RESOLUTION_FAILED);
+    throw error?.code === SELECTED_CREDENTIAL_UNAVAILABLE
+      ? credentialResolutionError(SELECTED_CREDENTIAL_UNAVAILABLE, 'Selected credential unavailable')
+      : credentialResolutionError(SELECTED_CREDENTIAL_RESOLUTION_FAILED, 'Selected credential unavailable');
   }
 };

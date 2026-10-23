@@ -4,7 +4,7 @@
 **Task type:** spike
 **Base commit:** f72010e3ef453a5218c3464b674b86c0ccc00a04
 **Started:** 2026-10-23T12:45:14+08:00
-**Status:** paused
+**Finished:** 2026-10-23T21:13:44+08:00
 
 **Question:** what would it cost to run isolated spaces on OMP, versus removing the OpenCode space runtime while spaces stay unreleased?
 **Time box:** one read-only source inventory and one source-referenced cost comparison; no Docker probe, no implementation.
@@ -33,24 +33,26 @@
 - Check before: spike, skipped per `flow-implement` step 1.
 - Read: `specs/post-m3-hardening.md` (parallel lanes, open question 2), `.workflow/isolated-spaces/DESIGN.md` (boundary rule, words, architecture), `STAGES.md` (stages 1b-5, delivery rules), `TESTING.md` (evidence rule, test layers, escape list), `packages/web/server/lib/spaces/DOCUMENTATION.md` (Tools volume, The server inside a space, Dispatcher, Grants, Known limits), `.workflow/omp-migration/scope.md` SCOPE-6.4, `PlanGapAnalysis.md` finding 2, the `isolated-space-boundary` skill, `flow-implement`, `spike-tasks.md`, `merge-strategy.md`, `CONVENTIONS.md`.
 - Evidence: `/home/shizuku/Project/ohpichamber-omp-artifacts/lane-f/08-2026-10-23/` (`opencode-coupling-inventory.json`, `opencode-coupling-inventory.md`, `inventory-run.log`; `inventory.mjs.sha256` retains the scanner hash). The read-only scanner was removed after the JSON, logs and hash were kept.
-- No source, spec, decisions, development, glossary or package file changed. No test or Docker probe ran: the landing rule and the director's probe permission gate both still apply.
+- No source, spec, decisions, development, glossary or package file changed. No Docker probe ran. The initial inventory ran no tests; the subsequent authorized full-root gates are recorded below.
 - Maintainer decision (2026-10-23): **B** — remove the OpenCode space runtime and keep spaces unreleased until the OMP space runtime is built. Recorded in this task only; no `decisions.md`, spec or glossary edit, because this lane may change task files only.
 - Follow-up task draft: `.workflow/tasks/post-m3-hardening/37-remove-opencode-space-runtime.md`. Drafted, not started, unassigned until the maintainer designates a dedicated Spaces Removal owner/lane (not lane F or an existing lane).
 
-### Decision and pause handoff (2026-10-23)
+### Decision and branch-only archive handoff (2026-10-23)
 
 - Decision: the maintainer chose **B** — remove the OpenCode space runtime and keep spaces unreleased until the OMP space runtime is built. Options A and B are costed below; B is the decided path.
-- Status is `paused` pending lane A task 01 landing and a clean `main`; then this task rebases and full `bun run test` must be green at the landing commit. It is not complete, archive-ready or landed.
+- The branch was rebased onto `7cc282d08504afc88d1531b6ba527009de3b0794`; final tested HEAD was `6f50bc8be7e56dd49d4e0d6f1820208ec2baa076`. Full-gate evidence and exact outcomes are recorded below. Archive remains branch-only; no landing or main-worktree change is included.
 - Follow-up: `.workflow/tasks/post-m3-hardening/37-remove-opencode-space-runtime.md` is drafted and not started. Owner: a dedicated future Spaces Removal owner/lane, not lane F and not an existing lane; the director/maintainer must assign it. Task 37 owns deleting `lib/opencode/proxy.js` and its three unit tests; task 10 moves the retained modules and docs but leaves the proxy and its tests in place, so lane A is not the deletion implementer. The feature is hidden, so no grant-screen or copy change is required; any wording change is lane G coordination only, and stops before their edit. Task 15 owns `Dockerfile:60`.
-- Landing gate: lane A task 01 is archived and landed at `ecdeb110d`; `main` has an unrelated uncommitted change in `packages/agent-service/src/sessions/registry.ts`. This task may rebase and run its full gate on committed `ecdeb110d`, but cannot land until the main worktree is clean and the maintainer grants landing permission. Review must pass.
-- Branch/worktree: `post-m3-hardening/08-isolated-spaces-runtime` in `/home/shizuku/Project/ohpichamber-worktrees/lane-f-spikes`, cut from `main`. Base `f72010e3ef453a5218c3464b674b86c0ccc00a04`; implementation snapshot `27321b952`; this pause/decision commit is discoverable on the branch. Dirty at start: none; main's unrelated dirty path is preserved. At review: this task file's edits and the renamed task 37 file; this commit stages only those two paths. No stash for this task.
-- Evidence limit: the inventory and audit are source-only. No Docker probe, runtime start, test run or network fetch ran. The two source-level readiness and archive consequences are labelled inference, not observed failures.
-- Checklist: the Done-when items are ticked because the findings and the follow-up draft exist. The task still does not land until the gates above pass.
+- Branch/worktree: `post-m3-hardening/08-isolated-spaces-runtime` in `/home/shizuku/Project/ohpichamber-worktrees/lane-f-spikes`, cut from `main`. Base `f72010e3ef453a5218c3464b674b86c0ccc00a04`; implementation snapshot `27321b952`; this pause/decision commit is discoverable on the branch. Dirty at start: none. Task37 remains a draft and is unchanged by this archive commit.
+- Evidence limit: the inventory and audit are source-only. No Docker probe, runtime start or network fetch ran. The test evidence and limits are recorded below; runtime consequences derived from source remain labeled inference, not observed failures.
+- Checklist: the Done-when items are ticked because the findings and the follow-up draft exist. The full test gate passed at the recorded rebased HEAD; no Docker probe or real-space runtime run was performed.
 - Review boundary: base `f72010e3e` + tasks 08/37 only; round 2. Brief A (contract) and Brief B (quality) both PASS after the prior Brief B blockers were fixed and rerun: boundaries none, findings 0 blocking / 0 remaining nonblocking. Neither is a runtime or security review, and `agent://lane-f-evidence` is not a `flow-verify` review. No implementation test or Docker result is claimed.
-- Check after: Findings inventory/options + user B + task 37 draft satisfied; `workflow validate` 117 tasks, exit 0; full root `bun run test` and real Docker NOT run.
+- Check after: Findings inventory/options + user B + task 37 draft satisfied; `.workflow/bin/workflow validate` passed on the archived task record. Full root `bun run test` history and exact limitations are recorded below.
 - Lane F order is 08 -> 17 -> 21 -> 22 -> 28. Do not start 17 until 08 is landed.
 - Shared-document sync deliberately not done: this lane may change task files only, so the B decision is not written to the spec, `decisions.md`, `development.md` or the glossary. The maintainer or their owner, outside Lane F, must record it there; this task does not require unrelated docs.
-- This pause/decision record commits task 08 and task 37 only. No landing, test, rebase, Docker or archive was done; landing waits for lane A 01, a clean main, then rebase and full `bun run test`.
+- Original full root `bun run test` exited 1; its evidence remains at `/home/shizuku/Project/ohpichamber-omp-artifacts/lane-f/08-2026-10-23-rebase-7cc282d/bun-run-test.log`, `bun-run-test.exit` and `completion-receipt.json`. The observed failure was Web `run-command.test.js:344` using the shared `os.tmpdir()` namespace containing stale `/tmp/openchamber-stderr-lldJQG`; this run did not pass.
+- Run-01 receipt and full log: `/home/shizuku/Project/ohpichamber-omp-artifacts/lane-f/08-2026-10-23-rebase-7cc282d/run-01/`; exit 1. The agent-service native plugin fixture returned `INVALID_REQUEST` (cause unresolved); Web `code-in.test.js` failed with `EXDEV` when renaming from `/tmp` to the external artifact TMPDIR on a different device.
+- Corrected run-02 receipt and full log: `/home/shizuku/Project/ohpichamber-omp-artifacts/lane-f/08-2026-10-23-rebase-7cc282d/run-02/`; tested SHA `6f50bc8be7e56dd49d4e0d6f1820208ec2baa076`, base `7cc282d08504afc88d1531b6ba527009de3b0794`, exit 0. It used fresh `/tmp/omp-task08-final-cCiBSf` (0 entries before run); `/tmp` device 54 inode 1, TMPDIR device 54 inode 12611343. All 7/7 suites passed: workspace 22/22, sdk 23/23, ui 804/804, agent-contract 177 pass, agent-service 229 pass/7 skip/0 fail, electron 44/44, web 375 passed/9 skipped (6105 tests passed, 135 skipped). This passing run does not establish why the original shared-`/tmp` run failed or prove that failure is gone.
+- Archive commit stages Task08 only. No source, spec, decisions, development, glossary, package or Task37 file is changed.
 
 ## Findings
 

@@ -7,13 +7,13 @@ import { StringDecoder } from 'node:string_decoder';
 import { z } from 'zod';
 import { AgentServiceReadySchema, ApprovalReplySchema, CounterSchema, EntityIdSchema, HistoryPageRequestSchema, JsonObjectSchema, ProblemDetailsSchema, PromptRequestSchema, QuestionReplySchema, SessionBranchRequestSchema, MCPConfigureRequestSchema, MCPApplyRequestSchema, MCPReconnectRequestSchema, MCPOAuthRequestSchema, SkillsApplyRequestSchema, SkillExpandRequestSchema } from '@openchamber/agent-contract';
 import type {
-  AgentCatalog, AgentMutationResult, AgentServiceReady, ApprovalRequest, CanonicalEvent,
+  AgentCatalog, AgentMutationResult, AgentServiceReady, ApprovalRequest,
   CompletionCancelResult, CompletionResult, HistoryPage, JsonObject, MCPCatalogRead,
   MCPConfigurationState, MCPConnectionTestResult, MCPWorkspaceReconnectResult, MCPSecretWriteResult,
   MCPApplyResult, MCPOAuthResult, ModelCatalog, ModelMutationResult, ProblemCode,
   ProblemDetails, ProviderCatalog, ProviderCredentialMutationResult, ProviderMutationResult,
   QuestionRequest, Run, RuntimeSession, SessionBranchResult, SessionDeleteAck, SessionSnapshot, SteerAck, FollowUpAck, Subagent,
-  ShellJob, ShellSnapshot, ShellOutput, ShellStopResult, SkillsCatalogState, SkillsApplyResult, SkillExpandResult, SkillInstallResult, StreamInvalidated,
+  ShellJob, ShellSnapshot, ShellOutput, ShellStopResult, SkillsCatalogState, SkillsApplyResult, SkillExpandResult, SkillInstallResult,
   ProviderAccounts, ProviderOAuthMethods, ProviderOAuthResult, ProviderModelDiscoveryResult, ProviderConfigurationRead,
   CacheWarmingState, CacheWarmingApplyResult,
   UsageStats, UsageToolsResponse,
@@ -28,6 +28,7 @@ import type { ApprovalPolicyCommit, ApprovalPolicyLoad } from '../interaction/ma
 import { SessionReferenceError } from '../sessions/references.ts';
 import { ArchiveImportRequestSchema } from '../sessions/archive.ts';
 import { WorkerOperationError, WorkerRegistry, type RegisteredWorkerInfo } from './workers.ts';
+import { deliverSessionStream } from './event-stream.ts';
 import { CatalogCoordinator, CatalogCoordinatorError, type CatalogAdmission, type CatalogBootstrap } from './catalog.ts';
 import { WorkspaceCatalogs } from './workspaces.ts';
 import { WorkspaceRoutes } from './workspace-routes.ts';
@@ -363,27 +364,7 @@ export class AgentService {
       throw new RequestError(400, 'INVALID_CURSOR', 'Event cursor sources disagree');
     }
     const journal = this.sessions.journal(sessionId);
-    const write = (event: CanonicalEvent | StreamInvalidated): void => {
-      if (response.destroyed || response.writableEnded) return;
-      if (event.type === 'stream.invalidated') {
-        response.end(`event: stream.invalidated\ndata: ${JSON.stringify(event)}\n\n`);
-        return;
-      }
-      if (!response.write(`id: ${event.epoch}:${event.sequence}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)) {
-        subscription.unsubscribe();
-        const invalidated: StreamInvalidated = { type: 'stream.invalidated', sessionId, epoch: event.epoch, reason: 'DELIVERY_OVERFLOW' };
-        response.end(`event: stream.invalidated\ndata: ${JSON.stringify(invalidated)}\n\n`);
-      }
-    };
-    // Subscribe and write captured replay in one synchronous turn.
-    const subscription = journal.subscribe(header ?? cursor, write);
-    response.once('close', subscription.unsubscribe);
-    response.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
-    response.flushHeaders();
-    for (const event of subscription.replay) {
-      write(event);
-      if (response.writableEnded || response.destroyed) break;
-    }
+    deliverSessionStream({ response, sessionId, journal, cursor: header ?? cursor });
   }
   private async handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
     if (!this.authenticated(request)) { respondProblem(response, 403, 'UNAUTHORIZED', 'Private loopback authentication is required'); return; }

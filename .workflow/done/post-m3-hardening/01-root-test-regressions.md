@@ -62,4 +62,6 @@ Review boundary: `f72010e3e` + task archive, spec row, `useAgentsStore.ts`, `use
 
 Final delta review (comparison point `eb07cdfd6` plus the task-record delta): Brief B passed with 0 findings; Brief A raised 4 blocking record findings — unrecorded tested commit, incomplete `Files` ownership, inaccurate pre-fix credential-code wording, and inverted start/finish timestamps. All four are fixed in this record and the receipt now names `eb07cdfd6`, the worktree, and the evidence paths.
 
+Landing: `main` fast-forwarded from `eb07cdfd6` after `bun run test` passed at the landing commit (root chain: scripts 22/22, sdk 23/23, ui 804/804, electron 44/44, web 371 files / 6095 tests, 0 unhandled). The task implementation commit is `eb07cdfd6`; this commit carries the evidence update.
+
 **Finished:** 2026-10-23T05:50:00Z

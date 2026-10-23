@@ -15,7 +15,7 @@
 //
 // Usage: node scripts/run-isolated-tests.mjs <root> [...roots] [--exclude <dir>]
 
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 
@@ -25,6 +25,35 @@ const TEST_FILE = /\.(test|spec)\.(js|cjs|mjs|jsx|ts|tsx)$/;
 const SKIP_DIRS = new Set(['node_modules', 'dist', 'dist-bundle', 'build', 'out', '.git', 'ios', 'android']);
 const MAX_PARALLEL = 4;
 const bunExecutable = resolveBunExecutable();
+
+// `--suites` runs the workspace test scripts rather than test files. It is the
+// same aggregate `bun run test` uses: every package runs in order, a failure
+// does not stop later packages, and the combined exit is non-zero if any fail.
+const SUITES_ARG = '--suites';
+if (process.argv.includes(SUITES_ARG)) {
+  const suites = [
+    { name: 'scripts', command: process.execPath, args: [process.argv[1], 'scripts'] },
+    { name: 'sdk', command: bunExecutable, args: ['run', '--cwd', 'packages/sdk', 'test'] },
+    { name: 'ui', command: bunExecutable, args: ['run', '--cwd', 'packages/ui', 'test'] },
+    { name: 'agent-contract', command: bunExecutable, args: ['run', '--cwd', 'packages/agent-contract', 'test'] },
+    { name: 'agent-service', command: bunExecutable, args: ['run', '--cwd', 'packages/agent-service', 'test'] },
+    { name: 'electron', command: bunExecutable, args: ['run', '--cwd', 'packages/electron', 'test'] },
+    { name: 'web', command: bunExecutable, args: ['run', '--cwd', 'packages/web', 'test'] },
+  ];
+  const failed = [];
+  for (const suite of suites) {
+    console.log(`\n[workspace-test] ${suite.name}`);
+    const result = spawnSync(suite.command, suite.args, { stdio: 'inherit', env: process.env });
+    if (result.error) failed.push(`${suite.name} (${result.error.message})`);
+    else if (result.status !== 0) failed.push(`${suite.name} (exit ${result.status ?? 'unknown'})`);
+  }
+  console.log(`\n[workspace-test] ${suites.length - failed.length}/${suites.length} suites passed`);
+  if (failed.length > 0) {
+    console.error(`[workspace-test] failed: ${failed.join(', ')}`);
+    process.exit(1);
+  }
+  process.exit(0);
+}
 
 // Staged dependency trees (a packaged runtime's own sources) are not this
 // repository's tests, so a caller names them instead of the runner guessing.

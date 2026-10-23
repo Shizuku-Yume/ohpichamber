@@ -12,7 +12,8 @@
   "scripts": {
     "build": "bun build --target=bun --packages=external --root=src --outdir=dist src/index.ts src/worker/index.ts src/supervisor/host-authorization-protocol.ts",
     "type-check": "bun scripts/prepare-sdk-types.mjs && tsc -p node_modules/.cache/omp-types/tsconfig.json",
-    "lint": "oxlint src scripts"
+    "lint": "oxlint src scripts",
+    "test": "bun test --timeout 15000 src"
   },
   "dependencies": {
     "@oh-my-pi/omp-stats": "file:../../vendor/omp/c9de2b02/tarballs/oh-my-pi-omp-stats-18.8.9.tgz",

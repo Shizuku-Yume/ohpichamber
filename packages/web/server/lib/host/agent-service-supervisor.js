@@ -18,6 +18,35 @@ const STOP_TIMEOUT_MS = 5_000;
 const ANNOUNCEMENT_TYPE = 'agent-service.listening';
 const SECRET_ENV = 'OHPICHAMBER_INTERNAL_SECRET';
 const SECRET_HEADER = 'X-Internal-Secret';
+const SECRET_REQUEST_TYPE = 'agent-service.internal-secret.request';
+const SECRET_MESSAGE_TYPE = 'agent-service.internal-secret';
+
+// The service inherits only what it needs to launch Bun and the SDK workers.
+// Host credentials, UI passwords, pairing tokens and every other `*_TOKEN` stay
+// in this process; a worker that runs a shell can read its own environment.
+const SERVICE_ENV_KEYS = Object.freeze([
+  'PATH', 'HOME', 'USERPROFILE', 'SHELL', 'TERM', 'TMPDIR', 'TEMP', 'TMP',
+  'LANG', 'LC_ALL', 'LC_CTYPE', 'LC_MESSAGES', 'TZ',
+  'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'ALL_PROXY',
+  'http_proxy', 'https_proxy', 'no_proxy', 'all_proxy',
+  'SSL_CERT_FILE', 'SSL_CERT_DIR', 'NODE_EXTRA_CA_CERTS', 'CURL_CA_BUNDLE',
+  'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME', 'XDG_RUNTIME_DIR',
+  'OHPICHAMBER_BUN',
+  'OMP_PROFILE', 'PI_PROFILE', 'PI_CONFIG_DIR', 'PI_CODING_AGENT_DIR',
+  'BUN_INSTALL', 'BUN_INSTALL_BIN',
+]);
+
+const buildServiceEnvironment = (overrides = {}) => {
+  const environment = {};
+  for (const key of SERVICE_ENV_KEYS) {
+    const value = process.env[key];
+    if (value !== undefined) environment[key] = value;
+  }
+  const merged = { ...environment, ...overrides };
+  // A caller-supplied overlay must not reintroduce the channel this change removes.
+  delete merged[SECRET_ENV];
+  return merged;
+};
 
 const timeoutSignal = (ms) => AbortSignal.timeout(ms);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -229,8 +258,7 @@ export const createAgentServiceSupervisor = ({
       // is not enough to signal a descendant.
       const ownershipToken = Buffer.from(randomBytes(16)).toString('hex');
       const childEnv = {
-        ...process.env, ...env,
-        [SECRET_ENV]: secret,
+        ...buildServiceEnvironment(env),
         [MANAGED_PROCESS_TOKEN_ENV]: ownershipToken,
       };
       const launched = spawn(bunPath, ['--no-env-file', entrypoint, '--port', '0'], {
@@ -241,7 +269,16 @@ export const createAgentServiceSupervisor = ({
         stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
       });
       child = launched;
-      const onPolicyMessage = message => { handlePolicyMessage(launched, message); authorization.handleMessage(launched, message); void handleSkillSourceMessage(launched, message); };
+      const onPolicyMessage = message => {
+        // The token never enters the child's environment: a same-UID worker can
+        // read `/proc/<service pid>/environ`, but not this private IPC channel.
+        if (message?.type === SECRET_REQUEST_TYPE) {
+          if (child !== launched || phase === 'stopping') return;
+          try { launched.send?.({ type: SECRET_MESSAGE_TYPE, secret }); } catch { /* service exited during the handshake */ }
+          return;
+        }
+        handlePolicyMessage(launched, message); authorization.handleMessage(launched, message); void handleSkillSourceMessage(launched, message);
+      };
       launched.on('message', onPolicyMessage);
       launched.once('disconnect', () => authorization.closeChild(launched));
       launched.once('close', () => { launched.removeListener('message', onPolicyMessage); authorization.closeChild(launched); });

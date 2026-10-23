@@ -50,6 +50,7 @@ type ActionHandle = { entry: WorkerEntry; controller: AbortController };
 export interface WorkerRegistryOptions {
   workerEntrypoint: string;
   workerRuntime?: string;
+  spawn?: typeof spawn;
   startupTimeoutMs?: number;
   stopTimeoutMs?: number;
   policyCheck?: (rootSessionId: string, request: WorkerPolicyRequest, descriptor?: NativeOperationDescriptor) => Promise<WorkerPolicyResult>;
@@ -62,6 +63,36 @@ function defaultWorkerRuntime(): string {
   if (process.execPath.includes('bun')) return process.execPath;
   return Bun.which('bun') ?? process.execPath;
 }
+
+// A worker runs model-invoked tools, including shells, so it must not inherit
+// the service's whole environment: the Host's UI password and pairing tokens
+// would be readable from the worker process. Only process needs (Bun, the OMP
+// profile and XDG paths, locale, proxies and trust roots) are inherited.
+// Provider credentials are not inherited either: OMP AuthStorage is the
+// credential owner, and the only additional values a worker may receive are
+// the Host-authorized per-directory overlay (`input.env`), which enterprise
+// mode already blanks.
+const WORKER_ENV_KEYS = Object.freeze([
+  'PATH', 'HOME', 'USERPROFILE', 'SHELL', 'TERM', 'TMPDIR', 'TEMP', 'TMP',
+  'LANG', 'LC_ALL', 'LC_CTYPE', 'LC_MESSAGES', 'TZ',
+  'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'ALL_PROXY',
+  'http_proxy', 'https_proxy', 'no_proxy', 'all_proxy',
+  'SSL_CERT_FILE', 'SSL_CERT_DIR', 'NODE_EXTRA_CA_CERTS', 'CURL_CA_BUNDLE',
+  'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME', 'XDG_RUNTIME_DIR',
+  'OMP_PROFILE', 'PI_PROFILE', 'PI_CONFIG_DIR',
+  'BUN_INSTALL', 'BUN_INSTALL_BIN',
+  // Process-tree membership proof used by Host orphan cleanup (task 13).
+  'OPENCHAMBER_MANAGED_PROCESS_TOKEN',
+]);
+
+export const buildWorkerEnvironment = (input: Pick<WorkerBootstrap, 'env' | 'agentDirectory'>, sourceEnv: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv => {
+  const environment: NodeJS.ProcessEnv = {};
+  for (const key of WORKER_ENV_KEYS) {
+    const value = sourceEnv[key];
+    if (value !== undefined) environment[key] = value;
+  }
+  return Object.assign(environment, input.env, { PI_CODING_AGENT_DIR: input.agentDirectory });
+};
 
 async function waitWithin(operation: Promise<void>, milliseconds: number): Promise<void> {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -214,9 +245,7 @@ export class WorkerRegistry {
   }
 
   private workerEnvironment(input: WorkerInput['input']): NodeJS.ProcessEnv {
-    const environment: NodeJS.ProcessEnv = { ...process.env, ...input.env, PI_CODING_AGENT_DIR: input.agentDirectory };
-    delete environment.OHPICHAMBER_INTERNAL_SECRET;
-    return environment;
+    return buildWorkerEnvironment(input);
   }
 
   async startUsage(input: StatelessWorkerInput): Promise<WorkerInfo> {
@@ -273,7 +302,7 @@ export class WorkerRegistry {
     const exited = Promise.withResolvers<void>();
     const workerRuntime = this.options.workerRuntime ?? defaultWorkerRuntime();
     const workerArgs = /(?:^|[\\/])bun(?:\.exe)?$/i.test(workerRuntime) ? ['--no-env-file', this.options.workerEntrypoint] : [this.options.workerEntrypoint];
-    const child = spawn(workerRuntime, workerArgs, {
+    const child = (this.options.spawn ?? spawn)(workerRuntime, workerArgs, {
       cwd: input.cwd,
       env: environment,
       windowsHide: true,

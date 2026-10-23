@@ -79,13 +79,21 @@ export const ensureApprovalPolicySchema = (db) => {
 
 export const openApprovalPolicyStore = ({ dataDir, databasePath } = {}) => {
   const filePath = databasePath ?? path.join(dataDir, 'host-approval-policies.sqlite');
+  const directoryPath = path.dirname(filePath);
+  const sidecarPaths = [`${filePath}-wal`, `${filePath}-shm`];
   try {
-    fs.mkdirSync(path.dirname(filePath), { recursive: true, mode: 0o700 });
+    fs.mkdirSync(directoryPath, { recursive: true, mode: 0o700 });
     if (!fs.existsSync(filePath)) fs.closeSync(fs.openSync(filePath, 'a', 0o600));
     fs.chmodSync(filePath, 0o600);
+    for (const sidecarPath of sidecarPaths) {
+      if (fs.existsSync(sidecarPath)) fs.chmodSync(sidecarPath, 0o600);
+    }
     const db = new (loadDatabaseSync())(filePath, { timeout: 5000 });
     try {
       ensureApprovalPolicySchema(db);
+      for (const sidecarPath of sidecarPaths) {
+        if (fs.existsSync(sidecarPath)) fs.chmodSync(sidecarPath, 0o600);
+      }
     } catch (error) {
       try { db.close(); } catch {}
       throw error;

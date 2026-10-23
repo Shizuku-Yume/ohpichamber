@@ -19,6 +19,66 @@ const makeRoot = () => {
 afterEach(() => {
   while (roots.length) fs.rmSync(roots.pop(), { recursive: true, force: true });
 });
+const posixTest = process.platform === 'win32' ? it.skip : it;
+const mode = (file) => fs.statSync(file).mode & 0o777;
+
+describe('approval policy database permissions and sidecars', () => {
+  posixTest('creates private database and WAL sidecars under umask 022', () => {
+    const parent = makeRoot();
+    const root = path.join(parent, 'data');
+    const previous = process.umask(0o022);
+    let store;
+    try {
+      store = openApprovalPolicyStore({ dataDir: root });
+      store.commit({
+        scope: 'workspace',
+        sessionId: 'sess-1',
+        projectId: 'proj-1',
+        workspaceId: 'ws-1',
+        decision: 'deny',
+        target: { toolName: 'bash', pattern: 'rm -rf *' },
+      });
+      const dbPath = path.join(root, 'host-approval-policies.sqlite');
+      expect(mode(root)).toBe(0o700);
+      expect(mode(dbPath)).toBe(0o600);
+      for (const suffix of ['-wal', '-shm']) {
+        if (fs.existsSync(`${dbPath}${suffix}`)) {
+          expect(mode(`${dbPath}${suffix}`)).toBe(0o600);
+        }
+      }
+    } finally {
+      if (store) store.close();
+      process.umask(previous);
+    }
+  });
+
+  posixTest('tightens pre-existing database and sidecars without changing existing root mode', () => {
+    const root = makeRoot();
+    fs.chmodSync(root, 0o755);
+    const filePath = path.join(root, 'host-approval-policies.sqlite');
+    let seed = new DatabaseSync(filePath);
+    try {
+      seed.exec("PRAGMA journal_mode = WAL; CREATE TABLE records (id INTEGER PRIMARY KEY, value TEXT); INSERT INTO records(value) VALUES ('durable');");
+      fs.chmodSync(filePath, 0o644);
+      expect(fs.existsSync(`${filePath}-wal`)).toBe(true);
+      expect(fs.existsSync(`${filePath}-shm`)).toBe(true);
+      fs.chmodSync(`${filePath}-wal`, 0o644);
+      fs.chmodSync(`${filePath}-shm`, 0o644);
+
+      const store = openApprovalPolicyStore({ dataDir: root, databasePath: filePath });
+      try {
+        expect(mode(root)).toBe(0o755);
+        expect(mode(filePath)).toBe(0o600);
+        expect(mode(`${filePath}-wal`)).toBe(0o600);
+        expect(mode(`${filePath}-shm`)).toBe(0o600);
+      } finally {
+        store.close();
+      }
+    } finally {
+      seed.close();
+    }
+  });
+});
 
 describe('approval policy database schema versioning and migrations', () => {
   it('fresh database gets current schema version and creates table and indexes', () => {

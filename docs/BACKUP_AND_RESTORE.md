@@ -27,10 +27,12 @@ Default location: `~/.config/openchamber` (or the directory specified by `OPENCH
   - Full-text search index (FTS5). This database is strictly derived from session events and is automatically rebuilt if absent; it does not need to be preserved in backups.
 
 ### OMP Agent Directory
-Resolved from `PI_CODING_AGENT_DIR` if set; otherwise:
-- Linux/macOS: `<XDG_DATA_HOME>/omp` if present, else `<HOME>/.omp/agent`.
-- Named profiles: `<HOME>/.omp/profiles/<profile>/agent`.
+The OMP agent directory contains conversation transcripts and provider credentials. Its location is resolved as follows:
+- **Explicit override**: If `PI_CODING_AGENT_DIR` is set in the environment, that directory is used.
+- **Named profile**: If running with a named profile (`PI_PROFILE=<profile>`), the directory is `<HOME>/.omp/profiles/<profile>/agent`.
+- **Default fallback**: If neither variable is set, `<XDG_DATA_HOME>/omp` is used if present, otherwise `<HOME>/.omp/agent`.
 
+When executing backup and restore procedures, operators using named profiles or non-default directories must set `PI_CODING_AGENT_DIR` (or `PI_PROFILE`) explicitly in the environment so commands resolve the intended directory.
 - **`sessions/**/session.jsonl`**:
   - Canonical agent conversation transcripts and turn history in JSON Lines format.
 - **`agent.db`**:
@@ -87,7 +89,16 @@ All Host SQLite databases operate in WAL (`Write-Ahead Logging`) mode (`PRAGMA j
 
 4. **Archive OMP session transcripts (content)**:
    ```bash
-   OMP_DIR="${PI_CODING_AGENT_DIR:-$HOME/.omp/agent}"
+   # Resolve the active OMP directory:
+   if [ -n "$PI_CODING_AGENT_DIR" ]; then
+     OMP_DIR="$PI_CODING_AGENT_DIR"
+   elif [ -n "$PI_PROFILE" ]; then
+     OMP_DIR="$HOME/.omp/profiles/$PI_PROFILE/agent"
+   elif [ -n "$XDG_DATA_HOME" ] && [ -d "$XDG_DATA_HOME/omp" ]; then
+     OMP_DIR="$XDG_DATA_HOME/omp"
+   else
+     OMP_DIR="$HOME/.omp/agent"
+   fi
    OMP_BACKUP_DEST="/path/to/backup/omp-sessions-$(date +%Y%m%d%H%M%S)"
    mkdir -p "$OMP_BACKUP_DEST"
 
@@ -136,8 +147,16 @@ All Host SQLite databases operate in WAL (`Write-Ahead Logging`) mode (`PRAGMA j
 
 3. **Restore OMP session transcripts**:
    ```bash
-   OMP_RESTORE_DIR="${PI_CODING_AGENT_DIR:-$HOME/.omp/agent}"
-   mkdir -p "$OMP_RESTORE_DIR"
+   # Resolve the active OMP restore destination:
+   if [ -n "$PI_CODING_AGENT_DIR" ]; then
+     OMP_RESTORE_DIR="$PI_CODING_AGENT_DIR"
+   elif [ -n "$PI_PROFILE" ]; then
+     OMP_RESTORE_DIR="$HOME/.omp/profiles/$PI_PROFILE/agent"
+   elif [ -n "$XDG_DATA_HOME" ] && [ -d "$XDG_DATA_HOME/omp" ]; then
+     OMP_RESTORE_DIR="$XDG_DATA_HOME/omp"
+   else
+     OMP_RESTORE_DIR="$HOME/.omp/agent"
+   fi
    chmod 700 "$OMP_RESTORE_DIR"
 
    if [ -d "$OMP_BACKUP_DEST/sessions" ]; then

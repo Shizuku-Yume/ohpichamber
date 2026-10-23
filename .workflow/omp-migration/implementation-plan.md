@@ -115,6 +115,8 @@ Web and Electron can create, stream, abort, reload, and reopen a session through
 
 ## M4: OpenChamber orchestration features
 
+**Status (2026-10-23):** do not execute this list directly. Several features below are already wired to the canonical service; [post-M3 hardening](../specs/post-m3-hardening.md) task 25 re-plans M4 as per-feature verification after the OMP/OpenCode comparison audit.
+
 ### Work
 
 Migrate one feature at a time, keeping its existing product behavior where the inventory says retain:
@@ -136,6 +138,8 @@ Migrate one feature at a time, keeping its existing product behavior where the i
 Each feature has a focused behavior check covering normal completion, failure, reconnect, and unsupported capability behavior. No feature reads OpenCode metadata, events, config, credentials, or route names.
 
 ## M5: retained surfaces and release cutover
+
+**Status (2026-10-23):** blocked on prerequisites this list omits: release workflows, non-Linux native packages and process cleanup, Docker image, npm distribution and the isolated-space runtime. [Post-M3 hardening](../specs/post-m3-hardening.md) tasks 11-15 own them, and task 26 re-plans M5 by release surface.
 
 ### Work
 

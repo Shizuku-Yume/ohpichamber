@@ -55,5 +55,5 @@ Check after:
 - `bun run type-check`: exit 0 on all packages (`type-check.log`).
 - `bun run docs:validate`: 672 pages, 56 links passed.
 - `.workflow/bin/workflow validate --no-color`: exit 0, 120 task files valid.
-- `bun run --cwd packages/web test`: 377 passed | 9 skipped files (386), 6114 passed | 135 skipped tests (6249).
+- `bun run --cwd packages/web test`: 377 passed | 9 skipped files (386), 6116 passed | 135 skipped tests (6251).
 - Evidence logs: `/home/shizuku/Project/ohpichamber-omp-artifacts/task19-2026-10-23/`.

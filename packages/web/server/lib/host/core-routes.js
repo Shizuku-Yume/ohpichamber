@@ -1,3 +1,4 @@
+import { hasLegacyOpenCodeData } from './legacy-data.js';
 import { ThemeImportStorageError } from './theme-runtime.js';
 import { registerThemeCatalogRoutes } from './theme-catalog.js';
 
@@ -398,6 +399,7 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
     // Display name a paired device shows for THIS server (issuing machine's
     // hostname), distinct from the per-device pairing label typed by the operator.
     getServerLabel = () => 'OpenChamber',
+    getLegacyDataPresence = hasLegacyOpenCodeData,
   } = dependencies;
   const PAIRING_REDEEM_RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000;
   const PAIRING_REDEEM_RATE_LIMIT_MAX_ATTEMPTS = 10;
@@ -1028,6 +1030,16 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
         } catch (error) {
           return res.json({ ok: false, error: error?.message || 'Probe failed' });
         }
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+  app.get('/api/host/legacy-data', async (req, res, next) => {
+    try {
+      await requireApiAuth(req, res, async () => {
+        res.setHeader('Cache-Control', 'no-store');
+        res.json({ present: Boolean(await getLegacyDataPresence()) });
       });
     } catch (error) {
       next(error);

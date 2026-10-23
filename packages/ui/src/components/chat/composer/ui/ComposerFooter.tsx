@@ -88,20 +88,20 @@ interface ComposerFooterProps {
     onRunInParallel?: () => void;
     /** Set while the composer is in "Run in parallel" mode: the primary action launches the run. */
     parallelRun?: { runCount: number; launching: boolean; onLaunch: () => void } | null;
-    /** A sent message is held until OpenCode's first connection. */
-    waitingForOpenCode: boolean;
+    /** A sent message is held until Agent Service's first connection. */
+    waitingForAgent: boolean;
 }
 
-/** Quiet note beside the send button while a sent message waits for OpenCode to start. */
-function OpenCodeStartupNote({ className }: { className?: string }) {
+/** Quiet note beside the send button while a sent message waits for the Agent Service to start. */
+function AgentStartupNote({ className }: { className?: string }) {
     const { t } = useI18n();
     return (
         <span
             role="status"
             className={cn('min-w-0 truncate self-center typography-micro text-muted-foreground/70', className)}
-            title={t('chat.chatInput.waitingForOpenCodeHint')}
+            title={t('chat.chatInput.waitingForAgentHint')}
         >
-            {t('chat.chatInput.waitingForOpenCode')}
+            {t('chat.chatInput.waitingForAgent')}
         </span>
     );
 }
@@ -155,7 +155,7 @@ function ComposerFooterView(props: ComposerFooterProps) {
         pinnedSelection = null,
         onRunInParallel,
         parallelRun = null,
-        waitingForOpenCode,
+        waitingForAgent,
     } = props;
 
     const dictationEnabled = useConfigStore((state) => state.dictationEnabled);
@@ -213,7 +213,7 @@ function ComposerFooterView(props: ComposerFooterProps) {
                             {!isBtw ? <SessionGoalObjectiveCounter length={messageLength} /> : null}
                         </div>
                         <div className="flex items-center min-w-0 gap-x-1 justify-end">
-                            {waitingForOpenCode ? <OpenCodeStartupNote /> : null}
+                            {waitingForAgent ? <AgentStartupNote /> : null}
                             <div className="flex items-center gap-x-1 flex-shrink-0">
                                 {!isBtw && showDictation ? <button
                                     type="button"
@@ -294,7 +294,7 @@ function ComposerFooterView(props: ComposerFooterProps) {
                         {!isBtw ? <SessionGoalObjectiveCounter length={messageLength} /> : null}
                     </div>
                     <div className={cn('flex items-center flex-1 justify-end', footerGapClass, 'md:gap-x-3')} data-dictation-chain="true">
-                        {waitingForOpenCode ? <OpenCodeStartupNote className="flex-shrink-0" /> : null}
+                        {waitingForAgent ? <AgentStartupNote className="flex-shrink-0" /> : null}
                         {parallelRun ? <div className="flex-1" /> : isBtw ? <ModelControls className="flex-1 min-w-0 justify-end" sessionId={modelSessionId ?? null} selection={btwSelection} /> : pinnedSelection ? <ModelControls className="flex-1 min-w-0 justify-end" sessionId={currentSessionId} selection={pinnedSelection} agentSelectable /> : <MemoModelControls className={cn('flex-1 min-w-0 justify-end')} onRunInParallel={onRunInParallel} />}
                         {!isBtw ? <MemoComposerDictation
                             radius={chatInputRadius}

@@ -3842,7 +3842,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     // Set by the footer's desktop dictation; the mobile overlay lives outside the box.
     const [desktopDictating, setDesktopDictating] = React.useState(false);
     const goalObjectiveLength = goalArmed ? message.length : 0;
-    const waitingForOpenCode = false;
+    const waitingForAgent = false;
 
     const footerPaddingClass = isMobile ? 'px-1.5 py-1.5' : 'px-2.5 py-1.5';
     const buttonSizeClass = isMobile ? 'h-8 w-8' : 'h-6 w-6';
@@ -4272,7 +4272,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                         pinnedSelection={pinnedComposerSelection}
                         onRunInParallel={!isMobile && !isBtwActive && !columnPinned ? handleRunInParallel : undefined}
                         parallelRun={parallelRun}
-                        waitingForOpenCode={waitingForOpenCode}
+                        waitingForAgent={waitingForAgent}
                     />
                     {mobileModelAgentRow}
                     </div>

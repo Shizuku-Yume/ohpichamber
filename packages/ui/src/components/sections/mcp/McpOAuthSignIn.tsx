@@ -232,7 +232,7 @@ export const McpOAuthSignIn: React.FC<McpOAuthSignInProps> = ({ serverId, direct
                   </Button>
                 </div>
               </div>
-              <p className="typography-micro text-muted-foreground/70">{t('settings.mcp.page.auth.waitingForOpenCode')}</p>
+              <p className="typography-micro text-muted-foreground/70">{t('settings.mcp.page.auth.waitingForAgent')}</p>
             </div>
           )}
 

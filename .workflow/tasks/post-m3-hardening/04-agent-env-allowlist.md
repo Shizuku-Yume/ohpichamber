@@ -3,7 +3,7 @@
 **Effort:** post-m3-hardening
 **Task type:** bugfix
 **Base commit:** f72010e3e
-**Started:** 2026-10-23T12:00:00Z
+**Started:** 2026-10-23T12:49:03+08:00
 **Status:** active
 
 **Delivers:** Agent tools can no longer read Host secrets or the internal service token from their environment, and real provider prompts still work.
@@ -37,4 +37,6 @@ Check after (this branch):
 - Worker shell test → 1 pass / 0 fail / 13 expects.
 - Supervisor env suite → 2 pass / 0 fail, including a real `packages/agent-service/src/index.ts` start and `/proc/<pid>/environ` inspection.
 - Credential strategy: workers inherit no ambient provider credentials. The Host-authorized directory overlay and OMP `AuthStorage` are the supported sources; the overlay cannot override `OHPICHAMBER_INTERNAL_SECRET`, `OPENCHAMBER_MANAGED_PROCESS_TOKEN` or `PI_CODING_AGENT_DIR`.
+- Env-only provider evidence: settings user variables and project variables are the directory overlay (`packages/web/server/lib/environment/runtime.js:124-131,246-263`), the Host passes that overlay to workspace admission (`packages/web/server/lib/host/agent-runtime.js:60-64`), and workers receive it as `input.env` (`packages/agent-service/src/supervisor/workers.ts`). The pinned SDK resolves provider credentials from env (`pi-ai` `envKeys`), so values configured through OpenPCHamber still reach workers; only ambient shell exports are intentionally not inherited.
+- Standalone start contract: removed the misleading `packages/agent-service` `start` script. The service is Host-spawned only; an IPC-less start exits 1 without listening.
 - Scope limit: this removes environment leakage. It is not a claim of isolation from same-UID `/proc` memory access, ptrace, or a compromised Host.

@@ -30,6 +30,10 @@ describe('approval policy database permissions and sidecars', () => {
     let store;
     try {
       store = openApprovalPolicyStore({ dataDir: root });
+      const dbPath = path.join(root, 'host-approval-policies.sqlite');
+      expect(mode(root)).toBe(0o700);
+      expect(mode(dbPath)).toBe(0o600);
+
       store.commit({
         scope: 'workspace',
         sessionId: 'sess-1',
@@ -38,9 +42,6 @@ describe('approval policy database permissions and sidecars', () => {
         decision: 'deny',
         target: { toolName: 'bash', pattern: 'rm -rf *' },
       });
-      const dbPath = path.join(root, 'host-approval-policies.sqlite');
-      expect(mode(root)).toBe(0o700);
-      expect(mode(dbPath)).toBe(0o600);
       for (const suffix of ['-wal', '-shm']) {
         if (fs.existsSync(`${dbPath}${suffix}`)) {
           expect(mode(`${dbPath}${suffix}`)).toBe(0o600);
@@ -69,6 +70,17 @@ describe('approval policy database permissions and sidecars', () => {
       try {
         expect(mode(root)).toBe(0o755);
         expect(mode(filePath)).toBe(0o600);
+        expect(mode(`${filePath}-wal`)).toBe(0o600);
+        expect(mode(`${filePath}-shm`)).toBe(0o600);
+
+        store.commit({
+          scope: 'workspace',
+          sessionId: 'sess-1',
+          projectId: 'proj-1',
+          workspaceId: 'ws-1',
+          decision: 'deny',
+          target: { toolName: 'bash', pattern: 'rm -rf *' },
+        });
         expect(mode(`${filePath}-wal`)).toBe(0o600);
         expect(mode(`${filePath}-shm`)).toBe(0o600);
       } finally {

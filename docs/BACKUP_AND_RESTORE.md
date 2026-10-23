@@ -28,11 +28,11 @@ Default location: `~/.config/openchamber` (or the directory specified by `OPENCH
 
 ### OMP Agent Directory
 The OMP agent directory contains conversation transcripts and provider credentials. Its location is resolved as follows:
-- **Explicit override**: If `PI_CODING_AGENT_DIR` is set in the environment, that directory is used.
-- **Named profile**: If running with a named profile (`PI_PROFILE=<profile>`), the directory is `<HOME>/.omp/profiles/<profile>/agent`.
+- **Explicit override**: If `PI_CODING_AGENT_DIR` is set in the environment, that directory is used directly.
+- **Named profile**: If running with a named profile (`OMP_PROFILE=<profile>` or `PI_PROFILE=<profile>`), the agent directory is `<HOME>/.omp/profiles/<profile>/agent`.
 - **Default fallback**: If neither variable is set, `<XDG_DATA_HOME>/omp` is used if present, otherwise `<HOME>/.omp/agent`.
 
-When executing backup and restore procedures, operators using named profiles or non-default directories must set `PI_CODING_AGENT_DIR` (or `PI_PROFILE`) explicitly in the environment so commands resolve the intended directory.
+When executing backup and restore procedures, operators using named profiles or custom directories must ensure `OMP_PROFILE`, `PI_PROFILE`, or `PI_CODING_AGENT_DIR` is set in the environment so commands resolve the intended directory.
 - **`sessions/**/session.jsonl`**:
   - Canonical agent conversation transcripts and turn history in JSON Lines format.
 - **`agent.db`**:
@@ -73,12 +73,26 @@ All Host SQLite databases operate in WAL (`Write-Ahead Logging`) mode (`PRAGMA j
 3. **Archive Host Gateway data**:
    ```bash
    DATA_DIR="${OPENCHAMBER_DATA_DIR:-$HOME/.config/openchamber}"
-   BACKUP_DEST="/path/to/backup/openchamber-host-$(date +%Y%m%d%H%M%S)"
-   mkdir -p "$BACKUP_DEST"
+   if [ ! -d "$DATA_DIR" ]; then
+     echo "Error: Host data directory not found or not a directory: $DATA_DIR" >&2
+     exit 1
+   fi
+
+   # Define concrete backup root (override with OPENCHAMBER_BACKUP_DIR or default to $HOME/openchamber-backups):
+   BACKUP_ROOT="${OPENCHAMBER_BACKUP_DIR:-$HOME/openchamber-backups}"
+   mkdir -p "$BACKUP_ROOT" || { echo "Error: Failed to create backup root directory: $BACKUP_ROOT" >&2; exit 1; }
+   if [ ! -w "$BACKUP_ROOT" ]; then
+     echo "Error: Backup root directory is not writable: $BACKUP_ROOT" >&2
+     exit 1
+   fi
+
+   TIMESTAMP="$(date +%Y%m%d%H%M%S)"
+   BACKUP_DEST="$BACKUP_ROOT/openchamber-host-$TIMESTAMP"
+   mkdir -p "$BACKUP_DEST" || { echo "Error: Failed to create Host backup destination directory: $BACKUP_DEST" >&2; exit 1; }
 
    # Copy Host SQLite databases and sidecars
-   cp -p "$DATA_DIR"/host-metadata.sqlite* "$BACKUP_DEST/"
-   cp -p "$DATA_DIR"/host-approval-policies.sqlite* "$BACKUP_DEST/"
+   cp -p "$DATA_DIR"/host-metadata.sqlite* "$BACKUP_DEST/" || { echo "Error: Failed to copy host-metadata database" >&2; exit 1; }
+   cp -p "$DATA_DIR"/host-approval-policies.sqlite* "$BACKUP_DEST/" || { echo "Error: Failed to copy host-approval-policies database" >&2; exit 1; }
 
    # Copy attachments and settings
    [ -d "$DATA_DIR/attachments" ] && cp -rp "$DATA_DIR/attachments" "$BACKUP_DEST/"
@@ -90,21 +104,33 @@ All Host SQLite databases operate in WAL (`Write-Ahead Logging`) mode (`PRAGMA j
 4. **Archive OMP session transcripts (content)**:
    ```bash
    # Resolve the active OMP directory:
+   ACTIVE_PROFILE="${OMP_PROFILE:-$PI_PROFILE}"
    if [ -n "$PI_CODING_AGENT_DIR" ]; then
      OMP_DIR="$PI_CODING_AGENT_DIR"
-   elif [ -n "$PI_PROFILE" ]; then
-     OMP_DIR="$HOME/.omp/profiles/$PI_PROFILE/agent"
+   elif [ -n "$ACTIVE_PROFILE" ]; then
+     OMP_DIR="$HOME/.omp/profiles/$ACTIVE_PROFILE/agent"
    elif [ -n "$XDG_DATA_HOME" ] && [ -d "$XDG_DATA_HOME/omp" ]; then
      OMP_DIR="$XDG_DATA_HOME/omp"
    else
      OMP_DIR="$HOME/.omp/agent"
    fi
-   OMP_BACKUP_DEST="/path/to/backup/omp-sessions-$(date +%Y%m%d%H%M%S)"
-   mkdir -p "$OMP_BACKUP_DEST"
+
+   if [ ! -d "$OMP_DIR" ]; then
+     echo "Error: OMP agent directory not found or not a directory: $OMP_DIR" >&2
+     exit 1
+   fi
+
+   BACKUP_ROOT="${OPENCHAMBER_BACKUP_DIR:-$HOME/openchamber-backups}"
+   OMP_BACKUP_DEST="$BACKUP_ROOT/omp-sessions-${TIMESTAMP:-$(date +%Y%m%d%H%M%S)}"
+   mkdir -p "$OMP_BACKUP_DEST" || { echo "Error: Failed to create OMP backup destination directory: $OMP_BACKUP_DEST" >&2; exit 1; }
+   if [ ! -w "$OMP_BACKUP_DEST" ]; then
+     echo "Error: OMP backup directory is not writable: $OMP_BACKUP_DEST" >&2
+     exit 1
+   fi
 
    # Copy session transcripts
    if [ -d "$OMP_DIR/sessions" ]; then
-     cp -rp "$OMP_DIR/sessions" "$OMP_BACKUP_DEST/"
+     cp -rp "$OMP_DIR/sessions" "$OMP_BACKUP_DEST/" || { echo "Error: Failed to copy OMP sessions" >&2; exit 1; }
    fi
    ```
 
@@ -112,9 +138,13 @@ All Host SQLite databases operate in WAL (`Write-Ahead Logging`) mode (`PRAGMA j
    ```bash
    # ONLY if backing up to secure, encrypted, single-user storage:
    if [ -f "$OMP_DIR/agent.db" ]; then
-     SECURE_DEST="/path/to/secure-vault/omp-credentials"
-     mkdir -p "$SECURE_DEST"
-     cp -p "$OMP_DIR/agent.db"* "$SECURE_DEST/"
+     SECURE_DEST="${OPENCHAMBER_SECURE_VAULT:-$HOME/.config/openchamber-vault}/omp-credentials"
+     mkdir -p "$SECURE_DEST" || { echo "Error: Failed to create secure vault directory: $SECURE_DEST" >&2; exit 1; }
+     if [ ! -w "$SECURE_DEST" ]; then
+       echo "Error: Secure vault directory is not writable: $SECURE_DEST" >&2
+       exit 1
+     fi
+     cp -p "$OMP_DIR"/agent.db* "$SECURE_DEST/" || { echo "Error: Failed to copy agent credentials to secure vault" >&2; exit 1; }
      chmod 600 "$SECURE_DEST"/agent.db*
    fi
    ```
@@ -127,15 +157,24 @@ All Host SQLite databases operate in WAL (`Write-Ahead Logging`) mode (`PRAGMA j
 2. **Prepare clean restore destination and restore Host data**:
    **IMPORTANT:** Never copy SQLite databases into a destination that contains stale `-wal` or `-shm` sidecar files from a previous run or different database instance. Merging a restored database with mismatched sidecars can corrupt the database upon recovery. If restoring into an existing data directory, remove any existing `*.sqlite*` files before copying:
    ```bash
+   if [ -z "$BACKUP_DEST" ] || [ ! -d "$BACKUP_DEST" ]; then
+     echo "Error: BACKUP_DEST is not set or not a valid directory (e.g. export BACKUP_DEST=\"$HOME/openchamber-backups/openchamber-host-<timestamp>\")" >&2
+     exit 1
+   fi
+
    RESTORE_DIR="${OPENCHAMBER_DATA_DIR:-$HOME/.config/openchamber}"
-   mkdir -p "$RESTORE_DIR"
+   mkdir -p "$RESTORE_DIR" || { echo "Error: Failed to create restore directory: $RESTORE_DIR" >&2; exit 1; }
+   if [ ! -w "$RESTORE_DIR" ]; then
+     echo "Error: Restore directory is not writable: $RESTORE_DIR" >&2
+     exit 1
+   fi
    chmod 700 "$RESTORE_DIR"
 
    # Remove any existing SQLite files and sidecars to prevent stale WAL merges
    rm -f "$RESTORE_DIR"/host-metadata.sqlite* "$RESTORE_DIR"/host-approval-policies.sqlite*
 
-   cp -p "$BACKUP_DEST"/host-metadata.sqlite* "$RESTORE_DIR/"
-   cp -p "$BACKUP_DEST"/host-approval-policies.sqlite* "$RESTORE_DIR/"
+   cp -p "$BACKUP_DEST"/host-metadata.sqlite* "$RESTORE_DIR/" || { echo "Error: Failed to restore Host SQLite databases" >&2; exit 1; }
+   cp -p "$BACKUP_DEST"/host-approval-policies.sqlite* "$RESTORE_DIR/" || { echo "Error: Failed to restore Host approval policies database" >&2; exit 1; }
    [ -d "$BACKUP_DEST/attachments" ] && cp -rp "$BACKUP_DEST/attachments" "$RESTORE_DIR/"
    [ -d "$BACKUP_DEST/projects" ] && cp -rp "$BACKUP_DEST/projects" "$RESTORE_DIR/"
    [ -f "$BACKUP_DEST/settings.json" ] && cp -p "$BACKUP_DEST/settings.json" "$RESTORE_DIR/"
@@ -147,26 +186,43 @@ All Host SQLite databases operate in WAL (`Write-Ahead Logging`) mode (`PRAGMA j
 
 3. **Restore OMP session transcripts**:
    ```bash
+   if [ -z "$OMP_BACKUP_DEST" ] || [ ! -d "$OMP_BACKUP_DEST" ]; then
+     echo "Error: OMP_BACKUP_DEST is not set or not a valid directory (e.g. export OMP_BACKUP_DEST=\"$HOME/openchamber-backups/omp-sessions-<timestamp>\")" >&2
+     exit 1
+   fi
+
    # Resolve the active OMP restore destination:
+   ACTIVE_PROFILE="${OMP_PROFILE:-$PI_PROFILE}"
    if [ -n "$PI_CODING_AGENT_DIR" ]; then
      OMP_RESTORE_DIR="$PI_CODING_AGENT_DIR"
-   elif [ -n "$PI_PROFILE" ]; then
-     OMP_RESTORE_DIR="$HOME/.omp/profiles/$PI_PROFILE/agent"
+   elif [ -n "$ACTIVE_PROFILE" ]; then
+     OMP_RESTORE_DIR="$HOME/.omp/profiles/$ACTIVE_PROFILE/agent"
    elif [ -n "$XDG_DATA_HOME" ] && [ -d "$XDG_DATA_HOME/omp" ]; then
      OMP_RESTORE_DIR="$XDG_DATA_HOME/omp"
    else
      OMP_RESTORE_DIR="$HOME/.omp/agent"
    fi
+   mkdir -p "$OMP_RESTORE_DIR" || { echo "Error: Failed to create OMP restore directory: $OMP_RESTORE_DIR" >&2; exit 1; }
+   if [ ! -w "$OMP_RESTORE_DIR" ]; then
+     echo "Error: OMP restore directory is not writable: $OMP_RESTORE_DIR" >&2
+     exit 1
+   fi
    chmod 700 "$OMP_RESTORE_DIR"
 
    if [ -d "$OMP_BACKUP_DEST/sessions" ]; then
-     cp -rp "$OMP_BACKUP_DEST/sessions" "$OMP_RESTORE_DIR/"
+     cp -rp "$OMP_BACKUP_DEST/sessions" "$OMP_RESTORE_DIR/" || { echo "Error: Failed to restore OMP session transcripts" >&2; exit 1; }
    fi
 
    # If restoring credentials:
-   if [ -f "$SECURE_DEST/agent.db" ]; then
-     cp -p "$SECURE_DEST"/agent.db* "$OMP_RESTORE_DIR/"
-     chmod 600 "$OMP_RESTORE_DIR"/agent.db*
+   if [ -n "$SECURE_DEST" ]; then
+     if [ ! -d "$SECURE_DEST" ]; then
+       echo "Error: SECURE_DEST is set but not a directory: $SECURE_DEST" >&2
+       exit 1
+     fi
+     if [ -f "$SECURE_DEST/agent.db" ]; then
+       cp -p "$SECURE_DEST"/agent.db* "$OMP_RESTORE_DIR/" || { echo "Error: Failed to restore credentials" >&2; exit 1; }
+       chmod 600 "$OMP_RESTORE_DIR"/agent.db*
+     fi
    fi
    ```
 

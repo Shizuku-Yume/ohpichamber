@@ -43,8 +43,8 @@ Implementation:
   - `packages/web/server/lib/host/metadata-sqlite.test.js`: fresh database user_version, legacy migrations, reopening idempotency, newer schema version refusal without write.
   - `packages/web/server/lib/host/approval-policy-store.test.js`: fresh database schema version, legacy migrations, reopening idempotency, newer schema version refusal without write, umask 022 private sidecar creation and pre-existing sidecar tightening.
   - `packages/web/server/lib/host/backup-restore.test.js`: end-to-end disposable-HOME backup and restore verification using real public APIs (`getState(scope)` with revision, items, options, status assertions; `list(scope)`, `openHostMetadataDatabase`, OMP JSONL transcripts, and isolated `agent.db` credentials).
-- Hardened approval policy sidecar permissions (`0o600`) in `packages/web/server/lib/host/approval-policy-store.js` before and after schema setup with full parity to metadata store.
-- Made OMP agent directory profile resolution (`PI_PROFILE`), XDG fallback, and explicit `PI_CODING_AGENT_DIR` explicit and consistent across inventory and backup/restore procedures in `docs/BACKUP_AND_RESTORE.md`.
+- Hardened approval policy sidecar permissions (`0o600`) in `packages/web/server/lib/host/approval-policy-store.js` before open, after schema setup, and post-commit with full parity to metadata store.
+- Made OMP agent directory profile resolution (`OMP_PROFILE`/`PI_PROFILE`), XDG fallback, and explicit `PI_CODING_AGENT_DIR` override explicit and consistent, with concrete documented destination conventions and defined path error handling across inventory and backup/restore procedures in `docs/BACKUP_AND_RESTORE.md`.
 
 Check after:
 - `bun run --cwd packages/web vitest run server/lib/host/metadata-sqlite.test.js server/lib/host/approval-policy-store.test.js server/lib/host/backup-restore.test.js`: 13 passed (13 tests across 3 files).

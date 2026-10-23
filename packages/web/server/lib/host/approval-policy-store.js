@@ -77,22 +77,22 @@ export const ensureApprovalPolicySchema = (db) => {
   return CURRENT_APPROVAL_POLICY_SCHEMA_VERSION;
 };
 
-export const openApprovalPolicyStore = ({ dataDir, databasePath } = {}) => {
-  const filePath = databasePath ?? path.join(dataDir, 'host-approval-policies.sqlite');
-  const directoryPath = path.dirname(filePath);
+export const openApprovalPolicyStore = ({ dataDir, databasePath, fsImpl = fs, path: nodePath = path } = {}) => {
+  const filePath = databasePath ?? nodePath.join(dataDir, 'host-approval-policies.sqlite');
+  const directoryPath = nodePath.dirname(filePath);
   const sidecarPaths = [`${filePath}-wal`, `${filePath}-shm`];
   try {
-    fs.mkdirSync(directoryPath, { recursive: true, mode: 0o700 });
-    if (!fs.existsSync(filePath)) fs.closeSync(fs.openSync(filePath, 'a', 0o600));
-    fs.chmodSync(filePath, 0o600);
+    fsImpl.mkdirSync(directoryPath, { recursive: true, mode: 0o700 });
+    if (!fsImpl.existsSync(filePath)) fsImpl.closeSync(fsImpl.openSync(filePath, 'a', 0o600));
+    fsImpl.chmodSync(filePath, 0o600);
     for (const sidecarPath of sidecarPaths) {
-      if (fs.existsSync(sidecarPath)) fs.chmodSync(sidecarPath, 0o600);
+      if (fsImpl.existsSync(sidecarPath)) fsImpl.chmodSync(sidecarPath, 0o600);
     }
     const db = new (loadDatabaseSync())(filePath, { timeout: 5000 });
     try {
       ensureApprovalPolicySchema(db);
       for (const sidecarPath of sidecarPaths) {
-        if (fs.existsSync(sidecarPath)) fs.chmodSync(sidecarPath, 0o600);
+        if (fsImpl.existsSync(sidecarPath)) fsImpl.chmodSync(sidecarPath, 0o600);
       }
     } catch (error) {
       try { db.close(); } catch {}
@@ -111,6 +111,9 @@ export const openApprovalPolicyStore = ({ dataDir, databasePath } = {}) => {
           const policyId = existing?.policy_id ?? crypto.randomUUID();
           db.prepare(`INSERT INTO approval_policies(policy_id,revision,session_id,root_session_id,project_id,workspace_id,scope,decision,tool_name,pattern) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(policy_id) DO UPDATE SET revision=excluded.revision,decision=excluded.decision`).run(policyId, revision, scope === 'session' ? sessionId : null, rootSessionId ?? null, projectId, workspaceId, scope, decision, target.toolName, target.pattern);
           db.exec('COMMIT');
+          for (const sidecarPath of sidecarPaths) {
+            if (fsImpl.existsSync(sidecarPath)) fsImpl.chmodSync(sidecarPath, 0o600);
+          }
           return { policyId, revision: String(revision), scope, decision, target: { toolName: target.toolName, pattern: target.pattern } };
         } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw new ApprovalPolicyWriteError('Could not write approval policy', error); }
       },

@@ -233,10 +233,16 @@ describe('Host and Agent backup and restore verification', () => {
       expect(allowRead).toBeDefined();
       expect(allowRead.target.toolName).toBe('read');
       expect(allowRead.target.pattern).toBe('*.json');
+      const approvalDbPath = path.join(restoreDataDir, 'host-approval-policies.sqlite');
+      for (const suffix of ['-wal', '-shm']) {
+        const sidecar = `${approvalDbPath}${suffix}`;
+        if (fs.existsSync(sidecar)) {
+          expect(fs.statSync(sidecar).mode & 0o777).toBe(0o600);
+        }
+      }
     } finally {
       restoredApproval.close();
     }
-
     // 9. Verify restored legacy files and settings
     expect(fs.existsSync(path.join(restoreDataDir, 'message-queue.json'))).toBe(true);
     const legacyQueue = JSON.parse(fs.readFileSync(path.join(restoreDataDir, 'message-queue.json'), 'utf8'));

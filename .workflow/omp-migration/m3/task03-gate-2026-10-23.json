@@ -1,7 +1,7 @@
 {
   "task": "post-M3 hardening task 03 \u2014 M3 gate at the main tip",
-  "observedAt": "2026-10-23T07:35:00Z",
-  "startingHead": "2c3dbbe5e",
+  "observedAt": "2026-10-23T08:52:00Z",
+  "startingHead": "8973d7fea",
   "worktree": "/home/shizuku/Project/ohpichamber-worktrees/post-m3-hardening-lane-a",
   "branch": "post-m3-hardening/03-m3-gate-at-tip",
   "command": "bun run type-check && bun run lint && bun run build && bun run test && bun run dead-code && bun run docs:validate && .workflow/bin/workflow validate --no-color",
@@ -77,5 +77,13 @@
       "log": "/home/shizuku/Project/ohpichamber-omp-artifacts/task03-2026-10-23/workflow-2c3.log"
     }
   ],
-  "notes": "The root aggregate now runs agent-contract and agent-service in addition to scripts, sdk, ui, electron and web. The agent-service suite uses a 15 s per-test timeout; the two credential-reopen tests take about 6.8 s on this machine. No test assertion is weakened. The 8d179c4e2 receipt is historical: it is source-equivalent to 24f1012c1 and does not cover the later commits."
+  "notes": "The root aggregate now runs agent-contract and agent-service in addition to scripts, sdk, ui, electron and web. The agent-service suite uses a 15 s per-test timeout; the two credential-reopen tests take about 6.8 s on this machine. No test assertion is weakened. The 8d179c4e2 receipt is historical: it is source-equivalent to 24f1012c1 and does not cover the later commits.",
+  "rebaseNote": "The gate phases ran at 2c3dbbe5e; after that branch was rebased onto main (83ec4d19b) the identical source tree became 8973d7fea, where the landing root test rerun passed (landing-test.log). Both commits are in main history after landing.",
+  "landingRootTest": {
+    "commit": "8973d7fea",
+    "command": "bun run test",
+    "exit": 0,
+    "result": "7/7 suites: scripts 22/22 files, sdk 23/23, ui 804/804, agent-contract 177 pass, agent-service 229 pass / 7 skip / 0 fail, electron 44/44, web 375 passed / 9 skipped files and 6105 passed / 135 skipped tests",
+    "log": "/home/shizuku/Project/ohpichamber-omp-artifacts/task03-2026-10-23/landing-test.log"
+  }
 }

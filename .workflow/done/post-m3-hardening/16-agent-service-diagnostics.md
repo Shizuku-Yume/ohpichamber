@@ -4,7 +4,7 @@
 **Task type:** feature
 **Base commit:** 24b19ddda
 **Started:** 2026-10-23T14:29:00+08:00
-**Status:** active
+**Finished:** 2026-10-23T15:25:00+08:00
 
 **Delivers:** Worker and service stderr reaches a bounded, redacted Host log tagged with root session and worker generation, with a configurable level, and Runtime Status can show recent entries.
 
@@ -32,7 +32,7 @@ Implementation:
 - `/health` remains optional-auth and aggregate-only. Diagnostics are served by authenticated `GET /api/agent/v1/diagnostics`; no message text is public.
 - Runtime Status (`packages/ui/src/lib/runtimeStatus.ts`, the command-palette "Show runtime status" dialog) fetches that endpoint and renders recent entries with level, source, root and generation. No new translatable copy or duplicate panel.
 
-Checks:
+Check after:
 - Worker diagnostics: 3 pass / 0 fail / 12 expects (warn level preserved; prompt sentinel dropped; MCP code normalized; init failure code).
 - Host diagnostics: 1 pass — redaction of `Authorization: Bearer`, quoted/space values and sk- keys; 20 KB no-newline chunk; 2,000-line flood bounded by ring and rate cap; level forwarded in spawn env.
 - Runtime Status formatter: 1 pass — an MCP startup failure renders with root and generation.

@@ -4,12 +4,12 @@
 **Task type:** bugfix
 **Base commit:** f72010e3e
 **Started:** 2026-10-23T04:40:17Z
-**Status:** blocked
+**Status:** active
 
 **Delivers:** A slow SSE reader receives every retained event in order; only real loss or an exceeded per-subscriber bound sends `stream.invalidated`.
 
 **Blocked by:** None
-**Files:** `packages/agent-service/src/supervisor/service.ts` (`stream`, lines 357-387); the journal subscription it uses; the Host Gateway SSE forwarding for `/api/agent/v1/sessions/:id/events`
+**Files:** `packages/agent-service/src/supervisor/service.ts` (`stream`, lines 357-387); `packages/agent-service/src/supervisor/event-stream.ts`; the journal subscription it uses; the Host Gateway SSE forwarding for `/api/agent/v1/sessions/:id/events`; `.workflow/omp-migration/contracts.md` ("Stream rejection and invalidation" / bounded replay)
 
 **Read first:** `.workflow/specs/post-m3-hardening.md`; `/home/shizuku/Project/ohpichamber-omp-artifacts/post-m3-review-2026-10-23/``AgentServiceReview.md` finding 3; `.workflow/omp-migration/contracts.md` (stream invalidation, bounded replay); `.agents/skills/relay-transport/SKILL.md`; `.agents/skills/performance-engineering/SKILL.md`
 **Covers:** H5
@@ -32,16 +32,10 @@ Focused lint: `oxlint` reports nothing on `event-stream.ts`, `event-stream.test.
 Type-check: package-wide `bun run --cwd packages/agent-service type-check` exits 1 on 12 vendor OMP diagnostics; 0 diagnostics mention `packages/agent-service/src`.
 Environment: network installs are not allowed. Test execution used `node_modules` symlinked from `/home/shizuku/Project/ohpichamber` (untracked, not committed).
 Not run: root `bun run test` (main is red pending Lane A task 01) and no rebase/landing was attempted.
-
-## Blocked
-
-- **Assumed:** Task 06 may document the bound in the stream contract section of `.workflow/omp-migration/contracts.md`, since `Done when` requires "The bound is a named constant and the contract documents it".
-- **True:** the Parallel sessions table grants Lane C only `contracts route text`; the stream invalidation section is outside that scope. A draft edit was made and reverted; `git diff` shows no change to `contracts.md`.
-- **True:** root `bun run test` is red on `main` pending Lane A task 01 (quota fixtures), so the required landing gate cannot pass from this lane.
-- **Needed:** either extend Lane C ownership to the stream-bound paragraph in `.workflow/omp-migration/contracts.md`, or have the owning session add it: "Backpressure is not event loss. The service keeps a bounded per-subscriber queue of 2048 frames (`EVENT_STREAM_QUEUE_LIMIT` in `packages/agent-service/src/supervisor/event-stream.ts`), which holds one full retained replay of 1000 events plus live traffic; when `write()` returns `false` it waits for `drain` and then continues in order. `DELIVERY_OVERFLOW` is sent only when that bound is exceeded, replay continuity is lost or the epoch changes." Code and regression are complete on this branch; the task stays unarchived.
+Authorization: the maintainer granted full permission and resolved the ownership conflict; `contracts.md`'s stream invalidation/bounded-replay section is now named in `Files`. The 2048-frame bound and drain semantics are recorded there. Root `bun run test` stays the landing gate until Lane A task 01 lands.
 
 ## Done when
 
 - [x] `response.write()` returning `false` waits for `drain` with a bounded per-subscriber queue instead of ending the stream with `DELIVERY_OVERFLOW`.
-- [ ] The bound is a named constant and the contract documents it.
+- [x] The bound is a named constant and the contract documents it.
 - [x] The Host Gateway forwarding is checked for the same pattern (CONVENTIONS §8 step 4).

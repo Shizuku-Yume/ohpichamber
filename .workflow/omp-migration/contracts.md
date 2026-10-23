@@ -427,6 +427,8 @@ data: {"sessionId":"sess_102","epoch":"ep_b120","reason":"EPOCH_CHANGED"}
 
 Reasons are `EPOCH_CHANGED`, `REPLAY_UNAVAILABLE` or `DELIVERY_OVERFLOW`. A transport that closes before delivering the control frame still enters cursor validation on reconnect; it does not invent a successful HTTP 410 after headers. WebSocket recovery uses the same control payload before close. Clients stop applying that stream, fetch an authoritative snapshot, then resume after its cursor. They never retry the invalid cursor indefinitely or silently discard missing deltas.
 
+Backpressure is not event loss. The service keeps a bounded per-subscriber queue of 2048 frames (`EVENT_STREAM_QUEUE_LIMIT` in `packages/agent-service/src/supervisor/event-stream.ts`), which holds one full retained replay of 1000 events plus live traffic; when `write()` returns `false` it waits for `drain` and then continues in order. `DELIVERY_OVERFLOW` is sent only when that bound is exceeded, replay continuity is lost or the epoch changes. The Host Gateway forwards the stream with `pipeline`, which also waits for `drain`.
+
 ---
 
 ## Commands, idempotency, and delivery guarantees

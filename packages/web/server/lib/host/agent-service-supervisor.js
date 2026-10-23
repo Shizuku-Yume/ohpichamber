@@ -16,7 +16,6 @@ const defaultRegistry = { registerManagedProcess, unregisterManagedProcess, reap
 const STARTUP_TIMEOUT_MS = 15_000;
 const STOP_TIMEOUT_MS = 5_000;
 const ANNOUNCEMENT_TYPE = 'agent-service.listening';
-const SECRET_ENV = 'OHPICHAMBER_INTERNAL_SECRET';
 const SECRET_HEADER = 'X-Internal-Secret';
 const SECRET_REQUEST_TYPE = 'agent-service.internal-secret.request';
 const SECRET_MESSAGE_TYPE = 'agent-service.internal-secret';
@@ -25,8 +24,10 @@ const SECRET_MESSAGE_TYPE = 'agent-service.internal-secret';
 // Host credentials, UI passwords, pairing tokens and every other `*_TOKEN` stay
 // in this process; a worker that runs a shell can read its own environment.
 const SERVICE_ENV_KEYS = Object.freeze([
-  'PATH', 'HOME', 'USERPROFILE', 'SHELL', 'TERM', 'TMPDIR', 'TEMP', 'TMP',
-  'LANG', 'LC_ALL', 'LC_CTYPE', 'LC_MESSAGES', 'TZ',
+  'PATH', 'HOME', 'USER', 'LOGNAME', 'USERPROFILE', 'SHELL', 'TERM', 'TMPDIR', 'TEMP', 'TMP',
+  'LANG', 'LANGUAGE', 'LC_ALL', 'LC_CTYPE', 'LC_MESSAGES', 'TZ',
+  'SystemRoot', 'SYSTEMDRIVE', 'COMSPEC', 'PATHEXT', 'WINDIR', 'HOMEDRIVE', 'HOMEPATH',
+  'APPDATA', 'LOCALAPPDATA', 'PROGRAMDATA', 'ProgramFiles', 'ProgramFiles(x86)',
   'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'ALL_PROXY',
   'http_proxy', 'https_proxy', 'no_proxy', 'all_proxy',
   'SSL_CERT_FILE', 'SSL_CERT_DIR', 'NODE_EXTRA_CA_CERTS', 'CURL_CA_BUNDLE',
@@ -42,10 +43,12 @@ const buildServiceEnvironment = (overrides = {}) => {
     const value = process.env[key];
     if (value !== undefined) environment[key] = value;
   }
-  const merged = { ...environment, ...overrides };
-  // A caller-supplied overlay must not reintroduce the channel this change removes.
-  delete merged[SECRET_ENV];
-  return merged;
+  // Overrides are a narrow embedding seam (for example OHPICHAMBER_BUN in the
+  // packaged verifier), not a second environment. Only allowlisted names pass.
+  for (const [key, value] of Object.entries(overrides)) {
+    if (SERVICE_ENV_KEYS.includes(key) && value !== undefined) environment[key] = value;
+  }
+  return environment;
 };
 
 const timeoutSignal = (ms) => AbortSignal.timeout(ms);

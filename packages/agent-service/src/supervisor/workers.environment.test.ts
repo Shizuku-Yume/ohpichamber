@@ -48,13 +48,19 @@ test('a real worker shell sees the allowlist, the directory overlay and no Host 
     ...sentinels,
     PATH: process.env.PATH,
     OMP_PROFILE: 'allowlisted-profile',
+    PI_PROFILE: 'allowlisted-pi-profile',
     OPENCHAMBER_MANAGED_PROCESS_TOKEN: 'tree-token',
+    SystemRoot: 'C:\\Windows',
+    PATHEXT: '.COM;.EXE;.BAT;.CMD',
   };
   for (const key of Object.keys(modified)) saved[key] = process.env[key];
   Object.assign(process.env, sentinels, {
     PATH: process.env.PATH ?? '/usr/bin:/bin',
     OMP_PROFILE: 'allowlisted-profile',
+    PI_PROFILE: 'allowlisted-pi-profile',
     OPENCHAMBER_MANAGED_PROCESS_TOKEN: 'tree-token',
+    SystemRoot: 'C:\\Windows',
+    PATHEXT: '.COM;.EXE;.BAT;.CMD',
   });
 
   const registry = new WorkerRegistry({
@@ -73,6 +79,9 @@ test('a real worker shell sees the allowlist, the directory overlay and no Host 
         OHPICHAMBER_INTERNAL_SECRET: 'overlay-secret',
         OPENCHAMBER_MANAGED_PROCESS_TOKEN: 'overlay-token',
         PI_CODING_AGENT_DIR: '/overlay-agent-directory',
+        pi_coding_agent_dir: '/lowercase-overlay-directory',
+        OMP_PROFILE: 'overlay-profile',
+        PI_PROFILE: 'overlay-pi-profile',
       },
     });
     expect(worker.state).toBe('ready');
@@ -86,15 +95,24 @@ test('a real worker shell sees the allowlist, the directory overlay and no Host 
     expect(observed).toContain(`PI_CODING_AGENT_DIR=${agentDirectory}`);
     expect(observed).toContain('OPENCHAMBER_MANAGED_PROCESS_TOKEN=tree-token');
     expect(observed).toContain('OMP_PROFILE=allowlisted-profile');
+    expect(observed).toContain('PI_PROFILE=allowlisted-pi-profile');
+    expect(observed).toContain('SystemRoot=');
+    expect(observed).toContain('PATHEXT=');
     expect(observed).not.toContain('overlay-secret');
     expect(observed).not.toContain('overlay-token');
     expect(observed).not.toContain('/overlay-agent-directory');
+    expect(observed).not.toContain('/lowercase-overlay-directory');
+    expect(observed).not.toContain('overlay-profile');
+    expect(observed).not.toContain('overlay-pi-profile');
   } finally {
-    await registry.close();
-    for (const [key, value] of Object.entries(saved)) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
+    try {
+      await registry.close();
+    } finally {
+      for (const [key, value] of Object.entries(saved)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+      await rm(root, { recursive: true, force: true });
     }
-    await rm(root, { recursive: true, force: true });
   }
 }, 15_000);

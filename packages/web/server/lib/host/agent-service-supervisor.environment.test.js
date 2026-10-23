@@ -80,6 +80,8 @@ describe('Agent Service spawn environment', () => {
         entrypoint,
         dataDir: root,
         registry,
+        // A future embedder override must not reopen the leak.
+        env: { OPENCHAMBER_UI_PASSWORD: 'override-ui-password-sentinel' },
         // Fixed bytes make the generated internal token observable to the assertions.
         randomBytes: (size) => Buffer.alloc(size, 0x2a),
         spawn: (file, args, options) => {
@@ -96,6 +98,7 @@ describe('Agent Service spawn environment', () => {
         expect(spawnOptions.env).not.toHaveProperty(key);
       }
       expect(spawnOptions.env).not.toHaveProperty('OHPICHAMBER_INTERNAL_SECRET');
+      expect(spawnOptions.env).not.toHaveProperty('OPENCHAMBER_UI_PASSWORD');
       expect(spawnOptions.env.OPENCHAMBER_MANAGED_PROCESS_TOKEN).toMatch(/^[a-f0-9]{32}$/);
 
       const environ = await fs.readFile(`/proc/${state.pid}/environ`, 'utf8');

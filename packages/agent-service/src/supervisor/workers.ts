@@ -73,8 +73,10 @@ function defaultWorkerRuntime(): string {
 // Host tokens written as `*_TOKEN` out of a model-invoked shell while still
 // letting a project configure its own provider environment.
 const WORKER_ENV_KEYS = Object.freeze([
-  'PATH', 'HOME', 'USERPROFILE', 'SHELL', 'TERM', 'TMPDIR', 'TEMP', 'TMP',
-  'LANG', 'LC_ALL', 'LC_CTYPE', 'LC_MESSAGES', 'TZ',
+  'PATH', 'HOME', 'USER', 'LOGNAME', 'USERPROFILE', 'SHELL', 'TERM', 'TMPDIR', 'TEMP', 'TMP',
+  'LANG', 'LANGUAGE', 'LC_ALL', 'LC_CTYPE', 'LC_MESSAGES', 'TZ',
+  'SystemRoot', 'SYSTEMDRIVE', 'COMSPEC', 'PATHEXT', 'WINDIR', 'HOMEDRIVE', 'HOMEPATH',
+  'APPDATA', 'LOCALAPPDATA', 'PROGRAMDATA', 'ProgramFiles', 'ProgramFiles(x86)',
   'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'ALL_PROXY',
   'http_proxy', 'https_proxy', 'no_proxy', 'all_proxy',
   'SSL_CERT_FILE', 'SSL_CERT_DIR', 'NODE_EXTRA_CA_CERTS', 'CURL_CA_BUNDLE',
@@ -85,10 +87,15 @@ const WORKER_ENV_KEYS = Object.freeze([
 
 // A directory overlay comes from user/project settings, but it must not be able
 // to forge the process-tree proof, the service token, or the worker's own
-// agent-directory binding.
-const RESERVED_WORKER_ENV_KEYS = Object.freeze([
-  'OHPICHAMBER_INTERNAL_SECRET', 'OPENCHAMBER_MANAGED_PROCESS_TOKEN', 'PI_CODING_AGENT_DIR',
-]);
+// agent-directory/profile binding. OMP's profile selection rewrites
+// PI_CODING_AGENT_DIR, so the profile names are reserved too.
+const RESERVED_WORKER_ENV_KEYS: Record<string, true> = Object.freeze({
+  ohpichamber_internal_secret: true,
+  openchamber_managed_process_token: true,
+  pi_coding_agent_dir: true,
+  omp_profile: true,
+  pi_profile: true,
+});
 
 export const buildWorkerEnvironment = (input: Pick<WorkerBootstrap, 'env' | 'agentDirectory'>, sourceEnv: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv => {
   const environment: NodeJS.ProcessEnv = {};
@@ -97,10 +104,18 @@ export const buildWorkerEnvironment = (input: Pick<WorkerBootstrap, 'env' | 'age
     if (value !== undefined) environment[key] = value;
   }
   Object.assign(environment, input.env);
-  for (const key of RESERVED_WORKER_ENV_KEYS) delete environment[key];
+  // Environment names are case-insensitive on Windows; the overlay cannot smuggle
+  // a second variant of a reserved name.
+  for (const key of Object.keys(environment)) {
+    if (Object.hasOwn(RESERVED_WORKER_ENV_KEYS, key.toLowerCase())) delete environment[key];
+  }
   environment.PI_CODING_AGENT_DIR = input.agentDirectory;
   const managedToken = sourceEnv.OPENCHAMBER_MANAGED_PROCESS_TOKEN;
   if (managedToken !== undefined) environment.OPENCHAMBER_MANAGED_PROCESS_TOKEN = managedToken;
+  for (const key of ['OMP_PROFILE', 'PI_PROFILE']) {
+    const value = sourceEnv[key];
+    if (value !== undefined) environment[key] = value;
+  }
   return environment;
 };
 

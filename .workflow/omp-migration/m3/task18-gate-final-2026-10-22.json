@@ -6,13 +6,65 @@
   "result": "PASS",
   "exit": 0,
   "phases": [
-    {"name": "type-check", "exit": 0, "packages": ["agent-contract", "agent-service", "sdk", "ui", "web", "electron", "mobile"]},
-    {"name": "lint", "exit": 0, "packages": ["agent-contract", "agent-service", "sdk", "ui", "web", "electron", "mobile"]},
-    {"name": "build", "exit": 0, "warnings": "4 pre-existing web CSS ::highlight warnings"},
-    {"name": "test", "exit": 0, "counts": {"scripts": "22/22 files", "sdk": "23/23 files", "ui": "803/803 files", "electron": "44/44 files", "web": "370 passed / 9 skipped files; 6086 passed / 135 skipped tests"}},
-    {"name": "dead-code", "exit": 0, "tool": "knip@5.80.0", "findings": 0},
-    {"name": "docs:validate", "exit": 0, "pages": 672, "sidebarLinks": 56},
-    {"name": "workflow", "exit": 0, "taskFiles": 84}
+    {
+      "name": "type-check",
+      "exit": 0,
+      "packages": [
+        "agent-contract",
+        "agent-service",
+        "sdk",
+        "ui",
+        "web",
+        "electron",
+        "mobile"
+      ]
+    },
+    {
+      "name": "lint",
+      "exit": 0,
+      "packages": [
+        "agent-contract",
+        "agent-service",
+        "sdk",
+        "ui",
+        "web",
+        "electron",
+        "mobile"
+      ]
+    },
+    {
+      "name": "build",
+      "exit": 0,
+      "warnings": "4 pre-existing web CSS ::highlight warnings"
+    },
+    {
+      "name": "test",
+      "exit": 0,
+      "counts": {
+        "scripts": "22/22 files",
+        "sdk": "23/23 files",
+        "ui": "803/803 files",
+        "electron": "44/44 files",
+        "web": "370 passed / 9 skipped files; 6086 passed / 135 skipped tests"
+      }
+    },
+    {
+      "name": "dead-code",
+      "exit": 0,
+      "tool": "knip@5.80.0",
+      "findings": 0
+    },
+    {
+      "name": "docs:validate",
+      "exit": 0,
+      "pages": 672,
+      "sidebarLinks": 56
+    },
+    {
+      "name": "workflow",
+      "exit": 0,
+      "taskFiles": 84
+    }
   ],
   "omissions": "Root bun run test omits packages/agent-contract and packages/agent-service suites. Reused focused W8 source-repair evidence: projection 16/16, agent-service 220 pass / 7 skip / 0 fail across 32 files, agent-service type-check exit 0. No AppImage was rebuilt by this gate.",
   "artifact": {
@@ -25,5 +77,8 @@
   "log": {
     "path": ".workflow/omp-migration/m3/task18-gate-final-2026-10-22.log",
     "sha256": "997019b483bedb418778dcca8b8788f5000139aca48668c26d802ed834e653f2"
-  }
+  },
+  "status": "historical",
+  "historicalReason": "Produced at 8d179c4e24d6f2208adff44ab6f3a4b34bed8642, which is not in main history. It is source-equivalent to 24f1012c1 and does not cover the later commits.",
+  "supersededBy": ".workflow/omp-migration/m3/task03-gate-2026-10-23.json"
 }

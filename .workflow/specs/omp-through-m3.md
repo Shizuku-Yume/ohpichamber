@@ -85,6 +85,8 @@ The M3 implementation is complete through the a92 matrix on artifact `a92fbb36â€
 
 **2026-10-23 review at `main` `842a48adc`:** the `8d179c4e2` gate receipt is not in `main`'s history (source-equivalent to `24f1012c1`, without the 12 later follow-up commits), and the root test is red at the tip: UI quota-store 6 failed, Web TTS 1 failed plus 3 unhandled errors. Type-check, lint, build, dead-code, agent-service 221/7/0 and agent-contract 177/0 pass. Acceptance of this effort waits for [post-M3 hardening](post-m3-hardening.md) task 03, which reruns the gate at the tip. Evidence: `/home/shizuku/Project/ohpichamber-omp-artifacts/post-m3-review-2026-10-23/`.
 
+**2026-10-23 gate at the tip (`ddc180155`):** the post-M3 gate passed with every phase exit 0: type-check and lint 7 packages, build (4 known CSS warnings), root tests scripts 22/22, SDK 23/23, UI 804/804, agent-contract 177 pass, agent-service 225 pass / 7 skip / 0 fail, Electron 44/44, Web 373 passed / 9 skipped files and 6102 passed / 135 skipped tests, dead-code 0 findings, docs 672/56, workflow 116 tasks. Receipt `.workflow/omp-migration/m3/task03-gate-2026-10-23.json`; logs `/home/shizuku/Project/ohpichamber-omp-artifacts/task03-2026-10-23/`. The `8d179c4e2` receipt is historical (source-equivalent to `24f1012c1`). Maintainer acceptance can be requested at `flow-close`.
+
 ### Remaining effort and exit order (2026-10-17) â€” historical planning snapshot, superseded 2026-10-22
 
 The four implementation packets and the final gate are complete (a92 matrix plus final root gate PASS at `8d179c4e2`); the technical M3 gate is complete and final maintainer acceptance is pending. This snapshot remains only as history; M4/M5 remain open.

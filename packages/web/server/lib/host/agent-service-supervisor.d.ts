@@ -20,6 +20,9 @@ export interface AgentServiceSupervisorOptions {
   env?: Record<string, string>;
   startupTimeoutMs?: number;
   stopTimeoutMs?: number;
+  restartBaseDelayMs?: number;
+  restartMaxDelayMs?: number;
+  restartMaxAttempts?: number;
   spawn?: (file: string, args?: readonly string[], options?: SpawnOptions) => ChildProcess;
   fetchImpl?: typeof fetch;
   registry?: AgentServiceRegistry;

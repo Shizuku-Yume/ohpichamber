@@ -4,7 +4,7 @@
 **Task type:** bugfix
 **Base commit:** f72010e3e
 **Started:** 2026-10-23T04:40:17Z
-**Status:** paused
+**Finished:** 2026-10-23T06:24:38Z
 
 **Delivers:** A slow SSE reader receives every retained event in order; only real loss or an exceeded per-subscriber bound sends `stream.invalidated`.
 
@@ -37,7 +37,14 @@ Review boundary: `f72010e3e` + `.workflow/omp-migration/contracts.md`, `.workflo
 Suite: `bun test packages/agent-service/src` — 223 pass / 7 skip / 0 fail across 33 files.
 Real path: the regression drives a real loopback HTTP/1.1 SSE connection and a real Node `ServerResponse` through `deliverSessionStream`; a full service process with a live OMP worker was not exercised (no provider available), and the delivery queue is independent of worker projection.
 
-Handoff: implementation, contract text, regression, both review briefs and the agent-service suite are complete and committed on `post-m3-hardening/06-sse-backpressure` in `/home/shizuku/Project/ohpichamber-worktrees/lane-c-hardening`. No open review findings. Next step once Lane A task 01 lands on `main`: `git rebase main`, run `bun run test` from the repository root until green, rerun this task's focused regression, then move this file to `.workflow/done/post-m3-hardening/`, run `.workflow/bin/workflow validate`, commit the archive, and fast-forward `main` per local-merge. `main` was still at `f72010e3e` and Lane A task 01 at `f6ef134bc` when this handoff was written. The worktree's `node_modules` is symlinked from the main checkout (untracked, not committed).
+Landing checks after rebase onto `c74823e17`:
+- Root `bun run test`: scripts 22/22, SDK 23/23, UI 804/804, Electron 44/44, Web 6095 passed / 135 skipped; exit 0.
+- Real route: `service-event-stream.test.ts` starts an `AgentService`, admits a real native session, seeds its journal with 1000 events and reads `/api/agent/v1/sessions/:id/events` over a real loopback socket: 200, ordered frames, no invalidation.
+- Agent Service suite: 224 pass / 7 skip / 0 fail across 34 files on the restored full dependency tree. An intermediate symlinked tree made `worker/catalog-credentials.test.ts` exceed its 5 s timeout; that file passed 4/4 after the tree was restored.
+- Lint: `bun run --cwd packages/agent-service lint` clean.
+- Type-check: 0 diagnostics in `packages/agent-service/src`; the package still exits 1 on 12 pre-existing vendor OMP diagnostics.
+- Dead code (knip 5.80.0 run offline from the local cache): `AgentSelectionState` (also reported on `main`) and `login-shell-env.js` (not reported on `main`; package `node_modules` still resolve through the main checkout). Neither is in this change.
+- Environment: no network install. `node_modules` is a full reflink copy of the main checkout's tree inside this worktree, with `packages/sdk/node_modules/zod` pointing at it so Bun's SDK-example source comments match the checked-in bundles. Untracked tooling state, not part of the commit.
 
 ## Done when
 

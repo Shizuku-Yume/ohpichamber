@@ -20,10 +20,10 @@ Root cause at `842a48adc`: `childEnv = { ...process.env, ...env, [SECRET_ENV]: s
 
 ## Done when
 
-- [ ] The supervisor builds the service environment from an explicit allowlist (PATH, HOME, locale, proxy, XDG, required Bun/OMP variables and the directory-scoped overlays the architecture names) instead of `...process.env`.
-- [ ] The internal secret reaches the service through a channel worker processes cannot read (IPC or a pipe), not the environment.
-- [ ] Which provider credential variables workers legitimately need is decided and documented; the rest are excluded.
-- [ ] The security pass (CONVENTIONS §7) runs on the spawn boundary.
+- [x] The supervisor builds the service environment from an explicit allowlist (PATH, HOME, locale, proxy, XDG, required Bun/OMP variables and the directory-scoped overlays the architecture names) instead of `...process.env`.
+- [x] The internal secret reaches the service through a channel worker processes cannot read (IPC or a pipe), not the environment.
+- [x] Which provider credential variables workers legitimately need is decided and documented; the rest are excluded.
+- [x] The security pass (CONVENTIONS §7) runs on the spawn boundary.
 
 ## Progress
 
@@ -40,3 +40,9 @@ Check after (this branch):
 - Env-only provider evidence: settings user variables and project variables are the directory overlay (`packages/web/server/lib/environment/runtime.js:124-131,246-263`), the Host passes that overlay to workspace admission (`packages/web/server/lib/host/agent-runtime.js:60-64`), and workers receive it as `input.env` (`packages/agent-service/src/supervisor/workers.ts`). The pinned SDK resolves provider credentials from env (`pi-ai` `envKeys`), so values configured through OpenPCHamber still reach workers; only ambient shell exports are intentionally not inherited.
 - Standalone start contract: removed the misleading `packages/agent-service` `start` script. The service is Host-spawned only; an IPC-less start exits 1 without listening.
 - Scope limit: this removes environment leakage. It is not a claim of isolation from same-UID `/proc` memory access, ptrace, or a compromised Host.
+- Docs updated to the delivered contract: `packages/agent-service/README.md` (Host-only startup, IPC handshake, worker allowlist/overlay, provider source scope), `packages/agent-service/DOCUMENTATION.md` (catalog env-credential scope, captured effective environment), `packages/web/server/lib/host/DOCUMENTATION.md` (supervisor IPC handshake, Host overlay hand-off), and `.workflow/omp-migration/architecture.md` (token channel, worker provider-credential sources). Obsolete env-secret and direct-start claims removed.
+- Real smoke: `bun run dev` started the Host and real Agent Service (`/health` HTTP 200, `agentService.phase=ready`; `/api/agent/v1/ready` HTTP 200). `POST /api/agent/v1/workspaces/resolve` returned HTTP 401 `UNAUTHORIZED` ('Authenticate with the Host'), so no prompt or run request was sent and no outbound provider request was made. The provider chat required by the Check remains owed. Receipt: `/home/shizuku/Project/ohpichamber-omp-artifacts/post-m3-hardening-task04-2026-10-23/dev-smoke.log`.
+- Root suite: still red in this tree while task 01 is blocked; the recorded `root-test.log` (802/804 files, `useQuotaStore.test.ts` failures) is not a pass receipt. Landing needs the rebase after 01 and a green run.
+- Review boundary: `f72010e3e...HEAD` + working tree (docs/task); paths: `agent-service-supervisor.js`, `agent-service/src/index.ts`, `workers.ts`+env test, host supervisor env test, four docs, task file; round: 1; briefs: Task04QualityReview and Task04SecurityReview subagents dispatched (results pending at this checkpoint); boundaries: Host→Agent Service spawn, Agent Service→worker spawn, private IPC token channel; findings: pending coordinator/security-review confirmation.
+- Review briefs are not yet returned; no finding is claimed as passed until both subagent reports arrive.
+- Security pass: reviewed the spawn boundaries and their direct callers. Ambient Host env, UI password, `*_TOKEN` and the internal secret are excluded from service and worker spawns; the overlay cannot set the reserved keys; the secret is read-only over the child IPC channel with 64-hex validation and a 10s timeout. No bypass found.

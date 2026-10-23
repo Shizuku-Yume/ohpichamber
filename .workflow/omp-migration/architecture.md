@@ -303,12 +303,13 @@ sequenceDiagram
 
 2. **Host Gateway to Agent Service Internal Credentials:**
    - When the Host Gateway spawns the Bun Agent Service, it generates a 256-bit cryptographically secure random token (`crypto.randomBytes(32).toString('hex')`).
-   - The token passes to the Agent Service via the environment variable `OHPICHAMBER_INTERNAL_SECRET`.
+   - The service requests the token over the private spawn IPC channel and the Host answers only that child; the service accepts a 64-hex value and times out after 10 seconds. The token never enters the environment, arguments, URLs or logs.
    - The Agent Service binds only to `127.0.0.1` or a private UNIX domain socket.
    - Every internal HTTP request from the Host Gateway includes the header `X-Internal-Secret: <token>`. Requests without this header or from non-loopback addresses are rejected immediately with HTTP 403 Forbidden.
 
 3. **Model Provider Credentials:**
    - Provider keys and OAuth tokens use OMP `AuthStorage`. [auth-paths.json](m0/auth-paths.json) establishes default `~/.omp/agent/agent.db`, initialized XDG data selection and independent environment/explicit agent-directory overrides. Those path cases prove owned database create/close, not credential conversion.
+   - SDK workers receive an explicit environment allowlist plus the Host-authorized directory overlay. Ambient Host provider credentials are not inherited; an environment-only provider is executable only when its values are configured in that overlay, because the SDK still resolves environment credentials from the worker environment.
    - SDK workers own authenticated model-provider requests and read credentials through the verified OMP boundary. Host credential import and quota access remain privileged, scoped operations; no secret is projected to a client.
    - Provider transport necessarily sends authentication to the selected provider. Credentials must never appear in public DTOs, browser/renderer responses or Host/service logs, nor be sent to unrelated destinations. This is not a prohibition on authenticated provider egress.
 

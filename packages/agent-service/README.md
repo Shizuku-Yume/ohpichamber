@@ -6,9 +6,9 @@ Application execution is not activated by this package's presence. Task 22 compo
 
 ## Lifecycle
 
-Build with `bun run build`. The built entrypoint is `dist/index.js`, with its worker at `dist/worker/index.js`. Development can use `bun --no-env-file src/index.ts --port 0`.
+Build with `bun run build`. The built entrypoint is `dist/index.js`, with its worker at `dist/worker/index.js`. The service starts only under the Host supervisor; an IPC-less start exits with code 1 without listening.
 
-The Host injects `OHPICHAMBER_INTERNAL_SECRET` as 32 random bytes encoded in hex. It never appears in arguments, URLs or logs. Every request requires `X-Internal-Secret` and a loopback peer. The listener binds only `127.0.0.1`; stdout publishes one `{ "type": "agent-service.listening", "port": ... }` line for endpoint discovery, not readiness.
+The Host generates a 256-bit token and answers the service's private spawn-IPC request with it; the service accepts only a 64-hex value and gives up after 10 seconds. The token never appears in the environment, arguments, URLs or logs. Every request requires `X-Internal-Secret` and a loopback peer. The listener binds only `127.0.0.1`; stdout publishes one `{ "type": "agent-service.listening", "port": ... }` line for endpoint discovery, not readiness.
 
 `GET /api/agent/v1/ready` returns `{ "ready": true, "engine": "omp", "version": "1.0.0" }` only after a dedicated worker initializes the real SDK public factory, disposes its session and exits successfully. The probe owns an ephemeral profile and workspace, removed after it exits. Startup is bounded to 15 seconds; orderly stop gets 5 seconds before forced termination.
 
@@ -19,7 +19,7 @@ The Host injects `OHPICHAMBER_INTERNAL_SECRET` as 32 random bytes encoded in hex
 - `POST /internal/workers/:rootSessionId/restart` retires the old generation before launching its replacement.
 - `DELETE /internal/workers/:rootSessionId` waits for its process to exit.
 
-Bootstrap data contains opaque root, project, and workspace IDs, absolute private `cwd` and `agentDirectory`, optional `sessionsDirectory`, and an optional Host-resolved environment overlay. Independent roots get separate processes even in the same workspace. Worker replacement and shutdown are serialized per root; prompt admission rejects a second active run while abort can interrupt the first. The internal secret is stripped before spawning a worker; environment values and private paths are absent from public worker observations. Authoritative worker observations (`WorkerInfo`) omit operating-system process IDs (`pidExposed: false`), exposing only lifecycle status, worker generation, and readiness to keep internal process layout private.
+Bootstrap data contains opaque root, project, and workspace IDs, absolute private `cwd` and `agentDirectory`, optional `sessionsDirectory`, and an optional Host-resolved environment overlay. Independent roots get separate processes even in the same workspace. Worker replacement and shutdown are serialized per root; prompt admission rejects a second active run while abort can interrupt the first. Workers are spawned with an explicit process/locale/proxy/OMP allowlist plus the Host-authorized directory overlay; the overlay cannot set `OHPICHAMBER_INTERNAL_SECRET`, `OPENCHAMBER_MANAGED_PROCESS_TOKEN` or `PI_CODING_AGENT_DIR`. Ambient Host credentials are not inherited: provider credentials come from that overlay or OMP `AuthStorage`, so an environment-only provider works only when its values are configured in the authorized overlay. Environment values and private paths are absent from public worker observations. Authoritative worker observations (`WorkerInfo`) omit operating-system process IDs (`pidExposed: false`), exposing only lifecycle status, worker generation, and readiness to keep internal process layout private.
 
 Both service and worker launches pass Bun's `--no-env-file`. Project dotenv files cannot add values to the Host-resolved environment.
 

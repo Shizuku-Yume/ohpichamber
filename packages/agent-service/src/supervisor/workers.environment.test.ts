@@ -15,21 +15,23 @@ const sentinels = {
 // A real worker process runs `env` through a shell-equivalent lookup and writes
 // what a model-invoked shell would see. The test observes that output, not the
 // spawn options we passed in.
-const FIXTURE = `
-import { spawnSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
-const report = process.env.WORKER_ENV_REPORT;
-process.on('message', message => {
-  if (message?.type === 'bootstrap') {
-    const environment = spawnSync('env', [], { encoding: 'utf8' }).stdout ?? '';
-    writeFileSync(report, environment);
-    process.send({ type: 'ready', workerGeneration: message.workerGeneration });
-  } else if (message?.type === 'stop') {
-    process.exit(0);
-  }
-});
-process.on('disconnect', () => process.exit(0));
-`;
+const FIXTURE = [
+  "import { spawnSync } from 'node:child_process';",
+  "import { writeFileSync } from 'node:fs';",
+  "const report = process.env.WORKER_ENV_REPORT;",
+  "process.on('message', message => {",
+  "  if (message?.type === 'bootstrap') {",
+  "    const environment = process.platform === 'win32'",
+  "      ? Object.entries(process.env).map(([key, value]) => key + '=' + value).join('\\n')",
+  "      : spawnSync('env', [], { encoding: 'utf8' }).stdout ?? '';",
+  "    writeFileSync(report, environment);",
+  "    process.send({ type: 'ready', workerGeneration: message.workerGeneration });",
+  "  } else if (message?.type === 'stop') {",
+  "    process.exit(0);",
+  "  }",
+  "});",
+  "process.on('disconnect', () => process.exit(0));",
+].join('\n');
 
 test('a real worker shell sees the allowlist, the directory overlay and no Host secret', async () => {
   const root = await mkdtemp(join(tmpdir(), 'worker-environment-'));
@@ -65,7 +67,13 @@ test('a real worker shell sees the allowlist, the directory overlay and no Host 
   try {
     const worker = await registry.start({
       rootSessionId: 'root-session', projectId: 'project', workspaceId: 'workspace',
-      cwd, agentDirectory, env: { WORKER_ENV_REPORT: reportPath, OPENAI_API_KEY: 'overlay-key' },
+      cwd, agentDirectory, env: {
+        WORKER_ENV_REPORT: reportPath,
+        OPENAI_API_KEY: 'overlay-key',
+        OHPICHAMBER_INTERNAL_SECRET: 'overlay-secret',
+        OPENCHAMBER_MANAGED_PROCESS_TOKEN: 'overlay-token',
+        PI_CODING_AGENT_DIR: '/overlay-agent-directory',
+      },
     });
     expect(worker.state).toBe('ready');
 
@@ -78,6 +86,9 @@ test('a real worker shell sees the allowlist, the directory overlay and no Host 
     expect(observed).toContain(`PI_CODING_AGENT_DIR=${agentDirectory}`);
     expect(observed).toContain('OPENCHAMBER_MANAGED_PROCESS_TOKEN=tree-token');
     expect(observed).toContain('OMP_PROFILE=allowlisted-profile');
+    expect(observed).not.toContain('overlay-secret');
+    expect(observed).not.toContain('overlay-token');
+    expect(observed).not.toContain('/overlay-agent-directory');
   } finally {
     await registry.close();
     for (const [key, value] of Object.entries(saved)) {

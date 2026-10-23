@@ -67,10 +67,11 @@ function defaultWorkerRuntime(): string {
 // the service's whole environment: the Host's UI password and pairing tokens
 // would be readable from the worker process. Only process needs (Bun, the OMP
 // profile and XDG paths, locale, proxies and trust roots) are inherited.
-// Provider credentials are not inherited either: OMP AuthStorage is the
-// credential owner, and the only additional values a worker may receive are
-// the Host-authorized per-directory overlay (`input.env`), which enterprise
-// mode already blanks.
+// Provider credentials are not inherited from the Host's own environment; the
+// Host-authorized per-directory overlay (`input.env`, which enterprise mode
+// blanks) and OMP AuthStorage are the supported sources. This keeps unrelated
+// Host tokens written as `*_TOKEN` out of a model-invoked shell while still
+// letting a project configure its own provider environment.
 const WORKER_ENV_KEYS = Object.freeze([
   'PATH', 'HOME', 'USERPROFILE', 'SHELL', 'TERM', 'TMPDIR', 'TEMP', 'TMP',
   'LANG', 'LC_ALL', 'LC_CTYPE', 'LC_MESSAGES', 'TZ',
@@ -80,8 +81,13 @@ const WORKER_ENV_KEYS = Object.freeze([
   'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME', 'XDG_RUNTIME_DIR',
   'OMP_PROFILE', 'PI_PROFILE', 'PI_CONFIG_DIR',
   'BUN_INSTALL', 'BUN_INSTALL_BIN',
-  // Process-tree membership proof used by Host orphan cleanup (task 13).
-  'OPENCHAMBER_MANAGED_PROCESS_TOKEN',
+]);
+
+// A directory overlay comes from user/project settings, but it must not be able
+// to forge the process-tree proof, the service token, or the worker's own
+// agent-directory binding.
+const RESERVED_WORKER_ENV_KEYS = Object.freeze([
+  'OHPICHAMBER_INTERNAL_SECRET', 'OPENCHAMBER_MANAGED_PROCESS_TOKEN', 'PI_CODING_AGENT_DIR',
 ]);
 
 export const buildWorkerEnvironment = (input: Pick<WorkerBootstrap, 'env' | 'agentDirectory'>, sourceEnv: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv => {
@@ -90,7 +96,12 @@ export const buildWorkerEnvironment = (input: Pick<WorkerBootstrap, 'env' | 'age
     const value = sourceEnv[key];
     if (value !== undefined) environment[key] = value;
   }
-  return Object.assign(environment, input.env, { PI_CODING_AGENT_DIR: input.agentDirectory });
+  Object.assign(environment, input.env);
+  for (const key of RESERVED_WORKER_ENV_KEYS) delete environment[key];
+  environment.PI_CODING_AGENT_DIR = input.agentDirectory;
+  const managedToken = sourceEnv.OPENCHAMBER_MANAGED_PROCESS_TOKEN;
+  if (managedToken !== undefined) environment.OPENCHAMBER_MANAGED_PROCESS_TOKEN = managedToken;
+  return environment;
 };
 
 async function waitWithin(operation: Promise<void>, milliseconds: number): Promise<void> {

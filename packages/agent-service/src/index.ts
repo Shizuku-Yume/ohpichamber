@@ -85,7 +85,8 @@ async function main(): Promise<void> {
     process.once('SIGINT', stop);
     await owned.start();
   } catch {
-    process.stderr.write('Agent Service startup failed\n');
+    // Standalone `bun run start` has no Host IPC channel and fails closed here.
+    process.stderr.write('Agent Service startup failed: it must be launched by the Host supervisor over IPC\n');
     authorization.close();
     skillSources.close();
     try { await service?.stop(); } finally { policies.close(); process.exitCode = 1; }

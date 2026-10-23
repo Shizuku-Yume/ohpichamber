@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -14,6 +15,89 @@ const makeDir = (prefix) => {
   roots.push(dir);
   return dir;
 };
+const posixTest = process.platform === 'win32' ? it.skip : it;
+const restoreFileNames = [
+  'host-metadata.sqlite', 'host-metadata.sqlite-wal', 'host-metadata.sqlite-shm',
+  'host-approval-policies.sqlite', 'host-approval-policies.sqlite-wal', 'host-approval-policies.sqlite-shm',
+];
+
+const documentedRestoreStaging = () => {
+  const docs = fs.readFileSync(new URL('../../../../../docs/BACKUP_AND_RESTORE.md', import.meta.url), 'utf8');
+  const startMarker = '   # Stage both required databases';
+  const endMarker = '   rm -rf "$STAGE_DIR" "$ROLLBACK_DIR" || { echo "Error: Failed to remove restore staging directories" >&2; exit 1; }';
+  const start = docs.indexOf(startMarker);
+  const end = docs.indexOf(endMarker, start);
+  if (start < 0 || end < 0) throw new Error('Documented restore staging block was not found');
+  return docs.slice(start, end + endMarker.length)
+    .split('\n')
+    .map((line) => line.startsWith('   ') ? line.slice(3) : line)
+    .join('\n');
+};
+
+const writeFileSet = (dir, files) => {
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  for (const [name, content] of Object.entries(files)) fs.writeFileSync(path.join(dir, name), content);
+};
+const snapshotFiles = (dir) => Object.fromEntries(restoreFileNames.map((name) => {
+  const file = path.join(dir, name);
+  return [name, fs.existsSync(file) ? { content: fs.readFileSync(file, 'utf8'), mode: fs.statSync(file).mode & 0o777 } : null];
+}));
+const makeFailingBin = (root) => {
+  const bin = path.join(root, 'bin');
+  fs.mkdirSync(bin, { recursive: true, mode: 0o700 });
+  fs.writeFileSync(path.join(bin, 'cp'), [
+    '#!/bin/sh',
+    'if [ -n "${FAIL_CP_BASENAME:-}" ]; then',
+    '  for arg in "$@"; do',
+    '    case "$arg" in *"/${FAIL_CP_BASENAME}") exit 1 ;; esac',
+    '  done',
+    'fi',
+    'exec /bin/cp "$@"',
+    '',
+  ].join('\n'), { mode: 0o755 });
+  fs.writeFileSync(path.join(bin, 'chmod'), [
+    '#!/bin/sh',
+    'if [ -n "${FAIL_CHMOD_BASENAME:-}" ]; then',
+    '  for arg in "$@"; do',
+    '    case "$arg" in *".host-restore-stage"*"/${FAIL_CHMOD_BASENAME}") exit 1 ;; esac',
+    '  done',
+    'fi',
+    'if [ -n "${FAIL_CHMOD_DIR_MATCH:-}" ]; then',
+    '  for arg in "$@"; do',
+    '    case "$arg" in *"${FAIL_CHMOD_DIR_MATCH}"*) exit 1 ;; esac',
+    '  done',
+    'fi',
+    'exec /bin/chmod "$@"',
+    '',
+  ].join('\n'), { mode: 0o755 });
+  fs.writeFileSync(path.join(bin, 'mv'), [
+    '#!/bin/sh',
+    'source_arg=""',
+    'for arg in "$@"; do',
+    '  case "$arg" in -*) ;; *) source_arg="$arg"; break ;; esac',
+    'done',
+    'if [ -n "${FAIL_MV_BASENAME:-}" ]; then',
+    '  case "$source_arg" in *".host-restore-stage"*"/${FAIL_MV_BASENAME}") exit 1 ;; esac',
+    'fi',
+    'if [ -n "${FAIL_MV_SOURCE:-}" ]; then',
+    '  case "$source_arg" in "$FAIL_MV_SOURCE") exit 1 ;; esac',
+    'fi',
+    'if [ -n "${FAIL_MV_ROLLBACK_BASENAME:-}" ]; then',
+    '  case "$source_arg" in *".host-restore-rollback"*"/${FAIL_MV_ROLLBACK_BASENAME}") exit 1 ;; esac',
+    'fi',
+    'exec /bin/mv "$@"',
+    '',
+  ].join('\n'), { mode: 0o755 });
+  return bin;
+};
+const runDocumentedRestore = ({ root, backupDir, restoreDir, failureEnv = {} }) => {
+  const bin = makeFailingBin(root);
+  return spawnSync('bash', ['-c', `set -u\n${documentedRestoreStaging()}\n`], {
+    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, BACKUP_DEST: backupDir, RESTORE_DIR: restoreDir, ...failureEnv },
+    encoding: 'utf8',
+  });
+};
+
 
 afterEach(() => {
   while (roots.length) fs.rmSync(roots.pop(), { recursive: true, force: true });
@@ -313,5 +397,115 @@ describe('Host and Agent backup and restore verification', () => {
     } finally {
       restoredAgentDb.close();
     }
+  });
+});
+
+describe('documented Host restore staging', () => {
+  const oldFiles = {
+    'host-metadata.sqlite': 'old-meta-main',
+    'host-metadata.sqlite-wal': 'old-meta-wal',
+    'host-metadata.sqlite-shm': 'old-meta-shm',
+    'host-approval-policies.sqlite': 'old-approval-main',
+    'host-approval-policies.sqlite-wal': 'old-approval-wal',
+    'host-approval-policies.sqlite-shm': 'old-approval-shm',
+  };
+  const backupFiles = {
+    'host-metadata.sqlite': 'new-meta-main',
+    'host-metadata.sqlite-wal': 'new-meta-wal',
+    'host-metadata.sqlite-shm': 'new-meta-shm',
+    'host-approval-policies.sqlite': 'new-approval-main',
+  };
+  const leftoverStageDirs = (dir) => fs.readdirSync(dir).filter((name) => name.startsWith('.host-restore-'));
+
+  posixTest('installs a coherent staged set and removes stale destination sidecars', () => {
+    const root = makeDir('restore-stage-success-');
+    const backupDir = path.join(root, 'backup');
+    const restoreDir = path.join(root, 'restore');
+    writeFileSet(backupDir, backupFiles);
+    writeFileSet(restoreDir, oldFiles);
+
+    const result = runDocumentedRestore({ root, backupDir, restoreDir });
+    expect(result.status, result.stderr).toBe(0);
+    const installed = snapshotFiles(restoreDir);
+    expect(installed['host-metadata.sqlite']).toMatchObject({ content: 'new-meta-main', mode: 0o600 });
+    expect(installed['host-metadata.sqlite-wal']).toMatchObject({ content: 'new-meta-wal', mode: 0o600 });
+    expect(installed['host-metadata.sqlite-shm']).toMatchObject({ content: 'new-meta-shm', mode: 0o600 });
+    expect(installed['host-approval-policies.sqlite']).toMatchObject({ content: 'new-approval-main', mode: 0o600 });
+    expect(installed['host-approval-policies.sqlite-wal']).toBeNull();
+    expect(installed['host-approval-policies.sqlite-shm']).toBeNull();
+    expect(leftoverStageDirs(restoreDir)).toEqual([]);
+  });
+
+  const expectFailurePreservesDestination = ({ failureEnv, failureEnvFor, mutateBackup, expectedStderr }) => {
+    const root = makeDir('restore-stage-failure-');
+    const backupDir = path.join(root, 'backup');
+    const restoreDir = path.join(root, 'restore');
+    writeFileSet(backupDir, backupFiles);
+    if (mutateBackup) mutateBackup(backupDir);
+    writeFileSet(restoreDir, oldFiles);
+    const before = snapshotFiles(restoreDir);
+
+    const resolvedFailureEnv = failureEnvFor ? failureEnvFor({ root, backupDir, restoreDir }) : failureEnv;
+    const result = runDocumentedRestore({ root, backupDir, restoreDir, failureEnv: resolvedFailureEnv });
+    expect(result.status, result.stderr).not.toBe(0);
+    if (expectedStderr) expect(result.stderr).toContain(expectedStderr);
+    expect(snapshotFiles(restoreDir)).toEqual(before);
+    expect(leftoverStageDirs(restoreDir)).toEqual([]);
+  };
+
+  posixTest('preserves the existing database set on staged copy, chmod, and sidecar-coherence failures', () => {
+    expectFailurePreservesDestination({
+      failureEnv: { FAIL_CP_BASENAME: 'host-approval-policies.sqlite' },
+      expectedStderr: 'Failed to stage host-approval-policies.sqlite',
+    });
+    expectFailurePreservesDestination({
+      failureEnv: { FAIL_CHMOD_BASENAME: 'host-metadata.sqlite' },
+      expectedStderr: 'Failed to restrict staged host-metadata.sqlite permissions',
+    });
+    expectFailurePreservesDestination({
+      mutateBackup: (dir) => fs.rmSync(path.join(dir, 'host-metadata.sqlite-shm')),
+      expectedStderr: 'Incomplete sidecar set for host-metadata.sqlite',
+    });
+    expectFailurePreservesDestination({
+      failureEnvFor: ({ restoreDir }) => ({ FAIL_MV_SOURCE: path.join(restoreDir, 'host-metadata.sqlite-wal') }),
+      expectedStderr: 'Failed to move existing host-metadata.sqlite-wal aside',
+    });
+    for (const dirMatch of ['.host-restore-stage', '.host-restore-rollback']) {
+      expectFailurePreservesDestination({
+        failureEnv: { FAIL_CHMOD_DIR_MATCH: dirMatch },
+        expectedStderr: 'permissions',
+      });
+    }
+  });
+
+  posixTest('rolls back installed files when a staged rename fails', () => {
+    expectFailurePreservesDestination({
+      failureEnv: { FAIL_MV_BASENAME: 'host-approval-policies.sqlite' },
+      expectedStderr: 'Failed to install staged host-approval-policies.sqlite',
+    });
+  });
+
+  posixTest('preserves the rollback directory when rollback itself fails (no state-file append dependency)', () => {
+    const root = makeDir('restore-rollback-failure-');
+    const backupDir = path.join(root, 'backup');
+    const restoreDir = path.join(root, 'restore');
+    writeFileSet(backupDir, backupFiles);
+    writeFileSet(restoreDir, oldFiles);
+
+    const result = runDocumentedRestore({
+      root, backupDir, restoreDir,
+      failureEnv: {
+        FAIL_MV_BASENAME: 'host-approval-policies.sqlite',
+        FAIL_MV_ROLLBACK_BASENAME: 'host-metadata.sqlite',
+      },
+    });
+    expect(result.status, result.stderr).not.toBe(0);
+    expect(result.stderr).toContain('Restore rollback was incomplete');
+    const leftovers = leftoverStageDirs(restoreDir);
+    const rollbackDirs = leftovers.filter((name) => name.startsWith('.host-restore-rollback'));
+    expect(leftovers.filter((name) => name.startsWith('.host-restore-stage'))).toEqual([]);
+    expect(rollbackDirs.length).toBe(1);
+    expect(fs.readFileSync(path.join(restoreDir, rollbackDirs[0], 'host-metadata.sqlite'), 'utf8')).toBe('old-meta-main');
+    expect(fs.readFileSync(path.join(restoreDir, 'host-metadata.sqlite'), 'utf8')).toBe('new-meta-main');
   });
 });

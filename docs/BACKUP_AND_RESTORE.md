@@ -234,12 +234,54 @@ A coherent snapshot requires either:
    fi
    chmod 700 "$RESTORE_DIR" || { echo "Error: Failed to restrict restore directory permissions" >&2; exit 1; }
 
-   # Stage both required databases and any present sidecars in a private
-   # directory first. No live database file is removed until every required
-   # copy and chmod has succeeded.
+   # Stage both required databases and any present sidecars in private
+   # directories under the restore destination. No live file is moved until
+   # every required copy and chmod succeeds, and both -wal and -shm must be
+   # present together. Rollback uses fixed filename loops, so no state file can
+   # fail after a rename and hide which old files must be restored.
+   STAGE_DIR=""
+   ROLLBACK_DIR=""
+   OLD_MOVES_STARTED=0
+   INSTALL_STARTED=0
+   INSTALL_OK=0
+   INSTALL_FILES="host-metadata.sqlite host-metadata.sqlite-wal host-metadata.sqlite-shm host-approval-policies.sqlite host-approval-policies.sqlite-wal host-approval-policies.sqlite-shm"
+
+   rollback_restore() {
+     rollback_failed=0
+     for rollback_file in $INSTALL_FILES; do
+       if [ -f "$ROLLBACK_DIR/$rollback_file" ]; then
+         mv -f "$ROLLBACK_DIR/$rollback_file" "$RESTORE_DIR/$rollback_file" || rollback_failed=1
+       elif [ "$INSTALL_STARTED" -eq 1 ]; then
+         rm -f "$RESTORE_DIR/$rollback_file" || rollback_failed=1
+       fi
+     done
+     return "$rollback_failed"
+   }
+
+   cleanup_restore() {
+     cleanup_status=$?
+     trap - EXIT
+     rollback_preserved=0
+     if [ "$OLD_MOVES_STARTED" -eq 1 ] && [ "$INSTALL_OK" -ne 1 ]; then
+       if ! rollback_restore; then
+         rollback_preserved=1
+         echo "Error: Restore rollback was incomplete; previous files remain in $ROLLBACK_DIR" >&2
+       fi
+     fi
+     if [ -n "$STAGE_DIR" ]; then
+       rm -rf "$STAGE_DIR"
+     fi
+     if [ "$rollback_preserved" -eq 0 ] && [ -n "$ROLLBACK_DIR" ]; then
+       rm -rf "$ROLLBACK_DIR"
+     fi
+     exit "$cleanup_status"
+   }
+   trap cleanup_restore EXIT
+
    STAGE_DIR="$(mktemp -d "$RESTORE_DIR/.host-restore-stage.XXXXXX")" || { echo "Error: Failed to create restore staging directory" >&2; exit 1; }
    chmod 700 "$STAGE_DIR" || { echo "Error: Failed to restrict restore staging directory permissions" >&2; exit 1; }
-   trap 'rm -rf "$STAGE_DIR"' EXIT
+   ROLLBACK_DIR="$(mktemp -d "$RESTORE_DIR/.host-restore-rollback.XXXXXX")" || { echo "Error: Failed to create restore rollback directory" >&2; exit 1; }
+   chmod 700 "$ROLLBACK_DIR" || { echo "Error: Failed to restrict restore rollback directory permissions" >&2; exit 1; }
 
    for db_file in "host-metadata.sqlite" "host-approval-policies.sqlite"; do
      backup_db="$BACKUP_DEST/$db_file"
@@ -247,31 +289,39 @@ A coherent snapshot requires either:
        echo "Error: Required database not found in backup: $backup_db" >&2
        exit 1
      fi
+     if { [ -f "$backup_db-wal" ] && [ ! -f "$backup_db-shm" ]; } || { [ ! -f "$backup_db-wal" ] && [ -f "$backup_db-shm" ]; }; then
+       echo "Error: Incomplete sidecar set for $db_file; both -wal and -shm or neither are required" >&2
+       exit 1
+     fi
      cp -p "$backup_db" "$STAGE_DIR/" || { echo "Error: Failed to stage $db_file" >&2; exit 1; }
      chmod 600 "$STAGE_DIR/$db_file" || { echo "Error: Failed to restrict staged $db_file permissions" >&2; exit 1; }
 
-     for suffix in "-wal" "-shm"; do
-       backup_sidecar="$backup_db$suffix"
-       if [ -f "$backup_sidecar" ]; then
-         cp -p "$backup_sidecar" "$STAGE_DIR/" || { echo "Error: Failed to stage $db_file$suffix" >&2; exit 1; }
+     if [ -f "$backup_db-wal" ]; then
+       for suffix in "-wal" "-shm"; do
+         cp -p "$backup_db$suffix" "$STAGE_DIR/" || { echo "Error: Failed to stage $db_file$suffix" >&2; exit 1; }
          chmod 600 "$STAGE_DIR/$db_file$suffix" || { echo "Error: Failed to restrict staged $db_file$suffix permissions" >&2; exit 1; }
-       fi
-     done
+       done
+     fi
    done
 
-   # All required files are staged and private. Replace the live database set
-   # only now, removing stale sidecars that the backup does not contain.
-   rm -f "$RESTORE_DIR"/host-metadata.sqlite* "$RESTORE_DIR"/host-approval-policies.sqlite* || { echo "Error: Failed to clear existing SQLite files" >&2; exit 1; }
-   for db_file in "host-metadata.sqlite" "host-approval-policies.sqlite"; do
-     for suffix in "" "-wal" "-shm"; do
-       staged="$STAGE_DIR/$db_file$suffix"
-       if [ -f "$staged" ]; then
-         mv -f "$staged" "$RESTORE_DIR/" || { echo "Error: Failed to install staged $db_file$suffix" >&2; exit 1; }
-       fi
-     done
+   # All required files are staged and private. Move the live set aside using
+   # the fixed filename list, then install the staged set. Any failure restores
+   # the previous live set; if rollback itself fails, its directory is kept.
+   OLD_MOVES_STARTED=1
+   for install_file in $INSTALL_FILES; do
+     if [ -f "$RESTORE_DIR/$install_file" ]; then
+       mv -f "$RESTORE_DIR/$install_file" "$ROLLBACK_DIR/$install_file" || { echo "Error: Failed to move existing $install_file aside" >&2; exit 1; }
+     fi
    done
-   rm -rf "$STAGE_DIR" || { echo "Error: Failed to remove restore staging directory" >&2; exit 1; }
+   INSTALL_STARTED=1
+   for install_file in $INSTALL_FILES; do
+     if [ -f "$STAGE_DIR/$install_file" ]; then
+       mv -f "$STAGE_DIR/$install_file" "$RESTORE_DIR/$install_file" || { echo "Error: Failed to install staged $install_file" >&2; exit 1; }
+     fi
+   done
+   INSTALL_OK=1
    trap - EXIT
+   rm -rf "$STAGE_DIR" "$ROLLBACK_DIR" || { echo "Error: Failed to remove restore staging directories" >&2; exit 1; }
 
    if [ -d "$BACKUP_DEST/attachments" ]; then
      cp -rp "$BACKUP_DEST/attachments" "$RESTORE_DIR/" || { echo "Error: Failed to restore attachments" >&2; exit 1; }

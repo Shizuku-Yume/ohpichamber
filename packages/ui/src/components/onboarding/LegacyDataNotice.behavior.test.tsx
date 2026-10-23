@@ -90,4 +90,12 @@ describe('legacy notice rendered behavior', () => {
     expect(useUIStore.getState().settingsPage).toBe('providers');
     expect(useUIStore.getState().isSettingsDialogOpen).toBe(true);
   });
+
+  test('keeps the notice hidden when the Host reports clean data', async () => {
+    installBrowser();
+    switchRuntimeEndpoint({ apiBaseUrl: 'http://task20.test', clientToken: 'task20', runtimeKey: 'task20-clean' });
+    globalThis.fetch = async () => Response.json({ present: false });
+    await renderNotice();
+    expect(container.querySelector('[role="status"]')).toBeNull();
+  });
 });

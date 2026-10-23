@@ -4,7 +4,7 @@
 **Task type:** bugfix
 **Base commit:** f72010e3e
 **Started:** 2026-10-23T12:49:03+08:00
-**Status:** active
+**Finished:** 2026-10-23T14:20:00+08:00
 
 **Delivers:** Agent tools can no longer read Host secrets or the internal service token from their environment, and real provider prompts still work.
 

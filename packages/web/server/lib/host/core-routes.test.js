@@ -250,6 +250,12 @@ describe('core-routes', () => {
       globalThis.fetch = originalFetch;
     }
   });
+  it('reports legacy presence without exposing a path', async () => {
+    const { app } = createPairingRouteApp({ getLegacyDataPresence: async () => true });
+    const response = await request(app).get('/api/host/legacy-data').expect(200, { present: true });
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(Object.keys(response.body)).toEqual(['present']);
+  });
 
   it('lets only GET html-preview file reads past API auth; the grant in the path is checked by the fs route', async () => {
     const app = express();

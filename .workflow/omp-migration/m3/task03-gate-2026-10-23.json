@@ -1,7 +1,11 @@
 {
   "task": "post-M3 hardening task 03 \u2014 M3 gate at the main tip",
   "observedAt": "2026-10-23T08:52:00Z",
-  "startingHead": "8973d7fea",
+  "phaseTestedCommit": "2c3dbbe5e",
+  "phaseTestedCommitInMain": false,
+  "landingEquivalentCommit": "8973d7fea",
+  "landingEquivalentCommitInMain": true,
+  "startingHead": "2c3dbbe5e",
   "worktree": "/home/shizuku/Project/ohpichamber-worktrees/post-m3-hardening-lane-a",
   "branch": "post-m3-hardening/03-m3-gate-at-tip",
   "command": "bun run type-check && bun run lint && bun run build && bun run test && bun run dead-code && bun run docs:validate && .workflow/bin/workflow validate --no-color",
@@ -78,7 +82,7 @@
     }
   ],
   "notes": "The root aggregate now runs agent-contract and agent-service in addition to scripts, sdk, ui, electron and web. The agent-service suite uses a 15 s per-test timeout; the two credential-reopen tests take about 6.8 s on this machine. No test assertion is weakened. The 8d179c4e2 receipt is historical: it is source-equivalent to 24f1012c1 and does not cover the later commits.",
-  "rebaseNote": "The gate phases ran at 2c3dbbe5e; after that branch was rebased onto main (83ec4d19b) the identical source tree became 8973d7fea, where the landing root test rerun passed (landing-test.log). Both commits are in main history after landing.",
+  "rebaseNote": "The gate phases ran at 2c3dbbe5e in the task worktree. That commit was never landed and is not in main's history; after the rebase onto main (83ec4d19b) the identical source tree became 8973d7fea, which is the only landed commit and where the landing root test rerun passed (landing-test.log). `git merge-base --is-ancestor 8973d7fea main` exits 0; the same check for 2c3dbbe5e exits 1.",
   "landingRootTest": {
     "commit": "8973d7fea",
     "command": "bun run test",

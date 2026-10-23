@@ -167,6 +167,11 @@ export function registerCanonicalHostRoutes(app, {
       next();
     } catch { return problem(res, 500, 'INTERNAL_ERROR', 'The Host could not authorize the request.'); }
   });
+  // Diagnostics carry operator-visible service/worker errors, so they stay behind
+  // the same authenticated gateway as every other canonical operation.
+  router.get('/diagnostics', (_req, res) => {
+    res.json({ entries: service.getDiagnostics?.() ?? [] });
+  });
   router.get('/capabilities', async (_req, res) => {
     if (service.getState().phase !== 'ready') return problem(res, 503, 'SERVICE_UNAVAILABLE', 'The Agent Service is not ready.');
     try {

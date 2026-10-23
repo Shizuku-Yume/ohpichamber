@@ -5,6 +5,7 @@ import { AgentService } from './supervisor/service.ts';
 import { HostApprovalPolicies } from './interaction/host-policy.ts';
 import { HostWorkerAuthorization } from './supervisor/host-authorization.ts';
 import { HostSkillSources } from './supervisor/host-skill-sources.ts';
+import type { WorkerDiagnostic } from './supervisor/workers.ts';
 
 function requestedPort(args: string[]): number {
   if (args.length === 0) return 0;
@@ -20,6 +21,26 @@ const SECRET_TIMEOUT_MS = 10_000;
 
 const SecretMessageSchema = z.object({ type: z.literal(SECRET_MESSAGE_TYPE), secret: z.string().regex(/^[a-f0-9]{64}$/i) });
 type IpcMessage = Parameters<NonNullable<typeof process.send>>[0];
+
+const DIAGNOSTIC_LEVELS = { off: 0, error: 1, warn: 2, info: 3 } as const;
+const DiagnosticLevelSchema = z.enum(['off', 'error', 'warn', 'info']);
+const requestedDiagnosticLevel = DiagnosticLevelSchema.safeParse(process.env.OPENCHAMBER_AGENT_DIAGNOSTICS_LEVEL ?? 'error');
+const diagnosticLevel = DIAGNOSTIC_LEVELS[requestedDiagnosticLevel.success ? requestedDiagnosticLevel.data : 'error'];
+
+export const redactDiagnostic = (message: string): string => message
+  .replace(/((?:authorization|api[_-]?key|token|secret|password)\s*[=:]\s*)([^\s,;]+)/gi, '$1[REDACTED]')
+  .replace(/\bsk-[A-Za-z0-9_-]{8,}\b/g, '[REDACTED]')
+  .replace(/\b[a-f0-9]{64}\b/gi, '[REDACTED]')
+  .replace(/\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi, 'Bearer [REDACTED]');
+
+// Worker stderr crosses this process on its way to the Host log. Redaction
+// happens again at the Host boundary; this keeps secrets out of the pipe too.
+const writeDiagnostic = (entry: WorkerDiagnostic) => {
+  if (diagnosticLevel === DIAGNOSTIC_LEVELS.off || DIAGNOSTIC_LEVELS[entry.level] > diagnosticLevel) return;
+  try {
+    process.stderr.write(`${JSON.stringify({ type: 'agent-service.diagnostic', ...entry, message: redactDiagnostic(entry.message) })}\n`);
+  } catch { /* stderr may be closed during shutdown */ }
+};
 
 /**
  * Read the internal token from the Host over the private spawn IPC channel.
@@ -67,6 +88,7 @@ async function main(): Promise<void> {
       workerEntrypoint: fileURLToPath(new URL(workerFile, import.meta.url)),
       workerRuntime: process.env.OHPICHAMBER_BUN ?? undefined,
       internalSecret,
+      onDiagnostic: writeDiagnostic,
       stateDirectory: join(process.cwd(), 'agent-state'),
       port: requestedPort(process.argv.slice(2)),
       approvalPolicyCommit: policies.commit,

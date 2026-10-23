@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { canonicalClient } from '@/api/canonicalClient';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { getSyncSessions } from '@/sync/sync-refs';
@@ -12,6 +13,14 @@ import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 declare const __APP_VERSION__: string | undefined;
 
 const RECENT_RECORD_LINES = 8;
+const RECENT_DIAGNOSTIC_LINES = 8;
+
+const AgentDiagnosticEntrySchema = z.object({
+  at: z.string(), level: z.string(), source: z.string(), message: z.string(),
+  rootSessionId: z.string().optional(), workerGeneration: z.string().optional(),
+});
+const DiagnosticResponseSchema = z.object({ entries: z.array(AgentDiagnosticEntrySchema) });
+type AgentDiagnosticEntry = z.infer<typeof AgentDiagnosticEntrySchema>;
 
 const getCurrentDirectory = (): string => {
   const currentSessionId = useSessionUIStore.getState().currentSessionId;
@@ -29,6 +38,21 @@ const formatIso = (timestamp: number | null | undefined): string => {
   }
 };
 
+const probeDiagnostics = async (): Promise<{ entries: AgentDiagnosticEntry[]; error: string | null }> => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  try {
+    const response = await runtimeFetch('/api/agent/v1/diagnostics', { signal: controller.signal, cache: 'no-store' });
+    if (!response.ok) return { entries: [], error: `HTTP ${response.status}` };
+    const parsed = DiagnosticResponseSchema.safeParse(await response.json());
+    return { entries: parsed.success ? parsed.data.entries : [], error: null };
+  } catch (error) {
+    return { entries: [], error: error instanceof Error ? error.message : String(error) };
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
 const probeHostHealth = async (): Promise<{ status: number | null; error: string | null }> => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5000);
@@ -42,6 +66,16 @@ const probeHostHealth = async (): Promise<{ status: number | null; error: string
   }
 };
 
+export const formatDiagnosticLines = (entries: AgentDiagnosticEntry[]): string[] => entries
+  .slice(-RECENT_DIAGNOSTIC_LINES)
+  .reverse()
+  .map(entry => {
+    const owner = entry.source === 'worker'
+      ? ` root=${entry.rootSessionId?.slice(0, 16) ?? '?'} generation=${entry.workerGeneration?.slice(0, 8) ?? '?'}`
+      : '';
+    return `- ${entry.at} ${entry.level} ${entry.source}${owner}: ${entry.message}`;
+  });
+
 export const buildRuntimeStatusReport = async (): Promise<string> => {
   const now = new Date();
   const appVersion = __APP_VERSION__ || '(unknown)';
@@ -50,13 +84,14 @@ export const buildRuntimeStatusReport = async (): Promise<string> => {
   const eventStreamStatus = useUIStore.getState().eventStreamStatus;
   const origin = window.location.origin;
   const apiBase = getRuntimeUrlResolver().api('/api/');
-  const [health, readiness, hostHome] = await Promise.all([
+  const [health, readiness, hostHome, diagnostics] = await Promise.all([
     probeHostHealth(),
     canonicalClient.checkReady().then((ready) => ({ ready, error: null }))
       .catch(() => ({ ready: false, error: 'readiness request failed' })),
     hostFilesystem.getSystemInfo()
       .then((info) => (info.homeDirectory && info.homeDirectory !== '/' ? info.homeDirectory : ''))
       .catch(() => ''),
+    probeDiagnostics(),
   ]);
 
   const lines = [
@@ -65,6 +100,8 @@ export const buildRuntimeStatusReport = async (): Promise<string> => {
     `Runtime: ${origin || '(unknown)'} (api=${apiBase || '(unknown)'})`,
     `Host health: ${health.status === null ? `unavailable (${health.error ?? 'no response'})` : `HTTP ${health.status}`}`,
     `Agent Service readiness: ${readiness.error ? `unavailable (${readiness.error})` : readiness.ready ? 'ready' : 'not ready'}`,
+    `Agent diagnostics: ${diagnostics.error ? `unavailable (${diagnostics.error})` : diagnostics.entries.length === 0 ? '(none)' : ''}`.trimEnd(),
+    ...formatDiagnosticLines(diagnostics.entries),
     `Event stream: ${eventStreamStatus}`,
     `Directory: ${directory || '(none)'}`,
     `Platform: ${platform}`,

@@ -2,6 +2,14 @@ import type { ChildProcess, SpawnOptions } from 'node:child_process';
 import type { reapOrphanedProcesses, registerManagedProcess, unregisterManagedProcess } from './managed-process-registry.js';
 import type { HostAuthorizationScope, WorkerPolicyRequest, WorkerPolicyResult, NativeOperationDescriptor, HostActionRequest, HostActionResult, HostSkillSourceOperation, HostSkillSourceResult } from '@openchamber/agent-service/private-protocol';
 
+export interface AgentServiceDiagnostic {
+  at: string;
+  level: 'error' | 'warn' | 'info';
+  source: 'worker' | 'service';
+  message: string;
+  rootSessionId?: string;
+  workerGeneration?: string;
+}
 export interface AgentServiceSupervisorState {
   phase: 'stopped' | 'starting' | 'restarting' | 'ready' | 'stopping' | 'failed';
   pid: number | null;
@@ -24,6 +32,9 @@ export interface AgentServiceSupervisorOptions {
   restartMaxDelayMs?: number;
   restartMaxAttempts?: number;
   restartStabilityMs?: number;
+  diagnosticsLevel?: 'off' | 'error' | 'warn' | 'info';
+  maxDiagnostics?: number;
+  logDiagnostic?: (message: string) => void;
   spawn?: (file: string, args?: readonly string[], options?: SpawnOptions) => ChildProcess;
   fetchImpl?: typeof fetch;
   registry?: AgentServiceRegistry;
@@ -40,5 +51,6 @@ export interface AgentServiceSupervisor {
   restart(): Promise<AgentServiceSupervisorState>;
   request(path: string, init?: RequestInit): Promise<Response>;
   getState(): AgentServiceSupervisorState;
+  getDiagnostics(): AgentServiceDiagnostic[];
 }
 export function createAgentServiceSupervisor(options: AgentServiceSupervisorOptions): AgentServiceSupervisor;

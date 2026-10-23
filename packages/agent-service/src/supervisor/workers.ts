@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { isDeepStrictEqual } from 'node:util';
+import { z } from 'zod';
 import { UsageWorkerBootstrapSchema, CompletionWorkerBootstrapSchema, WorkerBootstrapSchema, WorkerBootstrapMessageSchema, WorkerOperationSchema, WorkerReplySchema, WorkerPolicyResultSchema } from '../protocol.ts';
 import type { CompletionWorkerBootstrap, WorkerBootstrap, WorkerApprovalPolicy, WorkerInfo, WorkerOperation, WorkerOperationResult, WorkerPolicyRequest, WorkerPolicyResult, WorkerInteraction } from '../protocol.ts';
 import type { ProjectionSeed, ProjectionInput } from '../projection/protocol.ts';
@@ -47,9 +48,12 @@ type WorkerEntry = WorkerInput & {
 };
 type ActionHandle = { entry: WorkerEntry; controller: AbortController };
 
+export type WorkerDiagnostic = { level: 'error' | 'warn' | 'info'; rootSessionId: string; workerGeneration: string; message: string };
+
 export interface WorkerRegistryOptions {
   workerEntrypoint: string;
   workerRuntime?: string;
+  onDiagnostic?: (entry: WorkerDiagnostic) => void;
   startupTimeoutMs?: number;
   stopTimeoutMs?: number;
   policyCheck?: (rootSessionId: string, request: WorkerPolicyRequest, descriptor?: NativeOperationDescriptor) => Promise<WorkerPolicyResult>;
@@ -327,7 +331,49 @@ export class WorkerRegistry {
       cwd: input.cwd,
       env: environment,
       windowsHide: true,
-      stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+      stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
+    });
+    // Worker stderr is the only diagnostic channel; keep it line-bounded so a
+    // noisy SDK cannot grow the service or the Host log without limit.
+    const maxDiagnosticMessage = 2_048;
+    const maxStderrBuffer = 8_192;
+    let stderrBuffer = '';
+    // Only normalized event classes cross the process boundary. Free-form
+    // stderr may contain prompts or tool output and is deliberately dropped.
+    const DiagnosticEventSchema = z.looseObject({
+      type: z.enum(['mcp.runtime.failure', 'openchamber.diagnostic']),
+      level: z.enum(['error', 'warn', 'info']).optional(),
+      code: z.string().regex(/^[A-Za-z0-9_.-]{1,64}$/).optional(),
+      error: z.unknown().optional(),
+    });
+    const ErrorCodeSchema = z.looseObject({ code: z.string().regex(/^[A-Za-z0-9_.-]{1,64}$/) });
+    const emitDiagnostic = (line: string) => {
+      const text = line.trim();
+      if (!text) return;
+      let parsed: unknown;
+      try { parsed = JSON.parse(text); } catch { return; }
+      const event = DiagnosticEventSchema.safeParse(parsed);
+      if (!event.success) return;
+      const level = event.data.type === 'mcp.runtime.failure' ? 'error' : event.data.level ?? 'error';
+      const code = event.data.type === 'mcp.runtime.failure'
+        ? ErrorCodeSchema.safeParse(event.data.error).data?.code ?? 'UNKNOWN'
+        : event.data.code ?? 'UNKNOWN';
+      const message = event.data.type === 'mcp.runtime.failure' ? `MCP runtime failure (${code})` : code;
+      try {
+        this.options.onDiagnostic?.({ level, rootSessionId: input.rootSessionId, workerGeneration, message: message.slice(0, maxDiagnosticMessage) });
+      } catch { /* diagnostics must never affect worker lifecycle */ }
+    };
+    child.stderr?.on('data', (chunk: Buffer | string) => {
+      const bounded = Buffer.isBuffer(chunk) ? chunk.subarray(0, maxStderrBuffer) : Buffer.from(String(chunk).slice(0, maxStderrBuffer));
+      stderrBuffer += bounded.toString();
+      const lines = stderrBuffer.split(/\r?\n/);
+      stderrBuffer = lines.pop() ?? '';
+      if (stderrBuffer.length > maxStderrBuffer) {
+        emitDiagnostic(stderrBuffer);
+        stderrBuffer = '';
+        return;
+      }
+      for (const line of lines) emitDiagnostic(line);
     });
     const entry: WorkerEntry = {
       ...owner,
@@ -407,6 +453,8 @@ export class WorkerRegistry {
     });
     child.once('error', () => ready.reject(new Error('SDK worker could not start')));
     child.once('close', () => {
+      if (stderrBuffer) emitDiagnostic(stderrBuffer);
+      stderrBuffer = '';
       for (const [requestId, handle] of this.actions) if (handle.entry === entry) { this.actions.delete(requestId); handle.controller.abort(); }
       const wasStarting = entry.info.state === 'starting';
       if (entry.info.state !== 'stopping') entry.info.state = 'crashed';
@@ -423,6 +471,10 @@ export class WorkerRegistry {
       if (this.closing || this.entries.get(input.rootSessionId) !== entry || entry.info.state !== 'ready' || !child.connected) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
       return { ...entry.info };
     } catch (error) {
+      const code = error instanceof WorkerOperationError ? error.code : 'WORKER_INIT_FAILED';
+      try {
+        this.options.onDiagnostic?.({ level: 'error', rootSessionId: input.rootSessionId, workerGeneration, message: `Worker initialization failed (${code})` });
+      } catch { /* diagnostics never affect lifecycle */ }
       await this.stopEntry(entry);
       throw error;
     }

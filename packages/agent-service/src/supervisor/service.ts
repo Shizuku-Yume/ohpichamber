@@ -27,7 +27,7 @@ import { SessionRegistry, type NativeArchiveImported, type NativeArchiveInventor
 import type { ApprovalPolicyCommit, ApprovalPolicyLoad } from '../interaction/manager.ts';
 import { SessionReferenceError } from '../sessions/references.ts';
 import { ArchiveImportRequestSchema } from '../sessions/archive.ts';
-import { WorkerOperationError, WorkerRegistry, type RegisteredWorkerInfo } from './workers.ts';
+import { WorkerOperationError, WorkerRegistry, type RegisteredWorkerInfo, type WorkerDiagnostic } from './workers.ts';
 import { deliverSessionStream } from './event-stream.ts';
 import { CatalogCoordinator, CatalogCoordinatorError, type CatalogAdmission, type CatalogBootstrap } from './catalog.ts';
 import { WorkspaceCatalogs } from './workspaces.ts';
@@ -52,6 +52,7 @@ interface ServiceOptions {
   policyCheck?: (rootSessionId: string, request: WorkerPolicyRequest, descriptor?: NativeOperationDescriptor) => Promise<WorkerPolicyResult>;
   invokeHostAction?: (rootSessionId: string, request: HostActionRequest, signal: AbortSignal) => Promise<HostActionResult>;
   hostSkillSource: (operation: HostSkillSourceOperation) => Promise<HostSkillSourceResult>;
+  onDiagnostic?: (entry: WorkerDiagnostic) => void;
 }
 const InternalSecretSchema = z.string().regex(/^[a-f0-9]{64}$/i);
 const HostSkillSourcePublicationSchema = z.strictObject({
@@ -141,7 +142,7 @@ export class AgentService {
   private stopping: Promise<void> | undefined;
   constructor(private readonly options: ServiceOptions) {
     this.secret = Buffer.from(InternalSecretSchema.parse(options.internalSecret), 'hex');
-    this.workers = new WorkerRegistry({ workerEntrypoint: options.workerEntrypoint, workerRuntime: options.workerRuntime, policyCheck: options.policyCheck, invokeHostAction: options.invokeHostAction,
+    this.workers = new WorkerRegistry({ workerEntrypoint: options.workerEntrypoint, workerRuntime: options.workerRuntime, onDiagnostic: options.onDiagnostic, policyCheck: options.policyCheck, invokeHostAction: options.invokeHostAction,
       consumeApprovalGrant: (...args) => this.sessions.consumeApprovalGrant(...args),
       prepareBootstrap: async input => {
         this.sessions.assertBootstrapWritable(input);

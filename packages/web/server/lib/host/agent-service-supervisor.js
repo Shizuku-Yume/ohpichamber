@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
+import { z } from 'zod';
 import { CapturedHostBootstrapScopeSchema, HostApprovalPolicyListRequestSchema, HostSessionBootstrapSchema, HostSessionForkAckSchema, HostSessionRelocationFinalizeSchema, HostSessionRelocationPrepareSchema, HostSkillSourceOperationSchema, HostSkillSourceRequestSchema, HostSkillSourceResultSchema, HostWorkspaceBootstrapSchema, HostWorkspaceRegisteredSchema, WorkerBootstrapSchema } from '@openchamber/agent-service/private-protocol';
 import { createHostWorkerAuthorizationChannel } from './worker-authorization-channel.js';
 
@@ -17,6 +18,18 @@ const STARTUP_TIMEOUT_MS = 15_000;
 const STOP_TIMEOUT_MS = 5_000;
 const ANNOUNCEMENT_TYPE = 'agent-service.listening';
 const SECRET_HEADER = 'X-Internal-Secret';
+const DIAGNOSTIC_MAX_MESSAGE = 2_048;
+const DIAGNOSTIC_MAX_CHUNK = 8_192;
+const DIAGNOSTIC_MAX_PER_SECOND = 20;
+const DIAGNOSTICS_LEVEL_ENV = 'OPENCHAMBER_AGENT_DIAGNOSTICS_LEVEL';
+const DIAGNOSTIC_LEVELS = Object.freeze({ off: 0, error: 1, warn: 2, info: 3 });
+const DiagnosticMessageSchema = z.object({
+  type: z.literal('agent-service.diagnostic'),
+  level: z.enum(['error', 'warn', 'info']),
+  message: z.string(),
+  rootSessionId: z.string().optional(),
+  workerGeneration: z.string().optional(),
+});
 const SECRET_REQUEST_TYPE = 'agent-service.internal-secret.request';
 const SECRET_MESSAGE_TYPE = 'agent-service.internal-secret';
 
@@ -35,7 +48,17 @@ const SERVICE_ENV_KEYS = Object.freeze([
   'OHPICHAMBER_BUN',
   'OMP_PROFILE', 'PI_PROFILE', 'PI_CONFIG_DIR', 'PI_CODING_AGENT_DIR',
   'BUN_INSTALL', 'BUN_INSTALL_BIN',
+  'OPENCHAMBER_AGENT_DIAGNOSTICS_LEVEL',
 ]);
+
+// Authorization/Bearer first: a quoted or space-containing value must not
+// survive the more specific key=value patterns below.
+const redactDiagnostic = message => message
+  .replace(/(authorization\s*[:=]\s*)(?:bearer\s+)?[^\r\n]*/gi, '$1[REDACTED]')
+  .replace(/\bbearer\s+[^\s,;]+/gi, 'Bearer [REDACTED]')
+  .replace(/((?:api[_-]?key|token|secret|password)\s*[=:]\s*)("[^"]*"|'[^']*'|[^\s,;]+)/gi, '$1[REDACTED]')
+  .replace(/\bsk-[A-Za-z0-9_-]{8,}\b/g, '[REDACTED]')
+  .replace(/\b[a-f0-9]{64}\b/gi, '[REDACTED]');
 
 const buildServiceEnvironment = (overrides = {}) => {
   const environment = {};
@@ -90,6 +113,8 @@ export const createAgentServiceSupervisor = ({
   stopTimeoutMs = STOP_TIMEOUT_MS, spawn = nodeSpawn, fetchImpl = globalThis.fetch,
   registry = null, randomBytes = crypto.randomBytes,
   restartBaseDelayMs = 1_000, restartMaxDelayMs = 15_000, restartMaxAttempts = 3, restartStabilityMs = 60_000,
+  diagnosticsLevel = process.env.OPENCHAMBER_AGENT_DIAGNOSTICS_LEVEL ?? 'error',
+  maxDiagnostics = 100, logDiagnostic = null,
   approvalPolicyStore = null,
   authorizeWorkerOperation, invokeHostAction, handleSkillSource,
 } = {}) => {
@@ -101,6 +126,32 @@ export const createAgentServiceSupervisor = ({
   let phase = 'stopped'; let child = null; let port = null; let secret = null;
   let startupPromise = null; let stopPromise = null; let lifecycle = 0; let startupController = null; let accepting = false;
   let restartAttempts = 0; let restartTimer = null; let restartStabilityTimer = null; let terminating = null;
+  const diagnostics = [];
+  const diagnosticLevel = DIAGNOSTIC_LEVELS[diagnosticsLevel] ?? DIAGNOSTIC_LEVELS.error;
+  let diagnosticWindowStart = 0; let diagnosticWindowCount = 0; let diagnosticSuppressed = 0;
+  const pushDiagnostic = (entry) => {
+    const message = redactDiagnostic(String(entry.message)).slice(0, DIAGNOSTIC_MAX_MESSAGE);
+    const record = { at: new Date().toISOString(), ...entry, message };
+    diagnostics.push(record);
+    while (diagnostics.length > maxDiagnostics) diagnostics.shift();
+    const prefix = record.source === 'worker'
+      ? `[agent-service] worker ${record.rootSessionId ?? 'unknown'}/${record.workerGeneration ?? 'unknown'}: `
+      : '[agent-service] ';
+    try { (logDiagnostic ?? console.error)(`${prefix}${record.message}`); } catch { /* diagnostics never affect lifecycle */ }
+  };
+  const recordDiagnostic = (entry) => {
+    if (diagnosticLevel === DIAGNOSTIC_LEVELS.off || DIAGNOSTIC_LEVELS[entry.level] > diagnosticLevel) return;
+    const now = Date.now();
+    if (now - diagnosticWindowStart >= 1_000) {
+      if (diagnosticSuppressed > 0) pushDiagnostic({ source: 'service', level: 'warn', message: `${diagnosticSuppressed} diagnostics suppressed by the rate limit` });
+      diagnosticWindowStart = now;
+      diagnosticWindowCount = 0;
+      diagnosticSuppressed = 0;
+    }
+    if (diagnosticWindowCount >= DIAGNOSTIC_MAX_PER_SECOND) { diagnosticSuppressed += 1; return; }
+    diagnosticWindowCount += 1;
+    pushDiagnostic(entry);
+  };
   const scopes = new Map();
   const forkTickets = new Map();
   const relocationScopes = new Map();
@@ -293,6 +344,7 @@ export const createAgentServiceSupervisor = ({
       const childEnv = {
         ...buildServiceEnvironment(env),
         [MANAGED_PROCESS_TOKEN_ENV]: ownershipToken,
+        [DIAGNOSTICS_LEVEL_ENV]: diagnosticsLevel,
       };
       const launched = spawn(bunPath, ['--no-env-file', entrypoint, '--port', '0'], {
         cwd: dataDir,
@@ -315,7 +367,29 @@ export const createAgentServiceSupervisor = ({
       launched.on('message', onPolicyMessage);
       launched.once('disconnect', () => authorization.closeChild(launched));
       launched.once('close', () => { launched.removeListener('message', onPolicyMessage); authorization.closeChild(launched); });
-      launched.stderr?.on('data', () => {});
+      const maxStderrBuffer = 8_192;
+      let stderrBuffer = '';
+      const recordServiceLine = (line) => {
+        const text = line.trim();
+        if (!text) return;
+        const parsed = DiagnosticMessageSchema.safeParse((() => { try { return JSON.parse(text); } catch { return null; } })());
+        if (parsed.success) recordDiagnostic({ source: 'worker', level: parsed.data.level, rootSessionId: parsed.data.rootSessionId, workerGeneration: parsed.data.workerGeneration, message: parsed.data.message });
+        else recordDiagnostic({ source: 'service', level: 'error', message: text });
+      };
+      launched.stderr?.on('data', chunk => {
+        // Cap before decoding: a no-newline flood cannot allocate an unbounded string.
+        const bounded = Buffer.isBuffer(chunk) ? chunk.subarray(0, DIAGNOSTIC_MAX_CHUNK) : Buffer.from(String(chunk).slice(0, DIAGNOSTIC_MAX_CHUNK));
+        stderrBuffer += bounded.toString();
+        const lines = stderrBuffer.split(/\r?\n/);
+        stderrBuffer = lines.pop() ?? '';
+        if (stderrBuffer.length > maxStderrBuffer) {
+          recordServiceLine(stderrBuffer.slice(0, DIAGNOSTIC_MAX_MESSAGE));
+          stderrBuffer = '';
+          return;
+        }
+        for (const line of lines) recordServiceLine(line);
+      });
+      launched.once('close', () => { if (stderrBuffer) { recordServiceLine(stderrBuffer); stderrBuffer = ''; } });
       let announcement = '';
       const announced = new Promise((resolve, reject) => {
         let done = false;
@@ -557,5 +631,5 @@ export const createAgentServiceSupervisor = ({
       throw error;
     }
   };
-  return { start, stop, restart, request, getState: state };
+  return { start, stop, restart, request, getState: state, getDiagnostics: () => diagnostics.slice() };
 };

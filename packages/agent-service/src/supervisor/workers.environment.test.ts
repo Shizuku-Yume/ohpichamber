@@ -1,7 +1,5 @@
 import { expect, test } from 'bun:test';
-import { EventEmitter } from 'node:events';
-import type { ChildProcess, SpawnOptions } from 'node:child_process';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -14,77 +12,72 @@ const sentinels = {
   OPENAI_API_KEY: 'provider-key-sentinel-8a1c',
 };
 
-test('worker spawn receives the allowlist, the directory overlay and no Host secret', async () => {
+// A real worker process runs `env` through a shell-equivalent lookup and writes
+// what a model-invoked shell would see. The test observes that output, not the
+// spawn options we passed in.
+const FIXTURE = `
+import { spawnSync } from 'node:child_process';
+import { writeFileSync } from 'node:fs';
+const report = process.env.WORKER_ENV_REPORT;
+process.on('message', message => {
+  if (message?.type === 'bootstrap') {
+    const environment = spawnSync('env', [], { encoding: 'utf8' }).stdout ?? '';
+    writeFileSync(report, environment);
+    process.send({ type: 'ready', workerGeneration: message.workerGeneration });
+  } else if (message?.type === 'stop') {
+    process.exit(0);
+  }
+});
+process.on('disconnect', () => process.exit(0));
+`;
+
+test('a real worker shell sees the allowlist, the directory overlay and no Host secret', async () => {
   const root = await mkdtemp(join(tmpdir(), 'worker-environment-'));
   const cwd = join(root, 'workspace');
   const agentDirectory = join(root, 'agent');
+  const reportPath = join(root, 'worker-env.txt');
+  const workerEntrypoint = join(root, 'worker-fixture.mjs');
   await mkdir(cwd);
   await mkdir(agentDirectory);
+  await writeFile(workerEntrypoint, FIXTURE);
 
-  const saved: Record<string, string | undefined> = Object.fromEntries(Object.keys(sentinels).map(key => [key, process.env[key]]));
-  Object.assign(process.env, sentinels);
-  process.env.PATH = '/usr/bin:/bin';
-  process.env.OMP_PROFILE = 'default';
-  process.env.OPENCHAMBER_MANAGED_PROCESS_TOKEN = 'tree-token';
-
-  let captured: SpawnOptions | undefined;
-  // SAFETY: WorkerRegistry only calls send, kill and the EventEmitter surface,
-  // all of which are defined here; the rest of ChildProcess is unused.
-  const child = new EventEmitter() as ChildProcess;
-  Object.assign(child, {
-    pid: 424242,
-    connected: true,
-    exitCode: null,
-    signalCode: null,
-    send(command: { type?: string; workerGeneration?: string }, callback?: (error: Error | null) => void) {
-      callback?.(null);
-      if (command?.type === 'stop') {
-        queueMicrotask(() => { this.emit('exit', 0, null); this.emit('close'); });
-        return;
-      }
-      if (command?.type === 'bootstrap') {
-        queueMicrotask(() => this.emit('message', { type: 'ready', workerGeneration: command.workerGeneration }));
-      }
-    },
-    kill(signal: NodeJS.Signals) {
-      this.connected = false;
-      this.signalCode = signal;
-      queueMicrotask(() => { this.emit('exit', null, signal); this.emit('close'); });
-      return true;
-    },
+  const saved: Record<string, string | undefined> = {};
+  const modified = {
+    ...sentinels,
+    PATH: process.env.PATH,
+    OMP_PROFILE: 'allowlisted-profile',
+    OPENCHAMBER_MANAGED_PROCESS_TOKEN: 'tree-token',
+  };
+  for (const key of Object.keys(modified)) saved[key] = process.env[key];
+  Object.assign(process.env, sentinels, {
+    PATH: process.env.PATH ?? '/usr/bin:/bin',
+    OMP_PROFILE: 'allowlisted-profile',
+    OPENCHAMBER_MANAGED_PROCESS_TOKEN: 'tree-token',
   });
 
   const registry = new WorkerRegistry({
-    workerEntrypoint: '/unused-worker-entrypoint.js',
-    workerRuntime: '/usr/bin/bun',
-    spawn: (_file, _args, options) => {
-      captured = options;
-      return child;
-    },
+    workerEntrypoint,
+    workerRuntime: process.execPath,
+    startupTimeoutMs: 10_000,
+    stopTimeoutMs: 2_000,
   });
 
   try {
     const worker = await registry.start({
       rootSessionId: 'root-session', projectId: 'project', workspaceId: 'workspace',
-      cwd, agentDirectory, env: { PROJECT_ALLOWED_VARIABLE: 'allowed', OPENAI_API_KEY: 'overlay-key' },
+      cwd, agentDirectory, env: { WORKER_ENV_REPORT: reportPath, OPENAI_API_KEY: 'overlay-key' },
     });
     expect(worker.state).toBe('ready');
-    expect(captured.env).toMatchObject({
-      PATH: '/usr/bin:/bin',
-      OMP_PROFILE: 'default',
-      OPENCHAMBER_MANAGED_PROCESS_TOKEN: 'tree-token',
-      PI_CODING_AGENT_DIR: agentDirectory,
-      PROJECT_ALLOWED_VARIABLE: 'allowed',
-      OPENAI_API_KEY: 'overlay-key',
-    });
-    for (const key of Object.keys(sentinels)) {
-      if (key === 'OPENAI_API_KEY') continue;
-      expect(captured.env).not.toHaveProperty(key);
+
+    const observed = await readFile(reportPath, 'utf8');
+    for (const value of Object.values(sentinels)) {
+      expect(observed).not.toContain(value);
     }
-    // Provider credentials come from the authorized overlay or AuthStorage, never
-    // from the service's inherited environment.
-    expect(captured.env.OPENAI_API_KEY).toBe('overlay-key');
-    expect(captured.env.OPENAI_API_KEY).not.toBe(sentinels.OPENAI_API_KEY);
+    expect(observed).toContain('WORKER_ENV_REPORT=');
+    expect(observed).toContain('OPENAI_API_KEY=overlay-key');
+    expect(observed).toContain(`PI_CODING_AGENT_DIR=${agentDirectory}`);
+    expect(observed).toContain('OPENCHAMBER_MANAGED_PROCESS_TOKEN=tree-token');
+    expect(observed).toContain('OMP_PROFILE=allowlisted-profile');
   } finally {
     await registry.close();
     for (const [key, value] of Object.entries(saved)) {
@@ -93,4 +86,4 @@ test('worker spawn receives the allowlist, the directory overlay and no Host sec
     }
     await rm(root, { recursive: true, force: true });
   }
-});
+}, 15_000);

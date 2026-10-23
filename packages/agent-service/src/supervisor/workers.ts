@@ -50,7 +50,6 @@ type ActionHandle = { entry: WorkerEntry; controller: AbortController };
 export interface WorkerRegistryOptions {
   workerEntrypoint: string;
   workerRuntime?: string;
-  spawn?: typeof spawn;
   startupTimeoutMs?: number;
   stopTimeoutMs?: number;
   policyCheck?: (rootSessionId: string, request: WorkerPolicyRequest, descriptor?: NativeOperationDescriptor) => Promise<WorkerPolicyResult>;
@@ -302,7 +301,7 @@ export class WorkerRegistry {
     const exited = Promise.withResolvers<void>();
     const workerRuntime = this.options.workerRuntime ?? defaultWorkerRuntime();
     const workerArgs = /(?:^|[\\/])bun(?:\.exe)?$/i.test(workerRuntime) ? ['--no-env-file', this.options.workerEntrypoint] : [this.options.workerEntrypoint];
-    const child = (this.options.spawn ?? spawn)(workerRuntime, workerArgs, {
+    const child = spawn(workerRuntime, workerArgs, {
       cwd: input.cwd,
       env: environment,
       windowsHide: true,

@@ -2,6 +2,7 @@ import { execFileSync, spawn as nodeSpawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createAgentServiceSupervisor } from './agent-service-supervisor.js';
@@ -107,5 +108,32 @@ describe('Agent Service spawn environment', () => {
         else process.env[key] = value;
       }
     }
-  });
+  }, 30_000);
+
+  it.skipIf(!hasBun || process.platform !== 'linux')('the real Agent Service process carries no Host secret in /proc/<pid>/environ', async () => {
+    root = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-service-real-env-'));
+    const entrypoint = fileURLToPath(new URL('../../../../agent-service/src/index.ts', import.meta.url));
+    const saved = new Map(Object.keys(sentinels).map(key => [key, process.env[key]]));
+    Object.assign(process.env, sentinels);
+    try {
+      service = createAgentServiceSupervisor({
+        bunPath: 'bun',
+        entrypoint,
+        dataDir: root,
+        registry,
+        randomBytes: (size) => Buffer.alloc(size, 0x2a),
+      });
+      const state = await service.start();
+      expect(state.phase).toBe('ready');
+      const environ = await fs.readFile(`/proc/${state.pid}/environ`, 'utf8');
+      for (const value of [...Object.values(sentinels), '2a'.repeat(32)]) {
+        expect(environ).not.toContain(value);
+      }
+    } finally {
+      for (const [key, value] of saved) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  }, 30_000);
 });

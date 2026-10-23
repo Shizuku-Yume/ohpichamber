@@ -61,8 +61,8 @@ export const LegacyDataNotice: React.FC = () => {
     setDismissed(true);
   };
   const configureProviders = (event: React.MouseEvent<HTMLAnchorElement>) => {
-    event.preventDefault();
     const ui = useUIStore.getState();
+    ui.setSettingsProvidersConnectRequested(true);
     ui.setSettingsPage('providers');
     ui.setSettingsDialogOpen(true);
     dismiss();

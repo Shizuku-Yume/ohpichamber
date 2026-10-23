@@ -101,7 +101,7 @@ const RESERVED_WORKER_ENV_KEYS: Record<string, true> = Object.freeze({
   pi_coding_agent_dir: true,
 });
 
-export const buildWorkerEnvironment = (input: Pick<WorkerBootstrap, 'env' | 'agentDirectory'>, sourceEnv: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv => {
+const buildWorkerEnvironment = (input: Pick<WorkerBootstrap, 'env' | 'agentDirectory'>, sourceEnv: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv => {
   const environment: NodeJS.ProcessEnv = {};
   for (const key of WORKER_ENV_KEYS) {
     const value = sourceEnv[key];

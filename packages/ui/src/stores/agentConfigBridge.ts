@@ -11,7 +11,7 @@
  * registrations are called only from store actions or subscriptions.
  */
 
-export interface AgentSelectionState {
+interface AgentSelectionState {
   activeDirectoryKey: string;
   selectionSource: 'auto' | 'manual';
   agentSelectionSource: 'auto' | 'manual';

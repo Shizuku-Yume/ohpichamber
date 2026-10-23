@@ -368,7 +368,7 @@ export class WorkerRegistry {
       stderrBuffer += bounded.toString();
       const lines = stderrBuffer.split(/\r?\n/);
       stderrBuffer = lines.pop() ?? '';
-      if (stderrBuffer.length > maxStderrBuffer) {
+      if (stderrBuffer.length >= maxStderrBuffer) {
         emitDiagnostic(stderrBuffer);
         stderrBuffer = '';
         return;

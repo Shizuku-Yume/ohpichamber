@@ -45,7 +45,8 @@ const probeDiagnostics = async (): Promise<{ entries: AgentDiagnosticEntry[]; er
     const response = await runtimeFetch('/api/agent/v1/diagnostics', { signal: controller.signal, cache: 'no-store' });
     if (!response.ok) return { entries: [], error: `HTTP ${response.status}` };
     const parsed = DiagnosticResponseSchema.safeParse(await response.json());
-    return { entries: parsed.success ? parsed.data.entries : [], error: null };
+    if (!parsed.success) return { entries: [], error: 'invalid diagnostics response' };
+    return { entries: parsed.data.entries, error: null };
   } catch (error) {
     return { entries: [], error: error instanceof Error ? error.message : String(error) };
   } finally {

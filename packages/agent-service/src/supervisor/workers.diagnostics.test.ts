@@ -88,3 +88,9 @@ test('a worker initialization failure is reported by code only', async () => {
     try { await registry.close(); } finally { await rm(root, { recursive: true, force: true }); }
   }
 }, 15_000);
+
+
+test('a huge no-newline worker stderr chunk is dropped without affecting readiness', async () => {
+  const diagnostics = await runFixture(['x'.repeat(20_000)]);
+  expect(diagnostics).toEqual([]);
+}, 15_000);

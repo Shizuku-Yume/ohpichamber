@@ -80,4 +80,21 @@ describe('Agent Service diagnostics', () => {
     expect(service.getDiagnostics()).toHaveLength(5);
     expect(logged.length).toBeLessThan(30);
   });
+
+  it('records nothing when diagnostics are off', async () => {
+    const child = createChild(50002);
+    const logged = [];
+    const service = createAgentServiceSupervisor({
+      bunPath: '/usr/bin/bun', entrypoint: '/srv/agent-service/index.js', registry,
+      diagnosticsLevel: 'off', logDiagnostic: line => logged.push(line),
+      spawn: () => child,
+      fetchImpl: async () => Response.json({ ready: true, engine: 'omp', version: '1.0.0' }),
+    });
+    services.push(service);
+    await service.start();
+    child.stderr.write(`${JSON.stringify({ type: 'agent-service.diagnostic', level: 'error', message: 'ignored' })}\n`);
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(service.getDiagnostics()).toEqual([]);
+    expect(logged).toEqual([]);
+  });
 });

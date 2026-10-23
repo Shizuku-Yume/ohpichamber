@@ -128,7 +128,7 @@ export const createAgentServiceSupervisor = ({
   let restartAttempts = 0; let restartTimer = null; let restartStabilityTimer = null; let terminating = null;
   const diagnostics = [];
   const diagnosticLevel = DIAGNOSTIC_LEVELS[diagnosticsLevel] ?? DIAGNOSTIC_LEVELS.error;
-  let diagnosticWindowStart = 0; let diagnosticWindowCount = 0; let diagnosticSuppressed = 0;
+  let diagnosticWindowStart = 0; let diagnosticWindowCount = 0; let diagnosticSuppressed = 0; let suppressionFlushTimer = null;
   const pushDiagnostic = (entry) => {
     const message = redactDiagnostic(String(entry.message)).slice(0, DIAGNOSTIC_MAX_MESSAGE);
     const record = { at: new Date().toISOString(), ...entry, message };
@@ -139,16 +139,27 @@ export const createAgentServiceSupervisor = ({
       : '[agent-service] ';
     try { (logDiagnostic ?? console.error)(`${prefix}${record.message}`); } catch { /* diagnostics never affect lifecycle */ }
   };
+  const flushSuppressedDiagnostics = () => {
+    if (suppressionFlushTimer) { clearTimeout(suppressionFlushTimer); suppressionFlushTimer = null; }
+    const suppressed = diagnosticSuppressed;
+    diagnosticSuppressed = 0;
+    diagnosticWindowStart = Date.now();
+    diagnosticWindowCount = 0;
+    if (suppressed > 0 && diagnosticLevel >= DIAGNOSTIC_LEVELS.warn) pushDiagnostic({ source: 'service', level: 'warn', message: `${suppressed} diagnostics suppressed by the rate limit` });
+  };
   const recordDiagnostic = (entry) => {
     if (diagnosticLevel === DIAGNOSTIC_LEVELS.off || DIAGNOSTIC_LEVELS[entry.level] > diagnosticLevel) return;
     const now = Date.now();
-    if (now - diagnosticWindowStart >= 1_000) {
-      if (diagnosticSuppressed > 0) pushDiagnostic({ source: 'service', level: 'warn', message: `${diagnosticSuppressed} diagnostics suppressed by the rate limit` });
-      diagnosticWindowStart = now;
-      diagnosticWindowCount = 0;
-      diagnosticSuppressed = 0;
+    if (now - diagnosticWindowStart >= 1_000) flushSuppressedDiagnostics();
+    if (diagnosticWindowCount >= DIAGNOSTIC_MAX_PER_SECOND) {
+      diagnosticSuppressed += 1;
+      if (!suppressionFlushTimer) {
+        // A burst that stops must still leave its suppression total behind.
+        suppressionFlushTimer = setTimeout(flushSuppressedDiagnostics, 1_000);
+        suppressionFlushTimer.unref?.();
+      }
+      return;
     }
-    if (diagnosticWindowCount >= DIAGNOSTIC_MAX_PER_SECOND) { diagnosticSuppressed += 1; return; }
     diagnosticWindowCount += 1;
     pushDiagnostic(entry);
   };
@@ -257,6 +268,7 @@ export const createAgentServiceSupervisor = ({
   const clearRestartTimer = () => {
     if (restartTimer) { clearTimeout(restartTimer); restartTimer = null; }
     if (restartStabilityTimer) { clearTimeout(restartStabilityTimer); restartStabilityTimer = null; }
+    if (suppressionFlushTimer) { clearTimeout(suppressionFlushTimer); suppressionFlushTimer = null; }
   };
 
   const killChild = async () => {
@@ -374,7 +386,8 @@ export const createAgentServiceSupervisor = ({
         if (!text) return;
         const parsed = DiagnosticMessageSchema.safeParse((() => { try { return JSON.parse(text); } catch { return null; } })());
         if (parsed.success) recordDiagnostic({ source: 'worker', level: parsed.data.level, rootSessionId: parsed.data.rootSessionId, workerGeneration: parsed.data.workerGeneration, message: parsed.data.message });
-        else recordDiagnostic({ source: 'service', level: 'error', message: text });
+        // Unstructured service stderr may contain arbitrary text; keep only that it happened.
+        else recordDiagnostic({ source: 'service', level: 'error', message: 'Agent Service wrote unstructured stderr' });
       };
       launched.stderr?.on('data', chunk => {
         // Cap before decoding: a no-newline flood cannot allocate an unbounded string.
@@ -382,7 +395,7 @@ export const createAgentServiceSupervisor = ({
         stderrBuffer += bounded.toString();
         const lines = stderrBuffer.split(/\r?\n/);
         stderrBuffer = lines.pop() ?? '';
-        if (stderrBuffer.length > maxStderrBuffer) {
+        if (stderrBuffer.length >= maxStderrBuffer) {
           recordServiceLine(stderrBuffer.slice(0, DIAGNOSTIC_MAX_MESSAGE));
           stderrBuffer = '';
           return;

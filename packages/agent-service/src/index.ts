@@ -28,10 +28,11 @@ const requestedDiagnosticLevel = DiagnosticLevelSchema.safeParse(process.env.OPE
 const diagnosticLevel = DIAGNOSTIC_LEVELS[requestedDiagnosticLevel.success ? requestedDiagnosticLevel.data : 'error'];
 
 export const redactDiagnostic = (message: string): string => message
-  .replace(/((?:authorization|api[_-]?key|token|secret|password)\s*[=:]\s*)([^\s,;]+)/gi, '$1[REDACTED]')
+  .replace(/(authorization\s*[:=]\s*)(?:bearer\s+)?[^\r\n]*/gi, '$1[REDACTED]')
+  .replace(/\bbearer\s+[^\s,;]+/gi, 'Bearer [REDACTED]')
+  .replace(/((?:api[_-]?key|token|secret|password)\s*[=:]\s*)("[^"]*"|'[^']*'|[^\s,;]+)/gi, '$1[REDACTED]')
   .replace(/\bsk-[A-Za-z0-9_-]{8,}\b/g, '[REDACTED]')
-  .replace(/\b[a-f0-9]{64}\b/gi, '[REDACTED]')
-  .replace(/\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi, 'Bearer [REDACTED]');
+  .replace(/\b[a-f0-9]{64}\b/gi, '[REDACTED]');
 
 // Worker stderr crosses this process on its way to the Host log. Redaction
 // happens again at the Host boundary; this keeps secrets out of the pipe too.

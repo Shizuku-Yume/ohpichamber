@@ -33,6 +33,9 @@ Type-check: package-wide `bun run --cwd packages/agent-service type-check` exits
 Environment: network installs are not allowed. Test execution used `node_modules` symlinked from `/home/shizuku/Project/ohpichamber` (untracked, not committed).
 Not run: root `bun run test` (main is red pending Lane A task 01) and no rebase/landing was attempted.
 Authorization: the maintainer granted full permission and resolved the ownership conflict; `contracts.md`'s stream invalidation/bounded-replay section is now named in `Files`. The 2048-frame bound and drain semantics are recorded there. Root `bun run test` stays the landing gate until Lane A task 01 lands.
+Review boundary: `f72010e3e` + `.workflow/omp-migration/contracts.md`, `.workflow/tasks/post-m3-hardening/06-sse-backpressure.md`, `packages/agent-service/src/supervisor/{service.ts,event-stream.ts,event-stream.test.ts}`; round: 1; briefs: A,B; boundaries: Agent Service session SSE delivery (no authentication, credential or process boundary changed); findings: 0 blocking / 0 nonblocking. Brief A and Brief B both pass.
+Suite: `bun test packages/agent-service/src` — 223 pass / 7 skip / 0 fail across 33 files.
+Real path: the regression drives a real loopback HTTP/1.1 SSE connection and a real Node `ServerResponse` through `deliverSessionStream`; a full service process with a live OMP worker was not exercised (no provider available), and the delivery queue is independent of worker projection.
 
 ## Done when
 

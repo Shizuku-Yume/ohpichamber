@@ -31,7 +31,12 @@ export const readLegacyDataPresence = async (signal: AbortSignal): Promise<'pres
   return value.present ? 'present' : 'absent';
 };
 
-export const LegacyDataNotice: React.FC = () => {
+type LegacyDataNoticeProps = {
+  /** Mobile shell hook: switching Settings must also open its app-level surface. */
+  onOpenSettings?: (stage: 'nav' | 'page-content') => void;
+};
+
+export const LegacyDataNotice: React.FC<LegacyDataNoticeProps> = ({ onOpenSettings }) => {
   const { t } = useI18n();
   const [runtimeKey, setRuntimeKey] = React.useState(getRuntimeKey);
   const [state, setState] = React.useState<'loading' | LegacyDataPresence>('loading');
@@ -65,6 +70,7 @@ export const LegacyDataNotice: React.FC = () => {
     ui.setSettingsProvidersConnectRequested(true);
     ui.setSettingsPage('providers');
     ui.setSettingsDialogOpen(true);
+    onOpenSettings?.('page-content');
     dismiss();
   };
   return (

@@ -1,20 +1,81 @@
 {
-  "task": "post-M3 hardening task 03 — M3 gate at the main tip",
-  "observedAt": "2026-10-23T07:20:00Z",
-  "startingHead": "ddc180155cb2c1dfcef6642dce877e00de5397f8",
+  "task": "post-M3 hardening task 03 \u2014 M3 gate at the main tip",
+  "observedAt": "2026-10-23T07:35:00Z",
+  "startingHead": "2c3dbbe5e",
   "worktree": "/home/shizuku/Project/ohpichamber-worktrees/post-m3-hardening-lane-a",
   "branch": "post-m3-hardening/03-m3-gate-at-tip",
   "command": "bun run type-check && bun run lint && bun run build && bun run test && bun run dead-code && bun run docs:validate && .workflow/bin/workflow validate --no-color",
   "result": "PASS",
   "exit": 0,
   "phases": [
-    { "name": "type-check", "exit": 0, "packages": ["agent-contract", "agent-service", "sdk", "ui", "web", "electron", "mobile"], "log": "/home/shizuku/Project/ohpichamber-omp-artifacts/task03-2026-10-23/type-check-ddc.log" },
-    { "name": "lint", "exit": 0, "packages": ["agent-contract", "agent-service", "sdk", "ui", "web", "electron", "mobile"], "log": "/home/shizuku/Project/ohpichamber-omp-artifacts/task03-2026-10-23/lint-ddc.log" },
-    { "name": "build", "exit": 0, "warnings": "4 pre-existing web CSS ::highlight warnings", "log": "/home/shizuku/Project/ohpichamber-omp-artifacts/task03-2026-10-23/build-ddc.log" },
-    { "name": "test", "exit": 0, "counts": { "scripts": "22/22 files", "sdk": "23/23 files", "ui": "804/804 files", "agent-contract": "177 pass / 0 fail", "agent-service": "225 pass / 7 skip / 0 fail (232 tests / 35 files)", "electron": "44/44 files", "web": "373 passed / 9 skipped files; 6102 passed / 135 skipped tests" }, "log": "/home/shizuku/Project/ohpichamber-omp-artifacts/task03-2026-10-23/test-ddc.log" },
-    { "name": "dead-code", "exit": 0, "tool": "knip@5.80.0", "findings": 0, "log": "/home/shizuku/Project/ohpichamber-omp-artifacts/task03-2026-10-23/dead-code-ddc.log" },
-    { "name": "docs:validate", "exit": 0, "pages": 672, "sidebarLinks": 56, "log": "/home/shizuku/Project/ohpichamber-omp-artifacts/task03-2026-10-23/docs-ddc.log" },
-    { "name": "workflow", "exit": 0, "taskFiles": 116, "log": "/home/shizuku/Project/ohpichamber-omp-artifacts/task03-2026-10-23/workflow-ddc.log" }
+    {
+      "name": "type-check",
+      "exit": 0,
+      "packages": [
+        "agent-contract",
+        "agent-service",
+        "sdk",
+        "ui",
+        "web",
+        "electron",
+        "mobile"
+      ],
+      "log": "/home/shizuku/Project/ohpichamber-omp-artifacts/task03-2026-10-23/type-check-2c3.log"
+    },
+    {
+      "name": "lint",
+      "exit": 0,
+      "packages": [
+        "agent-contract",
+        "agent-service",
+        "sdk",
+        "ui",
+        "web",
+        "electron",
+        "mobile"
+      ],
+      "log": "/home/shizuku/Project/ohpichamber-omp-artifacts/task03-2026-10-23/lint-2c3.log"
+    },
+    {
+      "name": "build",
+      "exit": 0,
+      "warnings": "4 pre-existing web CSS ::highlight warnings",
+      "log": "/home/shizuku/Project/ohpichamber-omp-artifacts/task03-2026-10-23/build-2c3.log"
+    },
+    {
+      "name": "test",
+      "exit": 0,
+      "counts": {
+        "scripts": "22/22 files",
+        "sdk": "23/23 files",
+        "ui": "804/804 files",
+        "agent-contract": "177 pass / 0 fail",
+        "agent-service": "229 pass / 7 skip / 0 fail (236 tests / 36 files)",
+        "electron": "44/44 files",
+        "web": "375 passed / 9 skipped files; 6105 passed / 135 skipped tests"
+      },
+      "log": "/home/shizuku/Project/ohpichamber-omp-artifacts/task03-2026-10-23/test-2c3.log"
+    },
+    {
+      "name": "dead-code",
+      "exit": 0,
+      "tool": "knip@5.80.0",
+      "findings": 0,
+      "log": "/home/shizuku/Project/ohpichamber-omp-artifacts/task03-2026-10-23/dead-code-2c3.log"
+    },
+    {
+      "name": "docs:validate",
+      "exit": 0,
+      "pages": 672,
+      "sidebarLinks": 56,
+      "log": "/home/shizuku/Project/ohpichamber-omp-artifacts/task03-2026-10-23/docs-2c3.log"
+    },
+    {
+      "name": "workflow",
+      "exit": 0,
+      "taskFiles": 116,
+      "log": "/home/shizuku/Project/ohpichamber-omp-artifacts/task03-2026-10-23/workflow-2c3.log"
+    }
   ],
   "notes": "The root aggregate now runs agent-contract and agent-service in addition to scripts, sdk, ui, electron and web. The agent-service suite uses a 15 s per-test timeout; the two credential-reopen tests take about 6.8 s on this machine. No test assertion is weakened. The 8d179c4e2 receipt is historical: it is source-equivalent to 24f1012c1 and does not cover the later commits."
 }

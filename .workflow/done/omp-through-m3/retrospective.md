@@ -24,7 +24,7 @@ Spec checks (W1–W10 plus PWA) all pass:
 - **W10:** pass. Zero production old-client references and zero retired legacy URLs in the sanitized capture; source deletion plus archived static evidence.
 - **PWA:** pass. Unauthorized manifest exposes only Appearance Settings; authorized manifest exposes real session titles and `?session=` URLs. Provenance is the Web Host with existing packaged state, not packaged Electron password authentication.
 
-Final gate at the main tip: `ddc180155`, receipt `.workflow/omp-migration/m3/task03-gate-2026-10-23.json`, all seven phases exit 0, including root tests with agent-service 225 pass / 7 skip / 0 fail and agent-contract 177 pass. The `8d179c4e2` receipt is historical: source-equivalent to `24f1012c1`, not covering the later commits. Prior-scope aggregate brief A/source/security/content reviews passed; the final C1-C4 closure-content recheck passed. This is not final maintainer acceptance; acceptance can be requested at `flow-close`. Task18 and Task57 technical work is archived; the spec remains in progress.
+Final gate at the main tip: `2c3dbbe5e`, receipt `.workflow/omp-migration/m3/task03-gate-2026-10-23.json`, all seven phases exit 0, including root tests with agent-service 229 pass / 7 skip / 0 fail and agent-contract 177 pass. The `8d179c4e2` receipt is historical: source-equivalent to `24f1012c1`, not covering the later commits. Prior-scope aggregate brief A/source/security/content reviews passed; the final C1-C4 closure-content recheck passed. This is not final maintainer acceptance; acceptance can be requested at `flow-close`. Task18 and Task57 technical work is archived; the spec remains in progress.
 
 ## Decisions that shaped it
 

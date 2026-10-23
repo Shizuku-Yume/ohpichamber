@@ -32,10 +32,10 @@ Check before:
 
 Resolution of the dead-code block: the three "unused" agent-service modules are imported and instantiated by the production entry `src/index.ts`, which was missing from the `packages/agent-service` entry list in `knip.json`. Adding it (and dropping the unnecessary `export` on `buildWorkerEnvironment`) makes `knip` follow the real graph; no file was deleted and no rule was silenced. `bun run dead-code` now exits 0 with no findings.
 
-Check after (tested commit `ddc180155cb2c1dfcef6642dce877e00de5397f8`, worktree `/home/shizuku/Project/ohpichamber-worktrees/post-m3-hardening-lane-a`; logs in `/home/shizuku/Project/ohpichamber-omp-artifacts/task03-2026-10-23/`):
-- type-check 0 (`type-check-ddc.log`), lint 0 (`lint-ddc.log`), build 0 (`build-ddc.log`), test 0 (`test-ddc.log`), dead-code 0 with 0 findings (`dead-code-ddc.log`), docs:validate 0 with 672 pages / 56 links (`docs-ddc.log`), workflow validate 0 with 116 task files (`workflow-ddc.log`).
-- Root test: scripts 22/22 files, SDK 23/23, UI 804/804, agent-contract 177 pass / 0 fail, agent-service 225 pass / 7 skip / 0 fail, Electron 44/44, Web 373 passed / 9 skipped files and 6102 passed / 135 skipped tests.
+Check after (tested commit `2c3dbbe5e`, worktree `/home/shizuku/Project/ohpichamber-worktrees/post-m3-hardening-lane-a`; logs in `/home/shizuku/Project/ohpichamber-omp-artifacts/task03-2026-10-23/`):
+- type-check 0 (`type-check-2c3.log`), lint 0 (`lint-2c3.log`), build 0 (`build-2c3.log`), test 0 (`test-2c3.log`), dead-code 0 with 0 findings (`dead-code-2c3.log`), docs:validate 0 with 672 pages / 56 links (`docs-2c3.log`), workflow validate 0 with 116 task files (`workflow-2c3.log`).
+- Root test: scripts 22/22 files, SDK 23/23, UI 804/804, agent-contract 177 pass / 0 fail, agent-service 229 pass / 7 skip / 0 fail (236 tests / 36 files), Electron 44/44, Web 375 passed / 9 skipped files and 6105 passed / 135 skipped tests.
 - Receipt `.workflow/omp-migration/m3/task03-gate-2026-10-23.json`; old receipt labeled historical.
-- `git merge-base --is-ancestor ddc180155 main` is verified after the fast-forward landing.
+- `git merge-base --is-ancestor 2c3dbbe5e main` is verified after the fast-forward landing.
 
 **Finished:** 2026-10-23T07:23:08Z

@@ -94,16 +94,16 @@ test('a real worker shell sees the allowlist, the directory overlay and no Host 
     expect(observed).toContain('OPENAI_API_KEY=overlay-key');
     expect(observed).toContain(`PI_CODING_AGENT_DIR=${agentDirectory}`);
     expect(observed).toContain('OPENCHAMBER_MANAGED_PROCESS_TOKEN=tree-token');
-    expect(observed).toContain('OMP_PROFILE=allowlisted-profile');
-    expect(observed).toContain('PI_PROFILE=allowlisted-pi-profile');
+
     expect(observed).toContain('SystemRoot=');
     expect(observed).toContain('PATHEXT=');
     expect(observed).not.toContain('overlay-secret');
     expect(observed).not.toContain('overlay-token');
     expect(observed).not.toContain('/overlay-agent-directory');
     expect(observed).not.toContain('/lowercase-overlay-directory');
-    expect(observed).not.toContain('overlay-profile');
-    expect(observed).not.toContain('overlay-pi-profile');
+    // Named profiles are part of the authorized overlay and must be preserved.
+    expect(observed).toContain('OMP_PROFILE=overlay-profile');
+    expect(observed).toContain('PI_PROFILE=overlay-pi-profile');
   } finally {
     try {
       await registry.close();

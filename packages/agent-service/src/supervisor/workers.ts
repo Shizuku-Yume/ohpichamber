@@ -87,14 +87,14 @@ const WORKER_ENV_KEYS = Object.freeze([
 
 // A directory overlay comes from user/project settings, but it must not be able
 // to forge the process-tree proof, the service token, or the worker's own
-// agent-directory/profile binding. OMP's profile selection rewrites
-// PI_CODING_AGENT_DIR, so the profile names are reserved too.
+// agent-directory binding. OMP_PROFILE/PI_PROFILE remain part of the
+// Host-authorized overlay: named profiles intentionally select their own
+// config/plugin roots, while settings and AuthStorage keep the explicit agent
+// directory captured by the Host.
 const RESERVED_WORKER_ENV_KEYS: Record<string, true> = Object.freeze({
   ohpichamber_internal_secret: true,
   openchamber_managed_process_token: true,
   pi_coding_agent_dir: true,
-  omp_profile: true,
-  pi_profile: true,
 });
 
 export const buildWorkerEnvironment = (input: Pick<WorkerBootstrap, 'env' | 'agentDirectory'>, sourceEnv: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv => {
@@ -112,10 +112,6 @@ export const buildWorkerEnvironment = (input: Pick<WorkerBootstrap, 'env' | 'age
   environment.PI_CODING_AGENT_DIR = input.agentDirectory;
   const managedToken = sourceEnv.OPENCHAMBER_MANAGED_PROCESS_TOKEN;
   if (managedToken !== undefined) environment.OPENCHAMBER_MANAGED_PROCESS_TOKEN = managedToken;
-  for (const key of ['OMP_PROFILE', 'PI_PROFILE']) {
-    const value = sourceEnv[key];
-    if (value !== undefined) environment[key] = value;
-  }
   return environment;
 };
 

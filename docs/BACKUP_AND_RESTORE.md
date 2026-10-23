@@ -114,7 +114,7 @@ A coherent snapshot requires either:
    TIMESTAMP="$(date +%Y%m%d%H%M%S)"
    BACKUP_DEST="$BACKUP_ROOT/openchamber-host-$TIMESTAMP"
    mkdir -p "$BACKUP_DEST" || { echo "Error: Failed to create Host backup destination directory: $BACKUP_DEST" >&2; exit 1; }
-   chmod 700 "$BACKUP_DEST"
+   chmod 700 "$BACKUP_DEST" || { echo "Error: Failed to restrict Host backup destination permissions" >&2; exit 1; }
 
    # Guard required Host databases and copy main files
    for db_file in "host-metadata.sqlite" "host-approval-policies.sqlite"; do
@@ -124,14 +124,14 @@ A coherent snapshot requires either:
        exit 1
      fi
      cp -p "$src_db" "$BACKUP_DEST/" || { echo "Error: Failed to copy database: $src_db" >&2; exit 1; }
-     chmod 600 "$BACKUP_DEST/$db_file"
+     chmod 600 "$BACKUP_DEST/$db_file" || { echo "Error: Failed to restrict $db_file permissions" >&2; exit 1; }
 
      # Copy present sidecar files explicitly (avoiding unmatched wildcards)
      for suffix in "-wal" "-shm"; do
        src_sidecar="$src_db$suffix"
        if [ -f "$src_sidecar" ]; then
          cp -p "$src_sidecar" "$BACKUP_DEST/" || { echo "Error: Failed to copy sidecar: $src_sidecar" >&2; exit 1; }
-         chmod 600 "$BACKUP_DEST/$db_file$suffix"
+         chmod 600 "$BACKUP_DEST/$db_file$suffix" || { echo "Error: Failed to restrict $db_file$suffix permissions" >&2; exit 1; }
        fi
      done
    done
@@ -169,7 +169,7 @@ A coherent snapshot requires either:
      echo "Error: OMP backup directory is not writable: $OMP_BACKUP_DEST" >&2
      exit 1
    fi
-   chmod 700 "$OMP_BACKUP_DEST"
+   chmod 700 "$OMP_BACKUP_DEST" || { echo "Error: Failed to restrict OMP backup destination permissions" >&2; exit 1; }
 
    # Copy session transcripts
    if [ -d "$OMP_DIR/sessions" ]; then
@@ -232,29 +232,46 @@ A coherent snapshot requires either:
      echo "Error: Restore directory is not writable: $RESTORE_DIR" >&2
      exit 1
    fi
-   chmod 700 "$RESTORE_DIR"
+   chmod 700 "$RESTORE_DIR" || { echo "Error: Failed to restrict restore directory permissions" >&2; exit 1; }
 
-   # Remove any existing SQLite files and sidecars to prevent stale WAL merges
-   rm -f "$RESTORE_DIR"/host-metadata.sqlite* "$RESTORE_DIR"/host-approval-policies.sqlite*
+   # Stage both required databases and any present sidecars in a private
+   # directory first. No live database file is removed until every required
+   # copy and chmod has succeeded.
+   STAGE_DIR="$(mktemp -d "$RESTORE_DIR/.host-restore-stage.XXXXXX")" || { echo "Error: Failed to create restore staging directory" >&2; exit 1; }
+   chmod 700 "$STAGE_DIR" || { echo "Error: Failed to restrict restore staging directory permissions" >&2; exit 1; }
+   trap 'rm -rf "$STAGE_DIR"' EXIT
 
-   # Restore required Host databases and any present sidecars
    for db_file in "host-metadata.sqlite" "host-approval-policies.sqlite"; do
      backup_db="$BACKUP_DEST/$db_file"
      if [ ! -f "$backup_db" ]; then
        echo "Error: Required database not found in backup: $backup_db" >&2
        exit 1
      fi
-     cp -p "$backup_db" "$RESTORE_DIR/" || { echo "Error: Failed to restore $db_file" >&2; exit 1; }
-     chmod 600 "$RESTORE_DIR/$db_file"
+     cp -p "$backup_db" "$STAGE_DIR/" || { echo "Error: Failed to stage $db_file" >&2; exit 1; }
+     chmod 600 "$STAGE_DIR/$db_file" || { echo "Error: Failed to restrict staged $db_file permissions" >&2; exit 1; }
 
      for suffix in "-wal" "-shm"; do
        backup_sidecar="$backup_db$suffix"
        if [ -f "$backup_sidecar" ]; then
-         cp -p "$backup_sidecar" "$RESTORE_DIR/" || { echo "Error: Failed to restore $db_file$suffix" >&2; exit 1; }
-         chmod 600 "$RESTORE_DIR/$db_file$suffix"
+         cp -p "$backup_sidecar" "$STAGE_DIR/" || { echo "Error: Failed to stage $db_file$suffix" >&2; exit 1; }
+         chmod 600 "$STAGE_DIR/$db_file$suffix" || { echo "Error: Failed to restrict staged $db_file$suffix permissions" >&2; exit 1; }
        fi
      done
    done
+
+   # All required files are staged and private. Replace the live database set
+   # only now, removing stale sidecars that the backup does not contain.
+   rm -f "$RESTORE_DIR"/host-metadata.sqlite* "$RESTORE_DIR"/host-approval-policies.sqlite* || { echo "Error: Failed to clear existing SQLite files" >&2; exit 1; }
+   for db_file in "host-metadata.sqlite" "host-approval-policies.sqlite"; do
+     for suffix in "" "-wal" "-shm"; do
+       staged="$STAGE_DIR/$db_file$suffix"
+       if [ -f "$staged" ]; then
+         mv -f "$staged" "$RESTORE_DIR/" || { echo "Error: Failed to install staged $db_file$suffix" >&2; exit 1; }
+       fi
+     done
+   done
+   rm -rf "$STAGE_DIR" || { echo "Error: Failed to remove restore staging directory" >&2; exit 1; }
+   trap - EXIT
 
    if [ -d "$BACKUP_DEST/attachments" ]; then
      cp -rp "$BACKUP_DEST/attachments" "$RESTORE_DIR/" || { echo "Error: Failed to restore attachments" >&2; exit 1; }
@@ -269,8 +286,6 @@ A coherent snapshot requires either:
      cp -p "$BACKUP_DEST/message-queue.json" "$RESTORE_DIR/" || { echo "Error: Failed to restore message-queue.json" >&2; exit 1; }
    fi
 
-   # Ensure tight permissions on all restored SQLite files
-   chmod 600 "$RESTORE_DIR"/*.sqlite* 2>/dev/null || true
    ```
 
 3. **Restore OMP session transcripts**:
@@ -288,7 +303,7 @@ A coherent snapshot requires either:
      echo "Error: OMP restore directory is not writable: $OMP_RESTORE_DIR" >&2
      exit 1
    fi
-   chmod 700 "$OMP_RESTORE_DIR"
+   chmod 700 "$OMP_RESTORE_DIR" || { echo "Error: Failed to restrict OMP restore directory permissions" >&2; exit 1; }
 
    if [ -d "$OMP_BACKUP_DEST/sessions" ]; then
      cp -rp "$OMP_BACKUP_DEST/sessions" "$OMP_RESTORE_DIR/" || { echo "Error: Failed to restore OMP session transcripts" >&2; exit 1; }
@@ -300,10 +315,10 @@ A coherent snapshot requires either:
        echo "Error: ENCRYPTED_CREDENTIALS_SRC is not a valid directory: $ENCRYPTED_CREDENTIALS_SRC" >&2
        exit 1
      fi
-     # Remove stale destination sidecars while all processes are stopped so the
-     # restored agent.db is not paired with another database's WAL/SHM state.
-     rm -f "$OMP_RESTORE_DIR/agent.db-wal" "$OMP_RESTORE_DIR/agent.db-shm"
      if [ -f "$ENCRYPTED_CREDENTIALS_SRC/agent.db" ]; then
+       # Remove stale destination sidecars while all processes are stopped so the
+       # restored agent.db is not paired with another database's WAL/SHM state.
+       rm -f "$OMP_RESTORE_DIR/agent.db-wal" "$OMP_RESTORE_DIR/agent.db-shm" || { echo "Error: Failed to clear stale agent.db sidecars" >&2; exit 1; }
        cp -p "$ENCRYPTED_CREDENTIALS_SRC/agent.db" "$OMP_RESTORE_DIR/" || { echo "Error: Failed to restore agent.db" >&2; exit 1; }
        chmod 600 "$OMP_RESTORE_DIR/agent.db" || { echo "Error: Failed to restrict restored agent.db permissions" >&2; exit 1; }
 

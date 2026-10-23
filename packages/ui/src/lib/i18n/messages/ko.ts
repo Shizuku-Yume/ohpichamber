@@ -18,6 +18,10 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
 export const dict: Record<I18nKey, string> = {
+  "startup.legacyNotice.title": "이전 OpenCode 데이터 감지됨",
+  "startup.legacyNotice.action": "프로바이더 설정",
+  "startup.legacyNotice.dismiss": "닫기",
+  "startup.legacyNotice.descriptionGeneric": "이전 OpenCode 세션은 OpenChamber로 가져오지 않았습니다. 기존 데이터는 OpenCode 데이터 디렉터리에 안전하게 유지됩니다. 모델을 사용하려면 설정에서 프로바이더에 다시 로그인하세요.",
   'sessions.aiRename.action': 'AI로 이름 변경',
   'sessions.aiRename.generating': '세션 제목 생성 중...',
   'sessions.aiRename.checking': '완료된 대화 확인 중...',

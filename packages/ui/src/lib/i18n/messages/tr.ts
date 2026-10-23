@@ -17,6 +17,10 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
 export const dict = {
+  "startup.legacyNotice.dismiss": "Yoksay",
+  "startup.legacyNotice.action": "Provider\\'ları yapılandır",
+  "startup.legacyNotice.descriptionGeneric": "Önceki OpenCode oturumlarınız OpenChamber içine aktarılmadı. Mevcut verileriniz OpenCode veri dizininizde değişmeden korunmaktadır. Modellerinizi kullanmak için Ayarlar bölümünden provider\\'larınıza tekrar giriş yapın.",
+  "startup.legacyNotice.title": "Önceki OpenCode verileri algılandı",
   'sessions.aiRename.action': 'Yapay zekâ ile yeniden adlandır',
   'sessions.aiRename.generating': 'Oturum başlığı oluşturuluyor...',
   'sessions.aiRename.checking': 'Tamamlanan konuşma turları kontrol ediliyor...',

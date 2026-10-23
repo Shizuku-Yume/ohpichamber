@@ -18,6 +18,10 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
 export const dict: Record<I18nKey, string> = {
+  "startup.legacyNotice.descriptionGeneric": "您先前的 OpenCode 會話未匯入至 OpenChamber。現有資料仍完整保留在您的 OpenCode 資料目錄中。若要使用模型，請在「設定」中重新登入供應商。",
+  "startup.legacyNotice.action": "設定供應商",
+  "startup.legacyNotice.title": "偵測到先前的 OpenCode 資料",
+  "startup.legacyNotice.dismiss": "忽略",
   'sessions.aiRename.action': '使用 AI 重新命名',
   'sessions.aiRename.generating': '正在產生工作階段標題...',
   'sessions.aiRename.checking': '正在檢查已完成的對話回合...',

@@ -1,4 +1,4 @@
-# 30: Preserve sessions when discovery reports a project-scoped error
+# 34: Preserve sessions when discovery reports a project-scoped error
 
 **Effort:** post-m3-hardening
 **Task type:** bugfix

@@ -1,4 +1,4 @@
-# 29: Make the cold deleted-space snapshot cursor replayable
+# 33: Make the cold deleted-space snapshot cursor replayable
 
 **Effort:** post-m3-hardening
 **Task type:** bugfix

@@ -1,4 +1,4 @@
-# 31: Restore optimistic insertion for review-flow sends
+# 35: Restore optimistic insertion for review-flow sends
 
 **Effort:** post-m3-hardening
 **Task type:** bugfix

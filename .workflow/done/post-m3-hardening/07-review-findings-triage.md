@@ -21,11 +21,11 @@
 Started 2026-10-23T06:35:53Z on branch `post-m3-hardening/07-review-findings-triage`, cut from landed `main` `f56861c21`. Dirty at start: none.
 Time box: one reproduction attempt per item; no fix code in this spike. Worker-descendant result is handed to Lane B task 13; no `workers.ts` edit here.
 
-Outcome: all five items have a recorded attempt in `## Findings`. Confirmed and drafted: task 29 (cold snapshot cursor), task 30 (project-scoped discovery), task 31 (restore documented optimistic review send), task 32 (metadata route contract). Worker descendants: confirmed, owned by existing Lane B task 13; no new task.
+Outcome: all five items have a recorded attempt in `## Findings`. Confirmed and drafted: task 33 (cold snapshot cursor), task 34 (project-scoped discovery), task 35 (restore documented optimistic review send), task 36 (metadata route contract). Worker descendants: confirmed, owned by existing Lane B task 13; no new task. Drafts were renumbered from 29-32 because Task 08's branch drafts 29.
 Spike code discarded, not committed: `/tmp/repro-worker-descendant.mjs`, `/tmp/fake-worker.mjs`, `/tmp/repro-discovery-scope.mjs`, `/tmp/repro-cold-cursor.mjs`, and the temporary repo-context copies `packages/agent-service/tmp-repro-cold-cursor.mjs` and `packages/agent-service/tmp-repro-worker-stop.mjs` (removed). No source files changed by this task.
 
-Review boundary: `f56861c21` + `.workflow/tasks/post-m3-hardening/07-review-findings-triage.md` and drafts 29-32; round: 1; briefs: A,B; boundaries: spike evidence and drafted task scope (no source change); findings: A 2 blocking / 0 nonblocking, B 4 blocking / 0 nonblocking.
-Resolution: route item now records its command and output; task 29 chooses the shared-journal replay fix; task 31 becomes the bugfix that restores documented optimistic insertion; task 32 covers both stale contract statements at lines 127 and 501. The worker-descendant item stays at one recorded attempt per the timebox and is delegated to Lane B task 13 for full worker-stop verification.
+Review boundary: `f56861c21` + `.workflow/tasks/post-m3-hardening/07-review-findings-triage.md` and drafts 33-36; round: 1; briefs: A,B; boundaries: spike evidence and drafted task scope (no source change); findings: A 2 blocking / 0 nonblocking, B 4 blocking / 0 nonblocking.
+Resolution: route item now records its command and output; task 33 chooses the shared-journal replay fix; task 35 becomes the bugfix that restores documented optimistic insertion; task 36 covers both stale contract statements at lines 127 and 501. The worker-descendant item stays at one recorded attempt per the timebox and is delegated to Lane B task 13 for full worker-stop verification.
 
 ## Done when
 
@@ -56,7 +56,7 @@ Output:
 {"cursor":"9927e514-bebd-405f-a090-57e557e45beb:0","epoch":"9927e514-bebd-405f-a090-57e557e45beb","headSequence":"0","runtimeStatus":"unavailable"}
 {"replayError":{"status":503,"code":"SESSION_RESTORE_FAILED","message":"SDK worker operation failed"}}
 ```
-Conclusion: confirmed. The cursor is taken from `this.runtime(sessionId)`, not from the temporary journal that produced the snapshot, and `journal()` refuses unloaded entries, so the next attach is a 503 instead of a replay or the documented 410. Drafted bugfix task 29.
+Conclusion: confirmed. The cursor is taken from `this.runtime(sessionId)`, not from the temporary journal that produced the snapshot, and `journal()` refuses unloaded entries, so the next attach is a 503 instead of a replay or the documented 410. Drafted bugfix task 33.
 
 **3. Project-scoped discovery errors drop known sessions — confirmed.**
 Attempt: call the exported predicate used by `replaceSessionsForDirectories` with the same session and three differently keyed errors.
@@ -65,14 +65,14 @@ Output:
 ```
 {"projectScoped":false,"workspaceScoped":true,"sessionScoped":true}
 ```
-Conclusion: confirmed. `isSessionDiscoveryFailed` (`globalSessions.ts:54-58`) recognises only `sessionId` and `workspaceId`, so a project-keyed error leaves that project's cached sessions removable. Drafted bugfix task 30.
+Conclusion: confirmed. `isSessionDiscoveryFailed` (`globalSessions.ts:54-58`) recognises only `sessionId` and `workspaceId`, so a project-keyed error leaves that project's cached sessions removable. Drafted bugfix task 34.
 
 **4. `optimisticSend` does not insert optimistically — confirmed regression against the documented contract; bugfix task drafted.**
 Attempt: search the helper's use of the optimistic refs.
 Command: `grep -n "_optimistic(Add|Remove|Confirm)" packages/ui/src/sync/session-actions.ts`
 Output: declarations at 177-179, wiring at 265-267, guard at 1644-1646, and `_optimisticConfirm` at 1685; neither `_optimisticAdd` nor `_optimisticRemove` is ever called.
 The function's own doc says it preserves the review-flow call contract "without manufacturing native history" because the native service allocates message/turn/part IDs; `packages/ui/src/sync/DOCUMENTATION.md` item 9 and lines 304-308 still promise optimistic insertion.
-Conclusion: confirmed regression against the documented sync contract. The code comment records an implementation choice, not a maintainer decision; `packages/ui/src/sync/DOCUMENTATION.md:304-308` promises optimistic insertion and rollback, and native service IDs do not prevent a temporary client record that reconciles by the canonical message. Drafted bugfix task 31 to restore the documented optimistic insertion and rollback.
+Conclusion: confirmed regression against the documented sync contract. The code comment records an implementation choice, not a maintainer decision; `packages/ui/src/sync/DOCUMENTATION.md:304-308` promises optimistic insertion and rollback, and native service IDs do not prevent a temporary client record that reconciles by the canonical message. Drafted bugfix task 35 to restore the documented optimistic insertion and rollback.
 
 **5. Session metadata route drift — confirmed; the contract text is wrong.**
 Attempt: compare the three definitions.
@@ -84,6 +84,6 @@ Output:
     return request(`/api/agent/v1/sessions/${id(sessionId)}/metadata`, scoped(C.SessionMetadataStateSchema, result => result.sessionId === sessionId), {
 After authentication and authorization, the Host intercepts `PATCH .../sessions/:sessionId`, `GET .../metadata`, and every `/queue` route before the Agent proxy. …
 ```
-Conclusion: Host and client agree on `/metadata`; the contract table row and the prose at line 501 are stale. Drafted bugfix task 32.
+Conclusion: Host and client agree on `/metadata`; the contract table row and the prose at line 501 are stale. Drafted bugfix task 36.
 
 The `sync-context.tsx:180` reattach finding was not re-investigated (recorded false positive in the spec).

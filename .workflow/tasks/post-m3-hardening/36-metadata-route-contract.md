@@ -1,4 +1,4 @@
-# 32: Correct the session metadata PATCH route in the contract
+# 36: Correct the session metadata PATCH route in the contract
 
 **Effort:** post-m3-hardening
 **Task type:** bugfix

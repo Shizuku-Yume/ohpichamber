@@ -27,12 +27,13 @@ Default location: `~/.config/openchamber` (or the directory specified by `OPENCH
   - Full-text search index (FTS5). This database is strictly derived from session events and is automatically rebuilt if absent; it does not need to be preserved in backups.
 
 ### OMP Agent Directory
-The OMP agent directory contains conversation transcripts and provider credentials. Its location is resolved as follows:
-- **Explicit override**: If `PI_CODING_AGENT_DIR` is set in the environment, that directory is used directly.
-- **Named profile**: If running with a named profile (`OMP_PROFILE=<profile>` or `PI_PROFILE=<profile>`), the agent directory is `<HOME>/.omp/profiles/<profile>/agent`.
-- **Default fallback**: If neither variable is set, `<XDG_DATA_HOME>/omp` is used if present, otherwise `<HOME>/.omp/agent`.
+OpenChamber assigns each workspace a captured agent directory. The Host default is `$HOME/.omp/agent`: `packages/web/server/lib/host/agent-scope-runtime.js` builds `path.join(os.homedir(), '.omp', 'agent')` and does not consult `PI_CODING_AGENT_DIR` or XDG variables when forming that default. The Host passes the captured path to the agent service, which forces every worker's `PI_CODING_AGENT_DIR` to it.
 
-When executing backup and restore procedures, operators using named profiles or custom directories must ensure `OMP_PROFILE`, `PI_PROFILE`, or `PI_CODING_AGENT_DIR` is set in the environment so commands resolve the intended directory.
+Inside a worker, `openNativeRuntime` (`packages/agent-service/src/worker/native-runtime.ts`) applies this precedence:
+1. **Named profile:** use `OMP_PROFILE` when it is defined, otherwise `PI_PROFILE`. An empty value or `default` selects no profile; an invalid name throws. When a profile resolves, `setProfile(profile)` selects `$HOME/.omp/profiles/<profile>/agent` in OMP's process-wide path resolver, and that resolver ignores the captured agent directory.
+2. **Captured agent directory:** with no named profile, `setAgentDir(capturedAgentDirectory)` makes the Host-captured directory authoritative for OMP's resolver and sets `PI_CODING_AGENT_DIR` to it.
+
+In both branches the worker passes the captured agent directory explicitly to settings, credential discovery, and default session-directory resolution. The Host-managed credential database is therefore `<captured agent directory>/agent.db`, and Host-managed session transcripts are under `<captured agent directory>/sessions`. For the default Host setup, the backup target described below is `$HOME/.omp/agent`.
 - **`sessions/**/session.jsonl`**:
   - Canonical agent conversation transcripts and turn history in JSON Lines format.
 - **`agent.db`**:
@@ -46,29 +47,52 @@ When executing backup and restore procedures, operators using named profiles or 
 
 - **Never include `agent.db` in shareable or unencrypted backups.**
 - If creating an archive for bug reporting, team migration, or non-secure transport, exclude `agent.db`.
-- When restoring to a new machine or environment without `agent.db`, the Host and Agent Service will start normally, and the user can re-authenticate providers in Settings.
+- Standard session transcript backups must never contain `agent.db`. Credential backups require an explicitly specified, operator-controlled encrypted destination volume (`ENCRYPTED_CREDENTIALS_DEST`) or direct encryption pipeline (e.g. `gpg`).
+- When restoring to a new machine or environment without `agent.db`, the Host and Agent Service start normally, and the operator or user can re-authenticate providers in Settings.
 - File permissions for all SQLite files, sidecars, and `agent.db` must remain restricted to the owning user (`mode 0600`, directories `mode 0700`).
 
 ---
 
 ## 3. Consistent, WAL-Safe Backup Procedure
 
-All Host SQLite databases operate in WAL (`Write-Ahead Logging`) mode (`PRAGMA journal_mode = WAL`). When active, uncommitted or recently committed transactions reside in the `-wal` file. Copying a live SQLite database while processes are actively writing can produce a corrupt or inconsistent backup.
+All Host SQLite databases operate in WAL (`Write-Ahead Logging`) mode (`PRAGMA journal_mode = WAL`). When active, uncommitted or recently committed transactions reside in the `-wal` file. Copying a live SQLite database with shell tools while processes are actively writing is unsafe because sequential file copies cannot guarantee a point-in-time coherent snapshot between the database file, WAL index, and WAL log frames.
 
-### Step-by-Step Backup
+A coherent snapshot requires either:
+1. **Verifiable Full Quiescence (Offline Snapshot)**: Stopping all processes, verifying complete termination so all write locks and open descriptors are released, and copying the quiescent database and any present sidecars.
+2. **SQLite-Level Atomic Snapshot**: Using SQLite's native atomic snapshot capability (`VACUUM INTO 'destination.sqlite'`) through `node:sqlite` or the SQLite API, which checkpoints all WAL state into a single consistent database file without stopping readers.
 
-1. **Stop all running processes**:
-   Stop the OpenChamber server, Electron desktop shell, the Bun Agent Service, and any spawned worker processes. Verify no process holds open file descriptors on the data directory.
+### Step-by-Step Verifiable Offline Backup
+
+1. **Stop all running processes and verify full quiescence**:
+   Signal all OpenChamber and Agent Service processes to stop, then verify that all processes have exited:
    ```bash
-   # Ensure all OpenChamber and Agent Service processes are stopped
-   pkill -f "openchamber" || true
-   pkill -f "agent-service" || true
+   # Terminate running Host and Agent Service processes
+   pkill -TERM -f "openchamber" 2>/dev/null || true
+   pkill -TERM -f "agent-service" 2>/dev/null || true
+
+   # Wait and verify complete termination
+   timeout_counter=0
+   while pgrep -f "openchamber" >/dev/null || pgrep -f "agent-service" >/dev/null; do
+     if [ "$timeout_counter" -ge 10 ]; then
+       echo "Warning: Processes did not terminate cleanly after 10s; sending SIGKILL" >&2
+       pkill -KILL -f "openchamber" 2>/dev/null || true
+       pkill -KILL -f "agent-service" 2>/dev/null || true
+       sleep 1
+       break
+     fi
+     sleep 1
+     timeout_counter=$((timeout_counter + 1))
+   done
+
+   # Verify no processes remain running
+   if pgrep -f "openchamber" >/dev/null || pgrep -f "agent-service" >/dev/null; then
+     echo "Error: Failed to stop OpenChamber processes; aborting backup to prevent incoherent state" >&2
+     exit 1
+   fi
    ```
 
-2. **Verify / Checkpoint WAL sidecars (if offline copying)**:
-   When cleanly shut down, SQLite automatically checkpoints and flushes transactions. However, always preserve the sidecar files if they exist:
-   - For `host-metadata.sqlite`, include `host-metadata.sqlite`, `host-metadata.sqlite-wal`, and `host-metadata.sqlite-shm`.
-   - For `host-approval-policies.sqlite`, include `host-approval-policies.sqlite`, `host-approval-policies.sqlite-wal`, and `host-approval-policies.sqlite-shm`.
+2. **Verify / Checkpoint WAL sidecars**:
+   When cleanly shut down, SQLite automatically checkpoints transactions into the main database. However, offline copying must preserve any remaining sidecar files (`-wal` and `-shm`) if present, copying each file explicitly without wildcard expansion.
 
 3. **Archive Host Gateway data**:
    ```bash
@@ -78,7 +102,7 @@ All Host SQLite databases operate in WAL (`Write-Ahead Logging`) mode (`PRAGMA j
      exit 1
    fi
 
-   # Define concrete backup root (override with OPENCHAMBER_BACKUP_DIR or default to $HOME/openchamber-backups):
+   # Define concrete backup root (default to $HOME/openchamber-backups, override with OPENCHAMBER_BACKUP_DIR):
    BACKUP_ROOT="${OPENCHAMBER_BACKUP_DIR:-$HOME/openchamber-backups}"
    mkdir -p "$BACKUP_ROOT" || { echo "Error: Failed to create backup root directory: $BACKUP_ROOT" >&2; exit 1; }
    if [ ! -w "$BACKUP_ROOT" ]; then
@@ -89,12 +113,29 @@ All Host SQLite databases operate in WAL (`Write-Ahead Logging`) mode (`PRAGMA j
    TIMESTAMP="$(date +%Y%m%d%H%M%S)"
    BACKUP_DEST="$BACKUP_ROOT/openchamber-host-$TIMESTAMP"
    mkdir -p "$BACKUP_DEST" || { echo "Error: Failed to create Host backup destination directory: $BACKUP_DEST" >&2; exit 1; }
+   chmod 700 "$BACKUP_DEST"
 
-   # Copy Host SQLite databases and sidecars
-   cp -p "$DATA_DIR"/host-metadata.sqlite* "$BACKUP_DEST/" || { echo "Error: Failed to copy host-metadata database" >&2; exit 1; }
-   cp -p "$DATA_DIR"/host-approval-policies.sqlite* "$BACKUP_DEST/" || { echo "Error: Failed to copy host-approval-policies database" >&2; exit 1; }
+   # Guard required Host databases and copy main files
+   for db_file in "host-metadata.sqlite" "host-approval-policies.sqlite"; do
+     src_db="$DATA_DIR/$db_file"
+     if [ ! -f "$src_db" ]; then
+       echo "Error: Required Host database not found: $src_db" >&2
+       exit 1
+     fi
+     cp -p "$src_db" "$BACKUP_DEST/" || { echo "Error: Failed to copy database: $src_db" >&2; exit 1; }
+     chmod 600 "$BACKUP_DEST/$db_file"
 
-   # Copy attachments and settings
+     # Copy present sidecar files explicitly (avoiding unmatched wildcards)
+     for suffix in "-wal" "-shm"; do
+       src_sidecar="$src_db$suffix"
+       if [ -f "$src_sidecar" ]; then
+         cp -p "$src_sidecar" "$BACKUP_DEST/" || { echo "Error: Failed to copy sidecar: $src_sidecar" >&2; exit 1; }
+         chmod 600 "$BACKUP_DEST/$db_file$suffix"
+       fi
+     done
+   done
+
+   # Copy attachments, projects, settings, and legacy queue
    [ -d "$DATA_DIR/attachments" ] && cp -rp "$DATA_DIR/attachments" "$BACKUP_DEST/"
    [ -d "$DATA_DIR/projects" ] && cp -rp "$DATA_DIR/projects" "$BACKUP_DEST/"
    [ -f "$DATA_DIR/settings.json" ] && cp -p "$DATA_DIR/settings.json" "$BACKUP_DEST/"
@@ -103,17 +144,9 @@ All Host SQLite databases operate in WAL (`Write-Ahead Logging`) mode (`PRAGMA j
 
 4. **Archive OMP session transcripts (content)**:
    ```bash
-   # Resolve the active OMP directory:
-   ACTIVE_PROFILE="${OMP_PROFILE:-$PI_PROFILE}"
-   if [ -n "$PI_CODING_AGENT_DIR" ]; then
-     OMP_DIR="$PI_CODING_AGENT_DIR"
-   elif [ -n "$ACTIVE_PROFILE" ]; then
-     OMP_DIR="$HOME/.omp/profiles/$ACTIVE_PROFILE/agent"
-   elif [ -n "$XDG_DATA_HOME" ] && [ -d "$XDG_DATA_HOME/omp" ]; then
-     OMP_DIR="$XDG_DATA_HOME/omp"
-   else
-     OMP_DIR="$HOME/.omp/agent"
-   fi
+   # Host-captured agent directory used for OpenChamber-managed sessions and credentials.
+   # The current Host default is fixed; named OMP profiles do not relocate it.
+   OMP_DIR="$HOME/.omp/agent"
 
    if [ ! -d "$OMP_DIR" ]; then
      echo "Error: OMP agent directory not found or not a directory: $OMP_DIR" >&2
@@ -127,6 +160,7 @@ All Host SQLite databases operate in WAL (`Write-Ahead Logging`) mode (`PRAGMA j
      echo "Error: OMP backup directory is not writable: $OMP_BACKUP_DEST" >&2
      exit 1
    fi
+   chmod 700 "$OMP_BACKUP_DEST"
 
    # Copy session transcripts
    if [ -d "$OMP_DIR/sessions" ]; then
@@ -134,18 +168,39 @@ All Host SQLite databases operate in WAL (`Write-Ahead Logging`) mode (`PRAGMA j
    fi
    ```
 
-5. **Optional: Archive OMP credentials (secure storage only)**:
+5. **Optional: Archive OMP credentials (secure encrypted storage only)**:
+   Credentials in `agent.db` must NEVER be copied into standard or shared backups. An operator requiring credential backup MUST explicitly supply an encrypted destination directory:
    ```bash
-   # ONLY if backing up to secure, encrypted, single-user storage:
-   if [ -f "$OMP_DIR/agent.db" ]; then
-     SECURE_DEST="${OPENCHAMBER_SECURE_VAULT:-$HOME/.config/openchamber-vault}/omp-credentials"
-     mkdir -p "$SECURE_DEST" || { echo "Error: Failed to create secure vault directory: $SECURE_DEST" >&2; exit 1; }
-     if [ ! -w "$SECURE_DEST" ]; then
-       echo "Error: Secure vault directory is not writable: $SECURE_DEST" >&2
+   # Operator MUST explicitly set ENCRYPTED_CREDENTIALS_DEST (e.g. an encrypted filesystem mount)
+   if [ -z "$ENCRYPTED_CREDENTIALS_DEST" ]; then
+     echo "Notice: ENCRYPTED_CREDENTIALS_DEST is not set. Skipping credential backup."
+     echo "        Provider credentials in agent.db remain on this machine only."
+   else
+     if [ ! -d "$ENCRYPTED_CREDENTIALS_DEST" ]; then
+       echo "Error: ENCRYPTED_CREDENTIALS_DEST is set but not an existing directory: $ENCRYPTED_CREDENTIALS_DEST" >&2
        exit 1
      fi
-     cp -p "$OMP_DIR"/agent.db* "$SECURE_DEST/" || { echo "Error: Failed to copy agent credentials to secure vault" >&2; exit 1; }
-     chmod 600 "$SECURE_DEST"/agent.db*
+     if [ ! -w "$ENCRYPTED_CREDENTIALS_DEST" ]; then
+       echo "Error: ENCRYPTED_CREDENTIALS_DEST is not writable: $ENCRYPTED_CREDENTIALS_DEST" >&2
+       exit 1
+     fi
+
+     # Enforce restrictive directory permissions on the encrypted destination
+     chmod 700 "$ENCRYPTED_CREDENTIALS_DEST"
+
+     if [ -f "$OMP_DIR/agent.db" ]; then
+       cp -p "$OMP_DIR/agent.db" "$ENCRYPTED_CREDENTIALS_DEST/" || { echo "Error: Failed to copy agent.db" >&2; exit 1; }
+       chmod 600 "$ENCRYPTED_CREDENTIALS_DEST/agent.db"
+
+       for suffix in "-wal" "-shm"; do
+         if [ -f "$OMP_DIR/agent.db$suffix" ]; then
+           cp -p "$OMP_DIR/agent.db$suffix" "$ENCRYPTED_CREDENTIALS_DEST/" || { echo "Error: Failed to copy agent.db$suffix" >&2; exit 1; }
+           chmod 600 "$ENCRYPTED_CREDENTIALS_DEST/agent.db$suffix"
+         fi
+       done
+     else
+       echo "Notice: agent.db does not exist in $OMP_DIR; no credentials to archive."
+     fi
    fi
    ```
 
@@ -173,14 +228,31 @@ All Host SQLite databases operate in WAL (`Write-Ahead Logging`) mode (`PRAGMA j
    # Remove any existing SQLite files and sidecars to prevent stale WAL merges
    rm -f "$RESTORE_DIR"/host-metadata.sqlite* "$RESTORE_DIR"/host-approval-policies.sqlite*
 
-   cp -p "$BACKUP_DEST"/host-metadata.sqlite* "$RESTORE_DIR/" || { echo "Error: Failed to restore Host SQLite databases" >&2; exit 1; }
-   cp -p "$BACKUP_DEST"/host-approval-policies.sqlite* "$RESTORE_DIR/" || { echo "Error: Failed to restore Host approval policies database" >&2; exit 1; }
+   # Restore required Host databases and any present sidecars
+   for db_file in "host-metadata.sqlite" "host-approval-policies.sqlite"; do
+     backup_db="$BACKUP_DEST/$db_file"
+     if [ ! -f "$backup_db" ]; then
+       echo "Error: Required database not found in backup: $backup_db" >&2
+       exit 1
+     fi
+     cp -p "$backup_db" "$RESTORE_DIR/" || { echo "Error: Failed to restore $db_file" >&2; exit 1; }
+     chmod 600 "$RESTORE_DIR/$db_file"
+
+     for suffix in "-wal" "-shm"; do
+       backup_sidecar="$backup_db$suffix"
+       if [ -f "$backup_sidecar" ]; then
+         cp -p "$backup_sidecar" "$RESTORE_DIR/" || { echo "Error: Failed to restore $db_file$suffix" >&2; exit 1; }
+         chmod 600 "$RESTORE_DIR/$db_file$suffix"
+       fi
+     done
+   done
+
    [ -d "$BACKUP_DEST/attachments" ] && cp -rp "$BACKUP_DEST/attachments" "$RESTORE_DIR/"
    [ -d "$BACKUP_DEST/projects" ] && cp -rp "$BACKUP_DEST/projects" "$RESTORE_DIR/"
    [ -f "$BACKUP_DEST/settings.json" ] && cp -p "$BACKUP_DEST/settings.json" "$RESTORE_DIR/"
    [ -f "$BACKUP_DEST/message-queue.json" ] && cp -p "$BACKUP_DEST/message-queue.json" "$RESTORE_DIR/"
 
-   # Ensure tight permissions
+   # Ensure tight permissions on all restored SQLite files
    chmod 600 "$RESTORE_DIR"/*.sqlite* 2>/dev/null || true
    ```
 
@@ -191,17 +263,9 @@ All Host SQLite databases operate in WAL (`Write-Ahead Logging`) mode (`PRAGMA j
      exit 1
    fi
 
-   # Resolve the active OMP restore destination:
-   ACTIVE_PROFILE="${OMP_PROFILE:-$PI_PROFILE}"
-   if [ -n "$PI_CODING_AGENT_DIR" ]; then
-     OMP_RESTORE_DIR="$PI_CODING_AGENT_DIR"
-   elif [ -n "$ACTIVE_PROFILE" ]; then
-     OMP_RESTORE_DIR="$HOME/.omp/profiles/$ACTIVE_PROFILE/agent"
-   elif [ -n "$XDG_DATA_HOME" ] && [ -d "$XDG_DATA_HOME/omp" ]; then
-     OMP_RESTORE_DIR="$XDG_DATA_HOME/omp"
-   else
-     OMP_RESTORE_DIR="$HOME/.omp/agent"
-   fi
+   # Host-captured agent directory used for OpenChamber-managed sessions and credentials.
+   # The current Host default is fixed; named OMP profiles do not relocate it.
+   OMP_RESTORE_DIR="$HOME/.omp/agent"
    mkdir -p "$OMP_RESTORE_DIR" || { echo "Error: Failed to create OMP restore directory: $OMP_RESTORE_DIR" >&2; exit 1; }
    if [ ! -w "$OMP_RESTORE_DIR" ]; then
      echo "Error: OMP restore directory is not writable: $OMP_RESTORE_DIR" >&2
@@ -213,15 +277,22 @@ All Host SQLite databases operate in WAL (`Write-Ahead Logging`) mode (`PRAGMA j
      cp -rp "$OMP_BACKUP_DEST/sessions" "$OMP_RESTORE_DIR/" || { echo "Error: Failed to restore OMP session transcripts" >&2; exit 1; }
    fi
 
-   # If restoring credentials:
-   if [ -n "$SECURE_DEST" ]; then
-     if [ ! -d "$SECURE_DEST" ]; then
-       echo "Error: SECURE_DEST is set but not a directory: $SECURE_DEST" >&2
+   # If restoring credentials from secure encrypted vault:
+   if [ -n "$ENCRYPTED_CREDENTIALS_SRC" ]; then
+     if [ ! -d "$ENCRYPTED_CREDENTIALS_SRC" ]; then
+       echo "Error: ENCRYPTED_CREDENTIALS_SRC is not a valid directory: $ENCRYPTED_CREDENTIALS_SRC" >&2
        exit 1
      fi
-     if [ -f "$SECURE_DEST/agent.db" ]; then
-       cp -p "$SECURE_DEST"/agent.db* "$OMP_RESTORE_DIR/" || { echo "Error: Failed to restore credentials" >&2; exit 1; }
-       chmod 600 "$OMP_RESTORE_DIR"/agent.db*
+     if [ -f "$ENCRYPTED_CREDENTIALS_SRC/agent.db" ]; then
+       cp -p "$ENCRYPTED_CREDENTIALS_SRC/agent.db" "$OMP_RESTORE_DIR/" || { echo "Error: Failed to restore agent.db" >&2; exit 1; }
+       chmod 600 "$OMP_RESTORE_DIR/agent.db"
+
+       for suffix in "-wal" "-shm"; do
+         if [ -f "$ENCRYPTED_CREDENTIALS_SRC/agent.db$suffix" ]; then
+           cp -p "$ENCRYPTED_CREDENTIALS_SRC/agent.db$suffix" "$OMP_RESTORE_DIR/" || { echo "Error: Failed to restore agent.db$suffix" >&2; exit 1; }
+           chmod 600 "$OMP_RESTORE_DIR/agent.db$suffix"
+         fi
+       done
      fi
    fi
    ```

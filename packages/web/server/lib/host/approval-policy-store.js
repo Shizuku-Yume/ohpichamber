@@ -9,6 +9,17 @@ const loadDatabaseSync = () => {
   return DatabaseSync;
 };
 
+// Create each SQLite file before the connection opens. O_CREAT with mode 0600
+// means a new inode never exists with broader access: umask can only clear bits
+// from the requested mode. The chmod tightens files left by an earlier release;
+// it is not what protects a new file. Pre-creating the sidecars also stops
+// SQLite from creating them itself before any post-open chmod can run. This uses
+// no process-global umask mutation, so concurrent openers cannot race.
+const ensurePrivateSqliteFile = (fsImpl, filePath) => {
+  if (!fsImpl.existsSync(filePath)) fsImpl.closeSync(fsImpl.openSync(filePath, 'a', 0o600));
+  fsImpl.chmodSync(filePath, 0o600);
+};
+
 const normalize = (value) => typeof value === 'string' && value.length > 0 ? value : null;
 const validatePolicy = (policy) => {
   if (!policy || !['session', 'workspace'].includes(policy.scope) || (policy.scope === 'session' ? policy.decision !== 'allow' : policy.decision !== 'deny')) return null;
@@ -83,11 +94,11 @@ export const openApprovalPolicyStore = ({ dataDir, databasePath, fsImpl = fs, pa
   const sidecarPaths = [`${filePath}-wal`, `${filePath}-shm`];
   try {
     fsImpl.mkdirSync(directoryPath, { recursive: true, mode: 0o700 });
-    if (!fsImpl.existsSync(filePath)) fsImpl.closeSync(fsImpl.openSync(filePath, 'a', 0o600));
-    fsImpl.chmodSync(filePath, 0o600);
-    for (const sidecarPath of sidecarPaths) {
-      if (fsImpl.existsSync(sidecarPath)) fsImpl.chmodSync(sidecarPath, 0o600);
-    }
+    ensurePrivateSqliteFile(fsImpl, filePath);
+    // Pre-create both sidecars so SQLite reuses 0600 inodes instead of creating
+    // its own. Concurrent openers may race on creation, but O_CREAT with 0600
+    // means every winner's inode is already private.
+    for (const sidecarPath of sidecarPaths) ensurePrivateSqliteFile(fsImpl, sidecarPath);
     const db = new (loadDatabaseSync())(filePath, { timeout: 5000 });
     try {
       ensureApprovalPolicySchema(db);
@@ -102,20 +113,27 @@ export const openApprovalPolicyStore = ({ dataDir, databasePath, fsImpl = fs, pa
       commit({ scope, sessionId, rootSessionId, projectId, workspaceId, decision, target }) {
         const policy = validatePolicy({ scope, decision, target });
         if (!policy || !normalize(workspaceId) || !normalize(projectId) || (scope === 'session' && !normalize(sessionId))) throw new ApprovalPolicyWriteError('Invalid approval policy');
+        let revision;
+        let policyId;
         try {
           db.exec('BEGIN IMMEDIATE');
           const revisionQuery = db.prepare('SELECT revision FROM approval_policies ORDER BY revision DESC LIMIT 1');
           revisionQuery.setReadBigInts(true);
-          const revision = (revisionQuery.get()?.revision ?? 0n) + 1n;
+          revision = (revisionQuery.get()?.revision ?? 0n) + 1n;
           const existing = db.prepare('SELECT policy_id FROM approval_policies WHERE scope=? AND session_id IS ? AND workspace_id=? AND project_id=? AND tool_name=? AND pattern=?').get(scope, scope === 'session' ? sessionId : null, workspaceId, projectId, target.toolName, target.pattern);
-          const policyId = existing?.policy_id ?? crypto.randomUUID();
+          policyId = existing?.policy_id ?? crypto.randomUUID();
           db.prepare(`INSERT INTO approval_policies(policy_id,revision,session_id,root_session_id,project_id,workspace_id,scope,decision,tool_name,pattern) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(policy_id) DO UPDATE SET revision=excluded.revision,decision=excluded.decision`).run(policyId, revision, scope === 'session' ? sessionId : null, rootSessionId ?? null, projectId, workspaceId, scope, decision, target.toolName, target.pattern);
           db.exec('COMMIT');
-          for (const sidecarPath of sidecarPaths) {
+        } catch (error) {
+          try { db.exec('ROLLBACK'); } catch {}
+          throw new ApprovalPolicyWriteError('Could not write approval policy', error);
+        }
+        for (const sidecarPath of sidecarPaths) {
+          try {
             if (fsImpl.existsSync(sidecarPath)) fsImpl.chmodSync(sidecarPath, 0o600);
-          }
-          return { policyId, revision: String(revision), scope, decision, target: { toolName: target.toolName, pattern: target.pattern } };
-        } catch (error) { try { db.exec('ROLLBACK'); } catch {} throw new ApprovalPolicyWriteError('Could not write approval policy', error); }
+          } catch { /* sidecar tightening is best-effort post-commit */ }
+        }
+        return { policyId, revision: String(revision), scope, decision, target: { toolName: target.toolName, pattern: target.pattern } };
       },
       list({ sessionId, projectId, workspaceId }) {
         if (!normalize(sessionId) || !normalize(projectId) || !normalize(workspaceId)) throw new ApprovalPolicyWriteError('Invalid approval policy scope');

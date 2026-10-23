@@ -41,13 +41,13 @@ Implementation:
   - Legacy `message-queue.json` disposition: retained as immutable conversion source and safety net, skipped on subsequent starts via `prompt_queue_conversion` receipts, with manual operator cleanup guidance once verified.
 - Added comprehensive automated regression tests:
   - `packages/web/server/lib/host/metadata-sqlite.test.js`: fresh database user_version, legacy migrations, reopening idempotency, newer schema version refusal without write.
-  - `packages/web/server/lib/host/approval-policy-store.test.js`: fresh database schema version, legacy migrations, reopening idempotency, newer schema version refusal without write, umask 022 private sidecar creation and pre-existing sidecar tightening.
+  - `packages/web/server/lib/host/approval-policy-store.test.js`: fresh database schema version, legacy migrations, reopening idempotency, newer schema version refusal without write, umask 022 private sidecar creation, pre-existing sidecar tightening, and a concurrent/recreation regression (`recreates private sidecars across concurrent opens and reopen under umask 022`) that runs four child processes through repeated open/commit/close cycles and then reopens after deleting both sidecars, asserting the data directory is `0700` and main/WAL/SHM are `0600` throughout.
   - `packages/web/server/lib/host/backup-restore.test.js`: end-to-end disposable-HOME backup and restore verification using real public APIs (`getState(scope)` with revision, items, options, status assertions; `list(scope)`, `openHostMetadataDatabase`, OMP JSONL transcripts, and isolated `agent.db` credentials).
-- Hardened approval policy sidecar permissions (`0o600`) in `packages/web/server/lib/host/approval-policy-store.js` before open, after schema setup, and post-commit with full parity to metadata store.
-- Made OMP agent directory profile resolution (`OMP_PROFILE`/`PI_PROFILE`), XDG fallback, and explicit `PI_CODING_AGENT_DIR` override explicit and consistent, with concrete documented destination conventions and defined path error handling across inventory and backup/restore procedures in `docs/BACKUP_AND_RESTORE.md`.
+- Made approval policy SQLite permissions safe at creation, not just after the fact: `packages/web/server/lib/host/approval-policy-store.js` creates the main database and both sidecars with `O_CREAT` and mode `0600` before `node:sqlite` opens the database, then tightens pre-existing files with `chmod`. Because umask can only clear bits from the requested mode, a newly created inode can never be broader than `0600`; pre-creating `-wal`/`-shm` prevents SQLite from creating them before a post-open chmod. No process-global umask mutation is used.
+- Documented the exact OMP agent directory precedence in `docs/BACKUP_AND_RESTORE.md`: the Host captures `path.join(os.homedir(), '.omp', 'agent')` (no `PI_CODING_AGENT_DIR`/XDG lookup), workers force `PI_CODING_AGENT_DIR` to it, and `openNativeRuntime` prefers a named `OMP_PROFILE`/`PI_PROFILE` via `setProfile` (selecting `$HOME/.omp/profiles/<profile>/agent`) or otherwise calls `setAgentDir(capturedAgentDirectory)`. Settings, credential discovery, and default session resolution keep the captured directory explicitly, so Host-managed sessions and `agent.db` remain under `$HOME/.omp/agent`.
 
 Check after:
-- `bun run --cwd packages/web vitest run server/lib/host/metadata-sqlite.test.js server/lib/host/approval-policy-store.test.js server/lib/host/backup-restore.test.js`: 13 passed (13 tests across 3 files).
+- `bun run --cwd packages/web vitest run server/lib/host/metadata-sqlite.test.js server/lib/host/approval-policy-store.test.js server/lib/host/backup-restore.test.js`: 14 passed (14 tests across 3 files).
 - `node --test packages/web/server/lib/message-queue/sqlite-store.test.js`: 4 passed (4 tests).
 - Standalone disposable-HOME backup and restore smoke script: exit 0 (`disposable-home-smoke.log`).
 - `bun run dead-code`: 0 findings (`dead-code.log`).
@@ -55,5 +55,6 @@ Check after:
 - `bun run type-check`: exit 0 on all packages (`type-check.log`).
 - `bun run docs:validate`: 672 pages, 56 links passed.
 - `.workflow/bin/workflow validate --no-color`: exit 0, 120 task files valid.
-- `bun run --cwd packages/web test`: 377 passed | 9 skipped files (386), 6116 passed | 135 skipped tests (6251).
+- `bun run test`: 7/7 suites passed, exit 0 (`root-test-final.log`).
+- `bun run --cwd packages/web test`: 377 passed | 9 skipped files (386), 6117 passed | 135 skipped tests (6252).
 - Evidence logs: `/home/shizuku/Project/ohpichamber-omp-artifacts/task19-2026-10-23/`.

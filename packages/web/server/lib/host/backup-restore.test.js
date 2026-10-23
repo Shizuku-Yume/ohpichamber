@@ -130,27 +130,46 @@ describe('Host and Agent backup and restore verification', () => {
     const backupDir = makeDir('backup-dest-');
     const hostBackupDir = path.join(backupDir, 'host');
     const ompBackupDir = path.join(backupDir, 'omp-sessions');
-    const secureVaultDir = path.join(backupDir, 'secure-vault');
+    const encryptedVaultDir = makeDir('encrypted-vault-');
     fs.mkdirSync(hostBackupDir, { recursive: true, mode: 0o700 });
     fs.mkdirSync(ompBackupDir, { recursive: true, mode: 0o700 });
-    fs.mkdirSync(secureVaultDir, { recursive: true, mode: 0o700 });
+    fs.chmodSync(encryptedVaultDir, 0o700);
 
-    // Host copy
-    for (const file of fs.readdirSync(sourceDataDir)) {
-      const srcPath = path.join(sourceDataDir, file);
-      const dstPath = path.join(hostBackupDir, file);
-      if (fs.statSync(srcPath).isDirectory()) {
-        fs.cpSync(srcPath, dstPath, { recursive: true });
-      } else {
-        fs.copyFileSync(srcPath, dstPath);
+    // Host guarded backup
+    for (const dbName of ['host-metadata.sqlite', 'host-approval-policies.sqlite']) {
+      const srcDb = path.join(sourceDataDir, dbName);
+      expect(fs.existsSync(srcDb)).toBe(true);
+      fs.copyFileSync(srcDb, path.join(hostBackupDir, dbName));
+      fs.chmodSync(path.join(hostBackupDir, dbName), 0o600);
+      for (const suffix of ['-wal', '-shm']) {
+        const sidecar = `${srcDb}${suffix}`;
+        if (fs.existsSync(sidecar)) {
+          fs.copyFileSync(sidecar, path.join(hostBackupDir, `${dbName}${suffix}`));
+          fs.chmodSync(path.join(hostBackupDir, `${dbName}${suffix}`), 0o600);
+        }
       }
+    }
+
+    if (fs.existsSync(path.join(sourceDataDir, 'attachments'))) {
+      fs.cpSync(path.join(sourceDataDir, 'attachments'), path.join(hostBackupDir, 'attachments'), { recursive: true });
+    }
+    if (fs.existsSync(path.join(sourceDataDir, 'projects'))) {
+      fs.cpSync(path.join(sourceDataDir, 'projects'), path.join(hostBackupDir, 'projects'), { recursive: true });
+    }
+    if (fs.existsSync(path.join(sourceDataDir, 'settings.json'))) {
+      fs.copyFileSync(path.join(sourceDataDir, 'settings.json'), path.join(hostBackupDir, 'settings.json'));
+    }
+    if (fs.existsSync(path.join(sourceDataDir, 'message-queue.json'))) {
+      fs.copyFileSync(path.join(sourceDataDir, 'message-queue.json'), path.join(hostBackupDir, 'message-queue.json'));
     }
 
     // OMP session copy (unencrypted)
     fs.cpSync(path.join(sourceOmpDir, 'sessions'), path.join(ompBackupDir, 'sessions'), { recursive: true });
 
-    // Secure credentials copy (kept separate from unencrypted session backup)
-    fs.copyFileSync(agentDbPath, path.join(secureVaultDir, 'agent.db'));
+    // Secure credentials copy (kept strictly separate in operator-provided encrypted vault)
+    expect(fs.existsSync(agentDbPath)).toBe(true);
+    fs.copyFileSync(agentDbPath, path.join(encryptedVaultDir, 'agent.db'));
+    fs.chmodSync(path.join(encryptedVaultDir, 'agent.db'), 0o600);
 
     // Verify credential was NOT copied to standard session backup
     expect(fs.existsSync(path.join(ompBackupDir, 'agent.db'))).toBe(false);
@@ -162,23 +181,47 @@ describe('Host and Agent backup and restore verification', () => {
     fs.mkdirSync(restoreDataDir, { recursive: true, mode: 0o700 });
     fs.mkdirSync(restoreOmpDir, { recursive: true, mode: 0o700 });
 
-    // Restore Host data
-    for (const file of fs.readdirSync(hostBackupDir)) {
-      const srcPath = path.join(hostBackupDir, file);
-      const dstPath = path.join(restoreDataDir, file);
-      if (fs.statSync(srcPath).isDirectory()) {
-        fs.cpSync(srcPath, dstPath, { recursive: true });
-      } else {
-        fs.copyFileSync(srcPath, dstPath);
+    // Clean existing SQLite files in destination before restore
+    for (const f of fs.readdirSync(restoreDataDir)) {
+      if (f.endsWith('.sqlite') || f.includes('.sqlite-')) {
+        fs.unlinkSync(path.join(restoreDataDir, f));
       }
+    }
+
+    // Restore Host data with guarded checks
+    for (const dbName of ['host-metadata.sqlite', 'host-approval-policies.sqlite']) {
+      const backupDb = path.join(hostBackupDir, dbName);
+      expect(fs.existsSync(backupDb)).toBe(true);
+      fs.copyFileSync(backupDb, path.join(restoreDataDir, dbName));
+      fs.chmodSync(path.join(restoreDataDir, dbName), 0o600);
+      for (const suffix of ['-wal', '-shm']) {
+        const sidecar = `${backupDb}${suffix}`;
+        if (fs.existsSync(sidecar)) {
+          fs.copyFileSync(sidecar, path.join(restoreDataDir, `${dbName}${suffix}`));
+          fs.chmodSync(path.join(restoreDataDir, `${dbName}${suffix}`), 0o600);
+        }
+      }
+    }
+
+    if (fs.existsSync(path.join(hostBackupDir, 'attachments'))) {
+      fs.cpSync(path.join(hostBackupDir, 'attachments'), path.join(restoreDataDir, 'attachments'), { recursive: true });
+    }
+    if (fs.existsSync(path.join(hostBackupDir, 'projects'))) {
+      fs.cpSync(path.join(hostBackupDir, 'projects'), path.join(restoreDataDir, 'projects'), { recursive: true });
+    }
+    if (fs.existsSync(path.join(hostBackupDir, 'settings.json'))) {
+      fs.copyFileSync(path.join(hostBackupDir, 'settings.json'), path.join(restoreDataDir, 'settings.json'));
+    }
+    if (fs.existsSync(path.join(hostBackupDir, 'message-queue.json'))) {
+      fs.copyFileSync(path.join(hostBackupDir, 'message-queue.json'), path.join(restoreDataDir, 'message-queue.json'));
     }
 
     // Restore OMP sessions
     fs.cpSync(path.join(ompBackupDir, 'sessions'), path.join(restoreOmpDir, 'sessions'), { recursive: true });
 
-    // Restore credentials from secure vault
-    fs.copyFileSync(path.join(secureVaultDir, 'agent.db'), path.join(restoreOmpDir, 'agent.db'));
-
+    // Restore credentials from secure encrypted vault
+    fs.copyFileSync(path.join(encryptedVaultDir, 'agent.db'), path.join(restoreOmpDir, 'agent.db'));
+    fs.chmodSync(path.join(restoreOmpDir, 'agent.db'), 0o600);
     // 7. Verify restored Host metadata and prompt queue
     const restoredMeta = openHostMetadataDatabase({ dataDir: restoreDataDir });
     try {

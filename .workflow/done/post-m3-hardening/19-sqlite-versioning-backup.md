@@ -3,6 +3,18 @@
 **Effort:** post-m3-hardening
 **Task type:** feature
 **Base commit:** 7cc282d08504afc88d1531b6ba527009de3b0794
+**Reviewed functional commit:** ef4e7da3cb9d6441caa1857d7269e9dc6371cf14
+**Final evidence receipt:** `/home/shizuku/Project/ohpichamber-omp-artifacts/task19-2026-10-23/receipt.json` records the final commit SHA, the exact current-commit and `7cc282d08504afc88d1531b6ba527009de3b0794` base-to-HEAD path manifests, gate logs, and independent review receipts. A commit cannot embed its own hash, so this record cites that stable artifact path; the receipt is updated after each metadata-only commit.
+**Base-to-HEAD paths (`7cc282d08504afc88d1531b6ba527009de3b0794..final`):**
+- `.workflow/done/post-m3-hardening/19-sqlite-versioning-backup.md`
+- `.workflow/tasks/post-m3-hardening/19-sqlite-versioning-backup.md` (moved to `done/` by this task)
+- `docs/BACKUP_AND_RESTORE.md`
+- `packages/web/server/lib/host/approval-policy-store.js`
+- `packages/web/server/lib/host/approval-policy-store.test.js`
+- `packages/web/server/lib/host/backup-restore.test.js`
+- `packages/web/server/lib/host/metadata-sqlite.js`
+- `packages/web/server/lib/host/metadata-sqlite.test.js`
+- `packages/web/server/lib/message-queue/sqlite-store.js`
 **Started:** 2026-10-23T10:35:00Z
 **Finished:** 2026-10-23T15:25:00Z
 
@@ -46,6 +58,12 @@ Implementation:
 - Made approval policy SQLite permissions safe at creation, not just after the fact: `packages/web/server/lib/host/approval-policy-store.js` creates the main database and both sidecars with `O_CREAT` and mode `0600` before `node:sqlite` opens the database, then tightens pre-existing files with `chmod`. Because umask can only clear bits from the requested mode, a newly created inode can never be broader than `0600`; pre-creating `-wal`/`-shm` prevents SQLite from creating them before a post-open chmod. No process-global umask mutation is used.
 - Documented the exact OMP agent directory precedence in `docs/BACKUP_AND_RESTORE.md`: the Host captures `path.join(os.homedir(), '.omp', 'agent')` (no `PI_CODING_AGENT_DIR`/XDG lookup), workers force `PI_CODING_AGENT_DIR` to it, and `openNativeRuntime` prefers a named `OMP_PROFILE`/`PI_PROFILE` via `setProfile` (selecting `$HOME/.omp/profiles/<profile>/agent`) or otherwise calls `setAgentDir(capturedAgentDirectory)`. Settings, credential discovery, and default session resolution keep the captured directory explicitly, so Host-managed sessions and `agent.db` remain under `$HOME/.omp/agent`.
 
+### Final evidence and review
+
+The stable artifact receipt `/home/shizuku/Project/ohpichamber-omp-artifacts/task19-2026-10-23/receipt.json` records the final commit SHA, the exact current-commit and base-to-HEAD path manifests, gate logs, and independent review receipts with their exact reviewed boundaries. A commit cannot embed its own hash, so this record cites that artifact path; the receipt is updated after each metadata-only commit.
+
+`ef4e7da3cb9d6441caa1857d7269e9dc6371cf14` is the functional code/docs/test commit. Later commits only correct this task record and the operator documentation. The base-to-HEAD path manifest is recorded above. Review receipts are stored as `brief-a-receipt.json` and `brief-b-receipt.json` in the artifact directory, preserving prior reviewed-SHA receipts under distinct names; each receipt names the commit it reviewed so the archive, receipt, and review boundary can be checked together.
+
 Check after:
 - `bun run --cwd packages/web vitest run server/lib/host/metadata-sqlite.test.js server/lib/host/approval-policy-store.test.js server/lib/host/backup-restore.test.js`: 14 passed (14 tests across 3 files).
 - `node --test packages/web/server/lib/message-queue/sqlite-store.test.js`: 4 passed (4 tests).
@@ -57,4 +75,5 @@ Check after:
 - `.workflow/bin/workflow validate --no-color`: exit 0, 120 task files valid.
 - `bun run test`: 7/7 suites passed, exit 0 (`root-test-final.log`).
 - `bun run --cwd packages/web test`: 377 passed | 9 skipped files (386), 6117 passed | 135 skipped tests (6252).
+- Final metadata/docs commit: no implementation code changed after functional commit `ef4e7da3cb9d6441caa1857d7269e9dc6371cf14`; docs validation, workflow validation, and the disposable-HOME smoke were rerun for the final docs revision (`docs-validate-final.log`, `workflow-validate-final.log`, `disposable-home-smoke-final.log`).
 - Evidence logs: `/home/shizuku/Project/ohpichamber-omp-artifacts/task19-2026-10-23/`.

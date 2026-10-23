@@ -50,6 +50,7 @@ In both branches the worker passes the captured agent directory explicitly to se
 - Standard session transcript backups must never contain `agent.db`. Credential backups require an explicitly specified, operator-controlled encrypted destination volume (`ENCRYPTED_CREDENTIALS_DEST`) or direct encryption pipeline (e.g. `gpg`).
 - When restoring to a new machine or environment without `agent.db`, the Host and Agent Service start normally, and the operator or user can re-authenticate providers in Settings.
 - File permissions for all SQLite files, sidecars, and `agent.db` must remain restricted to the owning user (`mode 0600`, directories `mode 0700`).
+- On Windows, Node's filesystem mode arguments do not represent POSIX owner/group/other permissions; privacy there depends on the ACLs of the user-profile directories rather than `0600`/`0700`. The mode requirements and mode tests in this guide apply to POSIX platforms.
 
 ---
 
@@ -136,10 +137,18 @@ A coherent snapshot requires either:
    done
 
    # Copy attachments, projects, settings, and legacy queue
-   [ -d "$DATA_DIR/attachments" ] && cp -rp "$DATA_DIR/attachments" "$BACKUP_DEST/"
-   [ -d "$DATA_DIR/projects" ] && cp -rp "$DATA_DIR/projects" "$BACKUP_DEST/"
-   [ -f "$DATA_DIR/settings.json" ] && cp -p "$DATA_DIR/settings.json" "$BACKUP_DEST/"
-   [ -f "$DATA_DIR/message-queue.json" ] && cp -p "$DATA_DIR/message-queue.json" "$BACKUP_DEST/"
+   if [ -d "$DATA_DIR/attachments" ]; then
+     cp -rp "$DATA_DIR/attachments" "$BACKUP_DEST/" || { echo "Error: Failed to copy attachments" >&2; exit 1; }
+   fi
+   if [ -d "$DATA_DIR/projects" ]; then
+     cp -rp "$DATA_DIR/projects" "$BACKUP_DEST/" || { echo "Error: Failed to copy projects" >&2; exit 1; }
+   fi
+   if [ -f "$DATA_DIR/settings.json" ]; then
+     cp -p "$DATA_DIR/settings.json" "$BACKUP_DEST/" || { echo "Error: Failed to copy settings.json" >&2; exit 1; }
+   fi
+   if [ -f "$DATA_DIR/message-queue.json" ]; then
+     cp -p "$DATA_DIR/message-queue.json" "$BACKUP_DEST/" || { echo "Error: Failed to copy message-queue.json" >&2; exit 1; }
+   fi
    ```
 
 4. **Archive OMP session transcripts (content)**:
@@ -186,16 +195,16 @@ A coherent snapshot requires either:
      fi
 
      # Enforce restrictive directory permissions on the encrypted destination
-     chmod 700 "$ENCRYPTED_CREDENTIALS_DEST"
+     chmod 700 "$ENCRYPTED_CREDENTIALS_DEST" || { echo "Error: Failed to restrict encrypted destination permissions" >&2; exit 1; }
 
      if [ -f "$OMP_DIR/agent.db" ]; then
        cp -p "$OMP_DIR/agent.db" "$ENCRYPTED_CREDENTIALS_DEST/" || { echo "Error: Failed to copy agent.db" >&2; exit 1; }
-       chmod 600 "$ENCRYPTED_CREDENTIALS_DEST/agent.db"
+       chmod 600 "$ENCRYPTED_CREDENTIALS_DEST/agent.db" || { echo "Error: Failed to restrict copied agent.db permissions" >&2; exit 1; }
 
        for suffix in "-wal" "-shm"; do
          if [ -f "$OMP_DIR/agent.db$suffix" ]; then
            cp -p "$OMP_DIR/agent.db$suffix" "$ENCRYPTED_CREDENTIALS_DEST/" || { echo "Error: Failed to copy agent.db$suffix" >&2; exit 1; }
-           chmod 600 "$ENCRYPTED_CREDENTIALS_DEST/agent.db$suffix"
+           chmod 600 "$ENCRYPTED_CREDENTIALS_DEST/agent.db$suffix" || { echo "Error: Failed to restrict copied agent.db$suffix permissions" >&2; exit 1; }
          fi
        done
      else
@@ -247,10 +256,18 @@ A coherent snapshot requires either:
      done
    done
 
-   [ -d "$BACKUP_DEST/attachments" ] && cp -rp "$BACKUP_DEST/attachments" "$RESTORE_DIR/"
-   [ -d "$BACKUP_DEST/projects" ] && cp -rp "$BACKUP_DEST/projects" "$RESTORE_DIR/"
-   [ -f "$BACKUP_DEST/settings.json" ] && cp -p "$BACKUP_DEST/settings.json" "$RESTORE_DIR/"
-   [ -f "$BACKUP_DEST/message-queue.json" ] && cp -p "$BACKUP_DEST/message-queue.json" "$RESTORE_DIR/"
+   if [ -d "$BACKUP_DEST/attachments" ]; then
+     cp -rp "$BACKUP_DEST/attachments" "$RESTORE_DIR/" || { echo "Error: Failed to restore attachments" >&2; exit 1; }
+   fi
+   if [ -d "$BACKUP_DEST/projects" ]; then
+     cp -rp "$BACKUP_DEST/projects" "$RESTORE_DIR/" || { echo "Error: Failed to restore projects" >&2; exit 1; }
+   fi
+   if [ -f "$BACKUP_DEST/settings.json" ]; then
+     cp -p "$BACKUP_DEST/settings.json" "$RESTORE_DIR/" || { echo "Error: Failed to restore settings.json" >&2; exit 1; }
+   fi
+   if [ -f "$BACKUP_DEST/message-queue.json" ]; then
+     cp -p "$BACKUP_DEST/message-queue.json" "$RESTORE_DIR/" || { echo "Error: Failed to restore message-queue.json" >&2; exit 1; }
+   fi
 
    # Ensure tight permissions on all restored SQLite files
    chmod 600 "$RESTORE_DIR"/*.sqlite* 2>/dev/null || true
@@ -283,14 +300,17 @@ A coherent snapshot requires either:
        echo "Error: ENCRYPTED_CREDENTIALS_SRC is not a valid directory: $ENCRYPTED_CREDENTIALS_SRC" >&2
        exit 1
      fi
+     # Remove stale destination sidecars while all processes are stopped so the
+     # restored agent.db is not paired with another database's WAL/SHM state.
+     rm -f "$OMP_RESTORE_DIR/agent.db-wal" "$OMP_RESTORE_DIR/agent.db-shm"
      if [ -f "$ENCRYPTED_CREDENTIALS_SRC/agent.db" ]; then
        cp -p "$ENCRYPTED_CREDENTIALS_SRC/agent.db" "$OMP_RESTORE_DIR/" || { echo "Error: Failed to restore agent.db" >&2; exit 1; }
-       chmod 600 "$OMP_RESTORE_DIR/agent.db"
+       chmod 600 "$OMP_RESTORE_DIR/agent.db" || { echo "Error: Failed to restrict restored agent.db permissions" >&2; exit 1; }
 
        for suffix in "-wal" "-shm"; do
          if [ -f "$ENCRYPTED_CREDENTIALS_SRC/agent.db$suffix" ]; then
            cp -p "$ENCRYPTED_CREDENTIALS_SRC/agent.db$suffix" "$OMP_RESTORE_DIR/" || { echo "Error: Failed to restore agent.db$suffix" >&2; exit 1; }
-           chmod 600 "$OMP_RESTORE_DIR/agent.db$suffix"
+           chmod 600 "$OMP_RESTORE_DIR/agent.db$suffix" || { echo "Error: Failed to restrict restored agent.db$suffix permissions" >&2; exit 1; }
          fi
        done
      fi

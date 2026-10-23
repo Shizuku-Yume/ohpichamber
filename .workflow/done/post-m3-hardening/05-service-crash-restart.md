@@ -4,7 +4,7 @@
 **Task type:** bugfix
 **Base commit:** 05dd108e4
 **Started:** 2026-10-23T12:51:45+08:00
-**Status:** active
+**Finished:** 2026-10-23T14:28:00+08:00
 
 **Delivers:** After the Agent Service crashes, the Host restarts it with bounded backoff, health reports each state, and a crash loop ends in a visible failed state.
 

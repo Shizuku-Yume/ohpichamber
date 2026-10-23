@@ -35,9 +35,9 @@ Implementation:
 - `packages/agent-service/package.json` gains a `test` script with a 15 s per-test timeout; the two credential-reopen tests complete in about 7 s on this machine and exceeded Bun's 5 s default (assertions unchanged). `packages/agent-contract` already had `bun test src`.
 - `.github/workflows/oc-review.yml` runs the aggregate once; the redundant per-package Electron steps were removed because the Electron package `test` script already runs those files.
 
-Check after:
-- `bun run test` → exit 0, `[workspace-test] 7/7 suites passed`: scripts 22/22 files, sdk 23/23, ui 804/804, agent-contract 177 pass / 0 fail, agent-service 221 pass / 7 skip / 0 fail, electron 44/44, web 371 passed / 9 skipped files and 6095 passed / 135 skipped tests.
-- Failure injection: added a failing UI test; `bun run test` exited 1 with UI `803/804 test files passed, 1 failed`, and agent-contract, agent-service (221/7/0), electron (44/44) and web (371/9, 6095/135) still ran. Temporary test removed before the green run above.
+Check after (landing run on rebased `24b19ddda`, log `/home/shizuku/Project/ohpichamber-omp-artifacts/task02-2026-10-23/landing-root-test.log`):
+- `bun run test` → exit 0, `[workspace-test] 7/7 suites passed`: scripts 22/22 files, sdk 23/23, ui 804/804, agent-contract 177 pass / 0 fail, agent-service 222 pass / 7 skip / 0 fail, electron 44/44, web 373 passed / 9 skipped files and 6102 passed / 135 skipped tests.
+- Failure injection (run before the rebase): added a failing UI test; `bun run test` exited 1 with UI `803/804 test files passed, 1 failed`, and agent-contract, agent-service (221/7/0), electron (44/44) and web (371/9, 6095/135) still ran. Temporary test removed before every green run; the injection was not repeated.
 - `scripts/run-isolated-tests.mjs` file-test mode still passes its own `scripts` suite;
 - `bun run --cwd packages/ui type-check` and `bun run --cwd packages/ui lint` were green on the task 01 landing; this task changes no TypeScript source.
 

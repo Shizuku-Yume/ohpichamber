@@ -4,7 +4,7 @@
 **Task type:** bugfix
 **Base commit:** f72010e3e
 **Started:** 2026-10-23T04:40:17Z
-**Status:** active
+**Status:** paused
 
 **Delivers:** A slow SSE reader receives every retained event in order; only real loss or an exceeded per-subscriber bound sends `stream.invalidated`.
 
@@ -36,6 +36,8 @@ Authorization: the maintainer granted full permission and resolved the ownership
 Review boundary: `f72010e3e` + `.workflow/omp-migration/contracts.md`, `.workflow/tasks/post-m3-hardening/06-sse-backpressure.md`, `packages/agent-service/src/supervisor/{service.ts,event-stream.ts,event-stream.test.ts}`; round: 1; briefs: A,B; boundaries: Agent Service session SSE delivery (no authentication, credential or process boundary changed); findings: 0 blocking / 0 nonblocking. Brief A and Brief B both pass.
 Suite: `bun test packages/agent-service/src` — 223 pass / 7 skip / 0 fail across 33 files.
 Real path: the regression drives a real loopback HTTP/1.1 SSE connection and a real Node `ServerResponse` through `deliverSessionStream`; a full service process with a live OMP worker was not exercised (no provider available), and the delivery queue is independent of worker projection.
+
+Handoff: implementation, contract text, regression, both review briefs and the agent-service suite are complete and committed on `post-m3-hardening/06-sse-backpressure` in `/home/shizuku/Project/ohpichamber-worktrees/lane-c-hardening`. No open review findings. Next step once Lane A task 01 lands on `main`: `git rebase main`, run `bun run test` from the repository root until green, rerun this task's focused regression, then move this file to `.workflow/done/post-m3-hardening/`, run `.workflow/bin/workflow validate`, commit the archive, and fast-forward `main` per local-merge. `main` was still at `f72010e3e` and Lane A task 01 at `f6ef134bc` when this handoff was written. The worktree's `node_modules` is symlinked from the main checkout (untracked, not committed).
 
 ## Done when
 

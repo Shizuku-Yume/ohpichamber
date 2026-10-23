@@ -76,7 +76,9 @@ describe('Agent Service crash recovery', () => {
 
     children[0].emit('exit', 1, null);
     children[0].emit('close');
-    expect(service.getState().phase).toBe('failed');
+    expect(service.getState().phase).toBe('restarting');
+    expect(service.getState().pid).toBeNull();
+    expect(service.getState().port).toBeNull();
     await waitFor(() => children.length === 2 && service.getState().phase === 'ready');
 
     children[1].emit('exit', 1, null);
@@ -88,6 +90,35 @@ describe('Agent Service crash recovery', () => {
     await new Promise(resolve => setTimeout(resolve, 60));
     expect(children).toHaveLength(3);
     expect(service.getState().phase).toBe('failed');
+  });
+
+  it('never restarts when an explicit stop lands during the backoff window', async () => {
+    const children = [];
+    const service = createSupervisor(children);
+    await service.start();
+    children[0].emit('exit', 1, null);
+    children[0].emit('close');
+    expect(service.getState().phase).toBe('restarting');
+    await service.stop();
+    await new Promise(resolve => setTimeout(resolve, 60));
+    expect(children).toHaveLength(1);
+    expect(service.getState().phase).toBe('stopped');
+  });
+
+  it('schedules the next attempt when a recovery start fails', async () => {
+    const children = [];
+    const service = createSupervisor(children, {
+      startupTimeoutMs: 60,
+      fetchImpl: async () => {
+        if (children.length === 2) throw new Error('recovery service did not become ready');
+        return Response.json({ ready: true, engine: 'omp', version: '1.0.0' });
+      },
+    });
+    await service.start();
+    children[0].emit('exit', 1, null);
+    children[0].emit('close');
+    await waitFor(() => children.length === 3 && service.getState().phase === 'ready', 2_000);
+    expect(service.getState().phase).toBe('ready');
   });
 
   it('never restarts after an explicit stop', async () => {

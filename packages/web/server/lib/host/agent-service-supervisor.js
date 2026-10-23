@@ -89,7 +89,7 @@ export const createAgentServiceSupervisor = ({
   bunPath = 'bun', entrypoint, dataDir, env = {}, startupTimeoutMs = STARTUP_TIMEOUT_MS,
   stopTimeoutMs = STOP_TIMEOUT_MS, spawn = nodeSpawn, fetchImpl = globalThis.fetch,
   registry = null, randomBytes = crypto.randomBytes,
-  restartBaseDelayMs = 1_000, restartMaxDelayMs = 15_000, restartMaxAttempts = 3,
+  restartBaseDelayMs = 1_000, restartMaxDelayMs = 15_000, restartMaxAttempts = 3, restartStabilityMs = 60_000,
   approvalPolicyStore = null,
   authorizeWorkerOperation, invokeHostAction, handleSkillSource,
 } = {}) => {
@@ -100,7 +100,7 @@ export const createAgentServiceSupervisor = ({
     : defaultRegistry);
   let phase = 'stopped'; let child = null; let port = null; let secret = null;
   let startupPromise = null; let stopPromise = null; let lifecycle = 0; let startupController = null; let accepting = false;
-  let restartAttempts = 0; let restartTimer = null; let terminating = null;
+  let restartAttempts = 0; let restartTimer = null; let restartStabilityTimer = null; let terminating = null;
   const scopes = new Map();
   const forkTickets = new Map();
   const relocationScopes = new Map();
@@ -205,6 +205,7 @@ export const createAgentServiceSupervisor = ({
 
   const clearRestartTimer = () => {
     if (restartTimer) { clearTimeout(restartTimer); restartTimer = null; }
+    if (restartStabilityTimer) { clearTimeout(restartStabilityTimer); restartStabilityTimer = null; }
   };
 
   const killChild = async () => {
@@ -244,15 +245,20 @@ export const createAgentServiceSupervisor = ({
     if (terminating === current) terminating = null;
   };
 
-  const scheduleRestart = (launched) => {
-    if (child !== launched || terminating === launched || phase === 'stopping' || phase === 'stopped' || restartTimer) return;
+  const scheduleRestart = () => {
+    if (phase === 'stopping' || phase === 'stopped' || restartTimer || startupPromise) return;
     // The architecture bounds recovery: 1s, doubling to 15s, at most 3 retries.
-    if (restartAttempts >= restartMaxAttempts) return;
+    if (restartAttempts >= restartMaxAttempts) { phase = 'failed'; return; }
     const delay = Math.min(restartBaseDelayMs * 2 ** restartAttempts, restartMaxDelayMs);
+    const scheduledLifecycle = lifecycle;
     restartAttempts += 1;
+    // Health reports a distinct pending state while no child is running.
+    phase = 'restarting';
     restartTimer = setTimeout(() => {
       restartTimer = null;
-      void start(true).catch(() => { /* start() marked the failure; the next exit retries */ });
+      if (lifecycle !== scheduledLifecycle || phase === 'stopping' || phase === 'stopped') return;
+      if (startupPromise || phase === 'ready') return;
+      void start(true).catch(() => { /* start() scheduled the next attempt */ });
     }, Math.max(0, delay));
     // Recovery must not keep the Host process alive on its own.
     restartTimer.unref?.();
@@ -260,7 +266,8 @@ export const createAgentServiceSupervisor = ({
 
   const start = async (fromRestart = false) => {
     if (!fromRestart) { clearRestartTimer(); restartAttempts = 0; }
-    if (stopPromise) { await stopPromise; return start(); }
+    if (fromRestart && (phase === 'stopping' || phase === 'stopped')) return state();
+    if (stopPromise) { await stopPromise; return fromRestart ? state() : start(); }
     if (phase === 'ready') return state();
     if (startupPromise) return startupPromise;
     const myLifecycle = lifecycle;
@@ -325,10 +332,14 @@ export const createAgentServiceSupervisor = ({
         const onExit = (code, signal) => {
           finish(reject, new Error(`Agent service exited before listening (${code ?? signal ?? 'unknown'})`));
           if (child !== launched || phase === 'stopping' || terminating === launched) return;
+          if (restartStabilityTimer) { clearTimeout(restartStabilityTimer); restartStabilityTimer = null; }
+          child = null;
+          port = null;
           phase = 'failed';
           relocationScopes.clear(); forkTickets.clear(); scopes.clear(); workspaceScopes.clear(); authorization.closeChild(launched);
           accepting = false;
-          scheduleRestart(launched);
+          if (Number.isInteger(launched.pid)) void processRegistry.unregisterManagedProcess(launched.pid).catch(() => {});
+          scheduleRestart();
         };
         launched.stdout?.on('data', onData);
         launched.once('error', (error) => finish(reject, error));
@@ -344,7 +355,20 @@ export const createAgentServiceSupervisor = ({
           const response = await fetchImpl(`http://127.0.0.1:${port}/api/agent/v1/ready`, { method: 'GET', headers: { [SECRET_HEADER]: secret, Accept: 'application/json' }, signal: AbortSignal.any([startupController.signal, timeoutSignal(Math.min(1500, remaining()))]) });
           if (response.status === 200) {
             const body = await response.json();
-            if (AgentServiceReadySchema.parse(body) && lifecycle === myLifecycle) { phase = 'ready'; accepting = true; return state(); }
+            if (AgentServiceReadySchema.parse(body) && lifecycle === myLifecycle) {
+              phase = 'ready';
+              accepting = true;
+              if (fromRestart) {
+                // A short ready->crash cycle must not reset the retry budget.
+                if (!restartStabilityTimer) {
+                  restartStabilityTimer = setTimeout(() => { restartAttempts = 0; restartStabilityTimer = null; }, restartStabilityMs);
+                  restartStabilityTimer.unref?.();
+                }
+              } else {
+                restartAttempts = 0;
+              }
+              return state();
+            }
           }
         } catch { /* service is still initializing */ }
         await sleep(Math.min(100, remaining()));
@@ -356,7 +380,14 @@ export const createAgentServiceSupervisor = ({
       await killChild();
       port = null;
       throw error;
-    }).finally(() => { startupPromise = null; startupController = null; });
+    }).finally(() => {
+      const startupFinished = startupPromise;
+      startupPromise = null;
+      startupController = null;
+      // A failed recovery attempt consumes one budget unit and schedules the
+      // next one; an explicit stop or a newer start owns the lifecycle.
+      if (fromRestart && startupFinished !== null && phase === 'failed' && lifecycle === myLifecycle) scheduleRestart();
+    });
     return startupPromise;
   };
 

@@ -3,7 +3,7 @@ import type { reapOrphanedProcesses, registerManagedProcess, unregisterManagedPr
 import type { HostAuthorizationScope, WorkerPolicyRequest, WorkerPolicyResult, NativeOperationDescriptor, HostActionRequest, HostActionResult, HostSkillSourceOperation, HostSkillSourceResult } from '@openchamber/agent-service/private-protocol';
 
 export interface AgentServiceSupervisorState {
-  phase: 'stopped' | 'starting' | 'ready' | 'stopping' | 'failed';
+  phase: 'stopped' | 'starting' | 'restarting' | 'ready' | 'stopping' | 'failed';
   pid: number | null;
   port: number | null;
 }
@@ -23,6 +23,7 @@ export interface AgentServiceSupervisorOptions {
   restartBaseDelayMs?: number;
   restartMaxDelayMs?: number;
   restartMaxAttempts?: number;
+  restartStabilityMs?: number;
   spawn?: (file: string, args?: readonly string[], options?: SpawnOptions) => ChildProcess;
   fetchImpl?: typeof fetch;
   registry?: AgentServiceRegistry;

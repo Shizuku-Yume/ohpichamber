@@ -2,7 +2,9 @@
 
 **Effort:** post-m3-hardening
 **Task type:** bugfix
-**Base commit:** <commit-sha>
+**Base commit:** 05dd108e4
+**Started:** 2026-10-23T12:51:45+08:00
+**Status:** active
 
 **Delivers:** After the Agent Service crashes, the Host restarts it with bounded backoff, health reports each state, and a crash loop ends in a visible failed state.
 
@@ -18,7 +20,21 @@ Root cause at `842a48adc`: `onExit` only marks `phase = 'failed'`; `restart()` h
 
 ## Done when
 
-- [ ] An unexpected exit after readiness clears stale scopes (as today) and schedules a bounded restart; an explicit `stop()` never restarts.
-- [ ] Pending approvals and questions from the dead service expire as the contract requires; nothing is replayed.
-- [ ] The UI shows unavailable while restarting and recovers without a page reload.
-- [ ] Easier after 04: both edit the spawn path in the same file.
+- [x] An unexpected exit after readiness clears stale scopes (as today) and schedules a bounded restart; an explicit `stop()` never restarts.
+- [x] Pending approvals and questions from the dead service expire as the contract requires; nothing is replayed.
+- [x] The UI shows unavailable while restarting and recovers without a page reload.
+- [x] Easier after 04: both edit the spawn path in the same file.
+
+## Progress
+
+Dirty at start: none.
+
+Check before: the pre-change supervisor marked a post-readiness exit `failed` and never restarted; `restart()` had no production caller. The new regression exercises exactly that behaviour and fails without the restart loop.
+
+Check after:
+- `bun run --cwd packages/web test -- server/lib/host/agent-service-supervisor.restart.test.js` → 5 pass / 0 fail. Covers restart after readiness, `restarting` during backoff with null pid/port, bounded attempts ending in `failed`, explicit stop during backoff never restarting, and a failed recovery attempt scheduling the next one.
+- Full supervisor suite → 5 files / 31 tests pass.
+- Real path: `bun run dev`; `kill -9` on the ready service (pid 1131011) produced health `restarting null` for ~1 s, then `starting <new pid>`, then `ready 1131926` within ~2.7 s. A new prompt in the managed Chats workspace then completed with `CLIProxyAPI/deepseek-v4.1-flash`, text `pong`, usage input 8749 / output 4. Receipt: `/home/shizuku/Project/ohpichamber-omp-artifacts/post-m3-hardening-task04-2026-10-23/restart-smoke.log`.
+- Retry budget survives a short ready->crash cycle: attempts reset only after `restartStabilityMs` (60 s) of readiness, or on an explicit start/stop. A crash loop therefore terminates in visible `failed`.
+- Pending approvals/questions: `bun test packages/agent-service/src/interaction` → 11 pass / 0 fail (existing restart-expiry/CAS coverage); the supervisor clears scopes and closes the authorization channel before the restart, so old handles cannot be replayed.
+- UI unavailable/recovery: `/health` reports `agentService.phase` `restarting`/`starting` (ready=false) and returns to `ready` with a new pid; the existing readiness poll recovers without a reload.

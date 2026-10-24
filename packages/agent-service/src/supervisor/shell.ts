@@ -186,7 +186,7 @@ export class ShellCoordinator {
       throw unavailable();
     }
     try {
-      const reply = await this.workers.request(root.rootSessionId, { type: 'shell', operation }, root.workerGeneration);
+      const reply = await this.workers.requestSerialized(root.rootSessionId, { type: 'shell', operation }, root.workerGeneration);
       const current = this.workers.authorizationScope(root.rootSessionId);
       if (!current || !this.isAuthorizedRoot(root.rootSessionId)) throw unavailable();
       if (current.workerGeneration !== root.workerGeneration) {

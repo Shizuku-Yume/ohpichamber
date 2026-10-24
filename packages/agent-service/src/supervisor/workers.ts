@@ -227,6 +227,14 @@ export class WorkerRegistry {
     return this.dispatch(entry, parsed);
   }
 
+  /**
+   * Serialize with root lifecycle mutations. Shell start uses this so a
+   * background job cannot be admitted between the idle probe and stopEntry.
+   */
+  requestSerialized(rootSessionId: string, operation: WorkerOperation, expectedGeneration?: string): Promise<WorkerOperationResult> {
+    return this.withRoot(rootSessionId, () => this.request(rootSessionId, operation, expectedGeneration));
+  }
+
   private dispatch(entry: WorkerEntry, operation: WorkerOperation): Promise<WorkerOperationResult> {
     const commandId = randomUUID();
     entry.lastActivityAt = Date.now();

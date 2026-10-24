@@ -4,7 +4,7 @@
 **Task type:** feature
 **Base commit:** 039f542c3d3f1ae01866cbbf4b0c2157d71916e9
 **Started:** 2026-10-24T03:53:49Z
-**Finished:** 2026-10-24T04:56:37Z
+**Status:** active
 
 **Blocked by:** None
 **Files:** `packages/sdk/src/host.ts` (321-327, 538-555); `packages/sdk/src/api-version.ts` (3-5); `packages/sdk/package.json`; `packages/ui/src/components/layout/PluginPane.tsx` (913-965); `packages/docs/content/docs/sdk/example.mdx` and its translations
@@ -32,10 +32,12 @@ Check after:
 - UI focused: `bun test` on legacy detector, real `PluginPane` old-hello test, plugin-panel i18n, host-bridge, sdk-examples, WorkStatus -> 46 pass; `GuestHosts.test.tsx` -> 3 pass. The real-pane test drives an old `v1` `hello` from the current iframe and observes zero host-to-guest `postMessage`, the explicit `@openchamber/sdk 3.0.0` pane message, and no iframe. No port, ready push, or host state is granted.
 - `bun run --cwd packages/sdk build`, `type-check`, `lint` pass. `bun run --cwd packages/ui type-check` passes; changed UI files pass eslint. `bun run docs:validate` -> 672 pages, 56 sidebar links.
 - `bun run dead-code` reports only the pre-existing exported `LegacyDataNotice` helpers/types from landed Task20; this task adds no unused export. Full UI lint has the same pre-existing `LegacyDataNotice` errors; changed files are clean.
-- 12 committed SDK example bundles were rebuilt with the v2 SDK (plus browser-provider-stub service); the SDK bundle-freshness test passes.
+- All 15 committed SDK example entries were rebuilt/verified with the v2 SDK; 12 bundle files changed (the other 3 do not import the SDK). The SDK bundle-freshness test passes.
 - `bun run --cwd packages/web type-check` passes. `git diff --check` is clean.
 - Release-set scope: `scripts/bump-version.mjs` lists root/ui/web/sdk/electron, which are all `3.0.0`; `packages/mobile` (1.13.2) and the internal agent packages (1.0.0) are not in that release set and are intentionally unchanged.
 
 Real-path note: the old-hello regression drives the actual `PluginPane` window listener and React render. No packaged app/device run is claimed for this transport-only cutover.
 
-Review boundary: `039f542c3` + `packages/sdk`, `packages/ui` guest host/i18n, `packages/docs/content/docs` SDK pages, release `package.json`/`bun.lock`, `.workflow` spec/decision; round: 1; briefs: A,B,sec; boundaries: current-iframe window message -> host pane state, SDK wire/bootstrap version -> package/docs version surface; findings: 0 blocking / 0 nonblocking. The workflow-reviewer/security-reviewer agents were replaced by an inline review because the maintainer directed no additional worker delegation; both briefs and the handshake security pass were run against the commands and paths above. No waivers needed.
+Review boundary: `039f542c3` + `packages/sdk`, `packages/ui` guest host/i18n, `packages/docs/content/docs` SDK pages, release `package.json`/`bun.lock`, `.workflow` spec/decision; round: 1; briefs: A,B,sec; boundaries: current-iframe window message -> host pane state, SDK wire/bootstrap version -> package/docs version surface; findings: 1 blocking / 0 nonblocking. The workflow-reviewer/security-reviewer agents were replaced by an inline review because the maintainer directed no additional worker delegation; both briefs and the handshake security pass were run against the commands and paths above, followed by a delta review.
+
+Blocking finding and resolution (Brief A): `packages/sdk/GUEST_SERVICES.md:3` still said the wire envelope "stays `1`" after the contract moved to `2`. Fixed to name the v2 wire/bootstrap handshake, and the user-facing `invalid-engines` parse message now uses the current `3.0.0` example. The task was reopened and moved back to `tasks/`; independent A/B/security recheck is still owed before archiving. No waivers needed.

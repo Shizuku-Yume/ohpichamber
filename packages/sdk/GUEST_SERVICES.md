@@ -1,6 +1,6 @@
 # Guest local services
 
-Implemented on manifest `apiVersion: 1`. Wire envelope `OPENCHAMBER_SDK_API_VERSION` stays `1`.
+Implemented on manifest `apiVersion: 1`. The Guest wire envelope and bootstrap handshake are `v: 2`; the pre-M3 window transport is refused.
 
 This is the contract for guests that need a local process (Docker CLI, Engine sockets, kubectl, DB sockets). The iframe stays sandboxed. The host owns spawn and the loopback proxy.
 

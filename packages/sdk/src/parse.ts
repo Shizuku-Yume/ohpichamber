@@ -438,7 +438,7 @@ const failureFromIssue = (issue: { path: ReadonlyArray<PropertyKey>; code: strin
     );
   }
   if (path === 'engines' || path.startsWith('engines.')) {
-    return fail('invalid-engines', 'engines.openchamber must be a version like 1.22.0 or >=1.22.0.');
+    return fail('invalid-engines', 'engines.openchamber must be a version like 3.0.0 or >=3.0.0.');
   }
   if (path === 'contributes.panel' && issue.code === 'custom') {
     return fail('invalid-panel', issue.message);

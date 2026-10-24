@@ -2,9 +2,9 @@
 
 **Effort:** post-m3-hardening
 **Task type:** feature
-**Base commit:** <commit-sha>
-
-**Delivers:** Panels built with the old SDK either keep working through an explicit compatibility path, or the SDK ships a breaking version that the host and docs name.
+**Base commit:** 039f542c3d3f1ae01866cbbf4b0c2157d71916e9
+**Started:** 2026-10-24T03:53:49Z
+**Status:** active
 
 **Blocked by:** None
 **Files:** `packages/sdk/src/host.ts` (321-327, 538-555); `packages/sdk/src/api-version.ts` (3-5); `packages/sdk/package.json`; `packages/ui/src/components/layout/PluginPane.tsx` (913-965); `packages/docs/content/docs/sdk/example.mdx` and its translations
@@ -16,6 +16,9 @@
 
 ## Done when
 
-- [ ] Asks spec open question 1 when starting.
+- [x] Asks spec open question 1 when starting. Maintainer chose an explicit breaking version bump: no compatibility shim.
 - [ ] API/wire version and package version reflect the decision.
 - [ ] Every locale's SDK example names the supported version.
+## Progress
+
+Dirty at start: none. Task23 uses branch `post-m3-hardening/23-guest-sdk-transport-version` in separate worktree `/home/shizuku/Project/ohpichamber-worktrees/post-m3-hardening-lane-g-23`, based at main `039f542c3d3f1ae01866cbbf4b0c2157d71916e9`. The maintainer settled open question 1: explicitly bump to a breaking version, with no compatibility path or shim. Implement this decision and name the supported version in host behavior and all localized SDK examples.

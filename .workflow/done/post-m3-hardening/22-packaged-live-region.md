@@ -13,7 +13,17 @@
 **Read first:** `.workflow/specs/post-m3-hardening.md`; `.workflow/done/omp-through-m3/retrospective.md` (W7 inconclusive live-region); `.workflow/spike-tasks.md`
 **Covers:** H12
 
-**Check:** `## Findings
+**Check:** `## Findings` records the accessibility-tree or assistive-technology observation on a packaged build (`bun run electron:build`), with timing, and says yes, no, or what blocks measurement.
+
+## Progress
+
+- Review boundary: base `bc836586c0eb45359292d3823904b72ce6b1bac2` -> reviewed HEAD `87b6531df89530d1ee734f91addd47796157ed19`; archived Task22 record, the Task39 bugfix draft and the corrected external receipt; task-record-only, so no source path or trust boundary is in scope; round 1; briefs A,B.
+- Fresh reviews at that boundary: Brief A `lane-f-driver-3.Task22BriefA` PASS with no findings, confidence 0.99; Brief B `lane-f-driver-3.Task22BriefB` PASS with no findings. Both ran as child sessions of `lane-f-driver-3`; the named workflow-reviewer role was unavailable. The passes accept this record and its evidence, not application behaviour.
+- Earlier Brief A finding and resolution (kept visible): its first round at base `bc836586c` -> `249c61a2ef548338a83a0a8175a600c0f7aa03de` returned incorrect with two P2 findings. The external `measurement-receipt.json` still said the packaged status was never timed while this record reported five timed observations, and the Task39 Check did not preserve the accepted-request timing origin. The coordinator corrected the receipt to one explicit observed-threshold-failure verdict (superseded limitation retained; sha256 before `58c35b19118b28b8da67980e948f1cd508571c94b709e63c7a15faebb8d5fae5`, after `3c0f0a3cfe2ea7cf586b6c058ab8769aa04d72b4feeec76b7e8d2af6273d4bca`) and Task39 now names Host acceptance as `t0` and keeps provider/worker startup inside the interval. Brief A's recheck at `87b6531df` passed with no remaining finding.
+- Earlier Brief B blocker and resolution (kept visible): its first round was BLOCKED with one low review-completeness finding because the shell rejected its read-only `git diff`, so it could not independently confirm the branch was task-record-only; it accepted the receipts and record content otherwise. The coordinator supplied the exact `git diff --name-status` output showing only the Task22 archive/move and the new Task39 file; Brief B's delta check at `87b6531df` passed with no findings.
+- Gate state: `run-01` at HEAD `1bea2c1ab94ddf04a84f2d3888282009c796de6d` over base `bc836586c0eb45359292d3823904b72ce6b1bac2` exited 1 with 6/7 suites passed, so it is **not green**. The sole failure was the Web spaces `code-out` fetch-stop timing assertion: `server/lib/spaces/code-out.test.js` > "refuses a transfer over the cap that arrived in one piece" expected `null` to be `'0'` (1 failed / 6127 passed / 135 skipped tests in 387 files, 129.23 s). TMPDIR `/tmp/omp-task22-gate-STV0Z7` (device 54, same as `/tmp`, 0 initial entries). Evidence `run-01/bun-run-test.log`, `run-01/bun-run-test.exit` and `run-01/environment.txt`.
+
+## Findings
 
 **Answered question:** does the packaged Electron app announce streaming status through `aria-live` within 400 ms, as the Web build does?
 

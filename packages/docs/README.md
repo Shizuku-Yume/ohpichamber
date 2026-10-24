@@ -2,7 +2,8 @@
 
 This directory contains product documentation for OpenChamber powered by the Oh My Pi (OMP) agent runtime.
 
-OhPiChamber uses Oh My Pi (OMP) as its production agent runtime, supporting Web/PWA, Electron desktop, Mobile, and the Guest SDK. The Node.js Host Gateway supervises the Bun Agent Service and serves the Canonical `/api/agent/v1` API. These guides describe current OMP product behavior.
+OhPiChamber uses Oh My Pi (OMP) as its production agent runtime, supporting Web/PWA, Electron desktop, Mobile, and the Guest SDK. The Node.js Host Gateway supervises the Bun Agent Service and serves the Canonical `/api/agent/v1` API. These guides describe intended product behavior, labeling features that remain unverified on the OMP runtime. Mobile device certification and the standalone npm runtime are not yet verified.
+
 ## Layout
 
 - `content/docs/*.mdx`: English docs pages (source of truth)

@@ -5,6 +5,8 @@ description: Transformez un prompt en objectif vers lequel l'agent travaille aut
 
 # Objectifs de session
 
+**Remarque :** Cette fonctionnalité n'est pas encore vérifiée sur le runtime OMP. Cette page décrit le comportement prévu.
+
 Un objectif transforme un seul prompt en ligne d'arrivée. Au lieu de relancer l'agent avec « continue » après chaque réponse, vous définissez l'objectif une fois — et OpenChamber fait travailler la session vers lui automatiquement, en vérifiant la progression avec un auditeur indépendant après chaque tour. Le travail continue même en votre absence.
 
 ## Démarrer un objectif

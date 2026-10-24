@@ -6,7 +6,7 @@ The mobile package reuses the web build, then rewrites `mobile.html` to `index.h
 
 ### Migration status
 
-In OhPiChamber, the Mobile Capacitor shell is retained under `SCOPE-2.4` in `.workflow/omp-migration/scope.md`. It currently connects to the inherited remote host and OpenCode-backed UI, not an implemented Canonical API. The target consumes canonical records and events through the Host Gateway according to the migration contracts. Mobile embeds neither the host server nor the agent runtime. Guest iframe support is planned for M5 under `SCOPE-16.0`, without local background child processes.
+In OhPiChamber, the Mobile Capacitor shell is retained under `SCOPE-2.4` in `.workflow/omp-migration/scope.md`. The mobile app bundles the UI only and connects to an OpenChamber server whose Host Gateway serves the Canonical `/api/agent/v1` API. Mobile embeds neither the host server nor the agent runtime. Capacitor reconnect, push, and offline behavior and device certification remain unverified (M5). Guest iframe support is planned for M5 under `SCOPE-16.0`, without local background child processes.
 
 ## Runtime Model
 

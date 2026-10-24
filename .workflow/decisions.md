@@ -197,3 +197,21 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** no
 - **Revisit when:** A reproducible fresh-workspace plugin install failure is observed with an identified root cause.
 - **Effort:** post-m3-hardening
+
+## 2026-10-24 - Keep isolated spaces unreleased without the OpenCode runtime
+
+- **Decided:** Choose Task08 Option B: remove the OpenCode space runtime and keep isolated spaces unreleased until an OMP space runtime is built as a separate effort. Task38 owns the bounded removal and awaits a dedicated owner.
+- **Instead of:** Building an OMP Agent Service into isolated spaces as part of post-M3 hardening.
+- **Because:** Task08's source inventory found that OMP support would require coordinated image, tools-volume, in-space service, dispatcher and security-boundary work, while spaces are already explicitly unreleased. The maintainer selected B on 2026-10-23; the decision is now synchronized from the Task08 archive into the governing spec and decision log.
+- **Mine:** no
+- **Revisit when:** The maintainer starts a dedicated OMP isolated-spaces effort or changes the unreleased product boundary.
+- **Effort:** post-m3-hardening
+
+## 2026-10-24 - Break the Guest SDK version for the private bootstrap transport
+
+- **Decided:** Ship a breaking Guest SDK version bump for the private `MessageChannel` bootstrap transport. An old window-message client must receive an explicit version-mismatch outcome rather than time out; do not retain a compatibility path or fallback.
+- **Instead of:** Supporting both the old `window.postMessage` hello bootstrap and the new private `MessageChannel` transport.
+- **Because:** The two bootstrap contracts have different trust and lifecycle semantics. The maintainer chose an explicit breaking bump; a clear version mismatch makes the incompatibility observable without weakening the private channel boundary.
+- **Mine:** no
+- **Revisit when:** The maintainer chooses to support old Guest SDK panels through a separately reviewed compatibility boundary.
+- **Effort:** post-m3-hardening

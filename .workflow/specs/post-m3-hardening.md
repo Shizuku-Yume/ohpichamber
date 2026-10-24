@@ -60,8 +60,8 @@ Work runs in lanes. Each lane is one conversation in its own worktree under `/ho
 | C Streams and triage | 06 → 07 → bugfixes 07 drafts | `agent-service/src/supervisor/service.ts` stream path, `sessions/registry.ts`, `globalSessions.ts`/`useGlobalSessionsStore.ts`, `session-actions.ts` `optimisticSend`, contracts route text | a worker-descendant fix goes to lane B as task 13, not to C |
 | D Release | 12 → 11 → 14 → 15 → 27 | `.github/workflows/` except `oc-review.yml`, `scripts/oc-dev.mjs`, `packages/electron/scripts/`, Electron packaging config, `Dockerfile`, `scripts/docker-entrypoint.sh`, `vendor/omp/` docs | 14 asks open question 4; 12's follow-up asks question 5 |
 | E Comparison audit | `omp-opencode-comparison/01` | `.workflow/research/` only | nothing |
-| F Spikes | 08 → 17 → 21 → 22 → 28 | throwaway scripts outside the tree; task files only | 08's follow-up asks open question 2; 28's answer asks question 7 |
-| G UI, SDK and docs | 09 → 20 → 23 → 24 | i18n messages, composer footer, the first-run notice and its Host probe route, `packages/sdk`, `PluginPane.tsx`, `packages/docs`, package READMEs | 23 asks open question 1 |
+| F Spikes | 08 → 17 → 21 → 22 → 28 | throwaway scripts outside the tree; task files only | 08 records the isolated-spaces decision; Task38 owns the OpenCode runtime removal after a dedicated owner is assigned; 28's answer asks question 7 |
+| G UI, SDK and docs | 09 → 20 → 23 → 24 | i18n messages, composer footer, the first-run notice and its Host probe route, `packages/sdk`, `PluginPane.tsx`, `packages/docs`, package READMEs | 23 implements the maintainer's breaking-version decision for the private Guest bootstrap transport |
 | H Re-plan | 25 → 26 | new M4/M5 specs and tasks | A's 03 and E's audit landed; asks questions 3 and 6 |
 
 Landing order: lane A's task 01 lands first. Other lanes may build before that, but they rebase onto `main` and run `bun run test` green before each landing. Lane A's task 10 moves files under `packages/web/server/lib/opencode/`; any lane that touches those files rebases after it lands. Lane G registers its new Host route at the location in place after task 10, so it lands after 10 or rebases onto it.
@@ -99,12 +99,12 @@ Landing order: lane A's task 01 lands first. Other lanes may build before that, 
 - **H14.** Product docs and package READMEs describe only verified behavior or label it.
 - **H15.** M4 and M5 each have an approved spec and tasks, the OMP vendor upgrade runbook reproduces the current pin, and the upstream-sync question is answered for the maintainer.
 
-## Open questions
+## Settled decision and open questions
 
-These belong to the maintainer. The task that needs each one asks it when it starts.
+Settled decisions are recorded here for reference. Remaining questions belong to the maintainer; the task that needs each answer asks it when it starts.
 
-1. **Guest SDK compatibility** (task 23): keep an explicit compatibility path for panels built with the old SDK, or ship a breaking version bump.
-2. **Isolated spaces** (after task 08): move spaces onto OMP as its own effort, or remove the OpenCode space runtime and keep spaces unreleased until then.
+1. **Resolved (2026-10-24): Guest SDK compatibility** (task 23): ship an explicit breaking version bump for the private `MessageChannel` bootstrap transport. Old window-message clients receive an explicit version-mismatch result; no compatibility path or fallback is added. Decision: `decisions.md: 2026-10-24 - Break the Guest SDK version for the private bootstrap transport`.
+2. **Resolved (2026-10-23; recorded 2026-10-24): Isolated spaces** (Task08): remove the OpenCode space runtime and keep spaces unreleased until an OMP runtime is built as a separate effort. Task38 owns that removal and remains unassigned pending a dedicated owner. Decision: `decisions.md: 2026-10-24 - Keep isolated spaces unreleased without the OpenCode runtime`.
 3. **Mobile in the release matrix** (task 26): keep Capacitor mobile as a supported surface pending device validation, or take it out of the matrix and docs until then.
 4. **Windows signing** (task 14): which certificate and secret names the release jobs use.
 5. **Native packages for non-Linux targets** (after task 12): vendor registry prebuilt binaries pinned by integrity, or build from the pinned Rust source.

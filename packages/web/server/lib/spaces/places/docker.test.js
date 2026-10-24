@@ -19,7 +19,7 @@ const OUTER_NETWORK = `openchamber-space-${ID}-outer-network`;
 const WORK = `openchamber-space-${ID}-volume-work`;
 const HOME = `openchamber-space-${ID}-volume-home`;
 
-const SOURCE = createRegistryToolsSource({ webVersion: '1.24.2', openCodeVersion: '1.18.31' });
+const SOURCE = createRegistryToolsSource({ webVersion: '1.24.2' });
 const KEY = toolsContentKey(SOURCE, SPACE_BASE_IMAGE);
 const TOOLS = `openchamber-tools-${OWNER}-${KEY}`;
 const NOW = new Date('2026-09-20T08:00:00.000Z');
@@ -89,7 +89,6 @@ const describeCall = (args) => {
   if (args[0] === 'create') return args.includes('--network-alias') ? 'create gatekeeper' : 'create space';
   if (args[0] === 'rename') return `rename ${args[1]} ${args[2]}`;
   if (args[0] === 'network' && args[1] === 'connect') return `network connect ${args[2]}`;
-  if (isExec('ln -sfn')(args)) return 'exec link plugin';
   if (isExec('token.new')(args)) return 'exec write token';
   if (isExec('gatekeeper.cjs.new')(args)) return 'exec write program';
   if (args[0] === 'exec') return `exec ${args[4].endsWith('-gatekeeper') ? 'gatekeeper ' : ''}${args[5].split('/').pop()}`;
@@ -119,7 +118,6 @@ const SPACE_STEPS = [
   ...GATEKEEPER_START_STEPS,
   'create space',
   `start ${CONTAINER}`,
-  'exec link plugin',
   'exec write token',
   'exec curl',
 ];
@@ -231,8 +229,6 @@ describe('docker place: create', () => {
       '--env', 'NO_PROXY=gatekeeper,localhost,127.0.0.1',
       '--env', 'no_proxy=gatekeeper,localhost,127.0.0.1',
       '--env', 'NODE_USE_ENV_PROXY=1',
-      '--env', 'OPENCODE_DISABLE_MODELS_FETCH=1',
-      '--env', 'OPENCODE_DISABLE_AUTOUPDATE=1',
       '--env', 'OPENCHAMBER_RELAY_HOST=off',
       '--env', 'OPENCHAMBER_SPACE_IDLE_STOP_FILE=/home/space/.openchamber-space/idle-stop.json',
       SPACE_BASE_IMAGE,
@@ -440,7 +436,6 @@ describe('docker place: create rollback', () => {
     { step: 'gatekeeper program', failAt: isExec('gatekeeper.cjs.new'), code: 'gatekeeper_setup_failed', removals: withoutSpace },
     { step: 'space container', failAt: (args) => args[0] === 'create' && !args.includes('--network-alias'), removals: everything },
     { step: 'start', failAt: (args) => args[0] === 'start' && args[1] === CONTAINER, removals: everything },
-    { step: 'plugin link', failAt: isExec('ln -sfn'), code: 'space_setup_failed', removals: everything },
     { step: 'token', failAt: isExec('token.new'), code: 'space_setup_failed', removals: everything },
   ];
 
@@ -1017,7 +1012,7 @@ describe('docker place: tools volume', () => {
       '--label', 'openchamber.space.role=tools',
       '--label', `openchamber.space.owner=${OWNER}`,
       '--label', `openchamber.space.tools.key=${KEY}`,
-      '--label', 'openchamber.space.tools.description=web 1.24.2, opencode 1.18.31',
+      '--label', 'openchamber.space.tools.description=web 1.24.2',
       '--label', 'openchamber.space.created=2026-09-20T08:00:00.000Z',
       TOOLS,
     ]);
@@ -1125,7 +1120,7 @@ describe('docker place: tools volume', () => {
 
     const error = await makePlace(fake).create(SPEC).catch((caught) => caught);
     expect(error.code).toBe('tools_fill_failed');
-    expect(error.message).toMatch(/Installing web 1.24.2, opencode 1.18.31 failed: .*simulated failure/);
+    expect(error.message).toMatch(/Installing web 1.24.2 failed: .*simulated failure/);
     expect(error.message).toMatch(/npm registry/);
     expect(error.details).toMatchObject({ uncertain: false, rollbackFailures: [] });
     expect(removals(fake)).toEqual([`volume rm ${TOOLS}`]);
@@ -1217,7 +1212,7 @@ describe('docker place: tools volume', () => {
 
       const error = await place.create({ ...SPEC, id: '111111111111' }).catch((caught) => caught);
       expect(error.code).toBe('tools_marker_mismatch');
-      expect(error.message).toMatch(/Apply or discard the work in the spaces that were made with web 1\.24\.2, opencode 1\.18\.31, remove those spaces, then try again/);
+      expect(error.message).toMatch(/Apply or discard the work in the spaces that were made with web 1\.24\.2, remove those spaces, then try again/);
       // Nobody needs a terminal for this, so the message names no docker command.
       expect(error.message).not.toMatch(/docker |volume rm/);
       expect(fake.calls.some((call) => isRun('tools-fill')(call.args))).toBe(false);

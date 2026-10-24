@@ -9,7 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createPackedToolsSource, createRegistryToolsSource, readHostToolVersions, requireToolsSource, toolsContentKey } from './tools.js';
 
 const IMAGE = 'node@sha256:aaaa';
-const VERSIONS = { webVersion: '1.24.2', openCodeVersion: '1.18.31' };
+const VERSIONS = { webVersion: '1.24.2' };
 
 let directory;
 const tarball = (name, content) => {
@@ -27,14 +27,12 @@ afterAll(() => {
 });
 
 describe('readHostToolVersions', () => {
-  it('reads the version of this server and the OpenCode version it was built against', () => {
-    const versions = readHostToolVersions();
-    expect(versions.webVersion).toMatch(/^\d+\.\d+\.\d+/);
-    expect(versions.openCodeVersion).toMatch(/^\d+\.\d+\.\d+/);
+  it('reads the version of this server, and no engine version beside it', () => {
+    expect(readHostToolVersions()).toEqual({ webVersion: expect.stringMatching(/^\d+\.\d+\.\d+/) });
   });
 
-  it('rejects a manifest whose OpenCode dependency is a range', () => {
-    const manifest = tarball('range.json', JSON.stringify({ version: '1.0.0', dependencies: { '@opencode/client': '^1.18.0' } }));
+  it('rejects a manifest whose version is a range', () => {
+    const manifest = tarball('range.json', JSON.stringify({ version: '^1.0.0' }));
     expect(() => readHostToolVersions(pathToFileURL(manifest))).toThrow(expect.objectContaining({ code: 'invalid_tools_version' }));
   });
 
@@ -44,21 +42,20 @@ describe('readHostToolVersions', () => {
 });
 
 describe('createRegistryToolsSource', () => {
-  it('asks for exact versions, with the plugin at the OpenCode version', () => {
+  it('asks for the exact web version, and nothing else', () => {
     const source = createRegistryToolsSource(VERSIONS);
 
-    expect(source.description).toBe('web 1.24.2, opencode 1.18.31');
+    expect(source.description).toBe('web 1.24.2');
     expect(source.files).toEqual([]);
     expect(JSON.parse(source.packageJson)).toEqual({
       name: 'openchamber-space-tools',
       private: true,
-      dependencies: { '@openchamber/web': '1.24.2', '@opencode/cli': '1.18.31', '@opencode/plugin': '1.18.31' },
+      dependencies: { '@openchamber/web': '1.24.2' },
     });
   });
 
   it.each(['^1.24.2', 'latest', '1.24', '', undefined, 'https://example.com/x.tgz', '1.24.2 || 2'])('rejects the version %j', (version) => {
     expect(() => createRegistryToolsSource({ ...VERSIONS, webVersion: version })).toThrow(expect.objectContaining({ code: 'invalid_tools_version' }));
-    expect(() => createRegistryToolsSource({ ...VERSIONS, openCodeVersion: version })).toThrow(expect.objectContaining({ code: 'invalid_tools_version' }));
   });
 
   it('accepts a prerelease version', () => {
@@ -68,7 +65,7 @@ describe('createRegistryToolsSource', () => {
 
 describe('createPackedToolsSource', () => {
   it('installs both tarballs by path and makes every sdk in the tree the local one', () => {
-    const source = createPackedToolsSource({ webTarballPath: tarball('web.tgz', 'web bytes'), sdkTarballPath: tarball('sdk.tgz', 'sdk bytes'), openCodeVersion: '1.18.31' });
+    const source = createPackedToolsSource({ webTarballPath: tarball('web.tgz', 'web bytes'), sdkTarballPath: tarball('sdk.tgz', 'sdk bytes') });
 
     expect(source.description).toBe('development build');
     expect(source.files).toEqual([
@@ -81,8 +78,6 @@ describe('createPackedToolsSource', () => {
       dependencies: {
         '@openchamber/web': 'file:/tmp/openchamber-fill/openchamber-web.tgz',
         '@openchamber/sdk': 'file:/tmp/openchamber-fill/openchamber-sdk.tgz',
-        '@opencode/cli': '1.18.31',
-        '@opencode/plugin': '1.18.31',
       },
       overrides: { '@openchamber/sdk': '$@openchamber/sdk' },
     });
@@ -90,7 +85,7 @@ describe('createPackedToolsSource', () => {
 
   it('hashes the tarballs once, when the source is made', () => {
     const webTarballPath = tarball('web-once.tgz', 'first');
-    const source = createPackedToolsSource({ webTarballPath, sdkTarballPath: tarball('sdk-once.tgz', 'sdk'), openCodeVersion: '1.18.31' });
+    const source = createPackedToolsSource({ webTarballPath, sdkTarballPath: tarball('sdk-once.tgz', 'sdk') });
     const key = toolsContentKey(source, IMAGE);
 
     fs.writeFileSync(webTarballPath, 'changed later');
@@ -100,13 +95,13 @@ describe('createPackedToolsSource', () => {
 
   it('says which tarball it could not read', () => {
     const missing = path.join(directory, 'nowhere.tgz');
-    expect(() => createPackedToolsSource({ webTarballPath: missing, sdkTarballPath: missing, openCodeVersion: '1.18.31' }))
+    expect(() => createPackedToolsSource({ webTarballPath: missing, sdkTarballPath: missing }))
       .toThrow(expect.objectContaining({ code: 'tools_tarball_unreadable', message: expect.stringContaining('web') }));
   });
 });
 
 describe('toolsContentKey', () => {
-  const packed = (webContent) => createPackedToolsSource({ webTarballPath: tarball(`web-${webContent}.tgz`, webContent), sdkTarballPath: tarball('sdk-key.tgz', 'sdk'), openCodeVersion: '1.18.31' });
+  const packed = (webContent) => createPackedToolsSource({ webTarballPath: tarball(`web-${webContent}.tgz`, webContent), sdkTarballPath: tarball('sdk-key.tgz', 'sdk') });
 
   it('is 16 hex characters and the same for the same content', () => {
     const key = toolsContentKey(createRegistryToolsSource(VERSIONS), IMAGE);
@@ -118,7 +113,6 @@ describe('toolsContentKey', () => {
     const keys = [
       toolsContentKey(createRegistryToolsSource(VERSIONS), IMAGE),
       toolsContentKey(createRegistryToolsSource({ ...VERSIONS, webVersion: '1.24.3' }), IMAGE),
-      toolsContentKey(createRegistryToolsSource({ ...VERSIONS, openCodeVersion: '1.18.32' }), IMAGE),
       toolsContentKey(createRegistryToolsSource(VERSIONS), 'node@sha256:bbbb'),
       toolsContentKey(packed('a'), IMAGE),
       toolsContentKey(packed('b'), IMAGE),

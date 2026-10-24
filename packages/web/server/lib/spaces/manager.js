@@ -1,5 +1,6 @@
 import { SpaceError } from './errors.js';
 import { createSpaceId, hashProjectDirectory, normalizeSpaceName, requireSpaceId } from './labels.js';
+import { requireSpacesReleased } from './release.js';
 
 // Memory limit of a new space. Swap adds nothing on top of it.
 const DEFAULT_SPACE_MEMORY_BYTES = 4 * 1024 * 1024 * 1024;
@@ -7,8 +8,12 @@ const DEFAULT_SPACE_MEMORY_BYTES = 4 * 1024 * 1024 * 1024;
 /**
  * Thin orchestration over places. It keeps no record of spaces: every answer
  * comes from the place at the time of the call.
+ *
+ * `requireReleased` is the server's release gate, run before the place is asked to make or start
+ * anything. The tests inject a gate that opens, so the place paths stay exercised while the
+ * production gate is closed; there is no other caller that supplies one.
  */
-export function createSpaceManager({ registry, now = () => new Date() }) {
+export function createSpaceManager({ registry, now = () => new Date(), requireReleased = requireSpacesReleased }) {
   const requirePlace = (placeId) => {
     const place = registry.get(placeId);
     if (!place) {
@@ -31,6 +36,7 @@ export function createSpaceManager({ registry, now = () => new Date() }) {
 
   // `id` may be given, so a caller that announces a creation before it is done names the same space.
   const createSpace = async ({ placeId, projectDirectory, name, id = createSpaceId() }) => {
+    requireReleased();
     const place = requirePlace(placeId);
     const spec = {
       id: requireSpaceId(id),
@@ -77,7 +83,10 @@ export function createSpaceManager({ registry, now = () => new Date() }) {
 
   const stopSpace = async ({ placeId, spaceId }) => requirePlace(placeId).stop(spaceId);
 
-  const startSpace = async ({ placeId, spaceId }) => requirePlace(placeId).start(spaceId);
+  const startSpace = async ({ placeId, spaceId }) => {
+    requireReleased();
+    return requirePlace(placeId).start(spaceId);
+  };
 
   return { createSpace, listSpaces, stopSpace, startSpace, removeSpace };
 }

@@ -80,10 +80,10 @@ describe('findHardeningViolations', () => {
     ['user', { ...goodContainer(), Config: { User: '0:0' } }],
     ['environment', withEnv(['OPENCHAMBER_UI_PASSWORD=secret'])],
     ['environment', withEnv(['OPENCHAMBER_UI_PASSWORD='])],
-    // OpenCode 2 takes a provider key from its environment, directly or inside its config text.
+    // The allowlist takes only the variables the create args set and the base image's own.
     ['environment', withEnv(['OPENAI_API_KEY=x'])],
-    ['environment', withEnv(['OPENCODE_CONFIG_CONTENT={"provider":{"groq":{"options":{"apiKey":"x"}}}}'])],
-    ['environment', withEnv(['OPENCODE_CLI_CONFIG_CONTENT={}'])],
+    ['environment', withEnv(['SOME_CONFIG_CONTENT={"provider":{"groq":{"options":{"apiKey":"x"}}}}'])],
+    ['environment', withEnv(['ANTHROPIC_API_KEY={}'])],
     ['read_only', withHost({ ReadonlyRootfs: false })],
     ['privileged', withHost({ Privileged: true })],
     ['cap_drop', withHost({ CapDrop: ['NET_RAW'] })],

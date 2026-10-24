@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { SpaceError } from './errors.js';
 import { SPACES_ROUTE, answerFailure, createSwitchController, registerSpaceRoutes } from './routes.js';
+import { requireSpacesReleased } from './release.js';
 
 const ID = 'a1b2c3d4e5f6';
 const servers = [];
@@ -153,8 +154,8 @@ describe('space routes', () => {
     const answers = [];
     const res = { status(code) { this.code = code; return this; }, json(body) { answers.push({ status: this.code, body }); } };
     const cases = [
-      ['space_not_found', 404], ['isolated_spaces_off', 404], ['project_not_registered', 400], ['invalid_network', 400], ['space_preparing', 409], ['space_not_running', 409],
-      ['space_busy', 409], ['space_creation_failed', 409], ['invalid_grant_request', 400], ['secret_source_missing', 409], ['login_not_found', 409], ['login_not_supported', 409], ['login_expired', 409], ['space_record_unreadable', 409], ['invalid_domain', 400], ['network_is_open', 409], ['too_many_domains', 409],
+      ['space_not_found', 404], ['isolated_spaces_off', 404], ['isolated_spaces_unreleased', 409], ['project_not_registered', 400], ['invalid_network', 400], ['space_preparing', 409], ['space_not_running', 409],
+      ['space_busy', 409], ['space_creation_failed', 409], ['invalid_grant_request', 400], ['secret_source_missing', 409], ['space_record_unreadable', 409], ['invalid_domain', 400], ['network_is_open', 409], ['too_many_domains', 409],
       ['branch_exists', 409], ['changes_do_not_apply', 409], ['changes_route_closed', 409], ['nothing_to_apply', 409], ['place_cannot_restrict_network', 409],
       ['invalid_setup_commands', 400], ['space_setup_running', 409],
       ['space_remove_incomplete', 502], ['docker_command_failed', 502], ['code_out_failed', 502],
@@ -185,7 +186,7 @@ describe('the switch controller', () => {
     };
     return host;
   };
-  const controllerWith = ({ host = null, persistFails = false } = {}) => {
+  const controllerWith = ({ host = null, persistFails = false, released = true } = {}) => {
     const state = { host, built: 0, started: [], persisted: [] };
     const controller = createSwitchController({
       getHost: () => state.host,
@@ -193,9 +194,23 @@ describe('the switch controller', () => {
       buildHost: () => { state.built += 1; return hostOf(`built-${state.built}`); },
       startHost: (made) => { state.started.push(made.name); },
       persist: async (enabled) => { await sleep(10); if (persistFails) throw new Error('disk full'); state.persisted.push(enabled); },
+      isReleased: () => released,
+      requireReleased: released ? () => {} : requireSpacesReleased,
     });
     return { controller, state };
   };
+
+  it('keeps the feature off while the release gate is closed, whatever a saved switch says', async () => {
+    const { controller, state } = controllerWith({ released: false });
+
+    expect(await controller.readSwitch()).toEqual({ enabled: false, spaces: [] });
+    await expect(controller.setSwitch(true)).rejects.toMatchObject({ code: 'isolated_spaces_unreleased' });
+    // Nothing was written, built or started: the gate answers before the setting.
+    expect(state.persisted).toEqual([]);
+    expect(state.built).toBe(0);
+    expect(state.started).toEqual([]);
+    expect(state.host).toBeNull();
+  });
 
   it('reads the switch, and says the list is unknown rather than failing when the place cannot be asked', async () => {
     expect(await controllerWith().controller.readSwitch()).toEqual({ enabled: false, spaces: [] });

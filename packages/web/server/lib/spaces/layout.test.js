@@ -16,7 +16,7 @@ describe('projectFolderName', () => {
     expect(projectFolderName(directory)).toBe(name);
   });
 
-  // The plugin link lives at /spaces/<id>/node_modules, and a name with nothing readable left says nothing.
+  // npm state is reserved at the work root, and a name with nothing readable left says nothing.
   it.each(['/home/me/node_modules', '/home/me/NODE_MODULES', '/home/me/юнікод', '/home/me/...', '/', ''])('falls back to a fixed name for %j', (directory) => {
     expect(projectFolderName(directory)).toBe('project');
   });

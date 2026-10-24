@@ -8,7 +8,7 @@ import { createFakeDocker, hardenedContainerEntry } from './fake-docker.js';
 
 const OWNER = 'install-a';
 const STRANGER = 'install-b';
-const SOURCE = createRegistryToolsSource({ webVersion: '1.24.2', openCodeVersion: '1.18.31' });
+const SOURCE = createRegistryToolsSource({ webVersion: '1.24.2' });
 const KEY = toolsContentKey(SOURCE, SPACE_BASE_IMAGE);
 const OLD_KEY = '0123456789abcdef';
 const OLDER_KEY = 'fedcba9876543210';

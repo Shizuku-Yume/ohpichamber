@@ -53,8 +53,8 @@ describe('npm registry configuration', () => {
 
   test('encodes a metadata suffix independently of the scoped package name', () => {
     process.env.NPM_CONFIG_REGISTRY = 'https://mirror.example.com/custom/npm/';
-    expect(resolveNpmRegistryRequest('@opencode/cli', 'latest')).toEqual({
-      url: 'https://mirror.example.com/custom/npm/@opencode%2Fcli/latest', headers: {},
+    expect(resolveNpmRegistryRequest('@openchamber/sdk', 'latest')).toEqual({
+      url: 'https://mirror.example.com/custom/npm/@openchamber%2Fsdk/latest', headers: {},
     });
   });
 

@@ -7,8 +7,8 @@
 // host has authenticated the user, strips the prefix and the user's credentials, adds the
 // space's own session, and streams the rest untouched, HTTP and SSE alike. WebSocket upgrades
 // under the prefix are forwarded by `websocket.js`, which shares the rules and the session
-// of this module; the merged session list and the event connection of a space use
-// `requestInside` for their own requests to the server inside.
+// of this module. `requestInside` remains the host's own path for an explicit request to a
+// server inside; the removed session merge and event feed no longer use it.
 //
 // Two guards only reject. A prefixed request whose directory lies outside that space's root is
 // refused, and an unprefixed request whose directory lies under `/spaces/` is refused before

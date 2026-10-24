@@ -15,6 +15,7 @@ import { z } from 'zod';
 
 import { SpaceError } from './errors.js';
 import { isSpaceId } from './labels.js';
+import { isSpacesReleased, requireSpacesReleased } from './release.js';
 
 export const SPACES_ROUTE = '/api/openchamber/spaces';
 
@@ -39,15 +40,13 @@ const STATUS_BY_CODE = new Map([
   ['network_is_open', 409],
   ['too_many_domains', 409],
   ['secret_source_missing', 409],
-  ['login_not_found', 409],
-  ['login_not_supported', 409],
-  ['login_expired', 409],
   ['space_record_unreadable', 409],
   ['space_preparing', 409],
   ['space_creation_failed', 409],
   ['space_busy', 409],
   ['image_pulling', 409],
   ['isolated_spaces_off', 404],
+  ['isolated_spaces_unreleased', 409],
   ['space_not_running', 409],
   ['branch_exists', 409],
   ['changes_do_not_apply', 409],
@@ -85,8 +84,12 @@ const switchBodySchema = z.object({ enabled: z.boolean() });
  * host, `buildHost()` makes one as the start would, `startHost(host)` connects it, and
  * `persist(enabled)` writes the setting. One change runs at a time: a second request waits for
  * the first and then sees what it left, so a double click builds one host and never two.
+ *
+ * The release gate overrides the switch: while it is closed, reading answers off and turning it
+ * on is refused before the setting is written or a host is built. The tests inject an open gate
+ * to exercise the switch itself.
  */
-export function createSwitchController({ getHost, setHost, buildHost, startHost, persist }) {
+export function createSwitchController({ getHost, setHost, buildHost, startHost, persist, isReleased = isSpacesReleased, requireReleased = requireSpacesReleased }) {
   let turning = Promise.resolve();
   const inTurn = (work) => {
     const next = turning.then(work, work);
@@ -95,6 +98,7 @@ export function createSwitchController({ getHost, setHost, buildHost, startHost,
   };
 
   const readSwitch = async () => {
+    if (!isReleased()) return { enabled: false, spaces: [] };
     const host = getHost();
     if (!host) return { enabled: false, spaces: [] };
     try {
@@ -111,6 +115,7 @@ export function createSwitchController({ getHost, setHost, buildHost, startHost,
   // be stopped is reported as still running (decision 18). On: the setting is written and the
   // feature comes up, as it would at the next start.
   const setSwitch = (enabled) => inTurn(async () => {
+    if (enabled) requireReleased();
     const host = getHost();
     if (enabled === Boolean(host)) return { enabled, stopped: [], stillRunning: [] };
     if (!enabled) {

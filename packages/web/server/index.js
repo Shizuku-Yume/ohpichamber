@@ -117,6 +117,7 @@ import { CHAT_EXPORT_TIMEOUT_MS } from './lib/spaces/space-native-archive.js';
 import { readIdleStopSetting, startIdleStop } from './lib/spaces/idle-stop.js';
 import { SPACE_IDLE_EXIT_CODE } from './lib/spaces/layout.js';
 import { createSwitchController, registerSpaceRoutes } from './lib/spaces/routes.js';
+import { spacesHostEnabled } from './lib/spaces/release.js';
 import { configureGitEnvironment, configureProjectWorktreeDirectory, resolvePrimaryWorktreeRoot, getWorktrees } from './lib/git/service.js';
 import { createEnvironmentStore } from './lib/environment/store.js';
 import { createEnvironmentRuntime } from './lib/environment/runtime.js';
@@ -1620,7 +1621,7 @@ async function main(options = {}) {
     archive: spaceArchive,
   });
   const startupSettings = await readSettingsFromDiskMigrated().catch(() => null);
-  if (startupSettings?.isolatedSpacesEnabled === true) {
+  if (spacesHostEnabled(startupSettings)) {
     try {
       spacesHost = buildSpacesHost();
     } catch (error) {
@@ -1628,6 +1629,9 @@ async function main(options = {}) {
       console.error(`[spaces] isolated spaces are unavailable this start: ${error?.code ?? ''} ${error?.message ?? error}`.trim());
       spacesHost = null;
     }
+  } else if (startupSettings?.isolatedSpacesEnabled === true) {
+    // The saved switch cannot bring the feature up while the server gate is closed.
+    console.warn('[spaces] isolated spaces are not released yet; the saved switch is ignored until the OMP space runtime is built');
   }
 
   const app = express();
@@ -1842,10 +1846,9 @@ async function main(options = {}) {
   server.on('upgrade', (...args) => { spacesHost?.upgradeHandler(...args); });
   const startSpacesHost = (host) => {
     host.prepareUpgrades({ uiAuthController, isRequestOriginAllowed });
-    // Every space's events join the host's hub, and the host asks each space for its live status.
-    void host.startEvents(globalMessageStreamHub).catch((error) => {
-      console.warn(`[spaces] could not follow the spaces: ${error?.message ?? error}`);
-    });
+    // The journey's progress events enter the host's hub, and a start cut short leaves the
+    // grants of its running spaces to be said again.
+    host.start(globalMessageStreamHub);
   };
   if (spacesHost) startSpacesHost(spacesHost);
   const spacesSwitch = createSwitchController({

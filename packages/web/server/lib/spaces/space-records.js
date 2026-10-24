@@ -32,8 +32,6 @@ export const networkSchema = z.object({
 const historySchema = z.enum(['pending', 'sent', 'already_complete', 'host_shallow', 'failed']);
 
 const GRANT_ID_PATTERN = /^[A-Za-z0-9._-]{1,64}$/;
-/** A provider id as the host's catalog names it, which is also the grant id of a model or login grant. */
-export const providerIdSchema = z.string().regex(GRANT_ID_PATTERN);
 // zod runs the refinement even when `.url()` failed, so the parse of the URL must not throw here.
 const isHttpUrl = (value) => {
   try {
@@ -65,14 +63,6 @@ export const grantSchema = z.discriminatedUnion('kind', [
     kind: z.literal('domain'),
     id: z.string().regex(GRANT_ID_PATTERN),
     upstream: upstreamSchema,
-  }).strict(),
-  // A provider's browser login of the host's, since stage 7: the host reads its own login again
-  // at every start, so the record names only the provider and the login method it was made by.
-  z.object({
-    kind: z.literal('login'),
-    id: z.string().regex(GRANT_ID_PATTERN),
-    provider: z.string().regex(GRANT_ID_PATTERN),
-    method: z.string().regex(/^[a-z0-9-]{1,64}$/),
   }).strict(),
 ]);
 const MAX_GRANTS = 100;

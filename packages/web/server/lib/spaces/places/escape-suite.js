@@ -28,7 +28,6 @@ import {
   GATEKEEPER_CONTROL_PORT,
   GATEKEEPER_CORRIDOR_PORT,
   GATEKEEPER_WINDOW_PORT,
-  SPACE_HOME,
   SPACE_SERVER_PORT,
   TOOLS_BIN_PATH,
   TOOLS_MARKER_PATH,
@@ -37,8 +36,8 @@ import {
 import { createSpaceServerChannel } from '../space-server.js';
 
 const CREATE_TIMEOUT_MS = 25 * 60_000;
-// The server and OpenCode inside take about 370 MiB at rest. With 1 GiB the process that
-// allocates without end is by far the largest when the limit is hit, so it is the one that gets killed.
+// The server inside takes a few hundred MiB at rest. With 1 GiB the process that allocates
+// without end is by far the largest when the limit is hit, so it is the one that gets killed.
 const MEMORY_BYTES = 1024 * 1024 * 1024;
 const LOG_CAP_BYTES = 11 * 1024 * 1024;
 
@@ -185,18 +184,17 @@ Promise.all(Array.from({ length: 80 }, attempt)).then((outcomes) => {
 });
 `;
 
-// What a long-lived credential looks like: an OpenAI-style oauth record with a refresh token,
-// a private key, a GitHub token, a provider key. A log line that happens to say "refresh" does
-// not match, which is why each pattern carries its punctuation.
+// What a long-lived credential looks like: an oauth record with a refresh token, a private key,
+// a GitHub token, a provider key. A log line that happens to say "refresh" does not match, which
+// is why each pattern carries its punctuation.
 const LONG_LIVED_CREDENTIAL = '"refresh"[[:space:]]*:[[:space:]]*"|BEGIN [A-Z ]*PRIVATE KEY|gh[pousr]_[A-Za-z0-9]{16}|sk-[A-Za-z0-9_-]{20}|xox[baprs]-';
 
 /** Everything the space holds that could be a long-lived credential, as text for the host to read.
  * HOME, the work directory and /tmp, which is writable and 256 MiB. `-a` reads binary files as
- * text: OpenCode 2 keeps its logins in the SQLite database `opencode.db` under HOME, and `-I`
- * skipped that file. `-o` prints the matched shape and its file, never the binary around it. */
+ * text too, so a key in a database or an archive is found, and `-o` prints the matched shape and
+ * its file, never the binary around it. The environment of every process is searched as well. */
 const credentialSearch = (spaceId) => `
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin;
-echo "auth-record: $([ -e "$HOME/.local/share/opencode/auth.json" ] && echo present || echo absent)";
 echo "--- files";
 grep -raosE '${LONG_LIVED_CREDENTIAL}' "$HOME" /tmp /spaces/${spaceId} 2>/dev/null | head -20;
 echo "--- environments";
@@ -204,37 +202,10 @@ for process in /proc/[0-9]*/environ; do tr '\\0' '\\n' < "$process" 2>/dev/null;
 echo "--- end";
 `;
 
-// OpenCode 2's own login store: rows in the `credential` table of `opencode.db`. The control
-// writes two the way OpenCode stores them: an OpenAI browser login, and a key for a provider of the
-// user's own that OpenCode's catalog does not know, which no integration route lists and no key
-// pattern matches. No route can create an OAuth record without a real login, so the rows are
-// written with Node's built-in SQLite into the database the running OpenCode uses. The timeout
-// waits for OpenCode's own lock instead of failing on it.
-const DECOY_CREDENTIAL_ID = 'cred_decoy000000000000000000';
-const DECOY_CUSTOM_CREDENTIAL_ID = 'cred_decoy000000000000000001';
-const openDatabase = (databasePath, options = '{ timeout: 5000 }') => `
-const { DatabaseSync } = require('node:sqlite');
-const db = new DatabaseSync(${JSON.stringify(databasePath)}, ${options});
-`;
-const plantCredential = (databasePath) => `${openDatabase(databasePath)}
-const now = Date.now();
-const insert = db.prepare('INSERT INTO credential (id, integration_id, label, value, active, time_created, time_updated) VALUES (?, ?, ?, ?, ?, ?, ?)');
-insert.run('${DECOY_CREDENTIAL_ID}', 'openai', 'default', JSON.stringify({ type: 'oauth', methodID: 'chatgpt-browser', refresh: 'decoy-refresh-value', access: 'decoy-access-value', expires: now + 3600000 }), 1, now, now);
-insert.run('${DECOY_CUSTOM_CREDENTIAL_ID}', 'acme-llm', 'default', JSON.stringify({ type: 'key', key: 'acme_live_decoy' }), 1, now, now);
-db.close();
-`;
-const removeCredential = (databasePath) => `${openDatabase(databasePath)}
-const { changes } = db.prepare('DELETE FROM credential WHERE id IN (?, ?)').run('${DECOY_CREDENTIAL_ID}', '${DECOY_CUSTOM_CREDENTIAL_ID}');
-db.close();
-console.log('removed:' + changes);
-`;
-// Every stored login, by integration and kind, read straight from the table. OpenCode lists only
-// the integrations its catalog knows, so this is the check that sees a custom provider's key.
-const readCredentials = (databasePath) => `${openDatabase(databasePath, '{ readOnly: true, timeout: 5000 }')}
-const rows = db.prepare("SELECT integration_id AS integration, json_extract(value, '$.type') AS type FROM credential ORDER BY id").all();
-db.close();
-console.log(JSON.stringify(rows.map((row) => ({ integration: row.integration, type: row.type }))));
-`;
+// The OpenCode credential store and its integration listing were the positive control of this
+// search. They went with the in-space runtime. The general search and its file/environment
+// controls below still prove that no long-lived credential of the user's is inside a space; the
+// OMP credential stores need their own checks when that runtime is built.
 
 const sleep = (milliseconds) => new Promise((resolve) => { setTimeout(resolve, milliseconds); });
 
@@ -422,12 +393,11 @@ export function runEscapeSuite(title, { enabled = true, setup }) {
         const version = await inside(['openchamber', '--version']);
         expect(version.code).toBe(0);
         expect(version.stdout).toMatch(/^\d+\.\d+\.\d+/);
-        expect((await shell('command -v openchamber && command -v opencode')).stdout).toBe(`${launcher}\n${TOOLS_BIN_PATH}/opencode\n`);
+        expect((await shell('command -v openchamber')).stdout).toBe(`${launcher}\n`);
 
-        // The server that runs right now was started from the mount, and so was its OpenCode.
+        // The server that runs right now was started from the mount.
         const running = (await shell("for pid in /proc/[0-9]*; do tr '\\0' ' ' < $pid/cmdline; echo; done")).stdout;
         expect(running).toMatch(new RegExp(`node ${launcher} serve --foreground`));
-        expect(running).toMatch(new RegExp(`${TOOLS_MOUNT_PATH}/node_modules/\\S*opencode\\S* serve`));
       });
 
       it('is mounted read-only', async () => {
@@ -491,7 +461,7 @@ export function runEscapeSuite(title, { enabled = true, setup }) {
 
       const metadata = await host.spaceMetadata(spec.id);
       // Positive control: the metadata is real and complete enough to show the environment.
-      expect(metadata).toContain('OPENCODE_DISABLE_AUTOUPDATE=1');
+      expect(metadata).toContain('OPENCHAMBER_RELAY_HOST=off');
       expect(metadata).not.toContain(token);
     });
 
@@ -506,7 +476,7 @@ export function runEscapeSuite(title, { enabled = true, setup }) {
         const answer = await server.request(spec.id, { path: '/health' });
         expect(answer.status).toBe(200);
         expect(answer.body).not.toContain('INJECTED-BY-THE-AGENT');
-        expect(JSON.parse(answer.body)).toMatchObject({ isOpenCodeReady: true });
+        expect(JSON.parse(answer.body)).toMatchObject({ status: 'ok' });
       } finally {
         await shell('rm -f "$HOME/.curlrc"');
       }
@@ -898,7 +868,7 @@ export function runEscapeSuite(title, { enabled = true, setup }) {
         // Afterwards the corridor still serves a legitimate request, and the space is still healthy.
         await mustCarry('example.com:443');
         const health = await createSpaceServerChannel({ exec: place.exec }).request(spec.id, { path: '/health' });
-        expect(JSON.parse(health.body)).toMatchObject({ isOpenCodeReady: true });
+        expect(JSON.parse(health.body)).toMatchObject({ status: 'ok' });
         expect((await place.list()).find((space) => space.id === spec.id)).toMatchObject({ state: 'running', damaged: false });
       }, 240_000);
 
@@ -940,76 +910,36 @@ export function runEscapeSuite(title, { enabled = true, setup }) {
 
       // The one guarantee that is ours in both modes: no long-lived credential of the user's is
       // ever inside a space. Stage 2 puts none there, and this fails the day something does.
+      // The OpenCode credential store and its integration route were the old positive control and
+      // went with that runtime; the search keeps its file and process-environment controls, and
+      // the OMP credential stores get their own checks when the OMP runtime is built.
       it('holds no long-lived credential of the user\'s, anywhere the space can read', async () => {
         const search = () => shell(credentialSearch(spec.id));
-        const server = createSpaceServerChannel({ exec: place.exec });
-        const login = await server.request(spec.id, { method: 'POST', path: '/auth/session', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: await server.readToken(spec.id) }) });
-        expect(login.status).toBe(200);
-        const cookie = login.headers['set-cookie'][0].split(';')[0];
-        // What OpenCode itself holds: every connection of every integration, a stored login or a
-        // provider key it found in its own environment under one of its catalog's names.
-        const connections = async () => {
-          const answer = await server.request(spec.id, { path: '/api/integration', headers: { Cookie: cookie } });
-          expect(answer.status).toBe(200);
-          const integrations = JSON.parse(answer.body).data;
-          expect(integrations.length).toBeGreaterThan(0);
-          return integrations.flatMap((integration) => integration.connections.map((connection) => ({ integration: integration.id, ...connection })));
-        };
-        const database = `${SPACE_HOME}/.local/share/opencode/opencode.db`;
-        const storedCredentials = async () => {
-          const answer = await inside(['node', '--no-warnings', '-e', readCredentials(database)]);
-          expect(answer.code, answer.stderr).toBe(0);
-          return JSON.parse(answer.stdout);
-        };
-        const decoyRecord = `${SPACE_HOME}/.local/share/opencode/auth.json`;
         const decoy = 'sk-decoy00000000000000000000';
 
-        // The clean search runs first. SQLite keeps a deleted row's bytes in its write-ahead log,
-        // so after the control below the database would hold the decoy's text for good.
         const found = (await search()).stdout;
-        // Positive control of its own: the search ran and looked in all three places.
+        // Positive control of its own: the search ran and looked in both places.
         expect(found).toContain('--- files');
         expect(found).toContain('--- environments');
         expect(found).toContain('--- end');
-        expect(found).toContain('auth-record: absent');
         expect(found.slice(found.indexOf('--- files'))).toBe('--- files\n--- environments\n--- end\n');
-        expect(await connections()).toEqual([]);
-        expect(await storedCredentials()).toEqual([]);
 
         // Positive control: the same search, with a credential of each shape planted where one
-        // would live. The oauth refresh record goes only into OpenCode's database, so a search
-        // that skips binary files fails here. The legacy auth.json, which OpenCode 2 imports once,
-        // holds nothing and only shows that its path is checked.
+        // would live: a private key in HOME and an oauth-shaped token in a process environment.
         const planted = await shell([
-          `mkdir -p "$(dirname ${decoyRecord})"`,
-          `printf '{}' > ${decoyRecord}`,
           `printf -- '-----BEGIN OPENSSH PRIVATE KEY-----' > "$HOME/decoy-key"`,
           `DECOY_TOKEN=${decoy} sleep 30 & echo "decoy-pid:$!"`,
         ].join('; '));
         const decoyPid = /decoy-pid:(\d+)/.exec(planted.stdout)?.[1];
-        let removal;
         try {
-          const row = await inside(['node', '--no-warnings', '-e', plantCredential(database)]);
-          expect(row.code, row.stderr).toBe(0);
-          // OpenCode reads the row as a login, so this is where OpenCode 2 keeps them.
-          expect(await connections()).toEqual([{ integration: 'openai', type: 'credential', id: DECOY_CREDENTIAL_ID, label: 'default', method: 'oauth' }]);
-          // The custom provider's key is invisible to that listing, and the table read sees it.
-          expect(await storedCredentials()).toEqual([{ integration: 'openai', type: 'oauth' }, { integration: 'acme-llm', type: 'key' }]);
-
           const control = (await search()).stdout;
-          expect(control).toContain('auth-record: present');
-          expect(control).toMatch(/opencode\.db(-wal)?:"refresh"\s*:\s*"/);
           expect(control).toContain('BEGIN OPENSSH PRIVATE KEY');
           expect(control).toContain(decoy);
         } finally {
-          removal = await inside(['node', '--no-warnings', '-e', removeCredential(database)]);
-          await shell(`rm -f ${decoyRecord} "$HOME/decoy-key"; ${decoyPid ? `kill ${decoyPid} 2>/dev/null` : 'true'}; true`);
+          await shell(`rm -f "$HOME/decoy-key"; ${decoyPid ? `kill ${decoyPid} 2>/dev/null` : 'true'}; true`);
         }
-        // Checked after the finally, so a failed control above is the error that gets reported.
-        expect(removal.code, removal.stderr).toBe(0);
-        expect(removal.stdout).toBe('removed:2\n');
-        expect(await connections()).toEqual([]);
-        expect(await storedCredentials()).toEqual([]);
+        // The space is clean again once the control's files are gone.
+        expect((await search()).stdout.slice((await search()).stdout.indexOf('--- files'))).toBe('--- files\n--- environments\n--- end\n');
       }, 180_000);
 
       // One space is not enough to say anything about two. This makes a second one and looks
@@ -1044,7 +974,7 @@ export function runEscapeSuite(title, { enabled = true, setup }) {
 
           // The other space's server answers, so that space is alive and listening.
           const health = await createSpaceServerChannel({ exec: place.exec }).request(other.id, { path: '/health' });
-          expect(JSON.parse(health.body)).toMatchObject({ isOpenCodeReady: true });
+          expect(JSON.parse(health.body)).toMatchObject({ status: 'ok' });
 
           // And each space reaches the corridor of its own gatekeeper at that same port, so a
           // refusal below is the boundary between them and not a listener that is not there.
@@ -1113,9 +1043,9 @@ require('node:dns').promises.lookup('${GATEKEEPER_ALIAS}').then((answer) => done
 
       expect(await inside(['echo', 'alive'])).toMatchObject({ code: 0, stdout: 'alive\n' });
       expect((await place.list()).find((space) => space.id === spec.id)).toMatchObject({ state: 'running' });
-      // "Nothing else" includes the server inside and its OpenCode.
+      // "Nothing else" includes the server inside.
       const health = await createSpaceServerChannel({ exec: place.exec }).request(spec.id, { path: '/health' });
-      expect(JSON.parse(health.body)).toMatchObject({ isOpenCodeReady: true });
+      expect(JSON.parse(health.body)).toMatchObject({ status: 'ok' });
       expect(await place.check()).toMatchObject({ available: true });
     }, 120_000);
   });

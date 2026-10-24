@@ -9,7 +9,23 @@ import { createPlaceRegistry } from './places/registry.js';
 const NOW = new Date('2026-09-19T10:00:00.000Z');
 const REQUEST = { placeId: 'memory', projectDirectory: '/home/me/project', name: '  Fix login  ' };
 
-const managerFor = (place) => createSpaceManager({ registry: createPlaceRegistry([place]), now: () => NOW });
+const managerFor = (place) => createSpaceManager({ registry: createPlaceRegistry([place]), now: () => NOW, requireReleased: () => {} });
+
+describe('createSpaceManager: the release gate', () => {
+  it('refuses create and start while the gate is closed, before it asks the place', async () => {
+    const calls = [];
+    const place = {
+      ...createMemoryPlace(),
+      create: async () => { calls.push('create'); },
+      start: async () => { calls.push('start'); },
+    };
+    const manager = createSpaceManager({ registry: createPlaceRegistry([place]), now: () => NOW });
+
+    await expect(manager.createSpace(REQUEST)).rejects.toMatchObject({ code: 'isolated_spaces_unreleased' });
+    await expect(manager.startSpace({ placeId: 'memory', spaceId: 'a1b2c3d4e5f6' })).rejects.toMatchObject({ code: 'isolated_spaces_unreleased' });
+    expect(calls).toEqual([]);
+  });
+});
 
 describe('createSpaceManager', () => {
   it('creates a space with a fresh id, the project hash and the creation time', async () => {

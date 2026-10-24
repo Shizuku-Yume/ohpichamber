@@ -18,8 +18,8 @@ export const TOOLS_STAGING_PATH = '/tmp/openchamber-fill';
 const WEB_TARBALL_NAME = 'openchamber-web.tgz';
 const SDK_TARBALL_NAME = 'openchamber-sdk.tgz';
 
-// Exact versions for the three packages this module names, never a range or a URL.
-// That pins those three only. Their own dependencies are still ranges, and no lock file travels
+// Exact versions for the packages this module names, never a range or a URL.
+// That pins those only. Their own dependencies are still ranges, and no lock file travels
 // with the source, so two fills of one key can differ in a transitive package. A known limit.
 const EXACT_VERSION_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 
@@ -52,12 +52,9 @@ const requireRevision = (value) => {
   return value;
 };
 
-/** OpenCode and its plugin always share one version. */
-const openCodePackages = (version) => ({ '@opencode/cli': version, '@opencode/plugin': version });
-
 /**
- * The versions a released host installs: its own `@openchamber/web`, and OpenCode at the
- * version of the `@opencode/client` this server was built against.
+ * The version a released host installs: its own `@openchamber/web`. There is no agent runtime in
+ * the tools volume any more, and no engine version to read beside it.
  */
 export function readHostToolVersions(packageJsonUrl = new URL('../../../package.json', import.meta.url)) {
   let manifest;
@@ -68,18 +65,16 @@ export function readHostToolVersions(packageJsonUrl = new URL('../../../package.
   }
   return {
     webVersion: requireVersion(manifest.version, '@openchamber/web'),
-    openCodeVersion: requireVersion(manifest.dependencies?.['@opencode/client'], 'OpenCode'),
   };
 }
 
-export function createRegistryToolsSource({ webVersion, openCodeVersion, revision = '' }) {
+export function createRegistryToolsSource({ webVersion, revision = '' }) {
   const packages = {
     '@openchamber/web': requireVersion(webVersion, '@openchamber/web'),
-    ...openCodePackages(requireVersion(openCodeVersion, 'OpenCode')),
   };
   return finishSource({
     kind: 'registry',
-    description: `web ${webVersion}, opencode ${openCodeVersion}`,
+    description: `web ${webVersion}`,
     canonical: { kind: 'registry', packages, revision: requireRevision(revision) },
     packageJson: packageJsonText({ dependencies: packages }),
     files: [],
@@ -91,7 +86,7 @@ export function createRegistryToolsSource({ webVersion, openCodeVersion, revisio
  * The override makes every `@openchamber/sdk` in the tree the local tarball, also the one
  * that `web` asks for by version number.
  */
-export function createPackedToolsSource({ webTarballPath, sdkTarballPath, openCodeVersion, revision = '' }) {
+export function createPackedToolsSource({ webTarballPath, sdkTarballPath, revision = '' }) {
   const read = (filePath, what) => {
     try {
       return fs.readFileSync(filePath);
@@ -103,16 +98,14 @@ export function createPackedToolsSource({ webTarballPath, sdkTarballPath, openCo
     { name: WEB_TARBALL_NAME, bytes: read(webTarballPath, 'web') },
     { name: SDK_TARBALL_NAME, bytes: read(sdkTarballPath, 'sdk') },
   ];
-  const packages = openCodePackages(requireVersion(openCodeVersion, 'OpenCode'));
   return finishSource({
     kind: 'packed',
     description: 'development build',
-    canonical: { kind: 'packed', tarballs: files.map((file) => ({ name: file.name, sha256: sha256(file.bytes) })), packages, revision: requireRevision(revision) },
+    canonical: { kind: 'packed', tarballs: files.map((file) => ({ name: file.name, sha256: sha256(file.bytes) })), revision: requireRevision(revision) },
     packageJson: packageJsonText({
       dependencies: {
         '@openchamber/web': `file:${TOOLS_STAGING_PATH}/${WEB_TARBALL_NAME}`,
         '@openchamber/sdk': `file:${TOOLS_STAGING_PATH}/${SDK_TARBALL_NAME}`,
-        ...packages,
       },
       overrides: { '@openchamber/sdk': '$@openchamber/sdk' },
     }),

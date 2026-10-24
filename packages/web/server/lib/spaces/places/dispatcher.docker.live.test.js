@@ -56,7 +56,7 @@ describe.skipIf(!LIVE_DOCKER_ENABLED)('dispatcher over a real space: docker (liv
     await place.create(spec);
     await shell(`mkdir -p ${repo} && cd ${repo} && git init -q . && git -c user.email=space@example.invalid -c user.name=Space commit -q --allow-empty -m init`);
     dataDir = temporary('openchamber-dispatcher-live-');
-    host = createSpacesHost({ dataDir, place, logger: { warn: () => {} } });
+    host = createSpacesHost({ dataDir, place, requireReleased: () => {}, logger: { warn: () => {} } });
     const app = express();
     // The host's auth gate stands in front of the dispatcher in the real server; here the request
     // is taken as authenticated, and one host route records whether it ever ran.
@@ -77,32 +77,33 @@ describe.skipIf(!LIVE_DOCKER_ENABLED)('dispatcher over a real space: docker (liv
   });
 
   it('forwards a prefixed request to the server inside and returns its answer', async () => {
-    const response = await fetch(url(`/api/spaces/${spec.id}/session?directory=${encodeURIComponent(repo)}`));
+    const response = await fetch(url(`/api/spaces/${spec.id}/terminal/sessions`));
     expect(response.status).toBe(200);
     expect(response.headers.get('x-content-type-options')).toBe('nosniff');
     expect(response.headers.get('set-cookie')).toBeNull();
     const list = await response.json();
-    expect(Array.isArray(list.data ?? list)).toBe(true);
+    expect(Array.isArray(list.sessions)).toBe(true);
   });
 
-  it('creates a session inside through a streamed POST body, and lists it back', async () => {
-    const created = await fetch(url(`/api/spaces/${spec.id}/session`), {
+  it('creates a terminal inside through a streamed POST body, and lists it back', async () => {
+    const created = await fetch(url(`/api/spaces/${spec.id}/terminal/create`), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ location: { directory: repo } }),
+      body: JSON.stringify({ cwd: repo, cols: 80, rows: 24 }),
     });
     expect(created.status, await created.clone().text()).toBe(200);
-    const session = (await created.json()).data;
-    expect(session.location.directory).toBe(repo);
+    const session = await created.json();
+    expect(session.sessionId).toEqual(expect.any(String));
 
-    const listed = await fetch(url(`/api/spaces/${spec.id}/session?directory=${encodeURIComponent(repo)}`));
-    const ids = ((await listed.json()).data ?? []).map((entry) => entry.id);
-    expect(ids).toContain(session.id);
+    const listed = await fetch(url(`/api/spaces/${spec.id}/terminal/sessions`));
+    const ids = (await listed.json()).sessions.map((entry) => entry.sessionId);
+    expect(ids).toContain(session.sessionId);
+    expect((await fetch(url(`/api/spaces/${spec.id}/terminal/${session.sessionId}`), { method: 'DELETE' })).status).toBe(200);
   });
 
-  it('streams the event stream of the server inside', async () => {
+  it('streams an event stream of the server inside', async () => {
     const controller = new AbortController();
-    const response = await fetch(url(`/api/spaces/${spec.id}/event`), { signal: controller.signal, headers: { accept: 'text/event-stream' } });
+    const response = await fetch(url(`/api/spaces/${spec.id}/openchamber/events`), { signal: controller.signal, headers: { accept: 'text/event-stream' } });
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toContain('text/event-stream');
     const reader = response.body.getReader();
@@ -113,7 +114,7 @@ describe.skipIf(!LIVE_DOCKER_ENABLED)('dispatcher over a real space: docker (liv
   }, 60_000);
 
   it('refuses a prefixed request that names a directory outside the space, and a host-only route', async () => {
-    const outside = await fetch(url(`/api/spaces/${spec.id}/session?directory=${encodeURIComponent('/home/me/project')}`));
+    const outside = await fetch(url(`/api/spaces/${spec.id}/terminal/sessions?directory=${encodeURIComponent('/home/me/project')}`));
     expect(outside.status).toBe(400);
     expect(await outside.json()).toMatchObject({ code: 'directory_outside_space' });
     const hostOnly = await fetch(url(`/api/spaces/${spec.id}/config/settings`));
@@ -138,7 +139,7 @@ describe.skipIf(!LIVE_DOCKER_ENABLED)('dispatcher over a real space: docker (liv
   const bridgesInside = async () => Number((await shell('n=0; for p in /proc/[0-9]*; do if tr "\\0" " " < "$p/cmdline" 2>/dev/null | grep -q "^/usr/local/bin/node -e "; then n=$((n+1)); fi; done; echo $n')).trim());
 
   it('ends the bridge inside when the host closes its connections', async () => {
-    expect((await fetch(url(`/api/spaces/${spec.id}/session?directory=${encodeURIComponent(repo)}`))).status).toBe(200);
+    expect((await fetch(url(`/api/spaces/${spec.id}/terminal/sessions`))).status).toBe(200);
     expect(await bridgesInside()).toBeGreaterThan(0);
     host.close();
     let left = await bridgesInside();
@@ -148,17 +149,17 @@ describe.skipIf(!LIVE_DOCKER_ENABLED)('dispatcher over a real space: docker (liv
     }
     expect(left).toBe(0);
     // The next request opens a new one.
-    expect((await fetch(url(`/api/spaces/${spec.id}/session?directory=${encodeURIComponent(repo)}`))).status).toBe(200);
+    expect((await fetch(url(`/api/spaces/${spec.id}/terminal/sessions`))).status).toBe(200);
   }, 60_000);
 
   it('answers 503 with a stable code for a stopped space, and serves it again after a start', async () => {
     await place.stop(spec.id);
-    const stopped = await fetch(url(`/api/spaces/${spec.id}/session?directory=${encodeURIComponent(repo)}`));
+    const stopped = await fetch(url(`/api/spaces/${spec.id}/terminal/sessions`));
     expect(stopped.status).toBe(503);
     expect(await stopped.json()).toMatchObject({ code: 'space_not_running' });
 
     await place.start(spec.id);
-    const again = await fetch(url(`/api/spaces/${spec.id}/session?directory=${encodeURIComponent(repo)}`));
+    const again = await fetch(url(`/api/spaces/${spec.id}/terminal/sessions`));
     expect(again.status).toBe(200);
   }, 5 * 60_000);
 });
@@ -276,19 +277,30 @@ describe.skipIf(!LIVE_DOCKER_ENABLED)('the switch, on the real server (live)', (
     }
   }, 120_000);
 
-  it('registers the routes and asks Docker for its spaces while the switch is on', async () => {
+  it('keeps the feature off and refuses the switch while the release gate is closed, even when settings.json says on', async () => {
     const run = await startWith(true);
     try {
+      // The saved switch cannot bring a host up: no feature route, no directory guard, no Docker.
       const prefixed = await run.server.get('/api/spaces/aaaaaaaaaaaa/session');
-      expect(prefixed.status).toBe(502);
-      expect(await prefixed.json()).toMatchObject({ code: 'space_unreachable' });
-      expect(run.daemon.connections()).toBeGreaterThan(0);
-      const guarded = await run.server.get('/api/git/status?directory=/spaces/aaaaaaaaaaaa/repo');
-      expect(guarded.status).toBe(400);
-      expect(await guarded.json()).toMatchObject({ code: 'space_directory_needs_prefix' });
-      const hostOnly = await run.server.get('/api/spaces/aaaaaaaaaaaa/config/settings');
-      expect(hostOnly.status).toBe(403);
-      expect(fs.existsSync(path.join(run.dataDir, 'spaces', 'owner'))).toBe(true);
+      const body = await prefixed.text();
+      expect(body).not.toMatch(/space_not_found|space_unreachable|host_only_route/);
+      const unguarded = await run.server.get('/api/git/status?directory=/spaces/aaaaaaaaaaaa/repo');
+      expect(unguarded.status).not.toBe(400);
+      expect(run.daemon.connections()).toBe(0);
+      expect(fs.existsSync(path.join(run.dataDir, 'spaces'))).toBe(false);
+      expect(run.server.output()).toContain('not released yet');
+
+      // The switch route exists and answers off; turning it on is refused before the setting is written.
+      expect(await (await run.server.get('/api/openchamber/spaces/switch')).json()).toEqual({ enabled: false, spaces: [] });
+      const turnedOn = await fetch(`${run.server.base}/api/openchamber/spaces/switch`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ enabled: true }),
+      });
+      expect(turnedOn.status).toBe(409);
+      expect(await turnedOn.json()).toMatchObject({ code: 'isolated_spaces_unreleased' });
+      expect(JSON.parse(fs.readFileSync(path.join(run.dataDir, 'settings.json'), 'utf8')).isolatedSpacesEnabled).toBe(true);
+      expect(run.daemon.connections()).toBe(0);
     } finally {
       await run.stop();
     }

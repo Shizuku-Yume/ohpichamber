@@ -13,7 +13,7 @@
 - `project-directory-runtime.js` resolves and validates workspace roots; `project-icon-routes.js` owns project icon upload, discovery, and serving.
 - `path-utils.js` owns shared PATH heuristics and merge utilities used by Electron's login-shell environment setup and Host command environment resolution. It is Host infrastructure, not an OpenCode lifecycle owner.
 - `executable.js` checks that a path names a regular executable file. The retained terminal shell resolver uses this Host-owned probe without importing legacy OpenCode environment utilities.
-- `sse-stream.js` owns response backpressure for Host and isolated-space event streams; `session-list.js` owns the allowlisted session-list projection shared by the Host proxy and spaces.
+- `sse-stream.js` owns response backpressure for Host event streams. The allowlisted session-list projection was deleted with the removed proxy and space session merge.
 - `server-startup-runtime.js`, `startup-pipeline-runtime.js`, and `static-routes-runtime.js` own Host HTTP startup, static assets, SPA fallback, and manifest wiring.
 - `agent-service-supervisor.js` and `agent-service-supervisor.d.ts` start the separate Bun service, discover its loopback endpoint, supervise lifecycle, verify Linux process birth identity, handle worker operation authorization, route native approval policy IPC, and answer the service's private spawn-IPC request for the internal token (never via the environment).
 - `agent-runtime.js` integrates the supervisor, scope runtime, approval policy store, and worker operation authorizer, resolving authorized workspace and session scopes for Host operations.

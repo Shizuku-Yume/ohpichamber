@@ -1,6 +1,6 @@
 # Inherited OpenCode runtime notes
 
-These notes describe the current inherited OpenCode 2.x integration only, not the API or design for new OMP functionality. The [root migration direction](../../../../../AGENTS.md#migration-direction-and-status) and [scope hierarchy](../../../../../.workflow/omp-migration/scope.md#document-hierarchy) take precedence. Use affected sections for baseline diagnosis, preservation or retirement; new agent behavior follows the OMP Canonical API contracts.
+These notes describe the inherited OpenCode 2.x integration as it was, not the API or design for new OMP functionality. The web server no longer ships that integration; the notes remain for diagnosis only. The [root migration direction](../../../../../AGENTS.md#migration-direction-and-status) and [scope hierarchy](../../../../../.workflow/omp-migration/scope.md#document-hierarchy) take precedence. Use affected sections for baseline diagnosis, preservation or retirement; new agent behavior follows the OMP Canonical API contracts.
 
 OpenChamber moved from the OpenCode 1.x API to 2.x in one cutover (PR #3837,
 2026-09). Everything OpenCode-facing speaks 2.x: routes under `/api/*`, one
@@ -24,9 +24,10 @@ the 2.x code, not from memory of 1.x.
 - Historical usage no longer crosses the OpenCode boundary. Shared UI uses
   CanonicalClient usage endpoints through the Host; exact registered native
   sources are inspected cold in the Bun usage worker.
-- `packages/web/server/lib/opencode/proxy.js` forwards `/api/*` as-is (2.x
-  serves under `/api` itself) and folds OpenChamber-owned session state into
-  the records it serves. `env-runtime.js` launches `opencode serve`.
+- The unmounted proxy that forwarded `/api/*` as-is (2.x serves under `/api`
+  itself) and folded OpenChamber-owned session state into the records it served
+  was deleted with the in-space runtime, as was the environment code that
+  launched `opencode serve`. These notes are historical.
 - Plugins OpenChamber generates for OpenCode: `plugin-spec.js` and
   `agent-tool/runtime.js`. Only the binary, port and external toggle restart.
 
@@ -113,12 +114,12 @@ documentation move. Confirm against the installed pin and affected source when r
 ## Sources of truth
 
 - Read the pinned package manifests and generated client/schema in this checkout first. A separately available OpenCode reference checkout is read-only; do not assume a workstation-specific path. Follow the [local-work rules](../../../../../.workflow/standards.md) for Git authorization. Where reference source is unavailable, use published SHA-addressed source and official release/API references, and state the evidence limit. OpenCode 2.x source boundaries are `packages/core/src`, `packages/server/src/handlers/*`, `packages/schema/src` and `packages/protocol/src/groups`.
-- Minimum supported version lookup: `MINIMUM_OPENCODE_VERSION` in
-  `packages/web/server/lib/opencode/compatibility.js`. This is an inherited
-  compatibility boundary, not permission to change runtime requirements.
-- Pinned version: `opencodeCli.version` in `packages/electron/package.json`
-  (the bundled binary) and `@opencode/client` / `@opencode/schema` in the
-  root, ui and web manifests, plus `@opencode/cli@` in the
-  Dockerfile. These are coordinated inherited pins, not an automatic bump instruction.
+- The web package no longer pins `@opencode/client` or `@opencode/schema`, and
+  its spaces install no OpenCode CLI or plugin: task 38 removed both with the
+  in-space runtime. The root and ui manifests and `packages/electron/package.json`
+  still carry the inherited UI wire-type pins; the Dockerfile's CLI pin is task
+  15's. These are coordinated inherited pins, not an automatic bump instruction.
+- Historical version and compatibility notes here describe source that no longer
+  ships in `packages/web/server`. Do not reintroduce an engine from them.
 - Wire-type lookup: `model.ts` and `events.ts` at the UI boundary classify inherited message types and events. Preserve complete classification when maintaining that boundary; do not use these shapes for new OMP functionality.
 

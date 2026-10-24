@@ -34,7 +34,7 @@ afterEach(() => {
 });
 
 /** A journey on fresh stand-ins. `failAt` names a stand-in step that rejects. */
-const journeyWith = ({ failAt = null, place = createMemoryPlace(), projects = [PROJECT], historyStatus = 'sent', holdCodeIn = false, holdCodeOut = false, holdIdleSave = false, holdReady = false, holdLoginRow = false, hostEnvironment = {}, hostLogin = null, dataDir = null, archiveChats = null, logger = quiet } = {}) => {
+const journeyWith = ({ failAt = null, place = createMemoryPlace(), projects = [PROJECT], historyStatus = 'sent', holdCodeIn = false, holdCodeOut = false, holdIdleSave = false, hostEnvironment = {}, dataDir = null, archiveChats = null, logger = quiet } = {}) => {
   // With `holdCodeIn`, code in waits until the test lets it go, so a creation stays under way;
   // `holdCodeOut` does the same for the fetch of an apply.
   let releaseCodeIn = () => {};
@@ -47,7 +47,6 @@ const journeyWith = ({ failAt = null, place = createMemoryPlace(), projects = [P
   }
   const calls = [];
   const events = [];
-  const changes = { count: 0 };
   const fail = (step) => { if (failAt === step) throw new SpaceError(`${step}_failed`, `the stand-in for ${step} failed`); };
   // The stand-in gatekeeper holds grant ids per space, like the program's memory: a stop forgets them.
   const held = new Map();
@@ -62,23 +61,9 @@ const journeyWith = ({ failAt = null, place = createMemoryPlace(), projects = [P
   // `calls` so the order of the other steps reads as it did before 5d-3.
   const idle = { saved: null, writes: [], release: () => {} };
   const idleSaveHeld = new Promise((resolve) => { idle.release = resolve; });
-  // With `holdReady`, the server inside reports ready only when the test lets it, so the login
-  // row's repair after a start waits where a real server inside would still be starting.
-  let releaseReady = () => {};
-  const readyHeld = new Promise((resolve) => { releaseReady = resolve; });
   const serverInside = {
     writeToken: async (spaceId, token) => { calls.push(['writeToken', spaceId, token]); fail('writeToken'); },
     writeIdleStop: async (spaceId, setting) => { fail('writeIdleStop'); idle.writes.push([spaceId, setting]); },
-    waitUntilReady: async (spaceId) => { fail('waitUntilReady'); if (holdReady) await readyHeld; calls.push(['waitUntilReady', spaceId]); },
-  };
-  // With `holdLoginRow`, a write or removal of the login row inside waits until the test lets it
-  // go, so the repair after a start can be caught in the middle of its writing.
-  let releaseLoginRow = () => {};
-  const loginRowHeld = new Promise((resolve) => { releaseLoginRow = resolve; });
-  const spaceOpenCode = {
-    writeProviderConfig: async (spaceId, grants) => { calls.push(['writeProviderConfig', spaceId, grants]); fail('writeProviderConfig'); },
-    writeLogin: async (spaceId, provider, login) => { calls.push(['writeLogin', spaceId, provider, login]); if (holdLoginRow) await loginRowHeld; fail('writeLogin'); },
-    removeLogin: async (spaceId) => { calls.push(['removeLogin', spaceId]); if (holdLoginRow) await loginRowHeld; fail('removeLogin'); },
   };
   const codeIn = {
     bringCodeIn: async (request) => {
@@ -101,22 +86,22 @@ const journeyWith = ({ failAt = null, place = createMemoryPlace(), projects = [P
     applyAsChanges: async (request) => { calls.push(['applyAsChanges', request]); fail('applyAsChanges'); return { status: failAt === 'nothing' ? 'nothing_to_apply' : 'applied', appliedPaths: 3, remembered: true }; },
   };
   const records = createSpaceRecords({ dataDir, logger: quiet });
-  const manager = createSpaceManager({ registry: createPlaceRegistry([place]), now: () => new Date('2026-09-26T10:00:00.000Z') });
+  const manager = createSpaceManager({ registry: createPlaceRegistry([place]), now: () => new Date('2026-09-26T10:00:00.000Z'), requireReleased: () => {} });
   const journey = createSpaceJourney({
-    manager, place, gatekeeper, codeIn, codeOut, records, spaceOpenCode, serverInside,
+    manager, place, gatekeeper, codeIn, codeOut, records, serverInside,
     listProjectDirectories: async () => projects,
     archiveChats,
     readHostSecret: (name) => hostEnvironment[name],
-    readHostLogin: async (provider) => (hostLogin && provider === 'openai' ? hostLogin : null),
+    // The production gate is closed; the tests open it so the journey below stays exercised.
+    requireReleased: () => {},
     folderExists: async () => true,
     readIdleStop: async () => idle.saved ?? { enabled: true, hours: 4 },
     saveIdleStop: async (setting) => { if (holdIdleSave) await idleSaveHeld; fail('saveIdleStop'); idle.saved = setting; },
     announce: (spaceId, payload) => { events.push({ spaceId, ...payload.properties }); },
-    onSpacesChanged: () => { changes.count += 1; },
     logger,
     now: () => new Date('2026-09-26T10:00:00.000Z'),
   });
-  return { journey, place, records, calls, events, changes, manager, releaseCodeIn, releaseCodeOut, releaseReady, releaseLoginRow, gatekeeper, dataDir, idle };
+  return { journey, place, records, calls, events, manager, releaseCodeIn, releaseCodeOut, gatekeeper, dataDir, idle };
 };
 
 const REQUEST = { projectDirectory: PROJECT, name: ' Fix login ', start: 'uncommitted', network: NETWORK };
@@ -124,7 +109,7 @@ const steps = (events, spaceId) => events.filter((event) => event.spaceId === sp
 
 describe('the journey: create', () => {
   it('answers at once, then makes the space, sets its network, brings the code in and sends the history behind it', async () => {
-    const { journey, place, records, calls, events, changes } = journeyWith();
+    const { journey, place, records, calls, events } = journeyWith();
 
     const answer = await journey.createSpace(REQUEST);
     expect(answer).toMatchObject({ id: expect.stringMatching(/^[0-9a-f]{12}$/), name: 'Fix login', placeId: 'memory', projectDirectory: PROJECT, directory: `/spaces/${answer.id}/project`, state: 'preparing', step: 'checking_place', network: NETWORK, history: 'pending' });
@@ -140,7 +125,6 @@ describe('the journey: create', () => {
     expect(calls[2][1]).toEqual({ repository: PROJECT, spaceId: answer.id, spacePath: `/spaces/${answer.id}/project`, base: BASE });
     expect(await until(() => records.read(answer.id).record?.history === 'sent')).toBe(true);
     expect(records.read(answer.id).record).toMatchObject({ network: NETWORK, repository: PROJECT, spacePath: `/spaces/${answer.id}/project`, base: BASE });
-    expect(changes.count).toBeGreaterThan(0);
 
     const listed = await journey.listSpaces();
     expect(listed).toEqual([expect.objectContaining({ id: answer.id, state: 'running', step: null, failure: null, network: NETWORK, history: 'sent', damaged: false })]);
@@ -277,8 +261,7 @@ describe('the journey: start, stop, remove', () => {
   };
 
   it('stops a space and starts it again with its network said again to the gatekeeper', async () => {
-    const { journey, place, calls, id, changes } = await ready();
-    const before = changes.count;
+    const { journey, place, calls, id } = await ready();
     expect(await journey.stopSpace(id)).toMatchObject({ id, state: 'exited', network: NETWORK });
     expect(await place.list()).toEqual([expect.objectContaining({ state: 'exited' })]);
     expect(calls).toEqual([]);
@@ -286,7 +269,6 @@ describe('the journey: start, stop, remove', () => {
     const started = await journey.startSpace(id);
     expect(started).toMatchObject({ id, state: 'running', networkRestored: true });
     expect(calls).toEqual([['setNetwork', id, NETWORK]]);
-    expect(changes.count).toBe(before + 2);
   });
 
   it('starts a space whose record is gone with its network left closed, and says so', async () => {
@@ -561,7 +543,7 @@ describe('the journey: grants', () => {
   const openai = { kind: 'model', provider: 'openai', upstream: 'https://api.openai.com/v1', secret: { kind: 'env', name: 'OPENAI_API_KEY' } };
   const registry = { kind: 'domain', upstream: 'https://registry.example.com/npm/' };
 
-  it('gives a model key to the gatekeeper, remembers the grant without the key, and points OpenCode inside at the window', async () => {
+  it('gives a model key to the gatekeeper and remembers the grant without the key', async () => {
     const { journey, records, calls, id } = await ready({ hostEnvironment: { OPENAI_API_KEY: ENV_KEY } });
     const typed = await journey.grantAccess(id, anthropic);
     expect(typed).toEqual({ grant: { kind: 'model', id: 'anthropic', provider: 'anthropic', upstream: 'https://api.anthropic.com/v1', header: 'x-api-key', source: { kind: 'typed' }, url: 'http://gatekeeper:8080/model/anthropic' } });
@@ -570,9 +552,7 @@ describe('the journey: grants', () => {
 
     expect(calls).toEqual([
       ['addGrant', id, { id: 'anthropic', upstream: 'https://api.anthropic.com/v1', header: 'x-api-key', secret: KEY }],
-      ['writeProviderConfig', id, [expect.objectContaining({ id: 'anthropic' })]],
       ['addGrant', id, { id: 'openai', upstream: 'https://api.openai.com/v1', header: 'authorization', secret: ENV_KEY }],
-      ['writeProviderConfig', id, [expect.objectContaining({ id: 'anthropic' }), expect.objectContaining({ id: 'openai' })]],
     ]);
     // The record holds both grants and neither key, in the file as on the way out.
     const { record } = records.read(id);
@@ -593,7 +573,7 @@ describe('the journey: grants', () => {
     calls.splice(0);
     const opened = await journey.grantAccess(id, registry);
     expect(opened.grant).toEqual({ kind: 'domain', id: expect.stringMatching(/^open-[0-9a-f]{12}$/), upstream: 'https://registry.example.com/npm/', url: `http://gatekeeper:8080/model/${opened.grant.id}` });
-    // No header, no secret, and OpenCode inside is not told about a domain.
+    // No header, no secret, and nothing else is told about a domain.
     expect(calls).toEqual([['addGrant', id, { id: opened.grant.id, upstream: 'https://registry.example.com/npm/', header: null, secret: null }]]);
     expect(records.read(id).record.grants.map((grant) => grant.kind)).toEqual(['model', 'domain']);
   });
@@ -627,23 +607,6 @@ describe('the journey: grants', () => {
     await expect(journey.grantAccess(id, anthropic)).rejects.toMatchObject({ code: 'space_not_running' });
     expect(calls.filter(([name]) => name === 'addGrant')).toEqual([]);
     await expect(journey.grantAccess('0f0f0f0f0f0f', anthropic)).rejects.toMatchObject({ code: 'space_not_found' });
-  });
-
-  it('keeps a grant whose configuration inside was not written, and writes it again at the next start', async () => {
-    const { journey, records, calls, place, dataDir, id } = await ready();
-    // A second journey over the same place and records, whose write inside fails.
-    const failing = journeyWith({ place, dataDir, failAt: 'writeProviderConfig' });
-    await expect(failing.journey.grantAccess(id, anthropic)).rejects.toMatchObject({ code: 'writeProviderConfig_failed' });
-    // The key reached the gatekeeper and the grant is remembered: only the cooperation inside is missing.
-    expect(records.read(id).record.grants.map((grant) => grant.id)).toEqual(['anthropic']);
-
-    await journey.stopSpace(id);
-    calls.splice(0);
-    await journey.startSpace(id);
-    expect(calls.filter(([name]) => name === 'writeProviderConfig')).toEqual([['writeProviderConfig', id, [expect.objectContaining({ id: 'anthropic' })]]]);
-    // And a start whose write fails still starts.
-    await failing.journey.stopSpace(id);
-    expect(await failing.journey.startSpace(id)).toMatchObject({ state: 'running', networkRestored: true });
   });
 
   it('says nothing about access while an action holds the space', async () => {
@@ -682,9 +645,6 @@ describe('the journey: grants', () => {
     ]);
     // The typed key is not in anything the start sent or wrote.
     expect(JSON.stringify(calls)).not.toContain(KEY);
-    // OpenCode's configuration inside is written again from the record, with both model grants,
-    // so a write that failed at the grant is repaired here. It holds no key.
-    expect(calls.filter(([name]) => name === 'writeProviderConfig')).toEqual([['writeProviderConfig', id, [expect.objectContaining({ id: 'anthropic' }), expect.objectContaining({ id: 'openai' }), expect.objectContaining({ id: opened.grant.id })]]]);
 
     // The list asks the gatekeeper and says which grant needs the user again.
     const listed = (await journey.listSpaces({ access: true }))[0];
@@ -716,165 +676,8 @@ describe('the journey: grants', () => {
     expect((await refusing.journey.listSpaces({ access: true }))[0]).toMatchObject({ access: 'needs_access', needsAccess: ['openai'] });
   });
 
-  describe('the host\'s own login', () => {
-    const ACCESS = 'eyJ-live-short-token-of-the-host';
-    const login = { kind: 'login', provider: 'openai' };
-    const tokenSharing = { methodID: 'chatgpt-token-sharing', access: ACCESS, expires: Date.parse('2026-09-26T11:00:00.000Z'), metadata: { clientID: 'client_1', scopes: ['chatgpt.tokens.use.direct'], models: [{ slug: 'gpt-5.5' }] } };
-    const legacy = { methodID: 'chatgpt-browser', access: ACCESS, expires: Date.parse('2026-09-26T11:00:00.000Z'), metadata: { accountID: 'acct_1' } };
-
-    it('gives the login\'s short token to the gatekeeper at the method\'s upstream, remembers only the method, and writes the row and the configuration inside', async () => {
-      const { journey, calls, records, dataDir, id } = await ready({ hostLogin: tokenSharing });
-      const granted = await journey.grantAccess(id, login);
-      expect(granted).toEqual({ grant: { kind: 'login', id: 'openai', provider: 'openai', method: 'chatgpt-token-sharing', url: 'http://gatekeeper:8080/model/openai' } });
-      expect(calls).toEqual([
-        ['addGrant', id, { id: 'openai', upstream: 'https://api.openai.com/v1', header: 'authorization', secret: ACCESS }],
-        ['writeProviderConfig', id, [{ kind: 'login', id: 'openai', provider: 'openai', method: 'chatgpt-token-sharing' }]],
-        ['writeLogin', id, 'openai', tokenSharing],
-      ]);
-      // The token is in the gatekeeper's call and nowhere the host keeps.
-      expect(JSON.stringify(granted)).not.toContain(ACCESS);
-      expect(fs.readFileSync(path.join(dataDir, 'spaces', 'records', `${id}.json`), 'utf8')).not.toContain(ACCESS);
-      expect(records.read(id).record.grants).toEqual([{ kind: 'login', id: 'openai', provider: 'openai', method: 'chatgpt-token-sharing' }]);
-      expect((await journey.listSpaces({ access: true }))[0]).toMatchObject({ access: 'granted', grants: [expect.objectContaining({ kind: 'login', id: 'openai' })] });
-    });
-
-    it('sends the legacy ChatGPT login to its own upstream', async () => {
-      const { journey, calls, id } = await ready({ hostLogin: legacy });
-      await journey.grantAccess(id, login);
-      expect(calls[0]).toEqual(['addGrant', id, { id: 'openai', upstream: 'https://chatgpt.com/backend-api/codex', header: 'authorization', secret: ACCESS }]);
-      expect(calls[2]).toEqual(['writeLogin', id, 'openai', legacy]);
-    });
-
-    it('refuses when the host has no such login, one made another way, or one that has run out, and a request that names no provider', async () => {
-      const none = await ready();
-      await expect(none.journey.grantAccess(none.id, login)).rejects.toMatchObject({ code: 'login_not_found' });
-      const other = await ready({ hostLogin: { ...tokenSharing, methodID: 'some-new-method' } });
-      await expect(other.journey.grantAccess(other.id, login)).rejects.toMatchObject({ code: 'login_not_supported', message: expect.stringContaining('some-new-method') });
-      const ended = await ready({ hostLogin: { ...tokenSharing, expires: Date.parse('2026-09-26T09:59:00.000Z') } });
-      await expect(ended.journey.grantAccess(ended.id, login)).rejects.toMatchObject({ code: 'login_expired' });
-      await expect(ended.journey.grantAccess(ended.id, { kind: 'login' })).rejects.toMatchObject({ code: 'invalid_grant_request' });
-      await expect(ended.journey.grantAccess(ended.id, { kind: 'login', provider: 'openai', access: ACCESS })).rejects.toMatchObject({ code: 'invalid_grant_request' });
-      for (const made of [none, other, ended]) {
-        expect(made.calls).toEqual([]);
-        expect(made.records.read(made.id).record.grants).toEqual([]);
-      }
-    });
-
-    it('replaces a key with the login and the login with a key, taking the row inside with the login', async () => {
-      const { journey, calls, records, id } = await ready({ hostLogin: tokenSharing, hostEnvironment: { OPENAI_API_KEY: ENV_KEY } });
-      await journey.grantAccess(id, openai);
-      await journey.grantAccess(id, login);
-      expect(records.read(id).record.grants).toEqual([{ kind: 'login', id: 'openai', provider: 'openai', method: 'chatgpt-token-sharing' }]);
-      expect(calls.filter(([name]) => name === 'removeLogin')).toEqual([]);
-      calls.splice(0);
-      await journey.grantAccess(id, openai);
-      expect(records.read(id).record.grants).toEqual([expect.objectContaining({ kind: 'model', id: 'openai' })]);
-      // The row goes first: a removal that fails leaves the login grant as it was.
-      expect(calls.map(([name]) => name)).toEqual(['removeLogin', 'addGrant', 'writeProviderConfig']);
-      const stuck = await ready({ hostLogin: tokenSharing, hostEnvironment: { OPENAI_API_KEY: ENV_KEY }, failAt: 'removeLogin' });
-      await stuck.journey.grantAccess(stuck.id, login);
-      stuck.calls.splice(0);
-      await expect(stuck.journey.grantAccess(stuck.id, openai)).rejects.toMatchObject({ code: 'removeLogin_failed' });
-      expect(stuck.calls.map(([name]) => name)).toEqual(['removeLogin']);
-      expect(stuck.records.read(stuck.id).record.grants).toEqual([expect.objectContaining({ kind: 'login' })]);
-    });
-
-    it('keeps the grant when the row inside could not be written, so a grant said again repairs it', async () => {
-      const failing = await ready({ hostLogin: tokenSharing, failAt: 'writeLogin' });
-      await expect(failing.journey.grantAccess(failing.id, login)).rejects.toMatchObject({ code: 'writeLogin_failed' });
-      expect(failing.records.read(failing.id).record.grants).toEqual([expect.objectContaining({ kind: 'login', id: 'openai' })]);
-    });
-
-    it('says the login again after a start from the host\'s login as it is then: the same method yes; no login, another method or an ended token no', async () => {
-      const made = await ready({ hostLogin: tokenSharing });
-      await made.journey.grantAccess(made.id, login);
-      await made.journey.stopSpace(made.id);
-      made.gatekeeper.forget(made.id);
-      made.calls.splice(0);
-      expect(await made.journey.startSpace(made.id)).toMatchObject({ grantsRestored: ['openai'], needsAccess: [] });
-      expect(made.calls.filter(([name]) => name === 'addGrant')).toEqual([['addGrant', made.id, { id: 'openai', upstream: 'https://api.openai.com/v1', header: 'authorization', secret: ACCESS }]]);
-      // The configuration is written again from the record, and the row inside in the background
-      // once the server inside answers, so a write that failed at the grant is repaired here.
-      expect(made.calls.filter(([name]) => name === 'writeProviderConfig')).toEqual([['writeProviderConfig', made.id, [expect.objectContaining({ kind: 'login' })]]]);
-      await until(() => made.calls.some(([name]) => name === 'writeLogin'));
-      expect(made.calls.filter(([name]) => name === 'waitUntilReady' || name === 'writeLogin')).toEqual([['waitUntilReady', made.id], ['writeLogin', made.id, 'openai', tokenSharing]]);
-
-      for (const hostLogin of [null, legacy, { ...tokenSharing, expires: Date.parse('2026-09-26T09:59:00.000Z') }]) {
-        await made.journey.stopSpace(made.id);
-        made.gatekeeper.forget(made.id);
-        const then = journeyWith({ place: made.place, dataDir: made.dataDir, hostLogin });
-        expect(await then.journey.startSpace(made.id)).toMatchObject({ grantsRestored: [], needsAccess: ['openai'] });
-        expect(then.calls.filter(([name]) => name === 'addGrant')).toEqual([]);
-        expect((await then.journey.listSpaces({ access: true }))[0]).toMatchObject({ access: 'needs_access', needsAccess: ['openai'] });
-        // The row inside is taken out: a login the host cannot say is not one the space should hold.
-        await until(() => then.calls.some(([name]) => name === 'removeLogin'));
-        expect(then.calls.filter(([name]) => name === 'writeLogin')).toEqual([]);
-      }
-    });
-
-    it('takes a row out at a start when a key replaced the login but the removal failed, and goes on when the server inside never answers', async () => {
-      const made = await ready({ hostLogin: tokenSharing, hostEnvironment: { OPENAI_API_KEY: ENV_KEY } });
-      await made.journey.grantAccess(made.id, openai);
-      await made.journey.stopSpace(made.id);
-      made.calls.splice(0);
-      await made.journey.startSpace(made.id);
-      await until(() => made.calls.some(([name]) => name === 'removeLogin'));
-      expect(made.calls.filter(([name]) => name === 'writeLogin')).toEqual([]);
-
-      // A key granted while the server inside is still starting wins: the repair decides from the
-      // record as it is when the server answers, so it takes the row out and writes none back.
-      const racing = await ready({ hostLogin: tokenSharing, hostEnvironment: { OPENAI_API_KEY: ENV_KEY }, holdReady: true });
-      await racing.journey.grantAccess(racing.id, login);
-      await racing.journey.stopSpace(racing.id);
-      await racing.journey.startSpace(racing.id);
-      racing.calls.splice(0);
-      await racing.journey.grantAccess(racing.id, openai);
-      racing.releaseReady();
-      await until(() => racing.calls.filter(([name]) => name === 'removeLogin').length === 2);
-      expect(racing.calls.map(([name]) => name)).toEqual(['removeLogin', 'addGrant', 'writeProviderConfig', 'waitUntilReady', 'removeLogin']);
-      expect(racing.records.read(racing.id).record.grants).toEqual([expect.objectContaining({ kind: 'model', id: 'openai' })]);
-
-      // A key granted while the repair is writing the login row waits for that write and then
-      // takes the row out, so the two never cross; the space is not "busy" for it.
-      const writing = await ready({ hostLogin: tokenSharing, hostEnvironment: { OPENAI_API_KEY: ENV_KEY }, holdLoginRow: true });
-      const first = writing.journey.grantAccess(writing.id, login);
-      writing.releaseLoginRow();
-      await first;
-      await writing.journey.stopSpace(writing.id);
-      writing.calls.splice(0);
-      const held = journeyWith({ place: writing.place, dataDir: writing.dataDir, hostLogin: tokenSharing, hostEnvironment: { OPENAI_API_KEY: ENV_KEY }, holdLoginRow: true });
-      await held.journey.startSpace(writing.id);
-      await until(() => held.calls.some(([name]) => name === 'writeLogin'));
-      held.calls.splice(0);
-      const granting = held.journey.grantAccess(writing.id, openai);
-      await new Promise((resolve) => { setTimeout(resolve, 20); });
-      expect(held.calls).toEqual([]);
-      held.releaseLoginRow();
-      await granting;
-      expect(held.calls.map(([name]) => name)).toEqual(['removeLogin', 'addGrant', 'writeProviderConfig']);
-
-      const silent = await ready({ hostLogin: tokenSharing, failAt: 'waitUntilReady' });
-      await silent.journey.grantAccess(silent.id, login);
-      await silent.journey.stopSpace(silent.id);
-      silent.calls.splice(0);
-      expect(await silent.journey.startSpace(silent.id)).toMatchObject({ state: 'running', grantsRestored: ['openai'] });
-      await new Promise((resolve) => { setTimeout(resolve, 20); });
-      expect(silent.calls.filter(([name]) => name === 'writeLogin' || name === 'removeLogin')).toEqual([]);
-    });
-
-    it('says a login a running gatekeeper lost again when the host starts', async () => {
-      const { journey, calls, gatekeeper, id } = await ready({ hostLogin: tokenSharing });
-      await journey.grantAccess(id, login);
-      gatekeeper.forget(id);
-      calls.splice(0);
-      await journey.restoreLostGrants();
-      expect(calls.filter(([name]) => name === 'addGrant')).toEqual([['addGrant', id, { id: 'openai', upstream: 'https://api.openai.com/v1', header: 'authorization', secret: ACCESS }]]);
-      expect((await journey.listSpaces({ access: true }))[0]).toMatchObject({ access: 'granted' });
-    });
-  });
-
   it('says the grants a running gatekeeper lost again when the host starts: an environment key and a domain, never a typed key', async () => {
-    const { journey, calls, gatekeeper, id, changes } = await ready({ hostEnvironment: { OPENAI_API_KEY: ENV_KEY } });
+    const { journey, calls, gatekeeper, id } = await ready({ hostEnvironment: { OPENAI_API_KEY: ENV_KEY } });
     await journey.grantAccess(id, anthropic);
     await journey.grantAccess(id, openai);
     const opened = await journey.grantAccess(id, registry);
@@ -882,7 +685,6 @@ describe('the journey: grants', () => {
     gatekeeper.forget(id);
     expect((await journey.listSpaces({ access: true }))[0]).toMatchObject({ access: 'needs_access', needsAccess: ['anthropic', 'openai', opened.grant.id] });
     calls.splice(0);
-    const before = changes.count;
 
     await journey.restoreLostGrants();
     expect(calls.filter(([name]) => name === 'addGrant')).toEqual([
@@ -890,7 +692,6 @@ describe('the journey: grants', () => {
       ['addGrant', id, { id: opened.grant.id, upstream: 'https://registry.example.com/npm/', header: null, secret: null }],
     ]);
     expect(JSON.stringify(calls)).not.toContain(KEY);
-    expect(changes.count).toBe(before + 1);
     // Only the typed key still needs the user.
     expect((await journey.listSpaces({ access: true }))[0]).toMatchObject({ access: 'needs_access', needsAccess: ['anthropic'] });
 
@@ -1064,7 +865,7 @@ describe('the journey: the project folder of a space', () => {
     // The record names the folder: a journey that no longer has the project still lists it.
     const unregistered = createSpaceJourney({
       manager: first.manager, place: first.place, gatekeeper: first.gatekeeper, codeIn: {}, codeOut: {}, records: first.records,
-      spaceOpenCode: {}, serverInside: {},
+      serverInside: {},
       listProjectDirectories: async () => [],
       folderExists: async (directory) => { asked.push(directory); return false; },
       logger: quiet,
@@ -1081,7 +882,7 @@ describe('the journey: the project folder of a space', () => {
     const { first } = await made();
     const look = (directory) => createSpaceJourney({
       manager: first.manager, place: first.place, gatekeeper: first.gatekeeper, codeIn: {}, codeOut: {}, records: { read: () => ({ record: { repository: directory } }) },
-      spaceOpenCode: {}, serverInside: {},
+      serverInside: {},
       listProjectDirectories: async () => [],
       logger: quiet,
     }).listSpaces();
@@ -1397,5 +1198,56 @@ describe('the journey: the chat archive of a deleted space', () => {
     expect(outcome.removal).toBeNull();
     expect(outcome.kept).toMatchObject({ code: 'chats_not_saved' });
     expect(await place.list()).toEqual([expect.objectContaining({ id })]);
+  });
+});
+
+// The server gate is closed in production: `journeyWith` opens it, and this describe is the only
+// one that leaves it closed, so the refusal is proved where a caller would meet it.
+describe('the journey: the release gate', () => {
+  it('refuses create, start, repair and every grant before a place or the server inside is touched', async () => {
+    const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-journey-gate-'));
+    folders.push(dataDir);
+    const calls = [];
+    const memory = createMemoryPlace();
+    const record = (name, method) => async (...args) => { calls.push([name, ...args]); return method(...args); };
+    const place = {
+      ...memory,
+      check: record('check', memory.check),
+      create: record('create', memory.create),
+      list: record('list', memory.list),
+      start: record('start', memory.start),
+      stop: record('stop', memory.stop),
+      verify: record('verify', memory.verify),
+      exec: record('exec', memory.exec),
+      connect: record('connect', memory.connect),
+    };
+    const serverInside = {
+      writeToken: async () => { calls.push(['writeToken']); },
+      writeIdleStop: async () => { calls.push(['writeIdleStop']); },
+      waitUntilReady: async () => { calls.push(['waitUntilReady']); },
+    };
+    const gatekeeper = { setNetwork: async () => { calls.push(['setNetwork']); }, addGrant: async () => { calls.push(['addGrant']); } };
+    const manager = createSpaceManager({ registry: createPlaceRegistry([place]), now: () => new Date('2026-09-26T10:00:00.000Z') });
+    const journey = createSpaceJourney({
+      manager,
+      place,
+      gatekeeper,
+      codeIn: { bringCodeIn: async () => { calls.push(['bringCodeIn']); }, sendHistory: async () => { calls.push(['sendHistory']); }, removeSpaceRefs: async () => { calls.push(['removeSpaceRefs']); } },
+      codeOut: { bringCodeOut: async () => { calls.push(['bringCodeOut']); } },
+      records: createSpaceRecords({ dataDir, logger: quiet }),
+      serverInside,
+      listProjectDirectories: async () => [PROJECT],
+      logger: quiet,
+    });
+
+    await expect(journey.createSpace(REQUEST)).rejects.toMatchObject({ code: 'isolated_spaces_unreleased' });
+    await expect(journey.startSpace('a1b2c3d4e5f6')).rejects.toMatchObject({ code: 'isolated_spaces_unreleased' });
+    await expect(journey.restartSpace('a1b2c3d4e5f6')).rejects.toMatchObject({ code: 'isolated_spaces_unreleased' });
+    await expect(journey.grantAccess('a1b2c3d4e5f6', { kind: 'model', provider: 'anthropic', upstream: 'https://api.anthropic.com/v1', secret: { kind: 'typed', value: 'sk-live' } })).rejects.toMatchObject({ code: 'isolated_spaces_unreleased' });
+    await expect(journey.grantAccess('a1b2c3d4e5f6', { kind: 'login', provider: 'openai' })).rejects.toMatchObject({ code: 'isolated_spaces_unreleased' });
+    await expect(journey.grantAccess('a1b2c3d4e5f6', { kind: 'domain', upstream: 'https://registry.example.com/npm/' })).rejects.toMatchObject({ code: 'isolated_spaces_unreleased' });
+
+    // No place, container, network, code transfer, grant or readiness wait was touched.
+    expect(calls).toEqual([]);
   });
 });

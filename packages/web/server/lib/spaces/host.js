@@ -1,16 +1,14 @@
 // What the host server builds when the isolated-spaces switch is on, and nothing of it when it
-// is off: the place, the manager, the dispatcher, the WebSocket forwarder, the session index
-// with the event connection of every space, and the hooks the rest of the server takes.
+// is off: the place, the manager, the dispatcher, the WebSocket forwarder, the journey and the
+// hooks the rest of the server takes.
 //
-// `server/index.js` reads the switch at start and changes it live through the switch route.
-// While it is off this module is never imported for its effect: no place, no manager, no
-// route, no `docker`.
+// `server/index.js` reads the switch at start and changes it live through the switch route, and
+// asks `release.js` first: while the gate is closed no host is built at all. While the feature is
+// off this module is never imported for its effect: no place, no manager, no route, no `docker`.
 
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-
-import { z } from 'zod';
 
 import { createCodeIn } from './code-in.js';
 import { createCodeOut } from './code-out.js';
@@ -19,14 +17,10 @@ import { SpaceError } from './errors.js';
 import { createGatekeeperChannel } from './gatekeeper-channel.js';
 import { createHostGit } from './host-git.js';
 import { createSpaceJourney } from './journey.js';
-import { hashProjectDirectory } from './labels.js';
-import { spaceProjectPath } from './layout.js';
 import { createSpaceManager } from './manager.js';
+import { requireSpacesReleased } from './release.js';
 import { createSpaceRecords } from './space-records.js';
-import { createSpaceEventSources } from './space-events.js';
-import { createSpaceOpenCode } from './space-opencode.js';
 import { createSpaceNativeArchiveSource } from './space-native-archive.js';
-import { createSpaceSessionIndex, mergeSessionLists } from './space-sessions.js';
 import { createSpaceWebSocketForwarder } from './websocket.js';
 import { createDockerPlace } from './places/docker.js';
 import { createPlaceRegistry } from './places/registry.js';
@@ -35,31 +29,6 @@ import { createSpaceServerChannel } from './space-server.js';
 import { createRegistryToolsSource, readHostToolVersions } from './tools.js';
 
 const OWNER_FILE = path.join('spaces', 'owner');
-
-// How often the host reads its list of spaces to follow their event streams, and how long a
-// read serves the merged session list before it is repeated.
-const FOLLOW_INTERVAL_MS = 15_000;
-const LIST_TTL_MS = 2_000;
-// A space's session list is read in pages; more than this many is reported as partial.
-const SESSION_PAGE_LIMIT = 100;
-const SESSION_MAX_PAGES = 10;
-const SESSION_LIST_TIMEOUT_MS = 10_000;
-const MAX_SESSION_LIST_BYTES = 8 * 1024 * 1024;
-// The cursor of a next page, as the server inside names it; anything else ends the read.
-const nextCursorSchema = z.string().min(1);
-
-// A body from inside, read up to a cap and never past it.
-const readBody = (response, cap) => new Promise((resolve, reject) => {
-  const chunks = [];
-  let size = 0;
-  response.on('data', (chunk) => {
-    size += chunk.length;
-    if (size > cap) { response.destroy(); reject(new Error(`the answer exceeds ${cap} bytes`)); return; }
-    chunks.push(chunk);
-  });
-  response.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
-  response.on('error', reject);
-});
 
 /**
  * The installation id that labels this host's spaces, so two installations that share a Docker
@@ -91,9 +60,8 @@ export function readOrCreateOwner(dataDir) {
  * without it every space is marked as of an unknown project. `readIdleStop` and `saveIdleStop`
  * read and keep the user's idle stop setting in the host's settings. `archive` is the chat archive
  * of `space-archive.js`, which a delete saves the space's chats to; without it they go with it.
- * `readHostLogin(provider)` reads the host's own browser login for a provider, for a login grant;
- * without it a login grant has no login to carry. The tests give a login of their own, and
- * `loginWindowOf` lets the live test point that grant's upstream at its stand-in.
+ * `requireReleased` is the server's release gate, run by the manager and the journey before any
+ * place is touched, and by this constructor itself; only the tests open it.
  */
 export function createSpacesHost({
   dataDir,
@@ -105,18 +73,13 @@ export function createSpacesHost({
   readIdleStop,
   saveIdleStop,
   archive = null,
-  // Injected by tests and the live grant test; when absent, the journey's own default answers no
-  // login, so a login grant has nothing to carry.
-  readHostLogin,
-  loginWindowOf = undefined,
+  requireReleased = requireSpacesReleased,
   runCommand = runCommandProcess,
   openCommandStream = openCommandStreamProcess,
   place = null,
   logger = console,
-  now = Date.now,
-  setTimer = setInterval,
-  clearTimer = clearInterval,
 }) {
+  requireReleased();
   const dockerPlace = place ?? createDockerPlace({
     runCommand,
     openCommandStream,
@@ -127,7 +90,7 @@ export function createSpacesHost({
   });
   const registry = createPlaceRegistry([dockerPlace]);
   registry.seal();
-  const manager = createSpaceManager({ registry });
+  const manager = createSpaceManager({ registry, requireReleased });
   const serverInside = createSpaceServerChannel({ exec: dockerPlace.exec });
   const gatekeeper = createGatekeeperChannel({ exec: dockerPlace.exec });
   const git = createHostGit({ runCommand, gitPath, environment: hostEnvironment });
@@ -145,74 +108,7 @@ export function createSpacesHost({
     },
   });
 
-  const spaceOpenCode = createSpaceOpenCode({ exec: dockerPlace.exec, requestInside: dispatcher.requestInside });
   const nativeArchiveSource = createSpaceNativeArchiveSource({ requestInside: dispatcher.requestInside });
-
-  const index = createSpaceSessionIndex({ logger });
-  let events = null;
-  let unsubscribeHostEvents = null;
-  let followTimer = null;
-  let known = { spaces: [], readAt: -Infinity };
-  let listing = null;
-  // When each space's session list was last read; within the TTL the accepted list is served again.
-  const listReadAt = new Map();
-
-  /**
-   * Which registered project a space was made for, by the label's hash of the project path. A
-   * failed read of the projects, or a project since removed, leaves the space with no project.
-   */
-  const resolveProjects = async (spaces) => {
-    if (spaces.length === 0) return new Map();
-    let directories = [];
-    try {
-      directories = await listProjectDirectories();
-    } catch (error) {
-      logger.warn?.(`[spaces] could not read the projects: ${error?.code ?? error?.message ?? error}`);
-    }
-    const byHash = new Map(directories.map((directory) => [hashProjectDirectory(directory), directory]));
-    return new Map(spaces.map((space) => [space.id, byHash.get(space.project) ?? null]));
-  };
-
-  /**
-   * This host's spaces, each with its name and the project it was made for, read again when
-   * older than the TTL. A failed read keeps the last ones.
-   */
-  const knownSpaces = async () => {
-    if (now() - known.readAt < LIST_TTL_MS) return known.spaces;
-    if (!listing) {
-      listing = listSpaces()
-        .then(async (spaces) => {
-          const projects = await resolveProjects(spaces);
-          known = {
-            spaces: spaces.map((space) => {
-              const projectDirectory = projects.get(space.id) ?? null;
-              return {
-                id: space.id,
-                name: space.name,
-                projectDirectory,
-                directory: projectDirectory === null ? null : spaceProjectPath(space.id, projectDirectory),
-              };
-            }),
-            readAt: now(),
-          };
-        })
-        .catch((error) => { logger.warn?.(`[spaces] could not list the spaces: ${error?.code ?? error?.message ?? error}`); })
-        .finally(() => { listing = null; });
-    }
-    await listing;
-    return known.spaces;
-  };
-  const spaceIds = async () => (await knownSpaces()).map((space) => space.id);
-
-  const follow = async () => {
-    const ids = await spaceIds();
-    events?.sync(ids);
-  };
-  /** The list is read again at once, and the event connections follow it: for a space just made or removed. */
-  const refresh = () => {
-    known = { spaces: known.spaces, readAt: -Infinity };
-    return follow();
-  };
 
   let hub = null;
   const journey = createSpaceJourney({
@@ -222,7 +118,6 @@ export function createSpacesHost({
     codeIn,
     codeOut,
     records,
-    spaceOpenCode,
     serverInside,
     listProjectDirectories,
     archiveChats: archive ? ({ spaceId, name, projectDirectory, running, allowUnsaved }) => archive.saveChats({
@@ -242,70 +137,18 @@ export function createSpacesHost({
     // A key named by an environment variable is read from the host's own environment, now, and
     // its value is kept nowhere (decision 5).
     readHostSecret: (name) => hostEnvironment[name],
-    readHostLogin,
-    loginWindowOf,
     readIdleStop,
     saveIdleStop,
+    requireReleased,
     announce: (spaceId, payload) => { hub?.injectEvent({ payload, directory: 'global', spaceId }); },
-    onSpacesChanged: () => { void refresh().catch(() => {}); },
     logger,
   });
-
-  /** One space's whole session list, page by page, or as much of it as the page cap allows. */
-  const readSpaceSessions = async (spaceId) => {
-    const records = [];
-    let cursor = null;
-    for (let page = 0; page < SESSION_MAX_PAGES; page += 1) {
-      const query = new URLSearchParams({ limit: String(SESSION_PAGE_LIMIT) });
-      if (cursor !== null) query.set('cursor', cursor);
-      const response = await dispatcher.requestInside(spaceId, { path: `/api/session?${query}`, headers: { accept: 'application/json' }, timeoutMs: SESSION_LIST_TIMEOUT_MS });
-      if (response.statusCode !== 200) { response.resume(); throw new Error(`status ${response.statusCode}`); }
-      const payload = JSON.parse(await readBody(response, MAX_SESSION_LIST_BYTES));
-      const data = Array.isArray(payload) ? payload : payload?.data;
-      if (!Array.isArray(data)) throw new Error('the list is not a list');
-      records.push(...data);
-      const next = nextCursorSchema.safeParse(payload?.cursor?.next);
-      if (!next.success || data.length === 0) return { records, complete: true };
-      cursor = next.data;
-    }
-    return { records, complete: false };
-  };
-
-  /**
-   * The host's session list with every space's after it. Each reachable space is asked once,
-   * all of them at the same time; one that does not answer keeps its last known list, marked
-   * stale. A host list without spaces goes back exactly as it came.
-   */
-  const mergeSessionList = async (hostPayload) => {
-    const hostRecords = Array.isArray(hostPayload) ? hostPayload : hostPayload?.data;
-    if (Array.isArray(hostRecords)) index.observeHostRecords(hostRecords);
-    const spaces = await knownSpaces();
-    if (spaces.length === 0) return hostPayload;
-    await Promise.all(spaces.map(async ({ id: spaceId }) => {
-      if (now() - (listReadAt.get(spaceId) ?? -Infinity) < LIST_TTL_MS) return;
-      try {
-        const { records, complete } = await readSpaceSessions(spaceId);
-        index.acceptSpaceList(spaceId, records, { complete });
-        listReadAt.set(spaceId, now());
-      } catch (error) {
-        logger.warn?.(`[spaces] the session list of space ${spaceId} did not come: ${error?.code ?? error?.message ?? error}`);
-        index.markUnreachable(spaceId);
-      }
-    }));
-    // In the place's order, so the merged list reads the same from one call to the next.
-    const answers = new Map(index.snapshot().map((entry) => [entry.spaceId, entry]));
-    return mergeSessionLists(hostPayload, spaces.flatMap((space) => {
-      const answer = answers.get(space.id);
-      return answer === undefined ? [] : [{ ...answer, name: space.name, projectDirectory: space.projectDirectory, directory: space.directory }];
-    }));
-  };
 
   let sockets = null;
 
   return {
     manager,
     dispatcher,
-    index,
     journey,
     /** The places a space can be made on, for the funnel. */
     places: () => registry.list(),
@@ -319,19 +162,14 @@ export function createSpacesHost({
       sockets = createSpaceWebSocketForwarder({ dispatcher, connect: (spaceId) => dockerPlace.connect(spaceId), uiAuthController, isRequestOriginAllowed, logger });
     },
     upgradeHandler: (...args) => sockets?.upgradeHandler(...args),
-    /** Follows the spaces: an event connection for each, into the host's hub, and the host's own ids from its events. */
-    startEvents: (globalEventHub) => {
+    /**
+     * Takes the host's event hub, which the journey's progress events enter, and says again the
+     * grants a running gatekeeper lost to a start the previous host did not finish.
+     */
+    start: (globalEventHub) => {
       hub = globalEventHub;
-      events = createSpaceEventSources({ requestInside: dispatcher.requestInside, index, hub: globalEventHub, logger, now });
-      unsubscribeHostEvents = globalEventHub.subscribeEvent((event) => { if (event.spaceId === null) index.observeHostEvent(event.payload); });
-      followTimer = setTimer(() => { void follow(); }, FOLLOW_INTERVAL_MS);
-      followTimer?.unref?.();
-      // A running space whose gatekeeper lost its grants, from a start cut short, gets them again.
       void journey.restoreLostGrants();
-      return follow();
     },
-    /** For the proxy: the merged session list, or the host's own when no space exists. */
-    mergeSessionList,
     /** For the body parsers: a request to a space keeps its body for the space. */
     skipsBodyParsing: (req) => dispatcher.isSpaceRequestPath(req.path),
     /** For the directory gate: the reason a directory is refused on the host, or null. */
@@ -339,11 +177,6 @@ export function createSpacesHost({
       ? 'A directory under /spaces/ belongs to an isolated space and is addressed as /api/spaces/<id>/... only'
       : null),
     close: () => {
-      if (followTimer !== null) clearTimer(followTimer);
-      followTimer = null;
-      unsubscribeHostEvents?.();
-      unsubscribeHostEvents = null;
-      events?.close();
       sockets?.close();
       dispatcher.close();
     },

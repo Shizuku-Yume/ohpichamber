@@ -17,6 +17,10 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
 export const dict = {
+  "startup.legacyNotice.descriptionGeneric": "Uw eerdere OpenCode-sessies zijn niet geïmporteerd in OpenChamber. Uw bestaande gegevens blijven ongewijzigd bewaard in uw OpenCode-gegevensmap. Meld u in Instellingen opnieuw aan bij uw providers om uw modellen te gebruiken.",
+  "startup.legacyNotice.title": "Eerdere OpenCode-gegevens gedetecteerd",
+  "startup.legacyNotice.action": "Providers configureren",
+  "startup.legacyNotice.dismiss": "Sluiten",
   'sessions.aiRename.action': 'Hernoemen met AI',
   'sessions.aiRename.generating': 'Sessietitel genereren...',
   'sessions.aiRename.checking': 'Afgeronde beurten controleren...',

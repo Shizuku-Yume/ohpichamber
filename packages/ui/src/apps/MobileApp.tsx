@@ -5,6 +5,7 @@ import { MobileAppUpdateToast } from '@/components/update/MobileAppUpdateToast';
 import { Button } from '@/components/ui/button';
 import { OpenChamberLogo } from '@/components/ui/OpenChamberLogo';
 import { AppStartupOverlay } from '@/components/ui/AppStartupOverlay';
+import { LegacyDataNotice } from '@/components/onboarding/LegacyDataNotice';
 import { ChatView } from '@/components/views/ChatView';
 import { PlanView } from '@/components/views/PlanView';
 import { SettingsView } from '@/components/views/SettingsView';
@@ -74,7 +75,7 @@ import { ArchiveSessionsView } from '@/components/views/ArchiveView';
 import { MobileSourceBoard } from '@/components/sourceBoard/SourceBoardView';
 import { ScheduledTasksView, type ScheduledTasksLeaveReason } from '@/components/session/ScheduledTasksDialog';
 import { MobileWorkspaceDrawer, type MobileWorkspaceTab } from './MobileWorkspaceDrawer';
-import { DedicatedMobileAppProvider, type MobileAppActions } from './mobileAppContext';
+import { DedicatedMobileAppProvider, useMobileSettingsSurfaceOpener, type MobileAppActions } from './mobileAppContext';
 import { autoConnectLastInstance, getAutoConnectTargetLabel, logMobileConnectEvent, reprobeActiveConnection, suppressAutoConnectUntilManualConnect, type AutoConnectOutcome } from './mobileConnections';
 import { isCapacitorMobileApp, useNativeAndroidBackButton, useNativeMobileChrome, useNativeMobileLifecycle } from './mobileNativeChrome';
 import { reconnectAppForTransportSwitch, resetAppForRuntimeEndpointChange } from './runtimeEndpointReset';
@@ -182,10 +183,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
     setWorkspaceOpen(false);
   }, []);
 
-  const openSettingsSurface = React.useCallback((stage: 'nav' | 'page-content') => {
-    setSettingsInitialMobileStage(stage);
-    openSurface('settings');
-  }, [openSurface]);
+  const openSettingsSurface = useMobileSettingsSurfaceOpener(setSettingsInitialMobileStage, openSurface);
 
   // Tablet: sessions live in a persistent full-height left sidebar instead of
   // the phone's drawer. Everything else — the workspace drawer, the header, the
@@ -456,6 +454,9 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
         className="oc-mobile-app-shell main-content-safe-area flex h-[100dvh] flex-row bg-background text-foreground"
         data-page-scroll-lock="true"
       >
+        {/* The notice lives inside the shell: its Providers action must also switch
+            the app-level surface, or SettingsView never mounts on mobile. */}
+        <LegacyDataNotice onOpenSettings={openSettingsSurface} />
         {/* iPad: persistent full-height sessions sidebar; the chat column and
             its header butt against it (iPadOS-style split layout). Always
             mounted so open/close animates width, same as the desktop Sidebar. */}

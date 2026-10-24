@@ -1,5 +1,6 @@
 import React from 'react';
 import { AppStartupOverlay } from '@/components/ui/AppStartupOverlay';
+import { LegacyDataNotice } from '@/components/onboarding/LegacyDataNotice';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { AppLinkConfirmDialog } from '@/components/chat/AppLinkConfirmDialog';
 import { SharedTrustConfirmDialog } from '@/components/projects/SharedTrustConfirmDialog';
@@ -826,6 +827,7 @@ function App({ apis }: AppProps) {
                 <div className={isDesktopRuntime ? 'h-full text-foreground bg-transparent' : 'h-full text-foreground bg-background'}>
                   <SyncAppEffects backgroundWorkEnabled />
                   <MainLayout />
+                  <LegacyDataNotice />
                   {isDesktopRuntime ? <AppStartupOverlay ready={bootOutcomeKnown && bootViewIsMain} /> : null}
                   <Toaster />
                   <AppLinkConfirmDialog />

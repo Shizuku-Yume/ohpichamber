@@ -18,6 +18,10 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
 export const dict: Record<I18nKey, string> = {
+  "startup.legacyNotice.dismiss": "Descartar",
+  "startup.legacyNotice.title": "Datos anteriores de OpenCode detectados",
+  "startup.legacyNotice.descriptionGeneric": "Tus sesiones anteriores de OpenCode no se importaron a OpenChamber. Tus datos existentes permanecen intactos en tu directorio de datos de OpenCode. Para usar tus modelos, vuelve a iniciar sesión en tus proveedores desde Ajustes.",
+  "startup.legacyNotice.action": "Configurar proveedores",
   'sessions.aiRename.action': 'Renombrar con IA',
   'sessions.aiRename.generating': 'Generando el título de la sesión...',
   'sessions.aiRename.checking': 'Comprobando los turnos completados...',

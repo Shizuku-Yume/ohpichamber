@@ -388,6 +388,7 @@ export function createSpaceJourney({
    * gatekeeper that cannot be asked is left alone and logged. Nothing here fails the start.
    */
   const restoreLostGrants = async () => {
+    requireReleased();
     let spaces;
     try {
       spaces = await manager.listSpaces({ placeId: place.id });
@@ -671,26 +672,29 @@ export function createSpaceJourney({
    * The name may come from the journal, which the agent wrote; what makes it a decision is the
    * user reading it and pressing "Open", and the name rule refuses anything that is not a name.
    */
-  const openDomain = (spaceId, request) => exclusive(spaceId, async () => {
-    requireNotPending(spaceId);
-    const parsed = openDomainRequestSchema.safeParse(request ?? {});
-    if (!parsed.success) throw new SpaceError('invalid_domain', 'A domain is a name such as registry.npmjs.org: letters, digits and hyphens, with a dot.');
-    const { domain } = parsed.data;
-    const space = await requireListed(spaceId);
-    if (space.state !== 'running') throw new SpaceError('space_not_running', 'A domain is opened by the gatekeeper of a running space. Start the space, then open it.');
-    const current = records.read(spaceId);
-    if (current.status !== 'ok') throw new SpaceError('space_record_unreadable', 'The host\'s record of this space cannot be read, so an opened domain could not be remembered. Remove the space and create it again.');
-    const { network } = current.record;
-    if (network.mode === 'open') throw new SpaceError('network_is_open', 'The network of this space is open, so there is no list to add a domain to.');
-    if (network.domains.includes(domain)) return { network };
-    const next = networkSchema.safeParse({ mode: network.mode, domains: [...network.domains, domain] });
-    if (!next.success) throw new SpaceError('too_many_domains', 'This space already has as many opened domains as a list holds.');
-    await gatekeeper.setNetwork(spaceId, next.data);
-    if (records.update(spaceId, { network: next.data }).status !== 'ok') {
-      throw new SpaceError('space_record_unreadable', 'The domain is open now and could not be remembered, so it closes at the next start. Remove the space and create it again.');
-    }
-    return { network: next.data };
-  });
+  const openDomain = async (spaceId, request) => {
+    requireReleased();
+    return exclusive(spaceId, async () => {
+      requireNotPending(spaceId);
+      const parsed = openDomainRequestSchema.safeParse(request ?? {});
+      if (!parsed.success) throw new SpaceError('invalid_domain', 'A domain is a name such as registry.npmjs.org: letters, digits and hyphens, with a dot.');
+      const { domain } = parsed.data;
+      const space = await requireListed(spaceId);
+      if (space.state !== 'running') throw new SpaceError('space_not_running', 'A domain is opened by the gatekeeper of a running space. Start the space, then open it.');
+      const current = records.read(spaceId);
+      if (current.status !== 'ok') throw new SpaceError('space_record_unreadable', 'The host\'s record of this space cannot be read, so an opened domain could not be remembered. Remove the space and create it again.');
+      const { network } = current.record;
+      if (network.mode === 'open') throw new SpaceError('network_is_open', 'The network of this space is open, so there is no list to add a domain to.');
+      if (network.domains.includes(domain)) return { network };
+      const next = networkSchema.safeParse({ mode: network.mode, domains: [...network.domains, domain] });
+      if (!next.success) throw new SpaceError('too_many_domains', 'This space already has as many opened domains as a list holds.');
+      await gatekeeper.setNetwork(spaceId, next.data);
+      if (records.update(spaceId, { network: next.data }).status !== 'ok') {
+        throw new SpaceError('space_record_unreadable', 'The domain is open now and could not be remembered, so it closes at the next start. Remove the space and create it again.');
+      }
+      return { network: next.data };
+    });
+  };
 
   /**
    * Runs the project's setup commands again in a running space, from the "⋯" menu or after a run

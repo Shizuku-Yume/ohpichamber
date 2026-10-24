@@ -1246,6 +1246,8 @@ describe('the journey: the release gate', () => {
     await expect(journey.grantAccess('a1b2c3d4e5f6', { kind: 'model', provider: 'anthropic', upstream: 'https://api.anthropic.com/v1', secret: { kind: 'typed', value: 'sk-live' } })).rejects.toMatchObject({ code: 'isolated_spaces_unreleased' });
     await expect(journey.grantAccess('a1b2c3d4e5f6', { kind: 'login', provider: 'openai' })).rejects.toMatchObject({ code: 'isolated_spaces_unreleased' });
     await expect(journey.grantAccess('a1b2c3d4e5f6', { kind: 'domain', upstream: 'https://registry.example.com/npm/' })).rejects.toMatchObject({ code: 'isolated_spaces_unreleased' });
+    await expect(journey.openDomain('a1b2c3d4e5f6', { domain: 'registry.example.com' })).rejects.toMatchObject({ code: 'isolated_spaces_unreleased' });
+    await expect(journey.restoreLostGrants()).rejects.toMatchObject({ code: 'isolated_spaces_unreleased' });
 
     // No place, container, network, code transfer, grant or readiness wait was touched.
     expect(calls).toEqual([]);

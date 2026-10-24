@@ -168,7 +168,10 @@ export function createSpacesHost({
      */
     start: (globalEventHub) => {
       hub = globalEventHub;
-      void journey.restoreLostGrants();
+      // A closed gate makes the restore refuse; a start must not turn that into an unhandled rejection.
+      void journey.restoreLostGrants().catch((error) => {
+        logger.warn?.(`[spaces] the grants of running spaces were not restored: ${error?.code ?? error?.message ?? error}`);
+      });
     },
     /** For the body parsers: a request to a space keeps its body for the space. */
     skipsBodyParsing: (req) => dispatcher.isSpaceRequestPath(req.path),

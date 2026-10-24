@@ -4,7 +4,7 @@
 **Task type:** feature
 **Base commit:** 039f542c3d3f1ae01866cbbf4b0c2157d71916e9
 **Started:** 2026-10-24T03:53:49Z
-**Status:** active
+**Finished:** 2026-10-24T05:58:16Z
 
 **Blocked by:** None
 **Files:** `packages/sdk/src/host.ts` (321-327, 538-555); `packages/sdk/src/api-version.ts` (3-5); `packages/sdk/package.json`; `packages/ui/src/components/layout/PluginPane.tsx` (913-965); `packages/docs/content/docs/sdk/example.mdx` and its translations
@@ -48,9 +48,13 @@ Finding sec (nonblocking, resolved): the detector accepted any string `type`, le
 
 Review delta after fixes: paths above; briefs A,B,sec; findings 0 new blocking / 0 new nonblocking. Checks rerun: affected UI tests 6 pass, UI type-check pass, changed-file eslint pass.
 
-Independent A/B/security recheck after `ef43b26ec`:
+Independent A/B/security recheck after `ef43b26ec` (pre-rebase; rebased source equivalent `5ade3d0f3`):
 - Brief A: blocked on missing root-gate evidence. The effort requires `bun run test` at the landing commit; Task23 changes SDK/UI source. Resolution: rebase onto current main `690685e33`, then run the full root gate once at the exact final SHA and record it under Check after. This remains open until that run.
 - A nonblocking observations, all resolved: README preview example now matches the workflow's actual `1.23.2-preview.N`; README/API/DOCUMENTATION/GUEST_SERVICES/English and translated guides now say only the pre-M3 window `hello` is refused and a v1 bootstrap announcement is dropped; `host-version.ts` JSDoc examples use `3.0.0`; each of the 11 translated SDK guides has a concise localized breaking explanation.
 - Brief B: pass. One nonblocking assertion-strength finding resolved: the version-sync test now parses the documented JSON manifest block and asserts the exact `@openchamber/sdk` dependency and `engines.openchamber` values instead of substring matching.
 - Security: pass, no findings.
 - Delta A is not required for the doc/JSDoc/test-strength correction because the deliverable and boundaries are unchanged. The root-gate finding is closed only by the post-rebase run.
+
+Integration and rebase history: the task branch was rebased onto main `690685e33` (reviewed code SHA `43547521c`; full root gate 7/7 passed there under `TMPDIR=/tmp`) and then onto current main `873b7f826` (final code SHA `88f73484d` before this archive). The original `Base commit` stays `039f542c3` as history. Metadata conflicts in `.workflow/decisions.md` and the spec were reconciled by keeping main's settled decision/heading and enriching it with Task23's concrete versions; Task23 source/test/doc changes were preserved unchanged.
+
+Review boundary (post-rebase): landing comparison `873b7f826` + Task23 commits `7015c83eb..88f73484d`; task-owned source review boundary remains `039f542c3` + `packages/sdk`, `packages/ui` guest host/i18n, `packages/docs` SDK pages, release manifests/`bun.lock`, `.workflow` spec/decision. Main's intervening changes are outside this review. Final Task Check and full root gate run at the archived SHA; output appended below after the run.

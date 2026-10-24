@@ -15,6 +15,9 @@ import { PluginPane } from './PluginPane';
 test('an old window-protocol hello shows an explicit version mismatch and grants no port', async () => {
   const dom = new Window({ url: 'http://guest.test', settings: { disableIframePageLoading: true } });
   const guestWindow = new Window();
+  const foreignWindow = new Window();
+  const foreignChannel = new MessageChannel();
+  const legacyChannel = new MessageChannel();
   const originals: Array<[string, PropertyDescriptor | undefined]> = [];
   for (const [key, value] of Object.entries({ window: dom, document: dom.document, navigator: dom.navigator,
     localStorage: dom.localStorage, getComputedStyle: dom.getComputedStyle.bind(dom), Event: dom.Event, MessageEvent: dom.MessageEvent,
@@ -62,15 +65,64 @@ test('an old window-protocol hello shows an explicit version mismatch and grants
     if (!frame) throw new Error('Guest frame did not mount');
     Object.defineProperty(frame, 'contentWindow', { configurable: true, value: guestWindow });
     const guestPost = spyOn(guestWindow, 'postMessage');
+    const nonHello = new dom.MessageEvent('message', {
+      source: guestWindow,
+      data: { channel: 'openchamber.sdk', v: 1, type: 'list-projects', id: 'legacy-1' },
+    });
+    dom.dispatchEvent(nonHello);
     await act(async () => {
-      dom.dispatchEvent(new dom.MessageEvent('message', {
-        source: guestWindow,
-        data: { channel: 'openchamber.sdk', v: 1, type: 'hello' },
-      }));
       const { promise, resolve } = Promise.withResolvers<void>();
       setImmediate(resolve);
       await promise;
     });
+    expect(container.querySelector('iframe')).not.toBeNull();
+    expect(container.textContent).not.toContain('older OpenChamber SDK');
+
+    let foreignDelivered = false;
+    foreignChannel.port1.addEventListener('message', () => { foreignDelivered = true; });
+    foreignChannel.port1.start();
+    const foreignHello = new dom.MessageEvent('message', {
+      source: foreignWindow,
+      data: { channel: 'openchamber.sdk', v: 1, type: 'hello' },
+    });
+    Object.defineProperty(foreignHello, 'ports', { value: [foreignChannel.port1] });
+    dom.dispatchEvent(foreignHello);
+    await act(async () => {
+      const { promise, resolve } = Promise.withResolvers<void>();
+      setImmediate(resolve);
+      await promise;
+    });
+    foreignChannel.port2.postMessage('ping');
+    await act(async () => {
+      const { promise, resolve } = Promise.withResolvers<void>();
+      setTimeout(resolve, 10);
+      await promise;
+    });
+    expect(foreignDelivered).toBe(false);
+    expect(container.querySelector('iframe')).not.toBeNull();
+    expect(container.textContent).not.toContain('older OpenChamber SDK');
+
+    let legacyDelivered = false;
+    legacyChannel.port1.addEventListener('message', () => { legacyDelivered = true; });
+    legacyChannel.port1.start();
+    await act(async () => {
+      const legacyHello = new dom.MessageEvent('message', {
+        source: guestWindow,
+        data: { channel: 'openchamber.sdk', v: 1, type: 'hello' },
+      });
+      Object.defineProperty(legacyHello, 'ports', { value: [legacyChannel.port1] });
+      dom.dispatchEvent(legacyHello);
+      const { promise, resolve } = Promise.withResolvers<void>();
+      setImmediate(resolve);
+      await promise;
+    });
+    legacyChannel.port2.postMessage('ping');
+    await act(async () => {
+      const { promise, resolve } = Promise.withResolvers<void>();
+      setTimeout(resolve, 10);
+      await promise;
+    });
+    expect(legacyDelivered).toBe(false);
     expect(guestPost).toHaveBeenCalledTimes(0);
     expect(container.textContent).toContain('older OpenChamber SDK');
     expect(container.textContent).toContain('@openchamber/sdk 3.0.0');
@@ -84,5 +136,10 @@ test('an old window-protocol hello shows an explicit version mismatch and grants
     }
     await dom.happyDOM.close();
     await guestWindow.happyDOM.close();
+    await foreignWindow.happyDOM.close();
+    foreignChannel.port2.close();
+    foreignChannel.port1.close();
+    legacyChannel.port2.close();
+    legacyChannel.port1.close();
   }
 });

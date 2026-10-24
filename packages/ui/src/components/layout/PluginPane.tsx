@@ -926,6 +926,7 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
         return;
       }
       if (isLegacyGuestSdkMessage(event.data)) {
+        handledGuestBootstrapEvents.add(event);
         for (const transferred of ports) closeTransferredPort(transferred);
         rejectSdkVersion();
         return;

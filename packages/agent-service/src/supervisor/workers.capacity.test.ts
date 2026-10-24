@@ -134,3 +134,23 @@ test('a pending worker operation and a restart reservation each postpone evictio
     try { await registry.close(); } finally { await tree.remove(); }
   }
 }, 30_000);
+
+test('a running background shell job postpones eviction until it ends', async () => {
+  const tree = await workspace('shell-job');
+  const registry = new WorkerRegistry({ workerEntrypoint, workerRuntime: process.execPath,
+    startupTimeoutMs: 10_000, stopTimeoutMs: 2_000,
+    capacityPolicy: policy({ idleEvictionTimeoutMs: 100, reapIntervalMs: 20 }),
+    isSessionIdle: () => true });
+  try {
+    await startSession(registry, 'root-shell-job', tree.cwd, tree.agentDirectory, { WORKER_SHELL_JOB_MS: '900' });
+    // Real child processes and the registry's interval share no fake clock; the
+    // idle window itself is the behavior under test.
+    await Bun.sleep(400);
+    expect(registry.info('root-shell-job')?.state).toBe('ready');
+
+    await Bun.sleep(1_200);
+    expect(registry.info('root-shell-job')).toBeUndefined();
+  } finally {
+    try { await registry.close(); } finally { await tree.remove(); }
+  }
+}, 30_000);

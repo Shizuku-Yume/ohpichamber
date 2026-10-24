@@ -1,6 +1,7 @@
 import { appendFileSync } from 'node:fs';
 
 let rootSessionId = '';
+let shellJobUntil = 0;
 const send = message => { if (process.connected) process.send(message); };
 const now = Date.now();
 
@@ -9,6 +10,7 @@ process.on('message', message => {
   if (!type) return;
   if (type === 'bootstrap' || type === 'completion.bootstrap' || type === 'usage.bootstrap') {
     rootSessionId = message.rootSessionId ?? message.authorizationRootId ?? rootSessionId;
+    shellJobUntil = Date.now() + Number(process.env.WORKER_SHELL_JOB_MS ?? '0');
     if (process.env.WORKER_LOG) appendFileSync(process.env.WORKER_LOG, `${message.type} ${rootSessionId}\n`);
     if (message.type === 'bootstrap') {
       send({ type: 'opened', workerGeneration: message.workerGeneration, sessionFile: `${process.cwd()}/session.jsonl`, seed: {
@@ -25,9 +27,14 @@ process.on('message', message => {
   if (message.type === 'operation') {
     const operation = message.operation;
     if (operation?.type === 'shell' && operation.operation?.type === 'snapshot') {
+      const running = Date.now() < shellJobUntil ? [{
+        jobId: 'shell-job-fixture', sessionId: rootSessionId, epoch: 'fixture-epoch', workerGeneration: message.workerGeneration,
+        workspaceId: 'workspace', projectId: 'project', command: 'sleep 1', background: true,
+        startedAt: now, outputCursor: '0', status: 'running',
+      }] : [];
       const result = { type: 'shell', result: { type: 'snapshot', snapshot: {
         scope: { kind: 'session', sessionId: rootSessionId }, epoch: 'fixture-epoch', revision: '0',
-        running: [], ended: [], recovery: { priorEpochs: 'invalidated' },
+        running, ended: [], recovery: { priorEpochs: 'invalidated' },
       } } };
       const delay = Number(process.env.WORKER_OPERATION_DELAY_MS ?? '0');
       setTimeout(() => send({ type: 'result', workerGeneration: message.workerGeneration, commandId: message.commandId, result }), delay);

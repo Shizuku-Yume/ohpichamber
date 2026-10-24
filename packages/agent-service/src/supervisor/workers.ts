@@ -283,8 +283,47 @@ export class WorkerRegistry {
       if (this.restartReservations.has(entry.info.rootSessionId) || entry.pending.size > 0
         || [...this.actions.values()].some(action => action.entry === entry)) return;
       if (!this.sessionIsIdle(entry.info.rootSessionId)) return;
+      // A background shell job outlives its start operation, so it is invisible
+      // to the pending/action checks above. The worker's own snapshot is the
+      // authority; a missing or failed snapshot means "not proven idle".
+      if (!(await this.hasNoRunningShellJobs(entry))) return;
+      if (this.workerEntries.get(entry.info.rootSessionId) !== entry || entry.info.state !== 'ready' || this.closing
+        || this.restartReservations.has(entry.info.rootSessionId) || entry.pending.size > 0
+        || [...this.actions.values()].some(action => action.entry === entry)
+        || !this.sessionIsIdle(entry.info.rootSessionId)) return;
       await this.stopEntry(entry);
     });
+  }
+
+  /**
+   * Probe through the worker's shell owner rather than guessing from session
+   * state. A missing or failed probe keeps the worker alive. The reply counts
+   * as worker activity, so a running job is re-probed after the next idle
+   * window rather than on every scan.
+   */
+  private async hasNoRunningShellJobs(entry: WorkerEntry): Promise<boolean> {
+    const commandId = randomUUID();
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      const result = await Promise.race([
+        new Promise<WorkerOperationResult>((resolve, reject) => {
+          entry.pending.set(commandId, { resolve, reject });
+          entry.child.send({ type: 'operation', workerGeneration: entry.info.workerGeneration, commandId,
+            operation: { type: 'shell', operation: { type: 'snapshot' } } }, error => {
+            if (!error) return;
+            const pending = entry.pending.get(commandId);
+            entry.pending.delete(commandId);
+            pending?.reject(new WorkerOperationError(503, 'SERVICE_UNAVAILABLE'));
+          });
+        }),
+        new Promise<undefined>(resolve => {
+          timer = setTimeout(() => resolve(undefined), this.options.stopTimeoutMs ?? 5_000);
+          timer.unref();
+        }),
+      ]);
+      return result?.type === 'shell' && result.result.type === 'snapshot' && result.result.snapshot.running.length === 0;
+    } catch { return false; }
+    finally { clearTimeout(timer); entry.pending.delete(commandId); }
   }
 
   private sessionIsIdle(rootSessionId: string): boolean {

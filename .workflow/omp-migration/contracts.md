@@ -124,7 +124,7 @@ Clients reach this API through the Host Gateway (Node.js/Electron), which authen
 | `GET` | `/api/agent/v1/sessions` | List sessions for an authorized opaque workspace identity | Required | Yes | JSON |
 | `POST` | `/api/agent/v1/sessions` | Create a new session | Required | Yes (Key) | JSON |
 | `GET` | `/api/agent/v1/sessions/:sessionId` | Get session metadata and status | Required | Yes | JSON |
-| `PATCH` | `/api/agent/v1/sessions/:sessionId` | Update Host-owned session metadata through the Host writer | Required | Yes | JSON |
+| `PATCH` | `/api/agent/v1/sessions/:sessionId/metadata` | Update Host-owned session metadata through the Host writer | Required | Yes | JSON |
 | `GET` | `/api/agent/v1/sessions/:sessionId/metadata` | Host-owned metadata and its independent revision | Required | Yes | JSON |
 | `DELETE` | `/api/agent/v1/sessions/:sessionId` | Delete session and child sessions | Required | Yes | JSON |
 | `GET` | `/api/agent/v1/sessions/:sessionId/history` | Paginated message and turn history | Required | Yes | JSON |
@@ -498,7 +498,7 @@ The Agent Service never implements a secondary queue. It processes runs dispatch
 
 ### Host metadata and queue response ownership
 
-After authentication and authorization, the Host intercepts `PATCH .../sessions/:sessionId`, `GET .../metadata`, and every `/queue` route before the Agent proxy. Metadata PATCH accepts only `{changes: Partial<SessionMetadata>}`; there is no top-level writable title alias. The Host atomically commits a valid patch and increments that metadata revision, then returns `SessionMetadataState`. Queue reads/mutations return `QueueState` after the Host's queue transaction; no acknowledgement precedes the durable write. Writes require `If-Match: "<revision>"` for their owning metadata or queue revision. A mismatch returns HTTP 409 `METADATA_CONFLICT` or `QUEUE_CONFLICT` with the current authorized state; failed writes preserve the prior state/revision and return an error, never success or empty data.
+After authentication and authorization, the Host intercepts `PATCH .../sessions/:sessionId/metadata`, `GET .../sessions/:sessionId/metadata`, and every `/queue` route before the Agent proxy. Metadata PATCH accepts only `{changes: Partial<SessionMetadata>}`; there is no top-level writable title alias. The Host atomically commits a valid patch and increments that metadata revision, then returns `SessionMetadataState`. Queue reads/mutations return `QueueState` after the Host's queue transaction; no acknowledgement precedes the durable write. Writes require `If-Match: "<revision>"` for their owning metadata or queue revision. A mismatch returns HTTP 409 `METADATA_CONFLICT` or `QUEUE_CONFLICT` with the current authorized state; failed writes preserve the prior state/revision and return an error, never success or empty data.
 
 The Host sends committed Host state to the service projector for `session.updated` / `queue.updated`; delayed or failed event projection cannot roll back the Host HTTP result or alter its revision. Reconnect reads the independent Host state even if projection lagged. Host metadata/queue APIs remain usable while Agent execution is unavailable; dispatch waits for readiness. Session detail/list is composed by the Host from service runtime records and its metadata; independent `.../metadata` remains the read path when runtime composition is unavailable. No Host metadata/queue operation becomes an Agent-owned durable writer merely because its public path uses `/api/agent/v1`.
 

@@ -71,9 +71,15 @@ describe('checked-in SDK examples', () => {
     for (const locale of ['', 'de', 'es', 'fr', 'ja', 'ko', 'nl', 'pl', 'pt-br', 'tr', 'uk', 'zh-cn']) {
       const prefix = locale ? `${locale}/` : '';
       const example = await readFile(new URL(`${prefix}sdk/example.mdx`, docs), 'utf8');
-      expect(example).toContain(`"@openchamber/sdk": "^${sdk.version}"`);
+      const exampleJson = /```json\n([\s\S]*?)```/.exec(example);
+      if (!exampleJson?.[1]) throw new Error(`${locale || 'en'} SDK example has no JSON manifest block`);
+      const exampleManifest = JSON.parse(exampleJson[1]) as { dependencies?: Record<string, string> };
+      expect(exampleManifest.dependencies?.['@openchamber/sdk']).toBe(`^${sdk.version}`);
       const guide = await readFile(new URL(`${prefix}sdk.mdx`, docs), 'utf8');
-      expect(guide).toContain(`"openchamber": ">=${sdk.version}"`);
+      const guideJson = /```json\n([\s\S]*?)```/.exec(guide);
+      if (!guideJson?.[1]) throw new Error(`${locale || 'en'} SDK guide has no JSON manifest block`);
+      const guideManifest = JSON.parse(guideJson[1]) as { openchamber?: { engines?: { openchamber?: string } } };
+      expect(guideManifest.openchamber?.engines?.openchamber).toBe(`>=${sdk.version}`);
     }
   });
 

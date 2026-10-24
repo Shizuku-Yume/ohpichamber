@@ -78,6 +78,8 @@ OpenChamber 会读取清单，并弹出一个对话框列出扩展所请求的�
 
 `apiVersion` 为 `1`。OpenChamber 拒绝任何其他值。
 
+SDK 3 用私有且带版本号的 `MessagePort` 引导流程取代 SDK 2 的父窗口传输。仍发送 M3 之前 v1 `hello` 的面板无法连接：OpenChamber 会在面板中显示版本不匹配信息，并且不会授予端口或主机状态。v1 引导通知会被丢弃且不授予任何内容。请使用 `@openchamber/sdk` 3 重新构建面板。由于清单架构未变，`apiVersion` 仍为 `1`。
+
 `engines.openchamber` 可选。填写你的扩展支持的最低 OpenChamber 版本，写成 `3.0.0` 或 `>=3.0.0`。更旧的版本会拒绝安装，而不是之后才出错。
 
 `contributes.panel` 描述侧栏入口。`id` 使用 kebab-case，且在已安装扩展中必须唯一。`icon` 是 Remixicon 图标名（`RiWindowLine` 写成 `window`），或者你文件夹内的 SVG 文件，如 `icon.svg`。`entry` 是你文件夹内的 HTML 文件；只声明 `tools` 的扩展可以不写它（见[你的工具在聊天中的样子](#你的工具在聊天中的样子)）。

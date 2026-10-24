@@ -1,6 +1,6 @@
 # Guest local services
 
-Implemented on manifest `apiVersion: 1`. The Guest wire envelope and bootstrap handshake are `v: 2`; the pre-M3 window transport is refused.
+Implemented on manifest `apiVersion: 1`. The Guest wire envelope and bootstrap handshake are `v: 2`; the pre-M3 window `hello` is refused and a v1 bootstrap announcement is dropped.
 
 This is the contract for guests that need a local process (Docker CLI, Engine sockets, kubectl, DB sockets). The iframe stays sandboxed. The host owns spawn and the loopback proxy.
 
@@ -82,7 +82,7 @@ Socket entry shapes:
 
 Parse rules:
 
-- `apiVersion` is `1` (manifest schema). Wire `v` on the private port is `2`; the pre-M3 window transport is refused.
+- `apiVersion` is `1` (manifest schema). Wire `v` on the private port is `2`; the pre-M3 window `hello` is refused and a v1 bootstrap announcement is dropped.
 - `engines.openchamber` is optional. Values are `3.0.0` or `>=3.0.0` only. Install returns `host-too-old` when this OpenChamber build is older.
 - `contributes.panel` stays required. Same id / name / icon / entry rules as any guest.
 - `contributes.service` is optional. A guest without `service` is HTML-only.

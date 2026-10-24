@@ -46,4 +46,11 @@ Finding B (nonblocking, resolved): the legacy branch closed ports and rejected b
 
 Finding sec (nonblocking, resolved): the detector accepted any string `type`, letting a current guest self-reject with a v1 non-hello message. Detection now requires the old unconditional `type === 'hello'`; v1 calls are ignored. Regression tests cover v1 hello with a transferred port (closed, not delivered), v1 non-hello (ignored, pane stays), and a foreign-source v1 hello with a transferred port (closed without changing the pane).
 
-Review delta after fixes: paths above; briefs A,B,sec; findings 0 new blocking / 0 new nonblocking. Checks rerun: affected UI tests 6 pass, UI type-check pass, changed-file eslint pass. Independent A/B/security recheck is still owed before archiving.
+Review delta after fixes: paths above; briefs A,B,sec; findings 0 new blocking / 0 new nonblocking. Checks rerun: affected UI tests 6 pass, UI type-check pass, changed-file eslint pass.
+
+Independent A/B/security recheck after `ef43b26ec`:
+- Brief A: blocked on missing root-gate evidence. The effort requires `bun run test` at the landing commit; Task23 changes SDK/UI source. Resolution: rebase onto current main `690685e33`, then run the full root gate once at the exact final SHA and record it under Check after. This remains open until that run.
+- A nonblocking observations, all resolved: README preview example now matches the workflow's actual `1.23.2-preview.N`; README/API/DOCUMENTATION/GUEST_SERVICES/English and translated guides now say only the pre-M3 window `hello` is refused and a v1 bootstrap announcement is dropped; `host-version.ts` JSDoc examples use `3.0.0`; each of the 11 translated SDK guides has a concise localized breaking explanation.
+- Brief B: pass. One nonblocking assertion-strength finding resolved: the version-sync test now parses the documented JSON manifest block and asserts the exact `@openchamber/sdk` dependency and `engines.openchamber` values instead of substring matching.
+- Security: pass, no findings.
+- Delta A is not required for the doc/JSDoc/test-strength correction because the deliverable and boundaries are unchanged. The root-gate finding is closed only by the post-rebase run.

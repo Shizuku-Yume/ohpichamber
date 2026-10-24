@@ -78,6 +78,8 @@ Vous pouvez aussi ajouter un `.zip` local ou un lien https vers un dépôt git o
 
 `apiVersion` vaut `1`. OpenChamber refuse toute autre valeur.
 
+SDK 3 remplace le transport par fenêtre parente de SDK 2 par un amorçage `MessagePort` privé et versionné. Un panneau qui envoie encore le `hello` v1 antérieur à M3 ne peut pas se connecter : OpenChamber affiche un message d’incompatibilité de version dans son panneau et ne lui accorde ni port ni état de l’hôte. Une annonce d’amorçage v1 est ignorée sans rien accorder. Reconstruisez le panneau avec `@openchamber/sdk` 3. `apiVersion` reste `1`, car le schéma du manifeste n’a pas changé.
+
 `engines.openchamber` est optionnel. Indiquez la version d'OpenChamber la plus ancienne avec laquelle votre extension fonctionne, sous la forme `3.0.0` ou `>=3.0.0`. Les versions plus anciennes refusent de l'installer au lieu d'échouer plus tard.
 
 `contributes.panel` décrit l'entrée dans la barre latérale. `id` est en kebab-case et doit être unique parmi les extensions installées. `icon` est un nom Remixicon (`RiWindowLine` devient `window`) ou un fichier SVG dans votre dossier, comme `icon.svg`. `entry` est le fichier HTML dans votre dossier ; omettez-le pour une extension qui ne déclare que `tools` (voir [Vos outils dans le chat](#vos-outils-dans-le-chat)).

@@ -1,5 +1,5 @@
 const CORE_VERSION = /^(\d+)\.(\d+)\.(\d+)$/;
-/** `1.22.0` or `>=1.22.0`. Ranges beyond a floor are not accepted. */
+/** `3.0.0` or `>=3.0.0`. Ranges beyond a floor are not accepted. */
 export const OPENCHAMBER_ENGINE_PATTERN = /^(>=)?\d+\.\d+\.\d+$/;
 
 type OpenChamberVersionParts = {
@@ -32,7 +32,7 @@ export const compareOpenChamberVersions = (left: string, right: string): number 
   return a.patch - b.patch;
 };
 
-/** Normalize `>=1.22.0` / `1.22.0` to the floor version string. */
+/** Normalize `>=3.0.0` / `3.0.0` to the floor version string. */
 export const openChamberEngineMinimum = (engine: string): string | null => {
   const trimmed = engine.trim();
   if (!OPENCHAMBER_ENGINE_PATTERN.test(trimmed)) {

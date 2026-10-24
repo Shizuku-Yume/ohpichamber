@@ -78,6 +78,8 @@ U kunt ook een lokale `.zip` of een https-link naar een Git-repository of ZIP-be
 
 `apiVersion` moet `1` zijn. OpenChamber weigert andere waarden.
 
+SDK 3 vervangt de transport via het bovenliggende venster van SDK 2 door een privé, geversioneerde `MessagePort`-bootstrap. Een paneel dat nog de v1-`hello` van vóór M3 verstuurt, kan geen verbinding maken: OpenChamber toont een versiemismatch in het paneel en geeft het geen poort of hoststatus. Een v1-bootstrapaankondiging wordt zonder toekenning weggegooid. Bouw het paneel opnieuw met `@openchamber/sdk` 3. `apiVersion` blijft `1`, omdat het manifestschema niet is gewijzigd.
+
 `engines.openchamber` is optioneel. Geef de oudste ondersteunde OpenChamber-versie op als `3.0.0` of `>=3.0.0`. Oudere builds weigeren de installatie dan meteen, in plaats van later vast te lopen.
 
 `contributes.panel` beschrijft de vermelding in de balk. `id` gebruikt kebab-case en moet uniek zijn onder de geïnstalleerde extensies. `icon` is een Remixicon-naam: `RiWindowLine` wordt `window`. Een SVG-bestand in uw map, zoals `icon.svg`, mag ook. `entry` verwijst naar het HTML-bestand in de map. Laat het weg voor een extensie die alleen `tools` opgeeft. Zie [Uw tools in de chat](#uw-tools-in-de-chat).

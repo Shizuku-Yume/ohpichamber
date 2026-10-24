@@ -78,6 +78,8 @@ Você também pode adicionar um `.zip` local ou um link https para um repositór
 
 `apiVersion` é `1`. O OpenChamber recusa qualquer outro valor.
 
+O SDK 3 substitui o transporte pela janela pai do SDK 2 por um bootstrap `MessagePort` privado e versionado. Um painel que ainda envia o `hello` v1 anterior ao M3 não consegue se conectar: o OpenChamber mostra uma mensagem de versão incompatível no painel e não concede porta nem estado do host. Um anúncio de bootstrap v1 é descartado sem conceder nada. Recompile o painel com `@openchamber/sdk` 3. O `apiVersion` continua `1` porque o esquema do manifesto não mudou.
+
 `engines.openchamber` é opcional. Informe a versão mais antiga do OpenChamber com a qual sua extensão funciona, como `3.0.0` ou `>=3.0.0`. Versões anteriores se recusam a instalá-la em vez de falhar depois.
 
 `contributes.panel` descreve a entrada na barra lateral. `id` é em kebab-case e precisa ser único entre as extensões instaladas. `icon` é um nome do Remixicon (`RiWindowLine` vira `window`) ou um arquivo SVG dentro da sua pasta, como `icon.svg`. `entry` é o arquivo HTML dentro da sua pasta; deixe-o de fora em uma extensão que só declara `tools` (veja [Suas ferramentas no chat](#suas-ferramentas-no-chat)).

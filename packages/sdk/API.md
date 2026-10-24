@@ -8,7 +8,7 @@ What third-party guest authors import and call. Source of truth: `[packages/sdk/
 
 **Runtimes that load guests:** web and desktop. VS Code and mobile mark the catalog `unsupported`.
 
-Wire `v: 2` is the private bootstrap transport; manifest `apiVersion` stays `1` because the manifest/`contributes` schema did not change. SDK 3 refuses the pre-M3 window transport and names the mismatch in the pane instead of waiting for a timeout.
+Wire `v: 2` is the private bootstrap transport; manifest `apiVersion` stays `1` because the manifest/`contributes` schema did not change. SDK 3 refuses the pre-M3 window `hello` and names the mismatch in the pane instead of waiting for a timeout; a v1 bootstrap announcement is dropped without granting anything.
 
 Two entrypoints:
 

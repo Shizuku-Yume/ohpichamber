@@ -78,6 +78,8 @@ Yerel bir `.zip` dosyası ya da bir git deposuna veya zip dosyasına giden https
 
 `apiVersion` değeri `1`'dir. OpenChamber başka değerleri reddeder.
 
+SDK 3, SDK 2'nin üst pencere taşımasını özel ve sürümlenmiş bir `MessagePort` önyüklemesiyle değiştirir. Hâlâ M3 öncesi v1 `hello` gönderen bir panel bağlanamaz: OpenChamber panelinde sürüm uyuşmazlığı gösterir ve ona ne port ne de ana makine durumu verir. Bir v1 önyükleme duyurusu hiçbir şey verilmeden atılır. Paneli `@openchamber/sdk` 3 ile yeniden derleyin. Şema değişmediği için `apiVersion` `1` olarak kalır.
+
 `engines.openchamber` isteğe bağlıdır. Eklentinizin çalıştığı en eski OpenChamber sürümünü `3.0.0` veya `>=3.0.0` biçiminde yazın. Daha eski sürümler sonradan hata vermek yerine kurulumu reddeder.
 
 `contributes.panel` şerit girişini tanımlar. `id` kebab-case olmalı ve kurulu eklentiler arasında benzersiz olmalıdır. `icon` bir Remixicon adı (`RiWindowLine` için `window`) ya da klasörünüzdeki bir SVG dosyasıdır, örneğin `icon.svg`. `entry` klasörünüzdeki HTML dosyasıdır; yalnızca `tools` tanımlayan bir eklentide bunu atlayın (bkz. [Sohbetteki araçlarınız](#sohbetteki-araçlarınız)).

@@ -78,7 +78,7 @@ You can also add a local `.zip` or an https link to a git repository or a zip fi
 
 `apiVersion` is `1`. OpenChamber refuses any other value.
 
-SDK 3 replaces the parent-window transport used by SDK 2 with a private, versioned `MessagePort` bootstrap. A panel built with SDK 2 cannot connect: OpenChamber shows a version-mismatch message in its pane and never grants it a port or host state. Rebuild the panel with `@openchamber/sdk` 3. `apiVersion` stays `1` because the manifest schema did not change.
+SDK 3 replaces the parent-window transport used by SDK 2 with a private, versioned `MessagePort` bootstrap. A panel that still sends the pre-M3 v1 window `hello` cannot connect: OpenChamber shows a version-mismatch message in its pane and never grants it a port or host state. A v1 bootstrap announcement is dropped without granting anything. Rebuild the panel with `@openchamber/sdk` 3. `apiVersion` stays `1` because the manifest schema did not change.
 
 `engines.openchamber` is optional. Set the oldest OpenChamber version your extension works with, as `3.0.0` or `>=3.0.0`. Older builds refuse to install it instead of failing later.
 

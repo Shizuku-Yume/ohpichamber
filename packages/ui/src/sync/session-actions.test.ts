@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test"
-import type { ApprovalRequest, PromptRequest, Run, Session, SessionDeleteAck, SessionSnapshot } from "@openchamber/agent-contract"
+import type { ApprovalRequest, PromptRequest, Run, Session, SessionDeleteAck, SessionSnapshot, Message, Turn } from "@openchamber/agent-contract"
 import { CanonicalEventSchema, SessionMetadataSchema } from "@openchamber/agent-contract"
 import { z } from "zod"
 import { CanonicalApiError, canonicalClient } from "@/api/canonicalClient"
@@ -23,7 +23,7 @@ import {
   dismissPermission, forkAfterMessage, forkFromLastCompletedTurn, forkFromMessage,
   getSessionLastAssistantModel, getSessionLiveActivity, patchSessionMetadata,
   moveSessionToDirectory, reconcileExternallyDeletedSession, refetchSessionMessages, replyToForm, revertToMessage,
-  respondToPermission, sendMessage, setActionRefs, setSessionWorkState,
+  respondToPermission, sendMessage, setActionRefs, setSessionWorkState, optimisticSend, setOptimisticRefs,
   unarchiveSession, unarchiveSessions, updateSessionTitle,
 } from "./session-actions"
 
@@ -94,6 +94,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  setOptimisticRefs(() => {}, () => {}, () => {})
   setImperativeSessionMessageLoader(null)
   loader?.dispose()
   manager.disposeAll()
@@ -957,5 +958,144 @@ describe("native selected-branch forks", () => {
     spyOn(canonicalClient, "getSnapshot").mockResolvedValue(nativeSnapshot("session-a", []))
     await expect(forkFromLastCompletedTurn("session-a")).rejects.toBeInstanceOf(NothingToForkError)
     expect(create).not.toHaveBeenCalled()
+  })
+})
+
+describe("review-flow optimistic send", () => {
+  function canonicalUserMessage(sessionId: string, messageId: string, content: string, createdAt = 10): Message {
+    return {
+      messageId, sessionId, turnId: `turn-${messageId}`, role: "user", createdAt,
+      parts: [{ type: "text", partId: `part-${messageId}`, content }],
+    }
+  }
+
+  function reviewRun(runId = "run-review"): Run {
+    return { runId, sessionId: "session-a", status: "running", createdAt: 2 }
+  }
+
+  function runTurn(run: Run, userMessage: Message): Turn {
+    return {
+      turnId: userMessage.turnId, sessionId: userMessage.sessionId, runId: run.runId, status: "running",
+      userMessageId: userMessage.messageId, assistantMessageIds: [], startedAt: userMessage.createdAt,
+    }
+  }
+
+  function snapshotWithRun(run: Run, userMessage: Message): SessionSnapshot {
+    const snapshot = nativeSnapshot("session-a", [userMessage])
+    snapshot.turns = [runTurn(run, userMessage)]
+    snapshot.session = { ...snapshot.session, runtimeStatus: "running", activeRunId: run.runId }
+    snapshot.activeRun = run
+    return snapshot
+  }
+
+  function useOptimisticLoader(getSnapshot: () => Promise<SessionSnapshot>): void {
+    const optimisticLoader = new SessionMessageLoader(manager, { runtimeKey: "actions", client: nativeClient({ getSnapshot }) })
+    loader = optimisticLoader
+    setImperativeSessionMessageLoader(optimisticLoader)
+    setOptimisticRefs(
+      (input) => optimisticLoader.optimisticAdd({ ...input, directory: input.directory || directory }),
+      (input) => optimisticLoader.optimisticRemove({ ...input, directory: input.directory || directory }),
+      (input) => optimisticLoader.optimisticConfirm({ ...input, directory: input.directory || directory }),
+    )
+  }
+
+  test("inserts its pending user message before transport settles and removes only that record on a definite failure", async () => {
+    const existing = canonicalUserMessage("session-a", "existing", "Earlier prompt", 1)
+    const store = seed()
+    store.setState({ message: { "session-a": [existing] } })
+    useOptimisticLoader(async () => nativeSnapshot("session-a", [existing]))
+
+    let pendingId = ""
+    let duringSend: Message[] = []
+    await expect(optimisticSend({
+      sessionId: "session-a",
+      directory,
+      content: "Review feedback",
+      onMessageID: (messageId) => { pendingId = messageId },
+      send: async () => {
+        duringSend = store.getState().message["session-a"] ?? []
+        throw new Error("rejected")
+      },
+    })).rejects.toThrow("rejected")
+
+    const pending = duringSend.filter((message) => message.messageId === pendingId)
+    expect(pending).toHaveLength(1)
+    expect(pending[0]?.role).toBe("user")
+    expect(pending[0]?.parts).toEqual([{ type: "text", partId: expect.any(String), content: "Review feedback" }])
+    expect(store.getState().message["session-a"]).toEqual([existing])
+  })
+
+  test("reconciles an accepted send with the canonical history read without duplicating it", async () => {
+    const run = reviewRun()
+    const canonical = canonicalUserMessage("session-a", "canonical-user", "Review feedback", 20)
+    const store = seed()
+    let snapshot = nativeSnapshot("session-a", [])
+    useOptimisticLoader(async () => snapshot)
+
+    await optimisticSend({
+      sessionId: "session-a",
+      directory,
+      content: "Review feedback",
+      send: async () => {
+        snapshot = snapshotWithRun(run, canonical)
+        return run
+      },
+    })
+
+    expect(store.getState().message["session-a"]).toEqual([canonical])
+  })
+
+  test("keeps an accepted pending record until the canonical turn arrives, then removes it without duplication", async () => {
+    const run = reviewRun()
+    const store = seed()
+    let snapshot = nativeSnapshot("session-a", [])
+    useOptimisticLoader(async () => snapshot)
+
+    await optimisticSend({
+      sessionId: "session-a",
+      directory,
+      content: "Review feedback",
+      send: async () => run,
+    })
+
+    const pending = store.getState().message["session-a"] ?? []
+    expect(pending).toHaveLength(1)
+    expect(pending[0]?.role).toBe("user")
+
+    const canonical = canonicalUserMessage("session-a", "canonical-user", "Review feedback", 20)
+    snapshot = snapshotWithRun(run, canonical)
+    store.setState((state) => ({
+      message: { ...state.message, "session-a": [...(state.message["session-a"] ?? []), canonical] },
+      snapshot: { ...state.snapshot, "session-a": snapshot },
+    }))
+    expect(store.getState().message["session-a"]).toEqual([canonical])
+  })
+
+  test("does not mistake an earlier identical user message for this send's canonical record", async () => {
+    const run = reviewRun()
+    const existing = canonicalUserMessage("session-a", "existing", "Review feedback", 1)
+    const canonical = canonicalUserMessage("session-a", "canonical-user", "Review feedback", 20)
+    const store = seed()
+    store.setState({ message: { "session-a": [existing] } })
+    let snapshot = nativeSnapshot("session-a", [existing])
+    useOptimisticLoader(async () => snapshot)
+
+    await optimisticSend({
+      sessionId: "session-a",
+      directory,
+      content: "Review feedback",
+      send: async () => run,
+    })
+
+    const accepted = store.getState().message["session-a"] ?? []
+    expect(accepted).toHaveLength(2)
+    expect(accepted[0]).toEqual(existing)
+
+    snapshot = snapshotWithRun(run, canonical)
+    store.setState((state) => ({
+      message: { ...state.message, "session-a": [...(state.message["session-a"] ?? []), canonical] },
+      snapshot: { ...state.snapshot, "session-a": snapshot },
+    }))
+    expect(store.getState().message["session-a"]).toEqual([existing, canonical])
   })
 })

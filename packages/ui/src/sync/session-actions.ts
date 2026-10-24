@@ -109,8 +109,12 @@ export type SessionSendInput = {
   commandId?: string
 }
 
-/** Native delivery never generates a message ID or retries an ambiguous send. */
-export async function sendMessage(input: SessionSendInput): Promise<void> {
+/**
+ * Native delivery never generates a message ID or retries an ambiguous send.
+ * Returns the accepted outer run for the default mode so callers can correlate
+ * the canonical turn and user message with this specific send.
+ */
+export async function sendMessage(input: SessionSendInput): Promise<Run | null> {
   const runtimeKey = input.runtimeKey ?? getRuntimeKey()
   if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
   const request = PromptRequestSchema.parse(input.request)
@@ -119,9 +123,11 @@ export async function sendMessage(input: SessionSendInput): Promise<void> {
   if (input.mode === "steer") {
     const result = await canonicalClient.steer(input.sessionId, request, input.commandId)
     if (result.sessionId !== input.sessionId) throw new Error("Steer response identified another session")
+    return null
   } else if (input.mode === "follow-up") {
     const result = await canonicalClient.followUp(input.sessionId, request, input.commandId)
     if (result.sessionId !== input.sessionId) throw new Error("Follow-up response identified another session")
+    return null
   } else {
     // Capture the live head before the request: an ack that arrives after the
     // session already advanced past it and released its run is stale.
@@ -132,8 +138,8 @@ export async function sendMessage(input: SessionSendInput): Promise<void> {
     // The accepted run is authoritative control state even before its event
     // arrives; without this the composer can keep offering Send for a live run.
     publishRuntimeRun(result.run, baselines)
+    return result.run
   }
-  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
 }
 
 type RunControlBaselines = ReadonlyMap<string, RunControlBaseline>
@@ -1627,11 +1633,100 @@ export async function updateSessionTitle(
 // Retained review-flow send boundary — Task 16 owns its transport cutover.
 // ---------------------------------------------------------------------------
 
+const isUserMessageWithText = (message: CanonicalMessage, content: string): boolean => (
+  message.role === "user" && message.parts.some((part) => part.type === "text" && part.content === content)
+)
+
 /**
- * Preserve the review-flow call contract without manufacturing native history.
- * Its callback still accepts a legacy transport correlation ID; that ID is
- * never installed as a canonical message or used to guess an accepted run.
- * Canonical history is reconciled only from an authoritative snapshot.
+ * Forget an accepted send's pending record once the native transcript owns that
+ * message. Native message IDs are allocated by the Agent Service, so the
+ * canonical record arrives with a different ID. The accepted run identifies
+ * this send's turn, and the turn names the canonical user message; without a
+ * run (a caller that does not return one), only a user message that was absent
+ * from the pre-send transcript and repeats this content can be its counterpart.
+ * In both cases the pending record is removed only after the canonical message
+ * is visible, so the two cannot both render.
+ */
+function reconcileAcceptedSend(input: {
+  runtimeKey: string
+  sessionId: string
+  directory?: string | null
+  pendingMessage: CanonicalMessage
+  content: string
+  runId: string | null
+  knownMessageIds: ReadonlySet<string>
+}): void {
+  const store = input.directory ? _childStores?.getChild(input.directory) : undefined
+  if (!store) return
+  const messageId = input.pendingMessage.messageId
+  const removePending = () => _optimisticRemove?.({ sessionId: input.sessionId, directory: input.directory, messageId })
+  // A snapshot can promote an ID the server echoed by replacing the shadow
+  // object with the authoritative record. That record is not ours to delete.
+  const isPromoted = (messages: readonly CanonicalMessage[] | undefined) => {
+    const visible = messages?.find((message) => message.messageId === messageId)
+    return Boolean(visible && visible !== input.pendingMessage)
+  }
+  const confirmPromoted = () => _optimisticConfirm?.({ sessionId: input.sessionId, directory: input.directory, messageId })
+  const hasCanonicalCounterpart = (state: State): boolean => {
+    const messages = state.message[input.sessionId]
+    if (!messages) return false
+    if (input.runId) {
+      const canonicalId = state.snapshot[input.sessionId]?.turns
+        .find((turn) => turn.runId === input.runId)?.userMessageId
+      return Boolean(canonicalId && messages.some((message) => message.messageId === canonicalId))
+    }
+    return messages.some((message) => (
+      message.messageId !== messageId
+      && !input.knownMessageIds.has(message.messageId)
+      && isUserMessageWithText(message, input.content)
+    ))
+  }
+  const messagesAtRead = store.getState().message[input.sessionId]
+  if (isPromoted(messagesAtRead)) {
+    confirmPromoted()
+    return
+  }
+  if (hasCanonicalCounterpart(store.getState())) {
+    removePending()
+    return
+  }
+  let unsubscribe = () => {}
+  unsubscribe = store.subscribe((state) => {
+    const messages = state.message[input.sessionId]
+    if (isStaleRuntime(input.runtimeKey)) {
+      unsubscribe()
+      return
+    }
+    if (isPromoted(messages)) {
+      unsubscribe()
+      confirmPromoted()
+      return
+    }
+    // The loader may discard the pending record (invalidation, eviction, or a
+    // runtime switch) before a canonical echo appears. Stop waiting then.
+    if (!messages?.some((message) => message.messageId === messageId)) {
+      unsubscribe()
+      return
+    }
+    if (!hasCanonicalCounterpart(state)) return
+    unsubscribe()
+    removePending()
+  })
+}
+
+/**
+ * Send a review-flow prompt with optimistic continuity.
+ *
+ * A client-generated pending user message is inserted into the visible store
+ * and the loader's optimistic shadow before transport, so the review send is
+ * visible while the Host accepts it. The callback's correlation ID is not a
+ * native message identity: the Agent Service allocates message, turn, and part
+ * IDs. A definite failure removes only that unconfirmed record and records the
+ * failure for diagnostics. An accepted send reconciles the pending record with
+ * the server-authored user message named by the accepted run's canonical turn
+ * (falling back to a new matching user message for callers that return no run),
+ * from an authoritative snapshot/history read or the live transcript, without
+ * duplicating it. A rejected read cannot turn an accepted send into a failure.
  */
 export async function optimisticSend(input: {
   runtimeKey?: string
@@ -1645,7 +1740,7 @@ export async function optimisticSend(input: {
   onOptimisticInsert?: () => void
   onMessageID?: (messageID: string) => void
   beforeOptimisticInsert?: () => void
-  send: (messageID: string, context: SyntheticContextInput[]) => Promise<void>
+  send: (messageID: string, context: SyntheticContextInput[]) => Promise<Run | null>
 }): Promise<void> {
   if (!_optimisticAdd || !_optimisticRemove) {
     throw new Error("Optimistic refs not set — is useSync() mounted?")
@@ -1657,20 +1752,39 @@ export async function optimisticSend(input: {
   assertRuntimeUnchanged()
   await waitForConnectionOrThrow()
   assertRuntimeUnchanged()
-  input.beforeOptimisticInsert?.()
   const directory = input.directory ?? getSessionDirectory(input.sessionId)
   const context = (input.context ?? []).filter((item) => item.text.trim())
   const leading = await input.leadingContext
   assertRuntimeUnchanged()
   if (leading?.text.trim()) context.unshift(leading)
-  // This is the existing callback's transport correlation token, not a native
-  // message identity. The native service allocates all message/turn/part IDs.
+  // The callback's ID correlates the legacy transport and the returned send
+  // identity. It is never installed as a native message ID.
   const correlationId = `msg_${globalThis.crypto.randomUUID()}`
+  const pendingMessage: CanonicalMessage = {
+    messageId: correlationId,
+    sessionId: input.sessionId,
+    turnId: `turn_${globalThis.crypto.randomUUID()}`,
+    role: "user",
+    createdAt: Date.now(),
+    parts: [{ type: "text", partId: `part_${globalThis.crypto.randomUUID()}`, content: input.content }],
+  }
+  const knownMessageIds = new Set(
+    (directory ? _childStores?.getChild(directory)?.getState().message[input.sessionId] : undefined)
+      ?.map((message) => message.messageId) ?? [],
+  )
   input.onMessageID?.(correlationId)
   input.appendSubmissions?.()
+  input.beforeOptimisticInsert?.()
+  _optimisticAdd({ sessionId: input.sessionId, directory, message: pendingMessage })
+  input.onOptimisticInsert?.()
+  let acceptedRun: Run | null = null
   try {
-    await input.send(correlationId, context)
+    assertRuntimeUnchanged()
+    acceptedRun = await input.send(correlationId, context)
   } catch (error) {
+    // A definite failure removes only the unconfirmed record. Once an echo
+    // has promoted this ID, optimisticRemove refuses to delete it.
+    _optimisticRemove({ sessionId: input.sessionId, directory, messageId: correlationId })
     if (!isStaleRuntime(runtimeKey)) {
       recordSendFailure({
         sessionId: input.sessionId, messageId: correlationId, directory: directory ?? null,
@@ -1686,15 +1800,14 @@ export async function optimisticSend(input: {
   try {
     await refetchSessionMessages(input.sessionId)
     assertRuntimeUnchanged()
-    const messages = directory ? _childStores?.getChild(directory)?.getState().message[input.sessionId] : undefined
-    for (const message of messages ?? []) {
-      _optimisticConfirm?.({ sessionId: input.sessionId, directory, messageId: message.messageId })
-    }
-    input.onOptimisticInsert?.()
   } catch (error) {
     if (isStaleRuntime(runtimeKey)) throw error
     console.warn("[session-actions] accepted review send history refresh failed", error)
   }
+  reconcileAcceptedSend({
+    runtimeKey, sessionId: input.sessionId, directory, pendingMessage, content: input.content,
+    runId: acceptedRun?.runId ?? null, knownMessageIds,
+  })
 }
 
 // ---------------------------------------------------------------------------

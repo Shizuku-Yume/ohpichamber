@@ -16,6 +16,7 @@ import * as actions from '@/sync/session-actions';
 import * as prompts from '@/lib/magicPrompts';
 import * as knowledge from '@/lib/sessionKnowledgeApi';
 import { useSelectionStore } from '@/sync/selection-store';
+import { useConfigStore } from '@/stores/useConfigStore';
 import { sendReviewFeedbackToOriginal } from './reviewFlow';
 
 describe('reviewFlow auto-review helpers', () => {
@@ -94,7 +95,7 @@ describe('review native prompt delivery', () => {
     selection.saveSessionAgentSelection('original', 'agent');
     selection.saveAgentModelForSession('original', 'agent', 'captured', 'model');
     selection.saveAgentModelVariantForSession('original', 'agent', 'captured', 'model', 'high');
-    const send = spyOn(actions, 'sendMessage').mockResolvedValue(undefined);
+    const send = spyOn(actions, 'sendMessage').mockResolvedValue(null);
     const optimistic = spyOn(actions, 'optimisticSend').mockImplementation(async (input) => {
       input.beforeOptimisticInsert?.();
       input.onMessageID?.('message');
@@ -124,5 +125,55 @@ describe('review native prompt delivery', () => {
     expect(requests).toHaveLength(mode === 'plain' ? 0 : 1);
     const matched = mode === 'command' || mode === 'template';
     expect(send.mock.calls[0][0].request).toMatchObject({ input: { text: matched ? '/expanded once' : text }, options: { providerId: matched ? 'bound' : 'captured', modelId: matched ? 'bound-model' : 'model', agentId: matched ? 'bound-agent' : 'agent', variant: 'high', reasoningEffort: null } });
+  });
+});
+
+describe('review native prompt optimistic boundary', () => {
+  const spies: Array<{ mockRestore(): void }> = [];
+  const originalConfig = useConfigStore.getState();
+  afterEach(() => {
+    for (const spy of spies.splice(0).reverse()) spy.mockRestore();
+    actions.setOptimisticRefs(() => {}, () => {}, () => {});
+    useConfigStore.setState(originalConfig);
+  });
+
+  test('shows the pending user message before the native send settles and rolls it back on rejection', async () => {
+    switchRuntimeEndpoint({ apiBaseUrl: 'http://review-optimistic.test', runtimeKey: 'review-optimistic' });
+    useConfigStore.setState({ isConnected: true, hasEverConnected: true });
+    const session: Session = { sessionId: 'review', rootSessionId: 'review', projectId: 'project', workspaceId: 'workspace', displayPath: '.', createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, metadata: { openchamber: { kind: 'review', originalSessionID: 'original' } }, metadataRevision: '1', archiveRevision: '0' };
+    const snapshot: SessionSnapshot = { session, cursor: 'epoch:0', activeRun: null, branch: { branchId: 'branch', branchVersion: '1', leafMessageId: null }, window: { firstTurnId: null, lastTurnId: null, firstMessageId: null, lastMessageId: null, hasEarlier: false }, turns: [], messages: [], approvals: [], questions: [], requestRecovery: { pendingSet: 'replace', priorEpochs: 'expired' } };
+    spies.push(spyOn(canonicalClient, 'getSession').mockResolvedValue(snapshot));
+    spies.push(spyOn(canonicalClient, 'listSessions').mockResolvedValue({ items: [session], errors: {} }));
+    spies.push(spyOn(prompts, 'renderMagicPrompt').mockResolvedValue('Generated review feedback'));
+    spies.push(spyOn(knowledge, 'fetchSessionKnowledge').mockResolvedValue({ text: '', signature: '' }));
+    spies.push(spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({})));
+    const selection = useSelectionStore.getState();
+    selection.saveSessionModelSelection('original', 'captured', 'model');
+
+    const calls: string[] = [];
+    let pendingId: string | null = null;
+    actions.setOptimisticRefs(
+      (input) => {
+        pendingId = input.message.messageId;
+        expect(input.message.role).toBe('user');
+        expect(input.message.sessionId).toBe('original');
+        expect(input.message.parts).toEqual([{ type: 'text', partId: expect.any(String), content: 'Generated review feedback' }]);
+        calls.push('add');
+      },
+      (input) => {
+        expect(input.messageId).toBe(pendingId);
+        calls.push('remove');
+      },
+    );
+    spies.push(spyOn(actions, 'sendMessage').mockImplementation(async () => {
+      expect(pendingId).not.toBeNull();
+      calls.push('send');
+      throw new Error('rejected');
+    }));
+
+    await expect(sendReviewFeedbackToOriginal('review', '/repo', 'Feedback')).rejects.toThrow('rejected');
+
+    expect(calls).toEqual(['add', 'send', 'remove']);
+    expect(pendingId).not.toBeNull();
   });
 });

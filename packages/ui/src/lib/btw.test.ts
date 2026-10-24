@@ -83,7 +83,7 @@ describe('native btw fork and delivery', () => {
       return { ...(sessionId === parent.sessionId ? parent : fork), metadata: next, metadataRevision: '1' };
     });
     const title = spyOn(sessionActions, 'updateSessionTitle').mockResolvedValue(undefined);
-    const send = spyOn(sessionActions, 'sendMessage').mockImplementation(async () => { if (fails) throw new Error('native delivery failed'); });
+    const send = spyOn(sessionActions, 'sendMessage').mockImplementation(async () => { if (fails) throw new Error('native delivery failed'); return null; });
     const remove = spyOn(sessionActions, 'deleteSession').mockResolvedValue(true);
     const selection = useSelectionStore.getState();
     const model = spyOn(selection, 'saveSessionModelSelection').mockImplementation(() => undefined);

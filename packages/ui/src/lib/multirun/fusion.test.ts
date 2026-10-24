@@ -113,7 +113,7 @@ describe('fusion native primary delivery', () => {
     spies.push(spyOn(creation, 'createMultiRunSession').mockResolvedValue(fusion));
     spies.push(spyOn(observation, 'observeLaneSession').mockResolvedValue(undefined));
     spies.push(spyOn(canonicalClient, 'resolveWorkspace').mockResolvedValue({ projectId: 'project', workspaceId: 'workspace', name: 'repo' }));
-    const send = spyOn(actions, 'sendMessage').mockResolvedValue(undefined);
+    const send = spyOn(actions, 'sendMessage').mockResolvedValue(null);
     spies.push(send);
     const requests: Request[] = [];
     spies.push(spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {

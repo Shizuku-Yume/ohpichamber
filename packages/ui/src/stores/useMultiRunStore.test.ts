@@ -61,6 +61,7 @@ function fixture(input: { rejectFirst?: boolean; isolate?: boolean; wait?: boole
     dispatched.push(request);
     if (input.failFirstDispatch && dispatched.length === 1) throw new Error('Lane failed');
     onDispatch();
+    return null;
   }));
   spies.push(spyOn(canonicalClient, 'resolveWorkspace').mockImplementation(async (directory) => ({
     projectId: 'project', workspaceId: directory === '/repo' ? 'workspace' : `workspace_${directory.split('/').at(-1)}`, name: 'repo',

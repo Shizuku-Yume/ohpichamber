@@ -2,7 +2,9 @@
 
 **Effort:** post-m3-hardening
 **Task type:** feature
-**Base commit:** <commit-sha>
+**Base commit:** a37446ac7a309f5ce8a9a27bec0de3e326a73cf9
+**Started:** 2026-10-24T07:05:21Z
+**Status:** active
 
 **Delivers:** Product docs and package READMEs describe M4 features, Mobile and npm standalone as they are verified today, labeling unverified behavior.
 
@@ -19,3 +21,7 @@
 - [ ] Labels are consistent across locales.
 - [ ] The Mobile README describes the current Canonical API host, not OpenCode.
 - [ ] Delegate the prose to `writer`; facts come from the cited evidence.
+
+## Progress
+
+Dirty at start: none. Task24 uses branch `post-m3-hardening/24-docs-truth-pass` in worktree `/home/shizuku/Project/ohpichamber-worktrees/post-m3-hardening-lane-g-24`, based at main `a37446ac7a309f5ce8a9a27bec0de3e326a73cf9` after Task23 landed. Goal: product docs and package READMEs claim only behavior backed by `development.md`/retrospective evidence; label M4 features, Mobile and npm standalone as unverified where the evidence does not support them, consistently across locales.

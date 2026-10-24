@@ -17,10 +17,10 @@
 - `packages/web/server/lib/host/core-routes.js`: installs OpenChamber route families.
 - `packages/web/server/lib/host/feature-routes-runtime.js`: explicit feature route registration.
 - `packages/web/server/lib/host/settings-routes.js`: Host-owned `GET`/`PUT /api/config/settings` registration, composed from `packages/web/server/index.js` before feature routes.
-- `packages/web/server/lib/opencode/proxy.js`: unmounted legacy proxy fixture for M5 spaces tests; not a production fallback.
+- `packages/web/server/lib/opencode/`: historical notes only. The unmounted `proxy.js` fixture was deleted with the in-space runtime (Task38); no OpenCode proxy remains.
 - `packages/web/server/lib/ui-auth/ui-auth.js`: session and URL-token route gates.
 
-Production OpenChamber routes are explicit; the legacy OpenCode proxy is not mounted as a generic `/api/*` fallback.
+Production OpenChamber routes are explicit; no generic `/api/*` OpenCode proxy fallback remains.
 
 
 ## Runtime Switching
@@ -34,7 +34,6 @@ Review every cache keyed only by session ID, directory, URL, or entity ID. Add r
 - HTTP/request fidelity: `packages/ui/src/lib/runtime-fetch.test.ts`
 - URL/auth: `packages/ui/src/lib/runtime-url.test.ts`, `runtime-auth.test.ts`
 - Server auth: `packages/web/server/lib/ui-auth/ui-auth.test.js`
-- Legacy proxy fixture: `packages/web/server/lib/opencode/proxy.test.js` (spaces/test coverage only).
 - Dev-server tunnel: `packages/web/server/lib/dev-tunnel/tunnel.test.js`
 
 Also run focused tests beside new runtime implementations and validation required by each affected workspace.

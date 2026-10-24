@@ -59,6 +59,6 @@ Integration and rebase history: the task branch was rebased onto main `690685e33
 
 Review boundary (post-rebase): landing comparison `873b7f826` + Task23 commits `7015c83eb..88f73484d`; task-owned source review boundary remains `039f542c3` + `packages/sdk`, `packages/ui` guest host/i18n, `packages/docs` SDK pages, release manifests/`bun.lock`, `.workflow` spec/decision. Main's intervening changes are outside this review. Final Task Check and full root gate ran at archived SHA `2ef4b1e36`.
 
-Final post-rebase evidence (`2ef4b1e36`, worktree `post-m3-hardening-lane-g-23`, `TMPDIR=/tmp`):
+Final post-rebase evidence:
 - Task Check: UI old-hello/format regression tests 6 pass/0 fail; SDK package tests 23/23 test files passed (includes docs version sync and committed-bundle freshness); docs validation 672 pages, 56 sidebar links.
-- Full root `bun run test`: 7/7 suites passed. scripts 22/22 files; sdk 23/23 files; ui 807/807 files; agent-contract 177 pass/0 fail; agent-service 229 pass/7 skip/0 fail; electron 44/44 files; web 378 files/6128 tests passed (135 skipped). Wall time 510.94s.
+- Full root `bun run test` started on clean HEAD `2ef4b1e36`, exited 0, measured 477.34s. 7/7 suites passed: scripts 22/22 files; sdk 23/23 files; ui 807/807 files; agent-contract 177 pass/0 fail; agent-service 229 pass/7 skip/0 fail; electron 44/44 files; web 378 files/6128 tests passed (135 skipped). During the run, `50698c5bb` committed only this task receipt file; the source/test/doc tree under test stayed unchanged. Raw output/log is retained outside the repository (receipt: `/home/shizuku/Project/ohpichamber-omp-artifacts/task23-2026-10-24/root-test-2ef4b1e36-receipt.txt`).

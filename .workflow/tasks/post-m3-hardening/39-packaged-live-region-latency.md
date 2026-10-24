@@ -11,7 +11,7 @@
 
 **Read first:** `.workflow/done/post-m3-hardening/22-packaged-live-region.md`; `.workflow/specs/post-m3-hardening.md` H12; `.workflow/done/omp-through-m3/retrospective.md` W7
 
-**Check:** On an AppImage built from the fixed tree, three consecutive sends show a `role=status`, `aria-live=polite` accessibility node within 400 ms of the send, and all three sessions reach `idle` with an assistant reply; evidence recorded in `## Findings` with the receipt path.
+**Check:** On an AppImage built from the fixed tree, three consecutive sends each expose a named `role=status`, `aria-live=polite` accessibility node within 400 ms measured from the accepted run request (`t0` at the Host's acceptance of the send, not from first token), and all three sessions reach `idle` with an assistant reply. Record the timing origin explicitly, note that the interval may include provider connection and worker startup, and keep the result distinguishable from UI-only render latency. Evidence in `## Findings` with the receipt path.
 
 ## Context observed by task 22
 

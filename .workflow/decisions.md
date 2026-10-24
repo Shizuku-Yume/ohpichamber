@@ -188,3 +188,12 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** no
 - **Revisit when:** A real trial workspace shows the Host agent directory differing from the native OMP CLI configuration path, or a provider still cannot be selected after the availability fix.
 - **Effort:** omp-through-m3
+
+## 2026-10-24 - Remove Task 37 and retain unproven Agent Service failure log
+
+- **Decided:** Amend `post-m3-hardening` by removing Task 37 (`37-project-plugin-registry-setup.md`) without SDK or source changes. Retain `/home/shizuku/Project/ohpichamber-omp-artifacts/post-m3-integration-2026-10-24/root-test.log` as historical failure evidence, and record the exact cause of the earlier Agent Service failure as unproven.
+- **Instead of:** Keeping Task 37 open to patch `@oh-my-pi/pi-coding-agent` or add parent-directory creation around `Bun.write`.
+- **Because:** Direct Bun 1.4.2 smoke verification confirms `Bun.write` creates parent directories (`{createdParents:true}`) when writing nested paths like `.omp/plugins/installed_plugins.json.tmp`. In an isolated fresh workspace, the focused Agent Service plugins test passes (2 pass, 7 skip), and the assembled root gate on candidate branch `validation/post-m3-hardening-final` passes 7/7 suites unchanged with `TMPDIR=/tmp` (`/home/shizuku/Project/ohpichamber-omp-artifacts/post-m3-integration-2026-10-24/root-test-localtmp.log`). The hypothesized missing-mkdir `ENOENT` defect is disproved.
+- **Mine:** no
+- **Revisit when:** A reproducible fresh-workspace plugin install failure is observed with an identified root cause.
+- **Effort:** post-m3-hardening

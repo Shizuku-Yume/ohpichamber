@@ -1,6 +1,6 @@
 # Post-M3 hardening and re-planning
 
-**Status:** proposed
+**Status:** in progress
 **Priority:** high
 
 ## What this is for

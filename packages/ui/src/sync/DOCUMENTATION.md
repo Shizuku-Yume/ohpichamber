@@ -42,7 +42,7 @@ Host metadata revisions stay attached to projected sessions, HTTP write response
 - Rejects incoming metadata if `incoming.metadataRevision` is older than `previous.metadataRevision`
 - Rejects incoming archive state if `incoming.archiveRevision` is older than `previous.archiveRevision`
 
-Discovery failures are scoped. `client.listSessions(workspaceId)` returns `{ items: Session[], errors: Record<string, string> }`. When a session or scope reports an error in `errors`, `mergeHostSession` preserves the cached `Session` for that ID. Sibling sessions in the same workspace hydrate normally. Partial discovery failures preserve prior valid cached entities and do not produce an authoritative empty snapshot.
+Discovery failures are scoped. `client.listSessions(workspaceId)` returns `{ items: Session[], errors: Record<string, string> }`. When an error is keyed by a session, workspace or project, `isSessionDiscoveryFailed` in `globalSessions.ts` preserves the cached `Session` records in that scope instead of treating their absence as an authoritative empty result. Sibling sessions outside the failed scope reconcile normally. Partial discovery failures preserve prior valid cached entities and do not produce an authoritative empty snapshot.
 
 Web, PWA, and Electron use the retained Host owner. Hosted mobile and Capacitor use the active Host through shared runtime transport. VS Code is retired and receives no new support.
 

@@ -51,10 +51,11 @@ export const splitGlobalSessionsByArchived = (sessions: Session[]): { active: Se
   return { active, archived };
 };
 
-/** Discovery errors identify an individual session or native workspace scope. */
+/** Discovery errors identify an individual session or native project/workspace scope. */
 export const isSessionDiscoveryFailed = (session: Session, errors: Readonly<Record<string, string>>): boolean => (
   Object.hasOwn(errors, session.sessionId)
   || Object.hasOwn(errors, session.workspaceId)
+  || Object.hasOwn(errors, session.projectId)
 );
 
 /** Host metadata and archives advance independently from runtime execution state. */

@@ -34,12 +34,14 @@ describe('native global sessions', () => {
     expect(resolveWorkspaceDirectory('wsp_one')).toBeNull();
   });
 
-  test('matches native per-session and workspace failure scopes independently', () => {
+  test('matches native per-session, workspace and project failure scopes independently', () => {
     const record = session();
     expect(isSessionDiscoveryFailed(record, { ses_one: 'METADATA_READ_FAILED' })).toBe(true);
     expect(isSessionDiscoveryFailed(record, { wsp_one: 'SERVICE_UNAVAILABLE' })).toBe(true);
+    expect(isSessionDiscoveryFailed(record, { pro_one: 'SERVICE_UNAVAILABLE' })).toBe(true);
     expect(isSessionDiscoveryFailed(record, { ses_sibling: 'METADATA_READ_FAILED' })).toBe(false);
     expect(isSessionDiscoveryFailed(record, { wsp_sibling: 'SERVICE_UNAVAILABLE' })).toBe(false);
+    expect(isSessionDiscoveryFailed(record, { pro_sibling: 'SERVICE_UNAVAILABLE' })).toBe(false);
   });
 
   test('compares decimal uint64 revisions without numeric precision loss', () => {

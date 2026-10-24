@@ -187,6 +187,14 @@ describe('native discovery completeness scopes', () => {
     expect(useGlobalSessionsStore.getState().hasLoaded).toBe(false);
   });
 
+  test('a failed project preserves its records but not missing healthy-project siblings', async () => {
+    useGlobalSessionsStore.getState().upsertSessions([session('ses_failed'), session('ses_removed', { workspaceId: 'wsp_other', projectId: 'pro_other' })]);
+    request.resolve({ items: [], errors: { pro_repo: 'SERVICE_UNAVAILABLE' } });
+    await useGlobalSessionsStore.getState().loadSessions();
+    expect(ids(useGlobalSessionsStore.getState().activeSessions)).toEqual(['ses_failed']);
+    expect(useGlobalSessionsStore.getState().hasLoaded).toBe(false);
+  });
+
   test('directory entity errors preserve only failed sessions in that directory', async () => {
     const failed = session('ses_failed', { archivedAt: 4 });
     useGlobalSessionsStore.getState().applySnapshot([session('ses_removed')], [failed, session('ses_archived_removed', { archivedAt: 3 })]);
@@ -200,6 +208,19 @@ describe('native discovery completeness scopes', () => {
     await useGlobalSessionsStore.getState().refreshSessionsForDirectories(['repo', './repo', 'C:repo']);
     expect(resolveWorkspace.mock.calls).toHaveLength(0);
     expect(list.mock.calls).toHaveLength(0);
+  });
+
+  test('a project-scoped error preserves only that project while its sibling reconciles', async () => {
+    useGlobalSessionsStore.getState().applySnapshot([
+      session('ses_failed'),
+      session('ses_removed', { workspaceId: 'wsp_other', projectId: 'pro_other' }),
+    ], []);
+    list.mockImplementation(async (workspaceId): Promise<SessionDiscoveryResult> => {
+      if (workspaceId === 'wsp_repo') return { items: [], errors: { pro_repo: 'SERVICE_UNAVAILABLE' } };
+      return { items: [], errors: {} };
+    });
+    await useGlobalSessionsStore.getState().refreshSessionsForDirectories(['/repo', '/other']);
+    expect(ids(useGlobalSessionsStore.getState().activeSessions)).toEqual(['ses_failed']);
   });
 
   test('a failed directory does not block successful empty siblings', async () => {

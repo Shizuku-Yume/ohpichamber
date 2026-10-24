@@ -23,7 +23,9 @@ import type { AttachedFile, SessionWorktreeAttachment } from "@/stores/types/ses
 import type { WorktreeMetadata } from "@/types/worktree"
 import { runtimeFetch } from "@/lib/runtime-fetch"
 import type { PermissionMode } from "@/stores/utils/permissionAutoAccept"
+import { toast } from "sonner"
 import { canonicalClient } from "@/api/canonicalClient"
+import { canonicalProblemDetail } from "@/lib/problemMessage"
 import { useConfigStore } from "@/stores/useConfigStore"
 import { useProjectsStore } from "@/stores/useProjectsStore"
 import { useSessionDisplayStore } from "@/stores/useSessionDisplayStore"
@@ -989,6 +991,8 @@ const createSessionWithDraftLifecycle = async (
   } catch (error) {
     assertSendRuntime(runtimeKey)
     console.error("[session-ui-store] createSession failed", error)
+    const detail = canonicalProblemDetail(error instanceof Error ? error : null)
+    if (detail) toast.error(detail)
     return null
   }
 }

@@ -51,6 +51,7 @@ import {
     withdrawComposerInsets,
 } from '@/components/chat/composer/state/composerInsetReaders';
 import { SessionErrorNotice } from '@/components/chat/SessionErrorNotice';
+import { canonicalProblemDetail } from '@/lib/problemMessage';
 import ScrollToBottomButton from './components/ScrollToBottomButton';
 import { PromptNavigatorRail } from './components/PromptNavigatorRail';
 import { useAuthSessionStore } from '@/lib/runtime-auth-expiry';
@@ -891,6 +892,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
         currentSessionId ?? '',
         effectiveSessionDirectory,
     );
+    const sessionLoadProblem = canonicalProblemDetail(sessionMessageLoadState.error);
     const [firstVisiblePerformance] = React.useState(createFirstVisibleSessionPerformanceTracker);
 
     React.useEffect(() => {
@@ -1608,7 +1610,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                             <p className="typography-meta mt-1 text-muted-foreground">
                                 {authSessionExpired
                                     ? t('chat.container.sessionLoadError.authDescription')
-                                    : t('chat.container.sessionLoadError.description')}
+                                    : sessionLoadProblem ?? t('chat.container.sessionLoadError.description')}
                             </p>
                             {authSessionExpired ? (
                                 <Button variant="outline" size="sm" className="mt-4" onClick={() => useAuthSessionStore.getState().markReauthenticating()}>

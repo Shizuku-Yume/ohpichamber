@@ -748,7 +748,13 @@ export async function createSession(
     useSessionUIStore.getState().markSessionAsOpenChamberCreated(session.sessionId)
     return session
   } catch (error) {
-    if (!isStaleRuntime(runtimeKey)) console.error("[session-actions] createSession failed", error)
+    if (isStaleRuntime(runtimeKey)) return null
+    // A canonical refusal such as the Agent Service capacity outcome carries
+    // the sentence to show. Let the draft lifecycle report it instead of
+    // turning every refusal into the same silent null; ordinary transport
+    // failures keep the existing null contract.
+    if (error instanceof CanonicalApiError) throw error
+    console.error("[session-actions] createSession failed", error)
     return null
   }
 }

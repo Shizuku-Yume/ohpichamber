@@ -11,7 +11,7 @@ import type { JsonObject, ProblemCode } from '@openchamber/agent-contract';
 import type { NativeApprovalGrant } from '../native-policy-protocol.ts';
 
 export class WorkerOperationError extends Error {
-  constructor(readonly status: number, readonly code: ProblemCode, readonly details?: JsonObject) { super('SDK worker operation failed'); }
+  constructor(readonly status: number, readonly code: ProblemCode, readonly details?: JsonObject, message = 'SDK worker operation failed') { super(message); }
 }
 
 interface RestartReservation {
@@ -45,8 +45,17 @@ type WorkerEntry = WorkerInput & {
   pending: Map<string, { resolve: (result: WorkerOperationResult) => void; reject: (error: Error) => void }>;
   policySnapshot?: HostNativePolicySnapshot;
   environment: NodeJS.ProcessEnv;
+  lastActivityAt: number;
 };
 type ActionHandle = { entry: WorkerEntry; controller: AbortController };
+
+/** The Task17 measurement fixes these production values; tests may override them. */
+export const WORKER_CAPACITY_POLICY = {
+  maxActiveRootWorkers: 5,
+  idleEvictionTimeoutMs: 600_000,
+  reapIntervalMs: 30_000,
+} as const;
+export type WorkerCapacityPolicy = { readonly [K in keyof typeof WORKER_CAPACITY_POLICY]: number };
 
 export type WorkerDiagnostic = { level: 'error' | 'warn' | 'info'; rootSessionId: string; workerGeneration: string; message: string };
 
@@ -61,6 +70,9 @@ export interface WorkerRegistryOptions {
   consumeApprovalGrant?: (rootSessionId: string, generation: string, request: Extract<WorkerPolicyRequest, { type: 'tool' }>) => NativeApprovalGrant | undefined;
   prepareBootstrap?: (input: WorkerBootstrap) => Promise<WorkerBootstrap>;
   callbacks?: WorkerLifecycleCallbacks;
+  /** Absent only in registry tests that model no session activity. */
+  isSessionIdle?: (rootSessionId: string) => boolean;
+  capacityPolicy?: WorkerCapacityPolicy;
 }
 function defaultWorkerRuntime(): string {
   if (process.execPath.includes('bun')) return process.execPath;
@@ -134,43 +146,54 @@ async function waitWithin(operation: Promise<void>, milliseconds: number): Promi
 }
 
 export class WorkerRegistry {
-  private readonly entries = new Map<string, WorkerEntry>();
+  // Deliberately not named `entries`: test doubles extend this class and
+  // publish their own flat `entries` map, which must not shadow the live
+  // process entries the reaper and lifecycle paths own.
+  private readonly workerEntries = new Map<string, WorkerEntry>();
   private readonly mutations = new Map<string, Promise<void>>();
   private readonly actions = new Map<string, ActionHandle>();
   private readonly restartReservations = new Map<string, string>();
+  private readonly pendingRootAdmissions = new Set<string>();
+  private readonly capacityPolicy: WorkerCapacityPolicy;
+  private readonly reapTimer: NodeJS.Timeout;
+  private reaping = false;
   private closing = false;
 
-  constructor(private readonly options: WorkerRegistryOptions) {}
+  constructor(private readonly options: WorkerRegistryOptions) {
+    this.capacityPolicy = options.capacityPolicy ?? WORKER_CAPACITY_POLICY;
+    this.reapTimer = setInterval(() => { void this.reapIdleWorkers(); }, this.capacityPolicy.reapIntervalMs);
+    this.reapTimer.unref();
+  }
 
   list(): RegisteredWorkerInfo[] {
-    return [...this.entries.values()].map(entry => ({ ...entry.info, kind: entry.kind }));
+    return [...this.workerEntries.values()].map(entry => ({ ...entry.info, kind: entry.kind }));
   }
 
   info(rootSessionId: string): WorkerInfo | undefined {
-    const entry = this.entries.get(rootSessionId);
+    const entry = this.workerEntries.get(rootSessionId);
     return entry === undefined ? undefined : { ...entry.info };
   }
 
   bootstrap(rootSessionId: string): WorkerBootstrap | undefined {
-    const entry = this.entries.get(rootSessionId);
+    const entry = this.workerEntries.get(rootSessionId);
     return entry?.kind === 'session' ? structuredClone(entry.input) : undefined;
   }
   authorizationPolicy(workspaceId: string, agentDirectoryId: string, rootSessionId?: string): HostNativePolicySnapshot {
-    const candidates = rootSessionId === undefined ? [...this.entries.values()] : [this.entries.get(rootSessionId)];
+    const candidates = rootSessionId === undefined ? [...this.workerEntries.values()] : [this.workerEntries.get(rootSessionId)];
     const entry = candidates.find(candidate => candidate?.kind !== 'usage' && candidate?.input.workspaceId === workspaceId && candidate.input.agentDirectoryId === agentDirectoryId && candidate.child.connected && (candidate.info.state === 'starting' || candidate.info.state === 'ready') && candidate.policySnapshot !== undefined);
     if (!entry?.policySnapshot) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
     return structuredClone(entry.policySnapshot);
   }
 
   authorizationScope(rootSessionId: string): WorkerAuthorizationScope | undefined {
-    const entry = this.entries.get(rootSessionId);
+    const entry = this.workerEntries.get(rootSessionId);
     if (this.closing || !entry || entry.kind === 'usage' || !entry.child.connected || (entry.info.state !== 'starting' && entry.info.state !== 'ready')) return undefined;
     const { projectId, workspaceId, cwd, agentDirectory, agentDirectoryId } = entry.input;
     return { rootSessionId, workerGeneration: entry.info.workerGeneration, projectId, workspaceId, cwd, agentDirectory, agentDirectoryId };
   }
 
   reserveRestart(rootSessionId: string, generation: string): RestartReservation {
-    const entry = this.entries.get(rootSessionId);
+    const entry = this.workerEntries.get(rootSessionId);
     if (this.closing || !entry || entry.kind !== 'session' || entry.info.state !== 'ready' || !entry.child.connected)
       throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
     if (entry.info.workerGeneration !== generation) throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
@@ -183,10 +206,10 @@ export class WorkerRegistry {
         if (this.restartReservations.get(rootSessionId) === generation) this.restartReservations.delete(rootSessionId);
       },
       assertIdle: async () => {
-        if (this.entries.get(rootSessionId) !== entry || entry.info.state !== 'ready' || this.restartReservations.get(rootSessionId) !== generation)
+        if (this.workerEntries.get(rootSessionId) !== entry || entry.info.state !== 'ready' || this.restartReservations.get(rootSessionId) !== generation)
           throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
         const result = await this.dispatch(entry, { type: 'shell', operation: { type: 'snapshot' } });
-        if (this.entries.get(rootSessionId) !== entry || entry.info.state !== 'ready') throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
+        if (this.workerEntries.get(rootSessionId) !== entry || entry.info.state !== 'ready') throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
         if (result.type !== 'shell' || result.result.type !== 'snapshot') throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
         if (result.result.snapshot.running.length > 0 || [...this.actions.values()].some(action => action.entry === entry))
           throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
@@ -196,7 +219,7 @@ export class WorkerRegistry {
 
   async request(rootSessionId: string, operation: WorkerOperation, expectedGeneration?: string): Promise<WorkerOperationResult> {
     const parsed = WorkerOperationSchema.parse(operation);
-    const entry = this.entries.get(rootSessionId);
+    const entry = this.workerEntries.get(rootSessionId);
     if (entry && this.restartReservations.get(rootSessionId) === entry.info.workerGeneration)
       throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
     if (entry && expectedGeneration !== undefined && expectedGeneration !== entry.info.workerGeneration) throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
@@ -206,6 +229,7 @@ export class WorkerRegistry {
 
   private dispatch(entry: WorkerEntry, operation: WorkerOperation): Promise<WorkerOperationResult> {
     const commandId = randomUUID();
+    entry.lastActivityAt = Date.now();
     const result = new Promise<WorkerOperationResult>((resolve, reject) => entry.pending.set(commandId, { resolve, reject }));
     entry.child.send({ type: 'operation', workerGeneration: entry.info.workerGeneration, commandId, operation }, error => {
       if (!error) return;
@@ -214,10 +238,64 @@ export class WorkerRegistry {
     return result;
   }
 
+  /**
+   * A root may start only when fewer than the measured cap of session workers
+   * are live. The synchronous reservation closes the gap between this check and
+   * the asynchronous launch, so simultaneous opens cannot oversubscribe it.
+   * Stateless catalog workers are per-workspace overhead and never count.
+   */
+  private reserveSessionCapacity(rootSessionId: string): void {
+    const active = new Set<string>();
+    for (const entry of this.workerEntries.values()) {
+      if (entry.kind === 'session' && entry.info.rootSessionId !== rootSessionId
+        && entry.child.exitCode === null && entry.child.signalCode === null) active.add(entry.info.rootSessionId);
+    }
+    for (const pending of this.pendingRootAdmissions) if (pending !== rootSessionId) active.add(pending);
+    const maxActiveRootWorkers = this.capacityPolicy.maxActiveRootWorkers;
+    if (active.size >= maxActiveRootWorkers) {
+      throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', {
+        reason: 'worker_capacity', activeRootWorkers: active.size, maxActiveRootWorkers,
+      }, `Session capacity is full (${active.size} of ${maxActiveRootWorkers} active). Close another session or try again later.`);
+    }
+    this.pendingRootAdmissions.add(rootSessionId);
+  }
+
+  private async reapIdleWorkers(): Promise<void> {
+    if (this.closing || this.reaping) return;
+    this.reaping = true;
+    try {
+      const now = Date.now();
+      const candidates = [...this.workerEntries.values()].filter(entry => entry.kind === 'session'
+        && entry.info.state === 'ready' && entry.child.connected
+        && now - entry.lastActivityAt >= this.capacityPolicy.idleEvictionTimeoutMs);
+      for (const candidate of candidates) {
+        try { await this.evictIfIdle(candidate); } catch { /* one failed candidate must not stop the scan */ }
+      }
+    } finally { this.reaping = false; }
+  }
+
+  private async evictIfIdle(candidate: WorkerEntry): Promise<void> {
+    if (candidate.kind !== 'session' || this.closing || !this.sessionIsIdle(candidate.info.rootSessionId)) return;
+    await this.withRoot(candidate.info.rootSessionId, async () => {
+      const entry = this.workerEntries.get(candidate.info.rootSessionId);
+      if (entry !== candidate || entry.kind !== 'session' || this.closing || entry.info.state !== 'ready' || !entry.child.connected) return;
+      if (Date.now() - entry.lastActivityAt < this.capacityPolicy.idleEvictionTimeoutMs) return;
+      if (this.restartReservations.has(entry.info.rootSessionId) || entry.pending.size > 0
+        || [...this.actions.values()].some(action => action.entry === entry)) return;
+      if (!this.sessionIsIdle(entry.info.rootSessionId)) return;
+      await this.stopEntry(entry);
+    });
+  }
+
+  private sessionIsIdle(rootSessionId: string): boolean {
+    try { return this.options.isSessionIdle?.(rootSessionId) ?? true; }
+    catch { return false; }
+  }
+
   async start(input: WorkerBootstrap, replace = false, approvalPolicies?: WorkerApprovalPolicy[], restartGeneration?: string): Promise<WorkerInfo> {
     return this.withRoot(input.rootSessionId, async () => {
       if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
-      const previous = this.entries.get(input.rootSessionId);
+      const previous = this.workerEntries.get(input.rootSessionId);
       const reserved = this.restartReservations.get(input.rootSessionId);
       if (reserved !== undefined && (restartGeneration !== reserved || previous?.info.workerGeneration !== reserved))
         throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
@@ -227,27 +305,32 @@ export class WorkerRegistry {
         throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
       if (previous && previous.kind !== 'session') throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
       if (previous?.info.state === 'ready' && !replace) return { ...previous.info };
-      if (previous) {
-        const clean = await this.stopEntry(previous);
-        if (restartGeneration !== undefined && !clean) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
+      this.reserveSessionCapacity(input.rootSessionId);
+      try {
+        if (previous) {
+          const clean = await this.stopEntry(previous);
+          if (restartGeneration !== undefined && !clean) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
+        }
+        if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+        const prepared = WorkerBootstrapSchema.parse(this.options.prepareBootstrap ? await this.options.prepareBootstrap(input) : input);
+        if (prepared.rootSessionId !== input.rootSessionId) throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
+        if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+        return await this.launch({ kind: 'session', input: prepared }, approvalPolicies);
+      } finally {
+        this.pendingRootAdmissions.delete(input.rootSessionId);
       }
-      if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
-      const prepared = WorkerBootstrapSchema.parse(this.options.prepareBootstrap ? await this.options.prepareBootstrap(input) : input);
-      if (prepared.rootSessionId !== input.rootSessionId) throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
-      if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
-      return this.launch({ kind: 'session', input: prepared }, approvalPolicies);
     });
   }
 
   async startStateless(input: StatelessWorkerInput, replace = false): Promise<WorkerInfo> {
     const environment = this.workerEnvironment(input);
-    const current = this.entries.get(input.rootSessionId);
+    const current = this.workerEntries.get(input.rootSessionId);
     if (current?.kind === 'stateless' && this.mutations.has(input.rootSessionId)
       && (replace || !this.sameStatelessIdentity(current, input, environment)))
       throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
     return this.withRoot(input.rootSessionId, async () => {
       if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
-      const previous = this.entries.get(input.rootSessionId);
+      const previous = this.workerEntries.get(input.rootSessionId);
       if (previous && previous.kind !== 'stateless') throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
       if (previous?.info.state === 'ready' && !replace && this.sameStatelessIdentity(previous, input, environment)) return { ...previous.info };
       if (previous) {
@@ -276,7 +359,7 @@ export class WorkerRegistry {
   async startUsage(input: StatelessWorkerInput): Promise<WorkerInfo> {
     return this.withRoot(input.rootSessionId, async () => {
       if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
-      const previous = this.entries.get(input.rootSessionId);
+      const previous = this.workerEntries.get(input.rootSessionId);
       if (previous && previous.kind !== 'usage') throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
       if (previous?.info.state === 'ready') return { ...previous.info };
       if (previous) await this.stopEntry(previous);
@@ -287,7 +370,7 @@ export class WorkerRegistry {
 
   async stop(rootSessionId: string): Promise<boolean> {
     return this.withRoot(rootSessionId, async () => {
-      const entry = this.entries.get(rootSessionId);
+      const entry = this.workerEntries.get(rootSessionId);
       if (entry && this.restartReservations.get(rootSessionId) === entry.info.workerGeneration)
         throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
       return entry ? this.stopEntry(entry) : true;
@@ -295,8 +378,9 @@ export class WorkerRegistry {
   }
 
   async close(): Promise<void> {
+    clearInterval(this.reapTimer);
     this.closing = true;
-    await Promise.all([...this.entries.values()].map(entry => this.stopEntry(entry)));
+    await Promise.all([...this.workerEntries.values()].map(entry => this.stopEntry(entry)));
     await Promise.all(this.mutations.values());
   }
 
@@ -384,13 +468,15 @@ export class WorkerRegistry {
       exited: exited.promise,
       pending: new Map(),
       environment,
+      lastActivityAt: Date.now(),
     };
-    this.entries.set(input.rootSessionId, entry);
+    this.workerEntries.set(input.rootSessionId, entry);
     child.on('message', raw => {
       const reply = WorkerReplySchema.safeParse(raw);
       if (!reply.success || reply.data.workerGeneration !== workerGeneration) return;
-      if (this.entries.get(input.rootSessionId) !== entry) return;
+      if (this.workerEntries.get(input.rootSessionId) !== entry) return;
       if (entry.info.state !== 'starting' && entry.info.state !== 'ready') return;
+      entry.lastActivityAt = Date.now();
       if (reply.data.type === 'ready') {
         if (entry.info.state !== 'starting') return;
         entry.info.state = 'ready';
@@ -421,15 +507,15 @@ export class WorkerRegistry {
         const request = reply.data.request;
         void (async () => {
           const descriptor = await describeNativeOperation(input.cwd, request, reply.data.type === 'policy.request' ? reply.data.nativeContext : undefined);
-          if (this.entries.get(input.rootSessionId) !== entry || entry.info.workerGeneration !== workerGeneration) return { allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 } as const;
+          if (this.workerEntries.get(input.rootSessionId) !== entry || entry.info.workerGeneration !== workerGeneration) return { allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 } as const;
           if (descriptor && request.type === 'tool' && request.toolName === 'bash' && request.approvalId && request.toolCallId) {
             descriptor.approvalGrant = this.options.consumeApprovalGrant?.(input.rootSessionId, workerGeneration, request);
           }
           return check ? check(input.rootSessionId, request, descriptor) : { allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 } as const;
         })().then(result => {
-          if (this.entries.get(input.rootSessionId) === entry && entry.info.workerGeneration === workerGeneration && (entry.info.state === 'starting' || entry.info.state === 'ready') && entry.child.connected) entry.child.send({ type: 'policy.result', workerGeneration, requestId, result: WorkerPolicyResultSchema.parse(result) });
+          if (this.workerEntries.get(input.rootSessionId) === entry && entry.info.workerGeneration === workerGeneration && (entry.info.state === 'starting' || entry.info.state === 'ready') && entry.child.connected) entry.child.send({ type: 'policy.result', workerGeneration, requestId, result: WorkerPolicyResultSchema.parse(result) });
         }).catch(() => {
-          if (this.entries.get(input.rootSessionId) === entry && entry.info.workerGeneration === workerGeneration && (entry.info.state === 'starting' || entry.info.state === 'ready') && entry.child.connected) entry.child.send({ type: 'policy.result', workerGeneration, requestId, result: { allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 } });
+          if (this.workerEntries.get(input.rootSessionId) === entry && entry.info.workerGeneration === workerGeneration && (entry.info.state === 'starting' || entry.info.state === 'ready') && entry.child.connected) entry.child.send({ type: 'policy.result', workerGeneration, requestId, result: { allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 } });
         });
       } else if (reply.data.type === 'action.cancel') {
         const handle = this.actions.get(reply.data.requestId);
@@ -442,9 +528,9 @@ export class WorkerRegistry {
         const invoke = this.options.invokeHostAction;
         void (invoke ? invoke(input.rootSessionId, request, handle.controller.signal) : Promise.resolve({ ok: false, code: 'SERVICE_UNAVAILABLE', status: 503 } as const)).then(result => {
           if (this.actions.get(requestId) !== handle || handle.controller.signal.aborted) return;
-          if (this.entries.get(input.rootSessionId) === entry && entry.child.connected && entry.info.state === 'ready') entry.child.send({ type: 'action.result', workerGeneration, requestId, result });
+          if (this.workerEntries.get(input.rootSessionId) === entry && entry.child.connected && entry.info.state === 'ready') entry.child.send({ type: 'action.result', workerGeneration, requestId, result });
         }).catch(() => {
-          if (this.actions.get(requestId) === handle && this.entries.get(input.rootSessionId) === entry && entry.child.connected) entry.child.send({ type: 'action.result', workerGeneration, requestId, result: { ok: false, code: 'SERVICE_UNAVAILABLE', status: 503 } });
+          if (this.actions.get(requestId) === handle && this.workerEntries.get(input.rootSessionId) === entry && entry.child.connected) entry.child.send({ type: 'action.result', workerGeneration, requestId, result: { ok: false, code: 'SERVICE_UNAVAILABLE', status: 503 } });
         }).finally(() => { if (this.actions.get(requestId) === handle) this.actions.delete(requestId); });
       } else if (reply.data.type === 'result') {
         const pending = entry.pending.get(reply.data.commandId);
@@ -468,7 +554,7 @@ export class WorkerRegistry {
       if (!child.connected) ready.reject(new WorkerOperationError(503, 'SERVICE_UNAVAILABLE'));
       else child.send(command, error => { if (error) ready.reject(error); });
       await waitWithin(entry.ready, this.options.startupTimeoutMs ?? 15_000);
-      if (this.closing || this.entries.get(input.rootSessionId) !== entry || entry.info.state !== 'ready' || !child.connected) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+      if (this.closing || this.workerEntries.get(input.rootSessionId) !== entry || entry.info.state !== 'ready' || !child.connected) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
       return { ...entry.info };
     } catch (error) {
       const code = error instanceof WorkerOperationError ? error.code : 'WORKER_INIT_FAILED';
@@ -497,7 +583,7 @@ export class WorkerRegistry {
       for (const pending of entry.pending.values()) pending.reject(new Error('SDK worker is stopping'));
       entry.pending.clear();
       entry.info.state = 'stopped';
-      if (this.entries.get(entry.info.rootSessionId) === entry) this.entries.delete(entry.info.rootSessionId);
+      if (this.workerEntries.get(entry.info.rootSessionId) === entry) this.workerEntries.delete(entry.info.rootSessionId);
       return entry.child.exitCode === 0;
     })();
     return entry.stopping;

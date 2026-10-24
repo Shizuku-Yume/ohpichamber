@@ -20,6 +20,12 @@ Scope mismatches keep the existing refusals: the service compares the request wi
 
 Native JSONL storage appends timestamped `custom` records when a runtime opens or disposes (`ohpichamber.private-roots.v1`, `session_exit`), so whole-file byte equality is not a stable transcript invariant. Session tests compare the parsed `message` records and the journal/history projection instead; a live reopen must preserve them exactly.
 
+## Worker capacity and idle eviction
+
+`WorkerRegistry` counts only `kind: 'session'` roots against the measured Task17 cap (`WORKER_CAPACITY_POLICY`: 5 active root workers, 600000 ms idle timeout, 30000 ms reap interval). Stateless catalog and usage workers are workspace overhead and never consume a root slot. A new or replaced root reserves its slot synchronously before the asynchronous bootstrap, so concurrent opens cannot oversubscribe; a root beyond the cap receives HTTP 503 `SERVICE_UNAVAILABLE` with `details.reason: "worker_capacity"` and the current/maximum counts, while existing workers stay untouched. An existing root at the cap may still reopen, restart or receive work.
+
+The reaper considers a session worker idle when its last worker message or dispatched operation is older than the timeout. Eviction also requires no active run or pending prompt (`SessionRegistry.isIdleForEviction()`), no pending worker operation or Host action, no unresolved approval or question, no lifecycle mutation or opening, and no restart reservation (`WorkerRegistry`). Eviction reuses the graceful `stopEntry` path; the root becomes `unavailable` and reopens cold from its persisted native transcript. Active turns and pending approvals are never evicted. The reaper timer is unreferenced, so it cannot keep the service process alive.
+
 ## Explicit plugin application
 
 `POST /api/agent/v1/workspaces/:workspaceId/plugins/apply` with `strategy: "restart-idle-sessions"` applies the persisted plugin revision without incrementing it. The owner-wide operation captures current session generations, then `SessionRegistry.restartIdleSessions()` reserves every selected root before any retirement. Active runs, pending prompts, controls, interactions, child-index writes, worker commands, Host actions, lifecycle mutations and running background Shell jobs refuse the whole preflight without stopping any selected worker. Reservations block competing commands until the operation settles.

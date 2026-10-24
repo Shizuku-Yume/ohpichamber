@@ -740,6 +740,23 @@ export class SessionRegistry {
     if (result.type !== 'history') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
     return result.history;
   }
+  /**
+   * True when stopping this root's worker loses no turn, pending request,
+   * subagent write or in-flight session operation. The WorkerRegistry owns the
+   * process-level checks; this half owns session state.
+   */
+  isIdleForEviction(sessionId: string): boolean {
+    if (this.closing || this.deleting.has(sessionId) || this.openings.has(sessionId)
+      || this.controls.has(sessionId) || this.pendingRuns.has(sessionId)
+      || this.subagentLifecycleTails.has(sessionId)) return false;
+    const entry = this.entries.get(sessionId);
+    if (!entry || entry.state === 'unloaded') return true;
+    if (entry.state === 'opening') return false;
+    const runtime = entry.opened.journal.runtime();
+    if (runtime.runtimeStatus !== 'idle' || runtime.activeRunId !== null) return false;
+    return this.interactions.approvals(sessionId).length === 0 && this.interactions.questions(sessionId).length === 0;
+  }
+
   approvals(sessionId: string) { this.get(sessionId); return this.interactions.approvals(sessionId); }
 
   questions(sessionId: string) { this.get(sessionId); return this.interactions.questions(sessionId); }

@@ -27,7 +27,7 @@ import { SessionRegistry, type NativeArchiveImported, type NativeArchiveInventor
 import type { ApprovalPolicyCommit, ApprovalPolicyLoad } from '../interaction/manager.ts';
 import { SessionReferenceError } from '../sessions/references.ts';
 import { ArchiveImportRequestSchema } from '../sessions/archive.ts';
-import { WorkerOperationError, WorkerRegistry, type RegisteredWorkerInfo, type WorkerDiagnostic } from './workers.ts';
+import { WorkerOperationError, WorkerRegistry, type RegisteredWorkerInfo, type WorkerDiagnostic, type WorkerCapacityPolicy } from './workers.ts';
 import { deliverSessionStream } from './event-stream.ts';
 import { CatalogCoordinator, CatalogCoordinatorError, type CatalogAdmission, type CatalogBootstrap } from './catalog.ts';
 import { WorkspaceCatalogs } from './workspaces.ts';
@@ -53,6 +53,8 @@ interface ServiceOptions {
   invokeHostAction?: (rootSessionId: string, request: HostActionRequest, signal: AbortSignal) => Promise<HostActionResult>;
   hostSkillSource: (operation: HostSkillSourceOperation) => Promise<HostSkillSourceResult>;
   onDiagnostic?: (entry: WorkerDiagnostic) => void;
+  /** Test seam; production uses the measured Task17 policy in WorkerRegistry. */
+  workerCapacityPolicy?: WorkerCapacityPolicy;
 }
 const InternalSecretSchema = z.string().regex(/^[a-f0-9]{64}$/i);
 const HostSkillSourcePublicationSchema = z.strictObject({
@@ -142,7 +144,10 @@ export class AgentService {
   private stopping: Promise<void> | undefined;
   constructor(private readonly options: ServiceOptions) {
     this.secret = Buffer.from(InternalSecretSchema.parse(options.internalSecret), 'hex');
+    let sessions: SessionRegistry | undefined;
     this.workers = new WorkerRegistry({ workerEntrypoint: options.workerEntrypoint, workerRuntime: options.workerRuntime, onDiagnostic: options.onDiagnostic, policyCheck: options.policyCheck, invokeHostAction: options.invokeHostAction,
+      capacityPolicy: options.workerCapacityPolicy,
+      isSessionIdle: rootSessionId => sessions?.isIdleForEviction(rootSessionId) ?? false,
       consumeApprovalGrant: (...args) => this.sessions.consumeApprovalGrant(...args),
       prepareBootstrap: async input => {
         this.sessions.assertBootstrapWritable(input);
@@ -179,6 +184,7 @@ export class AgentService {
       },
     });
     this.sessions = new SessionRegistry(options.stateDirectory, this.workers, options.approvalPolicyCommit, options.approvalPolicyLoad);
+    sessions = this.sessions;
     this.webSearch = new WebSearchCoordinator(this.workspaceCatalogs, this.workers);
     this.workspaceRoutes = new WorkspaceRoutes(this.workspaceCatalogs, this.workers, this.catalog,
       this.sessions, options.stateDirectory, this.webSearch,

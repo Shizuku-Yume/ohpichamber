@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test"
 import type { Session, SessionCreateAck } from "@openchamber/agent-contract"
-import { canonicalClient } from "@/api/canonicalClient"
+import { canonicalClient, CanonicalApiError } from "@/api/canonicalClient"
 import { getRuntimeApiBaseUrl, getRuntimeKey, switchRuntimeEndpoint } from "@/lib/runtime-switch"
 import { resetWorkspaceDirectories } from "@/stores/globalSessions"
 import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
@@ -101,6 +101,18 @@ describe("native confirmed session creation", () => {
     expect(await createSession(undefined, directory)).toBeNull()
     expect(useSessionUIStore.getState().currentSessionId).toBeNull()
     expect(childStores.getChild(directory)).toBeUndefined()
+    expect(requests).toBe(0)
+  })
+
+  test("a canonical capacity refusal reaches the draft lifecycle with its Problem Details sentence", async () => {
+    const refusal = new CanonicalApiError({
+      type: "urn:ohpichamber:problem:SERVICE_UNAVAILABLE", title: "Agent Service unavailable", status: 503,
+      detail: "Session capacity is full (5 of 5 active). Close another session or try again later.",
+      code: "SERVICE_UNAVAILABLE", retryable: true,
+    })
+    spyOn(canonicalClient, "createSession").mockRejectedValue(refusal)
+    expect(await createSession(undefined, directory).catch(error => error)).toBe(refusal)
+    expect(useSessionUIStore.getState().currentSessionId).toBeNull()
     expect(requests).toBe(0)
   })
 

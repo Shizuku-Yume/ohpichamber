@@ -96,7 +96,7 @@ describe('connectHost', () => {
     expect(frame.posted.map((message) => message.type)).toEqual(['hello', 'request']);
     const request = frame.posted.find((message) => message.type === 'request');
     if (!request || request.type !== 'request') throw new Error('Expected queued request');
-    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'result', id: request.id, ok: true, payload: { status: 204, body: '' } });
+    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'result', id: request.id, ok: true, payload: { status: 204, body: '' } });
     await expect(pending).resolves.toEqual({ status: 204, body: '' });
     host.dispose();
   });
@@ -133,9 +133,9 @@ describe('connectHost', () => {
     const host = connectHost({ target: frame, acceptSource: () => true });
     const events: string[] = [];
     host.onPopoverClosed((event) => events.push(`${event.id}:${event.reason}`));
-    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'popover-closed', payload: { id: 'preview-1', reason: 'escape' } });
+    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'popover-closed', payload: { id: 'preview-1', reason: 'escape' } });
     host.dispose();
-    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'popover-closed', payload: { id: 'preview-1', reason: 'closed' } });
+    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'popover-closed', payload: { id: 'preview-1', reason: 'closed' } });
     expect(events).toEqual(['preview-1:escape']);
   });
   test('toast options are sent as data and resolve on display acknowledgement', async () => {
@@ -146,7 +146,7 @@ describe('connectHost', () => {
     const request = frame.posted.at(-1);
     if (!request || request.type !== 'toast') throw new Error('Expected toast');
     expect(request.payload).toEqual({ kind: 'success', message: 'Result', copy: { text: '  original\n' }, dismiss: true, persistent: true });
-    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'result', id: request.id, ok: true });
+    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'result', id: request.id, ok: true });
     await pending;
     host.dispose();
   });
@@ -173,14 +173,14 @@ describe('connectHost', () => {
     const legacyRequest = frame.posted.at(-1);
     if (!legacyRequest || legacyRequest.type !== 'storage') throw new Error('Expected storage request');
     expect(legacyRequest.payload).toEqual({ op: 'get', key: 'saved' });
-    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'result', id: legacyRequest.id, ok: true, payload: { storage: true, op: 'get', found: false } });
+    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'result', id: legacyRequest.id, ok: true, payload: { storage: true, op: 'get', found: false } });
     await expect(legacy).resolves.toBeUndefined();
     const explicitInstance = host.storage.keys({ scope: 'instance' });
     await frame.flush();
     const instanceRequest = frame.posted.at(-1);
     if (!instanceRequest || instanceRequest.type !== 'storage') throw new Error('Expected storage request');
     expect(instanceRequest.payload).toEqual({ op: 'keys' });
-    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'result', id: instanceRequest.id, ok: true, payload: { storage: true, op: 'keys', keys: [] } });
+    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'result', id: instanceRequest.id, ok: true, payload: { storage: true, op: 'keys', keys: [] } });
     await expect(explicitInstance).resolves.toEqual([]);
     await expect(host.storage.get('saved', { scope: 'device' })).rejects.toMatchObject({ code: 'UNSUPPORTED' });
     expect(frame.posted.filter((message) => message.type === 'storage')).toHaveLength(2);
@@ -199,7 +199,7 @@ describe('connectHost', () => {
     const request = frame.posted.at(-1);
     if (!request || request.type !== 'storage') throw new Error('Expected storage request');
     expect(request.payload).toEqual({ op: 'set', key: 'saved', value: { enabled: true }, scope: 'device' });
-    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'result', id: request.id, ok: true, payload: { storage: true, op: 'set' } });
+    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'result', id: request.id, ok: true, payload: { storage: true, op: 'set' } });
     await pending;
     host.dispose();
   });
@@ -219,11 +219,11 @@ describe('connectHost', () => {
     const request = frame.posted.at(-1);
     if (!request || request.type !== 'status-controls') throw new Error('Expected status controls request');
     expect(request.payload).toEqual({ controls: [{ kind: 'button', id: 'refresh', label: 'Refresh' }] });
-    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'result', id: request.id, ok: true });
+    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'result', id: request.id, ok: true });
     await pending;
-    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'status-control-event', payload: { id: 'refresh' } });
+    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'status-control-event', payload: { id: 'refresh' } });
     remove();
-    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'status-control-event', payload: { id: 'refresh' } });
+    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'status-control-event', payload: { id: 'refresh' } });
     expect(events).toEqual(['refresh']);
     host.dispose();
   });
@@ -250,7 +250,7 @@ describe('connectHost', () => {
   });
 
   const action: HostMessage = {
-    channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'action', id: 'action-1',
+    channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'action', id: 'action-1',
     payload: { kind: 'message', action: 'count', sessionId: 's1', sessionTitle: 'Session', directory: '/repo', messageId: 'm1', role: 'assistant', text: 'Hello' },
   };
 
@@ -266,9 +266,9 @@ describe('connectHost', () => {
     const toast = frame.posted.find((message) => message.type === 'toast');
     if (!toast || toast.type !== 'toast') throw new Error('Expected toast');
     expect(frame.posted.some((message) => message.type === 'action-result')).toBe(false);
-    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'result', id: toast.id, ok: true });
+    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'result', id: toast.id, ok: true });
     await frame.flush();
-    expect(frame.posted.at(-1)).toEqual({ channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'action-result', id: 'action-1', payload: { ok: true } });
+    expect(frame.posted.at(-1)).toEqual({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'action-result', id: 'action-1', payload: { ok: true } });
     host.dispose();
   });
 
@@ -313,9 +313,9 @@ describe('connectHost', () => {
     await guest.flush();
     const call = guest.posted.at(-1);
     if (call?.type !== 'workspace-subscribe') throw new Error('Expected subscription');
-    await guest.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'workspace',
+    await guest.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'workspace',
       payload: { subscriptionId: call.payload.subscriptionId, snapshot: { kind: 'projects', state: 'loading', projects: [] } } });
-    await guest.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'result', id: call.id, ok: true });
+    await guest.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'result', id: call.id, ok: true });
     const stop = await subscription;
     expect(seen).toEqual(['loading']);
     stop();
@@ -328,7 +328,7 @@ describe('connectHost', () => {
     await guest.flush();
     const next = guest.posted.at(-1);
     if (next?.type !== 'workspace-subscribe') throw new Error('Expected subscription');
-    await guest.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'result', id: next.id, ok: false, code: 'NOT_GRANTED', error: 'Not allowed' });
+    await guest.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'result', id: next.id, ok: false, code: 'NOT_GRANTED', error: 'Not allowed' });
     await refusedResult;
     host.dispose();
     await expect(host.listProjects()).rejects.toMatchObject({ code: 'HOST_UNAVAILABLE' });
@@ -446,7 +446,7 @@ describe('connectHost', () => {
     });
     await guest.receive({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: 1,
+      v: OPENCHAMBER_SDK_API_VERSION,
       type: 'session',
       payload: { session: { id: 'ses-2', title: 'Later' } },
     });
@@ -502,13 +502,13 @@ describe('connectHost', () => {
     await guest.receive(ready);
     await guest.receive({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: 1,
+      v: OPENCHAMBER_SDK_API_VERSION,
       type: 'directory',
       payload: { directory: '/other' },
     });
     await guest.receive({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: 1,
+      v: OPENCHAMBER_SDK_API_VERSION,
       type: 'session',
       payload: { session: { id: 'ses-9', title: 'Later' } },
     });
@@ -539,7 +539,7 @@ describe('connectHost', () => {
 
     await guest.receive({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: 1,
+      v: OPENCHAMBER_SDK_API_VERSION,
       type: 'session-lifecycle',
       payload: { sessionId: 'ses-1', phase: 'started' },
     });
@@ -575,7 +575,7 @@ describe('connectHost', () => {
 
     await guest.receive({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: 1,
+      v: OPENCHAMBER_SDK_API_VERSION,
       type: 'result',
       id: request.id,
       ok: true,
@@ -613,8 +613,8 @@ describe('connectHost', () => {
       throw new Error('expected clipboard-write and compose');
     }
 
-    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'result', id: writeRequest.id, ok: true });
-    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'result', id: composeRequest.id, ok: true });
+    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'result', id: writeRequest.id, ok: true });
+    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'result', id: composeRequest.id, ok: true });
     await Promise.all([write, compose]);
     host.dispose();
   });
@@ -636,8 +636,8 @@ describe('connectHost', () => {
       throw new Error('expected attach and close');
     }
 
-    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'result', id: attachRequest.id, ok: true });
-    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'result', id: closeRequest.id, ok: true });
+    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'result', id: attachRequest.id, ok: true });
+    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'result', id: closeRequest.id, ok: true });
     await Promise.all([attach, close]);
     host.dispose();
   });
@@ -658,7 +658,7 @@ describe('connectHost', () => {
       throw new Error('expected attach');
     }
     expect(attachRequest.payload.title).toHaveLength(GUEST_ATTACH_TITLE_MAX);
-    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'result', id: attachRequest.id, ok: true });
+    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'result', id: attachRequest.id, ok: true });
     await attach;
     host.dispose();
   });
@@ -685,7 +685,7 @@ describe('connectHost', () => {
       author: 'ada',
       branches: { head: 'feature', base: 'main' },
     });
-    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'result', id: attachRequest.id, ok: true });
+    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'result', id: attachRequest.id, ok: true });
     await attach;
     host.dispose();
   });
@@ -709,7 +709,7 @@ describe('connectHost', () => {
     expect(posted.payload.worktree).toBe(true);
     await frame.receive({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: 1,
+      v: OPENCHAMBER_SDK_API_VERSION,
       type: 'result',
       id: posted.id,
       ok: true,
@@ -738,13 +738,13 @@ describe('connectHost', () => {
     expect(promptRequest.payload).toEqual({ text: 'Fix the login', send: true });
     await frame.receive({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: 1,
+      v: OPENCHAMBER_SDK_API_VERSION,
       type: 'result',
       id: promptRequest.id,
       ok: true,
       payload: { sent: 'sent' },
     });
-    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'result', id: linkRequest.id, ok: true });
+    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'result', id: linkRequest.id, ok: true });
     expect(await prompt).toEqual({ sent: 'sent' });
     await link;
     host.dispose();
@@ -764,7 +764,7 @@ describe('connectHost', () => {
     }
     await frame.receive({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: 1,
+      v: OPENCHAMBER_SDK_API_VERSION,
       type: 'result',
       id: posted.id,
       ok: false,
@@ -811,7 +811,7 @@ describe('connectHost', () => {
     }
     await frame.receive({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: 1,
+      v: OPENCHAMBER_SDK_API_VERSION,
       type: 'result',
       id: posted.id,
       ok: true,
@@ -833,7 +833,7 @@ describe('connectHost', () => {
       if (posted?.type !== type || !('id' in posted)) {
         throw new Error(`expected ${type}`);
       }
-      await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'result', id: posted.id, ok: true, payload });
+      await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'result', id: posted.id, ok: true, payload });
       return posted;
     };
     const read = host.readFile('README.md');
@@ -870,7 +870,7 @@ describe('connectHost', () => {
       if (posted?.type !== 'generate') {
         throw new Error('expected generate');
       }
-      await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'result', id: posted.id, ok: true, payload });
+      await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'result', id: posted.id, ok: true, payload });
       return posted;
     };
     const generated = host.generate({ prompt: '  Summarize this  ', system: 'Be brief', maxOutputTokens: 99_999 });
@@ -924,7 +924,7 @@ describe('connectHost', () => {
     }
     await frame.receive({
       channel: OPENCHAMBER_SDK_CHANNEL,
-      v: 1,
+      v: OPENCHAMBER_SDK_API_VERSION,
       type: 'result',
       id: posted.id,
       ok: false,
@@ -1063,14 +1063,14 @@ describe('connectHost resolve and badge', () => {
     const call = frame.posted.at(-1);
     if (call?.type !== 'shells-subscribe') throw new Error('Expected subscription');
     expect(call.payload.scope).toEqual({ kind: 'session', sessionId: 'ses_1' });
-    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'shells', payload: { subscriptionId: call.payload.subscriptionId, snapshot: { kind: 'shells', scope: { kind: 'session', sessionId: 'ses_1' }, shells: [], ended: [] } } });
-    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'result', id: call.id, ok: true });
+    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'shells', payload: { subscriptionId: call.payload.subscriptionId, snapshot: { kind: 'shells', scope: { kind: 'session', sessionId: 'ses_1' }, shells: [], ended: [] } } });
+    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'result', id: call.id, ok: true });
     const stop = await subscription;
     expect(seen).toEqual(['session']);
     stop();
     await frame.flush();
     expect(frame.posted.at(-1)?.type).toBe('shells-unsubscribe');
-    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'shells', payload: { subscriptionId: call.payload.subscriptionId, snapshot: { kind: 'shells', scope: { kind: 'session', sessionId: 'ses_1' }, shells: [], ended: [] } } });
+    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'shells', payload: { subscriptionId: call.payload.subscriptionId, snapshot: { kind: 'shells', scope: { kind: 'session', sessionId: 'ses_1' }, shells: [], ended: [] } } });
     expect(seen).toEqual(['session']);
 
     const outputPromise = host.readShellOutput('sh_1', { cursor: 10, tailBytes: 1024 });
@@ -1078,14 +1078,14 @@ describe('connectHost resolve and badge', () => {
     const outputCall = frame.posted.at(-1);
     if (outputCall?.type !== 'shell-output') throw new Error('Expected output call');
     expect(outputCall.payload).toEqual({ shellId: 'sh_1', cursor: 10, tailBytes: 1024 });
-    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'result', id: outputCall.id, ok: true, payload: { output: 'tick', cursor: 14, skipped: false } });
+    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'result', id: outputCall.id, ok: true, payload: { output: 'tick', cursor: 14, skipped: false } });
     await expect(outputPromise).resolves.toEqual({ output: 'tick', cursor: 14, skipped: false });
 
     const stopPromise = host.stopShell('sh_1');
     await frame.flush();
     const stopCall = frame.posted.at(-1);
     if (stopCall?.type !== 'shell-stop') throw new Error('Expected stop call');
-    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'result', id: stopCall.id, ok: true, payload: { stopped: true } });
+    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'result', id: stopCall.id, ok: true, payload: { stopped: true } });
     await expect(stopPromise).resolves.toEqual({ stopped: true });
 
     await expect(host.readShellOutput('')).rejects.toMatchObject({ code: 'HOST_REJECTED' });
@@ -1100,14 +1100,14 @@ describe('connectHost resolve and badge', () => {
     const globalCall = frame.posted.at(-1);
     if (globalCall?.type !== 'shells-subscribe') throw new Error('Expected subscription');
     expect(globalCall.payload.scope).toEqual({ kind: 'global' });
-    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'result', id: globalCall.id, ok: true });
+    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'result', id: globalCall.id, ok: true });
     await globalSubscription;
     const projectSubscription = host.onRunningShells({ kind: 'project', projectId: 'p1' }, () => {});
     await frame.flush();
     const projectCall = frame.posted.at(-1);
     if (projectCall?.type !== 'shells-subscribe') throw new Error('Expected subscription');
     expect(projectCall.payload.scope).toEqual({ kind: 'project', projectId: 'p1' });
-    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: 1, type: 'result', id: projectCall.id, ok: true });
+    await frame.receive({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'result', id: projectCall.id, ok: true });
     await projectSubscription;
     await expect(host.onRunningShells({ kind: 'project', projectId: '' }, () => {})).rejects.toMatchObject({ code: 'HOST_REJECTED' });
     await expect(host.onRunningShells({ kind: 'session', sessionId: ' ' }, () => {})).rejects.toMatchObject({ code: 'HOST_REJECTED' });

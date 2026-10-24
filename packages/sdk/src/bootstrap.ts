@@ -7,7 +7,8 @@
  * sees the internal event consumed by `connectHost`.
  */
 export const GUEST_BOOTSTRAP_CHANNEL = 'openchamber.guest-bootstrap';
-export const GUEST_BOOTSTRAP_API_VERSION = 1;
+/** The pre-M3 direct-window SDK cannot speak this handshake; `1` is refused as a version mismatch. */
+export const GUEST_BOOTSTRAP_API_VERSION = 2;
 export const GUEST_BOOTSTRAP_EVENT = 'openchamber:guest-bootstrap';
 const bootstrap = (channelName: string, apiVersion: number, eventName: string): void => {
   const hostWindow = globalThis.window;

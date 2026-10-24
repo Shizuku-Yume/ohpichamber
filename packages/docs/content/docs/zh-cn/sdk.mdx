@@ -48,7 +48,7 @@ OpenChamber 会读取清单，并弹出一个对话框列出扩展所请求的�
   "version": "1.0.0",
   "openchamber": {
     "apiVersion": 1,
-    "engines": { "openchamber": ">=1.24.0" },
+    "engines": { "openchamber": ">=3.0.0" },
     "contributes": {
       "panel": {
         "id": "acme-hello",
@@ -78,7 +78,7 @@ OpenChamber 会读取清单，并弹出一个对话框列出扩展所请求的�
 
 `apiVersion` 为 `1`。OpenChamber 拒绝任何其他值。
 
-`engines.openchamber` 可选。填写你的扩展支持的最低 OpenChamber 版本，写成 `1.24.0` 或 `>=1.24.0`。更旧的版本会拒绝安装，而不是之后才出错。
+`engines.openchamber` 可选。填写你的扩展支持的最低 OpenChamber 版本，写成 `3.0.0` 或 `>=3.0.0`。更旧的版本会拒绝安装，而不是之后才出错。
 
 `contributes.panel` 描述侧栏入口。`id` 使用 kebab-case，且在已安装扩展中必须唯一。`icon` 是 Remixicon 图标名（`RiWindowLine` 写成 `window`），或者你文件夹内的 SVG 文件，如 `icon.svg`。`entry` 是你文件夹内的 HTML 文件；只声明 `tools` 的扩展可以不写它（见[你的工具在聊天中的样子](#你的工具在聊天中的样子)）。
 

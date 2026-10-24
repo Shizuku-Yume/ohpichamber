@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 
-import { OPENCHAMBER_SDK_API_VERSION } from './api-version.ts';
+import { OPENCHAMBER_SDK_MANIFEST_API_VERSIONS } from './api-version.ts';
 import { clampStatusSectionHeight, hasGuestPage, requestedGuestCapabilities, resolveAttachEntry, resolveStatusSectionEntry, resolveAttachMode, resolveIntegrationApi, toPublicIntegration, type OpenChamberContributes } from './manifest.ts';
 import { parseManifest, parseManifestJson } from './parse.ts';
 
 const validBlock = {
-  apiVersion: OPENCHAMBER_SDK_API_VERSION,
+  apiVersion: OPENCHAMBER_SDK_MANIFEST_API_VERSIONS[0],
   contributes: {
     panel: {
       id: 'acme-hello',
@@ -695,7 +695,7 @@ describe('parseManifest', () => {
     const result = parseManifestJson(JSON.stringify({
       name: '@openchamber/clickup',
       openchamber: {
-        apiVersion: OPENCHAMBER_SDK_API_VERSION,
+        apiVersion: OPENCHAMBER_SDK_MANIFEST_API_VERSIONS[0],
         contributes: {
           panel: { id: 'clickup', name: 'ClickUp', icon: 'window', entry: 'panel/index.html' },
           integration: {
@@ -722,7 +722,7 @@ describe('parseManifest', () => {
     const result = parseManifestJson(JSON.stringify({
       name: '@openchamber/linear',
       openchamber: {
-        apiVersion: OPENCHAMBER_SDK_API_VERSION,
+        apiVersion: OPENCHAMBER_SDK_MANIFEST_API_VERSIONS[0],
         contributes: {
           panel: { id: 'linear-issues', name: 'Linear', icon: 'window', entry: 'panel/index.html' },
           integration: {
@@ -746,7 +746,7 @@ describe('parseManifest', () => {
     const result = parseManifestJson(JSON.stringify({
       name: '@openchamber/gitlab',
       openchamber: {
-        apiVersion: OPENCHAMBER_SDK_API_VERSION,
+        apiVersion: OPENCHAMBER_SDK_MANIFEST_API_VERSIONS[0],
         contributes: {
           panel: { id: 'gitlab', name: 'GitLab', icon: 'window', entry: 'panel/index.html' },
           integration: {

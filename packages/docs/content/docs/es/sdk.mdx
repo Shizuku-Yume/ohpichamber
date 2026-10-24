@@ -48,7 +48,7 @@ También puedes añadir un `.zip` local o un enlace https a un repositorio de gi
   "version": "1.0.0",
   "openchamber": {
     "apiVersion": 1,
-    "engines": { "openchamber": ">=1.24.0" },
+    "engines": { "openchamber": ">=3.0.0" },
     "contributes": {
       "panel": {
         "id": "acme-hello",
@@ -78,7 +78,7 @@ También puedes añadir un `.zip` local o un enlace https a un repositorio de gi
 
 `apiVersion` es `1`. OpenChamber rechaza cualquier otro valor.
 
-`engines.openchamber` es opcional. Indica la versión más antigua de OpenChamber con la que funciona tu extensión, como `1.24.0` o `>=1.24.0`. Las versiones anteriores se niegan a instalarla en vez de fallar más tarde.
+`engines.openchamber` es opcional. Indica la versión más antigua de OpenChamber con la que funciona tu extensión, como `3.0.0` o `>=3.0.0`. Las versiones anteriores se niegan a instalarla en vez de fallar más tarde.
 
 `contributes.panel` describe la entrada en la barra lateral. `id` va en kebab-case y debe ser único entre las extensiones instaladas. `icon` es un nombre de Remixicon (`RiWindowLine` se convierte en `window`) o un archivo SVG dentro de tu carpeta, como `icon.svg`. `entry` es el archivo HTML dentro de tu carpeta; omítelo en una extensión que solo declara `tools` (consulta [Tus herramientas en el chat](#tus-herramientas-en-el-chat)).
 

@@ -209,9 +209,9 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 
 ## 2026-10-24 - Break the Guest SDK version for the private bootstrap transport
 
-- **Decided:** Ship a breaking Guest SDK version bump for the private `MessageChannel` bootstrap transport. An old window-message client must receive an explicit version-mismatch outcome rather than time out; do not retain a compatibility path or fallback.
-- **Instead of:** Supporting both the old `window.postMessage` hello bootstrap and the new private `MessageChannel` transport.
-- **Because:** The two bootstrap contracts have different trust and lifecycle semantics. The maintainer chose an explicit breaking bump; a clear version mismatch makes the incompatibility observable without weakening the private channel boundary.
+- **Decided:** Ship a breaking Guest SDK version bump for the private `MessagePort` bootstrap transport. Wire envelope and bootstrap handshake are `v: 2`; `@openchamber/sdk` and the release-coupled root/ui/web/electron packages are `3.0.0`. Manifest `apiVersion` stays `1` because the manifest/`contributes` schema is unchanged. A pre-M3 `v1` window `hello` from the current iframe stops the pane with a localized explicit version-mismatch; a v1 bootstrap announcement is dropped. The frame receives no port, ready push, or host state; no compatibility path or fallback is added.
+- **Instead of:** Supporting both the old `window.postMessage` hello bootstrap and the new private `MessagePort` transport, or leaving the wire at `1` and bumping only the SDK package.
+- **Because:** The two bootstrap contracts have different trust and lifecycle semantics. The maintainer chose an explicit breaking bump; the old SDK has no handshake-error message and is not guaranteed to call after `hello`, so the pane error is the observable refusal without weakening the private channel boundary. `scripts/bump-version.mjs` keeps the SDK version equal to the app release, so the release packages move with it.
 - **Mine:** no
-- **Revisit when:** The maintainer chooses to support old Guest SDK panels through a separately reviewed compatibility boundary.
+- **Revisit when:** The maintainer reintroduces a supported pre-`v2` consumer, or the manifest schema changes independently of the transport.
 - **Effort:** post-m3-hardening

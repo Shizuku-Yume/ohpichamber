@@ -63,6 +63,20 @@ describe('checked-in SDK examples', () => {
     }
   });
 
+  test('the SDK package and every localized example name the release version', async () => {
+    const sdk = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')) as { version: string };
+    const root = JSON.parse(await readFile(new URL('../../../package.json', import.meta.url), 'utf8')) as { version: string };
+    expect(sdk.version).toBe(root.version);
+    const docs = new URL('../../docs/content/docs/', import.meta.url);
+    for (const locale of ['', 'de', 'es', 'fr', 'ja', 'ko', 'nl', 'pl', 'pt-br', 'tr', 'uk', 'zh-cn']) {
+      const prefix = locale ? `${locale}/` : '';
+      const example = await readFile(new URL(`${prefix}sdk/example.mdx`, docs), 'utf8');
+      expect(example).toContain(`"@openchamber/sdk": "^${sdk.version}"`);
+      const guide = await readFile(new URL(`${prefix}sdk.mdx`, docs), 'utf8');
+      expect(guide).toContain(`"openchamber": ">=${sdk.version}"`);
+    }
+  });
+
   test('all shipped bundles match their source and current SDK', async () => {
     const temporary = await mkdtemp(path.join(tmpdir(), 'oc-example-bundles-'));
     try {

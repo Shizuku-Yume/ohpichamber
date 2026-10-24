@@ -9,6 +9,7 @@ const requiredKeys = [
   'contextRail.surface.plugin',
   'contextRail.surface.plugin.description',
   'contextPanel.plugin.loadFailed',
+  'contextPanel.plugin.incompatibleSdk',
   'chat.workStatus.sections.extensionBadge',
   'contextPanel.plugin.actionFailed',
   'contextPanel.plugin.toast.copy',

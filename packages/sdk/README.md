@@ -14,7 +14,9 @@ Device-scoped extension storage is local browser preference data. It stays parti
 npm install @openchamber/sdk
 ```
 
-The package ships compiled JavaScript with type declarations, so any bundler works. Its version matches the OpenChamber release it shipped with, so `@openchamber/sdk@2.2.0` is the contract of OpenChamber 2.2.0.
+The package ships compiled JavaScript with type declarations, so any bundler works. Its version matches the OpenChamber release it shipped with, so `@openchamber/sdk@3.0.0` is the contract of OpenChamber 3.0.0.
+
+SDK 3 replaces the pre-M3 parent-window transport with a private, versioned `MessagePort` bootstrap. Panels built with SDK 2.x cannot connect: the host names the version mismatch in the pane and never grants them a port, ready state, or host state. Rebuild the panel with SDK 3. Manifest `apiVersion` remains `1`; it names the manifest schema, which did not change.
 
 ### Monorepo development scripts
 
@@ -33,7 +35,7 @@ Preview packages are for testing unreleased SDK changes against a matching devel
 npm install @openchamber/sdk@preview
 ```
 
-Maintainers can run **Publish SDK preview** in GitHub Actions, select the source branch, and enter a positive preview number. For example, `1` publishes `1.23.2-preview.1` under the `preview` npm tag. Each publication needs an unused number. The workflow uses the existing `NPM_TOKEN` secret and publishes only the SDK. It changes the version in its temporary checkout, without creating commits or release tags or changing `latest`.
+Maintainers can run **Publish SDK preview** in GitHub Actions, select the source branch, and enter a positive preview number. For example, `1` publishes `3.0.0-preview.1` under the `preview` npm tag. Each publication needs an unused number. The workflow uses the existing `NPM_TOKEN` secret and publishes only the SDK. It changes the version in its temporary checkout, without creating commits or release tags or changing `latest`.
 
 The workflow must exist on the default branch before GitHub exposes its manual trigger. Once it does, select `bohdan/dev` to publish that branch's SDK. Enable `dry_run` to validate without publishing. Validation installs the packed SDK in an isolated project and checks its imports, TypeScript declarations, and extension bundler before publishing that same archive.
 
@@ -65,7 +67,7 @@ Git installs also accept SSH addresses such as `git@github.com:owner/extension.g
   "version": "1.0.0",
   "openchamber": {
     "apiVersion": 1,
-    "engines": { "openchamber": ">=1.22.0" },
+    "engines": { "openchamber": ">=3.0.0" },
     "contributes": {
       "panel": {
         "id": "acme-hello",
@@ -98,7 +100,7 @@ Git installs also accept SSH addresses such as `git@github.com:owner/extension.g
 
 - `version` is required semver. Settings → Extensions shows it on the card.
 - `apiVersion` is `1`. Anything else is refused.
-- `engines.openchamber` is optional (`1.22.0` or `>=1.22.0`). Older OpenChamber builds refuse the install.
+- `engines.openchamber` is optional (`3.0.0` or `>=3.0.0`). Older OpenChamber builds refuse the install.
 - `panel.id` is kebab-case and unique. `icon` is a Remixicon name (`RiWindowLine` becomes `window`) or an SVG inside the folder. `entry` is the visible panel's HTML file. Leave `entry` out to have no rail icon or panel. Add `background.entry` for executable actions and commands; with neither entry, the extension can only declare `tools`, as in `examples/tools-only`.
 - `background: { "entry": "background/index.html" }` supplies separate sandboxed HTML for background actions and slash commands. Its scripts must be built. It runs on demand, not continuously or at installation. A panel can coexist with it.
 - `attach` is optional. `"dialog"` opens the page in a window from the + menu next to the chat box; `true` or `"panel"` opens the rail panel instead. `ctx.surface` tells the page which one it is in. The object form `{ "mode": "dialog", "entry": "panel/attach.html" }` gives the window its own page. When the user clicks the attached chip, the page opens again with that item in `ctx.item` (`null` from the + menu), so it can show the item instead of the list.

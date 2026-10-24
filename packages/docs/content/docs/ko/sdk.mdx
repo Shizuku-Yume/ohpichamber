@@ -48,7 +48,7 @@ OpenChamber가 매니페스트를 읽고, 확장이 요구하는 항목을 나�
   "version": "1.0.0",
   "openchamber": {
     "apiVersion": 1,
-    "engines": { "openchamber": ">=1.24.0" },
+    "engines": { "openchamber": ">=3.0.0" },
     "contributes": {
       "panel": {
         "id": "acme-hello",
@@ -78,7 +78,7 @@ OpenChamber가 매니페스트를 읽고, 확장이 요구하는 항목을 나�
 
 `apiVersion`은 `1`입니다. OpenChamber는 다른 값을 거부합니다.
 
-`engines.openchamber`는 선택 사항입니다. 확장이 동작하는 가장 오래된 OpenChamber 버전을 `1.24.0` 또는 `>=1.24.0` 형태로 지정하세요. 더 오래된 빌드는 나중에 실패하는 대신 설치 자체를 거부합니다.
+`engines.openchamber`는 선택 사항입니다. 확장이 동작하는 가장 오래된 OpenChamber 버전을 `3.0.0` 또는 `>=3.0.0` 형태로 지정하세요. 더 오래된 빌드는 나중에 실패하는 대신 설치 자체를 거부합니다.
 
 `contributes.panel`은 레일 항목을 설명합니다. `id`는 kebab-case이며 설치된 확장 중에서 고유해야 합니다. `icon`은 Remixicon 이름(`RiWindowLine`이면 `window`)이거나 폴더 안의 SVG 파일(예: `icon.svg`)입니다. `entry`는 폴더 안의 HTML 파일입니다. `tools`만 선언하는 확장이라면 생략하세요([채팅에 표시되는 내 도구](#채팅에-표시되는-내-도구) 참고).
 

@@ -3,7 +3,7 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { CanonicalClient } from '@/api/canonicalClient';
 import { Window } from 'happy-dom';
-import { GUEST_BOOTSTRAP_API_VERSION, GUEST_BOOTSTRAP_CHANNEL } from '@openchamber/sdk';
+import { GUEST_BOOTSTRAP_API_VERSION, GUEST_BOOTSTRAP_CHANNEL, OPENCHAMBER_SDK_API_VERSION } from '@openchamber/sdk';
 import { hostMessageSchema } from '@openchamber/sdk/schemas';
 import type { GuestMessage, HostMessage } from '@openchamber/sdk';
 
@@ -114,7 +114,7 @@ test(`${variant.name}: actions and commands use the execution entry and clean up
         guestPorts.push(transferred);
         transferred.addEventListener('message', (message) => { messages.push(hostMessageSchema.parse(message.data)); });
         transferred.start();
-        transferred.postMessage({ channel: 'openchamber.sdk', v: 1, type: 'hello' });
+        transferred.postMessage({ channel: 'openchamber.sdk', v: OPENCHAMBER_SDK_API_VERSION, type: 'hello' });
       });
       guestBootstrapPort.start();
       const bootstrapEvent = new dom.MessageEvent('message', {
@@ -163,17 +163,17 @@ test(`${variant.name}: actions and commands use the execution entry and clean up
     expect(useGuestItemStore.getState().pendingItemByGuest.counter).toEqual(parkedItem);
     expect(useGuestBadgeStore.getState().countByGuest.counter).toBe(5);
     await act(async () => {
-      send({ channel: 'openchamber.sdk', v: 1, type: 'action-result', id: 'wrong-id', payload: { ok: true } });
-      send({ channel: 'openchamber.sdk', v: 1, type: 'action-result', id: actionMessage.id, payload: { ok: true } }, window);
-      send({ channel: 'openchamber.sdk', v: 1, type: 'toast', id: 'toast-1', payload: { kind: 'info', message: 'Counted', copy: true, persistent: true } });
+      send({ channel: 'openchamber.sdk', v: OPENCHAMBER_SDK_API_VERSION, type: 'action-result', id: 'wrong-id', payload: { ok: true } });
+      send({ channel: 'openchamber.sdk', v: OPENCHAMBER_SDK_API_VERSION, type: 'action-result', id: actionMessage.id, payload: { ok: true } }, window);
+      send({ channel: 'openchamber.sdk', v: OPENCHAMBER_SDK_API_VERSION, type: 'toast', id: 'toast-1', payload: { kind: 'info', message: 'Counted', copy: true, persistent: true } });
       await tick();
     });
     expect(useGuestActionHostStore.getState().requests.length).toBe(1);
     expect(notice.mock.calls.length).toBe(1);
     expect(messages.some((message) => message.type === 'result' && message.id === 'toast-1' && message.ok)).toBe(true);
     await act(async () => {
-      send({ channel: 'openchamber.sdk', v: 1, type: 'action-result', id: actionMessage.id, payload: { ok: true } });
-      send({ channel: 'openchamber.sdk', v: 1, type: 'toast', id: 'late', payload: { kind: 'info', message: 'Too late' } });
+      send({ channel: 'openchamber.sdk', v: OPENCHAMBER_SDK_API_VERSION, type: 'action-result', id: actionMessage.id, payload: { ok: true } });
+      send({ channel: 'openchamber.sdk', v: OPENCHAMBER_SDK_API_VERSION, type: 'toast', id: 'late', payload: { kind: 'info', message: 'Too late' } });
       await tick();
       await done;
     });
@@ -225,7 +225,7 @@ test(`${variant.name}: actions and commands use the execution entry and clean up
           if (parsed.type === 'resolve') resolveCommandReadyMessage?.(parsed);
         });
         transferred.start();
-        transferred.postMessage({ channel: 'openchamber.sdk', v: 1, type: 'hello' });
+        transferred.postMessage({ channel: 'openchamber.sdk', v: OPENCHAMBER_SDK_API_VERSION, type: 'hello' });
         resolveCommandPort?.(transferred);
       });
       guestBootstrapPort.start();
@@ -255,7 +255,7 @@ test(`${variant.name}: actions and commands use the execution entry and clean up
     const resolveMessage = await commandReadyMessage;
     expect(commandMessages.find((message) => message.type === 'ready')).toMatchObject({ payload: { surface: variant.backgroundEntry ? 'background' : 'panel' } });
     await act(async () => {
-      commandPort?.postMessage({ channel: 'openchamber.sdk', v: 1, type: 'resolve-result', id: resolveMessage.id, payload: { item: null } });
+      commandPort?.postMessage({ channel: 'openchamber.sdk', v: OPENCHAMBER_SDK_API_VERSION, type: 'resolve-result', id: resolveMessage.id, payload: { item: null } });
       await tick();
       expect(await commandDone).toEqual({ ok: true, item: null });
     });

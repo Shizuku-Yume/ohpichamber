@@ -48,7 +48,7 @@ OpenChamber がマニフェストを読み、拡張機能が求めているも�
   "version": "1.0.0",
   "openchamber": {
     "apiVersion": 1,
-    "engines": { "openchamber": ">=1.24.0" },
+    "engines": { "openchamber": ">=3.0.0" },
     "contributes": {
       "panel": {
         "id": "acme-hello",
@@ -78,7 +78,7 @@ OpenChamber がマニフェストを読み、拡張機能が求めているも�
 
 `apiVersion` は `1` です。OpenChamber は他の値を拒否します。
 
-`engines.openchamber` は任意です。拡張機能が動作する最も古い OpenChamber のバージョンを、`1.24.0` または `>=1.24.0` の形で指定します。古いビルドは、後で失敗する代わりにインストール自体を拒否します。
+`engines.openchamber` は任意です。拡張機能が動作する最も古い OpenChamber のバージョンを、`3.0.0` または `>=3.0.0` の形で指定します。古いビルドは、後で失敗する代わりにインストール自体を拒否します。
 
 `contributes.panel` はレールの項目を記述します。`id` は kebab-case で、インストール済みの拡張機能の中で一意でなければなりません。`icon` は Remixicon の名前(`RiWindowLine` なら `window`)か、フォルダ内の SVG ファイル(`icon.svg` など)です。`entry` はフォルダ内の HTML ファイルです。`tools` だけを宣言する拡張機能では省略してください([チャットに表示されるあなたのツール](#チャットに表示されるあなたのツール) を参照)。
 

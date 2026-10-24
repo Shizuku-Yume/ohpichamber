@@ -48,7 +48,7 @@ U kunt ook een lokale `.zip` of een https-link naar een Git-repository of ZIP-be
   "version": "1.0.0",
   "openchamber": {
     "apiVersion": 1,
-    "engines": { "openchamber": ">=1.24.0" },
+    "engines": { "openchamber": ">=3.0.0" },
     "contributes": {
       "panel": {
         "id": "acme-hello",
@@ -78,7 +78,7 @@ U kunt ook een lokale `.zip` of een https-link naar een Git-repository of ZIP-be
 
 `apiVersion` moet `1` zijn. OpenChamber weigert andere waarden.
 
-`engines.openchamber` is optioneel. Geef de oudste ondersteunde OpenChamber-versie op als `1.24.0` of `>=1.24.0`. Oudere builds weigeren de installatie dan meteen, in plaats van later vast te lopen.
+`engines.openchamber` is optioneel. Geef de oudste ondersteunde OpenChamber-versie op als `3.0.0` of `>=3.0.0`. Oudere builds weigeren de installatie dan meteen, in plaats van later vast te lopen.
 
 `contributes.panel` beschrijft de vermelding in de balk. `id` gebruikt kebab-case en moet uniek zijn onder de geïnstalleerde extensies. `icon` is een Remixicon-naam: `RiWindowLine` wordt `window`. Een SVG-bestand in uw map, zoals `icon.svg`, mag ook. `entry` verwijst naar het HTML-bestand in de map. Laat het weg voor een extensie die alleen `tools` opgeeft. Zie [Uw tools in de chat](#uw-tools-in-de-chat).
 

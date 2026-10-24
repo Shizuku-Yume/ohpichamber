@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { runInNewContext } from 'node:vm';
 import { Window } from 'happy-dom';
-import { GUEST_BOOTSTRAP_API_VERSION, GUEST_BOOTSTRAP_CHANNEL, GUEST_BOOTSTRAP_SCRIPT } from '@openchamber/sdk';
+import { GUEST_BOOTSTRAP_API_VERSION, GUEST_BOOTSTRAP_CHANNEL, GUEST_BOOTSTRAP_SCRIPT, OPENCHAMBER_SDK_API_VERSION } from '@openchamber/sdk';
 import { guestMessageSchema } from '@openchamber/sdk/schemas';
 import type { GuestMessage, HostMessage, HostReadyContext, HostResultPayload, GuestWorkspaceSnapshot } from '@openchamber/sdk';
 
@@ -64,12 +64,12 @@ const load = async (name: string, script = 'main', folder = 'panel') => {
     hostPort.postMessage(message);
   };
   const ready = async (next: HostReadyContext = context) => {
-    send({ channel: 'openchamber.sdk', v: 1, type: 'ready', payload: next });
+    send({ channel: 'openchamber.sdk', v: OPENCHAMBER_SDK_API_VERSION, type: 'ready', payload: next });
     await tick();
   };
   const reply = (message: GuestMessage, payload?: HostResultPayload) => {
     if (!('id' in message)) throw new Error('Cannot reply to hello');
-    send({ channel: 'openchamber.sdk', v: 1, type: 'result', id: message.id, ok: true, payload });
+    send({ channel: 'openchamber.sdk', v: OPENCHAMBER_SDK_API_VERSION, type: 'result', id: message.id, ok: true, payload });
   };
   const request = (type: GuestMessage['type']) => {
     const result = [...messages].reverse().find((message) => message.type === type);
@@ -86,7 +86,7 @@ const load = async (name: string, script = 'main', folder = 'panel') => {
       && (snapshot.kind === 'projects' || ('projectId' in message.payload.query && message.payload.query.projectId === snapshot.projectId)));
     if (!subscription || subscription.type !== 'workspace-subscribe') throw new Error(`Missing ${snapshot.kind} subscription`);
     reply(subscription);
-    send({ channel: 'openchamber.sdk', v: 1, type: 'workspace', payload: { subscriptionId: subscription.payload.subscriptionId, snapshot } });
+    send({ channel: 'openchamber.sdk', v: OPENCHAMBER_SDK_API_VERSION, type: 'workspace', payload: { subscriptionId: subscription.payload.subscriptionId, snapshot } });
   };
   const sandbox = {
     window, document: window.document, HTMLElement: window.HTMLElement, MessageEvent: window.MessageEvent, CustomEvent: window.CustomEvent,
@@ -105,7 +105,7 @@ describe('checked-in SDK examples', () => {
     const app = await load('checklist-editor', 'main', 'editor');
     const content = '# Launch\n- [ ] Write notes\n- [X] Ship\n';
     await app.ready({ ...context, surface: 'file' });
-    app.send({ channel: 'openchamber.sdk', v: 1, type: 'file-open', payload: { path: 'launch.checklist.md', name: 'launch.checklist.md', content, readOnly: false, encoding: 'text' } });
+    app.send({ channel: 'openchamber.sdk', v: OPENCHAMBER_SDK_API_VERSION, type: 'file-open', payload: { path: 'launch.checklist.md', name: 'launch.checklist.md', content, readOnly: false, encoding: 'text' } });
     await tick();
     const document = app.window.document;
     const boxes = [...document.querySelectorAll('input[type="checkbox"]')].filter((node) => node instanceof app.window.HTMLInputElement);
@@ -116,13 +116,13 @@ describe('checked-in SDK examples', () => {
     await tick();
     expect(app.request('file-change')).toMatchObject({ payload: { dirty: true, edited: true } });
 
-    app.send({ channel: 'openchamber.sdk', v: 1, type: 'file-snapshot', id: 'save-1', payload: { purpose: 'save' } });
+    app.send({ channel: 'openchamber.sdk', v: OPENCHAMBER_SDK_API_VERSION, type: 'file-snapshot', id: 'save-1', payload: { purpose: 'save' } });
     await tick();
     const answer = app.request('file-snapshot-result');
     if (answer.type !== 'file-snapshot-result' || !('snapshot' in answer.payload) || !('content' in answer.payload.snapshot)) throw new Error('Missing snapshot');
     expect(answer.payload.snapshot.content).toBe('# Launch\n- [x] Write notes\n- [x] Ship\n');
 
-    app.send({ channel: 'openchamber.sdk', v: 1, type: 'file-saved', payload: { version: answer.payload.snapshot.version } });
+    app.send({ channel: 'openchamber.sdk', v: OPENCHAMBER_SDK_API_VERSION, type: 'file-saved', payload: { version: answer.payload.snapshot.version } });
     await tick();
     expect(app.request('file-change')).toMatchObject({ payload: { dirty: false, edited: false } });
   });
@@ -130,7 +130,7 @@ describe('checked-in SDK examples', () => {
   test('a background message action shows one toast without drawing the panel', async () => {
     const app = await load('hello-kit', 'main', 'background');
     await app.ready({ ...context, surface: 'background' });
-    app.send({ channel: 'openchamber.sdk', v: 1, type: 'action', id: 'count', payload: {
+    app.send({ channel: 'openchamber.sdk', v: OPENCHAMBER_SDK_API_VERSION, type: 'action', id: 'count', payload: {
       kind: 'message', action: 'message-length', sessionId: 's1', sessionTitle: 'Example', directory: '/repo', messageId: 'm1', role: 'user', text: 'Hello',
     } });
     await tick();
@@ -171,7 +171,7 @@ describe('checked-in SDK examples', () => {
     const pending = app.request('request');
     await app.ready(connected);
     expect(app.messages.filter((message) => message.type === 'request').length).toBe(1);
-    app.send({ channel: 'openchamber.sdk', v: 1, type: 'connection', payload: { connection: context.connection } });
+    app.send({ channel: 'openchamber.sdk', v: OPENCHAMBER_SDK_API_VERSION, type: 'connection', payload: { connection: context.connection } });
     app.reply(pending, { status: 200, body: JSON.stringify([{ full_name: 'private/repository', html_url: 'https://example.com/repo', description: null, stargazers_count: 0, private: true }]) });
     await tick();
     expect(app.window.document.body.textContent).toContain('Not connected');
@@ -277,7 +277,7 @@ describe('checked-in SDK examples', () => {
 
   test('task commands resolve without ready and repeated ready keeps the panel', async () => {
     const app = await load('tasks-demo');
-    app.send({ channel: 'openchamber.sdk', v: 1, type: 'resolve', id: 'command', payload: { command: 'task', args: 'DEMO-2' } });
+    app.send({ channel: 'openchamber.sdk', v: OPENCHAMBER_SDK_API_VERSION, type: 'resolve', id: 'command', payload: { command: 'task', args: 'DEMO-2' } });
     await tick();
     app.reply(app.request('storage'), { storage: true, op: 'keys', keys: [] });
     await tick();
@@ -343,7 +343,7 @@ describe('checked-in SDK examples', () => {
     await tick();
     const storage = app.request('storage');
     if (!('id' in storage)) throw new Error('Missing storage request');
-    app.send({ channel: 'openchamber.sdk', v: 1, type: 'result', id: storage.id, ok: false, error: 'Storage unavailable', code: 'HOST_REJECTED' });
+    app.send({ channel: 'openchamber.sdk', v: OPENCHAMBER_SDK_API_VERSION, type: 'result', id: storage.id, ok: false, error: 'Storage unavailable', code: 'HOST_REJECTED' });
     app.update({ kind: 'projects', state: 'ready', projects: [{ id: 'a', name: 'Project A', directory: '/a' }] });
     await tick();
     app.update({ kind: 'sessions', projectId: 'a', state: 'ready', coverage: [], sessions: [{ id: 'session-a', title: 'Session A', projectId: 'a', directory: '/a', parentId: null,

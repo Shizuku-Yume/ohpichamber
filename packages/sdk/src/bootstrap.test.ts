@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { runInNewContext } from 'node:vm';
+import { OPENCHAMBER_SDK_API_VERSION } from './api-version.ts';
 import { connectHost, type HostFrame } from './host.ts';
 
 import {
@@ -87,10 +88,10 @@ describe('Guest bootstrap transport', () => {
     const client = connectHost({ target: first.target, acceptSource: () => true });
     await eventPort;
     await hello;
-    expect(guestMessages).toEqual([{ channel: 'openchamber.sdk', v: 1, type: 'hello' }]);
+    expect(guestMessages).toEqual([{ channel: 'openchamber.sdk', v: OPENCHAMBER_SDK_API_VERSION, type: 'hello' }]);
     const pending = client.request({ method: 'GET', path: '/api/v2/user' });
     const request = await requestMessage;
-    channel.port2.postMessage({ channel: 'openchamber.sdk', v: 1, type: 'result', id: request.id, ok: true, payload: { status: 200, body: '{}' } });
+    channel.port2.postMessage({ channel: 'openchamber.sdk', v: OPENCHAMBER_SDK_API_VERSION, type: 'result', id: request.id, ok: true, payload: { status: 200, body: '{}' } });
     await expect(pending).resolves.toEqual({ status: 200, body: '{}' });
     client.dispose();
     channel.port2.close();

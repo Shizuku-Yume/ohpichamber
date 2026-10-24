@@ -3,7 +3,7 @@ import http from "node:http";
 import { deflateSync } from "node:zlib";
 // packages/sdk/src/bootstrap.ts
 var GUEST_BOOTSTRAP_CHANNEL = "openchamber.guest-bootstrap";
-var GUEST_BOOTSTRAP_API_VERSION = 1;
+var GUEST_BOOTSTRAP_API_VERSION = 2;
 var GUEST_BOOTSTRAP_EVENT = "openchamber:guest-bootstrap";
 var bootstrap = (channelName, apiVersion, eventName) => {
   const hostWindow = globalThis.window;

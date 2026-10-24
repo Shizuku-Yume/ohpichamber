@@ -2,9 +2,13 @@
 
 What third-party guest authors import and call. Source of truth: `[packages/sdk/src](https://github.com/openchamber/openchamber/tree/main/packages/sdk/src)`. Longer guides live in the [product docs](https://github.com/openchamber/openchamber/tree/main/packages/docs/content/docs) (`sdk.mdx`, `sdk/host.mdx`, `sdk/ui.mdx`) and in `[GUEST_SERVICES.md](https://github.com/openchamber/openchamber/blob/main/packages/sdk/GUEST_SERVICES.md)` for local services.
 
-**Package:** `@openchamber/sdk`  
-**API version:** manifest `apiVersion: 1`, wire envelope `v: 1`  
+**Package:** `@openchamber/sdk`
+
+**API version:** manifest `apiVersion: 1`, wire envelope `v: 2` (private `MessagePort` bootstrap)
+
 **Runtimes that load guests:** web and desktop. VS Code and mobile mark the catalog `unsupported`.
+
+Wire `v: 2` is the private bootstrap transport; manifest `apiVersion` stays `1` because the manifest/`contributes` schema did not change. SDK 3 refuses the pre-M3 window transport and names the mismatch in the pane instead of waiting for a timeout.
 
 Two entrypoints:
 
@@ -460,7 +464,7 @@ Used by the OpenChamber host and by tools that validate packages. Guests rarely 
   "version": "1.0.0",
   "openchamber": {
     "apiVersion": 1,
-    "engines": { "openchamber": ">=1.22.0" },
+    "engines": { "openchamber": ">=3.0.0" },
     "contributes": {
       "panel": {
         "id": "acme-hello",
@@ -489,7 +493,7 @@ Used by the OpenChamber host and by tools that validate packages. Guests rarely 
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `version`             | Semver required on install (`1.0.0`)                                                                                                                                                 |
 | `apiVersion`          | Must be `1`                                                                                                                                                                          |
-| `engines.openchamber` | Optional. Only `1.22.0` or `>=1.22.0`. Older host → `host-too-old`                                                                                                                   |
+| `engines.openchamber` | Optional. Only `3.0.0` or `>=3.0.0`. Older host → `host-too-old`                                                                                                                   |
 | `panel.id`            | kebab-case                                                                                                                                                                           |
 | `panel.icon`          | Remixicon kebab name (`window`) **or** package `.svg` path. Remixicon needs no file. An `.svg` path must exist on disk or install fails (`invalid-manifest`). No URLs/absolute paths |
 | `panel.entry` | Optional visible-panel HTML path inside the package. No `..`, absolute path, or URL. Its scripts must be built. Omitting it removes the rail icon and visible views; `background.entry` can still run code. With neither entry, only `tools` plus package identity/version/engines are allowed. `hasGuestPage` means a visible panel, not background execution |
@@ -522,7 +526,7 @@ Extra keys are dropped, not forwarded.
 | `isGuestPackageSvgIcon`                            | Whether icon is a package SVG path                        |
 | `compareOpenChamberVersions`                       | Semver compare                                            |
 | `hostMeetsOpenChamberEngine`                       | Host vs `engines.openchamber` floor                       |
-| `openChamberEngineMinimum`                         | Normalize `>=1.22.0` → floor string                       |
+| `openChamberEngineMinimum`                         | Normalize `>=3.0.0` → floor string                       |
 | `parseOpenChamberVersion`                          | Parse `x.y.z`                                             |
 
 

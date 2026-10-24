@@ -12,7 +12,7 @@ Services keep the iframe. They add a host-owned child process from the same pack
 
 Do not put `docker` (or any product name) on `connectHost`. The SDK knows panel, service, and a loopback proxy. The package owns the integration.
 
-Declare the OpenChamber floor with `engines.openchamber` (`1.22.0` or `>=1.22.0`). Install refuses when this host is older. Put a semver `version` on `package.json` (`1.0.0`); install requires it and Settings → Extensions shows `v1.0.0` on the card.
+Declare the OpenChamber floor with `engines.openchamber` (`3.0.0` or `>=3.0.0`). Install refuses when this host is older. Put a semver `version` on `package.json` (`1.0.0`); install requires it and Settings → Extensions shows `v1.0.0` on the card.
 
 ## Model
 
@@ -44,7 +44,7 @@ Use `exec` when the integration shells out (like a modern Docker CLI panel). Use
 {
   "apiVersion": 1,
   "engines": {
-    "openchamber": ">=1.22.0"
+    "openchamber": ">=3.0.0"
   },
   "contributes": {
     "panel": {
@@ -82,8 +82,8 @@ Socket entry shapes:
 
 Parse rules:
 
-- `apiVersion` is `1`. Wire `v` on postMessage stays `1`.
-- `engines.openchamber` is optional. Values are `1.22.0` or `>=1.22.0` only. Install returns `host-too-old` when this OpenChamber build is older.
+- `apiVersion` is `1` (manifest schema). Wire `v` on the private port is `2`; the pre-M3 window transport is refused.
+- `engines.openchamber` is optional. Values are `3.0.0` or `>=3.0.0` only. Install returns `host-too-old` when this OpenChamber build is older.
 - `contributes.panel` stays required. Same id / name / icon / entry rules as any guest.
 - `contributes.service` is optional. A guest without `service` is HTML-only.
 - `service.entry` is a relative path inside the package. Ship compiled JS; the host never compiles TypeScript.

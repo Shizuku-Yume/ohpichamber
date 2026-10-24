@@ -53,6 +53,7 @@ import type { GuestBackgroundAction } from '@/lib/guests/run-action';
 import { useGuestFrameUrl } from '@/lib/guests/useGuestFrameUrl';
 import { useGuestItemStore } from '@/lib/guests/item-store';
 import { isGuestFileMessage, type GuestFileChannel } from '@/lib/guests/file-editor-channel';
+import { isLegacyGuestSdkMessage } from '@/lib/guests/legacy-guest-sdk';
 import { fetchHostLinearIssueGet } from '@/lib/guests/host-linear-request';
 import { loadGuestServiceStatus, proxyGuestServiceRequest } from '@/lib/guests/service';
 import { getSurfaceViewerId } from '@/lib/guests/surface-viewers';
@@ -309,7 +310,7 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
         : surface === 'file' ? fileEditorEntry
         : surface === 'dialog' && guest.attachEntry ? guest.attachEntry : guest.entry ?? null
     : null);
-  const { src, srcDoc, status: frameStatus, recoverExpiredNavigation, acknowledgeHandshake } = useGuestFrameUrl({
+  const { src, srcDoc, status: frameStatus, recoverExpiredNavigation, acknowledgeHandshake, rejectSdkVersion } = useGuestFrameUrl({
     guestId, entry: guestEntry, instanceKey: frameKey, enabled: guestEnabled, origins: approvedOrigins,
   });
 
@@ -924,6 +925,11 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
         }
         return;
       }
+      if (isLegacyGuestSdkMessage(event.data)) {
+        for (const transferred of ports) closeTransferredPort(transferred);
+        rejectSdkVersion();
+        return;
+      }
       handledGuestBootstrapEvents.add(event);
       const data = event.data;
       if (!data || data.channel !== GUEST_BOOTSTRAP_CHANNEL || data.v !== GUEST_BOOTSTRAP_API_VERSION
@@ -975,14 +981,14 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
       guestPortCloseRef.current?.();
       guestPortCloseRef.current = null;
     };
-  }, [acknowledgeHandshake, backgroundAction, clearPopoverCloseTimer, closeActivePopover, connectFileChannel, frameKey, guestEnabled, guestEntry, headless, popover, postToGuest, pushHostState, refreshOauth, registerResolver, schedulePopoverClose, sendBackgroundAction, setOauthStatus, src, srcDoc, stopOauthPoll, surface]);
+  }, [acknowledgeHandshake, backgroundAction, clearPopoverCloseTimer, closeActivePopover, connectFileChannel, frameKey, guestEnabled, guestEntry, headless, popover, postToGuest, pushHostState, refreshOauth, registerResolver, rejectSdkVersion, schedulePopoverClose, sendBackgroundAction, setOauthStatus, src, srcDoc, stopOauthPoll, surface]);
 
   // A project switch retires header callbacks, not the still-mounted frame's
   // workspace observers or unrelated in-flight requests.
   React.useLayoutEffect(() => { statusControlsRef.current?.retire(); }, [statusContextKey]);
 
   React.useEffect(() => {
-    if (backgroundAction && (frameStatus === 'error' || !guestEnabled)) {
+    if (backgroundAction && (frameStatus === 'error' || frameStatus === 'incompatible' || !guestEnabled)) {
       backgroundAction.complete({ ok: false, reason: 'unavailable' });
     }
   }, [backgroundAction, frameStatus, guestEnabled]);
@@ -1034,10 +1040,12 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
     return null;
   }
 
-  if (!guest || (!src && !srcDoc)) {
+  if (!guest || (!src && !srcDoc) || frameStatus === 'incompatible') {
     return (
       <div className="flex h-full items-center justify-center px-6 text-sm text-muted-foreground">
-        {t(guest && frameStatus === 'loading' ? 'common.loading' : 'contextPanel.plugin.loadFailed')}
+        {t(frameStatus === 'incompatible'
+          ? 'contextPanel.plugin.incompatibleSdk'
+          : guest && frameStatus === 'loading' ? 'common.loading' : 'contextPanel.plugin.loadFailed')}
       </div>
     );
   }

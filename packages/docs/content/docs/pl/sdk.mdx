@@ -48,7 +48,7 @@ Możesz też dodać lokalny plik `.zip` albo link https do repozytorium git lub 
   "version": "1.0.0",
   "openchamber": {
     "apiVersion": 1,
-    "engines": { "openchamber": ">=1.24.0" },
+    "engines": { "openchamber": ">=3.0.0" },
     "contributes": {
       "panel": {
         "id": "acme-hello",
@@ -78,7 +78,7 @@ Możesz też dodać lokalny plik `.zip` albo link https do repozytorium git lub 
 
 `apiVersion` to `1`. OpenChamber odrzuca każdą inną wartość.
 
-`engines.openchamber` jest opcjonalne. Podaj najstarszą wersję OpenChamber, z którą działa Twoje rozszerzenie, jako `1.24.0` lub `>=1.24.0`. Starsze wersje odmówią instalacji zamiast zawieść później.
+`engines.openchamber` jest opcjonalne. Podaj najstarszą wersję OpenChamber, z którą działa Twoje rozszerzenie, jako `3.0.0` lub `>=3.0.0`. Starsze wersje odmówią instalacji zamiast zawieść później.
 
 `contributes.panel` opisuje wpis na pasku bocznym. `id` jest w kebab-case i musi być unikalne wśród zainstalowanych rozszerzeń. `icon` to nazwa ikony Remixicon (`RiWindowLine` staje się `window`) albo plik SVG w Twoim folderze, na przykład `icon.svg`. `entry` to plik HTML w Twoim folderze; pomiń je w rozszerzeniu, które deklaruje tylko `tools` (zobacz [Twoje narzędzia w czacie](#twoje-narzędzia-w-czacie)).
 

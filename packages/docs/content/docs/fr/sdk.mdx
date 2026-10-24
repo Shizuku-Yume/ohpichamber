@@ -48,7 +48,7 @@ Vous pouvez aussi ajouter un `.zip` local ou un lien https vers un dépôt git o
   "version": "1.0.0",
   "openchamber": {
     "apiVersion": 1,
-    "engines": { "openchamber": ">=1.24.0" },
+    "engines": { "openchamber": ">=3.0.0" },
     "contributes": {
       "panel": {
         "id": "acme-hello",
@@ -78,7 +78,7 @@ Vous pouvez aussi ajouter un `.zip` local ou un lien https vers un dépôt git o
 
 `apiVersion` vaut `1`. OpenChamber refuse toute autre valeur.
 
-`engines.openchamber` est optionnel. Indiquez la version d'OpenChamber la plus ancienne avec laquelle votre extension fonctionne, sous la forme `1.24.0` ou `>=1.24.0`. Les versions plus anciennes refusent de l'installer au lieu d'échouer plus tard.
+`engines.openchamber` est optionnel. Indiquez la version d'OpenChamber la plus ancienne avec laquelle votre extension fonctionne, sous la forme `3.0.0` ou `>=3.0.0`. Les versions plus anciennes refusent de l'installer au lieu d'échouer plus tard.
 
 `contributes.panel` décrit l'entrée dans la barre latérale. `id` est en kebab-case et doit être unique parmi les extensions installées. `icon` est un nom Remixicon (`RiWindowLine` devient `window`) ou un fichier SVG dans votre dossier, comme `icon.svg`. `entry` est le fichier HTML dans votre dossier ; omettez-le pour une extension qui ne déclare que `tools` (voir [Vos outils dans le chat](#vos-outils-dans-le-chat)).
 

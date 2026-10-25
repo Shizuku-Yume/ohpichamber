@@ -15,6 +15,7 @@ import { useRequestReveal } from '@/sync/request-reveal';
 import { useChatSessionSelection } from './chatColumnSession';
 import { useMobileAutocompleteMaxHeight } from './useMobileAutocompleteMaxHeight';
 import { FormFieldControl } from './FormFieldControl';
+import { PlanReviewCard } from './PlanReviewCard';
 import {
     type AskAnswerState,
     type AskQuestion,
@@ -26,6 +27,7 @@ import {
     isAskQuestionAnswered,
     missingAskQuestionIndexes,
     parseAskQuestions,
+    parsePlanReview,
     serializeAskQuestionsMarkdown,
 } from './questionRequest';
 import { useQuestionResponse } from './useQuestionResponse';
@@ -53,7 +55,9 @@ const FormDockView: React.FC<FormDockProps> = ({ sessionId, directory, hidden })
     // panels cross-fade instead of swapping content in place.
     return (
         <AnimatePresence>
-            {hidden || !form ? null : <FormDockPanel key={form.questionId} form={form} forms={forms} />}
+            {hidden || !form ? null : parsePlanReview(form.schema) ? (
+                <PlanReviewCard key={form.questionId} form={form} docked forms={forms} />
+            ) : <FormDockPanel key={form.questionId} form={form} forms={forms} />}
         </AnimatePresence>
     );
 };

@@ -3,10 +3,10 @@ import type { QuestionRequest } from '@openchamber/agent-contract';
 import { toast } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
 import * as sessionActions from '@/sync/session-actions';
-import { deliverQuestionAnswer, type AskAnswerPayload } from './questionRequest';
+import { deliverQuestionAnswer, type QuestionAnswerPayload } from './questionRequest';
 
 /**
- * Submits one native question reply and cancels the request.
+ * Submits one native question or plan review reply and cancels the request.
  *
  * The action owner re-reads the pending record before replying, so the CAS
  * `version`/`epoch`/`workerGeneration` are always the current ones and a
@@ -32,7 +32,7 @@ export function useQuestionResponse(form: QuestionRequest) {
         });
     }, [form.sessionId]);
 
-    const answer = React.useCallback(async (payload: AskAnswerPayload): Promise<boolean> => {
+    const answer = React.useCallback(async (payload: QuestionAnswerPayload): Promise<boolean> => {
         // Enter in a text box reaches both the field and the panel handler;
         // one accepted reply owns the CAS until it settles.
         if (respondingRef.current || hasResponded) return false;

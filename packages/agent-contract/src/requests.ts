@@ -58,6 +58,21 @@ export const ApprovalRequestSchema = RequestCASSchema.extend({
   }
 });
 export type ApprovalRequest = z.infer<typeof ApprovalRequestSchema>;
+export const PlanReviewSchema = z.strictObject({
+  type: z.literal('plan-review'),
+  title: z.string().min(1),
+  planReference: z.string().regex(/^local:\/\/[^\s?#]+$/).refine(value => !value.includes('..') && !value.includes('\\'), 'Plan reference must remain session-local'),
+  planText: z.string().min(1),
+});
+export type PlanReview = z.infer<typeof PlanReviewSchema>;
+export const PlanReviewResponseSchema = z.discriminatedUnion('action', [
+  z.strictObject({ action: z.literal('approve') }),
+  z.strictObject({ action: z.literal('approve-compact') }),
+  z.strictObject({ action: z.literal('feedback'), feedback: z.string().trim().min(1) }),
+  z.strictObject({ action: z.literal('reject') }),
+]);
+export type PlanReviewResponse = z.infer<typeof PlanReviewResponseSchema>;
+
 export const QuestionReplySchema = z.discriminatedUnion('action', [
   RequestCASSchema.extend({ action: z.literal('answer'), response: JsonValueSchema }),
   RequestCASSchema.extend({ action: z.literal('cancel') }),
@@ -69,6 +84,13 @@ export const QuestionRequestSchema = RequestCASSchema.extend({
   response: JsonValueSchema.optional(), requestedAt: TimestampSchema, answeredAt: TimestampSchema.optional(),
   resolvedAt: TimestampSchema.optional(), resolvedBy: EntityIdSchema.optional(),
 }).superRefine((request, context) => {
+  if (request.schema?.type === 'plan-review') {
+    const review = PlanReviewSchema.safeParse(request.schema);
+    if (!review.success) context.addIssue({ code: 'custom', message: 'Invalid plan review question', path: ['schema'] });
+    if (request.status === 'answered' && !PlanReviewResponseSchema.safeParse(request.response).success) {
+      context.addIssue({ code: 'custom', message: 'Invalid plan review response', path: ['response'] });
+    }
+  }
   if (request.status === 'pending') {
     if (request.version !== '1' || request.response !== undefined || request.answeredAt !== undefined || request.resolvedAt !== undefined || request.resolvedBy !== undefined) {
       context.addIssue({ code: 'custom', message: 'Pending question must be unresolved at initial version 1' });

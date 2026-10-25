@@ -12,7 +12,7 @@ import type {
   ToolCallEvent,
 } from '@oh-my-pi/pi-coding-agent/sdk';
 import { ensureThemeSync, theme, type Theme } from '@oh-my-pi/pi-tui/theme';
-import { JsonObjectSchema } from '@openchamber/agent-contract';
+import { JsonObjectSchema, PlanReviewSchema, PlanReviewResponseSchema, type PlanReview, type PlanReviewResponse } from '@openchamber/agent-contract';
 import type { JsonObject, JsonValue } from '@openchamber/agent-contract';
 import type { WorkerInteraction as WorkerInteractionMessage } from '../protocol.ts';
 
@@ -41,6 +41,7 @@ export class WorkerInteraction {
   private readonly approvalHandles = new Map<string, PendingApproval>();
   private readonly executionReceipts = new Map<string, string>();
   private readonly questionHandles = new Map<string, PendingQuestion>();
+  private readonly planHandles = new Map<string, (response: PlanReviewResponse | undefined) => void>();
   private closed = false;
 
   constructor(private readonly callbacks: WorkerInteractionCallbacks) {
@@ -191,7 +192,30 @@ export class WorkerInteraction {
     return true;
   }
 
+  requestPlanReview(review: PlanReview, resolved: (response: PlanReviewResponse | undefined) => void): void {
+    const turnId = this.callbacks.currentTurn();
+    if (this.closed || !turnId) throw new Error('Plan review requires an active worker turn');
+    if (this.planHandles.size > 0) throw new Error('A plan is already awaiting review');
+    const schema = PlanReviewSchema.parse(review);
+    const questionId = randomUUID();
+    this.planHandles.set(questionId, resolved);
+    try {
+      this.callbacks.request({ kind: 'question', questionId, turnId, prompt: schema.title, schema });
+    } catch (error) {
+      this.planHandles.delete(questionId);
+      throw error;
+    }
+  }
+
   resolveQuestion(questionId: string, action: 'answer' | 'cancel', response?: JsonValue): boolean {
+    const plan = this.planHandles.get(questionId);
+    if (plan) {
+      const parsed = action === 'answer' ? PlanReviewResponseSchema.safeParse(response) : undefined;
+      if (parsed && !parsed.success) return false;
+      this.planHandles.delete(questionId);
+      plan(parsed?.success ? parsed.data : undefined);
+      return true;
+    }
     const pending = this.questionHandles.get(questionId);
     if (!pending) return false;
     if (action === 'cancel') {
@@ -231,6 +255,8 @@ export class WorkerInteraction {
   cancelAll(): void {
     for (const pending of this.approvalHandles.values()) pending.resolve(undefined);
     for (const pending of this.questionHandles.values()) pending.resolve(undefined);
+    for (const resolve of this.planHandles.values()) resolve(undefined);
+    this.planHandles.clear();
     this.approvalHandles.clear();
     this.questionHandles.clear();
     this.observed.clear();

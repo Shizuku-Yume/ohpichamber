@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import {
   ApprovalReplySchema, ApprovalRequestSchema, EntityIdSchema, JsonObjectSchema, JsonValueSchema,
-  QuestionReplySchema, QuestionRequestSchema,
+  QuestionReplySchema, QuestionRequestSchema, PlanReviewResponseSchema,
 } from '@openchamber/agent-contract';
 import type {
   ApprovalReply, ApprovalRequest, ApprovalResolution, JsonObject, JsonValue, QuestionReply, QuestionRequest,
@@ -310,6 +310,11 @@ export class InteractionManager {
   }
 
   private validateAnswer(request: QuestionRequest, response: JsonValue): JsonValue {
+    if (request.schema?.type === 'plan-review') {
+      const parsed = PlanReviewResponseSchema.safeParse(response);
+      if (!parsed.success) throw new ProjectionError(400, 'INVALID_REQUEST', 'Plan review response is invalid');
+      return parsed.data;
+    }
     const parsed = QuestionAnswerSchema.safeParse(response);
     if (!parsed.success) throw new ProjectionError(400, 'INVALID_REQUEST', 'Question response does not match the requested result shape');
     const schema = request.schema;

@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { z } from 'zod';
-import { JsonValueSchema, type ApprovalRequest, type JsonObject, type JsonValue, type PromptRequest } from '@openchamber/agent-contract';
+import { JsonValueSchema, type ApprovalRequest, type QuestionRequest, type JsonObject, type JsonValue, type PromptRequest } from '@openchamber/agent-contract';
 import { cfgEditMode } from '@oh-my-pi/pi-coding-agent/edit/settings';
 import { cfgBashPatterns } from '@oh-my-pi/pi-coding-agent/exec/settings';
 import type { SubagentLifecyclePayload } from '@oh-my-pi/pi-coding-agent/task';
@@ -73,6 +73,8 @@ async function fixture({ respond, invoke, machineCommands = [], onSubagent = () 
   const hostRequests: WorkerPolicyRequest[] = [];
   const pendingApprovals: ApprovalRequest[] = [];
   let approvalWaiter: ((approval: ApprovalRequest) => void) | undefined;
+  const pendingQuestions: QuestionRequest[] = [];
+  let questionWaiter: ((question: QuestionRequest) => void) | undefined;
   let journal: SessionJournal | undefined;
   let worker: WorkerSession | undefined;
   let fatal = false;
@@ -88,7 +90,12 @@ async function fixture({ respond, invoke, machineCommands = [], onSubagent = () 
       journal?.append(inputs);
     }, interaction => {
       interactions.onRequest(rootSessionId, generation, interaction);
-      if (interaction.kind !== 'approval') throw new Error('This native seam must not request a question');
+      if (interaction.kind === 'question') {
+        const question = interactions.questions(rootSessionId).find(record => record.questionId === interaction.questionId)!;
+        if (questionWaiter) { const waiter = questionWaiter; questionWaiter = undefined; waiter(question); }
+        else pendingQuestions.push(question);
+        return;
+      }
       const approval = interactions.approvals(rootSessionId).find(record => record.approvalId === interaction.approvalId)!;
       if (approvalWaiter) { const waiter = approvalWaiter; approvalWaiter = undefined; waiter(approval); }
       else pendingApprovals.push(approval);
@@ -143,6 +150,13 @@ async function fixture({ respond, invoke, machineCommands = [], onSubagent = () 
         worker = await openWorker(sessionFile);
         journal!.replace(worker.seed());
         interactions.openSession(rootSessionId, journal!.runtime().epoch, generation, 'workspace', async operation => { await worker!.operation(operation); }, input => { events.push(input); journal!.append([input]); });
+      },
+      waitQuestion: () => {
+        const question = pendingQuestions.shift();
+        if (question) return Promise.resolve(question);
+        const pending = Promise.withResolvers<QuestionRequest>();
+        questionWaiter = pending.resolve;
+        return pending.promise;
       },
       waitApproval: () => {
         const approval = pendingApprovals.shift();
@@ -835,3 +849,80 @@ test('native mode changes reject while a worker run is active', async () => {
     await harness.close();
   }
 }, 30000);
+
+for (const action of ['approve', 'approve-compact', 'feedback', 'reject'] as const) {
+  test(`native plan proposal supports ${action} through canonical questions`, async () => {
+    let stage = 0;
+    let executionStarted = false;
+    const execution = Promise.withResolvers<ProviderRequest>();
+    const releasePlanning = Promise.withResolvers<void>();
+    const planText = '# Native plan\nImplement the requested review.';
+    const harness = await fixture({ planModel: true, respond: async payload => {
+      stage++;
+      if (stage === 1) return completion({ name: 'write', id: 'write-plan', input: { path: 'local://PLAN.md', content: planText } });
+      if (stage === 2) return completion({ name: 'write', id: 'propose-plan', input: { path: 'xd://propose', content: 'review' } });
+      const content = JSON.stringify(payload.messages);
+      if (content.includes('Plan approved.') || content.includes('Revise the verification step.')) {
+        executionStarted = true;
+        execution.resolve(payload);
+      } else await releasePlanning.promise;
+      return completion();
+    } });
+    const planningEnded = Promise.withResolvers<void>();
+    const executionEnded = Promise.withResolvers<void>();
+    let ended = 0;
+    const unsubscribe = harness.worker.session.subscribe(event => {
+      if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) {
+        ended++;
+        if (ended === 1) planningEnded.resolve();
+        if (executionStarted) executionEnded.resolve();
+      }
+    });
+    try {
+      await harness.worker.session.setActiveToolPresentation(
+        harness.worker.session.getEnabledToolNames().filter(name => name !== 'read'),
+        harness.worker.session.getMountedXdevToolNames().filter(name => name !== 'read'),
+      );
+      const before = harness.worker.session.getEnabledToolNames();
+      await harness.worker.operation({ type: 'mode.set', mode: 'plan' });
+      await harness.worker.operation({ type: 'prompt', runId: 'planning-run', request: prompt('Prepare and propose a plan.') });
+      const question = await harness.waitQuestion();
+      expect(question.schema).toEqual({ type: 'plan-review', title: 'review', planReference: 'local://PLAN.md', planText });
+      expect(JSON.stringify(question)).not.toContain(harness.root);
+      const response = action === 'feedback' ? { action, feedback: 'Revise the verification step.' } : { action };
+      const reply = { action: 'answer' as const, response, version: question.version, epoch: question.epoch, workerGeneration: question.workerGeneration };
+      await harness.interactions.resolveQuestion(rootSessionId, question.questionId, reply);
+      expect(harness.events.filter(input => input.event.type === 'run.started')).toHaveLength(1);
+      await expect(harness.interactions.resolveQuestion(rootSessionId, question.questionId, reply)).rejects.toMatchObject({ code: 'QUESTION_CONFLICT' });
+      releasePlanning.resolve();
+      if (action === 'approve-compact') await Promise.race([planningEnded.promise, execution.promise.then(() => undefined)]);
+      else await planningEnded.promise;
+      if (action === 'reject') {
+        expect(harness.worker.mode().kind).toBe('plan');
+        expect(harness.events.filter(input => input.event.type === 'run.started')).toHaveLength(1);
+      } else {
+        await execution.promise;
+        await executionEnded.promise;
+        const started = harness.events.findIndex(input => input.event.type === 'run.started' && input.event.origin === 'plan');
+        expect(started).toBeGreaterThan(0);
+        if (action === 'feedback') {
+          expect(harness.worker.mode().kind).toBe('plan');
+          expect(JSON.stringify(harness.requests.at(-1)?.messages)).toContain('Revise the verification step.');
+        } else {
+          expect(harness.worker.mode()).toEqual({ kind: 'main' });
+          expect(harness.worker.session.getEnabledToolNames()).toEqual(before.includes('read') ? before : [...before, 'read']);
+          const executionMessages = harness.worker.seed().messages.filter(message => message.role === 'user');
+          expect(JSON.stringify(executionMessages.at(-1))).toContain('Plan approved.');
+          expect(JSON.stringify(executionMessages.at(-1))).toContain(planText.replaceAll('\n', '\\n'));
+          expect(JSON.stringify(harness.requests.at(-1)?.messages)).toContain('Full plan inlined below; durable copy at');
+          if (action === 'approve-compact') {
+            const compacted = harness.events.findIndex(input => input.event.type === 'session.compacted');
+            expect(compacted).toBeGreaterThan(0);
+            expect(compacted).toBeLessThan(started);
+          } else expect(harness.events.some(input => input.event.type === 'session.compacted')).toBe(false);
+        }
+      }
+      expect(harness.fatal()).toBe(false);
+    } finally { releasePlanning.resolve(); unsubscribe(); await harness.close(); }
+  }, 30000);
+}

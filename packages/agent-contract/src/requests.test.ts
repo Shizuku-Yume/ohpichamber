@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { ApprovalDecisionSchema, ApprovalReplySchema, ApprovalRequestSchema, ApprovalResolutionSchema, QuestionReplySchema, QuestionRequestSchema, RequestCASSchema } from './requests.ts';
+import { ApprovalDecisionSchema, ApprovalReplySchema, ApprovalRequestSchema, ApprovalResolutionSchema, QuestionReplySchema, QuestionRequestSchema, RequestCASSchema, PlanReviewSchema, PlanReviewResponseSchema } from './requests.ts';
 
 const cas = { version: '1', epoch: 'epoch-1', workerGeneration: 'worker-1' };
 const pendingApproval = {
@@ -114,4 +114,29 @@ describe('request wire schemas', () => {
     expect(() => QuestionRequestSchema.parse({ ...answeredQuestion, status: 'cancelled' })).toThrow();
     expect(() => QuestionRequestSchema.parse({ ...pendingQuestion, status: 'waiting' })).toThrow();
   });
+});
+
+const review = { type: 'plan-review', title: 'Implement review', planReference: 'local://review-plan.md', planText: '# Review\nImplement the plan.' };
+const pending = { questionId: 'question', sessionId: 'session', turnId: 'turn', prompt: review.title, schema: review,
+  status: 'pending', version: '1', epoch: 'epoch', workerGeneration: 'worker', requestedAt: 1 };
+
+test('plan review is a reconnectable canonical question containing only a local plan reference', () => {
+  expect(PlanReviewSchema.parse(review)).toEqual(review);
+  expect(QuestionRequestSchema.parse(pending)).toEqual(pending);
+  for (const planReference of ['/host/plan.md', 'file:///host/plan.md', 'local://', 'local://../plan.md', 'local://bad\\plan.md', 'local://bad path']) {
+    expect(QuestionRequestSchema.safeParse({ ...pending, schema: { ...review, planReference } }).success).toBe(false);
+  }
+  expect(QuestionRequestSchema.safeParse({ ...pending, schema: { ...review, hostPath: '/host/plan.md' } }).success).toBe(false);
+});
+
+test('plan review actions reject malformed feedback and preserve terminal question invariants', () => {
+  for (const response of [{ action: 'approve' }, { action: 'approve-compact' }, { action: 'reject' }, { action: 'feedback', feedback: 'Revise step two' }]) {
+    expect(PlanReviewResponseSchema.parse(response)).toEqual(response);
+    expect(QuestionRequestSchema.safeParse({ ...pending, status: 'answered', version: '2', response, answeredAt: 2, resolvedAt: 2 }).success).toBe(true);
+  }
+  for (const response of [{ action: 'feedback' }, { action: 'feedback', feedback: '  ' }, { action: 'approve', feedback: 'extra' }, { action: 'execute' }, { results: [] }]) {
+    expect(PlanReviewResponseSchema.safeParse(response).success).toBe(false);
+    expect(QuestionRequestSchema.safeParse({ ...pending, status: 'answered', version: '2', response, answeredAt: 2, resolvedAt: 2 }).success).toBe(false);
+  }
+  expect(QuestionRequestSchema.safeParse({ ...pending, status: 'expired', version: '2', resolvedAt: 2 }).success).toBe(true);
 });

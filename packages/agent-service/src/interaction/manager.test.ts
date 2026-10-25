@@ -14,6 +14,50 @@ function sessionHarness() {
   return { manager, events, operations };
 }
 
+const planReview: WorkerInteraction = { kind: 'question', questionId: 'plan-review', turnId: 'turn-1', prompt: 'Review plan',
+  schema: { type: 'plan-review', title: 'Review plan', planReference: 'local://review-plan.md', planText: '# Plan\nImplement review.' } };
+
+test('plan reviews retain reconnect recovery and validate all actions under the existing CAS', async () => {
+  for (const response of [{ action: 'approve' }, { action: 'approve-compact' }, { action: 'reject' }, { action: 'feedback', feedback: 'Revise step two' }]) {
+    const { manager, events, operations } = sessionHarness();
+    try {
+      manager.onRequest('session-1', 'worker-1', planReview);
+      manager.openSession('session-1', 'epoch-1', 'worker-1', 'workspace-1', async operation => { operations.push(operation); }, event => { events.push(event); });
+      expect(manager.questions('session-1')[0]?.schema).toEqual(planReview.schema);
+      const cas = { version: '1', epoch: 'epoch-1', workerGeneration: 'worker-1' };
+      for (const invalid of [{ action: 'feedback', feedback: ' ' }, { action: 'unknown' }, { results: [] }]) {
+        await expect(manager.resolveQuestion('session-1', 'plan-review', { ...cas, action: 'answer', response: invalid })).rejects.toMatchObject({ code: 'INVALID_REQUEST' });
+      }
+      const reply: QuestionReply = { ...cas, action: 'answer', response };
+      const concurrent = await Promise.allSettled([manager.resolveQuestion('session-1', 'plan-review', reply), manager.resolveQuestion('session-1', 'plan-review', reply)]);
+      expect(concurrent.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+      expect(concurrent.filter(result => result.status === 'rejected')).toMatchObject([{ reason: { code: 'QUESTION_CONFLICT' } }]);
+      expect(operations).toEqual([{ type: 'question.resolve', questionId: 'plan-review', action: 'answer', response }]);
+      expect(events.at(-1)?.event).toMatchObject({ type: 'question.resolved', question: { status: 'answered', version: '2', response } });
+    } finally { manager.closeSession('session-1'); }
+  }
+});
+
+test('plan review expires fail-closed and generation changes cannot revive it', async () => {
+  const dispatched = Promise.withResolvers<WorkerOperation>();
+  const manager = new InteractionManager(10);
+  manager.openSession('session-1', 'epoch-1', 'worker-1', 'workspace-1', async operation => { dispatched.resolve(operation); }, () => {});
+  try {
+    manager.onRequest('session-1', 'worker-1', planReview);
+    expect(await dispatched.promise).toEqual({ type: 'question.resolve', questionId: 'plan-review', action: 'cancel' });
+    expect(manager.questions('session-1')).toEqual([]);
+    await expect(manager.resolveQuestion('session-1', 'plan-review', { action: 'answer', response: { action: 'approve' }, version: '1', epoch: 'epoch-1', workerGeneration: 'worker-1' })).rejects.toMatchObject({ code: 'QUESTION_EXPIRED' });
+  } finally { manager.closeSession('session-1'); }
+  const next = sessionHarness();
+  try {
+    next.manager.onRequest('session-1', 'worker-1', planReview);
+    next.manager.openSession('session-1', 'epoch-2', 'worker-2', 'workspace-1', async () => {}, () => {});
+    await expect(next.manager.resolveQuestion('session-1', 'plan-review', { action: 'answer', response: { action: 'approve' }, version: '1', epoch: 'epoch-1', workerGeneration: 'worker-1' })).rejects.toMatchObject({ code: 'QUESTION_EXPIRED' });
+    expect(next.manager.questions('session-1')).toEqual([]);
+    expect(next.operations).toEqual([]);
+  } finally { next.manager.closeSession('session-1'); }
+});
+
 const approval: WorkerInteraction = {
   kind: 'approval', approvalId: 'approval-1', toolCallId: 'call-1', toolName: 'bash', actionType: 'bash_command',
   commandSummary: 'run tests', details: { command: 'bun test' }, policyTarget: { toolName: 'bash', pattern: 'run tests' }, turnId: 'turn-1',

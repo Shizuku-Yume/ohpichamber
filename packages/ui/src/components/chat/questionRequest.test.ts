@@ -3,6 +3,7 @@ import { JsonObjectSchema, type JsonObject } from '@openchamber/agent-contract';
 import {
   askSchemaSignature,
   buildAskAnswer,
+  buildPlanReviewAnswer,
   cardQuestionTextIntent,
   deliverQuestionAnswer,
   dockQuestionTextIntent,
@@ -10,6 +11,7 @@ import {
   isAskQuestionAnswered,
   missingAskQuestionIndexes,
   parseAskQuestions,
+  parsePlanReview,
   setAskCustom,
   setAskText,
   toggleAskOption,
@@ -168,5 +170,54 @@ describe('question answer delivery', () => {
 
     expect(accepted).toBe(true);
     expect(calls).toEqual(['reply']);
+  });
+});
+
+describe('plan review questions', () => {
+  const review = {
+    type: 'plan-review', title: 'Improve the composer',
+    planReference: 'local://plans/composer.md', planText: '## Plan\n\nKeep the existing ask flow.',
+  };
+
+  test('parses a plan review without treating it as omp.ask', () => {
+    expect(parsePlanReview(review)).toEqual(review);
+    expect(parseAskQuestions(review)).toEqual([]);
+    expect(parsePlanReview(schema)).toBeNull();
+  });
+
+  test('rejects malformed reviews and nonlocal references', () => {
+    expect(parsePlanReview({ ...review, planText: 42 })).toBeNull();
+    expect(parsePlanReview({ ...review, planReference: '/home/private/plan.md' })).toBeNull();
+    expect(parsePlanReview({ ...review, planReference: 'https://example.com/plan.md' })).toBeNull();
+    expect(parsePlanReview({ ...review, planReference: 'local://../plan.md' })).toBeNull();
+  });
+
+  test('builds each decision and trims feedback without sending blanks', () => {
+    for (const action of ['approve', 'approve-compact', 'reject'] as const) {
+      expect(buildPlanReviewAnswer(action)).toEqual({ action });
+    }
+    expect(buildPlanReviewAnswer('feedback', '  Keep keyboard navigation.\n')).toEqual({
+      action: 'feedback', feedback: 'Keep keyboard navigation.',
+    });
+    expect(buildPlanReviewAnswer('feedback', ' \n\t ')).toBeNull();
+  });
+
+  test('delivers Reject as an answer and preserves failed feedback for retry', async () => {
+    const rejected = { action: 'reject' } as const;
+    expect(await deliverQuestionAnswer({
+      reply: async (payload) => { expect(payload).toEqual(rejected); },
+      recover: () => { throw new Error('Unexpected recovery'); },
+      failed: () => { throw new Error('Unexpected failure'); },
+    }, rejected)).toBe(true);
+
+    const payload = { action: 'feedback', feedback: 'Revise the plan' } as const;
+    const calls: string[] = [];
+    expect(await deliverQuestionAnswer({
+      reply: async (delivered) => { expect(delivered).toEqual(payload); throw new Error('QUESTION_CONFLICT'); },
+      failed: () => { calls.push('failed'); },
+      recover: () => { calls.push('recover'); },
+    }, payload)).toBe(false);
+    expect(payload.feedback).toBe('Revise the plan');
+    expect(calls).toEqual(['failed', 'recover']);
   });
 });

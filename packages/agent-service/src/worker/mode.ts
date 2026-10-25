@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { SessionModeSchema, type SessionMode } from '@openchamber/agent-contract';
 import type { AgentSession } from '@oh-my-pi/pi-coding-agent/session/agent-session';
 import { isMCPToolName } from '@oh-my-pi/pi-coding-agent/tools/builtin-names';
+import type { PlanProposalHandler } from '@oh-my-pi/pi-coding-agent/tools/resolve';
 import { parseConfiguredThinkingLevel } from '@oh-my-pi/pi-tui/thinking';
 import { ProjectionError } from '../projection/journal.ts';
 
@@ -32,7 +33,7 @@ export class WorkerModeController {
   private previous: Previous | undefined;
   private current: SessionMode;
 
-  constructor(private readonly session: AgentSession) {
+  constructor(private readonly session: AgentSession, private readonly propose: PlanProposalHandler = title => session.preparePlanForReview(title)) {
     const context = session.sessionManager.buildSessionContext();
     const parsed = PlanModeDataSchema.safeParse(context.modeData);
     if (!parsed.success && context.modeData !== undefined && (context.mode === 'plan' || context.mode === 'plan_paused')) {
@@ -72,7 +73,7 @@ export class WorkerModeController {
     this.session.setPlanModeState({ enabled: true, planFilePath: reference, workflow: 'parallel', reentry: this.current.kind === 'plan' });
     try {
       await this.session.setActiveToolsByName([...new Set([...originalTools, ...(this.session.hasBuiltInTool('write') ? ['write'] : [])])]);
-      this.session.setPlanProposalHandler(title => this.session.preparePlanForReview(title));
+      this.session.setPlanProposalHandler(this.propose);
       await this.session.setModelTemporary(planModel.model, planModel.thinkingLevel);
       const modeData: { planFilePath: string; previousTools: string[]; previousMounted: string[]; previousModel?: NonNullable<Previous['model']> } = {
         planFilePath: reference, previousTools: previous.tools, previousMounted: previous.mounted,
@@ -93,7 +94,7 @@ export class WorkerModeController {
     this.current = { kind: 'plan', status: 'active', planReference: reference };
   }
 
-  private async exitPlan(): Promise<void> {
+  private async exitPlan(restoreTools = true): Promise<void> {
     if (this.current.kind === 'main') return;
     const previous = this.previous;
     const restoredModel = previous?.model && this.session.modelRegistry.find(previous.model.provider, previous.model.id);
@@ -105,7 +106,7 @@ export class WorkerModeController {
     const planThinking = this.session.configuredThinkingLevel();
     this.session.setPlanModeState(undefined);
     try {
-      if (previous) await this.session.restoreNonMCPToolPresentation(previous.tools, previous.mounted);
+      if (restoreTools && previous) await this.session.restoreNonMCPToolPresentation(previous.tools, previous.mounted);
       if (restoredModel) await this.session.setModelTemporary(restoredModel, previous?.model?.thinkingLevel);
       this.session.sessionManager.appendModeChange('none');
     } catch (error) {
@@ -119,12 +120,28 @@ export class WorkerModeController {
     this.current = { kind: 'main' };
   }
 
+  async approve(compact?: () => Promise<void>): Promise<SessionMode> {
+    if (this.session.isStreaming) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
+    if (this.current.kind !== 'plan') throw new ProjectionError(409, 'INVALID_REQUEST', 'Plan mode is not active');
+    const previous = this.previous ?? {
+      tools: this.session.getEnabledToolNames().filter(name => !isMCPToolName(name)),
+      mounted: this.session.getMountedXdevToolNames().filter(name => !isMCPToolName(name)),
+    };
+    await this.exitPlan(false);
+    try { await compact?.(); }
+    finally {
+      const tools = previous.tools.includes('read') ? previous.tools : [...previous.tools, 'read'];
+      await this.session.restoreNonMCPToolPresentation(tools, previous.mounted);
+    }
+    return this.mode();
+  }
+
   async restore(): Promise<void> {
     if (this.current.kind !== 'plan' || this.current.status === 'paused') return;
     const tools = this.session.getEnabledToolNames();
     this.session.setPlanModeState({ enabled: true, planFilePath: this.current.planReference, workflow: 'parallel', reentry: true });
     await this.session.setActiveToolsByName([...new Set([...tools, ...(this.session.hasBuiltInTool('write') ? ['write'] : [])])]);
-    this.session.setPlanProposalHandler(title => this.session.preparePlanForReview(title));
+    this.session.setPlanProposalHandler(this.propose);
     // AgentSession already restored the journal's model, not today's role configuration.
   }
 }

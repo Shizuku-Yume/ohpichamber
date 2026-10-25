@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { QuestionRequest } from '@openchamber/agent-contract';
+import { PlanReviewSchema, PlanReviewResponseSchema, type PlanReview, type PlanReviewResponse, type QuestionRequest } from '@openchamber/agent-contract';
 
 /**
  * Native `omp.ask` questions, shaped exactly like the request boundary:
@@ -56,6 +56,23 @@ type AskAnswerResult = {
 };
 
 export type AskAnswerPayload = { results: AskAnswerResult[] };
+
+export type QuestionAnswerPayload = AskAnswerPayload | PlanReviewResponse;
+
+/** Plan reviews use the same pending question and CAS reply boundary as omp.ask. */
+export function parsePlanReview(schema: QuestionRequest['schema']): PlanReview | null {
+  const parsed = PlanReviewSchema.safeParse(schema);
+  return parsed.success ? parsed.data : null;
+}
+
+/** Blank feedback is never sent; the contract trims accepted feedback. */
+export function buildPlanReviewAnswer(
+  action: PlanReviewResponse['action'],
+  feedback = '',
+): PlanReviewResponse | null {
+  const parsed = PlanReviewResponseSchema.safeParse(action === 'feedback' ? { action, feedback } : { action });
+  return parsed.success ? parsed.data : null;
+}
 
 /** Questions from the native schema, in request order. */
 export function parseAskQuestions(schema: QuestionRequest['schema']): AskQuestion[] {
@@ -202,7 +219,7 @@ export function serializeAskQuestionsMarkdown(prompt: string, questions: readonl
 }
 
 type QuestionAnswerDelivery = {
-  reply: (payload: AskAnswerPayload) => Promise<void>;
+  reply: (payload: QuestionAnswerPayload) => Promise<void>;
   recover: () => void;
   failed: () => void;
 };
@@ -214,7 +231,7 @@ type QuestionAnswerDelivery = {
  */
 export async function deliverQuestionAnswer(
   delivery: QuestionAnswerDelivery,
-  payload: AskAnswerPayload,
+  payload: QuestionAnswerPayload,
 ): Promise<boolean> {
   try {
     await delivery.reply(payload);

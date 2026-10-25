@@ -11,6 +11,7 @@ import { useSessions } from '@/sync/sync-context';
 import { useChatSessionSelection } from './chatColumnSession';
 import { FormFieldControl } from './FormFieldControl';
 import { FormMarkdown } from './FormMarkdown';
+import { PlanReviewCard } from './PlanReviewCard';
 import {
     type AskAnswerState,
     answerAt,
@@ -21,6 +22,7 @@ import {
     missingAskQuestionIndexes,
     askSchemaSignature,
     parseAskQuestions,
+    parsePlanReview,
     serializeAskQuestionsMarkdown,
 } from './questionRequest';
 import { useQuestionResponse } from './useQuestionResponse';
@@ -36,6 +38,10 @@ interface FormCardProps {
  * at a time.
  */
 export const FormCard: React.FC<FormCardProps> = ({ form }) => {
+    return parsePlanReview(form.schema) ? <PlanReviewCard form={form} /> : <AskFormCard form={form} />;
+};
+
+const AskFormCard: React.FC<FormCardProps> = ({ form }) => {
     const { t } = useI18n();
     const isMobile = useUIStore((state) => state.isMobile);
     const { sessionId: currentSessionId, directory } = useChatSessionSelection();

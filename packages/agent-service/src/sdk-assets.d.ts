@@ -3,6 +3,12 @@ declare module "*.md" {
 	export default content;
 }
 
+// OMP's public prompts export maps extensionless subpaths to Markdown files.
+declare module "@oh-my-pi/pi-coding-agent/prompts/*" {
+	const content: string;
+	export default content;
+}
+
 declare module "*.txt" {
 	const content: string;
 	export default content;

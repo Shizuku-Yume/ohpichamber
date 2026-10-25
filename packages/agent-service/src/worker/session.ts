@@ -1,4 +1,5 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, realpath } from 'node:fs/promises';
+import { isAbsolute, relative, sep } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { createAgentSession, type ExtensionFactory } from '@oh-my-pi/pi-coding-agent/sdk';
 import { EventBus } from '@oh-my-pi/pi-coding-agent/utils/event-bus';
@@ -37,6 +38,12 @@ import { createNativeBashPolicyExtension } from './native-bash-policy.ts';
 import { BashTool } from '@oh-my-pi/pi-coding-agent/tools/bash';
 import { nativePluginExtensionPaths } from './native-plugin-loader.ts';
 import { NativeCacheWarming } from './catalog-warming.ts';
+import { InternalUrlRouter, resolveLocalRoot } from '@oh-my-pi/pi-coding-agent/internal-urls';
+import { readPlanFile } from '@oh-my-pi/pi-coding-agent/plan-mode/plan-files';
+import { prompt as nativePrompt } from '@oh-my-pi/pi-utils';
+import planApprovedPrompt from '@oh-my-pi/pi-coding-agent/prompts/system/plan-mode-approved' with { type: 'text' };
+import planCompactPrompt from '@oh-my-pi/pi-coding-agent/prompts/system/plan-mode-compact-instructions' with { type: 'text' };
+import { PlanReviewSchema, type PlanReviewResponse } from '@openchamber/agent-contract';
 
 type PromptOperation = Extract<WorkerOperation, { type: 'prompt' | 'steer' | 'follow-up' }>;
 type PreparedPrompt = { text: string; options: PromptOptions; context: Parameters<SessionManager['appendMessage']>[0][] };
@@ -61,6 +68,9 @@ export class WorkerSession {
   private failed = false;
   private controllingBranch = false;
   private compacting = false;
+  private reviewingPlan = false;
+  private planRevision = 0;
+  private planReviewTask: Promise<void> | undefined;
   private constructor(
     readonly session: AgentSession,
     private readonly authStorage: AuthStorage,
@@ -80,7 +90,7 @@ export class WorkerSession {
     private readonly subagentEventBus: EventBus,
     private readonly webSearch: NativeWebSearch,
   ) {
-    this.modeController = new WorkerModeController(session);
+    this.modeController = new WorkerModeController(session, title => this.proposePlan(title));
     this.projection = new WorkerProjection(session.sessionManager, sessionId);
     this.btw = new RpcBtwController(session, frame => {
       if (frame.type === 'btw_delta') this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'btw.delta', recordId: frame.recordId, delta: frame.delta } }]);
@@ -454,6 +464,69 @@ export class WorkerSession {
     } finally { this.controllingBranch = false; }
   }
 
+  private async proposePlan(title: string) {
+    const result = await this.session.preparePlanForReview(title);
+    const details = result.details;
+    if (!details) throw new Error('Native plan preparation did not return plan details');
+    const reference = details.planFilePath;
+    // Reject host paths before opening the OMP reader or publishing any payload.
+    PlanReviewSchema.shape.planReference.parse(reference);
+    const localProtocolOptions = {
+      getArtifactsDir: () => this.session.sessionManager.getArtifactsDir(),
+      getSessionId: () => this.session.sessionManager.getSessionId(),
+    };
+    const localRoot = await realpath(resolveLocalRoot(localProtocolOptions));
+    const locatedPath = await InternalUrlRouter.instance().locate(reference, { cwd: this.cwd, localProtocolOptions });
+    if (!locatedPath) throw new Error('The proposed session-local plan is missing');
+    const resolvedPlanPath = await realpath(locatedPath);
+    const pathWithinRoot = relative(localRoot, resolvedPlanPath);
+    if (pathWithinRoot === '' || pathWithinRoot.startsWith(`..${sep}`) || pathWithinRoot === '..' || isAbsolute(pathWithinRoot)) {
+      throw new Error('The proposed plan resolves outside the session-local artifact root');
+    }
+    const planText = await readPlanFile(reference, { cwd: this.cwd, localProtocolOptions });
+    if (!planText?.trim()) throw new Error('The proposed session-local plan is empty or missing');
+    const review = PlanReviewSchema.parse({ type: 'plan-review', title: details.title, planReference: reference, planText });
+    const revision = this.planRevision + 1;
+    this.interaction.requestPlanReview({ ...review, title: this.projection.publicText(review.title), planText: this.projection.publicText(review.planText) }, response => {
+      if (!response || response.action === 'reject') return;
+      this.reviewingPlan = true;
+      this.planReviewTask = this.continuePlanReview(response, review, revision).catch(() => { if (!this.closed) this.fail(); }).finally(() => { this.reviewingPlan = false; });
+    });
+    this.planRevision = revision;
+    // Complete xd://propose without waiting for human input: the planning run
+    // must settle before an origin:plan run can own the next execution turn.
+    return result;
+  }
+
+  private async continuePlanReview(response: PlanReviewResponse, review: { planReference: string; planText: string }, revision: number): Promise<void> {
+    await this.promptTask;
+    await this.binding;
+    if (this.closed || this.failed || revision !== this.planRevision || this.modeController.mode().kind !== 'plan') return;
+    if (response.action === 'reject') return;
+    if (response.action === 'feedback') {
+      this.reviewingPlan = false;
+      void this.startWorkerRun('plan', async () => { await this.session.prompt(response.feedback); return true; }).catch(() => this.fail());
+      return;
+    }
+    const compact = response.action === 'approve-compact';
+    if (compact) this.session.markPlanInternalAbortPending();
+    try {
+      await this.modeController.approve(compact ? async () => {
+        this.session.setPlanReferencePath(review.planReference);
+        const result = await this.session.compact(undefined, { internalGuidance: nativePrompt.render(planCompactPrompt, { planFilePath: review.planReference }), suppressContinuation: true });
+        const completedAt = Date.now();
+        this.emit([{ timestamp: completedAt, event: { type: 'session.compacted', compactionId: randomUUID(), tokensBefore: result.tokensBefore, completedAt } }]);
+      } : undefined);
+    } finally { this.session.clearPlanInternalAbortPending(); }
+    this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', mode: this.modeController.mode() } }]);
+    if (this.closed || this.failed || revision !== this.planRevision) return;
+    this.session.setPlanReferencePath(review.planReference);
+    const text = nativePrompt.render(planApprovedPrompt, { planFilePath: review.planReference, planContent: review.planText, contextPreserved: true });
+    this.session.markPlanReferenceSent();
+    this.reviewingPlan = false;
+    void this.startWorkerRun('plan', async () => { await this.session.prompt(text); return true; }).catch(() => this.fail());
+  }
+
   /** Start a turn initiated by OMP, without creating or retaining a Host prompt. */
   startWorkerRun(origin: Exclude<RunOrigin, 'host'>, start: () => Promise<boolean>): Promise<boolean> {
     if (this.closed || this.failed) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Worker session is unavailable');
@@ -494,6 +567,7 @@ export class WorkerSession {
     if (this.closed || this.failed) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Worker session is unavailable');
     if (this.controllingBranch) throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', 'Native branch selection is in progress');
     if (this.compacting) throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', 'Session compaction is in progress');
+    if (this.reviewingPlan && !['abort', 'question.resolve', 'history'].includes(operation.type)) throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', 'Plan review transition is in progress');
     switch (operation.type) {
       case 'mode.set': {
         if (this.preparation || this.projection.activeRun() || this.session.isStreaming) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
@@ -629,6 +703,7 @@ export class WorkerSession {
       case 'abort': {
         const run = this.projection.activeRun();
         if (!run || run.runId !== operation.runId) throw new ProjectionError(404, 'RUN_NOT_FOUND', 'Run not found');
+        this.planRevision++;
         this.projection.requestCancel(operation.runId);
         this.cancellingRunId = operation.runId;
         this.interaction.cancelAll();
@@ -689,6 +764,7 @@ export class WorkerSession {
       try { await this.preparation; } catch { /* The operation reports preparation failure to its caller. */ }
       await this.session.abort();
       await this.promptTask;
+      await this.planReviewTask;
       await this.bind();
     } finally {
       this.unsubscribe();

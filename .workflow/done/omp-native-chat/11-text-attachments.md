@@ -26,3 +26,5 @@
 + Check before: native worker test lacked file content; host attachment tests had no admission validation
 + Root cause: non-image attachments were projected as a hidden host-path custom message, and Host delivery resolved files without validating text type or prompt character limits
 + Check after: `bun run --cwd packages/web test server/lib/host/attachment-store.test.js` — 4 passed; agent-service type-check remains blocked by pre-existing missing SessionControl exports and catalog schema errors
+ - Follow-up: OMP 18.8.9 conversion reaches the chat-completions fixture as a normalized user message; the test now verifies file content/name and host-path privacy without assuming the provider role remains developer.
+ - Check after correction: native focused test passed; Host attachment-store test passed 4/4.

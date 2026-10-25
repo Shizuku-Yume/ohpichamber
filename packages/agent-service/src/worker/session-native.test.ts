@@ -384,10 +384,11 @@ test('text attachments become visible OMP file mentions without host paths', asy
     await writeFile(filePath, 'VISIBLE_CONTENT');
     await harness.worker.operation({ type: 'prompt', runId: 'text-attachment-run', request: { ...prompt('Read this note.'), input: { text: 'Read this note.', attachments: [attachment], context: [] } }, attachments: [{ attachmentId: attachment.attachmentId, path: filePath }] });
     await finished.promise;
-    const serialized = JSON.stringify(harness.requests);
-    expect(serialized).toContain('<file path="notes.txt">');
-    expect(serialized).toContain('VISIBLE_CONTENT');
-    expect(serialized).not.toContain(filePath);
+    const requestMessages = harness.requests[0]?.messages ?? [];
+    const fileMention = requestMessages.find(message => JSON.stringify(message).includes('VISIBLE_CONTENT'));
+    expect(fileMention?.role).toBe('user');
+    expect(JSON.stringify(fileMention)).toContain('notes.txt');
+    expect(JSON.stringify(requestMessages)).not.toContain(filePath);
   } finally { unsubscribe(); await harness.close(); }
 }, 30000);
 test('actual SDK Host tool executes with Host-supplied first-use MCP storage and returns its real file result', async () => {

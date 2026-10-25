@@ -4,7 +4,6 @@
 **Task type:** feature
 **Base commit:** 1db4e3f3819dc5e14bd81db58abe1773d8217789
 **Started:** 2026-10-26T00:00:00Z
-**Status:** active
 
 **Delivers:** When the agent in plan mode proposes a plan, a review card shows the plan with Approve, Approve and compact, Send feedback and Reject. Approving leaves plan mode, restores the tools and starts execution as an `origin:'plan'` run with OMP's plan-approved prompt.
 

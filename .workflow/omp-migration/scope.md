@@ -151,7 +151,7 @@ Milestones adhere to the project roadmap:
 | `SCOPE-9.2` | 9.2 | Browser Control and Automation | Rewrite | Browser Open, Snapshot, Click, Type, Scroll, Inspect, Capture, Resize, multi-client claim broker | Host Gateway / Agent Service | M4 | Agent invokes browser tools via OMP; Host Browser Broker routes commands to CDP or Browser Pane with exclusive client claim. |
 | `SCOPE-9.3` | 9.3 | Dev Server and Dev Tunneling | Retain | Local port scanning, `/proc/net/tcp` probe, embedded preview, Cloudflare / ngrok tunnel, E2EE relay | Host Gateway | M1 | Dev Server panel discovers active project ports and provisions authenticated external tunnel URLs for preview. |
 | `SCOPE-10.1` | 10.1 | Diff Walkthrough Summaries | Rewrite | Hunk decomposition, stable hunk IDs, generated file filtering, structured JSON summaries, tour UI | Host Gateway / Agent Service | M4 | Walkthrough engine analyzes commit or branch diffs, calls OMP for structured explanation, and anchors commentary to diff lines. |
-| `SCOPE-10.2` | 10.2 | Session Goals Supervisor | Replatform | Goal checklist, file persistence, idle monitoring, evaluation loop, auto-continuation, token circuit breaker | Host Gateway | M4 | Background supervisor monitors session completion, audits goal progress against turn output, and automatically dispatches next prompt. |
+| `SCOPE-10.2` | 10.2 | Session Goals | Replatform | Objective and token budget, auto-continuation, pause/resume/drop, "Run as goal" from fork, plan, scheduled tasks and CLI, goal notifications; independent audit model retired | Agent Service / OMP SDK | M4 | Starting a goal runs OMP goal mode in the session's worker: the agent continues over worker-originated runs until it completes the goal, the budget runs out or the user stops it. The Host runs no goal loop. |
 | `SCOPE-10.3` | 10.3 | Session Assist and Turn Recaps | Rewrite | Post-turn idle cooling, last three turns extraction, tool noise stripping, recap and suggestion generation | Host Gateway / Agent Service | M4 | Host triggers assist task after session idle, generating recap and next steps into session metadata without polluting transcript. |
 | `SCOPE-10.4` | 10.4 | Durable Message Queue | Replatform | SQLite message queue (target), atomic writes, ordered delivery, retry with exponential backoff, lease holds | Host Gateway | M2 | User messages submitted while session is busy or offline are persisted to SQLite queue and dispatched sequentially on idle. |
 | `SCOPE-10.5` | 10.5 | Model and Intent Routing Pipeline | Replatform | `openchamber/auto` route, intent classification, model parameter rewrite, fallback safeguards | Host Gateway | M4 | Messages sent to auto router are classified by complexity, rewriting model and reasoning effort parameters before dispatch. |
@@ -292,10 +292,10 @@ The Host Gateway scans listening TCP ports to identify active development server
 
 ### Autonomous workflows and scheduling
 
-#### Session Goals supervisor (`SCOPE-10.2`)
-Session Goals provide autonomous agent operation across multi-turn tasks.
-- Supervisor loop: When a user configures session goals, the Host Gateway stores the goal checklist under `.openchamber/goals/`. When the agent becomes idle, the supervisor audits output against the goal criteria using an evaluation model.
-- Circuit breaker: If an agent makes no progress or encounters repeated blocking errors across three consecutive cycles, the supervisor halts automatic continuation and notifies the user.
+#### Session Goals (`SCOPE-10.2`)
+Session Goals provide autonomous agent operation across multi-turn tasks. They run on OMP goal mode (decisions.md: 2026-10-25 - Use OMP goal mode as the only goal loop).
+- Loop: OMP's `RpcGoalController` in the Agent Service worker continues the session after each turn, counts tokens against the optional budget, and stops when the agent marks the goal complete, a continuation makes no progress, or the user pauses, drops or aborts. The Host only forwards goal controls and reports the goal through the session mode.
+- Retired: the Host supervisor's goal files under the data directory, idle timer and small-model progress audit.
 
 #### Durable message queue (target M2, `SCOPE-10.4`)
 The target Host Gateway maintains a durable SQLite message queue.

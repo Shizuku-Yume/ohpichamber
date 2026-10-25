@@ -215,3 +215,39 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** no
 - **Revisit when:** The maintainer reintroduces a supported pre-`v2` consumer, or the manifest schema changes independently of the transport.
 - **Effort:** post-m3-hardening
+
+## 2026-10-25 - Drive OMP modes in-process instead of the rpc-ui subprocess
+
+- **Decided:** Keep OMP inside the Agent Service worker and reuse the pinned package's RPC-mode modules in-process (`RpcGoalController`, `RpcBtwController`, `executeAcpBuiltinSlashCommand`). Plan and vibe get a worker mode controller that follows `interactive-mode.ts` without importing it.
+- **Instead of:** Running `omp --mode rpc-ui` per session behind the Agent Service, as the ompweb reference client does.
+- **Because:** ompweb runs a subprocess only because Node can't load OMP. Our Bun worker already imports OMP and depends on the vendored patch, in-process host tools and the fail-closed interaction manager; a subprocess would duplicate the worker and move those guarantees across a pipe.
+- **Mine:** no
+- **Revisit when:** a needed OMP capability exists only in the RPC process and can't be reached through package exports, or an OMP upgrade removes the `./modes/rpc/*` exports.
+- **Effort:** omp-native-chat
+
+## 2026-10-25 - Replace root agent selection with session modes
+
+- **Decided:** A chat runs the main conversation. The composer switches session mode (main, plan, vibe, goal); agent profiles are only `task` subagent definitions. A root `agentId` or `agentMention` is rejected at Host admission, and stored root `agentId` values are migrated to `null`.
+- **Instead of:** Keeping the root agent picker, filtered to profiles whose tools are available.
+- **Because:** OMP has no root agent. A root profile override changes the tool set behind OMP's back, which produced the 422 on new chats; modes are OMP's own way to change root behaviour.
+- **Mine:** no
+- **Revisit when:** OMP adds root agent personas, or users need a root persona that plan, vibe and goal can't express.
+- **Effort:** omp-native-chat
+
+## 2026-10-25 - Report OMP-initiated turns as worker-originated runs
+
+- **Decided:** When OMP starts a turn without a Host prompt (plan approval, goal continuation), the worker projection opens a canonical run with `origin: 'plan' | 'goal'`. The Host treats it as an active run for `/runs`, queue dispatch and abort.
+- **Instead of:** Having the Host send every continuation and approval prompt through its delivery path.
+- **Because:** `RpcGoalController` already owns budget accounting, the no-progress stop and session-change handling; copying it into the Host would split goal state between two processes. The worker holds no user prompt, so the Host remains the single delivery owner.
+- **Mine:** yes
+- **Revisit when:** a worker-originated run must carry a user-authored prompt, or the Host needs to reorder continuation turns against queued prompts.
+- **Effort:** omp-native-chat
+
+## 2026-10-25 - Use OMP goal mode as the only goal loop
+
+- **Decided:** Session Goals run on OMP goal mode (`RpcGoalController` in the worker). The Host Session Goals supervisor, its objective files and its small-model progress audit are removed; the composer, fork, plan, scheduled-task and CLI "Run as goal" entry points send the `goal create` control, and notifications follow the session's goal mode.
+- **Instead of:** Keeping the Host supervisor as the goal loop, or running both, with the supervisor's independent audit judging OMP's goal turns.
+- **Because:** the supervisor existed because OpenCode had no goal mode. OMP's goal runtime already does continuation, budget accounting, the no-progress stop and abort handling, and a second loop would mean two goal states and two token counters for one session. The maintainer accepted losing the independent audit; the agent now declares completion itself.
+- **Mine:** no
+- **Revisit when:** goals end too early in practice because the agent declares completion without the work being done, or OMP exposes a hook for an external completion check.
+- **Effort:** omp-native-chat

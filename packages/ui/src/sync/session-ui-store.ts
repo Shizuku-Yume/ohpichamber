@@ -265,7 +265,6 @@ export async function routeMessage(params: {
     if (expanded) {
       request.input.text = expanded.content
       if (expanded.modelSelection) request.options = { ...request.options, ...expanded.modelSelection }
-      if (expanded.agentId) request.options.agentId = expanded.agentId
       await dispatchPrompt()
       return 'command'
     }
@@ -388,7 +387,6 @@ type AssistantMessageSessionExecution = {
   providerId: string
   modelId: string
   variant: string
-  agent: string
   instructions: string
   createWorktree?: boolean
   runAsGoal?: boolean
@@ -2122,7 +2120,7 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
     assertSendRuntime(runtimeKey)
     const session = await createSessionWithDraftLifecycle(undefined, sessionDirectory, undefined, undefined, {
       model: { providerId: providerID, modelId: modelID },
-      agent: execution.agent || undefined,
+      agent: null,
       variant: execution.variant || undefined,
     }, draftSnapshot, runtimeKey, selectedSessionId)
     assertSendRuntime(runtimeKey)
@@ -2157,7 +2155,7 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
       composeForkSessionMessage(execution.instructions, assistantPlanText),
       providerID,
       modelID,
-      execution.agent || undefined,
+      undefined,
       undefined,
       undefined,
       undefined,

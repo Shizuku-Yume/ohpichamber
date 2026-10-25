@@ -8,6 +8,13 @@ const splitModel = (value) => {
 
 const text = (value) => (typeof value === 'string' && value.trim() ? value.trim() : null);
 
+export const resolveScheduledTaskOptions = (execution) => ({
+  providerId: execution.useDefaults ? null : execution.providerID ?? null,
+  modelId: execution.useDefaults ? null : execution.modelID ?? null,
+  agentId: null,
+  variant: execution.useDefaults ? null : execution.variant ?? null,
+  reasoningEffort: null,
+});
 export const resolveSessionDefaults = ({ settings, project }) => {
   const projectModel = splitModel(project?.defaultModel);
   const globalModel = splitModel(settings?.defaultModel);

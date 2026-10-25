@@ -146,7 +146,7 @@ export const useProjectTodoSend = (options: {
           visiblePrompt,
           execution.providerID,
           execution.modelID,
-          null,
+          undefined,
           undefined,
           undefined,
           syntheticParts,

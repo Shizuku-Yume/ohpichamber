@@ -16,7 +16,6 @@ export interface MultiRunGroup {
 
 export interface MultiRunAutoFusion extends ModelSelection {
   variant?: string;
-  agentId?: string;
 }
 
 export interface CreateMultiRunParams {
@@ -25,7 +24,6 @@ export interface CreateMultiRunParams {
   /** Human title shown in the sidebar and overview; defaults to `name`. */
   title?: string;
   groups: MultiRunGroup[];
-  agent?: string;
   worktreeBaseBranch?: string;
   isolateRuns?: boolean;
   /** Files sent with every variant. */

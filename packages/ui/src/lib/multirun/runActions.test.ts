@@ -81,20 +81,17 @@ describe('canonical multi-run metadata actions', () => {
     expect(write.mock.calls.length).toBe(0);
     expect(api.published).toEqual([]);
   });
-  test('new model lanes retain the source profile captured before history awaits', async () => {
+  test('added lanes do not inherit root agent selections', async () => {
     const api = fixture();
-    useSelectionStore.getState().saveSessionAgentSelection('a', 'source-agent');
-    spies.push(spyOn(laneData, 'loadLaneFirstPrompt').mockImplementation(async () => {
-      useSelectionStore.getState().saveSessionAgentSelection('a', 'later-agent');
-      return { messageId: 'prompt', turnId: 'turn', text: 'question', files: [] };
-    }));
+    useSelectionStore.getState().saveSessionAgentSelection('a', 'legacy-root-agent');
+    spies.push(spyOn(laneData, 'loadLaneFirstPrompt').mockResolvedValue({ messageId: 'prompt', turnId: 'turn', text: 'question', files: [] }));
     spies.push(spyOn(location, 'resolveRunMemberLocation').mockResolvedValue(null));
     const create = spyOn(creation, 'createMultiRunSession').mockResolvedValue({ ...api.sessions[0], sessionId: 'added', rootSessionId: 'added' });
     const dispatch = spyOn(multiRunStore, 'dispatchRunPrompt').mockResolvedValue(undefined);
     spies.push(create, dispatch);
     await addLaneToRun({ run: api.run, runGroup: 'g1', model: { providerId: 'replacement', modelId: 'model' }, sessionById: api.sessionById });
-    expect(create.mock.calls[0][0].selection.agentId).toBe('source-agent');
-    expect(dispatch.mock.calls[0][0]).toMatchObject({ agentId: 'source-agent', workspaceId: 'workspace', attachmentWorkspaceId: 'workspace' });
+    expect(create.mock.calls[0][0].selection.agentId).toBeNull();
+    expect(dispatch.mock.calls[0][0]).toMatchObject({ workspaceId: 'workspace', attachmentWorkspaceId: 'workspace' });
     useSelectionStore.getState().clearSessionSelections('a');
   });
 });

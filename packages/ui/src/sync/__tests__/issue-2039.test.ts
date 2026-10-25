@@ -551,7 +551,6 @@ describe("assistant answer worktree routing", () => {
       providerId: "provider",
       modelId: "model",
       variant: "",
-      agent: "build",
       instructions: "Follow the answer",
     })).rejects.toThrow("Failed to create session")
     expect(useSessionUIStore.getState().currentSessionId).toBeNull()
@@ -573,12 +572,12 @@ describe("assistant answer worktree routing", () => {
     await useSessionUIStore.getState().createSessionFromAssistantMessage({
       sessionId: "source-session", directory: "/worktrees/source", text: "Implement the plan",
     }, {
-      providerId: "provider", modelId: "model", variant: "", agent: "build",
+      providerId: "provider", modelId: "model", variant: "",
       instructions: "Follow the answer", createWorktree: true,
     })
     expect(createdWorktreeProjects).toEqual([{ id: "project", path: "/repo" }])
     expect(createSessionCalls[0]?.directory).toBe("/worktrees/generated-branch")
-    expect(createSessionCalls[0]?.options).toMatchObject({ providerId: "provider", modelId: "model", agentId: "build" })
+    expect(createSessionCalls[0]?.options).toMatchObject({ providerId: "provider", modelId: "model", agentId: null })
     expect(useSessionUIStore.getState().getDirectoryForSession("ses_issue_2039")).toBe("/worktrees/generated-branch")
     expect(send).toHaveBeenCalledTimes(1)
     expect(send.mock.calls[0]?.[9]?.target).toEqual({

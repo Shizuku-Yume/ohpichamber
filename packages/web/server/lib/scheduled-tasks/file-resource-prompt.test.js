@@ -3,7 +3,7 @@ import { createScheduledPromptExpander } from './file-resource-prompt.js';
 
 const scope = { workspaceId: 'workspace', projectId: 'project', hostProjectId: 'host-project', cwd: '/repo', agentDirectoryId: 'agent-directory', agentDirectory: '/agent' };
 const prompt = (text) => ({ input: { text, attachments: [], context: [{ kind: 'synthetic', text: 'captured context' }] },
-  options: { providerId: 'selected-provider', modelId: 'selected-model', agentId: 'selected-agent', variant: 'high', reasoningEffort: 'high' } });
+  options: { providerId: 'selected-provider', modelId: 'selected-model', agentId: null, variant: 'high', reasoningEffort: 'high' } });
 const setup = (result, resolveWorkspaceScope = vi.fn(async () => scope)) => {
   const service = { request: vi.fn(async () => Response.json(result)) };
   return { service, resolveWorkspaceScope, expand: createScheduledPromptExpander({ service, resolveWorkspaceScope }) };
@@ -31,9 +31,9 @@ describe('native scheduled prompt capture', () => {
     expect(init.method).toBe('POST');
     expect(JSON.parse(init.body)).toEqual({ text });
     expect(captured.input).toEqual({ ...original.input, text: '/rendered-content-not-a-second-invocation\n' });
-    expect(captured.options).toEqual({ providerId: 'bound-provider', modelId: 'bound-model', agentId: 'bound-agent', variant: 'high', reasoningEffort: 'high' });
+    expect(captured.options).toEqual({ providerId: 'bound-provider', modelId: 'bound-model', agentId: null, variant: 'high', reasoningEffort: 'high' });
     expect(original.input.text).toBe(text);
-    expect(original.options.agentId).toBe('selected-agent');
+    expect(original.options.agentId).toBeNull();
   });
 
   it('preserves exact unmatched text and captured selection without speculative skill expansion', async () => {

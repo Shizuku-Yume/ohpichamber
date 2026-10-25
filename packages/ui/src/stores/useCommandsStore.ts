@@ -24,7 +24,7 @@ interface CommandsStore {
   loadCommands: (directory?: string | null) => Promise<boolean>;
   resetForRuntimeSwitch: () => void;
   createCommand: (config: CommandConfig, directory?: string | null) => Promise<boolean>;
-  updateCommand: (name: string, config: Partial<CommandConfig>, directory?: string | null) => Promise<boolean>;
+  updateCommand: (name: string, config: Partial<Omit<CommandConfig, 'agentId'>> & { agentId?: string | null }, directory?: string | null) => Promise<boolean>;
   deleteCommand: (name: string, directory?: string | null) => Promise<boolean>;
   getCommandByName: (name: string, directory?: string | null) => Command | undefined;
 }
@@ -140,7 +140,7 @@ export const useCommandsStore = create<CommandsStore>()(devtools((set, get) => {
         const next = await canonicalClient.fileResources.updateCommand(owner.workspaceId, {
           name: config.name ?? entry.name, description: config.description ?? entry.description,
           content: config.content ?? entry.content, argumentHint: config.argumentHint ?? entry.argumentHint,
-          agentId: 'agentId' in config ? config.agentId : entry.agentId,
+          agentId: null,
           modelSelection: 'modelSelection' in config ? config.modelSelection : entry.modelSelection,
           group: config.group ?? entry.group,
           scope: entry.scope, expectedRevision: catalog.revision, commandId: entry.commandId,

@@ -315,7 +315,7 @@ describe('canonical scheduled execution', () => {
       expect(service.request).toHaveBeenCalledTimes(1);
       expect(service.request.mock.calls[0][0]).toBe('/api/agent/v1/workspaces/opaque-workspace/commands/expand-text');
       expect(JSON.parse(service.request.mock.calls[0][1].body)).toEqual({ text: raw });
-      const captured = { providerId: 'bound-provider', modelId: 'bound-model', agentId: 'bound-agent', variant: 'high', reasoningEffort: null };
+      const captured = { providerId: 'bound-provider', modelId: 'bound-model', agentId: null, variant: 'high', reasoningEffort: null };
       expect(h.created[0].options).toEqual(captured);
       expect(h.sent[0].options).toEqual(captured);
       expect(h.sent[0].input.text).toBe('# Expanded\n\n  Markdown\n');

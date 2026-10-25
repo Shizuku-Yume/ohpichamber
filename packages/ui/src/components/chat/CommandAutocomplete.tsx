@@ -24,7 +24,6 @@ export interface CommandInfo {
   source: CommandSource;
   description?: string;
   searchAliases?: string[];
-  agentId?: string;
   modelSelection?: ModelSelection;
   isBuiltIn?: boolean;
   isOpenChamber?: boolean;
@@ -144,14 +143,13 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
   const allCommands = React.useMemo<CommandInfo[]>(() => {
     const customCommands: CommandInfo[] = commandsWithMetadata.map(cmd => ({
       id: cmd.commandId, name: cmd.name, source: 'native', description: cmd.description,
-      agentId: cmd.agentId, modelSelection: cmd.modelSelection,
+      modelSelection: cmd.modelSelection,
       scope: cmd.scope, resourceSource: cmd.source, group: cmd.group, argumentHint: cmd.argumentHint,
     }));
     const commandNames = new Set(customCommands.map(command => command.name));
     for (const template of templates) {
       if (!commandNames.has(template.name)) customCommands.push({
         id: template.templateId, name: template.name, source: 'native', description: template.description,
-        agentId: template.agentId, modelSelection: template.modelSelection,
         scope: template.scope, resourceSource: template.source, group: template.group,
       });
     }
@@ -418,11 +416,6 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
                         </span>
                       ) : null}
                       {command.resourceSource && <span className={NEUTRAL_BADGE_CLASS}>{command.resourceSource}</span>}
-                      {command.agentId && (
-                        <span className={NEUTRAL_BADGE_CLASS}>
-                          {command.agentId}
-                        </span>
-                      )}
                     </div>
                   </div>
                 </div>

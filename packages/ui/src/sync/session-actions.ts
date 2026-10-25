@@ -712,7 +712,7 @@ async function submitQuestion(request: FormRequest, action: { action: "answer"; 
 /** Capture the existing composer selection in native session admission options. */
 export type SessionCreateSelection = {
   model?: { providerId: string; modelId: string }
-  agent?: string
+  agent?: string | null
   variant?: string
   reasoningEffort?: string
 }

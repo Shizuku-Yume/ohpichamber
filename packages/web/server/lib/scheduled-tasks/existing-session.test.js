@@ -65,7 +65,7 @@ describe('canonical existing-session scheduling', () => {
     const queued = h.appended[0].request;
     expect(queued.content).toBe(prompt);
     expect(queued.request.input.text).toBe('# Native\n\n  raw body\n');
-    expect(queued.request.options).toEqual({ providerId: 'bound-provider', modelId: 'bound-model', agentId: 'bound-agent', variant: 'high', reasoningEffort: null });
+    expect(queued.request.options).toEqual({ providerId: 'bound-provider', modelId: 'bound-model', agentId: null, variant: 'high', reasoningEffort: null });
     await h.runtime.beforeSend(scope, { request: queued.request });
     expect(h.dependencies.service.request).toHaveBeenCalledTimes(1);
     expect(scheduled.execution.prompt).toBe(prompt);

@@ -127,7 +127,7 @@ describe('fusion native primary delivery', () => {
       if (mode === 'stale') registerWorkspaceDirectory('workspace', '/moved');
       return Response.json(mode === 'command' || mode === 'template' ? { kind: mode, content: '/expanded once', modelSelection: { providerId: 'bound', modelId: 'bound-model' }, agentId: 'bound-agent' } : { kind: 'text', content: text });
     }));
-    const result = startRunFusion({ ...api.input, judge: { ...api.input.judge, variant: 'high', agent: 'judge-agent' } });
+    const result = startRunFusion({ ...api.input, judge: { ...api.input.judge, variant: 'high' } });
     if (mode === 'failure' || mode === 'stale') {
       await expect(result).rejects.toThrow();
       expect(send).not.toHaveBeenCalled();
@@ -137,7 +137,7 @@ describe('fusion native primary delivery', () => {
     expect(requests).toHaveLength(mode === 'plain' ? 0 : 1);
     const matched = mode === 'command' || mode === 'template';
     const request = send.mock.calls[0][0].request;
-    expect(request.options).toEqual({ providerId: matched ? 'bound' : 'judge', modelId: matched ? 'bound-model' : 'model', agentId: matched ? 'bound-agent' : 'judge-agent', variant: 'high', reasoningEffort: null });
+    expect(request.options).toEqual({ providerId: matched ? 'bound' : 'judge', modelId: matched ? 'bound-model' : 'model', agentId: null, variant: 'high', reasoningEffort: null });
     expect(request.input.text).toBe(matched ? '/expanded once' : text);
     expect(request.input.context.some(part => part.text.includes('/original task'))).toBe(true);
     expect(request.input.context.some(part => part.text.includes('Source reply /literal'))).toBe(true);

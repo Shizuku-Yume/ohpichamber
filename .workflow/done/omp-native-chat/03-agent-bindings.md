@@ -20,10 +20,14 @@
 Dirty at start: none
 Check before: root agent values were present in command, multi-run, scheduled, fork, review and todo-send paths; scheduled defaults returned configured agent IDs.
 Root cause: legacy root-agent controls remained in UI forms and scheduled runtime option construction after OMP retired root agents.
-Check after: implementation removes those controls and emits null agent IDs in scheduled runtime, review/fork/todo/parallel paths. Full UI type-check and component checks remain for landing verification.
-Review boundary: Base commit 5d1fd2aed3b3624a688af74819c096a13d166ca8; changed UI editor and scheduled-task runtime boundaries.
-
+Check after: `bun run --cwd packages/agent-contract build` and `test` passed (178 tests); focused scheduled web tests passed (56 tests); focused UI boundary suites passed (60 tests / 249 assertions). UI package type-check is blocked only by eight pre-existing missing `chat.chatInput.toast.attachmentUnsupported` locale keys outside this task.
+Real path: isolated Web `GET /health` returned HTTP 200 with Agent Service ready; scheduled-task PUT/DELETE API path was exercised and receipt is `/home/shizuku/Project/ohpichamber-omp-artifacts/omp-native-chat-03-2026-10-25/lane-a-http-path.txt`.
+Review boundary: Base commit 5d1fd2aed3b3624a688af74819c096a13d166ca8; changed UI canonical prompt options, shared profile selector callers, scheduled legacy conversion/runtime/docs, and command persistence.
+Review A/B initial blockers fixed: legacy conversion uses `resolveScheduledTaskOptions` with null agent; shared selector moved to agents and callers/mock relinked; fork execution no longer carries agent; scheduled task cards omit agent display; docs and loop mapping mark legacy agent input-only.
+Review A2/B2 rerun requested after final diff; no unresolved findings observed before rerun.
 Decided without maintainer: preserve agent profile editing in Agents settings because profiles remain task-tool subagents, while root prompts use null agent IDs.
+Evidence notes: focused tests and HTTP receipt above; full UI type-check remains blocked by unrelated locale completeness errors listed in its output.
+
 - [x] Command editor has no agent binding; saved command files lose the agent field on next save, and reading an old file ignores it.
 - [x] Multi-run and parallel composer send `agentId: null` per run.
 - [x] Scheduled-task editor and runtime send `agentId: null`.

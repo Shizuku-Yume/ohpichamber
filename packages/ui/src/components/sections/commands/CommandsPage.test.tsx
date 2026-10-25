@@ -71,7 +71,7 @@ afterEach(async () => {
 });
 
 test('a command refresh during save preserves the newer draft for the queued save', async () => {
-  const writes: Array<{ template: string; publish: () => void; finish: (success?: boolean) => void }> = [];
+  const writes: Array<{ template: string; agentId: string | null | undefined; publish: () => void; finish: (success?: boolean) => void }> = [];
   const command: CommandEntry = { commandId: 'command_example', name: 'example', content: 'initial', description: '', scope: 'agent', source: 'agent', editable: true };
   useProjectsStore.setState({ projects: [{ id: 'project', path: '/project' }], activeProjectId: 'project' });
   useCommandsStore.setState({
@@ -79,13 +79,15 @@ test('a command refresh during save preserves the newer draft for the queued sav
     commands: [command],
     commandsByDirectory: { '/project': [command] },
     updateCommand: async (_name, config) => new Promise<boolean>((resolve) => {
-      writes.push({ template: config.content || '', publish: () => {
-        const updated = { ...command, ...config };
+      writes.push({ template: config.content || '', agentId: config.agentId, publish: () => {
+        const { agentId, ...rest } = { ...command, ...config };
+        const updated: CommandEntry = { ...rest, ...(agentId ? { agentId } : {}) };
         useCommandsStore.setState({ commands: [updated], commandsByDirectory: { '/project': [updated] } });
       }, finish: (success = true) => resolve(success) });
     }),
   });
   await act(async () => { root.render(<SyncProvider directory="/project"><I18nProvider><CommandsPage /></I18nProvider></SyncProvider>); });
+  expect(container.textContent).not.toContain('Override Agent');
   const prompt = container.querySelector<HTMLTextAreaElement>('textarea[rows="12"]');
   if (!prompt) throw new Error('Missing command template');
   const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
@@ -99,7 +101,7 @@ test('a command refresh during save preserves the newer draft for the queued sav
   };
   await edit(' older ');
   await edit('newer');
-  expect(writes.map((write) => write.template)).toEqual([' older ']);
+  expect(writes[0].agentId).toBeNull();
   // updateCommand publishes the refreshed catalog before its promise settles.
   await act(async () => { writes[0].publish(); });
   expect(prompt.value).toBe('newer');

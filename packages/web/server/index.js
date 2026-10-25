@@ -80,7 +80,7 @@ import { createLinearSessionStatusRuntime } from './lib/linear/status-runtime.js
 import { createSessionKnowledgeRuntime } from './lib/session-knowledge/runtime.js';
 import { createMessageSearchRuntime } from './lib/message-search/runtime.js';
 import { createScheduledTasksRuntime } from './lib/scheduled-tasks/runtime.js';
-import { resolveSessionDefaults } from './lib/scheduled-tasks/session-defaults.js';
+import { resolveScheduledTaskOptions, resolveSessionDefaults } from './lib/scheduled-tasks/session-defaults.js';
 import { createScheduledTaskContext } from './lib/scheduled-tasks/existing-session.js';
 import { createChatsScope } from './lib/scheduled-tasks/chats-scope.js';
 import { createServerStartupRuntime } from './lib/host/server-startup-runtime.js';
@@ -1151,9 +1151,7 @@ const convertLegacyQueue = async () => {
         throw new OpenChamberControlError('Legacy scheduled queue target is unavailable', 409);
       }
       await scheduledTasksRuntime.validateTarget(scope.hostProjectId, scope.sessionId);
-      const options = task.execution.useDefaults
-        ? { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null }
-        : { providerId: task.execution.providerID ?? null, modelId: task.execution.modelID ?? null, agentId: task.execution.agent ?? null, variant: task.execution.variant ?? null, reasoningEffort: null };
+      const options = resolveScheduledTaskOptions(task.execution);
       return {
         options,
         context: [createScheduledTaskContext({ projectId: scope.hostProjectId, taskId: task.id, sessionId: scope.sessionId,

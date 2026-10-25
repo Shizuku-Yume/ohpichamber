@@ -90,11 +90,9 @@ export async function askOtherModels(input: {
   session: Session;
   turnUserMessageId: string;
   models: ReadonlyArray<MultiRunModelSelection>;
-  agentId?: string | null;
 }): Promise<{ runKey: string; failedCount: number }> {
   const { session } = input;
   const runtimeKey = getRuntimeKey();
-  const sourceAgentId = input.agentId === undefined ? useSelectionStore.getState().getSessionAgentSelection(session.sessionId) : input.agentId;
   const assertCurrent = () => { if (getRuntimeKey() !== runtimeKey) throw new Error('Runtime changed'); };
   const prompt = await loadLaneFirstPrompt(session.sessionId);
   assertCurrent();
@@ -142,7 +140,7 @@ export async function askOtherModels(input: {
     try {
       assertCurrent();
       // Each new lane counts the ones before it, so duplicates get an index.
-      const laneId = await addLaneToRun({ run, runGroup: undefined, model, sessionById, agentId: sourceAgentId, isolateFromProjectRoot: true });
+      const laneId = await addLaneToRun({ run, runGroup: undefined, model, sessionById, isolateFromProjectRoot: true });
       const created = { sessionId: laneId, identity: { ...identity, providerID: model.providerId, modelID: model.modelId } };
       run.lanes = [...run.lanes, created];
     } catch (error) {
@@ -164,13 +162,6 @@ export async function addLaneToRun(input: {
   runGroup: string | undefined;
   model: MultiRunModelSelection;
   sessionById: ReadonlyMap<string, Session>;
-  /** Source profile captured before reading history or preparing the worktree. */
-  agentId?: string | null;
-  /**
-   * Give the new lane its own worktree even when the template lane works in
-   * the project root (a chat turned into a run). Shared-directory runs leave
-   * this off and keep sharing.
-   */
   isolateFromProjectRoot?: boolean;
 }): Promise<string> {
   const { run, model } = input;
@@ -185,7 +176,6 @@ export async function addLaneToRun(input: {
   if (!directory) throw new Error('Template directory is unknown');
   const selection = resolveSendSelection(templateSession.sessionId, directory, {
     providerId: model.providerId, modelId: model.modelId, variant: model.variant, reasoningEffort: model.reasoningEffort,
-    agentId: (input.agentId === undefined ? useSelectionStore.getState().getSessionAgentSelection(templateSession.sessionId) : input.agentId) || undefined,
   });
 
   const prompt = await loadLaneFirstPrompt(templateSession.sessionId);
@@ -260,7 +250,6 @@ export async function addLaneToRun(input: {
     modelId: model.modelId,
     variant: selection.variant ?? undefined,
     reasoningEffort: selection.reasoningEffort ?? undefined,
-    agentId: selection.agentId ?? undefined,
     files: prompt.files,
   });
   return session.sessionId;

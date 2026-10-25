@@ -24,7 +24,7 @@
  *               explicitly enables them, so discovery never auto-executes
  *               repository content)
  *   model    -> split into task.execution.providerID / task.execution.modelID
- *   agent    -> task.execution.agent (optional)
+ *   agent    -> legacy input-only field; retained if present but ignored at runtime
  *   timezone -> task.schedule.timezone (optional, defaults to the server zone)
  *   body     -> task.execution.prompt
  *

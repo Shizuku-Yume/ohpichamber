@@ -32,7 +32,7 @@ describe('native file resource wire contracts', () => {
   test('all command/template mutation names are confined and require decimal CAS counters', () => {
     const create = { expectedRevision: '0', name: 'review', scope: 'workspace', content: 'Review $1' };
     expect(CommandCreateRequestSchema.parse(create)).toEqual(create);
-    expect(CommandUpdateRequestSchema.parse({ ...create, commandId: 'command' }).commandId).toBe('command');
+    expect(CommandUpdateRequestSchema.parse({ ...create, commandId: 'command', agentId: null }).agentId).toBeNull();
     expect(CommandDeleteRequestSchema.safeParse({ commandId: 'command' }).success).toBe(false);
     expect(PromptTemplateCreateRequestSchema.parse({ ...create, name: 'quality/review' }).name).toBe('quality/review');
     expect(PromptTemplateUpdateRequestSchema.safeParse({ ...create, templateId: 'template', scope: 'inherited' }).success).toBe(false);

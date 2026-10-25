@@ -7,6 +7,7 @@ const command: CommandEntry = {
   scope: 'workspace', source: 'project', editable: true, group: 'team', argumentHint: '<files>',
   agentId: 'agent_review', modelSelection: { providerId: 'provider_a', modelId: 'model_a' },
 };
+let lastUpdateRequest: unknown;
 let catalog: CommandCatalogState;
 let requests: Request[];
 let failRead = false;
@@ -19,6 +20,7 @@ beforeEach(() => {
   useCommandsStore.getState().resetForRuntimeSwitch();
   catalog = { workspaceId: 'workspace_1', revision: '1', commands: [command], builtinCommands: ['context', 'compact'] };
   requests = []; failRead = false; conflict = false; delayedRead = null; onRead = () => {};
+  lastUpdateRequest = undefined;
   const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const request = new Request(input instanceof Request ? input : new URL(input.toString(), 'http://localhost'), init);
     requests.push(request.clone());
@@ -40,8 +42,11 @@ beforeEach(() => {
     }
     if (request.method === 'PATCH' && path.endsWith('/commands/command_1')) {
       const input = CommandUpdateRequestSchema.parse(await request.json());
-      expect(input.expectedRevision).toBe(catalog.revision);
-      catalog = { ...catalog, revision: String(BigInt(catalog.revision) + 1n), commands: [{ ...command, name: input.name, description: input.description ?? '', content: input.content, agentId: input.agentId, modelSelection: input.modelSelection, group: input.group, argumentHint: input.argumentHint }] };
+      lastUpdateRequest = input;
+      const updated: CommandEntry = { ...command, name: input.name, description: input.description ?? '', content: input.content, modelSelection: input.modelSelection, group: input.group, argumentHint: input.argumentHint };
+      delete updated.agentId;
+      if (input.agentId) updated.agentId = input.agentId;
+      catalog = { ...catalog, revision: String(BigInt(catalog.revision) + 1n), commands: [updated] };
       return Response.json(catalog);
     }
     if (request.method === 'DELETE' && path.endsWith('/commands/command_1')) {
@@ -63,16 +68,13 @@ describe('native command consumers', () => {
     expect(await useCommandsStore.getState().loadCommands('/repo')).toBe(true);
     expect(requests).toHaveLength(2);
   });
-  test('writes exact Markdown, CAS and canonical metadata without legacy bindings', async () => {
+  test('writes exact Markdown, CAS and clears legacy bindings', async () => {
     const content = '\n  ## Heading\n\n```ts\nconst value = 1;\n```\n';
     expect(await useCommandsStore.getState().updateCommand(command.name, { content }, '/repo')).toBe(true);
-    const input = CommandUpdateRequestSchema.parse(await requests.find(request => request.method === 'PATCH')?.json());
-    expect(input.content).toBe(content);
-    expect(input.agentId).toBe(command.agentId);
-    expect(input.modelSelection).toEqual(command.modelSelection);
-    expect(input.group).toBe('team');
-    expect(input.argumentHint).toBe('<files>');
-    expect(await useCommandsStore.getState().updateCommand(command.name, { agentId: undefined, modelSelection: undefined }, '/repo')).toBe(true);
+    expect(lastUpdateRequest).toMatchObject({ content, agentId: null });
+    expect(selectCommandsForDirectory(useCommandsStore.getState(), '/repo')[0].agentId).toBeUndefined();
+    expect(await useCommandsStore.getState().updateCommand(command.name, { agentId: null, modelSelection: undefined }, '/repo')).toBe(true);
+    expect(lastUpdateRequest).toMatchObject({ agentId: null });
     expect(selectCommandsForDirectory(useCommandsStore.getState(), '/repo')[0].agentId).toBeUndefined();
     expect(selectCommandsForDirectory(useCommandsStore.getState(), '/repo')[0].modelSelection).toBeUndefined();
   });

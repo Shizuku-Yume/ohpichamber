@@ -75,7 +75,7 @@ export const CommandsPage: React.FC = () => {
     try {
       const success = await useCommandsStore.getState().updateCommand(entity.name, {
         name: form.name, description: form.description, content: form.content, argumentHint: form.argumentHint,
-        modelSelection: form.modelSelection ?? undefined,
+        agentId: null, modelSelection: form.modelSelection ?? undefined,
       }, directory);
       if (!success) return autosaveFailed(t('settings.commands.page.toast.updateFailed'));
       if (identityRef.current === identity) saved.current = form;
@@ -160,6 +160,7 @@ export const CommandsPage: React.FC = () => {
             aria-label="$ARGUMENTS" className="h-8 w-64 px-2" />
         </SettingsFieldRow>
       </SettingsSection>
+      <SettingsSection title={t('settings.commands.page.section.executionContext')} contentClassName="space-y-0">
         <SettingsFieldRow settingsItem="commands.model" label={t('settings.agents.page.field.overrideModel')}>
           <ModelSelector providerId={form.modelSelection?.providerId ?? ''} modelId={form.modelSelection?.modelId ?? ''}
             directory={directory ?? undefined} onChange={(providerId, modelId) => {

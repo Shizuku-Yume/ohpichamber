@@ -111,7 +111,7 @@ mock.module('@/lib/i18n', () => ({
 mock.module('@/components/sections/agents/ModelSelector', () => ({
   ModelSelector: () => <button type="button">model</button>,
 }));
-mock.module('@/components/sections/commands/AgentSelector', () => ({
+mock.module('@/components/sections/agents/AgentSelector', () => ({
   AgentSelector: () => <button type="button">agent</button>,
 }));
 mock.module('@/components/sections/shared/SettingsInfoHint', () => ({

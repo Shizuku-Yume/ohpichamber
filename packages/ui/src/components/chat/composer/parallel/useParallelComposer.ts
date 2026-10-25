@@ -201,7 +201,6 @@ export function useParallelComposer(input: {
         file.dataUrl,
       )))
       : [];
-    const config = useConfigStore.getState();
     const params: CreateMultiRunParams = {
       name: title,
       title,

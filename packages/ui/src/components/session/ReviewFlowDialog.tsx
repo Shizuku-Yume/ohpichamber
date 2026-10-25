@@ -1,5 +1,7 @@
 import React from 'react';
 
+import { DialogDescription } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
 import { ThinkingPill } from '@/components/session/ThinkingPill';
 import { Button } from '@/components/ui/button';

@@ -36,7 +36,6 @@ export const createScheduledPromptExpander = ({ service, resolveWorkspaceScope }
       options.providerId = expansion.modelSelection.providerId;
       options.modelId = expansion.modelSelection.modelId;
     }
-    if (expansion.agentId !== undefined) options.agentId = expansion.agentId;
   }
   return PromptRequestSchema.parse({ input: { ...prompt.input, text: expansion.content }, options });
 };

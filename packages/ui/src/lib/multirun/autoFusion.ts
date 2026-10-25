@@ -50,7 +50,7 @@ function useRunAutoFusion(onStartFailed: (failure: AutoFusionFailure) => void): 
         await startRunFusion({
           run,
           sourceIds: run.lanes.map((lane) => lane.sessionId),
-          judge: resolveFusionJudge({ providerId: autoFusion.providerID, modelId: autoFusion.modelID, variant: autoFusion.variant, agent: autoFusion.agent }),
+          judge: resolveFusionJudge({ providerId: autoFusion.providerID, modelId: autoFusion.modelID, variant: autoFusion.variant }),
           sessionById,
         });
       } catch (error) {

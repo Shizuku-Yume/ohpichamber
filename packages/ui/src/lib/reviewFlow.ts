@@ -299,13 +299,11 @@ const resolveModelContext = (sessionID: string): SessionModelContext | null => {
   const selection = useSelectionStore.getState();
   const config = useConfigStore.getState();
   const lastChoice = useSessionUIStore.getState().getLastUserChoice(sessionID);
-  const agent = lastChoice?.agent || selection.getSessionAgentSelection(sessionID) || config.currentAgentName || undefined;
   const sessionModel = selection.getSessionModelSelection(sessionID);
-  const agentModel = agent ? selection.getAgentModelForSession(sessionID, agent) : null;
   const lastChoiceModel = lastChoice?.providerId && lastChoice.modelId
     ? { providerId: lastChoice.providerId, modelId: lastChoice.modelId }
     : null;
-  const selectedModel = lastChoiceModel || agentModel || sessionModel || (config.currentProviderId && config.currentModelId
+  const selectedModel = lastChoiceModel || sessionModel || (config.currentProviderId && config.currentModelId
     ? { providerId: config.currentProviderId, modelId: config.currentModelId }
     : null);
   if (!selectedModel?.providerId || !selectedModel?.modelId) return null;
@@ -313,21 +311,17 @@ const resolveModelContext = (sessionID: string): SessionModelContext | null => {
     return {
       providerId: lastChoiceModel.providerId,
       modelId: lastChoiceModel.modelId,
-      agentId: agent,
       variant: lastChoice?.variant,
     };
   }
-  const selectionVariant = agent
-    ? selection.getAgentModelVariantForSession(sessionID, agent, selectedModel.providerId, selectedModel.modelId)
-    : undefined;
   const configVariant = config.currentProviderId === selectedModel.providerId && config.currentModelId === selectedModel.modelId
     ? config.currentVariant
     : undefined;
   return {
     providerId: selectedModel.providerId,
     modelId: selectedModel.modelId,
-    agentId: agent,
-    variant: selectionVariant || configVariant || undefined,
+    agentId: undefined,
+    variant: configVariant || undefined,
   };
 };
 
@@ -354,14 +348,9 @@ const sendPlainMessage = async (
   const expanded = await expandNativeFileResource(text, directory);
   assertCurrent();
   text = expanded?.content ?? text;
-  const resolved = { ...captured, ...expanded?.modelSelection, agentId: expanded?.agentId ?? captured.agentId };
+  const resolved = { ...captured, ...expanded?.modelSelection, agentId: undefined };
   const selection = useSelectionStore.getState();
   selection.saveSessionModelSelection(sessionID, resolved.providerId, resolved.modelId);
-  if (resolved.agentId) {
-    selection.saveSessionAgentSelection(sessionID, resolved.agentId);
-    selection.saveAgentModelForSession(sessionID, resolved.agentId, resolved.providerId, resolved.modelId);
-    selection.saveAgentModelVariantForSession(sessionID, resolved.agentId, resolved.providerId, resolved.modelId, resolved.variant);
-  }
   // Review sessions are real work sessions, so they carry the project's
   // standing context (pinned notes, memory) exactly as a composer send would.
   const knowledge = await fetchSessionKnowledge(directory, sessionID);
@@ -386,7 +375,7 @@ const sendPlainMessage = async (
         runtimeKey,
         request: {
           input: { text, attachments: [], context: promptContext.map((item) => ({ kind: 'synthetic' as const, text: item.text })) },
-          options: { providerId: resolved.providerId, modelId: resolved.modelId, agentId: resolved.agentId ?? null, variant: resolved.variant ?? null, reasoningEffort: null },
+          options: { providerId: resolved.providerId, modelId: resolved.modelId, agentId: null, variant: resolved.variant ?? null, reasoningEffort: null },
         },
       });
     },
@@ -477,7 +466,7 @@ const createOrReuseReviewSession = async (
   const review = (await canonicalClient.createSession({
     projectId: original.projectId,
     workspaceId: original.workspaceId,
-    options: { providerId: selection.providerId, modelId: selection.modelId, agentId: selection.agentId ?? null, variant: selection.variant ?? null, reasoningEffort: null },
+    options: { providerId: selection.providerId, modelId: selection.modelId, agentId: null, variant: selection.variant ?? null, reasoningEffort: null },
     metadata: withReviewSessionMarker({ title: getReviewSessionTitle(original) }, originalSessionID),
   })).session;
   assertAutoReviewRuntimeStillCurrent(expectedRuntimeKey);
@@ -502,7 +491,7 @@ export const startReviewFlow = async (input: StartReviewFlowInput): Promise<void
   const reviewSelection: SessionModelContext = {
     providerId: input.providerId,
     modelId: input.modelId,
-    agentId: input.agentId,
+    agentId: undefined,
     variant: input.variant,
   };
   let reviewPrompt: string;

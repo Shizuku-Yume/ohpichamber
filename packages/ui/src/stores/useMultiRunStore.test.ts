@@ -98,7 +98,7 @@ function fixture(input: { rejectFirst?: boolean; isolate?: boolean; wait?: boole
   return { deleted, published, dispatched, order, worktrees, waitForDispatch, observed, manager, loader };
 }
 
-const laneInput = () => ({ runtimeKey: runtime.getRuntimeKey(), assertCurrent: () => {}, sessionId: 'lane', workspaceId: 'workspace', directory: '/repo', prompt: '/review "two words"\n tail  ', providerId: 'captured', modelId: 'model', agentId: 'agent', variant: 'high', reasoningEffort: 'medium' });
+const laneInput = () => ({ runtimeKey: runtime.getRuntimeKey(), assertCurrent: () => {}, sessionId: 'lane', workspaceId: 'workspace', directory: '/repo', prompt: '/review "two words"\n tail  ', providerId: 'captured', modelId: 'model', variant: 'high', reasoningEffort: 'medium' });
 
 describe('lane native expansion delivery', () => {
   for (const kind of ['command', 'template', 'text'] as const) test(`uses one authoritative ${kind} expansion`, async () => {
@@ -114,7 +114,7 @@ describe('lane native expansion delivery', () => {
     }));
     await dispatchRunPrompt(input);
     expect(requests).toHaveLength(1);
-    expect(api.dispatched[0].request).toMatchObject({ input: { text: kind === 'text' ? input.prompt : '/already expanded\n' }, options: { providerId: kind === 'text' ? 'captured' : 'bound', modelId: kind === 'text' ? 'model' : 'bound-model', agentId: kind === 'text' ? 'agent' : 'bound-agent', variant: 'high', reasoningEffort: 'medium' } });
+    expect(api.dispatched[0].request).toMatchObject({ input: { text: kind === 'text' ? input.prompt : '/already expanded\n' }, options: { providerId: kind === 'text' ? 'captured' : 'bound', modelId: kind === 'text' ? 'model' : 'bound-model', agentId: null, variant: 'high', reasoningEffort: 'medium' } });
   });
   test('expansion failure never dispatches original text', async () => {
     const api = fixture();
@@ -139,14 +139,14 @@ const models = [
 describe('canonical multi-run store', () => {
   test('publishes only ID-bound native records and keeps each captured selection', async () => {
     const api = fixture();
-    const result = await useMultiRunStore.getState().createMultiRun({ name: 'run', isolateRuns: false, agent: 'agent', groups: [{ prompt: 'question', models }] });
+    const result = await useMultiRunStore.getState().createMultiRun({ name: 'run', isolateRuns: false, groups: [{ prompt: 'question', models }] });
     await api.waitForDispatch(result?.sessionIds.length ?? 0);
     expect(result?.sessionIds).toEqual(['lane_1', 'lane_2']);
     expect(api.published.map((session) => getMultiRunMembership(session)?.sessionID)).toEqual(['lane_1', 'lane_2']);
     expect(resolveWorkspaceDirectory(api.published[0].workspaceId)).toBe('/repo');
     expect(api.dispatched.map(({ request }) => request.options)).toEqual([
-      { providerId: 'provider-a', modelId: 'vendor/a', variant: 'high', reasoningEffort: 'high', agentId: 'agent' },
-      { providerId: 'provider-b', modelId: 'vendor/b', variant: null, reasoningEffort: null, agentId: 'agent' },
+      { providerId: 'provider-a', modelId: 'vendor/a', variant: 'high', reasoningEffort: 'high', agentId: null },
+      { providerId: 'provider-b', modelId: 'vendor/b', variant: null, reasoningEffort: null, agentId: null },
     ]);
     expect(api.observed).toEqual(['lane_1', 'lane_2']);
   });

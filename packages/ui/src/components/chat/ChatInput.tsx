@@ -53,21 +53,18 @@ import { AttachedFilesList } from './FileAttachment';
 import { lazyWithChunkRecovery } from '@/lib/chunkLoadRecovery';
 import type { ToolPopupContent } from './message/types';
 import { QueuedMessagesStrip } from './QueuedMessagesStrip';
-import { TodoTray } from './TodoTray';
 import { AutoReviewStrip } from './AutoReviewStrip';
 import type { FileMentionHandle } from './FileMentionAutocomplete';
 import type { CommandAutocompleteHandle, CommandInfo } from './CommandAutocomplete';
 import type { SkillAutocompleteHandle } from './SkillAutocomplete';
 import { cn } from "@/lib/utils";
 import { ModelControls } from './ModelControls';
-import { parseAgentMentions } from '@/lib/messages/agentMentions';
 import { CONTEXT_METADATA_KEY, draftFromContextPayload } from '@/lib/messages/contextParts';
 import { shouldSubmitEnter } from './composer/keyboardPolicy';
 import { getDropdownNavigationKey } from '@/components/ui/dropdown-navigation';
 import { useChatColumnActions, useChatColumnExpandedInput, useChatColumnSession, type ChatColumnSession } from './chatColumnSession';
 import { usePinnedComposerSelection } from './pinnedComposerSelection';
 import { useChatSurfaceMode } from './useChatSurfaceMode';
-import { MobileAgentButton } from './MobileAgentButton';
 import { MobileModelButton } from './MobileModelButton';
 import { useSessionActivity } from '@/hooks/useSessionActivity';
 import { toast } from '@/components/ui';
@@ -77,8 +74,7 @@ import { useHardwareKeyboard } from '@/lib/hardwareKeyboard';
 import { isCapacitorApp } from '@/lib/platform';
 import { isIMECompositionEvent } from '@/lib/ime';
 import { setNativeImagePasteEnabled, subscribeToNativeImagePastes } from '@/lib/nativeImagePaste';
-import { getCycledAgentId, type MobileControlsPanel } from './mobileControlsUtils';
-import { isAutoModel } from '@/lib/routing/autoModel';
+import { type MobileControlsPanel } from './mobileControlsUtils';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { ReferencePickerDialog } from '@/components/references/ReferencePickerDialog';
@@ -108,7 +104,7 @@ import { routeGuestSlashCommand } from './composer/submit/guestCommands';
 import { pluginModeFromId } from '@/lib/surfaces/modes';
 import { expandCanonicalSkills } from '@/sync/session-ui-store';
 import { selectSkillsForDirectory, useSkillsStore } from '@/stores/useSkillsStore';
-import { selectBuiltinCommandsForDirectory, selectCommandsForDirectory, useCommandsStore } from '@/stores/useCommandsStore';
+import { selectCommandsForDirectory, useCommandsStore } from '@/stores/useCommandsStore';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useGitStore } from '@/stores/useGitStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -125,7 +121,6 @@ import { sessionEvents } from '@/lib/sessionEvents';
 import { fetchResponseStyleInstruction } from '@/lib/responseStyle';
 import { wrapSystemReminder } from '@/lib/systemReminder';
 import { getSyncMessages } from '@/sync/sync-refs';
-import { eventMatchesShortcut, getEffectiveShortcutCombo, normalizeCombo } from '@/lib/shortcuts';
 import {
     assignImageAttachmentFilenames,
     buildAttachmentCitationText,
@@ -336,7 +331,6 @@ function useStableHandler<Args extends readonly unknown[], Result>(
 
 const MemoModelControls = React.memo(ModelControls);
 const MemoComposerDictation = React.memo(ComposerDictation);
-const MemoMobileAgentButton = React.memo(MobileAgentButton);
 
 const MemoMobileModelButton = React.memo(MobileModelButton);
 
@@ -533,7 +527,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const attachedFiles = useDraftAttachedFiles(chatDraftIdentity);
     const addAttachedFile = useInputStore((s) => s.addAttachedFile);
     const clearAttachedFiles = useInputStore((s) => s.clearAttachedFiles);
-    const saveSessionAgentSelection = useSelectionStore((s) => s.saveSessionAgentSelection);
     const btwModelSelection = useSelectionStore(React.useCallback(
         (s) => btwComposerSessionId ? s.sessionModelSelections.get(btwComposerSessionId) ?? null : null,
         [btwComposerSessionId],
@@ -542,6 +535,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         (s) => btwComposerSessionId ? s.sessionAgentSelections.get(btwComposerSessionId) ?? null : null,
         [btwComposerSessionId],
     ));
+    const agents = useAgentsStore((state) => selectAgentsForDirectory(state, currentDirectory));
     const consumePendingBtwComposerRequest = useInputStore((s) => s.consumePendingBtwComposerRequest);
     const pendingBtwComposerRequest = useInputStore((s) => s.pendingBtwComposerRequest);
     const pendingPresetSubmit = useInputStore((s) => s.pendingPresetSubmit);
@@ -591,24 +585,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         ? getModelMetadata(currentProviderId, currentModelId)
         : undefined;
     const configVariant = useConfigStore((state) => state.currentVariant);
-    const currentVariantSelection = useConfigStore((state) => state.currentVariantSelection);
-    const configAgentName = useConfigStore((state) => state.currentAgentName);
-    const currentAgentName = pinnedComposerSelection?.agent ?? configAgentName;
     const currentVariant = pinnedComposerSelection ? pinnedComposerSelection.variant ?? undefined : configVariant;
-    const savedSessionReasoningEffort = useSelectionStore(React.useCallback(
-        (state) => currentSessionId && currentAgentName && currentProviderId && currentModelId
-            ? state.getAgentModelReasoningEffortForSession(currentSessionId, currentAgentName, currentProviderId, currentModelId)
-            : undefined,
-        [currentAgentName, currentModelId, currentProviderId, currentSessionId],
-    ));
-    const configReasoningEffort = useConfigStore((state) => state.currentReasoningEffort);
-    const currentReasoningEffort = pinnedComposerSelection
-        ? pinnedComposerSelection.reasoningEffort
-        : savedSessionReasoningEffort ?? configReasoningEffort;
-    const setAgent = useConfigStore((state) => state.setAgent);
-    // Preserve the directory roster reference while typing so the editor's
-    // language context does not rebuild on every keystroke.
-    const agents = useAgentsStore((state) => selectAgentsForDirectory(state, currentDirectory));
+    const currentVariantSelection = useConfigStore((state) => state.currentVariantSelection);
     const btwSavedVariant = useSelectionStore(React.useCallback(
         (state) => btwComposerSessionId && btwAgentSelection && btwModelSelection
             ? state.getAgentModelVariantForSession(
@@ -617,12 +595,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                 btwModelSelection.providerId,
                 btwModelSelection.modelId,
             )
-            : undefined,
-        [btwAgentSelection, btwComposerSessionId, btwModelSelection],
-    ));
-    const btwSavedReasoningEffort = useSelectionStore(React.useCallback(
-        (state) => btwComposerSessionId && btwAgentSelection && btwModelSelection
-            ? state.getAgentModelReasoningEffortForSession(btwComposerSessionId, btwAgentSelection, btwModelSelection.providerId, btwModelSelection.modelId)
             : undefined,
         [btwAgentSelection, btwComposerSessionId, btwModelSelection],
     ));
@@ -635,13 +607,11 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         isModelAvailable: btwModelAvailability(providerCatalog, autoReady),
         savedModel: btwModelSelection,
         savedVariant: btwSavedVariant,
-        savedReasoningEffort: btwSavedReasoningEffort,
         composerModel: currentProviderId && currentModelId ? { providerId: currentProviderId, modelId: currentModelId } : null,
         composerVariant: btwComposerVariant,
-        composerReasoningEffort: currentReasoningEffort,
-    }), [agents, autoReady, btwAgentSelection, btwComposerVariant, btwModelSelection, btwSavedReasoningEffort, btwSavedVariant, currentModelId, currentProviderId, currentReasoningEffort, providerCatalog]);
+    }), [agents, autoReady, btwAgentSelection, btwComposerVariant, btwModelSelection, btwSavedVariant, currentModelId, currentProviderId, providerCatalog]);
     React.useEffect(() => {
-        const { model, agent, variant, reasoningEffort } = effectiveBtwSelection;
+        const { model, agent, variant } = effectiveBtwSelection;
         if (!isBtwActive || !btwComposerSessionId || !model || !agent) return;
         const selections = useSelectionStore.getState();
         if (selections.getSessionModelSelection(btwComposerSessionId)) return;
@@ -649,7 +619,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         selections.saveSessionModelSelection(btwComposerSessionId, model.providerId, model.modelId);
         selections.saveAgentModelForSession(btwComposerSessionId, agent, model.providerId, model.modelId);
         selections.saveAgentModelVariantForSession(btwComposerSessionId, agent, model.providerId, model.modelId, variant);
-        selections.saveAgentModelReasoningEffortForSession(btwComposerSessionId, agent, model.providerId, model.modelId, reasoningEffort);
     }, [btwComposerSessionId, effectiveBtwSelection, isBtwActive]);
     const isMobile = useUIStore((state) => state.isMobile);
     const hasHardwareKeyboard = useHardwareKeyboard();
@@ -688,10 +657,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const { expanded: persistedExpandedInput, setExpanded: setExpandedInput } = useChatColumnExpandedInput();
     const isExpandedInput = !isBtwActive && persistedExpandedInput;
     const { files: runtimeFiles, git: runtimeGit, linear: runtimeLinear } = useRuntimeAPIs();
-    const cycleAgentShortcutOverride = useUIStore((state) => state.shortcutOverrides.cycle_agent);
-    const cycleAgentShortcut = React.useMemo(() => (
-        getEffectiveShortcutCombo('cycle_agent', cycleAgentShortcutOverride ? { cycle_agent: cycleAgentShortcutOverride } : undefined)
-    ), [cycleAgentShortcutOverride]);
     const { currentTheme } = useThemeSystem();
     const chatSearchDirectory = useChatSearchDirectory();
     const ensureGitStatus = useGitStore((state) => state.ensureStatus);
@@ -854,10 +819,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         return () => observer.disconnect();
     }, []);
 
-    const knownAgentNames = React.useMemo(
-        () => new Set(agents.map((agent) => agent.name.toLowerCase())),
-        [agents]
-    );
+    const knownAgentNames = React.useMemo(() => new Set<string>(), []);
     const knownAgentNamesRef = React.useRef(knownAgentNames);
     knownAgentNamesRef.current = knownAgentNames;
 
@@ -865,9 +827,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     // highlight matching tokens in the composer, the same way confirmed
     // @files are.
     const availableCommands = useCommandsStore((s) => selectCommandsForDirectory(s, currentDirectory));
-    const availableBuiltinCommands = useCommandsStore((s) => selectBuiltinCommandsForDirectory(s, currentDirectory));
-    const loadCommands = useCommandsStore((s) => s.loadCommands);
-    React.useEffect(() => { void loadCommands(currentDirectory); }, [currentDirectory, loadCommands]);
     const availableSkills = useSkillsStore((s) => selectSkillsForDirectory(s, currentDirectory));
     const availableSnippets = useSnippetsStore(state => selectSnippetsForDirectory(state, currentDirectory));
     const knownSlashNames = React.useMemo(() => {
@@ -1395,7 +1354,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             toast.error(t('chat.chatInput.toast.attachNamedFailed', { name: documentMentions.filename }));
             return;
         }
-        const { sanitizedText, mention } = parseAgentMentions(messageToQueue, agents);
+        const sanitizedText = messageToQueue;
         const { attachments: extractedMentionAttachments } = extractInlineFileMentions(sanitizedText, documentMentions.prepared);
         // #3898: a queued message is delivered later without the composer, so
         // a phantom mention (`@masha.conner`) must be dropped now or the
@@ -1476,15 +1435,12 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             await addToQueue(queueTarget, {
                 content: messageToQueue,
                 text: textToQueue,
-                agentMention: mention?.name,
                 attachments: attachmentsToQueue.length > 0 ? attachmentsToQueue : undefined,
                 context: context.length > 0 ? context : undefined,
                 sendConfig: queuedProviderId && queuedModelId ? {
                     providerID: queuedProviderId,
                     modelID: queuedModelId,
-                    agent: expandedResource?.agentId ?? currentAgentName ?? undefined,
-                    variant: expandedResource?.modelSelection ? undefined : currentVariant,
-                    reasoningEffort: expandedResource?.modelSelection ? undefined : currentReasoningEffort,
+                    variant: currentVariant ?? undefined,
                 } : undefined,
             });
         } catch (error) {
@@ -1512,7 +1468,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             return;
         }
         recordLinkedReferences(queueSessionId, queueTarget.directory, linked);
-    }, [getCurrentInputSnapshot, getSubmitErrorMessage, currentSessionId, messageQueueTarget, inputMode, hasDrafts, guestCommands, attachedFiles, sanitizeAttachmentsForSend, prepareDocumentMentions, extractInlineFileMentions, runtimeFiles, agents, consumePendingSyntheticParts, mailboxTarget, inlineDraftTarget, consumeDrafts, linkedReferences, scrollToLatest, clearAttachedFiles, chatDraftIdentity, isMobile, isMobileCommentOpen, addToQueue, currentProviderId, currentModelId, currentAgentName, currentVariant, currentReasoningEffort, t]);
+    }, [getCurrentInputSnapshot, getSubmitErrorMessage, currentSessionId, messageQueueTarget, inputMode, hasDrafts, guestCommands, attachedFiles, sanitizeAttachmentsForSend, prepareDocumentMentions, extractInlineFileMentions, runtimeFiles, agents, consumePendingSyntheticParts, mailboxTarget, inlineDraftTarget, consumeDrafts, linkedReferences, scrollToLatest, clearAttachedFiles, chatDraftIdentity, isMobile, isMobileCommentOpen, addToQueue, currentProviderId, currentModelId, currentVariant, t]);
 
     /** Put the context a queued message was captured with back on the composer chips. */
     const restoreQueuedContext = React.useCallback((context: readonly QueuedContextPart[]) => {
@@ -1593,9 +1549,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         void handleSubmitRef.current({ queuedOnly: true, queuedMessageId: messageId, delivery: 'steer' });
     }, []);
 
-    const handleOpenAgentPanel = React.useCallback(() => {
-        setMobileControlsPanel('agent');
-    }, []);
 
     const handleToggleExpandedInput = React.useCallback(() => {
         if (isBtwActive) return;
@@ -1656,7 +1609,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         // the prompt it produces. A command the composer cannot run here is not
         // a local command at all and goes out as typed.
         let commandPlan = !queuedOnly && inputSnapshot.hasContent
-            ? planLocalSlashCommand(inputSnapshot.message, inputMode, hasDrafts, Boolean(currentSessionId), availableBuiltinCommands)
+            ? planLocalSlashCommand(inputSnapshot.message, inputMode, hasDrafts, Boolean(currentSessionId))
             : null;
         if (commandPlan?.kind === 'prompt') {
             const magicCommand = findMagicPromptCommand(commandPlan.command.name);
@@ -1744,9 +1697,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         const capturedSendConfig = queuedProjection[0]?.sendConfig;
         const providerIdToSend = capturedSendConfig?.providerID ?? (isBtwActive ? effectiveBtwSelection.model?.providerId : currentProviderId);
         const modelIdToSend = capturedSendConfig?.modelID ?? (isBtwActive ? effectiveBtwSelection.model?.modelId : currentModelId);
-        const agentNameToSend = capturedSendConfig ? capturedSendConfig.agent : (isBtwActive ? effectiveBtwSelection.agent : currentAgentName);
+        const agentNameToSend = undefined;
         const variantToSend = capturedSendConfig ? capturedSendConfig.variant : (isBtwActive ? effectiveBtwSelection.variant : currentVariant);
-        const reasoningEffortToSend = capturedSendConfig ? capturedSendConfig.reasoningEffort : (isBtwActive ? effectiveBtwSelection.reasoningEffort : currentReasoningEffort);
 
         // The isolated space the message targets, if any: a session by its directory, a draft by
         // the creation request it still waits on or by its directory.
@@ -1849,9 +1801,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                         // selection even while the btw panel owns the composer.
                         providerID: capturedSendConfig?.providerID ?? currentProviderId,
                         modelID: capturedSendConfig?.modelID ?? currentModelId,
-                        agent: capturedSendConfig?.agent ?? currentAgentName,
+                        agent: undefined,
                         variant: capturedSendConfig?.variant ?? currentVariant ?? undefined,
-                        reasoningEffort: reasoningEffortToSend,
                     }, {
                         fork: sessionActions.forkFromLastCompletedTurn,
                         directoryFor: (session) => useSessionUIStore.getState().getDirectoryForSession(session.sessionId) || currentDirectory || null,
@@ -1859,25 +1810,23 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                             text,
                             selection.providerID,
                             selection.modelID,
-                            selection.agent,
+                            null,
                             undefined,
                             undefined,
                             undefined,
                             selection.variant,
                             'normal',
-                            { ...target, reasoningEffort: selection.reasoningEffort },
+                            target,
                         ),
                         draftIdentity: (directory, sessionId) => createChatDraftIdentity(getRuntimeKey(), directory, sessionId),
                         restoreText: (target, text) => useInputStore.setState({ pendingComposerRestore: { target, text, files: [] } }),
                     });
                     if (forkOutcome === 'send-failed') toast.error(t('chat.chatInput.toast.forkSendFailed'));
-                } else if (actionName === 'compact' && !availableBuiltinCommands.includes(actionName)) {
-                    const instructions = window.prompt(t('chat.compact.instructions.title'), '');
-                    if (instructions === null) { restoreComposerText(); return; }
-                    await sessionActions.compactSession(currentSessionId, instructions || undefined);
-                } else if (availableBuiltinCommands.includes(actionName)) {
-                    const output = await sessionActions.runBuiltinCommand(currentSessionId, `/${actionName}${commandPlan.command.argument ? ` ${commandPlan.command.argument}` : ''}`);
-                    if (output) toast.message(output);
+                } else if (actionName === 'compact') {
+                    await sendMessage('/compact', currentProviderId, currentModelId, null, undefined, undefined, undefined, variantToSend, 'normal', {
+                        sessionId: currentSessionId,
+                        directory: currentDirectory ?? undefined,
+                    });
                 }
             } catch (error) {
                 restoreComposerText();
@@ -2012,11 +1961,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             ],
             references: isBtwActive ? [] : linkedReferences.map(toContextReference),
         }, {
-            parseAgentMention: (text) => {
-                if (isBtwActive) return { text };
-                const { sanitizedText, mention } = parseAgentMentions(text, agents);
-                return { text: sanitizedText, agentName: mention?.name };
-            },
             extractFileMentions: (text) => {
                 if (isBtwActive) return { text, attachments: [] };
                 const { sanitizedText, attachments } = extractInlineFileMentions(text, preparedDocumentMentions);
@@ -2027,7 +1971,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         });
 
         const primaryText = outgoing.primaryText;
-        const { primaryAttachments, additionalParts, agentMentionName, skillNames } = outgoing;
+        const { primaryAttachments, additionalParts, skillNames } = outgoing;
         if (outgoing.primaryFileResourcesExpanded) sendMessageOptions = { ...sendMessageOptions, fileResourcesExpanded: true };
 
         if (outgoing.isEmpty) return;
@@ -2089,13 +2033,13 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                         visibleText,
                         providerIdToSend,
                         modelIdToSend,
-                        agentNameToSend,
+                        null,
                         sendableAttachments,
-                        agentMentionName,
+                        undefined,
                         [...additionalParts, { text: instructionsText, synthetic: true }],
                         variantToSend,
                         inputMode,
-                        { ...sendMessageOptions, reasoningEffort: reasoningEffortToSend },
+                        sendMessageOptions,
                     );
                     scrollToBottom?.();
                 } catch (error) {
@@ -2174,9 +2118,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                     directory: targetDirectory,
                     providerId: providerIdToSend,
                     modelId: modelIdToSend,
-                    agentId: agentNameToSend,
-                    variant: variantToSend,
-                    reasoningEffort: reasoningEffortToSend,
+                    agentId: undefined,
                     fileResourcesExpanded: outgoing.primaryFileResourcesExpanded,
                     attachments: sendableAttachments,
                     additionalParts,
@@ -2216,13 +2158,13 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             primaryText,
             providerIdToSend,
             modelIdToSend,
-            agentNameToSend,
+            null,
             sendableAttachments,
-            agentMentionName,
+            undefined,
             additionalParts.length > 0 ? additionalParts : undefined,
             variantToSend,
             inputMode,
-            { ...sendMessageOptions, reasoningEffort: reasoningEffortToSend },
+            sendMessageOptions,
         );
         void sendPromise.then(() => {
             if (isBtwActive) return;
@@ -2281,12 +2223,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
 
             if (normalized.includes('payload too large') || normalized.includes('413') || normalized.includes('entity too large')) {
                 toast.error(t('chat.chatInput.toast.attachmentsTooLarge'));
-                if (allAttachments.length > 0) useInputStore.getState().restoreAttachedFiles(allAttachments, chatDraftIdentity);
-                return;
-            }
-            if (normalized.includes('not text or image') || normalized.includes('valid utf-8 text')) {
-                toast.error(rawMessage || t('chat.chatInput.toast.attachmentUnsupported'));
-                if (allAttachments.length > 0) useInputStore.getState().restoreAttachedFiles(allAttachments, chatDraftIdentity);
+                if (allAttachments.length > 0) {
+                    useInputStore.getState().restoreAttachedFiles(allAttachments, chatDraftIdentity);
+                }
                 return;
             }
 
@@ -2481,21 +2420,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             return;
         }
 
-        const cycleAgentBackwardShortcut = cycleAgentShortcut && !cycleAgentShortcut.includes('shift')
-            ? normalizeCombo(`shift+${cycleAgentShortcut}`)
-            : '';
-        const cycleAgentDirection = cycleAgentBackwardShortcut && eventMatchesShortcut(e, cycleAgentBackwardShortcut)
-            ? -1
-            : eventMatchesShortcut(e, cycleAgentShortcut)
-                ? 1
-                : 0;
-
-        if (!isBtwActive && cycleAgentDirection !== 0 && openAutocomplete === null) {
-            e.preventDefault();
-            e.stopPropagation();
-            handleCycleAgent(cycleAgentDirection);
-            return;
-        }
 
         // Handle ArrowUp/ArrowDown for message history navigation
         // ArrowUp: only when cursor at start (position 0) or input is empty
@@ -2610,20 +2534,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         void abortCurrentOperation(abortTarget || undefined);
     }, [abortCurrentOperation, btwSessionId, clearAbortPrompt, currentSessionId, isBtwActive]);
 
-    const handleCycleAgent = React.useCallback((direction: 1 | -1 = 1) => {
-        // Auto hides the agent control, so the shortcut must not change a
-        // choice the user cannot see.
-        if (isAutoModel(currentProviderId, currentModelId)) return;
-        const nextAgentName = getCycledAgentId(agents, currentAgentName, direction, useUIStore.getState().favoriteAgents);
-        if (!nextAgentName) return;
-
-        // A pinned column's agent is its own session's choice only.
-        if (!columnPinned) setAgent(nextAgentName);
-
-        if (currentSessionId) {
-            saveSessionAgentSelection(currentSessionId, nextAgentName);
-        }
-    }, [agents, columnPinned, currentAgentName, currentModelId, currentProviderId, currentSessionId, setAgent, saveSessionAgentSelection]);
 
     // Height the failed-dictation salvage text needs. Its overlay sits
     // absolutely over the composer, so the composer must be able to grow for
@@ -3149,46 +3059,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         composerRef.current?.focus();
     });
 
-    const handleAgentSelect = useStableHandler((agentName: string) => {
-        const textarea = composerRef.current;
-        const cursorPosition = textarea?.getSelection().start ?? message.length;
-        const textBeforeCursor = message.substring(0, cursorPosition);
-        const lastAtSymbol = textBeforeCursor.lastIndexOf('@');
-
-        if (lastAtSymbol !== -1) {
-            const newMessage =
-                message.substring(0, lastAtSymbol) +
-                `@${agentName} ` +
-                message.substring(cursorPosition);
-            setMessage(newMessage);
-
-            const nextCursor = lastAtSymbol + agentName.length + 2;
-            requestAnimationFrame(() => {
-                if (composerRef.current) {
-                    composerRef.current.setSelection(nextCursor);
-                }
-                updateAutocompleteState(newMessage, nextCursor);
-            });
-        } else if (composerRef.current) {
-            const newMessage =
-                message.substring(0, cursorPosition) +
-                `@${agentName} ` +
-                message.substring(cursorPosition);
-            setMessage(newMessage);
-
-            const nextCursor = cursorPosition + agentName.length + 2;
-            requestAnimationFrame(() => {
-                if (composerRef.current) {
-                    composerRef.current.setSelection(nextCursor);
-                }
-                updateAutocompleteState(newMessage, nextCursor);
-            });
-        }
-
-        closeAutocomplete();
-
-        composerRef.current?.focus();
-    });
 
     const handleSkillSelect = useStableHandler((skillName: string) => {
         const textarea = composerRef.current;
@@ -3813,15 +3683,12 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             onSendMessage={handleQueuedMessageSend}
         />
     ) : null;
-    const todoRow = !isBtwActive && !newSessionDraftOpen ? (
-        <TodoTray sessionId={currentSessionId} directory={currentSessionDirectoryForSync ?? currentDirectory} />
-    ) : null;
-    // History-backed OMP todo state is scoped to the active session/branch.
-    const composerTopRows = worktreeSetupRow || spaceWaitRow || todoRow || goalRow || autoReviewRow || backgroundShellsRow || revertRow || queueRow || doneHintRow || reviewHintRow || suggestionRow ? (
+    // Null exactly when the suggestion row alone would have been: the mobile
+    // pill picks its shape from whether a top row exists.
+    const composerTopRows = worktreeSetupRow || spaceWaitRow || goalRow || autoReviewRow || backgroundShellsRow || revertRow || queueRow || doneHintRow || reviewHintRow || suggestionRow ? (
         <>
             {worktreeSetupRow}
             {spaceWaitRow}
-            {todoRow}
             {goalRow}
             {autoReviewRow}
             {backgroundShellsRow}
@@ -3832,17 +3699,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             {suggestionRow}
         </>
     ) : null;
-    const mobileModelAgentRow = isMobile && !isBtwActive ? (
-        // px-3.5 lines the model logo and the agent label up with the attach
-        // and mic icons above them; the buttons drop their own padding so the
-        // row alone owns the inset.
+    const mobileModelRow = isMobile && !isBtwActive ? (
+        // Keep the mobile model control aligned with the attachment and dictation rows.
         <div className="flex items-center justify-between gap-x-2 px-3.5 pb-2 pt-0.5">
             <MemoMobileModelButton onOpenModel={() => handleOpenMobilePanel('model')} className="min-w-0 px-0" />
-            <MemoMobileAgentButton
-                onOpenAgentPanel={handleOpenAgentPanel}
-                onCycleAgent={handleCycleAgent}
-                className="flex-shrink-0 px-0"
-            />
         </div>
     ) : null;
 
@@ -4075,7 +3935,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                                 {contextChips}
                             </div>
                         )}
-                        bottomRow={mobileModelAgentRow}
+                        bottomRow={mobileModelRow}
                         onExpand={mobileShell.expand}
                         onPrimaryAction={handlePrimaryAction}
                         onQueueMessage={() => { void handleQueueMessage(); }}
@@ -4108,7 +3968,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                         onCommandSelect={handleCommandSelect}
                         onSkillSelect={handleSkillSelect}
                         onFileSelect={handleFileSelect}
-                        onAgentSelect={handleAgentSelect}
                         onClose={closeAutocomplete}
                     />
                 {/* The lift shadow lives on this wrapper, away from the glass
@@ -4310,7 +4169,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                         parallelRun={parallelRun}
                         waitingForAgent={waitingForAgent}
                     />
-                    {mobileModelAgentRow}
+                    {mobileModelRow}
                     </div>
 
                 </div>

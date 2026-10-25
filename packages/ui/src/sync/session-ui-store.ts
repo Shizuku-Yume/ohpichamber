@@ -114,7 +114,7 @@ export type { AttachedFile }
 export function resolveSendSelection(
   _sessionId: string,
   _directory: string | undefined,
-  desired: { providerId: string; modelId: string; variant?: string; agentId?: string; reasoningEffort?: string },
+  desired: { providerId: string; modelId: string; variant?: string; agentId?: string | null; reasoningEffort?: string },
 ): PromptRequest['options'] {
   return {
     providerId: desired.providerId,
@@ -487,7 +487,7 @@ export type SessionUIState = {
     content: string,
     providerID: string,
     modelID: string,
-    agent?: string,
+    agent?: string | null,
     attachments?: AttachedFile[],
     agentMentionName?: string,
     additionalParts?: Array<{ text: string; attachments?: AttachedFile[]; synthetic?: boolean; metadata?: ContextPartMetadata; systemContext?: 'session-knowledge' }>,
@@ -1771,7 +1771,7 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
     content: string,
     providerID: string,
     modelID: string,
-    agent?: string,
+    agent?: string | null,
     attachments?: AttachedFile[],
     agentMentionName?: string,
     additionalParts?: Array<{ text: string; attachments?: AttachedFile[]; synthetic?: boolean; metadata?: ContextPartMetadata; systemContext?: 'session-knowledge' }>,
@@ -1788,10 +1788,12 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
     const targetDirectory = targetSessionId
       ? normalizePath(capturedTarget?.directory ?? options?.directory ?? get().getDirectoryForSession(targetSessionId))
       : null
-    const trimmedAgent = agent?.trim() || undefined
-    const effectiveAgent = (trimmedAgent
-      ?? (targetSessionId && !createsDraftSession ? useSelectionStore.getState().getSessionAgentSelection(targetSessionId) : undefined)
-      ?? useConfigStore.getState().currentAgentName)?.trim() || undefined
+    const trimmedAgent = agent === null ? null : agent?.trim() || undefined
+    const effectiveAgent = trimmedAgent === null
+      ? undefined
+      : (trimmedAgent
+        ?? (targetSessionId && !createsDraftSession ? useSelectionStore.getState().getSessionAgentSelection(targetSessionId) : undefined)
+        ?? useConfigStore.getState().currentAgentName)?.trim() || undefined
     const variantToRecord = resolveVariantToRecord(effectiveAgent, providerID, modelID, variant)
     const delivery = options?.delivery
     const commandId = options?.commandId

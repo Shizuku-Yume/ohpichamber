@@ -1448,7 +1448,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const modelLabelRef = React.useRef<HTMLSpanElement>(null);
     const isModelLabelTruncated = useIsTextTruncated(modelLabelRef, [currentModelDisplayName, isCompact]);
 
-    const currentAgentDisplayName = currentAgent?.name ?? (uiAgentName || t('chat.modelControls.selectAgent'));
+    const currentAgentDisplayName = uiAgentName || '';
 
 
     const toggleMobileProviderExpansion = React.useCallback((providerId: string) => {
@@ -1576,47 +1576,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         );
     };
 
-    const renderAgentDetails = (agent: Agent) => (
-        <div className="flex min-w-[200px] flex-col gap-2.5">
-            <div className="flex flex-col gap-0.5">
-                <span className="typography-micro font-semibold text-foreground">{agent.name}</span>
-                {agent.description && <span className="typography-meta text-muted-foreground">{agent.description}</span>}
-            </div>
-            {agent.model && (
-                <div className="flex flex-col gap-1">
-                    <span className="typography-meta font-semibold text-muted-foreground">{t('chat.modelControls.model')}</span>
-                    <span className="typography-meta text-foreground">{agent.model.providerId} / {agent.model.modelId}</span>
-                </div>
-            )}
-            <div className="flex flex-col gap-1">
-                <span className="typography-meta font-semibold text-muted-foreground">{t('chat.modelControls.toolAvailability')}</span>
-                <span className="typography-meta text-foreground break-words">
-                    {agent.allowedTools === null ? t('settings.agents.page.field.allowedToolsInherit') : agent.allowedTools.length > 0 ? agent.allowedTools.join(', ') : t('settings.projects.page.field.none')}
-                </span>
-            </div>
-            {agent.permissionPresetId && (
-                <div className="flex flex-col gap-1">
-                    <span className="typography-meta font-semibold text-muted-foreground">{t('settings.agents.page.field.permissionPreset')}</span>
-                    <span className="typography-meta text-foreground">{agent.permissionPresetId}</span>
-                </div>
-            )}
-            {agent.systemPromptOverride?.trim() && (
-                <div className="flex items-center justify-between gap-3">
-                    <span className="typography-meta text-muted-foreground">{t('chat.modelControls.customPrompt')}</span>
-                    <Icon name="checkbox-circle" className="size-4 text-foreground" />
-                </div>
-            )}
-        </div>
-    );
-
-    const renderMobileAgentTooltip = () => {
-        if (!isCompact || mobileTooltipOpen !== 'agent' || !currentAgent) return null;
-        return (
-            <MobileOverlayPanel open={true} onClose={closeMobileTooltip} title={currentAgent.name}>
-                {renderAgentDetails(currentAgent)}
-            </MobileOverlayPanel>
-        );
-    };
 
     const renderMobileModelPanel = () => {
         if (!isCompact) return null;
@@ -2092,65 +2051,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         );
     };
 
-    const renderMobileAgentPanel = () => {
-        if (!isCompact) return null;
- 
-        return (
-            <MobileOverlayPanel
-                open={activeMobilePanel === 'agent'}
-                onClose={closeMobilePanel}
-                title={t('chat.modelControls.selectAgent')}
-                contentMaxHeightClassName="max-h-[min(52dvh,360px)]"
-            >
-                <div className="flex flex-col gap-2">
-                    {selectableDesktopAgents.map((agent) => {
-                        const isSelected = agent.agentId === uiAgentName;
-                        const agentColor = getAgentColor(agent.agentId);
-                        return (
-                            <div key={agent.agentId} className="relative">
-                            <button
-                                type="button"
-                                className={cn(
-                                    'flex w-full flex-col gap-1.5 rounded-xl border py-2.5 pl-3 pr-11 text-left',
-                                    'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                                    'touch-manipulation cursor-pointer transition-colors',
-                                    'active:bg-interactive-active',
-                                    isSelected 
-                                        ? 'border-border bg-interactive-selection text-interactive-selection-foreground'
-                                        : 'border-border/40 hover:bg-interactive-hover/50'
-                                )}
-                                onClick={() => handleAgentChange(agent.agentId)}
-                            >
-                                <div className="flex items-center gap-2">
-                                    <div className="size-2.5 rounded-full flex-shrink-0" style={{ background: agentColor.color }} />
-                                    <span
-                                        className="typography-ui-label font-semibold"
-                                        style={isSelected ? { color: agentColor.color } : undefined}
-                                    >
-                                        {getAgentDisplayLabel(agent)}
-                                    </span>
-                                    {isSelected && (
-                                        <Icon name="check" className="size-4 text-primary ml-auto flex-shrink-0" />
-                                    )}
-                                </div>
-                                {agent.description && (
-                                    <span className="typography-meta text-muted-foreground pl-4.5">
-                                        {agent.description}
-                                    </span>
-                                )}
-                            </button>
-                            <AgentFavoriteToggle
-                                className="absolute right-2 top-2 h-8 w-8"
-                                favorite={favoriteAgents.includes(agent.agentId)}
-                                onToggle={() => toggleFavoriteAgent(agent.agentId)}
-                            />
-                            </div>
-                        );
-                    })}
-                </div>
-            </MobileOverlayPanel>
-        );
-    };
 
     const renderModelTooltipContent = () => (
         <TooltipContent align="start" sideOffset={8} className="max-w-[320px]">
@@ -2493,13 +2393,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         );
     };
 
-    const renderAgentTooltipContent = () => (
-        <TooltipContent align="start" sideOffset={8} className="max-w-[320px]">
-            {currentAgent ? renderAgentDetails(currentAgent) : (
-                <div className="min-w-[200px] typography-meta text-muted-foreground">{t('chat.modelControls.noAgentSelected')}</div>
-            )}
-        </TooltipContent>
-    );
 
     const renderVariantSelector = () => {
         if (!isReady || !hasVariants || isAutoSelected) {
@@ -2597,188 +2490,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         );
     };
 
-    const renderAgentSelector = () => {
-        if (!isCompact) {
-            return (
-                <div className="flex items-center gap-2 min-w-0">
-                    <Tooltip delayDuration={600}>
-                        <DropdownMenu open={canSelectAgent && isAgentSelectorOpen} onOpenChange={canSelectAgent ? setIsAgentSelectorOpen : undefined}>
-                            <TooltipTrigger asChild>
-                                <DropdownMenuTrigger asChild nativeButton>
-                                    <button
-                                        type="button"
-                                        className={cn(
-                                            'flex items-center gap-1.5 transition-colors cursor-pointer select-none hover:bg-transparent hover:opacity-70 min-w-0',
-                                            buttonHeight,
-                                        )}>
-                                        {!agentSelectionReady ? (
-                                            <>
-                                                <Icon name={agentsUnavailable ? 'ai-agent' : 'loader-4'}
-                                                    className={cn(
-                                                        controlIconSize,
-                                                        'flex-shrink-0 text-muted-foreground', !agentsUnavailable && 'animate-spin'
-                                                    )}
-                                                />
-                                                <span
-                                                    className={cn(
-                                                        'model-controls__agent-label',
-                                                        controlTextSize,
-                                                        'font-medium min-w-0 truncate text-muted-foreground'
-                                                    )}
-                                                >
-                                                    {agentReadinessLabel}
-                                                </span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Icon name="ai-agent"
-                                                    className={cn(
-                                                        controlIconSize,
-                                                        'flex-shrink-0',
-                                                        uiAgentName ? '' : 'text-muted-foreground'
-                                                    )}
-                                                    style={uiAgentName ? { color: getAgentColor(uiAgentName).color } : undefined}
-                                                />
-                                                <span
-                                                    className={cn(
-                                                        'model-controls__agent-label',
-                                                        controlTextSize,
-                                                        'font-medium min-w-0 truncate',
-                                                        isDesktop ? 'max-w-[220px]' : undefined
-                                                    )}
-                                                    style={uiAgentName ? { color: getAgentColor(uiAgentName).color } : undefined}
-                                                >
-                                                    {currentAgentDisplayName}
-                                                </span>
-                                            </>
-                                        )}
-                                    </button>
-                                </DropdownMenuTrigger>
-                            </TooltipTrigger>
-                            <DropdownMenuContent side="top" align="end" alignOffset={-40} constrainToMain collisionAvoidance={{ side: 'none', align: 'shift' }} className="w-[min(280px,calc(100vw-2rem))] p-0 flex flex-col overflow-hidden">
-                                <div className="p-2 border-b border-border/40">
-                                    <div className="relative">
-                                        <Icon name="search" className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
-                                        <Input
-                                            type="text"
-                                            placeholder={t('chat.modelControls.searchAgents')}
-                                            value={agentSearchQuery}
-                                            onChange={(e) => setAgentSearchQuery(e.target.value)}
-                                            onKeyDown={(e) => {
-                                                e.stopPropagation();
-                                            }}
-                                            className="pl-8 h-8 typography-meta"
-                                        />
-                                    </div>
-                                </div>
-                                <ScrollableOverlay outerClassName="max-h-[min(400px,calc(var(--available-height)-4rem))] flex-1">
-                                    <div className="p-1">
-                                        {!agentSearchQuery.trim() && defaultAgentId && (
-                                            <>
-                                                <DropdownMenuItem
-                                                    className="typography-meta"
-                                                    onSelect={() => handleAgentChange(defaultAgentId)}
-                                                >
-                                                    <div className="flex items-center gap-1.5">
-                                                        <Icon name="arrow-go-back" className="size-3.5 text-muted-foreground" />
-                                                        <span className="font-medium">{t('chat.modelControls.resetToDefault')}</span>
-                                                    </div>
-                                                </DropdownMenuItem>
-                                                <DropdownMenuSeparator />
-                                            </>
-                                        )}
-                                        {sortedAndFilteredAgents.length === 0 ? (
-                                            <div className="px-2 py-4 text-center typography-meta text-muted-foreground">
-                                                {t('chat.agentMentionAutocomplete.empty')}
-                                            </div>
-                                        ) : (
-                                            sortedAndFilteredAgents.map((agent) => (
-                                                <AgentDescriptionTooltip key={agent.agentId} description={agent.description}>
-                                                    <DropdownMenuItem
-                                                        className="typography-meta"
-                                                        onSelect={() => handleAgentChange(agent.agentId)}
-                                                    >
-                                                        <div className="flex w-full items-center gap-1.5">
-                                                            <div className="h-1 w-1 rounded-full" style={{ background: getAgentColor(agent.agentId).color }} />
-                                                            <span className="font-medium">{getAgentDisplayLabel(agent)}</span>
-                                                            <AgentFavoriteToggle
-                                                                className="ml-auto"
-                                                                favorite={favoriteAgents.includes(agent.agentId)}
-                                                                onToggle={() => toggleFavoriteAgent(agent.agentId)}
-                                                            />
-                                                        </div>
-                                                    </DropdownMenuItem>
-                                                </AgentDescriptionTooltip>
-                                            ))
-                                        )}
-                                    </div>
-                                </ScrollableOverlay>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                        {renderAgentTooltipContent()}
-                    </Tooltip>
-                </div>
-            );
-        }
-
-        return (
-            <button
-                type="button"
-                onClick={canSelectAgent ? () => setActiveMobilePanel('agent') : undefined}
-                onTouchStart={canSelectAgent ? () => handleLongPressStart('agent') : undefined}
-                onTouchEnd={canSelectAgent ? handleLongPressEnd : undefined}
-                onTouchCancel={canSelectAgent ? handleLongPressEnd : undefined}
-                disabled={!canSelectAgent}
-                className={cn(
-                    'model-controls__agent-trigger flex items-center gap-1.5 transition-colors min-w-0 focus:outline-none',
-                    buttonHeight,
-                    canSelectAgent ? 'cursor-pointer hover:bg-transparent hover:opacity-70' : 'opacity-60 cursor-not-allowed',
-                )}
-            >
-                {!agentSelectionReady ? (
-                    <>
-                        <Icon name={agentsUnavailable ? 'ai-agent' : 'loader-4'}
-                            className={cn(
-                                controlIconSize,
-                                'flex-shrink-0 text-muted-foreground', !agentsUnavailable && 'animate-spin'
-                            )}
-                        />
-                        <span
-                            className={cn(
-                                'model-controls__agent-label',
-                                controlTextSize,
-                                'font-medium truncate min-w-0 text-muted-foreground'
-                            )}
-                        >
-                            {agentReadinessLabel}
-                        </span>
-                    </>
-                ) : (
-                    <>
-                        <Icon name="ai-agent"
-                            className={cn(
-                                controlIconSize,
-                                'flex-shrink-0',
-                                uiAgentName ? '' : 'text-muted-foreground'
-                            )}
-                            style={uiAgentName ? { color: getAgentColor(uiAgentName).color } : undefined}
-                        />
-                        <span
-                            className={cn(
-                                'model-controls__agent-label',
-                                controlTextSize,
-                                'font-medium truncate min-w-0',
-                                isMobile && 'max-w-[60px]'
-                            )}
-                            style={uiAgentName ? { color: getAgentColor(uiAgentName).color } : undefined}
-                        >
-                            {currentAgentDisplayName}
-                        </span>
-                    </>
-                )}
-            </button>
-        );
-    };
 
     const inlineMobileSelection = isMobile && Boolean(selection);
     const inlineClassName = cn(
@@ -2804,15 +2515,12 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                     {renderModelSelector()}
                     {inlineMobileSelection && renderEffortSelector()}
                     {inlineMobileSelection && renderVariantSelector()}
-                    {(!selection || agentSelectable) && !isAutoSelected && renderAgentSelector()}
                 </div>
             </div>
 
             {renderMobileModelPanel()}
             {renderMobileVariantPanel()}
-            {!selection && !isAutoSelected && renderMobileAgentPanel()}
             {renderMobileModelTooltip()}
-            {!selection && !isAutoSelected && renderMobileAgentTooltip()}
         </>
     );
 

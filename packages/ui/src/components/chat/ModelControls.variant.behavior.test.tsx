@@ -19,7 +19,6 @@ import { useSelectionStore } from '@/sync/selection-store';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { SyncProvider } from '@/sync/sync-context';
 import { getSyncChildStores } from '@/sync/sync-refs';
-import { resolvePinnedComposerSelection } from './pinnedComposerSelection';
 
 // Base UI and React DOM detect browser support when imported.
 class TestIntersectionObserver {
@@ -54,12 +53,13 @@ const model: Model = {
   modelId: MODEL_ID, provider: PROVIDER_ID, name: MODEL_ID, modalities: ['text'],
   contextWindow: 128_000, maxOutputTokens: 16_384, reasoningEffortSupported: true,
   reasoningOptions: [
-    { reasoningEffort: 'off', label: 'Off', budgetTokens: null },
     { reasoningEffort: 'low', label: 'Low', budgetTokens: null },
-    { reasoningEffort: 'medium', label: 'Medium', budgetTokens: null },
     { reasoningEffort: 'high', label: 'High', budgetTokens: null },
   ],
-  variants: [],
+  variants: [
+    { variant: 'low', label: 'Low', reasoningEffort: 'low' },
+    { variant: 'high', label: 'High', reasoningEffort: 'high' },
+  ],
   pricing: null,
 };
 const provider: Provider & { models: Model[] } = {
@@ -110,8 +110,11 @@ const setRoster = (agents: Agent[], revision = '1') => useAgentsStore.setState({
   agentsByDirectory: { [DIRECTORY]: agents }, revisionsByDirectory: { [DIRECTORY]: revision }, errorsByDirectory: {},
 });
 const savedVariant = () => useSelectionStore.getState().getAgentModelVariantForSession(SESSION_ID, AGENT_ID, PROVIDER_ID, MODEL_ID);
-const savedEffort = () => useSelectionStore.getState().getAgentModelReasoningEffortForSession(SESSION_ID, AGENT_ID, PROVIDER_ID, MODEL_ID);
+const saveVariant = (variant: string | null | undefined) => useSelectionStore.getState()
+  .saveAgentModelVariantForSession(SESSION_ID, AGENT_ID, PROVIDER_ID, MODEL_ID, variant);
 
+// A native profile has no sampling default: effort is inherited from model/settings
+// or explicitly remembered for this session's profile/model combination.
 describe('ModelControls native selection and effort restore', () => {
   let dom: DomHarness;
   let root: Root;
@@ -135,34 +138,19 @@ describe('ModelControls native selection and effort restore', () => {
       </SyncProvider>,
     ));
   };
-  const label = (kind: 'agent' | 'variant' | 'effort') => dom.container.querySelector(`.model-controls__${kind}-label`)?.textContent?.trim();
-  const trigger = (kind: 'agent' | 'model' | 'variant' | 'effort') => {
+  const label = (kind: 'agent' | 'variant') => dom.container.querySelector(`.model-controls__${kind}-label`)?.textContent?.trim();
+  const trigger = (kind: 'agent' | 'model' | 'variant') => {
     const entry = dom.container.querySelector<HTMLElement>(`.model-controls__${kind}-trigger`);
     if (!entry) throw new Error(`Missing ${kind} trigger`);
     return entry;
   };
   const button = (name: string) => {
     const entry = [...document.querySelectorAll<HTMLElement>('button, [role="menuitem"], [role="option"]')]
-      .find((item) => !item.matches('.model-controls__model-trigger, .model-controls__agent-trigger, .model-controls__variant-trigger, .model-controls__effort-trigger')
+      .find((item) => !item.matches('.model-controls__model-trigger, .model-controls__agent-trigger, .model-controls__variant-trigger')
         && (item.textContent?.trim().toLocaleLowerCase().includes(name.toLocaleLowerCase()) || item.getAttribute('aria-label') === name
           || [...item.querySelectorAll('span')].some((span) => span.textContent?.trim().toLocaleLowerCase() === name.toLocaleLowerCase())));
     if (!entry) throw new Error(`Missing button: ${name}; body=${document.body.innerHTML.slice(-3000)}`);
     return entry;
-  };
-  const openTrigger = async (kind: 'model' | 'variant' | 'effort') => {
-    await act(async () => {
-      const entry = trigger(kind);
-      const view = entry.ownerDocument.defaultView;
-      if (!view) throw new Error('Expected browser window');
-      if (useUIStore.getState().isMobile && kind !== 'effort') {
-        entry.click();
-      } else {
-        entry.focus();
-        entry.dispatchEvent(new view.KeyboardEvent('keydown', { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, which: 40, bubbles: true, cancelable: true }));
-      }
-      await new Promise<void>((resolve) => view.requestAnimationFrame(() => resolve()));
-      await new Promise<void>((resolve) => view.requestAnimationFrame(() => resolve()));
-    });
   };
   const stage = async (messages: Message[]) => act(async () => {
     const store = getSyncChildStores().getChild(DIRECTORY);
@@ -180,14 +168,14 @@ describe('ModelControls native selection and effort restore', () => {
     useSelectionStore.setState({
       sessionModelSelections: new Map([[SESSION_ID, { providerId: PROVIDER_ID, modelId: MODEL_ID }]]),
       sessionAgentSelections: new Map([[SESSION_ID, AGENT_ID]]), sessionFollowedAgents: new Map(),
-      sessionFollowedModels: new Map(), sessionAgentModelSelections: new Map(), agentModelVariantSelections: new Map(), agentModelReasoningEffortSelections: new Map(),
+      sessionFollowedModels: new Map(), sessionAgentModelSelections: new Map(), agentModelVariantSelections: new Map(),
     });
     useUIStore.setState({ isMobile: false, isModelSelectorOpen: false, favoriteAgents: [], hiddenModels: [], shortcutOverrides: {}, routingFeatureAvailable: false });
     useConfigStore.setState({
       activeDirectoryKey: DIRECTORY,
       providers: [provider], providersLoaded: true, currentProviderId: PROVIDER_ID, currentModelId: MODEL_ID,
       directoryScoped: { [DIRECTORY]: { providers: [provider], providersLoaded: true, currentProviderId: PROVIDER_ID, currentModelId: MODEL_ID, currentVariant: undefined, currentVariantSelection: { override: undefined, inherited: undefined }, currentAgentName: AGENT_ID, selectedProviderId: PROVIDER_ID, agentModelSelections: {}, defaultProviders: {}, selectionSource: 'auto', agentSelectionSource: 'auto' } },
-      currentAgentName: AGENT_ID, currentVariant: undefined, currentReasoningEffort: undefined,
+      currentAgentName: AGENT_ID, currentVariant: undefined,
       currentVariantSelection: { override: undefined, inherited: undefined }, settingsDefaultVariant: undefined,
       settingsDefaultAgent: undefined, settingsDefaultModel: undefined, agentModelSelections: {}, defaultProviders: {},
       selectionSource: 'auto', agentSelectionSource: 'auto', lastDisconnectReason: null,
@@ -213,234 +201,80 @@ describe('ModelControls native selection and effort restore', () => {
     dom.restore();
   });
 
-  test('native identity selects by ID while the roster and current selection display names', async () => {
-    useUIStore.setState({ isMobile: true });
+  test('does not render root-agent controls when an unavailable profile is present', async () => {
+    const unavailableProfile = { ...agent, allowedTools: ['missing_tool'] };
+    setRoster([unavailableProfile]);
     await render();
-    expect(label('agent')).toBe('Build');
-    await act(async () => trigger('agent').click());
-    await act(async () => button('Plan').click());
-    expect(useConfigStore.getState().currentAgentName).toBe(planAgent.agentId);
-    expect(useSelectionStore.getState().getSessionAgentSelection(SESSION_ID)).toBe(planAgent.agentId);
-    expect(label('agent')).toBe('Plan');
+    expect(dom.container.querySelector('.model-controls__agent-trigger')).toBeNull();
+    expect(dom.container.textContent).not.toContain('Build');
   });
-
-  test('favoriting a native profile stores its ID rather than its display name', async () => {
-    useUIStore.setState({ isMobile: true });
-    await render();
-    await act(async () => trigger('agent').click());
-    const favorite = document.querySelector<HTMLButtonElement>('button[aria-pressed="false"]');
-    if (!favorite) throw new Error('Expected native agent favorite toggle');
-    await act(async () => favorite.click());
-    expect(useUIStore.getState().favoriteAgents).toEqual([AGENT_ID]);
-    expect(useConfigStore.getState().currentAgentName).toBe(AGENT_ID);
-  });
-
-  test('native details show complete tool availability and preset without permission allow/deny claims', async () => {
-    useUIStore.setState({ isMobile: true });
-    await render();
-    await act(async () => {
-      const agentTrigger = trigger('agent');
-      const touchStart = agentTrigger.ownerDocument.createEvent('Event');
-      touchStart.initEvent('touchstart', true, false);
-      agentTrigger.dispatchEvent(touchStart);
-      const delay = Promise.withResolvers<void>();
-      setTimeout(delay.resolve, 550);
-      await delay.promise;
-    });
-    const text = document.body.textContent ?? '';
-    expect(text).toContain('read, custom-native-tool');
-    expect(text).toContain('workspace-review');
-    expect(text).toContain('Build native projects');
-    expect(text).not.toContain('Allow');
-    expect(text).not.toContain('Deny');
-  });
-
-  for (const mobile of [false, true]) {
-    test(`successful empty native roster is not permanent Loading (${mobile ? 'mobile' : 'desktop'})`, async () => {
-      useUIStore.setState({ isMobile: mobile });
-      useSessionUIStore.setState({ currentSessionId: null });
-      useConfigStore.setState({ currentAgentName: undefined });
-      useAgentsStore.setState({ agentsByDirectory: {}, revisionsByDirectory: {}, errorsByDirectory: {} });
-      await render();
-      expect(label('agent')).toContain('Loading');
-      await act(async () => setRoster([], 'empty-revision'));
-      expect(label('agent')?.toLowerCase()).toContain('select agent');
-      expect(label('agent')).not.toContain('Loading');
-    });
-
-    test(`failed native roster shows Unavailable instead of successful empty (${mobile ? 'mobile' : 'desktop'})`, async () => {
-      useUIStore.setState({ isMobile: mobile });
-      useSessionUIStore.setState({ currentSessionId: null });
-      useConfigStore.setState({ currentAgentName: undefined });
-      useAgentsStore.setState({ agentsByDirectory: {}, revisionsByDirectory: {}, errorsByDirectory: { [DIRECTORY]: 'SERVICE_UNAVAILABLE' } });
-      await render();
-      expect(label('agent')).toContain('Unavailable');
-      expect(label('agent')?.toLowerCase()).not.toContain('select agent');
-      await act(async () => setRoster([agent]));
-      await act(async () => useConfigStore.setState({ currentAgentName: AGENT_ID }));
-      expect(label('agent')).toBe('Build');
-    });
-  }
-
-  test('agents are usable while model discovery is still loading', async () => {
-    useUIStore.setState({ isMobile: true });
+  test('a draft inherits its settings effort, not a retired agent sampling field', async () => {
     useSessionUIStore.setState({ currentSessionId: null });
-    useConfigStore.setState({ providers: [], providersLoaded: false, currentProviderId: '', currentModelId: '' });
-    await render();
-    expect(trigger('agent').hasAttribute('disabled')).toBe(false);
-    expect(trigger('model').hasAttribute('disabled')).toBe(true);
-    expect(trigger('model').textContent).toContain('Loading');
-    expect(label('agent')).toBe('Build');
-  });
-
-  test('a roster from another directory cannot resolve this directory agent', async () => {
-    useSessionUIStore.setState({ currentSessionId: null });
-    useAgentsStore.setState({ agentsByDirectory: { '/other': [agent] }, revisionsByDirectory: { '/other': '1' }, errorsByDirectory: {} });
-    await render();
-    expect(label('agent')).toBe(AGENT_ID);
-    await act(async () => setRoster([{ ...agent, name: 'Project builder' }]));
-    expect(label('agent')).toBe('Project builder');
-  });
-
-  test('a draft uses its configured reasoning effort independently of routes', async () => {
-    useSessionUIStore.setState({ currentSessionId: null });
-    useConfigStore.setState({ currentReasoningEffort: 'high' });
+    useConfigStore.setState({ currentVariant: 'high', settingsDefaultVariant: 'high', currentVariantSelection: { override: undefined, inherited: 'high' } });
+    useConfigStore.getState().setCurrentVariantOverride(undefined, 'high');
     setRoster([{ ...agent, model: { providerId: PROVIDER_ID, modelId: MODEL_ID } }]);
     await render();
-    expect(label('effort')).toBe('High');
-    expect(dom.container.querySelector('.model-controls__variant-trigger')).toBeNull();
+    expect(label('variant')).toBe('high');
+  });
+
+  test('native pinned provider/model binding preserves a valid manual effort', async () => {
+    useSessionUIStore.setState({ currentSessionId: null });
+    setRoster([{ ...agent, model: { providerId: PROVIDER_ID, modelId: MODEL_ID } }]);
+    useConfigStore.setState({ currentVariant: 'high', currentVariantSelection: { override: 'high', inherited: 'low' }, selectionSource: 'manual' });
+    await render();
     await act(async () => useConfigStore.getState().setAgent(AGENT_ID));
-    expect(useConfigStore.getState().currentReasoningEffort).toBe('high');
-  });
-
-  test('picking a native profile applies its pinned provider/model rather than its label', async () => {
-    useSessionUIStore.setState({ currentSessionId: null });
-    const pinnedModel = { ...model, modelId: 'pinned-model' };
-    const pinnedProvider = { ...provider, providerId: 'pinned-provider', models: [{ ...pinnedModel, provider: 'pinned-provider' }] };
-    useConfigStore.setState({ providers: [provider, pinnedProvider] });
-    setRoster([agent, { ...planAgent, model: { providerId: 'pinned-provider', modelId: 'pinned-model' } }]);
-    useUIStore.setState({ isMobile: true });
-    await render();
-    await act(async () => trigger('agent').click());
-    await act(async () => button('Plan').click());
     const state = useConfigStore.getState();
-    expect(state.currentAgentName).toBe(planAgent.agentId);
-    expect([state.currentProviderId, state.currentModelId]).toEqual(['pinned-provider', 'pinned-model']);
+    expect([state.currentProviderId, state.currentModelId]).toEqual([PROVIDER_ID, MODEL_ID]);
+    expect(state.currentVariantSelection.override).toBe('high');
+    expect(state.currentVariant).toBe('high');
   });
 
-  for (const mobile of [false, true]) {
-    test(`real efforts work with no routing variants (${mobile ? 'mobile' : 'desktop'})`, async () => {
-      useUIStore.setState({ isMobile: mobile });
-      if (mobile) useConfigStore.setState({ providers: [{ ...provider, models: [{ ...model, reasoningOptions: model.reasoningOptions.filter((option) => option.reasoningEffort !== 'off') }] }] });
-      await render();
-      expect(label('effort')).toBe('Off');
-      expect(dom.container.querySelector('.model-controls__variant-trigger')).toBeNull();
-      await openTrigger('effort');
-      expect([...document.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent?.trim())).toEqual(['Off', 'Low', 'Medium', 'High']);
-      await act(async () => button('High').click());
-      expect(label('effort')).toBe('High');
-      expect(savedEffort()).toBe('high');
-      expect(savedVariant()).toBeNull();
-      const captured = resolvePinnedComposerSelection({ savedAgent: AGENT_ID, savedModel: { providerId: PROVIDER_ID, modelId: MODEL_ID }, savedVariant: savedVariant(), savedReasoningEffort: savedEffort() });
-      expect(captured).toMatchObject({ reasoningEffort: 'high', variant: null });
-      await openTrigger('effort');
-      await act(async () => button('Off').click());
-      expect(label('effort')).toBe('Off');
-      expect(savedEffort()).toBe('off');
-      expect(useConfigStore.getState().currentReasoningEffort).toBe('off');
-    });
 
-    test(`a model without reasoning hides the effort picker (${mobile ? 'mobile' : 'desktop'})`, async () => {
-      useUIStore.setState({ isMobile: mobile });
-      useConfigStore.setState({ providers: [{ ...provider, models: [{ ...model, reasoningEffortSupported: false, reasoningOptions: [] }] }] });
-      await render();
-      expect(dom.container.querySelector('.model-controls__effort-trigger')).toBeNull();
-    });
-
-    test(`configured routes have their own labelled selector (${mobile ? 'mobile' : 'desktop'})`, async () => {
-      useUIStore.setState({ isMobile: mobile });
-      useConfigStore.setState({ providers: [{ ...provider, models: [{ ...model, variants: [{ variant: 'fast-route', label: 'Fast route', reasoningEffort: 'low' }] }] }] });
-      await render();
-      await openTrigger('variant');
-      expect(document.body.textContent).toContain('Routes');
-      await act(async () => button('Fast route').click());
-      expect(savedVariant()).toBe('fast-route');
-      expect(savedEffort()).toBe('low');
-      expect(label('variant')).toBe('Fast route');
-      await openTrigger('effort');
-      expect([...document.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent?.trim())).not.toContain('Fast route');
-      await act(async () => button('High').click());
-      expect(savedVariant()).toBeNull();
-      expect(savedEffort()).toBe('high');
-      expect(label('variant')).toBe('Default');
-    });
-  }
-
-  test('mobile model rows and route overflow are labelled as routes, not thinking modes', async () => {
-    useUIStore.setState({ isMobile: true });
-    const variants = Array.from({ length: 7 }, (_, index) => ({ variant: `route-${index}`, label: `Route ${index}`, reasoningEffort: 'low' }));
-    useConfigStore.setState({ providers: [{ ...provider, models: [{ ...model, variants }] }] });
-    await render();
-    await openTrigger('model');
-    const rowRoutes = [...document.querySelectorAll<HTMLButtonElement>('button[aria-label="Routes"]')].at(-1);
-    if (!rowRoutes) throw new Error('Expected model row route expansion');
-    await act(async () => rowRoutes.click());
-    expect(document.body.textContent).toContain('Routes: Default');
-    expect(document.querySelector('[aria-label="Show thinking modes"]')).toBeNull();
-    await act(async () => button('Show more').click());
-    expect(document.body.textContent).toContain('Routes');
-    expect(document.body.textContent).not.toContain('Thinking');
-    await act(async () => button('Route 6').click());
-    expect(savedVariant()).toBe('route-6');
-    expect(savedEffort()).toBe('low');
-  });
-
-  test('model picker arrow keys cycle real efforts exactly once through off', async () => {
-    await render();
-    await openTrigger('model');
-    const input = document.querySelector<HTMLInputElement>('input');
-    if (!input) throw new Error('Expected model search input');
-    const keyDown = (key: string) => {
-      const event = document.createEvent('KeyboardEvent');
-      event.initEvent('keydown', true, true);
-      Object.defineProperty(event, 'key', { value: key });
-      input.dispatchEvent(event);
-    };
-    for (const effort of ['low', 'medium', 'high', 'off']) {
-      await act(async () => keyDown('ArrowRight'));
-      expect(savedEffort()).toBe(effort);
-      expect(savedVariant()).toBeNull();
-    }
-    await act(async () => keyDown('ArrowLeft'));
-    expect(savedEffort()).toBe('high');
-  });
-
-  test('selecting a configured route applies its mapped reasoning effort', async () => {
-    const routeModel = { ...model, variants: [{ variant: 'fast-route', label: 'Fast route', reasoningEffort: 'low' }] };
-    useConfigStore.setState({ providers: [{ ...provider, models: [routeModel] }], currentReasoningEffort: 'high' });
-    await render();
-    await openTrigger('variant');
-    await act(async () => button('Fast route').click());
-    expect(label('effort')).toBe('Low');
-    expect(savedEffort()).toBe('low');
-  });
-
-  test('a discovery gap does not erase a draft reasoning effort', async () => {
+  test('a draft keeps its chosen effort through a provider discovery gap', async () => {
     useSessionUIStore.setState({ currentSessionId: null });
-    useConfigStore.setState({ providers: [], providersLoaded: false, currentReasoningEffort: 'high' });
+    useConfigStore.setState({ providers: [], providersLoaded: false, currentVariant: 'high', settingsDefaultVariant: 'low', currentVariantSelection: { override: 'high', inherited: 'low' } });
     await render();
-    expect(useConfigStore.getState().currentReasoningEffort).toBe('high');
+    expect(useConfigStore.getState().currentVariant).toBe('high');
     await act(async () => useConfigStore.setState({ providers: [provider], providersLoaded: true }));
-    expect(label('effort')).toBe('High');
+    expect(useConfigStore.getState().currentModelId).toBe(MODEL_ID);
+    expect(useConfigStore.getState().currentVariantSelection.override).toBe('high');
   });
 
-  test('history without effort does not replace a remembered reasoning effort', async () => {
-    useSelectionStore.getState().saveAgentModelReasoningEffortForSession(SESSION_ID, AGENT_ID, PROVIDER_ID, MODEL_ID, 'high');
+  test('a draft keeps its picked effort while the automatic model is unresolved', async () => {
+    useSessionUIStore.setState({ currentSessionId: null });
+    useConfigStore.setState({ providers: [], providersLoaded: false, currentProviderId: '', currentModelId: '', currentVariant: 'high', currentVariantSelection: { override: 'high', inherited: undefined } });
+    await render();
+    await act(async () => useConfigStore.setState({ providers: [provider], providersLoaded: true, currentProviderId: PROVIDER_ID, currentModelId: MODEL_ID }));
+    expect(useConfigStore.getState().currentVariantSelection.override).toBe('high');
+    expect(useConfigStore.getState().currentVariant).toBe('high');
+  });
+
+  test('a project draft inherits its own effort instead of the global default', async () => {
+    useSessionUIStore.setState({ currentSessionId: null });
+    useConfigStore.setState({ currentVariant: 'high', settingsDefaultVariant: 'low', currentVariantSelection: { override: undefined, inherited: 'high' } });
+    await render();
+    expect(useConfigStore.getState().currentVariant).toBe('high');
+    expect(useConfigStore.getState().currentVariantSelection.override).toBeUndefined();
+  });
+
+  test('history without effort records no choice instead of explicit Default', async () => {
     await render();
     await stage([reply('msg-history')]);
-    expect(savedEffort()).toBe('high');
-    expect(label('effort')).toBe('High');
+    expect(savedVariant()).toBeUndefined();
+    expect(useConfigStore.getState().currentVariantSelection.override).toBeUndefined();
   });
+
+  for (const variant of [null, 'high'] as const) {
+    test(`history echo preserves remembered manual effort ${variant ?? 'Default'}`, async () => {
+      saveVariant(variant);
+      useConfigStore.setState({ selectionSource: 'manual', settingsDefaultVariant: 'low', currentVariant: variant ?? undefined, currentVariantSelection: { override: variant, inherited: 'low' } });
+      await render();
+      await stage([reply('msg-echo')]);
+      expect(savedVariant()).toBe(variant);
+      expect(useConfigStore.getState().currentVariantSelection.override).toBe(variant);
+      expect(useConfigStore.getState().currentVariant).toBe(variant ?? undefined);
+    });
+  }
 
   for (const ready of [true, false]) {
     test(`saved Auto survives history when routing is ${ready ? 'ready' : 'still loading'}`, async () => {
@@ -455,42 +289,48 @@ describe('ModelControls native selection and effort restore', () => {
     });
   }
 
-  test('live agent change does not reapply persisted session model hydration', async () => {
-    const getModel = spyOn(useSelectionStore.getState(), 'getSessionModelSelection');
-    try {
-      await render();
-      await stage([]);
-      const hydratedCalls = getModel.mock.calls.length;
-      await act(async () => useConfigStore.setState({ currentAgentName: planAgent.agentId }));
-      expect(getModel.mock.calls.length).toBe(hydratedCalls);
-      expect(useConfigStore.getState().currentAgentName).toBe(planAgent.agentId);
-    } finally { getModel.mockRestore(); }
-  });
 
-  for (const mobile of [false, true]) {
-    test(`controlled effort selection remains independent (${mobile ? 'mobile' : 'desktop'})`, async () => {
+  for (const [mobile, variant] of [[false, 'low'], [true, null]] as const) {
+    test(`controlled selection remains independent (${mobile ? 'mobile' : 'desktop'}, ${variant ?? 'Default'})`, async () => {
       const controlledId = 'btw-pending:ses_restore';
       useUIStore.setState({ isMobile: mobile });
-      useConfigStore.setState({ currentProviderId: 'main-provider', currentModelId: 'main-model', currentReasoningEffort: 'high' });
+      useConfigStore.setState({ currentProviderId: 'main-provider', currentModelId: 'main-model', currentVariant: 'high', currentVariantSelection: { override: 'high', inherited: 'low' } });
       const saveModel = spyOn(useSelectionStore.getState(), 'saveSessionModelSelection');
-      const saveEffort = spyOn(useSelectionStore.getState(), 'saveAgentModelReasoningEffortForSession');
+      const saveEffort = spyOn(useSelectionStore.getState(), 'saveAgentModelVariantForSession');
+      const openTrigger = async (kind: 'model' | 'variant') => {
+        await act(async () => {
+          const entry = trigger(kind);
+          const view = entry.ownerDocument.defaultView;
+          if (!view) throw new Error('Expected a browser window for the model picker');
+          if (useUIStore.getState().isMobile) {
+            entry.dispatchEvent(new view.MouseEvent('click', { bubbles: true, cancelable: true }));
+          } else {
+            entry.focus();
+            entry.dispatchEvent(new view.KeyboardEvent('keydown', { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, which: 40, bubbles: true, cancelable: true }));
+          }
+          await new Promise<void>((resolve) => view.requestAnimationFrame(() => resolve()));
+          await new Promise<void>((resolve) => view.requestAnimationFrame(() => resolve()));
+        });
+      };
       try {
-        await render({ sessionId: controlledId, selection: { model: { providerId: PROVIDER_ID, modelId: MODEL_ID }, agent: planAgent.agentId, variant: null, reasoningEffort: 'low' } });
+        await render({ sessionId: controlledId, selection: { model: { providerId: PROVIDER_ID, modelId: MODEL_ID }, agent: planAgent.agentId, variant } });
         expect(useSessionUIStore.getState().getDirectoryForSession(controlledId)).toBe(DIRECTORY);
+        expect([useConfigStore.getState().activeDirectoryKey, useConfigStore.getState().providersLoaded, useConfigStore.getState().providers.map((item) => item.providerId)]).toEqual([DIRECTORY, true, [PROVIDER_ID]]);
         expect(selectCatalogLoadedForDirectory(useConfigStore.getState(), 'models', DIRECTORY)).toBe(true);
         expect(dom.container.querySelector('.model-controls__agent-label')).toBeNull();
-        expect(label('effort')).toBe('Low');
+        expect(label('variant')).toBe(variant ?? 'Default');
         expect(saveModel.mock.calls).toEqual([]);
         expect(saveEffort.mock.calls).toEqual([]);
         await openTrigger('model');
         await act(async () => button(MODEL_ID).click());
         expect(saveModel.mock.calls.at(-1)).toEqual([controlledId, PROVIDER_ID, MODEL_ID]);
-        await openTrigger('effort');
-        await act(async () => button('Off').click());
-        expect(saveEffort.mock.calls.at(-1)).toEqual([controlledId, planAgent.agentId, PROVIDER_ID, MODEL_ID, 'off']);
-        expect(useSelectionStore.getState().getAgentModelVariantForSession(controlledId, planAgent.agentId, PROVIDER_ID, MODEL_ID)).toBeNull();
+        expect(useSelectionStore.getState().getAgentModelForSession(controlledId, planAgent.agentId))
+          .toEqual({ providerId: PROVIDER_ID, modelId: MODEL_ID });
+        await openTrigger('variant');
+        await act(async () => button('Default').click());
+        expect(saveEffort.mock.calls.at(-1)).toEqual([controlledId, planAgent.agentId, PROVIDER_ID, MODEL_ID, null]);
         const state = useConfigStore.getState();
-        expect([state.currentProviderId, state.currentModelId, state.currentAgentName, state.currentReasoningEffort]).toEqual(['main-provider', 'main-model', AGENT_ID, 'high']);
+        expect([state.currentProviderId, state.currentModelId, state.currentAgentName, state.currentVariant]).toEqual(['main-provider', 'main-model', AGENT_ID, 'high']);
       } finally { saveModel.mockRestore(); saveEffort.mockRestore(); }
     });
   }

@@ -21,16 +21,8 @@ import {
 const attachment = (id: string) => ({ id, filename: `${id}.txt` } as unknown as AttachedFile);
 
 /**
- * Resolvers with just enough behavior to observe ordering: `@agent:name`
- * names an agent, `@file:x` resolves to an attachment, `/skill` is a skill.
  */
 const deps = (overrides: Partial<OutgoingMessageDeps> = {}): OutgoingMessageDeps => ({
-    parseAgentMention: (text) => {
-        const match = /@agent:(\w+)\s*/.exec(text);
-        return match
-            ? { text: text.replace(match[0], ''), agentName: match[1] }
-            : { text };
-    },
     extractFileMentions: (text) => {
         const attachments = [...text.matchAll(/@file:(\w+)/g)].map((m) => attachment(m[1]));
         return { text, attachments };
@@ -159,7 +151,6 @@ describe('queued messages', () => {
         expect(result.primaryText).toBe('@agent:plan see @file:doc and /deploy');
         expect(result.primaryFileResourcesExpanded).toBe(true);
         expect(result.primaryAttachments).toEqual([]);
-        expect(result.agentMentionName).toBe(undefined);
         expect(result.additionalParts).toEqual([]);
     });
 
@@ -175,32 +166,6 @@ describe('queued messages', () => {
     });
 });
 
-describe('agent mentions', () => {
-    test('an agent named in the composer routes the send', () => {
-        expect(buildOutgoingMessage(input({ composerText: '@agent:build do it' }), deps())
-            .agentMentionName).toBe('build');
-    });
-
-    test('the first mention wins across queued messages', () => {
-        const result = buildOutgoingMessage(input({
-            queued: [{ text: 'a', agentMention: 'plan' }, { text: 'b', agentMention: 'build' }],
-        }), deps());
-        expect(result.agentMentionName).toBe('plan');
-    });
-
-    test('a queued mention outranks one typed later', () => {
-        const result = buildOutgoingMessage(input({
-            queued: [{ text: 'a', agentMention: 'plan' }],
-            composerText: '@agent:build b',
-        }), deps());
-        expect(result.agentMentionName).toBe('plan');
-    });
-
-    test('no mention leaves the routing unset', () => {
-        expect(buildOutgoingMessage(input({ composerText: 'plain' }), deps()).agentMentionName)
-            .toBe(undefined);
-    });
-});
 
 const commentDraft = (overrides: Partial<InlineCommentDraft> = {}): InlineCommentDraft => ({
     id: 'icd-1',

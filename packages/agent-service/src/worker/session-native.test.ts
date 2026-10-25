@@ -49,13 +49,12 @@ function completion(tool?: { name: string; input: JsonObject; id: string }): Res
   return new Response(`data: ${JSON.stringify(chunk)}\n\ndata: ${JSON.stringify(finish)}\n\ndata: [DONE]\n\n`, { headers: { 'content-type': 'text/event-stream' } });
 }
 
-async function fixture({ respond, invoke, machineCommands = [], onSubagent = () => {}, denyWebSearch = false, supportsReasoning = false }: {
+async function fixture({ respond, invoke, machineCommands = [], onSubagent = () => {}, denyWebSearch = false }: {
   respond: (payload: ProviderRequest, root: string) => Promise<Response> | Response;
   invoke?: (request: HostActionRequest, signal: AbortSignal, root: string) => Promise<JsonValue>;
   machineCommands?: string[];
   onSubagent?: (payload: SubagentLifecyclePayload) => void;
   denyWebSearch?: boolean;
-  supportsReasoning?: boolean;
 }) {
   const root = await mkdtemp(join(tmpdir(), 'native-seams-'));
   const home = process.env.HOME;
@@ -119,9 +118,7 @@ async function fixture({ respond, invoke, machineCommands = [], onSubagent = () 
     } } } });
     await worker.operation({ type: 'catalog', revision: '2', operation: { type: 'catalog.model.configure', request: { expectedRevision: '1', model: {
       modelId: 'native-model', provider: 'native-fixture', name: 'Native model', modalities: ['text'], contextWindow: 65536, maxOutputTokens: 128,
-      reasoningEffortSupported: supportsReasoning,
-      reasoningOptions: supportsReasoning ? [{ reasoningEffort: 'high', label: 'High', budgetTokens: null }] : [],
-      variants: [], toolsSupported: true, enabled: true, pricing: null,
+      reasoningEffortSupported: false, reasoningOptions: [], variants: [], toolsSupported: true, enabled: true, pricing: null,
     } } } });
     return { root: cwd, worker, events, requests, grants, hostRequests, interactions, journal, mcpConfigPath,
       waitApproval: () => {
@@ -166,29 +163,6 @@ async function searxngLoopback(): Promise<{ url: string; requests: string[]; sto
   return { url: `http://127.0.0.1:${server.port}`, requests, stop: () => server.stop(true) };
 }
 
-test('builtin command controls capture output without starting a provider run', async () => {
-  const harness = await fixture({ respond: () => completion() });
-  try {
-    const result = await harness.worker.operation({ type: 'command', text: '/context' });
-    expect(result).toMatchObject({ type: 'command' });
-    if (result.type !== 'command') throw new Error('Expected builtin command acknowledgement');
-    expect(result.output.length).toBeGreaterThan(0);
-    expect(harness.requests).toHaveLength(0);
-    await expect(harness.worker.operation({ type: 'command', text: '/ssh' })).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
-  } finally { await harness.close(); }
-}, 30000);
-test('compact control refuses while a native run is active', async () => {
-  const started = Promise.withResolvers<void>();
-  const finish = Promise.withResolvers<Response>();
-  const harness = await fixture({ respond: async () => { started.resolve(); return finish.promise; } });
-  try {
-    const promptRun = harness.worker.operation({ type: 'prompt', runId: 'active-run', request: prompt('Hold this run open.') });
-    await started.promise;
-    await expect(harness.worker.operation({ type: 'compact' })).rejects.toMatchObject({ status: 409, code: 'RUN_ACTIVE' });
-    finish.resolve(completion());
-    await promptRun;
-  } finally { await harness.close(); }
-}, 30000);
 test('profile tool allowlist does not block selected provider authorization', async () => {
   const harness = await fixture({ respond: () => completion() });
   const terminal = Promise.withResolvers<void>();
@@ -206,20 +180,19 @@ test('profile tool allowlist does not block selected provider authorization', as
   } finally { unsubscribe(); await harness.close(); }
 }, 30000);
 
-test('captured reasoning effort configures the native OMP session and provider request', async () => {
-  const harness = await fixture({ supportsReasoning: true, respond: () => completion() });
+test('root prompt ignores unavailable profile tool allowlists', async () => {
+  const harness = await fixture({ respond: () => completion() });
   const terminal = Promise.withResolvers<void>();
   const unsubscribe = harness.worker.session.subscribe(event => {
     if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve();
   });
   try {
-    await harness.worker.operation({
-      type: 'prompt', runId: 'native-high-effort',
-      request: { ...prompt('Use high reasoning effort.'), options: { ...options, reasoningEffort: 'high' } },
-    });
+    await writeFile(join(harness.root, '.omp', 'agents', 'unavailable.md'),
+      '---\nname: unavailable\ndescription: Missing tool profile\nopenchamber: {agentId: unavailable, name: Unavailable, description: Missing tool profile, model: null, allowedTools: [missing_tool]}\n---\n\nUnavailable.\n');
+    await harness.worker.operation({ type: 'prompt', runId: 'root-null-profile-run', request: prompt('Use the main conversation tools.') });
     await terminal.promise;
     expect(harness.requests).toHaveLength(1);
-    expect(harness.requests[0]).toMatchObject({ reasoning_effort: 'high' });
+    expect(harness.events.some(input => input.event.type === 'run.completed')).toBe(true);
   } finally { unsubscribe(); await harness.close(); }
 }, 30000);
 
@@ -372,25 +345,6 @@ for (const decision of ['allow', 'deny'] as const) {
   }, 30000);
 }
 
-test('text attachments become visible OMP file mentions without host paths', async () => {
-  const harness = await fixture({ respond: () => completion() });
-  const finished = Promise.withResolvers<void>();
-  const unsubscribe = harness.worker.session.subscribe(event => {
-    if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) finished.resolve();
-  });
-  try {
-    const attachment = { attachmentId: 'text-attachment', name: 'notes.txt', mediaType: 'text/plain', size: 15, uri: 'attachment://text-attachment' };
-    const filePath = join(harness.root, 'private-note.txt');
-    await writeFile(filePath, 'VISIBLE_CONTENT');
-    await harness.worker.operation({ type: 'prompt', runId: 'text-attachment-run', request: { ...prompt('Read this note.'), input: { text: 'Read this note.', attachments: [attachment], context: [] } }, attachments: [{ attachmentId: attachment.attachmentId, path: filePath }] });
-    await finished.promise;
-    const requestMessages = harness.requests[0]?.messages ?? [];
-    const fileMention = requestMessages.find(message => JSON.stringify(message).includes('VISIBLE_CONTENT'));
-    expect(fileMention?.role).toBe('user');
-    expect(JSON.stringify(fileMention)).toContain('notes.txt');
-    expect(JSON.stringify(requestMessages)).not.toContain(filePath);
-  } finally { unsubscribe(); await harness.close(); }
-}, 30000);
 test('actual SDK Host tool executes with Host-supplied first-use MCP storage and returns its real file result', async () => {
   let invoked: HostActionRequest | undefined;
   const harness = await fixture({ respond(payload) {

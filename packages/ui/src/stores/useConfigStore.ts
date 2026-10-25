@@ -380,26 +380,20 @@ type DefaultAgentModelSelection = {
     variant?: string;
 };
 
-// Project and Host preferences outrank the native profile model binding.
+// Root model preferences are independent of the subagent catalog.
 // Discovery gaps preserve configured identifiers instead of choosing another model.
 const resolveDefaultAgentModelSelection = ({
-    agents,
     providers,
-    projectDefaultAgent,
     projectDefaultModel,
     projectDefaultVariant,
-    settingsDefaultAgent,
     settingsDefaultModel,
     settingsDefaultVariant,
     allowFallback = true,
     fallbackPrefs,
 }: {
-    agents: Agent[];
     providers: ProviderWithModelList[];
-    projectDefaultAgent?: string;
     projectDefaultModel?: string;
     projectDefaultVariant?: string;
-    settingsDefaultAgent?: string;
     settingsDefaultModel?: string;
     settingsDefaultVariant?: string;
     allowFallback?: boolean;
@@ -412,9 +406,6 @@ const resolveDefaultAgentModelSelection = ({
         return modelHasVariant(findProviderModel(providers, providerId, modelId), variant) ? variant : undefined;
     };
 
-    const resolvedAgent = agents.find((agent) => agent.agentId === projectDefaultAgent)
-        ?? agents.find((agent) => agent.agentId === settingsDefaultAgent)
-        ?? agents[0];
     // --- Model cascade ---
     let providerId: string | undefined;
     let modelId: string | undefined;
@@ -437,15 +428,7 @@ const resolveDefaultAgentModelSelection = ({
     }
 
     if (providerId || !allowFallback) {
-        return { agentName: resolvedAgent?.agentId ?? projectDefaultAgent ?? settingsDefaultAgent, providerId, modelId, variant };
-    }
-
-    if (!providerId && resolvedAgent?.model) {
-        providerId = resolvedAgent.model.providerId;
-        modelId = resolvedAgent.model.modelId;
-        variant = hasProviderModel(providers, providerId, modelId)
-            ? resolveVariant(providerId, modelId)
-            : undefined;
+        return { agentName: undefined, providerId, modelId, variant };
     }
 
 
@@ -455,7 +438,7 @@ const resolveDefaultAgentModelSelection = ({
         modelId = fallback?.modelId;
     }
 
-    return { agentName: resolvedAgent?.agentId, providerId, modelId, variant };
+    return { agentName: undefined, providerId, modelId, variant };
 };
 
 const resolveGitGenerationModelSelection = ({
@@ -2410,9 +2393,6 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                             sttLocalModel: defaults.sttLocalModel ?? state.sttLocalModel,
                             sttLanguage: defaults.sttLanguage ?? state.sttLanguage,
                         };
-                        if (!useSessionUIStore.getState().currentSessionId && state.selectionSource === 'auto' && state.agentSelectionSource === 'auto' && next.settingsDefaultAgent) {
-                            next.currentAgentName = next.settingsDefaultAgent;
-                        }
                         return next;
                     });
                     const state = get();
@@ -2749,17 +2729,14 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                         settingsDefaultVariant,
                         settingsDefaultAgent,
                     } = get();
-                    const agents = selectAgentsForDirectory(useAgentsStore.getState(), fromDirectoryKey(activeDirectoryKey));
                     const {
                         agentName: resolvedAgentName,
                         providerId: resolvedProviderId,
                         modelId: resolvedModelId,
                         variant: resolvedVariant,
                     } = resolveDefaultAgentModelSelection({
-                        agents,
                         providers,
                         ...projectDefaults,
-                        settingsDefaultAgent,
                         settingsDefaultModel,
                         settingsDefaultVariant,
                         allowFallback: get().settingsDefaultsLoaded,

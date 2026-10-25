@@ -1068,30 +1068,6 @@ export function ScheduledTaskEditorDialog(props: {
     });
   }, [draft.execution.prompt, setPromptValue, updateAutocompleteState]);
 
-  const handleAgentSelect = React.useCallback((agentName: string) => {
-    const promptValue = draft.execution.prompt;
-    const textarea = promptTextareaRef.current;
-    const cursorPosition = textarea?.selectionStart ?? promptValue.length;
-    const textBeforeCursor = promptValue.substring(0, cursorPosition);
-    const lastAtSymbol = textBeforeCursor.lastIndexOf('@');
-    const startIndex = lastAtSymbol !== -1 ? lastAtSymbol : cursorPosition;
-    const nextPrompt = `${promptValue.substring(0, startIndex)}@${agentName} ${promptValue.substring(cursorPosition)}`;
-    const nextCursor = startIndex + agentName.length + 2;
-
-    setPromptValue(nextPrompt);
-    setShowFileMention(false);
-    setMentionQuery('');
-
-    requestAnimationFrame(() => {
-      const currentTextarea = promptTextareaRef.current;
-      if (currentTextarea) {
-        currentTextarea.selectionStart = nextCursor;
-        currentTextarea.selectionEnd = nextCursor;
-        currentTextarea.focus();
-      }
-      updateAutocompleteState(nextPrompt, nextCursor);
-    });
-  }, [draft.execution.prompt, setPromptValue, updateAutocompleteState]);
 
   const handleCommandSelect = React.useCallback((command: CommandInfo) => {
     const nextPrompt = `/${command.name} `;
@@ -1635,7 +1611,6 @@ export function ScheduledTaskEditorDialog(props: {
                   ref={mentionRef}
                   searchQuery={mentionQuery}
                   onFileSelect={handleFileSelect}
-                  onAgentSelect={handleAgentSelect}
                   onClose={() => setShowFileMention(false)}
                   style={{
                     left: 0,

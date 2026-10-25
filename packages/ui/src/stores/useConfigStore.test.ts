@@ -564,7 +564,7 @@ describe('useConfigStore provider persistence', () => {
     expect(useConfigStore.getState().providers[0]?.models[0]?.modelId).toBe('new-model');
   });
 
-  test('worktree catalog keeps its parent project agent default', async () => {
+  test('worktree does not apply a parent project agent default to the composer', async () => {
     const worktree = '/workspace/project-default-worktree';
     useSessionUIStore.setState({
       availableWorktreesByProject: new Map([[DIRECTORY, [{
@@ -580,7 +580,7 @@ describe('useConfigStore provider persistence', () => {
     await useConfigStore.getState().activateDirectory(worktree);
 
     expect(useConfigStore.getState().activeDirectoryKey).toBe(worktree);
-    expect(useConfigStore.getState().currentAgentName).toBe('review');
+    expect(useConfigStore.getState().currentAgentName).toBeUndefined();
   });
 
   test('loading another project agent picker leaves the active composer untouched', async () => {
@@ -1409,7 +1409,7 @@ describe('useConfigStore provider persistence', () => {
     expect(useConfigStore.getState().currentAgentName).toBe('plan');
   });
 
-  test('default selection clears an agent pick so the next draft resolves defaults again', async () => {
+  test('default selection leaves the root composer without a profile', async () => {
     const agentsList = [
       testAgent('build', { model: { providerId: 'openai', modelId: 'gpt-5.6-sol' } }),
       testAgent('Build - Gemini', { model: { providerId: 'google', modelId: 'antigravity-gemini-3.8-flash' } }),
@@ -1418,11 +1418,7 @@ describe('useConfigStore provider persistence', () => {
     seedAgentCatalog(agentsList, DIRECTORY);
     useConfigStore.setState({
       activeDirectoryKey: DIRECTORY,
-      providers: [
-        provider('openai', 'gpt-5.6-sol'),
-        provider('google', 'antigravity-gemini-3.8-flash'),
-      ],
-      
+      providers: [provider('openai', 'gpt-5.6-sol'), provider('google', 'antigravity-gemini-3.8-flash')],
       currentProviderId: 'openai',
       currentModelId: 'gpt-5.6-sol',
       currentAgentName: 'build',
@@ -1437,7 +1433,7 @@ describe('useConfigStore provider persistence', () => {
     await refreshComposerCatalog(DIRECTORY);
 
     expect(useConfigStore.getState().agentSelectionSource).toBe('auto');
-    expect(useConfigStore.getState().currentAgentName).toBe('build');
+    expect(useConfigStore.getState().currentAgentName).toBeUndefined();
   });
 
   test('setAgent carries an explicit override from a pinned agent to an unpinned agent', () => {
@@ -1621,7 +1617,7 @@ describe('useConfigStore provider persistence', () => {
       await new Promise<void>((resolve) => setTimeout(resolve, 0));
       expect(settingsLoadCalls).toBe(1);
       expect(useConfigStore.getState()).toMatchObject({
-        currentProviderId: 'sidecar', currentModelId: 'chosen', currentAgentName: 'review', currentVariant: 'high',
+        currentProviderId: 'sidecar', currentModelId: 'chosen', currentAgentName: undefined, currentVariant: 'high',
       });
       expect(useConfigStore.getState().isInitialized).toBe(false);
     } finally {

@@ -343,8 +343,9 @@ path only writes BTW selections. Files attach as in the normal composer
 (picker, paste, drop) and live in the BTW draft identity's attachment slot,
 so they never mix with the main draft's files; the attach control offers
 only local files. Goals, expansion, shell, linked context (issues, PRs,
-guests), agent selection and file/agent mention autocomplete are
-unavailable. Auto-accept is applied before the first send.
+guests), and file/agent mention autocomplete are unavailable. The native
+composer sends the selected model directly; no agent selector is rendered.
+Auto-accept is applied before the first send.
 On mobile, model and effort controls sit in the input's upper-left row; the
 footer only contains auto-accept and send/stop controls.
 

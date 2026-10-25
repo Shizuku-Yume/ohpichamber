@@ -14,7 +14,7 @@ import type { ChatDraftIdentity } from '@/lib/chatDraftPersistence';
 export interface ForkSendSelection {
     providerID: string;
     modelID: string;
-    agent?: string;
+    agent?: string | null;
     variant?: string;
     reasoningEffort?: string;
 }

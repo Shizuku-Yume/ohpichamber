@@ -2281,9 +2281,12 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
 
             if (normalized.includes('payload too large') || normalized.includes('413') || normalized.includes('entity too large')) {
                 toast.error(t('chat.chatInput.toast.attachmentsTooLarge'));
-                if (allAttachments.length > 0) {
-                    useInputStore.getState().restoreAttachedFiles(allAttachments, chatDraftIdentity);
-                }
+                if (allAttachments.length > 0) useInputStore.getState().restoreAttachedFiles(allAttachments, chatDraftIdentity);
+                return;
+            }
+            if (normalized.includes('not text or image') || normalized.includes('valid utf-8 text')) {
+                toast.error(rawMessage || t('chat.chatInput.toast.attachmentUnsupported'));
+                if (allAttachments.length > 0) useInputStore.getState().restoreAttachedFiles(allAttachments, chatDraftIdentity);
                 return;
             }
 

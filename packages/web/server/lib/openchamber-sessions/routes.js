@@ -117,7 +117,20 @@ const createCanonicalSessionService = (dependencies) => {
     emit({ type: 'openchamber:session-created', properties: { sessionId: session.sessionId, projectId, workspaceId } });
     return result;
   };
-  const prepareDelivery = async (scope, requestBody, identity = {}) => { const capturedRequest = PromptRequestSchema.parse(await capturePrompt(scope, requestBody)); const capture = { ...identity, request: capturedRequest }; await beforeDispatch(scope, capture); const attachments = await resolveAttachments(scope, capturedRequest.input.attachments); return { ...capture, attachments }; };
+  const prepareDelivery = async (scope, requestBody, identity = {}) => {
+    const capturedRequest = PromptRequestSchema.parse(await capturePrompt(scope, requestBody));
+    const capture = { ...identity, request: capturedRequest };
+    await beforeDispatch(scope, capture);
+    try {
+      const attachments = await resolveAttachments(scope, capturedRequest.input.attachments);
+      return { ...capture, attachments };
+    } catch (error) {
+      if (error?.code === 'PAYLOAD_TOO_LARGE' || error?.code === 'INVALID_REQUEST') {
+        throw new OpenChamberControlError(error.message, error.statusCode ?? (error.code === 'PAYLOAD_TOO_LARGE' ? 413 : 400), { code: error.code, retryable: false });
+      }
+      throw error;
+    }
+  };
   const deliver = async (operation, sessionId, payload, commandId) => {
     const scope = await scopeFor(sessionId);
     assertWritableScope(scope);

@@ -366,10 +366,8 @@ export class WorkerSession {
       if (attachment.mediaType.startsWith('image/')) {
         images.push({ type: 'image', data: (await readFile(reference.path)).toString('base64'), mimeType: attachment.mediaType });
       } else {
-        contextMessages.push({ role: 'custom', customType: 'ohpichamber.attachment', display: false,
-          content: `Attached file ${attachment.name}: ${reference.path}`, details: attachment,
-          attribution: 'agent', timestamp: Date.now(),
-        });
+        const content = (await readFile(reference.path)).toString('utf8');
+        contextMessages.push({ role: 'fileMention', files: [{ path: attachment.name, content }], timestamp: Date.now() });
       }
     }
     if (operation.type === 'prompt') {

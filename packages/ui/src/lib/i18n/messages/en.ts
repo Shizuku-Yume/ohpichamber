@@ -2550,6 +2550,7 @@ export const dict = {
   'chat.chatInput.toast.weighFailed': 'Failed to weigh options',
   'chat.chatInput.toast.exploreFailed': 'Failed to start the tour',
   'chat.chatInput.toast.attachmentsTooLarge': 'Attachments are too large to send. Please try reducing the number or size of images.',
+  'chat.chatInput.toast.attachmentUnsupported': 'This attachment is not a supported text file or image.',
   'chat.chatInput.toast.sendAttachmentsFailed': 'Failed to send attachments. Try fewer files or smaller images.',
   'chat.chatInput.toast.messageSendFailed': 'Message failed to send. Attachments restored.',
   'chat.chatInput.toast.noModelSelected': 'Select a provider and model before sending.',

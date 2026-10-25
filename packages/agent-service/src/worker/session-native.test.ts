@@ -372,6 +372,24 @@ for (const decision of ['allow', 'deny'] as const) {
   }, 30000);
 }
 
+test('text attachments become visible OMP file mentions without host paths', async () => {
+  const harness = await fixture({ respond: () => completion() });
+  const finished = Promise.withResolvers<void>();
+  const unsubscribe = harness.worker.session.subscribe(event => {
+    if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) finished.resolve();
+  });
+  try {
+    const attachment = { attachmentId: 'text-attachment', name: 'notes.txt', mediaType: 'text/plain', size: 15, uri: 'attachment://text-attachment' };
+    const filePath = join(harness.root, 'private-note.txt');
+    await writeFile(filePath, 'VISIBLE_CONTENT');
+    await harness.worker.operation({ type: 'prompt', runId: 'text-attachment-run', request: { ...prompt('Read this note.'), input: { text: 'Read this note.', attachments: [attachment], context: [] } }, attachments: [{ attachmentId: attachment.attachmentId, path: filePath }] });
+    await finished.promise;
+    const serialized = JSON.stringify(harness.requests);
+    expect(serialized).toContain('<file path="notes.txt">');
+    expect(serialized).toContain('VISIBLE_CONTENT');
+    expect(serialized).not.toContain(filePath);
+  } finally { unsubscribe(); await harness.close(); }
+}, 30000);
 test('actual SDK Host tool executes with Host-supplied first-use MCP storage and returns its real file result', async () => {
   let invoked: HostActionRequest | undefined;
   const harness = await fixture({ respond(payload) {

@@ -54,6 +54,7 @@ export class WorkerSession {
   private skillsApplying = false;
   private failed = false;
   private controllingBranch = false;
+  private compacting = false;
 
   private constructor(
     readonly session: AgentSession,
@@ -444,6 +445,7 @@ export class WorkerSession {
   private async executeOperation(operation: WorkerOperation): Promise<WorkerOperationResult> {
     if (this.closed || this.failed) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Worker session is unavailable');
     if (this.controllingBranch) throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', 'Native branch selection is in progress');
+    if (this.compacting) throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', 'Session compaction is in progress');
     switch (operation.type) {
       case 'web-search': {
         if (operation.operation.type !== 'apply') throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'Search mutations require their workspace owner');
@@ -573,14 +575,15 @@ export class WorkerSession {
         return { type: 'history', history: this.projection.history(operation.request) };
       case 'compact': {
         if (this.preparation || this.projection.activeRun() || this.session.isStreaming || this.controllingBranch) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
-        await this.binding;
-        const result = await this.session.compact(operation.instructions);
-        const tokensBefore = result?.tokensBefore;
-        if (typeof tokensBefore !== 'number' || !Number.isFinite(tokensBefore) || tokensBefore < 0) throw new ProjectionError(503, 'INTERNAL_ERROR', 'Native compaction did not report token usage');
-        const completedAt = Date.now();
-        const compactionId = randomUUID();
-        this.emit([{ timestamp: completedAt, event: { type: 'session.compacted', compactionId, tokensBefore, completedAt } }]);
-        return { type: 'compact', compactionId, tokensBefore, completedAt };
+        this.compacting = true;
+        try {
+          await this.binding;
+          const result = await this.session.compact(operation.instructions);
+          const completedAt = Date.now();
+          const compactionId = randomUUID();
+          this.emit([{ timestamp: completedAt, event: { type: 'session.compacted', compactionId, tokensBefore: result.tokensBefore, completedAt } }]);
+          return { type: 'compact', compactionId, tokensBefore: result.tokensBefore, completedAt };
+        } finally { this.compacting = false; }
       }
       case 'branch':
         return this.selectBranch(operation.request);

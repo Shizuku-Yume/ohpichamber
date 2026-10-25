@@ -50,7 +50,7 @@ describe('canonical existing-session scheduling', () => {
   it('captures pinned model, agent and variant at admission', async () => {
     const h = setup();
     await h.runtime.run('host-project', { ...task, execution: { prompt: 'Pinned', providerID: 'provider', modelID: 'model', agent: 'agent', variant: 'high' } }, 'manual');
-    expect(h.appended[0].request.request.options).toEqual({ providerId: 'provider', modelId: 'model', agentId: 'agent', variant: 'high', reasoningEffort: null });
+    expect(h.appended[0].request.request.options).toEqual({ providerId: 'provider', modelId: 'model', agentId: null, variant: 'high', reasoningEffort: null });
   });
 
   it('captures worker expansion once before queue persistence while keeping raw task display', async () => {

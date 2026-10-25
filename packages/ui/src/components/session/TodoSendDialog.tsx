@@ -8,10 +8,8 @@ import {
 } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
-import { AgentSelector } from '@/components/sections/commands/AgentSelector';
 import { ThinkingPill } from '@/components/session/ThinkingPill';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { useAgentsStore } from '@/stores/useAgentsStore';
 import { useI18n } from '@/lib/i18n';
 
 type TodoSendTarget = 'session' | 'worktree';
@@ -20,10 +18,14 @@ export type TodoSendExecution = {
   providerID: string;
   modelID: string;
   variant: string;
-  agent: string;
   runAsGoal?: boolean;
 };
 
+const getInitialExecution = (params: { providerID: string; modelID: string; variant: string }): TodoSendExecution => ({
+  providerID: params.providerID,
+  modelID: params.modelID,
+  variant: params.variant,
+});
 type TodoSendDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -35,17 +37,6 @@ type TodoSendDialogProps = {
   onConfirm: (execution: TodoSendExecution) => Promise<void> | void;
 };
 
-const getInitialExecution = (params: {
-  providerID: string;
-  modelID: string;
-  variant: string;
-  agent: string;
-}): TodoSendExecution => ({
-  providerID: params.providerID,
-  modelID: params.modelID,
-  variant: params.variant,
-  agent: params.agent,
-});
 
 export function TodoSendDialog(props: TodoSendDialogProps) {
   const { t } = useI18n();
@@ -53,35 +44,26 @@ export function TodoSendDialog(props: TodoSendDialogProps) {
   const showRunAsGoal = allowRunAsGoal;
 
   const loadProviders = useConfigStore((state) => state.loadProviders);
-  const loadAgentsStoreAgents = useAgentsStore((state) => state.loadAgents);
   const providers = useConfigStore((state) => state.providers);
   const currentProviderID = useConfigStore((state) => state.currentProviderId);
   const currentModelID = useConfigStore((state) => state.currentModelId);
   const currentVariant = useConfigStore((state) => state.currentVariant || '');
-  const currentAgentName = useConfigStore((state) => state.currentAgentName || '');
 
   const [execution, setExecution] = React.useState<TodoSendExecution>(() => getInitialExecution({
     providerID: currentProviderID,
     modelID: currentModelID,
     variant: currentVariant,
-    agent: currentAgentName,
   }));
 
   React.useEffect(() => {
     if (!open) return;
     void loadProviders({ directory: projectDirectory, source: 'todoSendDialog' });
-    void loadAgentsStoreAgents(projectDirectory);
-  }, [open, loadProviders, loadAgentsStoreAgents, projectDirectory]);
+  }, [open, loadProviders, projectDirectory]);
 
   React.useEffect(() => {
     if (!open) return;
-    setExecution(getInitialExecution({
-      providerID: currentProviderID,
-      modelID: currentModelID,
-      variant: currentVariant,
-      agent: currentAgentName,
-    }));
-  }, [open, currentProviderID, currentModelID, currentVariant, currentAgentName]);
+    setExecution(getInitialExecution({ providerID: currentProviderID, modelID: currentModelID, variant: currentVariant }));
+  }, [open, currentProviderID, currentModelID, currentVariant]);
 
   React.useEffect(() => {
     if (!open || providers.length === 0) return;
@@ -160,17 +142,8 @@ export function TodoSendDialog(props: TodoSendDialogProps) {
               onChange={(variant) => setExecution((prev) => ({ ...prev, variant }))}
             />
           </div>
-          <div className="flex flex-col gap-1.5">
-            <span className="typography-meta font-medium text-muted-foreground">{t('sessions.scheduledTasks.editor.agent.label')}</span>
-            <AgentSelector
-              agentId={execution.agent}
-              directory={projectDirectory ?? undefined}
-              dropdownPortalToBody
-              onChange={(agent) => setExecution((prev) => ({ ...prev, agent }))}
-            />
-          </div>
-        </div>
 
+        </div>
         <div className={`flex items-center gap-3 ${showRunAsGoal ? 'justify-between' : 'justify-end'}`}>
           {showRunAsGoal ? (
             <div className="flex min-w-0 items-center gap-2">

@@ -237,7 +237,7 @@ export const createScheduledTasksRuntime = (deps) => {
     return CapturedSendOptionsSchema.parse({
       providerId: task.execution.providerID ?? null,
       modelId: task.execution.modelID ?? null,
-      agentId: task.execution.agent ?? null,
+      agentId: null,
       variant: task.execution.variant ?? null,
       reasoningEffort: null,
     });

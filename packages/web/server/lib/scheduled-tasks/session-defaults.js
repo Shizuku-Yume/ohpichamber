@@ -17,7 +17,7 @@ export const resolveSessionDefaults = ({ settings, project }) => {
     providerId: model?.providerId ?? null,
     modelId: model?.modelId ?? null,
     variant,
-    agentId: text(project?.defaultAgent) ?? text(settings?.defaultAgent),
+    agentId: null,
     reasoningEffort: null,
   };
 };

@@ -124,7 +124,6 @@ export const useProjectTodoSend = (options: {
         } else {
           const session = await createSession(undefined, projectRef.path, undefined, {
             model: { providerId: execution.providerID, modelId: execution.modelID },
-            agent: execution.agent.trim() || undefined,
             variant: execution.variant || undefined,
           });
           if (!session?.sessionId) {
@@ -141,24 +140,13 @@ export const useProjectTodoSend = (options: {
 
         const selectionState = useSelectionStore.getState();
         selectionState.saveSessionModelSelection(sessionId, execution.providerID, execution.modelID);
-        if (execution.agent.trim()) {
-          selectionState.saveSessionAgentSelection(sessionId, execution.agent);
-          selectionState.saveAgentModelForSession(sessionId, execution.agent, execution.providerID, execution.modelID);
-          selectionState.saveAgentModelVariantForSession(
-            sessionId,
-            execution.agent,
-            execution.providerID,
-            execution.modelID,
-            execution.variant || undefined,
-          );
-        }
 
         setCurrentSession(sessionId, directoryHint);
         await sendMessage(
           visiblePrompt,
           execution.providerID,
           execution.modelID,
-          execution.agent.trim() || undefined,
+          null,
           undefined,
           undefined,
           syntheticParts,

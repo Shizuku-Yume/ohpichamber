@@ -7,7 +7,6 @@ import { toast } from '@/components/ui';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { selectCommandsForDirectory, useCommandsStore, type CommandConfig, type CommandScope } from '@/stores/useCommandsStore';
 import { ModelSelector } from '../agents/ModelSelector';
-import { AgentSelector } from './AgentSelector';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
@@ -27,7 +26,6 @@ interface CommandForm {
   description: string;
   content: string;
   argumentHint: string;
-  agentId: string;
   modelSelection: ModelSelection | null;
 }
 
@@ -41,7 +39,7 @@ export const CommandsPage: React.FC = () => {
   const isNew = Boolean(draft && draft.name === selectedName && !entity);
   const readOnly = Boolean(entity && !entity.editable);
   const group = isNew ? draft?.group : entity?.group;
-  const [form, setForm] = React.useState<CommandForm>({ name: '', scope: 'agent', description: '', content: '', argumentHint: '', agentId: '', modelSelection: null });
+  const [form, setForm] = React.useState<CommandForm>({ name: '', scope: 'agent', description: '', content: '', argumentHint: '', modelSelection: null });
   const [creating, setCreating] = React.useState(false);
   const identity = JSON.stringify([directory, selectedName]);
   const identityRef = React.useRef(identity);
@@ -55,7 +53,7 @@ export const CommandsPage: React.FC = () => {
     const next: CommandForm = {
       name: source.name, scope: source.scope === 'workspace' ? 'workspace' : 'agent',
       description: source.description ?? '', content: source.content ?? '', argumentHint: source.argumentHint ?? '',
-      agentId: source.agentId ?? '', modelSelection: source.modelSelection ?? null,
+      modelSelection: source.modelSelection ?? null,
     };
     const sameIdentity = loadedIdentity.current === identity;
     loadedIdentity.current = identity;
@@ -66,7 +64,7 @@ export const CommandsPage: React.FC = () => {
   }, [draft, entity, identity, isNew]);
   const config: CommandConfig = {
     name: form.name, scope: form.scope, description: form.description, content: form.content,
-    argumentHint: form.argumentHint || undefined, agentId: form.agentId || undefined, modelSelection: form.modelSelection ?? undefined,
+    argumentHint: form.argumentHint || undefined, modelSelection: form.modelSelection ?? undefined,
     group: isNew ? draft?.group : entity?.group,
   };
   const save = React.useCallback(async (): Promise<AutosaveResult> => {
@@ -77,7 +75,7 @@ export const CommandsPage: React.FC = () => {
     try {
       const success = await useCommandsStore.getState().updateCommand(entity.name, {
         name: form.name, description: form.description, content: form.content, argumentHint: form.argumentHint,
-        agentId: form.agentId || undefined, modelSelection: form.modelSelection ?? undefined,
+        modelSelection: form.modelSelection ?? undefined,
       }, directory);
       if (!success) return autosaveFailed(t('settings.commands.page.toast.updateFailed'));
       if (identityRef.current === identity) saved.current = form;
@@ -162,12 +160,6 @@ export const CommandsPage: React.FC = () => {
             aria-label="$ARGUMENTS" className="h-8 w-64 px-2" />
         </SettingsFieldRow>
       </SettingsSection>
-      <SettingsSection title={t('settings.commands.page.section.executionContext')} contentClassName="space-y-0">
-        <SettingsFieldRow settingsItem="commands.agent" label={t('settings.commands.page.field.overrideAgent')}>
-          <AgentSelector agentId={form.agentId} directory={directory ?? undefined}
-            onChange={agentId => { setForm({ ...form, agentId }); requestSave(); }}
-            className={SETTINGS_CUSTOM_TRIGGER_CLASS} />
-        </SettingsFieldRow>
         <SettingsFieldRow settingsItem="commands.model" label={t('settings.agents.page.field.overrideModel')}>
           <ModelSelector providerId={form.modelSelection?.providerId ?? ''} modelId={form.modelSelection?.modelId ?? ''}
             directory={directory ?? undefined} onChange={(providerId, modelId) => {

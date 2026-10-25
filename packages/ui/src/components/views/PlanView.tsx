@@ -718,7 +718,6 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
         } else {
           const sessionResult = await createSession(undefined, sendTargetProject.path, undefined, {
             model: { providerId: execution.providerID, modelId: execution.modelID },
-            agent: execution.agent.trim() || undefined,
             variant: execution.variant || undefined,
           });
           if (!sessionResult?.sessionId) {
@@ -734,17 +733,6 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
 
         const selectionState = useSelectionStore.getState();
         selectionState.saveSessionModelSelection(sessionId, execution.providerID, execution.modelID);
-        if (execution.agent.trim()) {
-          selectionState.saveSessionAgentSelection(sessionId, execution.agent);
-          selectionState.saveAgentModelForSession(sessionId, execution.agent, execution.providerID, execution.modelID);
-          selectionState.saveAgentModelVariantForSession(
-            sessionId,
-            execution.agent,
-            execution.providerID,
-            execution.modelID,
-            execution.variant || undefined,
-          );
-        }
 
         setCurrentSession(sessionId, directoryHint);
         // "Run as goal" rides the same arm mechanism as the composer target
@@ -775,7 +763,7 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
           visiblePrompt,
           execution.providerID,
           execution.modelID,
-          execution.agent.trim() || undefined,
+          null,
           undefined,
           undefined,
           syntheticParts,

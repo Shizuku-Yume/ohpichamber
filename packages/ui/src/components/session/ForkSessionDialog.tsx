@@ -9,10 +9,8 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
-import { AgentSelector } from '@/components/sections/commands/AgentSelector';
 import { ThinkingPill } from '@/components/session/ThinkingPill';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { useAgentsStore } from '@/stores/useAgentsStore';
 import { EXECUTION_FORK_DEFAULT_INSTRUCTIONS, EXECUTION_FORK_GOAL_INSTRUCTIONS } from '@/lib/messages/executionMeta';
 import { useI18n } from '@/lib/i18n';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
@@ -23,7 +21,6 @@ export type ForkSessionExecution = {
   providerID: string;
   modelID: string;
   variant: string;
-  agent: string;
   instructions: string;
   createWorktree?: boolean;
   runAsGoal?: boolean;
@@ -51,17 +48,14 @@ export function ForkSessionDialog(props: ForkSessionDialogProps) {
   const ensureGitStatus = useGitStore((state) => state.ensureStatus);
 
   const loadProviders = useConfigStore((state) => state.loadProviders);
-  const loadAgentsStoreAgents = useAgentsStore((state) => state.loadAgents);
   const providers = useConfigStore((state) => state.providers);
   const currentProviderID = useConfigStore((state) => state.currentProviderId);
   const currentModelID = useConfigStore((state) => state.currentModelId);
   const currentVariant = useConfigStore((state) => state.currentVariant || '');
-  const currentAgentName = useConfigStore((state) => state.currentAgentName || '');
 
   const [providerID, setProviderID] = React.useState(currentProviderID);
   const [modelID, setModelID] = React.useState(currentModelID);
   const [variant, setVariant] = React.useState(currentVariant);
-  const [agent, setAgent] = React.useState(currentAgentName);
   const [instructions, setInstructions] = React.useState(EXECUTION_FORK_DEFAULT_INSTRUCTIONS);
   const [createWorktree, setCreateWorktree] = React.useState(false);
   const [runAsGoal, setRunAsGoal] = React.useState(false);
@@ -82,8 +76,7 @@ export function ForkSessionDialog(props: ForkSessionDialogProps) {
   React.useEffect(() => {
     if (!open) return;
     void loadProviders({ directory: projectDirectory, source: 'forkSessionDialog' });
-    void loadAgentsStoreAgents(projectDirectory);
-  }, [open, loadProviders, loadAgentsStoreAgents, projectDirectory]);
+  }, [open, loadProviders, projectDirectory]);
 
   React.useEffect(() => {
     if (!open || !resolvedWorktreeProjectDirectory || !git) return;
@@ -99,7 +92,6 @@ export function ForkSessionDialog(props: ForkSessionDialogProps) {
     setProviderID(config.currentProviderId);
     setModelID(config.currentModelId);
     setVariant(config.currentVariant || '');
-    setAgent(config.currentAgentName || '');
     setInstructions(EXECUTION_FORK_DEFAULT_INSTRUCTIONS);
     setCreateWorktree(false);
     setRunAsGoal(false);
@@ -143,12 +135,11 @@ export function ForkSessionDialog(props: ForkSessionDialogProps) {
       providerID,
       modelID,
       variant,
-      agent,
       instructions,
       createWorktree: showCreateWorktree && createWorktree,
       runAsGoal,
     });
-  }, [canConfirm, submitting, onConfirm, providerID, modelID, variant, agent, instructions, showCreateWorktree, createWorktree, runAsGoal]);
+  }, [canConfirm, submitting, onConfirm, providerID, modelID, variant, instructions, showCreateWorktree, createWorktree, runAsGoal]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -191,15 +182,6 @@ export function ForkSessionDialog(props: ForkSessionDialogProps) {
               options={variantOptions}
               disabled={!hasVariantOptions}
               onChange={setVariant}
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <span className="typography-meta font-medium text-muted-foreground">{t('sessions.scheduledTasks.editor.agent.label')}</span>
-            <AgentSelector
-              agentId={agent}
-              directory={projectDirectory ?? undefined}
-              dropdownPortalToBody
-              onChange={setAgent}
             />
           </div>
           <div className="flex flex-col gap-1.5">

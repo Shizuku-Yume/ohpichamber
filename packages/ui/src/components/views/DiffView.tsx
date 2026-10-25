@@ -1872,7 +1872,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                 directory,
                 providerId: execution.providerId,
                 modelId: execution.modelId,
-                agentId: execution.agentId || undefined,
+                agentId: null,
                 variant: execution.variant || undefined,
                 generateHandoff: execution.generateHandoff,
                 returnAfterHandoffRequest: execution.generateHandoff,

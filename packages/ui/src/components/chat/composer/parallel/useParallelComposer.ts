@@ -214,14 +214,13 @@ export function useParallelComposer(input: {
           displayName: model.displayName,
         }))),
       })),
-      agent: config.currentAgentName || undefined,
       isolateRuns: current.isolate,
       worktreeBaseBranch: current.isolate ? current.baseBranch || undefined : undefined,
       files: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
       attachmentWorkspaceId,
       setupCommands: current.isolate ? current.setupCommands?.filter((command) => command.trim()) : undefined,
       autoFusion: current.fuse
-        ? { providerId: current.fuse.providerId, modelId: current.fuse.modelId, variant: current.fuse.variant, agentId: config.currentAgentName || undefined }
+        ? { providerId: current.fuse.providerId, modelId: current.fuse.modelId, variant: current.fuse.variant }
         : undefined,
     };
 

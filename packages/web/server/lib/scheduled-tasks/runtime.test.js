@@ -298,7 +298,7 @@ describe('canonical scheduled execution', () => {
     const result = await h.runtime.runNow('host-project', 'task');
     expect(result).toMatchObject({ ok: true, sessionID: 'session' });
     expect(h.created[0]).toMatchObject({ projectId: 'opaque-project', workspaceId: 'opaque-workspace',
-      options: { providerId: 'provider', modelId: 'model', agentId: 'agent', variant: 'high', reasoningEffort: null } });
+      options: { providerId: 'provider', modelId: 'model', agentId: null, variant: 'high', reasoningEffort: null } });
     expect(h.sent[0].input.context[0]).toMatchObject({ kind: 'context', metadata: { scheduledTask: { projectId: 'host-project', taskId: 'task', mode: 'new' } } });
     expect(h.stored().state.lastStatus).toBe('success');
     h.runtime.stop();

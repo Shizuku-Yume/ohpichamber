@@ -1,7 +1,6 @@
 import React from 'react';
 import { canonicalClient } from '@/api/canonicalClient';
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
-import { AgentSelector } from '@/components/sections/commands/AgentSelector';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   SettingsSection,
@@ -20,8 +19,6 @@ import { PermissionDefaultModeField } from './PermissionDefaultModeField';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
 import { loadDesktopSettings, updateDesktopSettings } from '@/lib/persistence';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
-import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { useSelectionStore } from '@/sync/selection-store';
@@ -47,12 +44,10 @@ const getDisplayModel = (
   const settingsDirectory = useSettingsDirectory();
   const setProvider = useConfigStore((state) => state.setProvider);
   const setModel = useConfigStore((state) => state.setModel);
-  const setAgent = useConfigStore((state) => state.setAgent);
   const setCurrentVariant = useConfigStore((state) => state.setCurrentVariant);
   const setCurrentVariantOverride = useConfigStore((state) => state.setCurrentVariantOverride);
   const setSettingsDefaultModel = useConfigStore((state) => state.setSettingsDefaultModel);
   const setSettingsDefaultVariant = useConfigStore((state) => state.setSettingsDefaultVariant);
-  const setSettingsDefaultAgent = useConfigStore((state) => state.setSettingsDefaultAgent);
   // A default describes new sessions. Applying it to the open chat is a
   // convenience, not the point, so it stops where the chat carries a choice the
   // user made for it — the same pair of signals ModelControls restores from
@@ -60,24 +55,7 @@ const getDisplayModel = (
   const selectionIsManual = useConfigStore((state) => state.selectionSource === 'manual');
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
   const getSessionModelSelection = useSelectionStore((state) => state.getSessionModelSelection);
-  const getSessionAgentSelection = useSelectionStore((state) => state.getSessionAgentSelection);
-  const agentIsPicked = useConfigStore((state) => state.agentSelectionSource === 'manual');
-  // An agent picked for this chat brings the model its config pins, and a pin
-  // outranks the global default the same way it does in `setAgent`.
-  const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
-  const agents = useAgentsStore((state) => selectAgentsForDirectory(state, currentDirectory));
-  const pickedAgentPinsModel = useConfigStore((state) => {
-    if (state.agentSelectionSource !== 'manual') return false;
-    const agent = agents.find((candidate) => candidate.agentId === state.currentAgentName);
-    return Boolean(agent?.model?.providerId && agent.model.modelId);
-  });
-  const chatHasOwnModel = Boolean(
-    pickedAgentPinsModel
-    || (selectionIsManual && currentSessionId && getSessionModelSelection(currentSessionId)),
-  );
-  const chatHasOwnAgent = Boolean(
-    agentIsPicked && currentSessionId && getSessionAgentSelection(currentSessionId),
-  );
+  const chatHasOwnModel = Boolean(selectionIsManual && currentSessionId && getSessionModelSelection(currentSessionId));
   const showChatsSection = useSessionDisplayStore((state) => state.showChatsSection);
   const setShowChatsSection = useSessionDisplayStore((state) => state.setShowChatsSection);
   const showDeletionDialog = useUIStore((state) => state.showDeletionDialog);
@@ -87,7 +65,6 @@ const getDisplayModel = (
 
   const [defaultModel, setDefaultModel] = React.useState<string | undefined>();
   const [defaultVariant, setDefaultVariant] = React.useState<string | undefined>();
-  const [defaultAgent, setDefaultAgent] = React.useState<string | undefined>();
   const [smallModelUseDefault, setSmallModelUseDefault] = React.useState(true);
   const [smallModelOverride, setSmallModelOverride] = React.useState<string | undefined>();
   const [smallModelProviders, setSmallModelProviders] = React.useState<string[]>([]);
@@ -103,11 +80,6 @@ const getDisplayModel = (
         if (data) {
           const model = data.defaultModel?.trim() || undefined;
           const variant = data.defaultVariant?.trim() || undefined;
-          const agent = data.defaultAgent?.trim() || undefined;
-
-          if (model !== undefined) setDefaultModel(model);
-          if (variant !== undefined) setDefaultVariant(variant);
-          if (agent !== undefined) setDefaultAgent(agent);
           if (data.smallModelUseDefault !== undefined) setSmallModelUseDefault(data.smallModelUseDefault);
           const smallOverride = data.smallModelOverride?.trim();
           if (smallOverride) {
@@ -184,24 +156,6 @@ const getDisplayModel = (
     [chatHasOwnModel, setCurrentVariantOverride, setSettingsDefaultVariant]
   );
 
-  const handleAgentChange = React.useCallback(
-    async (agentName: string) => {
-      const newValue = agentName || undefined;
-      setDefaultAgent(newValue);
-      setSettingsDefaultAgent(newValue);
-
-      if (agentName && !chatHasOwnAgent) {
-        setAgent(agentName);
-      }
-
-      try {
-        await updateDesktopSettings({ defaultAgent: newValue ?? '' });
-      } catch (error) {
-        console.warn('Failed to save default agent:', error);
-      }
-    },
-    [chatHasOwnAgent, setAgent, setSettingsDefaultAgent]
-  );
 
   const handleSmallModelUseDefaultChange = React.useCallback(
     async (useDefault: boolean) => {
@@ -311,12 +265,6 @@ const getDisplayModel = (
             ) : (
               <span className="text-foreground">{t('settings.openchamber.defaults.summaryRuntimeDefault')}</span>
             )}
-            {defaultAgent && (
-              <>
-                {' / '}
-                <span className="text-foreground">{defaultAgent}</span>
-              </>
-            )}
           </div>
 
           <div className={SETTINGS_FIELDS_STACK_CLASS}>
@@ -354,18 +302,6 @@ const getDisplayModel = (
               </Select>
             </SettingsFieldRow>
 
-            <SettingsFieldRow
-              settingsItem="sessions.default-agent"
-              label={t('settings.openchamber.defaults.field.defaultAgent')}
-            >
-              <AgentSelector
-                agentId={defaultAgent || ''}
-                onChange={handleAgentChange}
-                className={SETTINGS_CUSTOM_TRIGGER_CLASS}
-              />
-            </SettingsFieldRow>
-
-            <PermissionDefaultModeField agentName={defaultAgent} />
           </div>
 
           <SettingsInset className={SETTINGS_OPTION_STACK_CLASS}>

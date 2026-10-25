@@ -1,31 +1,33 @@
 import React from 'react';
 
-import { AgentSelector } from '@/components/sections/commands/AgentSelector';
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
 import { ThinkingPill } from '@/components/session/ThinkingPill';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useI18n } from '@/lib/i18n';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { useAgentsStore } from '@/stores/useAgentsStore';
 
 export type ReviewFlowExecution = {
   providerId: string;
   modelId: string;
   variant: string;
-  agentId: string;
   generateHandoff: boolean;
   autoReview: boolean;
 };
 
+const getInitialExecution = (params: { providerId: string; modelId: string; variant: string }): ReviewFlowExecution => ({
+  providerId: params.providerId,
+  modelId: params.modelId,
+  variant: params.variant,
+  generateHandoff: true,
+  autoReview: false,
+});
 type ReviewFlowDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -34,19 +36,6 @@ type ReviewFlowDialogProps = {
   onConfirm: (execution: ReviewFlowExecution) => Promise<void> | void;
 };
 
-const getInitialExecution = (params: {
-  providerId: string;
-  modelId: string;
-  variant: string;
-  agentId: string;
-}): ReviewFlowExecution => ({
-  providerId: params.providerId,
-  modelId: params.modelId,
-  variant: params.variant,
-  agentId: params.agentId,
-  generateHandoff: true,
-  autoReview: false,
-});
 
 function ReviewFlowDialogView({
   open,
@@ -57,35 +46,26 @@ function ReviewFlowDialogView({
 }: ReviewFlowDialogProps) {
   const { t } = useI18n();
   const loadProviders = useConfigStore((state) => state.loadProviders);
-  const loadAgentsStoreAgents = useAgentsStore((state) => state.loadAgents);
   const providers = useConfigStore((state) => state.providers);
   const currentProviderID = useConfigStore((state) => state.currentProviderId);
   const currentModelID = useConfigStore((state) => state.currentModelId);
   const currentVariant = useConfigStore((state) => state.currentVariant || '');
-  const currentAgentName = useConfigStore((state) => state.currentAgentName || '');
 
   const [execution, setExecution] = React.useState<ReviewFlowExecution>(() => getInitialExecution({
     providerId: currentProviderID,
     modelId: currentModelID,
     variant: currentVariant,
-    agentId: currentAgentName,
   }));
 
   React.useEffect(() => {
     if (!open) return;
     void loadProviders({ directory: projectDirectory, source: 'reviewFlowDialog' });
-    void loadAgentsStoreAgents(projectDirectory);
-  }, [open, loadProviders, loadAgentsStoreAgents, projectDirectory]);
+  }, [open, loadProviders, projectDirectory]);
 
   React.useEffect(() => {
     if (!open) return;
-    setExecution(getInitialExecution({
-      providerId: currentProviderID,
-      modelId: currentModelID,
-      variant: currentVariant,
-      agentId: currentAgentName,
-    }));
-  }, [open, currentProviderID, currentModelID, currentVariant, currentAgentName]);
+    setExecution(getInitialExecution({ providerId: currentProviderID, modelId: currentModelID, variant: currentVariant }));
+  }, [open, currentProviderID, currentModelID, currentVariant]);
 
   React.useEffect(() => {
     if (!open || providers.length === 0) return;
@@ -189,17 +169,7 @@ function ReviewFlowDialogView({
             />
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <span className="typography-meta font-medium text-muted-foreground">{t('sessions.scheduledTasks.editor.agent.label')}</span>
-            <AgentSelector
-              agentId={execution.agentId}
-              directory={projectDirectory ?? undefined}
-              dropdownPortalToBody
-              onChange={(agent) => setExecution((prev) => ({ ...prev, agentId: agent }))}
-            />
-          </div>
         </div>
-
         <DialogFooter>
           <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)} disabled={submitting}>
             {t('diffView.reviewDialog.actions.cancel')}

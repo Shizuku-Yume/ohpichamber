@@ -4,7 +4,9 @@
 **Task type:** feature
 **Base commit:** 342c8182e20c8843176a5b714101f2f0696a5ea9
 **Base branch:** main
+**Landed from:** 74338fd78ab03de1ad516b0be265bdc16e3d1520 (cherry-picked candidate `7159a2b15`; final root main `debcb266dbd8fa6079bc103628f387e27d1aca2d`)
 **Started:** 2026-10-25T01:00:00+08:00
+**Finished:** 2026-10-25T02:21:42+08:00
 
 **Delivers:** Isolated spaces keep their container, gatekeeper, code transfer, dispatcher guards and preview, but run no OpenCode runtime. No in-space CLI/plugin install, `opencode.json`, credential rows, engine readiness, engine environment or unmounted proxy remains; spaces stay behind `ISOLATED_SPACES_RELEASED = false` and fail closed with a clear unsupported state.
 
@@ -28,23 +30,25 @@
 
 ## Done when
 
-- [ ] `packages/web` declares no `@opencode/*` dependency and production code imports none. `Dockerfile:60` is left to task 15 and that exception is stated.
-- [ ] No space installs the OpenCode CLI/plugin, writes `opencode.json`, links `@opencode/plugin`, reads `isOpenCodeReady`, or sets `OPENCODE_*`; the tools volume and filler require only the web package (and the SDK where already packed).
-- [ ] A server-owned release gate refuses create/start/repair before any place or container call while `ISOLATED_SPACES_RELEASED` is false, and overrides the UI flag, `startupSettings.isolatedSpacesEnabled` and the PUT switch route; no 120-second readiness wait and no half-running container. Grant routes refuse model and login grants. The hidden UI needs no change; any wording change follows the lane G rule in Progress.
-- [ ] The tools fill fails closed when a private or workspace dependency cannot resolve; no partial tools volume is produced or used.
-- [ ] The unmounted `proxy.js`, its three unit tests and both live-test imports are gone; the dead space session merge and `/api/event` source are removed with them.
-- [ ] Live Docker suites are migrated as scoped below; remaining suites pass or their deletions carry a recorded reason. No test was deleted to hide a failure.
-- [ ] Module docs and comments no longer describe an in-space OpenCode runtime.
+- [x] `packages/web` declares no `@opencode/*` dependency and production code imports none. `Dockerfile:60` is left to task 15 and that exception is stated.
+- [x] No space installs the OpenCode CLI/plugin, writes `opencode.json`, links `@opencode/plugin`, reads `isOpenCodeReady`, or sets `OPENCODE_*`; the tools volume and filler require only the web package (and the SDK where already packed).
+- [x] A server-owned release gate refuses create/start/repair before any place or container call while `ISOLATED_SPACES_RELEASED` is false, and overrides the UI flag, `startupSettings.isolatedSpacesEnabled` and the PUT switch route; no 120-second readiness wait and no half-running container. Grant routes refuse model and login grants. The hidden UI needs no change; any wording change follows the lane G rule in Progress.
+- [x] The tools fill fails closed when a private or workspace dependency cannot resolve; no partial tools volume is produced or used.
+- [x] The unmounted `proxy.js`, its three unit tests and both live-test imports are gone; the dead space session merge and `/api/event` source are removed with them.
+- [x] Live Docker suites are migrated as scoped below; remaining suites pass or their deletions carry a recorded reason. No test was deleted to hide a failure.
+- [x] Module docs and comments no longer describe an in-space OpenCode runtime.
 
 ## Progress
 
+**Check after:** Pass at the integration gate `9838b2071786292c044b1de678a3ef6c6f67064c` over base `74338fd78ab03de1ad516b0be265bdc16e3d1520`, with final root main `debcb266dbd8fa6079bc103628f387e27d1aca2d`. The exact root `bun run test` exited 0 (7/7 suites: scripts 22/22, SDK 23/23, UI 809/809 files, agent-contract 177 pass/0 fail, agent-service 237 pass/7 skip/0 fail, Electron 44/44, Web 372 passed/9 skipped files with 6047 passed/128 skipped tests), and `.workflow/bin/workflow validate --no-color` exited 0 (123 task files). The focused gate files passed 106/106 after the P2 fix, the runtime smoke exited 0, and the mutation check turned the gate tests red and the smoke to exit 1 before the exact gate was restored. No Docker/live suite ran, so no Docker result is claimed. Evidence: `/home/shizuku/Project/ohpichamber-omp-artifacts/post-m3-final-integration-2026-10-25/bun-run-test.log`, `.exit` and `LANDING-RECEIPT.json`; focused smoke and mutation logs are in `/home/shizuku/Project/ohpichamber-omp-artifacts/task38-2026-10-25/`.
+
 - Drafted from task 08's maintainer decision on 2026-10-23. No source changed, no code started, no test or Docker run.
-- Owner: a dedicated future Spaces Removal owner/lane, not lane F and not an existing lane; the director/maintainer must assign it. This task stays a draft and cannot start until that assignment.
+- Owner: a dedicated future Spaces Removal owner/lane, not lane F and not an existing lane; the director/maintainer must assign it. This task stayed a draft and could not start until that assignment was made.
 - Numbering: originally drafted as task 37 on 2026-10-23; renumbered to task 38 on 2026-10-24 after a separate Task37 was created and withdrawn. Do not reuse task 37.
 - Coordination: task 10 is coordination only. It moves the retained modules and docs and leaves `proxy.js` and its tests in place; this task owns their deletion, and lane A is not the deletion implementer. The feature is hidden, so no grant-screen or copy change is required. If a wording change becomes necessary, coordinate with lane G and stop before editing their files; do not create a tracking task for UI work. Task 15 owns `Dockerfile:60`, which still installs `@opencode/cli@2.0.25`; this task does not edit it.
-- Landing order: task 08 is independent and lands in Lane F order (08 -> 17 -> 21 -> 22 -> 28) once its own review, rebase and full `bun run test` gates pass; it does not wait for this task. This task is gated only on lane A task 01 (archived and landed at `ecdeb110d`), then task 10, then assignment to a dedicated owner. It remains a draft until that owner is designated.
+- Landing order: task 08 is independent and lands in Lane F order (08 -> 17 -> 21 -> 22 -> 28) once its own review, rebase and full `bun run test` gates pass; it does not wait for this task. This task is gated only on lane A task 01 (archived and landed at `ecdeb110d`), then task 10, then assignment to a dedicated owner. It remained a draft until that owner was designated.
 - Decision recording: Task08's option B decision is synchronized in `.workflow/specs/post-m3-hardening.md` and `.workflow/decisions.md: 2026-10-24 - Keep isolated spaces unreleased without the OpenCode runtime`; this task follows that boundary.
-- Evidence limit: the audit behind task 08 is source-only. No Docker, runtime, test or network evidence exists for this task yet.
+- Evidence limit: the audit behind task 08 was source-only; at drafting there was no Docker, runtime, test or network evidence for this task.
 
 ### Candidate work (2026-10-25)
 
@@ -62,9 +66,10 @@
 - Runtime smoke (real handlers, closed production gate): a throwaway Node HTTP scenario registered the real switch/create/start/repair/grant/open-domain routes over a real journey, manager and host with the production closed gate and a recording place adapter. Every feature route answered 409 `isolated_spaces_unreleased`; switch build/start/persist calls were 0; place/gatekeeper calls were 0; a saved `isolatedSpacesEnabled: true` produced `spacesHostEnabled === false` and `createSpacesHost` refused before the place. Exit 0; log `runtime-smoke.log`.
 - Mutation sensitivity (disposable worktree at `57984097`): flipping only `ISOLATED_SPACES_RELEASED` to true turned the gate tests red for the promised reason (release 2, manager 1, routes 1, host 1, journey 1 failing files) and the runtime smoke exited 1; restoring the exact gate returned the gate tests to 106/106 and the smoke to exit 0. Logs `task38-mutation-*.log`.
 - Security final boundary (confirmed on code-tested `b6c3d4a`, merge-base `74338fd`): no new blocking finding; the gate callers/callees are correct, the deleted modules have no live caller, and the dispatcher/websocket guards remain. It noted one non-blocking reference-map drift, now fixed: `ui-api-decoupling/references/implementation-map.md` no longer describes the deleted proxy fixture or its test.
-- Brief A (independent requirements/process, merge-base `74338fd` to code-tested `b6c3d4a`; final docs-only `c0169973`): **BLOCKED, one finding** — the required root `bun run test` has not run, so the task Check and final Done claim are unsupported. No code-level acceptance defect or missing direct caller/callee was established. Docker/live suites were not run.
-- Pending: the full root `bun run test` gate is the only reported acceptance blocker; no Docker/live run. The candidate is ready for the coordinator's gate slot and remains not done. No main mutation.
-- Candidate status: implementation and focused checks are complete. Do not tick the final live/root-gate acceptance until the gate and reviews pass; no Docker result is claimed.
+- Brief A (independent requirements/process, merge-base `74338fd` to code-tested `b6c3d4a`; final docs-only `c0169973`): reported one blocking finding, the unrun root `bun run test`; no code-level acceptance defect or missing direct caller/callee was established, and Docker/live suites were not run. That finding is closed by the integration gate at `9838b2071` (exit 0); the later docs-only amendments were not independently reviewed.
+- Review boundary: merge-base `74338fd78ab03de1ad516b0be265bdc16e3d1520` -> code-tested `b6c3d4a57`, final docs-only `7159a2b15`; paths: the space-runtime removal, the server release gate and its callers, the proxy/event/session deletions, `packages/web/package.json`/`bun.lock`, module docs and this task file; round 1; briefs: quality, security, Brief A; boundaries: server gate on start/switch/create/start/repair/grants/host construction, in-space runtime removal, tools fill, proxy/event/session deletion; findings: 1 blocking quality (fixed), 0 blocking security, 1 process finding (root gate unrun, now closed).
+- Landed integration: cherry-picked with Task39 from candidate `7159a2b15` onto `74338fd78ab03de1ad516b0be265bdc16e3d1520`; the exact root gate at `9838b2071` exited 0, and root main fast-forwarded to `debcb266dbd8fa6079bc103628f387e27d1aca2d`. No Docker/live run; that limit remains.
+- Candidate status: implementation, focused checks, quality/security review, runtime smoke, mutation sensitivity and the integration root gate are complete. No Docker result is claimed.
 
 ## Fail-closed invariant
 

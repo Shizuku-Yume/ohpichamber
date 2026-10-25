@@ -53,6 +53,7 @@ import { AttachedFilesList } from './FileAttachment';
 import { lazyWithChunkRecovery } from '@/lib/chunkLoadRecovery';
 import type { ToolPopupContent } from './message/types';
 import { QueuedMessagesStrip } from './QueuedMessagesStrip';
+import { TodoTray } from './TodoTray';
 import { AutoReviewStrip } from './AutoReviewStrip';
 import type { FileMentionHandle } from './FileMentionAutocomplete';
 import type { CommandAutocompleteHandle, CommandInfo } from './CommandAutocomplete';
@@ -3780,12 +3781,15 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             onSendMessage={handleQueuedMessageSend}
         />
     ) : null;
-    // Null exactly when the suggestion row alone would have been: the mobile
-    // pill picks its shape from whether a top row exists.
-    const composerTopRows = worktreeSetupRow || spaceWaitRow || goalRow || autoReviewRow || backgroundShellsRow || revertRow || queueRow || doneHintRow || reviewHintRow || suggestionRow ? (
+    const todoRow = !isBtwActive && !newSessionDraftOpen ? (
+        <TodoTray sessionId={currentSessionId} directory={currentSessionDirectoryForSync ?? currentDirectory} />
+    ) : null;
+    // History-backed OMP todo state is scoped to the active session/branch.
+    const composerTopRows = worktreeSetupRow || spaceWaitRow || todoRow || goalRow || autoReviewRow || backgroundShellsRow || revertRow || queueRow || doneHintRow || reviewHintRow || suggestionRow ? (
         <>
             {worktreeSetupRow}
             {spaceWaitRow}
+            {todoRow}
             {goalRow}
             {autoReviewRow}
             {backgroundShellsRow}

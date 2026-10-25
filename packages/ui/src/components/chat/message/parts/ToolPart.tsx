@@ -27,6 +27,8 @@ import {
     toolDescription,
     type ToolDescription,
 } from '@/lib/toolHelpers';
+import { TodoCard } from './TodoCard';
+import { extractTodoPhases } from '../../todoData';
 import { toolDisplayStyles } from '@/lib/typography';
 import { WorkerHighlightedCode } from '@/components/code/WorkerHighlightedCode';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -1314,6 +1316,10 @@ const ToolPart: React.FC<ToolPartProps> = ({
                 >
                     {shouldRenderExpandedContent ? (
                         <div className="relative ml-2 pl-3">
+                            {toolName === NATIVE_TOOLS.todo && result && !result.isError ? (() => {
+                                const phases = extractTodoPhases(resultContent.details);
+                                return phases ? <TodoCard phases={phases} /> : null;
+                            })() : null}
                             <BlockLine onToggle={() => onToggle(part.partId)} topOffset={1} />
                             <ToolExpandedContent
                                 part={part}

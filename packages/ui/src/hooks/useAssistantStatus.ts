@@ -84,27 +84,14 @@ const STATUS_SIGNATURE_SEPARATOR = '\u0000';
 
 type ToolBucket = 'read' | 'search' | 'edit' | 'command' | 'lookup' | 'delegate' | 'question' | 'skill';
 
-// Several tools share one phrase, so parallel calls of the same kind can be
-// counted together ("reading 3 files"). The timeline names the exact tool.
-// v2 tool names: `shell` replaced `bash`, `subagent` replaced `task`, and
-// `todowrite`/`todoread`/`list`/`lsp` are gone.
-const TOOL_BUCKETS = new Map<string, ToolBucket>(Object.entries({
-    read: 'read',
-    'file-diff': 'read',
-    grep: 'search',
-    glob: 'search',
-    edit: 'edit',
-    write: 'edit',
-    patch: 'edit',
-    shell: 'command',
-    execute: 'command',
-    webfetch: 'lookup',
-    web_search: 'lookup',
-    codesearch: 'lookup',
-    subagent: 'delegate',
-    question: 'question',
-    skill: 'skill',
-} satisfies Record<string, ToolBucket>));
+// OMP builtin tools use their native identities; other names stay visible.
+const TOOL_BUCKETS: Record<string, ToolBucket> = {
+    read: 'read', grep: 'search', glob: 'search', find: 'search',
+    edit: 'edit', write: 'edit', ast_edit: 'edit',
+    bash: 'command',
+    web_search: 'lookup', fetch: 'lookup', github: 'lookup',
+    task: 'delegate', ask: 'question', manage_skill: 'skill',
+};
 
 // [one call, several calls]; `{count}` becomes the number of parallel calls in
 // the bucket. A search spans many files in one call, so it is not counted.
@@ -143,7 +130,7 @@ type ParsedStatusResult = {
 };
 
 const getToolStatusPhrase = (toolName: string, count = 1): string => {
-    const bucket = TOOL_BUCKETS.get(toolName);
+    const bucket = TOOL_BUCKETS[toolName];
     if (!bucket) {
         return `using ${toolName}`;
     }
@@ -190,7 +177,7 @@ export const createParsedStatus = (parts: Part[], genericKey: string): ParsedSta
                 const toolStatus = part.status;
                 if ((toolStatus === 'running' || toolStatus === 'pending_approval' || toolStatus === 'approved') && !activePartType) {
                     const toolName = part.toolName;
-                    const bucket = TOOL_BUCKETS.get(toolName);
+                    const bucket = TOOL_BUCKETS[toolName];
                     activePartType = bucket === 'edit' ? 'editing' : 'tool';
                     activeToolName = toolName;
                     activeToolPhrase = getRunningToolPhrase(toolName, runningToolCounts.get(bucket ?? toolName) ?? 1);
@@ -252,7 +239,7 @@ const countRunningToolCalls = (parts: readonly Part[]): Map<string, number> => {
         const status = part.status;
         if (status !== 'running' && status !== 'pending_approval' && status !== 'approved') continue;
         const toolName = getToolDisplayName(part);
-        const bucket = TOOL_BUCKETS.get(toolName) ?? toolName;
+        const bucket = TOOL_BUCKETS[toolName] ?? toolName;
         counts.set(bucket, (counts.get(bucket) ?? 0) + 1);
     }
     return counts;

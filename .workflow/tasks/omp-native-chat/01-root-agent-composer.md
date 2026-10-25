@@ -2,7 +2,9 @@
 
 **Effort:** omp-native-chat
 **Task type:** bugfix
-**Base commit:** <commit-sha>
+**Base commit:** dee0c88ebd6c52810fefaa74d5848a23ecf6a0d9
+**Started:** 2026-10-25T00:00:00Z
+**Status:** paused
 
 **Delivers:** A new chat starts in the main conversation and sends successfully even when an agent profile with unavailable `allowedTools` exists. The desktop and mobile composers show no agent picker, `@agent` no longer selects a root profile, and every composer send carries `agentId: null`.
 
@@ -20,3 +22,9 @@
 - [ ] `@` mention no longer offers agents as root selections; file and skill mentions still work.
 - [ ] Removed i18n keys are deleted in every locale, per `locale-ui-patterns`.
 - [ ] `bun run --cwd packages/ui type-check` and `test` pass.
+## Progress
+
+Dirty at start: none
+Check before: `bun run --cwd packages/ui test` failed in 28 unrelated files (781/809 passed; BackgroundShellsStrip timeout and FileAttachment timeout among failures).
+Root cause: resumed mechanical edits crossed stale hashline ranges and corrupted ChatInput, FileMentionAutocomplete, buildOutgoingMessage and useConfigStore; focused type-check now reports syntax/contract errors in those files. The latest coherent state is not safe to land without restoring the affected files from the task branch base and reapplying a smaller patch.
+Handoff: restore the four affected files from `dee0c88ebd6c52810fefaa74d5848a23ecf6a0d9` (preserving only the intended agent-retirement diff), then implement the task with focused edits; current branch is `omp-native-chat/01-root-agent-composer`, uncommitted task changes remain in the worktree. Do not run broader cleanup before restoration.

@@ -288,6 +288,18 @@ export class CanonicalClient {
       return result;
     });
   }
+  askBtw(sessionId: string, question: string): Promise<{ recordId: string }> {
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/control`, scoped(z.strictObject({ type: z.literal('btw.ask'), recordId: C.EntityIdSchema }), result => result.type === 'btw.ask'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: bodyFor(C.SessionControlRequestSchema, { type: 'btw.ask', question }),
+    });
+  }
+  cancelBtw(sessionId: string): Promise<{ cancelled: boolean }> {
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/control`, scoped(z.strictObject({ type: z.literal('btw.cancel'), cancelled: z.boolean() }), result => result.type === 'btw.cancel'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: bodyFor(C.SessionControlRequestSchema, { type: 'btw.cancel' }),
+    });
+  }
   createRun(sessionId: string, input: RunCreateRequest, commandId?: string): Promise<RunCreateAck> {
     return request(`/api/agent/v1/sessions/${id(sessionId)}/runs`, scoped(z.strictObject({ run: C.RunSchema }), result => result.run.sessionId === sessionId), { method: 'POST', headers: { 'Content-Type': 'application/json', ...headersFor(commandId) }, body: bodyFor(C.RunCreateRequestSchema, input) });
   }

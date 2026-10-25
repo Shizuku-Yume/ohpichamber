@@ -12,7 +12,8 @@ import { AgentRegistry } from '@oh-my-pi/pi-coding-agent/registry/agent-registry
 import { initializeExtensions } from '@oh-my-pi/pi-coding-agent/modes/runtime-init';
 import { READ_ONLY_BUILTIN_COMMANDS, executeAcpBuiltinSlashCommand, isAllowedBuiltinCommand, parseSlashCommand } from './builtin-commands.ts';
 import type { SlashCommandRuntime } from '@oh-my-pi/pi-coding-agent/slash-commands/types';
-import { JsonObjectSchema, MCPOAuthPublicConfigurationSchema, SessionBranchRequestSchema, type Agent, type CapturedSendOptions, type JsonObject, type Run, type SessionBranchRequest } from '@openchamber/agent-contract';
+import { RpcBtwController } from '@oh-my-pi/pi-coding-agent/modes/rpc/rpc-btw';
+import { JsonObjectSchema, MCPOAuthPublicConfigurationSchema, SessionBranchRequestSchema, type Agent, type CapturedSendOptions, type JsonObject, type JsonValue, type Run, type SessionBranchRequest } from '@openchamber/agent-contract';
 import type { WorkerBootstrapMessage, WorkerInteraction, WorkerOperation, WorkerOperationResult } from '../protocol.ts';
 import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
@@ -48,6 +49,7 @@ export class WorkerSession {
   private readonly defaultMountedNames: string[];
   private readonly queuedContext = new WeakMap<AgentMessage, PreparedPrompt['context']>();
   private readonly nativeQueuedPreparation: AgentSession['agent']['prepareQueuedMessages'];
+  private readonly btw: RpcBtwController;
   private binding: Promise<void> = Promise.resolve();
   private promptTask: Promise<void> | undefined;
   private preparation: Promise<PreparedPrompt> | undefined;
@@ -57,7 +59,6 @@ export class WorkerSession {
   private failed = false;
   private controllingBranch = false;
   private compacting = false;
-
   private constructor(
     readonly session: AgentSession,
     private readonly authStorage: AuthStorage,
@@ -78,6 +79,15 @@ export class WorkerSession {
     private readonly webSearch: NativeWebSearch,
   ) {
     this.projection = new WorkerProjection(session.sessionManager, sessionId);
+    this.btw = new RpcBtwController(session, frame => {
+      if (frame.type === 'btw_delta') this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'btw.delta', recordId: frame.recordId, delta: frame.delta } }]);
+      else if (frame.type === 'btw_record') {
+        if (frame.record.status !== 'running') this.emit([{ timestamp: frame.record.updatedAt, transient: true, event: {
+          type: 'btw.completed', recordId: frame.record.id, status: frame.record.status === 'complete' ? 'completed' : frame.record.status === 'cancelled' ? 'cancelled' : 'failed',
+          text: frame.record.answer, ...(frame.record.error === undefined ? {} : { error: frame.record.error }),
+        } }]);
+      }
+    });
     this.defaultToolNames = session.getActiveToolNames();
     this.defaultMountedNames = session.getMountedXdevToolNames();
     this.nativeQueuedPreparation = session.agent.prepareQueuedMessages;
@@ -464,6 +474,12 @@ export class WorkerSession {
           return { type: 'catalog', result };
         } finally { if (applying) this.skillsApplying = false; }
       }
+      case 'btw.ask': {
+        const record = await this.btw.ask(operation.question, operation.recordId);
+        return { type: 'btw.ask', recordId: record.id };
+      }
+      case 'btw.cancel':
+        return { type: 'btw.cancel', cancelled: this.btw.cancel(operation.recordId) };
       case 'command': {
         const parsed = parseSlashCommand(operation.text);
         if (!parsed || !isAllowedBuiltinCommand(parsed.name)) throw new ProjectionError(400, 'INVALID_REQUEST', 'Slash command is not allowed');
@@ -589,9 +605,11 @@ export class WorkerSession {
       case 'approval.resolve':
         if (!this.interaction.resolveApproval(operation.approvalId, operation.decision)) throw new ProjectionError(404, 'APPROVAL_NOT_FOUND', 'Approval request is not pending');
         return { type: 'approval.resolve', resolved: true };
-      case 'question.resolve':
-        if (!this.interaction.resolveQuestion(operation.questionId, operation.action, operation.response)) throw new ProjectionError(404, 'QUESTION_NOT_FOUND', 'Question request is not pending');
+      case 'question.resolve': {
+        const question = operation as { type: 'question.resolve'; questionId: string; action: 'answer' | 'cancel'; response?: JsonValue };
+        if (!this.interaction.resolveQuestion(question.questionId, question.action, question.response)) throw new ProjectionError(404, 'QUESTION_NOT_FOUND', 'Question request is not pending');
         return { type: 'question.resolve', resolved: true };
+      }
       case 'history':
         await this.binding;
         return { type: 'history', history: this.projection.history(operation.request) };
@@ -615,6 +633,7 @@ export class WorkerSession {
         await this.session.sessionManager.dropSession(this.sessionFile);
         return { type: 'delete', deletedSessionIds: [this.sessionId] };
     }
+    throw new ProjectionError(400, 'INVALID_REQUEST', 'Unsupported worker operation');
   }
 
   async close(): Promise<void> {
@@ -622,6 +641,7 @@ export class WorkerSession {
     this.closed = true;
     this.interaction.close();
     try {
+      await this.btw.close();
       await this.catalogs.close();
       try { await this.preparation; } catch { /* The operation reports preparation failure to its caller. */ }
       await this.session.abort();

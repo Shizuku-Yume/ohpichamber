@@ -1,4 +1,4 @@
-import { CapturedSendOptionsSchema, CounterSchema, EntityIdSchema, EpochSchema, FollowUpAckSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, MCPConfigurationStateSchema, MCPServerConfigSchema, ProblemCodeSchema, PromptRequestSchema, RunSchema, SessionBranchRequestSchema, SessionBranchResultSchema, ShellStartRequestSchema, SkillSourceRevisionsSchema, SteerAckSchema, TimestampSchema } from '@openchamber/agent-contract';
+import { CapturedSendOptionsSchema, CounterSchema, EntityIdSchema, EpochSchema, FollowUpAckSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, MCPConfigurationStateSchema, MCPServerConfigSchema, ProblemCodeSchema, PromptRequestSchema, RunSchema, SessionBranchRequestSchema, SessionBranchResultSchema, ShellStartRequestSchema, SkillSourceRevisionsSchema, SteerAckSchema, TimestampSchema, type JsonValue } from '@openchamber/agent-contract';
 import { isAbsolute } from 'node:path';
 import { z } from 'zod';
 import { ProjectionInputSchema, ProjectionSeedSchema } from './projection/protocol.ts';
@@ -74,6 +74,8 @@ export const WorkerOperationSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('prompt'), runId: EntityIdSchema, request: PromptRequestSchema, attachments: z.array(AttachmentReferenceSchema).optional() }),
   HostStreamingPromptRequestSchema.extend({ type: z.literal('steer') }),
   HostStreamingPromptRequestSchema.extend({ type: z.literal('follow-up') }),
+  z.strictObject({ type: z.literal('btw.ask'), question: z.string().min(1), recordId: EntityIdSchema.optional() }),
+  z.strictObject({ type: z.literal('btw.cancel'), recordId: EntityIdSchema.optional() }),
   z.strictObject({ type: z.literal('abort'), runId: EntityIdSchema }),
   z.strictObject({ type: z.literal('compact'), instructions: z.string().optional() }),
   z.strictObject({ type: z.literal('command'), text: z.string().min(1) }),
@@ -91,7 +93,7 @@ export const WorkerOperationSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('usage.tools'), query: UsageQuerySchema, references: z.array(UsageSessionReferenceSchema) }),
   z.strictObject({ type: z.literal('mcp.configuration.read') }),
 ]);
-export type WorkerOperation = z.infer<typeof WorkerOperationSchema>;
+export type WorkerOperation = z.infer<typeof WorkerOperationSchema> | { type: 'question.resolve'; questionId: string; action: 'answer' | 'cancel'; response?: JsonValue };
 const WorkerApprovalInteractionSchema = z.strictObject({
   kind: z.literal('approval'), approvalId: EntityIdSchema, toolCallId: EntityIdSchema, toolName: z.string().min(1),
   actionType: z.enum(['bash_command', 'file_write', 'network_request', 'custom_tool']), commandSummary: z.string(),
@@ -110,6 +112,8 @@ const WorkerOperationResultSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('abort'), run: RunSchema }),
   z.strictObject({ type: z.literal('compact'), compactionId: EntityIdSchema, tokensBefore: z.number().int().nonnegative(), completedAt: TimestampSchema }),
   z.strictObject({ type: z.literal('command'), output: z.string() }),
+  z.strictObject({ type: z.literal('btw.ask'), recordId: EntityIdSchema }),
+  z.strictObject({ type: z.literal('btw.cancel'), cancelled: z.boolean() }),
   z.strictObject({ type: z.literal('approval.resolve'), resolved: z.literal(true) }),
   z.strictObject({ type: z.literal('question.resolve'), resolved: z.literal(true) }),
   z.strictObject({ type: z.literal('history'), history: HistoryPageSchema }),

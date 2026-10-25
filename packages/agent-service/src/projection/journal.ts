@@ -47,15 +47,20 @@ export class SessionJournal {
 
   append(inputs: readonly ProjectionInput[]): CanonicalEvent[] {
     this.ensureOpen();
+    const persistent = inputs.filter(input => !input.transient);
+    const transient = inputs.filter(input => input.transient);
     let next = this.head;
     const events: CanonicalEvent[] = [];
     // Parse the batch before granting any sequence or mutating authoritative state.
-    for (const input of inputs) {
+    for (const input of persistent) {
       if (next === U64_MAX) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Event sequence is exhausted');
       events.push(CanonicalEventSchema.parse({ ...input.event, sessionId: this.identity.sessionId,
         epoch: this.epoch, sequence: (++next).toString(), timestamp: input.timestamp,
       }));
     }
+    const transientEvents = transient.map(input => CanonicalEventSchema.parse({ ...input.event, sessionId: this.identity.sessionId,
+      epoch: this.epoch, sequence: this.head === 0n ? '1' : this.head.toString(), timestamp: input.timestamp,
+    }));
     for (const event of events) {
       this.reduce(event);
       this.head = BigInt(event.sequence);
@@ -63,7 +68,7 @@ export class SessionJournal {
       if (this.eventCount < REPLAY_LIMIT) this.events[(this.eventStart + this.eventCount++) % REPLAY_LIMIT] = event;
       else { this.events[this.eventStart] = event; this.eventStart = (this.eventStart + 1) % REPLAY_LIMIT; }
     }
-    for (const event of events) for (const listener of this.listeners) listener(structuredClone(event));
+    for (const event of [...events, ...transientEvents]) for (const listener of this.listeners) listener(structuredClone(event));
     return structuredClone(events);
   }
 

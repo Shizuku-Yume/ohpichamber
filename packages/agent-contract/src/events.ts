@@ -74,6 +74,8 @@ export const CanonicalEventSchema = z.discriminatedUnion('type', [
   }),
   DataEventEnvelopeSchema.extend({ type: z.literal('queue.updated'), queue: QueueStateSchema }),
   DataEventEnvelopeSchema.extend({ type: z.literal('catalog.updated'), catalog: CatalogUpdateSchema }),
+  DataEventEnvelopeSchema.extend({ type: z.literal('btw.delta'), recordId: EntityIdSchema, delta: z.string() }),
+  DataEventEnvelopeSchema.extend({ type: z.literal('btw.completed'), recordId: EntityIdSchema, status: z.enum(['completed', 'cancelled', 'failed']), text: z.string(), error: z.string().optional() }),
   DataEventEnvelopeSchema.extend({ type: z.literal('shell.updated'), job: ShellJobSchema }),
   DataEventEnvelopeSchema.extend({ type: z.literal('session.compacted'), compactionId: EntityIdSchema, tokensBefore: z.number().int().nonnegative(), completedAt: TimestampSchema }),
   DataEventEnvelopeSchema.extend({ type: z.literal('message.updated'), messageId: EntityIdSchema, providerId: z.string().min(1).optional(), modelId: z.string().min(1).optional(), usage: TokenUsageSchema.optional() }),

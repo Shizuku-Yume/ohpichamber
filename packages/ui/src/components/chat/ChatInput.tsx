@@ -48,8 +48,9 @@ import { ReviewFlowDialog, type ReviewFlowExecution } from '@/components/session
 import { BtwPanel } from './btw/BtwPanel';
 import { useBtwPanelState } from './btw/useBtwPanelState';
 import { btwModelAvailability, resolveBtwSelection, useBtwStore } from '@/stores/useBtwStore';
-import { buildBtwSyntheticTexts, preparePendingBtwSend, startBtwSession } from '@/lib/btw';
+import { canonicalClient } from '@/api/canonicalClient';
 import { AttachedFilesList } from './FileAttachment';
+import { buildBtwSyntheticTexts, preparePendingBtwSend } from '@/lib/btw';
 import { lazyWithChunkRecovery } from '@/lib/chunkLoadRecovery';
 import type { ToolPopupContent } from './message/types';
 import { QueuedMessagesStrip } from './QueuedMessagesStrip';
@@ -494,7 +495,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         ? `btw-pending:${currentSessionId}`
         : btwSessionId;
     const isBtwActive = Boolean(btwComposerSessionId) && !btwPanel.collapsed;
-    const isBtwPanelVisible = Boolean((btwPanel.btwSessionId && btwPanel.btwDirectory) || btwPanel.creating || btwPanel.pending);
+    const isBtwPanelVisible = Boolean((btwPanel.btwSessionId && btwPanel.btwDirectory) || btwPanel.creating || btwPanel.pending || btwPanel.ephemeralRecordId);
     const immediateBtwSubmitRef = React.useRef<{ identity: ChatDraftIdentity; text: string } | null>(null);
     const draftCaretModeRef = React.useRef({ btw: isBtwActive, atEnd: isBtwActive });
     const inputMode = isBtwActive ? 'normal' : storedInputMode;
@@ -2111,42 +2112,12 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                 return;
             }
             try {
-                const fork = await startBtwSession({
-                    parentSessionId: currentSessionId,
-                    expectedRuntimeKey: submitRuntimeKey,
-                    question: primaryText,
-                    directory: targetDirectory,
-                    providerId: providerIdToSend,
-                    modelId: modelIdToSend,
-                    agentId: undefined,
-                    fileResourcesExpanded: outgoing.primaryFileResourcesExpanded,
-                    attachments: sendableAttachments,
-                    additionalParts,
-                    skills: sendMessageOptions?.skills,
-                    permissionMode: pendingBtwPermissionMode,
-                });
+                const result = await canonicalClient.askBtw(currentSessionId, primaryText);
                 if (!ownsPendingBtwSend()) return;
-                if (getRuntimeKey() !== submitRuntimeKey) {
-                    useBtwStore.getState().clearPanelState(currentSessionId);
-                    return;
-                }
-                const forkDirectory = targetDirectory;
-                migrateDraft(chatDraftIdentity, createChatDraftIdentity(activeRuntimeKey, forkDirectory, fork.sessionId));
-                if (inlineDraftTarget) {
-                    const drafts = useInlineCommentDraftStore.getState();
-                    drafts.restoreDrafts({ directory: forkDirectory, sessionKey: fork.sessionId }, drafts.consumeDrafts(inlineDraftTarget));
-                }
-                useBtwStore.getState().setPanelState(currentSessionId, { pending: false, creating: false, pendingSend: undefined });
+                useBtwStore.getState().setPanelState(currentSessionId, { pending: false, creating: false, pendingSend: undefined, ephemeralRecordId: result.recordId, ephemeralText: '', ephemeralStatus: 'running', collapsed: false });
                 scrollToBottom?.();
             } catch (error) {
                 if (!ownsPendingBtwSend()) return;
-                if (getRuntimeKey() !== submitRuntimeKey) {
-                    useBtwStore.getState().clearPanelState(currentSessionId);
-                    restoreComposerText();
-                    return;
-                }
-                // Preserve the pending owner before restoring text so a failed
-                // first send never drops back into the parent draft.
                 useBtwStore.getState().setPanelState(currentSessionId, { pending: true, creating: false, collapsed: false, pendingSend: undefined });
                 restoreConsumedInput();
                 toast.error(getSubmitErrorMessage(error, t('chat.btw.toast.createFailed')));

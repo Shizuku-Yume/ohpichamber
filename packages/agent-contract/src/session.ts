@@ -105,11 +105,15 @@ export const SessionControlRequestSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('abort'), runId: EntityIdSchema }),
   z.strictObject({ type: z.literal('compact'), instructions: z.string().optional() }),
   z.strictObject({ type: z.literal('command'), text: z.string().min(1) }),
+  z.strictObject({ type: z.literal('btw.ask'), question: z.string().min(1), recordId: EntityIdSchema.optional() }),
+  z.strictObject({ type: z.literal('btw.cancel'), recordId: EntityIdSchema.optional() }),
 ]);
 export type SessionControlRequest = z.infer<typeof SessionControlRequestSchema>;
 export const SessionControlAckSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('compact'), compactionId: EntityIdSchema, tokensBefore: z.number().int().nonnegative(), completedAt: TimestampSchema }),
   z.strictObject({ type: z.literal('command'), output: z.string() }),
+  z.strictObject({ type: z.literal('btw.ask'), recordId: EntityIdSchema }),
+  z.strictObject({ type: z.literal('btw.cancel'), cancelled: z.boolean() }),
 ]);
 export type SessionControlAck = z.infer<typeof SessionControlAckSchema>;
 export const RunAbortAckSchema = z.strictObject({ run: RunSchema });

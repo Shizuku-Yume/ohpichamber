@@ -8,15 +8,15 @@ import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { subscribeWorkspaceDirectories } from '@/stores/globalSessions';
 
 export type BtwPanelState = {
-  /** The active fork for this parent, or null when no panel should exist. */
   btwSessionId: string | null;
-  /** The fork's directory identity (may be canonicalized by the server). */
   btwDirectory: string | null;
-  /** Last message id inherited from the parent; the panel shows what's after it. */
   boundaryMessageID: string | null;
   collapsed: boolean;
   creating: boolean;
   pending: boolean;
+  ephemeralRecordId: string | null;
+  ephemeralText: string;
+  ephemeralStatus: 'idle' | 'running' | 'completed' | 'cancelled' | 'failed';
 };
 
 /**
@@ -97,12 +97,9 @@ export function useBtwPanelState(
   const btwSessionId = btwSessionExists && !destroying ? linkedBtwSessionId : null;
   const btwDirectory = btwSessionId ? btwServerDirectory : null;
   const boundaryMessageID = btwSessionId ? btwBoundaryMessageID : null;
-  return React.useMemo(() => ({
-    btwSessionId,
-    btwDirectory,
-    boundaryMessageID,
-    collapsed,
-    creating,
-    pending,
-  }), [boundaryMessageID, btwDirectory, btwSessionId, collapsed, creating, pending]);
+  const ephemeralRecordId = uiState?.ephemeralRecordId ?? null;
+  const ephemeralText = uiState?.ephemeralText ?? '';
+  const ephemeralStatus = uiState?.ephemeralStatus ?? 'idle';
+  return React.useMemo(() => ({ btwSessionId, btwDirectory, boundaryMessageID, collapsed, creating, pending, ephemeralRecordId, ephemeralText, ephemeralStatus }),
+    [boundaryMessageID, btwDirectory, btwSessionId, collapsed, creating, ephemeralRecordId, ephemeralStatus, ephemeralText, pending]);
 }

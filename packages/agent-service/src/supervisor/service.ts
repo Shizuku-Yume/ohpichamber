@@ -573,7 +573,11 @@ export class AgentService {
         if (control.type === 'compact') {
           respondJson(response, 200, SessionControlAckSchema.parse(await this.sessions.compact(sessionId, control.instructions))); return;
         }
-        respondJson(response, 200, SessionControlAckSchema.parse(await this.sessions.command(sessionId, control.text))); return;
+        if (control.type === 'command') {
+          respondJson(response, 200, SessionControlAckSchema.parse(await this.sessions.command(sessionId, control.text))); return;
+        }
+        if (control.type === 'btw.ask') { respondJson(response, 202, SessionControlAckSchema.parse(await this.sessions.btwAsk(sessionId, control.question, control.recordId))); return; }
+        respondJson(response, 200, SessionControlAckSchema.parse(await this.sessions.btwCancel(sessionId, control.recordId))); return;
       }
       const sessionRoute = /^\/api\/agent\/v1\/sessions\/([^/]+)(?:\/(snapshot|history|events)|\/(runs)(?:\/([^/]+)\/abort)?)?$/.exec(url.pathname);
       if (sessionRoute) {

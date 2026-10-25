@@ -30,11 +30,14 @@ const ProjectionEventSchema = z.union([
   CanonicalEventSchema.options[21].omit(envelope),
   CanonicalEventSchema.options[22].omit(envelope),
   CanonicalEventSchema.options[23].omit(envelope),
+  CanonicalEventSchema.options[24].omit(envelope),
+  CanonicalEventSchema.options[25].omit(envelope),
 ]);
 export type ProjectionEvent = z.infer<typeof ProjectionEventSchema>;
 export const ProjectionInputSchema = z.strictObject({
   timestamp: TimestampSchema,
   event: ProjectionEventSchema,
+  transient: z.boolean().optional(),
 });
 export type ProjectionInput = z.infer<typeof ProjectionInputSchema>;
 

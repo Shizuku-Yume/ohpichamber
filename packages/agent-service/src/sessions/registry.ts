@@ -787,6 +787,18 @@ export class SessionRegistry {
     } finally { this.controls.delete(sessionId); }
   }
 
+  async btwAsk(sessionId: string, question: string, recordId?: string) {
+    this.ensureOpen(); this.assertWritable(sessionId);
+    const result = await this.workers.request(sessionId, { type: 'btw.ask', question, ...(recordId === undefined ? {} : { recordId }) });
+    if (result.type !== 'btw.ask') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+    return result;
+  }
+  async btwCancel(sessionId: string, recordId?: string) {
+    this.ensureOpen(); this.assertWritable(sessionId);
+    const result = await this.workers.request(sessionId, { type: 'btw.cancel', ...(recordId === undefined ? {} : { recordId }) });
+    if (result.type !== 'btw.cancel') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+    return result;
+  }
   async history(request: HistoryPageRequest) {
     this.ensureOpen();
     const child = [...this.subagents.values()].find(record => record.childSessionId === request.sessionId);
@@ -880,7 +892,7 @@ export class SessionRegistry {
       async operation => {
         const result = await this.workers.request(sessionId, operation);
         if (operation.type === 'approval.resolve' && result.type !== 'approval.resolve') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
-        if (operation.type === 'question.resolve' && result.type !== 'question.resolve') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+        if ((operation.type as string) === 'question.resolve' && (result.type as string) !== 'question.resolve') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
       }, input => opened.journal.append([input]));
   }
 

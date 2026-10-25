@@ -3,6 +3,7 @@ import { AnimatePresence } from 'motion/react';
 import { ComposerFloatingPanel } from '../composer/ui/ComposerFloatingPanel';
 import type { Message } from '@openchamber/agent-contract';
 import { useI18n } from '@/lib/i18n';
+import { canonicalClient } from '@/api/canonicalClient';
 import { isIMECompositionEvent } from '@/lib/ime';
 import { cn } from '@/lib/utils';
 import { toast } from '@/components/ui';
@@ -51,19 +52,24 @@ const BtwPanelView: React.FC<{ parentSessionId: string; panel: BtwPanelState; on
     onExit,
 }) => {
     const { t } = useI18n();
-    useEscapeToExit(onExit, !panel.collapsed && Boolean(panel.pending || panel.creating || panel.btwSessionId));
-
-    // Each stage is its own keyed panel, so moving between them cross-fades.
+    useEscapeToExit(onExit, !panel.collapsed && Boolean(panel.pending || panel.creating || panel.btwSessionId || panel.ephemeralRecordId));
     let stage: React.ReactNode = null;
-    if (panel.btwSessionId && panel.btwDirectory) {
+
+    if (panel.ephemeralRecordId) {
+        stage = (
+            <BtwFrame key="ephemeral" collapsed={panel.collapsed} actions={(
+                <Button type="button" variant="ghost" size="icon" onClick={() => void canonicalClient.cancelBtw(parentSessionId)} aria-label={t('chat.btw.cancelAria')}>
+                    <Icon name="close" className="size-4" />
+                </Button>
+            )}>
+                <div className="max-h-48 overflow-y-auto whitespace-pre-wrap px-4 py-3 text-sm">{panel.ephemeralText || t('chat.btw.loading')}</div>
+            </BtwFrame>
+        );
+    } else if (panel.btwSessionId && panel.btwDirectory) {
         stage = (
             <BtwSheet
                 key="sheet"
-                sessionRef={{
-                    parentSessionId,
-                    btwSessionId: panel.btwSessionId,
-                    directory: panel.btwDirectory,
-                }}
+                sessionRef={{ parentSessionId, btwSessionId: panel.btwSessionId, directory: panel.btwDirectory }}
                 boundaryMessageId={panel.boundaryMessageID}
                 collapsed={panel.collapsed}
             />

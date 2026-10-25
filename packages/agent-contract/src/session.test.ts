@@ -24,14 +24,18 @@ const run = { ...pendingRun, status: 'completed', finishedAt: timestamp + 1000 }
 const agent = { agentId: 'agt_01', name: 'Agent', description: '', model: null, allowedTools: ['read'] };
 
 describe('session schemas', () => {
-  test('session controls discriminate abort and compact without changing abort payloads', () => {
+  test('session controls discriminate abort compact and builtin command', () => {
     const abort = { type: 'abort', runId: 'run_01' } as const;
     const compact = { type: 'compact', instructions: 'Keep the decisions and unresolved questions.' } as const;
+    const command = { type: 'command', text: '/context' } as const;
     const ack = { type: 'compact', compactionId: 'compact_01', tokensBefore: 4096, completedAt: timestamp } as const;
     expect(SessionControlRequestSchema.parse(abort)).toEqual(abort);
     expect(SessionControlRequestSchema.parse(compact)).toEqual(compact);
+    expect(SessionControlRequestSchema.parse(command)).toEqual(command);
+    expect(SessionControlRequestSchema.safeParse({ type: 'command', text: '' }).success).toBe(false);
     expect(SessionControlRequestSchema.safeParse({ type: 'compact', instructions: 2 }).success).toBe(false);
     expect(SessionControlAckSchema.parse(ack)).toEqual(ack);
+    expect(SessionControlAckSchema.parse({ type: 'command', output: 'Context: 42%' })).toEqual({ type: 'command', output: 'Context: 42%' });
   });
   test('preserves opaque project identity and agent selection without inherited aliases', () => {
     const project = { projectId: 'pro_01', name: 'P', workspaceIds: ['ws_01'], displayPath: 'src' };

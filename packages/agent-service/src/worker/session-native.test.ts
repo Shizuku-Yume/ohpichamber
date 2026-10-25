@@ -163,6 +163,17 @@ async function searxngLoopback(): Promise<{ url: string; requests: string[]; sto
   return { url: `http://127.0.0.1:${server.port}`, requests, stop: () => server.stop(true) };
 }
 
+test('builtin command controls capture output without starting a provider run', async () => {
+  const harness = await fixture({ respond: () => completion() });
+  try {
+    const result = await harness.worker.operation({ type: 'command', text: '/context' });
+    expect(result).toMatchObject({ type: 'command' });
+    if (result.type !== 'command') throw new Error('Expected builtin command acknowledgement');
+    expect(result.output.length).toBeGreaterThan(0);
+    expect(harness.requests).toHaveLength(0);
+    await expect(harness.worker.operation({ type: 'command', text: '/ssh' })).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+  } finally { await harness.close(); }
+}, 30000);
 test('compact control refuses while a native run is active', async () => {
   const started = Promise.withResolvers<void>();
   const finish = Promise.withResolvers<Response>();

@@ -38,11 +38,11 @@ afterEach(async () => {
 describe('CanonicalClient native file resources', () => {
   test('requires exact catalog CAS revisions for command and prompt-template mutations', async () => {
     const commandInput: C.CommandCreateRequest = { expectedRevision: '0', name: 'review', scope: 'workspace', content: 'Review' };
-    handler = (_request, response) => json(response, { workspaceId, revision: '2', commands: [] });
+    handler = (_request, response) => json(response, { workspaceId, revision: '2', commands: [], builtinCommands: ['context'] });
     await expect(client.fileResources.createCommand(workspaceId, commandInput)).rejects.toThrow();
 
-    handler = (_request, response) => json(response, { workspaceId, revision: '1', commands: [] });
-    await expect(client.fileResources.createCommand(workspaceId, commandInput)).resolves.toMatchObject({ revision: '1' });
+    handler = (_request, response) => json(response, { workspaceId, revision: '1', commands: [], builtinCommands: ['context'] });
+    await expect(client.fileResources.createCommand(workspaceId, commandInput)).resolves.toMatchObject({ revision: '1', builtinCommands: ['context'] });
 
     const templateInput: C.PromptTemplateCreateRequest = { expectedRevision: '1', name: 'plan', scope: 'agent', content: 'Plan' };
     handler = (_request, response) => json(response, { workspaceId: 'other_workspace', revision: '2', templates: [] });

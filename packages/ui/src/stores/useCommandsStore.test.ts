@@ -17,7 +17,7 @@ let onRead: () => void = () => {};
 
 beforeEach(() => {
   useCommandsStore.getState().resetForRuntimeSwitch();
-  catalog = { workspaceId: 'workspace_1', revision: '1', commands: [command] };
+  catalog = { workspaceId: 'workspace_1', revision: '1', commands: [command], builtinCommands: ['context', 'compact'] };
   requests = []; failRead = false; conflict = false; delayedRead = null; onRead = () => {};
   const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const request = new Request(input instanceof Request ? input : new URL(input.toString(), 'http://localhost'), init);
@@ -96,7 +96,7 @@ describe('native command consumers', () => {
     const staleLoad = useCommandsStore.getState().loadCommands('/repo');
     await started.promise;
     expect(await useCommandsStore.getState().updateCommand(command.name, { content: 'new Markdown' }, '/repo')).toBe(true);
-    finish({ workspaceId: 'workspace_1', revision: '1', commands: [command] });
+    finish({ workspaceId: 'workspace_1', revision: '1', commands: [command], builtinCommands: ['context', 'compact'] });
     await staleLoad;
     expect(selectCommandsForDirectory(useCommandsStore.getState(), '/repo')[0].content).toBe('new Markdown');
   });

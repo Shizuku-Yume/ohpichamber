@@ -20,6 +20,7 @@ import {
 import type { FileResourceOperation, FileResourceResult } from '../catalogs/file-resources-protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
 import { buildPublicSkillPrompt, sanitizeSkillRoots } from './catalog-skills.ts';
+import { ALLOWED_BUILTIN_COMMANDS } from './builtin-commands.ts';
 
 export interface NativeFileResourcesContext {
   cwd: string;
@@ -261,7 +262,7 @@ export class NativeFileResources {
         else await this.remove(location);
       }
       commands = (await this.commands()).entries;
-      return { kind: 'commands', catalog: { workspaceId, revision, commands: commands.map(item => item.entry) } };
+      return { kind: 'commands', catalog: { workspaceId, revision, commands: commands.filter(item => item.entry.source !== 'builtin' || ALLOWED_BUILTIN_COMMANDS.includes(item.entry.name as typeof ALLOWED_BUILTIN_COMMANDS[number])).map(item => item.entry), builtinCommands: [...ALLOWED_BUILTIN_COMMANDS] } };
     }
     let { entries: templates } = await this.templates();
     if (operation.action === 'templates.expand') {

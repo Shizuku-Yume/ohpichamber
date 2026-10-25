@@ -10,6 +10,8 @@ import type { AuthStorage } from '@oh-my-pi/pi-coding-agent/session/auth-storage
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import { AgentRegistry } from '@oh-my-pi/pi-coding-agent/registry/agent-registry';
 import { initializeExtensions } from '@oh-my-pi/pi-coding-agent/modes/runtime-init';
+import { READ_ONLY_BUILTIN_COMMANDS, executeAcpBuiltinSlashCommand, isAllowedBuiltinCommand, parseSlashCommand } from './builtin-commands.ts';
+import type { SlashCommandRuntime } from '@oh-my-pi/pi-coding-agent/slash-commands/types';
 import { JsonObjectSchema, MCPOAuthPublicConfigurationSchema, SessionBranchRequestSchema, type Agent, type CapturedSendOptions, type JsonObject, type Run, type SessionBranchRequest } from '@openchamber/agent-contract';
 import type { WorkerBootstrapMessage, WorkerInteraction, WorkerOperation, WorkerOperationResult } from '../protocol.ts';
 import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
@@ -62,6 +64,7 @@ export class WorkerSession {
     readonly sessionFile: string,
     private readonly publish: (inputs: ProjectionInput[]) => void,
     private readonly sessionId: string,
+    private readonly cwd: string,
     private readonly onFatal: () => void,
     private readonly interaction: NativeInteraction,
     private readonly catalogs: WorkerCatalogs,
@@ -252,7 +255,7 @@ export class WorkerSession {
       const sessionFile = manager.getSessionFile();
       if (!sessionFile) throw new ProjectionError(503, 'SESSION_RESTORE_FAILED', 'Session storage is unavailable');
       await rememberPrivateRoots(manager, input);
-      owned = new WorkerSession(nativeSession, authStorage, sessionFile, publish, input.rootSessionId, onFatal, interaction, catalogs, mcp, shell, completion, admission, authorize, onSubagent, subagentEventBus, new NativeWebSearch(runtime, input.workspaceId, authorize));
+      owned = new WorkerSession(nativeSession, authStorage, sessionFile, publish, input.rootSessionId, input.cwd, onFatal, interaction, catalogs, mcp, shell, completion, admission, authorize, onSubagent, subagentEventBus, new NativeWebSearch(runtime, input.workspaceId, authorize));
       capturePolicy = async () => {
         const configuration = input.mcpConfigPath ? await readNativeMcpConfigurationIfPresent(input.mcpConfigPath, input.workspaceId) : null;
         publishPolicy(await captureNativePolicy({ projectId: input.projectId, workspaceId: input.workspaceId, cwd: input.cwd, agentDirectory: input.agentDirectory, agentDirectoryId: input.agentDirectoryId ?? input.workerGeneration }, runtime, catalogs.agents, configuration?.config.servers ?? []));
@@ -462,6 +465,27 @@ export class WorkerSession {
           if (operation.operation.type === 'skills.apply' && result.type === 'skills.applied' && result.result.outcome === 'applied') this.emit([{ timestamp: Date.now(), event: { type: 'catalog.updated', catalog: { kind: 'skills', state: this.catalogs.skills.read(operation.operation.sources) } } }]);
           return { type: 'catalog', result };
         } finally { if (applying) this.skillsApplying = false; }
+      }
+      case 'command': {
+        const parsed = parseSlashCommand(operation.text);
+        if (!parsed || !isAllowedBuiltinCommand(parsed.name)) throw new ProjectionError(400, 'INVALID_REQUEST', 'Slash command is not allowed');
+        const active = this.preparation || this.projection.activeRun() || this.session.isStreaming;
+        if (active && !READ_ONLY_BUILTIN_COMMANDS[parsed.name as keyof typeof READ_ONLY_BUILTIN_COMMANDS]) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
+        if (active && parsed.name === 'jobs' && parsed.args.startsWith('kill')) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
+        if (active && parsed.name === 'usage' && parsed.args.startsWith('reset')) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
+        if (active && parsed.name === 'todo' && parsed.args) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
+        await this.binding;
+        const output: string[] = [];
+        const runtime = {
+          session: this.session,
+          sessionManager: this.session.sessionManager,
+          settings: this.session.settings,
+          cwd: this.cwd,
+          output: (text: string) => { output.push(text); },
+        };
+        const result = await executeAcpBuiltinSlashCommand(operation.text, runtime as unknown as SlashCommandRuntime);
+        if (result === false || 'prompt' in result) throw new ProjectionError(400, 'INVALID_REQUEST', 'Slash command cannot run as a builtin');
+        return { type: 'command', output: output.join('\n') };
       }
       case 'usage.stats': case 'usage.tools':
         throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'Historical usage reads belong to the cold usage worker');

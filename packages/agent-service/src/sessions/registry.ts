@@ -775,6 +775,17 @@ export class SessionRegistry {
       return result;
     } finally { this.controls.delete(sessionId); }
   }
+  async command(sessionId: string, text: string) {
+    this.ensureOpen();
+    this.assertWritable(sessionId);
+    this.assertControlAvailable(sessionId);
+    this.controls.add(sessionId);
+    try {
+      const result = await this.workers.request(sessionId, { type: 'command', text });
+      if (result.type !== 'command') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+      return result;
+    } finally { this.controls.delete(sessionId); }
+  }
 
   async history(request: HistoryPageRequest) {
     this.ensureOpen();

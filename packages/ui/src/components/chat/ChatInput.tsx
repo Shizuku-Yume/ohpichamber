@@ -108,7 +108,7 @@ import { routeGuestSlashCommand } from './composer/submit/guestCommands';
 import { pluginModeFromId } from '@/lib/surfaces/modes';
 import { expandCanonicalSkills } from '@/sync/session-ui-store';
 import { selectSkillsForDirectory, useSkillsStore } from '@/stores/useSkillsStore';
-import { selectCommandsForDirectory, useCommandsStore } from '@/stores/useCommandsStore';
+import { selectBuiltinCommandsForDirectory, selectCommandsForDirectory, useCommandsStore } from '@/stores/useCommandsStore';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useGitStore } from '@/stores/useGitStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -846,6 +846,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     // highlight matching tokens in the composer, the same way confirmed
     // @files are.
     const availableCommands = useCommandsStore((s) => selectCommandsForDirectory(s, currentDirectory));
+    const availableBuiltinCommands = useCommandsStore((s) => selectBuiltinCommandsForDirectory(s, currentDirectory));
+    const loadCommands = useCommandsStore((s) => s.loadCommands);
+    React.useEffect(() => { void loadCommands(currentDirectory); }, [currentDirectory, loadCommands]);
     const availableSkills = useSkillsStore((s) => selectSkillsForDirectory(s, currentDirectory));
     const availableSnippets = useSnippetsStore(state => selectSnippetsForDirectory(state, currentDirectory));
     const knownSlashNames = React.useMemo(() => {
@@ -1633,7 +1636,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         // the prompt it produces. A command the composer cannot run here is not
         // a local command at all and goes out as typed.
         let commandPlan = !queuedOnly && inputSnapshot.hasContent
-            ? planLocalSlashCommand(inputSnapshot.message, inputMode, hasDrafts, Boolean(currentSessionId))
+            ? planLocalSlashCommand(inputSnapshot.message, inputMode, hasDrafts, Boolean(currentSessionId), availableBuiltinCommands)
             : null;
         if (commandPlan?.kind === 'prompt') {
             const magicCommand = findMagicPromptCommand(commandPlan.command.name);
@@ -1846,10 +1849,13 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                         restoreText: (target, text) => useInputStore.setState({ pendingComposerRestore: { target, text, files: [] } }),
                     });
                     if (forkOutcome === 'send-failed') toast.error(t('chat.chatInput.toast.forkSendFailed'));
-                } else if (actionName === 'compact') {
+                } else if (actionName === 'compact' && !availableBuiltinCommands.includes(actionName)) {
                     const instructions = window.prompt(t('chat.compact.instructions.title'), '');
                     if (instructions === null) { restoreComposerText(); return; }
                     await sessionActions.compactSession(currentSessionId, instructions || undefined);
+                } else if (availableBuiltinCommands.includes(actionName)) {
+                    const output = await sessionActions.runBuiltinCommand(currentSessionId, `/${actionName}${commandPlan.command.argument ? ` ${commandPlan.command.argument}` : ''}`);
+                    if (output) toast.message(output);
                 }
             } catch (error) {
                 restoreComposerText();

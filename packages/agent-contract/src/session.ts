@@ -104,9 +104,13 @@ export type RunAbortRequest = z.infer<typeof RunAbortRequestSchema>;
 export const SessionControlRequestSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('abort'), runId: EntityIdSchema }),
   z.strictObject({ type: z.literal('compact'), instructions: z.string().optional() }),
+  z.strictObject({ type: z.literal('command'), text: z.string().min(1) }),
 ]);
 export type SessionControlRequest = z.infer<typeof SessionControlRequestSchema>;
-export const SessionControlAckSchema = z.strictObject({ type: z.literal('compact'), compactionId: EntityIdSchema, tokensBefore: z.number().int().nonnegative(), completedAt: TimestampSchema });
+export const SessionControlAckSchema = z.discriminatedUnion('type', [
+  z.strictObject({ type: z.literal('compact'), compactionId: EntityIdSchema, tokensBefore: z.number().int().nonnegative(), completedAt: TimestampSchema }),
+  z.strictObject({ type: z.literal('command'), output: z.string() }),
+]);
 export type SessionControlAck = z.infer<typeof SessionControlAckSchema>;
 export const RunAbortAckSchema = z.strictObject({ run: RunSchema });
 export type RunAbortAck = z.infer<typeof RunAbortAckSchema>;

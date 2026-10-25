@@ -3,7 +3,7 @@ import type { ModelSelection } from '@openchamber/agent-contract';
 import { cn } from '@/lib/utils';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useChatSessionSelection } from './chatColumnSession';
-import { selectCommandsForDirectory, useCommandsStore } from '@/stores/useCommandsStore';
+import { selectBuiltinCommandsForDirectory, selectCommandsForDirectory, useCommandsStore } from '@/stores/useCommandsStore';
 import { selectSnippetsForDirectory, useSnippetsStore } from '@/stores/useSnippetsStore';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
@@ -91,6 +91,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
   // the app was on last.
   const effectiveDirectory = useEffectiveDirectory();
   const commandsWithMetadata = useCommandsStore((s) => selectCommandsForDirectory(s, effectiveDirectory));
+  const builtinCommandNames = useCommandsStore((s) => selectBuiltinCommandsForDirectory(s, effectiveDirectory));
   const loadCommandsForDirectory = useCommandsStore((s) => s.loadCommands);
   const refreshCommands = React.useCallback(() => loadCommandsForDirectory(effectiveDirectory), [effectiveDirectory, loadCommandsForDirectory]);
   const templates = useSnippetsStore(state => selectSnippetsForDirectory(state, effectiveDirectory));
@@ -144,6 +145,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
       id: cmd.commandId, name: cmd.name, source: 'native', description: cmd.description,
       agentId: cmd.agentId, modelSelection: cmd.modelSelection,
       scope: cmd.scope, resourceSource: cmd.source, group: cmd.group, argumentHint: cmd.argumentHint,
+      isBuiltIn: builtinCommandNames.includes(cmd.name),
     }));
     const commandNames = new Set(customCommands.map(command => command.name));
     for (const template of templates) {
@@ -164,7 +166,6 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
             { id: 'openchamber:undo', name: 'undo', source: 'openchamber' as const, description: t('chat.commandAutocomplete.command.undoDescription'), isBuiltIn: true },
             { id: 'openchamber:redo', name: 'redo', source: 'openchamber' as const, description: t('chat.commandAutocomplete.command.redoDescription'), isBuiltIn: true },
             { id: 'openchamber:timeline', name: 'timeline', source: 'openchamber' as const, description: t('chat.commandAutocomplete.command.timelineDescription'), isBuiltIn: true },
-            { id: 'openchamber:compact', name: 'compact', source: 'openchamber' as const, description: t('chat.commandAutocomplete.command.compactDescription'), isBuiltIn: true },
           ]
         : []
       ),
@@ -228,7 +229,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
       ...mergeCommandAutocompleteItems(builtInCommands, customCommands),
       ...extensionCommands,
     ];
-  }, [hasSession, canStartSessionCommand, canUseReviewHandoffFlow, commandsWithMetadata, templates, guestCommands, t]);
+  }, [hasSession, canStartSessionCommand, canUseReviewHandoffFlow, commandsWithMetadata, builtinCommandNames, templates, guestCommands, t]);
   const commands = React.useMemo(
     () => rankCommandAutocompleteItems(allCommands, searchQuery),
     [allCommands, searchQuery],

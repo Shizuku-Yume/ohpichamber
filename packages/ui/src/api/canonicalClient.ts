@@ -279,6 +279,15 @@ export class CanonicalClient {
       body: bodyFor(C.SessionControlRequestSchema, { type: 'compact', ...(instructions === undefined ? {} : { instructions }) }),
     });
   }
+  runBuiltinCommand(sessionId: string, text: string): Promise<Extract<C.SessionControlAck, { type: 'command' }>> {
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/control`, scoped(C.SessionControlAckSchema, result => result.type === 'command'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: bodyFor(C.SessionControlRequestSchema, { type: 'command', text }),
+    }).then(result => {
+      if (result.type !== 'command') throw new Error('Command response identified another control');
+      return result;
+    });
+  }
   createRun(sessionId: string, input: RunCreateRequest, commandId?: string): Promise<RunCreateAck> {
     return request(`/api/agent/v1/sessions/${id(sessionId)}/runs`, scoped(z.strictObject({ run: C.RunSchema }), result => result.run.sessionId === sessionId), { method: 'POST', headers: { 'Content-Type': 'application/json', ...headersFor(commandId) }, body: bodyFor(C.RunCreateRequestSchema, input) });
   }

@@ -1833,6 +1833,13 @@ export async function compactSession(sessionId: string, instructions?: string): 
   if (isStaleRuntime(runtimeKey)) throw new Error('runtime changed')
   if (result.type !== 'compact') throw new Error('Compact response identified another control')
 }
+export async function runBuiltinCommand(sessionId: string, text: string): Promise<string> {
+  const runtimeKey = getRuntimeKey()
+  const result = await canonicalClient.runBuiltinCommand(sessionId, text)
+  if (isStaleRuntime(runtimeKey)) throw new Error('runtime changed')
+  if (result.type !== 'command') throw new Error('Command response identified another control')
+  return result.output
+}
 
 // ---------------------------------------------------------------------------
 // Permissions

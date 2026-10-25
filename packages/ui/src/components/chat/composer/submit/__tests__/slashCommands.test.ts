@@ -80,6 +80,12 @@ describe('planLocalSlashCommand', () => {
             attachedContext: 'retain',
         });
     });
+    test('catalog builtins become session actions without a local duplicate list', () => {
+        for (const name of ['compact', 'shake', 'todo', 'jobs', 'usage', 'context', 'tools']) {
+            expect(planLocalSlashCommand(`/${name}`, 'normal', false, true, [name])).toMatchObject({ command: { name }, kind: 'action' });
+        }
+        expect(planLocalSlashCommand('/ssh', 'normal', false, true, ['context'])).toBeNull();
+    });
 
     test('prompt commands send attached context instead of disabling command parsing', () => {
         expect(planLocalSlashCommand('/summary auth', 'normal', true, true)).toEqual({

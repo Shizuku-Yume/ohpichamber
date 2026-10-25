@@ -37,6 +37,7 @@ interface ResourceOwner {
 }
 
 const EMPTY_COMMANDS: Command[] = [];
+const EMPTY_BUILTIN_COMMANDS: CommandCatalogState['builtinCommands'] = [];
 const DEFAULT_DIRECTORY = '__default__';
 const SOURCE = 'useCommandsStore';
 let generation = 0;
@@ -50,6 +51,8 @@ export const isCommandBuiltIn = (command: Command): boolean => !command.editable
 export const invalidateCommandsLoadCache = (directory?: string | null): void => { loadedAt.delete(keyFor(directory)); };
 export const selectCommandsForDirectory = (state: Pick<CommandsStore, 'commandsByDirectory'>, directory?: string | null): Command[] =>
   state.commandsByDirectory[keyFor(directory)] ?? EMPTY_COMMANDS;
+export const selectBuiltinCommandsForDirectory = (state: Pick<CommandsStore, 'catalogsByDirectory'>, directory?: string | null): CommandCatalogState['builtinCommands'] =>
+  state.catalogsByDirectory[keyFor(directory)]?.builtinCommands ?? EMPTY_BUILTIN_COMMANDS;
 
 export const useCommandsStore = create<CommandsStore>()(devtools((set, get) => {
   const publish = (directory: string, catalog: CommandCatalogState): void => {

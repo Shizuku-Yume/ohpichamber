@@ -570,7 +570,10 @@ export class AgentService {
         if (control.type === 'abort') {
           respondJson(response, 200, { run: await this.sessions.abort(sessionId, control.runId) }); return;
         }
-        respondJson(response, 200, SessionControlAckSchema.parse(await this.sessions.compact(sessionId, control.instructions))); return;
+        if (control.type === 'compact') {
+          respondJson(response, 200, SessionControlAckSchema.parse(await this.sessions.compact(sessionId, control.instructions))); return;
+        }
+        respondJson(response, 200, SessionControlAckSchema.parse(await this.sessions.command(sessionId, control.text))); return;
       }
       const sessionRoute = /^\/api\/agent\/v1\/sessions\/([^/]+)(?:\/(snapshot|history|events)|\/(runs)(?:\/([^/]+)\/abort)?)?$/.exec(url.pathname);
       if (sessionRoute) {

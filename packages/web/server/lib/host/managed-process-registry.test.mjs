@@ -366,7 +366,8 @@ describe('unregisterManagedProcess', () => {
 });
 
 describe('default registry exports', () => {
-  it('exposes terminateManagedProcess for the Agent Service supervisor', () => {
-    expect(typeof terminateManagedProcess).toBe('function');
+  it('rejects an invalid or unrecorded pid through the default export', async () => {
+    await expect(terminateManagedProcess(undefined)).resolves.toBe(false);
+    await expect(terminateManagedProcess(4242)).resolves.toBe(false);
   });
 });

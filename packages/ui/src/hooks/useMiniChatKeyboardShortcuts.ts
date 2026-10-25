@@ -72,24 +72,23 @@ export const useMiniChatKeyboardShortcuts = () => {
     },
     cycle_thinking_variant: () => {
       if (hasActiveBtwComposer()) return false;
-      const configState = useConfigStore.getState();
-      if (configState.getCurrentModelVariants().length === 0) return false;
-
-      const nextVariantOverride = configState.cycleCurrentVariant();
+      const config = useConfigStore.getState();
+      const model = config.getCurrentModel();
+      if (!model?.reasoningEffortSupported && !model?.reasoningOptions.length) return false;
+      const efforts = ['off', ...model.reasoningOptions.map(option => option.reasoningEffort).filter(effort => effort !== 'off')];
       const sessionId = useSessionUIStore.getState().currentSessionId;
-      const {
-        currentAgentName,
-        currentProviderId,
-        currentModelId,
-      } = useConfigStore.getState();
+      const { currentAgentName, currentProviderId, currentModelId } = config;
+      const savedEffort = sessionId && currentAgentName && currentProviderId && currentModelId
+        ? useSelectionStore.getState().getAgentModelReasoningEffortForSession(sessionId, currentAgentName, currentProviderId, currentModelId)
+        : undefined;
+      const currentEffort = savedEffort ?? config.currentReasoningEffort ?? 'off';
+      const currentIndex = efforts.indexOf(currentEffort);
+      const nextEffort = efforts[((currentIndex < 0 ? 0 : currentIndex) + 1) % efforts.length];
+      config.setCurrentReasoningEffort(nextEffort);
+      config.setCurrentVariantOverride(null, undefined);
       if (sessionId && currentAgentName && currentProviderId && currentModelId) {
-        useSelectionStore.getState().saveAgentModelVariantForSession(
-          sessionId,
-          currentAgentName,
-          currentProviderId,
-          currentModelId,
-          nextVariantOverride,
-        );
+        useSelectionStore.getState().saveAgentModelReasoningEffortForSession(sessionId, currentAgentName, currentProviderId, currentModelId, nextEffort);
+        useSelectionStore.getState().saveAgentModelVariantForSession(sessionId, currentAgentName, currentProviderId, currentModelId, null);
       }
     },
     cycle_favorite_model_forward: () => cycleFavoriteModel(1),

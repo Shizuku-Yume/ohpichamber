@@ -372,6 +372,24 @@ describe("server-owned message queue", () => {
     expect(taken?.text).toBe("with context")
   })
 
+  test("captured reasoning effort survives queue acceptance, reload and take", async () => {
+    const sendConfig = { providerID: "p", modelID: "m", reasoningEffort: "high" }
+    const item = serverItem("effort-1", "think carefully", { sendConfig })
+    respond = () => json({ revision: 6, session: session([item]) })
+    await useMessageQueueStore.getState().addToQueue(target, { content: item.content, sendConfig })
+    expect(calls[0]?.body.item.sendConfig).toEqual(sendConfig)
+    expect(useMessageQueueStore.getState().queuedMessages[key]?.[0]?.sendConfig).toEqual(sendConfig)
+
+    respond = () => json({ revision: 7, sessions: [session([item])] })
+    await useMessageQueueStore.getState().resync()
+    expect(useMessageQueueStore.getState().queuedMessages[key]?.[0]?.sendConfig).toEqual(sendConfig)
+
+    respond = () => json({ revision: 8, session: session([]), item })
+    const [taken] = await useMessageQueueStore.getState().takeForSend(target, item.id)
+    expect(taken?.sendConfig).toEqual(sendConfig)
+    expect(taken?.sendConfig?.variant).toBeUndefined()
+  })
+
   test("a server item with malformed context is rejected at the boundary", async () => {
     respond = () => new Response(JSON.stringify({
       revision: 8,

@@ -591,10 +591,20 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         ? getModelMetadata(currentProviderId, currentModelId)
         : undefined;
     const configVariant = useConfigStore((state) => state.currentVariant);
-    const currentVariant = pinnedComposerSelection ? pinnedComposerSelection.variant ?? undefined : configVariant;
     const currentVariantSelection = useConfigStore((state) => state.currentVariantSelection);
     const configAgentName = useConfigStore((state) => state.currentAgentName);
     const currentAgentName = pinnedComposerSelection?.agent ?? configAgentName;
+    const currentVariant = pinnedComposerSelection ? pinnedComposerSelection.variant ?? undefined : configVariant;
+    const savedSessionReasoningEffort = useSelectionStore(React.useCallback(
+        (state) => currentSessionId && currentAgentName && currentProviderId && currentModelId
+            ? state.getAgentModelReasoningEffortForSession(currentSessionId, currentAgentName, currentProviderId, currentModelId)
+            : undefined,
+        [currentAgentName, currentModelId, currentProviderId, currentSessionId],
+    ));
+    const configReasoningEffort = useConfigStore((state) => state.currentReasoningEffort);
+    const currentReasoningEffort = pinnedComposerSelection
+        ? pinnedComposerSelection.reasoningEffort
+        : savedSessionReasoningEffort ?? configReasoningEffort;
     const setAgent = useConfigStore((state) => state.setAgent);
     // Preserve the directory roster reference while typing so the editor's
     // language context does not rebuild on every keystroke.
@@ -610,6 +620,12 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             : undefined,
         [btwAgentSelection, btwComposerSessionId, btwModelSelection],
     ));
+    const btwSavedReasoningEffort = useSelectionStore(React.useCallback(
+        (state) => btwComposerSessionId && btwAgentSelection && btwModelSelection
+            ? state.getAgentModelReasoningEffortForSession(btwComposerSessionId, btwAgentSelection, btwModelSelection.providerId, btwModelSelection.modelId)
+            : undefined,
+        [btwAgentSelection, btwComposerSessionId, btwModelSelection],
+    ));
     const btwComposerVariant = currentVariantSelection.override === null ? null : currentVariantSelection.override ?? configVariant;
     // Memoized: the footer and its model controls compare this selection by
     // identity, and nothing in it changes while the user types.
@@ -619,11 +635,13 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         isModelAvailable: btwModelAvailability(providerCatalog, autoReady),
         savedModel: btwModelSelection,
         savedVariant: btwSavedVariant,
+        savedReasoningEffort: btwSavedReasoningEffort,
         composerModel: currentProviderId && currentModelId ? { providerId: currentProviderId, modelId: currentModelId } : null,
         composerVariant: btwComposerVariant,
-    }), [agents, autoReady, btwAgentSelection, btwComposerVariant, btwModelSelection, btwSavedVariant, currentModelId, currentProviderId, providerCatalog]);
+        composerReasoningEffort: currentReasoningEffort,
+    }), [agents, autoReady, btwAgentSelection, btwComposerVariant, btwModelSelection, btwSavedReasoningEffort, btwSavedVariant, currentModelId, currentProviderId, currentReasoningEffort, providerCatalog]);
     React.useEffect(() => {
-        const { model, agent, variant } = effectiveBtwSelection;
+        const { model, agent, variant, reasoningEffort } = effectiveBtwSelection;
         if (!isBtwActive || !btwComposerSessionId || !model || !agent) return;
         const selections = useSelectionStore.getState();
         if (selections.getSessionModelSelection(btwComposerSessionId)) return;
@@ -631,6 +649,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         selections.saveSessionModelSelection(btwComposerSessionId, model.providerId, model.modelId);
         selections.saveAgentModelForSession(btwComposerSessionId, agent, model.providerId, model.modelId);
         selections.saveAgentModelVariantForSession(btwComposerSessionId, agent, model.providerId, model.modelId, variant);
+        selections.saveAgentModelReasoningEffortForSession(btwComposerSessionId, agent, model.providerId, model.modelId, reasoningEffort);
     }, [btwComposerSessionId, effectiveBtwSelection, isBtwActive]);
     const isMobile = useUIStore((state) => state.isMobile);
     const hasHardwareKeyboard = useHardwareKeyboard();
@@ -1464,7 +1483,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                     providerID: queuedProviderId,
                     modelID: queuedModelId,
                     agent: expandedResource?.agentId ?? currentAgentName ?? undefined,
-                    variant: currentVariant ?? undefined,
+                    variant: expandedResource?.modelSelection ? undefined : currentVariant,
+                    reasoningEffort: expandedResource?.modelSelection ? undefined : currentReasoningEffort,
                 } : undefined,
             });
         } catch (error) {
@@ -1492,7 +1512,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             return;
         }
         recordLinkedReferences(queueSessionId, queueTarget.directory, linked);
-    }, [getCurrentInputSnapshot, getSubmitErrorMessage, currentSessionId, messageQueueTarget, inputMode, hasDrafts, guestCommands, attachedFiles, sanitizeAttachmentsForSend, prepareDocumentMentions, extractInlineFileMentions, runtimeFiles, agents, consumePendingSyntheticParts, mailboxTarget, inlineDraftTarget, consumeDrafts, linkedReferences, scrollToLatest, clearAttachedFiles, chatDraftIdentity, isMobile, isMobileCommentOpen, addToQueue, currentProviderId, currentModelId, currentAgentName, currentVariant, t]);
+    }, [getCurrentInputSnapshot, getSubmitErrorMessage, currentSessionId, messageQueueTarget, inputMode, hasDrafts, guestCommands, attachedFiles, sanitizeAttachmentsForSend, prepareDocumentMentions, extractInlineFileMentions, runtimeFiles, agents, consumePendingSyntheticParts, mailboxTarget, inlineDraftTarget, consumeDrafts, linkedReferences, scrollToLatest, clearAttachedFiles, chatDraftIdentity, isMobile, isMobileCommentOpen, addToQueue, currentProviderId, currentModelId, currentAgentName, currentVariant, currentReasoningEffort, t]);
 
     /** Put the context a queued message was captured with back on the composer chips. */
     const restoreQueuedContext = React.useCallback((context: readonly QueuedContextPart[]) => {
@@ -1726,6 +1746,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         const modelIdToSend = capturedSendConfig?.modelID ?? (isBtwActive ? effectiveBtwSelection.model?.modelId : currentModelId);
         const agentNameToSend = capturedSendConfig ? capturedSendConfig.agent : (isBtwActive ? effectiveBtwSelection.agent : currentAgentName);
         const variantToSend = capturedSendConfig ? capturedSendConfig.variant : (isBtwActive ? effectiveBtwSelection.variant : currentVariant);
+        const reasoningEffortToSend = capturedSendConfig ? capturedSendConfig.reasoningEffort : (isBtwActive ? effectiveBtwSelection.reasoningEffort : currentReasoningEffort);
 
         // The isolated space the message targets, if any: a session by its directory, a draft by
         // the creation request it still waits on or by its directory.
@@ -1830,6 +1851,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                         modelID: capturedSendConfig?.modelID ?? currentModelId,
                         agent: capturedSendConfig?.agent ?? currentAgentName,
                         variant: capturedSendConfig?.variant ?? currentVariant ?? undefined,
+                        reasoningEffort: reasoningEffortToSend,
                     }, {
                         fork: sessionActions.forkFromLastCompletedTurn,
                         directoryFor: (session) => useSessionUIStore.getState().getDirectoryForSession(session.sessionId) || currentDirectory || null,
@@ -1843,7 +1865,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                             undefined,
                             selection.variant,
                             'normal',
-                            target,
+                            { ...target, reasoningEffort: selection.reasoningEffort },
                         ),
                         draftIdentity: (directory, sessionId) => createChatDraftIdentity(getRuntimeKey(), directory, sessionId),
                         restoreText: (target, text) => useInputStore.setState({ pendingComposerRestore: { target, text, files: [] } }),
@@ -2073,7 +2095,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                         [...additionalParts, { text: instructionsText, synthetic: true }],
                         variantToSend,
                         inputMode,
-                        sendMessageOptions,
+                        { ...sendMessageOptions, reasoningEffort: reasoningEffortToSend },
                     );
                     scrollToBottom?.();
                 } catch (error) {
@@ -2153,6 +2175,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                     providerId: providerIdToSend,
                     modelId: modelIdToSend,
                     agentId: agentNameToSend,
+                    variant: variantToSend,
+                    reasoningEffort: reasoningEffortToSend,
                     fileResourcesExpanded: outgoing.primaryFileResourcesExpanded,
                     attachments: sendableAttachments,
                     additionalParts,
@@ -2198,7 +2222,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             additionalParts.length > 0 ? additionalParts : undefined,
             variantToSend,
             inputMode,
-            sendMessageOptions,
+            { ...sendMessageOptions, reasoningEffort: reasoningEffortToSend },
         );
         void sendPromise.then(() => {
             if (isBtwActive) return;

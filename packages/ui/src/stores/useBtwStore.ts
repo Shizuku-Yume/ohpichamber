@@ -7,6 +7,7 @@ export type BtwSelection = {
   agent: string | undefined;
   model: BtwModelSelection | null;
   variant: string | null | undefined;
+  reasoningEffort?: string;
 };
 
 /**
@@ -28,13 +29,15 @@ export const btwModelAvailability = (
   };
 };
 
-export const resolveBtwSelection = ({ agents, savedAgent, savedModel, savedVariant, composerModel, composerVariant, isModelAvailable }: {
+export const resolveBtwSelection = ({ agents, savedAgent, savedModel, savedVariant, savedReasoningEffort, composerModel, composerVariant, composerReasoningEffort, isModelAvailable }: {
   agents: readonly Pick<Agent, 'agentId' | 'name'>[];
   savedAgent: string | null;
   savedModel: BtwModelSelection | null;
   savedVariant?: string | null;
+  savedReasoningEffort?: string;
   composerModel: BtwModelSelection | null;
   composerVariant: string | null | undefined;
+  composerReasoningEffort?: string;
   /** Live-catalog check; when omitted the saved model wins, as before. */
   isModelAvailable?: (model: BtwModelSelection) => boolean;
 }): BtwSelection => {
@@ -50,6 +53,9 @@ export const resolveBtwSelection = ({ agents, savedAgent, savedModel, savedVaria
     agent: agent?.agentId,
     model: savedUsable ? savedModel : composerModel,
     variant: savedUsable ? savedVariant : composerVariant,
+    ...(savedUsable ? savedReasoningEffort : composerReasoningEffort) === undefined
+      ? {}
+      : { reasoningEffort: savedUsable ? savedReasoningEffort : composerReasoningEffort },
   };
 };
 

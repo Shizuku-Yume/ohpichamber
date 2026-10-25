@@ -187,8 +187,13 @@ function resolveModelSelection(registry: ModelRegistry, input: ModelSelection, c
     throw new ProjectionError(422, 'UNSUPPORTED_CAPABILITY', 'Selected model variant conflicts with the reasoning effort');
   }
   const requestedEffort = controls?.reasoningEffort ?? variant?.reasoningEffort ?? null;
-  const reasoningEffort = requestedEffort === null ? null : nativeModel.thinking?.efforts.find(effort => effort === requestedEffort);
-  if (requestedEffort !== null && (reasoningEffort === undefined || !projected.reasoningOptions.some(option => option.reasoningEffort === requestedEffort))) {
+  const reasoningEffort = requestedEffort === 'off' ? null
+    : requestedEffort === null ? null : nativeModel.thinking?.efforts.find(effort => effort === requestedEffort);
+  if (requestedEffort === 'off' && !projected.reasoningEffortSupported) {
+    throw new ProjectionError(422, 'UNSUPPORTED_CAPABILITY', 'Selected reasoning effort is unavailable');
+  }
+  if (requestedEffort !== null && requestedEffort !== 'off'
+    && (reasoningEffort === undefined || !projected.reasoningOptions.some(option => option.reasoningEffort === requestedEffort))) {
     throw new ProjectionError(422, 'UNSUPPORTED_CAPABILITY', 'Selected reasoning effort is unavailable');
   }
   if (variant) {

@@ -49,12 +49,13 @@ function completion(tool?: { name: string; input: JsonObject; id: string }): Res
   return new Response(`data: ${JSON.stringify(chunk)}\n\ndata: ${JSON.stringify(finish)}\n\ndata: [DONE]\n\n`, { headers: { 'content-type': 'text/event-stream' } });
 }
 
-async function fixture({ respond, invoke, machineCommands = [], onSubagent = () => {}, denyWebSearch = false }: {
+async function fixture({ respond, invoke, machineCommands = [], onSubagent = () => {}, denyWebSearch = false, supportsReasoning = false }: {
   respond: (payload: ProviderRequest, root: string) => Promise<Response> | Response;
   invoke?: (request: HostActionRequest, signal: AbortSignal, root: string) => Promise<JsonValue>;
   machineCommands?: string[];
   onSubagent?: (payload: SubagentLifecyclePayload) => void;
   denyWebSearch?: boolean;
+  supportsReasoning?: boolean;
 }) {
   const root = await mkdtemp(join(tmpdir(), 'native-seams-'));
   const home = process.env.HOME;
@@ -118,7 +119,9 @@ async function fixture({ respond, invoke, machineCommands = [], onSubagent = () 
     } } } });
     await worker.operation({ type: 'catalog', revision: '2', operation: { type: 'catalog.model.configure', request: { expectedRevision: '1', model: {
       modelId: 'native-model', provider: 'native-fixture', name: 'Native model', modalities: ['text'], contextWindow: 65536, maxOutputTokens: 128,
-      reasoningEffortSupported: false, reasoningOptions: [], variants: [], toolsSupported: true, enabled: true, pricing: null,
+      reasoningEffortSupported: supportsReasoning,
+      reasoningOptions: supportsReasoning ? [{ reasoningEffort: 'high', label: 'High', budgetTokens: null }] : [],
+      variants: [], toolsSupported: true, enabled: true, pricing: null,
     } } } });
     return { root: cwd, worker, events, requests, grants, hostRequests, interactions, journal, mcpConfigPath,
       waitApproval: () => {
@@ -200,6 +203,23 @@ test('profile tool allowlist does not block selected provider authorization', as
     await terminal.promise;
     expect(harness.requests).toHaveLength(1);
     expect(harness.events.some(input => input.event.type === 'run.completed')).toBe(true);
+  } finally { unsubscribe(); await harness.close(); }
+}, 30000);
+
+test('captured reasoning effort configures the native OMP session and provider request', async () => {
+  const harness = await fixture({ supportsReasoning: true, respond: () => completion() });
+  const terminal = Promise.withResolvers<void>();
+  const unsubscribe = harness.worker.session.subscribe(event => {
+    if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve();
+  });
+  try {
+    await harness.worker.operation({
+      type: 'prompt', runId: 'native-high-effort',
+      request: { ...prompt('Use high reasoning effort.'), options: { ...options, reasoningEffort: 'high' } },
+    });
+    await terminal.promise;
+    expect(harness.requests).toHaveLength(1);
+    expect(harness.requests[0]).toMatchObject({ reasoning_effort: 'high' });
   } finally { unsubscribe(); await harness.close(); }
 }, 30000);
 

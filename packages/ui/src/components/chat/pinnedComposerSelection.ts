@@ -9,10 +9,11 @@ import { useSession } from '@/sync/sync-context';
  * sessions intentionally do not carry the legacy agent/model selection fields,
  * so an absent saved pick remains absent rather than being inferred.
  */
-export const resolvePinnedComposerSelection = ({ savedAgent, savedModel, savedVariant }: {
+export const resolvePinnedComposerSelection = ({ savedAgent, savedModel, savedVariant, savedReasoningEffort }: {
     savedAgent: string | null;
     savedModel: { providerId: string; modelId: string } | null;
     savedVariant: string | null | undefined;
+    savedReasoningEffort?: string;
     record?: Session;
 }): BtwSelection => ({
     // Canonical sessions intentionally do not expose legacy agent/model
@@ -20,6 +21,7 @@ export const resolvePinnedComposerSelection = ({ savedAgent, savedModel, savedVa
     agent: savedAgent ?? undefined,
     model: savedModel,
     variant: savedVariant,
+    reasoningEffort: savedReasoningEffort,
 });
 
 /**
@@ -41,7 +43,10 @@ export const usePinnedComposerSelection = ({ enabled, sessionId, directory }: {
     const savedVariant = useSelectionStore((state) => (key && base.agent && base.model
         ? state.getAgentModelVariantForSession(key, base.agent, base.model.providerId, base.model.modelId)
         : undefined));
-    const { agent, model, variant } = resolvePinnedComposerSelection({ savedAgent, savedModel, savedVariant, record });
+    const savedReasoningEffort = useSelectionStore((state) => (key && base.agent && base.model
+        ? state.getAgentModelReasoningEffortForSession(key, base.agent, base.model.providerId, base.model.modelId)
+        : undefined));
+    const { agent, model, variant, reasoningEffort } = resolvePinnedComposerSelection({ savedAgent, savedModel, savedVariant, savedReasoningEffort, record });
     const providerId = model?.providerId;
     const modelId = model?.modelId;
     return React.useMemo(() => {
@@ -50,6 +55,7 @@ export const usePinnedComposerSelection = ({ enabled, sessionId, directory }: {
             agent,
             model: providerId && modelId ? { providerId, modelId } : null,
             variant,
+            reasoningEffort,
         };
-    }, [agent, key, modelId, providerId, variant]);
+    }, [agent, key, modelId, providerId, reasoningEffort, variant]);
 };

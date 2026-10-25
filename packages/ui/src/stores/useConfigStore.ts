@@ -993,6 +993,7 @@ subscribeRuntimeEndpointChanged((detail) => {
         currentAgentName: undefined,
         currentVariant: undefined,
         currentVariantSelection: { override: undefined, inherited: undefined },
+        currentReasoningEffort: undefined,
         selectedProviderId: '',
         agentModelSelections: {},
         defaultProviders: {},
@@ -1166,6 +1167,7 @@ interface ConfigStore {
     currentProviderId: string;
     currentModelId: string;
     currentVariant: string | undefined;
+    currentReasoningEffort: string | undefined;
     currentVariantSelection: CurrentVariantSelection;
     currentAgentName: string | undefined;
     selectedProviderId: string;
@@ -1272,6 +1274,7 @@ interface ConfigStore {
     setModel: (modelId: string) => void;
     setCurrentVariant: (variant: string | undefined) => void;
     setCurrentVariantOverride: (override: string | null | undefined, inherited: string | undefined) => void;
+    setCurrentReasoningEffort: (effort: string | undefined) => void;
     cycleCurrentVariant: () => string | undefined;
     getCurrentModelVariants: () => string[];
     /**
@@ -1421,6 +1424,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                 currentModelId: "",
                 currentVariant: undefined,
                 currentVariantSelection: { override: undefined, inherited: undefined },
+                currentReasoningEffort: undefined,
                 currentAgentName: undefined,
                 selectedProviderId: "",
                 agentModelSelections: {},
@@ -2238,6 +2242,9 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
 
                 setCurrentVariant: (variant: string | undefined) => {
                     get().setCurrentVariantOverride(undefined, variant);
+                },
+                setCurrentReasoningEffort: (effort) => {
+                    if (get().currentReasoningEffort !== effort) set({ currentReasoningEffort: effort });
                 },
 
                 setCurrentVariantOverride: (override, inherited) => {

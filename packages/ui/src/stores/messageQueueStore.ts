@@ -50,6 +50,7 @@ export interface QueuedMessageSendConfig {
     modelID: string;
     agent?: string;
     variant?: string;
+    reasoningEffort?: string;
 }
 
 /**
@@ -146,6 +147,7 @@ const serverSendConfigSchema = z.object({
     modelID: z.string().min(1),
     agent: z.string().optional(),
     variant: z.string().optional(),
+    reasoningEffort: z.string().optional(),
 });
 
 const serverAttachmentSchema = z.object({

@@ -90,7 +90,8 @@ describe('native btw fork and delivery', () => {
     const agent = spyOn(selection, 'saveSessionAgentSelection').mockImplementation(() => undefined);
     const agentModel = spyOn(selection, 'saveAgentModelForSession').mockImplementation(() => undefined);
     const variant = spyOn(selection, 'saveAgentModelVariantForSession').mockImplementation(() => undefined);
-    for (const mock of [ready, read, forkSession, history, patch, title, send, remove, model, agent, agentModel, variant]) restorers.push(() => mock.mockRestore());
+    const effort = spyOn(selection, 'saveAgentModelReasoningEffortForSession').mockImplementation(() => undefined);
+    for (const mock of [ready, read, forkSession, history, patch, title, send, remove, model, agent, agentModel, variant, effort]) restorers.push(() => mock.mockRestore());
     const requests: Request[] = [];
     const resolve = spyOn(canonicalClient, 'resolveWorkspace').mockResolvedValue({ projectId: 'project_parent', workspaceId: 'workspace_parent', name: 'repo' });
     const http = spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
@@ -106,7 +107,7 @@ describe('native btw fork and delivery', () => {
     const runtimeKey = getRuntimeKey();
     const result = startBtwSession({
       parentSessionId: parent.sessionId, directory: '/repo', expectedRuntimeKey: runtimeKey, question, fileResourcesExpanded: mode === 'queued',
-      providerId: 'provider_captured', modelId: 'model_captured', agentId: 'agent_captured', variant: 'variant_captured',
+      providerId: 'provider_captured', modelId: 'model_captured', agentId: 'agent_captured', variant: 'variant_captured', reasoningEffort: 'high',
       additionalParts: [{ text: 'Requested context' }],
     });
     if (mode === 'failure' || mode === 'stale') {
@@ -124,7 +125,7 @@ describe('native btw fork and delivery', () => {
     expect(agent).toHaveBeenCalledWith(fork.sessionId, expanded ? 'bound-agent' : 'agent_captured');
     expect(send).toHaveBeenCalledWith({ sessionId: fork.sessionId, runtimeKey, request: {
       input: { text: expanded ? '/expanded body\n' : question, attachments: [], context: [{ kind: 'synthetic', text: BTW_BOUNDARY_INSTRUCTION }, { kind: 'instruction', text: 'Requested context' }] },
-      options: { providerId: expanded ? 'bound' : 'provider_captured', modelId: expanded ? 'bound-model' : 'model_captured', agentId: expanded ? 'bound-agent' : 'agent_captured', variant: 'variant_captured', reasoningEffort: null },
+      options: { providerId: expanded ? 'bound' : 'provider_captured', modelId: expanded ? 'bound-model' : 'model_captured', agentId: expanded ? 'bound-agent' : 'agent_captured', variant: 'variant_captured', reasoningEffort: 'high' },
     } });
     expect(metadata.get(fork.sessionId)?.openchamber?.btwBoundaryMessageID).toBe('assistant_completed');
     expect(metadata.get(parent.sessionId)?.openchamber?.btwSessionID).toBe(fails ? undefined : fork.sessionId);

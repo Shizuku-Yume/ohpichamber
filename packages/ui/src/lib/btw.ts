@@ -25,6 +25,7 @@ export type StartBtwInput = {
   modelId: string;
   agentId?: string;
   variant?: string | null;
+  reasoningEffort?: string | null;
   permissionMode?: PermissionMode;
   attachments?: AttachedFile[];
   additionalParts?: Array<{ text: string; attachments?: AttachedFile[]; synthetic?: boolean; metadata?: ContextPartMetadata }>;
@@ -120,8 +121,8 @@ export async function startBtwSession(input: StartBtwInput): Promise<Session> {
       selections.saveSessionModelSelection(forked.sessionId, model.providerId, model.modelId);
       if (agentId) {
         selections.saveSessionAgentSelection(forked.sessionId, agentId);
-        selections.saveAgentModelForSession(forked.sessionId, agentId, model.providerId, model.modelId);
         selections.saveAgentModelVariantForSession(forked.sessionId, agentId, model.providerId, model.modelId, input.variant);
+        selections.saveAgentModelReasoningEffortForSession(forked.sessionId, agentId, model.providerId, model.modelId, input.reasoningEffort ?? undefined);
       }
       if (input.permissionMode !== undefined) {
         await usePermissionStore.getState().setSessionMode(forked.sessionId, input.permissionMode);
@@ -144,7 +145,7 @@ export async function startBtwSession(input: StartBtwInput): Promise<Session> {
         if (resolveWorkspaceDirectory(parent.session.workspaceId) !== directoryOwner) throw new Error('btw session directory changed');
         await sessionActions.sendMessage({
           sessionId: forked.sessionId,
-          request: { input: { text: expanded?.content ?? input.question, attachments: nativeAttachments(input.attachments), context: contexts }, options: { ...model, agentId: agentId ?? null, variant: input.variant ?? null, reasoningEffort: null } },
+          request: { input: { text: expanded?.content ?? input.question, attachments: nativeAttachments(input.attachments), context: contexts }, options: { ...model, agentId: agentId ?? null, variant: input.variant ?? null, reasoningEffort: input.reasoningEffort ?? null } },
           runtimeKey: expectedRuntimeKey,
         });
       } catch (error) {

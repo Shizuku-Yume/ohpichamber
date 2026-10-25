@@ -118,6 +118,21 @@ test('provider protocol changes reach the actual native model selected by a long
   } finally { await fixture.close(); }
 });
 
+test('native model selection accepts the explicit off reasoning level', async () => {
+  const fixture = await openCatalogFixture();
+  const reasoningModel = { ...configuredModel, reasoningEffortSupported: true,
+    reasoningOptions: [{ reasoningEffort: 'high', label: 'High', budgetTokens: null }] };
+  try {
+    await fixture.writer.models.configureProvider({ expectedRevision: '0', configuration }, '1');
+    await fixture.writer.models.configureModel({ expectedRevision: '1', model: reasoningModel }, '2');
+    const selected = await fixture.reader.models.selection(
+      { providerId: reasoningModel.provider, modelId: reasoningModel.modelId },
+      { variant: null, reasoningEffort: 'off' },
+    );
+    expect(selected.reasoningEffort).toBeNull();
+  } finally { await fixture.close(); }
+});
+
 test('protocol mutation migrates old generated APIs while preserving distinguishable native overrides', async () => {
   const fixture = await openCatalogFixture();
   try {

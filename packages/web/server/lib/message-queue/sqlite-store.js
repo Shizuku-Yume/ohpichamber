@@ -21,7 +21,7 @@ const LegacyAttachmentSchema = z.object({ id: z.string().min(1), filename: z.str
 const LegacyItemSchema = z.object({
   id: EntityIdSchema, createdAt: z.number().int().nonnegative(), content: z.string(), text: z.string().optional(),
   contextPreview: z.string().optional(), attachments: z.array(LegacyAttachmentSchema), context: z.array(PromptContextSchema),
-  agentMention: z.string().optional(), sendConfig: z.object({ providerID: z.string().min(1).optional(), modelID: z.string().min(1).optional(), agent: z.string().min(1).optional(), variant: z.string().min(1).optional() }),
+  agentMention: z.string().optional(), sendConfig: z.object({ providerID: z.string().min(1).optional(), modelID: z.string().min(1).optional(), agent: z.string().min(1).optional(), variant: z.string().min(1).optional(), reasoningEffort: z.string().min(1).optional() }),
   scheduledTask: z.object({ projectId: z.string().min(1), taskId: z.string().min(1) }).optional(),
 }).refine((item) => item.scheduledTask !== undefined || (item.sendConfig.providerID !== undefined && item.sendConfig.modelID !== undefined), 'Legacy queued prompts capture their provider and model');
 const LegacyScheduledResolutionSchema = z.strictObject({ options: CapturedSendOptionsSchema, context: z.array(PromptContextSchema).optional() });
@@ -354,7 +354,7 @@ export function createPromptQueueStore({ dataDir, database, closeDatabase = data
               modelId: item.sendConfig.modelID ?? null,
               agentId: item.sendConfig.agent ?? null,
               variant: item.sendConfig.variant ?? null,
-              reasoningEffort: null,
+              reasoningEffort: item.sendConfig.reasoningEffort ?? null,
             });
             let context = item.context;
             if (item.scheduledTask) {

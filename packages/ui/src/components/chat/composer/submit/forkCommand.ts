@@ -16,6 +16,7 @@ export interface ForkSendSelection {
     modelID: string;
     agent?: string;
     variant?: string;
+    reasoningEffort?: string;
 }
 
 export interface ForkCommandDeps {

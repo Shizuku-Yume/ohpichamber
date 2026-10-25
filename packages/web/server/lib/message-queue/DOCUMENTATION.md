@@ -85,7 +85,7 @@ send never re-resolves mutable UI state:
     { kind: 'instruction', text },                       // derived from the text (skill instruction)
     { kind: 'synthetic', text },                         // handed to the composer by another surface
   ],
-  sendConfig: { providerID, modelID, agent?, variant? }   // required
+  sendConfig: { providerID, modelID, agent?, variant?, reasoningEffort? } // required; captured at queue time
 }
 ```
 

@@ -205,6 +205,22 @@ test('worker-originated runs cancel through the normal abort operation', async (
   } finally { await harness.close(); }
 }, 30000);
 
+test('native builtin command returns context output without starting a provider run', async () => {
+  const harness = await fixture({ respond: () => completion() });
+  try {
+    const result = await harness.worker.operation({ type: 'command', text: '/context' });
+    expect(result.type).toBe('command');
+    if (result.type !== 'command') throw new Error('Expected command output');
+    expect(result.output).toContain('Context');
+    expect(result.output.length).toBeGreaterThan(0);
+    await expect(harness.worker.operation({ type: 'command', text: '/ssh' })).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+    expect(harness.requests).toHaveLength(0);
+    expect(harness.events.filter(input => input.event.type === 'run.started')).toHaveLength(0);
+    expect(harness.journal.runtime().activeRunId).toBeNull();
+    expect(harness.fatal()).toBe(false);
+  } finally { await harness.close(); }
+}, 30000);
+
 test('profile tool allowlist does not block selected provider authorization', async () => {
   const harness = await fixture({ respond: () => completion() });
   const terminal = Promise.withResolvers<void>();

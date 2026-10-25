@@ -107,7 +107,7 @@ import { routeGuestSlashCommand } from './composer/submit/guestCommands';
 import { pluginModeFromId } from '@/lib/surfaces/modes';
 import { expandCanonicalSkills } from '@/sync/session-ui-store';
 import { selectSkillsForDirectory, useSkillsStore } from '@/stores/useSkillsStore';
-import { selectCommandsForDirectory, useCommandsStore } from '@/stores/useCommandsStore';
+import { selectBuiltinCommandsForDirectory, selectCommandsForDirectory, useCommandsStore } from '@/stores/useCommandsStore';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useGitStore } from '@/stores/useGitStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -828,17 +828,21 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     // Known slash-invocations (commands + built-ins) and `$` skills, used to
     // highlight matching tokens in the composer, the same way confirmed
     // @files are.
+    const builtinCommandNames = useCommandsStore((s) => selectBuiltinCommandsForDirectory(s, currentDirectory));
     const availableCommands = useCommandsStore((s) => selectCommandsForDirectory(s, currentDirectory));
+    const loadCommands = useCommandsStore((s) => s.loadCommands);
+    React.useEffect(() => { void loadCommands(currentDirectory); }, [currentDirectory, loadCommands]);
     const availableSkills = useSkillsStore((s) => selectSkillsForDirectory(s, currentDirectory));
     const availableSnippets = useSnippetsStore(state => selectSnippetsForDirectory(state, currentDirectory));
     const knownSlashNames = React.useMemo(() => {
         const names = new Set<string>([
+            ...builtinCommandNames,
             'init', 'review', 'undo', 'redo', 'timeline', 'compact', 'fork', 'btw', 'summary', 'workspace-review', 'plan-feature', 'craft-goal', 'schedule-task', 'catch-up', 'debug', 'weigh', 'explore',
         ]);
         if (!isMobile) names.add('handoff-review');
         for (const command of availableCommands) names.add(command.name.toLowerCase());
         return names;
-    }, [availableCommands, isMobile]);
+    }, [availableCommands, builtinCommandNames, isMobile]);
     const knownSkillNames = React.useMemo(
         () => new Set(availableSkills.map((skill) => skill.name.toLowerCase())),
         [availableSkills],
@@ -1328,15 +1332,23 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         if (isMobileCommentOpen()) return;
         const inputSnapshot = getCurrentInputSnapshot();
         if (!inputSnapshot.hasContent || !currentSessionId || !messageQueueTarget) return;
+        const queueRuntimeKey = getRuntimeKey();
+        if (inputMode === 'normal' && inputSnapshot.message.trimStart().startsWith('/')
+            && !planLocalSlashCommand(inputSnapshot.message, inputMode, hasDrafts, true, [])) {
+            if (!await loadCommands(currentDirectory)) {
+                toast.error(t('chat.chatInput.toast.messageSendFailed'));
+                return;
+            }
+            if (queueRuntimeKey !== getRuntimeKey()) return;
+        }
 
         // A local or extension command is run, not queued: the queue delivers
         // text to the model, and `/compact`, `/btw`, or `/task` mean nothing there.
-        if (planLocalSlashCommand(inputSnapshot.message, inputMode, hasDrafts, true)
+        if (planLocalSlashCommand(inputSnapshot.message, inputMode, hasDrafts, true, selectBuiltinCommandsForDirectory(useCommandsStore.getState(), currentDirectory))
             || routeGuestSlashCommand(inputSnapshot.message, inputMode, guestCommands)) {
             void handleSubmitRef.current();
             return;
         }
-        const queueRuntimeKey = getRuntimeKey();
         const queueTarget = messageQueueTarget;
         const queueSessionId = currentSessionId;
         const messageToQueue = inputSnapshot.message.replace(/^\n+|\n+$/g, '');
@@ -1470,7 +1482,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             return;
         }
         recordLinkedReferences(queueSessionId, queueTarget.directory, linked);
-    }, [getCurrentInputSnapshot, getSubmitErrorMessage, currentSessionId, messageQueueTarget, inputMode, hasDrafts, guestCommands, attachedFiles, sanitizeAttachmentsForSend, prepareDocumentMentions, extractInlineFileMentions, runtimeFiles, agents, consumePendingSyntheticParts, mailboxTarget, inlineDraftTarget, consumeDrafts, linkedReferences, scrollToLatest, clearAttachedFiles, chatDraftIdentity, isMobile, isMobileCommentOpen, addToQueue, currentProviderId, currentModelId, currentVariant, t]);
+    }, [getCurrentInputSnapshot, getSubmitErrorMessage, currentSessionId, currentDirectory, messageQueueTarget, inputMode, hasDrafts, loadCommands, guestCommands, attachedFiles, sanitizeAttachmentsForSend, prepareDocumentMentions, extractInlineFileMentions, runtimeFiles, agents, consumePendingSyntheticParts, mailboxTarget, inlineDraftTarget, consumeDrafts, linkedReferences, scrollToLatest, clearAttachedFiles, chatDraftIdentity, isMobile, isMobileCommentOpen, addToQueue, currentProviderId, currentModelId, currentVariant, t]);
 
     /** Put the context a queued message was captured with back on the composer chips. */
     const restoreQueuedContext = React.useCallback((context: readonly QueuedContextPart[]) => {
@@ -1605,13 +1617,22 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             return;
         }
 
+        if (!queuedOnly && inputMode === 'normal' && inputSnapshot.message.trimStart().startsWith('/')
+            && !planLocalSlashCommand(inputSnapshot.message, inputMode, hasDrafts, Boolean(currentSessionId), [])) {
+            if (!await loadCommands(currentDirectory)) {
+                toast.error(t('chat.chatInput.toast.messageSendFailed'));
+                return;
+            }
+            if (submitRuntimeKey !== getRuntimeKey()) return;
+        }
+
         // Local slash commands are planned before anything is taken or
         // consumed. An action command must leave the queue and the attached
         // context where they are; a prompt command must send that context with
         // the prompt it produces. A command the composer cannot run here is not
         // a local command at all and goes out as typed.
         let commandPlan = !queuedOnly && inputSnapshot.hasContent
-            ? planLocalSlashCommand(inputSnapshot.message, inputMode, hasDrafts, Boolean(currentSessionId))
+            ? planLocalSlashCommand(inputSnapshot.message, inputMode, hasDrafts, Boolean(currentSessionId), selectBuiltinCommandsForDirectory(useCommandsStore.getState(), currentDirectory))
             : null;
         if (commandPlan?.kind === 'prompt') {
             const magicCommand = findMagicPromptCommand(commandPlan.command.name);
@@ -1778,7 +1799,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         // Action commands change session or UI state and send nothing. The
         // command text goes; the queue and whatever the composer had attached
         // stay exactly where they are.
-        if (commandPlan?.kind === 'action' && currentSessionId) {
+        if ((commandPlan?.kind === 'builtin' || commandPlan?.kind === 'action') && currentSessionId) {
             const actionName = commandPlan.command.name;
             setMessage('');
             confirmedMentionsRef.current.clear();
@@ -1787,7 +1808,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             if (!isBtwActive) setExpandedInput(false);
             if (isMobile) composerRef.current?.blur();
             try {
-                if (actionName === 'undo') {
+                if (commandPlan.kind === 'builtin') {
+                    const output = await sessionActions.runBuiltinCommand(currentSessionId, inputSnapshot.message);
+                    if (output) toast.info(output);
+                } else if (actionName === 'undo') {
                     await useSessionUIStore.getState().handleSlashUndo(currentSessionId);
                     scrollToBottom?.();
                 } else if (actionName === 'redo') {
@@ -1834,6 +1858,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                     toast.error(error instanceof sessionActions.NothingToForkError
                         ? t('chat.chatInput.toast.forkNothingToFork')
                         : getSubmitErrorMessage(error, t('chat.chatInput.toast.forkFailed')));
+                    return;
+                }
+                if (commandPlan.kind === 'builtin') {
+                    toast.error(getSubmitErrorMessage(error, t('chat.chatInput.toast.messageSendFailed')));
                     return;
                 }
                 if (actionName !== 'compact') throw error;

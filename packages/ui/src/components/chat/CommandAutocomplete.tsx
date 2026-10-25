@@ -132,10 +132,11 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
 
   const reservedCommandNames = React.useMemo(() => {
     const names = new Set<string>(LOCAL_COMMAND_NAMES);
+    for (const name of builtinCommandNames) names.add(name);
     for (const command of commandsWithMetadata) names.add(command.name.toLowerCase());
     for (const template of templates) names.add(template.name.toLowerCase());
     return names;
-  }, [commandsWithMetadata, templates]);
+  }, [builtinCommandNames, commandsWithMetadata, templates]);
   const guestCommands = useGuestCommands(reservedCommandNames);
 
   // The list depends on the registries, not on what is typed: it is built
@@ -145,7 +146,6 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
       id: cmd.commandId, name: cmd.name, source: 'native', description: cmd.description,
       agentId: cmd.agentId, modelSelection: cmd.modelSelection,
       scope: cmd.scope, resourceSource: cmd.source, group: cmd.group, argumentHint: cmd.argumentHint,
-      isBuiltIn: builtinCommandNames.includes(cmd.name),
     }));
     const commandNames = new Set(customCommands.map(command => command.name));
     for (const template of templates) {
@@ -157,6 +157,9 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
     }
 
     const builtInCommands: CommandInfo[] = [
+      ...(hasSession ? builtinCommandNames.map((name): CommandInfo => ({
+        id: `builtin:${name}`, name, source: 'native', isBuiltIn: true,
+      })) : []),
       ...(hasSession
         ? [{ id: 'openchamber:init', name: 'init', source: 'openchamber' as const, description: t('chat.commandAutocomplete.command.initDescription'), isBuiltIn: true }]
         : []

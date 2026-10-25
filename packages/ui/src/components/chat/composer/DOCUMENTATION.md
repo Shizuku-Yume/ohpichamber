@@ -248,6 +248,14 @@ and the send path reading the same grammar.
   shows an error toast. Queueing runs it instead of queueing, like a local
   command. `CommandAutocomplete` lists the same entries with the extension's
   name as their badge, and the language highlights them as known `/tokens`.
+- OMP slash builtins come only from the workspace command catalog's
+  `builtinCommands`. The composer loads that catalog for typed commands as well
+  as the palette, which synthesizes builtin rows independently of disk templates.
+  Send and queue planning preserve builtin identity; dispatch uses the session
+  `command` control and displays returned output as a notice, without consuming
+  attached context or submitting a prompt. Local actions keep precedence:
+  `/compact` uses the dedicated compact control and compaction projection.
+  File commands and prompt templates keep their native expansion path.
 - Local slash commands are planned by `submit/slashCommands.ts` before any
   attached context is consumed. Commands that act on session or UI state
   (`/undo`, `/redo`, `/compact`, `/timeline`, `/handoff-review`) take only

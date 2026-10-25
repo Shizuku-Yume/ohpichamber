@@ -5,6 +5,7 @@ import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { Window } from 'happy-dom';
 import type { RuntimeAPIs } from '@/lib/api/types';
+import type { ReactNode } from 'react';
 
 /**
  * Counts which components render per keystroke without instrumenting them.
@@ -287,4 +288,78 @@ test('typing in an existing session re-renders only the composer shell and its e
 
 test('typing in a new-session draft re-renders only the composer shell and its editor', async () => {
   expectOnlyTheEditorFollowsTheText(await measureTyping('draft'));
+});
+
+test('worker catalog builtins appear without disk templates and context output is a notice', async () => {
+  // These imports must follow the DOM and Vite-module bootstrap above, just
+  // like ChatInput: static loading initializes browser-only dependencies too early.
+  const { CommandAutocomplete } = await import('../CommandAutocomplete');
+  const { useCommandsStore } = await import('@/stores/useCommandsStore');
+  const { canonicalClient } = await import('@/api/canonicalClient');
+  const { toast } = await import('@/components/ui');
+  const { useAuthSessionStore } = await import('@/lib/runtime-auth-expiry');
+  const { useConfigStore } = await import('@/stores/useConfigStore');
+  const { useSnippetsStore } = await import('@/stores/useSnippetsStore');
+  const builtinCommands = ['compact', 'shake', 'todo', 'jobs', 'usage', 'context', 'tools'];
+  useDirectoryStore.setState({ currentDirectory: '/workspace' });
+  useSessionUIStore.setState({ currentSessionId: 'ses_slash', currentSessionDirectory: '/workspace', newSessionDraft: { ...useSessionUIStore.getState().newSessionDraft, open: false } });
+  useCommandsStore.setState({ catalogsByDirectory: { '/workspace': { workspaceId: 'workspace', revision: '1', commands: [], builtinCommands } }, commandsByDirectory: { '/workspace': [] } });
+  useSnippetsStore.setState({ catalogsByDirectory: new Map([['/workspace', { workspaceId: 'workspace', revision: '1', templates: [{ templateId: 'template-deploy', name: 'deploy', description: 'Deploy application', content: 'Deploy $1', scope: 'workspace', source: '(project)', editable: true }] }]]) });
+  const loadTemplates = spyOn(useSnippetsStore.getState(), 'loadSnippets').mockResolvedValue(true);
+  const load = spyOn(useCommandsStore.getState(), 'loadCommands').mockResolvedValue(true);
+  const run = spyOn(canonicalClient, 'runBuiltinCommand').mockResolvedValue({ type: 'command', output: 'Context window: 65536 tokens' });
+  const compact = spyOn(canonicalClient, 'compactSession').mockResolvedValue({ type: 'compact', compactionId: 'compact-proof', tokensBefore: 1, completedAt: 1 });
+  const notice = spyOn(toast, 'info').mockImplementation(() => 'notice');
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  const wrap = (content: ReactNode) => <RuntimeAPIContext.Provider value={runtimeAPIs}><ThemeSystemProvider><I18nProvider><SyncProvider directory="/workspace">{content}</SyncProvider></I18nProvider></ThemeSystemProvider></RuntimeAPIContext.Provider>;
+  try {
+    await act(async () => root.render(wrap(<CommandAutocomplete searchQuery="" onCommandSelect={() => {}} onClose={() => {}} />)));
+    const names = [...container.querySelectorAll('.typography-ui-label.font-medium')].map(item => item.textContent?.slice(1));
+    expect(names.filter(name => builtinCommands.includes(name ?? ''))).toEqual([...builtinCommands].sort());
+    expect(names).not.toContain('ssh');
+    expect(names).toContain('deploy');
+    useAuthSessionStore.setState({ state: 'ok' });
+    useConfigStore.setState({ currentProviderId: 'fixture', currentModelId: 'fixture-model' });
+    await act(async () => root.render(wrap(<ChatInput />)));
+    const content = container.querySelector<HTMLElement>('.cm-content');
+    const view = content ? EditorView.findFromDOM(content) : null;
+    if (!view) throw new Error('Expected composer editor');
+    const catalogReady = Promise.withResolvers<boolean>();
+    load.mockImplementation(() => catalogReady.promise);
+    await act(async () => useCommandsStore.setState({ catalogsByDirectory: {} }));
+    await act(async () => view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: '/context' }, userEvent: 'input.type' }));
+    const form = container.querySelector('form');
+    if (!form) throw new Error('Expected composer form');
+    await act(async () => {
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      const settled = Promise.withResolvers<void>();
+      setTimeout(settled.resolve, 50);
+      await settled.promise;
+    });
+    expect(run).not.toHaveBeenCalled();
+    await act(async () => {
+      useCommandsStore.setState({ catalogsByDirectory: { '/workspace': { workspaceId: 'workspace', revision: '1', commands: [], builtinCommands } } });
+      catalogReady.resolve(true);
+      const settled = Promise.withResolvers<void>();
+      setTimeout(settled.resolve, 50);
+      await settled.promise;
+    });
+    expect(run).toHaveBeenCalledWith('ses_slash', '/context');
+    expect(notice).toHaveBeenCalledWith('Context window: 65536 tokens');
+    await act(async () => view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: '/compact focus' }, userEvent: 'input.type' }));
+    await act(async () => {
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      const settled = Promise.withResolvers<void>();
+      setTimeout(settled.resolve, 50);
+      await settled.promise;
+    });
+    expect(compact).toHaveBeenCalledWith('ses_slash', 'focus');
+    expect(run).toHaveBeenCalledTimes(1);
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+    load.mockRestore(); loadTemplates.mockRestore(); run.mockRestore(); compact.mockRestore(); notice.mockRestore();
+  }
 });

@@ -7,9 +7,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import { z } from 'zod';
-import { SessionSnapshotSchema } from '@openchamber/agent-contract';
+import { RuntimeSessionSchema, SessionSnapshotSchema } from '@openchamber/agent-contract';
 import { AgentService } from '../supervisor/service.ts';
-
 const ListeningPortSchema = z.object({ port: z.number().int().positive() });
 
 test('a cold deleted-space snapshot cursor is accepted by the session stream', async () => {
@@ -79,12 +78,13 @@ test('a cold deleted-space snapshot cursor is accepted by the session stream', a
 
     const runtimeResponse = await fetch(`http://127.0.0.1:${port}/api/agent/v1/sessions/${rootSessionId}`, { headers });
     expect(runtimeResponse.status).toBe(200);
-    const runtime = SessionSnapshotSchema.shape.session.parse(await runtimeResponse.json());
+    const runtime = RuntimeSessionSchema.parse(await runtimeResponse.json());
     expect(runtime.epoch).toBe(snapshot.session.epoch);
     expect(runtime.headSequence).toBe(snapshot.session.headSequence);
+    expect(snapshot.session.headSequence).toBe('0');
 
     const controller = new AbortController();
-    const streamResponse = await fetch(`http://127.0.0.1:${port}/api/agent/v1/sessions/${rootSessionId}/events?cursor=${encodeURIComponent(`${snapshot.session.epoch}:0`)}`,
+    const streamResponse = await fetch(`http://127.0.0.1:${port}/api/agent/v1/sessions/${rootSessionId}/events?cursor=${encodeURIComponent(snapshot.cursor)}`,
       { headers: { ...headers, accept: 'text/event-stream' }, signal: controller.signal });
     expect(streamResponse.status).toBe(200);
     expect(streamResponse.headers.get('content-type')).toBe('text/event-stream');

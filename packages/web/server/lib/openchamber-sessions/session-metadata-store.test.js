@@ -165,8 +165,7 @@ describe('Host metadata conversion and admission boundaries', () => {
       knowledge_context_delivered: ['k'], context_obligatory_last_compaction_message_id: 'm',
       project_context_pins: ['p'], context_obligatory_messages: ['c'], linked_issues: [{ id: 'i' }],
       work: { id: 'w', sourceSessionID: 'parent' }, reviewOffer: { offered: true },
-      btwSessionID: 'btw', reviewSessionID: 'review', kind: 'btw', originalSessionID: 'original',
-      btwBoundaryMessageID: 'boundary', multirun: { groupId: 'multi' },
+      reviewSessionID: 'review', kind: 'review', originalSessionID: 'original',
     };
     await expect(store.importOperationalSessions([{ id: 'a', title: 'Custom', directory: '/workspace',
       metadata: { openchamber: { ...operational, transcript: 'must not copy' }, notes: 'note', messages: ['never'] },

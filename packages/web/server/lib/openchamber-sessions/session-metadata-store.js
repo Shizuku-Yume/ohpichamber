@@ -35,7 +35,7 @@ const writeFailure = (error) => error instanceof MetadataCorruptError || error i
 const OPENCHAMBER_KEYS = new Set([
   'goal', 'assist', 'knowledge_context_delivered', 'context_obligatory_last_compaction_message_id',
   'project_context_pins', 'context_obligatory_messages', 'linked_issues', 'work', 'reviewOffer',
-  'btwSessionID', 'reviewSessionID', 'kind', 'originalSessionID', 'btwBoundaryMessageID', 'multirun',
+  'reviewSessionID', 'kind', 'originalSessionID', 'multirun',
 ]);
 
 /** Sole durable authority for operational metadata; never reads an execution endpoint. */

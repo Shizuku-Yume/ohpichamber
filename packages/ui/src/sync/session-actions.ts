@@ -20,7 +20,6 @@ import {
   type SessionMetadataRecord,
 } from "@/lib/sessionReviewMetadata"
 import { withContextObligatoryMessage, type ContextObligatoryMessage } from "@/lib/contextObligatoryMessages"
-import { withoutBtwSessionLink } from "@/lib/sessionBtwMetadata"
 import { withLinkedIssue, type LinkedIssue } from "@/lib/linkedIssues"
 import { withSessionWorkState, type SessionWork } from "@/lib/sessionWorkMetadata"
 import { getImperativeSessionMessageLoader } from "./session-message-loader"
@@ -918,25 +917,6 @@ async function cleanupReviewMetadataBeforeDelete(
     return
   }
 
-  if (metadata?.openchamber?.kind === "btw") {
-    const originalSessionID = metadata.openchamber.originalSessionID
-    if (originalSessionID) await unlinkParent(originalSessionID, (current) => withoutBtwSessionLink(current, sessionId))
-    return
-  }
-
-  // Deleting or archiving a session that has an active btw fork also removes
-  // the fork: it is a temporary session that only exists for its parent's
-  // panel. Best-effort — a failed fork delete must not block the parent's
-  // operation; the orphaned fork stays visible in the sidebar.
-  const btwSessionID = metadata?.openchamber?.btwSessionID
-  if (btwSessionID) {
-    try {
-      if (isStaleRuntime(expectedRuntimeKey)) return
-      await deleteSession(btwSessionID, { expectedRuntimeKey })
-    } catch (error) {
-      console.warn("[session-actions] failed to delete btw fork before parent delete", error)
-    }
-  }
 }
 
 /** Remove a server-confirmed session from every live child store that has it. */
@@ -1365,7 +1345,7 @@ export async function archiveSessions(
  */
 function hasLinkedSessionCleanup(session: CanonicalSession): boolean {
   const links = session.metadata?.openchamber
-  return links?.kind === "review" || links?.kind === "btw" || Boolean(links?.btwSessionID)
+  return links?.kind === "review"
 }
 
 /**

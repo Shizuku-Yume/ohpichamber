@@ -64,8 +64,7 @@ const operationalSchema = z.strictObject({
   knowledge_context_delivered: z.string().optional(), context_obligatory_last_compaction_message_id: EntityIdSchema.optional(),
   project_context_pins: pinsSchema.optional(), context_obligatory_messages: z.array(contextMessageSchema).optional(),
   linked_issues: z.array(linkedIssueSchema).optional(), work: workSchema.optional(), reviewOffer: reviewOfferSchema.optional(),
-  btwSessionID: EntityIdSchema.optional(), reviewSessionID: EntityIdSchema.optional(), btwPromoted: z.boolean().optional(), kind: z.enum(['btw', 'review']).optional(),
-  originalSessionID: EntityIdSchema.optional(), btwBoundaryMessageID: EntityIdSchema.optional(), multirun: multirunSchema.optional(),
+  reviewSessionID: EntityIdSchema.optional(), kind: z.literal('review').optional(), originalSessionID: EntityIdSchema.optional(), multirun: multirunSchema.optional(),
 });
 export const SessionMetadataSchema = z.strictObject({
   title: z.string().optional(), folder: z.string().optional(), isPinned: z.boolean().optional(),
@@ -106,10 +105,8 @@ export const SessionMetadataPatchSchema = z.strictObject({ changes: z.strictObje
       state: workFields.state.nullable(), openedAt: workFields.openedAt.nullable(), openedBy: workFields.openedBy.nullable(),
     }).nullable().optional(),
     reviewOffer: z.strictObject({ at: reviewOfferFields.at.nullable().optional() }).nullable().optional(),
-    btwSessionID: EntityIdSchema.nullable().optional(),
-    reviewSessionID: EntityIdSchema.nullable().optional(), btwPromoted: z.boolean().nullable().optional(), kind: z.enum(['btw', 'review']).nullable().optional(),
-    originalSessionID: EntityIdSchema.nullable().optional(), btwBoundaryMessageID: EntityIdSchema.nullable().optional(),
-    multirun: multirunSchema.nullable().optional(),
+    reviewSessionID: EntityIdSchema.nullable().optional(), kind: z.literal('review').nullable().optional(),
+    originalSessionID: EntityIdSchema.nullable().optional(), multirun: multirunSchema.nullable().optional(),
   }).nullable().optional(),
 }) });
 export type SessionMetadataPatch = z.infer<typeof SessionMetadataPatchSchema>;

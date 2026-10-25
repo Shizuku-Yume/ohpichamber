@@ -40,18 +40,11 @@ describe('withoutSourceOwnedLinks', () => {
     expect(result).toEqual({ openchamber: { goal: { ...goal(false), status: 'paused', statusReason: 'paused in fork' } } });
   });
 
-  test('keeps the goal and drops the source btw and review links', () => {
+  test('keeps the goal and drops the source review link', () => {
     const metadata: SessionMetadata = {
-      openchamber: { goal: goal(false), btwSessionID: 'ses_btw', reviewSessionID: 'ses_review' },
+      openchamber: { goal: goal(false), reviewSessionID: 'ses_review' },
     };
     expect(withoutSourceOwnedLinks(metadata)).toEqual({ openchamber: { goal: goal(false) } });
-  });
-
-  test('drops the btw marker when the source is a btw thread', () => {
-    const metadata: SessionMetadata = {
-      openchamber: { kind: 'btw', originalSessionID: 'ses_parent', btwBoundaryMessageID: 'msg_1' },
-    };
-    expect(withoutSourceOwnedLinks(metadata)).toEqual({});
   });
 
   test('keeps a review marker and returns the same object when nothing changes', () => {
@@ -92,7 +85,7 @@ describe('applyForkInheritance', () => {
   });
 
   test('inlines the objective when the file write fails', async () => {
-    const fork = forkWith({ openchamber: { goal: goal(true), btwSessionID: 'ses_btw' } });
+    const fork = forkWith({ openchamber: { goal: goal(true) } });
     const h = harness(fork, { writeObjective: async () => false });
     await applyForkInheritance('ses_source', fork, h.deps);
     expect(h.patches).toEqual([{
@@ -101,7 +94,7 @@ describe('applyForkInheritance', () => {
   });
 
   test('a failed copy or patch never throws', async () => {
-    const fork = forkWith({ openchamber: { goal: goal(true), btwSessionID: 'ses_btw' } });
+    const fork = forkWith({ openchamber: { goal: goal(true) } });
     const h = harness(fork, {
       readObjective: async () => { throw new Error('offline'); },
       patchMetadata: async () => { throw new Error('offline'); },

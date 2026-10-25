@@ -1,8 +1,14 @@
 import React from 'react';
 import type { Session } from '@openchamber/agent-contract';
-import type { BtwSelection } from '@/stores/useBtwStore';
 import { useSelectionStore } from '@/sync/selection-store';
 import { useSession } from '@/sync/sync-context';
+
+export type ComposerModelSelection = {
+    agent: string | undefined;
+    model: { providerId: string; modelId: string } | null;
+    variant: string | null | undefined;
+    reasoningEffort?: string;
+};
 
 /**
  * What a pinned composer sends with: the picks saved for its session. Canonical
@@ -15,7 +21,7 @@ export const resolvePinnedComposerSelection = ({ savedAgent, savedModel, savedVa
     savedVariant: string | null | undefined;
     savedReasoningEffort?: string;
     record?: Session;
-}): BtwSelection => ({
+}): ComposerModelSelection => ({
     // Canonical sessions intentionally do not expose legacy agent/model
     // selection fields. Saved composer choices are the only supported source.
     agent: savedAgent ?? undefined,
@@ -34,7 +40,7 @@ export const usePinnedComposerSelection = ({ enabled, sessionId, directory }: {
     enabled: boolean;
     sessionId: string | null;
     directory: string | null;
-}): BtwSelection | null => {
+}): ComposerModelSelection | null => {
     const key = enabled ? sessionId : null;
     const record = useSession(key ?? undefined, directory ?? undefined);
     const savedAgent = useSelectionStore((state) => (key ? state.sessionAgentSelections.get(key) ?? null : null));

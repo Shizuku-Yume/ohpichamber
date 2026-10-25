@@ -27,13 +27,11 @@ describe('sourceOwnedLinksPatch', () => {
   });
 
   it('removes source links and pauses an active goal while preserving other Host fields', () => {
-    expect(sourceOwnedLinksPatch({ openchamber: { goal: { id: 'g', status: 'active' }, btwSessionID: 'b', reviewSessionID: 'r', custom: 'keep' } }))
-      .toEqual({ btwSessionID: null, reviewSessionID: null, goal: { status: 'paused', statusReason: 'paused in fork' } });
+    expect(sourceOwnedLinksPatch({ openchamber: { goal: { id: 'g', status: 'active' }, reviewSessionID: 'r', custom: 'keep' } }))
+      .toEqual({ reviewSessionID: null, goal: { status: 'paused', statusReason: 'paused in fork' } });
   });
 
-  it('removes the btw marker of a btw source, keeps a review marker', () => {
-    expect(sourceOwnedLinksPatch({ openchamber: { kind: 'btw', originalSessionID: 'p', btwBoundaryMessageID: 'm' } }))
-      .toEqual({ kind: null, originalSessionID: null, btwBoundaryMessageID: null });
+  it('leaves a review marker intact', () => {
     expect(sourceOwnedLinksPatch({ openchamber: { kind: 'review', originalSessionID: 'p' } })).toBeNull();
     expect(sourceOwnedLinksPatch(undefined)).toBeNull();
   });
@@ -48,7 +46,7 @@ describe('applyForkInheritance', () => {
   });
 
   it('copies complete explicit Host metadata and strips source links', async () => {
-    const metadata = { directory: '/tmp/project', openchamber: { goal: goal(true), btwSessionID: 'b', custom: 'kept' }, unrelated: { value: 1 } };
+    const metadata = { directory: '/tmp/project', openchamber: { goal: goal(true), custom: 'kept' }, unrelated: { value: 1 } }
     const h = harness(metadata);
     await h.run();
     expect(h.deps.readObjective).toHaveBeenCalledWith('ses_source');

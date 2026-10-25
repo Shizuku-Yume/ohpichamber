@@ -6,10 +6,7 @@ import { omitKeys } from '@/lib/omitKeys';
 export function withoutSourceOwnedLinks(metadata: SessionMetadata): SessionMetadata {
   const namespace = metadata.openchamber;
   if (!namespace) return metadata;
-  const rest = omitKeys(namespace, ['btwSessionID', 'reviewSessionID']);
-  const cleaned = rest.kind === 'btw'
-    ? omitKeys(rest, ['kind', 'originalSessionID', 'btwBoundaryMessageID'])
-    : rest;
+  const cleaned = omitKeys(namespace, ['reviewSessionID']);
   const goal = cleaned.goal;
   const nextGoal = goal?.status === 'active' ? { ...goal, status: 'paused' as const, statusReason: 'paused in fork' } : goal;
   const next = nextGoal === goal ? cleaned : { ...cleaned, goal: nextGoal };

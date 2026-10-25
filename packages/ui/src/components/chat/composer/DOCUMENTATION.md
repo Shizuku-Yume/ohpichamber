@@ -341,36 +341,18 @@ scope reads the persisted runtime bucket only.
 
 ## BTW composer
 
-An empty `/btw` opens an unsent draft. `/btw <question>` opens BTW and sends
-that question immediately after its own draft and model selection are active.
-**By the way…** opens an unsent draft with Quote-formatted selection text.
-The first send creates the fork; Enter follows the user's preference. Pending text and references then
-move to the fork's draft identity. Normal and BTW drafts remain independent,
-including in memory when persistence is disabled.
+`/btw` opens an in-memory side panel beside the composer. An empty command
+opens the question draft; `/btw <question>` asks immediately. **By the way…**
+opens the draft with selected text formatted as a quote. Answers stream into the
+panel, and cancelling stops the active question. These questions create no
+session and never enter the main conversation's transcript or history.
 
-Both modes reuse `ComposerEditor` and `ModelControls`; BTW transitions put the
-caret at the end. BTW copies the main model/effort once, including explicit
-Default, and uses `plan` or the first selectable agent. Its controlled model
-path only writes BTW selections. Files attach as in the normal composer
-(picker, paste, drop) and live in the BTW draft identity's attachment slot,
-so they never mix with the main draft's files; the attach control offers
-only local files. Goals, expansion, shell, linked context (issues, PRs,
-guests), and file/agent mention autocomplete are unavailable. The native
-composer sends the selected model directly; no agent selector is rendered.
-Auto-accept is applied before the first send.
-On mobile, model and effort controls sit in the input's upper-left row; the
-footer only contains auto-accept and send/stop controls.
-
-Escape closes menus first. Otherwise it returns to normal: an unsent BTW is
-discarded with its text, references, selections and panel; a creating or real
-fork is only collapsed. Neither exit sends, aborts, or deletes a server session,
-nor consumes the main draft's files, queue, or linked context. Pending snippet
-expansion belongs to the unsent panel. Discarding that panel invalidates the
-send, and a runtime change prevents fork creation and stale UI recovery.
-
-The unsent panel shows "Ask your question" until fork creation starts.
-Existing panels hide titles. Promotion retains the existing internal title, without
-transcript fetching or Small Model generation.
+The panel has transient per-parent UI state only. Its draft uses the same
+composer, but does not inherit a session model, agent, permission mode, history,
+files or references. Escape discards an unsent draft or collapses a panel with
+an answer; it does not send a question or affect the main run. A runtime change
+invalidates a pending send. The stream and cancel controls use the active
+session's existing canonical event/control transport; no session is created.
 
 ## Mobile
 

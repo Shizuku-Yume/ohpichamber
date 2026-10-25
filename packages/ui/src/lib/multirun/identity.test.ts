@@ -83,9 +83,7 @@ describe('multi-run identity', () => {
     expect(getMultiRunIdentity(fusion)!.key).toBe(anchor.key);
     expect(getMultiRunIdentity(old, 'different-project')!.key).not.toBe(anchor.key);
     expect(old.metadata?.openchamber?.multirun).toBeUndefined();
-    for (const kind of ['btw', 'review'] as const) {
-      expect(getMultiRunIdentity({ ...old, metadata: { openchamber: { kind } } })).toBeNull();
-    }
+    expect(getMultiRunIdentity({ ...old, metadata: { openchamber: { kind: 'review' } } })).toBeNull();
   });
 
   test('title and auto-fusion round-trip; markers without them stay valid', () => {

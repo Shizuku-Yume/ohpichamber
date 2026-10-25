@@ -2,7 +2,6 @@ import React from 'react';
 import type { Session } from '@openchamber/agent-contract';
 
 import { useGlobalSessionsStore, resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
-import { isBtwSession } from '@/lib/sessionBtwMetadata';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
 import { useGitAllBranches } from '@/stores/useGitStore';
@@ -165,8 +164,6 @@ export const useSwitcherItems = (enabled: boolean, options: SwitcherItemsOptions
       currentSessionId,
       (session) => findProjectForDirectory(resolveGlobalSessionDirectory(session))?.id ?? null,
       maxParents,
-      // btw forks stay hidden until promoted to a full session
-      (session) => isBtwSession(session),
     );
 
     const buildNode = (session: Session): SessionNode => {

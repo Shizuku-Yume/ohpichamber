@@ -21,13 +21,13 @@
 - Tasks 02 and 14 done receipts exist on `omp-native-chat/integration`; started from `e9a645c4c56b2985d9b47b6a2f841d090a7c62a1`.
 - Surfaces: shared UI and Agent Service worker, routed through existing canonical session control/event transport; no new session or Host transcript writer.
 - Risks: cross-package control/event contract, worker lifecycle and ephemeral state. `btw.*` must stay transient and be excluded from replay/snapshot history.
- - Check before: no btw controls/events existed; focused contract tests covered only abort/compact/command and no ephemeral path.
- - Check after: `bun run --cwd packages/agent-service type-check` passed; `bun run --cwd packages/ui type-check` passed; focused agent-contract events/session tests passed (10 pass). Full Agent Service test command timed out after 180s before producing a result.
- - Real path: not run; no provider-backed UI session was available in the focused check.
- - Review boundary: exact base `e9a645c4c56b2985d9b47b6a2f841d090a7c62a1` + agent contract/service worker/projection and shared UI BTW control/event paths; security boundary is authorized session control forwarding and transient event publication.
- - Decision: retain OMP `RpcBtwController` as the worker owner and mark its projected `btw.*` events transient, keeping the Host/session transcript unchanged.
+- Check before: the landed receipt claimed UI type-check success, but the resumed repair exposed stale fork-flow references and fixture/type errors.
+- Check after: `bun run --cwd packages/ui type-check` passes; `bun test packages/ui/src/stores/useBtwStore.test.ts` passes (4 tests). The package UI suite still has unrelated pre-existing failures in ModelControls variant expectations and useConfigStore agent expectations; locale parity was repaired in this change.
+- Real path: lane-B Web dev server started on ports 5182/3912 with the isolated data directory. The app loaded and showed the native composer; `/btw test` could not run from the new-session screen because no active session/provider was available. A source-control binding request returned 422 for the empty lane data repository.
+- Review boundary: repair diff from `e9a645c4c56b2985d9b47b6a2f841d090a7c62a1` through the current integration baseline, covering ChatInput/BtwPanel transient state, retired metadata/fork callers, locale parity, and affected run fixtures.
+- Repair decision: remove the retired fork metadata and helper paths entirely; retain only the transient in-memory panel and canonical `btw.ask`/`btw.cancel` transport.
 
  - [x] `btw.*` events are transient: excluded from history, not required for snapshot recovery.
- - [x] The composer BTW send no longer creates a forked session; the panel renders transient answer text and cancellation uses `btw.cancel`. Legacy fork helpers remain for non-composer compatibility and are not on the new composer path.
+- [x] The composer BTW send no longer creates a forked session; the panel renders transient answer text and cancellation uses `btw.cancel`, with retired fork metadata/helpers removed.
  - [x] Worker close calls `RpcBtwController.close()`. 
 **Finished:** 2026-10-26T03:10:00+08:00

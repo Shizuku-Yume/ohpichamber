@@ -2,7 +2,7 @@ import React from 'react';
 import { useChatColumnActions } from './chatColumnSession';
 import { MobileModelButton } from './MobileModelButton';
 import type { ModelMetadata } from '@/types';
-import type { Agent, Message, Model } from '@openchamber/agent-contract';
+import type { Message, Model } from '@openchamber/agent-contract';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -14,20 +14,18 @@ import {
 import { Input } from '@/components/ui/input';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
-import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Icon } from "@/components/icon/Icon";
 import { ArrowsMerge } from '@/components/icons/ArrowsMerge';
 import type { IconName } from "@/components/icon/icons";
 import { ModelPickerList, type ModelPickerEntry } from '@/components/model-picker/ModelPickerList';
 import { isDesktopShell } from '@/lib/desktop';
-import { useAgentColors } from '@/hooks/useAgentColors';
 import { useDeviceInfo } from '@/lib/device';
 import { mergeModelMetadataWithLiveModel } from '@/lib/modelMetadata';
 import { getModelDisplayName as getSharedModelDisplayName } from '@/lib/modelDisplay';
 import { formatCompactNumber } from '@/lib/numberFormat';
 import { cn } from '@/lib/utils';
-import { matchesRankQuery, rankByQuery } from '@/lib/search/fuzzySearch';
+import { matchesRankQuery } from '@/lib/search/fuzzySearch';
 import { useContextStore } from '@/stores/contextStore';
 import { useConfigStore, isStaleAutoSelection, selectKnownCatalogModel } from '@/stores/useConfigStore';
 import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
@@ -52,7 +50,7 @@ import {
     findLatestUserModelChoice,
     shouldPreserveManualModelOverride,
 } from '@/lib/messages/userModelChoice';
-import type { BtwSelection } from '@/stores/useBtwStore';
+import type { ComposerModelSelection } from './pinnedComposerSelection';
 
 type IconComponent = IconName;
 
@@ -61,71 +59,10 @@ type ProviderModel = Model;
 type MobileVariantTarget = { providerId: string; modelId: string };
 
 const buildModelRefKey = (providerId: string, modelId: string) => `${providerId}:${modelId}`;
-const getAgentDisplayLabel = (agent: Pick<Agent, 'name'> | undefined): string => agent?.name ?? '';
 
 const selectLatestReplyModelChoice = (messages: Message[]) => findLatestUserModelChoice(messages);
 const MAX_INLINE_MOBILE_VARIANT_OPTIONS = 6;
 
-const AgentDescriptionTooltip: React.FC<{
-    description?: string;
-    children: React.ReactElement;
-}> = ({ description, children }) => {
-    if (!description) {
-        return children;
-    }
-
-    return (
-        <Tooltip delayDuration={450}>
-            <TooltipTrigger asChild>{children}</TooltipTrigger>
-            <TooltipContent
-                side="right"
-                sideOffset={8}
-                className="max-w-xs text-left transition-none data-[starting-style]:opacity-100 data-[starting-style]:scale-100 data-[ending-style]:opacity-100 data-[ending-style]:scale-100"
-            >
-                <span className="typography-meta text-muted-foreground">{description}</span>
-            </TooltipContent>
-        </Tooltip>
-    );
-};
-
-/**
- * Star on an agent row. Starred agents are what Tab cycles through; the press
- * is kept from the row so starring never picks the agent.
- */
-const AgentFavoriteToggle: React.FC<{
-    favorite: boolean;
-    onToggle: () => void;
-    className?: string;
-}> = ({ favorite, onToggle, className }) => {
-    const { t } = useI18n();
-    const label = favorite ? t('chat.modelControls.removeFromFavorites') : t('chat.modelControls.agentFavoriteAdd');
-    const keepFromRow = (event: React.SyntheticEvent) => {
-        event.preventDefault();
-        event.stopPropagation();
-    };
-    return (
-        <button
-            type="button"
-            aria-pressed={favorite}
-            aria-label={label}
-            title={label}
-            onPointerDown={keepFromRow}
-            onPointerUp={keepFromRow}
-            onMouseUp={keepFromRow}
-            onClick={(event) => {
-                keepFromRow(event);
-                onToggle();
-            }}
-            className={cn(
-                'flex h-5 w-5 flex-shrink-0 items-center justify-center rounded hover:text-primary/80',
-                favorite ? 'text-primary' : 'text-muted-foreground',
-                className,
-            )}
-        >
-            <Icon name={favorite ? 'star-fill' : 'star'} className="h-3.5 w-3.5" />
-        </button>
-    );
-};
 
 
 interface CapabilityDefinition {
@@ -295,7 +232,7 @@ type ModelControlsProps = {
 } & (
     | { selection?: never; sessionId?: never; agentSelectable?: never }
     | {
-        selection: BtwSelection;
+        selection: ComposerModelSelection;
         sessionId: string | null;
         /** Offers the agent picker and saves the pick for `sessionId` (a chat pinned in the side panel). */
         agentSelectable?: boolean;
@@ -320,18 +257,14 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         ?? (currentSessionId ? getDirectoryForSession(currentSessionId) : undefined)
         ?? currentDirectory;
     const { isReady, isUnavailable } = useCatalogReadiness('models', currentSessionDirectory);
-    const { isReady: canSelectAgent, isUnavailable: agentsUnavailable } = useCatalogReadiness('agents', currentSessionDirectory);
+    const { isReady: canSelectAgent } = useCatalogReadiness('agents', currentSessionDirectory);
     const readinessLabel = isUnavailable ? t('common.unavailable') : t('common.loading');
-    const agentReadinessLabel = agentsUnavailable ? t('common.unavailable') : t('common.loading');
     const providers = useConfigStore((state) => state.providers);
     const agents = useAgentsStore((state) => selectAgentsForDirectory(state, currentSessionDirectory));
     const loadAgents = useAgentsStore((state) => state.loadAgents);
-    const getAgentColor = useAgentColors(currentSessionDirectory);
     React.useEffect(() => {
         void loadAgents(currentSessionDirectory);
     }, [currentSessionDirectory, loadAgents]);
-    const favoriteAgents = useUIStore((state) => state.favoriteAgents);
-    const toggleFavoriteAgent = useUIStore((state) => state.toggleFavoriteAgent);
     const currentProviderId = useConfigStore((state) => selection ? selection.model?.providerId ?? '' : state.currentProviderId);
     const currentModelId = useConfigStore((state) => selection ? selection.model?.modelId ?? '' : state.currentModelId);
     const effectiveCurrentVariant = useConfigStore((state) => state.currentVariant);
@@ -348,7 +281,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const agentsResolved = canSelectAgent;
     const providersResolved = useConfigStore((state) => state.providersLoaded);
     const modelSelectionReady = Boolean(currentModelId) || (selection ? isReady : defaultsLoaded && providersResolved);
-    const agentSelectionReady = Boolean(currentAgentName) || canSelectAgent;
     const setProvider = useConfigStore((state) => state.setProvider);
     const requestProviderConnect = useUIStore((state) => state.setSettingsProvidersConnectRequested);
     const setModel = useConfigStore((state) => state.setModel);
@@ -358,7 +290,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const setAgent = useConfigStore((state) => state.setAgent);
     const getCurrentProvider = useConfigStore((state) => state.getCurrentProvider);
     const getModelMetadata = useConfigStore((state) => state.getModelMetadata);
-    const selectableDesktopAgents = agents;
     const tracedReadyRef = React.useRef(false);
 
     React.useEffect(() => {
@@ -438,7 +369,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     ), [cycleAgentShortcutOverride]);
 
     // Separate state for agent selector to avoid conflict with model selector
-    const [isAgentSelectorOpen, setIsAgentSelectorOpen] = React.useState(false);
     const { favoriteModelsList, recentModelsList } = useModelLists();
     // Auto routing: the server resolves `openchamber/auto` into a real model per
     // send. Offered only while the server says it can honour it, in the main
@@ -540,33 +470,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     }, [focusColumnInput, isModelSelectorOpen, isCompact]);
 
     // Handle agent selector close behavior
-    const [agentSearchQuery, setAgentSearchQuery] = React.useState('');
-    React.useEffect(() => {
-        if (!selection && !isAgentSelectorOpen) {
-            setAgentSearchQuery('');
-            if (!isCompact) {
-                requestAnimationFrame(focusColumnInput);
-            }
-        }
-    }, [focusColumnInput, isAgentSelectorOpen, isCompact, selection]);
 
 
-    const sortedAndFilteredAgents = React.useMemo(() => {
-        const sorted = [...selectableDesktopAgents].sort((a, b) => a.name.localeCompare(b.name));
-        return rankByQuery(sorted, agentSearchQuery, (agent) => [agent.name, agent.description]);
-    }, [selectableDesktopAgents, agentSearchQuery]);
-
-    const defaultAgentId = React.useMemo(() => {
-        if (settingsDefaultAgent) {
-            const found = selectableDesktopAgents.find(a => a.agentId === settingsDefaultAgent);
-            if (found) return found.agentId;
-        }
-        return selectableDesktopAgents[0]?.agentId;
-    }, [settingsDefaultAgent, selectableDesktopAgents]);
-
-    const currentAgent = React.useMemo(() => (
-        agents.find((agent) => agent.agentId === uiAgentName)
-    ), [agents, uiAgentName]);
 
     const buttonHeight = isMobile ? 'h-9' : 'h-8';
     const controlIconSize = isMobile ? 'size-5' : 'size-4';
@@ -1448,7 +1353,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const modelLabelRef = React.useRef<HTMLSpanElement>(null);
     const isModelLabelTruncated = useIsTextTruncated(modelLabelRef, [currentModelDisplayName, isCompact]);
 
-    const currentAgentDisplayName = uiAgentName || '';
 
 
     const toggleMobileProviderExpansion = React.useCallback((providerId: string) => {

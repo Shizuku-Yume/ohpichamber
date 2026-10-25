@@ -11,7 +11,6 @@ import { useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
 import { useGlobalSessionStatusStore } from '@/sync/global-session-status';
 import { deriveRecentSessions } from '../recent/activitySections';
 import { isChatDirectoryPath } from '@/lib/chatDirectories';
-import { isBtwSession } from '@/lib/sessionBtwMetadata';
 import type { GlobalSessionStructure } from '@/stores/globalSessionStructure';
 import { countSyncPerformance } from '@/sync/performance-diagnostics';
 import type { SessionNode } from '../types';
@@ -30,15 +29,12 @@ const parentIdOf = (session: Session): string | null => {
   return session.parentSessionId ?? null;
 };
 
-// This boundary owns session visibility before Recent or projects take
-// ownership. Temporary /btw forks never leak into any sidebar projection.
 export const partitionSidebarSessions = (
   sessions: readonly Session[],
 ): SidebarSessionPartitions => {
   const projectSessions: Session[] = [];
   const chatSessions: Session[] = [];
   for (const session of sessions) {
-    if (isBtwSession(session)) continue;
     if (isChatDirectoryPath(resolveGlobalSessionDirectory(session))) {
       chatSessions.push(session);
       continue;

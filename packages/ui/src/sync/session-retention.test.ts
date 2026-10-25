@@ -56,11 +56,6 @@ describe('native retention eligibility', () => {
   test('archives old parents independently because archive does not cascade', () => {
     expect(candidates([session('root'), { ...recent[0], sessionId: 'child', parentSessionId: 'root' }], 'archive')).toEqual(['root']);
   });
-  test('retains sessions with an attached side conversation', () => {
-    const parent = session('parent', { metadata: { openchamber: { btwSessionID: 'side' } }, metadataRevision: '1' });
-    expect(candidates([parent])).toEqual([]);
-    expect(candidates([parent], 'archive')).toEqual([]);
-  });
   test('orders descendants before ancestors', () => {
     expect(candidates([session('root'), session('child', { parentSessionId: 'root' }), session('leaf', { parentSessionId: 'child' })]))
       .toEqual(['leaf', 'child', 'root']);

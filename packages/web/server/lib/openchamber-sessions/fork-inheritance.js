@@ -8,9 +8,7 @@ import { mergeMetadataPatch } from './session-metadata-store.js';
  */
 
 const NamespaceSchema = z.looseObject({
-  btwSessionID: z.unknown().optional(),
   reviewSessionID: z.unknown().optional(),
-  kind: z.unknown().optional(),
   goal: z.unknown().optional(),
 });
 const FileBackedGoalSchema = z.looseObject({ id: z.string().min(1), objectiveFile: z.literal(true) });
@@ -25,14 +23,7 @@ export const sourceOwnedLinksPatch = (metadata) => {
   const namespace = openChamberNamespace(metadata);
   if (!namespace) return null;
   const patch = {};
-  for (const key of ['btwSessionID', 'reviewSessionID']) {
-    if (key in namespace) patch[key] = null;
-  }
-  if (namespace.kind === 'btw') {
-    for (const key of ['kind', 'originalSessionID', 'btwBoundaryMessageID']) {
-      if (key in namespace) patch[key] = null;
-    }
-  }
+  if ('reviewSessionID' in namespace) patch.reviewSessionID = null;
   // A fork must not pursue the source's goal in parallel: an active goal
   // arrives paused and the user resumes it (same rule as UI forks).
   const goal = namespace.goal;

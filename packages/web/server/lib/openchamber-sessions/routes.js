@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import express from 'express';
 import { z } from 'zod';
-import { SessionCreateAckSchema, SessionCreateRequestSchema, RuntimeSessionSchema, SessionSchema, RunSchema, RunAbortRequestSchema, SessionDeleteAckSchema, PromptRequestSchema, CapturedSendOptionsSchema, SessionSnapshotSchema, HistoryPageSchema, SessionMetadataStateSchema, SessionMetadataPatchSchema, SteerRequestSchema, SteerAckSchema, FollowUpRequestSchema, FollowUpAckSchema, ProblemDetailsSchema, ProblemCodeSchema } from '@openchamber/agent-contract';
+import { SessionCreateAckSchema, SessionCreateRequestSchema, RuntimeSessionSchema, SessionSchema, RunSchema, RunAbortRequestSchema, SessionDeleteAckSchema, PromptRequestSchema, CapturedSendOptionsSchema, SessionSnapshotSchema, HistoryPageSchema, SessionMetadataStateSchema, SessionMetadataPatchSchema, SteerRequestSchema, SteerAckSchema, FollowUpRequestSchema, FollowUpAckSchema, ProblemDetailsSchema, ProblemCodeSchema, SessionControlRequestSchema, SessionControlAckSchema } from '@openchamber/agent-contract';
 import { EntityIdSchema } from '@openchamber/agent-contract';
 import { SessionBranchRequestSchema, SessionBranchResultSchema, SessionRelocateRequestSchema, SessionRelocateResultSchema } from '@openchamber/agent-contract';
 import { HostSessionRelocationPrepareSchema, HostSessionRelocationPreparedSchema, HostSessionRelocationFinalizeSchema, HostSessionRelocationFinalizedSchema, HostSessionRelocationPendingSchema } from '@openchamber/agent-service/private-protocol';
@@ -362,7 +362,18 @@ const createCanonicalSessionService = (dependencies) => {
       return relocationResult(rootSessionId, destination.workspaceId);
     } finally { relocationControls.delete(rootSessionId); }
   };
-  const control = async (sessionId, operation = {}) => { const scope = await scopeFor(sessionId); assertWritableScope(scope); if (operation?.type !== 'abort') throw new OpenChamberControlError('Unsupported session control operation', 400); const parsed = RunAbortRequestSchema.parse({ sessionId, runId: operation.runId }); const body = await request(`/api/agent/v1/sessions/${encodeURIComponent(parsed.sessionId)}/runs/${encodeURIComponent(parsed.runId)}/abort`, { method: 'POST' }); return { run: RunSchema.parse(body?.run) }; };
+  const control = async (sessionId, operation = {}) => {
+    const scope = await scopeFor(sessionId);
+    assertWritableScope(scope);
+    const parsed = parseCommand(SessionControlRequestSchema, operation);
+    if (parsed.type === 'abort') {
+      const requestBody = RunAbortRequestSchema.parse({ sessionId, runId: parsed.runId });
+      const body = await request(`/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/runs/${encodeURIComponent(requestBody.runId)}/abort`, { method: 'POST' });
+      return { run: RunSchema.parse(body?.run) };
+    }
+    const body = await request(`/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/control`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(parsed) });
+    return SessionControlAckSchema.parse(body);
+  };
   const remove = async (id) => { const scope = await scopeFor(id); const ack = SessionDeleteAckSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' })); if (ack.sessionId !== id) throw new OpenChamberControlError('Session deletion acknowledgement identified another session', 502); if (scope.workspaceId.startsWith('archive_')) await onArchiveDeleted?.(scope, ack); return ack; };
   return { create, send, steer, followUp, fork, selectBranch, relocate, delete: remove, open, history, list, control, resolveDirectory: async (payload = {}) => { const scope = await resolveWorkspaceScope(payload.workspaceId); if (!scope) throw new OpenChamberControlError('Workspace was not found', 404); return scope.cwd; }, archive, unarchive, getMetadata, setMetadata, sessionMetadataStore, archiveStore };
 };

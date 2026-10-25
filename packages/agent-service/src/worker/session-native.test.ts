@@ -163,6 +163,18 @@ async function searxngLoopback(): Promise<{ url: string; requests: string[]; sto
   return { url: `http://127.0.0.1:${server.port}`, requests, stop: () => server.stop(true) };
 }
 
+test('compact control refuses while a native run is active', async () => {
+  const started = Promise.withResolvers<void>();
+  const finish = Promise.withResolvers<Response>();
+  const harness = await fixture({ respond: async () => { started.resolve(); return finish.promise; } });
+  try {
+    const promptRun = harness.worker.operation({ type: 'prompt', runId: 'active-run', request: prompt('Hold this run open.') });
+    await started.promise;
+    await expect(harness.worker.operation({ type: 'compact' })).rejects.toMatchObject({ status: 409, code: 'RUN_ACTIVE' });
+    finish.resolve(completion());
+    await promptRun;
+  } finally { await harness.close(); }
+}, 30000);
 test('profile tool allowlist does not block selected provider authorization', async () => {
   const harness = await fixture({ respond: () => completion() });
   const terminal = Promise.withResolvers<void>();

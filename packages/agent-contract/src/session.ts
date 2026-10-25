@@ -101,6 +101,13 @@ export const RunCreateRequestSchema = PromptRequestSchema;
 export type RunCreateRequest = z.infer<typeof RunCreateRequestSchema>;
 export const RunAbortRequestSchema = z.strictObject({ sessionId: EntityIdSchema, runId: EntityIdSchema });
 export type RunAbortRequest = z.infer<typeof RunAbortRequestSchema>;
+export const SessionControlRequestSchema = z.discriminatedUnion('type', [
+  z.strictObject({ type: z.literal('abort'), runId: EntityIdSchema }),
+  z.strictObject({ type: z.literal('compact'), instructions: z.string().optional() }),
+]);
+export type SessionControlRequest = z.infer<typeof SessionControlRequestSchema>;
+export const SessionControlAckSchema = z.strictObject({ type: z.literal('compact'), compactionId: EntityIdSchema, tokensBefore: z.number().int().nonnegative(), completedAt: TimestampSchema });
+export type SessionControlAck = z.infer<typeof SessionControlAckSchema>;
 export const RunAbortAckSchema = z.strictObject({ run: RunSchema });
 export type RunAbortAck = z.infer<typeof RunAbortAckSchema>;
 export const SteerRequestSchema = z.strictObject({ sessionId: EntityIdSchema, request: PromptRequestSchema });

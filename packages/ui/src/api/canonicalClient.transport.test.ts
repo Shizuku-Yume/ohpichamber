@@ -194,6 +194,11 @@ describe('CanonicalClient real HTTP scope boundary', () => {
     respondWith({ sessionId: 'session_other', followUpId: 'followup_expected', acceptedAt: 1 });
     await expect(client.followUp(sessionId, prompt)).rejects.toThrow();
   });
+  test('sends compact instructions through the canonical session control contract', async () => {
+    respondWith({ type: 'compact', compactionId: 'compact_1', tokensBefore: 4096, completedAt: 1 });
+    await expect(client.compactSession(sessionId, 'Keep key details.')).resolves.toMatchObject({ type: 'compact', tokensBefore: 4096 });
+    expect(calls.at(-1)).toBe(`POST /api/agent/v1/sessions/${sessionId}/control`);
+  });
 
   test('rejects unrelated interaction identity or generation', async () => {
     const reply: C.ApprovalReply = { version: '1', epoch, workerGeneration: generation, decision: 'approve' };

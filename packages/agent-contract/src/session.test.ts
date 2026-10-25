@@ -5,7 +5,7 @@ import {
   RunAbortAckSchema, RunAbortRequestSchema, RunCreateRequestSchema, RunSchema,
   RunStatusSchema, RuntimeSessionSchema, SessionCreateAckSchema, SessionCreateRequestSchema,
   SessionDeleteAckSchema, SessionDeleteRequestSchema, SessionRuntimeStatusSchema, SessionSchema,
-  SteerAckSchema, SteerRequestSchema, SubagentSchema,
+  SteerAckSchema, SteerRequestSchema, SubagentSchema, SessionControlRequestSchema, SessionControlAckSchema,
 } from './session.ts';
 
 const id = 'ses_01';
@@ -24,6 +24,15 @@ const run = { ...pendingRun, status: 'completed', finishedAt: timestamp + 1000 }
 const agent = { agentId: 'agt_01', name: 'Agent', description: '', model: null, allowedTools: ['read'] };
 
 describe('session schemas', () => {
+  test('session controls discriminate abort and compact without changing abort payloads', () => {
+    const abort = { type: 'abort', runId: 'run_01' } as const;
+    const compact = { type: 'compact', instructions: 'Keep the decisions and unresolved questions.' } as const;
+    const ack = { type: 'compact', compactionId: 'compact_01', tokensBefore: 4096, completedAt: timestamp } as const;
+    expect(SessionControlRequestSchema.parse(abort)).toEqual(abort);
+    expect(SessionControlRequestSchema.parse(compact)).toEqual(compact);
+    expect(SessionControlRequestSchema.safeParse({ type: 'compact', instructions: 2 }).success).toBe(false);
+    expect(SessionControlAckSchema.parse(ack)).toEqual(ack);
+  });
   test('preserves opaque project identity and agent selection without inherited aliases', () => {
     const project = { projectId: 'pro_01', name: 'P', workspaceIds: ['ws_01'], displayPath: 'src' };
     expect(ProjectSchema.parse(project)).toEqual(project);

@@ -5,8 +5,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { z } from 'zod';
-import { AgentServiceReadySchema, ApprovalReplySchema, CounterSchema, EntityIdSchema, HistoryPageRequestSchema, JsonObjectSchema, ProblemDetailsSchema, PromptRequestSchema, QuestionReplySchema, SessionBranchRequestSchema, MCPConfigureRequestSchema, MCPApplyRequestSchema, MCPReconnectRequestSchema, MCPOAuthRequestSchema, SkillsApplyRequestSchema, SkillExpandRequestSchema } from '@openchamber/agent-contract';
+import { AgentServiceReadySchema, ApprovalReplySchema, CounterSchema, EntityIdSchema, HistoryPageRequestSchema, JsonObjectSchema, ProblemDetailsSchema, PromptRequestSchema, QuestionReplySchema, SessionBranchRequestSchema, MCPConfigureRequestSchema, MCPApplyRequestSchema, MCPReconnectRequestSchema, MCPOAuthRequestSchema, SkillsApplyRequestSchema, SkillExpandRequestSchema, SessionControlRequestSchema, SessionControlAckSchema } from '@openchamber/agent-contract';
 import type {
+  SessionControlAck,
   AgentCatalog, AgentMutationResult, AgentServiceReady, ApprovalRequest,
   CompletionCancelResult, CompletionResult, HistoryPage, JsonObject, MCPCatalogRead,
   MCPConfigurationState, MCPConnectionTestResult, MCPWorkspaceReconnectResult, MCPSecretWriteResult,
@@ -77,7 +78,7 @@ type ServiceResponse =
   | WorkerInfo | { workers: RegisteredWorkerInfo[] }
   | SessionList | RuntimeSession | HistoryPage | SessionSnapshot | SessionDeleteAck | SessionForkResult | NativeEntryResult | Subagent[]
   | NativeArchiveInventory | NativeArchiveImported
-  | ApprovalRequest | ApprovalRequest[] | QuestionRequest | QuestionRequest[] | { run: Run }
+  | ApprovalRequest | ApprovalRequest[] | QuestionRequest | QuestionRequest[] | { run: Run } | SessionControlAck
   | SteerAck | FollowUpAck
   | SessionBranchResult
   | MCPCatalogRead | MCPApplyResult | MCPOAuthResult
@@ -561,6 +562,15 @@ export class AgentService {
       if (questionRespond && request.method === 'POST') {
         const sessionId = identity(questionRespond[1]);
         respondJson(response, 200, await this.sessions.resolveQuestion(sessionId, identity(questionRespond[2]), await readBody(request, QuestionReplySchema))); return;
+      }
+      const controlRoute = /^\/api\/agent\/v1\/sessions\/([^/]+)\/control$/.exec(url.pathname);
+      if (controlRoute && request.method === 'POST') {
+        const sessionId = identity(controlRoute[1]);
+        const control = SessionControlRequestSchema.parse(await readBody(request, SessionControlRequestSchema));
+        if (control.type === 'abort') {
+          respondJson(response, 200, { run: await this.sessions.abort(sessionId, control.runId) }); return;
+        }
+        respondJson(response, 200, SessionControlAckSchema.parse(await this.sessions.compact(sessionId, control.instructions))); return;
       }
       const sessionRoute = /^\/api\/agent\/v1\/sessions\/([^/]+)(?:\/(snapshot|history|events)|\/(runs)(?:\/([^/]+)\/abort)?)?$/.exec(url.pathname);
       if (sessionRoute) {

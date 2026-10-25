@@ -571,6 +571,17 @@ export class WorkerSession {
       case 'history':
         await this.binding;
         return { type: 'history', history: this.projection.history(operation.request) };
+      case 'compact': {
+        if (this.preparation || this.projection.activeRun() || this.session.isStreaming || this.controllingBranch) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
+        await this.binding;
+        const result = await this.session.compact(operation.instructions);
+        const tokensBefore = result?.tokensBefore;
+        if (typeof tokensBefore !== 'number' || !Number.isFinite(tokensBefore) || tokensBefore < 0) throw new ProjectionError(503, 'INTERNAL_ERROR', 'Native compaction did not report token usage');
+        const completedAt = Date.now();
+        const compactionId = randomUUID();
+        this.emit([{ timestamp: completedAt, event: { type: 'session.compacted', compactionId, tokensBefore, completedAt } }]);
+        return { type: 'compact', compactionId, tokensBefore, completedAt };
+      }
       case 'branch':
         return this.selectBranch(operation.request);
       case 'delete':

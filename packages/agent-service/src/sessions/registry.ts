@@ -497,6 +497,7 @@ export class SessionRegistry {
   async prompt(sessionId: string, operation: PromptOperation) {
     this.ensureOpen();
     this.assertWritable(sessionId);
+    this.assertControlAvailable(sessionId);
     const runtime = this.runtime(sessionId);
     if (runtime.runtimeStatus === 'unavailable') throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
     if (runtime.activeRunId !== null || this.pendingRuns.has(sessionId)) throw new WorkerOperationError(409, 'RUN_ACTIVE');
@@ -574,6 +575,7 @@ export class SessionRegistry {
   }
   async branch(sessionId: string, input: SessionBranchRequest) {
     this.assertWritable(sessionId);
+    this.assertControlAvailable(sessionId);
     const request = SessionBranchRequestSchema.parse(input);
     const entry = this.get(sessionId);
     if (entry.state === 'unloaded' || !entry.opened) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
@@ -759,6 +761,19 @@ export class SessionRegistry {
     const result = await this.workers.request(sessionId, { type: 'abort', runId });
     if (result.type !== 'abort') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
     return result.run;
+  }
+  async compact(sessionId: string, instructions?: string) {
+    this.ensureOpen();
+    this.assertWritable(sessionId);
+    this.assertControlAvailable(sessionId);
+    const runtime = this.runtime(sessionId);
+    if (runtime.activeRunId !== null || this.pendingRuns.has(sessionId)) throw new WorkerOperationError(409, 'RUN_ACTIVE');
+    this.controls.add(sessionId);
+    try {
+      const result = await this.workers.request(sessionId, { type: 'compact', ...(instructions === undefined ? {} : { instructions }) });
+      if (result.type !== 'compact') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+      return result;
+    } finally { this.controls.delete(sessionId); }
   }
 
   async history(request: HistoryPageRequest) {

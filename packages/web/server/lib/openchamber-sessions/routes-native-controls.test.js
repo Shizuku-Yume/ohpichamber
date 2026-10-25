@@ -29,7 +29,7 @@ const fixture = async () => {
   const source = await store.ensureWorkspace({ hostProjectId: 'project', projectDirectory: cwd, workspaceDirectory: cwd, agentDirectory, name: 'Project' });
   const destination = await store.ensureWorkspace({ hostProjectId: 'project', projectDirectory: cwd, workspaceDirectory: destinationCwd, agentDirectory, name: 'Project' });
   for (const sessionId of ['public-root', 'public-child']) await store.bindSession({ sessionId, rootSessionId: 'public-root', workspaceId: source.workspaceId });
-  const native = { workspaceId: source.workspaceId, pending: null, commitFailure: false, loseCommitResponse: false, prepareFailure: false, abortFailure: false, active: false, calls: [] };
+  const native = { workspaceId: source.workspaceId, pending: null, commitFailure: false, loseCommitResponse: false, prepareFailure: false, abortFailure: false, active: false, calls: [], compactResult: { type: 'compact', compactionId: 'compact-id', tokensBefore: 9000, completedAt: 1700000000002 } };
   const runtime = (sessionId = 'public-root') => {
     const session = { sessionId, rootSessionId: 'public-root',
       projectId: source.projectId, workspaceId: native.workspaceId, displayPath: '.', createdAt: 1700000000000, updatedAt: 1700000000001,
@@ -67,6 +67,7 @@ const fixture = async () => {
       if (native.abortFailure) return Response.json({ type: 'urn:ohpichamber:problem:RUN_NOT_FOUND', title: 'Run not found', status: 404, code: 'RUN_NOT_FOUND', detail: 'Run not found', retryable: false }, { status: 404 });
       return Response.json({ run: { runId: decodeURIComponent(pathname.split('/').at(-2)), sessionId: 'public-root', status: 'cancelled', createdAt: 1700000000000, finishedAt: 1700000000002 } });
     }
+    if (pathname.endsWith('/control')) return Response.json(native.compactResult);
     if (pathname === '/api/agent/v1/sessions/forked-child') return Response.json({ ...runtime('forked-child'), rootSessionId: 'forked-child' });
     if (pathname.startsWith('/api/agent/v1/sessions/')) return Response.json(runtime(decodeURIComponent(pathname.split('/').at(-1))));
     throw new Error(`Unexpected private request ${pathname}`);
@@ -115,6 +116,13 @@ describe('Host native session control saga', () => {
       await expect(mutate()).rejects.toMatchObject({ statusCode: 409, code: 'SESSION_READ_ONLY' });
     }
     expect(native.calls).toEqual([]);
+  });
+  it('forwards compact through the authorized session control endpoint and preserves optional instructions', async () => {
+    const { native, makeService } = await fixture();
+    const service = makeService();
+    await expect(service.control('public-root', { type: 'compact', instructions: 'Keep the decisions.' })).resolves.toEqual(native.compactResult);
+    expect(native.calls.at(-1)).toMatchObject({ pathname: '/api/agent/v1/sessions/public-root/control', body: { type: 'compact', instructions: 'Keep the decisions.' } });
+    await expect(service.control('missing-session', { type: 'compact' })).rejects.toMatchObject({ statusCode: 404 });
   });
   it('returns the settled abort run unchanged and preserves native run-not-found and non-abort refusal', async () => {
     const { native, makeService } = await fixture();

@@ -271,7 +271,13 @@ export class CanonicalClient {
     return request(`/api/agent/v1/sessions/${id(sessionId)}/fork`, scoped(C.SessionCreateAckSchema, result => result.session.projectId === projectId && result.session.workspaceId === workspaceId && result.session.sessionId !== sessionId), { method: 'POST', headers: { 'Content-Type': 'application/json', ...headersFor(commandId) }, body: JSON.stringify(input) });
   }
   abortSession(sessionId: string, runId: string): Promise<RunAbortAck> {
-    return request(`/api/agent/v1/sessions/${id(sessionId)}/control`, scoped(C.RunAbortAckSchema, result => result.run.sessionId === sessionId && result.run.runId === runId), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'abort', runId }) });
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/control`, scoped(C.RunAbortAckSchema, result => result.run.sessionId === sessionId && result.run.runId === runId), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.SessionControlRequestSchema, { type: 'abort', runId }) });
+  }
+  compactSession(sessionId: string, instructions?: string): Promise<C.SessionControlAck> {
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/control`, scoped(C.SessionControlAckSchema, result => result.type === 'compact'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: bodyFor(C.SessionControlRequestSchema, { type: 'compact', ...(instructions === undefined ? {} : { instructions }) }),
+    });
   }
   createRun(sessionId: string, input: RunCreateRequest, commandId?: string): Promise<RunCreateAck> {
     return request(`/api/agent/v1/sessions/${id(sessionId)}/runs`, scoped(z.strictObject({ run: C.RunSchema }), result => result.run.sessionId === sessionId), { method: 'POST', headers: { 'Content-Type': 'application/json', ...headersFor(commandId) }, body: bodyFor(C.RunCreateRequestSchema, input) });

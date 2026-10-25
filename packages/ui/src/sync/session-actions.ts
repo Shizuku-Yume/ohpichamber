@@ -1827,6 +1827,12 @@ export async function abortCurrentOperation(sessionId: string): Promise<void> {
   // the stop control clears without waiting for the event stream to recover.
   publishRuntimeRun(result.run)
 }
+export async function compactSession(sessionId: string, instructions?: string): Promise<void> {
+  const runtimeKey = getRuntimeKey()
+  const result = await canonicalClient.compactSession(sessionId, instructions)
+  if (isStaleRuntime(runtimeKey)) throw new Error('runtime changed')
+  if (result.type !== 'compact') throw new Error('Compact response identified another control')
+}
 
 // ---------------------------------------------------------------------------
 // Permissions

@@ -1847,10 +1847,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                     });
                     if (forkOutcome === 'send-failed') toast.error(t('chat.chatInput.toast.forkSendFailed'));
                 } else if (actionName === 'compact') {
-                    await sendMessage('/compact', currentProviderId, currentModelId, currentAgentName, undefined, undefined, undefined, variantToSend, 'normal', {
-                        sessionId: currentSessionId,
-                        directory: currentDirectory ?? undefined,
-                    });
+                    const instructions = window.prompt(t('chat.compact.instructions.title'), '');
+                    if (instructions === null) { restoreComposerText(); return; }
+                    await sessionActions.compactSession(currentSessionId, instructions || undefined);
                 }
             } catch (error) {
                 restoreComposerText();

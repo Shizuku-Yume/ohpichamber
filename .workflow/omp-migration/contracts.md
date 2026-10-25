@@ -131,6 +131,7 @@ Clients reach this API through the Host Gateway (Node.js/Electron), which authen
 | `GET` | `/api/agent/v1/sessions/:sessionId/snapshot` | Atomic runtime state snapshot and matching event cursor | Required | Yes | JSON |
 | `POST` | `/api/agent/v1/sessions/:sessionId/runs` | Start a new agent execution run | Required | Yes (Key) | JSON |
 | `POST` | `/api/agent/v1/sessions/:sessionId/runs/:runId/abort` | Abort an active run | Required | Yes | JSON |
+| `POST` | `/api/agent/v1/sessions/:sessionId/control` | Abort an active run or compact the session with optional instructions | Required | Yes | JSON |
 | `POST` | `/api/agent/v1/sessions/:sessionId/steer` | Inject prompt into running turn | Required | Yes (Key) | JSON |
 | `POST` | `/api/agent/v1/sessions/:sessionId/follow-up` | Stage prompt for next turn | Required | Yes (Key) | JSON |
 | `GET` | `/api/agent/v1/sessions/:sessionId/queue` | List durable queued prompts | Required | Yes | JSON |
@@ -578,7 +579,7 @@ The protocol treats conversation history branching and filesystem modifications 
 3. **Explicit Host Operations.** If a user wishes to restore previous file states, they must execute explicit Host Git operations (such as `git restore` or worktree branch switching) through Host APIs.
 4. **Transition rejection and state preservation.** Leaf selection requested during an active run, or with a stale selection owner or mismatched version, is rejected with an error. Failed selection attempts preserve the valid original selection state.
 5. **Privacy.** Public responses never include absolute host working-directory paths or private SDK entry identifiers.
-6. **Implementation status.** Native session control endpoints, leaf selection, and verification remain in progress and unverified.
+6. **Implementation status.** Native session controls use `POST /api/agent/v1/sessions/:sessionId/control`: `{type:"abort",runId}` preserves run-abort behavior; `{type:"compact",instructions?}` compacts the idle native session and publishes `session.compacted`. Active runs or branch controls refuse compaction with HTTP 409 `RUN_ACTIVE`.
 
 ### Execution workspace relocation
 

@@ -15,6 +15,7 @@ const canonicalSession = (sessionId, title, updatedAt, extra = {}) => ({
   headSequence: '0',
   runtimeStatus: 'idle',
   activeRunId: null,
+  mode: { kind: 'main' },
   metadata: title === null ? null : { title },
   metadataRevision: title === null ? '0' : '1',
   archiveRevision: '0',

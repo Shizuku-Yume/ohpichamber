@@ -6,7 +6,7 @@ import { deferred } from './session-message-loader-test-fixtures';
 const fork: Session = {
   sessionId: 'ses_fork', projectId: 'proj_1', workspaceId: 'ws_1', displayPath: 'repo',
   rootSessionId: 'ses_fork', createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0',
-  runtimeStatus: 'idle', activeRunId: null, metadata: null, metadataRevision: '0', archiveRevision: '0',
+  runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' }, metadata: null, metadataRevision: '0', archiveRevision: '0',
 };
 
 const deps = (overrides: Partial<ForkedSessionDeps> = {}) => {

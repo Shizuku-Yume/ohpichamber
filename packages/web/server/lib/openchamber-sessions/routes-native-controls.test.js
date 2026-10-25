@@ -33,6 +33,7 @@ const fixture = async () => {
   const runtime = (sessionId = 'public-root') => {
     const session = { sessionId, rootSessionId: 'public-root',
       projectId: source.projectId, workspaceId: native.workspaceId, displayPath: '.', createdAt: 1700000000000, updatedAt: 1700000000001,
+      mode: { kind: 'main' },
       epoch: 'epoch-native', headSequence: '0', runtimeStatus: native.active ? 'running' : 'idle', activeRunId: native.active ? 'active-run' : null };
     if (sessionId === 'public-child') session.parentSessionId = 'public-root';
     return session;
@@ -67,7 +68,10 @@ const fixture = async () => {
       if (native.abortFailure) return Response.json({ type: 'urn:ohpichamber:problem:RUN_NOT_FOUND', title: 'Run not found', status: 404, code: 'RUN_NOT_FOUND', detail: 'Run not found', retryable: false }, { status: 404 });
       return Response.json({ run: { runId: decodeURIComponent(pathname.split('/').at(-2)), sessionId: 'public-root', status: 'cancelled', createdAt: 1700000000000, finishedAt: 1700000000002 } });
     }
-    if (pathname.endsWith('/control')) return Response.json(native.compactResult);
+    if (pathname.endsWith('/control')) {
+      if (body.type === 'mode.set') return Response.json({ type: 'mode.set', mode: body.mode === 'main' ? { kind: 'main' } : { kind: 'plan', status: 'active', planReference: 'local://PLAN.md' } });
+      return Response.json(native.compactResult);
+    }
     if (pathname === '/api/agent/v1/sessions/forked-child') return Response.json({ ...runtime('forked-child'), rootSessionId: 'forked-child' });
     if (pathname.startsWith('/api/agent/v1/sessions/')) return Response.json(runtime(decodeURIComponent(pathname.split('/').at(-1))));
     throw new Error(`Unexpected private request ${pathname}`);
@@ -85,6 +89,18 @@ const fixture = async () => {
 };
 
 describe('Host native session control saga', () => {
+  it('forwards authorized mode transitions without storing mode in the Host', async () => {
+    const { native, makeService } = await fixture();
+    const service = makeService();
+    expect(await service.control('public-root', { type: 'mode.set', mode: 'plan' })).toEqual({
+      type: 'mode.set', mode: { kind: 'plan', status: 'active', planReference: 'local://PLAN.md' },
+    });
+    expect(native.calls).toContainEqual({ pathname: '/api/agent/v1/sessions/public-root/control', body: { type: 'mode.set', mode: 'plan' } });
+    expect(await service.control('public-root', { type: 'mode.set', mode: 'main' })).toEqual({ type: 'mode.set', mode: { kind: 'main' } });
+    const beforeInvalid = native.calls.length;
+    await expect(service.control('public-root', { type: 'mode.set', mode: 'vibe' })).rejects.toMatchObject({ statusCode: 400 });
+    expect(native.calls).toHaveLength(beforeInvalid);
+  });
   it('refuses native mutations for deleted-space sessions before dispatch', async () => {
     const { root, store, destination, native, makeService } = await fixture();
     const spaceId = 'a1b2c3d4e5f6';
@@ -110,6 +126,7 @@ describe('Host native session control saga', () => {
       () => service.selectBranch(sessionId, { action: 'restore', branchId: 'branch-owner', branchVersion: '3' }),
       () => service.relocate(sessionId, { workspaceId: destination.workspaceId }),
       () => service.control(sessionId, { type: 'abort', runId: 'run-1' }),
+      () => service.control(sessionId, { type: 'mode.set', mode: 'plan' }),
     ];
 
     for (const mutate of mutations) {

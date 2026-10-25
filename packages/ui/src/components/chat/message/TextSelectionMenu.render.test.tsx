@@ -28,7 +28,7 @@ const sessionId = 'session-1';
 const column = { sessionId, directory };
 const session = (updated: number, sessionDirectory = directory): Session => ({
   sessionId: sessionDirectory === directory ? sessionId : `${sessionId}-${sessionDirectory.slice(1)}`, projectId: 'project', workspaceId: 'workspace', displayPath: 'repo', rootSessionId: sessionId,
-  createdAt: 0, updatedAt: updated, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  createdAt: 0, updatedAt: updated, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
   metadata: null, metadataRevision: '0', archiveRevision: '0',
 });
 const otherSession = (updated: number): Session => ({ ...session(updated), sessionId: 'session-2' });

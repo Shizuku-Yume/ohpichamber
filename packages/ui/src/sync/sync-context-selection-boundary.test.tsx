@@ -30,7 +30,7 @@ const createNativeClient = (): CanonicalClient => {
   return client
 }
 const session = (sessionId: string, workspaceId: string): Session => ({
-  sessionId, projectId: 'project-1', workspaceId, displayPath: '.', rootSessionId: sessionId, createdAt: 1, updatedAt: 1, epoch: 'epoch-1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  sessionId, projectId: 'project-1', workspaceId, displayPath: '.', rootSessionId: sessionId, createdAt: 1, updatedAt: 1, epoch: 'epoch-1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
   metadata: null, metadataRevision: '0', archiveRevision: '0',
 })
 
@@ -133,7 +133,7 @@ describe("SyncProvider native scope and selection boundaries", () => {
         pending.resolve({ items: [listed, sibling], errors: {} })
         await materializationStarted.promise
         expect(handleEvents({ directory, sessionId: listed.sessionId }, [{ type: "run.started", sessionId: listed.sessionId, epoch: listed.epoch, sequence: "1", timestamp: 2, runId: "live-run", createdAt: 2 }], manager!)).toBe(true)
-        materializing.resolve({ ...nativeSnapshot(sibling.sessionId), session: sibling, cursor: `${sibling.epoch}:0`, activeRun: { runId: "sibling-run", sessionId: sibling.sessionId, status: "running", createdAt: 1 } })
+        materializing.resolve({ ...nativeSnapshot(sibling.sessionId), session: sibling, cursor: `${sibling.epoch}:0`, activeRun: { runId: "sibling-run", sessionId: sibling.sessionId, status: "running", origin: "host", createdAt: 1 } })
         await Promise.resolve()
         await Promise.resolve()
       })

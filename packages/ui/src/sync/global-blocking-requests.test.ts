@@ -30,7 +30,7 @@ describe('global native blocking requests', () => {
   test('authoritative snapshot replaces pending scope and ignores prior epoch events', () => {
     const current = approval('approval_1', 'session_1');
     replaceGlobalBlockingRequestSnapshot('/repo', {
-      session: { sessionId: 'session_1', projectId: 'project_1', workspaceId: 'workspace_1', displayPath: '.', rootSessionId: 'session_1', createdAt: 1, updatedAt: 1, epoch: 'epoch_1', headSequence: '4', runtimeStatus: 'awaiting_approval', activeRunId: 'run_1' },
+      session: { sessionId: 'session_1', projectId: 'project_1', workspaceId: 'workspace_1', displayPath: '.', rootSessionId: 'session_1', createdAt: 1, updatedAt: 1, epoch: 'epoch_1', headSequence: '4', runtimeStatus: 'awaiting_approval', activeRunId: 'run_1', mode: { kind: 'main' } },
       cursor: 'epoch_1:4', activeRun: null, branch: { branchId: 'branch_1', branchVersion: '0', leafMessageId: null },
       window: { firstTurnId: null, lastTurnId: null, firstMessageId: null, lastMessageId: null, hasEarlier: false }, turns: [], messages: [], approvals: [current], questions: [], requestRecovery: { pendingSet: 'replace', priorEpochs: 'expired' },
     });
@@ -39,7 +39,7 @@ describe('global native blocking requests', () => {
     applyGlobalBlockingRequestEvents('/repo', [event('approval.resolved', { sessionId: 'session_1', epoch: 'epoch_0', approval: old })]);
     expect(bySession().get('session_1')?.permissions[0]?.approvalId).toBe('approval_1');
     replaceGlobalBlockingRequestSnapshot('/repo', {
-      session: { sessionId: 'session_1', projectId: 'project_1', workspaceId: 'workspace_1', displayPath: '.', rootSessionId: 'session_1', createdAt: 1, updatedAt: 2, epoch: 'epoch_1', headSequence: '5', runtimeStatus: 'idle', activeRunId: null },
+      session: { sessionId: 'session_1', projectId: 'project_1', workspaceId: 'workspace_1', displayPath: '.', rootSessionId: 'session_1', createdAt: 1, updatedAt: 2, epoch: 'epoch_1', headSequence: '5', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' } },
       cursor: 'epoch_1:5', activeRun: null, branch: { branchId: 'branch_1', branchVersion: '0', leafMessageId: null },
       window: { firstTurnId: null, lastTurnId: null, firstMessageId: null, lastMessageId: null, hasEarlier: false }, turns: [], messages: [], approvals: [], questions: [], requestRecovery: { pendingSet: 'replace', priorEpochs: 'expired' },
     });

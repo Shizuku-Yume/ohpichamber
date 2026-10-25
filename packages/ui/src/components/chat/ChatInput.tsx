@@ -1,5 +1,5 @@
 import React from 'react';
-import { useSessionActiveRun } from '@/sync/sync-context';
+import { useDirectorySync, useSessionActiveRun } from '@/sync/sync-context';
 import { ComposerStatusStrip } from './ComposerStatusStrip';
 import { formatChangeRequestReference } from '@/lib/source-control/identity';
 import { ComposerDictation } from '@/components/dictation/ComposerDictation';
@@ -3661,6 +3661,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         ? <ComposerStatusStrip icon="time" text={t('spaces.draft.queued')} />
         : null;
     const autoReviewRow = !isBtwActive && !newSessionDraftOpen ? <AutoReviewStrip /> : null;
+    const sessionMode = useDirectorySync(React.useCallback((state) => currentSessionId ? state.snapshot[currentSessionId]?.session.mode : undefined, [currentSessionId]), currentSessionDirectoryForSync ?? currentDirectory ?? undefined);
     const workerRun = useSessionActiveRun(currentSessionId ?? '', currentSessionDirectoryForSync ?? currentDirectory ?? undefined);
     const workerRunRow = !isBtwActive && !newSessionDraftOpen && (workerRun?.origin === 'plan' || workerRun?.origin === 'goal')
         ? <ComposerStatusStrip icon="loader-4" spin text={t(workerRun.origin === 'plan' ? 'chat.run.origin.plan' : 'chat.run.origin.goal')} />
@@ -4126,6 +4127,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                     <ComposerFooter
                         isMobile={isMobile}
                         sessionId={currentSessionId}
+                        mode={sessionMode}
+                        runActive={Boolean(workerRun)}
                         directory={currentSessionDirectoryForSync ?? currentDirectory}
                         newSessionDraftOpen={newSessionDraftOpen}
                         messageLength={goalObjectiveLength}

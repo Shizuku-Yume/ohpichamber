@@ -4,7 +4,7 @@ import { ProjectionError, SessionJournal } from './journal.ts';
 import type { ProjectionEvent, ProjectionInput, ProjectionSeed } from './protocol.ts';
 
 const session = { sessionId: 's', projectId: 'p', workspaceId: 'w', displayPath: '.', rootSessionId: 's' };
-const seed: ProjectionSeed = { createdAt: 1, updatedAt: 1, branch: { branchId: 'branch:opaque', branchVersion: '1', leafMessageId: null }, turns: [], messages: [] };
+const seed: ProjectionSeed = { createdAt: 1, updatedAt: 1, mode: { kind: 'main' }, branch: { branchId: 'branch:opaque', branchVersion: '1', leafMessageId: null }, turns: [], messages: [] };
 const input = (event: ProjectionEvent, timestamp = 2): ProjectionInput => ({ timestamp, event });
 function cursorFailure(journal: SessionJournal, cursor?: string) {
   try { journal.subscribe(cursor, () => {}); }
@@ -23,6 +23,25 @@ function begin(journal: SessionJournal): void {
 }
 
 describe('SessionJournal consumer boundary', () => {
+  test('mode changes reach two subscribers and recovery snapshots without Host state', () => {
+    const journal = new SessionJournal(session, seed);
+    const first: (CanonicalEvent | StreamInvalidated)[] = [];
+    const second: (CanonicalEvent | StreamInvalidated)[] = [];
+    const unsubscribeFirst = journal.subscribe(journal.snapshot().cursor, event => first.push(event)).unsubscribe;
+    const unsubscribeSecond = journal.subscribe(journal.snapshot().cursor, event => second.push(event)).unsubscribe;
+    const mode = { kind: 'plan', status: 'active', planReference: 'local://PLAN.md' } as const;
+    journal.append([input({ type: 'session.updated', mode })]);
+    expect(journal.snapshot().session.mode).toEqual(mode);
+    expect(first).toEqual(second);
+    expect(first).toHaveLength(1);
+    expect(first[0]).toMatchObject({ type: 'session.updated', mode });
+    expect(journal.subscribe(`${journal.runtime().epoch}:0`, () => {}).replay).toEqual(first);
+    journal.replace({ ...seed, mode: { ...mode, status: 'paused' } });
+    expect(journal.snapshot().session.mode).toEqual({ ...mode, status: 'paused' });
+    unsubscribeFirst();
+    unsubscribeSecond();
+    journal.close();
+  });
   test('replay covers its exact ring boundary and distinguishes invalid from unavailable cursors', () => {
     const journal = new SessionJournal(session, seed);
     const events = journal.append(Array.from({ length: 1001 }, (_, index) => input({ type: 'tool.started', toolCallId: `tool${index}`, toolName: 'bash', input: {} })));

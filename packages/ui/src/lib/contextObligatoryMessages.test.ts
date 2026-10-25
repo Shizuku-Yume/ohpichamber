@@ -4,7 +4,7 @@ import { getContextObligatoryMessages, withContextObligatoryMessage } from './co
 
 const sessionWith = (metadata: SessionMetadata): Session => ({
   sessionId: 'session_1', projectId: 'project_1', workspaceId: 'workspace_1', displayPath: 'repo', rootSessionId: 'session_1',
-  createdAt: 1, updatedAt: 10, epoch: 'epoch_1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  createdAt: 1, updatedAt: 10, epoch: 'epoch_1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
   metadata, metadataRevision: '1', archiveRevision: '0',
 });
 

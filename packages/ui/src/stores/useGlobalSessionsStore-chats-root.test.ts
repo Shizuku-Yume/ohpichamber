@@ -20,7 +20,7 @@ class TestStorage implements Storage {
 
 const chat = (sessionId: string): Session => ({
   sessionId, projectId: 'pro_chats', workspaceId: `wsp_${sessionId}`, displayPath: 'chats/day', rootSessionId: sessionId,
-  createdAt: 1, updatedAt: 2, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  createdAt: 1, updatedAt: 2, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
   metadata: { title: sessionId }, metadataRevision: '1', archiveRevision: '0',
 });
 const ids = (records: readonly Session[]) => records.map((record) => record.sessionId).sort();

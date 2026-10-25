@@ -22,7 +22,7 @@ const workspace = { projectId: 'canonical-project', workspaceId: 'canonical-work
 const installSessionService = (gate = null) => { dispatchGate = gate; };
 const sessionRecord = (sessionId) => ({ sessionId, projectId: workspace.projectId, workspaceId: workspace.workspaceId,
   rootSessionId: sessionId, displayPath: '.', createdAt: Date.now(), updatedAt: Date.now(), epoch: 'epoch', headSequence: '0',
-  runtimeStatus: 'idle', activeRunId: null, metadata: null, metadataRevision: '0', archiveRevision: '0' });
+  runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' }, metadata: null, metadataRevision: '0', archiveRevision: '0' });
 
 const UTC = (y, mo, d, h, mi, s = 0) => Date.UTC(y, mo, d, h, mi, s);
 const MINUTE = 60_000;

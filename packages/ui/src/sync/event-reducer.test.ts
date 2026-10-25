@@ -5,7 +5,7 @@ import { INITIAL_STATE, type State } from "./types"
 
 const runtime = (overrides: Partial<RuntimeSession> = {}): RuntimeSession => ({
   sessionId: "session-1", projectId: "project-1", workspaceId: "workspace-1", displayPath: ".", rootSessionId: "session-1",
-  createdAt: 1, updatedAt: 1, epoch: "epoch-1", headSequence: "0", runtimeStatus: "idle", activeRunId: null, ...overrides,
+  createdAt: 1, updatedAt: 1, epoch: "epoch-1", headSequence: "0", runtimeStatus: "idle", activeRunId: null, mode: { kind: "main" }, ...overrides,
 })
 const session = (overrides: Partial<Session> = {}): Session => ({
   ...runtime(), metadata: null, metadataRevision: "0", archiveRevision: "0", ...overrides,
@@ -49,6 +49,14 @@ describe("native canonical event reducer", () => {
     expect(applyDirectoryEvent(base, event("2", "session.status", { runtimeStatus: "running", activeRunId: "run-1" })).kind).toBe("resnapshot")
     expect(applyDirectoryEvent(base, { ...event("1", "session.status", { runtimeStatus: "idle", activeRunId: null }), epoch: "epoch-2" }).kind).toBe("resnapshot")
   })
+  test("projects a top-level mode event to the snapshot and live session row", () => {
+    const base = state({ snapshot: { "session-1": snapshot() }, sessionCursor: { "session-1": "epoch-1:0" } })
+    const changed = applyDirectoryEvent(base, event("1", "session.updated", { mode: { kind: "plan", status: "active", planReference: "local://plans/session-1.md" } }))
+    expect(changed.kind).toBe("applied")
+    expect(changed.state.snapshot["session-1"]?.session.mode).toEqual({ kind: "plan", status: "active", planReference: "local://plans/session-1.md" })
+    expect(changed.state.session[0]?.mode).toEqual({ kind: "plan", status: "active", planReference: "local://plans/session-1.md" })
+    expect(applyDirectoryEvent(changed.state, event("1", "session.updated", { mode: { kind: "main" } })).kind).toBe("duplicate")
+  })
 
   test("applies contiguous runtime events while retaining unrelated parts", () => {
     const message: Message = { messageId: "message-1", sessionId: "session-1", turnId: "turn-1", role: "assistant", createdAt: 1, parts: [{ type: "text", partId: "part-1", content: "hello" }] }
@@ -80,7 +88,7 @@ describe("native canonical event reducer", () => {
   })
 
   test("settles a matching cancelled run", () => {
-    const running = snapshot({ session: runtime({ headSequence: "0", runtimeStatus: "running", activeRunId: "run-1" }), activeRun: { runId: "run-1", sessionId: "session-1", status: "running", createdAt: 1 } })
+    const running = snapshot({ session: runtime({ headSequence: "0", runtimeStatus: "running", activeRunId: "run-1" }), activeRun: { runId: "run-1", sessionId: "session-1", status: "running", origin: "host", createdAt: 1 } })
     const base = state({ snapshot: { "session-1": running }, sessionCursor: { "session-1": "epoch-1:0" } })
     const settled = applyDirectoryEvent(base, event("1", "run.cancelled", { runId: "run-1", finishedAt: 2 }))
     expect(settled.kind).toBe("applied")

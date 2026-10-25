@@ -4,7 +4,7 @@ import { createSessionWorkRuntime } from './runtime.js';
 
 const scope = { sessionId: 'ses_1', rootSessionId: 'ses_1', projectId: 'project-1', workspaceId: 'workspace-1', agentDirectoryId: 'agent-1', cwd: '/repo' };
 const endpoint = { url: 'https://jev.test', model: 'jev', headers: {} };
-const rootSession = { sessionId: 'ses_1', projectId: 'project-1', workspaceId: 'workspace-1', displayPath: '.', rootSessionId: 'ses_1', createdAt: 1, updatedAt: 2, epoch: 'epoch_1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null };
+const rootSession = { sessionId: 'ses_1', projectId: 'project-1', workspaceId: 'workspace-1', displayPath: '.', rootSessionId: 'ses_1', createdAt: 1, updatedAt: 2, epoch: 'epoch_1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' } };
 const childSession = { ...rootSession, sessionId: 'ses_child', rootSessionId: 'ses_1' };
 const historyPage = (sessionId, pending = true) => {
   const messages = [

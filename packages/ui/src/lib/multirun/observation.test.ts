@@ -13,7 +13,7 @@ afterEach(() => {
 
 const lane = (sessionId: string): Session => ({
   sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '.', rootSessionId: sessionId,
-  createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
   metadata: {}, metadataRevision: '1', archiveRevision: '0',
 });
 describe('canonical lane observation before dispatch', () => {

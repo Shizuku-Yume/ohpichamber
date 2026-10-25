@@ -40,8 +40,8 @@ describe('native streaming state', () => {
   test('an inner turn can complete while its outer run remains live', () => {
     const user = message('user_1', 'user'); const assistant = message('assistant_1', 'assistant');
     const snapshot: SessionSnapshot = {
-      session: { sessionId: 'session_1', projectId: 'project_1', workspaceId: 'workspace_1', displayPath: 'repo', rootSessionId: 'session_1', createdAt: 1, updatedAt: 1, epoch: 'epoch_1', headSequence: '1', runtimeStatus: 'running', activeRunId: 'run_1' },
-      cursor: 'epoch_1:1', activeRun: { runId: 'run_1', sessionId: 'session_1', status: 'running', createdAt: 1 },
+      session: { sessionId: 'session_1', projectId: 'project_1', workspaceId: 'workspace_1', displayPath: 'repo', rootSessionId: 'session_1', createdAt: 1, updatedAt: 1, epoch: 'epoch_1', headSequence: '1', runtimeStatus: 'running', activeRunId: 'run_1', mode: { kind: 'main' } },
+      cursor: 'epoch_1:1', activeRun: { runId: 'run_1', sessionId: 'session_1', status: 'running', origin: 'host', createdAt: 1 },
       branch: { branchId: 'branch_1', branchVersion: '0', leafMessageId: 'assistant_1' },
       window: { firstTurnId: 'turn_1', lastTurnId: 'turn_1', firstMessageId: 'user_1', lastMessageId: 'assistant_1', hasEarlier: false },
       turns: [{ turnId: 'turn_1', sessionId: 'session_1', runId: 'run_1', status: 'running', userMessageId: 'user_1', assistantMessageIds: ['assistant_1'], startedAt: 1 }],

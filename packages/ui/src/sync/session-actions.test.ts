@@ -404,7 +404,7 @@ describe("Host archive transitions over native records", () => {
     const store = seed([session("session-a", { archivedAt: 3 })])
     store.setState({ session: [], sessionStatusReady: true, sessionStatusInvalidated: { "session-a": true } })
     const snapshot = nativeSnapshot("session-a", [])
-    const run: Run = { runId: "run-live", sessionId: "session-a", status: "running", createdAt: 4 }
+    const run: Run = { runId: "run-live", sessionId: "session-a", status: "running", origin: "host", createdAt: 4 }
     snapshot.session = { ...snapshot.session, runtimeStatus: "running", activeRunId: run.runId }
     snapshot.activeRun = run
     spyOn(globalThis, "fetch").mockResolvedValue(restoreResponse(["session-a"]))
@@ -464,7 +464,7 @@ describe("native delivery and execution controls", () => {
     input: { text: "Hello", attachments: [{ attachmentId: "attachment-a", name: "notes.txt", mediaType: "text/plain", size: 4, uri: "attachment://attachment-a" }], context: [{ kind: "synthetic", text: "Context" }] },
     options: { providerId: "provider-a", modelId: "model-a", agentId: "agent-a", variant: null, reasoningEffort: null },
   }
-  const run: Run = { runId: "run-a", sessionId: "session-a", status: "running", createdAt: 1 }
+  const run: Run = { runId: "run-a", sessionId: "session-a", status: "running", origin: "host", createdAt: 1 }
 
   test("submits a native prompt and command identity without inventing transcript records", async () => {
     const store = seed()
@@ -926,7 +926,7 @@ describe("native selected-branch forks", () => {
       { turnId: runningUser.turnId, sessionId: "session-a", runId: "run-b", status: "running", userMessageId: runningUser.messageId, assistantMessageIds: [running.messageId], startedAt: 3 },
     ]
     snapshot.session = { ...snapshot.session, runtimeStatus: "running", activeRunId: "run-b" }
-    snapshot.activeRun = { sessionId: "session-a", runId: "run-b", status: "running", createdAt: 3 }
+    snapshot.activeRun = { sessionId: "session-a", runId: "run-b", status: "running", origin: "host", createdAt: 3 }
     spyOn(canonicalClient, "getSnapshot").mockResolvedValue(snapshot)
     const result = await forkFromLastCompletedTurn("session-a")
     expect(result?.sessionId).toBe(fork.sessionId)
@@ -938,7 +938,7 @@ describe("native selected-branch forks", () => {
     const current = nativeMessage("session-a", "current-user", 3)
     const snapshot = nativeSnapshot("session-a", [current])
     snapshot.session = { ...snapshot.session, runtimeStatus: "running", activeRunId: "run-b" }
-    snapshot.activeRun = { sessionId: "session-a", runId: "run-b", status: "running", createdAt: 3 }
+    snapshot.activeRun = { sessionId: "session-a", runId: "run-b", status: "running", origin: "host", createdAt: 3 }
     snapshot.turns = [{ turnId: current.turnId, sessionId: "session-a", runId: "run-b", status: "running", userMessageId: current.messageId, assistantMessageIds: [], startedAt: 3 }]
     snapshot.window.hasEarlier = true
     const user = nativeMessage("session-a", "older-user", 1)
@@ -970,7 +970,7 @@ describe("review-flow optimistic send", () => {
   }
 
   function reviewRun(runId = "run-review"): Run {
-    return { runId, sessionId: "session-a", status: "running", createdAt: 2 }
+    return { runId, sessionId: "session-a", status: "running", origin: "host", createdAt: 2 }
   }
 
   function runTurn(run: Run, userMessage: Message): Turn {

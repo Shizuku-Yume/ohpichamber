@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import type { Session } from '@openchamber/agent-contract';
 import { compareSessionsByLifecycleOrder, observeSessionActivityEvent, orderSessionsByLifecycleScopes, reconcileSessionActivitySnapshot, removeSessionOrdering, resetSessionOrdering, useSessionOrderingStore } from './session-ordering';
-const session = (sessionId: string, updatedAt: number, parentSessionId?: string): Session => ({ sessionId, projectId: 'project_1', workspaceId: 'workspace_1', displayPath: 'session', parentSessionId, rootSessionId: parentSessionId ?? sessionId, createdAt: updatedAt - 1, updatedAt, epoch: 'epoch_1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, metadata: null, metadataRevision: '0', archiveRevision: '0' });
+const session = (sessionId: string, updatedAt: number, parentSessionId?: string): Session => ({ sessionId, projectId: 'project_1', workspaceId: 'workspace_1', displayPath: 'session', parentSessionId, rootSessionId: parentSessionId ?? sessionId, createdAt: updatedAt - 1, updatedAt, epoch: 'epoch_1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' }, metadata: null, metadataRevision: '0', archiveRevision: '0' });
 beforeEach(() => resetSessionOrdering());
 describe('native session lifecycle ordering', () => {
   test('promotes only active and settled lifecycle edges', () => {

@@ -46,6 +46,7 @@ const runtimeSession = {
   headSequence: '0',
   runtimeStatus: 'idle',
   activeRunId: null,
+  mode: { kind: 'main' },
 };
 const run = {
   runId: randomUUID(), sessionId: SESSION, status: 'pending', createdAt: 2,

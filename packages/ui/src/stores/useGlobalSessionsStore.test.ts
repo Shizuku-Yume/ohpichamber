@@ -6,7 +6,7 @@ import { isGlobalSessionRecencyOnlyUpdate, resolveGlobalSessionDirectory, useGlo
 const session = (sessionId: string, extra: Partial<Session> = {}): Session => ({
   sessionId, projectId: 'pro_project', workspaceId: 'wsp_repo', displayPath: 'repo',
   rootSessionId: sessionId, createdAt: 1, updatedAt: 2, epoch: 'epoch', headSequence: '0',
-  runtimeStatus: 'idle', activeRunId: null, metadata: { title: sessionId },
+  runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' as const }, metadata: { title: sessionId },
   metadataRevision: '1', archiveRevision: '0', ...extra,
 });
 

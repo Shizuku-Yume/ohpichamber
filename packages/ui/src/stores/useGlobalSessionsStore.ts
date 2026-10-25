@@ -103,6 +103,7 @@ const childSessionRecord = (parent: Session, child: Subagent): Session => {
     sessionId: child.childSessionId, parentSessionId: parent.sessionId, rootSessionId: parent.rootSessionId,
     projectId: parent.projectId, workspaceId: parent.workspaceId, displayPath: parent.displayPath,
     createdAt: parent.createdAt, updatedAt: parent.updatedAt, epoch: parent.epoch, headSequence: parent.headSequence,
+    mode: { kind: 'main' },
     runtimeStatus, activeRunId: runtimeStatus === 'idle' || runtimeStatus === 'unavailable' ? null : parent.activeRunId,
     metadata: { title: child.role }, metadataRevision: parent.metadataRevision === '0' ? '1' : parent.metadataRevision,
     archiveRevision: parent.archiveRevision,

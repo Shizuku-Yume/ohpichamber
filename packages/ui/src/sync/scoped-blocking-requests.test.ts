@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { ApprovalRequest, Session } from '@openchamber/agent-contract';
 import { areRequestArraysReferentiallyEqual, collectScopedBlockingRequests } from './scoped-blocking-requests';
-const session = (sessionId: string, parentSessionId?: string): Session => ({ sessionId, projectId: 'project_1', workspaceId: 'workspace_1', displayPath: 'session', parentSessionId, rootSessionId: parentSessionId ?? sessionId, createdAt: 1, updatedAt: 1, epoch: 'epoch_1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, metadata: null, metadataRevision: '0', archiveRevision: '0' });
+const session = (sessionId: string, parentSessionId?: string): Session => ({ sessionId, projectId: 'project_1', workspaceId: 'workspace_1', displayPath: 'session', parentSessionId, rootSessionId: parentSessionId ?? sessionId, createdAt: 1, updatedAt: 1, epoch: 'epoch_1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' }, metadata: null, metadataRevision: '0', archiveRevision: '0' });
 const approval = (approvalId: string, sessionId: string): ApprovalRequest => ({ approvalId, sessionId, turnId: 'turn_1', toolCallId: 'tool_1', toolName: 'bash', actionType: 'bash_command', commandSummary: 'pwd', details: {}, status: 'pending', requestedAt: 1, epoch: 'epoch_1', workerGeneration: 'worker_1', version: '1' });
 describe('scoped native blocking requests', () => {
   test('collects a session subtree', () => {

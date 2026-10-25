@@ -4,7 +4,7 @@ import { getCurrentSessionAssist } from './sessionAssistMetadata';
 
 const session = (updatedAt: number, assist: { forMessageID: string; recap: string; suggestion: string; generatedAt: number }): Session => ({
   sessionId: 'ses_1', projectId: 'prj', workspaceId: 'ws', displayPath: 'repo', rootSessionId: 'ses_1',
-  createdAt: 1, updatedAt, epoch: 'e', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  createdAt: 1, updatedAt, epoch: 'e', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
   metadata: { openchamber: { assist } } satisfies SessionMetadata, metadataRevision: '1', archiveRevision: '0',
 });
 

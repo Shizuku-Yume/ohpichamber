@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { CounterSchema, EntityIdSchema, EpochSchema, JsonObjectSchema, JsonValueSchema, PositiveCounterSchema, TimestampSchema } from './primitives.ts';
 import { SessionMetadataSchema } from './metadata.ts';
-import { RunOriginSchema, RuntimeSessionSchema, SessionRuntimeStatusSchema } from './session.ts';
+import { RunOriginSchema, RuntimeSessionSchema, SessionModeSchema, SessionRuntimeStatusSchema } from './session.ts';
 import { PartSchema, TokenUsageSchema, ToolStatusSchema } from './messages.ts';
 import { ApprovalRequestSchema, QuestionRequestSchema } from './requests.ts';
 import { QueueStateSchema } from './queue.ts';
@@ -19,6 +19,7 @@ export type DataEventEnvelope = z.infer<typeof DataEventEnvelopeSchema>;
 const sessionUpdatedSchema = DataEventEnvelopeSchema.extend({
   type: z.literal('session.updated'),
   session: RuntimeSessionSchema.optional(),
+  mode: SessionModeSchema.optional(),
   metadata: SessionMetadataSchema.nullable().optional(),
   metadataRevision: CounterSchema.optional(),
   archivedAt: TimestampSchema.nullable().optional(),
@@ -26,7 +27,7 @@ const sessionUpdatedSchema = DataEventEnvelopeSchema.extend({
 }).refine((event) => {
   const metadataPresent = event.metadata !== undefined;
   const archivePresent = event.archivedAt !== undefined;
-  return (event.session !== undefined || metadataPresent || archivePresent)
+  return (event.session !== undefined || event.mode !== undefined || metadataPresent || archivePresent)
     && metadataPresent === (event.metadataRevision !== undefined)
     && archivePresent === (event.archiveRevision !== undefined)
     && (!metadataPresent || (event.metadata === null) === (event.metadataRevision === '0'));

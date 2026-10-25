@@ -272,7 +272,7 @@ describe('canonical scheduled execution', () => {
   const workspace = { hostProjectId: 'host-project', projectId: 'opaque-project', workspaceId: 'opaque-workspace', cwd: '/repo' };
   const session = (scope, id = 'session') => ({ sessionId: id, rootSessionId: id, projectId: scope.projectId, workspaceId: scope.workspaceId,
     displayPath: '.', createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
-    metadata: null, metadataRevision: '0', archiveRevision: '0' });
+    mode: { kind: 'main' }, metadata: null, metadataRevision: '0', archiveRevision: '0' });
   const setup = (execution = {}, extra = {}) => {
     let task = { id: 'task', name: 'Daily', enabled: false, schedule: { kind: 'daily', times: ['09:00'], timezone: 'UTC' },
       execution: { prompt: 'Do the work', providerID: 'provider', modelID: 'model', agent: 'agent', variant: 'high', ...execution }, state: {} };

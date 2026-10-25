@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { createSessionGoalRuntime } from './runtime.js';
 
 const scope = { sessionId: 'ses_1', rootSessionId: 'ses_1', projectId: 'project-1', workspaceId: 'workspace-1', cwd: '/repo' };
-const rootSession = { sessionId: 'ses_1', projectId: 'project-1', workspaceId: 'workspace-1', displayPath: '.', rootSessionId: 'ses_1', createdAt: 1, updatedAt: 2, epoch: 'epoch_1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null };
+const rootSession = { sessionId: 'ses_1', projectId: 'project-1', workspaceId: 'workspace-1', displayPath: '.', rootSessionId: 'ses_1', createdAt: 1, updatedAt: 2, epoch: 'epoch_1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' } };
 const activeGoal = { id: 'goal_1', objective: 'Finish the task', status: 'active', turnsUsed: 0, createdAt: 1, updatedAt: 1 };
 
 const makeRuntime = ({ metadata = { openchamber: { goal: activeGoal } }, persistSessionGoal = async () => undefined } = {}) => createSessionGoalRuntime({

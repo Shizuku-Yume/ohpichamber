@@ -4,6 +4,20 @@ import { CanonicalEventSchema, StreamInvalidatedSchema } from './events.ts';
 const envelope = { sessionId: 'session_1', epoch: 'epoch_1', sequence: '9007199254740993', timestamp: 1 };
 
 describe('canonical event boundaries', () => {
+  test('session updates preserve authoritative plan state and reject Host paths', () => {
+    const session = {
+      sessionId: envelope.sessionId, rootSessionId: envelope.sessionId, projectId: 'project_1', workspaceId: 'workspace_1',
+      displayPath: '.', createdAt: 1, updatedAt: 1, epoch: envelope.epoch, headSequence: envelope.sequence,
+      runtimeStatus: 'idle', activeRunId: null,
+      mode: { kind: 'plan', status: 'active', planReference: 'local://PLAN.md' },
+    };
+    const event = { ...envelope, type: 'session.updated', session };
+    expect(CanonicalEventSchema.parse(JSON.parse(JSON.stringify(event)))).toEqual(event);
+    expect(CanonicalEventSchema.safeParse({ ...event, session: { ...session, mode: { ...session.mode, planReference: '/host/PLAN.md' } } }).success).toBe(false);
+    const modeOnly = { ...envelope, type: 'session.updated', mode: session.mode };
+    expect(CanonicalEventSchema.parse(modeOnly)).toEqual(modeOnly);
+    expect(CanonicalEventSchema.safeParse({ ...envelope, type: 'session.updated' }).success).toBe(false);
+  });
   test('data events retain exact uint64 sequences; invalidation never advances a cursor', () => {
     const delta = { ...envelope, type: 'part.delta', partId: 'part_1', delta: 'hello' };
     expect(CanonicalEventSchema.parse(JSON.parse(JSON.stringify(delta)))).toEqual(delta);

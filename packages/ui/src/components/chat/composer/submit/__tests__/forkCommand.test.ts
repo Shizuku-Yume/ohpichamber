@@ -7,7 +7,7 @@ import { runForkCommand, type ForkCommandDeps } from '../forkCommand';
 
 const forked: Session = {
     sessionId: 'session-fork', projectId: 'project-a', workspaceId: 'workspace-a', displayPath: '.', rootSessionId: 'session-fork',
-    createdAt: 1, updatedAt: 1, epoch: 'epoch-1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+    createdAt: 1, updatedAt: 1, epoch: 'epoch-1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
     metadata: { title: 'Fork' }, metadataRevision: '1', archiveRevision: '0',
 };
 const selection = { providerID: 'p', modelID: 'm', agent: 'build', variant: 'route-a', reasoningEffort: 'high' };

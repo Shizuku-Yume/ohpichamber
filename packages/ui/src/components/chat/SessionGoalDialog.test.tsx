@@ -29,7 +29,7 @@ const sessionId = 'session-1';
 // with it.
 const session = (updated: number, turnsUsed: number): Session => ({
   sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '.', rootSessionId: sessionId,
-  createdAt: 0, updatedAt: updated, epoch: 'epoch', headSequence: String(updated), runtimeStatus: 'idle', activeRunId: null,
+  createdAt: 0, updatedAt: updated, epoch: 'epoch', headSequence: String(updated), runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
   metadata: { title: 'test', openchamber: { goal: { id: 'goal-1', objective: 'Ship it', status: 'active', tokensUsed: updated * 100, turnsUsed } } },
   metadataRevision: '1', archiveRevision: '0',
 });

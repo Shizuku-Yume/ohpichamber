@@ -23,7 +23,7 @@ const initialUI = useSessionUIStore.getState();
 const Item: SessionTabMenuComponents['Item'] = (props) => <button {...props} />;
 const session = (sessionId: string, archivedAt?: number): Session => ({
   sessionId, rootSessionId: sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '.',
-  createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
   archivedAt, metadata: archivedAt === undefined ? null : { title: `session ${sessionId}` }, metadataRevision: archivedAt === undefined ? '0' : '1', archiveRevision: archivedAt === undefined ? '0' : '1',
 });
 let root: Root;

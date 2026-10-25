@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import type { Session, SessionRuntimeStatus } from '@openchamber/agent-contract';
 import { aggregateLiveSessionStatuses, areSessionListsEquivalent } from './live-aggregate';
 import { getSyncPerformanceDiagnostics, resetSyncPerformanceDiagnostics, setSyncPerformanceDiagnosticsEnabled } from './performance-diagnostics';
-const session = (sessionId: string, updatedAt: number): Session => ({ sessionId, projectId: 'project_1', workspaceId: 'workspace_1', displayPath: 'session', rootSessionId: sessionId, createdAt: updatedAt, updatedAt, epoch: 'epoch_1', headSequence: '0', runtimeStatus: 'running', activeRunId: 'run_1', metadata: null, metadataRevision: '0', archiveRevision: '0' });
+const session = (sessionId: string, updatedAt: number): Session => ({ sessionId, projectId: 'project_1', workspaceId: 'workspace_1', displayPath: 'session', rootSessionId: sessionId, createdAt: updatedAt, updatedAt, epoch: 'epoch_1', headSequence: '0', runtimeStatus: 'running', activeRunId: 'run_1', mode: { kind: 'main' }, metadata: null, metadataRevision: '0', archiveRevision: '0' });
 describe('native live status aggregation', () => {
   test('indexes each session once instead of scanning per status', () => {
     const sessions = Array.from({ length: 50 }, (_, index) => session(`session-${index}`, index));

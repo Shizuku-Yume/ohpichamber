@@ -56,7 +56,7 @@ const session = (sessionId: string, displayPath: string | null): Session => {
   if (displayPath) registerWorkspaceDirectory(workspaceId, displayPath);
   return {
     sessionId, projectId: 'project', workspaceId, displayPath: displayPath ?? '.', rootSessionId: sessionId,
-    createdAt: 1, updatedAt: 1, epoch: 'epoch_1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+    createdAt: 1, updatedAt: 1, epoch: 'epoch_1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
     metadata: { title: sessionId }, metadataRevision: '1', archiveRevision: '0',
   };
 };

@@ -53,6 +53,7 @@ const admittedSession = (scope, sessionId = 'native-session') => ({
   sessionId, rootSessionId: sessionId, projectId: scope.projectId, workspaceId: scope.workspaceId,
   displayPath: scope.displayPath, createdAt: 1700000000000, updatedAt: 1700000000000,
   epoch: 'native-epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  mode: { kind: 'main' },
 });
 
 describe('configured Host scope authority', () => {

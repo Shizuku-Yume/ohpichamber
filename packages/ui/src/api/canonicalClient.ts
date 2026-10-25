@@ -270,6 +270,15 @@ export class CanonicalClient {
     const { sessionId, workspaceId, projectId } = scope;
     return request(`/api/agent/v1/sessions/${id(sessionId)}/fork`, scoped(C.SessionCreateAckSchema, result => result.session.projectId === projectId && result.session.workspaceId === workspaceId && result.session.sessionId !== sessionId), { method: 'POST', headers: { 'Content-Type': 'application/json', ...headersFor(commandId) }, body: JSON.stringify(input) });
   }
+  setMode(sessionId: string, mode: 'main' | 'plan'): Promise<Extract<C.SessionControlAck, { type: 'mode.set' }>> {
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/control`, scoped(C.SessionControlAckSchema, result => result.type === 'mode.set'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: bodyFor(C.SessionControlRequestSchema, { type: 'mode.set', mode }),
+    }).then((result) => {
+      if (result.type !== 'mode.set') throw new Error('Mode response identified another control');
+      return result;
+    });
+  }
   abortSession(sessionId: string, runId: string): Promise<RunAbortAck> {
     return request(`/api/agent/v1/sessions/${id(sessionId)}/control`, scoped(C.RunAbortAckSchema, result => result.run.sessionId === sessionId && result.run.runId === runId), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.SessionControlRequestSchema, { type: 'abort', runId }) });
   }

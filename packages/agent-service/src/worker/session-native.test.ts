@@ -18,6 +18,7 @@ import type { ProjectionInput } from '../projection/protocol.ts';
 import type { HostActionRequest } from '../native-policy-protocol.ts';
 import { NativeApprovalRequired } from './policy.ts';
 import { WorkerSession } from './session.ts';
+import { WorkerModeController } from './mode.ts';
 
 beforeEach(resetSettingsForTest);
 afterEach(resetSettingsForTest);
@@ -49,12 +50,13 @@ function completion(tool?: { name: string; input: JsonObject; id: string }): Res
   return new Response(`data: ${JSON.stringify(chunk)}\n\ndata: ${JSON.stringify(finish)}\n\ndata: [DONE]\n\n`, { headers: { 'content-type': 'text/event-stream' } });
 }
 
-async function fixture({ respond, invoke, machineCommands = [], onSubagent = () => {}, denyWebSearch = false }: {
+async function fixture({ respond, invoke, machineCommands = [], onSubagent = () => {}, denyWebSearch = false, planModel = false }: {
   respond: (payload: ProviderRequest, root: string) => Promise<Response> | Response;
   invoke?: (request: HostActionRequest, signal: AbortSignal, root: string) => Promise<JsonValue>;
   machineCommands?: string[];
   onSubagent?: (payload: SubagentLifecyclePayload) => void;
   denyWebSearch?: boolean;
+  planModel?: boolean;
 }) {
   const root = await mkdtemp(join(tmpdir(), 'native-seams-'));
   const home = process.env.HOME;
@@ -80,9 +82,8 @@ async function fixture({ respond, invoke, machineCommands = [], onSubagent = () 
     requests.push(payload);
     return respond(payload, cwd);
   } });
-  try {
-    worker = await WorkerSession.open({ type: 'bootstrap', rootSessionId, workerGeneration: generation,
-      projectId: 'project', workspaceId: 'workspace', agentDirectoryId: 'source', cwd, agentDirectory, mcpConfigPath, sessionsDirectory: join(root, 'sessions') }, inputs => {
+  const openWorker = (sessionFile?: string) => WorkerSession.open({ type: 'bootstrap', rootSessionId, workerGeneration: generation,
+      projectId: 'project', workspaceId: 'workspace', agentDirectoryId: 'source', cwd, agentDirectory, mcpConfigPath, sessionFile, sessionsDirectory: join(root, 'sessions') }, inputs => {
       events.push(...inputs);
       journal?.append(inputs);
     }, interaction => {
@@ -110,9 +111,10 @@ async function fixture({ respond, invoke, machineCommands = [], onSubagent = () 
       if (!invoke) throw new Error('Host action was not part of this scenario');
       return invoke(request, signal, cwd);
     }, () => {}, onSubagent);
+  try {
+    worker = await openWorker();
     journal = new SessionJournal({ sessionId: rootSessionId, rootSessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '.' }, worker.seed());
-    const sessionWorker = worker;
-    interactions.openSession(rootSessionId, journal.runtime().epoch, generation, 'workspace', async operation => { await sessionWorker.operation(operation); }, input => { events.push(input); journal!.append([input]); });
+    interactions.openSession(rootSessionId, journal.runtime().epoch, generation, 'workspace', async operation => { await worker!.operation(operation); }, input => { events.push(input); journal!.append([input]); });
     await worker.operation({ type: 'catalog', revision: '1', operation: { type: 'catalog.provider.configure', request: { expectedRevision: '0', configuration: {
       providerId: 'native-fixture', name: 'Native fixture', endpoint: `http://127.0.0.1:${provider.port}/v1`, protocol: 'chat-completions', credentialRef: null,
     } } } });
@@ -120,7 +122,28 @@ async function fixture({ respond, invoke, machineCommands = [], onSubagent = () 
       modelId: 'native-model', provider: 'native-fixture', name: 'Native model', modalities: ['text'], contextWindow: 65536, maxOutputTokens: 128,
       reasoningEffortSupported: false, reasoningOptions: [], variants: [], toolsSupported: true, enabled: true, pricing: null,
     } } } });
-    return { root: cwd, worker, events, requests, grants, hostRequests, interactions, journal, mcpConfigPath,
+    if (planModel) {
+      await worker.operation({ type: 'catalog', revision: '3', operation: { type: 'catalog.model.configure', request: { expectedRevision: '2', model: {
+        modelId: 'native-plan-model', provider: 'native-fixture', name: 'Native plan model', modalities: ['text'], contextWindow: 65536, maxOutputTokens: 128,
+        reasoningEffortSupported: false, reasoningOptions: [], variants: [], toolsSupported: true, enabled: true, pricing: null,
+      } } } });
+      worker.session.settings.setModelRole('plan', 'native-fixture/native-plan-model');
+      await worker.session.settings.flush();
+    }
+    const initialModel = worker.session.modelRegistry.find('native-fixture', 'native-model');
+    if (!initialModel) throw new Error('Fixture main model is unavailable');
+    await worker.session.setModelTemporary(initialModel);
+    return { root: cwd, get worker() { return worker!; }, events, requests, grants, hostRequests, interactions, journal, mcpConfigPath,
+      reopen: async () => {
+        const sessionFile = worker!.session.sessionManager.getSessionFile();
+        if (!sessionFile) throw new Error('Fixture session file is missing');
+        interactions.closeSession(rootSessionId);
+        await worker!.close();
+        resetSettingsForTest();
+        worker = await openWorker(sessionFile);
+        journal!.replace(worker.seed());
+        interactions.openSession(rootSessionId, journal!.runtime().epoch, generation, 'workspace', async operation => { await worker!.operation(operation); }, input => { events.push(input); journal!.append([input]); });
+      },
       waitApproval: () => {
         const approval = pendingApprovals.shift();
         if (approval) return Promise.resolve(approval);
@@ -132,7 +155,7 @@ async function fixture({ respond, invoke, machineCommands = [], onSubagent = () 
       close: async () => {
         interactions.closeSession(rootSessionId);
         journal?.close();
-        await sessionWorker.close();
+        await worker!.close();
         provider.stop(true);
         if (home === undefined) delete process.env.HOME; else process.env.HOME = home;
         resetSettingsForTest();
@@ -730,6 +753,85 @@ test('actual SDK edit reaches Host policy and projects its exact replace argumen
     expect(harness.events.some(event => event.event.type === 'run.failed')).toBe(false);
   } finally {
     unsubscribe();
+    await harness.close();
+  }
+}, 30000);
+
+test('native plan mode restores its tools and role model after reopening the same file', async () => {
+  const harness = await fixture({ respond: () => completion(), planModel: true });
+  try {
+    const before = harness.worker.session.getEnabledToolNames();
+    const entered = await harness.worker.operation({ type: 'mode.set', mode: 'plan' });
+    expect(entered).toMatchObject({ type: 'mode.set', mode: { kind: 'plan', status: 'active', planReference: expect.stringMatching(/^local:\/\//) } });
+    expect(harness.worker.session.getEnabledToolNames()).toEqual([...new Set([...before, ...(harness.worker.session.hasBuiltInTool('write') ? ['write'] : [])])]);
+    expect(harness.worker.session.model?.id).toBe('native-plan-model');
+    expect(harness.journal.snapshot().session.mode).toEqual(harness.worker.mode());
+    expect(harness.events).toContainEqual(expect.objectContaining({ event: { type: 'session.updated', mode: harness.worker.mode() } }));
+    await harness.reopen();
+    expect(harness.worker.mode()).toEqual(entered.type === 'mode.set' ? entered.mode : undefined);
+    expect(harness.journal.snapshot().session.mode).toEqual(harness.worker.mode());
+    expect(harness.worker.session.model?.id).toBe('native-plan-model');
+    expect(harness.worker.session.getEnabledToolNames()).toEqual([...new Set([...before, ...(harness.worker.session.hasBuiltInTool('write') ? ['write'] : [])])]);
+    expect(await harness.worker.operation({ type: 'mode.set', mode: 'main' })).toEqual({ type: 'mode.set', mode: { kind: 'main' } });
+    expect(harness.worker.session.getEnabledToolNames()).toEqual(before);
+    expect(harness.worker.session.model?.id).toBe('native-model');
+    await harness.reopen();
+    expect(harness.worker.mode()).toEqual({ kind: 'main' });
+    expect(harness.worker.session.model?.id).toBe('native-model');
+  } finally { await harness.close(); }
+}, 30000);
+
+test('native plan prompts keep the role model despite captured Main options', async () => {
+  const requested = Promise.withResolvers<ProviderRequest>();
+  const harness = await fixture({ planModel: true, respond: payload => { requested.resolve(payload); return completion(); } });
+  try {
+    await harness.worker.operation({ type: 'mode.set', mode: 'plan' });
+    await harness.worker.operation({ type: 'prompt', runId: 'plan-role-run', request: prompt('Read the plan context.') });
+    expect((await requested.promise).model).toBe('native-plan-model');
+    expect(harness.worker.session.model?.id).toBe('native-plan-model');
+  } finally { await harness.close(); }
+}, 30000);
+
+test('native mode controller restores plan_paused without activating planning tools', async () => {
+  const harness = await fixture({ respond: () => completion() });
+  try {
+    harness.worker.session.sessionManager.appendModeChange('plan_paused', { planFilePath: 'local://paused-plan.md' });
+    await harness.worker.session.sessionManager.flush();
+    await harness.reopen();
+    expect(harness.worker.mode()).toEqual({ kind: 'plan', status: 'paused', planReference: 'local://paused-plan.md' });
+    expect(harness.worker.session.getPlanModeState()).toBeUndefined();
+    const restored = new WorkerModeController(harness.worker.session);
+    expect(restored.mode()).toEqual(harness.worker.mode());
+    expect(await harness.worker.operation({ type: 'mode.set', mode: 'main' })).toEqual({ type: 'mode.set', mode: { kind: 'main' } });
+  } finally { await harness.close(); }
+}, 30000);
+
+test('native plan mode refuses an actual write outside the plan reference', async () => {
+  const failed = Promise.withResolvers<void>();
+  const harness = await fixture({ planModel: true, respond: payload => payload.messages.at(-1)?.role === 'tool'
+    ? completion() : completion({ name: 'write', id: 'outside-plan-write', input: { path: 'outside-plan.txt', content: 'must-refuse' } }) });
+  const unsubscribe = harness.worker.session.subscribe(event => {
+    if (event.type === 'tool_execution_end' && event.toolCallId === 'outside-plan-write') failed.resolve();
+  });
+  try {
+    await harness.worker.operation({ type: 'mode.set', mode: 'plan' });
+    await harness.worker.operation({ type: 'prompt', runId: 'plan-write-run', request: prompt('Write outside the plan file.') });
+    await failed.promise;
+    const outcome = harness.events.map(input => input.event).find(event => event.type === 'tool.completed' && event.toolCallId === 'outside-plan-write');
+    expect(outcome).toMatchObject({ status: 'failed', isError: true });
+    await expect(readFile(join(harness.root, 'outside-plan.txt'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+  } finally { unsubscribe(); await harness.close(); }
+}, 30000);
+
+test('native mode changes reject while a worker run is active', async () => {
+  const harness = await fixture({ respond: () => completion() });
+  const gate = Promise.withResolvers<boolean>();
+  try {
+    const run = harness.worker.startWorkerRun('plan', () => gate.promise);
+    await expect(harness.worker.operation({ type: 'mode.set', mode: 'plan' })).rejects.toMatchObject({ status: 409, code: 'RUN_ACTIVE' });
+    gate.resolve(false);
+    await run;
+  } finally {
     await harness.close();
   }
 }, 30000);

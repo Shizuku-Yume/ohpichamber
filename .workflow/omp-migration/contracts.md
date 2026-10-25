@@ -286,6 +286,10 @@ The Host privately maps `projectId` and `workspaceId` to validated cwd roots and
 
 `RuntimeSession` contains `runtimeStatus` and nullable `activeRunId`, but no Host archive or metadata. Host-composed `Session` adds `archivedAt`, `archiveRevision`, nullable `metadata` and `metadataRevision`; confirmed missing metadata is exactly `null` at revision `"0"`. An operational record may omit `title`. Goals, work status, delivery receipts, context pins and multi-run membership stay under typed `openchamber` metadata, not a second scalar `goal` field. The Host projects a legacy multi-run private scope to an opaque identity before publication.
 
+`RuntimeSession.mode` is required and owned by OMP's session context. It is `{kind:'main'}` or `{kind:'plan', status:'active'|'paused', planReference:string}`; plan references are `local://` URLs, never Host filesystem paths. The worker restores native plan state on open and publishes changes through `session.updated.mode` (or the mode in a full `session.updated.session`), so snapshots and subscribed clients share the same authority. The journal supplies event epoch/sequence; the worker does not invent a full runtime record for a mode-only change. The Host does not persist mode.
+
+`POST /api/agent/v1/sessions/:sessionId/control` accepts `{type:'mode.set', mode:'main'|'plan'}` and returns `{type:'mode.set', mode:SessionMode}`. The worker owns tool/model transitions and writes OMP `appendModeChange`; a running session refuses changes with 409 `RUN_ACTIVE`. Entering Plan narrows tools to OMP's plan set and applies its plan model role; returning to Main restores the previous tools/model. Repeated selection of the current idle mode is a no-op. Other modes are added by their owning tasks.
+
 Agent profile `allowedTools` has three distinct states: `null` inherits the SDK's captured native active default set, `[]` explicitly allows no model tools, and an array is the exact restriction. Canonical profile metadata preserves this distinction and the worker captures the inherited baseline before any profile selection. This is a worker execution-profile grant, not a Host policy snapshot field: `HostNativePolicySnapshot` carries only agent/profile and permission-preset identities, and the Host still authorizes every tool call independently.
 
 Agent profile mutations replace the complete profile at an expected owning revision. Omitted `systemPromptOverride` and `permissionPresetId` use the default prompt and policy; a preset ID selects an owning policy, not an unvalidated allow-mode shortcut. Provider/model mutations likewise carry their owning revision. Credential values occur only in an authenticated `ProviderCredentialWriteRequest`; catalogs, mutation results and events expose non-secret credential presence/references, never those values. Configured presence does not prove provider reachability.
@@ -403,7 +407,7 @@ For example, an empty captured branch returns:
 
 ```json
 {
-  "session": {"sessionId":"sess_alpha","projectId":"project_1","workspaceId":"workspace_1","displayPath":".","rootSessionId":"sess_alpha","createdAt":1774201000000,"updatedAt":1774201000000,"epoch":"ep_2","headSequence":"0","runtimeStatus":"idle","activeRunId":null},
+  "session": {"sessionId":"sess_alpha","projectId":"project_1","workspaceId":"workspace_1","displayPath":".","rootSessionId":"sess_alpha","createdAt":1774201000000,"updatedAt":1774201000000,"epoch":"ep_2","headSequence":"0","runtimeStatus":"idle","activeRunId":null,"mode":{"kind":"main"}},
   "cursor":"ep_2:0",
   "activeRun":null,
   "branch":{"branchId":"branch_1","branchVersion":"1","leafMessageId":null},

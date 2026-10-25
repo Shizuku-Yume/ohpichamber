@@ -58,7 +58,7 @@ describe('native btw fork and delivery', () => {
     const parent: Session = {
       sessionId: 'parent', rootSessionId: 'parent', workspaceId: 'workspace_parent', projectId: 'project_parent',
       displayPath: '.', epoch: 'epoch_parent', headSequence: '5', createdAt: 1, updatedAt: 3,
-      runtimeStatus: 'running', activeRunId: 'run_running', metadata: null, metadataRevision: '0', archiveRevision: '0',
+      runtimeStatus: 'running', activeRunId: 'run_running', mode: { kind: 'main' }, metadata: null, metadataRevision: '0', archiveRevision: '0',
     };
     const fork: Session = { ...parent, sessionId: 'fork', rootSessionId: 'fork', runtimeStatus: 'idle', activeRunId: null };
     const turns: Turn[] = [
@@ -67,7 +67,7 @@ describe('native btw fork and delivery', () => {
       { turnId: 'turn_running', sessionId: parent.sessionId, runId: 'run_running', status: 'running', userMessageId: 'user_running', assistantMessageIds: ['assistant_running'], startedAt: 3 },
     ];
     const snapshot: SessionSnapshot = {
-      session: parent, cursor: 'epoch_parent:5', activeRun: { runId: 'run_running', sessionId: parent.sessionId, status: 'running', createdAt: 3 },
+      session: parent, cursor: 'epoch_parent:5', activeRun: { runId: 'run_running', sessionId: parent.sessionId, status: 'running', origin: 'host', createdAt: 3 },
       branch: { branchId: 'branch_parent', branchVersion: '1', leafMessageId: 'assistant_running' },
       window: { firstTurnId: 'turn_completed', lastTurnId: 'turn_running', firstMessageId: 'user_completed', lastMessageId: 'assistant_running', hasEarlier: false },
       turns, messages: [], approvals: [], questions: [], requestRecovery: { pendingSet: 'replace', priorEpochs: 'expired' },

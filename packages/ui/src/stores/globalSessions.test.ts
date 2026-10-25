@@ -5,7 +5,7 @@ import { compareSessionRevision, isSessionDiscoveryFailed, mergeSessionDirectory
 const session = (extra: Partial<Session> = {}): Session => ({
   sessionId: 'ses_one', projectId: 'pro_one', workspaceId: 'wsp_one', displayPath: 'repo',
   rootSessionId: 'ses_one', createdAt: 1, updatedAt: 2, epoch: 'epoch', headSequence: '0',
-  runtimeStatus: 'idle', activeRunId: null, metadata: { title: 'One' },
+  runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' as const }, metadata: { title: 'One' },
   metadataRevision: '1', archiveRevision: '0', ...extra,
 });
 

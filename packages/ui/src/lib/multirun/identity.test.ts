@@ -11,7 +11,7 @@ const membership = (id: string): MultiRunMembership => ({
 });
 const session = (id: string, marker: MultiRunMembership | null = membership(id)): Session => {
   const result: Session = { sessionId: id, projectId: 'project', workspaceId: 'workspace', displayPath: '.', rootSessionId: id,
-    createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+    createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
     metadata: { title: 'bench/openrouter/vendor/model' }, metadataRevision: '1', archiveRevision: '0' };
   if (marker) result.metadata = withMultiRunMembership(result, marker);
   return result;

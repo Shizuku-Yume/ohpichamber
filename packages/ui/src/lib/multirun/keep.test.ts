@@ -15,7 +15,7 @@ const spies: Array<{ mockRestore(): void }> = [];
 afterEach(() => { for (const spy of spies.splice(0)) spy.mockRestore(); });
 function sessionFixture(sessionId: string): Session {
   const session: Session = { sessionId, rootSessionId: sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '.',
-    createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+    createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
     metadata: {}, metadataRevision: '1', archiveRevision: '0' };
   session.metadata = withMultiRunMembership(session, { version: 1, sessionID: sessionId, group: { kind: 'id', id: '9f512893-6e63-4e49-a534-5de733ca103e' }, groupSlug: 'run', role: 'run', providerID: 'provider', modelID: 'model' });
   return session;

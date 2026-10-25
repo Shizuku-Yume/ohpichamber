@@ -12,6 +12,7 @@
  */
 
 import type { SourceControlProvider } from '@/lib/api/types';
+import type { SessionMode } from '@openchamber/agent-contract';
 import React from 'react';
 
 import { SessionGoalButton, SessionGoalObjectiveCounter } from '@/components/chat/SessionGoalButton';
@@ -26,6 +27,7 @@ import { ModelControls } from '../../ModelControls';
 import { ComposerActionButtons } from './ComposerActionButtons';
 import { ComposerAttachmentControls } from './ComposerAttachmentControls';
 import { FocusModeButton } from './FocusModeButton';
+import { ComposerModeSelector } from './ComposerModeSelector';
 import { PermissionAutoAcceptButton } from './PermissionAutoAcceptButton';
 import type { PermissionMode } from '@/stores/utils/permissionAutoAccept';
 import type { BtwSelection } from '@/stores/useBtwStore';
@@ -52,6 +54,8 @@ interface ComposerFooterProps {
     canAbort: boolean;
     hasContent: boolean;
     isExpandedInput: boolean;
+    mode?: SessionMode;
+    runActive: boolean;
     permissionMode: PermissionMode;
     isPermissionAutoAcceptInteractive: boolean;
     dictationActive: boolean;
@@ -126,6 +130,8 @@ function ComposerFooterView(props: ComposerFooterProps) {
         hasContent,
         isExpandedInput,
         permissionMode,
+        mode,
+        runActive,
         isPermissionAutoAcceptInteractive,
         dictationActive,
         onOpenSettings,
@@ -182,6 +188,7 @@ function ComposerFooterView(props: ComposerFooterProps) {
                 <>
                     <div className="flex w-full items-center justify-between gap-x-1.5">
                         <div className="composer-mobile-actions flex items-center gap-x-2 pl-1">
+                            {!isBtw ? <ComposerModeSelector sessionId={currentSessionId} mode={mode} runActive={runActive} buttonClass={footerIconButtonClass} iconSizeClass={iconSizeClass} /> : null}
                             <ComposerAttachmentControls
                                 footerIconButtonClass={footerIconButtonClass}
                                 iconSizeClass={iconSizeClass}
@@ -256,6 +263,7 @@ function ComposerFooterView(props: ComposerFooterProps) {
             ) : (
                 <>
                     <div className={cn("flex items-center flex-shrink-0", footerGapClass)}>
+                        {!isBtw ? <ComposerModeSelector sessionId={currentSessionId} mode={mode} runActive={runActive} buttonClass={footerIconButtonClass} iconSizeClass={iconSizeClass} /> : null}
                         <ComposerAttachmentControls
                             footerIconButtonClass={footerIconButtonClass}
                             iconSizeClass={iconSizeClass}

@@ -74,7 +74,7 @@ const planAgent: Agent = { ...agent, agentId: 'profile-plan-29', name: 'Plan' };
 const reviewAgent: Agent = { ...agent, agentId: 'profile-review-31', name: 'Review' };
 const session: Session = {
   sessionId: SESSION_ID, projectId: 'project', workspaceId: 'workspace', displayPath: '.', rootSessionId: SESSION_ID,
-  createdAt: 0, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  createdAt: 0, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
   metadata: null, metadataRevision: '0', archiveRevision: '0',
 };
 const reply = (messageId: string): Message => ({

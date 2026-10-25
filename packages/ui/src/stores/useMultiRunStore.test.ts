@@ -72,7 +72,7 @@ function fixture(input: { rejectFirst?: boolean; isolate?: boolean; wait?: boole
     metadata.set(sessionId, request.metadata ?? {});
     const session: Session = {
       sessionId, rootSessionId: sessionId, projectId: request.projectId, workspaceId: request.workspaceId, displayPath: '.',
-      createdAt: count, updatedAt: count, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+      createdAt: count, updatedAt: count, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
       metadata: request.metadata ?? null, metadataRevision: request.metadata ? '1' : '0', archiveRevision: '0',
     };
     expect(getMultiRunMembership(session)).toBeNull();
@@ -193,7 +193,7 @@ describe('canonical multi-run store', () => {
   });
   test('registration rejects a mismatched workspace directory', () => {
     const api = fixture();
-    const unowned: Session = { sessionId: 'unowned', rootSessionId: 'unowned', projectId: 'project', workspaceId: 'unknown', displayPath: '.', createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, metadata: null, metadataRevision: '0', archiveRevision: '0' };
+    const unowned: Session = { sessionId: 'unowned', rootSessionId: 'unowned', projectId: 'project', workspaceId: 'unknown', displayPath: '.', createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' }, metadata: null, metadataRevision: '0', archiveRevision: '0' };
     expect(() => registerMultiRunSession(unowned, '/other')).toThrow('directory changed');
     expect(api.published).toEqual([]);
   });

@@ -25,6 +25,7 @@ const session = (sessionId: string, directory: string, title = sessionId): Sessi
   headSequence: '0',
   runtimeStatus: 'idle',
   activeRunId: null,
+  mode: { kind: 'main' },
   metadata: { title },
   metadataRevision: '0',
   archiveRevision: '0',

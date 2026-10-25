@@ -12,7 +12,7 @@ const generation = 'worker_expected';
 const client = new CanonicalClient();
 const runtimeSession: C.RuntimeSession = {
   sessionId, rootSessionId: 'root_expected', projectId: 'project_expected', workspaceId, displayPath: '.',
-  epoch, headSequence: '0', createdAt: 1, updatedAt: 1, runtimeStatus: 'idle', activeRunId: null,
+  epoch, headSequence: '0', createdAt: 1, updatedAt: 1, runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
 };
 const snapshot = (session = runtimeSession): C.SessionSnapshot => ({
   session, cursor: `${session.epoch}:${session.headSequence}`, activeRun: null,
@@ -197,6 +197,11 @@ describe('CanonicalClient real HTTP scope boundary', () => {
   test('sends compact instructions through the canonical session control contract', async () => {
     respondWith({ type: 'compact', compactionId: 'compact_1', tokensBefore: 4096, completedAt: 1 });
     await expect(client.compactSession(sessionId, 'Keep key details.')).resolves.toMatchObject({ type: 'compact', tokensBefore: 4096 });
+    expect(calls.at(-1)).toBe(`POST /api/agent/v1/sessions/${sessionId}/control`);
+  });
+  test('sends mode.set through canonical session control and validates the authoritative mode ack', async () => {
+    respondWith({ type: 'mode.set', mode: { kind: 'plan', status: 'active', planReference: 'local://plans/session-1.md' } });
+    await expect(client.setMode(sessionId, 'plan')).resolves.toMatchObject({ type: 'mode.set', mode: { kind: 'plan', status: 'active' } });
     expect(calls.at(-1)).toBe(`POST /api/agent/v1/sessions/${sessionId}/control`);
   });
 

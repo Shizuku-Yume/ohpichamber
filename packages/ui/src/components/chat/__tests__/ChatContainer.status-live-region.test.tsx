@@ -108,7 +108,7 @@ const hostSession = (): Session => ({
 const acceptedRunSnapshot = (sessionId: string) => {
   const snapshot = nativeSnapshot(sessionId, []);
   snapshot.session = { ...snapshot.session, runtimeStatus: 'running', activeRunId: 'run-accepted' };
-  snapshot.activeRun = { runId: 'run-accepted', sessionId, status: 'running', createdAt: 3 };
+  snapshot.activeRun = { runId: 'run-accepted', sessionId, status: 'running', origin: 'host', createdAt: 3 };
   return snapshot;
 };
 const client = nativeClient({

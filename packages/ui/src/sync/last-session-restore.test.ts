@@ -21,6 +21,7 @@ const session = (sessionId: string, workspaceId = 'workspace-restore'): Session 
     headSequence: '0',
     runtimeStatus: 'idle',
     activeRunId: null,
+    mode: { kind: 'main' },
     metadata: { title: sessionId },
     metadataRevision: '1',
     archiveRevision: '0',

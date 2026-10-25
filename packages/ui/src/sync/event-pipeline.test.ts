@@ -6,7 +6,7 @@ import type { SessionMessageTarget } from "./session-message-loader"
 
 const target: SessionMessageTarget = { directory: "/repo", sessionId: "session-1" }
 const snapshot: SessionSnapshot = {
-  session: { sessionId: "session-1", projectId: "project-1", workspaceId: "workspace-1", displayPath: ".", rootSessionId: "session-1", createdAt: 1, updatedAt: 1, epoch: "epoch-1", headSequence: "4", runtimeStatus: "idle", activeRunId: null },
+  session: { sessionId: "session-1", projectId: "project-1", workspaceId: "workspace-1", displayPath: ".", rootSessionId: "session-1", createdAt: 1, updatedAt: 1, epoch: "epoch-1", headSequence: "4", runtimeStatus: "idle", activeRunId: null, mode: { kind: "main" } },
   cursor: "epoch-1:4", activeRun: null,
   branch: { branchId: "branch-1", branchVersion: "0", leafMessageId: null },
   window: { firstTurnId: null, lastTurnId: null, firstMessageId: null, lastMessageId: null, hasEarlier: false },

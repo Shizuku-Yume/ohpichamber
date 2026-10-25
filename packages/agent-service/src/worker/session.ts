@@ -18,6 +18,7 @@ import type { WorkerBootstrapMessage, WorkerInteraction, WorkerOperation, Worker
 import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
 import { WorkerInteraction as NativeInteraction } from './interaction.ts';
+import { WorkerModeController } from './mode.ts';
 import { BRANCH_TYPE, rememberPrivateRoots, resolveCanonicalMessage, selectedBranchRevert, WorkerProjection, type BranchSelection } from './projection.ts';
 import { WorkerCatalogs } from './catalogs.ts';
 import { WorkerMcp, readNativeMcpConfigurationIfPresent } from './mcp.ts';
@@ -42,6 +43,7 @@ type PreparedPrompt = { text: string; options: PromptOptions; context: Parameter
 type NativeAdmission = { skillsAvailable: boolean; profile: Agent | null };
 
 export class WorkerSession {
+  private readonly modeController: WorkerModeController;
   private readonly projection: WorkerProjection;
   private readonly unsubscribe: () => void;
   private readonly operations = new Set<Promise<WorkerOperationResult>>();
@@ -78,6 +80,7 @@ export class WorkerSession {
     private readonly subagentEventBus: EventBus,
     private readonly webSearch: NativeWebSearch,
   ) {
+    this.modeController = new WorkerModeController(session);
     this.projection = new WorkerProjection(session.sessionManager, sessionId);
     this.btw = new RpcBtwController(session, frame => {
       if (frame.type === 'btw_delta') this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'btw.delta', recordId: frame.recordId, delta: frame.delta } }]);
@@ -266,6 +269,7 @@ export class WorkerSession {
       if (!sessionFile) throw new ProjectionError(503, 'SESSION_RESTORE_FAILED', 'Session storage is unavailable');
       await rememberPrivateRoots(manager, input);
       owned = new WorkerSession(nativeSession, authStorage, sessionFile, publish, input.rootSessionId, input.cwd, onFatal, interaction, catalogs, mcp, shell, completion, admission, authorize, onSubagent, subagentEventBus, new NativeWebSearch(runtime, input.workspaceId, authorize));
+      await owned.modeController.restore();
       capturePolicy = async () => {
         const configuration = input.mcpConfigPath ? await readNativeMcpConfigurationIfPresent(input.mcpConfigPath, input.workspaceId) : null;
         publishPolicy(await captureNativePolicy({ projectId: input.projectId, workspaceId: input.workspaceId, cwd: input.cwd, agentDirectory: input.agentDirectory, agentDirectoryId: input.agentDirectoryId ?? input.workerGeneration }, runtime, catalogs.agents, configuration?.config.servers ?? []));
@@ -301,6 +305,9 @@ export class WorkerSession {
   }
 
   private async selectOptions(options: CapturedSendOptions): Promise<void> {
+    // Composer options describe Main; active Plan keeps OMP's role model and tool presentation.
+    const mode = this.modeController.mode();
+    if (mode.kind === 'plan' && mode.status === 'active') return;
     const profile = options.agentId === null ? null : await this.catalogs.agents.profile(options.agentId);
     const fallback = profile?.model ?? (this.session.model ? { providerId: this.session.model.provider, modelId: this.session.model.id } : null);
     const providerId = options.providerId ?? fallback?.providerId;
@@ -324,6 +331,7 @@ export class WorkerSession {
   }
 
   seed(): ProjectionSeed { return this.projection.seed(); }
+  mode() { return this.modeController.mode(); }
 
   private emit(inputs: ProjectionInput[]): void { if (inputs.length !== 0) this.publish(inputs); }
 
@@ -487,6 +495,12 @@ export class WorkerSession {
     if (this.controllingBranch) throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', 'Native branch selection is in progress');
     if (this.compacting) throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', 'Session compaction is in progress');
     switch (operation.type) {
+      case 'mode.set': {
+        if (this.preparation || this.projection.activeRun() || this.session.isStreaming) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
+        const mode = await this.modeController.set(operation.mode);
+        this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', mode } }]);
+        return { type: 'mode.set', mode };
+      }
       case 'web-search': {
         if (operation.operation.type !== 'apply') throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'Search mutations require their workspace owner');
         const result = await this.webSearch.operation(operation.operation);

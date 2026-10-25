@@ -3,7 +3,7 @@ import type { Session, SessionMetadataState } from '@openchamber/agent-contract'
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { deferred } from './session-message-loader-test-fixtures';
 import { cancelSessionTitleGeneration, generateAndSaveSessionTitle, runSessionTitleGeneration, type NativeTitleContext } from './session-title-generation';
-const session: Session = { sessionId: 'session_1', projectId: 'project_1', workspaceId: 'workspace_1', displayPath: 'repo', rootSessionId: 'session_1', createdAt: 1, updatedAt: 2, epoch: 'epoch_1', headSequence: '2', runtimeStatus: 'idle', activeRunId: null, metadata: { title: 'Before' }, metadataRevision: '1', archiveRevision: '0' };
+const session: Session = { sessionId: 'session_1', projectId: 'project_1', workspaceId: 'workspace_1', displayPath: 'repo', rootSessionId: 'session_1', createdAt: 1, updatedAt: 2, epoch: 'epoch_1', headSequence: '2', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' }, metadata: { title: 'Before' }, metadataRevision: '1', archiveRevision: '0' };
 const metadata: SessionMetadataState = { sessionId: session.sessionId, revision: '1', metadata: session.metadata };
 const prepared: NativeTitleContext = { session, metadata, turns: [{ user: { messageId: 'user_1', sessionId: session.sessionId, turnId: 'turn_1', role: 'user', createdAt: 1, parts: [{ type: 'text', partId: 'user_text', content: 'Question' }] }, assistant: { messageId: 'assistant_1', sessionId: session.sessionId, turnId: 'turn_1', role: 'assistant', createdAt: 2, parts: [{ type: 'text', partId: 'assistant_text', content: 'Answer' }] } }] };
 describe('native title save guards', () => {

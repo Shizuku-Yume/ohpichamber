@@ -4,7 +4,7 @@ import { createContextObligatoryRuntime } from './runtime.js';
 
 const scope = { sessionId: 'ses_1', rootSessionId: 'ses_1', projectId: 'project-1', workspaceId: 'workspace-1', cwd: '/repo/app' };
 const metadataWithPin = { openchamber: { context_obligatory_messages: [{ id: 'msg-1', createdAt: 1, role: 'user' }] } };
-const rootSession = { sessionId: 'ses_1', projectId: 'project-1', workspaceId: 'workspace-1', displayPath: '.', rootSessionId: 'ses_1', createdAt: 1, updatedAt: 2, epoch: 'epoch_1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null };
+const rootSession = { sessionId: 'ses_1', projectId: 'project-1', workspaceId: 'workspace-1', displayPath: '.', rootSessionId: 'ses_1', createdAt: 1, updatedAt: 2, epoch: 'epoch_1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' } };
 const childSession = { ...rootSession, sessionId: 'ses_child', rootSessionId: 'ses_1' };
 const compacted = { type: 'session.compacted', sessionId: 'ses_1', epoch: 'epoch_1', sequence: '1', timestamp: 3, compactionId: 'compaction-1', tokensBefore: 10, completedAt: 3 };
 

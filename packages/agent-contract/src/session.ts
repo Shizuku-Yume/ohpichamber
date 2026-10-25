@@ -51,11 +51,20 @@ export const AgentMutationResultSchema = z.strictObject({
 export type AgentMutationResult = z.infer<typeof AgentMutationResultSchema>;
 export const SessionRuntimeStatusSchema = z.enum(['idle', 'running', 'awaiting_approval', 'awaiting_input', 'unavailable']);
 export type SessionRuntimeStatus = z.infer<typeof SessionRuntimeStatusSchema>;
+export const SessionModeSchema = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('main') }),
+  z.strictObject({
+    kind: z.literal('plan'), status: z.enum(['active', 'paused']),
+    planReference: z.string().regex(/^local:\/\/[^\s]+$/, 'Plan references must use local:// URLs'),
+  }),
+]);
+export type SessionMode = z.infer<typeof SessionModeSchema>;
 export const RuntimeSessionSchema = z.strictObject({
   sessionId: EntityIdSchema, projectId: EntityIdSchema, workspaceId: EntityIdSchema, displayPath: DisplayPathSchema,
   parentSessionId: EntityIdSchema.optional(), rootSessionId: EntityIdSchema,
   createdAt: TimestampSchema, updatedAt: TimestampSchema, epoch: EpochSchema, headSequence: CounterSchema,
   runtimeStatus: SessionRuntimeStatusSchema, activeRunId: EntityIdSchema.nullable(),
+  mode: SessionModeSchema,
 }).refine((session) => (session.runtimeStatus === 'idle' || session.runtimeStatus === 'unavailable') === (session.activeRunId === null), {
   message: 'Runtime activity must identify its outer run', path: ['activeRunId'],
 });
@@ -105,6 +114,7 @@ export const RunAbortRequestSchema = z.strictObject({ sessionId: EntityIdSchema,
 export type RunAbortRequest = z.infer<typeof RunAbortRequestSchema>;
 export const SessionControlRequestSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('abort'), runId: EntityIdSchema }),
+  z.strictObject({ type: z.literal('mode.set'), mode: z.enum(['main', 'plan']) }),
   z.strictObject({ type: z.literal('compact'), instructions: z.string().optional() }),
   z.strictObject({ type: z.literal('command'), text: z.string().min(1) }),
   z.strictObject({ type: z.literal('btw.ask'), question: z.string().min(1), recordId: EntityIdSchema.optional() }),
@@ -112,6 +122,7 @@ export const SessionControlRequestSchema = z.discriminatedUnion('type', [
 ]);
 export type SessionControlRequest = z.infer<typeof SessionControlRequestSchema>;
 export const SessionControlAckSchema = z.discriminatedUnion('type', [
+  z.strictObject({ type: z.literal('mode.set'), mode: SessionModeSchema }),
   z.strictObject({ type: z.literal('compact'), compactionId: EntityIdSchema, tokensBefore: z.number().int().nonnegative(), completedAt: TimestampSchema }),
   z.strictObject({ type: z.literal('command'), output: z.string() }),
   z.strictObject({ type: z.literal('btw.ask'), recordId: EntityIdSchema }),

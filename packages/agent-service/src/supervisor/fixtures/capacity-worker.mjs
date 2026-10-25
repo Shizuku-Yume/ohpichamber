@@ -15,6 +15,7 @@ process.on('message', message => {
     if (message.type === 'bootstrap') {
       send({ type: 'opened', workerGeneration: message.workerGeneration, sessionFile: `${process.cwd()}/session.jsonl`, seed: {
         createdAt: now, updatedAt: now,
+        mode: { kind: 'main' },
         branch: { branchId: 'branch-fixture', branchVersion: '1', leafMessageId: null },
         turns: [],
         messages: [{ messageId: 'message-retained', sessionId: rootSessionId, turnId: 'turn-retained', role: 'user', createdAt: now,

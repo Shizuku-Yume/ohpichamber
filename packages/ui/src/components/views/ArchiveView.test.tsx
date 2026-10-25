@@ -21,7 +21,7 @@ const initialUI = useUIStore.getState();
 const initialSessions = useGlobalSessionsStore.getState();
 const session = (sessionId: string, title: string, archivedAt?: number): Session => ({
   sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: 'workspace', rootSessionId: sessionId,
-  createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
   ...(archivedAt === undefined ? {} : { archivedAt }),
   metadata: { title }, metadataRevision: '1', archiveRevision: archivedAt === undefined ? '0' : '1',
 });

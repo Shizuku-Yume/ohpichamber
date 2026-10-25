@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { CanonicalEventSchema, CounterSchema, CursorSchema, EntityIdSchema, HistoryPageRequestSchema, HistoryPageSchema, RuntimeSessionSchema, SessionSnapshotSchema } from '@openchamber/agent-contract';
-import type { ApprovalRequest, CanonicalEvent, HistoryPage, HistoryPageRequest, JsonObject, Message, Part, ProblemCode, QuestionRequest, Run, RuntimeSession, SessionSnapshot, StreamInvalidated, Turn } from '@openchamber/agent-contract';
+import type { ApprovalRequest, CanonicalEvent, HistoryPage, HistoryPageRequest, JsonObject, Message, Part, ProblemCode, QuestionRequest, Run, RuntimeSession, SessionMode, SessionSnapshot, StreamInvalidated, Turn } from '@openchamber/agent-contract';
 import type { ProjectionInput, ProjectionSeed } from './protocol.ts';
 
 export class ProjectionError extends Error {
@@ -32,6 +32,7 @@ export class SessionJournal {
   private branch: ProjectionSeed['branch'];
   private turns: Turn[];
   private messages: Message[];
+  private mode: SessionMode;
   private activeRunId: string | null = null;
   private runtimeStatus: RuntimeSession['runtimeStatus'] = 'idle';
   private closed = false;
@@ -41,6 +42,7 @@ export class SessionJournal {
     this.updatedAt = seed.updatedAt;
     this.branch = structuredClone(seed.branch);
     this.turns = structuredClone(seed.turns);
+    this.mode = structuredClone(seed.mode);
     this.messages = structuredClone(seed.messages);
     this.rebuildIndexes();
   }
@@ -74,7 +76,7 @@ export class SessionJournal {
 
   runtime(): RuntimeSession {
     return RuntimeSessionSchema.parse({ ...this.identity, createdAt: this.createdAt, updatedAt: this.updatedAt,
-      epoch: this.epoch, headSequence: this.head.toString(), runtimeStatus: this.runtimeStatus, activeRunId: this.activeRunId,
+      epoch: this.epoch, headSequence: this.head.toString(), runtimeStatus: this.runtimeStatus, activeRunId: this.activeRunId, mode: this.mode,
     });
   }
 
@@ -142,10 +144,10 @@ export class SessionJournal {
 
   replace(seed: ProjectionSeed): void {
     this.resetEpoch();
-    this.createdAt = seed.createdAt; this.updatedAt = seed.updatedAt;
+    this.createdAt = seed.createdAt; this.updatedAt = seed.updatedAt; this.mode = structuredClone(seed.mode);
     this.branch = structuredClone(seed.branch); this.turns = structuredClone(seed.turns); this.messages = structuredClone(seed.messages);
-    this.activeRunId = null; this.runtimeStatus = 'idle';
     this.runs.clear(); this.approvals.clear(); this.questions.clear();
+    this.activeRunId = null; this.runtimeStatus = 'idle';
     this.rebuildIndexes();
   }
 
@@ -206,6 +208,7 @@ export class SessionJournal {
         this.activeRunId = event.runId; this.runtimeStatus = 'running'; return;
       case 'run.completed': case 'run.cancelled': case 'run.failed':
         this.settleRun(event.runId, event.type === 'run.completed' ? 'completed' : event.type === 'run.cancelled' ? 'cancelled' : 'failed', event.finishedAt, event.type === 'run.failed' ? event.error : undefined); return;
+      case 'session.updated': if (event.mode !== undefined) this.mode = structuredClone(event.mode); return;
       case 'session.status': this.runtimeStatus = event.runtimeStatus; this.activeRunId = event.activeRunId; return;
       case 'turn.started': {
         const turn: Turn = { turnId: event.turnId, sessionId: this.identity.sessionId, runId: event.runId, userMessageId: event.userMessageId,

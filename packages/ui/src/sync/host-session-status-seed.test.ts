@@ -19,6 +19,7 @@ const session = (sessionId: string, runtimeStatus: SessionRuntimeStatus = 'runni
   sessionId, workspaceId: 'workspace-a', projectId: 'project-a', displayPath: 'display-only', rootSessionId: sessionId,
   createdAt: NOW - 1_000, updatedAt: NOW, epoch: 'epoch-a', headSequence: '4', runtimeStatus,
   activeRunId: runtimeStatus === 'idle' || runtimeStatus === 'unavailable' ? null : 'run-a',
+  mode: { kind: 'main' as const },
   metadata: null, metadataRevision: '0', archiveRevision: '0', ...extra,
 });
 const liveStatus = (sessionId: string, runtimeStatus: SessionRuntimeStatus) => applyGlobalSessionStatusEvent('/repo', {

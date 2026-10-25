@@ -20,6 +20,7 @@ const runtime = (sessionId) => ({
   sessionId, rootSessionId: sessionId, projectId: 'project', workspaceId: 'workspace',
   displayPath: 'workspace', createdAt: 1, updatedAt: 2,
   epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  mode: { kind: 'main' },
 });
 const forkAck = (overrides = {}) => ({
   sessionId: childId, rootSessionId: childId, sessionFile: '/tmp/child.jsonl',

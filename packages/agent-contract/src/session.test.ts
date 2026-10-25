@@ -5,7 +5,7 @@ import {
   RunAbortAckSchema, RunAbortRequestSchema, RunCreateRequestSchema, RunSchema,
   RunStatusSchema, RuntimeSessionSchema, SessionCreateAckSchema, SessionCreateRequestSchema,
   SessionDeleteAckSchema, SessionDeleteRequestSchema, SessionRuntimeStatusSchema, SessionSchema,
-  SteerAckSchema, SteerRequestSchema, SubagentSchema, SessionControlRequestSchema, SessionControlAckSchema,
+  SteerAckSchema, SteerRequestSchema, SubagentSchema, SessionControlRequestSchema, SessionControlAckSchema, SessionModeSchema,
 } from './session.ts';
 
 const id = 'ses_01';
@@ -16,6 +16,7 @@ const runtime = {
   sessionId: id, projectId: 'pro_01', workspaceId: 'ws_01', displayPath: 'src', rootSessionId: id,
   createdAt: timestamp, updatedAt: timestamp, epoch: '0', headSequence: '0',
   runtimeStatus: 'idle', activeRunId: null,
+  mode: { kind: 'main' },
 };
 const metadata = { title: 'A' };
 const session = { ...runtime, archivedAt: timestamp, metadata, metadataRevision: '1', archiveRevision: '2' };
@@ -24,6 +25,24 @@ const run = { ...pendingRun, status: 'completed', finishedAt: timestamp + 1000 }
 const agent = { agentId: 'agt_01', name: 'Agent', description: '', model: null, allowedTools: ['read'] };
 
 describe('session schemas', () => {
+  test('session modes carry only canonical plan references and mode controls are explicit', () => {
+    const mode = { kind: 'plan', status: 'active', planReference: 'local://PLAN.md' } as const;
+    expect(SessionModeSchema.parse({ kind: 'main' })).toEqual({ kind: 'main' });
+    expect(SessionModeSchema.parse(mode)).toEqual(mode);
+    expect(SessionModeSchema.parse({ ...mode, status: 'paused' })).toEqual({ ...mode, status: 'paused' });
+    for (const planReference of ['/host/PLAN.md', 'file:///host/PLAN.md', 'local://', 'local://bad path']) {
+      expect(SessionModeSchema.safeParse({ ...mode, planReference }).success).toBe(false);
+    }
+    expect(SessionModeSchema.safeParse({ ...mode, status: 'complete' }).success).toBe(false);
+    expect(SessionModeSchema.safeParse({ kind: 'main', planReference: mode.planReference }).success).toBe(false);
+    expect(RuntimeSessionSchema.safeParse({ ...runtime, mode: undefined }).success).toBe(false);
+    for (const selected of ['main', 'plan']) {
+      const control = { type: 'mode.set', mode: selected };
+      expect(SessionControlRequestSchema.parse(control)).toEqual(control);
+    }
+    expect(SessionControlRequestSchema.safeParse({ type: 'mode.set', mode: 'vibe' }).success).toBe(false);
+    expect(SessionControlAckSchema.parse({ type: 'mode.set', mode })).toEqual({ type: 'mode.set', mode });
+  });
   test('session controls discriminate abort compact and builtin command', () => {
     const abort = { type: 'abort', runId: 'run_01' } as const;
     const compact = { type: 'compact', instructions: 'Keep the decisions and unresolved questions.' } as const;

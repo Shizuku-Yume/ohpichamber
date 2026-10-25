@@ -6,7 +6,7 @@ import { applyGlobalSessionStructureMutations, buildGlobalSessionStructure, reso
 const session = (sessionId: string, extra: Partial<Session> = {}): Session => ({
   sessionId, projectId: 'pro_one', workspaceId: 'wsp_one', displayPath: 'repo',
   rootSessionId: sessionId, createdAt: 1, updatedAt: 2, epoch: 'epoch', headSequence: '0',
-  runtimeStatus: 'idle', activeRunId: null, metadata: null, metadataRevision: '0', archiveRevision: '0', ...extra,
+  runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' as const }, metadata: null, metadataRevision: '0', archiveRevision: '0', ...extra,
 });
 
 beforeEach(() => {

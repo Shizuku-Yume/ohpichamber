@@ -21,6 +21,7 @@ function makeSession(sessionId: string, parentSessionId?: string): Session {
     headSequence: "0",
     runtimeStatus: "idle",
     activeRunId: null,
+    mode: { kind: "main" },
     metadata: null,
     metadataRevision: "0",
     archiveRevision: "0",

@@ -8,7 +8,7 @@ const goal = (objectiveFile: boolean) => ({
 
 const forkWith = (metadata: SessionMetadata): Session => ({
   sessionId: 'ses_fork', projectId: 'proj_1', workspaceId: 'ws_1', displayPath: 'repo', rootSessionId: 'ses_fork',
-  createdAt: 1, updatedAt: 1, epoch: 'epoch_1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  createdAt: 1, updatedAt: 1, epoch: 'epoch_1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
   metadata, metadataRevision: '1', archiveRevision: '0',
 });
 

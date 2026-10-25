@@ -7,7 +7,7 @@ import {
 
 const sessionWith = (metadata: SessionMetadata): Session => ({
   sessionId: 's', projectId: 'p', workspaceId: 'w', displayPath: 'repo', rootSessionId: 's', createdAt: 1, updatedAt: 1,
-  epoch: 'e', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, metadata, metadataRevision: '1', archiveRevision: '0',
+  epoch: 'e', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' }, metadata, metadataRevision: '1', archiveRevision: '0',
 });
 
 describe('parent link', () => {

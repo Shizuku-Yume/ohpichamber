@@ -10,7 +10,7 @@ import { installHookTestDom } from '../test-utils/testDom';
 
 const session = (sessionId: string): Session => ({
   sessionId, rootSessionId: sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '/workspace',
-  createdAt: 1, updatedAt: 1, epoch: '1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  createdAt: 1, updatedAt: 1, epoch: '1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
   metadata: { title: sessionId }, metadataRevision: '0', archiveRevision: '0',
 });
 

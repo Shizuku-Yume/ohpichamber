@@ -11,7 +11,7 @@ const membership = (id: string, overrides: Partial<MultiRunMembership> = {}): Mu
 const session = (id: string, marker: MultiRunMembership | null, extra: Partial<Session> = {}): Session => {
   const result: Session = {
     sessionId: id, projectId: 'project', workspaceId: 'workspace', displayPath: '.', rootSessionId: id,
-    createdAt: Number(id.replace(/\D/g, '')) || 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+    createdAt: Number(id.replace(/\D/g, '')) || 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' as const },
     metadata: { title: id }, metadataRevision: '1', archiveRevision: '0',
     ...extra,
   };

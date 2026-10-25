@@ -5,7 +5,7 @@ import type { AgentSessionEvent } from '@oh-my-pi/pi-coding-agent/session/agent-
 import type { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import type { SessionEntry } from '@oh-my-pi/pi-coding-agent/session/session-entries';
 import { CounterSchema, EntityIdSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, PromptAttachmentSchema, TokenUsageSchema } from '@openchamber/agent-contract';
-import type { HistoryPage, HistoryPageRequest, JsonObject, JsonValue, Message, Part, PromptAttachment, Run, RunOrigin, TokenUsage, Turn } from '@openchamber/agent-contract';
+import type { HistoryPage, HistoryPageRequest, JsonObject, JsonValue, Message, Part, PromptAttachment, Run, RunOrigin, SessionMode, TokenUsage, Turn } from '@openchamber/agent-contract';
 import type { ProjectionEvent, ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
 
@@ -531,6 +531,14 @@ export class WorkerProjection {
   }
 
   private readHistory(): ProjectionSeed {
+    const context = this.manager.buildSessionContext();
+    const modeData = context.modeData;
+    const planReference = typeof modeData?.planFilePath === 'string' && modeData.planFilePath.startsWith('local://') ? modeData.planFilePath : 'local://PLAN.md';
+    const mode: SessionMode = context.mode === 'plan_paused'
+      ? { kind: 'plan', status: 'paused', planReference }
+      : context.mode === 'plan'
+        ? { kind: 'plan', status: 'active', planReference }
+        : { kind: 'main' };
     const entries = this.manager.getBranch();
     const references = new Map<string, Reference>();
     const terminals = new Map<string, z.infer<typeof TerminalSchema>>();
@@ -641,7 +649,7 @@ export class WorkerProjection {
       if (message.modelId !== undefined) message.modelId = this.publicText(message.modelId);
     }
     for (const turn of turns) if (turn.error !== undefined) turn.error = this.publicText(turn.error);
-    return { createdAt, updatedAt: Math.max(createdAt, updatedAt, messages.at(-1)?.createdAt ?? createdAt),
+    return { createdAt, updatedAt: Math.max(createdAt, updatedAt, messages.at(-1)?.createdAt ?? createdAt), mode,
       branch: { branchId: `branch:${this.sessionId}`, branchVersion: (version + BigInt(virtualTurns.size)).toString(), leafMessageId,
         ...(selection?.revertedMessageId ? { revert: { messageId: selection.revertedMessageId } } : undefined) }, turns, messages,
     };

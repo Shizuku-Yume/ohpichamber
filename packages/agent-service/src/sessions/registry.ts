@@ -69,7 +69,7 @@ export class SessionRegistry {
         sessionId: reference.rootSessionId, rootSessionId: reference.rootSessionId,
         projectId: reference.projectId, workspaceId: reference.workspaceId, displayPath: reference.displayPath,
         createdAt: reference.createdAt, updatedAt: reference.updatedAt,
-        epoch: randomUUID(), headSequence: '0', runtimeStatus: 'unavailable', activeRunId: null,
+        epoch: randomUUID(), headSequence: '0', runtimeStatus: 'unavailable', activeRunId: null, mode: { kind: 'main' },
       });
       if (reference.parentSessionId) runtime.parentSessionId = reference.parentSessionId;
       this.entries.set(reference.rootSessionId, { state: 'unloaded', reference, runtime });
@@ -573,6 +573,19 @@ export class SessionRegistry {
     if (result.type === 'steer' && result.ack.runId !== runtime.activeRunId) throw new WorkerOperationError(503, 'INTERNAL_ERROR');
     return result.ack;
   }
+  async setMode(sessionId: string, mode: 'main' | 'plan') {
+    this.ensureOpen();
+    this.assertWritable(sessionId);
+    this.assertControlAvailable(sessionId);
+    const runtime = this.runtime(sessionId);
+    if (runtime.activeRunId !== null || this.pendingRuns.has(sessionId)) throw new WorkerOperationError(409, 'RUN_ACTIVE');
+    this.controls.add(sessionId);
+    try {
+      const result = await this.workers.request(sessionId, { type: 'mode.set', mode });
+      if (result.type !== 'mode.set') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+      return result.mode;
+    } finally { this.controls.delete(sessionId); }
+  }
   async branch(sessionId: string, input: SessionBranchRequest) {
     this.assertWritable(sessionId);
     this.assertControlAvailable(sessionId);
@@ -739,7 +752,7 @@ export class SessionRegistry {
     const runtime = RuntimeSessionSchema.parse({
       sessionId: reference.rootSessionId, rootSessionId: reference.rootSessionId, projectId: reference.projectId,
       workspaceId: reference.workspaceId, displayPath: reference.displayPath, createdAt: reference.createdAt, updatedAt: reference.updatedAt,
-      epoch: randomUUID(), headSequence: '0', runtimeStatus: 'unavailable', activeRunId: null,
+      epoch: randomUUID(), headSequence: '0', runtimeStatus: 'unavailable', activeRunId: null, mode: { kind: 'main' },
     });
     if (reference.parentSessionId) runtime.parentSessionId = reference.parentSessionId;
     this.entries.set(reference.rootSessionId, { state: 'unloaded', reference, runtime });

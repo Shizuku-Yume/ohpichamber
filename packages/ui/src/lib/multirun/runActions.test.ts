@@ -20,7 +20,7 @@ function fixture() {
   registerWorkspaceDirectory('workspace', '/repo');
   const sessions = ['a', 'b'].map((sessionId): Session => {
     const session: Session = { sessionId, rootSessionId: sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '.',
-      createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+      createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
       metadata: { title: 'lane', notes: 'preserve', openchamber: { goal: { status: 'active' } } }, metadataRevision: '1', archiveRevision: '0' };
     session.metadata = withMultiRunMembership(session, { version: 1, sessionID: sessionId, group, groupSlug: 'run', role: 'run', providerID: 'provider', modelID: 'model', runGroup: 'g1', index: 2 });
     return session;

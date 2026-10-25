@@ -8,7 +8,7 @@ const task = { id: 'task', name: 'Follow up', enabled: true, targetSessionId: 't
   execution: { prompt: 'Continue', useDefaults: true }, state: {} };
 const scope = { sessionId: 'target', rootSessionId: 'target', projectId: 'opaque-project', workspaceId: 'opaque-workspace', hostProjectId: 'host-project', cwd: '/worktree' };
 const snapshot = (sessionId = 'target') => ({ session: { sessionId, rootSessionId: sessionId, projectId: scope.projectId, workspaceId: scope.workspaceId, displayPath: '.',
-  createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null }, cursor: 'epoch:0', activeRun: null,
+  createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' } }, cursor: 'epoch:0', activeRun: null,
   branch: { branchId: 'branch', branchVersion: '1', leafMessageId: null }, window: { firstTurnId: null, lastTurnId: null, firstMessageId: null, lastMessageId: null, hasEarlier: false },
   turns: [], messages: [], approvals: [], questions: [], requestRecovery: { pendingSet: 'replace', priorEpochs: 'expired' } });
 const setup = (extra = {}) => {

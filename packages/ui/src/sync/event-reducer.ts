@@ -231,11 +231,13 @@ export function applyDirectoryEvent(state: State, event: CanonicalEvent): Direct
     case "session.updated": {
       if (event.session) {
         if (event.session.sessionId !== id || event.session.epoch !== event.epoch || event.session.workspaceId !== snapshot.session.workspaceId || compareCounters(event.session.headSequence, event.sequence) > 0) { recover = true; break }
-        updated = { ...updated, session: event.session }
-      }
+        updated = { ...updated, session: { ...event.session, ...(event.mode ? { mode: event.mode } : {}) } }
+      } else if (event.mode) {
+        updated = { ...updated, session: { ...updated.session, mode: event.mode } }
+       }
       const current = next.session.find((session) => session.sessionId === id)
       if (current) {
-        let session: Session = { ...current, ...(event.session ?? {}) }
+        let session: Session = { ...current, ...(event.session ?? {}), ...(event.mode ? { mode: event.mode } : {}) }
         if (event.metadataRevision !== undefined && compareCounters(event.metadataRevision, current.metadataRevision) >= 0) {
           session = { ...session, metadata: event.metadata ?? null, metadataRevision: event.metadataRevision }
         }

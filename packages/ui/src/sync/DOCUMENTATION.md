@@ -185,7 +185,7 @@ Native `bash`, `edit`, and `write` completion hints invalidate Host Git status w
 ## Independent Host metadata and durable queue
 
 The canonical snapshot (`SessionSnapshot`) contains:
-- `session: RuntimeSession`: execution fields only (`sessionId`, `projectId`, `workspaceId`, `displayPath`, `parentSessionId`, `rootSessionId`, `createdAt`, `updatedAt`, `epoch`, `headSequence`, `runtimeStatus`, `activeRunId`)
+- `session: RuntimeSession`: execution fields only (`sessionId`, `projectId`, `workspaceId`, `displayPath`, `parentSessionId`, `rootSessionId`, `createdAt`, `updatedAt`, `epoch`, `headSequence`, `runtimeStatus`, `activeRunId`, `mode`)
 - `cursor: Cursor`: an opaque Host-issued stream recovery token
 - `activeRun: Run | null`
 - `branch: { branchId, branchVersion, leafMessageId }`

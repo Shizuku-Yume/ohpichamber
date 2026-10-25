@@ -2,6 +2,7 @@
 
 **Status:** proposed
 **Priority:** high
+**Integration branch:** omp-native-chat/integration
 
 ## What this is for
 

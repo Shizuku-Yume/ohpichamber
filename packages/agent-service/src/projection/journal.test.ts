@@ -42,6 +42,19 @@ describe('SessionJournal consumer boundary', () => {
     unsubscribeSecond();
     journal.close();
   });
+  test('transient events never advance or collide with the first durable cursor', () => {
+    const journal = new SessionJournal(session, seed);
+    const transient: CanonicalEvent[] = [];
+    const subscription = journal.subscribe(journal.snapshot().cursor, event => {
+      if (event.type !== 'stream.invalidated') transient.push(event);
+    });
+    journal.append([{ ...input({ type: 'btw.delta', recordId: 'record', delta: 'ephemeral' }), transient: true }]);
+    const durable = journal.append([input({ type: 'session.updated', mode: { kind: 'main' } })]);
+    expect(transient[0]).toMatchObject({ type: 'btw.delta', sequence: '1' });
+    expect(durable[0]).toMatchObject({ type: 'session.updated', sequence: '2' });
+    expect(subscription.replay).toEqual([]);
+    expect(journal.subscribe(`${journal.runtime().epoch}:1`, () => {}).replay).toEqual(durable);
+  });
   test('replay covers its exact ring boundary and distinguishes invalid from unavailable cursors', () => {
     const journal = new SessionJournal(session, seed);
     const events = journal.append(Array.from({ length: 1001 }, (_, index) => input({ type: 'tool.started', toolCallId: `tool${index}`, toolName: 'bash', input: {} })));

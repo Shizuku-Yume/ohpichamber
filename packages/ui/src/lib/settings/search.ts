@@ -479,12 +479,6 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['thinking', 'reasoning', 'variant'],
   },
   {
-    id: 'sessions.default-agent',
-    page: 'sessions',
-    titleKey: 'settings.openchamber.defaults.field.defaultAgent',
-    keywords: ['agent', 'new sessions'],
-  },
-  {
     id: 'sessions.deletion-dialog',
     page: 'sessions',
     titleKey: 'settings.openchamber.defaults.field.showDeletionDialog',
@@ -1021,12 +1015,6 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     page: 'commands',
     titleKey: 'settings.commands.page.field.commandName',
     keywords: ['slash command', 'name'],
-  },
-  {
-    id: 'commands.agent',
-    page: 'commands',
-    titleKey: 'settings.commands.page.field.overrideAgent',
-    keywords: ['agent', 'execution'],
   },
   {
     id: 'commands.model',

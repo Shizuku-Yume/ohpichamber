@@ -60,16 +60,19 @@ export class SessionJournal {
         epoch: this.epoch, sequence: (++next).toString(), timestamp: input.timestamp,
       }));
     }
-    const transientEvents = transient.map(input => CanonicalEventSchema.parse({ ...input.event, sessionId: this.identity.sessionId,
-      epoch: this.epoch, sequence: this.head === 0n ? '1' : this.head.toString(), timestamp: input.timestamp,
-    }));
+    const transientEvents = transient.map(input => {
+      if (next === U64_MAX) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Event sequence is exhausted');
+      return CanonicalEventSchema.parse({ ...input.event, sessionId: this.identity.sessionId,
+        epoch: this.epoch, sequence: (++next).toString(), timestamp: input.timestamp,
+      });
+    });
     for (const event of events) {
       this.reduce(event);
       this.head = BigInt(event.sequence);
-      this.updatedAt = event.timestamp;
       if (this.eventCount < REPLAY_LIMIT) this.events[(this.eventStart + this.eventCount++) % REPLAY_LIMIT] = event;
       else { this.events[this.eventStart] = event; this.eventStart = (this.eventStart + 1) % REPLAY_LIMIT; }
     }
+    if (transientEvents.length > 0) this.head = BigInt(transientEvents.at(-1)!.sequence);
     for (const event of [...events, ...transientEvents]) for (const listener of this.listeners) listener(structuredClone(event));
     return structuredClone(events);
   }

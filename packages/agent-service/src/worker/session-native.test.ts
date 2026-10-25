@@ -163,6 +163,48 @@ async function searxngLoopback(): Promise<{ url: string; requests: string[]; sto
   return { url: `http://127.0.0.1:${server.port}`, requests, stop: () => server.stop(true) };
 }
 
+test('worker-originated custom prompts open canonical runs with origin', async () => {
+  const harness = await fixture({ respond: () => completion() });
+  try {
+    const model = harness.worker.session.modelRegistry.find('native-fixture', 'native-model');
+    if (!model) throw new Error('Native fixture model is required');
+    await harness.worker.session.setModelTemporary(model);
+    const task = harness.worker.startWorkerRun('goal', () => harness.worker.session.promptCustomMessage({
+      customType: 'goal-continuation', content: 'Continue the goal.', display: false,
+    }));
+    const started = harness.events.find(input => input.event.type === 'run.started');
+    if (!started || started.event.type !== 'run.started') throw new Error('Worker run was not opened');
+    expect(started.event.origin).toBe('goal');
+    expect(harness.journal.snapshot().activeRun).toMatchObject({ runId: started.event.runId, origin: 'goal', status: 'running' });
+    expect(harness.events.some(input => input.event.type === 'turn.started')).toBe(true);
+    await task;
+    expect(harness.events).toContainEqual(expect.objectContaining({ event: expect.objectContaining({ type: 'run.completed', runId: started.event.runId }) }));
+    expect(harness.journal.snapshot().activeRun).toBeNull();
+  } finally { await harness.close(); }
+}, 30000);
+test('worker-originated runs cancel through the normal abort operation', async () => {
+  const requestStarted = Promise.withResolvers<void>();
+  const harness = await fixture({ respond: async () => {
+    requestStarted.resolve();
+    return new Response(new ReadableStream({}), { headers: { 'content-type': 'text/event-stream' } });
+  } });
+  try {
+    const model = harness.worker.session.modelRegistry.find('native-fixture', 'native-model');
+    if (!model) throw new Error('Native fixture model is required');
+    await harness.worker.session.setModelTemporary(model);
+    const task = harness.worker.startWorkerRun('plan', () => harness.worker.session.promptCustomMessage({
+      customType: 'plan-mode-approved', content: 'Execute the approved plan.', display: false,
+    }));
+    const started = harness.events.find(input => input.event.type === 'run.started');
+    if (!started || started.event.type !== 'run.started') throw new Error('Worker run was not opened');
+    await requestStarted.promise;
+    const aborted = await harness.worker.operation({ type: 'abort', runId: started.event.runId });
+    expect(aborted).toMatchObject({ type: 'abort', run: { runId: started.event.runId, origin: 'plan', status: 'cancelled' } });
+    await task;
+    expect(harness.events).toContainEqual(expect.objectContaining({ event: expect.objectContaining({ type: 'run.cancelled', runId: started.event.runId }) }));
+  } finally { await harness.close(); }
+}, 30000);
+
 test('profile tool allowlist does not block selected provider authorization', async () => {
   const harness = await fixture({ respond: () => completion() });
   const terminal = Promise.withResolvers<void>();

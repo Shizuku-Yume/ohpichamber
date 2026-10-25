@@ -1,4 +1,6 @@
 import React from 'react';
+import { useSessionActiveRun } from '@/sync/sync-context';
+import { ComposerStatusStrip } from './ComposerStatusStrip';
 import { formatChangeRequestReference } from '@/lib/source-control/identity';
 import { ComposerDictation } from '@/components/dictation/ComposerDictation';
 // sessionStore removed — currentSessionId comes from useSessionUIStore
@@ -217,7 +219,6 @@ import { SessionSuggestionChip } from '@/components/chat/SessionSuggestionChip';
 import { SessionDoneHintRow } from '@/components/chat/SessionDoneHintRow';
 import { SessionReviewHintRow } from '@/components/chat/SessionReviewHintRow';
 import { BackgroundShellsStrip } from '@/components/chat/BackgroundShellsStrip';
-import { ComposerStatusStrip } from '@/components/chat/ComposerStatusStrip';
 import { useWorktreeBootstrapPending } from '@/hooks/useWorktreeBootstrapPending';
 import { FormDock } from '@/components/chat/FormDock';
 import { PermissionDock } from '@/components/chat/PermissionDock';
@@ -3632,6 +3633,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         ? <ComposerStatusStrip icon="time" text={t('spaces.draft.queued')} />
         : null;
     const autoReviewRow = !isBtwActive && !newSessionDraftOpen ? <AutoReviewStrip /> : null;
+    const workerRun = useSessionActiveRun(currentSessionId ?? '', currentSessionDirectoryForSync ?? currentDirectory ?? undefined);
+    const workerRunRow = !isBtwActive && !newSessionDraftOpen && (workerRun?.origin === 'plan' || workerRun?.origin === 'goal')
+        ? <ComposerStatusStrip icon="loader-4" spin text={t(workerRun.origin === 'plan' ? 'chat.run.origin.plan' : 'chat.run.origin.goal')} />
+        : null;
     // The session's goal, then what is still running, then what waits for it.
     const goalRow = !isBtwActive ? (
         <SessionGoalRow
@@ -3654,11 +3659,12 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     ) : null;
     // Null exactly when the suggestion row alone would have been: the mobile
     // pill picks its shape from whether a top row exists.
-    const composerTopRows = worktreeSetupRow || spaceWaitRow || goalRow || autoReviewRow || backgroundShellsRow || revertRow || queueRow || doneHintRow || reviewHintRow || suggestionRow ? (
+    const composerTopRows = worktreeSetupRow || spaceWaitRow || goalRow || workerRunRow || autoReviewRow || backgroundShellsRow || revertRow || queueRow || doneHintRow || reviewHintRow || suggestionRow ? (
         <>
             {worktreeSetupRow}
             {spaceWaitRow}
             {goalRow}
+            {workerRunRow}
             {autoReviewRow}
             {backgroundShellsRow}
             {revertRow}

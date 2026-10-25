@@ -15,6 +15,7 @@ import { environmentI18n } from './environment.i18n';
 import { providersI18n } from './providers.i18n';
 import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
+import { workerRunsI18n } from './worker-runs.i18n';
 
 export const dict = {
   "startup.legacyNotice.dismiss": "Yoksay",
@@ -65,6 +66,7 @@ export const dict = {
   ...providersI18n.tr,
   ...mcpGridI18n.tr,
   ...pluginsGridI18n.tr,
+  ...workerRunsI18n.tr,
   'terminalView.actions.attachSelection': 'Seçili çıktıyı ekle',
   'terminalView.actions.copySelection': 'Seçili çıktıyı kopyala',
   'terminalView.toast.selectionCopied': 'Çıktı kopyalandı',

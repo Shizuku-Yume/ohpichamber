@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { CounterSchema, EntityIdSchema, EpochSchema, JsonObjectSchema, JsonValueSchema, PositiveCounterSchema, TimestampSchema } from './primitives.ts';
 import { SessionMetadataSchema } from './metadata.ts';
-import { RuntimeSessionSchema, SessionRuntimeStatusSchema } from './session.ts';
+import { RunOriginSchema, RuntimeSessionSchema, SessionRuntimeStatusSchema } from './session.ts';
 import { PartSchema, TokenUsageSchema, ToolStatusSchema } from './messages.ts';
 import { ApprovalRequestSchema, QuestionRequestSchema } from './requests.ts';
 import { QueueStateSchema } from './queue.ts';
@@ -44,7 +44,7 @@ export const CanonicalEventSchema = z.discriminatedUnion('type', [
   sessionUpdatedSchema,
   DataEventEnvelopeSchema.extend({ type: z.literal('session.deleted'), deletedSessionIds: z.array(EntityIdSchema).min(1) }),
   sessionStatusSchema,
-  DataEventEnvelopeSchema.extend({ type: z.literal('run.started'), runId: EntityIdSchema, createdAt: TimestampSchema }),
+  DataEventEnvelopeSchema.extend({ type: z.literal('run.started'), runId: EntityIdSchema, origin: RunOriginSchema.optional(), createdAt: TimestampSchema }),
   DataEventEnvelopeSchema.extend({ type: z.literal('run.completed'), runId: EntityIdSchema, finishedAt: TimestampSchema }),
   DataEventEnvelopeSchema.extend({ type: z.literal('run.failed'), runId: EntityIdSchema, finishedAt: TimestampSchema, error: z.string() }),
   DataEventEnvelopeSchema.extend({ type: z.literal('run.cancelled'), runId: EntityIdSchema, finishedAt: TimestampSchema }),

@@ -518,10 +518,10 @@ When a tool finishes with `failed` or `denied`, the Agent Service injects a `too
 
 ### Run Terminal States
 
-A Run represents the entire multi-step conversation cycle initiated by a user prompt.
+Every `Run` represents one outer execution cycle and carries `origin` (`host`, `plan`, or `goal`), defaulting to `host`. Worker-started turns open the same canonical run, append no Host prompt to the worker queue, and remain coordinated by the Host's active-run guard, queue and abort routes.
 - Run terminal states: `completed`, `failed`, `cancelled`.
 
-The Run reaches `failed` only if the model execution itself crashes unrecoverably (e.g. context window exhaustion, provider quota error, or internal agent panic).
+The Run reaches `failed` only if the model execution itself crashes unrecoverably (e.g. context window exhaustion, provider quota error, or internal agent panic). An Agent Service restart marks an interrupted worker-originated run as failed when the native session is reopened.
 
 ### OMP turn_end semantics
 

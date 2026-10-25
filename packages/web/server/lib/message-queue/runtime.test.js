@@ -155,6 +155,30 @@ describe('canonical queue runtime', () => {
     assert.equal((await runtime.getState(scope)).items[0].status, 'queued');
     await runtime.stop();
   });
+  it('holds queued items until an active worker-originated run ends', async () => {
+    const store = storeFor();
+    const activeSession = { ...runtimeSession, runtimeStatus: 'running', activeRunId: randomUUID() };
+    const runCalls = [];
+    const service = {
+      request: async (pathname) => {
+        if (pathname === `/api/agent/v1/sessions/${SESSION}`) return response(activeSession);
+        runCalls.push(pathname);
+        return response({ run: { ...run, runId: (await store.getState({ sessionId: SESSION, projectId: PROJECT, workspaceId: WORKSPACE })).items[0].delivery.runId, origin: 'goal' } }, 202);
+      },
+    };
+    const runtime = createCanonicalQueueRuntime({ store, service, resolveAttachments: async () => [], publishQueue: () => {}, reportFailure: () => {} });
+    await runtime.append(scope, randomUUID(), { expectedRevision: '0', content: 'wait for goal', request: { input: { text: 'wait for goal', attachments: [], context: [] }, options } });
+    await runtime.dispatch(scope);
+    assert.deepEqual(runCalls, []);
+    activeSession.runtimeStatus = 'idle';
+    activeSession.activeRunId = null;
+    await runtime.dispatch(scope);
+    assert.deepEqual(runCalls, [`/internal/sessions/${SESSION}/runs`]);
+    assert.equal((await runtime.getState(scope)).items.length, 1);
+    assert.equal((await runtime.getState(scope)).items[0].status, 'leased');
+    await runtime.stop();
+  });
+
 
   it('leaves a submitting capture when acceptance hooks fail', async () => {
     const store = storeFor();

@@ -16,6 +16,7 @@ import { environmentI18n } from './environment.i18n';
 import { providersI18n } from './providers.i18n';
 import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
+import { workerRunsI18n } from './worker-runs.i18n';
 
 export const dict: Record<I18nKey, string> = {
   "startup.legacyNotice.descriptionGeneric": "您先前的 OpenCode 會話未匯入至 OpenChamber。現有資料仍完整保留在您的 OpenCode 資料目錄中。若要使用模型，請在「設定」中重新登入供應商。",
@@ -127,6 +128,7 @@ export const dict: Record<I18nKey, string> = {
   ...providersI18n['zh-TW'],
   ...mcpGridI18n['zh-TW'],
   ...pluginsGridI18n['zh-TW'],
+  ...workerRunsI18n['zh-TW'],
   'terminalView.actions.attachSelection': '附加所選輸出',
   'terminalView.actions.copySelection': '複製所選輸出',
   'terminalView.toast.selectionCopied': '已複製輸出',

@@ -130,7 +130,7 @@ export function installRuntimeRun(state: State, run: Run, requestBaseline: RunCo
   }
 
   const status = terminal ? "idle" : "running"
-  const activeRun = terminal ? null : { runId: run.runId, sessionId: id, status: run.status, createdAt: run.createdAt }
+  const activeRun = terminal ? null : { runId: run.runId, sessionId: id, status: run.status, origin: run.origin, createdAt: run.createdAt }
   // A repeated live ack never downgrades the run record an event may already
   // have advanced; it only fills a binding that is missing.
   const settledLive = !terminal && snapshot?.session.activeRunId === run.runId && snapshot.activeRun !== null && snapshot.session.runtimeStatus === "running"
@@ -274,7 +274,7 @@ export function applyDirectoryEvent(state: State, event: CanonicalEvent): Direct
       if (event.activeRunId === null) updated = { ...updated, activeRun: null }
       break
     case "run.started":
-      updated = { ...updated, activeRun: { runId: event.runId, sessionId: id, status: "running", createdAt: event.createdAt }, session: { ...updated.session, runtimeStatus: "running", activeRunId: event.runId } }
+      updated = { ...updated, activeRun: { runId: event.runId, sessionId: id, status: "running", origin: event.origin ?? "host", createdAt: event.createdAt }, session: { ...updated.session, runtimeStatus: "running", activeRunId: event.runId } }
       break
     case "run.completed":
     case "run.failed":

@@ -16,6 +16,7 @@ import { environmentI18n } from './environment.i18n';
 import { providersI18n } from './providers.i18n';
 import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
+import { workerRunsI18n } from './worker-runs.i18n';
 
 export const dict: Record<I18nKey, string> = {
   "startup.legacyNotice.title": "检测到先前的 OpenCode 数据",
@@ -127,6 +128,7 @@ export const dict: Record<I18nKey, string> = {
   ...providersI18n['zh-CN'],
   ...mcpGridI18n['zh-CN'],
   ...pluginsGridI18n['zh-CN'],
+  ...workerRunsI18n['zh-CN'],
   'terminalView.actions.attachSelection': '附加所选输出',
   'terminalView.actions.copySelection': '复制所选输出',
   'terminalView.toast.selectionCopied': '已复制输出',

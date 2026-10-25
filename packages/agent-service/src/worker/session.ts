@@ -13,7 +13,7 @@ import { initializeExtensions } from '@oh-my-pi/pi-coding-agent/modes/runtime-in
 import { READ_ONLY_BUILTIN_COMMANDS, executeAcpBuiltinSlashCommand, isAllowedBuiltinCommand, parseSlashCommand } from './builtin-commands.ts';
 import type { SlashCommandRuntime } from '@oh-my-pi/pi-coding-agent/slash-commands/types';
 import { RpcBtwController } from '@oh-my-pi/pi-coding-agent/modes/rpc/rpc-btw';
-import { JsonObjectSchema, MCPOAuthPublicConfigurationSchema, SessionBranchRequestSchema, type Agent, type CapturedSendOptions, type JsonObject, type JsonValue, type Run, type SessionBranchRequest } from '@openchamber/agent-contract';
+import { JsonObjectSchema, MCPOAuthPublicConfigurationSchema, SessionBranchRequestSchema, type Agent, type CapturedSendOptions, type JsonObject, type JsonValue, type Run, type RunOrigin, type SessionBranchRequest } from '@openchamber/agent-contract';
 import type { WorkerBootstrapMessage, WorkerInteraction, WorkerOperation, WorkerOperationResult } from '../protocol.ts';
 import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
@@ -446,6 +446,35 @@ export class WorkerSession {
     } finally { this.controllingBranch = false; }
   }
 
+  /** Start a turn initiated by OMP, without creating or retaining a Host prompt. */
+  startWorkerRun(origin: Exclude<RunOrigin, 'host'>, start: () => Promise<boolean>): Promise<boolean> {
+    if (this.closed || this.failed) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Worker session is unavailable');
+    if (this.controllingBranch) throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', 'Native branch selection is in progress');
+    if (this.preparation || this.projection.activeRun()) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
+    const runId = randomUUID();
+    this.emit(this.projection.beginRun(runId, Date.now(), [], origin));
+    const task = (async () => {
+      try {
+        await this.session.sessionManager.flush();
+        const dispatched = await start();
+        await this.bind();
+        if (!dispatched && this.projection.activeRun()?.runId === runId) {
+          this.emit(this.projection.completeRun(Date.now()));
+          await this.session.sessionManager.flush();
+        }
+        return dispatched;
+      } catch (error) {
+        if (this.projection.activeRun()?.runId === runId) {
+          this.emit(this.cancellingRunId === runId
+            ? this.projection.cancelRun(Date.now(), runId) : this.projection.failRun('Agent execution failed', Date.now()));
+        }
+        throw error;
+      }
+    })();
+    this.promptTask = task.then(() => {}, () => {});
+    return task;
+  }
+
   operation(operation: WorkerOperation): Promise<WorkerOperationResult> {
     const task = this.executeOperation(operation);
     this.operations.add(task);
@@ -598,7 +627,7 @@ export class WorkerSession {
         if (run.finishedAt === undefined || run.status === 'running' || run.status === 'pending') {
           throw new ProjectionError(503, 'INTERNAL_ERROR', 'Run cancellation did not settle');
         }
-        const settled: Run = { runId: run.runId, sessionId: run.sessionId, status: run.status, createdAt: run.createdAt, finishedAt: run.finishedAt };
+        const settled: Run = { runId: run.runId, sessionId: run.sessionId, origin: run.origin, status: run.status, createdAt: run.createdAt, finishedAt: run.finishedAt };
         if (run.error !== undefined) settled.error = run.error;
         return { type: 'abort', run: settled };
       }

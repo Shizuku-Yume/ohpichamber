@@ -16,6 +16,7 @@ import { providersI18n } from './providers.i18n';
 import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
+import { workerRunsI18n } from './worker-runs.i18n';
 export const dict = {
   "startup.legacyNotice.dismiss": "Dismiss",
   "startup.legacyNotice.action": "Configure providers",
@@ -3672,6 +3673,7 @@ export const dict = {
   'sessions.scheduledTasks.dialog.toast.alreadyRunning': 'This task already has a run in progress',
   'sessions.scheduledTasks.dialog.toast.alreadyQueued': 'This task is already waiting in the queue and will run when a slot frees up',
   'chat.modelControls.agentFavoriteAdd': 'Add to favorites. With favorites, Tab cycles through them only',
+  ...workerRunsI18n.en,
 } as const;
 
 export type I18nKey = keyof typeof dict;

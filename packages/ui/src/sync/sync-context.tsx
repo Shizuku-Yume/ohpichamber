@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components -- SyncProvider, its contexts, hooks, and runtime helpers are one contract module. */
 import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from "react"
 import { useStore, type StoreApi } from "zustand"
-import type { ApprovalRequest, CanonicalEvent, Message, Part, QuestionRequest, Session, SessionRuntimeStatus, SessionSnapshot } from "@openchamber/agent-contract"
+import type { ApprovalRequest, CanonicalEvent, Message, Part, QuestionRequest, Run, Session, SessionRuntimeStatus, SessionSnapshot } from "@openchamber/agent-contract"
 import { canonicalClient, type CanonicalClient } from "@/api/canonicalClient"
 import { getRuntimeKey, subscribeRuntimeEndpointChanged, subscribeRuntimeEndpointWillChange } from "@/lib/runtime-switch"
 import { normalizePath } from "@/lib/pathNormalization"
@@ -460,6 +460,9 @@ export function useSessionMessagesSelector<T>(sessionId: string, directory: stri
 export function useSessionMessagesResolved(sessionId: string, directory?: string): boolean { return useSessionMessagesSelector(sessionId, directory, (_messages, state) => Object.hasOwn(state.message, sessionId)) }
 export function useSessionRenderable(sessionId: string, directory?: string): boolean { return useSessionMessagesSelector(sessionId, directory, (_messages, state) => getSessionMaterializationStatus(state, sessionId).renderable) }
 export function useSessionStatus(sessionId: string, directory?: string): SessionRuntimeStatus | undefined { return useDirectorySync(useCallback((state) => state.sessionStatusInvalidated?.[sessionId] ? "unavailable" : state.session_status[sessionId], [sessionId]), directory) }
+export function useSessionActiveRun(sessionId: string, directory?: string): Run | null {
+  return useDirectorySync(useCallback((state) => state.snapshot[sessionId]?.activeRun ?? null, [sessionId]), directory)
+}
 export function useSessionStatusSnapshotReady(directory?: string, sessionId?: string): boolean { return useDirectorySync(useCallback((state) => sessionId ? Boolean(state.snapshot[sessionId]) && !state.sessionStatusInvalidated?.[sessionId] : Boolean(state.sessionStatusReady), [sessionId]), directory) }
 export function useGlobalSessionStatus(sessionId: string): SessionRuntimeStatus | undefined { return useGlobalSessionStatusStore(useCallback((state) => state.statusById.get(sessionId)?.status, [sessionId])) }
 export function useSessionPermissions(sessionId: string, directory?: string, options?: { bootstrap?: boolean }): ApprovalRequest[] {

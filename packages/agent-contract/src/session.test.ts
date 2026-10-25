@@ -91,11 +91,17 @@ describe('session schemas', () => {
     expect(SessionSchema.safeParse({ ...session, archiveRevision: '02' }).success).toBe(false);
   });
 
+  test('run origin defaults to Host and accepts worker origins', () => {
+    expect(RunSchema.parse(pendingRun).origin).toBe('host');
+    expect(RunSchema.parse({ ...pendingRun, origin: 'goal' }).origin).toBe('goal');
+    expect(RunSchema.safeParse({ ...pendingRun, origin: 'invalid' }).success).toBe(false);
+  });
+
   test('outer run terminal status does not represent tool denial or an inner approval wait', () => {
-    expect(RunSchema.parse(pendingRun)).toEqual(pendingRun);
-    expect(RunSchema.parse(run)).toEqual(run);
+    expect(RunSchema.parse(pendingRun)).toMatchObject({ ...pendingRun, origin: 'host' });
+    expect(RunSchema.parse(run)).toMatchObject({ ...run, origin: 'host' });
     const running = { ...pendingRun, status: 'running' };
-    expect(RunSchema.parse(running)).toEqual(running);
+    expect(RunSchema.parse(running)).toMatchObject({ ...running, origin: 'host' });
     for (const status of ['pending', 'running', 'completed', 'failed', 'cancelled']) expect(RunStatusSchema.parse(status)).toBe(status);
     expect(RunStatusSchema.safeParse('awaiting_approval').success).toBe(false);
     expect(RunStatusSchema.safeParse('denied').success).toBe(false);
@@ -130,9 +136,9 @@ describe('session schemas', () => {
     const followUp = { sessionId: id, request: prompt };
     const followedUp = { sessionId: id, followUpId: 'fu_01', acceptedAt: timestamp };
     expect(RunCreateRequestSchema.parse(prompt)).toEqual(prompt);
-    expect(RunSchema.parse(pendingRun)).toEqual(pendingRun);
+    expect(RunSchema.parse(pendingRun)).toMatchObject({ ...pendingRun, origin: 'host' });
     expect(RunAbortRequestSchema.parse(abort)).toEqual(abort);
-    expect(RunAbortAckSchema.parse(aborted)).toEqual(aborted);
+    expect(RunAbortAckSchema.parse(aborted)).toMatchObject({ run: { ...run, status: 'cancelled', origin: 'host' } });
     expect(SteerRequestSchema.parse(steer)).toEqual(steer);
     expect(SteerAckSchema.parse(steered)).toEqual(steered);
     expect(FollowUpRequestSchema.parse(followUp)).toEqual(followUp);

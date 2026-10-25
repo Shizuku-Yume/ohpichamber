@@ -16,6 +16,7 @@ import { environmentI18n } from './environment.i18n';
 import { providersI18n } from './providers.i18n';
 import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
+import { workerRunsI18n } from './worker-runs.i18n';
 
 export const dict: Record<I18nKey, string> = {
   "startup.legacyNotice.title": "Виявлено попередні дані OpenCode",
@@ -137,6 +138,7 @@ export const dict: Record<I18nKey, string> = {
   ...providersI18n.uk,
   ...mcpGridI18n.uk,
   ...pluginsGridI18n.uk,
+  ...workerRunsI18n.uk,
   'terminalView.actions.attachSelection': 'Прикріпити вибраний вивід',
   'terminalView.actions.copySelection': 'Скопіювати вибраний вивід',
   'terminalView.toast.selectionCopied': 'Вивід скопійовано',

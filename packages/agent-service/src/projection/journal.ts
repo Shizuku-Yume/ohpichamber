@@ -202,7 +202,7 @@ export class SessionJournal {
   private reduce(event: CanonicalEvent): void {
     switch (event.type) {
       case 'run.started':
-        this.runs.set(event.runId, { runId: event.runId, sessionId: this.identity.sessionId, status: 'running', createdAt: event.createdAt });
+        this.runs.set(event.runId, { runId: event.runId, sessionId: this.identity.sessionId, status: 'running', origin: event.origin ?? 'host', createdAt: event.createdAt });
         this.activeRunId = event.runId; this.runtimeStatus = 'running'; return;
       case 'run.completed': case 'run.cancelled': case 'run.failed':
         this.settleRun(event.runId, event.type === 'run.completed' ? 'completed' : event.type === 'run.cancelled' ? 'cancelled' : 'failed', event.finishedAt, event.type === 'run.failed' ? event.error : undefined); return;

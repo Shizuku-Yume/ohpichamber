@@ -5,7 +5,7 @@ import type { AgentSessionEvent } from '@oh-my-pi/pi-coding-agent/session/agent-
 import type { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import type { SessionEntry } from '@oh-my-pi/pi-coding-agent/session/session-entries';
 import { CounterSchema, EntityIdSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, PromptAttachmentSchema, TokenUsageSchema } from '@openchamber/agent-contract';
-import type { HistoryPage, HistoryPageRequest, JsonObject, JsonValue, Message, Part, PromptAttachment, Run, TokenUsage, Turn } from '@openchamber/agent-contract';
+import type { HistoryPage, HistoryPageRequest, JsonObject, JsonValue, Message, Part, PromptAttachment, Run, RunOrigin, TokenUsage, Turn } from '@openchamber/agent-contract';
 import type { ProjectionEvent, ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
 
@@ -13,6 +13,7 @@ type NativeMessage = Extract<AgentSessionEvent, { type: 'message_start' }>['mess
 type VisibleMessage = Extract<NativeMessage, { role: 'user' | 'assistant' | 'toolResult' }>;
 const REF_TYPE = 'ohpichamber.canonical.v1';
 const RUN_TYPE = 'ohpichamber.run.v1';
+const WORKER_RUN_TYPE = 'ohpichamber.worker-run.v1';
 const TURN_TYPE = 'ohpichamber.turn.v1';
 const ReferenceSchema = z.strictObject({
   nativeEntryId: EntityIdSchema, messageId: EntityIdSchema, turnId: EntityIdSchema,
@@ -98,8 +99,9 @@ export function selectedBranchRevert(branch: readonly SessionEntry[]): BranchSel
   }
   return null;
 }
+const WorkerRunSchema = z.strictObject({ runId: EntityIdSchema, origin: z.enum(['plan', 'goal']), createdAt: z.number().finite().nonnegative(), turnId: EntityIdSchema, userMessageId: EntityIdSchema });
 const TerminalSchema = z.strictObject({
-  runId: EntityIdSchema, status: z.enum(['completed', 'failed', 'cancelled']),
+  runId: EntityIdSchema, status: z.enum(['completed', 'failed', 'cancelled']), origin: z.enum(['host', 'plan', 'goal']).optional(),
   finishedAt: z.number().finite().nonnegative(), error: z.string().optional(),
 });
 const TurnTerminalSchema = TerminalSchema.extend({ turnId: EntityIdSchema, startedAt: z.number().finite().nonnegative() });
@@ -284,15 +286,23 @@ export class WorkerProjection {
     if (this.run?.runId === runId) this.cancelRequestedRunId = runId;
   }
 
-  beginRun(runId: string, timestamp: number, attachments: PromptAttachment[] = []): ProjectionInput[] {
+  beginRun(runId: string, timestamp: number, attachments: PromptAttachment[] = [], origin: RunOrigin = 'host'): ProjectionInput[] {
     if (this.run) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
     this.cancelRequestedRunId = undefined;
-    this.run = { runId, sessionId: this.sessionId, status: 'running', createdAt: timestamp };
+    this.run = { runId, sessionId: this.sessionId, status: 'running', origin, createdAt: timestamp };
     this.turn = undefined;
     this.message = undefined;
     this.stopReason = undefined;
     this.attachments = attachments;
-    return [{ timestamp, event: { type: 'run.started', runId, createdAt: timestamp } }];
+    const result: ProjectionInput[] = [{ timestamp, event: { type: 'run.started', runId, origin, createdAt: timestamp } }];
+    if (origin !== 'host') {
+      const turnId = randomUUID(), userMessageId = randomUUID();
+      this.turn = { turnId, userMessageId, virtualUser: true, open: true, startedAt: timestamp };
+      this.manager.appendCustomEntry(WORKER_RUN_TYPE, { runId, origin, createdAt: timestamp, turnId, userMessageId });
+      result.push({ timestamp, event: { type: 'turn.started', turnId, runId, userMessageId } },
+        { timestamp, event: { type: 'message.created', messageId: userMessageId, turnId, role: 'user' } });
+    }
+    return result;
   }
 
   consume(event: AgentSessionEvent): ProjectionInput[] {
@@ -471,7 +481,7 @@ export class WorkerProjection {
     run.status = settled;
     run.finishedAt = timestamp;
     if (error !== undefined) run.error = error;
-    this.manager.appendCustomEntry(RUN_TYPE, { runId: run.runId, status: settled, finishedAt: timestamp, error });
+    this.manager.appendCustomEntry(RUN_TYPE, { runId: run.runId, status: settled, origin: run.origin, finishedAt: timestamp, error });
     this.run = null;
     return result;
   }
@@ -532,6 +542,7 @@ export class WorkerProjection {
     let version = 0n;
     let updatedAt = 0;
     const virtualTurns = new Set<string>();
+    const workerRuns = new Map<string, z.infer<typeof WorkerRunSchema>>();
     for (const entry of this.manager.getEntries()) {
       const timestamp = Date.parse(entry.timestamp);
       if (Number.isFinite(timestamp)) updatedAt = Math.max(updatedAt, timestamp);
@@ -545,9 +556,18 @@ export class WorkerProjection {
       } else if (entry.customType === RUN_TYPE) {
         const terminal = TerminalSchema.parse(entry.data);
         terminals.set(terminal.runId, terminal);
+      } else if (entry.customType === WORKER_RUN_TYPE) {
+        const workerRun = WorkerRunSchema.parse(entry.data);
+        workerRuns.set(workerRun.runId, workerRun);
       } else if (entry.customType === TURN_TYPE) {
         const terminal = TurnTerminalSchema.parse(entry.data);
         turnTerminals.set(terminal.turnId, terminal);
+      }
+    }
+    for (const workerRun of workerRuns.values()) {
+      if (workerRun.runId !== this.run?.runId && !terminals.has(workerRun.runId)) {
+        terminals.set(workerRun.runId, { runId: workerRun.runId, status: 'failed', origin: workerRun.origin,
+          finishedAt: workerRun.createdAt, error: 'Agent execution was interrupted' });
       }
     }
     const turns: Turn[] = [];
@@ -570,7 +590,6 @@ export class WorkerProjection {
         const userMessageId = reference?.userMessageId ?? messageId;
         const runId = reference?.runId ?? opaqueNativeId('run', this.sessionId, entry.id);
         const terminal = turnTerminals.get(turnId);
-        // Bound messages identify the run; an unbound message belongs to the open turn only after the last binding point.
         const live = activeRunId !== undefined && (reference?.runId === activeRunId
           || (this.turn?.open === true && entryIndex >= this.entryOffset));
         if (live) liveTurnIds.add(turnId);

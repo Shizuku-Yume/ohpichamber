@@ -184,14 +184,14 @@ describe("native canonical event reducer", () => {
     expect(next.sessionDeletedRevision?.["session-1"] ?? 0).toBeGreaterThan(0)
   })
 
-  const run = (overrides: Partial<Run> = {}): Run => ({ runId: "run-1", sessionId: "session-1", status: "running", createdAt: 5, ...overrides })
+  const run = (overrides: Partial<Run> = {}): Run => ({ runId: "run-1", sessionId: "session-1", status: "running", origin: "host", createdAt: 5, ...overrides })
 
   test("an accepted run acknowledgement binds live control state before its event arrives", () => {
     const base = installSessionSnapshot(state(), snapshot())
     const accepted = installRuntimeRun(base, run())
     expect(accepted.session_status["session-1"]).toBe("running")
     expect(accepted.snapshot["session-1"]?.session).toMatchObject({ runtimeStatus: "running", activeRunId: "run-1" })
-    expect(accepted.snapshot["session-1"]?.activeRun).toEqual({ runId: "run-1", sessionId: "session-1", status: "running", createdAt: 5 })
+    expect(accepted.snapshot["session-1"]?.activeRun).toEqual({ runId: "run-1", sessionId: "session-1", status: "running", origin: "host", createdAt: 5 })
     expect(accepted.session[0]).toMatchObject({ runtimeStatus: "running", activeRunId: "run-1" })
     // Control state only: the transcript is untouched and a repeated ack is a no-op.
     expect(accepted.message["session-1"]).toBe(base.message["session-1"])

@@ -15,6 +15,7 @@ import { environmentI18n } from './environment.i18n';
 import { providersI18n } from './providers.i18n';
 import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
+import { workerRunsI18n } from './worker-runs.i18n';
 
 export const dict = {
   "startup.legacyNotice.descriptionGeneric": "Uw eerdere OpenCode-sessies zijn niet geïmporteerd in OpenChamber. Uw bestaande gegevens blijven ongewijzigd bewaard in uw OpenCode-gegevensmap. Meld u in Instellingen opnieuw aan bij uw providers om uw modellen te gebruiken.",
@@ -126,6 +127,7 @@ export const dict = {
   ...providersI18n.nl,
   ...mcpGridI18n.nl,
   ...pluginsGridI18n.nl,
+  ...workerRunsI18n.nl,
   'terminalView.actions.attachSelection': 'Geselecteerde uitvoer toevoegen',
   'terminalView.actions.copySelection': 'Geselecteerde uitvoer kopiëren',
   'terminalView.toast.selectionCopied': 'Uitvoer gekopieerd',

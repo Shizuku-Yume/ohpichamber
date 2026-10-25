@@ -69,9 +69,11 @@ export const SessionSchema = RuntimeSessionSchema.safeExtend({
 export type Session = z.infer<typeof SessionSchema>;
 export const RunStatusSchema = z.enum(['pending', 'running', 'completed', 'failed', 'cancelled']);
 export type RunStatus = z.infer<typeof RunStatusSchema>;
+export const RunOriginSchema = z.enum(['host', 'plan', 'goal']);
+export type RunOrigin = z.infer<typeof RunOriginSchema>;
 export const RunSchema = z.strictObject({
   runId: EntityIdSchema, sessionId: EntityIdSchema,
-  status: RunStatusSchema, createdAt: TimestampSchema, finishedAt: TimestampSchema.optional(), error: z.string().optional(),
+  status: RunStatusSchema, origin: RunOriginSchema.default('host'), createdAt: TimestampSchema, finishedAt: TimestampSchema.optional(), error: z.string().optional(),
 }).refine((run) => {
   const terminal = run.status === 'completed' || run.status === 'failed' || run.status === 'cancelled';
   return terminal === (run.finishedAt !== undefined);

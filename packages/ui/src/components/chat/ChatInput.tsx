@@ -1824,10 +1824,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                     });
                     if (forkOutcome === 'send-failed') toast.error(t('chat.chatInput.toast.forkSendFailed'));
                 } else if (actionName === 'compact') {
-                    await sendMessage('/compact', currentProviderId, currentModelId, null, undefined, undefined, undefined, variantToSend, 'normal', {
-                        sessionId: currentSessionId,
-                        directory: currentDirectory ?? undefined,
-                    });
+                    const instructions = commandPlan.command.argument.trim();
+                    await sessionActions.compactSession(currentSessionId, instructions || undefined);
                 }
             } catch (error) {
                 restoreComposerText();

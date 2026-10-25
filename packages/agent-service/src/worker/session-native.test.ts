@@ -499,6 +499,32 @@ test('actual native undo/redo retains sibling transcript and cold-reopen selecti
     expect(harness.requests).toHaveLength(0);
   } finally { await cold?.close(); await harness.close(); }
 }, 30000);
+test('native compact refuses while a run is active', async () => {
+  const firstRequest = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  const harness = await fixture({ async respond() {
+    firstRequest.resolve();
+    await release.promise;
+    return completion();
+  } });
+  const terminal = Promise.withResolvers<void>();
+  const unsubscribe = harness.worker.session.subscribe(event => {
+    if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve();
+  });
+  try {
+    await harness.worker.operation({ type: 'prompt', runId: 'compact-active-run', request: prompt('Keep this run active.') });
+    await firstRequest.promise;
+    await expect(harness.worker.operation({ type: 'compact', instructions: 'Preserve the active-run refusal.' }))
+      .rejects.toMatchObject({ status: 409, code: 'RUN_ACTIVE' });
+    release.resolve();
+    await terminal.promise;
+    expect(harness.fatal()).toBe(false);
+  } finally {
+    release.resolve();
+    unsubscribe();
+    await harness.close();
+  }
+}, 30000);
 
 test('native branch CAS rejects stale owner/version and redo expires after a new prompt', async () => {
   const harness = await fixture({ respond: () => completion() });

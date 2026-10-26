@@ -15,6 +15,7 @@ import {
   SETTINGS_FIELDS_STACK_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { SessionWarmingCheckbox } from './SessionWarmingCheckbox';
+import { SessionWarmingModeField } from './SessionWarmingModeField';
 import { PermissionDefaultModeField } from './PermissionDefaultModeField';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
 import { loadDesktopSettings, updateDesktopSettings } from '@/lib/persistence';
@@ -447,6 +448,11 @@ const getDisplayModel = (
             </SettingsInset>
           </div>
         </div>
+      </SettingsSection>
+
+      {/* Per-session warming owned by the Host; the workspace's cache warming is the checkbox above. */}
+      <SettingsSection title={t('settings.openchamber.defaults.promptCacheTitle')}>
+        <SessionWarmingModeField />
       </SettingsSection>
     </>
   );

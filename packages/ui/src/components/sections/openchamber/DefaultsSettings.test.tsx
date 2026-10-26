@@ -114,6 +114,23 @@ mock.module('@/components/sections/agents/ModelSelector', () => ({
 mock.module('@/components/sections/commands/AgentSelector', () => ({
   AgentSelector: () => <button type="button">agent</button>,
 }));
+// A Host without per-session warming: the field renders nothing and touches no route.
+mock.module('@/stores/useSessionWarmingStore', () => ({
+  WARMING_DURATION_STEPS: [30, 60, 120, 180],
+  useSessionWarmingStore: <T,>(selector: (state: Record<string, unknown>) => T): T => selector({
+    status: 'unavailable',
+    revision: null,
+    enabled: false,
+    minutes: 60,
+    sessions: {},
+    applySnapshot: () => undefined,
+    refresh: async () => undefined,
+    setMode: async () => undefined,
+    setMinutes: async () => undefined,
+    setSessionWarm: async () => undefined,
+    reset: () => undefined,
+  }),
+}));
 mock.module('@/components/sections/shared/SettingsInfoHint', () => ({
   SettingsInfoHint: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
@@ -126,6 +143,9 @@ mock.module('@/components/sections/shared/SettingsSection', () => ({
   SettingsFieldRow: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   SettingsCheckboxRow: ({ children, label }: { children?: React.ReactNode; label?: React.ReactNode }) => (
     <div>{label}{children}</div>
+  ),
+  SettingsChipGroup: ({ options }: { options?: Array<{ label: React.ReactNode }> }) => (
+    <div>{options?.map((option, index) => <span key={index}>{option.label}</span>)}</div>
   ),
   SettingsInset: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   SettingsGroupTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,

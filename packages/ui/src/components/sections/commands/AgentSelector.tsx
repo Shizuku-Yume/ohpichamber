@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { dropdownTriggerVariants } from '@/components/ui/dropdown-trigger';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { Icon } from "@/components/icon/Icon";
+import { Spinner } from '@/components/ui/spinner';
 import { useI18n } from '@/lib/i18n';
 import { useCatalogReadiness } from '@/hooks/useCatalogReadiness';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
@@ -77,7 +78,7 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
                                 key={agent.agentId}
                                 type="button"
                                 className={cn(
-                                    'flex w-full items-center justify-between rounded-lg border border-border/40 px-2 py-1.5 text-left',
+                                    'flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-start',
                                     isSelected ? 'bg-interactive-selection text-interactive-selection-foreground' : 'text-foreground hover:bg-interactive-hover'
                                 )}
                                 onClick={() => {
@@ -120,7 +121,7 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
                     <div className="flex items-center gap-2">
                         {!isReady && !agentId ? (
                             <>
-                                <Icon name="loader-4" className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                                {isUnavailable ? <Icon name="error-warning" className="h-3.5 w-3.5 text-muted-foreground" /> : <Spinner className="h-3.5 w-3.5 text-muted-foreground" />}
                                 <span className="typography-meta text-muted-foreground">{isUnavailable ? t('common.unavailable') : t('common.loading')}</span>
                             </>
                         ) : (

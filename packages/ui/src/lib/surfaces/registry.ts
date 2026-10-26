@@ -1,6 +1,6 @@
 import type { IconName } from '@/components/icon/icons';
 import type { I18nKey } from '@/lib/i18n';
-import { isPluginContextPanelMode, type ContextPanelMode } from '@/lib/surfaces/modes';
+import type { ContextPanelMode } from '@/lib/surfaces/modes';
 
 type BuiltInContextSurfaceId =
   | 'editor'

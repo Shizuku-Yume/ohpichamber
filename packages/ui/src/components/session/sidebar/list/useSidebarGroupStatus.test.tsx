@@ -126,10 +126,14 @@ const projectSections: ProjectSection[] = [{
   project: { id: 'project', normalizedPath: '/project' }, groups: [projectGroup],
 }];
 
-test('unopened groups wait for the global list, expose failure, and settle after retry', async () => {
+test('a global refresh error alone does not mark unopened groups failed; their own refresh does', async () => {
   const dom = installHookTestDom();
   const root = createRoot(dom.container);
   const manager = new ChildStoreManager();
+  let failProject = true;
+  manager.configure({ onBootstrap: ({ directory }) => {
+    if (directory === '/project' && failProject) throw new Error('list failed');
+  } });
   const captured = React.createRef<ReturnType<typeof useSidebarGroupStatus>>();
   const Harness = () => {
     captured.current = useSidebarGroupStatus({ childStores: manager, sections: projectSections, chatGroup, canGrantAccess: true });
@@ -142,21 +146,25 @@ test('unopened groups wait for the global list, expose failure, and settle after
     await act(async () => useGlobalSessionsStore.setState({ status: 'loading' }));
     expect(states().map((status) => status.state)).toEqual(['loading', 'loading']);
     await act(async () => useGlobalSessionsStore.setState({ status: 'error' }));
-    expect(states()).toEqual([
-      { state: 'load-failed', directory: null, canGrantAccess: false },
-      { state: 'load-failed', directory: null, canGrantAccess: false },
-    ]);
-    await act(async () => useGlobalSessionsStore.setState({ status: 'loading' }));
+    // A partial global error, but neither group ran its own refresh yet.
     expect(states().map((status) => status.state)).toEqual(['loading', 'loading']);
-    await act(async () => useGlobalSessionsStore.getState().applySnapshot([], []));
+    await act(async () => useGlobalSessionsStore.setState({ status: 'error', globalRefreshFailed: true }));
+    // A total global request failure keeps its retry visible on every group.
+    expect(states().map((status) => status.state)).toEqual(['load-failed', 'load-failed']);
+    await act(async () => useGlobalSessionsStore.setState({ status: 'loading', globalRefreshFailed: false }));
+    await act(async () => manager.requestBootstrap({ directory: '/project', priority: 'selected', reason: 'current-directory' }));
+    expect(captured.current?.groupStatusByKey.get('project:root')).toEqual({ state: 'load-failed', directory: '/project', canGrantAccess: false });
+    expect(captured.current?.groupStatusByKey.get('activity:chats')?.state).toBe('loading');
+    failProject = false;
+    await act(async () => manager.requestBootstrap({ directory: '/project', priority: 'expanded', reason: 'project-expanded', force: true }));
+    await act(async () => manager.requestBootstrap({ directory: '/chats', priority: 'selected', reason: 'current-directory' }));
+    await act(async () => manager.requestBootstrap({ directory: '/chats/session', priority: 'selected', reason: 'selected-session' }));
     expect(states().map((status) => status.state)).toEqual(['ready', 'ready']);
     // Routine polling must not flash loading over a known empty group.
     await act(async () => useGlobalSessionsStore.setState({ status: 'loading' }));
     expect(states().map((status) => status.state)).toEqual(['ready', 'ready']);
-    expect(manager.getBootstrapState('/project')).toBeUndefined();
-    expect(manager.getBootstrapState('/chats')).toBeUndefined();
     await act(async () => useGlobalSessionsStore.getState().resetForRuntimeSwitch());
-    expect(states().map((status) => status.state)).toEqual(['loading', 'loading']);
+    expect(states().map((status) => status.state)).toEqual(['ready', 'ready']);
   } finally {
     await act(async () => root.unmount());
     manager.disposeAll();
@@ -164,7 +172,7 @@ test('unopened groups wait for the global list, expose failure, and settle after
   }
 });
 
-test('a complete directory does not hide a global failure in an unrelated group', async () => {
+test('a complete directory does not inherit an unrelated refresh failure', async () => {
   const dom = installHookTestDom();
   const root = createRoot(dom.container);
   const manager = new ChildStoreManager();
@@ -179,7 +187,7 @@ test('a complete directory does not hide a global failure in an unrelated group'
     await act(async () => manager.requestBootstrap({ directory: '/project', priority: 'selected', reason: 'current-directory' }));
     await act(async () => useGlobalSessionsStore.setState({ status: 'error' }));
     expect(captured.current?.groupStatusByKey.get('project:root')?.state).toBe('ready');
-    expect(captured.current?.groupStatusByKey.get('activity:chats')).toEqual({ state: 'load-failed', directory: null, canGrantAccess: false });
+    expect(captured.current?.groupStatusByKey.get('activity:chats')?.state).toBe('loading');
   } finally {
     await act(async () => root.unmount());
     manager.disposeAll();

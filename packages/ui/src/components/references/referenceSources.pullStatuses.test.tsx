@@ -39,6 +39,10 @@ test('a list that mounts while its statuses are already on the way shows them wh
   globalThis.fetch = Object.assign(async (input: RequestInfo | URL) => {
     const url = new URL(input instanceof Request ? input.url : String(input), 'http://localhost');
     switch (url.pathname) {
+      case '/api/git/check': return Response.json({ isGitRepository: true });
+      case '/api/git/status': return Response.json({
+        current: 'main', tracking: null, ahead: 0, behind: 0, files: [], isClean: true,
+      });
       case '/api/source-control/binding': return Response.json({
         status: 'bound', revision: 1,
         repository: { supported: true, repositoryId: 'repo', configRevision: 'rev', bare: false,

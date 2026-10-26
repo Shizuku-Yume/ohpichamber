@@ -3490,7 +3490,7 @@ export const dict = {
   'chat.permissionDock.collapseAria': 'İzin isteğini daralt',
   'chat.permissionDock.stepAria': 'İstek {index}: {tool}',
   'chat.permissionCard.allowOnce': 'Bir kez izin ver',
-  'chat.permissionCard.alwaysAllow': 'Her zaman izin ver',
+  'chat.permissionCard.alwaysAllow': 'Bu oturumda {tool} aracına her zaman izin ver',
   'chat.permissionCard.alwaysAllowPatterns': 'Her zaman: {patterns}',
   'chat.permissionCard.deny': 'Reddet',
   'chat.permissionCard.replaceAll': 'Tüm eşleşmeleri değiştirir',

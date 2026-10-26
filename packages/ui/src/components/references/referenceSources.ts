@@ -27,9 +27,11 @@ import type {
     SourceControlReadContext,
 } from '@/lib/api/types';
 import { getRuntimeKey } from '@/lib/runtime-switch';
+import { runBackgroundNetworkTask } from '@/lib/background-network';
 import { GITHUB_SOURCE_CONTROL_IDENTITY, resolveSourceControlIdentity } from '@/lib/source-control/identity';
 import { getSourceControlAuthKey, useSourceControlAuthStore } from '@/stores/useSourceControlAuthStore';
 import { useRepositoryBinding } from '@/lib/source-control/repository-binding';
+import { useIsGitRepo, useGitStore } from '@/stores/useGitStore';
 import { useLinearAuthStore } from '@/stores/useLinearAuthStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
@@ -62,8 +64,20 @@ const BUILT_IN_IDENTITIES: SourceControlIdentity[] = [
  * to and the hosts its remotes point at, whether or not an account there works.
  */
 function useRepositoryHosts(directory: string | null) {
-    const { sourceControl } = useRuntimeAPIs();
-    const binding = useRepositoryBinding(directory, sourceControl, Boolean(directory));
+    const { sourceControl, git } = useRuntimeAPIs();
+    const ensureGitStatus = useGitStore((state) => state.ensureStatus);
+    const isGitRepo = useIsGitRepo(directory);
+    React.useEffect(() => {
+        if (!directory || !git || isGitRepo !== null) return;
+        // A deep link or Source Board can reach a directory the sidebar never
+        // probed. Read its repository status once; binding reads wait for it.
+        void runBackgroundNetworkTask(() => ensureGitStatus(directory, git)).catch(() => {
+            // An unreadable directory stays unknown; no binding is requested.
+        });
+    }, [directory, ensureGitStatus, git, isGitRepo]);
+    // A binding only exists for a Git repository. Non-repository chat folders
+    // (the managed chats root included) must not answer 422 from the route.
+    const binding = useRepositoryBinding(directory, sourceControl, Boolean(directory) && isGitRepo === true);
     const knownIdentities = useSourceControlAuthStore((state) => state.identities);
     const hosts = React.useMemo(() => {
         const read = binding.read;

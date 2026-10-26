@@ -82,7 +82,7 @@ export const WorkerOperationSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('abort'), runId: EntityIdSchema }),
   z.strictObject({ type: z.literal('compact'), instructions: z.string().optional() }),
   z.strictObject({ type: z.literal('command'), text: z.string().min(1) }),
-  z.strictObject({ type: z.literal('approval.resolve'), approvalId: EntityIdSchema, decision: z.enum(['approve', 'reject']), policy: WorkerApprovalPolicySchema.optional() }),
+  z.strictObject({ type: z.literal('approval.resolve'), approvalId: EntityIdSchema, decision: z.enum(['approve', 'approve-always', 'reject']), policy: WorkerApprovalPolicySchema.optional() }),
   z.strictObject({ type: z.literal('question.resolve'), questionId: EntityIdSchema, action: z.enum(['answer', 'cancel']), response: JsonValueSchema.optional() }),
   z.strictObject({ type: z.literal('history'), request: HistoryPageRequestSchema }),
   z.strictObject({ type: z.literal('branch'), request: SessionBranchRequestSchema }),
@@ -101,6 +101,7 @@ const WorkerApprovalInteractionSchema = z.strictObject({
   kind: z.literal('approval'), approvalId: EntityIdSchema, toolCallId: EntityIdSchema, toolName: z.string().min(1),
   actionType: z.enum(['bash_command', 'file_write', 'network_request', 'custom_tool']), commandSummary: z.string(),
   details: JsonObjectSchema, policyTarget: z.strictObject({ toolName: z.string().min(1), pattern: z.string() }), turnId: EntityIdSchema,
+  sessionRuleKey: z.string().min(1).optional(), nativeGrant: z.literal(true).optional(),
 });
 const WorkerQuestionInteractionSchema = z.strictObject({
   kind: z.literal('question'), questionId: EntityIdSchema, turnId: EntityIdSchema, prompt: z.string(),

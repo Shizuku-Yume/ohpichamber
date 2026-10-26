@@ -3499,7 +3499,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.permissionDock.collapseAria': '권한 요청 접기',
   'chat.permissionDock.stepAria': '요청 {index}: {tool}',
   'chat.permissionCard.allowOnce': '한 번 허용',
-  'chat.permissionCard.alwaysAllow': '항상 허용',
+  'chat.permissionCard.alwaysAllow': '이 세션에서 {tool} 항상 허용',
   'chat.permissionCard.alwaysAllowPatterns': '항상: {patterns}',
   'chat.permissionCard.deny': '거부',
   'chat.permissionCard.replaceAll': '모든 항목을 바꿉니다',

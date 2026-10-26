@@ -2,6 +2,7 @@ import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import path from 'node:path';
+import { z } from 'zod';
 
 const require = createRequire(import.meta.url);
 const loadDatabaseSync = () => {
@@ -20,7 +21,7 @@ const ensurePrivateSqliteFile = (fsImpl, filePath) => {
   fsImpl.chmodSync(filePath, 0o600);
 };
 
-const normalize = (value) => typeof value === 'string' && value.length > 0 ? value : null;
+const normalize = (value) => z.string().min(1).safeParse(value).data ?? null;
 const validatePolicy = (policy) => {
   if (!policy || !['session', 'workspace'].includes(policy.scope) || (policy.scope === 'session' ? policy.decision !== 'allow' : policy.decision !== 'deny')) return null;
   const toolName = normalize(policy.target?.toolName);
@@ -37,7 +38,7 @@ export class ApprovalPolicySchemaTooNewError extends ApprovalPolicyWriteError {
   constructor(message, cause) { super(message, cause); this.name = 'ApprovalPolicySchemaTooNewError'; this.code = 'APPROVAL_POLICY_SCHEMA_TOO_NEW'; }
 }
 
-export const CURRENT_APPROVAL_POLICY_SCHEMA_VERSION = 1;
+export const CURRENT_APPROVAL_POLICY_SCHEMA_VERSION = 2;
 
 const APPROVAL_POLICY_MIGRATIONS = [
   // Migration 1: baseline approval_policies table and indexes
@@ -51,6 +52,13 @@ const APPROVAL_POLICY_MIGRATIONS = [
       CREATE INDEX IF NOT EXISTS approval_policies_session ON approval_policies(session_id);
       CREATE INDEX IF NOT EXISTS approval_policies_workspace ON approval_policies(workspace_id);
     `);
+  },
+  // Migration 2: "Always allow" is now an in-memory session rule like OMP's
+  // ACP allow_always cache. Older releases persisted an exact-input session
+  // allowance; a wildcard written by an interim build is no more valid. Revoke
+  // both instead of widening them into the new lifetime.
+  (db) => {
+    db.exec("DELETE FROM approval_policies WHERE scope = 'session' AND decision = 'allow'");
   },
 ];
 

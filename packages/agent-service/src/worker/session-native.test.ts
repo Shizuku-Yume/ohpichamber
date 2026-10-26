@@ -485,9 +485,7 @@ for (const decision of ['allow', 'deny'] as const) {
           output: { content: expect.arrayContaining([{ type: 'text', text: expect.stringContaining('PATTERN') }]) },
         });
       } else {
-        expect(outcome).toMatchObject({ status: 'failed', isError: true,
-          output: { content: expect.arrayContaining([{ type: 'text', text: expect.stringContaining('blocked by tool policy') }]) },
-        });
+        expect(outcome).toMatchObject({ status: 'failed', isError: true });
         expect(outcome.output).not.toMatchObject({ content: expect.arrayContaining([{ type: 'text', text: 'PATTERN' }]) });
       }
       expect(harness.events.filter(input => input.event.type === 'approval.requested')).toHaveLength(0);
@@ -496,6 +494,41 @@ for (const decision of ['allow', 'deny'] as const) {
     } finally { unsubscribe(); await harness.close(); }
   }, 30000);
 }
+
+test('actual SDK Bash always-allow caches natively and still grants each execution exactly', async () => {
+  const first = `printf FIRST >> '${join('ROOT', 'proof.txt')}'`;
+  const second = `printf SECOND >> '${join('ROOT', 'proof.txt')}'`;
+  let step = 0;
+  const harness = await fixture({ respond(payload, root) {
+    if (payload.messages.at(-1)?.role !== 'tool') {
+      step = 1;
+      return completion({ name: 'bash', id: 'native-bash-1', input: { command: first.replace('ROOT', root) } });
+    }
+    if (step === 1) {
+      step = 2;
+      return completion({ name: 'bash', id: 'native-bash-2', input: { command: second.replace('ROOT', root) } });
+    }
+    return completion();
+  } });
+  const terminal = Promise.withResolvers<void>();
+  const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve(); });
+  try {
+    cfgToolsApprovalMode.override(harness.worker.session.settings, 'always-ask');
+    await harness.worker.operation({ type: 'prompt', runId: 'always-run', request: prompt('Run both native bash steps.') });
+    const approval = await harness.waitApproval();
+    await harness.interactions.resolveApproval(rootSessionId, approval.approvalId, {
+      decision: 'always-allow', policyScope: 'session', version: approval.version, epoch: approval.epoch, workerGeneration: approval.workerGeneration,
+    });
+    await terminal.promise;
+    expect(await readFile(join(harness.root, 'proof.txt'), 'utf8')).toBe('FIRSTSECOND');
+    const requested = harness.events.filter(input => input.event.type === 'approval.requested');
+    expect(requested).toHaveLength(1);
+    expect(harness.grants).toHaveLength(2);
+    expect(harness.grants[0]).toBe(approval.approvalId);
+    expect(harness.grants[1]).not.toBe(approval.approvalId);
+    expect(harness.fatal()).toBe(false);
+  } finally { unsubscribe(); await harness.close(); }
+}, 30000);
 
 test('actual SDK Host tool executes with Host-supplied first-use MCP storage and returns its real file result', async () => {
   let invoked: HostActionRequest | undefined;

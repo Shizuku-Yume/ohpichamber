@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { ApprovalRequestSchema, type ApprovalRequest } from '@openchamber/agent-contract';
-import { getApprovalPolicyTitle, getApprovalPresentation } from './permissionPresentation';
+import { getApprovalPolicyTitle, getApprovalPresentation, isToolScopePolicy } from './permissionPresentation';
 
 const approval = (patch: Partial<ApprovalRequest>): ApprovalRequest => ApprovalRequestSchema.parse({
   approvalId: 'approval-1',
@@ -39,10 +39,14 @@ describe('native approval presentation', () => {
     });
   });
 
-  test('names the exact session allowance target only when the request has one', () => {
+  test('names the exact allowance target and treats the native wildcard as tool scope', () => {
     expect(getApprovalPolicyTitle(approval({}))).toBeUndefined();
     expect(getApprovalPolicyTitle(approval({
       policyTarget: { toolName: 'bash', pattern: 'git status' },
     }))).toBe('bash: git status');
+    const toolScope = approval({ policyTarget: { toolName: 'bash', pattern: '*' } });
+    expect(getApprovalPolicyTitle(toolScope)).toBe('bash: *');
+    expect(isToolScopePolicy(toolScope)).toBe(true);
+    expect(isToolScopePolicy(approval({ policyTarget: { toolName: 'bash', pattern: 'git status' } }))).toBe(false);
   });
 });

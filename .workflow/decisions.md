@@ -251,3 +251,39 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** no
 - **Revisit when:** goals end too early in practice because the agent declares completion without the work being done, or OMP exposes a hook for an external completion check.
 - **Effort:** omp-native-chat
+
+## 2026-10-26 - Approval summaries are safe one-liners
+
+- **Decided:** The public approval record carries the exact tool name and a redacted, single-line, 200-character input summary (bash command or file path). Raw input and exact policy targets stay service-private; card details, pattern labels and tooltips are built only from the safe projection.
+- **Instead of:** Forwarding the captured input object/details to the browser, or keeping the generic "Native tool operation requires approval" text.
+- **Because:** The card must name the tool and command to be useful, but the same projection reaches browser events and notifications. Environment assignment values, authorization schemes, URL credentials, token arguments, API-key headers, signed-URL parameters and known credential/key shapes must be masked before that boundary.
+- **Mine:** yes
+- **Revisit when:** a tool needs a different human summary field, or the projection gains structured preview data that cannot be bounded by one line.
+- **Effort:** omp-native-parity
+
+## 2026-10-26 - Chat reference bindings require a Git repository
+
+- **Decided:** `useRepositoryHosts` ensures the owning Git store has read the directory's status, then reads a source-control binding only when that status reports a repository. Non-repository chat directories request no binding.
+- **Instead of:** Returning a synthetic empty binding from `GET /api/source-control/binding`, or letting the existing 422 stand and treating it as an empty result.
+- **Because:** `SourceControlBindingRead` requires a real repository context; a fake repository would leak into identity, mutation and worktree consumers that assume a repository. The binding route remains honest about its precondition, and a deep-linked or Source-Board directory still gets a status read before its real repository binding is skipped or loaded.
+- **Mine:** yes
+- **Revisit when:** a non-repository surface needs a first-class "no repository" binding read (for example a dedicated discriminated response).
+- **Effort:** omp-native-parity
+
+## 2026-10-26 - Refresh errors belong to the group that failed
+
+- **Decided:** A sidebar group shows "Could not refresh sessions" when its own directory bootstrap failed, or when the global session-list request itself failed (a total failure, with global retry). Partial per-scope `result.errors` do not mark untouched groups.
+- **Instead of:** Falling back to `globalStatus === 'error'` for every incomplete group, or suppressing all global failures for directory-backed groups.
+- **Because:** A partial global result can fail for one directory while other groups have not refreshed at all, while a total list failure is real for every unopened group and must keep its retry visible.
+- **Mine:** yes
+- **Revisit when:** the global store publishes per-directory failure attribution, which would let each group show its own global-scope error directly.
+- **Effort:** omp-native-parity
+
+## 2026-10-27 - Always allow uses OMP's native ACP cache with exact Host grants
+
+- **Decided:** "Always allow" resolves OMP's `allow_always` handle through the native `ClientBridge.requestPermission` seam for bash. OMP's per-session ACP decision cache owns the key (`bash`); the Agent Service keeps no policy mirror and writes nothing to Host SQLite or OMP config. A worker-local routing set only identifies a cached call so it can request the silent exact Host grant; it never authorizes execution itself. A later cached bash call bypasses the native card but still reaches the custom Bash tool, which synthesizes an exact Host execution grant bound to that tool call and input before authorization; that grant is consumed once and produces no public card. The bridge resets with the native logical session, stops with the worker, surfaces non-bash ACP-gated tools as one-shot canonical cards (never a session allowance), passes native bash pattern allow/deny to their existing Host policy, and provider-safety or Host-only prompts never receive a native allowance. Schema version 2 revokes all legacy persisted session allowances.
+- **Instead of:** The interim Agent Service session-rule Set, a wildcard Host policy row, or a second approval prompt after the native cache already authorized a call.
+- **Because:** Title-text scraping and conflating the two-option `ui.select` prompt with the four-option native gate were unsound: cached ACP calls bypass `requestPermission`, so a Host mirror could authorize the wrong tool or keep allowing after the native session reset. The native cache is the exact lifecycle owner; re-entering the custom Bash tool is the one point where every execution can still be bound to an exact Host grant.
+- **Mine:** yes
+- **Revisit when:** the SDK exposes per-tool ACP bridge scoping or a session-reset callback that lets the Host observe cache clears directly.
+- **Effort:** omp-native-parity

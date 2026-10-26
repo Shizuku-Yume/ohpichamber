@@ -257,7 +257,7 @@ describe('canonical sidebar child discovery', () => {
     await discover(directory);
     const state = useGlobalSessionsStore.getState();
     expect(state.entityById.get('ses_child')).toEqual(session('ses_child', {
-      parentSessionId: 'ses_root', rootSessionId: 'ses_root', title: 'Worker', metadata: {},
+      parentSessionId: 'ses_root', rootSessionId: 'ses_root', title: 'Worker', metadata: null, metadataRevision: '0',
       runtimeStatus: 'idle', activeRunId: null,
     }));
     expect(state.structure.activeRootIds).toEqual(['ses_root']);
@@ -356,7 +356,7 @@ describe('canonical sidebar child discovery', () => {
     subagents.mockResolvedValue([child('failed')]);
     await useGlobalSessionsStore.getState().loadSessions();
     expect(useGlobalSessionsStore.getState().entityById.get('ses_child')).toMatchObject({
-      title: 'Worker', metadata: {}, metadataRevision: '1', runtimeStatus: 'idle', activeRunId: null,
+      title: 'Worker', metadata: null, metadataRevision: '0', runtimeStatus: 'idle', activeRunId: null,
     });
   });
 });

@@ -220,7 +220,7 @@ describe("canonical session snapshot loading", () => {
   })
 
   test("late independent Host reads cannot publish into another runtime", async () => {
-    const metadata = deferred<{ sessionId: string; revision: string; metadata: {} }>()
+    const metadata = deferred<{ sessionId: string; revision: string; metadata: Record<string, unknown> }>()
     const { loader, store } = setup({ client: nativeClient({ getSessionMetadata: () => metadata.promise }) })
     store.setState({ session: [nativeHostSession()] })
     const load = loader.ensure(target)

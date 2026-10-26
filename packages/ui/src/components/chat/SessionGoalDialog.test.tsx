@@ -28,7 +28,7 @@ const directory = '/repo';
 const sessionId = 'session-1';
 // A streamed step replaces the session record; an active goal's usage moves
 // with it.
-const session = (updated: number, _turnsUsed: number): Session => ({
+const session = (updated: number): Session => ({
   sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '.', rootSessionId: sessionId,
   createdAt: 0, updatedAt: updated, epoch: 'epoch', headSequence: String(updated), runtimeStatus: 'idle', activeRunId: null,
   mode: { kind: 'goal', status: 'active', objective: 'Ship it', tokenBudget: null, tokensUsed: updated * 100 },
@@ -92,12 +92,12 @@ describe('SessionGoalDialog', () => {
 
   test('a closed dialog does not re-render while the session streams', async () => {
     await render(false);
-    await stage(session(1, 1));
+    await stage(session(1));
     const settled = renders;
 
-    await stage(session(2, 1));
-    await stage(session(3, 2));
-    await stage(session(4, 3));
+    await stage(session(2));
+    await stage(session(3));
+    await stage(session(4));
 
     expect(renders).toBe(settled);
     expect(document.body.textContent).not.toContain('Session Goal');
@@ -105,7 +105,7 @@ describe('SessionGoalDialog', () => {
 
   test('an open dialog displays canonical objective and token usage', async () => {
     await render(false);
-    await stage(session(1, 3));
+    await stage(session(1));
     await render(true);
 
     expect(document.body.textContent).toContain('Session Goal');
@@ -121,12 +121,12 @@ describe('SessionGoalDialog', () => {
     };
     try {
       await render(false);
-      await stage(session(1, 1));
+      await stage(session(1));
       await render(true);
       const pause = Array.from(document.querySelectorAll('button')).find((button) => button.textContent?.includes('Pause'));
       await act(async () => pause?.dispatchEvent(new window.MouseEvent('click', { bubbles: true })));
       expect(calls).toEqual([[sessionId, { op: 'pause' }]]);
-      const paused = session(2, 1);
+      const paused = session(2);
       if (paused.mode.kind === 'goal') paused.mode.status = 'paused';
       await stage(paused);
       const resume = Array.from(document.querySelectorAll('button')).find(button => button.textContent?.includes('Resume'));
@@ -148,7 +148,7 @@ describe('SessionGoalDialog', () => {
       return { type: 'goal', mode: { kind: 'main' } };
     };
     try {
-      await stage(session(1, 1));
+      await stage(session(1));
       await render(true);
       const checkbox = document.querySelector('[role="checkbox"][aria-label="Token budget"]');
       expect(checkbox).not.toBeNull();

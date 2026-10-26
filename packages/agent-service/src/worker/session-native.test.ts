@@ -10,6 +10,7 @@ import type { SubagentLifecyclePayload } from '@oh-my-pi/pi-coding-agent/task';
 import { cfgToolsApprovalMode, cfgWebSearchEnabled } from '@oh-my-pi/pi-coding-agent/tools/settings';
 import { cfgSearxngEndpoint } from '@oh-my-pi/pi-coding-agent/web/settings';
 import { cfgProvidersWebSearchTimeoutSeconds } from '@oh-my-pi/pi-coding-agent/session/settings';
+import { cfgCompactionKeepRecentTokens } from '@oh-my-pi/pi-coding-agent/session/context-settings';
 import { cfgGoalContinuationModes } from '@oh-my-pi/pi-coding-agent/goals/settings';
 import { resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { createAgentSession } from '@oh-my-pi/pi-coding-agent/sdk';
@@ -1146,6 +1147,9 @@ for (const action of ['approve', 'approve-compact', 'feedback', 'reject'] as con
       }
     });
     try {
+      // Keep this fixture's short transcript compactable so approve-compact
+      // exercises the real compaction path; a second test covers the no-op.
+      if (action === 'approve-compact') cfgCompactionKeepRecentTokens.override(harness.worker.session.settings, 1);
       await harness.worker.session.setActiveToolPresentation(
         harness.worker.session.getEnabledToolNames().filter(name => name !== 'read'),
         harness.worker.session.getMountedXdevToolNames().filter(name => name !== 'read'),
@@ -1193,6 +1197,31 @@ for (const action of ['approve', 'approve-compact', 'feedback', 'reject'] as con
     } finally { releasePlanning.resolve(); unsubscribe(); await harness.close(); }
   }, 30000);
 }
+
+test('approve-compact continues the approved plan when there is nothing to compact', async () => {
+  const planText = '# Small plan\nExecute the approved scope.';
+  const execution = Promise.withResolvers<void>();
+  let stage = 0;
+  const harness = await fixture({ planModel: true, respond: payload => {
+    stage++;
+    if (stage === 1) return completion({ name: 'write', id: 'write-small-plan', input: { path: 'local://PLAN.md', content: planText } });
+    if (stage === 2) return completion({ name: 'write', id: 'propose-small-plan', input: { path: 'xd://propose', content: 'small' } });
+    if (JSON.stringify(payload.messages).includes('Plan approved.')) execution.resolve();
+    return completion();
+  } });
+  try {
+    await harness.worker.operation({ type: 'mode.set', mode: 'plan' });
+    await harness.worker.operation({ type: 'prompt', runId: 'small-plan-run', request: prompt('Prepare a small plan.') });
+    const question = await harness.waitQuestion();
+    const reply = { action: 'answer' as const, response: { action: 'approve-compact' }, version: question.version, epoch: question.epoch, workerGeneration: question.workerGeneration };
+    await harness.interactions.resolveQuestion(rootSessionId, question.questionId, reply);
+    await execution.promise;
+    expect(harness.fatal()).toBe(false);
+    expect(harness.worker.mode()).toEqual({ kind: 'main' });
+    expect(harness.events.some(input => input.event.type === 'session.compacted')).toBe(false);
+    expect(harness.events.some(input => input.event.type === 'run.started' && input.event.origin === 'plan')).toBe(true);
+  } finally { await harness.close(); }
+}, 30000);
 
 test('a prompt with no explicit effort runs at OMP default thinking level', async () => {
   const harness = await fixture({ respond: () => completion(), reasoningEfforts: ['low', 'medium', 'high'] });

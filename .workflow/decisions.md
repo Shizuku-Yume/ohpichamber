@@ -435,3 +435,21 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Effort:** omp-native-parity
 - **Mine:** yes
 - **Revisit when:** OMP adds an authorization hook for replan title refreshes or delegates replan title generation to the host.
+
+## 2026-10-27 - Approve-and-compact proceeds when compaction is a no-op
+
+- **Decided:** Plan approval with compact treats compaction as best-effort: if OMP reports nothing to compact or compaction fails while the worker is healthy, the approved plan still starts its execution turn and no `session.compacted` event is emitted.
+- **Instead of:** Failing the worker when `session.compact` throws `ManualCompactionNoOpError` for a small or already-compacted transcript.
+- **Because:** The user approved the plan; compaction only shrinks the transcript. Upstream OMP's own plan approval documents failure as proceeding best-effort, and a short plan session must not lose its execution. OMP does not export the no-op error class, so the worker distinguishes only the unhealthy-worker case.
+- **Mine:** yes
+- **Revisit when:** OMP exports a compaction outcome or no-op error type that lets the worker distinguish cancellation from failure without catching every error.
+- **Effort:** omp-native-parity
+
+## 2026-10-27 - Slash-command agent bindings still reach the send
+
+- **Decided:** `routeMessage` applies `agentId` from a native command/template expansion to the prompt options, even though the root agent picker is retired.
+- **Instead of:** Ignoring the expanded `agentId` and sending only the composer's captured agent value.
+- **Because:** A command's agent binding is resource metadata, not the retired root agent picker; the canonical file-resource contract carries it and the existing session tests assert it. Dropping it silently changed command behavior.
+- **Mine:** yes
+- **Revisit when:** OMP command/template expansion stops exposing agent bindings, or prompt submission rejects non-null `agentId` by contract.
+- **Effort:** omp-native-parity

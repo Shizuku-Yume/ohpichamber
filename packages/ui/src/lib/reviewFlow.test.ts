@@ -122,7 +122,7 @@ describe('review native prompt delivery', () => {
     expect(await result).toBe('message');
     expect(requests).toHaveLength(mode === 'plain' ? 0 : 1);
     const matched = mode === 'command' || mode === 'template';
-    expect(send.mock.calls[0][0].request).toMatchObject({ input: { text: matched ? '/expanded once' : text }, options: { providerId: matched ? 'bound' : 'captured', modelId: matched ? 'bound-model' : 'model', agentId: matched ? 'bound-agent' : 'agent', variant: 'high', reasoningEffort: null } });
+    expect(send.mock.calls[0][0].request).toMatchObject({ input: { text: matched ? '/expanded once' : text }, options: { providerId: matched ? 'bound' : 'captured', modelId: matched ? 'bound-model' : 'model', agentId: null, variant: null, reasoningEffort: null } });
   });
 });
 

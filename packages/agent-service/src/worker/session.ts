@@ -11,7 +11,7 @@ import type { AuthStorage } from '@oh-my-pi/pi-coding-agent/session/auth-storage
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import { AgentRegistry } from '@oh-my-pi/pi-coding-agent/registry/agent-registry';
 import { initializeExtensions } from '@oh-my-pi/pi-coding-agent/modes/runtime-init';
-import { READ_ONLY_BUILTIN_COMMANDS, executeAcpBuiltinSlashCommand, isAllowedBuiltinCommand, parseSlashCommand } from './builtin-commands.ts';
+import { executeAcpBuiltinSlashCommand, isAllowedBuiltinCommand, isReadOnlyBuiltinCommand, parseSlashCommand } from './builtin-commands.ts';
 import type { SlashCommandRuntime } from '@oh-my-pi/pi-coding-agent/slash-commands/types';
 import { RpcBtwController } from '@oh-my-pi/pi-coding-agent/modes/rpc/rpc-btw';
 import { JsonObjectSchema, MCPOAuthPublicConfigurationSchema, SessionBranchRequestSchema, type CapturedSendOptions, type JsonObject, type JsonValue, type Run, type RunOrigin, type SessionBranchRequest } from '@openchamber/agent-contract';
@@ -46,7 +46,7 @@ import { readPlanFile } from '@oh-my-pi/pi-coding-agent/plan-mode/plan-files';
 import { prompt as nativePrompt } from '@oh-my-pi/pi-utils';
 import planApprovedPrompt from '@oh-my-pi/pi-coding-agent/prompts/system/plan-mode-approved' with { type: 'text' };
 import planCompactPrompt from '@oh-my-pi/pi-coding-agent/prompts/system/plan-mode-compact-instructions' with { type: 'text' };
-import { PlanReviewSchema, type PlanReviewResponse } from '@openchamber/agent-contract';
+import { PlanReferenceSchema, PlanReviewSchema, type PlanReviewResponse } from '@openchamber/agent-contract';
 
 type PromptOperation = Extract<WorkerOperation, { type: 'prompt' | 'steer' | 'follow-up' }>;
 type PreparedPrompt = { text: string; options: PromptOptions; context: Parameters<SessionManager['appendMessage']>[0][] };
@@ -103,10 +103,10 @@ export class WorkerSession {
     this.btw = new RpcBtwController(session, frame => {
       if (frame.type === 'btw_delta') this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'btw.delta', recordId: frame.recordId, delta: frame.delta } }]);
       else if (frame.type === 'btw_record') {
-        if (frame.record.status !== 'running') this.emit([{ timestamp: frame.record.updatedAt, transient: true, event: {
-          type: 'btw.completed', recordId: frame.record.id, status: frame.record.status === 'complete' ? 'completed' : frame.record.status === 'cancelled' ? 'cancelled' : 'failed',
-          text: frame.record.answer, ...(frame.record.error === undefined ? {} : { error: frame.record.error }),
-        } }]);
+        if (frame.record.status !== 'running') {
+          const completed = { type: 'btw.completed' as const, recordId: frame.record.id, status: frame.record.status === 'complete' ? 'completed' as const : frame.record.status === 'cancelled' ? 'cancelled' as const : 'failed' as const, text: frame.record.answer };
+          this.emit([{ timestamp: frame.record.updatedAt, transient: true, event: frame.record.error === undefined ? completed : { ...completed, error: frame.record.error } }]);
+        }
       }
     });
     this.nativeQueuedPreparation = session.agent.prepareQueuedMessages;
@@ -497,7 +497,7 @@ export class WorkerSession {
     if (!details) throw new Error('Native plan preparation did not return plan details');
     const reference = details.planFilePath;
     // Reject host paths before opening the OMP reader or publishing any payload.
-    PlanReviewSchema.shape.planReference.parse(reference);
+    PlanReferenceSchema.parse(reference);
     const localProtocolOptions = {
       getArtifactsDir: () => this.session.sessionManager.getArtifactsDir(),
       getSessionId: () => this.session.sessionManager.getSessionId(),
@@ -540,9 +540,15 @@ export class WorkerSession {
     try {
       await this.modeController.approve(compact ? async () => {
         this.session.setPlanReferencePath(review.planReference);
-        const result = await this.session.compact(undefined, { internalGuidance: nativePrompt.render(planCompactPrompt, { planFilePath: review.planReference }), suppressContinuation: true });
-        const completedAt = Date.now();
-        this.emit([{ timestamp: completedAt, event: { type: 'session.compacted', compactionId: randomUUID(), tokensBefore: result.tokensBefore, completedAt } }]);
+        try {
+          const result = await this.session.compact(undefined, { internalGuidance: nativePrompt.render(planCompactPrompt, { planFilePath: review.planReference }), suppressContinuation: true });
+          const completedAt = Date.now();
+          this.emit([{ timestamp: completedAt, event: { type: 'session.compacted', compactionId: randomUUID(), tokensBefore: result.tokensBefore, completedAt } }]);
+        } catch (error) {
+          // Compaction is best-effort: an already-compacted or too-small session
+          // must not cancel the plan the user approved.
+          if (this.closed || this.failed) throw error;
+        }
       } : undefined);
     } finally { this.session.clearPlanInternalAbortPending(); }
     this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', mode: this.modeController.mode() } }]);
@@ -705,20 +711,23 @@ export class WorkerSession {
         const parsed = parseSlashCommand(operation.text);
         if (!parsed || !isAllowedBuiltinCommand(parsed.name)) throw new ProjectionError(400, 'INVALID_REQUEST', 'Slash command is not allowed');
         const active = this.preparation || this.projection.activeRun() || this.session.isStreaming;
-        if (active && !READ_ONLY_BUILTIN_COMMANDS[parsed.name as keyof typeof READ_ONLY_BUILTIN_COMMANDS]) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
+        if (active && !isReadOnlyBuiltinCommand(parsed.name)) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
         if (active && parsed.name === 'jobs' && parsed.args.startsWith('kill')) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
         if (active && parsed.name === 'usage' && parsed.args.startsWith('reset')) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
         if (active && parsed.name === 'todo' && parsed.args) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
         await this.binding;
         const output: string[] = [];
-        const runtime = {
+        const runtime: SlashCommandRuntime = {
           session: this.session,
           sessionManager: this.session.sessionManager,
           settings: this.session.settings,
           cwd: this.cwd,
           output: (text: string) => { output.push(text); },
+          // This surface has no ACP command list to re-advertise; the workspace catalog is Host-pulled.
+          refreshCommands: () => {},
+          reloadPlugins: async () => { await this.session.refreshSkillsAndCommands(); },
         };
-        const result = await executeAcpBuiltinSlashCommand(operation.text, runtime as unknown as SlashCommandRuntime);
+        const result = await executeAcpBuiltinSlashCommand(operation.text, runtime);
         if (result === false || 'prompt' in result) throw new ProjectionError(400, 'INVALID_REQUEST', 'Slash command cannot run as a builtin');
         return { type: 'command', output: output.join('\n') };
       }
@@ -836,8 +845,7 @@ export class WorkerSession {
         if (!this.interaction.resolveApproval(operation.approvalId, operation.decision)) throw new ProjectionError(404, 'APPROVAL_NOT_FOUND', 'Approval request is not pending');
         return { type: 'approval.resolve', resolved: true };
       case 'question.resolve': {
-        const question = operation as { type: 'question.resolve'; questionId: string; action: 'answer' | 'cancel'; response?: JsonValue };
-        if (!this.interaction.resolveQuestion(question.questionId, question.action, question.response)) throw new ProjectionError(404, 'QUESTION_NOT_FOUND', 'Question request is not pending');
+        if (!this.interaction.resolveQuestion(operation.questionId, operation.action, operation.response)) throw new ProjectionError(404, 'QUESTION_NOT_FOUND', 'Question request is not pending');
         return { type: 'question.resolve', resolved: true };
       }
       case 'history':

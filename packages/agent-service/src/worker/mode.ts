@@ -2,7 +2,7 @@ import { VibeSessionRegistry, type VibeOwnerScope, type VibeParentSession } from
 import { cfgGoalContinuationModes } from '@oh-my-pi/pi-coding-agent/goals/settings';
 import { goalFromModeData } from '@oh-my-pi/pi-coding-agent/goals/state';
 import type { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
-import { RpcGoalController, type RpcGoalResult } from '@oh-my-pi/pi-coding-agent/modes/rpc/rpc-goal';
+import { RpcGoalController, type RpcGoalResult, type RpcGoalSession } from '@oh-my-pi/pi-coding-agent/modes/rpc/rpc-goal';
 import { z } from 'zod';
 import { SessionModeSchema, type SessionMode } from '@openchamber/agent-contract';
 import type { AgentSession } from '@oh-my-pi/pi-coding-agent/session/agent-session';
@@ -23,11 +23,12 @@ const PlanModeDataSchema = z.object({
   previousMounted: z.array(z.string()).optional(),
   previousModel: z.object({ provider: z.string().min(1), id: z.string().min(1), thinkingLevel: ThinkingLevelSchema.optional() }).optional(),
 });
+type PlanModeData = z.infer<typeof PlanModeDataSchema>;
 type VibePrevious = { tools: string[]; ownerScope: VibeOwnerScope };
 type Previous = {
   tools: string[];
   mounted: string[];
-  model?: z.infer<typeof PlanModeDataSchema>['previousModel'];
+  model?: PlanModeData['previousModel'];
 };
 function planReference(value: string | undefined): string {
   const parsed = SessionModeSchema.safeParse({ kind: 'plan', status: 'active', planReference: value });
@@ -43,7 +44,10 @@ export function readSessionMode(manager: SessionManager): SessionMode {
       objective: data?.objective, tokenBudget: data?.tokenBudget ?? null, tokensUsed: data?.tokensUsed });
     if (parsed.success) return parsed.data;
   }
-  if (context.mode === 'plan' || context.mode === 'plan_paused') return { kind: 'plan', status: context.mode === 'plan' ? 'active' : 'paused', planReference: planReference(typeof context.modeData?.planFilePath === 'string' ? context.modeData.planFilePath : undefined) };
+  if (context.mode === 'plan' || context.mode === 'plan_paused') {
+    const data = PlanModeDataSchema.safeParse(context.modeData);
+    return { kind: 'plan', status: context.mode === 'plan' ? 'active' : 'paused', planReference: planReference(data.success ? data.data.planFilePath : undefined) };
+  }
   if (context.mode === 'vibe') return { kind: 'vibe' };
   const branch = manager.getBranch();
   for (let index = branch.length - 1; index >= 0; index--) {
@@ -67,11 +71,25 @@ export class WorkerModeController {
     const continuationModes = cfgGoalContinuationModes.get(session.settings);
     if (!continuationModes.includes('rpc')) cfgGoalContinuationModes.override(session.settings, [...continuationModes, 'rpc']);
     const nativePrompt = session.promptCustomMessage.bind(session);
-    const goalSession = new Proxy(session, { get(target, property) {
-      if (property === 'promptCustomMessage') return (input: Parameters<AgentSession['promptCustomMessage']>[0]) => startGoalRun ? startGoalRun(() => nativePrompt(input)) : nativePrompt(input);
-      const value = Reflect.get(target, property, target);
-      return typeof value === 'function' ? value.bind(target) : value;
-    } });
+    const goalSession: RpcGoalSession = {
+      settings: session.settings,
+      sessionManager: session.sessionManager,
+      get goalRuntime() { return session.goalRuntime; },
+      getGoalModeState: () => session.getGoalModeState(),
+      setGoalModeState: state => session.setGoalModeState(state),
+      getPlanModeState: () => session.getPlanModeState(),
+      getEnabledToolNames: () => session.getEnabledToolNames(),
+      setActiveToolsByName: names => session.setActiveToolsByName(names),
+      sendGoalModeContext: options => session.sendGoalModeContext(options),
+      getTodoPhases: () => session.getTodoPhases(),
+      promptCustomMessage: input => startGoalRun ? startGoalRun(() => nativePrompt(input)) : nativePrompt(input),
+      waitForIdle: () => session.waitForIdle(),
+      get isStreaming() { return session.isStreaming; },
+      get isDisposed() { return session.isDisposed; },
+      get isSessionTransitioning() { return session.isSessionTransitioning; },
+      get hasAdmittedSubmission() { return session.hasAdmittedSubmission; },
+      get queuedMessageCount() { return session.queuedMessageCount; },
+    };
     this.goal = new RpcGoalController(goalSession, onContinuationDropped);
     const context = session.sessionManager.buildSessionContext();
     const parsed = PlanModeDataSchema.safeParse(context.modeData);
@@ -184,7 +202,7 @@ export class WorkerModeController {
       await this.session.setActiveToolsByName([...new Set([...originalTools, ...(this.session.hasBuiltInTool('write') ? ['write'] : [])])]);
       this.session.setPlanProposalHandler(this.propose);
       await this.session.setModelTemporary(planModel.model, planModel.thinkingLevel);
-      const modeData: { planFilePath: string; previousTools: string[]; previousMounted: string[]; previousModel?: NonNullable<Previous['model']> } = {
+      const modeData: PlanModeData = {
         planFilePath: reference, previousTools: previous.tools, previousMounted: previous.mounted,
       };
       if (previous.model) modeData.previousModel = previous.model;

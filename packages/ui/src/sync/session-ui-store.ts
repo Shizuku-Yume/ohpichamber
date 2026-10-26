@@ -258,6 +258,7 @@ export async function routeMessage(params: {
     if (expanded) {
       request.input.text = expanded.content
       if (expanded.modelSelection) request.options = { ...request.options, ...expanded.modelSelection }
+      if (expanded.agentId) request.options = { ...request.options, agentId: expanded.agentId }
       await dispatchPrompt()
       return 'command'
     }

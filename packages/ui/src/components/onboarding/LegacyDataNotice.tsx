@@ -6,10 +6,10 @@ import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-sw
 import { getSafeStorage } from '@/stores/utils/safeStorage';
 import { useUIStore } from '@/stores/useUIStore';
 
-export type LegacyDataPresence = 'present' | 'absent' | 'error';
+type LegacyDataPresence = 'present' | 'absent' | 'error';
 const dismissalKey = (runtimeKey: string) => `legacy-data-notice-dismissed:${runtimeKey}`;
 
-export const isLegacyNoticeDismissed = (runtimeKey: string): boolean => {
+const isLegacyNoticeDismissed = (runtimeKey: string): boolean => {
   try {
     return getSafeStorage().getItem(dismissalKey(runtimeKey)) === 'true';
   } catch {
@@ -17,11 +17,11 @@ export const isLegacyNoticeDismissed = (runtimeKey: string): boolean => {
   }
 };
 
-export const dismissLegacyNotice = (runtimeKey: string): void => {
+const dismissLegacyNotice = (runtimeKey: string): void => {
   getSafeStorage().setItem(dismissalKey(runtimeKey), 'true');
 };
 
-export const readLegacyDataPresence = async (signal: AbortSignal): Promise<'present' | 'absent'> => {
+const readLegacyDataPresence = async (signal: AbortSignal): Promise<'present' | 'absent'> => {
   const response = await runtimeFetch('/api/host/legacy-data', { signal });
   if (!response.ok) throw new Error('Legacy presence unavailable');
   const value: unknown = await response.json();

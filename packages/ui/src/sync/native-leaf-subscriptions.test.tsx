@@ -132,7 +132,7 @@ describe('native session leaf subscriptions', () => {
     await seed([session({ workspaceId: WORKTREE_WORKSPACE_ID, title: 'Renamed', metadata: {}, metadataRevision: '2' })], [message('message-1', 10), message('message-2', 20)])
     expect(readings?.messageFingerprint).toBe('message-1:10:part-message-1|message-2:20:part-message-2')
 
-    await seed([session({ workspaceId: WORKTREE_WORKSPACE_ID, metadata: null, metadataRevision: '0' })], [])
+    await seed([session({ workspaceId: WORKTREE_WORKSPACE_ID, title: undefined, metadata: null, metadataRevision: '0' })], [])
     expect(readings?.title).toBeUndefined()
     expect(readings?.messageFingerprint).toBe('')
   })

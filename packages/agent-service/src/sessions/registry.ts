@@ -29,7 +29,7 @@ type ColdRoot = { reference: SessionReference; child?: ChildRecord };
 type NativeCold = { workspace: SessionWorkspaceScope; info: SessionInfo; identity: NativeSessionIdentity };
 type ArchiveChat = NativeArchiveInventory['chats'][number];
 export interface SessionList { items: RuntimeSession[]; errors: { sessionId: string; code: ProblemCode }[]; }
-export type SessionWorkspaceScope = Readonly<{ workspaceId: string; projectId: string; cwd: string; agentDirectory: string }>;
+export type SessionWorkspaceScope = Readonly<{ workspaceId: string; projectId: string; cwd: string; agentDirectory: string; agentDirectoryId?: string }>;
 type PromptOperation = Extract<WorkerOperation, { type: 'prompt' }>;
 type Opened = { generation: string; sessionFile: string; journal: SessionJournal };
 export interface SessionForkResult { sessionId: string; rootSessionId: string; sessionFile: string; sourceSessionId: string; entryId: string | null; mode: 'selected' | 'full' }
@@ -118,7 +118,7 @@ export class SessionRegistry {
     this.ensureOpen();
     const parsed = HostSessionBootstrapSchema.parse(input);
     await this.assertReopenable(parsed.rootSessionId);
-    await this.ensureNativeReference(parsed.rootSessionId);
+    await this.ensureNativeReference(parsed.rootSessionId, parsed);
     return this.open(parsed);
   }
   /** Returns the live runtime for an already-open healthy root; callers keep admission for anything else. */
@@ -126,8 +126,10 @@ export class SessionRegistry {
     this.ensureOpen();
     const parsed = HostSessionBootstrapSchema.parse(input);
     await this.assertReopenable(parsed.rootSessionId);
-    const entry = this.get(parsed.rootSessionId);
-    if (entry.state !== 'live' || !this.liveRuntime(entry)) return undefined;
+    // Native-only sessions have no entry until promotion; a live check must not
+    // turn that expected cold state into SESSION_NOT_FOUND before admission.
+    const entry = this.entries.get(parsed.rootSessionId);
+    if (entry?.state !== 'live' || !this.liveRuntime(entry)) return undefined;
     // A stopping, disconnected or replaced worker still has a live entry until exit; its captured generation is gone.
     if (this.workers.authorizationScope(parsed.rootSessionId)?.workerGeneration !== entry.opened.generation) return undefined;
     // `open` keeps the existing captured-scope comparison and returns the live runtime without restarting it.
@@ -144,15 +146,24 @@ export class SessionRegistry {
   }
 
   /** Promote a listed native session into a persisted reference before its first worker starts. */
-  private async ensureNativeReference(sessionId: string): Promise<void> {
+  private async ensureNativeReference(sessionId: string, requested: SessionBootstrap): Promise<void> {
     if (this.references.get(sessionId)) return;
     const native = this.nativeCold.get(sessionId);
     if (!native) return;
+    // A child's list identity points at its root; promoting the child under its
+    // own id would write an ancestor reference to the child file. The Host
+    // reopens a child through its root, so refuse this shape rather than guess.
+    if (native.identity.rootSessionId !== sessionId || native.info.parentSessionPath !== undefined)
+      throw new WorkerOperationError(409, 'INVALID_REQUEST', undefined, 'Native child sessions must reopen through their root');
+    if (!sameScope(native.workspace, requested)
+      || (requested.agentDirectoryId !== undefined && native.workspace.agentDirectoryId !== undefined
+        && requested.agentDirectoryId !== native.workspace.agentDirectoryId))
+      throw new WorkerOperationError(403, 'UNAUTHORIZED', undefined, 'Native session scope does not match its listed workspace');
     const createdAt = nativeTime(native.info.created, nativeTime(native.info.modified, 0));
     const reference = {
       rootSessionId: native.identity.rootSessionId, projectId: native.workspace.projectId, workspaceId: native.workspace.workspaceId,
-      cwd: native.workspace.cwd, agentDirectory: native.workspace.agentDirectory, displayPath: 'workspace',
-      sessionFile: native.info.path, sessionsDirectory: dirname(native.info.path), createdAt,
+      cwd: native.workspace.cwd, agentDirectory: native.workspace.agentDirectory, agentDirectoryId: native.workspace.agentDirectoryId,
+      displayPath: 'workspace', sessionFile: native.info.path, sessionsDirectory: dirname(native.info.path), createdAt,
       updatedAt: Math.max(createdAt, nativeTime(native.info.modified, createdAt)),
     } satisfies SessionReference;
     await this.references.put(native.identity.parentSessionId === undefined ? reference : { ...reference, parentSessionId: native.identity.parentSessionId });
@@ -684,11 +695,17 @@ export class SessionRegistry {
     this.ensureOpen();
     this.assertWritable(sessionId);
     this.assertControlAvailable(sessionId);
-    const runtime = this.runtime(sessionId);
-    if (runtime.runtimeStatus === 'unavailable') throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
-    if (runtime.activeRunId !== null || runtime.continuationPending === true || this.pendingRuns.has(sessionId)) throw new WorkerOperationError(409, 'RUN_ACTIVE');
+    // Reserve admission before any runtime check or await. The idle predicate
+    // reads this set, so a prompt that starts between an eviction probe and its
+    // root-locked recheck is still observable as busy. Once the worker admits
+    // the run it emits run.started before the prompt reply, so releasing this
+    // reservation exposes the active run to the same predicate.
+    if (this.pendingRuns.has(sessionId)) throw new WorkerOperationError(409, 'RUN_ACTIVE');
     this.pendingRuns.add(sessionId);
     try {
+      const runtime = this.runtime(sessionId);
+      if (runtime.runtimeStatus === 'unavailable') throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+      if (runtime.activeRunId !== null || runtime.continuationPending === true) throw new WorkerOperationError(409, 'RUN_ACTIVE');
       const result = await this.workers.request(sessionId, operation);
       if (result.type !== 'prompt') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
       return result.run;
@@ -1083,6 +1100,9 @@ export class SessionRegistry {
       journal.close();
       await this.workers.stop(sessionId);
       for (const id of result.deletedSessionIds) await this.references.remove(id);
+      // A listed native record must not outlive its deleted transcript and
+      // resurrect a reference on the next reopen.
+      for (const id of result.deletedSessionIds) this.nativeCold.delete(id);
       return { sessionId, deletedSessionIds: result.deletedSessionIds };
     } finally { this.deleting.delete(sessionId); }
   }

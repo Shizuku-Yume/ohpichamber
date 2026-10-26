@@ -57,6 +57,8 @@ const fixture = async () => {
       return Response.json({ session: runtime() });
     }
     if (pathname.endsWith('/reopen')) return Response.json(runtime());
+    if (pathname === '/api/agent/v1/sessions/public-root' && init.method === 'DELETE')
+      return Response.json({ sessionId: 'public-root', deletedSessionIds: ['public-root'] });
     if (pathname.includes('/native-entry/')) return Response.json({ entryId: decodeURIComponent(pathname.split('/').at(-1)) });
     if (pathname.endsWith('/fork')) return Response.json({ sessionId: 'forked-child', rootSessionId: 'forked-child', sessionFile: '/tmp/forked-child.jsonl', sourceSessionId: 'public-root', entryId: 'message-7', mode: 'selected' }, { status: 201 });
     if (pathname.endsWith('/branch')) {
@@ -220,6 +222,26 @@ describe('Host native session control saga', () => {
     await expect(makeService().selectBranch('public-root', { action: 'restore', branchId: 'branch-owner', branchVersion: '3' })).resolves.toMatchObject({ branch: { branchVersion: '4' } });
     expect(native.calls.findIndex((call) => call.pathname.endsWith('/relocation/finalize'))).toBeLessThan(native.calls.findIndex((call) => call.pathname.endsWith('/branch')));
     await expect(store.getRelocation('public-root')).resolves.toBeNull();
+  });
+  it('reopens a cold root before non-abort control and delete, but not before abort', async () => {
+    const { native, makeService } = await fixture();
+    const service = makeService();
+    await service.control('public-root', { type: 'mode.set', mode: 'plan' });
+    expect(native.calls.map(call => call.pathname)).toEqual([
+      '/internal/sessions/public-root/reopen',
+      '/api/agent/v1/sessions/public-root/control',
+    ]);
+    native.calls.length = 0;
+    await service.control('public-root', { type: 'abort', runId: 'active-run' });
+    expect(native.calls.map(call => call.pathname)).toEqual([
+      '/api/agent/v1/sessions/public-root/runs/active-run/abort',
+    ]);
+    native.calls.length = 0;
+    expect(await service.delete('public-root')).toEqual({ sessionId: 'public-root', deletedSessionIds: ['public-root'] });
+    expect(native.calls.map(call => call.pathname)).toEqual([
+      '/internal/sessions/public-root/reopen',
+      '/api/agent/v1/sessions/public-root',
+    ]);
   });
   it('reopens the authorized source, forks the selected message, and registers the returned child scope', async () => {
     const { native, makeService, registrations, source } = await fixture();

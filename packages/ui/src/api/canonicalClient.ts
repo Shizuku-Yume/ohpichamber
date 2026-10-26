@@ -270,7 +270,7 @@ export class CanonicalClient {
     const { sessionId, workspaceId, projectId } = scope;
     return request(`/api/agent/v1/sessions/${id(sessionId)}/fork`, scoped(C.SessionCreateAckSchema, result => result.session.projectId === projectId && result.session.workspaceId === workspaceId && result.session.sessionId !== sessionId), { method: 'POST', headers: { 'Content-Type': 'application/json', ...headersFor(commandId) }, body: JSON.stringify(input) });
   }
-  setMode(sessionId: string, mode: 'main' | 'plan'): Promise<Extract<C.SessionControlAck, { type: 'mode.set' }>> {
+  setMode(sessionId: string, mode: 'main' | 'plan' | 'vibe'): Promise<Extract<C.SessionControlAck, { type: 'mode.set' }>> {
     return request(`/api/agent/v1/sessions/${id(sessionId)}/control`, scoped(C.SessionControlAckSchema, result => result.type === 'mode.set'), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: bodyFor(C.SessionControlRequestSchema, { type: 'mode.set', mode }),

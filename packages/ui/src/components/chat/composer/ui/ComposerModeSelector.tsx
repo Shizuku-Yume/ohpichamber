@@ -22,7 +22,7 @@ export const ComposerModeSelector = React.memo(function ComposerModeSelector({
     const [pending, setPending] = React.useState(false);
     const selected = mode?.kind ?? 'main';
     const disabled = !sessionId || !mode || runActive || pending;
-    const setMode = React.useCallback(async (next: 'main' | 'plan') => {
+    const setMode = React.useCallback(async (next: 'main' | 'plan' | 'vibe') => {
         if (!sessionId || disabled || next === selected) return;
         setPending(true);
         try {
@@ -63,6 +63,19 @@ export const ComposerModeSelector = React.memo(function ComposerModeSelector({
             >
                 <Icon name="file-text" className={iconSizeClass} />
                 <span className="sr-only">{t('chat.chatInput.mode.plan')}</span>
+            </button>
+            <button
+                type="button"
+                className={cn(buttonClass, selected === 'vibe' && 'bg-muted text-foreground')}
+                onClick={() => void setMode('vibe')}
+                disabled={disabled}
+                role="radio"
+                aria-checked={selected === 'vibe'}
+                aria-label={t('chat.chatInput.mode.vibe')}
+                title={t('chat.chatInput.mode.vibe.description')}
+            >
+                <Icon name="sparkling" className={iconSizeClass} />
+                <span className="sr-only">{t('chat.chatInput.mode.vibe')}</span>
             </button>
         </div>
     );

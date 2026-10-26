@@ -191,6 +191,8 @@ export const dict: Record<I18nKey, string> = {
   'layout.mainTab.plan': '計画',
   'chat.chatInput.mode.main': 'メイン',
   'chat.chatInput.mode.plan': '計画',
+  'chat.chatInput.mode.vibe': 'Vibe',
+  'chat.chatInput.mode.vibe.description': '柔軟で対話的なコーディングには Vibe モードを使用します。',
   'chat.chatInput.mode.label': 'セッションモード',
   'layout.mainTab.diff': '差分',
   'layout.mainTab.diagram': 'ダイアグラム',

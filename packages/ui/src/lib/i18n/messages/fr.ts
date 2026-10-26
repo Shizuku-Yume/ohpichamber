@@ -190,6 +190,8 @@ export const dict = {
   'layout.mainTab.plan': 'Plan',
   'chat.chatInput.mode.main': 'Principal',
   'chat.chatInput.mode.plan': 'Plan',
+  'chat.chatInput.mode.vibe': 'Vibe',
+  'chat.chatInput.mode.vibe.description': 'Utilisez le mode Vibe pour programmer de façon flexible et conversationnelle.',
   'chat.chatInput.mode.label': 'Mode de session',
   'layout.mainTab.diff': 'Diff',
   'layout.mainTab.files': 'Fichiers',

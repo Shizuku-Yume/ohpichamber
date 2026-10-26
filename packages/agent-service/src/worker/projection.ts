@@ -538,7 +538,7 @@ export class WorkerProjection {
       ? { kind: 'plan', status: 'paused', planReference }
       : context.mode === 'plan'
         ? { kind: 'plan', status: 'active', planReference }
-        : { kind: 'main' };
+        : context.mode === 'vibe' ? { kind: 'vibe' } : { kind: 'main' };
     const entries = this.manager.getBranch();
     const references = new Map<string, Reference>();
     const terminals = new Map<string, z.infer<typeof TerminalSchema>>();

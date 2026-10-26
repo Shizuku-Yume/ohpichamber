@@ -191,6 +191,8 @@ export const dict: Record<I18nKey, string> = {
   'layout.mainTab.plan': '計畫',
   'chat.chatInput.mode.main': '主要',
   'chat.chatInput.mode.plan': '計畫',
+  'chat.chatInput.mode.vibe': 'Vibe',
+  'chat.chatInput.mode.vibe.description': '使用 Vibe 模式，以彈性、對話式的方式撰寫程式。',
   'chat.chatInput.mode.label': '工作階段模式',
   'layout.mainTab.diff': '差異',
   'layout.mainTab.diagram': '圖表',

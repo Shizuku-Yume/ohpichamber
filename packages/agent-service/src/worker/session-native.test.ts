@@ -729,6 +729,40 @@ test('native plan mode restores its tools and role model after reopening the sam
   } finally { await harness.close(); }
 }, 30000);
 
+test('native vibe mode restores tools after reopening and returning to Main', async () => {
+  const harness = await fixture({ respond: () => completion() });
+  try {
+    const before = harness.worker.session.getEnabledToolNames();
+    const entered = await harness.worker.operation({ type: 'mode.set', mode: 'vibe' });
+    expect(entered).toEqual({ type: 'mode.set', mode: { kind: 'vibe' } });
+    expect(harness.worker.session.getEnabledToolNames()).toEqual(['read', ...(harness.worker.session.hasBuiltInTool('todo') ? ['todo'] : []), 'vibe_spawn', 'vibe_send', 'vibe_wait', 'vibe_kill', 'vibe_list']);
+    expect(harness.journal.snapshot().session.mode).toEqual({ kind: 'vibe' });
+    await harness.reopen();
+    expect(harness.worker.mode()).toEqual({ kind: 'vibe' });
+    expect(harness.worker.session.getEnabledToolNames()).toEqual(['read', ...(harness.worker.session.hasBuiltInTool('todo') ? ['todo'] : []), 'vibe_spawn', 'vibe_send', 'vibe_wait', 'vibe_kill', 'vibe_list']);
+    expect(await harness.worker.operation({ type: 'mode.set', mode: 'main' })).toEqual({ type: 'mode.set', mode: { kind: 'main' } });
+    expect(harness.worker.session.getEnabledToolNames()).toEqual(before);
+    await harness.reopen();
+    expect(harness.worker.mode()).toEqual({ kind: 'main' });
+  } finally { await harness.close(); }
+}, 30000);
+
+test('native plan and vibe transitions remain mutually exclusive', async () => {
+  const harness = await fixture({ respond: () => completion(), planModel: true });
+  try {
+    await harness.worker.operation({ type: 'mode.set', mode: 'plan' });
+    const vibe = await harness.worker.operation({ type: 'mode.set', mode: 'vibe' });
+    expect(vibe).toEqual({ type: 'mode.set', mode: { kind: 'vibe' } });
+    expect(harness.worker.session.getPlanModeState()).toBeUndefined();
+    expect(harness.worker.session.getEnabledToolNames()).toContain('vibe_spawn');
+    const plan = await harness.worker.operation({ type: 'mode.set', mode: 'plan' });
+    expect(plan).toMatchObject({ type: 'mode.set', mode: { kind: 'plan', status: 'active' } });
+    expect(harness.worker.session.getEnabledToolNames()).not.toContain('vibe_spawn');
+    expect(harness.journal.snapshot().session.mode).toEqual(plan.type === 'mode.set' ? plan.mode : undefined);
+    await harness.worker.operation({ type: 'mode.set', mode: 'main' });
+  } finally { await harness.close(); }
+}, 30000);
+
 test('native plan prompts keep the role model despite captured Main options', async () => {
   const requested = Promise.withResolvers<ProviderRequest>();
   const harness = await fixture({ planModel: true, respond: payload => { requested.resolve(payload); return completion(); } });

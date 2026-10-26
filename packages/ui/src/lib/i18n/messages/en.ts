@@ -189,6 +189,8 @@ export const dict = {
   'layout.mainTab.plan': 'Plan',
   'chat.chatInput.mode.main': 'Main',
   'chat.chatInput.mode.plan': 'Plan',
+  'chat.chatInput.mode.vibe': 'Vibe',
+  'chat.chatInput.mode.vibe.description': 'Use Vibe mode for flexible, conversational coding.',
   'chat.chatInput.mode.label': 'Session mode',
   'layout.mainTab.diff': 'Diff',
   'layout.mainTab.diagram': 'Diagram',

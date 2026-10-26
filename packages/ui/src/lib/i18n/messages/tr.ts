@@ -113,6 +113,8 @@ export const dict = {
   'layout.mainTab.plan': 'Plan',
   'chat.chatInput.mode.main': 'Ana',
   'chat.chatInput.mode.plan': 'Plan',
+  'chat.chatInput.mode.vibe': 'Vibe',
+  'chat.chatInput.mode.vibe.description': 'Esnek ve sohbet odaklı kodlama için Vibe modunu kullanın.',
   'chat.chatInput.mode.label': 'Oturum modu',
   'layout.mainTab.diff': 'Diff',
   'layout.mainTab.diagram': 'Diyagram',

@@ -57,6 +57,7 @@ export const SessionModeSchema = z.discriminatedUnion('kind', [
     kind: z.literal('plan'), status: z.enum(['active', 'paused']),
     planReference: z.string().regex(/^local:\/\/[^\s]+$/, 'Plan references must use local:// URLs'),
   }),
+  z.strictObject({ kind: z.literal('vibe') }),
 ]);
 export type SessionMode = z.infer<typeof SessionModeSchema>;
 export const RuntimeSessionSchema = z.strictObject({
@@ -114,7 +115,7 @@ export const RunAbortRequestSchema = z.strictObject({ sessionId: EntityIdSchema,
 export type RunAbortRequest = z.infer<typeof RunAbortRequestSchema>;
 export const SessionControlRequestSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('abort'), runId: EntityIdSchema }),
-  z.strictObject({ type: z.literal('mode.set'), mode: z.enum(['main', 'plan']) }),
+  z.strictObject({ type: z.literal('mode.set'), mode: z.enum(['main', 'plan', 'vibe']) }),
   z.strictObject({ type: z.literal('compact'), instructions: z.string().optional() }),
   z.strictObject({ type: z.literal('command'), text: z.string().min(1) }),
   z.strictObject({ type: z.literal('btw.ask'), question: z.string().min(1), recordId: EntityIdSchema.optional() }),

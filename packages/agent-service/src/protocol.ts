@@ -76,7 +76,7 @@ export const WorkerOperationSchema = z.discriminatedUnion('type', [
   HostStreamingPromptRequestSchema.extend({ type: z.literal('follow-up') }),
   z.strictObject({ type: z.literal('btw.ask'), question: z.string().min(1), recordId: EntityIdSchema.optional() }),
   z.strictObject({ type: z.literal('btw.cancel'), recordId: EntityIdSchema.optional() }),
-  z.strictObject({ type: z.literal('mode.set'), mode: z.enum(['main', 'plan']) }),
+  z.strictObject({ type: z.literal('mode.set'), mode: z.enum(['main', 'plan', 'vibe']) }),
   z.strictObject({ type: z.literal('abort'), runId: EntityIdSchema }),
   z.strictObject({ type: z.literal('compact'), instructions: z.string().optional() }),
   z.strictObject({ type: z.literal('command'), text: z.string().min(1) }),

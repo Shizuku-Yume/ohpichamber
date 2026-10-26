@@ -66,7 +66,7 @@ the keyboard mover and the column shrinks around it at settle.
 
 ### Session mode selector
 
-The composer mode selector offers Main and Plan in the freed footer slot. Its selected value comes only from the authoritative `RuntimeSession.mode` snapshot (and subsequent `session.updated` events); it does not maintain a local mode authority. Mode controls are disabled while a run is active and send `mode.set` through `canonicalClient` when the session is idle.
+The composer mode selector offers Main, Plan and Vibe in the freed footer slot. Its selected value comes only from the authoritative `RuntimeSession.mode` snapshot (and subsequent `session.updated` events); it does not maintain a local mode authority. Mode controls are disabled while a run is active and send `mode.set` through `canonicalClient` when the session is idle.
 
 Glass does not nest: a `backdrop-filter` element is a backdrop root, so a
 glass child only blurs its parent's content. Popups therefore anchor to the

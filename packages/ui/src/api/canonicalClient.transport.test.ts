@@ -203,6 +203,8 @@ describe('CanonicalClient real HTTP scope boundary', () => {
     respondWith({ type: 'mode.set', mode: { kind: 'plan', status: 'active', planReference: 'local://plans/session-1.md' } });
     await expect(client.setMode(sessionId, 'plan')).resolves.toMatchObject({ type: 'mode.set', mode: { kind: 'plan', status: 'active' } });
     expect(calls.at(-1)).toBe(`POST /api/agent/v1/sessions/${sessionId}/control`);
+    respondWith({ type: 'mode.set', mode: { kind: 'vibe' } });
+    await expect(client.setMode(sessionId, 'vibe')).resolves.toEqual({ type: 'mode.set', mode: { kind: 'vibe' } });
   });
 
   test('rejects unrelated interaction identity or generation', async () => {

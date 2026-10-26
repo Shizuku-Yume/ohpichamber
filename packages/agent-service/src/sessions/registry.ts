@@ -573,7 +573,7 @@ export class SessionRegistry {
     if (result.type === 'steer' && result.ack.runId !== runtime.activeRunId) throw new WorkerOperationError(503, 'INTERNAL_ERROR');
     return result.ack;
   }
-  async setMode(sessionId: string, mode: 'main' | 'plan') {
+  async setMode(sessionId: string, mode: 'main' | 'plan' | 'vibe') {
     this.ensureOpen();
     this.assertWritable(sessionId);
     this.assertControlAvailable(sessionId);

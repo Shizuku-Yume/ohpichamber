@@ -69,7 +69,7 @@ const fixture = async () => {
       return Response.json({ run: { runId: decodeURIComponent(pathname.split('/').at(-2)), sessionId: 'public-root', status: 'cancelled', createdAt: 1700000000000, finishedAt: 1700000000002 } });
     }
     if (pathname.endsWith('/control')) {
-      if (body.type === 'mode.set') return Response.json({ type: 'mode.set', mode: body.mode === 'main' ? { kind: 'main' } : { kind: 'plan', status: 'active', planReference: 'local://PLAN.md' } });
+      if (body.type === 'mode.set') return Response.json({ type: 'mode.set', mode: body.mode === 'main' ? { kind: 'main' } : body.mode === 'vibe' ? { kind: 'vibe' } : { kind: 'plan', status: 'active', planReference: 'local://PLAN.md' } });
       return Response.json(native.compactResult);
     }
     if (pathname === '/api/agent/v1/sessions/forked-child') return Response.json({ ...runtime('forked-child'), rootSessionId: 'forked-child' });
@@ -97,9 +97,8 @@ describe('Host native session control saga', () => {
     });
     expect(native.calls).toContainEqual({ pathname: '/api/agent/v1/sessions/public-root/control', body: { type: 'mode.set', mode: 'plan' } });
     expect(await service.control('public-root', { type: 'mode.set', mode: 'main' })).toEqual({ type: 'mode.set', mode: { kind: 'main' } });
-    const beforeInvalid = native.calls.length;
-    await expect(service.control('public-root', { type: 'mode.set', mode: 'vibe' })).rejects.toMatchObject({ statusCode: 400 });
-    expect(native.calls).toHaveLength(beforeInvalid);
+    expect(await service.control('public-root', { type: 'mode.set', mode: 'vibe' })).toEqual({ type: 'mode.set', mode: { kind: 'vibe' } });
+    expect(native.calls).toContainEqual({ pathname: '/api/agent/v1/sessions/public-root/control', body: { type: 'mode.set', mode: 'vibe' } });
   });
   it('refuses native mutations for deleted-space sessions before dispatch', async () => {
     const { root, store, destination, native, makeService } = await fixture();

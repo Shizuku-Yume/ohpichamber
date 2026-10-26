@@ -36,11 +36,11 @@ describe('session schemas', () => {
     expect(SessionModeSchema.safeParse({ ...mode, status: 'complete' }).success).toBe(false);
     expect(SessionModeSchema.safeParse({ kind: 'main', planReference: mode.planReference }).success).toBe(false);
     expect(RuntimeSessionSchema.safeParse({ ...runtime, mode: undefined }).success).toBe(false);
-    for (const selected of ['main', 'plan']) {
+    for (const selected of ['main', 'plan', 'vibe']) {
       const control = { type: 'mode.set', mode: selected };
       expect(SessionControlRequestSchema.parse(control)).toEqual(control);
     }
-    expect(SessionControlRequestSchema.safeParse({ type: 'mode.set', mode: 'vibe' }).success).toBe(false);
+    expect(SessionModeSchema.parse({ kind: 'vibe' })).toEqual({ kind: 'vibe' });
     expect(SessionControlAckSchema.parse({ type: 'mode.set', mode })).toEqual({ type: 'mode.set', mode });
   });
   test('session controls discriminate abort compact and builtin command', () => {

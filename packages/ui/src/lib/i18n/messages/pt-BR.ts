@@ -201,6 +201,8 @@ export const dict: Record<I18nKey, string> = {
   "layout.mainTab.plan": "Plano",
   "chat.chatInput.mode.main": "Principal",
   "chat.chatInput.mode.plan": "Plano",
+  'chat.chatInput.mode.vibe': 'Vibe',
+  'chat.chatInput.mode.vibe.description': 'Use o modo Vibe para programar de forma flexível e conversacional.',
   "chat.chatInput.mode.label": "Modo da sessão",
   "layout.mainTab.diff": "Diff",
   "layout.mainTab.diagram": "Diagrama",

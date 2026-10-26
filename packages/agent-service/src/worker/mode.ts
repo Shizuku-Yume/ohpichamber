@@ -1,3 +1,4 @@
+import { VibeSessionRegistry, type VibeOwnerScope, type VibeParentSession } from '@oh-my-pi/pi-coding-agent/vibe/runtime';
 import { z } from 'zod';
 import { SessionModeSchema, type SessionMode } from '@openchamber/agent-contract';
 import type { AgentSession } from '@oh-my-pi/pi-coding-agent/session/agent-session';
@@ -18,6 +19,7 @@ const PlanModeDataSchema = z.object({
   previousMounted: z.array(z.string()).optional(),
   previousModel: z.object({ provider: z.string().min(1), id: z.string().min(1), thinkingLevel: ThinkingLevelSchema.optional() }).optional(),
 });
+type VibePrevious = { tools: string[]; ownerScope: VibeOwnerScope };
 type Previous = {
   tools: string[];
   mounted: string[];
@@ -31,6 +33,7 @@ function planReference(value: string | undefined): string {
 /** OMP owns durable mode; the worker restores the interactive recipe without its TUI. */
 export class WorkerModeController {
   private previous: Previous | undefined;
+  private vibePrevious: VibePrevious | undefined;
   private current: SessionMode;
 
   constructor(private readonly session: AgentSession, private readonly propose: PlanProposalHandler = title => session.preparePlanForReview(title)) {
@@ -42,19 +45,77 @@ export class WorkerModeController {
     const data = parsed.success ? parsed.data : undefined;
     this.current = context.mode === 'plan' || context.mode === 'plan_paused'
       ? { kind: 'plan', status: context.mode === 'plan' ? 'active' : 'paused', planReference: planReference(data?.planFilePath) }
-      : { kind: 'main' };
+      : context.mode === 'vibe' ? { kind: 'vibe' } : { kind: 'main' };
     if (this.current.kind === 'plan' && data?.previousTools) {
       this.previous = { tools: data.previousTools, mounted: data.previousMounted ?? [], model: data.previousModel };
+    }
+    if (this.current.kind === 'vibe') {
+      const previousTools = z.array(z.string()).safeParse(context.modeData?.previousTools);
+      if (!previousTools.success) throw new ProjectionError(503, 'SESSION_RESTORE_FAILED', 'Stored vibe mode tools are invalid');
+      this.vibePrevious = { tools: previousTools.data, ownerScope: VibeSessionRegistry.global().ownerScope(this.vibeParent()) };
     }
   }
 
   mode(): SessionMode { return { ...this.current }; }
 
-  async set(kind: 'main' | 'plan'): Promise<SessionMode> {
+  async set(kind: 'main' | 'plan' | 'vibe'): Promise<SessionMode> {
     if (this.session.isStreaming) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
-    if (kind === 'plan') await this.enterPlan();
-    else await this.exitPlan();
+    if (kind === 'plan') {
+      if (this.current.kind === 'vibe') await this.exitVibe();
+      await this.enterPlan();
+    } else if (kind === 'vibe') {
+      if (this.current.kind === 'plan') await this.exitPlan();
+      await this.enterVibe();
+    } else if (this.current.kind === 'plan') await this.exitPlan();
+    else await this.exitVibe();
     return this.mode();
+  }
+
+  private vibeParent(): VibeParentSession {
+    return {
+      getAgentId: () => this.session.getAgentId() ?? this.session.sessionManager.getSessionId() ?? 'native-session',
+      getSessionId: () => this.session.sessionManager.getSessionId() ?? this.session.getAgentId(),
+      getSessionFile: () => this.session.sessionManager.getSessionFile() ?? null,
+      sessionManager: this.session.sessionManager,
+      settings: this.session.settings,
+      asyncJobManager: this.session.asyncJobManager,
+    };
+  }
+
+  private async enterVibe(): Promise<void> {
+    if (this.current.kind === 'vibe') return;
+    const previous = this.session.getEnabledToolNames();
+    const registry = VibeSessionRegistry.global();
+    const parent = this.vibeParent();
+    const ownerScope = registry.ownerScope(parent);
+    registry.activateScope(ownerScope);
+    const baseTools = ['read', ...(this.session.hasBuiltInTool('todo') ? ['todo'] : [])];
+    try {
+      await this.session.activateVibeTools(baseTools);
+      this.session.setVibeModeState({ enabled: true });
+      this.session.sessionManager.appendModeChange('vibe', { previousTools: previous });
+    } catch (error) {
+      await this.session.deactivateVibeTools(previous);
+      this.session.setVibeModeState(undefined);
+      throw error;
+    }
+    this.vibePrevious = { tools: previous, ownerScope };
+    this.current = { kind: 'vibe' };
+  }
+
+  private async exitVibe(): Promise<void> {
+    if (this.current.kind !== 'vibe') return;
+    const previous = this.vibePrevious;
+    const registry = VibeSessionRegistry.global();
+    await this.session.runModeExitTeardown(async () => {
+      if (this.session.isStreaming) await this.session.abort();
+      await registry.killAll(this.vibeParent(), previous?.ownerScope);
+      await this.session.deactivateVibeTools(previous?.tools ?? []);
+      this.session.setVibeModeState(undefined);
+    });
+    this.session.sessionManager.appendModeChange('none');
+    this.vibePrevious = undefined;
+    this.current = { kind: 'main' };
   }
 
   private async enterPlan(): Promise<void> {
@@ -137,6 +198,17 @@ export class WorkerModeController {
   }
 
   async restore(): Promise<void> {
+    if (this.current.kind === 'vibe') {
+      const vibePrevious = this.vibePrevious;
+      const tools = vibePrevious?.tools;
+      if (!vibePrevious || !tools) throw new ProjectionError(503, 'SESSION_RESTORE_FAILED', 'Stored vibe mode tools are unavailable');
+      const parent = this.vibeParent();
+      VibeSessionRegistry.global().activateScope(vibePrevious.ownerScope);
+      await this.session.activateVibeTools(['read', ...(this.session.hasBuiltInTool('todo') ? ['todo'] : [])]);
+      this.session.setVibeModeState({ enabled: true });
+      await VibeSessionRegistry.global().rehydrate(parent);
+      return;
+    }
     if (this.current.kind !== 'plan' || this.current.status === 'paused') return;
     const tools = this.session.getEnabledToolNames();
     this.session.setPlanModeState({ enabled: true, planFilePath: this.current.planReference, workflow: 'parallel', reentry: true });

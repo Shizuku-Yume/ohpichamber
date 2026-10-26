@@ -251,3 +251,30 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** no
 - **Revisit when:** goals end too early in practice because the agent declares completion without the work being done, or OMP exposes a hook for an external completion check.
 - **Effort:** omp-native-chat
+
+## 2026-10-26 - OMP owns session titles
+
+- **Decided:** `RuntimeSession.title` is the only session title, sourced from OMP's JSONL through its listing and title-change event. Rename goes through OMP `setSessionName`; Host metadata no longer has a writable title field, and legacy stored titles are ignored on read.
+- **Instead of:** Keeping `SessionMetadata.title` as the UI-facing canonical title and overlaying or mirroring OMP's title into it.
+- **Because:** two writable title stores disagree after a CLI rename or OMP auto-title, and the spec requires the sidebar and `omp --resume` to show the same title. A projection also leaves `getSessionMetadata`, list composition and patch revisions disagreeing about which title is current.
+- **Effort:** omp-native-parity
+- **Mine:** yes
+- **Revisit when:** a retained surface needs Host-owned titles that OMP cannot express, or an OMP release stops storing the title in the session JSONL.
+
+## 2026-10-26 - Cold title writes use OMP's session manager
+
+- **Decided:** A rename on a cold root opens OMP's `SessionManager` for that JSONL, calls `setSessionName(..., 'user')`, flushes and closes. A live root applies the same call through its worker.
+- **Instead of:** Requiring a worker to be started before any rename, or appending a title record by hand.
+- **Because:** OMP's own API owns the header title slot and title-change entry; starting a worker only to write a title wastes a capacity slot, and a hand-written record would diverge from OMP's format. The live branch prevents two writers to the same file.
+- **Effort:** omp-native-parity
+- **Mine:** yes
+- **Revisit when:** OMP adds a storage API that writes titles without constructing a session manager, or a live/cold race becomes observable.
+
+## 2026-10-26 - Legacy Host titles are dropped, not migrated
+
+- **Decided:** Existing `session_metadata.payload.title` values are stripped from canonical metadata reads and are not copied into OMP. OMP's JSONL titles become authoritative immediately.
+- **Instead of:** A one-time Host-to-OMP title migration during list or startup.
+- **Because:** app-created sessions already carry OMP's generated title in their JSONL, so the common case needs no migration; a list-time migration would mutate during a read and could start an unbounded cold-write pass. Manual old titles are the only loss, and no acceptance criterion requires importing them.
+- **Effort:** omp-native-parity
+- **Mine:** yes
+- **Revisit when:** a maintainer reports a manual title that must survive the cutover; then add an explicit versioned migration rather than a fallback.

@@ -70,6 +70,8 @@ export const RuntimeSessionSchema = z.strictObject({
   createdAt: TimestampSchema, updatedAt: TimestampSchema, epoch: EpochSchema, headSequence: CounterSchema,
   runtimeStatus: SessionRuntimeStatusSchema, activeRunId: EntityIdSchema.nullable(),
   mode: SessionModeSchema,
+  /** OMP's session title; absent until OMP names the session. */
+  title: z.string().min(1).optional(),
   continuationPending: z.boolean().optional(),
 }).refine((session) => (session.runtimeStatus === 'idle' || session.runtimeStatus === 'unavailable') === (session.activeRunId === null), {
   message: 'Runtime activity must identify its outer run', path: ['activeRunId'],
@@ -102,11 +104,16 @@ export const SubagentSchema = z.strictObject({
 export type Subagent = z.infer<typeof SubagentSchema>;
 export const SessionCreateRequestSchema = z.strictObject({
   projectId: EntityIdSchema, workspaceId: EntityIdSchema, options: CapturedSendOptionsSchema,
+  title: z.string().trim().min(1).optional(),
   metadata: SessionMetadataSchema.optional(),
 });
 export type SessionCreateRequest = z.infer<typeof SessionCreateRequestSchema>;
 export const SessionCreateAckSchema = z.strictObject({ session: SessionSchema });
 export type SessionCreateAck = z.infer<typeof SessionCreateAckSchema>;
+export const SessionTitleRequestSchema = z.strictObject({
+  workspaceId: EntityIdSchema, title: z.string().trim().min(1),
+});
+export type SessionTitleRequest = z.infer<typeof SessionTitleRequestSchema>;
 export const SessionDeleteRequestSchema = z.strictObject({
   sessionId: EntityIdSchema, force: z.boolean().optional(), purgeWorkspaceFiles: z.boolean().optional(),
 });

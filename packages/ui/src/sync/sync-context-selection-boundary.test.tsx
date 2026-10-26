@@ -97,7 +97,7 @@ describe("SyncProvider native scope and selection boundaries", () => {
       if (!manager) throw new Error("Directory manager was not mounted")
       const store = manager.ensureChild(directory, { bootstrap: false })
       const stale = session("mutated-session", resolved.workspaceId)
-      const current = { ...stale, metadata: { title: "Local mutation" }, metadataRevision: "2" }
+      const current = { ...stale, title: "Local mutation", metadata: {}, metadataRevision: "2" }
       store.setState({ session: [current], sessionRevision: 1, sessionEventRevision: { [current.sessionId]: 1 } })
       await act(async () => { pending.resolve({ items: [stale], errors: {} }); await Promise.resolve() })
       expect(store.getState().session[0]).toBe(current)

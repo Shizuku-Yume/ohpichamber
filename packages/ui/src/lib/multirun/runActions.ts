@@ -59,13 +59,16 @@ export async function renameRun(run: MultiRunSummary, title: string, sessionById
  */
 export async function detachFromRun(session: Session, runTitle: string): Promise<void> {
   const runtimeKey = getRuntimeKey();
-  const result = await canonicalClient.patchSessionMetadata(session.sessionId, {
-    changes: { title: runTitle.trim() || session.metadata?.title, openchamber: { multirun: null } },
+  const nextTitle = runTitle.trim() || session.title;
+  if (!nextTitle) throw new Error('Run session title is unavailable');
+  const metadata = await canonicalClient.patchSessionMetadata(session.sessionId, {
+    changes: { openchamber: { multirun: null } },
   });
+  const renamed = await canonicalClient.renameSession(session.sessionId, session.workspaceId, nextTitle);
   if (getRuntimeKey() !== runtimeKey) throw new Error('Runtime changed');
   const directory = resolveWorkspaceDirectory(session.workspaceId);
   if (!directory) throw new Error('Member directory is unknown');
-  registerMultiRunSession(session, directory, result);
+  registerMultiRunSession({ ...renamed, metadata: metadata.metadata, metadataRevision: metadata.revision }, directory, metadata);
 }
 
 /** Archives every member of the run. Worktrees stay; the chats move to the archive. */
@@ -104,7 +107,7 @@ export async function askOtherModels(input: {
   if (!providerID || !modelID) throw new Error('The chat has no model to compare against');
   const directory = resolveWorkspaceDirectory(session.workspaceId);
   if (!directory) throw new Error('The chat directory is unknown');
-  const title = (session.metadata?.title || prompt.text.split('\n')[0] || 'Run').trim().slice(0, 200);
+  const title = (session.title || prompt.text.split('\n')[0] || 'Run').trim().slice(0, 200);
   const membership: MultiRunMembership = {
     version: 1,
     sessionID: session.sessionId,

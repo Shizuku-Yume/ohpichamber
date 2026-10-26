@@ -1,43 +1,40 @@
 import { create } from 'zustand';
 import { getRuntimeKey, subscribeRuntimeEndpointWillChange } from '@/lib/runtime-switch';
 import { normalizePath } from '@/lib/pathNormalization';
-import type { Session, SessionMetadataState } from '@openchamber/agent-contract';
+import type { Session } from '@openchamber/agent-contract';
 import type { NativeTitleTurn } from './session-title-context';
 
 type TitleTarget = { runtimeKey: string; directory: string; sessionId: string };
 type PendingTitle = { target: TitleTarget; controller: AbortController };
 
-export type NativeTitleContext = { session: Session; metadata: SessionMetadataState; turns: NativeTitleTurn[] };
+export type NativeTitleContext = { session: Session; turns: NativeTitleTurn[] };
 
 const keyFor = (target: TitleTarget) => JSON.stringify([target.runtimeKey, normalizePath(target.directory), target.sessionId]);
 const useTitleGenerations = create<{ pending: ReadonlyMap<string, PendingTitle> }>(() => ({ pending: new Map() }));
 
-/** The metadata check belongs to the operation, independently of its menu. */
+/** The title comparison belongs to the operation, independently of its menu. */
 export async function generateAndSaveSessionTitle(input: {
   signal: AbortSignal;
   prepare: (signal: AbortSignal) => Promise<NativeTitleContext>;
   generate: (turns: readonly NativeTitleTurn[], signal: AbortSignal) => Promise<string>;
-  readSession: () => Promise<{ session: Session; metadata: SessionMetadataState }>;
+  readSession: () => Promise<Session>;
   saveTitle: (title: string, signal: AbortSignal) => Promise<void>;
 }): Promise<void> {
   const { signal } = input;
   signal.throwIfAborted();
   const prepared = await input.prepare(signal);
   signal.throwIfAborted();
-  if (prepared.metadata.sessionId !== prepared.session.sessionId) throw new Error('Session metadata belongs to another session');
   if (!prepared.turns.length) throw new Error('No completed turns');
   const title = await input.generate(prepared.turns, signal);
   signal.throwIfAborted();
   const current = await input.readSession();
   signal.throwIfAborted();
-  if (current.session.sessionId !== prepared.session.sessionId
-    || current.metadata.sessionId !== prepared.metadata.sessionId
-    || current.session.updatedAt !== prepared.session.updatedAt
-    || current.session.epoch !== prepared.session.epoch
-    || current.session.headSequence !== prepared.session.headSequence
-    || current.session.archivedAt !== prepared.session.archivedAt
-    || current.metadata.revision !== prepared.metadata.revision
-    || current.metadata.metadata?.title !== prepared.metadata.metadata?.title) return;
+  if (current.sessionId !== prepared.session.sessionId
+    || current.updatedAt !== prepared.session.updatedAt
+    || current.epoch !== prepared.session.epoch
+    || current.headSequence !== prepared.session.headSequence
+    || current.archivedAt !== prepared.session.archivedAt
+    || current.title !== prepared.session.title) return;
   await input.saveTitle(title, signal);
 }
 

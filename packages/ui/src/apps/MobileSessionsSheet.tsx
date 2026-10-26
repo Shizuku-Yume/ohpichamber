@@ -231,7 +231,7 @@ const findExactWorktreeMatch = (project: ProjectMeta, normalizedDirectory: strin
 );
 
 const sessionMatchesQuery = (session: Session, projectLabel: string, query: string): boolean =>
-  matchesRankQuery([session.metadata?.title ?? '', session.sessionId, getSessionDirectory(session), projectLabel], query);
+  matchesRankQuery([session.title ?? '', session.sessionId, getSessionDirectory(session), projectLabel], query);
 
 // Worktree buckets render inside a map, so the removal subscription lives here.
 const WorktreeRemovalScope: React.FC<{
@@ -355,7 +355,7 @@ const SessionRow: React.FC<{
 }) => {
   const { t } = useI18n();
   const time = formatRelativeShort(getSessionTimestamp(session));
-  const title = session.metadata?.title?.trim() || t('mobile.sessions.untitled');
+  const title = session.title?.trim() || t('mobile.sessions.untitled');
   const swipeEnabled = Boolean(onRevealedChange && onArchive);
   const aiRename = useSessionAiRenameAction(session.sessionId, getSessionDirectory(session), swipeEnabled && (revealed || renaming));
   // Live indicators, same conventions as the desktop sidebar: busy/retry →

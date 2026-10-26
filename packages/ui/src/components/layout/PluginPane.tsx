@@ -223,7 +223,7 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
       currentSessionId
         ? {
           id: session?.sessionId ?? currentSessionId,
-          title: session?.metadata?.title ?? backgroundAction?.item.sessionTitle,
+          title: session?.title ?? backgroundAction?.item.sessionTitle,
           busy: sessionBusy,
         }
         : null,

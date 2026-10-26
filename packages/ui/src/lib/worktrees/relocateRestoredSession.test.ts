@@ -22,7 +22,7 @@ const session = (sessionId: string, overrides: Partial<Session> = {}): Session =
   runtimeStatus: 'idle',
   activeRunId: null,
   mode: { kind: 'main' as const },
-  metadata: { title: sessionId },
+  title: sessionId, metadata: {},
   metadataRevision: '1',
   archiveRevision: '0',
   ...overrides,

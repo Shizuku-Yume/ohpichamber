@@ -27,8 +27,8 @@ describe("upsertSessionRecord", () => {
   })
 
   test("preserves references for equivalent metadata", () => {
-    const current = [session("a", { metadata: { title: "Known" }, metadataRevision: "2" }), session("b")]
-    const incoming = session("a", { metadata: { title: "Known" }, metadataRevision: "2" })
+    const current = [session("a", { title: "Known", metadata: {}, metadataRevision: "2" }), session("b")]
+    const incoming = session("a", { title: "Known", metadata: {}, metadataRevision: "2" })
     const result = upsertSessionRecord(current, incoming)
     expect(result).toBe(current)
     expect(result[0]).toBe(current[0])
@@ -37,11 +37,11 @@ describe("upsertSessionRecord", () => {
 
   test("keeps newer Host metadata and archive revisions independently of runtime changes", () => {
     const cached = session("a", {
-      metadata: { title: "Host title" }, metadataRevision: "9007199254740993",
+      title: "Host title", metadata: {}, metadataRevision: "9007199254740993",
       archivedAt: 10, archiveRevision: "3",
     })
     const result = upsertSessionRecord([cached], session("a", {
-      metadata: { title: "Old" }, metadataRevision: "9007199254740992",
+      title: "Old", metadata: {}, metadataRevision: "9007199254740992",
       archiveRevision: "2", updatedAt: 2, headSequence: "7",
     }))
     expect(result[0]).toMatchObject({ updatedAt: 2, headSequence: "7", archivedAt: 10, archiveRevision: "3" })
@@ -50,7 +50,7 @@ describe("upsertSessionRecord", () => {
   })
 
   test("confirmed empty metadata and restored archive replace cached values at newer revisions", () => {
-    const cached = session("a", { metadata: { title: "Old" }, metadataRevision: "2", archivedAt: 10, archiveRevision: "2" })
+    const cached = session("a", { title: "Old", metadata: {}, metadataRevision: "2", archivedAt: 10, archiveRevision: "2" })
     const result = upsertSessionRecord([cached], session("a", { metadata: {}, metadataRevision: "3", archiveRevision: "3", updatedAt: 2 }))
     expect(result[0].metadata).toEqual({})
     expect(result[0].archivedAt).toBeUndefined()
@@ -60,7 +60,7 @@ describe("upsertSessionRecord", () => {
     ["workspace", { workspaceId: "wsp_a", projectId: "pro_a" }, { workspaceId: "wsp_b", projectId: "pro_b" }],
     ["parent", { parentSessionId: "p" }, { parentSessionId: "q" }],
     ["root ownership", { rootSessionId: "root-a" }, { rootSessionId: "root-b" }],
-    ["metadata", { metadata: { title: "One" }, metadataRevision: "1" }, { metadata: { title: "Two" }, metadataRevision: "2" }],
+    ["metadata", { title: "One", metadata: {}, metadataRevision: "1" }, { title: "Two", metadata: {}, metadataRevision: "2" }],
     ["runtime status", { runtimeStatus: "idle", activeRunId: null }, { runtimeStatus: "running", activeRunId: "run_b" }],
     ["sequence", { headSequence: "1" }, { headSequence: "2" }],
     ["execution epoch", { epoch: "epoch-a", headSequence: "10" }, { epoch: "epoch-b", headSequence: "0" }],

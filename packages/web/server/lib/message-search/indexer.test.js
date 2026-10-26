@@ -9,11 +9,11 @@ afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); });
 const fixture = ({ records = [message()], turns = [turn()], includeReasoning = () => false } = {}) => {
   const store = openMessageSearchStore(loadSqliteOpener()(':memory:'));
   const service = {
-    open: async () => snapshot(records, turns), history: async () => history(records, turns),
+    open: async () => snapshot(records, turns, { title: 'Host title' }), history: async () => history(records, turns),
     list: async () => ({ items: [{ ...runtimeSession(), metadata: null, metadataRevision: '0', archiveRevision: '0' }], errors: {} }),
   };
   const indexer = createMessageSearchIndexer({ store, sessionService: service, resolveSessionScope: async () => scope,
-    readSessionMetadata: async () => ({ title: 'Host title' }), includeReasoning, liveDebounceMs: 0, backfillPauseMs: 0, logger: { warn() {} } });
+    includeReasoning, liveDebounceMs: 0, backfillPauseMs: 0, logger: { warn() {} } });
   cleanups.push(() => { indexer.stop(); store.close(); });
   const search = (query, options = {}) => store.search({ match: toMatchExpression(query), limit: 100, ...options });
   return { indexer, store, service, search };

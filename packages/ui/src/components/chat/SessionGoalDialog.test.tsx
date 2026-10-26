@@ -32,7 +32,7 @@ const session = (updated: number, _turnsUsed: number): Session => ({
   sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '.', rootSessionId: sessionId,
   createdAt: 0, updatedAt: updated, epoch: 'epoch', headSequence: String(updated), runtimeStatus: 'idle', activeRunId: null,
   mode: { kind: 'goal', status: 'active', objective: 'Ship it', tokenBudget: null, tokensUsed: updated * 100 },
-  metadata: { title: 'test' }, metadataRevision: '1', archiveRevision: '0',
+  title: 'test', metadata: {}, metadataRevision: '1', archiveRevision: '0',
 });
 
 const DOM_GLOBAL_NAMES = ['window', 'document', 'navigator', 'Node', 'Element', 'HTMLElement', 'PointerEvent', 'localStorage', 'getComputedStyle', 'requestAnimationFrame', 'cancelAnimationFrame', 'IS_REACT_ACT_ENVIRONMENT'] as const;

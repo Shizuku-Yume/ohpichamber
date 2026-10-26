@@ -632,7 +632,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
       <Icon name="target" className="h-3 w-3" style={{ color: sessionGoalStatusColor[sessionGoal.status] }} />
     </span>
   ) : null;
-  const sessionTitle = resolvedSession.metadata?.title || t('sessions.sidebar.session.untitled');
+  const sessionTitle = resolvedSession.title || t('sessions.sidebar.session.untitled');
   // Timeline is a flat list: a node that still carries children renders as a
   // leaf, without a chevron and without an expansion state.
   const hasChildren = !isTimelineRow && node.children.length > 0;
@@ -692,7 +692,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
         if (!childDirectory) throw new Error('Session directory is required for export');
         const childRecords = await loadExportRecords({ directory: childDirectory, sessionId: child.session.sessionId });
         if (!childRecords) throw new Error('Session runtime changed during export');
-        const childTitle = child.session.metadata?.title || t('sessions.sidebar.session.export.untitledSubagent');
+        const childTitle = child.session.title || t('sessions.sidebar.session.export.untitledSubagent');
         const grandChildren = await collectChildExports(child.children);
         skipped += grandChildren.skipped;
         results.push({
@@ -738,8 +738,8 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
       skippedSubtaskCount = collected.skipped;
     }
 
-    const markdown = formatSessionAsMarkdown(records, resolvedSession.metadata?.title ?? null, childExports);
-    const filename = buildExportFilename(resolvedSession.metadata?.title ?? null);
+    const markdown = formatSessionAsMarkdown(records, resolvedSession.title ?? null, childExports);
+    const filename = buildExportFilename(resolvedSession.title ?? null);
     const savedPath = await saveAsMarkdownDesktop(markdown, filename);
 
     if (savedPath) {
@@ -762,20 +762,20 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
     downloadAsMarkdown(markdown, filename);
     toast.success(t('sessions.sidebar.session.export.success'));
     showSkippedSubtasksWarning(skippedSubtaskCount);
-  }, [collectChildExports, loadExportRecords, node.children, resolvedSession.metadata?.title, session.sessionId, sessionDirectory, showSkippedSubtasksWarning, t]);
+  }, [collectChildExports, loadExportRecords, node.children, resolvedSession.title, session.sessionId, sessionDirectory, showSkippedSubtasksWarning, t]);
   const guestActionEntries = useGuestActions();
   const guestSessionActionEntries = React.useMemo(() => guestSessionActions(guestActionEntries), [guestActionEntries]);
   const handleGuestSessionAction = React.useCallback((entry: GuestActionEntry) => {
     void runGuestSessionAction({
       entry,
       t,
-      session: { id: session.sessionId, title: resolvedSession.metadata?.title, directory: sessionDirectory },
+      session: { id: session.sessionId, title: resolvedSession.title, directory: sessionDirectory },
       loadRecords: () => (sessionDirectory
         ? loadExportRecords({ directory: sessionDirectory, sessionId: session.sessionId }).catch(() => null)
         : Promise.resolve(null)),
       onLoadFailed: () => toast.error(t('sessions.sidebar.session.export.failedLoadHistory')),
     });
-  }, [loadExportRecords, resolvedSession.metadata?.title, session.sessionId, sessionDirectory, t]);
+  }, [loadExportRecords, resolvedSession.title, session.sessionId, sessionDirectory, t]);
   const handleExportSession = React.useCallback(async () => {
     if (node.children.length > 0) {
       setExportIncludeSubtasks(true);

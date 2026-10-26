@@ -11,7 +11,7 @@ import { nativeSnapshot } from "./session-message-loader-test-fixtures"
 
 const session: Session = {
   ...nativeSnapshot("activity-session", []).session,
-  metadata: { title: "Activity" }, metadataRevision: "0", archiveRevision: "0",
+  title: "Activity", metadata: {}, metadataRevision: "0", archiveRevision: "0",
 }
 let manager: ChildStoreManager
 

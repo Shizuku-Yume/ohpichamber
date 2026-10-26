@@ -18,7 +18,7 @@ const deferred = <T>() => {
 const session = (sessionId: string, extra: Partial<Session> = {}): Session => ({
   sessionId, projectId: 'pro_repo', workspaceId: 'wsp_repo', displayPath: 'repo', rootSessionId: sessionId,
   createdAt: 1, updatedAt: 2, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' as const },
-  metadata: { title: sessionId }, metadataRevision: '1', archiveRevision: '0', ...extra,
+  title: sessionId, metadata: {}, metadataRevision: '1', archiveRevision: '0', ...extra,
 });
 const ids = (records: readonly Session[]) => records.map((record) => record.sessionId).sort();
 let runtime = 0;
@@ -76,14 +76,14 @@ describe('native global mutation reconciliation', () => {
     const stale = session('ses_one');
     useGlobalSessionsStore.getState().applySnapshot([stale], []);
     const loading = useGlobalSessionsStore.getState().loadSessions();
-    useGlobalSessionsStore.getState().upsertSession({ ...stale, metadata: { title: 'New' }, metadataRevision: '2' });
+    useGlobalSessionsStore.getState().upsertSession({ ...stale, title: 'New', metadata: {}, metadataRevision: '2' });
     useGlobalSessionsStore.getState().archiveSessions(['ses_one'], 10);
     request.resolve({ items: [stale], errors: {} });
     await loading;
     const state = useGlobalSessionsStore.getState();
     expect(state.activeSessions).toEqual([]);
     expect(state.archivedSessions[0]?.archivedAt).toBe(10);
-    expect(state.archivedSessions[0]?.metadata?.title).toBe('New');
+    expect(state.archivedSessions[0]?.title).toBe('New');
   });
 
   test('uses commit-time state and fills only unlisted live gaps after failure', async () => {
@@ -169,12 +169,12 @@ describe('native discovery completeness scopes', () => {
   test('an entity failure preserves its owner while healthy siblings reconcile', async () => {
     const failed = session('ses_failed', { archivedAt: 4 });
     useGlobalSessionsStore.getState().applySnapshot([session('ses_removed'), session('ses_healthy')], [failed]);
-    request.resolve({ items: [session('ses_healthy', { metadata: { title: 'Fresh' }, metadataRevision: '2' })], errors: { ses_failed: 'METADATA_READ_FAILED' } });
+    request.resolve({ items: [session('ses_healthy', { title: 'Fresh', metadata: {}, metadataRevision: '2' })], errors: { ses_failed: 'METADATA_READ_FAILED' } });
     await useGlobalSessionsStore.getState().loadSessions();
     const state = useGlobalSessionsStore.getState();
     expect(state.entityById.get('ses_failed')).toBe(failed);
     expect(state.entityById.has('ses_removed')).toBe(false);
-    expect(state.entityById.get('ses_healthy')?.metadata?.title).toBe('Fresh');
+    expect(state.entityById.get('ses_healthy')?.title).toBe('Fresh');
     expect(state.status).toBe('error');
     expect(state.hasLoaded).toBe(true);
   });
@@ -257,7 +257,7 @@ describe('canonical sidebar child discovery', () => {
     await discover(directory);
     const state = useGlobalSessionsStore.getState();
     expect(state.entityById.get('ses_child')).toEqual(session('ses_child', {
-      parentSessionId: 'ses_root', rootSessionId: 'ses_root', metadata: { title: 'Worker' },
+      parentSessionId: 'ses_root', rootSessionId: 'ses_root', title: 'Worker', metadata: {},
       runtimeStatus: 'idle', activeRunId: null,
     }));
     expect(state.structure.activeRootIds).toEqual(['ses_root']);
@@ -356,7 +356,7 @@ describe('canonical sidebar child discovery', () => {
     subagents.mockResolvedValue([child('failed')]);
     await useGlobalSessionsStore.getState().loadSessions();
     expect(useGlobalSessionsStore.getState().entityById.get('ses_child')).toMatchObject({
-      metadata: { title: 'Worker' }, metadataRevision: '1', runtimeStatus: 'idle', activeRunId: null,
+      title: 'Worker', metadata: {}, metadataRevision: '1', runtimeStatus: 'idle', activeRunId: null,
     });
   });
 });

@@ -558,7 +558,7 @@ export const createOpenChamberControlService = (dependencies) => {
         projectId: scope.projectId,
         workspaceId: scope.workspaceId,
         options: sessionOptions(input),
-        ...(asNonEmptyString(input.title) ? { metadata: { title: input.title.trim() } } : {}),
+        ...(asNonEmptyString(input.title) ? { title: input.title.trim() } : {}),
       });
       const canonicalSessionID = asNonEmptyString(created?.sessionId)
         || asNonEmptyString(created?.session?.sessionId)

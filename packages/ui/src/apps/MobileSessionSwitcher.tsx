@@ -20,7 +20,7 @@ const RECENT_SESSIONS_LIMIT = 10;
 const TABLET_POPOVER_WIDTH = 380;
 
 const getSessionTitle = (session: Session, fallback: string): string =>
-  session.metadata?.title?.trim() || fallback;
+  session.title?.trim() || fallback;
 
 /** One switcher row: live status (busy spinner / attention dot), title,
     "project · branch", compact time. Mirrors the desktop SessionSwitcherDropdown

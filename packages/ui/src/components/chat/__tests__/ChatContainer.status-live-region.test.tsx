@@ -101,7 +101,7 @@ const SESSION_ID = 'session-accepted-run';
 
 const hostSession = (): Session => ({
   ...nativeSnapshot(SESSION_ID, []).session,
-  metadata: { title: 'Fresh session' }, metadataRevision: '1', archiveRevision: '0',
+  title: 'Fresh session', metadata: {}, metadataRevision: '1', archiveRevision: '0',
   runtimeStatus: 'running', activeRunId: 'run-accepted',
 });
 /** What the column holds right after the Host accepted a run: no message yet. */

@@ -78,10 +78,10 @@ describe("native canonical event reducer", () => {
   })
 
   test("preserves newer host metadata when an older update arrives", () => {
-    const current = session({ metadata: { title: "New" }, metadataRevision: "8" })
+    const current = session({ title: "New", metadata: {}, metadataRevision: "8" })
     const prior = snapshot({ session: runtime({ headSequence: "0" }) })
     const base = state({ session: [current], snapshot: { "session-1": prior }, sessionCursor: { "session-1": "epoch-1:0" } })
-    const result = applyDirectoryEvent(base, event("1", "session.updated", { session: runtime({ headSequence: "1" }), metadata: { title: "Old" }, metadataRevision: "7" }))
+    const result = applyDirectoryEvent(base, event("1", "session.updated", { session: runtime({ headSequence: "1" }), title: "Old", metadata: {}, metadataRevision: "7" }))
     expect(result.kind).toBe("applied")
     expect(result.state.session[0]?.metadata).toEqual({ title: "New" })
     expect(result.state.session[0]?.metadataRevision).toBe("8")
@@ -121,8 +121,8 @@ describe("native canonical event reducer", () => {
   })
 
   test("metadata, archive and queue revisions remain independent of runtime snapshots", () => {
-    const prior = session({ metadata: { title: "new" }, metadataRevision: "10", archiveRevision: "10", archivedAt: 20, headSequence: "4" })
-    const merged = mergeHostSession(session({ metadata: { title: "old" }, metadataRevision: "2", archiveRevision: "2", headSequence: "2" }), prior)
+    const prior = session({ title: "new", metadata: {}, metadataRevision: "10", archiveRevision: "10", archivedAt: 20, headSequence: "4" })
+    const merged = mergeHostSession(session({ title: "old", metadata: {}, metadataRevision: "2", archiveRevision: "2", headSequence: "2" }), prior)
     expect(merged.metadata).toBe(prior.metadata)
     expect(merged.archivedAt).toBe(20)
     expect(merged.headSequence).toBe("4")

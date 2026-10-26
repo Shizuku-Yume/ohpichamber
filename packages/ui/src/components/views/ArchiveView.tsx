@@ -97,7 +97,7 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
       if (normalizedQuery.startsWith('ses_')) {
         return sortedSessions.filter((session) => session.sessionId.toLowerCase() === normalizedQuery);
       }
-      return rankByQuery(sortedSessions, normalizedQuery, (session) => [session.metadata?.title ?? '']);
+      return rankByQuery(sortedSessions, normalizedQuery, (session) => [session.title ?? '']);
     }
     if (selectedWorkspaceId === null) return sortedSessions;
     return buckets.find((bucket) => bucket.workspaceId === selectedWorkspaceId)?.sessions ?? [];
@@ -179,7 +179,7 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
           {visibleSessions.length === 0 ? emptyState : visibleSessions.map((session) => {
             const workspaceId = session.workspaceId;
             const sessionDirectory = normalizePath(resolveGlobalSessionDirectory(session)) ?? '';
-            const title = session.metadata?.title || t('sessions.sidebar.session.untitled');
+            const title = session.title || t('sessions.sidebar.session.untitled');
             // A deleted space's chat has nowhere to be restored to.
             const restorable = !(spaceArchives?.has(workspaceId) ?? false);
             return (
@@ -304,7 +304,7 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
                 const workspaceId = session.workspaceId;
                 const sessionDirectory = normalizePath(resolveGlobalSessionDirectory(session)) ?? '';
                 const directoryLabel = labelOf(workspaceId, sessionDirectory);
-                const title = session.metadata?.title || t('sessions.sidebar.session.untitled');
+                const title = session.title || t('sessions.sidebar.session.untitled');
                 // A deleted space's chat has nowhere to be restored to.
                 const restorable = !(spaceArchives?.has(workspaceId) ?? false);
                 return (

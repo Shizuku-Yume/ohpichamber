@@ -56,3 +56,5 @@ Check before: not run for this branch (new branch from the integration tip; task
 - `bun run dead-code` -> 1 with only the pre-landed UI-store findings from task 23; no SDK findings.
 
 **Finished:** 2026-10-27T14:40:00+08:00
+
+**After rebase onto `2e1239cd4b`:** clean rebase, two commits replayed. `bun install --frozen-lockfile` -> 0, `bun run type-check` -> 0, `bun run lint` -> 0, `VITEST_MAX_WORKERS=2 bun run test` -> 0 (7/7 suites) (`*-after-rebase.log`). This doc-only entry follows the tested code commit `5db1b91db8`.

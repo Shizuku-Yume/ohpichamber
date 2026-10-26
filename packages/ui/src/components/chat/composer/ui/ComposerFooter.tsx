@@ -15,7 +15,6 @@ import type { SourceControlProvider } from '@/lib/api/types';
 import type { SessionMode } from '@openchamber/agent-contract';
 import React from 'react';
 
-import { SessionGoalButton, SessionGoalObjectiveCounter } from '@/components/chat/SessionGoalButton';
 import { ComposerDictation } from '@/components/dictation/ComposerDictation';
 import { Icon } from '@/components/icon/Icon';
 import type { GuestAttachItem } from '@/hooks/useGuestSurfaces';
@@ -27,7 +26,8 @@ import { ModelControls } from '../../ModelControls';
 import { ComposerActionButtons } from './ComposerActionButtons';
 import { ComposerAttachmentControls } from './ComposerAttachmentControls';
 import { FocusModeButton } from './FocusModeButton';
-import { ComposerModeSelector } from './ComposerModeSelector';
+import { ComposerModeSelector, type ComposerModeValue } from './ComposerModeSelector';
+import type { DraftGoalObjective, DraftSessionMode } from '@/sync/session-ui-store';
 import { PermissionAutoAcceptButton } from './PermissionAutoAcceptButton';
 import type { PermissionMode } from '@/stores/utils/permissionAutoAccept';
 import type { ComposerModelSelection } from '@/components/chat/pinnedComposerSelection';
@@ -40,7 +40,11 @@ interface ComposerFooterProps {
     sessionId: string | null;
     directory?: string;
     newSessionDraftOpen: boolean;
-    messageLength: number;
+    draftMode?: DraftSessionMode;
+    draftGoalObjective?: DraftGoalObjective | null;
+    planRoleAvailable: boolean | undefined;
+    sessionGoalEnabled: boolean;
+    onDraftModeChange: (mode: ComposerModeValue, goalObjective?: DraftGoalObjective | null) => void;
 
     radius: string;
     footerPaddingClass: string;
@@ -114,7 +118,11 @@ function ComposerFooterView(props: ComposerFooterProps) {
         sessionId: currentSessionId,
         directory,
         newSessionDraftOpen,
-        messageLength,
+        draftMode,
+        draftGoalObjective,
+        planRoleAvailable,
+        sessionGoalEnabled,
+        onDraftModeChange,
         radius: chatInputRadius,
         footerPaddingClass,
         footerGapClass,
@@ -183,7 +191,6 @@ function ComposerFooterView(props: ComposerFooterProps) {
                 <>
                     <div className="flex w-full items-center justify-between gap-x-1.5">
                         <div className="composer-mobile-actions flex items-center gap-x-2 pl-1">
-                            {!isBtw ? <ComposerModeSelector sessionId={currentSessionId} mode={mode} runActive={runActive} buttonClass={footerIconButtonClass} iconSizeClass={iconSizeClass} /> : null}
                             <ComposerAttachmentControls
                                 footerIconButtonClass={footerIconButtonClass}
                                 iconSizeClass={iconSizeClass}
@@ -205,14 +212,6 @@ function ComposerFooterView(props: ComposerFooterProps) {
                                 permissionMode={permissionMode}
                                 handlePermissionModeCycle={onCyclePermissionMode}
                             />
-                            {!isBtw ? <SessionGoalButton
-                                sessionId={currentSessionId}
-                                directory={directory}
-                                draftOpen={newSessionDraftOpen}
-                                footerIconButtonClass={footerIconButtonClass}
-                                iconSizeClass={iconSizeClass}
-                            /> : null}
-                            {!isBtw ? <SessionGoalObjectiveCounter length={messageLength} /> : null}
                         </div>
                         <div className="flex items-center min-w-0 gap-x-1 justify-end">
                             {waitingForAgent ? <AgentStartupNote /> : null}
@@ -258,7 +257,6 @@ function ComposerFooterView(props: ComposerFooterProps) {
             ) : (
                 <>
                     <div className={cn("flex items-center flex-shrink-0", footerGapClass)}>
-                        {!isBtw ? <ComposerModeSelector sessionId={currentSessionId} mode={mode} runActive={runActive} buttonClass={footerIconButtonClass} iconSizeClass={iconSizeClass} /> : null}
                         <ComposerAttachmentControls
                             footerIconButtonClass={footerIconButtonClass}
                             iconSizeClass={iconSizeClass}
@@ -286,19 +284,22 @@ function ComposerFooterView(props: ComposerFooterProps) {
                             handlePermissionModeCycle={onCyclePermissionMode}
                             withTooltip
                         />
-                        {!isBtw ? <SessionGoalButton
-                            sessionId={currentSessionId}
-                            directory={directory}
-                            draftOpen={newSessionDraftOpen}
-                            footerIconButtonClass={footerIconButtonClass}
-                            iconSizeClass={iconSizeClass}
-                            withTooltip
-                        /> : null}
-                        {!isBtw ? <SessionGoalObjectiveCounter length={messageLength} /> : null}
                     </div>
                     <div className={cn('flex items-center flex-1 justify-end', footerGapClass, 'md:gap-x-3')} data-dictation-chain="true">
                         {waitingForAgent ? <AgentStartupNote className="flex-shrink-0" /> : null}
                         {parallelRun ? <div className="flex-1" /> : pinnedSelection ? <ModelControls className="flex-1 min-w-0 justify-end" sessionId={currentSessionId} selection={pinnedSelection} agentSelectable /> : <MemoModelControls className={cn('flex-1 min-w-0 justify-end')} onRunInParallel={onRunInParallel} />}
+                        {!isBtw ? <ComposerModeSelector
+                            sessionId={currentSessionId}
+                            draftOpen={newSessionDraftOpen}
+                            mode={mode}
+                            draftMode={draftMode}
+                            draftGoalObjective={draftGoalObjective}
+                            runActive={runActive}
+                            planRoleAvailable={planRoleAvailable}
+                            sessionGoalEnabled={sessionGoalEnabled}
+                            directory={directory}
+                            onDraftModeChange={onDraftModeChange}
+                        /> : null}
                         {!isBtw ? <MemoComposerDictation
                             radius={chatInputRadius}
                             isMobile={isMobile}

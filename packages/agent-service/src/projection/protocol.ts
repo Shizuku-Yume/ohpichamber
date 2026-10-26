@@ -41,7 +41,7 @@ export const ProjectionInputSchema = z.strictObject({
 });
 export type ProjectionInput = z.infer<typeof ProjectionInputSchema>;
 
-export const ProjectionSeedSchema = payloadFields.merge(SessionSnapshotSchema).pick({ branch: true }).extend({
+export const ProjectionSeedSchema = payloadFields.merge(SessionSnapshotSchema).pick({ branch: true, selection: true }).extend({
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
   turns: z.array(TurnSchema),

@@ -1,7 +1,6 @@
 import React from 'react';
 import { canonicalClient } from '@/api/canonicalClient';
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   SettingsSection,
   SettingsFieldRow,
@@ -9,23 +8,16 @@ import {
   SettingsInset,
   SettingsGroupTitle,
   SETTINGS_CUSTOM_TRIGGER_CLASS,
-  SETTINGS_SELECT_ROW_TRIGGER_CLASS,
-  SETTINGS_SELECT_SIZE,
   SETTINGS_OPTION_STACK_CLASS,
-  SETTINGS_FIELDS_STACK_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { SessionWarmingCheckbox } from './SessionWarmingCheckbox';
-import { PermissionDefaultModeField } from './PermissionDefaultModeField';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
 import { loadDesktopSettings, updateDesktopSettings } from '@/lib/persistence';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
-import { useSelectionStore } from '@/sync/selection-store';
-import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useI18n } from '@/lib/i18n';
 import { parseModelIdentifier } from '@/lib/modelIdentifier';
-import { isAutoModel } from '@/lib/routing/autoModel';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 
 const getDisplayModel = (
@@ -42,44 +34,23 @@ const getDisplayModel = (
  export const DefaultsSettings: React.FC = () => {
    const { t } = useI18n();
   const settingsDirectory = useSettingsDirectory();
-  const setProvider = useConfigStore((state) => state.setProvider);
-  const setModel = useConfigStore((state) => state.setModel);
-  const setCurrentVariant = useConfigStore((state) => state.setCurrentVariant);
-  const setCurrentVariantOverride = useConfigStore((state) => state.setCurrentVariantOverride);
-  const setSettingsDefaultModel = useConfigStore((state) => state.setSettingsDefaultModel);
-  const setSettingsDefaultVariant = useConfigStore((state) => state.setSettingsDefaultVariant);
-  // A default describes new sessions. Applying it to the open chat is a
-  // convenience, not the point, so it stops where the chat carries a choice the
-  // user made for it — the same pair of signals ModelControls restores from
-  // (`shouldPreserveManualModelOverride`).
-  const selectionIsManual = useConfigStore((state) => state.selectionSource === 'manual');
-  const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
-  const getSessionModelSelection = useSelectionStore((state) => state.getSessionModelSelection);
-  const chatHasOwnModel = Boolean(selectionIsManual && currentSessionId && getSessionModelSelection(currentSessionId));
   const showChatsSection = useSessionDisplayStore((state) => state.showChatsSection);
   const setShowChatsSection = useSessionDisplayStore((state) => state.setShowChatsSection);
   const showDeletionDialog = useUIStore((state) => state.showDeletionDialog);
   const setShowDeletionDialog = useUIStore((state) => state.setShowDeletionDialog);
-  const providers = useConfigStore((state) => state.providers);
   const modelsMetadata = useConfigStore((state) => state.modelsMetadata);
 
-  const [defaultModel, setDefaultModel] = React.useState<string | undefined>();
-  const [defaultVariant, setDefaultVariant] = React.useState<string | undefined>();
   const [smallModelUseDefault, setSmallModelUseDefault] = React.useState(true);
   const [smallModelOverride, setSmallModelOverride] = React.useState<string | undefined>();
   const [smallModelProviders, setSmallModelProviders] = React.useState<string[]>([]);
   const [walkthroughModelOverride, setWalkthroughModelOverride] = React.useState<string | undefined>();
   const [isLoading, setIsLoading] = React.useState(true);
 
-  const parsedModel = React.useMemo(() => getDisplayModel(defaultModel), [defaultModel]);
-
   React.useEffect(() => {
     const loadSettings = async () => {
       try {
         const data = await loadDesktopSettings();
         if (data) {
-          const model = data.defaultModel?.trim() || undefined;
-          const variant = data.defaultVariant?.trim() || undefined;
           if (data.smallModelUseDefault !== undefined) setSmallModelUseDefault(data.smallModelUseDefault);
           const smallOverride = data.smallModelOverride?.trim();
           if (smallOverride) {
@@ -98,64 +69,6 @@ const getDisplayModel = (
     };
     loadSettings();
   }, []);
-
-  const handleModelChange = React.useCallback(
-    async (providerId: string, modelId: string) => {
-      const newValue = providerId && modelId ? `${providerId}/${modelId}` : undefined;
-      setDefaultModel(newValue);
-      setDefaultVariant(undefined);
-      setSettingsDefaultVariant(undefined);
-      setSettingsDefaultModel(newValue);
-
-      if (!chatHasOwnModel) {
-        setCurrentVariant(undefined);
-
-        if (providerId && modelId) {
-          const provider = providers.find((p) => p.providerId === providerId);
-          // Auto is not a provider OpenCode lists; the picker only offers it while the server can honour it.
-          if (provider || isAutoModel(providerId, modelId)) {
-            setProvider(providerId);
-            setModel(modelId);
-          }
-        }
-      }
-
-      try {
-        await updateDesktopSettings({ defaultModel: newValue ?? '', defaultVariant: '' });
-      } catch (error) {
-        console.warn('Failed to save default model:', error);
-      }
-    },
-    [chatHasOwnModel, providers, setCurrentVariant, setModel, setProvider, setSettingsDefaultModel, setSettingsDefaultVariant]
-  );
-
-  const DEFAULT_VARIANT_VALUE = '__default__';
-
-  const formatVariantLabel = React.useCallback((variant: string) => {
-    if (variant === DEFAULT_VARIANT_VALUE) {
-      return t('settings.openchamber.defaults.option.default');
-    }
-    return variant.charAt(0).toUpperCase() + variant.slice(1);
-  }, [t]);
-
-  const handleVariantChange = React.useCallback(
-    async (variant: string) => {
-      const newValue = variant === DEFAULT_VARIANT_VALUE ? undefined : variant || undefined;
-      setDefaultVariant(newValue);
-      setSettingsDefaultVariant(newValue);
-      if (!chatHasOwnModel) {
-        setCurrentVariantOverride(newValue ?? null, newValue);
-      }
-
-      try {
-        await updateDesktopSettings({ defaultVariant: newValue ?? '' });
-      } catch (error) {
-        console.warn('Failed to save default variant:', error);
-      }
-    },
-    [chatHasOwnModel, setCurrentVariantOverride, setSettingsDefaultVariant]
-  );
-
 
   const handleSmallModelUseDefaultChange = React.useCallback(
     async (useDefault: boolean) => {
@@ -237,15 +150,6 @@ const getDisplayModel = (
     };
   }, [settingsDirectory]);
 
-  const availableVariants = React.useMemo(() => {
-    if (!parsedModel.providerId || !parsedModel.modelId) return [];
-    const provider = providers.find((p) => p.providerId === parsedModel.providerId);
-    const model = provider?.models.find((m) => m.modelId === parsedModel.modelId);
-    return model?.variants.map((variant) => variant.variant) ?? [];
-  }, [parsedModel.modelId, parsedModel.providerId, providers]);
-
-  const supportsVariants = availableVariants.length > 0;
-
   if (isLoading) {
     return null;
   }
@@ -254,56 +158,6 @@ const getDisplayModel = (
     <>
       <SettingsSection title={t('settings.openchamber.defaults.title')} divider={false}>
         <div className="space-y-0">
-          <div className="mt-0 mb-4 typography-meta text-muted-foreground">
-            {t('settings.openchamber.defaults.summaryPrefix')}
-            {' '}
-            {parsedModel.providerId ? (
-              <span className="text-foreground">
-                {parsedModel.providerId}/{parsedModel.modelId}
-                {supportsVariants ? ` (${defaultVariant ?? t('settings.openchamber.defaults.option.defaultLowercase')})` : ''}
-              </span>
-            ) : (
-              <span className="text-foreground">{t('settings.openchamber.defaults.summaryRuntimeDefault')}</span>
-            )}
-          </div>
-
-          <div className={SETTINGS_FIELDS_STACK_CLASS}>
-            <SettingsFieldRow
-              settingsItem="sessions.default-model"
-              label={t('settings.openchamber.defaults.field.defaultModel')}
-            >
-              <ModelSelector
-                providerId={parsedModel.providerId}
-                modelId={parsedModel.modelId}
-                onChange={handleModelChange}
-                className={SETTINGS_CUSTOM_TRIGGER_CLASS}
-                offerAuto
-              />
-            </SettingsFieldRow>
-
-            <SettingsFieldRow
-              settingsItem="sessions.default-thinking"
-              label={t('settings.openchamber.defaults.field.defaultThinking')}
-            >
-              <Select value={defaultVariant ?? DEFAULT_VARIANT_VALUE} onValueChange={handleVariantChange} disabled={!supportsVariants}>
-                <SelectTrigger size={SETTINGS_SELECT_SIZE} className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}>
-                  <SelectValue placeholder={t('settings.openchamber.defaults.field.thinkingPlaceholder')}>
-                    {formatVariantLabel(defaultVariant ?? DEFAULT_VARIANT_VALUE)}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={DEFAULT_VARIANT_VALUE}>{t('settings.openchamber.defaults.option.default')}</SelectItem>
-                  {availableVariants.map((variant) => (
-                    <SelectItem key={variant} value={variant}>
-                      {formatVariantLabel(variant)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </SettingsFieldRow>
-
-          </div>
-
           <SettingsInset className={SETTINGS_OPTION_STACK_CLASS}>
             <SettingsCheckboxRow
               settingsItem="sessions.deletion-dialog"

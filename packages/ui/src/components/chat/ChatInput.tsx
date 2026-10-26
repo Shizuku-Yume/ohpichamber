@@ -9,9 +9,9 @@ import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStor
 import { useUIStore } from '@/stores/useUIStore';
 import { createMessageQueueTarget, getMessageQueueKey, useMessageQueueStore, type QueuedContextPart, type QueuedMessage } from '@/stores/messageQueueStore';
 import { useAutoReviewStore } from '@/stores/useAutoReviewStore';
-import { useSessionGoalArmStore } from '@/stores/useSessionGoalArmStore';
 import { useBtwStore } from '@/stores/useBtwStore';
-import { useSessionUIStore, type CanonicalSkillMentions } from '@/sync/session-ui-store';
+import { useSessionUIStore, type CanonicalSkillMentions, type DraftGoalObjective } from '@/sync/session-ui-store';
+import { ROOT_SELECTION_AGENT, useSelectionStore } from '@/sync/selection-store';
 import { prepareLocalAttachments, useDraftAttachedFiles, useInputStore, type SyntheticContextPart } from '@/sync/input-store';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { openParallelComposer } from '@/lib/multirun/openParallelComposer';
@@ -64,6 +64,7 @@ import { shouldSubmitEnter } from './composer/keyboardPolicy';
 import { getDropdownNavigationKey } from '@/components/ui/dropdown-navigation';
 import { useChatColumnActions, useChatColumnExpandedInput, useChatColumnSession, type ChatColumnSession } from './chatColumnSession';
 import { usePinnedComposerSelection } from './pinnedComposerSelection';
+import { resolveReasoningEffortToSend } from './composer/submit/resolveReasoningEffort';
 import { useChatSurfaceMode } from './useChatSurfaceMode';
 import { MobileModelButton } from './MobileModelButton';
 import { useSessionActivity } from '@/hooks/useSessionActivity';
@@ -208,6 +209,7 @@ import { useSpacesStore } from '@/lib/spaces/spaces-store';
 import { isDraftSendWaiting, subscribeDraftSendWaiting } from '@/lib/worktrees/pendingDraftWorktree';
 import { ComposerAutocompletePopups } from './composer/ui/ComposerAutocompletePopups';
 import { ComposerFooter } from './composer/ui/ComposerFooter';
+import { ComposerModeSelector, type ComposerModeValue } from './composer/ui/ComposerModeSelector';
 import { MobilePillComposer } from './composer/ui/MobilePillComposer';
 import { ComposerContextChips } from './composer/ui/ComposerContextChips';
 import { LinkedReferenceRow } from './composer/ui/LinkedReferenceRow';
@@ -567,6 +569,28 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         : undefined;
     const configVariant = useConfigStore((state) => state.currentVariant);
     const currentVariant = pinnedComposerSelection ? pinnedComposerSelection.variant ?? undefined : configVariant;
+    const configReasoningEffort = useConfigStore((state) => state.currentReasoningEffort);
+    const settingsDefaultReasoningEffort = useConfigStore((state) => state.settingsDefaultReasoningEffort);
+    const configuredReasoningEffort = pinnedComposerSelection ? pinnedComposerSelection.reasoningEffort : configReasoningEffort;
+    const persistedThinkingLevel = useDirectorySync(
+        React.useCallback((state) => (
+            currentSessionId ? state.snapshot[currentSessionId]?.selection?.thinkingLevel : undefined
+        ), [currentSessionId]),
+        currentSessionDirectoryForSync ?? currentDirectory ?? undefined,
+    );
+    // The picker's fallback is OMP's configured level. `auto` is a resolution
+    // mode, not an effort, so it stays off the wire and OMP decides per turn.
+    const reasoningEffortForModel = React.useCallback((
+        providerId: string | undefined,
+        modelId: string | undefined,
+        input: { captured?: { reasoningEffort?: string | null } | undefined; session?: string | null | undefined; native?: string | null | undefined; draft?: string | null | undefined },
+    ): string | undefined => {
+        if (!providerId || !modelId) return undefined;
+        const model = useConfigStore.getState().providers
+            .find((provider) => provider.providerId === providerId)?.models
+            .find((candidate) => candidate.modelId === modelId);
+        return resolveReasoningEffortToSend({ model, ompDefault: settingsDefaultReasoningEffort, ...input });
+    }, [settingsDefaultReasoningEffort]);
     const isMobile = useUIStore((state) => state.isMobile);
     const hasHardwareKeyboard = useHardwareKeyboard();
     const enterToSend = useUIStore((state) => state.enterToSend);
@@ -1363,6 +1387,16 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
 
         const queuedProviderId = expandedResource?.modelSelection?.providerId ?? currentProviderId;
         const queuedModelId = expandedResource?.modelSelection?.modelId ?? currentModelId;
+        const queuedAgent = queueSessionId
+            ? useSelectionStore.getState().getSessionAgentSelection(queueSessionId)
+                ?? useConfigStore.getState().currentAgentName
+                ?? ROOT_SELECTION_AGENT
+            : undefined;
+        const queuedSessionEffort = queueSessionId && queuedAgent !== undefined
+            ? useSelectionStore.getState().getAgentModelReasoningEffortForSession(
+                queueSessionId, queuedAgent, queuedProviderId ?? '', queuedModelId ?? '',
+            )
+            : undefined;
         try {
             await addToQueue(queueTarget, {
                 content: messageToQueue,
@@ -1373,6 +1407,11 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                     providerID: queuedProviderId,
                     modelID: queuedModelId,
                     variant: currentVariant ?? undefined,
+                    reasoningEffort: reasoningEffortForModel(queuedProviderId, queuedModelId, {
+                        session: queuedSessionEffort,
+                        native: queueSessionId ? persistedThinkingLevel : undefined,
+                        draft: configuredReasoningEffort,
+                    }),
                 } : undefined,
             });
         } catch (error) {
@@ -1400,7 +1439,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             return;
         }
         recordLinkedReferences(queueSessionId, queueTarget.directory, linked);
-    }, [getCurrentInputSnapshot, getSubmitErrorMessage, currentSessionId, currentDirectory, messageQueueTarget, inputMode, hasDrafts, loadCommands, guestCommands, attachedFiles, sanitizeAttachmentsForSend, prepareDocumentMentions, extractInlineFileMentions, runtimeFiles, agents, consumePendingSyntheticParts, mailboxTarget, inlineDraftTarget, consumeDrafts, linkedReferences, scrollToLatest, clearAttachedFiles, chatDraftIdentity, isMobile, isMobileCommentOpen, addToQueue, currentProviderId, currentModelId, currentVariant, t]);
+    }, [getCurrentInputSnapshot, getSubmitErrorMessage, currentSessionId, currentDirectory, messageQueueTarget, inputMode, hasDrafts, loadCommands, guestCommands, attachedFiles, sanitizeAttachmentsForSend, prepareDocumentMentions, extractInlineFileMentions, runtimeFiles, agents, consumePendingSyntheticParts, mailboxTarget, inlineDraftTarget, consumeDrafts, linkedReferences, scrollToLatest, clearAttachedFiles, chatDraftIdentity, isMobile, isMobileCommentOpen, addToQueue, currentProviderId, currentModelId, currentVariant, configuredReasoningEffort, persistedThinkingLevel, reasoningEffortForModel, t]);
 
     /** Put the context a queued message was captured with back on the composer chips. */
     const restoreQueuedContext = React.useCallback((context: readonly QueuedContextPart[]) => {
@@ -1628,6 +1667,26 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         const providerIdToSend = capturedSendConfig?.providerID ?? currentProviderId;
         const modelIdToSend = capturedSendConfig?.modelID ?? currentModelId;
         const variantToSend = capturedSendConfig ? capturedSendConfig.variant : currentVariant;
+        const sessionEffortAgent = currentSessionId
+            ? useSelectionStore.getState().getSessionAgentSelection(currentSessionId)
+                ?? useConfigStore.getState().currentAgentName
+                ?? ROOT_SELECTION_AGENT
+            : undefined;
+        const sessionReasoningEffort = currentSessionId && sessionEffortAgent !== undefined
+            ? useSelectionStore.getState().getAgentModelReasoningEffortForSession(
+                currentSessionId, sessionEffortAgent, providerIdToSend, modelIdToSend,
+            )
+            : undefined;
+        // A queued item owns the effort it captured: its explicit value (or
+        // unset/auto) is delivered as captured, never re-resolved against a
+        // later session or preference change.
+        const reasoningEffortToSend = reasoningEffortForModel(providerIdToSend, modelIdToSend, capturedSendConfig
+            ? { captured: capturedSendConfig }
+            : {
+                session: sessionReasoningEffort,
+                native: currentSessionId ? persistedThinkingLevel : undefined,
+                draft: configuredReasoningEffort,
+            });
 
         // The isolated space the message targets, if any: a session by its directory, a draft by
         // the creation request it still waits on or by its directory.
@@ -1783,13 +1842,15 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             delivery?: 'steer';
             skills?: CanonicalSkillMentions;
             fileResourcesExpanded?: boolean;
+            reasoningEffort?: string;
         } | undefined;
-        if (capturedTarget || capturedDraftSnapshot || delivery) {
+        if (capturedTarget || capturedDraftSnapshot || delivery || reasoningEffortToSend) {
             sendMessageOptions = {};
             if (capturedTarget) sendMessageOptions.target = capturedTarget;
             if (capturedDraftSnapshot) sendMessageOptions.draftSnapshot = capturedDraftSnapshot;
         }
         if (delivery && sendMessageOptions) sendMessageOptions.delivery = delivery;
+        if (reasoningEffortToSend) sendMessageOptions = { ...(sendMessageOptions ?? {}), reasoningEffort: reasoningEffortToSend };
 
         // Queued messages resolved their mentions when they were queued; only
         // the composer's own text can still name a document.
@@ -3547,6 +3608,13 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         : null;
     const autoReviewRow = !isBtwActive && !newSessionDraftOpen ? <AutoReviewStrip /> : null;
     const sessionMode = useDirectorySync(React.useCallback((state) => currentSessionId ? state.snapshot[currentSessionId]?.session.mode : undefined, [currentSessionId]), currentSessionDirectoryForSync ?? currentDirectory ?? undefined);
+    // The workspace model catalog is the authoritative source for whether OMP
+    // can resolve the project/global `plan` role.
+    const planRoleAvailable = useDirectorySync(React.useCallback((state) => state.models?.planRoleAvailable, []), currentSessionDirectoryForSync ?? currentDirectory ?? undefined);
+    const sessionGoalEnabled = useUIStore((state) => state.sessionGoalEnabled);
+    const handleDraftModeChange = React.useCallback((next: ComposerModeValue, goal?: DraftGoalObjective | null) => {
+        useSessionUIStore.getState().setDraftMode(next, goal ?? null);
+    }, []);
     const workerRun = useSessionActiveRun(currentSessionId ?? '', currentSessionDirectoryForSync ?? currentDirectory ?? undefined);
     const workerRunRow = !isBtwActive && !newSessionDraftOpen && (workerRun?.origin === 'plan' || workerRun?.origin === 'goal')
         ? <ComposerStatusStrip icon="loader-4" spin text={t(workerRun.origin === 'plan' ? 'chat.run.origin.plan' : 'chat.run.origin.goal')} />
@@ -3592,6 +3660,19 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         // Keep the mobile model control aligned with the attachment and dictation rows.
         <div className="flex items-center justify-between gap-x-2 px-3.5 pb-2 pt-0.5">
             <MemoMobileModelButton onOpenModel={() => handleOpenMobilePanel('model')} className="min-w-0 px-0" />
+            <ComposerModeSelector
+                sessionId={currentSessionId}
+                draftOpen={newSessionDraftOpen}
+                mode={sessionMode}
+                draftMode={newSessionDraft.mode}
+                draftGoalObjective={newSessionDraft.goalObjective ?? null}
+                runActive={Boolean(workerRun)}
+                planRoleAvailable={planRoleAvailable}
+                sessionGoalEnabled={sessionGoalEnabled}
+                directory={currentSessionDirectoryForSync ?? currentDirectory}
+                isMobile
+                onDraftModeChange={handleDraftModeChange}
+            />
         </div>
     ) : null;
 
@@ -3621,12 +3702,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         editorRef: composerRef,
     });
 
-    // The footer's objective counter shows only while a goal is armed; passing
-    // the length otherwise would re-render the whole footer on every keystroke.
-    const goalArmed = useSessionGoalArmStore((state) => state.armed);
     // Set by the footer's desktop dictation; the mobile overlay lives outside the box.
     const [desktopDictating, setDesktopDictating] = React.useState(false);
-    const goalObjectiveLength = goalArmed ? message.length : 0;
     const waitingForAgent = false;
 
     const footerPaddingClass = isMobile ? 'px-1.5 py-1.5' : 'px-2.5 py-1.5';
@@ -3984,7 +4061,11 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                         runActive={Boolean(workerRun)}
                         directory={currentSessionDirectoryForSync ?? currentDirectory}
                         newSessionDraftOpen={newSessionDraftOpen}
-                        messageLength={goalObjectiveLength}
+                        draftMode={newSessionDraft.mode}
+                        draftGoalObjective={newSessionDraft.goalObjective ?? null}
+                        planRoleAvailable={planRoleAvailable}
+                        sessionGoalEnabled={sessionGoalEnabled}
+                        onDraftModeChange={handleDraftModeChange}
                         radius={chatInputRadius}
                         footerPaddingClass={footerPaddingClass}
                         footerGapClass={footerGapClass}

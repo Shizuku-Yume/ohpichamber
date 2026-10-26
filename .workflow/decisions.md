@@ -252,6 +252,93 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Revisit when:** goals end too early in practice because the agent declares completion without the work being done, or OMP exposes a hook for an external completion check.
 - **Effort:** omp-native-chat
 
+## 2026-10-27 - Publish OMP's resolved defaults on the model catalog
+
+- **Decided:** Add `defaults: { model, thinkingLevel }` to the canonical `ModelCatalog`; the worker resolves them with the pinned `resolveAllowedModels`/`resolveModelRoleValue`/`pickDefaultAvailableModel` and `cfgDefaultThinkingLevel`, and the UI treats them as the untouched-draft value. `auto` is exposed but never sent as an effort.
+- **Instead of:** Keeping app-owned default model/thinking settings (desktop `defaultModel`/`defaultVariant`) and teaching the UI OMP's precedence itself.
+- **Because:** The catalog already crosses the worker boundary with the exact native workspace state; a second resolver in the UI would drift on credentials, enabled models and role aliases, and app defaults would keep overriding the TUI on the same session.
+- **Mine:** yes
+- **Revisit when:** OMP exposes a session-scoped default or the catalog read stops reflecting the live credential/role resolution.
+- **Effort:** omp-native-parity
+
+## 2026-10-27 - Keep unset effort distinct from explicit off and persist the sent level
+
+- **Decided:** `undefined`/`null` effort means "defer to OMP"; `off` is a real choice. The worker normalizes optional controls to `null` before its guard, the composer shows session effort → explicit draft effort → OMP catalog default → `off`, and the sent effort is stored per session+agent+model so a reload restores it. Route variants stay a separate picker.
+- **Instead of:** Defaulting the composer to `off` when no local choice exists, or folding `off` into the unset state.
+- **Because:** OMP resolves a missing effort to its configured level; treating that as `off` both hides the real level and forces a different request. Explicit `off` must still reach `setThinkingLevel('off')`.
+- **Mine:** yes
+- **Revisit when:** the canonical session record starts carrying the stored thinking level, which can replace the local per-session copy.
+- **Effort:** omp-native-parity
+
+## 2026-10-27 - Retire only the global default model/thinking controls, keep project and small-model choices
+
+- **Decided:** Remove the global `defaultModel`/`defaultVariant` desktop settings and the Defaults page model/thinking rows; keep the project default model/route and the small-model/walkthrough preferences that share the page.
+- **Instead of:** Deleting the whole Defaults section and every per-project or auxiliary model preference.
+- **Because:** The spec retires app-level defaults that override OMP for ordinary new chats; project identity and small-model selection are separate explicit choices, and deleting their only UI would drop unrelated capability. The main composer now follows OMP when no explicit choice exists.
+- **Mine:** yes
+- **Revisit when:** OMP role settings replace the small-model/walkthrough overrides, or the maintainer wants the remaining Defaults controls moved or removed.
+- **Effort:** omp-native-parity
+
+## 2026-10-27 - Keep the worker's OMP resolution unchanged; prove it with fixtures
+
+- **Decided:** Do not change the worker's `selectOptions` guard. The observed base behavior already defers to OMP when all client effort/variant values are `null`; the real defect was on the catalog/UI side. Keep fixture tests for no-effort → `high` and explicit `off`, and record the spec's unreproduced "worker forces off" claim in task 04 Progress instead of inventing a production change.
+- **Instead of:** Keeping a defensive normalization that made no observable difference, or editing the spec Check to hide the mismatch.
+- **Because:** A real native fixture on `cbe1f912b3` already recorded `reasoning_effort: high` with no client effort. Changing the guard would be scope without evidence; the strict contract already forbids `undefined` in those fields.
+- **Mine:** yes
+- **Revisit when:** a real caller can pass `undefined` effort/variant outside the parsed contract, or a client-visible case forces `off` again.
+- **Effort:** omp-native-parity
+
+## 2026-10-27 - Read the persisted session level from the transcript snapshot
+
+- **Decided:** Add `selection: { model, thinkingLevel }` to `SessionSnapshot`/`ProjectionSeed`, derive it from the JSONL's last `model_change` and `thinking_level_change`, and publish `session.updated.selection` when OMP reports `thinking_level_changed`. The composer reads session choice → this native level → draft choice → OMP default.
+- **Instead of:** Relying only on the browser selection store for reload, or exposing the level on every `Session` record.
+- **Because:** A page reload can hit a live worker whose in-memory level is newer than the seed; the event keeps the journal current, and the snapshot is the canonical place the UI already reads. Keeping it out of `Session` avoids changing every session list/row consumer.
+- **Mine:** yes
+- **Revisit when:** the canonical `Session` record starts carrying the native selection, making a separate snapshot field redundant.
+- **Effort:** omp-native-parity
+## 2026-10-27 - Host tools are essential callable tools, not xd:// devices
+
+- **Decided:** Register `openchamber`, `web`, `memory` and `notify` with `loadMode: 'essential'`, so OMP places them in the normal callable tool schema with only their own descriptions. Their Host actions keep the existing capability owner and approval path.
+- **Instead of:** Leaving them as default `discoverable` extension tools, which OMP mounts as `xd://` devices whose documentation the Host policy refuses, or adding app-authored prompt guidance explaining how to call them.
+- **Because:** The effort's parity rule is that the model receives what plain OMP receives plus pins, attachments and the tools' own descriptions. A discoverable extension tool reaches the model only through an `xd://` device listing, which is additional prompt text and an unreadable Host capability; an essential tool is the ordinary OMP shape for a callable extension.
+- **Mine:** yes
+- **Revisit when:** OMP changes extension-tool presentation so essential tools gain prompt text of their own, or a Host tool needs to be deferred until explicitly enabled.
+- **Effort:** omp-native-parity
+
+## 2026-10-27 - Host policy passes only allowlisted OMP internal URL reads
+
+- **Decided:** A native `read` descriptor may carry `internalReadUrls` only for the exact OMP schemes `agent`, `history`, `artifact`, `local`, `proc`, `skill`, `xd`, `mcp`, `omp`, `issue` and `pr`. The descriptor resolves them with OMP's own `InternalUrlRouter.normalize`/`canHandle` (so registered aliases and selectors keep OMP's meaning) and stores the normalized URL. Host policy admits them only for `read`, checks every local target in a mixed list as before, and keeps `write`, `edit`, `grep` and `glob` on the filesystem-only path. Unknown schemes, `file://`, `https://` and NUL bytes stay refused. Native `wait` is admitted because it only observes this session's async jobs.
+- **Instead of:** Removing the `://` refusal wholesale, resolving internal URLs in the Host, or allowing the same pass-through for every native tool.
+- **Because:** OMP owns the grammar and containment of its internal resources, while the Host must not turn an opaque URL into a machine-capability grant. The allowlist is exactly the schemes the TUI resolves; arbitrary MCP fallback schemes and remote/file URLs are not silently granted, and a mixed delimited read still authorizes each local path.
+- **Mine:** yes
+- **Revisit when:** OMP adds or removes a native internal scheme, or a read-only internal URL starts granting a capability the Host must authorize separately.
+- **Effort:** omp-native-parity
+## 2026-10-27 - Publish plan-role availability in the workspace model catalog
+
+- **Decided:** `ModelCatalog` carries `planRoleAvailable`, resolved by the Agent Service with OMP's `resolveRoleModelFull(settings, 'plan', modelRegistry.getAvailable(), undefined)` — the same resolver the worker's plan enter uses. The composer reads it from the per-directory catalog cache to disable Plan and show the reason before a session exists.
+- **Instead of:** Letting the user pick Plan and surfacing the worker's 422 `MODEL_UNAVAILABLE` after the draft session is created, or reading the OMP config from the UI.
+- **Because:** the UI must know availability in a draft, the Agent Service already owns OMP settings and the executable model list, and a second availability rule would drift from `mode.ts`. The new field is required so every catalog producer and consumer states the fact.
+- **Mine:** yes
+- **Revisit when:** OMP exposes a dedicated capability endpoint, or plan availability stops depending on `modelRoles.plan`.
+- **Effort:** omp-native-parity
+
+## 2026-10-27 - Draft mode lives in draft state and applies after session creation
+
+- **Decided:** `NewSessionDraftState.mode` (and a Goal objective) holds the composer's choice. `sendMessage` applies Plan/Vibe with `mode.set` after the session exists and before the prompt; Goal calls the native `goal create` and returns without a prompt, because the controller starts the first turn. If `mode.set` fails, the created session stays in Main, the composer text is restored, and no prompt is sent.
+- **Instead of:** Applying the mode before creation through a hidden draft session, or sending the prompt and switching afterwards.
+- **Because:** the worker mode control needs a real session id and "before the first prompt" is the acceptance condition; for Goal, also sending the typed text would duplicate the first objective turn.
+- **Mine:** yes
+- **Revisit when:** the Agent Service supports creating a session in an initial mode atomically, or a draft mode can fail without closing the draft.
+- **Effort:** omp-native-parity
+
+## 2026-10-27 - Mode picker sits beside ModelControls, not inside it
+
+- **Decided:** the desktop mode picker renders immediately after `<ModelControls>` in the composer's right-side group; mobile renders it after the model button in the same model row. It uses the retired agent picker's DropdownMenu + Input + ScrollableOverlay pattern, with a searchable bottom sheet on mobile.
+- **Instead of:** Editing `ModelControls.renderAgentSelector`'s old insertion point inside that component.
+- **Because:** the visual order is the same rightmost slot, and window C owns the model/effort region of `ModelControls.tsx`; a sibling keeps the two intents mergeable. Mobile keeps the exact vacated `MobileAgentButton` slot.
+- **Mine:** yes
+- **Revisit when:** composer layout composes model and mode into one shared control cluster.
+- **Effort:** omp-native-parity
 ## 2026-10-26 - OMP owns session titles
 
 - **Decided:** `RuntimeSession.title` is the only session title, sourced from OMP's JSONL through its listing and title-change event. Rename goes through OMP `setSessionName`; Host metadata no longer has a writable title field, and legacy stored titles are ignored on read.

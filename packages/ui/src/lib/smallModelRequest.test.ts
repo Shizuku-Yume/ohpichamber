@@ -22,7 +22,7 @@ beforeEach(() => {
   models = [model('chosen', 'large'), model('other', 'haiku')];
   useConfigStore.setState({ currentProviderId: 'chosen', currentModelId: 'large' });
   const scope = spyOn(canonicalClient, 'resolveWorkspace').mockResolvedValue({ workspaceId: 'workspace-a', projectId: 'project-a', name: 'A' });
-  const catalog = spyOn(canonicalClient, 'getModels').mockImplementation(async workspaceId => ({ workspaceId, revision: '0', models }));
+  const catalog = spyOn(canonicalClient, 'getModels').mockImplementation(async workspaceId => ({ workspaceId, revision: '0', models, defaults: { model: null, thinkingLevel: null }, planRoleAvailable: false }));
   const fetcher = spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json(settings));
   restorers = [() => scope.mockRestore(), () => catalog.mockRestore(), () => fetcher.mockRestore()];
 });
@@ -120,7 +120,7 @@ describe('canonical utility generation', () => {
     const complete = spyOn(canonicalClient, 'complete');
     const catalog = spyOn(canonicalClient, 'getModels').mockImplementation(async workspaceId => {
       switchRuntimeEndpoint({ apiBaseUrl: 'https://other.test', runtimeKey: 'other' });
-      return { workspaceId, revision: '0', models };
+      return { workspaceId, revision: '0', models, defaults: { model: null, thinkingLevel: null }, planRoleAvailable: false };
     });
     restorers.push(() => complete.mockRestore(), () => catalog.mockRestore());
     await expect(requestSmallModel({ directory: '/repo', prompt: 'hello' }, { notifyOnError: false })).rejects.toThrow();

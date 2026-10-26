@@ -44,6 +44,13 @@ test('plan mode survives a serialized recovery snapshot', () => {
   }
 });
 
+test('snapshot carries the persisted native selection when present', () => {
+  const selected = { ...empty, selection: { model: { providerId: 'provider_1', modelId: 'model_1' }, thinkingLevel: 'off' } };
+  expect(SessionSnapshotSchema.parse(JSON.parse(JSON.stringify(selected)))).toEqual(selected);
+  expect(SessionSnapshotSchema.parse({ ...selected, selection: { model: null, thinkingLevel: null } })).toEqual({ ...selected, selection: { model: null, thinkingLevel: null } });
+  expect(SessionSnapshotSchema.safeParse({ ...selected, selection: { model: null, thinkingLevel: '' } }).success).toBe(false);
+});
+
 test('snapshot captures exact uint64 cursor, empty bounds and no independent Host state', () => {
   expect(SessionSnapshotSchema.parse(empty)).toEqual(empty);
   for (const invalid of [

@@ -31,8 +31,8 @@ import { SettingsStackedField } from '@/components/sections/shared/SettingsSecti
 
 const WEEKDAY_INDEXES = [0, 1, 2, 3, 4, 5, 6] as const;
 
-// Mirrors the composer's footer icon toggles (PermissionAutoAcceptButton /
-// SessionGoalButton) so the state reads the same in both places.
+// Mirrors the composer's footer icon toggles (PermissionAutoAcceptButton and
+// the permission controls) so the state reads the same in both places.
 const EDITOR_TOGGLE_BUTTON_CLASS = 'flex h-6 w-6 cursor-pointer items-center justify-center text-foreground transition-none outline-none focus:outline-none flex-shrink-0';
 
 const TIMEZONE_OPTIONS = (() => {

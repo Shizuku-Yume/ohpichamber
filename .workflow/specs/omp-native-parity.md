@@ -56,8 +56,8 @@ Every change keeps the existing path: UI `canonicalClient` → Host session rout
 
 ### Mode dropdown (task 06)
 
-- `ComposerModeSelector.tsx` (:24 disables it when there is no `sessionId` or snapshot) and `SessionGoalButton.tsx` become one dropdown on the composer's right side, in the slot of the removed agent picker (`ModelControls.tsx` `renderAgentSelector`, removed in 2f4836e839/30c7f58f51; `MobileAgentButton.tsx` for mobile). It is searchable and keyboard operable and uses the Radix tooltip pattern in `FocusModeButton.tsx:33-55`.
-- In a draft the chosen mode is held by the composer and applied with `mode.set` after the session is created and before the first prompt; Goal asks for the objective first. When the plan role is missing (`mode.ts:177` returns 422), Plan is disabled and the tooltip says why.
+- `composer/ui/ComposerModeSelector.tsx` (the stacked selector currently disables itself when there is no `sessionId` or snapshot) and `SessionGoalButton.tsx` become one dropdown on the composer's right side, in the slot of the removed agent picker. Historical correction: the composer picker was removed by `5d1fd2a` (`ModelControls.tsx` `renderAgentSelector` and `MobileAgentButton.tsx`); `2f4836e839`/`30c7f58f51` removed other agent selectors. Desktop uses the retired picker's `DropdownMenu` + search `Input` + `ScrollableOverlay`; mobile uses the same searchable list in a bottom sheet. It is keyboard operable and uses the Radix tooltip pattern in `FocusModeButton.tsx:33-55`.
+- In a draft the chosen mode is held by the draft state and applied with `mode.set` after the session is created and before the first prompt; Goal asks for the objective first and creates the native goal instead of a prompt. When the plan role is missing (`mode.ts:178` returns 422), the workspace model catalog reports it and Plan is disabled with the reason in a Radix tooltip.
 
 ### Approvals and small defects (task 07)
 

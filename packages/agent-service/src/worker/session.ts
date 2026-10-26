@@ -139,6 +139,13 @@ export class WorkerSession {
         this.publishContinuationPending();
         this.emit(this.projection.consume(event));
         if (event.type === 'goal_updated' || event.type === 'agent_end') this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', mode: this.modeController.mode() } }]);
+        if (event.type === 'thinking_level_changed') {
+          const model = session.model;
+          this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', selection: {
+            model: model ? { providerId: model.provider, modelId: model.id } : null,
+            thinkingLevel: event.configured ?? event.thinkingLevel ?? null,
+          } } }]);
+        }
         if (event.type === 'message_end' || event.type === 'turn_end' || event.type === 'agent_end') void this.bind().catch(() => this.fail());
         if (event.type === 'agent_end') this.scheduleAutoTitle();
       } catch { this.fail(); }
@@ -382,22 +389,11 @@ export class WorkerSession {
     const invocation = /^\/skill:([^\s]+)(?:\s+([\s\S]*))?$/.exec(text);
     if (invocation) text = await this.catalogs.skills.preparePrompt(invocation[1]!, invocation[2] ?? '');
     for (const context of input.context) {
-      if (context.kind === 'instruction' || context.kind === 'synthetic') {
-        const message = context.kind === 'instruction'
-          ? { role: 'developer' as const, content: context.text, timestamp: Date.now() }
-          : { role: 'user' as const, content: context.text, synthetic: true, timestamp: Date.now() };
-        contextMessages.push(message);
-      } else {
-        if (context.instructions) {
-          const message = { role: 'developer' as const, content: context.instructions, timestamp: Date.now() };
-          contextMessages.push(message);
-        }
-        contextMessages.push({
-          role: 'custom', customType: 'ohpichamber.context', content: context.text, display: false,
-          details: { metadata: context.metadata, deliveryReceiptId: context.deliveryReceiptId },
-          attribution: 'agent', timestamp: Date.now(),
-        });
-      }
+      // A user-requested skill expansion stays a developer instruction. Captured
+      // context and user pins travel as hidden user text: plain OMP never sees
+      // app-authored custom/developer messages for them.
+      if (context.kind === 'instruction') contextMessages.push({ role: 'developer' as const, content: context.text, timestamp: Date.now() });
+      else if (context.text) contextMessages.push({ role: 'user' as const, content: context.text, synthetic: true, timestamp: Date.now() });
     }
     const images: NonNullable<PromptOptions['images']> = [];
     for (const attachment of input.attachments) {

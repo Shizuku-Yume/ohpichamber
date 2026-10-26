@@ -9,6 +9,9 @@ import { z } from "zod"
 import { createDeferredSafeJSONStorage } from "@/stores/utils/safeStorage"
 import { getRuntimeKey } from "@/lib/runtime-switch"
 
+/** Root chats have no agent, so their per-session choices use this stable key. */
+export const ROOT_SELECTION_AGENT = ''
+
 type ModelSelection = { providerId: string; modelId: string }
 type LastUsedProvider = { providerID: string; modelID: string }
 type VariantSelections = Map<string, Map<string, Map<string, string | null>>>

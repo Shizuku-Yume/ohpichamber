@@ -138,7 +138,7 @@ describe('ModelControls native selection and effort restore', () => {
       </SyncProvider>,
     ));
   };
-  const label = (kind: 'agent' | 'variant') => dom.container.querySelector(`.model-controls__${kind}-label`)?.textContent?.trim();
+  const label = (kind: 'agent' | 'variant' | 'effort') => dom.container.querySelector(`.model-controls__${kind}-label`)?.textContent?.trim();
   const trigger = (kind: 'agent' | 'model' | 'variant') => {
     const entry = dom.container.querySelector<HTMLElement>(`.model-controls__${kind}-trigger`);
     if (!entry) throw new Error(`Missing ${kind} trigger`);
@@ -176,7 +176,7 @@ describe('ModelControls native selection and effort restore', () => {
       providers: [provider], providersLoaded: true, currentProviderId: PROVIDER_ID, currentModelId: MODEL_ID,
       directoryScoped: { [DIRECTORY]: { providers: [provider], providersLoaded: true, currentProviderId: PROVIDER_ID, currentModelId: MODEL_ID, currentVariant: undefined, currentVariantSelection: { override: undefined, inherited: undefined }, currentAgentName: AGENT_ID, selectedProviderId: PROVIDER_ID, agentModelSelections: {}, defaultProviders: {}, selectionSource: 'auto', agentSelectionSource: 'auto' } },
       currentAgentName: AGENT_ID, currentVariant: undefined,
-      currentVariantSelection: { override: undefined, inherited: undefined }, settingsDefaultVariant: undefined,
+      currentVariantSelection: { override: undefined, inherited: undefined },
       settingsDefaultAgent: undefined, settingsDefaultModel: undefined, agentModelSelections: {}, defaultProviders: {},
       selectionSource: 'auto', agentSelectionSource: 'auto', lastDisconnectReason: null,
     });
@@ -208,13 +208,12 @@ describe('ModelControls native selection and effort restore', () => {
     expect(dom.container.querySelector('.model-controls__agent-trigger')).toBeNull();
     expect(dom.container.textContent).not.toContain('Build');
   });
-  test('a draft inherits its settings effort, not a retired agent sampling field', async () => {
+  test('a draft shows OMP\'s configured thinking level instead of Off', async () => {
     useSessionUIStore.setState({ currentSessionId: null });
-    useConfigStore.setState({ currentVariant: 'high', settingsDefaultVariant: 'high', currentVariantSelection: { override: undefined, inherited: 'high' } });
-    useConfigStore.getState().setCurrentVariantOverride(undefined, 'high');
+    useConfigStore.setState({ currentVariant: undefined, settingsDefaultReasoningEffort: 'high', currentReasoningEffort: undefined });
     setRoster([{ ...agent, model: { providerId: PROVIDER_ID, modelId: MODEL_ID } }]);
     await render();
-    expect(label('variant')).toBe('high');
+    expect(label('effort')).toBe('High');
   });
 
   test('native pinned provider/model binding preserves a valid manual effort', async () => {
@@ -232,7 +231,7 @@ describe('ModelControls native selection and effort restore', () => {
 
   test('a draft keeps its chosen effort through a provider discovery gap', async () => {
     useSessionUIStore.setState({ currentSessionId: null });
-    useConfigStore.setState({ providers: [], providersLoaded: false, currentVariant: 'high', settingsDefaultVariant: 'low', currentVariantSelection: { override: 'high', inherited: 'low' } });
+    useConfigStore.setState({ providers: [], providersLoaded: false, currentVariant: 'high', currentVariantSelection: { override: 'high', inherited: 'low' } });
     await render();
     expect(useConfigStore.getState().currentVariant).toBe('high');
     await act(async () => useConfigStore.setState({ providers: [provider], providersLoaded: true }));
@@ -251,7 +250,7 @@ describe('ModelControls native selection and effort restore', () => {
 
   test('a project draft inherits its own effort instead of the global default', async () => {
     useSessionUIStore.setState({ currentSessionId: null });
-    useConfigStore.setState({ currentVariant: 'high', settingsDefaultVariant: 'low', currentVariantSelection: { override: undefined, inherited: 'high' } });
+    useConfigStore.setState({ currentVariant: 'high', currentVariantSelection: { override: undefined, inherited: 'high' } });
     await render();
     expect(useConfigStore.getState().currentVariant).toBe('high');
     expect(useConfigStore.getState().currentVariantSelection.override).toBeUndefined();
@@ -267,7 +266,7 @@ describe('ModelControls native selection and effort restore', () => {
   for (const variant of [null, 'high'] as const) {
     test(`history echo preserves remembered manual effort ${variant ?? 'Default'}`, async () => {
       saveVariant(variant);
-      useConfigStore.setState({ selectionSource: 'manual', settingsDefaultVariant: 'low', currentVariant: variant ?? undefined, currentVariantSelection: { override: variant, inherited: 'low' } });
+      useConfigStore.setState({ selectionSource: 'manual', currentVariant: variant ?? undefined, currentVariantSelection: { override: variant, inherited: 'low' } });
       await render();
       await stage([reply('msg-echo')]);
       expect(savedVariant()).toBe(variant);
@@ -318,7 +317,7 @@ describe('ModelControls native selection and effort restore', () => {
         expect([useConfigStore.getState().activeDirectoryKey, useConfigStore.getState().providersLoaded, useConfigStore.getState().providers.map((item) => item.providerId)]).toEqual([DIRECTORY, true, [PROVIDER_ID]]);
         expect(selectCatalogLoadedForDirectory(useConfigStore.getState(), 'models', DIRECTORY)).toBe(true);
         expect(dom.container.querySelector('.model-controls__agent-label')).toBeNull();
-        expect(label('variant')).toBe(variant ?? 'Default');
+        expect(label('variant')).toBe(variant ? variant.charAt(0).toUpperCase() + variant.slice(1) : 'Default');
         expect(saveModel.mock.calls).toEqual([]);
         expect(saveEffort.mock.calls).toEqual([]);
         await openTrigger('model');

@@ -12,6 +12,8 @@ import { cfgSearxngEndpoint } from '@oh-my-pi/pi-coding-agent/web/settings';
 import { cfgProvidersWebSearchTimeoutSeconds } from '@oh-my-pi/pi-coding-agent/session/settings';
 import { cfgGoalContinuationModes } from '@oh-my-pi/pi-coding-agent/goals/settings';
 import { resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
+import { createAgentSession } from '@oh-my-pi/pi-coding-agent/sdk';
+import type { AgentSession } from '@oh-my-pi/pi-coding-agent/session/agent-session';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import { InteractionManager } from '../interaction/manager.ts';
 import { SessionJournal } from '../projection/journal.ts';
@@ -20,6 +22,8 @@ import type { HostActionRequest } from '../native-policy-protocol.ts';
 import { NativeApprovalRequired } from './policy.ts';
 import { WorkerSession } from './session.ts';
 import { WorkerModeController } from './mode.ts';
+import { openNativeRuntime, type NativeWorkerRuntime } from './native-runtime.ts';
+import { HOST_TOOL_DESCRIPTIONS } from './host-tool.ts';
 
 const previousNoTitle = process.env.PI_NO_TITLE;
 beforeEach(() => {
@@ -42,6 +46,48 @@ const ProviderRequestSchema = z.object({
   messages: z.array(z.object({ role: z.enum(['system', 'developer', 'user', 'assistant', 'tool']) }).catchall(JsonValueSchema)),
 }).catchall(JsonValueSchema);
 type ProviderRequest = z.infer<typeof ProviderRequestSchema>;
+const ProviderToolsSchema = z.array(z.object({
+  function: z.object({ name: z.string(), description: z.string().optional() }).catchall(JsonValueSchema),
+}).catchall(JsonValueSchema));
+function requestTools(request: ProviderRequest | undefined): Map<string, string | undefined> {
+  const parsed = ProviderToolsSchema.safeParse(request?.tools);
+  return new Map(parsed.success ? parsed.data.map(tool => [tool.function.name, tool.function.description]) : []);
+}
+function promptRequest(requests: ProviderRequest[], marker: string): ProviderRequest {
+  const match = requests.find(request => JSON.stringify(request.messages.at(-1)?.content).includes(marker));
+  if (!match) throw new Error(`Provider request carrying ${marker} was not captured`);
+  return match;
+}
+function requestContaining(requests: ProviderRequest[], marker: string): ProviderRequest {
+  const match = requests.find(request => JSON.stringify(request.messages).includes(marker));
+  if (!match) throw new Error(`Provider request containing ${marker} was not captured`);
+  return match;
+}
+function instructionMessages(request: ProviderRequest): Array<{ role: string; content: JsonValue }> {
+  return request.messages.filter(message => message.role === 'system' || message.role === 'developer')
+    .map(message => ({ role: message.role, content: message.content }));
+}
+const HOST_TOOL_NAMES = ['openchamber', 'web', 'memory', 'notify'] as const;
+const HOST_TOOL_INVENTORY_LINE = new RegExp(`^- (?:${HOST_TOOL_NAMES.join('|')})(?:: \`[^\`]+\`)?$`);
+/**
+ * Callable Host tools necessarily appear in OMP's tool inventory. That listing
+ * is the tools' own presentation, the one difference W4 allows alongside pins
+ * and attachments; every other system/developer line must match plain OMP.
+ */
+const TextBlockSchema = z.object({ text: z.string() }).catchall(JsonValueSchema);
+function withoutHostToolInventory(messages: Array<{ role: string; content: JsonValue }>) {
+  const stripLines = (text: string) => text.split('\n').filter(line => !HOST_TOOL_INVENTORY_LINE.test(line)).join('\n');
+  const strip = (content: JsonValue): JsonValue => {
+    const text = z.string().safeParse(content);
+    if (text.success) return stripLines(text.data);
+    if (!Array.isArray(content)) return content;
+    return content.map(block => {
+      const parsed = TextBlockSchema.safeParse(block);
+      return parsed.success ? { ...parsed.data, text: stripLines(parsed.data.text) } : block;
+    });
+  };
+  return messages.map(message => ({ ...message, content: strip(message.content) }));
+}
 
 function expectContextOrder(request: ProviderRequest | undefined, markers: string[]): void {
   if (!request) throw new Error('Native provider request was not captured');
@@ -72,13 +118,14 @@ function waitForGoal(worker: WorkerSession, predicate: () => boolean): Promise<v
   });
 }
 
-async function fixture({ respond, invoke, machineCommands = [], onSubagent = () => {}, denyWebSearch = false, planModel = false }: {
+async function fixture({ respond, invoke, machineCommands = [], onSubagent = () => {}, denyWebSearch = false, planModel = false, reasoningEfforts }: {
   respond: (payload: ProviderRequest, root: string) => Promise<Response> | Response;
   invoke?: (request: HostActionRequest, signal: AbortSignal, root: string) => Promise<JsonValue>;
   machineCommands?: string[];
   onSubagent?: (payload: SubagentLifecyclePayload) => void;
   denyWebSearch?: boolean;
   planModel?: boolean;
+  reasoningEfforts?: readonly string[];
 }) {
   const root = await mkdtemp(join(tmpdir(), 'native-seams-'));
   const home = process.env.HOME;
@@ -149,7 +196,9 @@ async function fixture({ respond, invoke, machineCommands = [], onSubagent = () 
     } } } });
     await worker.operation({ type: 'catalog', revision: '2', operation: { type: 'catalog.model.configure', request: { expectedRevision: '1', model: {
       modelId: 'native-model', provider: 'native-fixture', name: 'Native model', modalities: ['text'], contextWindow: 65536, maxOutputTokens: 128,
-      reasoningEffortSupported: false, reasoningOptions: [], variants: [], toolsSupported: true, enabled: true, pricing: null,
+      reasoningEffortSupported: (reasoningEfforts?.length ?? 0) > 0,
+      reasoningOptions: (reasoningEfforts ?? []).map(reasoningEffort => ({ reasoningEffort, label: reasoningEffort, budgetTokens: null })),
+      variants: [], toolsSupported: true, enabled: true, pricing: null,
     } } } });
     if (planModel) {
       await worker.operation({ type: 'catalog', revision: '3', operation: { type: 'catalog.model.configure', request: { expectedRevision: '2', model: {
@@ -162,7 +211,7 @@ async function fixture({ respond, invoke, machineCommands = [], onSubagent = () 
     const initialModel = worker.session.modelRegistry.find('native-fixture', 'native-model');
     if (!initialModel) throw new Error('Fixture main model is unavailable');
     await worker.session.setModelTemporary(initialModel);
-    return { root: cwd, get worker() { return worker!; }, events, requests, grants, hostRequests, interactions, journal, mcpConfigPath,
+    return { root: cwd, agentDirectory, get worker() { return worker!; }, events, requests, grants, hostRequests, interactions, journal, mcpConfigPath,
       reopen: async () => {
         const sessionFile = worker!.session.sessionManager.getSessionFile();
         if (!sessionFile) throw new Error('Fixture session file is missing');
@@ -536,6 +585,67 @@ test('actual SDK Host tool executes with Host-supplied first-use MCP storage and
   } finally { unsubscribe(); await harness.close(); }
 }, 30000);
 
+test('worker sends plain OMP system and developer context plus only the user pin', async () => {
+  const marker = 'PARITY_PROMPT_MARKER';
+  const harness = await fixture({ respond: () => completion() });
+  let plain: AgentSession | undefined;
+  let plainAuth: NativeWorkerRuntime['authStorage'] | undefined;
+  let unsubscribePlain: (() => void) | undefined;
+  try {
+    const workerTerminal = Promise.withResolvers<void>();
+    const unsubscribeWorker = harness.worker.session.subscribe(event => {
+      if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) workerTerminal.resolve();
+    });
+    await harness.worker.operation({ type: 'prompt', runId: 'parity-run', request: {
+      ...prompt(marker), input: { text: marker, attachments: [], context: [{ kind: 'context', text: 'USER_PIN_MARKER', metadata: {} }] },
+    } });
+    await workerTerminal.promise;
+    unsubscribeWorker();
+    const workerRequest = promptRequest(harness.requests, marker);
+
+    const runtime = await openNativeRuntime({ cwd: harness.root, agentDirectory: harness.agentDirectory });
+    plainAuth = runtime.authStorage;
+    const plainDirectory = join(harness.root, 'plain-sessions');
+    await mkdir(plainDirectory, { recursive: true });
+    const plainManager = SessionManager.create(harness.root, plainDirectory);
+    const created = await createAgentSession({
+      cwd: harness.root, agentDir: harness.agentDirectory, sessionManager: plainManager, authStorage: runtime.authStorage,
+      modelRegistry: runtime.modelRegistry, settings: runtime.settings, initialModelRefreshStrategy: 'offline',
+      enableMCP: false, enableLsp: false, disableExtensionDiscovery: true, hasUI: true, interactivePrompts: true,
+    });
+    plain = created.session;
+    const model = runtime.modelRegistry.find('native-fixture', 'native-model');
+    if (!model) throw new Error('Plain OMP model is unavailable');
+    await plain.setModelTemporary(model);
+    const plainTerminal = Promise.withResolvers<void>();
+    unsubscribePlain = plain.subscribe(event => {
+      if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) plainTerminal.resolve();
+    });
+    const observed = harness.requests.length;
+    await plain.prompt(marker, { throwOnDrop: true, images: [], runCommands: false, expandPromptTemplates: false });
+    await plainTerminal.promise;
+    const plainRequest = promptRequest(harness.requests.slice(observed), marker);
+
+    const workerInstructions = instructionMessages(workerRequest);
+    const plainInstructions = instructionMessages(plainRequest);
+    expect(withoutHostToolInventory(workerInstructions)).toEqual(plainInstructions);
+    for (const toolName of HOST_TOOL_NAMES) expect(JSON.stringify(workerInstructions)).toContain(`- ${toolName}: \`${toolName}\``);
+    expect(JSON.stringify(plainInstructions)).not.toContain('openchamber');
+    expect(JSON.stringify(workerRequest.messages)).toContain('USER_PIN_MARKER');
+    expect(JSON.stringify(instructionMessages(workerRequest))).not.toContain('USER_PIN_MARKER');
+    expect(JSON.stringify(workerRequest)).not.toContain('ohpichamber.context');
+    const workerTools = requestTools(workerRequest);
+    for (const toolName of HOST_TOOL_NAMES) expect(workerTools.get(toolName)).toBe(HOST_TOOL_DESCRIPTIONS[toolName]);
+    expect([...workerTools.keys()].some(name => name.includes('://'))).toBe(false);
+    expect(harness.fatal()).toBe(false);
+  } finally {
+    unsubscribePlain?.();
+    await plain?.dispose();
+    plainAuth?.close();
+    await harness.close();
+  }
+}, 30000);
+
 test('actual SDK steer/follow-up admission retains queued identity, captured context and attachment metadata', async () => {
   const firstRequest = Promise.withResolvers<void>();
   const release = Promise.withResolvers<void>();
@@ -565,9 +675,12 @@ test('actual SDK steer/follow-up admission retains queued identity, captured con
       ] },
     } });
     await firstRequest.promise;
-    expectContextOrder(harness.requests[0], [
-      'DIRECT_ASSOCIATED_INSTRUCTION', 'DIRECT_CONTEXT_ENTRY', 'DIRECT_LATER_INSTRUCTION', 'DIRECT_SYNTHETIC_ENTRY', 'DIRECT_LAST_CONTEXT',
+    const streamingRequest = requestContaining(harness.requests, 'DIRECT_CONTEXT_ENTRY');
+    expectContextOrder(streamingRequest, [
+      'DIRECT_CONTEXT_ENTRY', 'DIRECT_LATER_INSTRUCTION', 'DIRECT_SYNTHETIC_ENTRY', 'DIRECT_LAST_CONTEXT',
     ]);
+    expect(JSON.stringify(streamingRequest)).not.toContain('DIRECT_ASSOCIATED_INSTRUCTION');
+    expect(JSON.stringify(streamingRequest)).not.toContain('ohpichamber.context');
     const attachment = { attachmentId: 'streaming-attachment', name: 'note.txt', mediaType: 'text/plain', size: Buffer.byteLength('ATTACHMENT_MARKER'), uri: 'attachment://streaming-attachment' };
     const path = join(harness.root, 'note.txt');
     await writeFile(path, 'ATTACHMENT_MARKER');
@@ -596,9 +709,11 @@ test('actual SDK steer/follow-up admission retains queued identity, captured con
     expect(JSON.stringify(followUp)).toContain('FOLLOW_UP_MARKER');
     expect(JSON.stringify(harness.requests)).toContain('STEERING_INSTRUCTION');
     expect(JSON.stringify(harness.requests)).toContain('FOLLOW_UP_CONTEXT');
-    expectContextOrder(harness.requests.find(request => JSON.stringify(request.messages).includes('FOLLOW_UP_CONTEXT')), [
-      'FOLLOW_UP_ASSOCIATED_INSTRUCTION', 'FOLLOW_UP_CONTEXT', 'FOLLOW_UP_LATER_INSTRUCTION', 'FOLLOW_UP_SYNTHETIC_ENTRY', 'FOLLOW_UP_LAST_CONTEXT',
+    expectContextOrder(requestContaining(harness.requests, 'FOLLOW_UP_CONTEXT'), [
+      'FOLLOW_UP_CONTEXT', 'FOLLOW_UP_LATER_INSTRUCTION', 'FOLLOW_UP_SYNTHETIC_ENTRY', 'FOLLOW_UP_LAST_CONTEXT',
     ]);
+    expect(JSON.stringify(harness.requests)).not.toContain('FOLLOW_UP_ASSOCIATED_INSTRUCTION');
+    expect(JSON.stringify(harness.requests)).not.toContain('ohpichamber.context');
     expect(harness.fatal()).toBe(false);
   } finally { release.resolve(); unsubscribe(); await harness.close(); }
 }, 30000);
@@ -839,6 +954,23 @@ test('actual SDK edit reaches Host policy and projects its exact replace argumen
   }
 }, 30000);
 
+test('model catalog plan availability matches whether plan mode can enter', async () => {
+  const missing = await fixture({ respond: () => completion() });
+  try {
+    const catalog = await missing.worker.operation({ type: 'catalog', revision: '0', operation: { type: 'catalog.models.read' } });
+    expect(catalog).toMatchObject({ type: 'catalog', result: { type: 'catalog.models', catalog: { planRoleAvailable: false } } });
+    await expect(missing.worker.operation({ type: 'mode.set', mode: 'plan' })).rejects.toMatchObject({ status: 422, code: 'MODEL_UNAVAILABLE' });
+  } finally { await missing.close(); }
+
+  const configured = await fixture({ respond: () => completion(), planModel: true });
+  try {
+    const catalog = await configured.worker.operation({ type: 'catalog', revision: '0', operation: { type: 'catalog.models.read' } });
+    expect(catalog).toMatchObject({ type: 'catalog', result: { type: 'catalog.models', catalog: { planRoleAvailable: true } } });
+    await expect(configured.worker.operation({ type: 'mode.set', mode: 'plan' }))
+      .resolves.toMatchObject({ type: 'mode.set', mode: { kind: 'plan', status: 'active' } });
+  } finally { await configured.close(); }
+});
+
 test('native plan mode restores its tools and role model after reopening the same file', async () => {
   const harness = await fixture({ respond: () => completion(), planModel: true });
   try {
@@ -1028,3 +1160,34 @@ for (const action of ['approve', 'approve-compact', 'feedback', 'reject'] as con
     } finally { releasePlanning.resolve(); unsubscribe(); await harness.close(); }
   }, 30000);
 }
+
+test('a prompt with no explicit effort runs at OMP default thinking level', async () => {
+  const harness = await fixture({ respond: () => completion(), reasoningEfforts: ['low', 'medium', 'high'] });
+  const terminal = Promise.withResolvers<void>();
+  const unsubscribe = harness.worker.session.subscribe(event => {
+    if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve();
+  });
+  try {
+    await harness.worker.operation({ type: 'prompt', runId: 'default-effort-run', request: prompt('Use the default thinking level.') });
+    await terminal.promise;
+    expect(harness.worker.session.configuredThinkingLevel()).toBe('high');
+    expect(harness.requests[0]).toMatchObject({ reasoning_effort: 'high' });
+    expect(harness.fatal()).toBe(false);
+  } finally { unsubscribe(); await harness.close(); }
+}, 30000);
+
+test('an explicit off effort reaches the native agent while an omitted effort keeps the OMP default', async () => {
+  const harness = await fixture({ respond: () => completion(), reasoningEfforts: ['low', 'medium', 'high'] });
+  const terminal = Promise.withResolvers<void>();
+  const unsubscribe = harness.worker.session.subscribe(event => {
+    if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve();
+  });
+  try {
+    await harness.worker.operation({ type: 'prompt', runId: 'off-effort-run', request: {
+      ...prompt('Think as little as possible.'), options: { ...options, reasoningEffort: 'off' },
+    } });
+    await terminal.promise;
+    expect(harness.worker.session.configuredThinkingLevel()).toBe('off');
+    expect(harness.requests[0]?.reasoning_effort).not.toBe('high');
+  } finally { unsubscribe(); await harness.close(); }
+}, 30000);

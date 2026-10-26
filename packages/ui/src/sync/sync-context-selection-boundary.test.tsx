@@ -22,7 +22,7 @@ const createNativeClient = (): CanonicalClient => {
   client.listWorkspaces = async () => ({ items: [], errors: {} })
   client.resolveWorkspace = async (directory: string) => workspace(directory)
   client.listSessions = async () => ({ items: [], errors: {} })
-  client.getModels = async (workspaceId: string) => ({ workspaceId, revision: '0', models: [] })
+  client.getModels = async (workspaceId: string) => ({ workspaceId, revision: '0', models: [], defaults: { model: null, thinkingLevel: null }, planRoleAvailable: false })
   client.getProviders = async (workspaceId: string) => ({ workspaceId, revision: '0', providers: [] })
   client.getAgents = async (workspaceId: string) => ({ workspaceId, revision: '0', agents: [] })
   client.getShellSnapshot = async (scope) => { if (scope.kind !== 'workspace') throw new Error('Selection fixture only uses workspace shell scope'); return shellSnapshot(scope.workspaceId) }

@@ -18,3 +18,8 @@
 - [ ] Host route authorizes; secrets never returned.
 - [ ] UI section with save feedback per PATTERNS.md; strings localized.
 - [ ] Dead OpenCode pages removed after confirmation.
+
+## Progress (reconnaissance notes for the next session)
+
+- The four candidate "dead OpenCode pages" are retained: snippets use the pinned native prompt-template calls and ChatInput expansion; routing consumes `host/prompt-delivery-runtime.resolveAutoSelection`; classification also informs permission auto-accept safety; magic prompts are used by gitApi, conflict/plan/review/fusion and ChatInput. They are not dead and must not be removed without a separate effect proof.
+- Settings API constraints from the pinned package: `Settings.set` queues a native atomic background write; the OMP settings operation must flush before returning. Every GET must reload from disk so TUI edits appear. Do not narrow the spec allowlist silently: `isCredential` metadata, raw MCP `command`/`env`/`headers`, `auth.broker.*`, `task.agentAccountPools`, and `compaction.remoteEndpoint`/`skills.registryUrl` carry credential/exec/egress risk; route secret-rich MCP/provider fields through their existing owning APIs or record a precise spec adjustment backed by the pinned metadata and enterprise policy. Exclude appearance (including `goal.statusInFooter` even under `goal.*`). Selecting a provider model role is not by itself a provider entry; inspect the actual enterprise policy. A generic settings route must not bypass policy through URL/path/command fields.

@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Session } from '@openchamber/agent-contract';
-import { useSelectionStore } from '@/sync/selection-store';
+import { ROOT_SELECTION_AGENT, useSelectionStore } from '@/sync/selection-store';
 import { useSession } from '@/sync/sync-context';
 
 export type ComposerModelSelection = {
@@ -49,8 +49,8 @@ export const usePinnedComposerSelection = ({ enabled, sessionId, directory }: {
     const savedVariant = useSelectionStore((state) => (key && base.agent && base.model
         ? state.getAgentModelVariantForSession(key, base.agent, base.model.providerId, base.model.modelId)
         : undefined));
-    const savedReasoningEffort = useSelectionStore((state) => (key && base.agent && base.model
-        ? state.getAgentModelReasoningEffortForSession(key, base.agent, base.model.providerId, base.model.modelId)
+    const savedReasoningEffort = useSelectionStore((state) => (key && base.model
+        ? state.getAgentModelReasoningEffortForSession(key, base.agent ?? ROOT_SELECTION_AGENT, base.model.providerId, base.model.modelId)
         : undefined));
     const { agent, model, variant, reasoningEffort } = resolvePinnedComposerSelection({ savedAgent, savedModel, savedVariant, savedReasoningEffort, record });
     const providerId = model?.providerId;

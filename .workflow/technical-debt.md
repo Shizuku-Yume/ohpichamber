@@ -49,3 +49,13 @@ An entry leaves this file in one of two ways:
 - **Impact:** pinned sessions, pin ordering in the sidebar and the palette's pin actions stay fork-version-only; upstream changes in that path cannot be adopted.
 - **Solution:** add Host-owned pin state (canonical session metadata or a Host store), expose it through the session API, then port the upstream pin store and UI.
 - **Cost:** Host storage and contract change plus sidebar/palette consumers.
+
+## Session restore rejects native usage with reasoningTokens
+
+- **Where:** `packages/agent-service/src/worker/projection.ts` (`TokenUsageSchema.parse(message.usage)`), `packages/agent-contract/src/messages.ts` (`TokenUsageSchema`)
+- **Added:** 2026-10-27
+- **Priority:** fix-now
+- **Problem:** After a reload, `GET /api/agent/v1/sessions/<id>/snapshot` answers 503 `SESSION_RESTORE_FAILED` and the UI shows "Session could not be loaded" even though the session file is intact. The worker bootstrap parses the native assistant usage with the canonical strict `TokenUsageSchema`, but OMP 18.8.9 writes `{ input, output, cacheRead, cacheWrite, totalTokens, reasoningTokens, cost }`; `reasoningTokens` is an unrecognized key, so the Zod parse throws and the worker reports `SESSION_RESTORE_FAILED`. Reproduced on the pre-refresh baseline `524a6b5351` with Bun 1.4.2 and on `4d69e299`/`3dc9b8a`, so it predates the refresh and is not caused by tasks 01, 02 or 23. Evidence: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-23-2026-10-27/session-restore-worker-error.log` and `real-path-main524a-reload-error.png`.
+- **Impact:** Every session whose provider reports reasoning tokens cannot be reopened after a page reload or Host restart, which blocks the W6 reload row for every UI task and hides transcripts the user can no longer view.
+- **Solution:** Map the native usage fields into the canonical object in the projection adapter (dropping reasoning tokens if the contract does not expose them), or extend `TokenUsageSchema`/`TokenUsage` with an explicit optional reasoning field and thread it through. Add a fixture whose native usage includes `reasoningTokens` and assert snapshot restore succeeds.
+- **Cost:** One adapter change plus a contract decision; small if the field is dropped, larger if reasoning tokens must be exposed to the UI.

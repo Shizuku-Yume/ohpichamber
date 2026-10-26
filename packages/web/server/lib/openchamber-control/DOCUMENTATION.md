@@ -17,7 +17,7 @@ other.
   `schedule.list` also returns scheduler status as `scheduler`.
 - `routes.js` is the authenticated CLI HTTP adapter. It forwards one action,
   preserves service status and partial-result details, and propagates request
-  cancellation.
+  cancellation. It also carries the chat's answer to a waiting page.
 - `../agent-tool/runtime.js` is the managed-tool adapter. It wraps service
   results in the versioned native-tool envelope and uses a separate ephemeral
   loopback credential.
@@ -78,3 +78,21 @@ other.
   used as a path. The result also states how to present the image, because chat
   renders the image paths written in a finished answer below that message —
   saving the file is not what shows it to anyone.
+- `browser.close` removes a browser tab the calling session opened, and is
+  refused for any other tab, including the user's own tab an action without
+  `tabId` might otherwise fall back to (`../browser-control/DOCUMENTATION.md`).
+  Closing is panel state, so the client that owns the tab performs it through a
+  registered closer, not the page view; the server only validates `tabId` and
+  forwards the action like the rest.
+
+## Decisions
+
+### Why a dispatched session links back from its prompt and does not nest in the sidebar
+
+A dispatched session used to nest under the caller's work in the sidebar
+(`metadata.openchamber.originSessionID` on the session). These sessions are
+the user's own conversations, such as PRs a triage session splits off for a
+separate discussion: nesting hid them under one chevron, reshuffled them when
+the caller was archived, and made `work.name` in each of them rename the
+caller. They stay roots now, and the link sits on the prompt that started
+them, where it says who sent which message.

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createOpenChamberControlService } from './service.js';
 
@@ -17,7 +17,7 @@ const createHarness = (settings = {
   agentWebToolEnabled: true,
   agentMemoryToolEnabled: true,
   agentNotifyToolEnabled: true,
-}) => {
+}, overrides = {}) => {
   const created = [];
   const sent = [];
   const forked = [];
@@ -67,6 +67,7 @@ const createHarness = (settings = {
       remove: async () => [],
       setEnabled: async () => ({ enabled: true }),
     },
+    ...overrides,
   });
   return { control, created, sent, forked, requests };
 };
@@ -162,5 +163,57 @@ describe('OpenChamber control service canonical consumers', () => {
     await expect(disabled.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
       toolName: 'notify', action: 'notify.send', sessionId: 'session-1', input: { title: 't' },
     })).resolves.toEqual({ ok: false, code: 'FEATURE_DISABLED', status: 403 });
+  });
+});
+
+describe('models.search over the canonical catalog', () => {
+  const harness = () => createHarness({
+    agentControlToolEnabled: true,
+    favoriteModels: [{ providerId: 'b', modelId: 'old' }],
+    hiddenModels: [{ providerId: 'a', modelId: 'secret' }],
+  }, {
+    service: {
+      request: async (pathname) => {
+        if (pathname.endsWith('/models')) {
+          return Response.json({ workspaceId: 'workspace-1', revision: '1', models: [
+            { provider: 'a', modelId: 'new', name: 'Alpha New', variants: [{ variant: 'high' }], status: 'active' },
+            { provider: 'a', modelId: 'older', name: 'Alpha Older', variants: [], status: 'active' },
+            { provider: 'a', modelId: 'secret', name: 'Alpha Secret', variants: [], status: 'deprecated' },
+            { provider: 'b', modelId: 'old', name: 'Beta Old', variants: [], status: 'deprecated' },
+            { provider: 'b', modelId: 'newer', name: 'Beta Newer', variants: [], status: 'beta' },
+          ] });
+        }
+        if (pathname.endsWith('/providers')) {
+          return Response.json({ workspaceId: 'workspace-1', revision: '1', providers: [
+            { providerId: 'a', name: 'Alpha' }, { providerId: 'b', name: 'Beta' },
+          ] });
+        }
+        return Response.json({});
+      },
+    },
+  });
+
+  it('leads with the favorite, hides what the picker hides, and pages', async () => {
+    const { control } = harness();
+    const first = await control.execute('models.search', {}, '/repo/app');
+    expect(first.models.map(({ id }) => id)).toEqual(['b/old', 'a/new', 'a/older', 'b/newer']);
+    expect(first.models[0]).toMatchObject({ preference: 'favorite', provider: 'Beta', variants: [] });
+    expect(first.models[1].preference).toBeUndefined();
+    expect(first.total).toBe(4);
+
+    const alpha = await control.execute('models.search', { provider: 'alpha' }, '/repo/app');
+    expect(alpha.models.map(({ id }) => id)).toEqual(['a/new', 'a/older']);
+
+    const paged = await control.execute('models.search', { query: 'NEW', limit: 1 }, '/repo/app');
+    expect(paged).toMatchObject({ models: [{ id: 'a/new' }], total: 2, next: 1 });
+  });
+});
+
+describe('browser.close over the browser control bridge', () => {
+  it('forwards the close and its tab to the browser control', async () => {
+    const request = vi.fn(async () => ({ closed: true }));
+    const { control } = createHarness(undefined, { browserControl: { request } });
+    await expect(control.execute('browser.close', { tabId: 'tab-1' }, '/repo/app')).resolves.toEqual({ closed: true });
+    expect(request).toHaveBeenCalledWith('browser.close', { tabId: 'tab-1' }, expect.objectContaining({ timeoutMs: 20_000 }));
   });
 });

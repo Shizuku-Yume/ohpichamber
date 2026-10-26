@@ -50,7 +50,10 @@ There is no env gate — the feature shipped dark behind
   `classifierEndpoint(workspaceId)` requires an authorized workspace; it and
   `testClassifier(draft, workspaceId)` resolve a selected native provider's
   credential only for execution. Session consumers pass their Host-resolved
-  workspace identity, never an unscoped classifier fallback.
+  workspace identity, never an unscoped classifier fallback. The classifier
+  judges the user's text plus one attachment fact for sends with images
+  (`attachmentHint`, `routingRequestTextOf` in `runtime.js`); that fact never
+  reaches the Agent Service.
 - `routes.js` — `/api/routing` (GET, PUT), `/api/routing/token` (PUT, DELETE),
   `/api/routing/classifier` (PUT), `/api/routing/classifier/custom` (PUT,
   DELETE), and `/api/routing/classifier/test` (POST). State and probe requests
@@ -72,6 +75,10 @@ There is no env gate — the feature shipped dark behind
 - Routing failures keep the user's own behaviour: a Jev error, timeout, unknown
   category or low confidence routes to the fallback model, and the decision
   carries the reason.
+- The routing question sends `ROUTING_INSTRUCTIONS` as one string, the same
+  form as the Test probe. TypeSafe also accepts a list there, but a
+  self-hosted System One server may not: Kev answers a list with 400, so Auto
+  fell back on every send while Test passed (#4175).
 - The safety net accepts only on a verdict from Jev. With no usable
   classification provider it holds quietly (the session behaves like `ask`);
   when Jev fails it holds, broadcasts `openchamber:routing.safety-skipped` with

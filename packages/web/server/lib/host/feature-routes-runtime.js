@@ -1,3 +1,4 @@
+import { createRipgrepResolver } from '../fs/ripgrep.js';
 import { registerFsRoutes } from '../fs/routes.js';
 import { registerEnvironmentRoutes } from '../environment/routes.js';
 import { registerQuotaRoutes } from '../quota/routes.js';
@@ -33,6 +34,7 @@ import { registerOpenChamberSessionRoutes } from '../openchamber-sessions/routes
 import { registerOpenChamberControlRoutes } from '../openchamber-control/routes.js';
 import { registerMarkdownImageGrantRoutes } from '../markdown-image-grants/routes.js';
 import { createSkillRepositoryIdentityResolver } from './skill-repository-identity.js';
+import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { getGitHubAuthByAccountId } from '../github/auth.js';
 import { getGitHubCliCredential } from '../github/octokit.js';
@@ -518,6 +520,7 @@ export const createFeatureRoutesRuntime = () => {
       resolveProjectDirectory,
       buildAugmentedPath,
       resolveGitBinaryForSpawn,
+      resolveRipgrepBinary: createRipgrepResolver({ fs, path, buildSearchPath: buildAugmentedPath }).resolveRipgrepBinary,
       openchamberUserConfigRoot,
       cloneRepository: networkOperations.cloneRepository,
       managedChatsRoot,

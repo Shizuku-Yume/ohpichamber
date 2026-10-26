@@ -75,7 +75,7 @@ const createMessageId = (now) => {
   return `delivery_${time}${random}`;
 };
 
-const escapeAttribute = (value) => value
+export const escapeAttribute = (value) => value
   .replace(/&/g, '&amp;')
   .replace(/"/g, '&quot;')
   .replace(/</g, '&lt;')
@@ -173,19 +173,23 @@ export function createDispatchResultsRuntime({
       if (parse(errorCodeSchema, error)?.code === 'ENOENT') return [];
       throw error;
     }
-    let parsed;
+    let stored = null;
+    let reason = 'not a dispatch results file';
     try {
-      parsed = JSON.parse(raw);
+      stored = parse(storedFileSchema, JSON.parse(raw));
     } catch (error) {
+      reason = error?.message ?? String(error);
+    }
+    if (!stored) {
       // Malformed is a failure, not "nothing pending": keep the bytes and
       // start over rather than overwrite them on the next write.
       const backup = `${filePath}.corrupt-${now()}`;
       await fs.promises.rename(filePath, backup).catch(() => undefined);
-      console.warn(`[dispatch-results] file was unreadable and moved to ${backup}: ${error?.message ?? error}`);
+      console.warn(`[dispatch-results] file was unreadable and moved to ${backup}: ${reason}`);
       return [];
     }
     // One unreadable entry is dropped alone; the rest still deliver.
-    return (parse(storedFileSchema, parsed)?.entries ?? []).map((entry) => parse(entrySchema, entry)).filter(Boolean);
+    return stored.entries.map((entry) => parse(entrySchema, entry)).filter(Boolean);
   };
 
   const load = () => {
@@ -206,17 +210,18 @@ export function createDispatchResultsRuntime({
 
   const persist = () => {
     const payload = JSON.stringify({ version: FILE_VERSION, entries: Array.from(entries.values()) });
-    writePromise = writePromise
-      .then(async () => {
-        await fs.promises.mkdir(dataDir, { recursive: true });
-        const tmpPath = `${filePath}.${process.pid}.tmp`;
-        await fs.promises.writeFile(tmpPath, payload, { encoding: 'utf8', mode: 0o600 });
-        await fs.promises.rename(tmpPath, filePath);
-      })
-      .catch((error) => {
-        console.warn('[dispatch-results] failed to persist pending results:', error?.message ?? error);
-      });
-    return writePromise;
+    const write = writePromise.then(async () => {
+      await fs.promises.mkdir(dataDir, { recursive: true });
+      const tmpPath = `${filePath}.${process.pid}.tmp`;
+      await fs.promises.writeFile(tmpPath, payload, { encoding: 'utf8', mode: 0o600 });
+      await fs.promises.rename(tmpPath, filePath);
+    });
+    // The chain survives a failed write so later writes still run; the caller
+    // still sees this one fail, since "on disk" is what it waits for.
+    writePromise = write.catch((error) => {
+      console.warn('[dispatch-results] failed to persist pending results:', error?.message ?? error);
+    });
+    return write;
   };
 
   // --- OpenCode access -----------------------------------------------------
@@ -321,7 +326,13 @@ export function createDispatchResultsRuntime({
         if (!entry.messageId) {
           // Persisted before the first attempt, so a retry reuses it.
           entry.messageId = createMessageId(now());
-          await persist();
+          try {
+            await persist();
+          } catch (error) {
+            // Unsaved, it could be minted again after a crash and deliver twice.
+            delete entry.messageId;
+            throw error;
+          }
         }
         const message = buildDispatchResultMessage({
           sessionId,
@@ -391,7 +402,14 @@ export function createDispatchResultsRuntime({
         console.warn(`[dispatch-results] too many pending results; no longer waiting on ${stale.sessionId} for ${stale.parentSessionId}`);
       }
     }
-    await persist();
+    try {
+      await persist();
+    } catch (error) {
+      // The caller tells the agent no result is coming; delivering one anyway
+      // would contradict it.
+      entries.delete(entry.id);
+      throw error;
+    }
     // The session may already be done: a short turn can end before this
     // entry existed, and its idle event would then have found nothing to arm.
     arm(watched);

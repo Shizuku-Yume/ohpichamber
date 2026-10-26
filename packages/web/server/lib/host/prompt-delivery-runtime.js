@@ -1,5 +1,6 @@
 
 import { PromptRequestSchema } from '@openchamber/agent-contract';
+import { routingRequestTextOf } from '../routing/runtime.js';
 const asError = (message, status = 400, code = 'INVALID_REQUEST') => Object.assign(new Error(message), { status, code });
 const scopeIdentity = (scope) => ({
   sessionId: scope?.sessionId,
@@ -53,7 +54,7 @@ export function createHostPromptDeliveryRuntime({
     const fresh = await requireScope(scope);
     const parsed = PromptRequestSchema.parse(request);
     const options = parsed.options;
-    const routing = await routingRuntime.resolveAutoSelection({ sessionId: fresh.sessionId, directory: fresh.cwd, workspaceId: fresh.workspaceId, model: options.modelId ? { providerId: options.providerId, modelId: options.modelId } : null, agent: options.agentId, requestText: parsed.input.text });
+    const routing = await routingRuntime.resolveAutoSelection({ sessionId: fresh.sessionId, directory: fresh.cwd, workspaceId: fresh.workspaceId, model: options.modelId ? { providerId: options.providerId, modelId: options.modelId } : null, agent: options.agentId, requestText: routingRequestTextOf(parsed.input) });
     if (routing) {
       options.providerId = routing.model.providerId;
       options.modelId = routing.model.modelId;

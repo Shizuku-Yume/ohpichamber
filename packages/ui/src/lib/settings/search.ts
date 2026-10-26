@@ -258,18 +258,6 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['goal', 'objective', 'auto continue'],
   },
   {
-    id: 'chat.session-goal-checker',
-    page: 'chat',
-    titleKey: 'settings.openchamber.visual.goal.checkerLabel',
-    keywords: ['goal', 'progress', 'check', 'jev', 'classification', 'small model'],
-  },
-  {
-    id: 'chat.session-goal-max-turns',
-    page: 'chat',
-    titleKey: 'settings.openchamber.visual.goal.maxTurnsLabel',
-    keywords: ['goal', 'turns', 'limit', 'continuations', 'safety'],
-  },
-  {
     id: 'chat.session-goal-budget',
     page: 'chat',
     titleKey: 'settings.openchamber.visual.goal.budgetLabel',

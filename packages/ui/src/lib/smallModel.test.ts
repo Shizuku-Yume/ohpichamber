@@ -5,7 +5,7 @@ import { registerSessionDirectory, setSyncRefs } from '@/sync/sync-refs';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { invalidateSettingsCache } from './persistence';
 import { switchRuntimeEndpoint } from './runtime-switch';
-import { distillGoalObjective, summarizeSelectionForNotes } from './smallModel';
+import { summarizeSelectionForNotes } from './smallModel';
 
 let stores: ChildStoreManager;
 let restorers: Array<() => void>;
@@ -50,23 +50,6 @@ describe('canonical note summaries', () => {
     const complete = spyOn(canonicalClient, 'complete');
     restorers.push(() => complete.mockRestore());
     expect(await summarizeSelectionForNotes(' Exact identifiers ', 'source-session')).toBe('Exact identifiers');
-    expect(complete).not.toHaveBeenCalled();
-  });
-  test('goal distillation honors the target scope instead of the current composer workspace', async () => {
-    const complete = spyOn(canonicalClient, 'complete').mockImplementation(async (workspaceId, input) => {
-      expect(workspaceId).toBe('workspace-source');
-      expect(input.selection).toEqual({ providerId: 'source', modelId: 'source-model' });
-      return { completionId: input.completionId, selection: input.selection, status: 'completed', output: { kind: 'text', text: 'Verified completion criteria' }, finishReason: 'complete', usage: null };
-    });
-    restorers.push(() => complete.mockRestore());
-    expect(await distillGoalObjective(selectedText, { directory: '/source', sessionId: 'source-session', preferred: { providerId: 'source', modelId: 'source-model' } })).toBe('Verified completion criteria');
-  });
-  test('cancelled goal distillation cannot return a fallback objective', async () => {
-    const controller = new AbortController();
-    controller.abort();
-    const complete = spyOn(canonicalClient, 'complete');
-    restorers.push(() => complete.mockRestore());
-    await expect(distillGoalObjective(selectedText, { directory: '/source', signal: controller.signal })).rejects.toThrow();
     expect(complete).not.toHaveBeenCalled();
   });
 });

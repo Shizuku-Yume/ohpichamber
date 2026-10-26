@@ -16,8 +16,7 @@ export const EXECUTION_FORK_DEFAULT_INSTRUCTIONS =
     "Always clearly state what you understand your task to be, and wait for the user's approval of your conclusions before taking any further actions.";
 
 // Assertive variant prefilled when "Run as goal" is checked: the new session
-// must treat the forked message as an assignment and execute it to completion
-// (the goal loop audits progress and keeps it going), not report back and wait.
+// treats the forked message as an assignment and executes it to completion.
 export const EXECUTION_FORK_GOAL_INSTRUCTIONS =
     "The message I share is an assignment handed over from another AI agent. Extract the concrete task from it and start executing immediately: " +
     "if it is an implementation plan, implement that plan; " +

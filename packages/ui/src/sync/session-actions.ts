@@ -37,7 +37,6 @@ import { deleteChatDirectory } from "@/lib/chatDirectories"
 import { cancelSessionTitleGeneration } from "./session-title-generation"
 import { recordSessionActionFailure } from "./session-action-failures"
 import { withoutSourceOwnedLinks } from "@/lib/sessionForkInheritance"
-import { fetchGoalObjectiveContent, writeGoalObjectiveFile } from "@/lib/goalObjectiveFiles"
 import { canonicalClient, CanonicalApiError } from "@/api/canonicalClient"
 import { SessionMetadataSchema, SessionMetadataPatchSchema, PromptRequestSchema } from "@openchamber/agent-contract"
 import type { Session as CanonicalSession, Message as CanonicalMessage, SessionSnapshot, SessionBranchResult, SessionMetadataState, PromptRequest, ApprovalRequest as PermissionRequest, QuestionRequest as FormRequest, ApprovalReply, QuestionReply, JsonValue, JsonObject as Metadata, SessionMetadata, Run } from "@openchamber/agent-contract"
@@ -1984,21 +1983,6 @@ async function inheritForkMetadata(sourceSessionId: string, forkedSession: Canon
     if (isStaleRuntime(expectedRuntimeKey)) return
     const inherited = SessionMetadataSchema.parse(withoutSourceOwnedLinks(source.metadata ?? {}))
     await patchSessionMetadata(forkedSession.sessionId, directory, (current) => Object.keys(current).length ? current : inherited, expectedRuntimeKey)
-    const goal = inherited.openchamber?.goal
-    if (!goal?.id || !goal.objectiveFile) return
-    const objective = await fetchGoalObjectiveContent(sourceSessionId)
-    if (isStaleRuntime(expectedRuntimeKey) || objective === null) return
-    const current = await canonicalClient.getSessionMetadata(forkedSession.sessionId)
-    if (isStaleRuntime(expectedRuntimeKey) || current.metadata?.openchamber?.goal?.id !== goal.id) return
-    const written = await writeGoalObjectiveFile(forkedSession.sessionId, objective)
-    if (isStaleRuntime(expectedRuntimeKey)) return
-    if (!written) await patchSessionMetadata(forkedSession.sessionId, directory, (metadata) => {
-      const native = SessionMetadataSchema.parse(metadata)
-      const openchamber = native.openchamber
-      const nativeGoal = openchamber?.goal
-      if (!openchamber || !nativeGoal || nativeGoal.id !== goal.id) return metadata
-      return { ...native, openchamber: { ...openchamber, goal: { ...nativeGoal, objective, objectiveFile: false } } }
-    }, expectedRuntimeKey)
   } catch (error) {
     if (!isStaleRuntime(expectedRuntimeKey)) console.warn("[session-actions] fork metadata inheritance failed", error)
   }

@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { DEFAULT_SESSION_GOAL_MAX_AUTO_TURNS, isSessionGoalMaxAutoTurns } from '@/lib/sessionGoalTurnLimit';
 import { z } from 'zod';
 import { devtools, persist } from 'zustand/middleware';
 import type { SidebarSection } from '@/constants/sidebar';
@@ -44,7 +43,6 @@ type DesktopWindowControlsPosition = 'left' | 'right';
 type DesktopWindowControlsStyle = 'classic' | 'traffic-lights';
 export type FileEditorKeymap = 'default' | 'vim';
 export type LargeTextPasteBehavior = 'ask' | 'attach' | 'inline' | 'inline-double-paste';
-export type SessionGoalChecker = 'classifier' | 'small-model';
 
 const DEFAULT_LARGE_TEXT_PASTE_BEHAVIOR: LargeTextPasteBehavior = 'ask';
 
@@ -929,10 +927,6 @@ interface UIStore {
   /** Keep a session in work listed under its project group and folders too. */
   sessionWorkKeepInGroup: boolean;
   sessionGoalEnabled: boolean;
-  /** Who checks goal progress; the small model checks when no classification provider can. */
-  sessionGoalChecker: SessionGoalChecker;
-  /** Automatic continuations a goal may take before it stops for the user (1–200). */
-  sessionGoalMaxAutoTurns: number;
   sessionGoalDefaultBudgetEnabled: boolean;
   sessionGoalDefaultBudget: number;
   collapsibleThinkingBlocks: boolean;
@@ -1190,8 +1184,6 @@ interface UIStore {
   setSessionReviewOfferEnabled: (value: boolean) => void;
   setSessionWorkKeepInGroup: (value: boolean) => void;
   setSessionGoalEnabled: (value: boolean) => void;
-  setSessionGoalChecker: (value: SessionGoalChecker) => void;
-  setSessionGoalMaxAutoTurns: (value: number) => void;
   setSessionGoalDefaultBudgetEnabled: (value: boolean) => void;
   setSessionGoalDefaultBudget: (value: number) => void;
   setCollapsibleThinkingBlocks: (value: boolean) => void;
@@ -1405,8 +1397,6 @@ export const useUIStore = create<UIStore>()(
         sessionReviewOfferEnabled: false,
         sessionWorkKeepInGroup: false,
         sessionGoalEnabled: true,
-        sessionGoalChecker: 'small-model',
-        sessionGoalMaxAutoTurns: DEFAULT_SESSION_GOAL_MAX_AUTO_TURNS,
         sessionGoalDefaultBudgetEnabled: false,
         sessionGoalDefaultBudget: 200_000,
         collapsibleThinkingBlocks: true,
@@ -2378,14 +2368,6 @@ export const useUIStore = create<UIStore>()(
           set({ sessionGoalEnabled: value });
         },
 
-        setSessionGoalChecker: (value) => {
-          set({ sessionGoalChecker: value });
-        },
-
-        setSessionGoalMaxAutoTurns: (value) => {
-          if (!isSessionGoalMaxAutoTurns(value)) return;
-          set({ sessionGoalMaxAutoTurns: value });
-        },
 
         setSessionGoalDefaultBudgetEnabled: (value) => {
           set({ sessionGoalDefaultBudgetEnabled: value });
@@ -3407,8 +3389,6 @@ export const useUIStore = create<UIStore>()(
           sessionReviewOfferEnabled: state.sessionReviewOfferEnabled,
           sessionWorkKeepInGroup: state.sessionWorkKeepInGroup,
           sessionGoalEnabled: state.sessionGoalEnabled,
-          sessionGoalChecker: state.sessionGoalChecker,
-          sessionGoalMaxAutoTurns: state.sessionGoalMaxAutoTurns,
           sessionGoalDefaultBudgetEnabled: state.sessionGoalDefaultBudgetEnabled,
           sessionGoalDefaultBudget: state.sessionGoalDefaultBudget,
           collapsibleThinkingBlocks: state.collapsibleThinkingBlocks,

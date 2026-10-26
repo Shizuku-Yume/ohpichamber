@@ -9,6 +9,7 @@ import { useSkillsStore } from '@/stores/useSkillsStore';
 import { useCommandsStore } from '@/stores/useCommandsStore';
 import { useSessionGoalArmStore } from '@/stores/useSessionGoalArmStore';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { useUIStore } from '@/stores/useUIStore';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { registerWorkspaceDirectory, resetWorkspaceDirectories } from '@/stores/globalSessions';
 import { getDeferredSafeStorage } from '@/stores/utils/safeStorage';
@@ -1351,6 +1352,28 @@ describe('armed canonical goal submission', () => {
     await send('Ship the feature');
     expect(createGoal).toHaveBeenCalledWith('session-a', { op: 'create', objective: 'Ship the feature', tokenBudget: null });
     expect(runCalls).toEqual([]);
+  });
+  test('creates an OMP goal before sending the armed goal prompt', async () => {
+    seedCanonicalSession();
+    const createGoal = stub(canonicalClient, 'goal', async (sessionId, input) => ({ type: 'goal', mode: { kind: 'goal', status: 'active', objective: input.objective, tokenBudget: input.tokenBudget, tokensUsed: 0 } }));
+    useSessionGoalArmStore.getState().setArmed(true, 'Implement the plan');
+    await send('Implement the plan now');
+    expect(createGoal).toHaveBeenCalledWith('session-a', { op: 'create', objective: 'Implement the plan', tokenBudget: null });
+    expect(runCalls).toHaveLength(1);
+    expect(runCalls[0].request.input.context ?? []).toEqual([]);
+  });
+  test('uses the configured default token budget for an armed goal', async () => {
+    seedCanonicalSession();
+    const state = useUIStore.getState();
+    const createGoal = stub(canonicalClient, 'goal', async (sessionId, input) => ({ type: 'goal', mode: { kind: 'goal', status: 'active', objective: input.objective, tokenBudget: input.tokenBudget, tokensUsed: 0 } }));
+    useUIStore.setState({ sessionGoalDefaultBudgetEnabled: true, sessionGoalDefaultBudget: 12000 });
+    try {
+      useSessionGoalArmStore.getState().setArmed(true, 'Finish the work');
+      await send('Finish the work');
+      expect(createGoal).toHaveBeenCalledWith('session-a', { op: 'create', objective: 'Finish the work', tokenBudget: 12000 });
+    } finally {
+      useUIStore.setState({ sessionGoalDefaultBudgetEnabled: state.sessionGoalDefaultBudgetEnabled, sessionGoalDefaultBudget: state.sessionGoalDefaultBudget });
+    }
   });
 });
 

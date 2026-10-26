@@ -104,6 +104,18 @@ test('a long-lived native settings reader cannot select a deleted bundled provid
   } finally { await fixture.close(); }
 });
 
+test('model catalog reports whether the plan role resolves to an executable model', async () => {
+  const fixture = await openCatalogFixture();
+  try {
+    await fixture.writer.models.configureProvider({ expectedRevision: '0', configuration }, '1');
+    await fixture.writer.models.configureModel({ expectedRevision: '1', model: configuredModel }, '2');
+    expect((await fixture.reader.models.readModels('workspace_1', '2')).planRoleAvailable).toBe(false);
+    fixture.reader.settings.setModelRole('plan', `${configuredModel.provider}/${configuredModel.modelId}`);
+    await fixture.reader.settings.flush();
+    expect((await fixture.reader.models.readModels('workspace_1', '3')).planRoleAvailable).toBe(true);
+  } finally { await fixture.close(); }
+});
+
 test('provider protocol changes reach the actual native model selected by a long-lived reader', async () => {
   const fixture = await openCatalogFixture();
   const selection = { providerId: configuredModel.provider, modelId: configuredModel.modelId };

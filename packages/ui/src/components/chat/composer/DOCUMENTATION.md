@@ -66,9 +66,15 @@ the keyboard mover and the column shrinks around it at settle.
 
 ### Session mode selector
 
-The composer mode selector offers Main, Plan and Vibe in the freed footer slot. Its selected value comes only from the authoritative `RuntimeSession.mode` snapshot (and subsequent `session.updated` events); it does not maintain a local mode authority. Mode controls are disabled while a run is active and send `mode.set` through `canonicalClient` when the session is idle.
+The composer presents a single searchable mode dropdown (Main, Plan, Vibe, Goal) with Radix tooltips and keyboard filtering:
+- On desktop, the mode trigger sits immediately after `ModelControls` in the footer's right-aligned action group, occupying the visual layout slot vacated by the retired agent picker (rather than nesting inside `ModelControls`).
+- On mobile, it mounts to the right of `MobileModelButton` inside `mobileModelRow`.
 
-The goal target button arms the next composer objective with an optional token budget. Submission creates an OMP goal through canonical session control; it does not also submit a Host prompt, since the controller starts the first turn. The goal strip and management dialog read `SessionMode`, not Host goal metadata. Pause, resume, remove and budget replacement map to native pause, resume, drop and drop-and-create. These controls show no independent audit model or supervisor-only blocked/turn-count state.
+In draft sessions, transient mode selection and any typed objective are held in `NewSessionDraftState`. When submitting a draft with Plan or Vibe selected, the composer applies `mode.set` through `canonicalClient` immediately after `materializeOpenDraftSession` creates the session, before dispatching the initial prompt. Submitting with Goal selected invokes native goal creation directly via canonical session control, initiating the goal run without dispatching a redundant prompt turn.
+
+For established sessions, the dropdown selection reflects the authoritative `RuntimeSession.mode` snapshot and subsequent `session.updated` events; local selection state is never maintained independently. Selecting Main, Plan, or Vibe while idle issues `mode.set`, whereas selecting Goal opens the native objective dialog. Mode controls remain disabled while a provider run is active. Plan mode availability is governed by workspace `ModelCatalog.planRoleAvailable` from the OMP resolver; when unavailable, Plan is disabled with a tooltip directing the user to OMP settings.
+
+Active goal display and lifecycle management are retained by `SessionGoalRow` and `SessionGoalDialog` (objective, status, token budget, pause, resume, and drop). The standalone `SessionGoalButton` and inline objective counter are retired in favor of the unified mode dropdown.
 
 
 Glass does not nest: a `backdrop-filter` element is a backdrop root, so a

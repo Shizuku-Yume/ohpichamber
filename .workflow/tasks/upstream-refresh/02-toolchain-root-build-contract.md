@@ -4,7 +4,6 @@
 **Task type:** refactor
 **Base commit:** 524a6b5351ac2592e7bb94e69876cd7f4c3970ab
 **Started:** 2026-10-27T03:25:00Z
-**Status:** paused
 
 **Delivers:** The repository builds and checks with upstream's toolchain: TypeScript ~7.0.2, Bun 1.4.4, oxlint 1.88, Electron ^44.9.3, upstream root config and a regenerated lockfile; every package version stays 3.0.0 (mobile 1.13.2).
 
@@ -35,26 +34,39 @@
 
 **Check before:** pending baseline run (`00-baseline-*` logs in the evidence directory).
 
-### Handoff (paused mid-task)
+### Progress record (awaiting task 01)
 
-**Where the work is:** worktree `/home/shizuku/Project/ohpichamber-worktrees/upstream-refresh-02`, branch `upstream-refresh/02-toolchain-root-build-contract`, everything uncommitted.
+**Branch:** `upstream-refresh/02-toolchain-root-build-contract`, worktree `/home/shizuku/Project/ohpichamber-worktrees/upstream-refresh-02`. Working tree clean at `0d592b5ff4`.
 
-**Done in this session**
-- Root manifest: `packageManager` `bun@1.4.4`, `typescript` ~7.0.2, `oxlint`/`@oxlint/plugins` 1.88.0, `bun-pty` 0.5.1, ESLint devDependencies removed, `type-check` = `bun check -b` plus electron/agent-contract/agent-service/mobile, `lint:anti-slop` = `oxlint -c oxlint.anti-slop.config.ts`, `patchedDependencies` swapped to the upstream patch names.
-- `bun-patches`: adopted upstream `@legendapp%2Flist@3.6.0.patch`, `@tanstack+virtual-core+3.19.6.patch`, `bun-pty@0.5.1.patch`; deleted `@tanstack+virtual-core+3.17.11.patch` and `bun-pty@0.4.8.patch` (upstream deleted both). `happy-dom@18.0.1.patch` retained (unchanged upstream).
-- `ui` `@tanstack/react-virtual` 3.14.21 and `web` `bun-pty` 0.5.1 so the adopted patches apply.
-- Root `tsconfig.json` adopted from upstream (no `baseUrl`, sdk reference, no vscode); `ui`/`web` tsconfigs converted off `baseUrl` for TS 7; `sdk` gained `types: ["node"]`; `electron` gained `allowImportingTsExtensions` (its JS imports reach `@openchamber/web` → agent-service `.ts` sources); `agent-contract` gained `types: ["node"]` + `@types/node`.
-- `oxlint.config.ts` adopted (general lint, openchamber plugin) and `oxlint.anti-slop.config.ts` added; `tools/oxlint/openchamber/*` adopted. `knip.json` merged (new entries, fork workspaces kept). `Dockerfile` bun 1.4.4 in both stages.
-- Deletions: `.env` and `eslint.config.js` (upstream deleted both); every workspace `lint` now calls `oxlint -c ../../oxlint.config.ts --report-unused-disable-directives`; `scripts/check-changed.mjs` and `scripts/anti-slop.mjs` point at the anti-slop config (both are task 03 paths — flag for 03).
-- `openchamber/no-physical-sides` is wired but set `off` with a comment: 881 existing physical-side classes are task 20's RTL conversion; enabling now makes every build red.
-- TS 7 fixes: `packages/agent-service/scripts/prepare-sdk-types.mjs` rewritten (no compiler JS API in TS 7; emits declarations through `tsc -p` with TS 7-relative `paths`, no `baseUrl`, tolerates only vendor `TS2883`); three tests that parsed source with the TS API rewritten against extracted helpers (`lib/source-control/dirty-branch-switch.ts`, `lib/source-control/authorSelection`-side helpers in `components/views/git/authorSelection.ts`, `lib/legacy-data-notice.ts`); `tunnel-client.ts` WebSocket send now normalizes ArrayBuffer-backed views; `getRandomValues` stubs, `frame.matches` stub, DOM-null guards in tests.
-- oxlint 1.88 fixes: 28 agent-service findings (prefer-const, unused imports/params, empty catches documented, statement ternaries expanded, `finally` cleanup moved to `src/worker/temporary-file.ts`, MCP dispatch extracted, fallthrough removed, escape removed); UI findings (`LegacyDataNotice` helpers moved out, optional-chain guards, stale directives removed).
-- bun 1.4.4 installed user-locally at `~/.local/opt/bun/v1.4.4/bun-linux-x64/bun`, linked as `~/.local/bin/bun-1.4.4`. Node v24.18.0 satisfies `>=24.14.0`.
+**Commits**
+- `39412d7a83` build(toolchain): move to TypeScript 7, Bun 1.4.4, oxlint 1.88 and Electron 44
+- `f8022630d3` chore(agent-service): prepare SDK declarations without the TypeScript JS API
+- `a6b92f80f3` refactor(ui): give the dirty-switch and author rules real modules
+- `6889413d53` fix(lint): clear the oxlint 1.88 findings the general config surfaces
+- `489be48ce2` docs(workflow): record the toolchain cutover decisions
+- `d2533b5540` fix(ui): keep the extracted helpers inside the anti-slop boundary rules
+- `0d592b5ff4` build(lockfile): drop the deferred SDK example workspace
 
-**Checks run so far** (logs in `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-02-2026-10-27/`)
-- `bun install` (1.4.4): ok, Electron 44.9.3 repaired and installed.
-- `bun run type-check`: exit 0 (`05-type-check-try5.log`), before the last lint-driven edits; rerun started (`08-type-check-try6.log`).
-- `bun run lint`: exit 0 (`07-lint-try2.log`).
-- Not yet run: `bun install --frozen-lockfile`, `bun run test`, `bun run dead-code`, `bun pm ls electron`, the `bun run dev` real path with `/api/agent/v1/ready`.
+**Toolchain observed:** bun 1.4.4 (user-local at `~/.local/opt/bun/v1.4.4/bun-linux-x64/bun`, linked `~/.local/bin/bun-1.4.4`; system bun stays 1.4.2), Node v24.18.0, typescript 7.0.2, oxlint and @oxlint/plugins 1.88.0, electron 44.9.3 (`bun pm ls electron`), `packageManager` `bun@1.4.4`.
 
-**Not done:** rebase onto `upstream-refresh/integration` after 01 lands, lockfile regeneration after that rebase, the remaining checks, review (`flow-verify`), decisions entry for the ESLint cutover and the staged RTL rule, archive, commit and fast-forward landing.
+**Checks (logs in `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-02-2026-10-27/`)**
+- `bun install` with 1.4.4: exit 0; Electron 44.9.3 installed/repaired.
+- `bun install --frozen-lockfile`: exit 0 (`Checked 1429 installs across 1576 packages`).
+- `bun run type-check`: exit 0 — `bun check -b` (2,647 files, 5 projects) plus electron, agent-contract, agent-service and mobile package checks.
+- `bun run lint`: exit 0, no findings.
+- `bun run test`: exit 1 on one pre-existing ambient failure only — `server/lib/network-defaults.test.js` in web, `ApprovalPolicySchemaTooNewError` (the default state dir `~/.config/openchamber/host-approval-policies.sqlite` has `PRAGMA user_version = 2`, this branch supports 1). Proven unrelated: the same file fails on a clean `524a6b5351` checkout with the old toolchain (`11-base-web-network-defaults.log`), and passes on this branch with an isolated `HOME`/data dir. 6 of 7 workspace suites pass; all other 6,050 tests pass.
+- `bun run dead-code`: exit 0 after removing one unused export; two non-failing configuration hints (`fix-deprecation.js`, `packages/web/bin/cli.js` entry patterns are redundant in knip instead). Inspected.
+- `bunx oxlint` on created/rewritten files: general config clean; anti-slop findings only in pre-existing tunnel-client lines.
+- Real path: `bun run dev` with `OPENCHAMBER_DATA_DIR` pointed at an isolated dir (the machine's default dir is blocked by the stale approval DB above) serves the UI at `http://127.0.0.1:5180` (200, title `OpenChamber - AI Coding Assistant`) and `/api/agent/v1/ready` returns 200 `{"ready":true,"engine":"omp","version":"1.0.0"}`. A chat send was not driven: the isolated data dir has no `settings.json` provider, and the operator provider file is consumed by the M0 harness, not the running app. Recorded as the stand-in limit.
+
+**Deviations and their reasons**
+- `packages/sdk/examples/source-control-provider/package.json` is **not** adopted: the fork's SDK manifest parser rejects it (`invalid-service`; the `sourceControl` contribution is newer than the parser). Task 04 owns the SDK contract and the rest of that example. Recorded in `decisions.md`.
+- `openchamber/no-physical-sides` is wired in `oxlint.config.ts` and set `off` until task 20 converts the layout (881 existing physical classes). Recorded in `decisions.md`.
+- `@ark/schema@0.56.2` left `patchedDependencies` because the package is no longer installed; the version override stays. Recorded in `decisions.md`.
+
+**Self-review (flow-verify briefs, run by the implementer)**
+- Boundary: `git diff 524a6b5351` over 60 paths — manifests, configs, root build, agent-service, ui relay/tests, workflow docs. Compared each extracted helper with its original body: `dirtySwitchPushTarget` identical; `commitAndSwitchDirtyBranch` keeps the commit → publish → toast → refresh → close → checkout order and the failed-push early return; `repositoryIdentityChoices`/`activeRepositoryIdentity` keep the completeness/connection and bound-account rules; `removeTemporaryFile` rethrows non-ENOENT exactly as the three inlined finally blocks did.
+- Process: decisions recorded; no rule, severity or type weakened; no `any`, no new type assertion; version strings stay `3.0.0`/`1.13.2`; upstream root docs, `renovate.json` and `flake.*` untouched.
+- Findings: (1) `event-stream.ts` now binds the subscription with `const`; safe because only `write`/`overflow`/the close handler call `stop`, and `journal.subscribe` never invokes the listener synchronously — verified in `projection/journal.ts`. (2) `service.ts` reads `this.sessions` where it previously mirrored it in a local; identical value at the same time. (3) The branch still carries an intermediate commit that adds the deferred example manifest before the docs commit removes it; the tip is correct and the branch is unlanded, so it can be squashed at rebase. (4) `bun run test` cannot be fully green on this machine until the stale `~/.config/openchamber` approval DB is cleared or the test isolates its data dir — pre-existing, not caused here.
+
+**Landing status:** not landed. `upstream-refresh/integration` is at `a335fcaf6c` (a plan amendment moving the GHE token check to task 06) and does not yet contain `.workflow/done/upstream-refresh/01-*`. Awaiting task 01, then: rebase, regenerate `bun.lock` with Bun 1.4.4 keeping simple-git `^4.0.2`, rerun frozen install, type-check, lint and test, archive this file, `workflow validate`, fast-forward the integration branch, remove the task worktree and branch.

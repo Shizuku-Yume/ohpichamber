@@ -58,3 +58,5 @@ Check before: not run for this branch (new branch from the integration tip; task
 **Finished:** 2026-10-27T14:40:00+08:00
 
 **After rebase onto `2e1239cd4b`:** clean rebase, two commits replayed. `bun install --frozen-lockfile` -> 0, `bun run type-check` -> 0, `bun run lint` -> 0, `VITEST_MAX_WORKERS=2 bun run test` -> 0 (7/7 suites) (`*-after-rebase.log`). This doc-only entry follows the tested code commit `5db1b91db8`.
+
+**Final landing attempt (integration tip `4d4c335444`, docs-only commits on top of the previous rebase):** clean rebase, three commits replayed. `bun install --frozen-lockfile` -> 0, `bun run type-check` -> 0, `bun run lint` -> 0, `VITEST_MAX_WORKERS=2 bun run test` -> 0, 7/7 suites (`*-final.log`). This doc-only entry follows the tested code commit `7db7c994d3`.

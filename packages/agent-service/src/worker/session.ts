@@ -32,9 +32,11 @@ import type { WorkerAuthorize } from './policy.ts';
 import { createHostToolExtension } from './host-tool.ts';
 import type { WorkerHostInvoke } from './host-actions.ts';
 import { formatModelString } from '@oh-my-pi/pi-coding-agent/config/model-resolver';
+import { generateSelectedModelTitle } from './auto-title.ts';
 import { captureNativePolicy } from './native-policy-snapshot.ts';
 import type { HostNativePolicySnapshot, NativePolicyContext } from '../native-policy-protocol.ts';
 import { createNativeBashPolicyExtension } from './native-bash-policy.ts';
+import { NativePermissionBridge } from './native-permission-bridge.ts';
 import { BashTool } from '@oh-my-pi/pi-coding-agent/tools/bash';
 import { nativePluginExtensionPaths } from './native-plugin-loader.ts';
 import { NativeCacheWarming } from './catalog-warming.ts';
@@ -59,6 +61,9 @@ export class WorkerSession {
   private readonly btw: RpcBtwController;
   private binding: Promise<void> = Promise.resolve();
   private readonly titleUnsubscribe: () => void;
+  private pendingTitleInput: string | undefined;
+  private titleGeneration: Promise<void> | undefined;
+  private titleAbort: AbortController | undefined;
   private promptTask: Promise<void> | undefined;
   private preparation: Promise<PreparedPrompt> | undefined;
   private cancellingRunId: string | undefined;
@@ -86,9 +91,11 @@ export class WorkerSession {
     private readonly completion: WorkerCompletion,
     private readonly admission: NativeAdmission,
     private readonly authorize: WorkerAuthorize,
+    private readonly authorizeProviderUse: (model: { provider: string; id: string; baseUrl: string }) => Promise<void>,
     private readonly onSubagent: (payload: SubagentLifecyclePayload) => void,
     private readonly subagentEventBus: EventBus,
     private readonly webSearch: NativeWebSearch,
+    private readonly permissionBridge: NativePermissionBridge,
   ) {
     this.modeController = new WorkerModeController(session, title => this.proposePlan(title), start => this.startWorkerRun('goal', start), () => this.publishContinuationPending());
     this.projection = new WorkerProjection(session.sessionManager, sessionId);
@@ -142,6 +149,7 @@ export class WorkerSession {
           } } }]);
         }
         if (event.type === 'message_end' || event.type === 'turn_end' || event.type === 'agent_end') void this.bind().catch(() => this.fail());
+        if (event.type === 'agent_end') this.scheduleAutoTitle();
       } catch { this.fail(); }
     });
   }
@@ -227,12 +235,27 @@ export class WorkerSession {
       });
       const subagentEventBus = new EventBus();
       const pluginExtensionPaths = await nativePluginExtensionPaths(input.cwd);
+      const permissionBridge = new NativePermissionBridge(
+        (toolCall, options, sessionRuleKey, signal) => interaction.requestPermission(toolCall, options, sessionRuleKey, signal),
+        toolCall => {
+          try {
+            const decision = bashPolicy.approval(toolCall.rawInput);
+            if (decision === 'read' || decision === 'write' || decision === 'exec') return 'prompt';
+            return decision.policy === 'allow' ? 'allow' : decision.policy === 'deny' ? 'deny' : 'prompt';
+          } catch { return 'prompt'; }
+        },
+      );
       const result = await createAgentSession({
         cwd: input.cwd, agentDir: input.agentDirectory, sessionManager: manager, authStorage, modelRegistry, settings,
         initialModelRefreshStrategy: 'offline',
+        // OMP owns titles. The worker runs its own automatic title after an idle
+        // turn so the title provider can be pinned and authorized before its
+        // credentials are released; OMP's autoTitle path has no such seam.
+        autoTitle: false,
         enableMCP: mcp !== undefined, mcpManager: mcp, enableLsp: false, disableExtensionDiscovery: true,
         hasUI: true, interactivePrompts: true, subagentEventBus, extensions: [observer, createNativeBashPolicyExtension({ interaction, approval: bashPolicy.approval,
           authorize: (toolCallId, toolInput, approvalId) => authorizeTool('bash', toolInput, { toolCallId, approvalId }),
+          nativeAuthorized: (toolCallId, toolInput) => permissionBridge.isNativeAuthorized('bash', toolInput, toolCallId),
         }), createHostToolExtension({
           scope: { sessionId: input.rootSessionId, rootSessionId: input.rootSessionId, workspaceId: input.workspaceId },
           invoke: invocation => invokeHostAction(invocation.request, invocation.signal),
@@ -248,6 +271,7 @@ export class WorkerSession {
         throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Native plugin or local extension failed to load');
       }
       const nativeSession = session;
+      nativeSession.setClientBridge(permissionBridge.clientBridge);
       mcp?.attachSession(nativeSession);
       result.setToolUIContext(interaction.ui, true);
       const warming = new NativeCacheWarming({ cwd: input.cwd, agentDirectory: input.agentDirectory, session: nativeSession });
@@ -285,7 +309,10 @@ export class WorkerSession {
       const sessionFile = manager.getSessionFile();
       if (!sessionFile) throw new ProjectionError(503, 'SESSION_RESTORE_FAILED', 'Session storage is unavailable');
       await rememberPrivateRoots(manager, input);
-      owned = new WorkerSession(nativeSession, authStorage, sessionFile, publish, input.rootSessionId, input.cwd, onFatal, interaction, catalogs, mcp, shell, completion, admission, authorize, onSubagent, subagentEventBus, new NativeWebSearch(runtime, input.workspaceId, authorize));
+      const authorizeProviderUse = async (model: { provider: string; id: string; baseUrl: string }): Promise<void> => {
+        await authorizeTool('provider.use', { providerId: model.provider, modelId: model.id, endpoint: model.baseUrl });
+      };
+      owned = new WorkerSession(nativeSession, authStorage, sessionFile, publish, input.rootSessionId, input.cwd, onFatal, interaction, catalogs, mcp, shell, completion, admission, authorize, authorizeProviderUse, onSubagent, subagentEventBus, new NativeWebSearch(runtime, input.workspaceId, authorize), permissionBridge);
       await owned.modeController.goal.reconcile();
       await owned.modeController.restore();
       capturePolicy = async () => {
@@ -438,6 +465,7 @@ export class WorkerSession {
       }));
       this.projection.resetSelection();
       const seed = this.projection.seed();
+      this.permissionBridge?.reset();
       this.interaction.cancelAll();
       return { type: 'branch', seed, result: { sessionId: this.sessionId, branch: seed.branch,
         draft: navigation.editorText === undefined ? null : { text: this.projection.publicText(navigation.editorText),
@@ -448,6 +476,7 @@ export class WorkerSession {
       if (navigationStarted && (navigated || manager.getLeafId() !== previousLeaf)) {
         // The native context may already have switched. Retire it rather than
         // allowing a prompt against a failed selection or stale agent context.
+        this.permissionBridge?.reset();
         try {
           if (previousLeaf === null) manager.resetLeaf(); else manager.branch(previousLeaf);
           await manager.appendEntriesAtomically(() => manager.appendCustomEntry(BRANCH_TYPE, previousRevert ?? { restoreLeafId: null, revertedMessageId: null }));
@@ -532,6 +561,7 @@ export class WorkerSession {
     this.publishContinuationPending();
     const task = (async () => {
       try {
+        await this.stopAutoTitle();
         await this.session.sessionManager.flush();
         const dispatched = await start();
         await this.bind();
@@ -550,6 +580,46 @@ export class WorkerSession {
     })();
     this.promptTask = task.then(() => {}, () => {});
     return task;
+  }
+
+  /** Stop an in-flight background title before a user turn or disposal touches provider settings. */
+  private async stopAutoTitle(): Promise<void> {
+    this.titleAbort?.abort();
+    const generation = this.titleGeneration;
+    if (generation) await generation;
+  }
+
+  /** Start one best-effort title attempt once the session is idle and still unnamed. */
+  private scheduleAutoTitle(): void {
+    if (this.closed || this.failed || process.env.PI_NO_TITLE || this.titleGeneration || this.session.isStreaming || this.projection.activeRun() || this.session.sessionManager.getSessionName()) return;
+    const text = this.pendingTitleInput;
+    if (!text) return;
+    this.pendingTitleInput = undefined;
+    const controller = new AbortController();
+    const generation = (async () => {
+      try {
+        const model = this.session.model;
+        if (!model) return;
+        const title = await generateSelectedModelTitle({
+          session: this.session,
+          settings: this.session.settings,
+          firstMessage: text,
+          authorize: this.authorizeProviderUse,
+          signal: controller.signal,
+        });
+        if (!title || controller.signal.aborted || this.closed || this.session.sessionManager.getSessionName()) return;
+        await this.session.sessionManager.setSessionName(title, 'auto');
+        await this.session.sessionManager.flush();
+      } catch {
+        // A refused or unavailable title provider leaves the session untitled; it never fails the user run.
+      }
+    })();
+    this.titleAbort = controller;
+    this.titleGeneration = generation;
+    void generation.finally(() => {
+      if (this.titleGeneration === generation) this.titleGeneration = undefined;
+      if (this.titleAbort === controller) this.titleAbort = undefined;
+    });
   }
 
   operation(operation: WorkerOperation): Promise<WorkerOperationResult> {
@@ -712,6 +782,8 @@ export class WorkerSession {
         finally { this.preparation = undefined; }
         if (this.closed || this.failed) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Worker session is unavailable');
         if (this.skillsApplying || !this.admission.skillsAvailable) throw new ProjectionError(503, 'SKILL_APPLY_FAILED', 'Native skills changed during prompt preparation');
+        this.pendingTitleInput = operation.request.input.text.trim() || undefined;
+        await this.stopAutoTitle();
         this.emit(this.projection.beginRun(operation.runId, Date.now(), operation.request.input.attachments));
         const run = this.projection.activeRun();
         if (!run) throw new ProjectionError(503, 'INTERNAL_ERROR', 'Run admission failed');
@@ -783,6 +855,9 @@ export class WorkerSession {
   async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
+    this.permissionBridge?.stop();
+    this.pendingTitleInput = undefined;
+    await this.stopAutoTitle();
     this.interaction.close();
     try {
       await this.btw.close();
@@ -803,7 +878,10 @@ export class WorkerSession {
           await Promise.allSettled([...this.operations]);
           try { await this.shell.close(); } finally { await this.mcp?.close(); }
         }
-      } finally { try { await this.session.dispose(); } finally { this.authStorage.close(); } }
+      } finally {
+        this.session.setClientBridge(undefined);
+        try { await this.session.dispose(); } finally { this.authStorage.close(); }
+      }
     }
   }
 }

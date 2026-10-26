@@ -3481,7 +3481,7 @@ export const dict = {
   'chat.permissionDock.collapseAria': 'Toestemmingsverzoek inklappen',
   'chat.permissionDock.stepAria': 'Verzoek {index}: {tool}',
   'chat.permissionCard.allowOnce': 'Een keer toestaan',
-  'chat.permissionCard.alwaysAllow': 'Altijd toestaan',
+  'chat.permissionCard.alwaysAllow': '{tool} altijd toestaan voor deze sessie',
   'chat.permissionCard.alwaysAllowPatterns': 'Altijd: {patterns}',
   'chat.permissionCard.deny': 'Weigeren',
   'chat.permissionCard.replaceAll': 'Vervangt elk voorkomen',

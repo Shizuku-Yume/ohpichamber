@@ -20,10 +20,14 @@ export const ApprovalReplySchema = z.discriminatedUnion('decision', [
 ]);
 export type ApprovalReply = z.infer<typeof ApprovalReplySchema>;
 const committedPolicyFields = { policyId: EntityIdSchema, revision: CounterSchema, persistence: z.literal('committed') };
+const sessionPolicyFields = z.union([
+  z.strictObject({ ...committedPolicyFields, scope: z.literal('session') }),
+  z.strictObject({ scope: z.literal('session'), persistence: z.literal('ephemeral') }),
+]);
 export const ApprovalResolutionSchema = z.discriminatedUnion('decision', [
   z.strictObject({ decision: z.literal('approve') }),
   z.strictObject({ decision: z.literal('reject') }),
-  z.strictObject({ decision: z.literal('always-allow'), policy: z.strictObject({ ...committedPolicyFields, scope: z.literal('session') }) }),
+  z.strictObject({ decision: z.literal('always-allow'), policy: sessionPolicyFields }),
   z.strictObject({ decision: z.literal('always-deny'), policy: z.strictObject({ ...committedPolicyFields, scope: z.literal('workspace') }) }),
 ]);
 export type ApprovalResolution = z.infer<typeof ApprovalResolutionSchema>;

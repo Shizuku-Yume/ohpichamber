@@ -14,6 +14,7 @@ const PREFIX = '/api/agent/v1';
 const HostScopeSchema = z.strictObject({
   workspaceId: C.EntityIdSchema, projectId: C.EntityIdSchema, agentDirectoryId: C.EntityIdSchema,
   cwd: z.string().refine(isAbsolute), agentDirectory: z.string().refine(isAbsolute),
+  rootSessionId: C.EntityIdSchema.optional(), displayPath: C.DisplayPathSchema.optional(), env: z.record(z.string(), z.string()).optional(),
 });
 const NativeServiceCapabilitiesSchema = C.RuntimeCapabilitiesSchema.extend({
   capabilities: C.RuntimeCapabilitySetSchema.omit({ documentExtraction: true, credentialHandoff: true })
@@ -116,8 +117,12 @@ function credentialProblem(res, error) {
 
 function capturedScope(value, expectedWorkspaceId) {
   if (!value || (expectedWorkspaceId !== undefined && value.workspaceId !== expectedWorkspaceId)) return null;
-  const { workspaceId, projectId, agentDirectoryId, cwd, agentDirectory } = value;
-  const parsed = HostScopeSchema.safeParse({ workspaceId, projectId, agentDirectoryId, cwd, agentDirectory });
+  const { workspaceId, projectId, agentDirectoryId, cwd, agentDirectory, rootSessionId, displayPath, env } = value;
+  const narrowed = { workspaceId, projectId, agentDirectoryId, cwd, agentDirectory };
+  if (rootSessionId !== undefined) narrowed.rootSessionId = rootSessionId;
+  if (displayPath !== undefined) narrowed.displayPath = displayPath;
+  if (env !== undefined) narrowed.env = env;
+  const parsed = HostScopeSchema.safeParse(narrowed);
   return parsed.success ? parsed.data : null;
 }
 
@@ -284,6 +289,24 @@ export function registerCanonicalHostRoutes(app, {
         if (!scope) return problem(res, 403, 'UNAUTHORIZED', 'The selected session is not authorized.');
       }
       if (groups?.extensionId) C.LocalExtensionIdSchema.parse(decodeURIComponent(groups.extensionId));
+      // Reads go straight to the cold projection. Only a mutating session
+      // operation needs a worker, so this is the one place a canonical route
+      // starts one.
+      if (groups?.sessionId && req.method !== 'GET' && !route.shellObservation && scope) {
+        const sessionId = C.EntityIdSchema.parse(decodeURIComponent(groups.sessionId));
+        const bootstrap = { rootSessionId: scope.rootSessionId ?? sessionId, projectId: scope.projectId, workspaceId: scope.workspaceId,
+          cwd: scope.cwd, agentDirectory: scope.agentDirectory, agentDirectoryId: scope.agentDirectoryId,
+          displayPath: scope.displayPath ?? 'workspace' };
+        if (scope.env !== undefined) bootstrap.env = scope.env;
+        const reopened = await service.request(`/internal/sessions/${encodeURIComponent(sessionId)}/reopen`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bootstrap), signal: controller.signal,
+        });
+        if (!reopened.ok) {
+          const parsedError = C.ProblemDetailsSchema.safeParse(await reopened.json());
+          if (!parsedError.success) return problem(res, 503, 'SERVICE_UNAVAILABLE', 'The agent error response is invalid.');
+          return res.status(reopened.status).type('application/problem+json').json(parsedError.data);
+        }
+      }
       const url = new URL(req.originalUrl, 'http://canonical.invalid');
       for (const key of url.searchParams.keys()) {
         if (!(route.query ?? []).includes(key) || url.searchParams.getAll(key).length !== 1)

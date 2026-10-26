@@ -216,7 +216,7 @@ describe('approval policy database schema versioning and migrations', () => {
     }
   });
 
-  it('old-version fixture with legacy policies migrates once and preserves existing data', () => {
+  it('old-version fixture drops legacy exact-input session allowances and preserves other policies', () => {
     const root = makeRoot();
     const filePath = path.join(root, 'host-approval-policies.sqlite');
 
@@ -228,19 +228,19 @@ describe('approval policy database schema versioning and migrations', () => {
         scope TEXT NOT NULL, decision TEXT NOT NULL, tool_name TEXT NOT NULL, pattern TEXT NOT NULL,
         UNIQUE(scope, session_id, workspace_id, project_id, tool_name, pattern)
       );
-      INSERT INTO approval_policies VALUES ('pol-1', 1, 'sess-1', 'root-1', 'proj-1', 'ws-1', 'session', 'allow', 'bash', 'npm test');
+      INSERT INTO approval_policies VALUES ('pol-1', 1, 'sess-1', 'root-1', 'proj-1', 'ws-1', 'session', 'allow', 'bash', '{"command":"npm test"}');
+      INSERT INTO approval_policies VALUES ('pol-3', 3, 'sess-1', 'root-1', 'proj-1', 'ws-1', 'session', 'allow', 'bash', '*');
+      INSERT INTO approval_policies VALUES ('pol-2', 2, NULL, NULL, 'proj-1', 'ws-1', 'workspace', 'deny', 'bash', 'rm -rf');
       PRAGMA user_version = 0;
     `);
     seed.close();
 
     const store = openApprovalPolicyStore({ dataDir: root });
     try {
-      // Data in pre-existing table was preserved
+      // The exact-input and interim wildcard session allowances are both retired.
       const listed = store.list({ sessionId: 'sess-1', projectId: 'proj-1', workspaceId: 'ws-1' });
-      expect(listed.length).toBe(1);
-      expect(listed[0].policyId).toBe('pol-1');
-      expect(listed[0].decision).toBe('allow');
-      expect(listed[0].target.toolName).toBe('bash');
+      expect(listed).toHaveLength(1);
+      expect(listed[0]).toMatchObject({ policyId: 'pol-2', decision: 'deny', target: { toolName: 'bash', pattern: 'rm -rf' } });
 
       // Version bumped to current
       const db = new DatabaseSync(filePath);

@@ -16,10 +16,10 @@
 
 ## Done when
 
-- [ ] One renderer path remains; the fork's parallel marked/dompurify renderer is removed rather than kept as a fallback.
-- [ ] HTML is sanitized and no raw provider HTML reaches the DOM.
-- [ ] Incremental/streaming rendering keeps the existing append-only performance behavior.
-- [ ] CodeMirror and syntax highlighting behavior matches upstream, including large files.
+- [x] One renderer path remains; the fork's parallel marked/dompurify renderer is removed rather than kept as a fallback.
+- [x] HTML is sanitized and no raw provider HTML reaches the DOM.
+- [x] Incremental/streaming rendering keeps the existing append-only performance behavior.
+- [x] CodeMirror and syntax highlighting behavior matches upstream, including large files.
 
 ## Progress
 
@@ -123,3 +123,31 @@ Removed because only the deleted marked/DOMPurify/morphdom renderer used them (g
 **Built web:** `bun run build` exit 0; `packages/web` served the built `dist` on `6303` with a fresh data dir. Built page renders the same sample (code/table/math/mermaid, `__ohpi_pwned` null), Changes renders `diffs-container` with 6 lines, and worker assets return 200. Screenshot `real-path/built-diff.png`. Warm reload of the built page: no console errors.
 
 **Diff-worker verdict.** With the integration tip's `DiffWorkerProvider`, both dev and the built bundle logged `WorkerPoolManager: worker initialization timed out after 10000ms` twice at startup while warming the pool on idle (matching the task-10 probe's dev cold-start finding, and it also reproduces in the built bundle). Upstream's refreshed provider changes that init path — `mainThreadMaxCharacters`, the `@pierre/highlights` engine via `DIFFS_HIGHLIGHTER` (`lib/shiki/diffsHighlighter.ts`), and warming `highlightsEngine` — so it was adopted (task 24 owns the file; recorded here as the required cutover). After adoption, warm dev and the rebuilt web show **zero** worker errors and the diff renders through the pool. The remaining console item is the known `GET /api/source-control/binding` 422 on a data directory that is not a Git repository (task-10 follow-up; out of scope). A button-in-button React hydration warning appears once when the Add-project dialog opens (pre-existing UI markup, not renderer-related) and fresh-data-dir 404s for workspace resolve/icon discovery were observed; neither is a diff-worker or Markdown error.
+
+## Dispositions (12.tsv, 63 paths)
+
+- **51 `clean_live` / `new_adoptable` paths**: taken whole from `0056bf6a9` — chat `AutoReviewStrip`, `ChatErrorBoundary`, `ErrorResponseDetails`, `LongErrorText`, `MarkdownRenderer`, `MessageList.navigation.test`; the CodeMirror additions (`caretBlink`, `codeHighlight`, `codeHighlight.test`, `importLinks`, `importLinks.test`, `indentGuides`, `indentGuides.test`, `jsonSyntaxLint`, `jsonSyntaxLint.test`, `stickyScope`, `stickyScope.test` plus the refreshed folding/document-symbols/editing-aids/flexoki/git-gutter/vim files); the diff additions (`diffFind`, `findWord`, `selectedDiffLines` and tests, refreshed `pullRequestDiff`); the message additions (`assistantError`, `attachmentPreview`, `autoReadClaims`, `latestReply`, `sessionMentionChip`, refreshed `contextParts.test`, `inlineMessageLinks`, `queuedMessagePreview`); and the Shiki additions (`appThemeRegistry`, `diffsHighlighter`, `pierreDiffTint`, `zedThemeFromAppTheme` and tests). Exceptions recorded below.
+- **`lib/messages/assistantError.{ts,test.ts}`, `latestReply.{ts,test.ts}`**: not adopted and deleted — they decode OpenCode `message.error` / `finish` / `time.completed`, which canonical messages do not carry; the fork shows turn errors through its session notices and derives the latest reply from turn records. No shim was left.
+- **`MarkdownRendererImpl.tsx` / `.test.ts` / `.performance.test.tsx`**: upstream file adopted whole, then adapted to canonical data (`Part` from `@openchamber/agent-contract`, `partId`, `content`-equality settlement, `sessionId` threaded from the message), VS Code branches removed, `repositoryLinks`/`remarkRepositoryReferences` deferred to task 07 (the provider catalog they need is not adopted), OpenCode-shaped test mocks and the repository-reference test block removed, and the code-plugin tests reduced to the two real line budgets.
+- **`contextParts.ts`**: three-way merge resolved toward canonical prompt text: the fork's local composer → canonical prompt formatting is kept; provider naming is the fork's two-provider (`GitHub pull request` / `GitLab merge request`, plain `pull request` when absent) instead of the upstream provider-registry lookup (task 06/07); the upstream diff-origin field is omitted until task 07's review origin lands; legacy `linear-issue` payloads are read as `tracker-item` with provider `linear`.
+- **`messageMarkdown.ts`**: kept the fork's canonical version; upstream's metadata-context rendering does not apply because canonical transcript parts carry only content.
+- **`messageText.ts` / `.test.ts`**: canonical content-based flattening kept and upstream's `assistantTextSegments` added; the upstream shell-action branch is OpenCode-shaped and omitted.
+- **`ChatContainer.tsx`, `ChatMessage.tsx`, `MessageList.tsx`**: kept the fork's canonical-data versions; upstream's restructure consumes the OpenCode message/Part shape and turn-expansion state owned by task 13. Rendering-relevant cutovers applied: ChatMessage copy renders through `renderMarkdownForExport`; `MessageBody`/`AssistantTextPart` pass `sessionId` to the renderer; the fork-only `MarkdownImageGallery` is removed (upstream deleted it; media renders inside Streamdown).
+- **`DiffPreview.tsx`**: fork body kept; upstream's RTL logical classes applied to the line-number gutter.
+- **`lib/codemirror/shikiHighlight.ts`**: deleted (upstream deletion); `FilesView`, `PlanView` and `SkillsPage` switched to `codeHighlightExtension`/`getCodeTokenTheme`.
+- **`MessageList.navigation.test.tsx`**: adopted and adapted to the fork's one-argument timeline-list registration; the second test (named-list anchor-hold ownership) was removed because it asserts the `useChatTimelineScroll` API that lands with task 24 (whose own test covers it).
+- **Upstream markdown stack beyond the 12 list**: the whole `components/chat/markdown/` directory was adopted because the renderer imports it; the fork's deleted `markdownCore`/`decorate`/`detachedMarkdownDomCache`/`openFenceIncremental`/`markdownSecurity`/`markdownTheme`/worker-protocol/text-position/table-width modules and their tests were removed. `remarkRepositoryReferences.ts` was adopted then deleted with the deferred repository-link feature.
+- **Supporting modules adopted from other path lists because this renderer needs them**: `lib/invisibleText`, `lib/textSelection`, `lib/router/appOrigins`, `lib/emoji/shortcodes`, the `markdown-github.i18n` fragment and English renderer keys, `composer/attachments/filePaths.normalizeDroppedPath`, `message/selectionMarkdown.{ts,test}`, `message/imageExport.{ts,test}`, `message/parts/ToolPartDiffPreview`, `views/files/previews/useMarkdownLocalAssets.{ts,test}`, and `contexts/DiffWorkerProvider`. The diff provider cutover is required by the observed worker-init timeout; the others are the delegate targets of the refreshed renderer and editor. Task 13/07/24 own their later integration.
+- **Not carried over**: repository-reference linking, diff-origin labels, file-reference chips that depend on the source-control provider registry, and the VS Code branches. Each names its owning task above; none is replaced by an adapter or a fallback engine.
+
+## Final checks (post-rebase, commit fc56a69956)
+
+- `bun install --frozen-lockfile`: 0 (`frozen-install.log`).
+- `bun run type-check`: 0 (`root-type-check.log`, re-run after the diff-provider adoption: 0).
+- `bun run lint`: 0; one pre-existing unused-disable warning in `tooltip.tsx` (`lint-final.log`).
+- `VITEST_MAX_WORKERS=2 bun run test`: 0 — 7/7 workspace suites, 6086 tests passed / 128 skipped (`test-root-final.log`). The known web `network-defaults.test.js` passes with the host config and with `HOME`/`XDG_CONFIG_HOME` at a fresh temp dir (5/5 each, `nd-host.log`, `nd-temp.log`); the earlier `sonner.test.tsx` failure was a parallel-load flake and does not reproduce.
+- `bun run dead-code`: inspected (`dead-code2.log`); remaining findings are cross-task or knip's dynamic-import blind spot, enumerated in the round-2 section.
+- `bunx oxlint` on the authored paths: 0 (`oxlint-authored.log`).
+- `bun run build`: see `build-final.log`; the web bundle was rebuilt again after the diff-provider adoption (`build-web2.log`).
+
+**Check after:** `fc56a69956` on integration `4634e8bcf1` — `bun install --frozen-lockfile` 0, `bun run type-check` 0, `bun run lint` 0, `VITEST_MAX_WORKERS=2 bun run test` 0 (7/7 suites; 6086 passed, 128 skipped), `bun run build` 0, `GET /api/agent/v1/ready` 200; warm dev and built-web diff worker loads with no console errors and the markdown/diff real path is recorded above.

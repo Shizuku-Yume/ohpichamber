@@ -49,6 +49,55 @@ describe('canonical session route contracts', () => {
   it('rejects metadata and archive operations for an unauthorized Host session', async () => { const { app } = createApp({ routes }); await request(app).get('/api/openchamber/sessions/ses_foreign/metadata').expect(404); await request(app).post('/api/openchamber/sessions/archive').send({ ids: ['ses_foreign'] }).expect(404); });
   it('keeps admitted Host metadata and archive operations available when native service is unavailable', async () => { const archiveStore = createMemoryArchiveStore(); const sessionMetadataStore = createMemorySessionMetadataStore(); const { app } = createApp({ routes, archiveStore, sessionMetadataStore }); await request(app).patch('/api/openchamber/sessions/ses_admitted/metadata').send({ changes: { notes: 'host-owned' } }).expect(200); await request(app).get('/api/openchamber/sessions/ses_admitted/metadata').expect(200); await request(app).post('/api/openchamber/sessions/archive').send({ ids: ['ses_admitted'], archivedAt: 1700 }).expect(200); await request(app).post('/api/openchamber/sessions/unarchive').send({ ids: ['ses_admitted'] }).expect(200); });
   it('rejects malformed archive batches', async () => { const { app } = createApp({ routes }); await request(app).post('/api/openchamber/sessions/archive').send({ ids: [] }).expect(400); await request(app).post('/api/openchamber/sessions/archive').send({ ids: ['ses_admitted'], archivedAt: -1 }).expect(400); });
+  it('reopens a cold session before a run, starts one worker, and keeps the second send live', async () => {
+    const live = new Set(); const calls = []; let workerStarts = 0;
+    const runtime = id => ({ sessionId: id, rootSessionId: id, projectId: 'proj_1', workspaceId: 'ws_1', displayPath: 'app',
+      createdAt: 1, updatedAt: 2, epoch: `epoch-${id}`, headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' } });
+    const service = { request: async (pathname, init = {}) => {
+      calls.push(pathname);
+      const id = decodeURIComponent(pathname.split('/').at(-2));
+      if (pathname.endsWith('/reopen')) {
+        if (!live.has(id)) { live.add(id); workerStarts += 1; }
+        return Response.json(runtime(id));
+      }
+      if (pathname.endsWith('/runs')) {
+        if (!live.has(id)) return Response.json({ type: 'urn:ohpichamber:problem:SERVICE_UNAVAILABLE', title: 'Unavailable', status: 503, code: 'SERVICE_UNAVAILABLE', detail: 'Cold session has no worker', retryable: true }, { status: 503 });
+        const body = JSON.parse(init.body);
+        return Response.json({ run: { runId: body.runId, sessionId: id, status: 'running', origin: 'host', createdAt: 1 } });
+      }
+      throw new Error(`Unexpected service request ${pathname}`);
+    } };
+    const { createOpenChamberSessionService, registerCanonicalSessionRoutes } = routes;
+    const sessionService = createOpenChamberSessionService({
+      service,
+      resolveWorkspaceScope: async () => validScope('workspace'),
+      resolveSessionScope: async id => validScope(id),
+      resolveHostSessionScope: async id => id === 'ses_admitted' ? validScope(id) : null,
+      registerSessionScope: async () => true,
+      resolveAttachments: async () => [],
+      capturePrompt: async (_scope, body) => body,
+      beforeDispatch: async () => {},
+      onPromptAccepted: async () => {},
+      directCommandAdmissionStore: routeFixture.directCommandAdmissionStore,
+      archiveStore: createMemoryArchiveStore(),
+      sessionMetadataStore: createMemorySessionMetadataStore(),
+    });
+    const app = express();
+    const router = express.Router();
+    registerCanonicalSessionRoutes(router, sessionService);
+    app.use('/api/agent/v1/sessions', router);
+    const prompt = { input: { text: 'Cold prompt', attachments: [], context: [] },
+      options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null } };
+    const first = await request(app).post('/api/agent/v1/sessions/ses_admitted/runs').send(prompt).expect(200);
+    expect(first.body.run).toMatchObject({ sessionId: 'ses_admitted', status: 'running' });
+    const second = await request(app).post('/api/agent/v1/sessions/ses_admitted/runs').send(prompt).expect(200);
+    expect(second.body.run).toMatchObject({ sessionId: 'ses_admitted', status: 'running' });
+    expect(workerStarts).toBe(1);
+    expect(calls.filter(path => path.endsWith('/reopen'))).toHaveLength(2);
+    const afterValid = calls.length;
+    await request(app).post('/api/agent/v1/sessions/ses_admitted/runs').send({}).expect(400);
+    expect(calls).toHaveLength(afterValid);
+  });
 });
 
 describe('canonical session list persistence', () => {

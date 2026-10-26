@@ -365,3 +365,12 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Effort:** omp-native-parity
 - **Mine:** yes
 - **Revisit when:** a maintainer reports a manual title that must survive the cutover; then add an explicit versioned migration rather than a fallback.
+
+## 2026-10-27 - Worker titles use OMP's generator on the selected provider
+
+- **Decided:** The worker leaves OMP `autoTitle` off and, after an idle turn on an untitled session, calls OMP `AgentSession.generateTitle` with the `tiny`, `commit` and `smol` roles pinned to the selected session model and model fallback disabled. The worker authorizes `provider.use` through the Host before that call; a refused or unavailable provider leaves the session untitled without failing the user run.
+- **Instead of:** Enabling OMP `autoTitle`, which can run a fork turn or fall back to a role model on another connected provider, resolving credentials directly from the model registry without the Host `provider.use` gate.
+- **Because:** the title request carries the operator's first substantive message and must release credentials only for a Host-authorized provider. Pinning one candidate keeps title work on the selected provider, as the migration architecture requires, and limiting the override to the idle title window leaves user-run fallback behavior untouched.
+- **Effort:** omp-native-parity
+- **Mine:** yes
+- **Revisit when:** OMP exposes a title hook that accepts a Host-authorized model and fallback policy directly, or titles must use a configured small model on a different provider.

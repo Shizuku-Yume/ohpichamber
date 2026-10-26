@@ -25,8 +25,19 @@ import { WorkerModeController } from './mode.ts';
 import { openNativeRuntime, type NativeWorkerRuntime } from './native-runtime.ts';
 import { HOST_TOOL_DESCRIPTIONS } from './host-tool.ts';
 
-beforeEach(resetSettingsForTest);
-afterEach(resetSettingsForTest);
+const previousNoTitle = process.env.PI_NO_TITLE;
+beforeEach(() => {
+  resetSettingsForTest();
+  // Worker sessions opt into OMP auto titles in production. This suite's
+  // provider fixture asserts foreground request counts, so suppress the
+  // background title turn; the real title path is covered by the Web UI smoke.
+  process.env.PI_NO_TITLE = '1';
+});
+afterEach(() => {
+  resetSettingsForTest();
+  if (previousNoTitle === undefined) delete process.env.PI_NO_TITLE;
+  else process.env.PI_NO_TITLE = previousNoTitle;
+});
 const rootSessionId = 'native-root';
 const generation = 'native-generation';
 const options = { providerId: 'native-fixture', modelId: 'native-model', agentId: null, variant: null, reasoningEffort: null };

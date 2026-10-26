@@ -260,6 +260,7 @@ const isSameSessionForRow = (prev: SessionNode, next: SessionNode): boolean => (
   && prev.session.createdAt === next.session.createdAt
   && prev.session.updatedAt === next.session.updatedAt
   && prev.session.archivedAt === next.session.archivedAt
+  && prev.session.title === next.session.title
   && prev.session.runtimeStatus === next.session.runtimeStatus
   && sameMultiRunIdentity(prev.session, next.session)
   && normalizePath(prev.worktree?.path ?? null) === normalizePath(next.worktree?.path ?? null)

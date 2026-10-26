@@ -18,7 +18,7 @@ import { setSyncRefs } from './sync-refs';
 import { setActionRefs } from './session-actions';
 import { useSessionWorktreeStore } from './session-worktree-store';
 import { routeMessage, useSessionUIStore } from './session-ui-store';
-import { useSelectionStore } from './selection-store';
+import { ROOT_SELECTION_AGENT, useSelectionStore } from './selection-store';
 import { deferred, nativeSnapshot } from './session-message-loader-test-fixtures';
 
 const originalRuntime = getRuntimeKey();
@@ -1220,6 +1220,16 @@ describe('native UI submit lifecycle', () => {
     expect(runCalls[0].sessionId).toBe('materialized-alpha');
     expect(runCalls[0].request.options).toEqual(captured.options);
     expect(useSessionUIStore.getState().currentSessionId).toBe('existing-beta');
+  });
+  test('records a root chat effort under the root key and keeps explicit off', async () => {
+    await send('root effort', { reasoningEffort: 'high' }, undefined, null);
+    expect(useSelectionStore.getState().getAgentModelReasoningEffortForSession(
+      'session-a', ROOT_SELECTION_AGENT, 'provider-a', 'model-a',
+    )).toBe('high');
+    await send('root off', { reasoningEffort: 'off' }, undefined, null);
+    expect(useSelectionStore.getState().getAgentModelReasoningEffortForSession(
+      'session-a', ROOT_SELECTION_AGENT, 'provider-a', 'model-a',
+    )).toBe('off');
   });
   test('a failed draft admission preserves the draft and never dispatches a prompt', async () => {
     const draft = { draftId: 42, open: true, target: 'project', directoryOverride: '/alpha', preserveDirectoryOverride: true };

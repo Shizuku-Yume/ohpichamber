@@ -77,13 +77,23 @@ describe("native canonical event reducer", () => {
     expect(result.state).toBe(base)
   })
 
+  test("projects live selection updates into the snapshot", () => {
+    const base = state({ snapshot: { "session-1": snapshot() }, sessionCursor: { "session-1": "epoch-1:0" } })
+    const changed = applyDirectoryEvent(base, event("1", "session.updated", { selection: { model: { providerId: "provider-1", modelId: "model-1" }, thinkingLevel: "off" } }))
+    expect(changed.kind).toBe("applied")
+    expect(changed.state.snapshot["session-1"]?.selection).toEqual({ model: { providerId: "provider-1", modelId: "model-1" }, thinkingLevel: "off" })
+    expect(changed.state.session[0]).toBe(base.session[0])
+    const cleared = applyDirectoryEvent(changed.state, event("2", "session.updated", { selection: { model: null, thinkingLevel: null } }))
+    expect(cleared.state.snapshot["session-1"]?.selection).toEqual({ model: null, thinkingLevel: null })
+  })
+
   test("preserves newer host metadata when an older update arrives", () => {
-    const current = session({ title: "New", metadata: {}, metadataRevision: "8" })
+    const current = session({ metadata: { notes: "New" }, metadataRevision: "8" })
     const prior = snapshot({ session: runtime({ headSequence: "0" }) })
     const base = state({ session: [current], snapshot: { "session-1": prior }, sessionCursor: { "session-1": "epoch-1:0" } })
-    const result = applyDirectoryEvent(base, event("1", "session.updated", { session: runtime({ headSequence: "1" }), title: "Old", metadata: {}, metadataRevision: "7" }))
+    const result = applyDirectoryEvent(base, event("1", "session.updated", { session: runtime({ headSequence: "1" }), metadata: { notes: "Old" }, metadataRevision: "7" }))
     expect(result.kind).toBe("applied")
-    expect(result.state.session[0]?.metadata).toEqual({ title: "New" })
+    expect(result.state.session[0]?.metadata).toEqual({ notes: "New" })
     expect(result.state.session[0]?.metadataRevision).toBe("8")
   })
 

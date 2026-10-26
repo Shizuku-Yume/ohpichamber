@@ -95,6 +95,14 @@ export const ProviderSchema = z.strictObject({
 );
 export type Provider = z.infer<typeof ProviderSchema>;
 
+export const ModelCatalogDefaultsSchema = z.strictObject({
+  /** The model OMP resolves for a new session with no explicit selection. */
+  model: ModelSelectionSchema.nullable(),
+  /** OMP's configured thinking level for that model, including `auto`. */
+  thinkingLevel: z.string().min(1).nullable(),
+});
+export type ModelCatalogDefaults = z.infer<typeof ModelCatalogDefaultsSchema>;
+
 export const ModelCatalogSchema = z.strictObject({
   workspaceId: EntityIdSchema,
   revision: CounterSchema,
@@ -102,6 +110,7 @@ export const ModelCatalogSchema = z.strictObject({
     (models) => new Set(models.map((model) => JSON.stringify([model.provider, model.modelId]))).size === models.length,
     'Model identities are unique within a provider',
   ),
+  defaults: ModelCatalogDefaultsSchema,
   // Resolved by OMP from `modelRoles.plan` against the executable models, so
   // the UI can disable Plan before a session exists.
   planRoleAvailable: z.boolean(),

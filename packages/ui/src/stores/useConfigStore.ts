@@ -3,7 +3,7 @@ import { AUTO_MODEL_ID, AUTO_PROVIDER_ID, isAutoModel } from '@/lib/routing/auto
 import { selectAutoReady, useRoutingStore } from '@/stores/useRoutingStore';
 import type { StoreApi, UseBoundStore } from "zustand";
 import { devtools, persist } from "zustand/middleware";
-import type { Agent, Model, ModelCatalog, Provider, ProviderAuthState, ProviderCatalog } from '@openchamber/agent-contract';
+import type { Model, ModelCatalog, Provider, ProviderAuthState, ProviderCatalog } from '@openchamber/agent-contract';
 import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
 import { notifyAgentReadiness, registerAgentSelectionReader } from '@/stores/agentConfigBridge';
 import { canonicalClient } from '@/api/canonicalClient';
@@ -47,8 +47,6 @@ const PROVIDERS_RETRY_SOURCE = "loadProviders:retryAfterFailure";
 const PROVIDERS_RETRY_DELAY_MS = 3000;
 
 interface OpenChamberDefaults {
-    defaultModel?: string;
-    defaultVariant?: string;
     defaultAgent?: string;
     autoCreateWorktree?: boolean;
     gitmojiEnabled?: boolean;
@@ -125,14 +123,10 @@ const fetchOpenChamberDefaults = (context: ConfigRuntimeContext): Promise<OpenCh
 };
 
 const toOpenChamberDefaults = (data: DesktopSettings): OpenChamberDefaults => {
-    const defaultModel = data.defaultModel?.trim() ?? '';
-    const defaultVariant = data.defaultVariant?.trim() ?? '';
     const defaultAgent = data.defaultAgent?.trim() ?? '';
     const zenModel = data.zenModel ?? '';
 
     return {
-        defaultModel: defaultModel.length > 0 ? defaultModel : undefined,
-        defaultVariant: defaultVariant.length > 0 ? defaultVariant : undefined,
         defaultAgent: defaultAgent.length > 0 ? defaultAgent : undefined,
         autoCreateWorktree: data.autoCreateWorktree,
         gitmojiEnabled: data.gitmojiEnabled,
@@ -156,7 +150,6 @@ const requestOpenChamberDefaults = async (context: ConfigRuntimeContext): Promis
         markStartupTrace('config.defaults:end', {
             source,
             durationMs: Math.round(ended - started),
-            hasDefaultModel: Boolean(result?.defaultModel),
             hasDefaultAgent: Boolean(result?.defaultAgent),
         });
         return result;
@@ -264,7 +257,7 @@ const resolveProviderModelSelection = ({
     currentVariant,
     preserveCurrent = false,
     settingsDefaultModel,
-    settingsDefaultVariant,
+    defaultVariant,
     allowFallback,
     fallbackPrefs,
 }: {
@@ -274,7 +267,7 @@ const resolveProviderModelSelection = ({
     currentVariant?: string;
     preserveCurrent?: boolean;
     settingsDefaultModel?: string;
-    settingsDefaultVariant?: string;
+    defaultVariant?: string;
     allowFallback: boolean;
     fallbackPrefs: FallbackModelPrefs;
 }): ProviderModelSelection => {
@@ -298,12 +291,14 @@ const resolveProviderModelSelection = ({
     if (settingsDefaultModel) {
         const parsed = parseModelString(settingsDefaultModel);
         if (parsed) {
+            // OMP's default role selects a model and a thinking level; a route
+            // is a separate per-session choice, so only a project default carries one.
             return {
                 providerId: parsed.providerId,
                 modelId: parsed.modelId,
                 variant: hasProviderModel(providers, parsed.providerId, parsed.modelId)
-                    ? resolveVariant(parsed.providerId, parsed.modelId, settingsDefaultVariant)
-                    : settingsDefaultVariant,
+                    ? resolveVariant(parsed.providerId, parsed.modelId, defaultVariant)
+                    : defaultVariant,
             };
         }
     }
@@ -387,7 +382,6 @@ const resolveDefaultAgentModelSelection = ({
     projectDefaultModel,
     projectDefaultVariant,
     settingsDefaultModel,
-    settingsDefaultVariant,
     allowFallback = true,
     fallbackPrefs,
 }: {
@@ -395,7 +389,6 @@ const resolveDefaultAgentModelSelection = ({
     projectDefaultModel?: string;
     projectDefaultVariant?: string;
     settingsDefaultModel?: string;
-    settingsDefaultVariant?: string;
     allowFallback?: boolean;
     fallbackPrefs: FallbackModelPrefs;
 }): DefaultAgentModelSelection => {
@@ -418,9 +411,8 @@ const resolveDefaultAgentModelSelection = ({
         if (parsed) {
             providerId = parsed.providerId;
             modelId = parsed.modelId;
-            // A project default carries its own variant; the settings variant
-            // belongs to the settings model and must not leak onto it.
-            const configuredVariant = projectDefaultModel ? projectDefaultVariant : settingsDefaultVariant;
+            // A project default carries its own route; OMP's default model has none.
+            const configuredVariant = projectDefaultModel ? projectDefaultVariant : undefined;
             variant = hasProviderModel(providers, providerId, modelId)
                 ? resolveVariant(providerId, modelId, configuredVariant)
                 : configuredVariant;
@@ -981,7 +973,7 @@ subscribeRuntimeEndpointChanged((detail) => {
         agentModelSelections: {},
         defaultProviders: {},
         settingsDefaultModel: undefined,
-        settingsDefaultVariant: undefined,
+        settingsDefaultReasoningEffort: undefined,
         settingsDefaultAgent: undefined,
         settingsDefaultsLoaded: false,
         settingsZenModel: undefined,
@@ -1166,10 +1158,11 @@ interface ConfigStore {
     lastInitFailure: InitFailure | null;
     isInitialized: boolean;
     modelsMetadata: Map<string, ModelMetadata>;
-    // OpenChamber settings-based defaults (take precedence over agent preferences)
-    settingsDefaultModel: string | undefined; // format: "provider/model"
+    // OMP's resolved default model role, plus the app's own default agent.
+    settingsDefaultModel: string | undefined; // format: "provider/model", from the model catalog
     settingsDefaultsLoaded: boolean;
-    settingsDefaultVariant: string | undefined;
+    /** OMP's configured thinking level for a new session; `auto` stays unset on the wire. */
+    settingsDefaultReasoningEffort: string | undefined;
     settingsDefaultAgent: string | undefined;
     // OpenCode server's own global `model` config field ("provider/model"), used as a fallback
     // when neither our settingsDefaultModel nor the resolved agent pins a model.
@@ -1271,8 +1264,6 @@ interface ConfigStore {
     /** Replaces an `openchamber/auto` selection this server cannot honour with the default model. */
     dropStaleAutoSelection: () => void;
     setSelectedProvider: (providerId: string) => void;
-    setSettingsDefaultModel: (model: string | undefined) => void;
-    setSettingsDefaultVariant: (variant: string | undefined) => void;
     setSettingsDefaultAgent: (agent: string | undefined) => void;
     setSettingsAutoCreateWorktree: (enabled: boolean) => void;
     setSettingsGitmojiEnabled: (enabled: boolean) => void;
@@ -1423,7 +1414,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                 modelsMetadata: new Map<string, ModelMetadata>(),
                 settingsDefaultModel: undefined,
                 settingsDefaultsLoaded: false,
-                settingsDefaultVariant: undefined,
+                settingsDefaultReasoningEffort: undefined,
                 settingsDefaultAgent: undefined,
                 settingsAutoCreateWorktree: false,
                 settingsGitmojiEnabled: false,
@@ -1897,9 +1888,17 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                             ]);
                             if (!isConfigRuntimeContextCurrent(runtimeContext)) return;
                             const processedProviders = combineCanonicalCatalog(providerCatalog, modelCatalog);
-                            // Canonical catalogs intentionally do not publish a resolved default.
-                            // Keep the prior map for cache/selection compatibility; model selection
-                            // still resolves from explicit settings, the current pick, or fallback.
+                            // OMP resolves new-session defaults from modelRoles.default and
+                            // defaultThinkingLevel; the app shows these instead of keeping
+                            // its own default model or effort.
+                            // An empty catalog is a directory still starting, not
+                            // evidence that OMP lost its default; keep the last
+                            // resolved default until a real catalog replaces it.
+                            const keepPreviousDefaults = modelCatalog.models.length === 0 && modelCatalog.defaults.model === null;
+                            const ompDefaultModel = modelCatalog.defaults.model
+                                ? `${modelCatalog.defaults.model.providerId}/${modelCatalog.defaults.model.modelId}`
+                                : undefined;
+                            const ompDefaultReasoningEffort = modelCatalog.defaults.thinkingLevel ?? undefined;
                             const defaults = previousDefaults;
 
                             if (!isConfigRuntimeContextCurrent(runtimeContext)) return;
@@ -1937,8 +1936,8 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                                     currentModelId,
                                     currentVariant,
                                     preserveCurrent: (state.activeDirectoryKey === directoryKey ? state.selectionSource : baseSnapshot.selectionSource) === 'manual',
-                                    settingsDefaultModel: projectDefaults.projectDefaultModel || state.settingsDefaultModel,
-                                    settingsDefaultVariant: projectDefaults.projectDefaultModel ? projectDefaults.projectDefaultVariant : state.settingsDefaultVariant,
+                                    settingsDefaultModel: projectDefaults.projectDefaultModel || ompDefaultModel,
+                                    defaultVariant: projectDefaults.projectDefaultModel ? projectDefaults.projectDefaultVariant : undefined,
                                     allowFallback: state.settingsDefaultsLoaded,
                                     fallbackPrefs: readFallbackModelPrefs(),
                                 });
@@ -1991,6 +1990,8 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                                         && state.currentVariant === nextSnapshot.currentVariant
                                         && state.selectedProviderId === nextSnapshot.selectedProviderId
                                         && state.workspaceId === workspace.workspaceId
+                                        && state.settingsDefaultModel === ompDefaultModel
+                                        && state.settingsDefaultReasoningEffort === ompDefaultReasoningEffort
                                     ))
                                 ) {
                                     return state;
@@ -2013,6 +2014,8 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                                     nextState.currentVariant = nextSnapshot.currentVariant;
                                     nextState.currentVariantSelection = nextSnapshot.currentVariantSelection ?? { override: undefined, inherited: nextSnapshot.currentVariant };
                                     nextState.selectedProviderId = selectedProviderId;
+                                    nextState.settingsDefaultModel = keepPreviousDefaults ? state.settingsDefaultModel : ompDefaultModel;
+                                    nextState.settingsDefaultReasoningEffort = keepPreviousDefaults ? state.settingsDefaultReasoningEffort : ompDefaultReasoningEffort;
                                 }
 
                                 return nextState;
@@ -2094,17 +2097,13 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                                     const settingsProvider = previousProviders.find((p) => p.providerId === parsed.providerId);
                                     const model = settingsProvider?.models.find((entry) => entry.modelId === parsed.modelId);
                                     if (model) {
-                                        const currentVariant = modelHasVariant(model, state.settingsDefaultVariant)
-                                            ? state.settingsDefaultVariant
-                                            : undefined;
-
                                         nextState.currentProviderId = parsed.providerId;
                                         nextState.currentModelId = parsed.modelId;
-                                        nextState.currentVariant = currentVariant;
+                                        nextState.currentVariant = undefined;
 
                                         nextSnapshot.currentProviderId = parsed.providerId;
                                         nextSnapshot.currentModelId = parsed.modelId;
-                                        nextSnapshot.currentVariant = currentVariant;
+                                        nextSnapshot.currentVariant = undefined;
 
                                         // Only adopt this as the settings selection when the user has
                                         // none; a failed refresh must not move an existing one.
@@ -2378,8 +2377,6 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                         const next: Partial<ConfigStore> = {
                             configRuntimeKey: runtimeContext.runtimeKey,
                             settingsDefaultsLoaded: true,
-                            settingsDefaultModel: edited ? state.settingsDefaultModel : defaults.defaultModel,
-                            settingsDefaultVariant: edited ? state.settingsDefaultVariant : defaults.defaultVariant,
                             settingsDefaultAgent: edited ? state.settingsDefaultAgent : defaults.defaultAgent,
                             settingsAutoCreateWorktree: defaults.autoCreateWorktree ?? false,
                             settingsGitmojiEnabled: defaults.gitmojiEnabled ?? false,
@@ -2418,7 +2415,6 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                         activeDirectoryKey,
                         providers,
                         settingsDefaultModel,
-                        settingsDefaultVariant,
                         currentProviderId,
                         currentModelId,
                         currentAgentName,
@@ -2552,7 +2548,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                                 && (!model || modelHasVariant(model, candidate))
                             );
 
-                            const inherited = [agentVariant, settingsDefaultVariant].find(isAvailable);
+                            const inherited = [agentVariant].find(isAvailable);
 
                             const savedVariant = currentSessionId
                                 ? useSelectionStore.getState().getAgentModelVariantForSession(
@@ -2676,7 +2672,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                     const resolved = resolveProviderModelSelection({
                         providers: current.providers,
                         settingsDefaultModel: projectDefaults.projectDefaultModel || current.settingsDefaultModel,
-                        settingsDefaultVariant: projectDefaults.projectDefaultModel ? projectDefaults.projectDefaultVariant : current.settingsDefaultVariant,
+                        defaultVariant: projectDefaults.projectDefaultModel ? projectDefaults.projectDefaultVariant : undefined,
                         allowFallback: true,
                         fallbackPrefs: readFallbackModelPrefs(),
                     });
@@ -2723,11 +2719,8 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                 applyDefaultModelAgentSelection: (options) => {
                     const projectDefaults = options ?? getProjectDefaultsForConfigDirectory(fromDirectoryKey(get().activeDirectoryKey));
                     const {
-                        activeDirectoryKey,
                         providers,
                         settingsDefaultModel,
-                        settingsDefaultVariant,
-                        settingsDefaultAgent,
                     } = get();
                     const {
                         agentName: resolvedAgentName,
@@ -2738,7 +2731,6 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                         providers,
                         ...projectDefaults,
                         settingsDefaultModel,
-                        settingsDefaultVariant,
                         allowFallback: get().settingsDefaultsLoaded,
                         fallbackPrefs: readFallbackModelPrefs(),
                     });
@@ -2786,18 +2778,6 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                 },
 
 
-                 setSettingsDefaultModel: (model: string | undefined) => {
-                     recordOpenChamberDefaultsChange();
-                     set({ settingsDefaultModel: model });
-                     if (!useSessionUIStore.getState().currentSessionId) get().applyDefaultModelAgentSelection();
-                 },
-
-                 setSettingsDefaultVariant: (variant: string | undefined) => {
-                     recordOpenChamberDefaultsChange();
-                     set({ settingsDefaultVariant: variant });
-                     if (!useSessionUIStore.getState().currentSessionId) get().applyDefaultModelAgentSelection();
-                 },
- 
                  setSettingsDefaultAgent: (agent: string | undefined) => {
                      recordOpenChamberDefaultsChange();
                      set({ settingsDefaultAgent: agent });
@@ -3361,7 +3341,6 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                     agentModelSelections: state.agentModelSelections,
                     defaultProviders: state.defaultProviders,
                     settingsDefaultModel: state.settingsDefaultModel,
-                    settingsDefaultVariant: state.settingsDefaultVariant,
                     settingsDefaultAgent: state.settingsDefaultAgent,
                     settingsAutoCreateWorktree: state.settingsAutoCreateWorktree,
                     settingsGitmojiEnabled: state.settingsGitmojiEnabled,

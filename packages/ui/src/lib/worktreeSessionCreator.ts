@@ -130,22 +130,6 @@ const applyDefaultAgentAndModelSelection = (sessionId: string, configState = use
 
     useContextStore.getState().saveSessionModelSelection(sessionId, providerId, modelId);
     useContextStore.getState().saveAgentModelForSession(sessionId, agentName, providerId, modelId);
-
-    const settingsDefaultVariant = configState.settingsDefaultVariant;
-    if (!settingsDefaultVariant) {
-      return;
-    }
-
-    const provider = configState.providers.find((entry) => entry.providerId === providerId);
-    const model = provider?.models.find((entry) => entry.modelId === modelId);
-    const variants = model?.variants.map((entry) => entry.variant) ?? [];
-
-    if (variants.includes(settingsDefaultVariant)) {
-      configState.setCurrentVariant(settingsDefaultVariant);
-      useContextStore
-        .getState()
-        .saveAgentModelVariantForSession(sessionId, agentName, providerId, modelId, settingsDefaultVariant);
-    }
   } catch {
     // Ignore errors setting default agent
   }

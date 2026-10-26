@@ -134,6 +134,13 @@ export class WorkerSession {
         this.publishContinuationPending();
         this.emit(this.projection.consume(event));
         if (event.type === 'goal_updated' || event.type === 'agent_end') this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', mode: this.modeController.mode() } }]);
+        if (event.type === 'thinking_level_changed') {
+          const model = session.model;
+          this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', selection: {
+            model: model ? { providerId: model.provider, modelId: model.id } : null,
+            thinkingLevel: event.configured ?? event.thinkingLevel ?? null,
+          } } }]);
+        }
         if (event.type === 'message_end' || event.type === 'turn_end' || event.type === 'agent_end') void this.bind().catch(() => this.fail());
       } catch { this.fail(); }
     });

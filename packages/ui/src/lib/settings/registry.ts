@@ -495,8 +495,8 @@ export const SETTINGS_REGISTRY = {
   }),
 
   // ── Models and agents (profile) ──
-  defaultModel: field({ scope: 'profile', parse: parseNonEmptyString }),
-  defaultVariant: field({ scope: 'profile', parse: parseNonEmptyString }),
+  // New-session model and thinking level belong to OMP (`modelRoles.default`,
+  // `defaultThinkingLevel`); the app no longer keeps a second default.
   defaultAgent: field({ scope: 'profile', parse: parseNonEmptyString }),
   smallModelUseDefault: field({ scope: 'profile', parse: parseBoolean }),
   smallModelOverride: field({ scope: 'profile', parse: parseNonEmptyString }),

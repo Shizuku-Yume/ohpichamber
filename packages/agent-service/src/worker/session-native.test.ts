@@ -107,13 +107,14 @@ function waitForGoal(worker: WorkerSession, predicate: () => boolean): Promise<v
   });
 }
 
-async function fixture({ respond, invoke, machineCommands = [], onSubagent = () => {}, denyWebSearch = false, planModel = false }: {
+async function fixture({ respond, invoke, machineCommands = [], onSubagent = () => {}, denyWebSearch = false, planModel = false, reasoningEfforts }: {
   respond: (payload: ProviderRequest, root: string) => Promise<Response> | Response;
   invoke?: (request: HostActionRequest, signal: AbortSignal, root: string) => Promise<JsonValue>;
   machineCommands?: string[];
   onSubagent?: (payload: SubagentLifecyclePayload) => void;
   denyWebSearch?: boolean;
   planModel?: boolean;
+  reasoningEfforts?: readonly string[];
 }) {
   const root = await mkdtemp(join(tmpdir(), 'native-seams-'));
   const home = process.env.HOME;
@@ -184,7 +185,9 @@ async function fixture({ respond, invoke, machineCommands = [], onSubagent = () 
     } } } });
     await worker.operation({ type: 'catalog', revision: '2', operation: { type: 'catalog.model.configure', request: { expectedRevision: '1', model: {
       modelId: 'native-model', provider: 'native-fixture', name: 'Native model', modalities: ['text'], contextWindow: 65536, maxOutputTokens: 128,
-      reasoningEffortSupported: false, reasoningOptions: [], variants: [], toolsSupported: true, enabled: true, pricing: null,
+      reasoningEffortSupported: (reasoningEfforts?.length ?? 0) > 0,
+      reasoningOptions: (reasoningEfforts ?? []).map(reasoningEffort => ({ reasoningEffort, label: reasoningEffort, budgetTokens: null })),
+      variants: [], toolsSupported: true, enabled: true, pricing: null,
     } } } });
     if (planModel) {
       await worker.operation({ type: 'catalog', revision: '3', operation: { type: 'catalog.model.configure', request: { expectedRevision: '2', model: {
@@ -1146,3 +1149,34 @@ for (const action of ['approve', 'approve-compact', 'feedback', 'reject'] as con
     } finally { releasePlanning.resolve(); unsubscribe(); await harness.close(); }
   }, 30000);
 }
+
+test('a prompt with no explicit effort runs at OMP default thinking level', async () => {
+  const harness = await fixture({ respond: () => completion(), reasoningEfforts: ['low', 'medium', 'high'] });
+  const terminal = Promise.withResolvers<void>();
+  const unsubscribe = harness.worker.session.subscribe(event => {
+    if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve();
+  });
+  try {
+    await harness.worker.operation({ type: 'prompt', runId: 'default-effort-run', request: prompt('Use the default thinking level.') });
+    await terminal.promise;
+    expect(harness.worker.session.configuredThinkingLevel()).toBe('high');
+    expect(harness.requests[0]).toMatchObject({ reasoning_effort: 'high' });
+    expect(harness.fatal()).toBe(false);
+  } finally { unsubscribe(); await harness.close(); }
+}, 30000);
+
+test('an explicit off effort reaches the native agent while an omitted effort keeps the OMP default', async () => {
+  const harness = await fixture({ respond: () => completion(), reasoningEfforts: ['low', 'medium', 'high'] });
+  const terminal = Promise.withResolvers<void>();
+  const unsubscribe = harness.worker.session.subscribe(event => {
+    if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve();
+  });
+  try {
+    await harness.worker.operation({ type: 'prompt', runId: 'off-effort-run', request: {
+      ...prompt('Think as little as possible.'), options: { ...options, reasoningEffort: 'off' },
+    } });
+    await terminal.promise;
+    expect(harness.worker.session.configuredThinkingLevel()).toBe('off');
+    expect(harness.requests[0]?.reasoning_effort).not.toBe('high');
+  } finally { unsubscribe(); await harness.close(); }
+}, 30000);

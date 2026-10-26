@@ -25,6 +25,7 @@ type Probe = {
   repositoryContext: (directory: string) => Promise<SourceControlRepositoryContext>;
   getCurrentGitIdentity: (directory: string) => Promise<{ userName: string | null; userEmail: string | null } | null>;
   hasLocalIdentity: (directory: string) => Promise<boolean>;
+  checkIsGitRepository: (directory: string) => Promise<boolean>;
 };
 
 // The probe renders no DOM nodes. This implements only React root setup.
@@ -54,6 +55,7 @@ const mount = async (overrides: Partial<Probe> = {}) => {
     repositoryContext: async () => context,
     getCurrentGitIdentity: async () => ({ userName: 'Ada', userEmail: 'ada@example.com' }),
     hasLocalIdentity: async () => true,
+    checkIsGitRepository: async () => true,
     ...overrides,
   };
   const Component = () => {
@@ -61,7 +63,7 @@ const mount = async (overrides: Partial<Probe> = {}) => {
       input.directory,
       {
         sourceControl: { repositoryContext: input.repositoryContext },
-        git: { getCurrentGitIdentity: input.getCurrentGitIdentity, hasLocalIdentity: input.hasLocalIdentity },
+        git: { getCurrentGitIdentity: input.getCurrentGitIdentity, hasLocalIdentity: input.hasLocalIdentity, checkIsGitRepository: input.checkIsGitRepository },
       },
       true,
     );
@@ -114,6 +116,16 @@ describe('useExistingRepositorySummary', () => {
   test('reports nothing for a directory that is not a repository', async () => {
     const probe = await mount({ repositoryContext: async () => { throw new Error('Not a repository'); } });
     expect(probe.summary).toBeNull();
+  });
+
+  test('does not request repository context when the directory is not a repository', async () => {
+    let requested = false;
+    const probe = await mount({
+      checkIsGitRepository: async () => false,
+      repositoryContext: async () => { requested = true; throw new Error('Not a repository'); },
+    });
+    expect(probe.summary).toBeNull();
+    expect(requested).toBe(false);
   });
 
   test('reports a repository without remotes, with nothing to anchor a binding to', async () => {

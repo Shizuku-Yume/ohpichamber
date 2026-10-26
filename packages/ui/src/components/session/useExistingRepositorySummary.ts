@@ -29,7 +29,7 @@ export type ExistingRepositorySummary = {
 
 type ExistingRepositoryAPIs = {
   sourceControl: Pick<SourceControlAPI, 'repositoryContext'>;
-  git: Pick<GitAPI, 'getCurrentGitIdentity' | 'hasLocalIdentity'>;
+  git: Pick<GitAPI, 'getCurrentGitIdentity' | 'hasLocalIdentity' | 'checkIsGitRepository'>;
 };
 
 /** `origin` is the conventional anchor; any single remote speaks for itself. */
@@ -67,6 +67,10 @@ export const useExistingRepositorySummary = (
     const timer = setTimeout(() => {
       void (async () => {
         try {
+          if (!await git.checkIsGitRepository(directory)) {
+            if (!cancelled) setSummary(null);
+            return;
+          }
           const context = await sourceControl.repositoryContext(directory);
           const remotes: ExistingRepositoryRemote[] = context.remotes.map((remote) => ({
             ...remote,

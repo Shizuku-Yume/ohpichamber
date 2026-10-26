@@ -1176,10 +1176,10 @@ export function ScheduledTaskEditorDialog(props: {
         <SettingsStackedField label={t('sessions.scheduledTasks.editor.targetSession')} info={t('sessions.scheduledTasks.editor.targetHint')}>
           <Select value={draft.targetSessionId} onValueChange={(targetSessionId) => setDraft((prev) => ({ ...prev, targetSessionId }))}>
             <SelectTrigger size="settings"><SelectValue placeholder={t('sessions.scheduledTasks.editor.targetSession')}>
-              {sessions.find((session) => session.sessionId === draft.targetSessionId)?.metadata?.title || draft.targetSessionId || undefined}
+              {sessions.find((session) => session.sessionId === draft.targetSessionId)?.title || draft.targetSessionId || undefined}
             </SelectValue></SelectTrigger>
             <SelectContent>
-              {sessions.map((session) => <SelectItem key={session.sessionId} value={session.sessionId}>{session.metadata?.title || session.sessionId}</SelectItem>)}
+              {sessions.map((session) => <SelectItem key={session.sessionId} value={session.sessionId}>{session.title || session.sessionId}</SelectItem>)}
             </SelectContent>
           </Select>
         </SettingsStackedField>

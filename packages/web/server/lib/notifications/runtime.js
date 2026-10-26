@@ -9,7 +9,7 @@ const TITLES = {
 
 export const createNotificationTriggerRuntime = (deps) => {
   const {
-    sessionService, resolveSessionScope, readSettingsFromDisk, readSessionMetadata,
+    sessionService, resolveSessionScope, readSettingsFromDisk,
     prepareNotificationLastMessage, buildTemplateVariables, fetchLastAssistantMessageText,
     resolveNotificationTemplate, shouldApplyResolvedTemplateMessage,
     emitDesktopNotification, broadcastUiNotification, sendPushToAllUiSessions, sendApnsToAllUiSessions,

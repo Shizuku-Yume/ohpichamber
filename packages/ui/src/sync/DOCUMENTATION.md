@@ -391,7 +391,7 @@ Live activity across directories is coordinated through specialized helpers:
   - Caches recent non-idle `SessionRuntimeStatus` seeds per runtime key and directory with a 15-second TTL (`LIVE_STATUS_TTL_MS`); idle transitions are ignored and do not seed memory.
 - `session-title-context.ts` and `session-title-generation.ts`:
   - `collectNativeTitleTurns` uses native messages plus authoritative `Turn[]` and selects each completed turn's final assistant response. Attachment-only user prompts remain eligible; title readers supply `getTurns()` rather than infer completion from historical message anomalies.
-  - Title generation validates current `Session.headSequence`, `updatedAt`, `archivedAt`, and `SessionMetadataState.revision` before committing generated titles to Host metadata.
+  - Title generation validates current `Session.headSequence`, `updatedAt`, `archivedAt`, and `Session.title` before committing generated titles; the save goes through the OMP title route and the returned title is published. Automatic titles for new chats are OMP's; the small-model generator is only the manual AI-rename action.
 - `session-error-log.ts`:
   - Retains the last 20 diagnostic error summaries in memory. Native run failures supply error strings; independently supplied structured transport detail is diagnostics-only. Sequence/epoch gating replaces the obsolete legacy wire freshness/router implementation.
 

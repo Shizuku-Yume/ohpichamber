@@ -26,7 +26,7 @@ export function getMultiRunIdentity(session: Session, legacyScope = session.proj
     return { ...identity, key: multiRunGroupKey(membership.group, membership.groupSlug) };
   }
   if (session.parentSessionId || openchamber?.kind === 'review') return null;
-  const title = parseMultiRunSessionTitle(session.metadata?.title ?? '');
+  const title = parseMultiRunSessionTitle(session.title ?? '');
   if (!title || !legacyScope) return null;
   const group: MultiRunMembership['group'] = { kind: 'legacy', scope: legacyScope };
   return {

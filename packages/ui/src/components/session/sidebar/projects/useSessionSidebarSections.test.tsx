@@ -23,7 +23,7 @@ const chatSession = (sessionId: string, title: string): Session => ({
   runtimeStatus: 'idle',
   activeRunId: null,
   mode: { kind: 'main' },
-  metadata: { title },
+  title: title, metadata: {},
   metadataRevision: '0',
   archiveRevision: '0',
 });

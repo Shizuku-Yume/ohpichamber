@@ -24,7 +24,7 @@ const deferred = <T>() => Promise.withResolvers<T>();
 const session = (sessionId: string, workspaceId: string, updatedAt: number): Session => ({
   sessionId, projectId: 'pro_project', workspaceId, displayPath: 'repo', rootSessionId: sessionId,
   createdAt: updatedAt - 1, updatedAt, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
-  metadata: { title: sessionId, openchamber: { assist: { recap: 'Recap', suggestion: 'Continue', forMessageID: 'msg_one', generatedAt: 1 } } },
+  title: sessionId, metadata: {openchamber: { assist: { recap: 'Recap', suggestion: 'Continue', forMessageID: 'msg_one', generatedAt: 1 } }},
   metadataRevision: '1', archiveRevision: '0',
 });
 const worktree = session('ses_worktree', 'wsp_worktree', 30);

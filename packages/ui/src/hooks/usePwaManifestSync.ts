@@ -51,7 +51,7 @@ const buildRecentShortcuts = (
     seen.add(sessionId);
     shortcuts.push({
       sessionId,
-      title: normalizeRecentTitle(session.metadata?.title, `Session ${shortcuts.length + 1}`),
+      title: normalizeRecentTitle(session.title, `Session ${shortcuts.length + 1}`),
     });
 
     if (shortcuts.length >= MAX_RECENT_SHORTCUTS) {

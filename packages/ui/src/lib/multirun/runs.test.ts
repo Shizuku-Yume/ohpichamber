@@ -12,7 +12,7 @@ const session = (id: string, marker: MultiRunMembership | null, extra: Partial<S
   const result: Session = {
     sessionId: id, projectId: 'project', workspaceId: 'workspace', displayPath: '.', rootSessionId: id,
     createdAt: Number(id.replace(/\D/g, '')) || 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' as const },
-    metadata: { title: id }, metadataRevision: '1', archiveRevision: '0',
+    title: id, metadata: {}, metadataRevision: '1', archiveRevision: '0',
     ...extra,
   };
   if (marker) result.metadata = withMultiRunMembership(result, marker);

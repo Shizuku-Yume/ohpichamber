@@ -644,7 +644,9 @@ export class WorkerProjection {
       if (message.modelId !== undefined) message.modelId = this.publicText(message.modelId);
     }
     for (const turn of turns) if (turn.error !== undefined) turn.error = this.publicText(turn.error);
+    const title = this.manager.getSessionName()?.trim();
     return { createdAt, updatedAt: Math.max(createdAt, updatedAt, messages.at(-1)?.createdAt ?? createdAt), mode,
+      ...(title ? { title } : {}),
       branch: { branchId: `branch:${this.sessionId}`, branchVersion: (version + BigInt(virtualTurns.size)).toString(), leafMessageId,
         ...(selection?.revertedMessageId ? { revert: { messageId: selection.revertedMessageId } } : undefined) }, turns, messages,
     };

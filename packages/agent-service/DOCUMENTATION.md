@@ -113,3 +113,9 @@ Each session worker owns an unchanged OMP `RpcGoalController`, enables the sessi
 
 `SessionMode` publishes the objective, native status, optional budget and tokens used. A dropped goal reports Main. Completed goals retain a terminal display record even though OMP exits its active goal mode. Native controls do not write legacy Host supervisor metadata; that supervisor remains for entry points not yet migrated.
 
+
+## Session listing and titles
+
+`GET /api/agent/v1/sessions?workspaceId=...` merges the Host-authorized workspace's persisted references with OMP's own directory listing (`SessionManager.getDefaultSessionDir` plus `listSessionsReadOnly`/`isEmptySession` in `session-listing.ts`). Sessions created outside the app appear by their OMP identity and title; a referenced session keeps the Host's opaque `rootSessionId` and is correlated to OMP storage by its session file. Listing reads JSONL headers only and starts no worker. `RuntimeSession.title` carries OMP's title and timestamps come from OMP's file metadata.
+
+`PATCH /api/agent/v1/sessions/:sessionId/title` accepts `SessionTitleRequest` (`workspaceId`, `title`). A live root applies OMP `SessionManager.setSessionName(title, 'user')` through the worker; a cold referenced or unreferenced session opens OMP's session manager for that JSONL, writes the title, flushes and closes. The live projection also subscribes to OMP's session-name change and publishes `session.updated { title }`, so an auto-generated title reaches open clients without a refetch. Host metadata no longer stores titles.

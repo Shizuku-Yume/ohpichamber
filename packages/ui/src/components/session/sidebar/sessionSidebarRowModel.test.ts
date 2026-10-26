@@ -227,7 +227,7 @@ describe('buildSessionSidebarRowModel', () => {
     const titled = (id: string, title: string, children: SessionNode[] = []): SessionNode => ({
       session: {
         ...session(id),
-        metadata: { title },
+        title: title, metadata: {},
         metadataRevision: '1',
       },
       children,

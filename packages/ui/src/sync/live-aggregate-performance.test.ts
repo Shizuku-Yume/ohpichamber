@@ -18,6 +18,6 @@ describe('native live status aggregation', () => {
     expect(areSessionListsEquivalent([original], [{ ...original }])).toBe(true);
     expect(areSessionListsEquivalent([original], [{ ...original, epoch: 'epoch_2' }])).toBe(false);
     expect(areSessionListsEquivalent([original], [{ ...original, headSequence: '1' }])).toBe(false);
-    expect(areSessionListsEquivalent([original], [{ ...original, metadata: { title: 'Renamed' }, metadataRevision: '1' }])).toBe(false);
+    expect(areSessionListsEquivalent([original], [{ ...original, title: 'Renamed', metadata: {}, metadataRevision: '1' }])).toBe(false);
   });
 });

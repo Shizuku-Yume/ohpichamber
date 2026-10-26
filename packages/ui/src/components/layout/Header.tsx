@@ -301,7 +301,7 @@ export const Header: React.FC = () => {
         .find((candidate) => candidate.sessionId === currentSessionId);
       if (!session) return null;
       return {
-        title: session.metadata?.title ?? null,
+        title: session.title ?? null,
         directory: resolveGlobalSessionDirectory(session),
         created: session.createdAt,
         slug: null,

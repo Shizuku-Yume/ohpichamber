@@ -54,7 +54,7 @@ const session = (sessionId: string): Session => ({
   runtimeStatus: 'idle',
   activeRunId: null,
   mode: { kind: 'main' },
-  metadata: { title: 'Shared title' },
+  title: 'Shared title', metadata: {},
   metadataRevision: '1',
   archiveRevision: '0',
 });
@@ -109,12 +109,12 @@ describe('SessionTreeItem public behavior', () => {
       await act(async () => root.render(<I18nProvider><Harness /></I18nProvider>));
       expect(renderedRows).toHaveLength(2);
 
-      await act(async () => renderedRows[0]?.handleSessionDoubleClick(sharedSession.sessionId, sharedSession.metadata?.title ?? ''));
+      await act(async () => renderedRows[0]?.handleSessionDoubleClick(sharedSession.sessionId, sharedSession.title ?? ''));
       expect(renderedRows).toHaveLength(4);
       expect(renderedRows.slice(-2).map((row) => [row.editingId, row.editingRowKey, row.editTitle]))
         .toEqual([
-          [sharedSession.sessionId, 'project:session:same-session', sharedSession.metadata?.title ?? ''],
-          [sharedSession.sessionId, 'project:session:same-session', sharedSession.metadata?.title ?? ''],
+          [sharedSession.sessionId, 'project:session:same-session', sharedSession.title ?? ''],
+          [sharedSession.sessionId, 'project:session:same-session', sharedSession.title ?? ''],
         ]);
 
       await act(async () => renderedRows[3]?.setOpenSidebarMenuKey('session-menu:recent:session:same-session'));

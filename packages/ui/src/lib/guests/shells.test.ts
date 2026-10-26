@@ -13,7 +13,7 @@ const session = (sessionId: string, displayPath: string, projectId: string, work
   const value: Session = {
     sessionId, projectId, workspaceId, displayPath, rootSessionId: parentSessionId ? 'root' : sessionId,
     createdAt: 1, updatedAt: 1, epoch: 'epoch-1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
-    metadata: { title: sessionId }, metadataRevision: '1', archiveRevision: '0',
+    title: sessionId, metadata: {}, metadataRevision: '1', archiveRevision: '0',
   };
   return parentSessionId ? { ...value, parentSessionId } : value;
 };

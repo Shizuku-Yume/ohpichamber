@@ -3,7 +3,7 @@ import { AUTO_MODEL_ID, AUTO_PROVIDER_ID, isAutoModel } from '@/lib/routing/auto
 import { selectAutoReady, useRoutingStore } from '@/stores/useRoutingStore';
 import type { StoreApi, UseBoundStore } from "zustand";
 import { devtools, persist } from "zustand/middleware";
-import type { Agent, Model, ModelCatalog, Provider, ProviderAuthState, ProviderCatalog } from '@openchamber/agent-contract';
+import type { Model, ModelCatalog, Provider, ProviderAuthState, ProviderCatalog } from '@openchamber/agent-contract';
 import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
 import { notifyAgentReadiness, registerAgentSelectionReader } from '@/stores/agentConfigBridge';
 import { canonicalClient } from '@/api/canonicalClient';
@@ -2719,10 +2719,8 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                 applyDefaultModelAgentSelection: (options) => {
                     const projectDefaults = options ?? getProjectDefaultsForConfigDirectory(fromDirectoryKey(get().activeDirectoryKey));
                     const {
-                        activeDirectoryKey,
                         providers,
                         settingsDefaultModel,
-                        settingsDefaultAgent,
                     } = get();
                     const {
                         agentName: resolvedAgentName,

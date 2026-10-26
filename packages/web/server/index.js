@@ -741,7 +741,6 @@ configureAgentService(hostAgentRuntime.service, {
 notificationTemplateRuntime = createNotificationTemplateRuntime({
   sessionService: openChamberSessionService,
   resolveSessionScope: hostAgentRuntime.resolveSessionScope,
-  readSessionMetadata: readStoredSessionMetadata,
   readSettingsFromDisk,
 });
 
@@ -760,7 +759,6 @@ const notificationTriggerRuntime = createNotificationTriggerRuntime({
   isAnyInteractiveClientVisible,
   sessionService: openChamberSessionService,
   resolveSessionScope: hostAgentRuntime.resolveSessionScope,
-  readSessionMetadata: readStoredSessionMetadata,
 });
 
 const setAutoAcceptSession = (sessionId, enabled) => permissionAutoAcceptRuntime.setSessionPolicy(sessionId, enabled);
@@ -788,10 +786,6 @@ const sessionKnowledgeRuntime = createSessionKnowledgeRuntime({
   // reference here would read it before it exists.
   resolveProjectId: (directory) => resolveMemoryProjectId(directory),
   isAgentMemoryEnabled,
-  isSessionLinkingAvailable: async () => {
-    const settings = await readSettingsFromDiskMigrated();
-    return settings.agentControlToolEnabled !== false;
-  },
   readSessionMetadata: readStoredSessionMetadata,
   // Pins and the delivered-signature cursor are read from OpenChamber's own store.
   persistSessionMetadata: (sessionID, directory, patch) => persistSessionMetadataPatch(sessionID, patch, { directory }),
@@ -891,7 +885,6 @@ const messageSearchRuntime = createMessageSearchRuntime({
   dataDir: OPENCHAMBER_DATA_DIR,
   sessionService: openChamberSessionService,
   resolveSessionScope: hostAgentRuntime.resolveSessionScope,
-  readSessionMetadata: readStoredSessionMetadata,
   globalEventHub: globalMessageStreamHub,
   readSettings: async () => {
     const settings = await readSettingsFromDisk();

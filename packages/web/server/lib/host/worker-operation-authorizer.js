@@ -116,6 +116,9 @@ export const createWorkerOperationAuthorizer = ({
       // Native goal operations only read or change this session's OMP goal state.
       // Provider turns and machine tools still require their own authorization.
       if (request.toolName === 'goal') return allowed;
+      // Native wait only observes this session's async jobs; it opens no machine
+      // capability and OMP resolves its own job identifiers.
+      if (request.toolName === 'wait') return allowed;
       // Native task delegation starts an SDK child under the captured workspace. A
       // non-isolated child's tool calls re-enter this authorizer, so the request grants
       // no machine capability; the selected profile's allowedTools gate already ran in
@@ -125,6 +128,10 @@ export const createWorkerOperationAuthorizer = ({
         return delegation === 'allowed' ? allowed : delegation === 'isolated' ? denied() : denied('INVALID_REQUEST', 400);
       }
       if (nativeTool && descriptor) {
+        const internalReadUrls = descriptor.internalReadUrls ?? [];
+        // Internal URLs are OMP-owned resources, not filesystem grants. Only the
+        // read path may pass them through; write/edit/grep/glob stay local.
+        if (internalReadUrls.length > 0 && request.toolName !== 'read') return denied();
         for (const target of [...descriptor.sourcePaths, ...descriptor.destinationPaths, ...descriptor.fileOps.flatMap(operation => operation.to === undefined ? [operation.path] : [operation.path, operation.to])]) {
           if (!await pathAllowed(target)) return denied();
         }
@@ -133,6 +140,7 @@ export const createWorkerOperationAuthorizer = ({
         const capability = ['write', 'edit'].includes(request.toolName) ? 'write' : 'read';
         if (request.toolName === 'edit' && descriptor.effectiveMode === undefined) return denied();
         const targets = capability === 'write' ? descriptor.destinationPaths : descriptor.sourcePaths;
+        if (internalReadUrls.length > 0 && capability === 'read') return policy.fileTools.includes('read') ? allowed : denied();
         return targets.length > 0 && policy.fileTools.includes(capability) ? allowed : denied();
       }
       return policy.toolRequests.some(candidate => isDeepStrictEqual(candidate, request)) ? allowed : denied();

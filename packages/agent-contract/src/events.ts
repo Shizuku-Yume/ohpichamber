@@ -21,6 +21,7 @@ const sessionUpdatedSchema = DataEventEnvelopeSchema.extend({
   type: z.literal('session.updated'),
   session: RuntimeSessionSchema.optional(),
   mode: SessionModeSchema.optional(),
+  title: z.string().min(1).optional(),
   continuationPending: z.boolean().optional(),
   selection: SessionSelectionSchema.optional(),
   metadata: SessionMetadataSchema.nullable().optional(),
@@ -30,7 +31,8 @@ const sessionUpdatedSchema = DataEventEnvelopeSchema.extend({
 }).refine((event) => {
   const metadataPresent = event.metadata !== undefined;
   const archivePresent = event.archivedAt !== undefined;
-  return (event.session !== undefined || event.mode !== undefined || event.continuationPending !== undefined || event.selection !== undefined || metadataPresent || archivePresent)
+  return (event.session !== undefined || event.mode !== undefined || event.title !== undefined
+    || event.continuationPending !== undefined || event.selection !== undefined || metadataPresent || archivePresent)
     && metadataPresent === (event.metadataRevision !== undefined)
     && archivePresent === (event.archiveRevision !== undefined)
     && (!metadataPresent || (event.metadata === null) === (event.metadataRevision === '0'));

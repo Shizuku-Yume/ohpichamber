@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { HistoryPageSchema, SessionMetadataSchema, SessionSnapshotSchema } from '@openchamber/agent-contract';
+import { HistoryPageSchema, SessionSnapshotSchema } from '@openchamber/agent-contract';
 
 const BODY_MAX_CHARS = 1000;
 const textFromParts = (parts, maxLength = BODY_MAX_CHARS) => {
@@ -8,11 +8,11 @@ const textFromParts = (parts, maxLength = BODY_MAX_CHARS) => {
 };
 
 export const createNotificationTemplateRuntime = ({
-  sessionService, resolveSessionScope, readSessionMetadata, readSettingsFromDisk, resolveGitBinaryForSpawn,
+  sessionService, resolveSessionScope, readSettingsFromDisk, resolveGitBinaryForSpawn,
 }) => {
   if (typeof sessionService?.open !== 'function' || typeof sessionService?.history !== 'function'
-    || typeof resolveSessionScope !== 'function' || typeof readSessionMetadata !== 'function') {
-    throw new TypeError('Canonical session reader and Host scope/metadata readers are required');
+    || typeof resolveSessionScope !== 'function') {
+    throw new TypeError('Canonical session reader and Host scope reader are required');
   }
   const resolveNotificationTemplate = (template, variables) => typeof template === 'string'
     ? template.replace(/\{(\w+)\}/g, (_match, key) => String(variables[key] ?? '')) : '';
@@ -48,9 +48,7 @@ export const createNotificationTemplateRuntime = ({
     if (!resolved?.cwd || (scope && (scope.workspaceId !== resolved.workspaceId || scope.rootSessionId !== resolved.rootSessionId))) {
       throw new Error('Host session scope is unavailable');
     }
-    // The Host custom title is read at use time. A failed read never substitutes
-    // another owner's title or clears the existing authoritative metadata.
-    const metadata = SessionMetadataSchema.nullable().parse(await readSessionMetadata(sessionId));
+    // OMP owns the session title; the canonical snapshot carries it.
     const snapshot = SessionSnapshotSchema.parse(await sessionService.open(sessionId));
     if (snapshot.session.sessionId !== sessionId || snapshot.session.workspaceId !== resolved.workspaceId
       || snapshot.session.rootSessionId !== resolved.rootSessionId) throw new Error('Canonical snapshot scope mismatch');
@@ -67,7 +65,7 @@ export const createNotificationTemplateRuntime = ({
       // Templates are public notification content; never expose the private cwd.
       worktree: snapshot.session.displayPath,
       branch,
-      session_name: metadata?.title ?? 'Session',
+      session_name: snapshot.session.title ?? 'Session',
       agent_name: 'Agent',
       model_name: 'Assistant',
       last_message: '',

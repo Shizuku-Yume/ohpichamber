@@ -656,9 +656,12 @@ export class WorkerProjection {
       if (message.modelId !== undefined) message.modelId = this.publicText(message.modelId);
     }
     for (const turn of turns) if (turn.error !== undefined) turn.error = this.publicText(turn.error);
-    return { createdAt, updatedAt: Math.max(createdAt, updatedAt, messages.at(-1)?.createdAt ?? createdAt), mode, selection: nativeSelection,
+    const title = this.manager.getSessionName()?.trim();
+    const seed: ProjectionSeed = { createdAt, updatedAt: Math.max(createdAt, updatedAt, messages.at(-1)?.createdAt ?? createdAt), mode, selection: nativeSelection,
       branch: { branchId: `branch:${this.sessionId}`, branchVersion: (version + BigInt(virtualTurns.size)).toString(), leafMessageId,
         ...(selection?.revertedMessageId ? { revert: { messageId: selection.revertedMessageId } } : undefined) }, turns, messages,
     };
+    if (title) seed.title = title;
+    return seed;
   }
 }

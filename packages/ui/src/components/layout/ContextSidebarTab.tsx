@@ -275,7 +275,7 @@ export const ContextPanelContent: React.FC = () => {
       : null;
 
     return {
-      sessionTitle: currentSession?.metadata?.title || t('contextSidebar.session.untitled'),
+      sessionTitle: currentSession?.title || t('contextSidebar.session.untitled'),
       messagesCount: sessionMessages.length,
       userMessagesCount: userMessages.length,
       assistantMessagesCount: assistantMessages.length,

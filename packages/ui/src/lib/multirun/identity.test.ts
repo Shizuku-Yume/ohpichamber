@@ -12,7 +12,7 @@ const membership = (id: string): MultiRunMembership => ({
 const session = (id: string, marker: MultiRunMembership | null = membership(id)): Session => {
   const result: Session = { sessionId: id, projectId: 'project', workspaceId: 'workspace', displayPath: '.', rootSessionId: id,
     createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
-    metadata: { title: 'bench/openrouter/vendor/model' }, metadataRevision: '1', archiveRevision: '0' };
+    title: 'bench/openrouter/vendor/model', metadata: {}, metadataRevision: '1', archiveRevision: '0' };
   if (marker) result.metadata = withMultiRunMembership(result, marker);
   return result;
 };
@@ -20,7 +20,7 @@ const session = (id: string, marker: MultiRunMembership | null = membership(id))
 describe('multi-run identity', () => {
   test('renaming, archiving, serialization and model slashes do not change membership', () => {
     const original = session('s1');
-    const renamed = { ...original, metadata: { ...original.metadata, title: 'any title' }, archivedAt: 5 };
+    const renamed = { ...original, title: 'any title', metadata: {...original.metadata}, archivedAt: 5 };
     expect(getMultiRunIdentity(renamed)).toEqual(getMultiRunIdentity(original));
     expect(getMultiRunIdentity(SessionSchema.parse(JSON.parse(JSON.stringify(renamed))))).toEqual(getMultiRunIdentity(original));
     for (const modelID of ['vendor/2', 'vendor/fusion', 'a/b/c', 'vendor/model%2Fname']) {

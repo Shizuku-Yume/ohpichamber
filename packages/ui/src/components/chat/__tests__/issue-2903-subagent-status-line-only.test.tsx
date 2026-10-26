@@ -126,7 +126,7 @@ describe('issue #2903 busy subagent status-line-only', () => {
       session: [{
         sessionId: SESSION_ID, projectId: 'project', workspaceId: 'workspace', displayPath: '.', rootSessionId: SESSION_ID,
         createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
-        metadata: { title: 'Audit Searchbar implementation' }, metadataRevision: '1', archiveRevision: '0',
+        title: 'Audit Searchbar implementation', metadata: {}, metadataRevision: '1', archiveRevision: '0',
       }],
       message: { [SESSION_ID]: messages },
       partOwner: {},

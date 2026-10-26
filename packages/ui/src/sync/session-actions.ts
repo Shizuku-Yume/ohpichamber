@@ -39,7 +39,7 @@ import { recordSessionActionFailure } from "./session-action-failures"
 import { withoutSourceOwnedLinks } from "@/lib/sessionForkInheritance"
 import { canonicalClient, CanonicalApiError } from "@/api/canonicalClient"
 import { SessionMetadataSchema, SessionMetadataPatchSchema, PromptRequestSchema } from "@openchamber/agent-contract"
-import type { Session as CanonicalSession, Message as CanonicalMessage, SessionSnapshot, SessionBranchResult, SessionMetadataState, PromptRequest, ApprovalRequest as PermissionRequest, QuestionRequest as FormRequest, ApprovalReply, QuestionReply, JsonValue, JsonObject as Metadata, SessionMetadata, Run } from "@openchamber/agent-contract"
+import type { Session as CanonicalSession, Message as CanonicalMessage, SessionSnapshot, SessionBranchResult, SessionMetadataState, PromptRequest, ApprovalRequest as PermissionRequest, QuestionRequest as FormRequest, ApprovalReply, QuestionReply, JsonValue, JsonObject as Metadata, SessionMetadata, SessionCreateRequest, Run } from "@openchamber/agent-contract"
 import { installHostSession, installRuntimeRun, installSessionMetadata, installSessionSnapshot, type RunControlBaseline } from "./event-reducer"
 import { registerWorkspaceDirectory, resolveWorkspaceDirectory } from "@/stores/globalSessions"
 import type { State } from "./types"
@@ -730,8 +730,7 @@ export async function createSession(
     const workspace = await canonicalClient.resolveWorkspace(effectiveDirectory)
     if (isStaleRuntime(runtimeKey)) return null
     const admittedMetadata = { ...metadata }
-    if (title !== undefined) admittedMetadata.title = title
-    const { session } = await canonicalClient.createSession({
+    const createRequest: SessionCreateRequest = {
       projectId: workspace.projectId,
       workspaceId: workspace.workspaceId,
       options: {
@@ -742,7 +741,9 @@ export async function createSession(
         reasoningEffort: selection?.reasoningEffort ?? null,
       },
       metadata: SessionMetadataSchema.parse(admittedMetadata),
-    })
+    }
+    if (title !== undefined) createRequest.title = title
+    const { session } = await canonicalClient.createSession(createRequest)
     if (isStaleRuntime(runtimeKey)) return null
     registerWorkspaceDirectory(workspace.workspaceId, effectiveDirectory)
     _childStores?.ensureChild(effectiveDirectory, { bootstrap: false })
@@ -1601,11 +1602,11 @@ export async function updateSessionTitle(
   const current = getGlobalSessionSnapshot(sessionId) ?? await readCanonicalSession(sessionId, runtimeKey)
   if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
   options?.signal?.throwIfAborted()
-  const result = await canonicalClient.patchSessionMetadata(sessionId, { changes: { title } })
+  const result = await canonicalClient.renameSession(sessionId, current.workspaceId, title)
   if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
   options?.signal?.throwIfAborted()
-  if (result.sessionId !== sessionId) throw new Error("Title response identified another session")
-  publishCanonicalMetadata(current, result)
+  if (result.sessionId !== sessionId || !result.title) throw new Error("Title response identified another session")
+  publishCanonicalSession(result, options?.directory ?? undefined)
 }
 
 // ---------------------------------------------------------------------------

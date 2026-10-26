@@ -134,7 +134,7 @@ const MobileTimelineRow: React.FC<{
 }> = ({ entry, active, revealed, confirmingDelete, renaming, handlers }) => {
   const { t } = useI18n();
   const { session, project, branch, inSpace } = entry;
-  const title = session.metadata?.title?.trim() || t('mobile.sessions.untitled');
+  const title = session.title?.trim() || t('mobile.sessions.untitled');
   const time = formatRelativeShort(getSessionTimestamp(session));
   const aiRename = useSessionAiRenameAction(session.sessionId, getSessionDirectory(session), revealed || renaming);
 

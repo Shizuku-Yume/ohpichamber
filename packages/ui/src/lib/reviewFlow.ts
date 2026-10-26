@@ -20,7 +20,6 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 import { getDirectoryState, getSyncMessages, registerSessionDirectory } from '@/sync/sync-refs';
 import { markPendingUserSendAnimation } from '@/lib/userSendAnimation';
 import { getRuntimeKey } from '@/lib/runtime-switch';
-import { fetchSessionKnowledge, reportSessionKnowledgeDelivered } from '@/lib/sessionKnowledgeApi';
 import { expandNativeFileResource } from '@/api/fileResourceExpansion';
 import { resolveWorkspaceDirectory } from '@/stores/globalSessions';
 
@@ -351,18 +350,13 @@ const sendPlainMessage = async (
   const resolved = { ...captured, ...expanded?.modelSelection, agentId: undefined };
   const selection = useSelectionStore.getState();
   selection.saveSessionModelSelection(sessionID, resolved.providerId, resolved.modelId);
-  // Review sessions are real work sessions, so they carry the project's
-  // standing context (pinned notes, memory) exactly as a composer send would.
-  const knowledge = await fetchSessionKnowledge(directory, sessionID);
-  assertCurrent();
-  const sendContext = knowledge.text ? [{ text: knowledge.text }, ...(context ?? [])] : context;
   markPendingUserSendAnimation(sessionID);
   let sentMessageID: string | null = null;
   await optimisticSend({
     sessionId: sessionID,
     content: text,
     directory,
-    context: sendContext,
+    context,
     onMessageID: (messageID) => {
       sentMessageID = messageID;
     },
@@ -382,9 +376,6 @@ const sendPlainMessage = async (
   });
   assertCurrent();
   if (!sentMessageID) throw new Error('Failed to prepare review flow message');
-  if (knowledge.text) {
-    void reportSessionKnowledgeDelivered(directory, sessionID, knowledge.signature);
-  }
   return sentMessageID;
 };
 
@@ -399,8 +390,8 @@ const openReviewSessionPanel = (directory: string, session: Session): void => {
   useUIStore.getState().openContextPanelTab(directory, {
     mode: 'chat',
     dedupeKey: `session:${session.sessionId}`,
-    label: session.metadata?.title ?? null,
-    sessionTitleFallback: session.metadata?.title ?? null,
+    label: session.title ?? null,
+    sessionTitleFallback: session.title ?? null,
   });
 };
 
@@ -427,7 +418,7 @@ const getSessionOrNull = async (sessionID: string): Promise<Session | null> => {
 };
 
 const getReviewSessionTitle = (original: Session): string => {
-  const implementationTitle = original.metadata?.title?.trim() || original.sessionId;
+  const implementationTitle = original.title?.trim() || original.sessionId;
   return `Review: ${implementationTitle}`;
 };
 
@@ -467,7 +458,8 @@ const createOrReuseReviewSession = async (
     projectId: original.projectId,
     workspaceId: original.workspaceId,
     options: { providerId: selection.providerId, modelId: selection.modelId, agentId: null, variant: selection.variant ?? null, reasoningEffort: null },
-    metadata: withReviewSessionMarker({ title: getReviewSessionTitle(original) }, originalSessionID),
+    title: getReviewSessionTitle(original),
+    metadata: withReviewSessionMarker({}, originalSessionID),
   })).session;
   assertAutoReviewRuntimeStillCurrent(expectedRuntimeKey);
   registerSessionDirectory(review.sessionId, directory);

@@ -35,7 +35,7 @@ const session = (sessionId: string, workspaceId: string): Session => ({
   runtimeStatus: "idle",
   activeRunId: null,
   mode: { kind: "main" },
-  metadata: { title: "Worktree session" },
+  title: "Worktree session", metadata: {},
   metadataRevision: "1",
   archiveRevision: "0",
 })

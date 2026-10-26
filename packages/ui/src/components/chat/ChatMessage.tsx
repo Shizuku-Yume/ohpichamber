@@ -388,7 +388,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
             label: entry.action.label,
             icon: <GuestIcon icon={entry.icon} iconSrc={entry.iconSrc} className="size-3.5" />,
             onSelect: () => {
-                const sessionTitle = useGlobalSessionsStore.getState().entityById.get(sessionId)?.metadata?.title ?? null;
+                const sessionTitle = useGlobalSessionsStore.getState().entityById.get(sessionId)?.title ?? null;
                 const directory = useSessionUIStore.getState().getDirectoryForSession(sessionId);
                 const item = buildGuestMessageItem(entry.action.id, { sessionId, sessionTitle, directory }, messageRecordRef.current);
                 void runGuestAction(entry, item, t);

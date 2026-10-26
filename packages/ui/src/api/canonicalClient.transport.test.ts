@@ -145,7 +145,9 @@ describe('CanonicalClient real HTTP scope boundary', () => {
     await expect(client.getHistory(sessionId)).rejects.toThrow();
     respondWith({ sessionId: 'session_other', revision: '0', metadata: null });
     await expect(client.getSessionMetadata(sessionId)).rejects.toThrow();
-    await expect(client.patchSessionMetadata(sessionId, { changes: { title: 'Title' } })).rejects.toThrow();
+    await expect(client.patchSessionMetadata(sessionId, { changes: { notes: 'Note' } })).rejects.toThrow();
+    respondWith({ ...runtimeSession, sessionId: 'session_other' });
+    await expect(client.renameSession(sessionId, runtimeSession.workspaceId, 'Title')).rejects.toThrow();
     respondWith({ sessionId: 'session_other', revision: '0', items: [] });
     await expect(client.getQueue(sessionId)).rejects.toThrow();
     await expect(client.appendQueue(sessionId, { expectedRevision: '0', content: 'hello', request: prompt })).rejects.toThrow();

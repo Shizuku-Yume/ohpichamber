@@ -74,7 +74,7 @@ mock.module('@/stores/usePullRequestSelectionStore', () => ({ usePullRequestSele
 mock.module('@/stores/useWalkthroughStore', () => ({ useWalkthroughStore: () => null }));
 mock.module('@/stores/useUIStore', () => ({ useUIStore }));
 mock.module('@/sync/session-ui-store', () => ({ useSessionUIStore }));
-mock.module('@/sync/sync-context', () => ({ useSession: () => ({ metadata: { title: 'Current session' } }) }));
+mock.module('@/sync/sync-context', () => ({ useSession: () => ({ title: 'Current session', metadata: {} }) }));
 mock.module('@/components/chat/composer/pendingComposerReferences', () => ({ usePendingComposerReferences: { getState: () => ({ push: (references: unknown[]) => pushedReferences.push(...references) }) } }));
 mock.module('@/components/references/resolveComposerReferences', () => ({ resolveComposerReferences: async (selection: unknown[]) => { resolveCalls.push(selection); return { references: selection, failures: [] }; } }));
 mock.module('@/components/references/referenceSources', () => ({ readLinearIssueDetail: async () => null }));

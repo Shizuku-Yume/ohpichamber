@@ -125,6 +125,7 @@ Clients reach this API through the Host Gateway (Node.js/Electron), which authen
 | `POST` | `/api/agent/v1/sessions` | Create a new session | Required | Yes (Key) | JSON |
 | `GET` | `/api/agent/v1/sessions/:sessionId` | Get session metadata and status | Required | Yes | JSON |
 | `PATCH` | `/api/agent/v1/sessions/:sessionId/metadata` | Update Host-owned session metadata through the Host writer | Required | Yes | JSON |
+| `PATCH` | `/api/agent/v1/sessions/:sessionId/title` | Rename through OMP `setSessionName` (`SessionTitleRequest`) | Required | Yes | JSON |
 | `GET` | `/api/agent/v1/sessions/:sessionId/metadata` | Host-owned metadata and its independent revision | Required | Yes | JSON |
 | `DELETE` | `/api/agent/v1/sessions/:sessionId` | Delete session and child sessions | Required | Yes | JSON |
 | `GET` | `/api/agent/v1/sessions/:sessionId/history` | Paginated message and turn history | Required | Yes | JSON |
@@ -645,7 +646,7 @@ To preserve privacy across remote web surfaces, mobile connections, and cloud re
 
 ## Metadata sidecar and transcript ownership
 
-The Host Gateway is the sole durable writer for custom titles, goals, assist recaps/suggestions, context delivery cursors/receipts, pinned notes, pins, folders, retention and workspace associations. `SessionMetadata.title` is the only canonical title; `Session.metadata` and `metadataRevision` are Host-composed projections, not permission for the Agent Service to persist or patch them. Runtime snapshots omit them and use independent Host reads. A context delivery cursor is Host metadata, distinct from a service event cursor.
+The Host Gateway is the sole durable writer for goals, assist recaps/suggestions, context delivery cursors/receipts, pinned notes, pins, folders, retention and workspace associations. OMP owns the session title: `RuntimeSession.title` is the only canonical title, carried from OMP's JSONL and published by `session.updated`; a rename goes through `PATCH .../sessions/:sessionId/title` and OMP `setSessionName`. `Session.metadata` and `metadataRevision` are Host-composed projections, not permission for the Agent Service to persist or patch them. Runtime snapshots omit them and use independent Host reads. A context delivery cursor is Host metadata, distinct from a service event cursor.
 
 OMP alone writes messages, reasoning, tool results and compaction history. The service reads/projects OMP state and owns transient execution handles and replay state. Host metadata stores no duplicate transcript or tool-output history. Task 20 migrates applicable existing Host metadata and every accessor before removing its OpenCode source. Missing, corrupt and failed metadata reads/writes remain distinct; failure preserves valid prior data and does not clear unrelated sessions.
 

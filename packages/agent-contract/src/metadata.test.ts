@@ -23,7 +23,7 @@ const multirun = {
   role: 'run', title: 'Run', autoFusion: { providerID: 'provider_1', modelID: 'model_1', variant: 'v1', agent: 'agent_1', launcherId: 'launcher_1' },
 };
 const metadata = {
-  title: 'Title', folder: 'folder_1', isPinned: true, color: 'blue', icon: 'star', notes: 'Notes',
+  folder: 'folder_1', isPinned: true, color: 'blue', icon: 'star', notes: 'Notes',
   openchamber: {
     knowledge_context_delivered: 'cursor', context_obligatory_last_compaction_message_id: 'message_1',
     project_context_pins: { notes: ['note_1'], plans: ['plan_1'] },
@@ -71,7 +71,7 @@ test('metadata state distinguishes missing null revision zero from present empty
 
 test('metadata patches support typed null deletion and reject malformed patch values', () => {
   const cleared = { changes: {
-    title: null, folder: null, isPinned: null, color: null, icon: null, notes: null, openchamber: {
+    folder: null, isPinned: null, color: null, icon: null, notes: null, openchamber: {
       goal: null, assist: null, knowledge_context_delivered: null, context_obligatory_last_compaction_message_id: null,
       project_context_pins: null, context_obligatory_messages: null, linked_issues: null, work: null, reviewOffer: null,
       reviewSessionID: null, kind: null, originalSessionID: null, multirun: null,
@@ -79,7 +79,7 @@ test('metadata patches support typed null deletion and reject malformed patch va
   } };
   expect(SessionMetadataPatchSchema.parse(cleared)).toEqual(cleared);
   for (const invalid of [
-    { changes: { title: 1 } }, { changes: { openchamber: { goal: 'bad' } } },
+    { changes: { folder: 1 } }, { changes: { openchamber: { goal: 'bad' } } },
     { changes: { openchamber: { assist: { suggestion: 1 } } } },
     { changes: { openchamber: { reviewOffer: { at: 'bad' } } } },
     { changes: { openchamber: { knowledge_context_delivered: 1 } } },

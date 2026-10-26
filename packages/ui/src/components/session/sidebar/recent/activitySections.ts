@@ -24,7 +24,7 @@ const matchesSidebarSessionQuery = (session: Session, query: string): boolean =>
   const normalizedQuery = query.trim().toLowerCase();
   if (!normalizedQuery) return true;
   if (normalizedQuery.startsWith('ses_')) return session.sessionId.toLowerCase() === normalizedQuery;
-  const title = session.metadata?.title?.toLowerCase() ?? '';
+  const title = session.title?.toLowerCase() ?? '';
   return title.includes(normalizedQuery);
 };
 

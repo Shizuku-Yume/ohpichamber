@@ -111,6 +111,9 @@ export const ModelCatalogSchema = z.strictObject({
     'Model identities are unique within a provider',
   ),
   defaults: ModelCatalogDefaultsSchema,
+  // Resolved by OMP from `modelRoles.plan` against the executable models, so
+  // the UI can disable Plan before a session exists.
+  planRoleAvailable: z.boolean(),
 });
 export type ModelCatalog = z.infer<typeof ModelCatalogSchema>;
 

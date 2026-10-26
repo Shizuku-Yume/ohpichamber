@@ -22,7 +22,7 @@ const createNativeClient = (): CanonicalClient => {
   client.listWorkspaces = async () => ({ items: [], errors: {} })
   client.resolveWorkspace = async (directory: string) => workspace(directory)
   client.listSessions = async () => ({ items: [], errors: {} })
-  client.getModels = async (workspaceId: string) => ({ workspaceId, revision: '0', models: [], defaults: { model: null, thinkingLevel: null } })
+  client.getModels = async (workspaceId: string) => ({ workspaceId, revision: '0', models: [], defaults: { model: null, thinkingLevel: null }, planRoleAvailable: false })
   client.getProviders = async (workspaceId: string) => ({ workspaceId, revision: '0', providers: [] })
   client.getAgents = async (workspaceId: string) => ({ workspaceId, revision: '0', agents: [] })
   client.getShellSnapshot = async (scope) => { if (scope.kind !== 'workspace') throw new Error('Selection fixture only uses workspace shell scope'); return shellSnapshot(scope.workspaceId) }
@@ -97,7 +97,7 @@ describe("SyncProvider native scope and selection boundaries", () => {
       if (!manager) throw new Error("Directory manager was not mounted")
       const store = manager.ensureChild(directory, { bootstrap: false })
       const stale = session("mutated-session", resolved.workspaceId)
-      const current = { ...stale, metadata: { title: "Local mutation" }, metadataRevision: "2" }
+      const current = { ...stale, title: "Local mutation", metadata: {}, metadataRevision: "2" }
       store.setState({ session: [current], sessionRevision: 1, sessionEventRevision: { [current.sessionId]: 1 } })
       await act(async () => { pending.resolve({ items: [stale], errors: {} }); await Promise.resolve() })
       expect(store.getState().session[0]).toBe(current)

@@ -58,6 +58,7 @@ export class WorkerSession {
   private readonly nativeQueuedPreparation: AgentSession['agent']['prepareQueuedMessages'];
   private readonly btw: RpcBtwController;
   private binding: Promise<void> = Promise.resolve();
+  private readonly titleUnsubscribe: () => void;
   private promptTask: Promise<void> | undefined;
   private preparation: Promise<PreparedPrompt> | undefined;
   private cancellingRunId: string | undefined;
@@ -101,6 +102,10 @@ export class WorkerSession {
       }
     });
     this.nativeQueuedPreparation = session.agent.prepareQueuedMessages;
+    this.titleUnsubscribe = session.sessionManager.onSessionNameChanged(() => {
+      const title = session.sessionManager.getSessionName()?.trim();
+      if (title) this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', title } }]);
+    });
     this.subagentEventBus.on(TASK_SUBAGENT_LIFECYCLE_CHANNEL, data => {
       // SAFETY: The worker publishes this channel only with SubagentLifecyclePayload.
       this.onSubagent(data as SubagentLifecyclePayload);
@@ -371,22 +376,11 @@ export class WorkerSession {
     const invocation = /^\/skill:([^\s]+)(?:\s+([\s\S]*))?$/.exec(text);
     if (invocation) text = await this.catalogs.skills.preparePrompt(invocation[1]!, invocation[2] ?? '');
     for (const context of input.context) {
-      if (context.kind === 'instruction' || context.kind === 'synthetic') {
-        const message = context.kind === 'instruction'
-          ? { role: 'developer' as const, content: context.text, timestamp: Date.now() }
-          : { role: 'user' as const, content: context.text, synthetic: true, timestamp: Date.now() };
-        contextMessages.push(message);
-      } else {
-        if (context.instructions) {
-          const message = { role: 'developer' as const, content: context.instructions, timestamp: Date.now() };
-          contextMessages.push(message);
-        }
-        contextMessages.push({
-          role: 'custom', customType: 'ohpichamber.context', content: context.text, display: false,
-          details: { metadata: context.metadata, deliveryReceiptId: context.deliveryReceiptId },
-          attribution: 'agent', timestamp: Date.now(),
-        });
-      }
+      // A user-requested skill expansion stays a developer instruction. Captured
+      // context and user pins travel as hidden user text: plain OMP never sees
+      // app-authored custom/developer messages for them.
+      if (context.kind === 'instruction') contextMessages.push({ role: 'developer' as const, content: context.text, timestamp: Date.now() });
+      else if (context.text) contextMessages.push({ role: 'user' as const, content: context.text, synthetic: true, timestamp: Date.now() });
     }
     const images: NonNullable<PromptOptions['images']> = [];
     for (const attachment of input.attachments) {
@@ -599,6 +593,14 @@ export class WorkerSession {
         this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', mode } }]);
         return { type: 'mode.set', mode };
       }
+      case 'session.rename': {
+        await this.binding;
+        if (!await this.session.sessionManager.setSessionName(operation.title, 'user')) throw new ProjectionError(400, 'INVALID_REQUEST', 'Session title is empty');
+        await this.session.sessionManager.flush();
+        const title = this.session.sessionManager.getSessionName();
+        if (!title) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Session title was not persisted');
+        return { type: 'session.rename', title };
+      }
       case 'web-search': {
         if (operation.operation.type !== 'apply') throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'Search mutations require their workspace owner');
         const result = await this.webSearch.operation(operation.operation);
@@ -793,6 +795,7 @@ export class WorkerSession {
       await this.bind();
     } finally {
       this.unsubscribe();
+      this.titleUnsubscribe();
       this.session.agent.prepareQueuedMessages = this.nativeQueuedPreparation;
       try {
         try { await this.completion.close(); }

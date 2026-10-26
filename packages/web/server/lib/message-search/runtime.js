@@ -29,7 +29,6 @@ export const createMessageSearchRuntime = ({
   dataDir,
   sessionService,
   resolveSessionScope,
-  readSessionMetadata,
   globalEventHub,
   // () => Promise<{ enabled: boolean, reasoning: boolean }>, from settings.json.
   readSettings,
@@ -73,7 +72,7 @@ export const createMessageSearchRuntime = ({
   const startEngine = () => {
     const store = openMessageSearchStore(open(indexPath));
     reconcileReasoning(store);
-    const indexer = createMessageSearchIndexer({ store, sessionService, resolveSessionScope, readSessionMetadata, includeReasoning: () => reasoning, logger });
+    const indexer = createMessageSearchIndexer({ store, sessionService, resolveSessionScope, includeReasoning: () => reasoning, logger });
     const unsubscribeEvents = globalEventHub.subscribeEvent((event, scope) => indexer.processCanonicalEvent(event, scope));
     const unsubscribeStatus = globalEventHub.subscribeStatus((status) => {
       if (status.type === 'connect') return indexer.onConnected(status.sessionId);

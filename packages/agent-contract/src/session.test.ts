@@ -18,7 +18,7 @@ const runtime = {
   runtimeStatus: 'idle', activeRunId: null,
   mode: { kind: 'main' },
 };
-const metadata = { title: 'A' };
+const metadata = { folder: 'A' };
 const session = { ...runtime, archivedAt: timestamp, metadata, metadataRevision: '1', archiveRevision: '2' };
 const pendingRun = { runId: 'run_01', sessionId: id, status: 'pending', createdAt: timestamp };
 const run = { ...pendingRun, status: 'completed', finishedAt: timestamp + 1000 };

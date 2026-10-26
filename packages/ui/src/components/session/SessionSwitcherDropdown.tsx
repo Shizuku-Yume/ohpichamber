@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Icon } from '@/components/icon/Icon';
+import { useWaitingBlink } from '@/hooks/useDurationTicker';
 import { SessionActivityIndicator } from '@/components/session/SessionActivityIndicator';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSessionUnseenCount } from '@/sync/notification-store';
@@ -238,6 +239,7 @@ function SwitcherRow({ session, depth, variant, secondaryMeta, hasChildren, isEx
   const isSubtask = Boolean(session.parentSessionId);
   const needsAttention = unseenCount > 0 && (!isSubtask || notifyOnSubtasks);
   const turnActivity = useSessionTurnActivity(session.sessionId);
+  const runningBlink = useWaitingBlink(turnActivity !== null);
   const isStreaming = turnActivity !== null;
   const showUnreadDot = !isStreaming && needsAttention && !isActive;
 
@@ -274,7 +276,7 @@ function SwitcherRow({ session, depth, variant, secondaryMeta, hasChildren, isEx
         'data-[highlighted]:bg-interactive-hover hover:bg-interactive-hover',
         isActive && 'bg-interactive-selection text-interactive-selection-foreground hover:bg-interactive-selection data-[highlighted]:bg-interactive-selection',
       )}
-      style={{ paddingLeft: 8 + depth * 12 }}
+      style={{ paddingInlineStart: 8 + depth * 12 }}
     >
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex min-w-0 items-center gap-1.5">
@@ -294,7 +296,7 @@ function SwitcherRow({ session, depth, variant, secondaryMeta, hasChildren, isEx
               {isExpanded ? <Icon name="arrow-down-s" className="h-3.5 w-3.5" /> : <Icon name="arrow-right-s" className="h-3.5 w-3.5" />}
             </span>
           ) : null}
-          <span dir="auto" className="truncate text-left typography-ui-label font-normal leading-tight text-foreground">
+          <span dir="auto" className="truncate oc-ui-start-align typography-ui-label font-normal leading-tight text-foreground">
             {sessionTitle}
           </span>
         </div>
@@ -335,7 +337,7 @@ function SwitcherRow({ session, depth, variant, secondaryMeta, hasChildren, isEx
         <span className="flex h-3 w-3 flex-shrink-0 items-center justify-center self-center">
           <SessionActivityIndicator
             state={turnActivity ?? 'unread'}
-            runningClassName="animate-busy-pulse"
+            runningClassName={cn('h-2 w-2', runningBlink)}
           />
         </span>
       ) : null}

@@ -627,3 +627,37 @@ describe('buildSessionSidebarRowModel', () => {
     expect(buildSessionSidebarRowModel(input).sessionById.get('hidden')?.sessionId).toBe('hidden');
   });
 });
+
+describe('unsent drafts', () => {
+  const draft = (id: string, text = 'start'): import('@/stores/useSessionDraftsStore').SessionDraft => ({
+    id, directory: '/repo', projectId: 'project-a', text, mentions: [], attachments: [], createdAt: 1, updatedAt: 2,
+  });
+
+  test('a draft lists where its session would go, before the group rows', () => {
+    const input = args([project([group([node('a')])])]);
+    input.draftsByGroupKey = new Map([['project-a:main', [draft('d1')]]]);
+    const model = buildSessionSidebarRowModel(input);
+    const kinds = model.rows.map((row) => row.kind);
+    expect(kinds).toContain('draft');
+    expect(kinds.indexOf('draft')).toBeLessThan(kinds.indexOf('session'));
+    const row = model.rows[kinds.indexOf('draft')];
+    expect(row).toMatchObject({ kind: 'draft', depth: 0, projectId: 'project-a', draft: { id: 'd1' } });
+  });
+
+  test('a search lists sessions only: a draft has no title to match', () => {
+    const input = args([project([group([node('a')])])]);
+    input.mode = 'search';
+    input.normalizedQuery = 'start';
+    input.draftsByGroupKey = new Map([['project-a:main', [draft('d1')]]]);
+    const model = buildSessionSidebarRowModel(input);
+    expect(model.rows.some((row) => row.kind === 'draft')).toBe(false);
+  });
+
+  test('a group with only a draft is not empty', () => {
+    const input = args([project([group([])])]);
+    input.draftsByGroupKey = new Map([['project-a:main', [draft('d1')]]]);
+    const model = buildSessionSidebarRowModel(input);
+    expect(model.rows.some((row) => row.kind === 'empty')).toBe(false);
+    expect(model.rows.some((row) => row.kind === 'draft')).toBe(true);
+  });
+});

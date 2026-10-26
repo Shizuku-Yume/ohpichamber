@@ -11,6 +11,7 @@ import { getSessionFolderIdentityKey, getSessionFolderOwnerKey, getSessionFolder
 import type { SessionRowOrderEntry } from './sessions/sessionRowOrder';
 import { countSessionTreeQueryMatches } from './recent/activitySections';
 import { EMPTY_MULTI_RUN_INDEX, type MultiRunIndex, type MultiRunSummary } from '@/lib/multirun/runs';
+import type { SessionDraft } from '@/stores/useSessionDraftsStore';
 
 export type SessionSidebarActivityItem = {
   node: SessionNode;
@@ -59,6 +60,9 @@ export type SessionSidebarRow =
   // A multi-run: one derived parent row over its member sessions. It is not a
   // session, so it never enters selection, and its lanes render as session
   // rows one level deeper when it is expanded.
+  // A new session's draft not sent yet, where its session would go: the pen
+  // row the composer's own draft opens into, from any client of the Host.
+  | (RowBase & { kind: 'draft'; draft: SessionDraft; depth: number; projectId: string | null })
   | (RowBase & { kind: 'run'; run: MultiRunSummary; depth: number; laneNodes: readonly SessionNode[]; blockingSessionIds: readonly string[]; projectId: string | null; projectLabel: string | null; groupDirectory: string | null; renderContext: SessionSidebarRenderContext; expansionKey: string; expanded: boolean; forceExpanded: boolean })
   | (RowBase & { kind: 'empty'; emptyKind: 'sidebar' | 'search' | 'group' | 'archived'; group?: SessionGroup; projectId?: string | null })
   | (RowBase & { kind: 'status'; status: SessionSidebarGroupStatus; group: SessionGroup; groupKey: string })
@@ -102,6 +106,8 @@ export type SessionSidebarRowModelArgs = {
   authoritativeSections: readonly ProjectSection[];
   chatGroup: SessionGroup | null;
   recentSections: readonly SessionSidebarActivitySection[];
+  /** A project root's unsent drafts, by group key, newest first. */
+  draftsByGroupKey?: ReadonlyMap<string, readonly SessionDraft[]>;
   timelineItems?: readonly SessionSidebarActivityItem[];
   /**
    * Sessions in work, already ordered and search-filtered. They render in
@@ -196,6 +202,7 @@ export const countSessionSearchMatches = (nodes: readonly SessionNode[], normali
 };
 
 const EMPTY_FOLDERS: readonly SessionFolder[] = [];
+const EMPTY_DRAFTS: readonly SessionDraft[] = [];
 const EMPTY_WORK_SESSION_IDS: ReadonlySet<string> = new Set();
 const SESSION_ESTIMATE = 32;
 const TIMELINE_SESSION_ESTIMATE = 64;
@@ -552,6 +559,13 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
     };
     for (const folder of roots) appendFolder(folder, '');
 
+    // Drafts sit where their session would go, before its row. A search lists
+    // sessions only; a draft has no title to match.
+    const groupDrafts = search || group.isArchivedBucket ? EMPTY_DRAFTS : args.draftsByGroupKey?.get(groupKey) ?? EMPTY_DRAFTS;
+    for (const draft of groupDrafts) {
+      push({ kind: 'draft', key: keyFor(`${groupKey}:draft:${draft.id}`), estimateSize: SESSION_ESTIMATE, draft, depth: 0, projectId });
+    }
+
     const sessionBatchSize = projectId ? args.sessionBatchSize : undefined;
     const initialLimit = limits?.initial ?? sessionBatchSize ?? 5;
     const increment = limits?.increment ?? sessionBatchSize ?? 7;
@@ -583,7 +597,7 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
     }
 
     const status = args.groupStatusByKey.get(groupKey);
-    if (sourceNodes.length === 0 && visibleFolders.length === 0) {
+    if (sourceNodes.length === 0 && visibleFolders.length === 0 && groupDrafts.length === 0) {
       if (status && status.state !== 'ready') push({ kind: 'status', key: `${groupKey}:status`, estimateSize: STATUS_ESTIMATE, status, group, groupKey });
       else push({ kind: 'empty', key: `${groupKey}:empty`, estimateSize: STATUS_ESTIMATE, emptyKind: group.isArchivedBucket ? 'archived' : 'group', group, projectId });
     } else if (status && status.state !== 'ready' && status.state !== 'loading') {

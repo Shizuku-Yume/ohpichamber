@@ -37,12 +37,13 @@ import { createSessionOwnershipIndex } from '../sessions/sessionOwnership';
 import { useProjectSessionLists } from '../projects/useProjectSessionLists';
 import { useSessionSidebarSections } from '../projects/useSessionSidebarSections';
 import { SessionPrefetchProvider } from './useSessionPrefetch';
-import { normalizePath } from '../utils';
+import { isPathWithinProject, normalizePath } from '../utils';
 import type { SessionGroup, SessionNode } from '../types';
 import { SessionProjectScroller } from '../projects/SessionProjectScroller';
 import { useSessionGrouping } from '../projects/useSessionGrouping';
 import { SessionBulkActions } from '../folders/SessionBulkActions';
 import { useSessionFoldersStore } from '@/stores/useSessionFoldersStore';
+import { useSessionDraftsStore, type SessionDraft } from '@/stores/useSessionDraftsStore';
 import type { useSessionProjectViewState } from '../projects/useSessionProjectViewState';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import type { SidebarViewMode } from '@/stores/useSessionDisplayStore';
@@ -75,6 +76,7 @@ const SIDEBAR_MISSING_CHANGE_REQUEST_RETURN_MS = 60_000;
 const EMPTY_STANDALONE_GROUPS: SessionGroup[] = [];
 
 const EMPTY_TIMELINE_ITEMS: ReturnType<typeof deriveTimelineActivityItems> = [];
+const NO_DRAFTS: readonly SessionDraft[] = [];
 const EMPTY_WORK_SESSIONS: readonly Session[] = [];
 
 const isRootSession = (session: Session): boolean => {
@@ -845,6 +847,38 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
     }
     return nextFolderAuthorityByOwner;
   }, [bootstrapSnapshot, chatGroup, childStores, collection.hasAuthoritativeGlobalSessions, orderedSectionsForRender]);
+  // Drafts of new sessions not sent yet, where their session would go: the
+  // group whose directory holds the draft, else the project root's. They are
+  // read from the Host so a draft begun on another client lists here too.
+  const storedDrafts = useSessionDraftsStore((state) => (state.runtimeKey === getRuntimeKey() ? state.drafts : NO_DRAFTS));
+  React.useEffect(() => {
+    void useSessionDraftsStore.getState().load();
+  }, []);
+  const draftsByGroupKey = React.useMemo(() => {
+    const byGroupKey = new Map<string, SessionDraft[]>();
+    const drafts = [...storedDrafts].sort((left, right) => right.updatedAt - left.updatedAt);
+    for (const draft of drafts) {
+      const directory = normalizePath(draft.directory);
+      if (!directory) continue;
+      // The draft's own project first; otherwise the project whose folder
+      // holds it most closely, as nested projects share a prefix.
+      const section = projectSections.find((entry) => entry.project.id === draft.projectId)
+        ?? projectSections
+          .filter((entry) => isPathWithinProject(directory, entry.project.normalizedPath))
+          .sort((left, right) => right.project.normalizedPath.length - left.project.normalizedPath.length)[0];
+      if (!section) continue;
+      // A worktree's draft belongs to that worktree's group; anything else in
+      // the project goes to the root's.
+      const holdingGroup = section.groups
+        .filter((entry) => !entry.isArchivedBucket && entry.directory && isPathWithinProject(directory, normalizePath(entry.directory) ?? ''))
+        .sort((left, right) => (normalizePath(right.directory)?.length ?? 0) - (normalizePath(left.directory)?.length ?? 0))[0];
+      const group = holdingGroup ?? section.groups.find((entry) => entry.isMain);
+      if (!group) continue;
+      const groupKey = `${section.project.id}:${group.id}`;
+      byGroupKey.set(groupKey, [...(byGroupKey.get(groupKey) ?? []), draft]);
+    }
+    return byGroupKey;
+  }, [projectSections, storedDrafts]);
   const visibleCountByContainer = React.useMemo(() => new Map([
     ...visibleSessionCountByGroup,
     ...visibleActivityCountByKey,
@@ -857,6 +891,7 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
     // Hidden only from the list: folders and search keep the group.
     chatGroup: showChatsSection ? chatGroup : null,
     recentSections: recentActivitySections,
+    draftsByGroupKey,
     timelineItems,
     workItems,
     workSessionIds,
@@ -879,7 +914,7 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
     singleProjectMode: singleProjectMode && !timelineMode,
     singleProjectId: selectedSingleProjectId,
     runIndex,
-  }), [runIndex, chatGroup, showChatsSection, projectView.collapsedActivities, timelineItems, timelineMode, workItems, workSessionIds, sessionWorkKeepInGroup, collapsedFolderIds, collection.pinnedSessionIds, expandedParents, folderAuthorityByOwner, foldersMap, groupSearchDataByGroup, groupStatusByKey, orderedSectionsForRender, projectSections, projectView.collapsedGroups, projectView.collapsedProjects, recentActivitySections, selectedSingleProjectId, sessionOrderIndex, showRecentSection, singleProjectMode, view.activeProjectId, view.hasSessionSearchQuery, view.normalizedSessionSearchQuery, visibleCountByContainer]);
+  }), [runIndex, chatGroup, showChatsSection, projectView.collapsedActivities, timelineItems, timelineMode, workItems, workSessionIds, sessionWorkKeepInGroup, collapsedFolderIds, collection.pinnedSessionIds, draftsByGroupKey, expandedParents, folderAuthorityByOwner, foldersMap, groupSearchDataByGroup, groupStatusByKey, orderedSectionsForRender, projectSections, projectView.collapsedGroups, projectView.collapsedProjects, recentActivitySections, selectedSingleProjectId, sessionOrderIndex, showRecentSection, singleProjectMode, view.activeProjectId, view.hasSessionSearchQuery, view.normalizedSessionSearchQuery, visibleCountByContainer]);
   React.useEffect(() => {
     onSearchMatchCountChange(sidebarRowModel.searchMatchCount);
   }, [onSearchMatchCountChange, sidebarRowModel.searchMatchCount]);

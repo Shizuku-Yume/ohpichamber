@@ -28,6 +28,7 @@ import { Icon } from '@/components/icon/Icon';
 import { SessionSidebarFolderItem } from '../folders/SessionSidebarFolderItem';
 import { SessionTreeItem } from '../sessions/SessionTreeItem';
 import { RunSidebarRow } from '../sessions/RunSidebarRow';
+import { SessionDraftRow } from '../works/SessionDraftRow';
 import { computeNodeStructureKey, nodeContainsSessionId } from '../sessions/sessionNodeItemUtils';
 import { DroppableFolderWrapper } from '../folders/sessionFolderDnd';
 import { FolderDeleteConfirmDialog, type DeleteFolderConfirmState } from '../shell/ConfirmDialogs';
@@ -410,6 +411,9 @@ function SessionProjectScrollerComponent({ model, view, actions }: Props): React
           archivedBucket={row.archived}
         />}
       </DroppableFolderWrapper>;
+    }
+    if (row.kind === 'draft') {
+      return <SessionDraftRow draft={row.draft} depth={row.depth} alwaysShowActions={view.alwaysShowActions} />;
     }
     if (row.kind === 'session') {
       const subtreeContainsEditing = new Set<string>();

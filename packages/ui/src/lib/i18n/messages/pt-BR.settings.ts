@@ -1255,6 +1255,7 @@ export const settingsDict = {
   "settings.openchamber.keyboardShortcuts.action.mini_chat_global.label": "Atalho global do Mini Chat",
   "settings.openchamber.keyboardShortcuts.action.quake_mode_global.label": "Atalho global do modo Quake",
   "settings.openchamber.keyboardShortcuts.action.open_help.label": "Abrir atalhos de teclado",
+  "settings.openchamber.keyboardShortcuts.action.open_project_actions.label": "Abrir ações do projeto",
   "settings.openchamber.keyboardShortcuts.action.toggle_services_menu.label": "Mostrar ou ocultar menu de serviços",
   "settings.openchamber.keyboardShortcuts.action.cycle_theme.label": "Alternar tema",
   "settings.openchamber.keyboardShortcuts.action.cycle_agent.label": "Alternar agente",

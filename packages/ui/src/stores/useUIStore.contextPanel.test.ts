@@ -112,7 +112,6 @@ describe('useUIStore context panel tabs', () => {
         state: {
           contextPanelByDirectory: {
             [directory]: {
-              isOpen: true, expanded: false, widthByMode: {}, touchedAt: 1,
               activeTabId: 'diff',
               tabs: [
                 { id: 'diff', mode: 'diff', diffScope: 'turn', touchedAt: 1 },
@@ -211,7 +210,6 @@ describe('useUIStore context panel tabs', () => {
         [directory]: {
           isOpen: true,
           expanded: false,
-          widthByMode: {},
           touchedAt: 1,
           activeTabId: 'plan:plan-1',
           tabs: [
@@ -272,7 +270,6 @@ describe('useUIStore context panel tabs', () => {
         [directory]: {
           isOpen: true,
           expanded: false,
-          widthByMode: {},
           touchedAt: 1,
           activeTabId: 'plan',
           tabs: [
@@ -324,8 +321,10 @@ describe('useUIStore context panel tabs', () => {
                 walkthrough: 0.8,
               },
               touchedAt: 1,
-              activeTabId: null,
-              tabs: [],
+              activeTabId: 'walkthrough',
+              tabs: [
+                { id: 'walkthrough', mode: 'walkthrough', dedupeKey: 'walkthrough', touchedAt: 1 },
+              ],
             },
           },
         },
@@ -340,7 +339,7 @@ describe('useUIStore context panel tabs', () => {
 
       const panel = useUIStore.getState().contextPanelByDirectory[directory];
       expect(panel).not.toHaveProperty('widthFractionByMode');
-      expect(panel?.widthByMode).toEqual({ walkthrough: 800 });
+      expect(useUIStore.getState().contextZoneSizes.right).toBe(800);
     } finally {
       useUIStore.persist.setOptions(originalPersistOptions);
     }
@@ -353,7 +352,6 @@ describe('useUIStore context panel tabs', () => {
         [directory]: {
           isOpen: true,
           expanded: false,
-          widthByMode: {},
           touchedAt: 1,
           activeTabId: null,
           tabs: [
@@ -457,7 +455,6 @@ describe('useUIStore context panel tabs', () => {
             '/repo': {
               isOpen: true,
               expanded: false,
-              widthByMode: {},
               touchedAt: 1,
               activeTabId: 'chat:session:ses_1',
               tabs: [
@@ -508,7 +505,6 @@ describe('useUIStore context panel tabs', () => {
         '/repo-worktree': {
           isOpen: true,
           expanded: false,
-          widthByMode: {},
           touchedAt: 1,
           activeTabId: 'terminal',
           tabs: [
@@ -543,7 +539,6 @@ describe('useUIStore context panel tabs', () => {
         '/repo-worktree': {
           isOpen: true,
           expanded: false,
-          widthByMode: {},
           touchedAt: 1,
           activeTabId: 'terminal',
           tabs: [
@@ -587,7 +582,6 @@ describe('useUIStore context panel tabs', () => {
         '/repo-worktree': {
           isOpen: true,
           expanded: false,
-          widthByMode: {},
           touchedAt: 1,
           activeTabId: 'diff',
           tabs: [
@@ -927,6 +921,7 @@ describe('useUIStore closeContextPanelTab surface stability', () => {
     useUIStore.setState({ contextEditorTreeVisible: false });
 
     const stateBefore = useUIStore.getState().contextPanelByDirectory[directory];
+    const contextZoneSizesBefore = useUIStore.getState().contextZoneSizes;
     const fileTabId = stateBefore?.tabs.find((tab) => tab.mode === 'file')?.id;
     if (!fileTabId) throw new Error('expected a file tab');
     useUIStore.getState().closeContextPanelTab(directory, fileTabId);
@@ -938,7 +933,7 @@ describe('useUIStore closeContextPanelTab surface stability', () => {
     expect(activeTab?.targetPath).toBe(null);
     expect(state?.tabs.map((tab) => tab.mode)).toEqual(['terminal', 'file']);
     expect(useUIStore.getState().contextEditorTreeVisible).toBe(true);
-    expect(state?.widthByMode).toEqual(stateBefore?.widthByMode);
+    expect(useUIStore.getState().contextZoneSizes).toEqual(contextZoneSizesBefore);
   });
 
   test('closing the empty editor tab itself still closes the file surface', () => {
@@ -992,6 +987,7 @@ describe('useUIStore closeContextPanelTabs bulk', () => {
     useUIStore.setState({ contextEditorTreeVisible: false });
 
     const state0 = useUIStore.getState().contextPanelByDirectory[directory];
+    const contextZoneSizes0 = useUIStore.getState().contextZoneSizes;
     const fileIds = state0?.tabs.filter((tab) => tab.mode === 'file').map((tab) => tab.id) ?? [];
     useUIStore.getState().closeContextPanelTabs(directory, fileIds);
 
@@ -1002,7 +998,7 @@ describe('useUIStore closeContextPanelTabs bulk', () => {
     expect(activeTab?.targetPath).toBe(null);
     expect(state?.tabs.some((tab) => tab.mode === 'terminal')).toBe(true);
     expect(useUIStore.getState().contextEditorTreeVisible).toBe(true);
-    expect(state?.widthByMode).toEqual(state0?.widthByMode);
+    expect(useUIStore.getState().contextZoneSizes).toEqual(contextZoneSizes0);
   });
 
   test('closing only inactive-mode tabs leaves the active tab and panel intact', () => {
@@ -1041,31 +1037,33 @@ describe('useUIStore closeContextPanelTabs bulk', () => {
   });
 });
 
-describe('useUIStore per-surface panel widths', () => {
+describe('useUIStore context zone widths', () => {
   const directory = '/repo';
 
-  test('setContextPanelWidth stores a clamped manual width for one mode only', () => {
+  test('setContextZoneSize stores a clamped width for the zone, not per surface', () => {
     useUIStore.getState().openContextPanelTab(directory, { mode: 'diff' });
-    useUIStore.getState().setContextPanelWidth(directory, 'diff', 700);
-    useUIStore.getState().setContextPanelWidth(directory, 'git', 100);
+    useUIStore.getState().setContextZoneSize('right', 700);
+    useUIStore.getState().setContextZoneSize('left', 100);
 
-    const state = useUIStore.getState().contextPanelByDirectory[directory];
-    expect(state?.widthByMode.diff).toBe(700);
-    expect(state?.widthByMode.git).toBe(320);
-    expect(state?.widthByMode.browser).toBe(undefined);
+    const state = useUIStore.getState();
+    expect(state.contextZoneSizes.right).toBe(700);
+    expect(state.contextZoneSizes.left).toBe(320);
+    expect(state.contextZoneSizes.bottom).toBe(undefined);
+    // The width belongs to the zone: the surface it shows does not change it.
+    useUIStore.getState().openContextPanelTab(directory, { mode: 'git' });
+    expect(useUIStore.getState().contextZoneSizes.right).toBe(700);
   });
 
   test('a later resize replaces the remembered width', () => {
     const store = useUIStore.getState();
-    store.setContextPanelWidth(directory, 'walkthrough', 800);
-    store.setContextPanelWidth(directory, 'walkthrough', 600.4);
-    const panel = useUIStore.getState().contextPanelByDirectory[directory];
-    expect(panel?.widthByMode.walkthrough).toBe(600);
+    store.setContextZoneSize('right', 800);
+    store.setContextZoneSize('right', 600.4);
+    expect(useUIStore.getState().contextZoneSizes.right).toBe(600);
   });
 
   test('tree resizing and visibility changes preserve the full editor width', () => {
     const store = useUIStore.getState();
-    store.setContextPanelWidth(directory, 'file', 800);
+    store.setContextZoneSize('right', 800);
     store.openContextFile(directory, '/repo/a.ts');
     store.setContextEditorTreeWidth(260);
     store.toggleContextEditor();
@@ -1076,12 +1074,11 @@ describe('useUIStore per-surface panel widths', () => {
     const fileIds = useUIStore.getState().contextPanelByDirectory[directory]?.tabs.map((tab) => tab.id) ?? [];
     store.closeContextPanelTabs(directory, fileIds);
 
-    const panel = useUIStore.getState().contextPanelByDirectory[directory];
     expect(useUIStore.getState().contextEditorTreeWidth).toBe(300);
-    expect(panel?.widthByMode).toEqual({ file: 800 });
+    expect(useUIStore.getState().contextZoneSizes.right).toBe(800);
   });
 
-  test('restores the shared tree width and ignores obsolete tree-only panel widths', async () => {
+  test('restores the shared tree width and migrates per-surface widths to the zone', async () => {
     useUIStore.persist.setOptions({
       storage: {
         getItem: () => ({
@@ -1094,8 +1091,10 @@ describe('useUIStore per-surface panel widths', () => {
                 expanded: false,
                 widthByMode: { 'file-tree': 400, file: 800 },
                 touchedAt: 1,
-                activeTabId: null,
-                tabs: [],
+                activeTabId: 'file:/repo/a.ts',
+                tabs: [
+                  { id: 'file:/repo/a.ts', mode: 'file', targetPath: '/repo/a.ts', dedupeKey: '/repo/a.ts', touchedAt: 1 },
+                ],
               },
             },
           },
@@ -1111,7 +1110,9 @@ describe('useUIStore per-surface panel widths', () => {
 
       const panel = useUIStore.getState().contextPanelByDirectory[directory];
       expect(useUIStore.getState().contextEditorTreeWidth).toBe(260);
-      expect(panel?.widthByMode).toEqual({ file: 800 });
+      // `file-tree` never was a surface width; the file surface sets the zone.
+      expect(useUIStore.getState().contextZoneSizes.right).toBe(800);
+      expect(panel).not.toHaveProperty('widthByMode');
     } finally {
       useUIStore.persist.setOptions(originalPersistOptions);
     }
@@ -1198,7 +1199,6 @@ describe('useUIStore openAgentBrowserTab', () => {
         [directory]: {
           isOpen: false,
           expanded: false,
-          widthByMode: {},
           touchedAt: 1,
           activeTabId: null,
           tabs: [{ id: 'browser:browser:agent:1-1', mode: 'browser', targetPath: 'https://old.test', dedupeKey: 'browser:agent:1-1', touchedAt: 1 }],
@@ -1261,5 +1261,98 @@ describe('useUIStore closeContextFile (the editor\'s Cmd/Ctrl+W)', () => {
 
     expect(panel().tabs).toBe(before);
     expect(editorOpenPaths()).not.toContain('/repo/stray.ts');
+  });
+});
+
+describe('useUIStore persisted layout migration', () => {
+  const directory = '/repo';
+
+  const rehydrateFrom = async (version: number, state: Record<string, unknown>): Promise<void> => {
+    useUIStore.persist.setOptions({
+      storage: {
+        getItem: () => ({ version, state }),
+        setItem: () => undefined,
+        removeItem: () => undefined,
+      },
+    });
+    try {
+      useUIStore.setState(useUIStore.getInitialState(), true);
+      await useUIStore.persist.rehydrate();
+    } finally {
+      useUIStore.persist.setOptions(originalPersistOptions);
+    }
+  };
+
+  test('a v23 blob keeps its tabs and active tab, gets closed side zones and a zone size from its surface widths', async () => {
+    await rehydrateFrom(23, {
+      contextEditorTreeWidth: 260,
+      contextPanelByDirectory: {
+        [directory]: {
+          isOpen: true,
+          expanded: false,
+          widthByMode: { file: 800, walkthrough: 700 },
+          widthFractionByMode: { file: 1.2 },
+          touchedAt: 1,
+          activeTabId: 'file:/repo/a.ts',
+          tabs: [
+            { id: 'file:/repo/a.ts', mode: 'file', targetPath: '/repo/a.ts', dedupeKey: '/repo/a.ts', touchedAt: 1 },
+          ],
+        },
+      },
+    });
+
+    const panel = useUIStore.getState().contextPanelByDirectory[directory];
+    expect(useUIStore.getState().contextEditorTreeWidth).toBe(260);
+    expect(panel?.tabs.map((tab) => tab.id)).toEqual(['file:/repo/a.ts']);
+    expect(panel?.activeTabId).toBe('file:/repo/a.ts');
+    expect(panel?.isOpen).toBe(true);
+    expect(panel?.zones.left.isOpen).toBe(false);
+    expect(panel?.zones.bottom.isOpen).toBe(false);
+    expect(useUIStore.getState().contextSurfaceZones).toEqual({});
+    // The right zone keeps the width of the surface it shows.
+    expect(useUIStore.getState().contextZoneSizes.right).toBe(800);
+    expect(panel).not.toHaveProperty('widthByMode');
+  });
+
+  test('a corrupt blob opens with an empty, closed layout instead of throwing', async () => {
+    await rehydrateFrom(24, {
+      contextPanelByDirectory: 'not-an-object',
+      contextSurfaceZones: ['nope'],
+      contextZoneSizes: { right: 'wide', left: -5, bottom: null },
+      fileTreeSide: 'up',
+      contextRailOrder: 'nope',
+    });
+
+    const state = useUIStore.getState();
+    expect(state.contextPanelByDirectory).toEqual({});
+    expect(state.contextSurfaceZones).toEqual({});
+    expect(state.contextZoneSizes).toEqual({ left: 320 });
+    expect(state.fileTreeSide).toBe('right');
+    expect(Array.isArray(state.contextRailOrder)).toBe(true);
+  });
+
+  test('a corrupt panel entry keeps no unopenable tab and no unknown zone data', async () => {
+    await rehydrateFrom(24, {
+      contextPanelByDirectory: {
+        [directory]: {
+          isOpen: 'yes',
+          expanded: 1,
+          tabs: [{ mode: 'nope' }, 'not-a-tab'],
+          zones: 5,
+          activeTabId: 7,
+          widthByMode: 'wide',
+          touchedAt: 'soon',
+        },
+      },
+    });
+
+    const panel = useUIStore.getState().contextPanelByDirectory[directory];
+    expect(panel?.tabs).toEqual([]);
+    expect(panel?.activeTabId).toBe(null);
+    expect(panel?.isOpen).toBe(false);
+    expect(panel?.zones).toEqual({
+      left: { isOpen: false, expanded: false, activeTabId: null },
+      bottom: { isOpen: false, expanded: false, activeTabId: null },
+    });
   });
 });

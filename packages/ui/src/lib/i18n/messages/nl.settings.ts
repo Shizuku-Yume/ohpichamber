@@ -1288,6 +1288,7 @@ export const settingsDict = {
   'settings.openchamber.keyboardShortcuts.action.mini_chat_global.label': 'Globale sneltoets voor Mini Chat',
   'settings.openchamber.keyboardShortcuts.action.quake_mode_global.label': 'Globale sneltoets voor Quake-modus',
   'settings.openchamber.keyboardShortcuts.action.open_help.label': 'Sneltoetsen openen',
+  'settings.openchamber.keyboardShortcuts.action.open_project_actions.label': 'Projectacties openen',
   'settings.openchamber.keyboardShortcuts.action.toggle_services_menu.label': 'Services-menu in-/uitschakelen',
   'settings.openchamber.keyboardShortcuts.action.cycle_theme.label': 'Thema doorlopen',
   'settings.openchamber.keyboardShortcuts.action.cycle_agent.label': 'Agent doorlopen',

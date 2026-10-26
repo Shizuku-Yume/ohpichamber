@@ -1255,6 +1255,7 @@ export const settingsDict = {
   "settings.openchamber.keyboardShortcuts.action.mini_chat_global.label": "Глобальне скорочення Mini Chat",
   "settings.openchamber.keyboardShortcuts.action.quake_mode_global.label": "Глобальне скорочення режиму Quake",
   "settings.openchamber.keyboardShortcuts.action.open_help.label": "Відкрити комбінації клавіш",
+  "settings.openchamber.keyboardShortcuts.action.open_project_actions.label": "Відкрити дії проєкту",
   "settings.openchamber.keyboardShortcuts.action.toggle_services_menu.label": "Перемкнути меню сервісів",
   "settings.openchamber.keyboardShortcuts.action.cycle_theme.label": "Перемкнути тему",
   "settings.openchamber.keyboardShortcuts.action.cycle_agent.label": "Перемкнути агента",

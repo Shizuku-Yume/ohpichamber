@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const contextPanelSource = readFileSync(join(__dirname, '..', 'ContextPanel.tsx'), 'utf-8');
+const zoneEscapeSource = readFileSync(join(__dirname, '..', 'zoneEscape.ts'), 'utf-8');
 const mobileWorkspaceDrawerSource = readFileSync(
   join(__dirname, '..', '..', '..', 'apps', 'MobileWorkspaceDrawer.tsx'),
   'utf-8',
@@ -22,30 +23,26 @@ describe('issue #2644: Escape in terminal must not close the context panel', () 
     expect(contextPanelSource).toContain('onKeyDownCapture={handlePanelKeyDownCapture}');
   });
 
-  test('the capture handler skips closing when the event target is inside the terminal', () => {
-    const start = contextPanelSource.indexOf('const handlePanelKeyDownCapture = React.useCallback(');
-    expect(start).toBeGreaterThan(-1);
-    const end = contextPanelSource.indexOf('}, [handleClose, isOpen]);', start);
-    expect(end).toBeGreaterThan(start);
-    const handler = contextPanelSource.slice(start, end);
+  test('the zone frame asks the shared Escape helper, which skips closing inside the terminal', () => {
+    expect(contextPanelSource).toContain('closeZoneOnEscape(event, isOpen, handleClose)');
+    expect(zoneEscapeSource).toContain("event.key !== 'Escape'");
+    expect(zoneEscapeSource).toContain('isTerminalEventTarget(event.target)');
+    expect(zoneEscapeSource).toContain('event.preventDefault()');
+    expect(zoneEscapeSource).toContain('event.stopPropagation()');
 
-    expect(handler).toContain("event.key !== 'Escape'");
-    expect(handler).toContain('isTerminalEventTarget(event.target)');
-    expect(handler).toContain('event.preventDefault()');
-    expect(handler).toContain('event.stopPropagation()');
-    expect(handler).toContain('handleClose()');
-
-    // Guard must return before preventDefault/stopPropagation so the terminal input's
-    // bubble-phase keydown listener can forward Escape to the PTY.
-    const guardIndex = handler.indexOf('isTerminalEventTarget(event.target)');
-    const preventIndex = handler.indexOf('event.preventDefault()');
+    // The guard returns before preventDefault/stopPropagation so the terminal
+    // input's bubble-phase listener can forward Escape to the PTY.
+    const guardIndex = zoneEscapeSource.indexOf('isTerminalEventTarget(event.target)');
+    const preventIndex = zoneEscapeSource.indexOf('event.preventDefault()');
     expect(guardIndex).toBeGreaterThan(-1);
     expect(preventIndex).toBeGreaterThan(guardIndex);
   });
 
-  test('ContextPanel imports the shared terminal focus helper', () => {
-    expect(contextPanelSource).toContain("from '@/lib/terminalFocus'");
-    expect(contextPanelSource).toContain('isTerminalEventTarget');
+  test('the Escape helper imports the shared terminal, editor and IME guards', () => {
+    expect(zoneEscapeSource).toContain("from '@/lib/terminalFocus'");
+    expect(zoneEscapeSource).toContain('isTerminalEventTarget');
+    expect(zoneEscapeSource).toContain("from '@/lib/editorFocus'");
+    expect(zoneEscapeSource).toContain("from '@/lib/ime'");
   });
 
   test('mobile drawer keeps its terminal Escape exception', () => {

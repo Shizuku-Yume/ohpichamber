@@ -1253,6 +1253,7 @@ export const settingsDict = {
   'settings.openchamber.keyboardShortcuts.action.mini_chat_global.label': 'Mini Chat genel kısayolu',
   'settings.openchamber.keyboardShortcuts.action.quake_mode_global.label': 'Quake Modu genel kısayolu',
   'settings.openchamber.keyboardShortcuts.action.open_help.label': 'Klavye kısayollarını aç',
+  'settings.openchamber.keyboardShortcuts.action.open_project_actions.label': 'Proje eylemlerini aç',
   'settings.openchamber.keyboardShortcuts.action.toggle_services_menu.label': 'Hizmetler menüsünü aç/kapat',
   'settings.openchamber.keyboardShortcuts.action.cycle_theme.label': 'Temalar arasında geçiş yap',
   'settings.openchamber.keyboardShortcuts.action.cycle_agent.label': 'Agent\'lar arasında geçiş yap',

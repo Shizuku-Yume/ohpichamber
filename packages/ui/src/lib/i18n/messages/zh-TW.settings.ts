@@ -1149,6 +1149,7 @@ export const settingsDict = {
   'settings.openchamber.keyboardShortcuts.action.mini_chat_global.label': 'Mini Chat 全域快捷鍵',
   'settings.openchamber.keyboardShortcuts.action.quake_mode_global.label': 'Quake 模式全域快捷鍵',
   'settings.openchamber.keyboardShortcuts.action.open_help.label': '開啟鍵盤快速鍵',
+  'settings.openchamber.keyboardShortcuts.action.open_project_actions.label': '開啟專案動作',
   'settings.openchamber.keyboardShortcuts.action.toggle_services_menu.label': '切換服務選單',
   'settings.openchamber.keyboardShortcuts.action.cycle_theme.label': '輪換主題',
   'settings.openchamber.keyboardShortcuts.action.cycle_agent.label': '輪換 agent',

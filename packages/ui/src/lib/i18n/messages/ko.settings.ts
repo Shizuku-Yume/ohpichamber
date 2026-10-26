@@ -1255,6 +1255,7 @@ export const settingsDict = {
   'settings.openchamber.keyboardShortcuts.action.mini_chat_global.label': 'Mini Chat 전역 단축키',
   'settings.openchamber.keyboardShortcuts.action.quake_mode_global.label': 'Quake 모드 전역 단축키',
   'settings.openchamber.keyboardShortcuts.action.open_help.label': '키보드 단축키 열기',
+  'settings.openchamber.keyboardShortcuts.action.open_project_actions.label': '프로젝트 작업 열기',
   'settings.openchamber.keyboardShortcuts.action.toggle_services_menu.label': '서비스 메뉴 토글',
   'settings.openchamber.keyboardShortcuts.action.cycle_theme.label': '테마 순환',
   'settings.openchamber.keyboardShortcuts.action.cycle_agent.label': '에이전트 순환',

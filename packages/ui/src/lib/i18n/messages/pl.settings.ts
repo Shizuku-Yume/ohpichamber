@@ -873,6 +873,7 @@ export const settingsDict = {
   'settings.openchamber.keyboardShortcuts.action.open_go_to_line.label': 'Przejdź do linii (edytor plików)',
   'settings.openchamber.keyboardShortcuts.action.open_document_symbols.label': 'Przejdź do symbolu w pliku (edytor plików)',
   'settings.openchamber.keyboardShortcuts.action.open_help.label': 'Otwórz skróty klawiszowe',
+  'settings.openchamber.keyboardShortcuts.action.open_project_actions.label': 'Otwórz akcje projektu',
     'settings.openchamber.keyboardShortcuts.action.switch_session_tab.label': 'Przełącz kartę sesji',
   'settings.openchamber.keyboardShortcuts.action.switch_session_tab.suffix': ' + 1…9',
   'settings.openchamber.keyboardShortcuts.action.switch_context_surface.label': 'Przełącz powierzchnię panelu kontekstu',

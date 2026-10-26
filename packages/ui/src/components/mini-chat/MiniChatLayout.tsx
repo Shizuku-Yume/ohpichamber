@@ -9,6 +9,7 @@ import { WindowsWindowControls } from '@/components/desktop/WindowsWindowControl
 import { SessionSwitcherDropdown } from '@/components/session/SessionSwitcherDropdown';
 import { cn } from '@/lib/utils';
 import { normalizePath } from '@/lib/pathNormalization';
+import { findWorktreeHoldingDirectory } from '@/lib/worktrees/worktreePaths';
 import { useI18n } from '@/lib/i18n';
 import { invokeDesktop, isElectronShell } from '@/lib/desktop';
 import { useDesktopWindowControlsLayout } from '@/hooks/useDesktopWindowControlsLayout';
@@ -25,6 +26,7 @@ import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { buildSessionContextUsage, isSameContextUsage } from '@/stores/utils/tokenUtils';
 import type { SessionContextUsage } from '@/stores/types/sessionTypes';
 import { isChatDirectoryPath } from '@/lib/chatDirectories';
+import { followZonePlacementOfOtherWindows } from '@/components/layout/zoneSync';
 
 type MiniChatMode = 'session' | 'draft';
 
@@ -67,7 +69,8 @@ const MiniChatHeader: React.FC<{ mode: MiniChatMode }> = ({ mode }) => {
     if (!state.newSessionDraft?.open) return '';
     return normalizePath(state.newSessionDraft.bootstrapPendingDirectory ?? state.newSessionDraft.directoryOverride ?? '');
   });
-  const [pinned, setPinned] = React.useState(false);
+  // New mini chat windows open pinned; the shell's answer below confirms it.
+  const [pinned, setPinned] = React.useState(true);
   const macosMajor = typeof window !== 'undefined' ? window.__OPENCHAMBER_MACOS_MAJOR__ ?? 0 : 0;
   const hasMacTrafficLights = Number.isFinite(macosMajor) && macosMajor > 0;
   const { usesFramelessChrome, side: windowControlsSide } = useDesktopWindowControlsLayout();
@@ -103,12 +106,14 @@ const MiniChatHeader: React.FC<{ mode: MiniChatMode }> = ({ mode }) => {
     const candidateDirectory = normalizePath(worktreeDirectory || sessionDirectory || '');
     if (!candidateDirectory) return null;
     for (const worktrees of state.availableWorktreesByProject.values()) {
-      const match = worktrees.find((worktree) => normalizePath(worktree.path) === candidateDirectory);
+      const match = findWorktreeHoldingDirectory(worktrees, candidateDirectory);
       const branch = match?.branch?.trim();
       if (branch) return branch;
     }
     return null;
   });
+  // A surface moved in the main window lives in the same zone here.
+  React.useEffect(() => followZonePlacementOfOtherWindows(), []);
   React.useEffect(() => {
     if (!openDirectory || isChatContext) return;
     void ensureGitStatus(openDirectory, runtimeApis.git).catch(() => {});

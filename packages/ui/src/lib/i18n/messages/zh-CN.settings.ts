@@ -1255,6 +1255,7 @@ export const settingsDict = {
   'settings.openchamber.keyboardShortcuts.action.mini_chat_global.label': 'Mini Chat 全局快捷键',
   'settings.openchamber.keyboardShortcuts.action.quake_mode_global.label': 'Quake 模式全局快捷键',
   'settings.openchamber.keyboardShortcuts.action.open_help.label': '打开键盘快捷键',
+  'settings.openchamber.keyboardShortcuts.action.open_project_actions.label': '打开项目操作',
   'settings.openchamber.keyboardShortcuts.action.toggle_services_menu.label': '切换服务菜单',
   'settings.openchamber.keyboardShortcuts.action.cycle_theme.label': '轮换主题',
   'settings.openchamber.keyboardShortcuts.action.cycle_agent.label': '轮换智能体',

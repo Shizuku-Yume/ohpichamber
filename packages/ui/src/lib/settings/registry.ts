@@ -643,6 +643,11 @@ export const LOCAL_DEVICE_KEYS = [
   'alwaysShowScrollbars',
   'agentMemoryViewedAt',
   'projectContextSidebarWidth',
+  // Workspace zones (task 09): device layout, not settings.
+  'sidebarFoldedForExpandedZone',
+  'contextSurfaceZones',
+  'fileTreeSide',
+  'contextZoneSizes',
 ] as const;
 
 /**

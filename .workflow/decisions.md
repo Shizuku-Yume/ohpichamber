@@ -314,3 +314,48 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** the maintainer prefers fork-only history, or a tag/pin mechanism replaces the merge.
 - **Effort:** upstream-refresh
+
+## 2026-10-27 - Lint with oxlint only
+
+- **Decided:** The repository lints with oxlint alone: `eslint.config.js` is deleted, the ESLint and typescript-eslint devDependencies leave the root, ui and web manifests, and every workspace `lint` script runs `oxlint -c ../../oxlint.config.ts --report-unused-disable-directives`. `oxlint.config.ts` is the general config and `oxlint.anti-slop.config.ts` keeps the anti-slop backlog and ratchet, the split upstream uses.
+- **Instead of:** keeping ESLint for general lint and oxlint only for the vendored anti-slop plugin, as the fork did before this refresh.
+- **Because:** upstream 0056bf6a9 authors and checks its source with oxlint 1.88, and two linters mean the same file is judged twice with different rule sets and duplicated disable comments. The oxlint 1.88 config is ESLint's and typescript-eslint's recommended sets plus the React rules, so the migration keeps the checks the fork relied on.
+- **Mine:** yes
+- **Revisit when:** a rule the fork needs has no oxlint equivalent, or a check has to run with type information oxlint does not provide.
+- **Effort:** upstream-refresh
+
+## 2026-10-27 - Wire the RTL lint rule but leave it off until the RTL conversion
+
+- **Decided:** `tools/oxlint/openchamber` (including `no-physical-sides`) is vendored and wired in `oxlint.config.ts`, but the rule is set to `"off"` with a comment naming the RTL conversion task 20 as the owner that turns it on.
+- **Instead of:** enabling the rule now, which reports 881 physical side classes in the fork's UI, or dropping the rule and the plugin until later.
+- **Because:** the layout has not been converted to logical sides yet; that conversion is task 20's deliverable, and enabling the rule in task 02 would leave the integration branch red for every task until 20 lands. Keeping the rule wired means the conversion only flips one value.
+- **Mine:** yes
+- **Revisit when:** task 20 converts the UI, or a task needs the rule enforced over its own files sooner.
+- **Effort:** upstream-refresh
+
+## 2026-10-27 - Take upstream's bun patch set and drop the dead @ark/schema entry
+
+- **Decided:** `bun-patches/` matches upstream where the package version is the fork's: adopt `@legendapp%2Flist@3.6.0.patch` whole, replace the `@tanstack/virtual-core` 3.17.11 patch with 3.19.6, replace the `bun-pty` 0.4.8 patch with 0.5.1, and bump `@tanstack/react-virtual` to 3.14.21 and `bun-pty` to 0.5.1 so the new patches apply. Keep `happy-dom@18.0.1.patch` (unchanged upstream) and the three vendor OMP patches. Delete the `@ark/schema@0.56.2` entry from `patchedDependencies`: the package is no longer installed, so `bun install` warned that its patch does not apply, while the version override stays for a dependency that may return.
+- **Instead of:** keeping the fork's older patch set, or re-adding a package just to keep its patch alive.
+- **Because:** a patch that names a version the tree no longer installs is dead weight that makes every install warn, and upstream's patch content is the same fix carried onto the versions the refresh moves to.
+- **Mine:** yes
+- **Revisit when:** a vendor package reintroduces `@ark/schema`, or a patched dependency is removed or replaced.
+- **Effort:** upstream-refresh
+
+## 2026-10-27 - Do not track a .env file
+
+- **Decided:** Delete the tracked root `.env` (its only content was `NODE_ENV=development`). `.env` stays in `.gitignore`; local development sets variables through the shell or an untracked file.
+- **Instead of:** keeping the tracked file because it was already there.
+- **Because:** upstream deleted it, nothing in the repository reads a root `.env` outside Vite's `VITE_`-prefixed convention, and a tracked environment file ships a default that silently overrides whatever the developer configured. The fork's real provider settings already live outside the repository.
+- **Mine:** yes
+- **Revisit when:** the build needs a repository-shipped default for a non-secret variable, which belongs in the code or a documented command instead.
+- **Effort:** upstream-refresh
+
+## 2026-10-27 - Leave the source-control SDK example to task 04
+
+- **Decided:** `packages/sdk/examples/source-control-provider/package.json` is not adopted in task 02. The SDK example set stays as the fork has it; task 04 brings this manifest together with the example's `README.md`, `fake-forge.ts` and `service/main.*`, which its path list already owns.
+- **Instead of:** adopting the manifest now because the path list assigns it to 02, or teaching the fork's manifest parser the new `sourceControl` contribution from a toolchain task.
+- **Because:** the fork's current SDK manifest parser rejects the file (`invalid-service`: the `sourceControl` contribution and `provides: ["source-control"]` shape are newer than the parser), so landing it alone leaves an example the repository cannot validate; the parser and the example's sources belong to task 04.
+- **Mine:** yes
+- **Revisit when:** task 04 lands the SDK source-control contract and its examples.
+- **Effort:** upstream-refresh

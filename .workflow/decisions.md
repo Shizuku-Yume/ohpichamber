@@ -251,3 +251,21 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** no
 - **Revisit when:** goals end too early in practice because the agent declares completion without the work being done, or OMP exposes a hook for an external completion check.
 - **Effort:** omp-native-chat
+
+## 2026-10-27 - Host tools are essential callable tools, not xd:// devices
+
+- **Decided:** Register `openchamber`, `web`, `memory` and `notify` with `loadMode: 'essential'`, so OMP places them in the normal callable tool schema with only their own descriptions. Their Host actions keep the existing capability owner and approval path.
+- **Instead of:** Leaving them as default `discoverable` extension tools, which OMP mounts as `xd://` devices whose documentation the Host policy refuses, or adding app-authored prompt guidance explaining how to call them.
+- **Because:** The effort's parity rule is that the model receives what plain OMP receives plus pins, attachments and the tools' own descriptions. A discoverable extension tool reaches the model only through an `xd://` device listing, which is additional prompt text and an unreadable Host capability; an essential tool is the ordinary OMP shape for a callable extension.
+- **Mine:** yes
+- **Revisit when:** OMP changes extension-tool presentation so essential tools gain prompt text of their own, or a Host tool needs to be deferred until explicitly enabled.
+- **Effort:** omp-native-parity
+
+## 2026-10-27 - Host policy passes only allowlisted OMP internal URL reads
+
+- **Decided:** A native `read` descriptor may carry `internalReadUrls` only for the exact OMP schemes `agent`, `history`, `artifact`, `local`, `proc`, `skill`, `xd`, `mcp`, `omp`, `issue` and `pr`. The descriptor resolves them with OMP's own `InternalUrlRouter.normalize`/`canHandle` (so registered aliases and selectors keep OMP's meaning) and stores the normalized URL. Host policy admits them only for `read`, checks every local target in a mixed list as before, and keeps `write`, `edit`, `grep` and `glob` on the filesystem-only path. Unknown schemes, `file://`, `https://` and NUL bytes stay refused. Native `wait` is admitted because it only observes this session's async jobs.
+- **Instead of:** Removing the `://` refusal wholesale, resolving internal URLs in the Host, or allowing the same pass-through for every native tool.
+- **Because:** OMP owns the grammar and containment of its internal resources, while the Host must not turn an opaque URL into a machine-capability grant. The allowlist is exactly the schemes the TUI resolves; arbitrary MCP fallback schemes and remote/file URLs are not silently granted, and a mixed delimited read still authorizes each local path.
+- **Mine:** yes
+- **Revisit when:** OMP adds or removes a native internal scheme, or a read-only internal URL starts granting a capability the Host must authorize separately.
+- **Effort:** omp-native-parity

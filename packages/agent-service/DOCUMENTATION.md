@@ -73,6 +73,12 @@ Root admission reconciles Host source journals under that same queue before nati
 Raw `SKILL.md` content remains exact Markdown. Skill descriptions and expanded prompts reuse the established session skill privacy helpers: the native builder receives the public `skill://` base URI and private roots are redacted from public expansion messages. This is the existing catalog privacy contract, not a new authoring-content transform.
 
 Web and Electron reach these operations through the authenticated Host Gateway. Hosted mobile and Capacitor use that same configured Host; no client or Node Host imports the SDK.
+## Host tools and native internal URLs
+
+The worker registers `openchamber`, `web`, `memory` and `notify` as essential extension tools, so OMP presents them in the ordinary callable tool schema with only their own descriptions. Their `execute` path still calls the Host action owner; they are never `xd://` devices in the chat prompt.
+
+Native `read` targets may be OMP internal URLs. The supervisor's execution-free descriptor normalizes a target with OMP's `InternalUrlRouter` and admits only `agent`, `history`, `artifact`, `local`, `proc`, `skill`, `xd`, `mcp`, `omp`, `issue` and `pr` into the Host authorization request. Host policy accepts those internal targets only for `read`, still checks every local path in a mixed delimited list, and leaves `write`, `edit`, `grep` and `glob` on the filesystem-only path. Unknown schemes and NUL bytes remain refused. Native `wait` observes only this session's async jobs and is admitted without a machine capability.
+
 ## Native web search
 
 `GET`/`PUT /api/agent/v1/workspaces/:workspaceId/web-search` and credential `PUT`/`DELETE .../web-search/credentials/:providerId` use the strict canonical web-search schemas. Credential path and body identities must match. The workspace must be registered by the authenticated Host; no session is required to read or persist settings. These HTTP operations serve web/PWA, Electron, hosted mobile, and Capacitor through the existing canonical Host transport.

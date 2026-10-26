@@ -5,7 +5,6 @@ import { sendMessage } from '@/sync/session-actions';
 import { devtools } from 'zustand/middleware';
 import type { CreateMultiRunParams, CreateMultiRunResult } from '@/types/multirun';
 import { resolveWorkspaceDirectory } from '@/stores/globalSessions';
-import { fetchSessionKnowledge, reportSessionKnowledgeDelivered } from '@/lib/sessionKnowledgeApi';
 import { getWorktreeSetupWaitEnabled, saveWorktreeSetupCommands } from '@/lib/openchamberConfig';
 import type { ProjectRef } from '@/lib/worktrees/worktreeManager';
 import { createWorktreeWithDefaults, resolveRootTrackingRemote } from '@/lib/worktrees/worktreeCreate';
@@ -113,10 +112,7 @@ export async function dispatchRunPrompt(input: {
     files: input.files, sourceWorkspaceId: input.attachmentWorkspaceId!, destinationWorkspaceId: input.workspaceId, assertCurrent,
   }) : [];
   assertCurrent();
-  const [expanded, knowledge] = await Promise.all([
-    expandNativeFileResource(input.prompt, input.directory),
-    fetchSessionKnowledge(input.directory, input.sessionId),
-  ]);
+  const expanded = await expandNativeFileResource(input.prompt, input.directory);
   assertCurrent();
   const model = expanded?.modelSelection ?? { providerId: input.providerId, modelId: input.modelId };
   useSelectionStore.getState().saveSessionModelSelection(input.sessionId, model.providerId, model.modelId);
@@ -126,13 +122,10 @@ export async function dispatchRunPrompt(input: {
     sessionId: input.sessionId,
     request: {
       options: { ...model, variant: input.variant ?? null, agentId: null, reasoningEffort: input.reasoningEffort ?? null },
-      input: { text: expanded?.content ?? input.prompt, attachments, context: knowledge.text ? [{ kind: 'instruction', text: knowledge.text }] : [] },
+      input: { text: expanded?.content ?? input.prompt, attachments, context: [] },
     },
   });
   assertCurrent();
-  if (knowledge.text) {
-    void reportSessionKnowledgeDelivered(input.directory, input.sessionId, knowledge.signature);
-  }
 }
 
 const resolveActiveProject = (): ProjectRef | null => {

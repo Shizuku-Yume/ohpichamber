@@ -58,6 +58,35 @@ describe('trusted execution-free first-party target inspection', () => {
     const glob = await describeNativeOperation(cwd, { type: 'tool', toolName: 'glob', input: { path: 'src/*.ts;../**/*.ts' } });
     expect(glob?.sourcePaths).toContain(join(cwd, 'src')); expect(glob?.sourcePaths).toContain(join(cwd, '..'));
   });
+  test('passes only allowlisted OMP internal URL reads through to the SDK grammar', async () => {
+    const cwd = await workspace();
+    for (const url of ['agent://native', 'history://native', 'artifact://3', 'local://notes.md:1-2', 'proc://job', 'skill://flow-start', 'xd://memory', 'mcp://server/resource', 'omp://help', 'issue://42', 'pr://7/diff']) {
+      const descriptor = await describeNativeOperation(cwd, { type: 'tool', toolName: 'read', input: { path: url } });
+      expect(descriptor?.sourcePaths).toEqual([]);
+      expect(descriptor?.internalReadUrls).toEqual([url]);
+    }
+    const mixed = await describeNativeOperation(cwd, { type: 'tool', toolName: 'read', input: { path: 'agent://native;src/a.ts:1-2' } });
+    expect(mixed?.internalReadUrls).toEqual(['agent://native']);
+    expect(mixed?.sourcePaths).toContain(join(cwd, 'src/a.ts'));
+
+    for (const [path, normalized] of [['local:/notes.md', 'local://notes.md'], [`${cwd}/local://notes.md`, 'local://notes.md']]) {
+      const descriptor = await describeNativeOperation(cwd, { type: 'tool', toolName: 'read', input: { path } });
+      expect(descriptor?.sourcePaths).toEqual([]);
+      expect(descriptor?.internalReadUrls).toEqual([normalized]);
+    }
+  });
+
+  test('refuses non-OMP schemes, NUL bytes and every non-read tool', async () => {
+    const cwd = await workspace();
+    for (const path of ['file:///etc/passwd', 'https://example.com/a', 'attachment://upload']) {
+      await expect(describeNativeOperation(cwd, { type: 'tool', toolName: 'read', input: { path } })).rejects.toThrow('separate Host capability');
+    }
+    await expect(describeNativeOperation(cwd, { type: 'tool', toolName: 'read', input: { path: 'agent://native\0ignored' } })).rejects.toThrow('invalid byte');
+    await expect(describeNativeOperation(cwd, { type: 'tool', toolName: 'write', input: { path: 'local://notes.md', content: 'x' } })).rejects.toThrow('separate Host capability');
+    await expect(describeNativeOperation(cwd, { type: 'tool', toolName: 'grep', input: { path: 'agent://native', pattern: 'x' } })).rejects.toThrow('separate Host capability');
+    await expect(describeNativeOperation(cwd, { type: 'tool', toolName: 'glob', input: { path: 'local://*' } })).rejects.toThrow('separate Host capability');
+  });
+
   test('derives write containers and hashline-header destinations without performing writes', async () => {
     const cwd = await workspace();
     for (const [path, target] of [['[src/a.ts#0000]', 'src/a.ts'], ['archive.zip:member.ts', 'archive.zip'], ['db.sqlite:table:key', 'db.sqlite']]) {

@@ -29,7 +29,6 @@ import { canonicalProblemDetail } from "@/lib/problemMessage"
 import { useConfigStore } from "@/stores/useConfigStore"
 import { useProjectsStore } from "@/stores/useProjectsStore"
 import { useSessionDisplayStore } from "@/stores/useSessionDisplayStore"
-import { fetchSessionKnowledge, reportSessionKnowledgeDelivered } from "@/lib/sessionKnowledgeApi"
 import { useGlobalSessionsStore, resolveGlobalSessionDirectory } from "@/stores/useGlobalSessionsStore"
 import { isDirectoryUnknown, useDirectoryStore } from "@/stores/useDirectoryStore"
 import { hostFilesystem } from "@/lib/host-filesystem"
@@ -193,7 +192,6 @@ export async function routeMessage(params: {
   /** Host idempotency key; never a slash command name. */
   commandId?: string
   skills?: CanonicalSkillMentions
-  sessionKnowledge?: Promise<string>
   /** Queue capture already ran the native pipeline and preserved the resulting selection. */
   fileResourcesExpanded?: boolean
   /** Goal preparation reuses its authoritative expansion when the prompt is delivered. */
@@ -209,8 +207,6 @@ export async function routeMessage(params: {
     agentId: params.agent,
     reasoningEffort: params.reasoningEffort,
   })
-  const knowledgeText = await params.sessionKnowledge
-  assertSendRuntime(runtimeKey)
   const additionalContext: PromptContext[] = (params.additionalParts ?? [])
     .filter((part) => part.text.trim().length > 0)
     .map((part) => part.synthetic
@@ -222,7 +218,6 @@ export async function routeMessage(params: {
     ? await expandCanonicalSkills(params.sessionId, params.skills.names)
     : null
   const context: PromptContext[] = [
-    ...(knowledgeText ? [{ kind: 'instruction' as const, text: knowledgeText }] : []),
     ...additionalContext,
     ...(skillText ? [{ kind: 'instruction' as const, text: skillText }] : []),
   ]
@@ -1887,7 +1882,6 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
           })
         }
       }
-      const knowledgeRequest = inputMode === "shell" ? null : fetchSessionKnowledge(directory, sessionId)
       const historyIdentity = createInputHistoryIdentity(capturedRuntimeKey, directory ?? '', sessionId)
       const appendSubmissions = historyIdentity && historySubmissions?.length
         ? () => {
@@ -1895,7 +1889,7 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
           useInputHistoryStore.getState().appendSubmissions(historyIdentity, historySubmissions)
         }
         : undefined
-      const messageRoute = await routeMessage({
+      await routeMessage({
         runtimeKey: capturedRuntimeKey,
         sessionId,
         directory,
@@ -1914,15 +1908,9 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
         skills,
         fileResourcesExpanded: options?.fileResourcesExpanded,
         fileResourceExpansion,
-        sessionKnowledge: knowledgeRequest?.then((knowledge) => knowledge.text),
         additionalParts: additionalContext,
       })
       assertSendRuntime(capturedRuntimeKey)
-      const knowledge = knowledgeRequest && messageRoute !== 'shell' ? await knowledgeRequest : null
-      assertSendRuntime(capturedRuntimeKey)
-      if (knowledge?.text) {
-        void reportSessionKnowledgeDelivered(directory, sessionId, knowledge.signature)
-      }
     })().catch((error) => {
       if (goalArm.armed && !goalApplied && getRuntimeKey() === capturedRuntimeKey) {
         useSessionGoalArmStore.getState().setArmed(true, goalArm.objectiveOverride, goalArm.composerGoal)

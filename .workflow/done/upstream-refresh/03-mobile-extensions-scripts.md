@@ -64,3 +64,5 @@ Check before: not run for this branch (the branch is new from the integration ti
 - Limits: no simulator/device or store run; Capacitor-only behavior (LAN connection, push, native plugins) unexercised.
 
 **Finished:** 2026-10-27T13:55:00+08:00
+
+**After rebase onto `3dc9b8a911` (task 23 landed while this task ran):** clean rebase, three commits replayed. `bun install --frozen-lockfile` -> 0 (`install-after-rebase.log`), `bun run type-check` -> 0 (`type-check-after-rebase.log`), `bun run lint` -> 0 (`lint-after-rebase.log`), `VITEST_MAX_WORKERS=2 bun run test` -> 0, 7/7 suites, 6086 passed / 128 skipped (`test-after-rebase.log`). This doc-only entry follows the tested code commit `1d4112ecd4`.

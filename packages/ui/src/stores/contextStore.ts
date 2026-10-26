@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+/* oxlint-disable typescript/no-explicit-any */
 import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 import type { Message, Part } from '@openchamber/agent-contract';

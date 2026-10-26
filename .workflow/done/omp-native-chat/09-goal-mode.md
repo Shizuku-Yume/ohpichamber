@@ -36,3 +36,5 @@
 - Brief B (quality): no blocking findings. Reviewed lifecycle/abort/reopen handling, authoritative mode projection, continuation queue gating, API boundary and UI control mappings against callers/tests; no issue found requiring changes.
 - Review recheck: no code changes made from review.
 - Browser automation and authenticated real-provider run omitted because browser CLI and Host credentials/session are unavailable; those are required to demonstrate live create/pause/resume/drop and worker-originated provider execution.
+- Post-land `bun run test`: failed overall (3 suites, 14 tests failed; 369 files passed, 9 skipped). Failures were in UI scheduled-task timing tests and Web scheduled-task runtime/issue-2710 tests; task-native checks rerun after landing all passed. No failure was in goal-mode changed paths. Full suite log was captured in the worker session output; failures were not rerun or modified.
+- Post-land: `.workflow/bin/workflow validate` passed (139 task files).

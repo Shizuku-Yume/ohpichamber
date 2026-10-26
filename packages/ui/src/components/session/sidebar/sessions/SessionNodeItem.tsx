@@ -2125,8 +2125,10 @@ const areSessionRenderSemanticsEqual = (prev: Session, next: Session): boolean =
   && prev.createdAt === next.createdAt
   && prev.updatedAt === next.updatedAt
   && prev.archivedAt === next.archivedAt
+  && prev.title === next.title
   && prev.runtimeStatus === next.runtimeStatus
-  // Goal, work state, recap, and title all come from canonical metadata.
+  // Goal, work state, and recap come from canonical metadata; title is a
+  // top-level session field and must be compared on its own.
   && prev.metadata === next.metadata
   && sameMultiRunIdentity(prev, next)
 );

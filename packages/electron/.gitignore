@@ -9,6 +9,7 @@ dist-bundle/
 resources/web-dist/
 resources/agent-runtime/
 resources/agent-runtime.staging/
+resources/web-dist-staging-*/
 .cache/
 
 # OS-specific

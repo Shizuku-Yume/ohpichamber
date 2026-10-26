@@ -64,7 +64,8 @@
       "dist-bundle/entry.mjs",
       "dist-bundle/main.mjs",
       "dist-bundle/early-startup.mjs",
-      "preload.mjs"
+      "preload.mjs",
+      "browser-panel-preload.cjs"
     ],
     "extraResources": [
       {

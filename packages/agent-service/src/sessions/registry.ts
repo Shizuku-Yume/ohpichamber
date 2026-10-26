@@ -475,6 +475,8 @@ export class SessionRegistry {
 
   listSubagents(sessionId: string): Subagent[] {
     const root = this.entries.has(sessionId) ? sessionId : [...this.subagents.values()].find(record => record.childSessionId === sessionId)?.rootSessionId;
+    // A listed native session has no live worker and no persisted child index yet.
+    if (!root && this.nativeCold.has(sessionId)) return [];
     if (!root) throw new WorkerOperationError(404, 'SESSION_NOT_FOUND');
     this.get(root);
     return [...this.subagents.values()].filter(record => record.rootSessionId === root && record.parentSessionId === sessionId).map(({ rootSessionId: _root, workspaceId: _workspace, projectId: _project, sessionFile: _file, ...publicRecord }) => SubagentSchema.parse(publicRecord));

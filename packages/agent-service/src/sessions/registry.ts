@@ -153,7 +153,7 @@ export class SessionRegistry {
     // A child's list identity points at its root; promoting the child under its
     // own id would write an ancestor reference to the child file. The Host
     // reopens a child through its root, so refuse this shape rather than guess.
-    if (native.identity.rootSessionId !== sessionId)
+    if (native.identity.rootSessionId !== sessionId || native.info.parentSessionPath !== undefined)
       throw new WorkerOperationError(409, 'INVALID_REQUEST', undefined, 'Native child sessions must reopen through their root');
     if (!sameScope(native.workspace, requested)
       || (requested.agentDirectoryId !== undefined && native.workspace.agentDirectoryId !== undefined
@@ -162,8 +162,8 @@ export class SessionRegistry {
     const createdAt = nativeTime(native.info.created, nativeTime(native.info.modified, 0));
     const reference = {
       rootSessionId: native.identity.rootSessionId, projectId: native.workspace.projectId, workspaceId: native.workspace.workspaceId,
-      cwd: native.workspace.cwd, agentDirectory: native.workspace.agentDirectory, displayPath: 'workspace',
-      sessionFile: native.info.path, sessionsDirectory: dirname(native.info.path), createdAt,
+      cwd: native.workspace.cwd, agentDirectory: native.workspace.agentDirectory, agentDirectoryId: native.workspace.agentDirectoryId,
+      displayPath: 'workspace', sessionFile: native.info.path, sessionsDirectory: dirname(native.info.path), createdAt,
       updatedAt: Math.max(createdAt, nativeTime(native.info.modified, createdAt)),
     } satisfies SessionReference;
     await this.references.put(native.identity.parentSessionId === undefined ? reference : { ...reference, parentSessionId: native.identity.parentSessionId });
@@ -1100,6 +1100,9 @@ export class SessionRegistry {
       journal.close();
       await this.workers.stop(sessionId);
       for (const id of result.deletedSessionIds) await this.references.remove(id);
+      // A listed native record must not outlive its deleted transcript and
+      // resurrect a reference on the next reopen.
+      for (const id of result.deletedSessionIds) this.nativeCold.delete(id);
       return { sessionId, deletedSessionIds: result.deletedSessionIds };
     } finally { this.deleting.delete(sessionId); }
   }

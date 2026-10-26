@@ -95,12 +95,14 @@ test('native promotion refuses a child identity or a scope other than the listed
     const childId = child.getSessionId();
     await child.close();
     await registry.initialize();
-    const scope = { workspaceId: 'workspace', projectId: 'project', cwd, agentDirectory };
+    const scope = { workspaceId: 'workspace', projectId: 'project', cwd, agentDirectory, agentDirectoryId: 'native-owner' };
     const listed = await registry.list(scope);
     expect(listed.items.map(item => item.sessionId)).toEqual(expect.arrayContaining([parent.sessionId, childId]));
 
     const bootstrap = { rootSessionId: parent.sessionId, projectId: 'project', workspaceId: 'workspace', cwd, agentDirectory, displayPath: 'workspace' };
     await expect(registry.reopen({ ...bootstrap, workspaceId: 'other-workspace' }))
+      .rejects.toMatchObject({ status: 403, code: 'UNAUTHORIZED' });
+    await expect(registry.reopen({ ...bootstrap, agentDirectoryId: 'other-owner' }))
       .rejects.toMatchObject({ status: 403, code: 'UNAUTHORIZED' });
     await expect(registry.reopen({ ...bootstrap, rootSessionId: childId }))
       .rejects.toMatchObject({ status: 409, code: 'INVALID_REQUEST' });

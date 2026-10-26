@@ -144,7 +144,8 @@ covered.
 |---|---:|---|
 | `bun install --frozen-lockfile` | 0 | 1406 packages |
 | `bun run type-check` | 0 | final tree |
-| `bun test` focused: folders route/store, drafts route, row model, archive/subtree, i18n | 0 | 15/17/8/38/17/69 pass |
+| `bun test` focused, isolated: folders route, drafts route, row model, archive/subtree, i18n | 0 | `logs/focused-tests-2.log`, 101 pass / 24 files |
+| `bun test` focused, one process incl. folders store | 1 | `logs/focused-tests-1.log`: bun `mock.module('@/lib/runtime-switch')` in `useSessionFoldersStore.test.ts` pollutes later files of the same process; 68 pass, 2 module-load errors. The repo runner isolates suites; the store test alone is 17/17. |
 | `bunx oxlint` changed files | 0 | exit 0 |
 | `bun run lint` (full) | NOT RUN | |
 | `VITEST_MAX_WORKERS=2 bun run test` | NOT RUN | |

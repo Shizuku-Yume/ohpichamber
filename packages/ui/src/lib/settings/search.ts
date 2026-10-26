@@ -32,6 +32,13 @@ interface SettingsSearchAvailabilityContext extends SettingsRuntimeContext {
 
 const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
   {
+    id: 'omp.behaviour',
+    page: 'omp',
+    titleKey: 'settings.page.omp.title',
+    descriptionKey: 'settings.page.omp.description',
+    keywords: ['omp', 'compaction', 'retry', 'approval', 'thinking', 'budget', 'skills', 'mcp', 'lsp', 'model roles', 'enabled models', 'plan', 'goal', 'config.yml'],
+  },
+  {
     id: 'chat.activity-default',
     page: 'chat',
     titleKey: 'settings.openchamber.visual.section.activityDefault',

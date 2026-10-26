@@ -82,6 +82,8 @@ Clients reach this API through the Host Gateway (Node.js/Electron), which authen
 | `PUT` | `/api/agent/v1/workspaces/:workspaceId/web-search` | Persist web search configuration | Required | Yes (Revision) | JSON |
 | `PUT` | `/api/agent/v1/workspaces/:workspaceId/web-search/credentials/:providerId` | Write one write-only provider credential | Required | Yes (Revision) | JSON |
 | `DELETE` | `/api/agent/v1/workspaces/:workspaceId/web-search/credentials/:providerId` | Remove one provider credential | Required | Yes (Revision) | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/settings` | Allowlisted OMP behaviour settings with native metadata | Required | Yes | JSON |
+| `PUT` | `/api/agent/v1/workspaces/:workspaceId/settings` | Persist allowlisted OMP settings through the native Settings API | Required | Yes (Revision) | JSON |
 | `GET` | `/api/agent/v1/usage` | Authorized historical usage summary | Required | Yes | JSON |
 | `GET` | `/api/agent/v1/usage/tools` | Authorized historical tool execution report | Required | Yes | JSON |
 | `GET` | `/api/agent/v1/workspaces/:workspaceId/commands` | Workspace and selected-agent command catalog | Required | Yes | JSON |
@@ -307,6 +309,7 @@ These route families are present in current source. They share Host authenticati
 | Commands, prompt templates, authored skills, skill repositories | `/workspaces/:workspaceId/{commands,prompt-templates,skills/...}` | `file-resources.ts`, `skill-repositories.ts`, `catalogs.ts` | Task 51 |
 | Plugins and local extensions | `/workspaces/:workspaceId/plugins/...` | `plugins.ts` | Task 52 |
 | Web search | `/workspaces/:workspaceId/web-search...` | `websearch.ts` | Task 53 |
+| OMP behaviour settings | `/workspaces/:workspaceId/settings` | `settings.ts` | Task 05 (W7) |
 | Historical usage | `/usage`, `/usage/tools` | `usage.ts` | Task 54 |
 
 ### Agent roster and profile controls
@@ -342,6 +345,8 @@ Authoring skills is separate from execution catalogs. `GET .../skills/catalog` r
 `PluginMutationResult` separates committed persistence from active outcomes (`applied`, `partial`, `failed`, `no-active-workers`). Ordinary mutations do not restart active sessions; a root that needs newly loaded modules reports `RELOAD_REQUIRED` rather than fake success. `PluginApplyRequest` with `strategy: "restart-idle-sessions"` reuses the committed revision without incrementing it, refuses the whole preflight if any selected root is busy or has pending control work, and reports actual new worker generations. Package install/update/uninstall and marketplace refresh are refused in enterprise mode; catalog reads, enable/disable, diagnostics, settings and confined local authoring remain available.
 
 ### Web search
+
+`GET/PUT .../settings` use `OmpSettingsState` and `OmpSettingsUpdateRequest` at the workspace's catalog revision. The id allowlist is `OMP_SETTING_IDS`; descriptor type/default/enum/UI metadata comes from OMP's `orderedSettings()`, and each PUT value is validated by the pinned `Setting.assertWritable`. GET reloads the native settings file first; PUT awaits the native flush before returning. Credential settings, raw MCP command/env/header definitions, account pools, remote URLs and configurable paths are absent; those remain on their owning provider/MCP/skill surfaces.
 
 `GET/PUT .../web-search` use `WebSearchConfigState` and `WebSearchUpdateRequest`; `PUT/DELETE .../web-search/credentials/:providerId` use `WebSearchCredentialWriteRequest` and `WebSearchCredentialDeleteRequest`. All mutations return `WebSearchMutationResult` with `WebSearchConfigState`, persistence status and `WebSearchWorkerApplyOutcome` entries. Configuration edits never carry API keys: credentials are write-only through their dedicated route and are never read back; the public provider catalog exposes configured/writable booleans, provider identity and non-secret endpoint/option fields only. Provider options are typed to the native providers that support them, and the primary provider cannot also appear in the fallback chain.
 

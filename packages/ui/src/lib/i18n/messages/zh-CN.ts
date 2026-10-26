@@ -10,6 +10,7 @@ import { surfacePanelI18n } from './surface-panel.i18n';
 import { fileArtifactsI18n } from './file-artifacts.i18n';
 import { usageStatsI18n } from './usage-stats.i18n';
 import { webSearchI18n } from './websearch.i18n';
+import { ompSettingsI18n } from './omp-settings.i18n';
 import { isolatedSpacesI18n } from './isolated-spaces.i18n';
 import { sourceBoardI18n } from './source-board.i18n';
 import { environmentI18n } from './environment.i18n';
@@ -122,6 +123,7 @@ export const dict: Record<I18nKey, string> = {
   ...fileArtifactsI18n['zh-CN'],
   ...usageStatsI18n['zh-CN'],
   ...webSearchI18n['zh-CN'],
+  ...ompSettingsI18n['zh-CN'],
   ...isolatedSpacesI18n['zh-CN'],
   ...sourceBoardI18n['zh-CN'],
   ...environmentI18n['zh-CN'],

@@ -160,11 +160,77 @@ first-run contention flake, not a code failure.
 
 ### Limits
 
-- The real-path browser exercise (reload restore, Host restart, optimistic send) was not run:
-  the run budget was exhausted while closing the check-and-land sequence. The canonical sync
-  unit suites cover the three named invariants and pass.
+- The real-path browser exercise was not run during the original landing (run budget); the
+  follow-up receipts below record it, including the pre-existing integration-tip defects.
 - `bun run dead-code` is non-zero because the delivered interfaces are not consumed yet; the
   report was inspected, not silenced.
 - Module docs `packages/ui/src/sync/DOCUMENTATION.md` and `stores/DOCUMENTATION.md` are task 01's
   landed files and were not re-adopted; the new modules carry their contracts in header
   comments.
+
+### Follow-up receipts (2026-10-27, after landing)
+
+**Main-tree integrity.** The recon snapshot (`history://recon-state`, HEAD `dee0c88ebd`) and the
+current main tree are identical: the same five modified `.workflow` files, the same two
+untracked paths, and the same HEAD. The 33 `packages/ui/src` paths that a scripted rebuild
+briefly overwrote were each restored with `git checkout --`; none of them appeared in the recon
+dirty state, so no user modification existed to destroy. The five pre-existing modified files
+were never in the incident's path list. The recon transcript recorded no `git diff --stat`, so an
+exact line-count comparison to that moment is not possible from the transcript; the current
+diffstat is 80 insertions / 20 deletions across those five files. Evidence:
+`/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-23-2026-10-27/main-tree-integrity.txt`
+(per-path table: all 33 "dirty in recon snapshot: no").
+
+**Full suite at the integration tip.** Fresh worktree `upstream-refresh-23-followup`, Bun 1.4.4.
+At `3dc9b8a911`: `bun install --frozen-lockfile` exit 0, `VITEST_MAX_WORKERS=2 bun run test`
+exit 0, **7/7 suites passed** (UI 813 files, agent-service 249 tests, web 374 files / 6086
+tests, electron 44 files, mobile, sdk, agent-contract). `web` passed on the real HOME, so the
+network-defaults approval-DB caveat did not apply and no isolated-HOME rerun was needed. After
+rebasing onto `2e1239cd4b` (task 10 and the lane-deferral record landed) the same checks were
+rerun on the rebased tree: install 0, `bun run type-check` 0, `bun run lint` 0,
+`VITEST_MAX_WORKERS=2 bun run test` exit 0, **7/7 suites** again (web 374 files / 6086 tests).
+`bun run dead-code` exit 1 at both tips: the same expected unreferenced interfaces. Logs:
+`.../full-suite-followup.log`, `.../full-suite-followup2.log`, `.../followup-type-check.log`,
+`.../followup2-type-check.log`, `.../followup-lint.log`, `.../followup2-lint.log`,
+`.../followup-dead-code.log`, `.../followup2-install.log`.
+
+**W6 real path (task-23 worktree, isolated data dir `/tmp/omp-23-followup-data`, ports
+5197/3913).** `GET /api/agent/v1/ready` answered 200 `{"ready":true,"engine":"omp"}`. The UI
+loaded, a project was added, session `74a6a2bb-5f10-4ca0-9e3a-a87a2a0e1e7a` was created and a
+real-provider chat completed ("Reply with the single word: pong" → "pong", GPT-6 Astra). A
+reload kept the session in the URL and the sidebar, and the transcript area showed the explicit
+`Session could not be loaded` card with a retry, not an empty conversation. Killing the Host
+with the chat open left the sidebar rows in place and showed `Could not refresh sessions.` with
+`try again` per directory — no empty-success list. After restarting the Host, the dev page
+full-reloaded and landed blank while the API was coming up; a manual reload restored the shell,
+the session list and the selected session, with the same explicit load error in the transcript.
+
+The `Session could not be loaded` card wraps
+`GET /api/agent/v1/sessions/<id>/snapshot` → 503 `SESSION_RESTORE_FAILED` ("SDK worker
+operation failed"), and worker re-initialization logs the same code. This is **pre-existing at
+the integration tip**: a detached worktree at `4d69e299` (tasks 01+02, before task 23) created
+session `8219e41c-b2be-44f3-b08a-e06fb77387d9`, completed the same chat, and showed the same
+error after reload; the blank first boot after a host restart also reproduced there. Task 23's
+diff touches neither the Agent Service nor the session snapshot/loader path, so no task-23 fix
+branch was opened. Both defects are recorded as integration-tip limits for the tasks that own
+the Agent Service worker restore and the app boot gate.
+Screenshots/snapshots: `.../real-path-chat-before-reload.png`, `.../real-path-repo-chat.png`,
+`.../real-path-after-reload-post-23.png` (+ `.snapshot.txt`),
+`.../real-path-host-down-immediate.png`, `.../real-path-host-restart-blank.png`,
+`.../real-path-host-restart-recovered.png` (+ `.snapshot.txt`),
+`.../real-path-pre23-reload-error.png` (+ `.snapshot.txt`); console logs:
+`.../real-path-console-before-restart.log`, `.../real-path-console-post-23.log`,
+`.../real-path-console-after-restart.log`.
+
+**Incidents, stated factually.** (1) While inspecting the operator provider env file, a failed
+redaction echoed its API key into a tool transcript. No value is recorded in the repository,
+commits, task record or evidence files. Rotate the key if transcript exposure matters. (2) A
+scripted conflict rebuild wrote 33 `packages/ui/src` files into the main tree by mistake; they
+were restored with `git checkout --` and the main tree is identical to the recon snapshot (see
+above). No stash was used.
+
+**Check after:** source tree `2e1239cd4b` tested as below (full suite 7/7, type-check 0,
+lint 0); rebased onto the landing tip, whose only later commits are workflow records, where
+install and type-check and lint were rerun 0; real path exercised as above with the two
+pre-existing integration-tip defects named.
+**Fix commits:** none (no task-23 regression found).

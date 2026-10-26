@@ -1,0 +1,22 @@
+# 07: Review surfaces, Board and file/Git views
+
+**Effort:** upstream-refresh
+**Task type:** feature
+**Base commit:** <commit-sha>
+
+**Delivers:** The UI renders upstream's Board, PR/review and tracker surfaces, references and comments, plus the Files, Git, worktree and diff views, on top of the refreshed server.
+
+**Blocked by:** 06, 10
+**Files:** Path list: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-sync-2026-10-27/plan-paths/07.tsv` (268 paths: 235 clean/new, 18 both-side, 9 conflicts; +24k lines). Main locations: `packages/ui/src/components/{sourceBoard,comments,references,sourceControl,github,views}`, `packages/ui/src/lib/{source-control,trackers}`, and the host-related settings sections (`git-identities`, `projects`, `routing`, `remote-instances`).
+
+**Read first:** Spec W5; `.agents/skills/ui-api-decoupling/SKILL.md`; `.agents/skills/locale-ui-patterns/SKILL.md`; `.agents/skills/performance-engineering/SKILL.md`; `.agents/skills/sync-state-invariants/SKILL.md`; `packages/ui/src/components/views/DOCUMENTATION.md`.
+**Covers:** W5
+
+**Check:** `bun install --frozen-lockfile` and `bun run type-check` and `bun run lint` and `bun run test` all exit 0, the affected UI tests pass, and in the running app the Board lists issues/PRs for a fixture repository, a PR diff renders, the Files tree opens a file, and a review comment thread can be created. Real path: one real host with credentials if available; otherwise the fixture and the limit are named.
+
+## Done when
+
+- [ ] Board, tracker and review components use the canonical client and task 06's routes; no direct provider fetch in the browser.
+- [ ] Files/Git/diff views open the fixture repository and show changed files, hunks and the sticky scrollbar behavior.
+- [ ] References and comments work across sessions and worktrees.
+- [ ] View tests pass; large lists use the upstream virtualization.

@@ -251,3 +251,66 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** no
 - **Revisit when:** goals end too early in practice because the agent declares completion without the work being done, or OMP exposes a hook for an external completion check.
 - **Effort:** omp-native-chat
+
+## 2026-10-27 - Adopt the upstream-first area refresh now
+
+- **Decided:** Answer post-M3 hardening open question 7 by adopting the upstream-first area refresh and running it now to upstream `0056bf6a9` (v2.5.2+1, 2026-10-26, 813 commits since the adopted baseline), including features rather than only security and bugfixes. For each shared area, take current upstream source as the baseline, then restore the fork's OMP customizations path by path.
+- **Instead of:** security-only synchronization, commit-level cherry-picking of the range, or leaving the fork at `1f9320062` until the OMP engine work finishes.
+- **Because:** the measured delta is 4,031 changed paths (+299,677/-82,213), 1,223 of them new, and 640 of 1,230 files changed on both sides conflict textually; one sampled cherry-pick of a five-file fix conflicted in three files. The maintainer wants current upstream features, not a permanently older fork.
+- **Mine:** no
+- **Revisit when:** upstream stops touching retained areas, an area refresh cannot preserve an OMP invariant, or the maintainer changes the sync cadence.
+- **Effort:** upstream-refresh
+
+## 2026-10-27 - Do not adopt upstream folder trust
+
+- **Decided:** Do not adopt `packages/web/server/lib/opencode-trust` or the commits `c351e16e38`, `bcf2498bbb` and `883f50e173`, and open no technical-debt item for them.
+- **Instead of:** Porting folder trust to an OMP equivalent, or tracking its absence as debt.
+- **Because:** it guards OpenCode running project code. OMP has no project-code execution hook of that kind, and the maintainer does not expect one.
+- **Mine:** no
+- **Revisit when:** OMP gains a project-code execution hook that needs user consent.
+- **Effort:** upstream-refresh
+
+## 2026-10-27 - Keep the fork version at 3.0.0
+
+- **Decided:** Keep the fork's package versions at `3.0.0` (mobile `1.13.2`) through the refresh; do not adopt upstream's `2.5.2` or any upstream version string in project documents.
+- **Instead of:** Following upstream's release number, or bumping the fork version because the source changed.
+- **Because:** the fork numbers its own releases; a source refresh is not a fork release, and the earlier rebaseline already establishes that upstream version framing is not current project state.
+- **Mine:** no
+- **Revisit when:** the maintainer schedules a fork release with its own version decision.
+- **Effort:** upstream-refresh
+
+## 2026-10-27 - Bump the toolchain before refreshing ui and web
+
+- **Decided:** Land TypeScript ~7.0.2, Bun 1.4.4, oxlint 1.88 and Electron ^44.9.3 in task 02, before any ui/web area task, with the lockfile regenerated.
+- **Instead of:** bumping the toolchain last, after the area refresh.
+- **Because:** upstream area source is authored against TypeScript 7. Refreshing it under 5.9 and migrating later would touch every refreshed file twice and review it against a compiler upstream does not use.
+- **Mine:** yes
+- **Revisit when:** the toolchain bump cannot be green before the area work, or upstream authors against the older toolchain again.
+- **Effort:** upstream-refresh
+
+## 2026-10-27 - Refresh paths three-way from the adopted baseline
+
+- **Decided:** Refresh per path with a three-way content merge based on `1f9320062` (`git merge-file` or `git show` blobs): adopt clean/new upstream files whole, merge both-changed files and resolve toward OMP invariants, keep fork-deleted paths deleted, and apply upstream deletions unless the fork changed the file.
+- **Instead of:** `git merge upstream/main`, or cherry-picking the 813 commits.
+- **Because:** the real merge base of `main` and `upstream/main` is `336e19248` (915 upstream commits older than the adopted baseline), so a plain merge reports 2,810 conflicting paths; the requested merge-base override is ignored by git 2.56. Per-path slices give every task a disjoint, measurable list and keep OMP resolution local.
+- **Mine:** yes
+- **Revisit when:** the history link lands and a normal merge becomes accurate, or a task cannot be expressed as a path slice.
+- **Effort:** upstream-refresh
+
+## 2026-10-27 - Plan the refresh on an integration branch
+
+- **Decided:** Run the effort on `upstream-refresh/integration`, cut from `main` at `dee0c88ebd`, and commit the plan there instead of on `main` as `flow-break` normally does.
+- **Instead of:** committing the plan on `main`, or stashing or committing the other session's uncommitted `.workflow` edits.
+- **Because:** `main`'s working tree holds another session's changes (`decisions.md`, `implementation-plan.md`, `post-m3-hardening.md`, tasks 26/29, the M5 spec and tasks); committing there would capture or disturb work this session does not own. The branch starts at the same commit, so the plan is identical.
+- **Mine:** yes
+- **Revisit when:** `main`'s working tree is clean and the plan changes, or the other session's work lands.
+- **Effort:** upstream-refresh
+
+## 2026-10-27 - Link upstream history with an ours merge
+
+- **Decided:** The final task creates `git merge -s ours 0056bf6a9` on the integration branch so upstream's commit becomes an ancestor without altering the refreshed tree.
+- **Instead of:** leaving history unlinked, keeping the fork's history pure and repeating the `1f9320062` base comparison on every future sync.
+- **Because:** after the content refresh the tree already contains upstream's changes; the merge records that fact so `git merge-base` returns `0056bf6a9` instead of `336e19248`, and the next sync diffs only new upstream work.
+- **Mine:** yes
+- **Revisit when:** the maintainer prefers fork-only history, or a tag/pin mechanism replaces the merge.
+- **Effort:** upstream-refresh

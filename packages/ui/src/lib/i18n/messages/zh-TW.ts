@@ -3500,7 +3500,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.permissionDock.collapseAria': '收合權限請求',
   'chat.permissionDock.stepAria': '請求 {index}：{tool}',
   'chat.permissionCard.allowOnce': '允許一次',
-  'chat.permissionCard.alwaysAllow': '一律允許',
+  'chat.permissionCard.alwaysAllow': '在此工作階段中一律允許 {tool}',
   'chat.permissionCard.alwaysAllowPatterns': '一律：{patterns}',
   'chat.permissionCard.deny': '拒絕',
   'chat.permissionCard.replaceAll': '取代所有符合項目',

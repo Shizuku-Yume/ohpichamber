@@ -3497,7 +3497,7 @@ export const dict = {
   'chat.permissionDock.collapseAria': 'Berechtigungsanfrage einklappen',
   'chat.permissionDock.stepAria': 'Anfrage {index}: {tool}',
   'chat.permissionCard.allowOnce': 'Einmal erlauben',
-  'chat.permissionCard.alwaysAllow': 'Immer erlauben',
+  'chat.permissionCard.alwaysAllow': '{tool} für diese Sitzung immer erlauben',
   'chat.permissionCard.alwaysAllowPatterns': 'Immer: {patterns}',
   'chat.permissionCard.deny': 'Ablehnen',
   'chat.permissionCard.replaceAll': 'Ersetzt jedes Vorkommen',

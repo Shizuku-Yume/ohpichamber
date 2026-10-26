@@ -3500,7 +3500,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.permissionDock.collapseAria': '許可リクエストを折りたたむ',
   'chat.permissionDock.stepAria': 'リクエスト {index}: {tool}',
   'chat.permissionCard.allowOnce': '今回のみ許可',
-  'chat.permissionCard.alwaysAllow': '常に許可',
+  'chat.permissionCard.alwaysAllow': 'このセッションで {tool} を常に許可',
   'chat.permissionCard.alwaysAllowPatterns': '常に: {patterns}',
   'chat.permissionCard.deny': '拒否',
   'chat.permissionCard.replaceAll': 'すべての箇所を置き換えます',

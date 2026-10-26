@@ -22,7 +22,9 @@ export const PermissionActions: React.FC<{
 }> = ({ permission, isResponding, onRespond, variant }) => {
     const { t } = useI18n();
     const hasSessionAllow = permission.policyTarget !== undefined;
-    const alwaysTitle = getApprovalPolicyTitle(permission);
+    const ruleTitle = getApprovalPolicyTitle(permission);
+    const alwaysAllowLabel = t('chat.permissionCard.alwaysAllow', { tool: permission.toolName });
+    const alwaysTitle = permission.policyTarget && permission.policyTarget.pattern !== '*' ? ruleTitle : alwaysAllowLabel;
 
     if (variant === 'dock') {
         return (
@@ -36,7 +38,7 @@ export const PermissionActions: React.FC<{
                 {hasSessionAllow ? (
                     <Button variant="outline" size="xs" disabled={isResponding} onClick={() => onRespond('always')} title={alwaysTitle}>
                         <Icon name="time" className="size-3.5" />
-                        <span className="max-w-[180px] truncate">{t('chat.permissionCard.alwaysAllow')}</span>
+                        <span className="max-w-[180px] truncate">{alwaysAllowLabel}</span>
                         <kbd className="ml-1 hidden sm:inline typography-micro opacity-60">{formatShortcutForDisplay('alt+shift+enter')}</kbd>
                     </Button>
                 ) : null}
@@ -84,7 +86,7 @@ export const PermissionActions: React.FC<{
                     {...hover('rgb(var(--muted) / 0.5)', 'rgb(var(--muted) / 0.7)')}
                 >
                     <Icon name="time" className="h-3.5 w-3.5 sm:h-3 sm:w-3 flex-shrink-0" />
-                    <span className="truncate max-w-[180px]">{t('chat.permissionCard.alwaysAllow')}</span>
+                    <span className="truncate max-w-[180px]">{alwaysAllowLabel}</span>
                     <kbd className="ml-1 hidden sm:inline typography-micro opacity-60">{formatShortcutForDisplay('alt+shift+enter')}</kbd>
                 </button>
             ) : null}

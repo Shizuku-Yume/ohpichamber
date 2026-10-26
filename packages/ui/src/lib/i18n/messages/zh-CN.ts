@@ -3501,7 +3501,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.permissionDock.collapseAria': '收起权限请求',
   'chat.permissionDock.stepAria': '请求 {index}：{tool}',
   'chat.permissionCard.allowOnce': '允许一次',
-  'chat.permissionCard.alwaysAllow': '始终允许',
+  'chat.permissionCard.alwaysAllow': '在此会话中始终允许 {tool}',
   'chat.permissionCard.alwaysAllowPatterns': '始终：{patterns}',
   'chat.permissionCard.deny': '拒绝',
   'chat.permissionCard.replaceAll': '替换所有匹配项',

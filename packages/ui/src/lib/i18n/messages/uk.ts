@@ -3501,7 +3501,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.permissionDock.collapseAria': 'Згорнути запит дозволу',
   'chat.permissionDock.stepAria': 'Запит {index}: {tool}',
   'chat.permissionCard.allowOnce': 'Дозволити раз',
-  'chat.permissionCard.alwaysAllow': 'Дозволяти завжди',
+  'chat.permissionCard.alwaysAllow': 'Завжди дозволяти {tool} у цій сесії',
   'chat.permissionCard.alwaysAllowPatterns': 'Завжди: {patterns}',
   'chat.permissionCard.deny': 'Відхилити',
   'chat.permissionCard.replaceAll': 'Замінює всі входження',

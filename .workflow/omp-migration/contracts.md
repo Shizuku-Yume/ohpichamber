@@ -547,9 +547,9 @@ The Agent Service owns real SDK pending handles and an atomic resolution registr
 
 Each record carries a decimal-string CAS `version`, its creation `epoch` and opaque `workerGeneration`. Request IDs are never reused. `ApprovalReply` and `QuestionReply` supply these fields to the existing `/respond` routes. The service verifies the current epoch/generation before request lookup: prior-owner replies return HTTP 410 `APPROVAL_EXPIRED` / `QUESTION_EXPIRED` even when a restart discarded the old registry. Unknown IDs in the current owner return HTTP 404. The current owner's pending status and expected version are selected atomically; exactly one responder may resolve that live handle. Competing replies return HTTP 409 with `{expectedVersion, actualVersion, currentRecord}` in sanitized Problem Details `details`.
 
-Approval decisions are the four retained values, not record statuses: `approve` and `always-allow` finish as `approved`; `reject` and `always-deny` finish as `rejected`. `always-allow` persists the request's service-derived tool/pattern target for this session; `always-deny` persists it for the authorized workspace across sessions/restarts. The client cannot invent a wider target or scope. Policy persistence belongs to the Host's retained settings/approval-policy boundary and authorization, not a new SDK policy framework. A request without a safe `policyTarget` cannot accept an always decision; it returns an explicit error and remains pending. One-shot choices persist no policy.
+Approval decisions are the four retained values, not record statuses: `approve` and `always-allow` finish as `approved`; `reject` and `always-deny` finish as `rejected`. `always-allow` resolves OMP's native `allow_always` handle in the worker's per-session ACP decision cache (bash cache key) and reports `policy: {scope:"session", persistence:"ephemeral"}`. It is not written to the Host approval-policy store or OMP config and resets with the native logical session and worker. A later cached bash call bypasses the native card but still reaches the custom Bash tool, which synthesizes an exact Host execution grant bound to that tool call and input before authorization; no public card is produced for that grant. `always-deny` persists its service-derived exact target for the authorized workspace across sessions/restarts. The client cannot invent a wider target or scope. Schema version 2 revokes legacy session allowances instead of widening them. Policy persistence belongs to the Host's retained settings/approval-policy boundary and authorization, not a new SDK policy framework. A request without a safe `policyTarget` cannot accept an always decision; it returns an explicit error and remains pending. One-shot choices persist no policy.
 
-For an always decision, the service reserves the CAS winner without invoking the SDK handle, asks the Host to atomically commit the fixed target/scope, and only then increments the request version and resolves the live handle. Host failure returns HTTP 503 `APPROVAL_POLICY_WRITE_FAILED`, with the unchanged pending record, releases the reservation and executes nothing. Committed policy may survive a crash before acknowledgement; that crash still expires the old request and never replays its action. Host policy `revision` and `persistence: "committed"` appear in `ApprovalResolution`; there is no reported committed policy on a failed write. Success returns the full resolved `ApprovalRequest` and publishes `approval.resolved` with `{approval: ApprovalRequest}`, including `resolution`. This event/response are the CAS result, not a second independently writable policy record.
+For an `always-deny` decision, the service reserves the CAS winner without invoking the SDK handle, asks the Host to atomically commit the fixed target/scope, and only then increments the request version and resolves the live handle. An `always-allow` decision resolves the native handle with OMP's `allow_always` choice and does not write Host policy. Host failure for a persisted decision returns HTTP 503 `APPROVAL_POLICY_WRITE_FAILED`, with the unchanged pending record, releases the reservation and executes nothing. Committed policy may survive a crash before acknowledgement; that crash still expires the old request and never replays its action. Host policy `revision` and `persistence: "committed"` appear in `ApprovalResolution`; there is no reported committed policy on a failed write. Success returns the full resolved `ApprovalRequest` and publishes `approval.resolved` with `{approval: ApprovalRequest}`, including `resolution`. This event/response are the CAS result, not a second independently writable policy record.
 
 ```json
 {"decision":"always-allow","policyScope":"session","version":"1","epoch":"ep_1a","workerGeneration":"worker_g1"}
@@ -998,7 +998,7 @@ Event from a separate active run, not the completed run above:
 ```text
 id: ep_1a:23
 event: approval.requested
-data: {"sessionId":"sess_alpha","epoch":"ep_1a","sequence":"23","timestamp":1774201002100,"approval":{"approvalId":"appr_55","sessionId":"sess_alpha","turnId":"turn_302","toolCallId":"tc_sh1","toolName":"bash","actionType":"bash_command","commandSummary":"npm test auth","details":{"command":"npm test auth"},"policyTarget":{"toolName":"bash","pattern":"npm test auth"},"version":"1","epoch":"ep_1a","workerGeneration":"worker_g1","status":"pending","requestedAt":1774201002100}}
+data: {"sessionId":"sess_alpha","epoch":"ep_1a","sequence":"23","timestamp":1774201002100,"approval":{"approvalId":"appr_55","sessionId":"sess_alpha","turnId":"turn_302","toolCallId":"tc_sh1","toolName":"bash","actionType":"bash_command","commandSummary":"npm test auth","details":{"command":"npm test auth"},"policyTarget":{"toolName":"bash","pattern":"*"},"version":"1","epoch":"ep_1a","workerGeneration":"worker_g1","status":"pending","requestedAt":1774201002100}}
 ```
 
 Resolution request:
@@ -1020,10 +1020,10 @@ Status: 200 OK
 {
   "approvalId":"appr_55","sessionId":"sess_alpha","turnId":"turn_302","toolCallId":"tc_sh1",
   "toolName":"bash","actionType":"bash_command","commandSummary":"npm test auth","details":{"command":"npm test auth"},
-  "policyTarget":{"toolName":"bash","pattern":"npm test auth"},
+  "policyTarget":{"toolName":"bash","pattern":"*"},
   "status":"approved","version":"2","epoch":"ep_1a","workerGeneration":"worker_g1",
   "requestedAt":1774201002100,"resolvedAt":1774201003500,
-  "resolution":{"decision":"always-allow","policy":{"policyId":"policy_1","scope":"session","revision":"3","persistence":"committed"}}
+  "resolution":{"decision":"always-allow","policy":{"scope":"session","persistence":"ephemeral"}}
 }
 ```
 
@@ -1056,8 +1056,8 @@ Content-Type: application/problem+json
       "status": "approved",
       "requestedAt": 1774201002100,
       "resolvedAt": 1774201003500,
-      "policyTarget": {"toolName":"bash","pattern":"npm test auth"},
-      "resolution": {"decision":"always-allow","policy":{"policyId":"policy_1","scope":"session","revision":"3","persistence":"committed"}}
+      "policyTarget": {"toolName":"bash","pattern":"*"},
+      "resolution": {"decision":"always-allow","policy":{"scope":"session","persistence":"ephemeral"}}
     }
   }
 }
@@ -1068,7 +1068,7 @@ Terminal approval event for the winning result uses the same complete record as 
 ```text
 id: ep_1a:24
 event: approval.resolved
-data: {"sessionId":"sess_alpha","epoch":"ep_1a","sequence":"24","timestamp":1774201003500,"approval":{"approvalId":"appr_55","sessionId":"sess_alpha","turnId":"turn_302","toolCallId":"tc_sh1","toolName":"bash","actionType":"bash_command","commandSummary":"npm test auth","details":{"command":"npm test auth"},"policyTarget":{"toolName":"bash","pattern":"npm test auth"},"status":"approved","version":"2","epoch":"ep_1a","workerGeneration":"worker_g1","requestedAt":1774201002100,"resolvedAt":1774201003500,"resolution":{"decision":"always-allow","policy":{"policyId":"policy_1","scope":"session","revision":"3","persistence":"committed"}}}}
+data: {"sessionId":"sess_alpha","epoch":"ep_1a","sequence":"24","timestamp":1774201003500,"approval":{"approvalId":"appr_55","sessionId":"sess_alpha","turnId":"turn_302","toolCallId":"tc_sh1","toolName":"bash","actionType":"bash_command","commandSummary":"npm test auth","details":{"command":"npm test auth"},"policyTarget":{"toolName":"bash","pattern":"*"},"status":"approved","version":"2","epoch":"ep_1a","workerGeneration":"worker_g1","requestedAt":1774201002100,"resolvedAt":1774201003500,"resolution":{"decision":"always-allow","policy":{"scope":"session","persistence":"ephemeral"}}}}
 ```
 
 Question cancellation uses the same response route and identity/version checks:

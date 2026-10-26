@@ -3505,7 +3505,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.permissionDock.collapseAria': 'Zwiń prośbę o uprawnienie',
   'chat.permissionDock.stepAria': 'Prośba {index}: {tool}',
   'chat.permissionCard.allowOnce': 'Zezwól raz',
-  'chat.permissionCard.alwaysAllow': 'Zezwalaj zawsze',
+  'chat.permissionCard.alwaysAllow': 'Zawsze zezwalaj na {tool} w tej sesji',
   'chat.permissionCard.alwaysAllowPatterns': 'Zawsze: {patterns}',
   'chat.permissionCard.deny': 'Odmów',
   'chat.permissionCard.replaceAll': 'Zastępuje każde wystąpienie',

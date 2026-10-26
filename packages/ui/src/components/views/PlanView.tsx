@@ -26,7 +26,6 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSessions } from '@/sync/sync-context';
 import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
-import { useFeatureFlagsStore } from '@/stores/useFeatureFlagsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSelectionStore } from '@/sync/selection-store';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -146,7 +145,6 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
   const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
   const sessions = useSessions();
   const homeDirectory = useDirectoryStore((state) => state.homeDirectory);
-  const planModeEnabled = useFeatureFlagsStore((state) => state.planModeEnabled);
   const projects = useProjectsStore((state) => state.projects);
   const activeProjectId = useProjectsStore((state) => state.activeProjectId);
   const gitDirectories = useGitStore((state) => state.directories);
@@ -484,8 +482,8 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
   }, [saveQueue]);
 
   React.useEffect(() => {
-    // Saved project plans opened via context panel should work even when session plan mode is off.
-    if (!planModeEnabled && !targetPath && !savedPlanId) {
+    // A plan view with no file or saved project plan has nothing to show.
+    if (!targetPath && !savedPlanId) {
       scheduleSave();
       docRef.current = { key: null, target: null, content: '', editRevision: 0, savedRevision: 0, runtimeKey: '' };
       setResolvedPath(null);
@@ -610,7 +608,7 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
     return () => {
       cancelled = true;
     };
-  }, [activeRuntimeKey, homeDirectory, planModeEnabled, runtimeApis.files, savedPlanId, savedPlanKey, savedPlanProjectRef, saveQueue, scheduleSave, sessionDirectory, targetPath]);
+  }, [activeRuntimeKey, homeDirectory, runtimeApis.files, savedPlanId, savedPlanKey, savedPlanProjectRef, saveQueue, scheduleSave, sessionDirectory, targetPath]);
 
   // Synchronous buffer tracking: if an edit and an unmount land in the same
   // batch, the passive content effect would never run and a flush would save

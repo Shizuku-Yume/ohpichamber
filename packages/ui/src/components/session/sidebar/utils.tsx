@@ -138,8 +138,6 @@ export const dedupeSessionsById = (sessions: readonly Session[]): Session[] => {
   return Array.from(byId.values());
 };
 
-export const getArchivedScopeKey = (projectRoot: string): string => `__archived__:${projectRoot}`;
-
 export const resolveArchivedFolderName = (session: Session, projectRoot: string | null): string => {
   const sessionDirectory = normalizePath(resolveGlobalSessionDirectory(session));
   const resolved = sessionDirectory;

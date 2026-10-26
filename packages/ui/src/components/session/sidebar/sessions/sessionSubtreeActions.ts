@@ -6,8 +6,8 @@ import { takeSessionActionFailure } from '@/sync/session-action-failures';
 import { describeSessionActionError } from './sessionActionError';
 import type { I18nKey, I18nParams } from '@/lib/i18n';
 import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { readGlobalSessionLineage } from '@/stores/sessionLineage';
 import { useSessionUIStore, type SessionUIState } from '@/sync/session-ui-store';
-import { getDescendantIds } from '../list/sessionCollection';
 
 type Translate = (key: I18nKey, params?: I18nParams) => string;
 
@@ -40,20 +40,9 @@ export const collectSessionSubtreeIds = (
   knownDescendantIds: readonly string[],
   includeArchived: boolean,
 ): string[] => {
-  const global = useGlobalSessionsStore.getState();
-  const childrenByParentId = new Map<string, Session[]>();
-  for (const session of [...global.activeSessions, ...global.archivedSessions]) {
-    const parentId = session.parentSessionId;
-    if (!parentId) continue;
-    const siblings = childrenByParentId.get(parentId) ?? [];
-    siblings.push(session);
-    childrenByParentId.set(parentId, siblings);
-  }
   const ids = new Set(knownDescendantIds);
-  for (const id of getDescendantIds(childrenByParentId, rootId)) {
-    if (!includeArchived && global.entityById.get(id)?.archivedAt !== undefined) continue;
-    ids.add(id);
-  }
+  const descendants = readGlobalSessionLineage().descendantsOf(rootId, includeArchived ? 'all' : 'activeThroughArchived');
+  for (const descendant of descendants) ids.add(descendant.sessionId);
   ids.delete(rootId);
   return [...ids];
 };

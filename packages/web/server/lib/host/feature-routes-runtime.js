@@ -12,6 +12,7 @@ import { registerGitRoutes } from '../git/routes.js';
 import { registerDevServerRoutes } from '../dev-servers/routes.js';
 import { registerMagicPromptRoutes } from '../magic-prompts/routes.js';
 import { registerSessionFoldersRoutes } from '../session-folders/routes.js';
+import { registerSessionDraftRoutes } from '../session-drafts/routes.js';
 import { registerProjectContextRoutes } from '../project-context/routes.js';
 import { registerProjectDirectoryRoutes, registerProjectSetupRoutes } from '../projects/routes.js';
 import { registerAgentMemoryRoutes } from '../agent-memory/routes.js';
@@ -506,6 +507,7 @@ export const createFeatureRoutesRuntime = () => {
       sessionFoldersStore: routeDependencies.sessionFoldersStore,
       openchamberDataDir,
     });
+    registerSessionDraftRoutes(app, { fsPromises, path, openchamberDataDir });
     registerFsRoutes(app, {
       os,
       path,

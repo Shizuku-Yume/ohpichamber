@@ -12,6 +12,8 @@ import { useDirectoryStore } from './useDirectoryStore';
 import { streamDebugEnabled } from '@/stores/utils/streamDebug';
 import { PROJECT_COLORS } from '@/lib/projectMeta';
 import { useSessionUIStore } from '@/sync/session-ui-store';
+import { getArchivedScopeKey } from '@/lib/sessionFolders/folderScopes';
+import { useSessionFoldersStore } from './useSessionFoldersStore';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { getRuntimeApiBaseUrl } from '@/lib/runtime-switch';
 
@@ -521,6 +523,14 @@ export const useProjectsStore = create<ProjectsStore>()(
       // Clean up worktree entries for the removed project
       if (project) {
         const normalizedPath = project.path.replace(/\\/g, '/').replace(/\/+$/, '') || '/';
+        // Its chat folders go for every client of the server: those of the
+        // project root, its archive and each of its worktrees.
+        const folderRoot = normalizePath(project.path);
+        if (folderRoot) {
+          const worktreeScopes = (useSessionUIStore.getState().availableWorktreesByProject.get(normalizedPath) ?? [])
+            .flatMap((worktree) => normalizePath(worktree.path) ?? []);
+          useSessionFoldersStore.getState().forgetScopes([folderRoot, getArchivedScopeKey(folderRoot), ...worktreeScopes]);
+        }
         useSessionUIStore.setState((s) => {
           const next = new Map(s.availableWorktreesByProject);
           next.delete(normalizedPath);

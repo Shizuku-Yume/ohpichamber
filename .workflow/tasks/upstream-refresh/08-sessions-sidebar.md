@@ -2,7 +2,7 @@
 
 **Effort:** upstream-refresh
 **Task type:** feature
-**Base commit:** 2e1239cd4b (upstream-refresh/integration tip at setup)
+**Base commit:** 2e1239cd4b
 
 **Delivers:** Upstream's session list, unread/work markers, folders, archive and chat view shell work with OMP sessions, including the server-side session folder and draft support.
 
@@ -77,58 +77,30 @@ remaining list is at the end.
   Kept the fork's notification-based unseen count as the unread source (no `session-unread`, no
   OMP viewed watermark yet).
 
-### Not adopted, with the owner that blocks it (all remain at the fork's version)
+### Deferred rows and their owner task (all remain at the fork's version)
 
-The upstream sidebar's "one view" redesign (Pinned / In work / list-by-time zones, worktree works
-rows, detailed rows, draft rows in zones, tree guides, disclosure animation) is one contract
-across tasks 07, 09, 21, 24 and 25. Adopting a part alone would either fail to compile or create a
-second row model. Files kept at the fork's version for that reason: `sessionSidebarRowModel.ts`
-and its test (also needs `lib/sessionPins`), `SessionNodeItem.tsx` (pins, unread, turn duration,
-`openTrackerItem`, `FileTreeRowParts`), `RunSidebarRow.tsx`, `SessionTimelineRowBody.tsx`,
-`SessionSidebarRows.tsx` (disclosure), `sessionSidebarVirtualization.ts`, `sessionSidebarDisclosure*`,
-`sessionTreeGeometry.ts`, `SessionTreeGuides.tsx`, `RowMarkTooltip.tsx`, `useSessionRefLines.ts`,
-`SidebarRefLinks.tsx`, `sessionWorkFailure.ts`, `useRunWork.ts`, `collapsedActivityState.ts`,
-`SessionProjectScroller.tsx` (works/zone parts; its archive-all fix WAS adopted),
-`SessionProjectCollection.tsx` (works/zone parts; drafts WERE adopted), `sessionCollection.ts`
-(`lib/sessionWorkLineage`, task 25), `useSessionGrouping.ts` (worktree works), `activitySections.ts`
-and its test (zones removed Recent upstream; the fork still ships Recent), `sidebar/works/*`
-except the three draft files (worktree work rows need 07/09/21/25), `SidebarFooter.tsx`
-(`DesktopInstanceMenu`, task 25), `SidebarHeader.tsx` (one-view display menu), `sessionSidebarHeaderPresentation.tsx`
-(zone header contract), `shell/useSwitcherItems.ts` (worktree prefix matching rides the works
-change; the helper exists upstream and in the fork's `worktreeIndex`), `SessionFolderItem.tsx`
-(`FileTreeRowParts` chevron; the upstream canExpand/indent behavior waits for task 07),
-`SessionDialogs.tsx` (`worktreePaths`, task 09; upstream also changes task 09's
-`worktreeRemovalFlow` API), `sessionWorktreeMenu.ts` (`worktreePaths`), `SessionActivityDuration.tsx`
-and `sync/session-turn-duration` (task 25), `NewWorktreeDialog*` (source-control provider and
-tracker registries, tasks 06/07), `SessionSwitcherDropdown`'s `session-unread` swap (deferred by
-task 23; no OMP viewed watermark), `collapsedActivityState`'s `session-unread`.
-- `useProjectsInSidebarOrder.ts` (+test): needs `@/lib/opencode/model` and
-  `sync/global-sync-store`, neither of which the fork has (canonical projects only); its
-  consumers (Settings pickers, board, usage) are task 24/25. Move-chat and scheduled-tasks use
-  the fork's order.
-- `lib/sessionListOrder.ts` (+test) and `lib/sidebarSessionRows.ts`: consumers are the command
-  palette and desktop tray (task 25); `sessionListOrder`'s pinned contract is the directory-keyed
-  fork store, not upstream's metadata pins, so adopting it now would mix pin sources.
-- `components/session/project-context/*` (KnowledgeComposer/EntryView/Split/Actions/SearchBar,
-  NoteEditor, memoryTidy, knowledgeFormat, pendingKnowledgeDeletes, and the reworked
-  Memory/Notes/Plans/Todos/ProjectNotesTodoPanel): tied to task 16's project-context API/route
-  rewrite and task 15's emoji picker + task 09's context-panel header slot; the fork's panel
-  keeps working. `project-context/DOCUMENTATION.md` likewise describes the deferred panel.
-- `components/session/spaces/*`: the fork ships these components with no live consumer after
-  Task38; `NewSpaceDialog` needs `@/lib/opencode/client` and `lib/spaces/registry-domains`
-  (OpenCode engine / excluded spaces runtime), so the area was left untouched rather than
-  half-adopted.
-- `ScheduledTasksDialog/ScheduledTaskEditorDialog` and the new `scheduledTasksRequests.ts`:
-  upstream's rework routes through `useProjectsInSidebarOrder` and a server request module whose
-  server half is task 17/22's; kept the fork's dialogs.
-- `views/archive/ArchivedWorktreeRow.tsx`, `useWorktreeArchiveActions.ts`: need task 09's
-  `lib/worktrees/worktreeArchive`. The archive page itself (parent grouping, restore rule,
-  subsession titles) was already adopted by task 01; worktree archive rows wait for 09.
-- `views/PlanView.tsx` rewrite (saved plans only, markdown local assets, line-drag selection,
-  `contextPanelHeaderSlot`): depends on task 16's plan store and task 09's header slot; only the
-  feature-flag removal and gate were adopted.
-- `session-unread`, `session-pins`, `session-turn-duration`, `useSessionPinnedStore` rework: stay
-  deferred with task 23's reasons (no Host source; the technical-debt pin entry stands).
+Every deferred row names one open task in `.workflow/tasks/upstream-refresh/`. Proposed plan
+amendment (for the plan owner, not applied here): **09-layout-works-worktrees owns the one-view
+sidebar redesign** and its `Blocked by` grows to `07, 21, 25` so it lands last among the redesign's
+prerequisites. The parts 07/21/24/25 must leave alone are listed at the end of this section.
+
+| Deferred row | Owner | Why now |
+|---|---|---|
+| One-view sidebar redesign: `sessionSidebarRowModel(.test).ts`, `SessionNodeItem.tsx`, `RunSidebarRow.tsx`, `SessionTimelineRowBody.tsx`, `SessionSidebarRows.tsx`, `sessionSidebarVirtualization.ts`, `sessionSidebarDisclosure*`, `sessionTreeGeometry.ts`, `SessionTreeGuides.tsx`, `RowMarkTooltip.tsx`, `useSessionRefLines.ts`, `SidebarRefLinks.tsx`, `sessionWorkFailure.ts`, `useRunWork.ts`, `collapsedActivityState.ts`, `SessionProjectScroller/Collection` works/zone parts, `sessionCollection.ts`, `useSessionGrouping.ts`, `activitySections(.test).ts`, `sidebar/works/*` except the three draft files, `SidebarFooter.tsx`, `SidebarHeader.tsx`, `sessionSidebarHeaderPresentation.tsx`, `shell/useSwitcherItems.ts`, `SessionFolderItem.tsx`, `SessionDialogs.tsx`, `sessionWorktreeMenu.ts`, `NewWorktreeDialog*`, `prStatusLabel.ts`, `sessionPrSummaries.ts`, `useProjectsInSidebarOrder.ts` | 09 | One row-model/zone contract; a part alone does not compile or creates a second model. The display-store rework moves with it (apps/mobile task 25, layout task 09). |
+| `scheduledTasksRequests.ts`, `ScheduledTasksDialog`, `ScheduledTaskEditorDialog` | 17 | Upstream's rework calls the scheduled-task server module 17 owns and the project order 24 owns. |
+| `lib/sessionListOrder(.test).ts`, `lib/sidebarSessionRows.ts` | 25 | Consumers are the command palette and desktop tray; `sessionListOrder`'s pinned contract is the fork's directory-keyed store, not upstream's metadata pins. |
+| `session-unread` swap in `collapsedActivityState.ts`/`SessionSwitcherDropdown.tsx`; `session-turn-duration`/`SessionActivityDuration.tsx`; `session-pins`/`useSessionPinnedStore` rework | 25 | No OMP Host viewed watermark or pin source yet (`technical-debt.md: Session pins have no OMP source`); task 23 deferred them here. |
+| Project knowledge UI: `components/session/project-context/*` and `project-context/DOCUMENTATION.md` | 16 | Tied to 16's project-context API/route rewrite; also needs 15's emoji picker and 09's context-panel header slot. |
+| `views/PlanView.tsx` full rewrite (saved plans only, markdown local assets, line-drag, header slot) | 16 | Depends on 16's plan store; only the feature-flag removal and gate were adopted here. |
+| `views/archive/ArchivedWorktreeRow.tsx`, `useWorktreeArchiveActions.ts` | 09 | Need 09's `lib/worktrees/worktreeArchive`; the page's parent grouping/restore rule already landed with task 01. |
+| `useProjectsInSidebarOrder.ts` (+test) | 24 | Needs a canonical-project replacement for `@/lib/opencode/model` + `sync/global-sync-store`; its consumers are Settings and apps. |
+| `components/session/spaces/*` | 30 | No live consumer after Task38; `NewSpaceDialog` needs `@/lib/opencode/client` (excluded engine). 30 verifies the exclusion in W11; no feature task adopts it. |
+
+Parts the other tasks leave alone: 07 (`FileTreeRowParts`/`fileTreeRow`, `openTrackerItem`) and
+21 (`overviewActions`) provide helpers and do not edit `components/session/**`; 24/25 do not edit
+`components/session/**`, `components/views/PlanView.tsx`, `stores/useSessionDisplayStore.ts` or
+`stores/useSessionPinnedStore.ts`; their own paths stay theirs. 09 owns the files above once its
+Blocked-by names 07/21/25.
 
 ### Interfaces and dead code
 

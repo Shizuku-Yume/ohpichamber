@@ -778,7 +778,11 @@ const appRuntime: SessionFoldersRuntime = {
 const sessionFolders = createSessionFoldersStore(appRuntime);
 
 export const useSessionFoldersStore = sessionFolders.store;
-export const handleSessionFoldersChanged = sessionFolders.handleSessionFoldersChanged;
-export const handleSessionFoldersStreamReady = sessionFolders.handleSessionFoldersStreamReady;
 
 void sessionFolders.hydrateFromServer();
+// Back online after the Host was unreachable: flush what was queued and read
+// the folders again. The control stream reaches the same handler when task 25
+// delivers its `session-folders-changed` event type.
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => sessionFolders.handleSessionFoldersStreamReady());
+}

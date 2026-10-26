@@ -48,7 +48,7 @@ export const folderChangesBodySchema = z.object({ changes: z.array(folderChangeS
 // A deleted folder id is remembered this long, so a device on an older
 // version that still holds the folder cannot bring it back by writing its
 // whole copy.
-export const TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 const sameName = (left, right) => left.trim().toLowerCase() === right.trim().toLowerCase();
 

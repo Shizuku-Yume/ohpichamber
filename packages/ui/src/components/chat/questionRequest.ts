@@ -17,6 +17,7 @@ import { PlanReviewSchema, PlanReviewResponseSchema, type PlanReview, type PlanR
 const AskQuestionOptionSchema = z.object({
   label: z.string(),
   description: z.string().optional(),
+  preview: z.string().optional(),
 });
 const AskQuestionSchema = z.object({
   id: z.string().min(1),
@@ -29,6 +30,7 @@ const AskQuestionSchema = z.object({
 const AskRequestSchema = z.object({
   type: z.literal('omp.ask'),
   questions: z.array(AskQuestionSchema),
+  timeout: z.number().int().positive().optional(),
 });
 
 export type AskQuestion = {
@@ -56,6 +58,12 @@ type AskAnswerResult = {
 };
 
 export type AskAnswerPayload = { results: AskAnswerResult[] };
+
+/** The OMP dialog timeout in milliseconds, when the native host supplied one. */
+export function parseAskTimeout(schema: QuestionRequest['schema']): number | undefined {
+  const parsed = AskRequestSchema.safeParse(schema);
+  return parsed.success ? parsed.data.timeout : undefined;
+}
 
 export type QuestionAnswerPayload = AskAnswerPayload | PlanReviewResponse;
 
@@ -99,7 +107,11 @@ export const askSchemaSignature = (schema: QuestionRequest['schema']): string =>
 const emptyState = (): AskAnswerState => ({ selected: [], custom: false, text: '' });
 
 export const initialAskAnswers = (questions: readonly AskQuestion[]): AskAnswerState[] =>
-  questions.map(emptyState);
+  questions.map((question) => {
+    const recommended = question.recommended;
+    const option = recommended === undefined ? undefined : question.options[recommended];
+    return option ? { selected: [option.label], custom: false, text: '' } : emptyState();
+  });
 
 export const answerAt = (answers: readonly AskAnswerState[], index: number): AskAnswerState =>
   answers[index] ?? emptyState();

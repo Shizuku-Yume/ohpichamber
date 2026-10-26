@@ -11,6 +11,7 @@ import {
   isAskQuestionAnswered,
   missingAskQuestionIndexes,
   parseAskQuestions,
+  parseAskTimeout,
   parsePlanReview,
   setAskCustom,
   setAskText,
@@ -19,6 +20,7 @@ import {
 
 const schema = JsonObjectSchema.parse({
   type: 'omp.ask',
+  timeout: 45_000,
   questions: [
     {
       id: 'colors',
@@ -27,8 +29,8 @@ const schema = JsonObjectSchema.parse({
       multi: true,
       recommended: 1,
       options: [
-        { label: 'red', description: 'Warm' },
-        { label: 'blue' },
+        { label: 'red', description: 'Warm', preview: '**Rose** red' },
+        { label: 'blue', preview: '- ocean\n- sky' },
       ],
     },
     {
@@ -40,7 +42,11 @@ const schema = JsonObjectSchema.parse({
 });
 
 describe('parseAskQuestions', () => {
-  test('reads the exact omp.ask question shape', () => {
+  test('reads the optional native timeout', () => {
+    expect(parseAskTimeout(schema)).toBe(45_000);
+  });
+
+  test('reads options previews and recommended choice from the native question shape', () => {
     expect(parseAskQuestions(schema)).toEqual([
       {
         id: 'colors',
@@ -48,7 +54,7 @@ describe('parseAskQuestions', () => {
         question: 'Which colors should I use?',
         multi: true,
         recommended: 1,
-        options: [{ label: 'red', description: 'Warm' }, { label: 'blue' }],
+        options: [{ label: 'red', description: 'Warm', preview: '**Rose** red' }, { label: 'blue', preview: '- ocean\n- sky' }],
       },
       { id: 'note', question: 'Anything else?', multi: false, options: [{ label: 'Other' }] },
     ]);
@@ -62,13 +68,26 @@ describe('parseAskQuestions', () => {
   });
 });
 
+test('preselects the recommended option in single and multi questions', () => {
+  const questions = parseAskQuestions({
+    type: 'omp.ask',
+    questions: [
+      { id: 'single', options: [{ label: 'no' }, { label: 'yes' }], recommended: 1 },
+      { id: 'multi', options: [{ label: 'first' }, { label: 'second' }], multi: true, recommended: 0 },
+      { id: 'unrecommended', options: [{ label: 'left' }, { label: 'right' }] },
+      { id: 'invalid', options: [{ label: 'only' }], recommended: 3 },
+    ],
+  });
+  expect(initialAskAnswers(questions).map((answer) => answer.selected)).toEqual([['yes'], ['first'], [], []]);
+});
+
+
 describe('native question answers', () => {
   const questions = parseAskQuestions(schema);
 
   test('keeps result order and request ids, with selections in option order', () => {
     const answers = initialAskAnswers(questions);
-    const colors = toggleAskOption(questions[0], answers[0], 'blue');
-    const withRed = toggleAskOption(questions[0], colors, 'red');
+    const withRed = toggleAskOption(questions[0], answers[0], 'red');
     const note = setAskCustom(questions[1], answers[1], true);
 
     expect(buildAskAnswer(questions, [withRed, setAskText(note, '  a free answer  ')])).toEqual({
@@ -84,7 +103,7 @@ describe('native question answers', () => {
     const custom = setAskText(setAskCustom(questions[0], selected, true), 'also lime');
 
     expect(buildAskAnswer([questions[0]], [custom])).toEqual({
-      results: [{ id: 'colors', selectedOptions: ['red'], customInput: 'also lime' }],
+      results: [{ id: 'colors', selectedOptions: ['red', 'blue'], customInput: 'also lime' }],
     });
   });
 

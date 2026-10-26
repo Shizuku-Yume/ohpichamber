@@ -14,6 +14,7 @@ import { useScopedBlockingForms, useSessions } from '@/sync/sync-context';
 import { useRequestReveal } from '@/sync/request-reveal';
 import { useChatSessionSelection } from './chatColumnSession';
 import { useMobileAutocompleteMaxHeight } from './useMobileAutocompleteMaxHeight';
+import { AskCountdown } from './AskCountdown';
 import { FormFieldControl } from './FormFieldControl';
 import { PlanReviewCard } from './PlanReviewCard';
 import {
@@ -27,6 +28,7 @@ import {
     isAskQuestionAnswered,
     missingAskQuestionIndexes,
     parseAskQuestions,
+    parseAskTimeout,
     parsePlanReview,
     serializeAskQuestionsMarkdown,
 } from './questionRequest';
@@ -89,6 +91,7 @@ const FormDockPanel: React.FC<{ form: QuestionRequest; forms: QuestionRequest[] 
     const bodyRef = React.useRef<HTMLDivElement | null>(null);
 
     const questions = React.useMemo(() => parseAskQuestions(form.schema), [form.schema]);
+    const timeoutMs = React.useMemo(() => parseAskTimeout(form.schema), [form.schema]);
     const signature = React.useMemo(() => askSchemaSignature(form.schema), [form.schema]);
     const [restored] = React.useState(() => {
         const draft = formDrafts.get(form.questionId);
@@ -231,6 +234,9 @@ const FormDockPanel: React.FC<{ form: QuestionRequest; forms: QuestionRequest[] 
                             {t('chat.formDock.progress', { current: String(currentStep + 1), total: String(questions.length) })}
                         </span>
                     ) : null}
+                    <span className="typography-micro shrink-0 tabular-nums text-muted-foreground">
+                        <AskCountdown timeoutMs={timeoutMs} requestedAt={form.requestedAt} />
+                    </span>
                 </button>
                 {/* One dot per question: filled when answered, the current one solid. */}
                 {!collapsed && questions.length > 1 ? (

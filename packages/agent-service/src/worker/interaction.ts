@@ -149,7 +149,7 @@ export class WorkerInteraction {
     } finally { signal?.removeEventListener('abort', abort); }
   }
 
-  private async askDialog(questions: ExtensionAskDialogQuestion[], dialogOptions?: { signal?: AbortSignal }): Promise<ExtensionAskDialogResult | undefined> {
+  private async askDialog(questions: ExtensionAskDialogQuestion[], dialogOptions?: { signal?: AbortSignal; timeout?: number }): Promise<ExtensionAskDialogResult | undefined> {
     if (this.closed) return undefined;
     const turnId = this.callbacks.currentTurn();
     if (!turnId || questions.length === 0) return undefined;
@@ -171,10 +171,11 @@ export class WorkerInteraction {
       if (question.recommended !== undefined) safeQuestion.recommended = question.recommended;
       return safeQuestion;
     });
-    const schema = JsonObjectSchema.parse({ type: 'omp.ask', questions: safeQuestions });
+    const schema: JsonObject = JsonObjectSchema.parse({ type: 'omp.ask', questions: safeQuestions });
+    if (dialogOptions?.timeout !== undefined) schema.timeout = dialogOptions.timeout;
     return new Promise<ExtensionAskDialogResult | undefined>(resolve => {
       this.questionHandles.set(questionId, { questions, resolve });
-      this.callbacks.request({ kind: 'question', questionId, turnId, prompt: questions.map(question => question.question).join('\n'), schema });
+      this.callbacks.request({ kind: 'question', questionId, turnId, prompt: questions.map(question => question.question).join('\n'), schema, timeout: dialogOptions?.timeout });
       if (dialogOptions?.signal) {
         const abort = () => { this.questionHandles.delete(questionId); resolve(undefined); };
         if (dialogOptions.signal.aborted) abort();

@@ -15,7 +15,7 @@ import type { HostApprovalPolicyListRequestSchema } from '../supervisor/host-aut
 
 type RequestKind = 'approval' | 'question';
 type ApprovalRecordState = { kind: 'approval'; request: ApprovalRequest; target: ApprovalPolicyWrite['target']; timer?: NodeJS.Timeout };
-type RecordState = ApprovalRecordState | { kind: 'question'; request: QuestionRequest; timer?: NodeJS.Timeout };
+type RecordState = ApprovalRecordState | { kind: 'question'; request: QuestionRequest; timer?: NodeJS.Timeout; timeoutMs: number };
 type SessionState = { epoch: string; generation: string; workspaceId: string; dispatch: (operation: WorkerOperation) => Promise<void>; append: (input: ProjectionInput) => void };
 
 export interface ApprovalPolicyWrite {
@@ -150,8 +150,9 @@ export class InteractionManager {
       questionId: interaction.questionId, sessionId, turnId: interaction.turnId, prompt: interaction.prompt, schema: interaction.schema,
       status: 'pending', version: '1', epoch: state.epoch, workerGeneration: state.generation, requestedAt: now,
     });
-    const timer = setTimeout(() => { void this.expirePending(sessionId, request.questionId); }, this.timeoutMs);
-    this.records.set(request.questionId, { kind: 'question', request, timer });
+    const timeoutMs = Math.min(this.timeoutMs, interaction.timeout ?? this.timeoutMs);
+    const timer = setTimeout(() => { void this.expirePending(sessionId, request.questionId); }, timeoutMs);
+    this.records.set(request.questionId, { kind: 'question', request, timer, timeoutMs });
     state.append({ timestamp: now, event: { type: 'question.requested', question: request } });
   }
 
@@ -256,12 +257,12 @@ export class InteractionManager {
           ? { ...request, status: 'answered', version: increment(request.version), response: answered.response, answeredAt: resolvedAt, resolvedAt, resolvedBy: resolvedById }
           : { ...request, status: 'cancelled', version: increment(request.version), resolvedAt, resolvedBy: resolvedById },
       );
-      this.records.set(questionId, { kind: 'question', request: terminal, timer: undefined });
+      this.records.set(questionId, { kind: 'question', request: terminal, timer: undefined, timeoutMs: record.timeoutMs });
       state.append({ timestamp: resolvedAt, event: { type: 'question.resolved', question: terminal } });
       return terminal;
     } finally {
       this.reservations.delete(questionId);
-      if (this.records.get(questionId) === record) record.timer = setTimeout(() => { void this.expirePending(sessionId, questionId); }, Math.max(0, request.requestedAt + this.timeoutMs - Date.now()));
+      if (this.records.get(questionId) === record) record.timer = setTimeout(() => { void this.expirePending(sessionId, questionId); }, Math.max(0, request.requestedAt + record.timeoutMs - Date.now()));
     }
   }
 
@@ -287,7 +288,7 @@ export class InteractionManager {
     const terminal = { ...record.request, status: 'expired' as const, version: increment(record.request.version), resolvedAt: Date.now(), resolvedBy: 'agent-service' };
     return record.kind === 'approval'
       ? { kind: 'approval', request: ApprovalRequestSchema.parse(terminal), target: record.target, timer: undefined }
-      : { kind: 'question', request: QuestionRequestSchema.parse(terminal), timer: undefined };
+      : { kind: 'question', request: QuestionRequestSchema.parse(terminal), timer: undefined, timeoutMs: record.timeoutMs };
   }
 
   private assertOwner(sessionId: string, epoch: string, generation: string, record: RecordState | undefined, kind: RequestKind): SessionState {

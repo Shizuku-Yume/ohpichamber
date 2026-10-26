@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test, vi } from 'bun:test';
 import { ApprovalRequestSchema } from '@openchamber/agent-contract';
 import type { ApprovalReply, QuestionReply } from '@openchamber/agent-contract';
 import type { ProjectionInput } from '../projection/protocol.ts';
@@ -106,7 +106,7 @@ describe('service-owned interaction CAS', () => {
   test('multi-question choice and freeform answers validate before resolving', async () => {
     const { manager, events } = sessionHarness();
     const question: WorkerInteraction = {
-      kind: 'question', questionId: 'question-1', turnId: 'turn-1', prompt: 'Choose', schema: {
+      kind: 'question', questionId: 'question-1', turnId: 'turn-1', prompt: 'Choose', timeout: 10, schema: {
         type: 'omp.ask', questions: [
           { id: 'colors', question: 'Colors', options: [{ label: 'red' }, { label: 'blue' }], multi: true },
           { id: 'note', question: 'Note', options: [{ label: 'Other' }] },
@@ -187,6 +187,24 @@ describe('service-owned interaction CAS', () => {
     await expect(manager.resolveApproval('session-1', 'approval-1', { decision: 'approve', version: '1', epoch: 'epoch-1', workerGeneration: 'worker-1' })).rejects.toMatchObject({ status: 410, code: 'APPROVAL_EXPIRED' });
     manager.closeSession('session-1');
   });
+  test('expires a question at the forwarded native timeout and rejects its late answer', async () => {
+    vi.useFakeTimers();
+    try {
+      const operations: WorkerOperation[] = [];
+      const events: ProjectionInput[] = [];
+      const manager = new InteractionManager(60_000);
+      manager.openSession('session-1', 'epoch-1', 'worker-1', 'workspace-1', async operation => { operations.push(operation); }, input => { events.push(input); });
+      manager.onRequest('session-1', 'worker-1', { kind: 'question', questionId: 'question-short', turnId: 'turn-1', prompt: 'Choose', timeout: 10, schema: { type: 'omp.ask', questions: [{ id: 'q', options: [{ label: 'yes' }] }] } });
+      vi.advanceTimersByTime(10);
+      expect(operations).toContainEqual({ type: 'question.resolve', questionId: 'question-short', action: 'cancel' });
+      expect(events.at(-1)?.event).toMatchObject({ type: 'question.resolved', question: { questionId: 'question-short', status: 'expired', version: '2' } });
+      await expect(manager.resolveQuestion('session-1', 'question-short', { action: 'answer', response: { results: [{ id: 'q', selectedOptions: ['yes'] }] }, version: '1', epoch: 'epoch-1', workerGeneration: 'worker-1' })).rejects.toMatchObject({ status: 410, code: 'QUESTION_EXPIRED' });
+      manager.closeSession('session-1');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
 
   test('projects public approval requests without exposing private paths, credentials, or raw native inputs', async () => {
     let committedTarget: { toolName: string; pattern: string } | undefined;

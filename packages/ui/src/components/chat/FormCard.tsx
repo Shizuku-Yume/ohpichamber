@@ -9,6 +9,7 @@ import { toast } from '@/components/ui';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessions } from '@/sync/sync-context';
 import { useChatSessionSelection } from './chatColumnSession';
+import { AskCountdown } from './AskCountdown';
 import { FormFieldControl } from './FormFieldControl';
 import { FormMarkdown } from './FormMarkdown';
 import { PlanReviewCard } from './PlanReviewCard';
@@ -22,6 +23,7 @@ import {
     missingAskQuestionIndexes,
     askSchemaSignature,
     parseAskQuestions,
+    parseAskTimeout,
     parsePlanReview,
     serializeAskQuestionsMarkdown,
 } from './questionRequest';
@@ -47,6 +49,7 @@ const AskFormCard: React.FC<FormCardProps> = ({ form }) => {
     const { sessionId: currentSessionId, directory } = useChatSessionSelection();
     const sessions = useSessions(directory ?? undefined);
     const questions = React.useMemo(() => parseAskQuestions(form.schema), [form.schema]);
+    const timeoutMs = React.useMemo(() => parseAskTimeout(form.schema), [form.schema]);
     const signature = React.useMemo(() => askSchemaSignature(form.schema), [form.schema]);
     const resetKey = `${form.questionId}:${signature}`;
     const appliedResetKeyRef = React.useRef(resetKey);
@@ -124,6 +127,9 @@ const AskFormCard: React.FC<FormCardProps> = ({ form }) => {
                                     {t('chat.formCard.fromSubagent')}
                                 </span>
                             ) : null}
+                            <span className="typography-micro ml-auto tabular-nums">
+                                <AskCountdown timeoutMs={timeoutMs} requestedAt={form.requestedAt} />
+                            </span>
                             <div className="ml-auto flex items-center gap-0.5">
                                 <button
                                     type="button"

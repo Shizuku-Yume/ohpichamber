@@ -102,7 +102,7 @@ const WorkerApprovalInteractionSchema = z.strictObject({
 });
 const WorkerQuestionInteractionSchema = z.strictObject({
   kind: z.literal('question'), questionId: EntityIdSchema, turnId: EntityIdSchema, prompt: z.string(),
-  schema: JsonObjectSchema,
+  schema: JsonObjectSchema, timeout: z.number().int().positive().optional(),
 });
 const WorkerInteractionSchema = z.discriminatedUnion('kind', [WorkerApprovalInteractionSchema, WorkerQuestionInteractionSchema]);
 export type WorkerInteraction = z.infer<typeof WorkerInteractionSchema>;

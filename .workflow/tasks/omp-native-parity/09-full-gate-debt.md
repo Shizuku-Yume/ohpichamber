@@ -19,3 +19,6 @@
 ## Progress
 
 - Created by Task 08 on 2026-10-27 from the acceptance run; not started.
+- Task 08 measured the gate at code tip `ad8413b82b` (Task 08 merge `0cd1d81e9a`). Integration later moved to `fe7f38fd8b` (Task 02 cold-read fixes) before this record was updated, so reproduce the gate at the current integration tip before classifying any failure.
+- UI caveat: the five failing UI files (`gitApi.test.ts`, `reviewFlow.test.ts`, `useGlobalSessionsStore-races.test.ts`, `native-leaf-subscriptions.test.tsx`, `session-ui-store.test.js`) were **not individually rerun**. The combined rerun was invalid because it ran several files in one Bun process and hit the repository's known `mock.module` leakage; rerun each file through the project's isolated per-file runner before treating it as a regression or inherited baseline.
+- Reproduced after the dev server was stopped: the agent-service `session-native.test.ts` 30 s timeout and all 12 Web failures. Logs: `/home/shizuku/Project/ohpichamber-omp-artifacts/onp-acceptance-2026-10-26/rerun-agent-service.log` and `rerun-web.log`.

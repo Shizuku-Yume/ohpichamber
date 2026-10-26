@@ -14,7 +14,7 @@ import { initializeExtensions } from '@oh-my-pi/pi-coding-agent/modes/runtime-in
 import { READ_ONLY_BUILTIN_COMMANDS, executeAcpBuiltinSlashCommand, isAllowedBuiltinCommand, parseSlashCommand } from './builtin-commands.ts';
 import type { SlashCommandRuntime } from '@oh-my-pi/pi-coding-agent/slash-commands/types';
 import { RpcBtwController } from '@oh-my-pi/pi-coding-agent/modes/rpc/rpc-btw';
-import { JsonObjectSchema, MCPOAuthPublicConfigurationSchema, SessionBranchRequestSchema, type Agent, type CapturedSendOptions, type JsonObject, type JsonValue, type Run, type RunOrigin, type SessionBranchRequest } from '@openchamber/agent-contract';
+import { JsonObjectSchema, MCPOAuthPublicConfigurationSchema, SessionBranchRequestSchema, type CapturedSendOptions, type JsonObject, type JsonValue, type Run, type RunOrigin, type SessionBranchRequest } from '@openchamber/agent-contract';
 import type { WorkerBootstrapMessage, WorkerInteraction, WorkerOperation, WorkerOperationResult } from '../protocol.ts';
 import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
@@ -47,15 +47,13 @@ import { PlanReviewSchema, type PlanReviewResponse } from '@openchamber/agent-co
 
 type PromptOperation = Extract<WorkerOperation, { type: 'prompt' | 'steer' | 'follow-up' }>;
 type PreparedPrompt = { text: string; options: PromptOptions; context: Parameters<SessionManager['appendMessage']>[0][] };
-type NativeAdmission = { skillsAvailable: boolean; profile: Agent | null };
+type NativeAdmission = { skillsAvailable: boolean };
 
 export class WorkerSession {
   private readonly modeController: WorkerModeController;
   private readonly projection: WorkerProjection;
   private readonly unsubscribe: () => void;
   private readonly operations = new Set<Promise<WorkerOperationResult>>();
-  private readonly defaultToolNames: string[];
-  private readonly defaultMountedNames: string[];
   private readonly queuedContext = new WeakMap<AgentMessage, PreparedPrompt['context']>();
   private readonly nativeQueuedPreparation: AgentSession['agent']['prepareQueuedMessages'];
   private readonly btw: RpcBtwController;
@@ -101,8 +99,6 @@ export class WorkerSession {
         } }]);
       }
     });
-    this.defaultToolNames = session.getActiveToolNames();
-    this.defaultMountedNames = session.getMountedXdevToolNames();
     this.nativeQueuedPreparation = session.agent.prepareQueuedMessages;
     this.subagentEventBus.on(TASK_SUBAGENT_LIFECYCLE_CHANNEL, data => {
       // SAFETY: The worker publishes this channel only with SubagentLifecyclePayload.
@@ -146,7 +142,7 @@ export class WorkerSession {
     let shell: WorkerShell | undefined;
     let projection: WorkerProjection | undefined;
     let owned: WorkerSession | undefined;
-    const admission: NativeAdmission = { skillsAvailable: !input.skillSources, profile: null };
+    const admission: NativeAdmission = { skillsAvailable: !input.skillSources };
     let capturePolicy: (() => Promise<void>) | undefined;
     const authorize: WorkerAuthorize = async (request, context) => {
       await capturePolicy?.();
@@ -154,8 +150,6 @@ export class WorkerSession {
     };
     const authorizeTool = async (toolName: string, toolInput: JsonObject, approval?: { approvalId?: string; toolCallId: string }): Promise<void> => {
       await capturePolicy?.();
-      const profile = admission.profile;
-      if (profile && profile.allowedTools !== null && toolName !== 'provider.use' && !profile.allowedTools.includes(toolName)) throw new ProjectionError(403, 'UNAUTHORIZED', 'Selected agent profile does not permit this tool');
       const model = session?.model;
       const nativeContext: NativePolicyContext = { editMode: runtime.effectiveEditMode(model ? formatModelString(model) : undefined) };
       if (model) {
@@ -163,14 +157,13 @@ export class WorkerSession {
         nativeContext.modelId = model.id;
         nativeContext.endpoint = model.baseUrl;
       }
-      return hostAuthorize({ type: 'tool', toolName, input: toolInput, agentId: profile?.agentId, permissionPresetId: profile?.permissionPresetId, ...approval }, nativeContext);
+      return hostAuthorize({ type: 'tool', toolName, input: toolInput, ...approval }, nativeContext);
     };
     const worker = { workspaceId: input.workspaceId, rootSessionId: input.rootSessionId, workerGeneration: input.workerGeneration };
     const interaction = new NativeInteraction({ request: onInteraction, currentTurn: () => projection?.currentTurn()?.turnId });
     const observer: ExtensionFactory = api => {
       api.on('tool_call', async event => {
         interaction.observeToolCall(event);
-        if (admission.profile && admission.profile.allowedTools !== null && !admission.profile.allowedTools.includes(event.toolName)) return { block: true, reason: 'Selected agent profile does not permit this tool' };
         if (['bash', 'openchamber', 'web', 'memory', 'notify'].includes(event.toolName)) return;
         // The native search tool is the SDK's egress entry point, not a generic
         // tool grant. Host authorization already owns web-search policy (including
@@ -184,7 +177,7 @@ export class WorkerSession {
         try { await authorizeTool(event.toolName, JsonObjectSchema.parse(JSON.parse(JSON.stringify(event.input)))); }
         catch { return { block: true, reason: 'Host policy refused the tool operation' }; }
       });
-      api.on('before_agent_start', () => admission.profile?.systemPromptOverride === undefined ? undefined : { systemPrompt: [admission.profile.systemPromptOverride] });
+      api.on('before_agent_start', () => undefined);
       api.on('tool_approval_requested', event => { interaction.observeApproval(event); });
       api.on('tool_result', event => { interaction.forgetToolCall(event.toolCallId); });
       api.on('tool_approval_resolved', event => { interaction.forgetToolCall(event.toolCallId, false); });
@@ -315,11 +308,10 @@ export class WorkerSession {
   }
 
   private async selectOptions(options: CapturedSendOptions): Promise<void> {
-    // Composer options describe Main; active Plan keeps OMP's role model and tool presentation.
+    // Root options select only the model and thinking effort; OMP owns root tools.
     const mode = this.modeController.mode();
     if (mode.kind === 'plan' && mode.status === 'active') return;
-    const profile = options.agentId === null ? null : await this.catalogs.agents.profile(options.agentId);
-    const fallback = profile?.model ?? (this.session.model ? { providerId: this.session.model.provider, modelId: this.session.model.id } : null);
+    const fallback = this.session.model ? { providerId: this.session.model.provider, modelId: this.session.model.id } : null;
     const providerId = options.providerId ?? fallback?.providerId;
     const modelId = options.modelId ?? fallback?.modelId;
     if (!providerId || !modelId) throw new ProjectionError(422, 'MODEL_UNAVAILABLE', 'Selected model is unavailable');
@@ -330,14 +322,6 @@ export class WorkerSession {
       if (effort === undefined && selected.nativeModel.reasoning) throw new ProjectionError(422, 'MODEL_UNAVAILABLE', 'Selected model effort is unavailable');
       if (effort !== undefined) this.session.setThinkingLevel(effort);
     }
-    if (profile && profile.allowedTools !== null) {
-      const available = this.session.getAllToolInfos();
-      if (profile.allowedTools.some(name => !available.some(tool => tool.name === name))) throw new ProjectionError(422, 'UNSUPPORTED_CAPABILITY', 'Selected profile tool is unavailable');
-      await this.session.setActiveToolsByName([...profile.allowedTools]);
-    } else if (this.admission.profile) {
-      await this.session.restoreNonMCPToolPresentation(this.defaultToolNames, this.defaultMountedNames);
-    }
-    this.admission.profile = profile;
   }
 
   seed(): ProjectionSeed { return this.projection.seed(); }
@@ -363,8 +347,7 @@ export class WorkerSession {
 
   private async prepare(operation: PromptOperation): Promise<PreparedPrompt> {
     const { input, options } = operation.request;
-    if (input.agentMention && options.agentId !== null && input.agentMention.agentId !== options.agentId) throw new ProjectionError(400, 'INVALID_REQUEST', 'Agent mention and selected profile disagree');
-    await this.selectOptions(input.agentMention ? { ...options, agentId: input.agentMention.agentId } : options);
+    await this.selectOptions(options);
     let text = input.text;
     const contextMessages: PreparedPrompt['context'] = [];
     const invocation = /^\/skill:([^\s]+)(?:\s+([\s\S]*))?$/.exec(text);

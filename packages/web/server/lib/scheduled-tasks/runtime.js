@@ -970,11 +970,19 @@ export const createScheduledTasksRuntime = (deps) => {
     if (started) {
       return;
     }
-    started = true;
+    const projects = await listScopes();
+    let changed = 0;
+    for (const project of projects) {
+      if (!project?.id || typeof projectConfigRuntime.migrateProjectScheduledTasks !== 'function') continue;
+      try { changed += await projectConfigRuntime.migrateProjectScheduledTasks(project.id); }
+      catch (error) { logger.warn?.('[scheduled-tasks] root agent migration failed', { projectId: project.id, error: error?.message ?? String(error) }); }
+    }
+    logger.info?.(`[scheduled-tasks] root agent migration changed=${changed}`);
     await syncAllProjects();
+    started = true;
   };
 
-  const stop = () => {
+  const stop = async () => {
     if (!started) {
       return;
     }

@@ -553,6 +553,18 @@ export const createProjectConfigRuntime = (deps) => {
     const legacy = legacyPath ? await readJsonDocumentIfPresent(legacyPath, ['ENOENT', 'ENAMETOOLONG']) : null;
     return legacy ?? {};
   };
+  const migrateProjectScheduledTasks = async (projectID) => withProjectWriteLock(projectID, async () => {
+    const document = await readRawProjectConfigFromDisk(projectID);
+    if (!Array.isArray(document.scheduledTasks)) return 0;
+    let changed = 0;
+    const scheduledTasks = document.scheduledTasks.map((task) => {
+      if (!task || typeof task !== 'object' || !task.execution || typeof task.execution !== 'object' || task.execution.agent == null) return task;
+      changed += 1;
+      return { ...task, execution: { ...task.execution, agent: null } };
+    });
+    if (changed > 0) await writeRawProjectConfigToDisk(projectID, { ...document, scheduledTasks });
+    return changed;
+  });
 
   // Normalized tasks for reading, plus the raw on-disk record of each one for
   // writing back. Normalization only keeps the fields THIS build knows, so a
@@ -1128,6 +1140,7 @@ export const createProjectConfigRuntime = (deps) => {
     updateProjectSetup,
     updateSharedProjectSetup,
     resolveSharedPlansDir,
+    migrateProjectScheduledTasks,
     listScheduledTasks,
     upsertScheduledTask,
     deleteScheduledTask,

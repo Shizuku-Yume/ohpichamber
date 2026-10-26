@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { CanonicalEventSchema, EntityIdSchema, HistoryPageSchema, ProblemDetailsSchema, QueueStateSchema, RunSchema, RuntimeSessionSchema, SessionSnapshotSchema } from '@openchamber/agent-contract';
 import { PromptQueueError } from './sqlite-store.js';
+import { assertRootPromptAdmission } from './prompt-admission.js';
 
 const AdmissionSchema = z.strictObject({ run: RunSchema });
 const QUIET_MS = 500;
@@ -204,8 +205,9 @@ export function createCanonicalQueueRuntime({ store, service, resolveAttachments
   return {
     getState: (scope) => store.getState(queueScope(scope)),
     append: async (scope, commandId, request) => {
-      const captured = await capturePrompt(scope, request.request);
-      const queue = await store.append(queueScope(scope), commandId, { ...request, request: captured });
+      const admitted = { ...request, request: assertRootPromptAdmission(request.request) };
+      const captured = assertRootPromptAdmission(await capturePrompt(scope, admitted.request));
+      const queue = await store.append(queueScope(scope), commandId, { ...admitted, request: captured });
       changed(scope, queue); schedule(scope); return queue;
     },
     remove: async (scope, request) => {

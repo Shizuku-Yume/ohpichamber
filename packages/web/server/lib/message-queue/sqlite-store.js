@@ -48,11 +48,27 @@ const hash = (value) => createHash('sha256').update(stableJson(value)).digest('h
 const preview = (value) => value === undefined ? undefined : value.slice(0, 100) + (value.length > 100 ? '...' : '');
 
 /** Host-owned delivery data only; the OMP transcript never enters this database. */
-export function createPromptQueueStore({ dataDir, database, closeDatabase = database === undefined, now = Date.now } = {}) {
+export function createPromptQueueStore({ dataDir, database, closeDatabase = database === undefined, now = Date.now, logger = console } = {}) {
   const db = database ?? openHostMetadataDatabase({ dataDir }).db;
   if (database) {
     ensureHostMetadataSchema(db);
   }
+  const migrateRootAgentIds = () => {
+    let changed = 0;
+    withTransaction(db, () => {
+      for (const row of db.prepare('SELECT session_id, item_id, payload FROM prompt_queue_item').all()) {
+        let stored;
+        try { stored = StoredItemSchema.parse(JSON.parse(row.payload)); } catch { throw corrupt(); }
+        if (stored.request.options.agentId === null) continue;
+        const request = { ...stored.request, options: { ...stored.request.options, agentId: null } };
+        db.prepare('UPDATE prompt_queue_item SET payload = ? WHERE session_id = ? AND item_id = ?').run(JSON.stringify({ ...stored, request }), row.session_id, row.item_id);
+        changed += 1;
+      }
+    });
+    logger.info?.(`[message-queue] root agent migration changed=${changed}`);
+    return changed;
+  };
+  migrateRootAgentIds();
   const lifecycle = createMetadataLifecycle(db, closeDatabase);
   const legacyPath = dataDir === undefined ? null : path.join(dataDir, 'message-queue.json');
   let conversionStatus = legacyPath !== null && fs.existsSync(legacyPath) ? 'pending' : 'missing';
@@ -352,7 +368,7 @@ export function createPromptQueueStore({ dataDir, database, closeDatabase = data
             let options = CapturedSendOptionsSchema.parse({
               providerId: item.sendConfig.providerID ?? null,
               modelId: item.sendConfig.modelID ?? null,
-              agentId: item.sendConfig.agent ?? null,
+              agentId: null,
               variant: item.sendConfig.variant ?? null,
               reasoningEffort: item.sendConfig.reasoningEffort ?? null,
             });
@@ -365,7 +381,6 @@ export function createPromptQueueStore({ dataDir, database, closeDatabase = data
               if (!hasProvenance) context = [...context, { kind: 'context', text: '', metadata: { scheduledTask: { mode: 'existing', projectId: item.scheduledTask.projectId, taskId: item.scheduledTask.taskId, sessionId: scope.sessionId, workspaceId: scope.workspaceId, triggeredAt: item.createdAt } } }];
             }
             const input = { text: item.text ?? item.content, attachments, context };
-            if (item.agentMention) input.agentMention = { agentId: item.agentMention };
             const request = PromptRequestSchema.parse({ input, options });
             captured.push({ id: item.id, createdAt: item.createdAt, stored: StoredItemSchema.parse({ content: item.content, contextPreview: preview(item.contextPreview), request }) });
           }

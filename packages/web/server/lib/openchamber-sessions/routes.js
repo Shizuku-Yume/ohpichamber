@@ -1,13 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import express from 'express';
 import { z } from 'zod';
-import { SessionCreateAckSchema, SessionCreateRequestSchema, RuntimeSessionSchema, SessionSchema, RunSchema, RunAbortRequestSchema, SessionDeleteAckSchema, PromptRequestSchema, CapturedSendOptionsSchema, SessionSnapshotSchema, HistoryPageSchema, SessionMetadataStateSchema, SessionMetadataPatchSchema, SteerRequestSchema, SteerAckSchema, FollowUpRequestSchema, FollowUpAckSchema, ProblemDetailsSchema, ProblemCodeSchema, SessionControlRequestSchema, SessionControlAckSchema } from '@openchamber/agent-contract';
-import { EntityIdSchema } from '@openchamber/agent-contract';
+import { assertRootPromptAdmission } from '../message-queue/prompt-admission.js';
+import { SessionCreateAckSchema, SessionCreateRequestSchema, RuntimeSessionSchema, SessionSchema, RunSchema, RunAbortRequestSchema, SessionDeleteAckSchema, PromptRequestSchema, CapturedSendOptionsSchema, SessionSnapshotSchema, HistoryPageSchema, SessionMetadataStateSchema, SessionMetadataPatchSchema, SteerRequestSchema, SteerAckSchema, FollowUpRequestSchema, FollowUpAckSchema, ProblemDetailsSchema, ProblemCodeSchema, SessionControlRequestSchema, SessionControlAckSchema, EntityIdSchema } from '@openchamber/agent-contract';
 import { SessionBranchRequestSchema, SessionBranchResultSchema, SessionRelocateRequestSchema, SessionRelocateResultSchema } from '@openchamber/agent-contract';
 import { HostSessionRelocationPrepareSchema, HostSessionRelocationPreparedSchema, HostSessionRelocationFinalizeSchema, HostSessionRelocationFinalizedSchema, HostSessionRelocationPendingSchema } from '@openchamber/agent-service/private-protocol';
-
 import { OpenChamberControlError, asControlError } from '../openchamber-control/error.js';
 import { asNonEmptyString } from '../shared/guards.js';
+
 const SessionForkAckSchema = z.strictObject({ sessionId: z.string().min(1), rootSessionId: z.string().min(1), sessionFile: z.string().min(1), sourceSessionId: z.string().min(1), entryId: z.string().min(1).nullable(), mode: z.enum(['selected', 'full']) });
 const SessionForkRequestSchema = z.strictObject({ messageId: EntityIdSchema.optional(), mode: z.enum(['selected', 'full']) }).refine(
   (input) => input.mode === 'selected' ? input.messageId !== undefined : input.messageId === undefined,
@@ -117,12 +117,12 @@ const createCanonicalSessionService = (dependencies) => {
     emit({ type: 'openchamber:session-created', properties: { sessionId: session.sessionId, projectId, workspaceId } });
     return result;
   };
-  const prepareDelivery = async (scope, requestBody, identity = {}) => {
-    const capturedRequest = PromptRequestSchema.parse(await capturePrompt(scope, requestBody));
-    const capture = { ...identity, request: capturedRequest };
+  const prepareDelivery = async (scope, requestBody, identity = {}, capturedRequest = null) => {
+    const admitted = assertRootPromptAdmission(capturedRequest ?? await capturePrompt(scope, requestBody));
+    const capture = { ...identity, request: admitted };
     await beforeDispatch(scope, capture);
     try {
-      const attachments = await resolveAttachments(scope, capturedRequest.input.attachments);
+      const attachments = await resolveAttachments(scope, admitted.input.attachments);
       return { ...capture, attachments };
     } catch (error) {
       if (error?.code === 'PAYLOAD_TOO_LARGE' || error?.code === 'INVALID_REQUEST') {
@@ -140,16 +140,18 @@ const createCanonicalSessionService = (dependencies) => {
     }
     const requestBody = operation === 'steer' ? SteerRequestSchema.parse({ sessionId, request: parsed.data }).request
       : operation === 'followUp' ? FollowUpRequestSchema.parse({ sessionId, request: parsed.data }).request : parsed.data;
+    assertRootPromptAdmission(requestBody);
     if (commandId !== undefined && !EntityIdSchema.safeParse(commandId).success) {
       throw new OpenChamberControlError('Command key is invalid', 400, { code: 'INVALID_REQUEST' });
     }
     const claim = commandId === undefined ? null : await directCommandAdmissionStore.claim(scope, commandId, operation, requestBody);
     if (claim?.state === 'accepted') return claim.acknowledgment;
+    const capturedRequest = assertRootPromptAdmission(await capturePrompt(scope, requestBody));
     const deliveryRunId = randomUUID();
     const deliveryIdentity = { deliveryRunId };
     if (operation === 'send') deliveryIdentity.runId = deliveryRunId;
     if (commandId !== undefined) deliveryIdentity.commandId = commandId;
-    const capture = await prepareDelivery(scope, requestBody, deliveryIdentity);
+    const capture = await prepareDelivery(scope, requestBody, deliveryIdentity, capturedRequest);
     let acknowledgment;
     let receipt;
     try {

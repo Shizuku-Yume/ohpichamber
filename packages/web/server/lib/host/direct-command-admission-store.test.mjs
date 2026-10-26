@@ -9,7 +9,7 @@ import { createOpenChamberSessionService } from '../openchamber-sessions/routes.
 const options = {
   providerId: 'provider',
   modelId: 'model',
-  agentId: 'agent',
+  agentId: null,
   variant: 'variant',
   reasoningEffort: 'high',
 };
@@ -158,6 +158,16 @@ describe('real SQLite direct command admission', () => {
     const fixture = await makeHarness();
     await expectAdmissionError(fixture.service.send('session-a', { input: { text: 'missing options', attachments: [], context: [] } }, 'invalid-command'), 400, 'INVALID_REQUEST');
     expect(fixture.nativeCalls).toHaveLength(0);
+    expect(countAdmissionRows(fixture.state)).toBe(0);
+  });
+  it.each([
+    ['agentId', request => ({ ...request, options: { ...request.options, agentId: 'build' } })],
+    ['agentMention', request => ({ ...request, input: { ...request.input, agentMention: { agentId: 'build' } } })],
+  ])('rejects root %s before the Host claim or native dispatch', async (_field, mutate) => {
+    const fixture = await makeHarness();
+    await expectAdmissionError(fixture.service.send('session-a', mutate(promptFor()), 'rejected-root'), 400, 'INVALID_REQUEST');
+    expect(fixture.nativeCalls).toHaveLength(0);
+    expect(fixture.captures).toHaveLength(0);
     expect(countAdmissionRows(fixture.state)).toBe(0);
   });
 

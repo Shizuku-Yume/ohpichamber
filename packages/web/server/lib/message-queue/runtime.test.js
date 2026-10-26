@@ -28,7 +28,6 @@ const request = {
     text: 'captured prompt',
     attachments: [{ attachmentId: randomUUID(), name: 'note.txt', mediaType: 'text/plain', size: 4, uri: '' }],
     context: [{ kind: 'context', text: 'captured context', metadata: { issue: 7 }, instructions: 'read first' }],
-    agentMention: { agentId: 'reviewer' },
   },
   options,
 };

@@ -175,6 +175,26 @@ describe('Host-owned native descriptor authority', () => {
     } finally { await denied.close(); }
   });
 
+  it('admits session-local goal operations without granting machine capabilities', async () => {
+    const harness = await nativeHarness();
+    try {
+      for (const op of ['create', 'get', 'complete', 'resume', 'drop']) {
+        const request = { type: 'tool', toolName: 'goal', input: { op, objective: 'Finish the task' } };
+        expect(await harness.authorize(harness.scope, request)).toEqual({ allowed: true });
+        for (const mismatch of [{ workspaceId: 'foreign' }, { agentDirectoryId: 'foreign' }, { cwd: harness.outside }]) {
+          expect(await harness.authorize({ ...harness.scope, ...mismatch }, request)).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+        }
+        expect(await harness.authorize(harness.scope, { ...request, toolName: 'unregistered-tool' })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      }
+      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'goal', input: { op: 'complete' }, agentId: 'foreign' })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+    } finally { await harness.close(); }
+    const input = { op: 'complete' };
+    const denied = await nativeHarness([{ scope: 'workspace', decision: 'deny', target: { toolName: 'goal', pattern: JSON.stringify(input) } }]);
+    try {
+      expect(await denied.authorize(denied.scope, { type: 'tool', toolName: 'goal', input })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+    } finally { await denied.close(); }
+  });
+
   it('admits profile-gated native task delegation without granting arbitrary tools', async () => {
     const input = { agent: 'child', name: 'child-proof', task: 'Return the child proof marker.' };
     const request = { type: 'tool', toolName: 'task', input };

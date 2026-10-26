@@ -113,6 +113,9 @@ export const createWorkerOperationAuthorizer = ({
       // Native yield submits the child's structured result to its parent; it opens no
       // machine capability and is the only successful child-completion path.
       if (request.toolName === 'yield') return allowed;
+      // Native goal operations only read or change this session's OMP goal state.
+      // Provider turns and machine tools still require their own authorization.
+      if (request.toolName === 'goal') return allowed;
       // Native task delegation starts an SDK child under the captured workspace. A
       // non-isolated child's tool calls re-enter this authorizer, so the request grants
       // no machine capability; the selected profile's allowedTools gate already ran in

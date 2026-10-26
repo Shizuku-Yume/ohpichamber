@@ -191,6 +191,9 @@ Native Bash descriptors include their working directory as a source path. The Ho
 ### Worker operation authorization and native questions
 
 `worker-operation-authorizer.js` authorizes native worker operations against Host workspace scopes, path containment rules, and approval policies. After evaluating scope, path containment, agent profile, preset constraints, and explicit policy denials, the authorizer allows the native `ask` and `task` tool names. `ask` only opens a scoped, CAS-protected interaction; `task` starts a non-isolated SDK child under the captured workspace and the worker already applies the selected profile's `allowedTools` gate. Every child tool call on that path re-enters this authorizer, so neither name grants a host machine capability or an unknown-tool authorization. Isolated task requests are refused because SDK isolation drops the programmatic authorization extensions, and caller-supplied child names must be one safe path segment.
+
+Native `goal` operations are also session-local: they read or update OMP's current goal, including the agent's completion declaration. They pass the same workspace/source, profile, preset and explicit-deny checks, but need no separate machine capability grant. Subsequent provider turns and file, shell or network tool calls still pass their own authorization. This policy is shared by Web, Electron and hosted mobile through the Host gateway; it does not bypass OMP's own tool approval rules.
+
 ## Retained Host Infrastructure Contracts
 
 ### bootstrap-runtime.js

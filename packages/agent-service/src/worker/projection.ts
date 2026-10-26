@@ -110,9 +110,34 @@ interface LiveMessage {
   attachments: PromptAttachment[]; started: Set<number>; providerId?: string; modelId?: string; usage?: TokenUsage;
 }
 
+type NativeAssistantMessage = Extract<VisibleMessage, { role: 'assistant' }>;
+
+/**
+ * The native usage carries provider-only counters (`reasoningTokens`, provider
+ * extras) that the canonical wire contract does not publish. Map the shared
+ * fields explicitly so a provider counter added by the SDK cannot fail a
+ * session restore, and parse the result to keep the canonical numbers strict.
+ */
+function canonicalUsage(usage: NonNullable<NativeAssistantMessage['usage']>): TokenUsage {
+  return TokenUsageSchema.parse({
+    input: usage.input,
+    output: usage.output,
+    cacheRead: usage.cacheRead,
+    cacheWrite: usage.cacheWrite,
+    totalTokens: usage.totalTokens,
+    cost: {
+      input: usage.cost.input,
+      output: usage.cost.output,
+      cacheRead: usage.cost.cacheRead,
+      cacheWrite: usage.cost.cacheWrite,
+      total: usage.cost.total,
+    },
+  });
+}
+
 function metadata(message: VisibleMessage): Pick<LiveMessage, 'providerId' | 'modelId' | 'usage'> {
   if (message.role !== 'assistant') return {};
-  return { providerId: message.provider, modelId: message.model, usage: TokenUsageSchema.parse(message.usage) };
+  return { providerId: message.provider, modelId: message.model, usage: message.usage ? canonicalUsage(message.usage) : undefined };
 }
 
 function visible(message: NativeMessage): message is VisibleMessage {

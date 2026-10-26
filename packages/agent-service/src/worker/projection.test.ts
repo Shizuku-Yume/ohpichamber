@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
@@ -543,6 +543,58 @@ test('history keeps an earlier terminal-less turn untouched when a new run opens
     expect(settled.turns[0]).toMatchObject({ status: 'completed' });
     expect(settled.turns[1]).toMatchObject({ runId: 'next', status: 'cancelled' });
   } finally {
+    await manager.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('reopening a native session maps reasoningTokens usage into the canonical shape', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'canonical-usage-'));
+  const manager = SessionManager.create(root, root);
+  let reopened: SessionManager | undefined;
+  try {
+    await manager.ensureOnDisk();
+    const projection = new WorkerProjection(manager, 'session');
+    const journal = new SessionJournal({ sessionId: 'session', rootSessionId: 'session', projectId: 'project', workspaceId: 'workspace', displayPath: '.' }, projection.seed());
+    journal.append(projection.beginRun('run', 1));
+    let timestamp = 2;
+    const deliver = (message: NativeMessage): void => {
+      journal.append(projection.consume({ type: 'message_start', message }));
+      manager.appendMessage(message);
+      journal.append(projection.consume({ type: 'message_end', message }));
+      projection.bindPending();
+    };
+    deliver({ role: 'user', content: 'ping', timestamp: timestamp++ });
+    const answer: Assistant = {
+      ...assistant([{ type: 'text', text: 'pong' }], 'stop', timestamp++),
+      usage: { input: 7, output: 5, cacheRead: 2, cacheWrite: 1, totalTokens: 12,
+        cost: { input: 1, output: 2, cacheRead: 3, cacheWrite: 4, total: 10 } },
+    };
+    deliver(answer);
+    journal.append(projection.completeRun(timestamp++));
+    await manager.flush();
+    const file = manager.getSessionFile();
+    if (!file) throw new Error('Native session file is required');
+    await manager.close();
+    // The SDK writes provider-only counters into native usage; the canonical
+    // wire contract publishes only the shared token fields.
+    const rewritten = (await readFile(file, 'utf8')).trimEnd().split('\n').map((line) => {
+      const entry: { type?: string; message?: { role?: string; usage?: Record<string, unknown> } } = JSON.parse(line);
+      if (entry.type === 'message' && entry.message?.role === 'assistant' && entry.message.usage) entry.message.usage.reasoningTokens = 3;
+      return JSON.stringify(entry);
+    });
+    await writeFile(file, `${rewritten.join('\n')}\n`);
+    reopened = await SessionManager.open(file, root, undefined, { initialCwd: root, throwIfMissing: true });
+    const restored = new WorkerProjection(reopened, 'session');
+    const expected = { input: 7, output: 5, cacheRead: 2, cacheWrite: 1, totalTokens: 12,
+      cost: { input: 1, output: 2, cacheRead: 3, cacheWrite: 4, total: 10 } };
+    const seeded = restored.seed().messages.find((message) => message.role === 'assistant');
+    expect(seeded?.usage).toEqual(expected);
+    const page = restored.history({ sessionId: 'session' }).messages.find((message) => message.role === 'assistant');
+    expect(page?.usage).toEqual(expected);
+    expect(seeded?.usage).not.toHaveProperty('reasoningTokens');
+  } finally {
+    await reopened?.close();
     await manager.close();
     await rm(root, { recursive: true, force: true });
   }

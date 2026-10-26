@@ -1126,3 +1126,52 @@ describe('connectHost resolve and badge', () => {
     host.dispose();
   });
 });
+
+describe('late generate results', () => {
+  const late = { request: { prompt: 'Summarize' }, ok: true as const, result: { text: 'Short.' } };
+  const failed = { request: { prompt: 'Again' }, ok: false as const, code: 'MODEL_FAILED' as const, error: 'The Small Model could not complete this request.' };
+  const supporting: HostMessage = { ...ready, payload: { ...ready.payload, features: { lateGenerateResults: true } } };
+  const lateMessage = (payload: typeof late | typeof failed): HostMessage => ({
+    channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'generate-late', payload,
+  });
+  const listens = (frame: MessageChannelFrame) => frame.posted.filter((message) => message.type === 'generate-late-listen').length;
+
+  test('listens only on a host that keeps late answers, and hands each one over', async () => {
+    const frame = createMessageChannelFrame();
+    const host = connectHost({ target: frame, acceptSource: () => true });
+    const results: unknown[] = [];
+    const stop = host.onLateGenerateResult((result) => results.push(result));
+    // No ready yet, then an older host without the feature: nothing to listen to.
+    await frame.receive(ready);
+    expect(listens(frame)).toBe(0);
+    await frame.receive(supporting);
+    expect(listens(frame)).toBe(1);
+    // Every later ready repeats it, so a host that re-attached knows again.
+    await frame.receive(supporting);
+    expect(listens(frame)).toBe(2);
+    await frame.receive(lateMessage(late));
+    await frame.receive(lateMessage(failed));
+    expect(results).toEqual([late, failed]);
+    stop();
+    await frame.receive(supporting);
+    expect(listens(frame)).toBe(2);
+    // The host may still push after the last listener left; the answer waits for the next one.
+    await frame.receive(lateMessage(late));
+    expect(results).toHaveLength(2);
+    const later: unknown[] = [];
+    host.onLateGenerateResult((result) => later.push(result));
+    expect(later).toEqual([late]);
+    host.dispose();
+  });
+
+  test('a listener registered after ready listens at once', async () => {
+    const frame = createMessageChannelFrame();
+    const host = connectHost({ target: frame, acceptSource: () => true });
+    await frame.receive(supporting);
+    expect(listens(frame)).toBe(0);
+    host.onLateGenerateResult(() => undefined);
+    await frame.flush();
+    expect(listens(frame)).toBe(1);
+    host.dispose();
+  });
+});

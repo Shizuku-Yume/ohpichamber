@@ -397,7 +397,7 @@ export const configureProjectWorktreeDirectory = (reader) => {
 // category that lets it through (a copy of @simple-git/argv-parser's table;
 // see simpleGitEnvOptions). One of them from a project environment would make
 // every Git command fail, so the overlay leaves them out for Git only.
-const SIMPLE_GIT_REFUSED_ENV_CATEGORIES: Record<string, string> = {
+const SIMPLE_GIT_REFUSED_ENV_CATEGORIES = {
   editor: 'allowUnsafeEditor',
   git_askpass: 'allowUnsafeAskPass',
   git_config: 'allowUnsafeConfigPaths',

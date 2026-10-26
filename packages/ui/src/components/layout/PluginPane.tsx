@@ -35,6 +35,7 @@ import {
   buildItemMessage,
   buildReadyMessage,
   buildResolveMessage,
+  buildGenerateLateMessage,
   buildSessionLifecycleMessage,
   buildSessionMessage,
   buildSettingsMessage,
@@ -44,6 +45,7 @@ import { useGuestBadgeStore } from '@/lib/guests/badge-store';
 import { guestMay, isGuestActive } from '@/lib/guests/capabilities';
 import { guestFileOperation } from '@/lib/guests/files';
 import { guestGenerate } from '@/lib/guests/generate';
+import { guestGenerateResults, lateGenerateResult, type GenerateOwner } from '@/lib/guests/generate-results';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { openGuestCommit, readCurrentBranch } from '@/lib/guests/open-commit';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
@@ -238,6 +240,8 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
     if (surface === 'status' && onStatusControls) features.statusControls = true;
     if (!popoverHost && !popover && !headless && !isMobileSurfaceRuntime()
       && (surface === 'panel' || surface === 'page' || surface === 'status')) features.popovers = true;
+    // A hidden frame is nobody's panel: it neither takes kept answers nor leaves any.
+    if (!headless) features.lateGenerateResults = true;
     return {
     theme: {
       mode: currentTheme.metadata.variant === 'dark' ? 'dark' : 'light',
@@ -357,6 +361,9 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
   const oauthPollRef = React.useRef<number | null>(null);
   // Outstanding `resolve` requests this pane sent; answered by `resolve-result`.
   const resolveWaitersRef = React.useRef(new Map<string, (outcome: GuestResolveOutcome) => void>());
+  // Counts `hello`s: each one is a new document in the frame, which has no
+  // waiter for a `generate` the previous document sent.
+  const frameDocumentRef = React.useRef(0);
   const guestPortRef = React.useRef<MessagePort | null>(null);
   // Only the document loaded from the current authorized URL may receive a port.
   const authorizedNavigationRef = React.useRef(true);
@@ -538,7 +545,16 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
     });
     statusControlsRef.current = statusControls;
     const clearSubscriptions = () => { for (const unsubscribe of subscriptions.values()) unsubscribe(); subscriptions.clear(); };
-    const runtimeUnsubscribe = subscribeRuntimeEndpointChanged(() => { disposed = true; shellRequests.abortAll(); closeActivePopover('owner'); statusControls.dispose(); clearSubscriptions(); stopOauthPoll(); });
+    const generateOwner = (): GenerateOwner => ({
+      runtimeKey,
+      guestId: requestingGuestId,
+      storageId: installation?.storageId ?? null,
+      surface: readyRef.current.surface,
+      directory: directoryRef.current || null,
+    });
+    let stopLateGenerate: (() => void) | null = null;
+    const stopLateGenerateListening = () => { stopLateGenerate?.(); stopLateGenerate = null; };
+    const runtimeUnsubscribe = subscribeRuntimeEndpointChanged(() => { disposed = true; shellRequests.abortAll(); closeActivePopover('owner'); statusControls.dispose(); clearSubscriptions(); stopOauthPoll(); stopLateGenerateListening(); });
     const requireSessions = () => {
       if (!guestMay(currentGuest(), 'sessions')) throw new HostRequestError('NOT_GRANTED', NOT_GRANTED_MESSAGE);
     };
@@ -576,6 +592,8 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
       if (!ownsFrame()) return;
 
       if (message.type === 'hello') {
+        frameDocumentRef.current += 1;
+        stopLateGenerateListening();
         acknowledgeHandshake();
         clearSubscriptions();
         pushHostState();
@@ -594,6 +612,25 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
         fileChannelRef.current?.receive(message);
         return;
       }
+
+      if (message.type === 'generate-late-listen') {
+        if (headless) return;
+        stopLateGenerateListening();
+        stopLateGenerate = guestGenerateResults.listen({
+          owner: generateOwner,
+          deliver: (result) => {
+            if (!ownsFrame() || guestPortRef.current !== messagePort) return false;
+            messagePort.postMessage(buildGenerateLateMessage(result));
+            return true;
+          },
+        });
+        return;
+      }
+
+      // A generate answer that finds its frame gone, or a new document in
+      // it, is kept for the next frame of this extension that listens.
+      const requestOwner = message.type === 'generate' && !headless ? generateOwner() : null;
+      const requestDocument = frameDocumentRef.current;
 
       void answerGuestMessage(message, {
         workspaceRead: (query) => { requireSessions(); return readGuestWorkspace(query, guestIdRef.current); },
@@ -908,7 +945,14 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
           });
           return;
         }
-        if (reply && ownsFrame() && guestPortRef.current === messagePort) messagePort.postMessage(reply);
+        if (!reply) return;
+        const deliverable = ownsFrame() && guestPortRef.current === messagePort;
+        if (message.type === 'generate' && requestOwner && !(deliverable && frameDocumentRef.current === requestDocument)) {
+          const late = lateGenerateResult(message.payload, reply);
+          if (late) guestGenerateResults.keep(requestOwner, late);
+          return;
+        }
+        if (deliverable) messagePort.postMessage(reply);
       });
     };
     const onBootstrap = (event: MessageEvent): void => {
@@ -979,6 +1023,7 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
       statusControls.dispose();
       if (statusControlsRef.current === statusControls) statusControlsRef.current = null;
       clearSubscriptions();
+      stopLateGenerateListening();
       guestPortCloseRef.current?.();
       guestPortCloseRef.current = null;
     };

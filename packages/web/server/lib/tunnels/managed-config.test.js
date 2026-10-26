@@ -23,7 +23,7 @@ describe('managed remote tunnel config', () => {
         },
       },
       path,
-      normalizeManagedRemoteTunnelHostname: (value) => (typeof value === 'string' ? value.trim().toLowerCase() : ''),
+      normalizeManagedRemoteTunnelHostname: (value) => value.trim().toLowerCase(),
       normalizeManagedRemoteTunnelPresets: (value) => value,
       constants: {
         CLOUDFLARE_MANAGED_REMOTE_TUNNELS_FILE_PATH: configPath,

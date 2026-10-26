@@ -1,35 +1,9 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/lib/i18n';
-import { runtimeFetch } from '@/lib/runtime-fetch';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
-import { getSafeStorage } from '@/stores/utils/safeStorage';
 import { useUIStore } from '@/stores/useUIStore';
-
-export type LegacyDataPresence = 'present' | 'absent' | 'error';
-const dismissalKey = (runtimeKey: string) => `legacy-data-notice-dismissed:${runtimeKey}`;
-
-export const isLegacyNoticeDismissed = (runtimeKey: string): boolean => {
-  try {
-    return getSafeStorage().getItem(dismissalKey(runtimeKey)) === 'true';
-  } catch {
-    return false;
-  }
-};
-
-export const dismissLegacyNotice = (runtimeKey: string): void => {
-  getSafeStorage().setItem(dismissalKey(runtimeKey), 'true');
-};
-
-export const readLegacyDataPresence = async (signal: AbortSignal): Promise<'present' | 'absent'> => {
-  const response = await runtimeFetch('/api/host/legacy-data', { signal });
-  if (!response.ok) throw new Error('Legacy presence unavailable');
-  const value: unknown = await response.json();
-  if (typeof value !== 'object' || value === null || !('present' in value) || typeof value.present !== 'boolean' || Object.keys(value).length !== 1) {
-    throw new Error('Invalid legacy presence response');
-  }
-  return value.present ? 'present' : 'absent';
-};
+import { dismissLegacyNotice, isLegacyNoticeDismissed, readLegacyDataPresence, type LegacyDataPresence } from './legacyDataNoticeHelpers';
 
 type LegacyDataNoticeProps = {
   /** Mobile shell hook: switching Settings must also open its app-level surface. */

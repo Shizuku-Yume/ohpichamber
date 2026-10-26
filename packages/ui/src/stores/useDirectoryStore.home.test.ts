@@ -47,7 +47,7 @@ let loggedIn = false;
 let homeReads = 0;
 const directoriesSet: string[] = [];
 let runtimeKey = 'test';
-let probeDirectory = async (_directory: string): Promise<'available' | 'missing' | 'unknown'> => 'available';
+let probeDirectory: (directory: string) => Promise<'available' | 'missing' | 'unknown'> = async () => 'available';
 
 mock.module('@/lib/host-filesystem', () => ({
   hostFilesystem: {

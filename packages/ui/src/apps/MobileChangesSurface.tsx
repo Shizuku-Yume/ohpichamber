@@ -1232,7 +1232,7 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
           branch: pendingDirtySwitchBranch,
           directory: currentDirectory,
           sourceBranch: status?.current ?? null,
-          createCommit: git.createGitCommit,
+          createCommit: async (directory, message, options) => { await git.createGitCommit(directory, message, options); },
           preparePush: async () => {
             const executePush = await publishChooser.prepare('push');
             return async () => { await executePush(); };

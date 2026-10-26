@@ -22,13 +22,13 @@ export const dirtySwitchPushTarget = (
 };
 
 /** The handles the dirty-branch switch dialog needs from the screen that opened it. */
-export interface DirtyBranchSwitchDeps {
+interface DirtyBranchSwitchDeps {
   /** The branch being switched to; null when no switch is pending. */
   branch: string | null;
   directory: string | null;
   /** The branch that was checked out before the switch, for the success message. */
   sourceBranch: string | null;
-  createCommit: (directory: string, message: string, options: { addAll: true }) => Promise<unknown>;
+  createCommit: (directory: string, message: string, options: { addAll: true }) => Promise<void>;
   /** Runs the managed publish chooser and returns the push it prepared. */
   preparePush: () => Promise<() => Promise<void>>;
   refresh: () => Promise<void>;

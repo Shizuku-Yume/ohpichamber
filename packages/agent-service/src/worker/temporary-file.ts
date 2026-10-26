@@ -1,6 +1,6 @@
 import { unlink } from 'node:fs/promises';
 
-const missing = (error: unknown): boolean => error instanceof Error && 'code' in error && error.code === 'ENOENT';
+const missing = (error: Error): boolean => 'code' in error && error.code === 'ENOENT';
 
 /**
  * Removes the temporary file an atomic write created. Cleanup runs from a
@@ -12,6 +12,6 @@ export const removeTemporaryFile = async (path: string): Promise<void> => {
   try {
     await unlink(path);
   } catch (error) {
-    if (!missing(error)) throw error;
+    if (!(error instanceof Error && missing(error))) throw error;
   }
 };

@@ -533,7 +533,7 @@ test('actual native TaskTool owns a child session and persists its history', asy
   const lifecycle: SubagentLifecyclePayload[] = [];
   const harness = await fixture({
     onSubagent: payload => lifecycle.push(payload),
-    respond: payload => {
+    respond: () => {
       requests += 1;
       if (requests === 1) return completion({ name: 'task', id: 'native-task', input: { agent: 'child', name: 'child-proof', task: 'Return the child proof marker.' } });
       return completion();

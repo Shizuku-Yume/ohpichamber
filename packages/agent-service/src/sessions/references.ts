@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { chmod, mkdir, open, readFile, rename, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DisplayPathSchema, EntityIdSchema, JsonValueSchema, SubagentSchema, TimestampSchema } from '@openchamber/agent-contract';
-import type { JsonValue, ProblemCode, Subagent } from '@openchamber/agent-contract';
+import type { JsonValue, ProblemCode } from '@openchamber/agent-contract';
 import { z } from 'zod';
 import { WorkerBootstrapSchema } from '../protocol.ts';
 

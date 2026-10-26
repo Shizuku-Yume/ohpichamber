@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Serializable } from 'node:child_process';
 import { isDeepStrictEqual } from 'node:util';
-import { HostAuthorizationScopeSchema, HostWorkerAuthorizationReplySchema, HostWorkerAuthorizationRequestSchema, HostWorkerActionReplySchema, HostWorkerActionRequestSchema, type HostAuthorizationScope, type NativeOperationDescriptor, type HostActionRequest, type HostActionResult } from './host-authorization-protocol.ts';
+import { HostWorkerAuthorizationReplySchema, HostWorkerAuthorizationRequestSchema, HostWorkerActionReplySchema, HostWorkerActionRequestSchema, type HostAuthorizationScope, type NativeOperationDescriptor, type HostActionRequest, type HostActionResult } from './host-authorization-protocol.ts';
 import type { WorkerPolicyRequest, WorkerPolicyResult } from '../protocol.ts';
 
 const unavailable = (): WorkerPolicyResult & { allowed: false } => ({ allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 });

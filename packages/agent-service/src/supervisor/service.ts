@@ -144,10 +144,9 @@ export class AgentService {
   private stopping: Promise<void> | undefined;
   constructor(private readonly options: ServiceOptions) {
     this.secret = Buffer.from(InternalSecretSchema.parse(options.internalSecret), 'hex');
-    let sessions: SessionRegistry | undefined;
     this.workers = new WorkerRegistry({ workerEntrypoint: options.workerEntrypoint, workerRuntime: options.workerRuntime, onDiagnostic: options.onDiagnostic, policyCheck: options.policyCheck, invokeHostAction: options.invokeHostAction,
       capacityPolicy: options.workerCapacityPolicy,
-      isSessionIdle: rootSessionId => sessions?.isIdleForEviction(rootSessionId) ?? false,
+      isSessionIdle: rootSessionId => this.sessions?.isIdleForEviction(rootSessionId) ?? false,
       consumeApprovalGrant: (...args) => this.sessions.consumeApprovalGrant(...args),
       prepareBootstrap: async input => {
         this.sessions.assertBootstrapWritable(input);
@@ -184,7 +183,6 @@ export class AgentService {
       },
     });
     this.sessions = new SessionRegistry(options.stateDirectory, this.workers, options.approvalPolicyCommit, options.approvalPolicyLoad);
-    sessions = this.sessions;
     this.webSearch = new WebSearchCoordinator(this.workspaceCatalogs, this.workers);
     this.workspaceRoutes = new WorkspaceRoutes(this.workspaceCatalogs, this.workers, this.catalog,
       this.sessions, options.stateDirectory, this.webSearch,

@@ -31,10 +31,9 @@ export function deliverSessionStream(options: {
   const pending: string[] = [];
   let blocked = false;
   let settled = false;
-  let subscription: { replay: CanonicalEvent[]; unsubscribe: () => void } | undefined;
 
   function stop(): void {
-    subscription?.unsubscribe();
+    subscription.unsubscribe();
     response.off('drain', drain);
   }
 
@@ -76,7 +75,7 @@ export function deliverSessionStream(options: {
   };
 
   // Subscribe and write captured replay in one synchronous turn.
-  subscription = journal.subscribe(cursor, write);
+  const subscription = journal.subscribe(cursor, write);
   response.on('drain', drain);
   response.once('close', () => {
     settled = true;

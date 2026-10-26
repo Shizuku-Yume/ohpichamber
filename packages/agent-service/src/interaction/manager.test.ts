@@ -250,9 +250,8 @@ describe('service-owned interaction CAS', () => {
   test('an approved native command is available during dispatch, bound to exact input, and consumed once', async () => {
     const input = { command: 'printf approved' };
     const target = { toolName: 'bash', pattern: JSON.stringify(input) };
-    let manager: InteractionManager;
     const consumed: unknown[] = [];
-    manager = new InteractionManager(60_000);
+    const manager = new InteractionManager(60_000);
     manager.openSession('session-1', 'epoch-1', 'worker-1', 'workspace-1', async operation => {
       if (operation.type !== 'approval.resolve') throw new Error('Unexpected dispatch');
       expect(manager.consumeApprovalGrant('other-session', 'worker-1', operation.approvalId, 'call-1', 'bash', input)).toBeUndefined();

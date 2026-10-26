@@ -28,7 +28,7 @@ const PrivateRootSchema = z.strictObject({ root: z.string().min(1).refine(isAbso
 const PrivateRootsSchema = z.array(PrivateRootSchema);
 type PrivateRoot = z.infer<typeof PrivateRootSchema>;
 const PrivateTextSchema = z.string();
-const PRIVATE_PATH_DELIMITERS = ' \t\n\r\"\'`=:,;()[]{}<>';
+const PRIVATE_PATH_DELIMITERS = ' \t\n\r"\'`=:,;()[]{}<>';
 function startsPrivatePath(text: string, index: number, context = ''): boolean {
   const previous = index > 0 ? text[index - 1] : context.at(-1);
   return previous === undefined || PRIVATE_PATH_DELIMITERS.includes(previous)

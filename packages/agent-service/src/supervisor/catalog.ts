@@ -741,7 +741,7 @@ export class CatalogCoordinator {
           return { worker: ownerIdentity(worker), outcome: 'retired' };
         }
         this.mcpSnapshots.set(worker.identity.rootSessionId, snapshot);
-      } catch {}
+      } catch { /* a worker that failed its MCP read keeps its previous snapshot */ }
       return outcome;
     } catch (error) {
       if (!await this.live(worker)) {
@@ -779,7 +779,7 @@ export class CatalogCoordinator {
           return { worker: ownerIdentity(worker), outcome: 'retired' };
         }
         this.skillSnapshots.set(worker.identity.rootSessionId, snapshot);
-      } catch {}
+      } catch { /* a worker that failed its skill read keeps its previous snapshot */ }
       return outcome;
     } catch (error) {
       if (!await this.live(worker)) {
@@ -848,6 +848,6 @@ export class CatalogCoordinator {
       try { await handle.writeFile(JSON.stringify({ workspaces: [...this.workspaces.values()], agents: [...this.agents.values()] })); }
       finally { await handle.close(); }
       await rename(temporary, this.file);
-    } finally { try { await unlink(temporary); } catch {} }
+    } finally { try { await unlink(temporary); } catch { /* the rename already consumed the temporary file */ } }
   }
 }

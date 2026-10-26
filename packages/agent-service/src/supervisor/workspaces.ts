@@ -371,6 +371,6 @@ export class WorkspaceCatalogs {
       try { await file.writeFile(JSON.stringify({ workspaces: [...this.workspaces.values()], owners: [...this.owners.values()],
         pluginOwners: [...this.pluginOwners.values()], pluginBindings: [...this.pluginBindings.values()] })); } finally { await file.close(); }
       await rename(temporary, this.file);
-    } finally { try { await unlink(temporary); } catch {} }
+    } finally { try { await unlink(temporary); } catch { /* the rename already consumed the temporary file */ } }
   }
 }

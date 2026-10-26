@@ -162,7 +162,7 @@ export class SessionRegistry {
       for (const { target, input } of reserved) {
         try {
           // Admission builds a strict worker bootstrap; displayPath belongs to the registry/reference only.
-          const { displayPath, ...admissionInput } = input;
+          const { displayPath: _displayPath, ...admissionInput } = input;
           await admit(admissionInput, bootstrap => this.openResolved({ ...input, ...bootstrap }, true, undefined, true, target.workerGeneration));
           const current = this.workers.info(target.rootSessionId);
           if (!current || current.state !== 'ready' || current.workerGeneration === target.workerGeneration)
@@ -275,9 +275,9 @@ export class SessionRegistry {
                 ? { childSessionId: parsed.data.id, parentSessionFile: parsed.data.parentSession }
                 : { childSessionId: parsed.data.id };
             }
-          } catch {}
+          } catch { /* an unreadable parent-session line names no parent; keep scanning */ }
         }
-      } catch {}
+      } catch { /* the session file is still being written; retry below */ }
       if (attempt < 9) await new Promise<void>(resolve => setTimeout(resolve, 10));
     }
     return undefined;

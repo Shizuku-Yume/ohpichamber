@@ -39,22 +39,23 @@ test('an idle root is evicted and reopens cold with native history; a turn and a
   await manager.close();
   if (!sessionFile) throw new Error('Native session file is required');
 
-  let sessions: SessionRegistry | undefined;
+  // The workers call back into the registry that is built from them.
+  const sessionAccess: { registry?: SessionRegistry } = {};
   const workers = new WorkerRegistry({
     workerEntrypoint, workerRuntime: process.execPath,
     startupTimeoutMs: 30_000, stopTimeoutMs: 3_000,
     capacityPolicy: { ...WORKER_CAPACITY_POLICY, idleEvictionTimeoutMs: 150, reapIntervalMs: 20 },
     policyCheck: async () => ({ allowed: true }),
-    isSessionIdle: rootSessionId => sessions?.isIdleForEviction(rootSessionId) ?? false,
+    isSessionIdle: rootSessionId => sessionAccess.registry?.isIdleForEviction(rootSessionId) ?? false,
     callbacks: {
-      onOpened: (...args) => sessions!.onOpened(...args),
-      onEvents: (...args) => sessions!.onEvents(...args),
-      onInteraction: (...args) => sessions!.onInteraction(...args),
-      onExit: (...args) => sessions!.onExit(...args),
+      onOpened: (...args) => sessionAccess.registry!.onOpened(...args),
+      onEvents: (...args) => sessionAccess.registry!.onEvents(...args),
+      onInteraction: (...args) => sessionAccess.registry!.onInteraction(...args),
+      onExit: (...args) => sessionAccess.registry!.onExit(...args),
     },
   });
   const registry = new SessionRegistry(join(root, 'service-state'), workers);
-  sessions = registry;
+  sessionAccess.registry = registry;
   const source = {
     rootSessionId: 'root-eviction', projectId: 'project', workspaceId: 'workspace',
     cwd, agentDirectory, agentDirectoryId: 'agent-owner', displayPath: 'workspace',

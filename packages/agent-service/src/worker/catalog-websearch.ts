@@ -41,9 +41,18 @@ function providerOptions(model: SearchModel, settings: Settings): WebSearchProvi
   return undefined;
 }
 function applyProviderOptions(settings: Settings, options: WebSearchProviderOptions): void {
-  if (options.exa?.enabled !== undefined) options.exa.enabled === null ? cfgExaEnabled.unset(settings) : cfgExaEnabled.set(settings, options.exa.enabled);
-  if (options.searxng?.language !== undefined) options.searxng.language === null ? cfgSearxngLanguage.unset(settings) : cfgSearxngLanguage.set(settings, options.searxng.language);
-  if (options.searxng?.safesearch !== undefined) options.searxng.safesearch === null ? cfgSearxngSafesearch.unset(settings) : cfgSearxngSafesearch.set(settings, options.searxng.safesearch);
+  if (options.exa?.enabled !== undefined) {
+    if (options.exa.enabled === null) cfgExaEnabled.unset(settings);
+    else cfgExaEnabled.set(settings, options.exa.enabled);
+  }
+  if (options.searxng?.language !== undefined) {
+    if (options.searxng.language === null) cfgSearxngLanguage.unset(settings);
+    else cfgSearxngLanguage.set(settings, options.searxng.language);
+  }
+  if (options.searxng?.safesearch !== undefined) {
+    if (options.searxng.safesearch === null) cfgSearxngSafesearch.unset(settings);
+    else cfgSearxngSafesearch.set(settings, options.searxng.safesearch);
+  }
 }
 /** Native cached transports are guarded, not a parallel search implementation. */
 export async function installWebSearchAuthorization(runtime: NativeWorkerRuntime, authorize: WorkerAuthorize): Promise<void> {
@@ -153,10 +162,22 @@ export class NativeWebSearch {
           if (request.timeoutSeconds !== undefined) cfgProvidersWebSearchTimeoutSeconds.set(this.runtime.settings, request.timeoutSeconds);
           if (request.selectedProviderId !== undefined) this.runtime.settings.setModelRole('web', request.selectedProviderId ?? undefined);
           if (request.fallbackProviderIds !== undefined) cfgRetryFallbackChains.setEntry(this.runtime.settings, 'web', request.fallbackProviderIds);
-          if (request.providerSearchDelayMs !== undefined) request.providerSearchDelayMs === null ? cfgExaSearchDelayMs.unset(this.runtime.settings) : cfgExaSearchDelayMs.set(this.runtime.settings, request.providerSearchDelayMs);
-          if (request.providerEndpoint !== undefined) request.providerEndpoint === null ? cfgSearxngEndpoint.unset(this.runtime.settings) : cfgSearxngEndpoint.set(this.runtime.settings, request.providerEndpoint);
-          if (request.providerCategories !== undefined) request.providerCategories === null ? cfgSearxngCategories.unset(this.runtime.settings) : cfgSearxngCategories.set(this.runtime.settings, request.providerCategories);
-          if (request.providerEngines !== undefined) request.providerEngines === null ? cfgSearxngEngines.unset(this.runtime.settings) : cfgSearxngEngines.set(this.runtime.settings, request.providerEngines);
+          if (request.providerSearchDelayMs !== undefined) {
+            if (request.providerSearchDelayMs === null) cfgExaSearchDelayMs.unset(this.runtime.settings);
+            else cfgExaSearchDelayMs.set(this.runtime.settings, request.providerSearchDelayMs);
+          }
+          if (request.providerEndpoint !== undefined) {
+            if (request.providerEndpoint === null) cfgSearxngEndpoint.unset(this.runtime.settings);
+            else cfgSearxngEndpoint.set(this.runtime.settings, request.providerEndpoint);
+          }
+          if (request.providerCategories !== undefined) {
+            if (request.providerCategories === null) cfgSearxngCategories.unset(this.runtime.settings);
+            else cfgSearxngCategories.set(this.runtime.settings, request.providerCategories);
+          }
+          if (request.providerEngines !== undefined) {
+            if (request.providerEngines === null) cfgSearxngEngines.unset(this.runtime.settings);
+            else cfgSearxngEngines.set(this.runtime.settings, request.providerEngines);
+          }
           applyProviderOptions(this.runtime.settings, options);
           await this.runtime.settings.flush();
         } else {
@@ -229,6 +250,6 @@ export class NativeWebSearch {
       const file = await open(temporary, 'wx', 0o600);
       try { await file.writeFile(revision); await file.sync(); } finally { await file.close(); }
       await rename(temporary, this.revisionPath);
-    } finally { try { await unlink(temporary); } catch {} }
+    } finally { try { await unlink(temporary); } catch { /* the rename already consumed the temporary file */ } }
   }
 }

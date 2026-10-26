@@ -108,14 +108,12 @@ OhPiChamber retains these tools in the adopted pre-M0 baseline. Target adapters 
   (`../git/DOCUMENTATION.md`, *Worktree creation from a GitHub pull request*);
   everything else about the request is resolved on the server.
 - A rule about when to act belongs where the model reads it before choosing a
-  tool: the head of the tool description and, when it must hold in every
-  session, the session context (`../session-knowledge/`). An action's
-  description is read only after the tool was chosen, so a trigger placed
-  there is missed by an agent that never thought the tool applied. Seen with
-  `session.link`: told only in the action, an agent investigating an issue
-  never linked it; with the rule at the head of the description and in the
-  session context, the next agent linked the issue first thing (2026-10-02).
-  Action descriptions say what the action does and takes.
+  tool: the head of the tool description. An action's description is read only
+  after the tool was chosen, so a trigger placed there is missed by an agent
+  that never thought the tool applied. Action descriptions say what the action
+  does and takes. The former mirrored session-context guidance for
+  `session.link` was removed with the app-authored prompt block (2026-10-27
+  parity work); do not reintroduce save/link instructions into session context.
 - Detailed combination rules are enforced by the shared control service and
   returned as actionable usage errors only after an invalid call. Per-action
   examples and a repeated per-action parameter schema are intentionally omitted.

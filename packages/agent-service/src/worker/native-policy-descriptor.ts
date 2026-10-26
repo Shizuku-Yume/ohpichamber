@@ -3,27 +3,59 @@ import { editInspect } from '@oh-my-pi/pi-natives';
 import { parseArchivePathCandidates } from '@oh-my-pi/pi-utils/ar';
 import { toPathList } from '@oh-my-pi/pi-tui/render/render-utils';
 import { splitPathAndSel } from '@oh-my-pi/pi-tui/tools/read';
-import { expandDelimitedPathEntries, normalizePathLikeInput, parseFindPattern, parseSearchPathPreferringLiteral, resolveReadPathAsync, resolveToCwd, splitDelimitedPathEntry, splitPathAndSelPreferringLiteral } from '@oh-my-pi/pi-coding-agent/tools/path-utils';
+import { expandDelimitedPathEntries, normalizePathLikeInput, parseFindPattern, parseSearchPathPreferringLiteral, resolveReadPathAsync, resolveToCwd, splitDelimitedPathEntry, splitMixedUrlPathList, splitPathAndSelPreferringLiteral } from '@oh-my-pi/pi-coding-agent/tools/path-utils';
 import { unwrapHashlineHeaderPath } from '@oh-my-pi/pi-coding-agent/tools/plan-mode-guard';
 import { splitJsonQueryTarget } from '@oh-my-pi/pi-coding-agent/tools/read-json';
 import { parseSqlitePathCandidates } from '@oh-my-pi/pi-coding-agent/tools/sqlite-reader';
 import { splitVideoReadTarget } from '@oh-my-pi/pi-coding-agent/utils/video';
 import { splitPdfImageReadPath } from '@oh-my-pi/pi-coding-agent/tools/read-pdf';
-import { NativeOperationDescriptorSchema, type NativeOperationDescriptor, type NativePolicyContext } from '../native-policy-protocol.ts';
+import { InternalUrlRouter } from '@oh-my-pi/pi-coding-agent/internal-urls';
+import { NativeOperationDescriptorSchema, OMP_INTERNAL_URL_SCHEMES, type NativeOperationDescriptor, type NativePolicyContext } from '../native-policy-protocol.ts';
 import type { WorkerPolicyRequest } from '../protocol.ts';
 
+const OMP_INTERNAL_URL_SCHEME_SET: Record<string, true> = Object.fromEntries(OMP_INTERNAL_URL_SCHEMES.map(scheme => [scheme, true]));
+const URL_SCHEME_PREFIX = /^([A-Za-z][A-Za-z0-9+.-]*):\/\//;
+
+/**
+ * The normalized URL only when OMP itself would dispatch it to one of the
+ * allowlisted internal schemes. OMP's router owns aliases and selectors; the
+ * Host neither parses nor resolves the target.
+ */
+function ompInternalUrl(value: string): string | null {
+  const router = InternalUrlRouter.instance();
+  const normalized = router.normalize(value);
+  const match = URL_SCHEME_PREFIX.exec(normalized);
+  return match !== null && OMP_INTERNAL_URL_SCHEME_SET[match[1]!.toLowerCase()] === true && router.canHandle(normalized)
+    ? normalized : null;
+}
+
+function requireNoNul(raw: string): void {
+  if (raw.includes('\0')) throw new Error('Native target contains an invalid byte');
+}
+
 function localPath(raw: string, cwd: string): string {
+  requireNoNul(raw);
   const value = normalizePathLikeInput(raw);
   // Remote/internal device ownership is not a filesystem capability.
-  if (value.includes('://') || value.includes('\0')) throw new Error('Target requires a separate Host capability');
+  if (value.includes('://')) throw new Error('Target requires a separate Host capability');
   return resolveToCwd(value, cwd);
 }
 
-async function fileTargets(raw: string, cwd: string, read: boolean): Promise<string[]> {
+async function fileTargets(raw: string, cwd: string, read: boolean): Promise<{ targets: string[]; internalUrls: string[] }> {
+  requireNoNul(raw);
   const normalized = unwrapHashlineHeaderPath(normalizePathLikeInput(raw));
   const targets = new Set<string>();
-  const parts = read ? await splitDelimitedPathEntry(normalized, cwd, { splitter: item => ({ basePath: splitPathAndSel(item).path }) }) ?? [normalized] : [normalized];
+  const internalUrls: string[] = [];
+  let parts = read ? await splitDelimitedPathEntry(normalized, cwd, { splitter: item => ({ basePath: splitPathAndSel(item).path }) }) ?? [normalized] : [normalized];
+  if (read && parts.length === 1) parts = await splitMixedUrlPathList(parts[0]!, cwd, part => ompInternalUrl(part) !== null) ?? parts;
   for (const part of parts) {
+    // OMP owns the URL grammar, including selectors; the Host neither peels nor
+    // resolves these targets and only admits the allowlisted scheme.
+    const internal = read ? ompInternalUrl(part) : null;
+    if (internal !== null) {
+      internalUrls.push(internal);
+      continue;
+    }
     const split = read ? await splitPathAndSelPreferringLiteral(part, cwd) : { path: part };
     targets.add(localPath(split.path, cwd));
     if (read) targets.add(await resolveReadPathAsync(split.path, cwd));
@@ -38,7 +70,7 @@ async function fileTargets(raw: string, cwd: string, read: boolean): Promise<str
     }
     for (const candidate of parseSqlitePathCandidates(split.path)) targets.add(localPath(candidate.sqlitePath, cwd));
   }
-  return [...targets];
+  return { targets: [...targets], internalUrls };
 }
 
 /** Execution-free first-party grammar inspection, only in the trusted Bun supervisor. */
@@ -65,8 +97,10 @@ export async function describeNativeOperation(cwd: string, request: WorkerPolicy
   if (toolName === 'read' || toolName === 'write') {
     const path = z.string().safeParse(input.path);
     if (!path.success) throw new Error('Native file path is missing');
-    const targets = await fileTargets(path.data, cwd, toolName === 'read');
-    return NativeOperationDescriptorSchema.parse({ ...effective, ...(toolName === 'read' ? { sourcePaths: targets } : { destinationPaths: targets }) });
+    const { targets, internalUrls } = await fileTargets(path.data, cwd, toolName === 'read');
+    if (toolName !== 'read') return NativeOperationDescriptorSchema.parse({ ...effective, destinationPaths: targets });
+    const descriptor = { ...effective, sourcePaths: targets };
+    return NativeOperationDescriptorSchema.parse(internalUrls.length > 0 ? { ...descriptor, internalReadUrls: internalUrls } : descriptor);
   }
   if (toolName === 'grep' || toolName === 'glob') {
     const path = z.string().safeParse(input.path);

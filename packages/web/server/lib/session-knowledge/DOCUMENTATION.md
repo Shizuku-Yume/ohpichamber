@@ -1,8 +1,12 @@
 # Session Knowledge
 
-What a session must be told about the project — that session's pinned notes and
-plans, and the index of what the agent has remembered — and whether it has been
-told yet.
+What a session must be told about the project: that session's pinned notes and
+plans, and whether it has been told yet.
+
+Memory and session-linking are not prompt background. The model sees what plain
+OMP sends for the same session, plus the user's own pins and attachments and the
+Host tools' descriptions. The panel still reports memory counts and offers its
+CRUD, but no memory index or save/link guidance is copied into a prompt.
 
 ## Why it is here and not in the UI
 
@@ -11,11 +15,14 @@ remembered what it had sent in a module-scoped map. Two consequences followed.
 
 A session started without a UI got nothing at all. Scheduled tasks and sessions
 the agent dispatches build their prompts on the server and never touch the
-browser, so pinned context and the memory index simply did not exist for them.
+browser, so pinned context simply did not exist for them.
 
 And a tab's memory of what it sent survives compaction, while the conversation
 does not. After a summary the agent no longer holds the block, but the tab goes
 on believing it does and never sends it again.
+
+The UI now reads only the summary and writes pins; every prompt path goes
+through the Host, which attaches what the session still owes.
 
 ## The contract
 
@@ -30,21 +37,25 @@ Directories beneath the managed `~/.config/openchamber/chats` root resolve to th
 of what the session is carrying. It lives with the session, so it survives the
 tab closing and is visible to every sender, including the ones with no tab.
 
-The signature covers content revisions, not just identity: editing a pinned note
-must re-send it, not merely renaming one.
+The signature covers content revisions of the pins, not just identity: editing a
+pinned note must re-send it, not merely renaming one. With no pins the signature
+and the text are empty, so enabled memory or session linking cannot create an
+otherwise empty delivery.
 
-## Three moments, two deliveries
+## Three moments, one delivery
 
 | Moment | Delivery |
 |---|---|
-| A message from the UI | synthetic part on that message |
-| A scheduled task, a session the agent dispatched | synthetic part on that prompt |
-| After compaction | its own `prompt_async`, alongside the pinned messages |
+| A message from the UI | the Host attaches the pending pins to that prompt |
+| A scheduled task or a session the agent dispatched | the same Host delivery path attaches the pending pins |
+| After compaction | the `context-obligatory` turn carries the pins again, alongside the user's pinned messages |
 
-The first two attach to an outgoing message because there is one. Compaction has
-none, which is why it re-sends on its own — and it travels with
-`context-obligatory`'s pinned messages in a single turn, since two synthetic
-messages back to back read as the agent being interrupted twice.
+All three moments share the same Host-owned resolution and delivered signature;
+the UI never assembles, attaches or reports the block.
+
+The worker renders attached context and pins as hidden user text, never as an
+`ohpichamber.context` custom message. A user-requested skill expansion keeps its
+developer instruction; no app-authored developer instruction is added.
 
 ## Failure behaviour
 
@@ -52,38 +63,33 @@ Nothing here may fail a send. A message without its background costs the agent
 some context; a failed send costs the user their message. Every caller treats an
 error as "no block this time".
 
-A source that will not load never blanks the rest: an unreadable memory store
-still delivers the pinned notes. A memory scope that failed to load is left out
-rather than indexed as empty, which would teach the agent to store again what it
-already has.
+A source that will not load never blanks the rest: an unreadable plan is marked
+in the block, and a project context that fails to load sends no pins rather than
+failing the send.
 
 Delivery is recorded only after the send is accepted. Recording it when the text
 is handed over would leave a failed send believing the agent had context it never
 received.
 
-## Entries that read as instructions
+## Memory stays out of prompts
 
-Memory is the one place where text from outside can settle permanently. The
-agent reads a page, decides a line is worth keeping, saves it — and from then on
-it rides into every session in every project. An injection anywhere else lives
-for one conversation.
+Memory remains a UI-owned store with its own review and CRUD. `agent-memory/threat-patterns`
+scans on write and again on every read, so an entry written before a pattern
+existed, or edited on disk since, is judged now. A match never deletes: the entry
+is stored, flagged, and shown in the panel with a warning. Silently dropping it
+would hide the attempt from the only person able to judge it.
 
-`agent-memory/threat-patterns` scans on write and again on every read, so an
-entry written before a pattern existed, or edited on disk since, is judged now.
-A match never deletes: the entry is stored, flagged, kept out of what sessions
-are told, and shown in the panel with a warning. Silently dropping it would hide
-the attempt from the only person able to judge it.
-
-Patterns, not a model — this runs on every index build. That buys the blunt
-cases only, which is the honest expectation.
+Those titles and bodies are not indexed into session prompts. The model can use
+the Host memory tool when the session needs it; plain OMP sends no memory
+guidance of its own.
 
 ## Shipping dark
 
 Agent memory is complete but unreleased. `OPENCHAMBER_MEMORY_ENABLE` decides
 whether it exists in a given process at all: unset, there is no tool, no routes,
-no session index, no settings row and no panel tab — absent rather than switched
-off, which would invite turning on something never announced. The setting itself
-also defaults to off, so setting the variable does not enable memory by itself.
+no settings row and no panel tab — absent rather than switched off, which would
+invite turning on something never announced. The setting itself also defaults to
+off, so setting the variable does not enable memory by itself.
 
 Pinned notes and plans are unaffected by the memory switch and remain scoped to
 the session that pinned them.

@@ -369,22 +369,11 @@ export class WorkerSession {
     const invocation = /^\/skill:([^\s]+)(?:\s+([\s\S]*))?$/.exec(text);
     if (invocation) text = await this.catalogs.skills.preparePrompt(invocation[1]!, invocation[2] ?? '');
     for (const context of input.context) {
-      if (context.kind === 'instruction' || context.kind === 'synthetic') {
-        const message = context.kind === 'instruction'
-          ? { role: 'developer' as const, content: context.text, timestamp: Date.now() }
-          : { role: 'user' as const, content: context.text, synthetic: true, timestamp: Date.now() };
-        contextMessages.push(message);
-      } else {
-        if (context.instructions) {
-          const message = { role: 'developer' as const, content: context.instructions, timestamp: Date.now() };
-          contextMessages.push(message);
-        }
-        contextMessages.push({
-          role: 'custom', customType: 'ohpichamber.context', content: context.text, display: false,
-          details: { metadata: context.metadata, deliveryReceiptId: context.deliveryReceiptId },
-          attribution: 'agent', timestamp: Date.now(),
-        });
-      }
+      // A user-requested skill expansion stays a developer instruction. Captured
+      // context and user pins travel as hidden user text: plain OMP never sees
+      // app-authored custom/developer messages for them.
+      if (context.kind === 'instruction') contextMessages.push({ role: 'developer' as const, content: context.text, timestamp: Date.now() });
+      else if (context.text) contextMessages.push({ role: 'user' as const, content: context.text, synthetic: true, timestamp: Date.now() });
     }
     const images: NonNullable<PromptOptions['images']> = [];
     for (const attachment of input.attachments) {

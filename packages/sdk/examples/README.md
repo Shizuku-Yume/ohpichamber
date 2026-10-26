@@ -1,6 +1,6 @@
 # Extension gallery
 
-Six examples to use, explore, and adapt. The five panel extensions also have full-screen pages. Their layouts respond to the iframe width, use the host's light/dark theme, and keep your input when the host updates its context.
+Nine examples to use, explore, and adapt. The five panel extensions also have full-screen pages. Their layouts respond to the iframe width, use the host's light/dark theme, and keep your input when the host updates its context.
 
 | Folder | In the app | Try this |
 | --- | --- | --- |
@@ -10,6 +10,7 @@ Six examples to use, explore, and adapt. The five panel extensions also have ful
 | `service-echo` | **Local Service Lab** | Send an echo request, inspect its response and round-trip time, and watch the service state. Try an invalid path to see the host refuse it. The optional system-information experiment requires `uname` on the server. |
 | `config-editor` | **Config Studio** | Browse and filter JSON keys, edit or format the raw file, then compare the on-disk content with your draft before saving. Reads only the declared `~/.config/opencode/opencode.json` path on the connected instance. |
 | `tools-only` | **Tool Gallery** | Render review findings and project checks as tables inside chat. This extension has no panel. Its optional read-only MCP fixture makes the results reproducible; see [its README](./tools-only/README.md). |
+| `source-control-provider` | **Teahouse** (a Git host) | Adds a Git host next to GitHub, GitLab, Gitea and Gerrit, written against a subset of Gitea's REST API. Point it at a Gitea 1.21+ server: on the **Teahouse** card in Settings → Integrations, add the server's address and a token, then open a project whose remote is on that server and browse its pull requests and issues, comment, close, or merge. It has no panel, and the token stays in OpenChamber; see [its README](./source-control-provider/README.md). |
 
 ## Install and explore
 
@@ -51,9 +52,15 @@ bun packages/sdk/scripts/bundle-guest.ts packages/sdk/examples/tasks-demo/panel/
 bun packages/sdk/scripts/bundle-guest.ts packages/sdk/examples/tasks-demo/panel/attach.ts packages/sdk/examples/tasks-demo/panel/attach.js
 bun packages/sdk/scripts/bundle-guest.ts packages/sdk/examples/tasks-demo/panel/page.ts packages/sdk/examples/tasks-demo/panel/page.js
 bun packages/sdk/scripts/bundle-guest.ts --node packages/sdk/examples/tools-only/mcp.ts packages/sdk/examples/tools-only/mcp.js
+bun packages/sdk/scripts/bundle-guest.ts packages/sdk/examples/git-graph-status/status/main.ts packages/sdk/examples/git-graph-status/status/main.js
+bun packages/sdk/scripts/bundle-guest.ts --node packages/sdk/examples/git-graph-status/service/main.ts packages/sdk/examples/git-graph-status/service/main.js
+bun packages/sdk/scripts/bundle-guest.ts packages/sdk/examples/checklist-editor/editor/main.ts packages/sdk/examples/checklist-editor/editor/main.js
+bun packages/sdk/scripts/bundle-guest.ts --node packages/sdk/examples/browser-provider-stub/service/main.ts packages/sdk/examples/browser-provider-stub/service/main.js
+bun packages/sdk/scripts/bundle-guest.ts packages/sdk/examples/browser-provider-stub/panel/main.ts packages/sdk/examples/browser-provider-stub/panel/main.js
+bun packages/sdk/scripts/bundle-guest.ts --node packages/sdk/examples/source-control-provider/service/main.ts packages/sdk/examples/source-control-provider/service/main.js
 ```
 
-Rebuild all panels after editing `shared.ts` or the SDK. Commit built files with the extension; installation never builds source or installs dependencies. Bump the extension's own version when publishing an update through Git.
+Rebuild all panels after editing `shared.ts` or the SDK. Commit built files with the extension; installation never builds source or installs dependencies. Bump the extension's own version when publishing an update through Git. A Bun upgrade also invalidates every panel bundle, because the minifier assigns different identifier names; regenerate them with the Bun version the repository pins in `package.json`.
 
 ## Check
 
@@ -64,4 +71,4 @@ bun run --cwd packages/sdk test
 bun test packages/ui/src/lib/guests/sdk-examples.test.ts
 ```
 
-SDK checks cover example TypeScript, manifests, persistence failures, the optional MCP fixture, and freshness of all ten bundles. UI-owned DOM tests exercise those bundles with a simulated host. These tests never read your real config or use a provider credential.
+SDK checks cover example TypeScript, manifests, persistence failures, the optional MCP fixture, the Git host service against its fake forge, and freshness of every bundle. UI-owned DOM tests exercise those bundles with a simulated host. These tests never read your real config or use a provider credential.

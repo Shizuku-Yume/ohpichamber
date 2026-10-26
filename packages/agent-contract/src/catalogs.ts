@@ -102,6 +102,9 @@ export const ModelCatalogSchema = z.strictObject({
     (models) => new Set(models.map((model) => JSON.stringify([model.provider, model.modelId]))).size === models.length,
     'Model identities are unique within a provider',
   ),
+  // Resolved by OMP from `modelRoles.plan` against the executable models, so
+  // the UI can disable Plan before a session exists.
+  planRoleAvailable: z.boolean(),
 });
 export type ModelCatalog = z.infer<typeof ModelCatalogSchema>;
 

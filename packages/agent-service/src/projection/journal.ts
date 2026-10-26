@@ -35,6 +35,7 @@ export class SessionJournal {
   private mode: SessionMode;
   private activeRunId: string | null = null;
   private runtimeStatus: RuntimeSession['runtimeStatus'] = 'idle';
+  private title: string | undefined;
   private continuationPending = false;
   private closed = false;
 
@@ -45,6 +46,7 @@ export class SessionJournal {
     this.turns = structuredClone(seed.turns);
     this.mode = structuredClone(seed.mode);
     this.messages = structuredClone(seed.messages);
+    this.title = seed.title;
     this.rebuildIndexes();
   }
 
@@ -81,6 +83,7 @@ export class SessionJournal {
   runtime(): RuntimeSession {
     return RuntimeSessionSchema.parse({ ...this.identity, createdAt: this.createdAt, updatedAt: this.updatedAt,
       epoch: this.epoch, headSequence: this.head.toString(), runtimeStatus: this.runtimeStatus, activeRunId: this.activeRunId, mode: this.mode,
+      ...(this.title === undefined ? {} : { title: this.title }),
       continuationPending: this.continuationPending,
     });
   }
@@ -217,6 +220,7 @@ export class SessionJournal {
         this.settleRun(event.runId, event.type === 'run.completed' ? 'completed' : event.type === 'run.cancelled' ? 'cancelled' : 'failed', event.finishedAt, event.type === 'run.failed' ? event.error : undefined); return;
       case 'session.updated':
         if (event.mode !== undefined) this.mode = structuredClone(event.mode);
+        if (event.title !== undefined) this.title = event.title;
         if (event.continuationPending !== undefined) this.continuationPending = event.continuationPending;
         return;
       case 'session.status': this.runtimeStatus = event.runtimeStatus; this.activeRunId = event.activeRunId; return;

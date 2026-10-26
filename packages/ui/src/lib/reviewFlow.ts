@@ -390,8 +390,8 @@ const openReviewSessionPanel = (directory: string, session: Session): void => {
   useUIStore.getState().openContextPanelTab(directory, {
     mode: 'chat',
     dedupeKey: `session:${session.sessionId}`,
-    label: session.metadata?.title ?? null,
-    sessionTitleFallback: session.metadata?.title ?? null,
+    label: session.title ?? null,
+    sessionTitleFallback: session.title ?? null,
   });
 };
 
@@ -418,7 +418,7 @@ const getSessionOrNull = async (sessionID: string): Promise<Session | null> => {
 };
 
 const getReviewSessionTitle = (original: Session): string => {
-  const implementationTitle = original.metadata?.title?.trim() || original.sessionId;
+  const implementationTitle = original.title?.trim() || original.sessionId;
   return `Review: ${implementationTitle}`;
 };
 
@@ -458,7 +458,8 @@ const createOrReuseReviewSession = async (
     projectId: original.projectId,
     workspaceId: original.workspaceId,
     options: { providerId: selection.providerId, modelId: selection.modelId, agentId: null, variant: selection.variant ?? null, reasoningEffort: null },
-    metadata: withReviewSessionMarker({ title: getReviewSessionTitle(original) }, originalSessionID),
+    title: getReviewSessionTitle(original),
+    metadata: withReviewSessionMarker({}, originalSessionID),
   })).session;
   assertAutoReviewRuntimeStillCurrent(expectedRuntimeKey);
   registerSessionDirectory(review.sessionId, directory);

@@ -269,7 +269,7 @@ const TEXT_INDEPENDENT_CHILDREN = [
   'ReviewFlowDialogView',
   'QueuedMessagesStrip',
   'ComposerDictation',
-  'SessionGoalObjectiveCounter',
+  'ComposerModeSelector',
 ];
 
 const expectOnlyTheEditorFollowsTheText = (cost: TypingCost) => {

@@ -40,7 +40,7 @@ const projectRunningSession = (session: Session, parentSessionId: string): Runni
     sessionId: session.sessionId,
     parentSessionId,
     createdAt: session.createdAt,
-    description: session.metadata?.title,
+    description: session.title,
 });
 
 /** Keep transient child activity separate from canonical transcript records. */

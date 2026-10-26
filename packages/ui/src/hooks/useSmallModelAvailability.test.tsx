@@ -44,7 +44,7 @@ beforeEach(() => {
   const models = spyOn(canonicalClient, 'getModels').mockImplementation(async workspaceId => {
     modelFetchCount += 1;
     requestedWorkspace = workspaceId;
-    return { workspaceId, revision: '0', models: [{ provider: 'composer', modelId: 'haiku', name: 'Haiku', modalities: ['text'], contextWindow: 8000, maxOutputTokens: 2000, reasoningEffortSupported: false, reasoningOptions: [], variants: [], pricing: null }] };
+    return { workspaceId, revision: '0', models: [{ provider: 'composer', modelId: 'haiku', name: 'Haiku', modalities: ['text'], contextWindow: 8000, maxOutputTokens: 2000, reasoningEffortSupported: false, reasoningOptions: [], variants: [], pricing: null }], planRoleAvailable: false };
   });
   const fetcher = spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json({}));
   restorers = [() => resolve.mockRestore(), () => models.mockRestore(), () => fetcher.mockRestore()];

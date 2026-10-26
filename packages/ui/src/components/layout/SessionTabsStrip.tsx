@@ -120,7 +120,7 @@ const SessionTabItem: React.FC<{
   const [contextMenuOpen, setContextMenuOpen] = React.useState(false);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: tab.id });
 
-  const title = tab.session.metadata?.title?.trim() || t('sessions.sidebar.session.untitled');
+  const title = tab.session.title?.trim() || t('sessions.sidebar.session.untitled');
   const overlayVisible = !suppressControls && (menuOpen || menuVisible);
 
   // Session state for the dot and the hover tooltip.

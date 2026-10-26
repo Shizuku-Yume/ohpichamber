@@ -66,7 +66,7 @@ const operationalSchema = z.strictObject({
   reviewSessionID: EntityIdSchema.optional(), kind: z.literal('review').optional(), originalSessionID: EntityIdSchema.optional(), multirun: multirunSchema.optional(),
 });
 export const SessionMetadataSchema = z.strictObject({
-  title: z.string().optional(), folder: z.string().optional(), isPinned: z.boolean().optional(),
+  folder: z.string().optional(), isPinned: z.boolean().optional(),
   color: z.string().optional(), icon: z.string().optional(), notes: z.string().optional(), openchamber: operationalSchema.optional(),
 });
 export type SessionMetadata = z.infer<typeof SessionMetadataSchema>;
@@ -77,7 +77,7 @@ export const SessionMetadataStateSchema = z.strictObject({
 });
 export type SessionMetadataState = z.infer<typeof SessionMetadataStateSchema>;
 export const SessionMetadataPatchSchema = z.strictObject({ changes: z.strictObject({
-  title: z.string().nullable().optional(), folder: z.string().nullable().optional(), isPinned: z.boolean().nullable().optional(),
+  folder: z.string().nullable().optional(), isPinned: z.boolean().nullable().optional(),
   color: z.string().nullable().optional(), icon: z.string().nullable().optional(), notes: z.string().nullable().optional(),
   openchamber: z.strictObject({
     goal: z.strictObject({

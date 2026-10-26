@@ -269,3 +269,55 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** OMP adds or removes a native internal scheme, or a read-only internal URL starts granting a capability the Host must authorize separately.
 - **Effort:** omp-native-parity
+## 2026-10-27 - Publish plan-role availability in the workspace model catalog
+
+- **Decided:** `ModelCatalog` carries `planRoleAvailable`, resolved by the Agent Service with OMP's `resolveRoleModelFull(settings, 'plan', modelRegistry.getAvailable(), undefined)` — the same resolver the worker's plan enter uses. The composer reads it from the per-directory catalog cache to disable Plan and show the reason before a session exists.
+- **Instead of:** Letting the user pick Plan and surfacing the worker's 422 `MODEL_UNAVAILABLE` after the draft session is created, or reading the OMP config from the UI.
+- **Because:** the UI must know availability in a draft, the Agent Service already owns OMP settings and the executable model list, and a second availability rule would drift from `mode.ts`. The new field is required so every catalog producer and consumer states the fact.
+- **Mine:** yes
+- **Revisit when:** OMP exposes a dedicated capability endpoint, or plan availability stops depending on `modelRoles.plan`.
+- **Effort:** omp-native-parity
+
+## 2026-10-27 - Draft mode lives in draft state and applies after session creation
+
+- **Decided:** `NewSessionDraftState.mode` (and a Goal objective) holds the composer's choice. `sendMessage` applies Plan/Vibe with `mode.set` after the session exists and before the prompt; Goal calls the native `goal create` and returns without a prompt, because the controller starts the first turn. If `mode.set` fails, the created session stays in Main, the composer text is restored, and no prompt is sent.
+- **Instead of:** Applying the mode before creation through a hidden draft session, or sending the prompt and switching afterwards.
+- **Because:** the worker mode control needs a real session id and "before the first prompt" is the acceptance condition; for Goal, also sending the typed text would duplicate the first objective turn.
+- **Mine:** yes
+- **Revisit when:** the Agent Service supports creating a session in an initial mode atomically, or a draft mode can fail without closing the draft.
+- **Effort:** omp-native-parity
+
+## 2026-10-27 - Mode picker sits beside ModelControls, not inside it
+
+- **Decided:** the desktop mode picker renders immediately after `<ModelControls>` in the composer's right-side group; mobile renders it after the model button in the same model row. It uses the retired agent picker's DropdownMenu + Input + ScrollableOverlay pattern, with a searchable bottom sheet on mobile.
+- **Instead of:** Editing `ModelControls.renderAgentSelector`'s old insertion point inside that component.
+- **Because:** the visual order is the same rightmost slot, and window C owns the model/effort region of `ModelControls.tsx`; a sibling keeps the two intents mergeable. Mobile keeps the exact vacated `MobileAgentButton` slot.
+- **Mine:** yes
+- **Revisit when:** composer layout composes model and mode into one shared control cluster.
+- **Effort:** omp-native-parity
+## 2026-10-26 - OMP owns session titles
+
+- **Decided:** `RuntimeSession.title` is the only session title, sourced from OMP's JSONL through its listing and title-change event. Rename goes through OMP `setSessionName`; Host metadata no longer has a writable title field, and legacy stored titles are ignored on read.
+- **Instead of:** Keeping `SessionMetadata.title` as the UI-facing canonical title and overlaying or mirroring OMP's title into it.
+- **Because:** two writable title stores disagree after a CLI rename or OMP auto-title, and the spec requires the sidebar and `omp --resume` to show the same title. A projection also leaves `getSessionMetadata`, list composition and patch revisions disagreeing about which title is current.
+- **Effort:** omp-native-parity
+- **Mine:** yes
+- **Revisit when:** a retained surface needs Host-owned titles that OMP cannot express, or an OMP release stops storing the title in the session JSONL.
+
+## 2026-10-26 - Cold title writes use OMP's session manager
+
+- **Decided:** A rename on a cold root opens OMP's `SessionManager` for that JSONL, calls `setSessionName(..., 'user')`, flushes and closes. A live root applies the same call through its worker.
+- **Instead of:** Requiring a worker to be started before any rename, or appending a title record by hand.
+- **Because:** OMP's own API owns the header title slot and title-change entry; starting a worker only to write a title wastes a capacity slot, and a hand-written record would diverge from OMP's format. The live branch prevents two writers to the same file.
+- **Effort:** omp-native-parity
+- **Mine:** yes
+- **Revisit when:** OMP adds a storage API that writes titles without constructing a session manager, or a live/cold race becomes observable.
+
+## 2026-10-26 - Legacy Host titles are dropped, not migrated
+
+- **Decided:** Existing `session_metadata.payload.title` values are stripped from canonical metadata reads and are not copied into OMP. OMP's JSONL titles become authoritative immediately.
+- **Instead of:** A one-time Host-to-OMP title migration during list or startup.
+- **Because:** app-created sessions already carry OMP's generated title in their JSONL, so the common case needs no migration; a list-time migration would mutate during a read and could start an unbounded cold-write pass. Manual old titles are the only loss, and no acceptance criterion requires importing them.
+- **Effort:** omp-native-parity
+- **Mine:** yes
+- **Revisit when:** a maintainer reports a manual title that must survive the cutover; then add an explicit versioned migration rather than a fallback.

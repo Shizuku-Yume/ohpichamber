@@ -77,7 +77,7 @@ const projectSession = (session: CanonicalSession, directory: string, projectId:
   }
   // The guest SDK has no cancelled outcome; do not label cancellation a failure.
   const outcome = observed?.outcome;
-  return { id, title: session.metadata?.title ?? id, projectId, directory, parentId: session.parentSessionId ?? null, createdAt: session.createdAt, updatedAt: session.updatedAt, archivedAt: session.archivedAt ?? null, worktree, activity, outcome: activity === 'idle' && (outcome === 'completed' || outcome === 'failed') ? outcome : null, items: guestItems(session, guestId) };
+  return { id, title: session.title ?? id, projectId, directory, parentId: session.parentSessionId ?? null, createdAt: session.createdAt, updatedAt: session.updatedAt, archivedAt: session.archivedAt ?? null, worktree, activity, outcome: activity === 'idle' && (outcome === 'completed' || outcome === 'failed') ? outcome : null, items: guestItems(session, guestId) };
 };
 
 /** Store projection only. Layout-owned sync and topology discovery supply hydration. */

@@ -9,9 +9,8 @@ import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStor
 import { useUIStore } from '@/stores/useUIStore';
 import { createMessageQueueTarget, getMessageQueueKey, useMessageQueueStore, type QueuedContextPart, type QueuedMessage } from '@/stores/messageQueueStore';
 import { useAutoReviewStore } from '@/stores/useAutoReviewStore';
-import { useSessionGoalArmStore } from '@/stores/useSessionGoalArmStore';
 import { useBtwStore } from '@/stores/useBtwStore';
-import { useSessionUIStore, type CanonicalSkillMentions } from '@/sync/session-ui-store';
+import { useSessionUIStore, type CanonicalSkillMentions, type DraftGoalObjective } from '@/sync/session-ui-store';
 import { prepareLocalAttachments, useDraftAttachedFiles, useInputStore, type SyntheticContextPart } from '@/sync/input-store';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { openParallelComposer } from '@/lib/multirun/openParallelComposer';
@@ -208,6 +207,7 @@ import { useSpacesStore } from '@/lib/spaces/spaces-store';
 import { isDraftSendWaiting, subscribeDraftSendWaiting } from '@/lib/worktrees/pendingDraftWorktree';
 import { ComposerAutocompletePopups } from './composer/ui/ComposerAutocompletePopups';
 import { ComposerFooter } from './composer/ui/ComposerFooter';
+import { ComposerModeSelector, type ComposerModeValue } from './composer/ui/ComposerModeSelector';
 import { MobilePillComposer } from './composer/ui/MobilePillComposer';
 import { ComposerContextChips } from './composer/ui/ComposerContextChips';
 import { LinkedReferenceRow } from './composer/ui/LinkedReferenceRow';
@@ -3547,6 +3547,13 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         : null;
     const autoReviewRow = !isBtwActive && !newSessionDraftOpen ? <AutoReviewStrip /> : null;
     const sessionMode = useDirectorySync(React.useCallback((state) => currentSessionId ? state.snapshot[currentSessionId]?.session.mode : undefined, [currentSessionId]), currentSessionDirectoryForSync ?? currentDirectory ?? undefined);
+    // The workspace model catalog is the authoritative source for whether OMP
+    // can resolve the project/global `plan` role.
+    const planRoleAvailable = useDirectorySync(React.useCallback((state) => state.models?.planRoleAvailable, []), currentSessionDirectoryForSync ?? currentDirectory ?? undefined);
+    const sessionGoalEnabled = useUIStore((state) => state.sessionGoalEnabled);
+    const handleDraftModeChange = React.useCallback((next: ComposerModeValue, goal?: DraftGoalObjective | null) => {
+        useSessionUIStore.getState().setDraftMode(next, goal ?? null);
+    }, []);
     const workerRun = useSessionActiveRun(currentSessionId ?? '', currentSessionDirectoryForSync ?? currentDirectory ?? undefined);
     const workerRunRow = !isBtwActive && !newSessionDraftOpen && (workerRun?.origin === 'plan' || workerRun?.origin === 'goal')
         ? <ComposerStatusStrip icon="loader-4" spin text={t(workerRun.origin === 'plan' ? 'chat.run.origin.plan' : 'chat.run.origin.goal')} />
@@ -3592,6 +3599,19 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         // Keep the mobile model control aligned with the attachment and dictation rows.
         <div className="flex items-center justify-between gap-x-2 px-3.5 pb-2 pt-0.5">
             <MemoMobileModelButton onOpenModel={() => handleOpenMobilePanel('model')} className="min-w-0 px-0" />
+            <ComposerModeSelector
+                sessionId={currentSessionId}
+                draftOpen={newSessionDraftOpen}
+                mode={sessionMode}
+                draftMode={newSessionDraft.mode}
+                draftGoalObjective={newSessionDraft.goalObjective ?? null}
+                runActive={Boolean(workerRun)}
+                planRoleAvailable={planRoleAvailable}
+                sessionGoalEnabled={sessionGoalEnabled}
+                directory={currentSessionDirectoryForSync ?? currentDirectory}
+                isMobile
+                onDraftModeChange={handleDraftModeChange}
+            />
         </div>
     ) : null;
 
@@ -3621,12 +3641,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         editorRef: composerRef,
     });
 
-    // The footer's objective counter shows only while a goal is armed; passing
-    // the length otherwise would re-render the whole footer on every keystroke.
-    const goalArmed = useSessionGoalArmStore((state) => state.armed);
     // Set by the footer's desktop dictation; the mobile overlay lives outside the box.
     const [desktopDictating, setDesktopDictating] = React.useState(false);
-    const goalObjectiveLength = goalArmed ? message.length : 0;
     const waitingForAgent = false;
 
     const footerPaddingClass = isMobile ? 'px-1.5 py-1.5' : 'px-2.5 py-1.5';
@@ -3984,7 +4000,11 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                         runActive={Boolean(workerRun)}
                         directory={currentSessionDirectoryForSync ?? currentDirectory}
                         newSessionDraftOpen={newSessionDraftOpen}
-                        messageLength={goalObjectiveLength}
+                        draftMode={newSessionDraft.mode}
+                        draftGoalObjective={newSessionDraft.goalObjective ?? null}
+                        planRoleAvailable={planRoleAvailable}
+                        sessionGoalEnabled={sessionGoalEnabled}
+                        onDraftModeChange={handleDraftModeChange}
                         radius={chatInputRadius}
                         footerPaddingClass={footerPaddingClass}
                         footerGapClass={footerGapClass}

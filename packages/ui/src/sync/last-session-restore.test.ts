@@ -22,7 +22,7 @@ const session = (sessionId: string, workspaceId = 'workspace-restore'): Session 
     runtimeStatus: 'idle',
     activeRunId: null,
     mode: { kind: 'main' },
-    metadata: { title: sessionId },
+    title: sessionId, metadata: {},
     metadataRevision: '1',
     archiveRevision: '0',
 });

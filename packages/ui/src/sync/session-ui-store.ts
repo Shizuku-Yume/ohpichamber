@@ -399,6 +399,10 @@ type AssistantMessageSessionSource = {
 
 type NewSessionDraftTarget = "chat" | "project"
 
+/** Modes a draft can hold before its session exists; Main is the absence of a value. */
+export type DraftSessionMode = "plan" | "vibe" | "goal"
+export type DraftGoalObjective = { objective: string; tokenBudget: number | null }
+
 export type NewSessionDraftState = {
   draftId: number
   open: boolean
@@ -406,6 +410,10 @@ export type NewSessionDraftState = {
   directoryOverride: string | null
   /** Chosen with the composer's shield button; absent means the new session takes the default from Settings. */
   permissionMode?: PermissionMode
+  /** Chosen with the composer's mode dropdown; applied after the session is created. */
+  mode?: DraftSessionMode
+  /** Required for `mode: "goal"`; creates the native goal and its first turn instead of a prompt. */
+  goalObjective?: DraftGoalObjective
   pendingWorktreeRequestId?: string | null
   bootstrapPendingDirectory?: string | null
   preserveDirectoryOverride?: boolean
@@ -458,6 +466,7 @@ export type SessionUIState = {
   setNewSessionDraftTarget: (target: { projectId?: string | null; selectedProjectId?: string | null; directoryOverride?: string | null }, options?: { force?: boolean }) => void
   setDraftPreserveDirectoryOverride: (value: boolean) => void
   setDraftPermissionMode: (mode: PermissionMode) => void
+  setDraftMode: (mode: "main" | DraftSessionMode, goalObjective?: DraftGoalObjective | null) => void
   setDraftProjectContextPin: (kind: "note" | "plan", id: string, pinned: boolean) => void
   acknowledgeSessionAbort: (sessionId: string) => void
   clearAbortPrompt: () => void
@@ -789,6 +798,7 @@ const cloneDraft = (draft: NewSessionDraftState): NewSessionDraftState => ({
   projectContextPins: draft.projectContextPins
     ? { notes: [...draft.projectContextPins.notes], plans: [...draft.projectContextPins.plans] }
     : undefined,
+  goalObjective: draft.goalObjective ? { ...draft.goalObjective } : undefined,
 })
 
 const writeRuntimeSessionMemory = (key: string, patch: Partial<RuntimeSessionMemory>): void => {
@@ -1487,6 +1497,8 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
       syntheticParts: options?.syntheticParts,
       targetFolderId: options?.targetFolderId,
       projectContextPins: options?.projectContextPins,
+      mode: options?.mode,
+      goalObjective: options?.goalObjective,
     }
 
     set({
@@ -1565,6 +1577,8 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
       && currentDraft.syntheticParts === undefined
       && currentDraft.targetFolderId === undefined
       && currentDraft.permissionMode === undefined
+      && currentDraft.mode === undefined
+      && currentDraft.goalObjective === undefined
     ) {
       return
     }
@@ -1583,6 +1597,8 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
       initialPrompt: undefined,
       syntheticParts: undefined,
       targetFolderId: undefined,
+      mode: undefined,
+      goalObjective: undefined,
     }
     set({
       newSessionDraft: nextDraft,
@@ -1635,6 +1651,18 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
     set((s) => {
       if (!s.newSessionDraft?.open) return s
       return { newSessionDraft: { ...s.newSessionDraft, permissionMode: mode } }
+    }),
+
+  setDraftMode: (mode, goalObjective = null) =>
+    set((s) => {
+      if (!s.newSessionDraft?.open) return s
+      return {
+        newSessionDraft: {
+          ...s.newSessionDraft,
+          mode: mode === "main" ? undefined : mode,
+          goalObjective: mode === "goal" ? goalObjective ?? undefined : undefined,
+        },
+      }
     }),
 
   setDraftProjectContextPin: (kind, id, pinned) =>
@@ -1846,6 +1874,24 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
       }
       markPendingUserSendAnimation(sessionId)
 
+      // The draft holds the mode until the session exists. Apply it now so the
+      // first prompt runs under it; a Goal draft never also sends that prompt,
+      // because the native goal controller starts its own first turn.
+      if (createsDraftSession && draft.mode) {
+        if (draft.mode === "goal") {
+          const objective = draft.goalObjective?.objective.trim()
+          if (!objective) throw new Error("A goal objective is required")
+          assertSendRuntime(capturedRuntimeKey)
+          await canonicalClient.goal(sessionId, { op: "create", objective, tokenBudget: draft.goalObjective?.tokenBudget ?? null })
+          assertSendRuntime(capturedRuntimeKey)
+          goalApplied = true
+          return
+        }
+        assertSendRuntime(capturedRuntimeKey)
+        await canonicalClient.setMode(sessionId, draft.mode)
+        assertSendRuntime(capturedRuntimeKey)
+      }
+
       let fileResourceExpansion: FileResourceExpandResult | null | undefined
       if (goalArm.armed && goalArm.composerGoal) {
         const objective = goalArm.objectiveOverride?.trim() || content.trim()
@@ -2004,7 +2050,7 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
       await forkFromMessageAction(sessionId, messageId)
 
       const { toast } = await import("sonner")
-      toast.success(`Forked from ${existingSession.metadata?.title ?? existingSession.sessionId}`)
+      toast.success(`Forked from ${existingSession.title ?? existingSession.sessionId}`)
     } catch (error) {
       console.error("Failed to fork session:", error)
       const { toast } = await import("sonner")
@@ -2020,7 +2066,7 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
       await forkAfterMessageAction(sessionId, messageId)
 
       const { toast } = await import("sonner")
-      toast.success(`Forked from ${existingSession.metadata?.title ?? existingSession.sessionId}`)
+      toast.success(`Forked from ${existingSession.title ?? existingSession.sessionId}`)
     } catch (error) {
       console.error("Failed to fork session:", error)
       const { toast } = await import("sonner")

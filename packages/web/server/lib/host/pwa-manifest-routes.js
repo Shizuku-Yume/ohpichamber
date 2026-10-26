@@ -60,7 +60,7 @@ export const registerPwaManifestRoute = (app, dependencies) => {
         seen.add(id);
         rows.push({
           id,
-          title: normalizeShortcutTitle(item.metadata?.title, `Session ${rows.length + 1}`),
+          title: normalizeShortcutTitle(item.title, `Session ${rows.length + 1}`),
           updatedAt: Number.isFinite(item.updatedAt) ? item.updatedAt : 0,
         });
       }

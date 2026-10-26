@@ -27,7 +27,7 @@ const createClient = () => {
 
 const session = (overrides: Partial<Session> = {}): Session => ({
   ...nativeSnapshot(SESSION_ID, []).session,
-  metadata: { title: 'One' },
+  title: 'One', metadata: {},
   metadataRevision: '1',
   archiveRevision: '0',
   ...overrides,
@@ -35,7 +35,7 @@ const session = (overrides: Partial<Session> = {}): Session => ({
 
 const message = (id: string, createdAt = 10): Message => nativeMessage(SESSION_ID, id, createdAt)
 
-const selectRecordTitle = (record: Session | undefined) => record?.metadata?.title
+const selectRecordTitle = (record: Session | undefined) => record?.title
 const selectRuntimeStatus = (record: Session | undefined) => record?.runtimeStatus
 const selectMessageFingerprint = (messages: Message[]) => messages.map((item) => `${item.messageId}:${item.createdAt}:${item.parts.map((part) => part.partId).join(',')}`).join('|')
 
@@ -120,16 +120,16 @@ describe('native session leaf subscriptions', () => {
     await render(new Set([SESSION_ID]))
     await seed([session()], [message('message-1', 10)])
 
-    await seed([session({ metadata: { title: 'Renamed' }, metadataRevision: '2' })], [message('message-1', 10)])
+    await seed([session({ title: 'Renamed', metadata: {}, metadataRevision: '2' })], [message('message-1', 10)])
     expect(readings?.title).toBe('Renamed')
 
-    await seed([session({ metadata: { title: 'Renamed' }, metadataRevision: '2', runtimeStatus: 'running', activeRunId: 'run-1' })], [message('message-1', 10)])
+    await seed([session({ title: 'Renamed', metadata: {}, metadataRevision: '2', runtimeStatus: 'running', activeRunId: 'run-1' })], [message('message-1', 10)])
     expect(readings?.runtimeStatus).toBe('running')
 
-    await seed([session({ workspaceId: WORKTREE_WORKSPACE_ID, metadata: { title: 'Renamed' }, metadataRevision: '2', runtimeStatus: 'running', activeRunId: 'run-1' })], [message('message-1', 10)])
+    await seed([session({ workspaceId: WORKTREE_WORKSPACE_ID, title: 'Renamed', metadata: {}, metadataRevision: '2', runtimeStatus: 'running', activeRunId: 'run-1' })], [message('message-1', 10)])
     expect(readings?.directory).toBe(WORKTREE_DIR)
 
-    await seed([session({ workspaceId: WORKTREE_WORKSPACE_ID, metadata: { title: 'Renamed' }, metadataRevision: '2' })], [message('message-1', 10), message('message-2', 20)])
+    await seed([session({ workspaceId: WORKTREE_WORKSPACE_ID, title: 'Renamed', metadata: {}, metadataRevision: '2' })], [message('message-1', 10), message('message-2', 20)])
     expect(readings?.messageFingerprint).toBe('message-1:10:part-message-1|message-2:20:part-message-2')
 
     await seed([session({ workspaceId: WORKTREE_WORKSPACE_ID, metadata: null, metadataRevision: '0' })], [])
@@ -138,7 +138,7 @@ describe('native session leaf subscriptions', () => {
   })
 
   test('live sessions the caller excludes do not re-render it; the rest still do', async () => {
-    const gapSession = session({ sessionId: 'session-gap', metadata: { title: 'Gap' } })
+    const gapSession = session({ sessionId: 'session-gap', title: 'Gap', metadata: {} })
     await render(new Set([SESSION_ID]))
     await seed([session(), gapSession], [])
     expect(readings?.liveGap.map((entry) => entry.sessionId)).toEqual(['session-gap'])
@@ -151,8 +151,8 @@ describe('native session leaf subscriptions', () => {
     expect(renders).toBe(settled)
     expect(readings?.liveGap).toBe(gap)
 
-    await seed([session({ updatedAt: 9 }), { ...gapSession, metadata: { title: 'Renamed' }, metadataRevision: '2' }], [])
-    expect(readings?.liveGap.map((entry) => entry.metadata?.title)).toEqual(['Renamed'])
+    await seed([session({ updatedAt: 9 }), { ...gapSession, title: 'Renamed', metadata: {}, metadataRevision: '2' }], [])
+    expect(readings?.liveGap.map((entry) => entry.title)).toEqual(['Renamed'])
 
     await render(new Set([SESSION_ID, 'session-gap']))
     expect(readings?.liveGap).toEqual([])

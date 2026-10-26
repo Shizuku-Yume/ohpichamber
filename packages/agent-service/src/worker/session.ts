@@ -58,6 +58,7 @@ export class WorkerSession {
   private readonly nativeQueuedPreparation: AgentSession['agent']['prepareQueuedMessages'];
   private readonly btw: RpcBtwController;
   private binding: Promise<void> = Promise.resolve();
+  private readonly titleUnsubscribe: () => void;
   private promptTask: Promise<void> | undefined;
   private preparation: Promise<PreparedPrompt> | undefined;
   private cancellingRunId: string | undefined;
@@ -101,6 +102,10 @@ export class WorkerSession {
       }
     });
     this.nativeQueuedPreparation = session.agent.prepareQueuedMessages;
+    this.titleUnsubscribe = session.sessionManager.onSessionNameChanged(() => {
+      const title = session.sessionManager.getSessionName()?.trim();
+      if (title) this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', title } }]);
+    });
     this.subagentEventBus.on(TASK_SUBAGENT_LIFECYCLE_CHANNEL, data => {
       // SAFETY: The worker publishes this channel only with SubagentLifecyclePayload.
       this.onSubagent(data as SubagentLifecyclePayload);
@@ -556,7 +561,7 @@ export class WorkerSession {
       case 'goal': {
         const request = operation;
         if (request.op === 'create' && (request.providerId || request.modelId || request.variant !== undefined || request.reasoningEffort !== undefined)) {
-          await this.selectOptions({ providerId: request.providerId, modelId: request.modelId, variant: request.variant ?? null, reasoningEffort: request.reasoningEffort ?? null });
+          await this.selectOptions({ providerId: request.providerId ?? null, modelId: request.modelId ?? null, agentId: null, variant: request.variant ?? null, reasoningEffort: request.reasoningEffort ?? null });
         }
         if (request.op === 'create' || request.op === 'resume') {
           if (this.preparation || this.projection.activeRun() || this.session.isStreaming || this.continuationPending) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
@@ -580,6 +585,14 @@ export class WorkerSession {
         const mode = await this.modeController.set(operation.mode);
         this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', mode } }]);
         return { type: 'mode.set', mode };
+      }
+      case 'session.rename': {
+        await this.binding;
+        if (!await this.session.sessionManager.setSessionName(operation.title, 'user')) throw new ProjectionError(400, 'INVALID_REQUEST', 'Session title is empty');
+        await this.session.sessionManager.flush();
+        const title = this.session.sessionManager.getSessionName();
+        if (!title) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Session title was not persisted');
+        return { type: 'session.rename', title };
       }
       case 'web-search': {
         if (operation.operation.type !== 'apply') throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'Search mutations require their workspace owner');
@@ -775,6 +788,7 @@ export class WorkerSession {
       await this.bind();
     } finally {
       this.unsubscribe();
+      this.titleUnsubscribe();
       this.session.agent.prepareQueuedMessages = this.nativeQueuedPreparation;
       try {
         try { await this.completion.close(); }

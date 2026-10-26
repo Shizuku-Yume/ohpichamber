@@ -119,7 +119,7 @@ re-adopting upstream's whole file:
   search, task 07), `SessionProjectIcon` (`resolveProjectColor`, task 25), `useSidebarPeek` (needs RTL helpers
   and the task-08 Sidebar), tracked items (task 07), worktree archives (Host endpoints).
 
-**Round-2 checks so far:** `bun run type-check` exit 0 (`logs/type-check-1.log`); `bun run lint` exit 0
+**Round-2 checks:** `bun run type-check` exit 0 (`logs/type-check-1.log`); `bun run lint` exit 0
 (`logs/lint-2.log`, one pre-existing unused-disable warning in `components/ui/tooltip.tsx`); 22/22 layout test
 files; `useUIStore.contextPanel.test.ts` 70 pass; worktree focused tests 14/14 and multirun 16 pass from the
 worktree commit. Full suite, dead-code, oxlint-on-authored and the real path follow before landing.
@@ -173,6 +173,7 @@ mobile workspace tabs and archive-on-done were stripped from the store.
 | `useUIStore.contextPanel.test.ts` | 0 | 70 pass (includes v23→v24 and corrupt-blob migration tests) |
 | worktree tests / multirun | 0 | 14/14 files, 16 pass |
 | full suite (first run) | 1 | `logs/test-1.log`: registry/telemetry version expectations and project worktreeDirectory tests (fixed since), plus load-sensitive flakes: scripts runner (`/proc` race, passes alone), agent-service capacity (sleep-based), canonical-plugins 503 |
+| full suite (rebased final tree) | 6/7 suites | `logs/test-final.log`: sdk, ui (374 files / 6089 tests), agent-contract, scripts, electron and web all pass; only `agent-service`'s sleep-based `workers.capacity.test.ts` failed under load, and passes alone (`logs/agent-service-capacity-rerun.log`, 6 pass) |
 
 **Real path (observed, dev on API 6202 / UI 6280, `OPENCHAMBER_DATA_DIR=/tmp/ohpi-09-data`, fixture
 `/tmp/ohpi-09-fixture`).** `GET /api/agent/v1/ready` 200 `{"ready":true,"engine":"omp","version":"1.0.0"}`.

@@ -5,20 +5,20 @@ import { prepareNotificationLastMessage } from './message.js';
 import { event, message, runtimeSession, scope, snapshot, turn } from '../event-stream/canonical-test-fixtures.js';
 
 const disposers = [];
-afterEach(() => { for (const stop of disposers.splice(0)) stop(); vi.useRealTimers(); vi.unstubAllEnvs(); });
+afterEach(() => { for (const stop of disposers.splice(0)) stop(); vi.useRealTimers(); vi.unstubAllEnvs?.(); });
 const fixture = (settings = {}, overrides = {}) => {
   const web = []; const native = []; const ui = []; const desktop = [];
   const records = [message({ parts: [{ type: 'text', partId: 't', content: 'Final answer in /private/workspace; Authorization: Bearer secret' }] })];
   const sessionService = {
-    open: async () => snapshot(records, [turn()]),
+    open: async () => snapshot(records, [turn()], { title: 'Host session' }),
     history: async () => { throw new Error('not expected'); },
     list: async () => ({ items: [{ ...runtimeSession(), metadata: null, metadataRevision: '0', archiveRevision: '0' }], errors: {} }),
   };
   const readSettingsFromDisk = async () => ({ nativeNotificationsEnabled: true, notificationMode: 'always', projects: [], ...settings });
   const template = createNotificationTemplateRuntime({ sessionService, resolveSessionScope: async () => scope,
-    readSessionMetadata: async () => ({ title: 'Host session' }), readSettingsFromDisk, resolveGitBinaryForSpawn: () => 'git' });
+    readSettingsFromDisk, resolveGitBinaryForSpawn: () => 'git' });
   const runtime = createNotificationTriggerRuntime({ sessionService, resolveSessionScope: async () => scope,
-    readSettingsFromDisk, readSessionMetadata: async () => null, ...template, prepareNotificationLastMessage,
+    readSettingsFromDisk, ...template, prepareNotificationLastMessage,
     emitDesktopNotification: (payload) => { desktop.push(payload); return true; }, broadcastUiNotification: (payload) => ui.push(payload),
     sendPushToAllUiSessions: (payload) => web.push(payload), sendApnsToAllUiSessions: (payload) => native.push(payload), ...overrides });
   disposers.push(runtime.stop);

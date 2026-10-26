@@ -149,11 +149,11 @@ describe("canonical session snapshot loading", () => {
 
   test("metadata and archive revisions reconcile independently and never regress", async () => {
     const oldHost = nativeHostSession()
-    const incoming = { ...oldHost, metadata: { title: "New title" }, metadataRevision: "6", archiveRevision: "1", archivedAt: undefined }
-    const { loader, store } = setup({ client: nativeClient({ listSessions: async () => ({ items: [incoming], errors: {} }), getSessionMetadata: async sessionId => ({ sessionId, metadata: { title: "Newer title" }, revision: "7" }) }) })
+    const incoming = { ...oldHost, title: "New title", metadata: {}, metadataRevision: "6", archiveRevision: "1", archivedAt: undefined }
+    const { loader, store } = setup({ client: nativeClient({ listSessions: async () => ({ items: [incoming], errors: {} }), getSessionMetadata: async sessionId => ({ sessionId, title: "Newer title", metadata: {}, revision: "7" }) }) })
     // A concurrent projection arrives while the missing-session list request is in flight.
     const list = deferred<{ items: typeof incoming[]; errors: Record<string, never> }>()
-    const client = nativeClient({ listSessions: () => list.promise, getSessionMetadata: async sessionId => ({ sessionId, metadata: { title: "Newer title" }, revision: "7" }) })
+    const client = nativeClient({ listSessions: () => list.promise, getSessionMetadata: async sessionId => ({ sessionId, title: "Newer title", metadata: {}, revision: "7" }) })
     loader.configure({ client, runtimeKey: "runtime-a" })
     const load = loader.ensure(target)
     await Promise.resolve()
@@ -161,7 +161,7 @@ describe("canonical session snapshot loading", () => {
     store.setState({ session: [oldHost] })
     list.resolve({ items: [incoming], errors: {} })
     await load
-    expect(store.getState().session[0]?.metadata?.title).toBe("Newer title")
+    expect(store.getState().session[0]?.title).toBe("Newer title")
     expect(store.getState().session[0]?.metadataRevision).toBe("7")
     expect(store.getState().session[0]?.archiveRevision).toBe("8")
     expect(store.getState().session[0]?.archivedAt).toBe(3)
@@ -219,16 +219,16 @@ describe("canonical session snapshot loading", () => {
   })
 
   test("late independent Host reads cannot publish into another runtime", async () => {
-    const metadata = deferred<{ sessionId: string; revision: string; metadata: { title: string } }>()
+    const metadata = deferred<{ sessionId: string; revision: string; metadata: {} }>()
     const { loader, store } = setup({ client: nativeClient({ getSessionMetadata: () => metadata.promise }) })
     store.setState({ session: [nativeHostSession()] })
     const load = loader.ensure(target)
     await Promise.resolve()
     await Promise.resolve()
     loader.configure({ client: nativeClient(), runtimeKey: "runtime-b" })
-    metadata.resolve({ sessionId: target.sessionId, revision: "100", metadata: { title: "Obsolete" } })
+    metadata.resolve({ sessionId: target.sessionId, revision: "100", metadata: {} })
     await load
-    expect(store.getState().session[0]?.metadata?.title).toBe("Saved title")
+    expect(store.getState().session[0]?.title).toBe("Saved title")
   })
   test("does not resurrect a session deleted while its snapshot was in flight", async () => {
     const pending = deferred<SessionSnapshot>()

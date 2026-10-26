@@ -21,7 +21,7 @@ import type { SessionNode } from '../types';
 
 const session = (sessionId: string, title: string): Session => ({
   sessionId, rootSessionId: sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '/repo',
-  metadata: { title }, createdAt: 1, updatedAt: 1, epoch: '1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
+  title: title, metadata: {}, createdAt: 1, updatedAt: 1, epoch: '1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
   metadataRevision: '1', archiveRevision: '0',
 });
 

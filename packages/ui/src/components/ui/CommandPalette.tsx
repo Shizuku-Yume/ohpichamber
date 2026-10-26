@@ -651,7 +651,7 @@ export const CommandPalette: React.FC = () => {
 
   const scoredSessions = React.useMemo(() => {
     if (!hasQuery) return orderedActiveSessions.slice(0, 5).map((item) => ({ item, score: 0 }));
-    return scoreByFuzzyQuery(orderedActiveSessions, liveTrimmed, (s) => s.metadata?.title || '', {
+    return scoreByFuzzyQuery(orderedActiveSessions, liveTrimmed, (s) => s.title || '', {
       limit: 7,
       threshold: 0.2,
     });
@@ -934,7 +934,7 @@ export const CommandPalette: React.FC = () => {
                 return (
                   <CommandGroup key="sessions" heading={t('commandPalette.group.sessions')}>
                     {visibleSessions.map((session) => {
-                      const title = session.metadata?.title || t('commandPalette.session.untitled');
+                      const title = session.title || t('commandPalette.session.untitled');
                       const dir = resolveGlobalSessionDirectory(session);
                       const branch = branchForSession(session.sessionId, dir);
                       const projectLabel = projectLabelForDirectory(dir);

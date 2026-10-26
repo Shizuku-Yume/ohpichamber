@@ -2016,7 +2016,7 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
       await forkFromMessageAction(sessionId, messageId)
 
       const { toast } = await import("sonner")
-      toast.success(`Forked from ${existingSession.metadata?.title ?? existingSession.sessionId}`)
+      toast.success(`Forked from ${existingSession.title ?? existingSession.sessionId}`)
     } catch (error) {
       console.error("Failed to fork session:", error)
       const { toast } = await import("sonner")
@@ -2032,7 +2032,7 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
       await forkAfterMessageAction(sessionId, messageId)
 
       const { toast } = await import("sonner")
-      toast.success(`Forked from ${existingSession.metadata?.title ?? existingSession.sessionId}`)
+      toast.success(`Forked from ${existingSession.title ?? existingSession.sessionId}`)
     } catch (error) {
       console.error("Failed to fork session:", error)
       const { toast } = await import("sonner")

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { z } from 'zod';
-import { AgentServiceReadySchema, ApprovalReplySchema, CounterSchema, EntityIdSchema, HistoryPageRequestSchema, JsonObjectSchema, ProblemDetailsSchema, PromptRequestSchema, QuestionReplySchema, SessionBranchRequestSchema, MCPConfigureRequestSchema, MCPApplyRequestSchema, MCPReconnectRequestSchema, MCPOAuthRequestSchema, SkillsApplyRequestSchema, SkillExpandRequestSchema, SessionControlRequestSchema, SessionControlAckSchema } from '@openchamber/agent-contract';
+import { AgentServiceReadySchema, ApprovalReplySchema, CounterSchema, EntityIdSchema, HistoryPageRequestSchema, JsonObjectSchema, ProblemDetailsSchema, PromptRequestSchema, QuestionReplySchema, SessionBranchRequestSchema, SessionTitleRequestSchema, MCPConfigureRequestSchema, MCPApplyRequestSchema, MCPReconnectRequestSchema, MCPOAuthRequestSchema, SkillsApplyRequestSchema, SkillExpandRequestSchema, SessionControlRequestSchema, SessionControlAckSchema } from '@openchamber/agent-contract';
 import type {
   SessionControlAck,
   AgentCatalog, AgentMutationResult, AgentServiceReady, ApprovalRequest,
@@ -520,7 +520,13 @@ export class AgentService {
       if (request.method === 'GET' && url.pathname === '/api/agent/v1/sessions') {
         const workspaceId = EntityIdSchema.safeParse(url.searchParams.get('workspaceId'));
         if (!workspaceId.success) throw new RequestError(400, 'INVALID_REQUEST', 'Workspace identity is required');
-        respondJson(response, 200, this.sessions.list(workspaceId.data)); return;
+        respondJson(response, 200, await this.sessions.list(this.workspaceCatalogs.get(workspaceId.data))); return;
+      }
+      const sessionTitle = /^\/api\/agent\/v1\/sessions\/([^/]+)\/title$/.exec(url.pathname);
+      if (sessionTitle && request.method === 'PATCH') {
+        const sessionId = identity(sessionTitle[1]);
+        const input = await readBody(request, SessionTitleRequestSchema);
+        respondJson(response, 200, await this.sessions.rename(sessionId, this.workspaceCatalogs.get(input.workspaceId), input.title)); return;
       }
       const subagents = /^\/api\/agent\/v1\/subagents$/.exec(url.pathname);
       if (subagents && request.method === 'GET') {

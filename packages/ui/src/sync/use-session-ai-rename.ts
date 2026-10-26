@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import type { Session, SessionMetadataState, SessionSnapshot } from '@openchamber/agent-contract';
+import type { Session, SessionSnapshot } from '@openchamber/agent-contract';
 import { canonicalClient } from '@/api/canonicalClient';
 import { generateSessionTitle } from '@/lib/sessionTitle';
 import { getRuntimeKey } from '@/lib/runtime-switch';
@@ -13,12 +13,9 @@ import { updateSessionTitle } from './session-actions';
 async function readNativeTitleSession(
   sessionId: string,
   baseSession?: Session,
-): Promise<{ session: Session; metadata: SessionMetadataState; snapshot: SessionSnapshot }> {
-  const [snapshot, metadata] = await Promise.all([
-    canonicalClient.getSession(sessionId),
-    canonicalClient.getSessionMetadata(sessionId),
-  ]);
-  if (snapshot.session.sessionId !== sessionId || metadata.sessionId !== sessionId) {
+): Promise<{ session: Session; snapshot: SessionSnapshot }> {
+  const snapshot = await canonicalClient.getSession(sessionId);
+  if (snapshot.session.sessionId !== sessionId) {
     throw new Error('Native session response identified another session');
   }
   let session = baseSession ?? useGlobalSessionsStore.getState().entityById.get(sessionId);
@@ -29,8 +26,7 @@ async function readNativeTitleSession(
   if (!session) throw new Error('Native session projection is unavailable');
   if (session.workspaceId !== snapshot.session.workspaceId) throw new Error('Session moved');
   return {
-    session: { ...session, ...snapshot.session, metadata: metadata.metadata, metadataRevision: metadata.revision },
-    metadata,
+    session: { ...session, ...snapshot.session },
     snapshot,
   };
 }
@@ -41,7 +37,7 @@ export function useIsSessionAiRenamePending(sessionID: string, directory: string
 }
 
 export type SessionAiRenameController = {
-  prepare: (signal: AbortSignal) => Promise<{ session: Session; metadata: SessionMetadataState; turns: NativeTitleTurn[] }>;
+  prepare: (signal: AbortSignal) => Promise<{ session: Session; turns: NativeTitleTurn[] }>;
   rename: () => Promise<void>;
 };
 
@@ -71,7 +67,7 @@ export function useSessionAiRename(sessionID: string, directory: string | null |
       });
       signal.throwIfAborted();
       if (getRuntimeKey() !== runtimeKey) throw new Error('Runtime changed');
-      return { session: native.session, metadata: native.metadata, turns };
+      return { session: native.session, turns };
     } finally {
       release();
     }
@@ -90,10 +86,7 @@ export function useSessionAiRename(sessionID: string, directory: string | null |
           return prepared;
         },
         generate: (turns, requestSignal) => generateSessionTitle({ turns, workspaceId, directory: normalizedDirectory, signal: requestSignal }),
-        readSession: async () => {
-          const native = await readNativeTitleSession(sessionID);
-          return { session: native.session, metadata: native.metadata };
-        },
+        readSession: async () => (await readNativeTitleSession(sessionID)).session,
         saveTitle: (title, requestSignal) => updateSessionTitle(sessionID, title, { directory: normalizedDirectory, expectedRuntimeKey: runtimeKey, signal: requestSignal }),
       });
     });

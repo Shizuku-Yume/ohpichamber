@@ -487,7 +487,7 @@ export const createScheduledTasksRuntime = (deps) => {
       prompt = await expandPrompt(workspace, PromptRequestSchema.parse({ input: { text: task.execution.prompt, attachments: [], context: [] }, options }));
       const created = SessionCreateAckSchema.parse(await sessionService.create({
         projectId: workspace.projectId, workspaceId: workspace.workspaceId, options: prompt.options,
-        metadata: { title: formatScheduledSessionTitle(task, startedAt) },
+        title: formatScheduledSessionTitle(task, startedAt),
       }));
       sessionID = created.session.sessionId;
       if (created.session.projectId !== workspace.projectId || created.session.workspaceId !== workspace.workspaceId) throw new Error('Scheduled session scope mismatch');

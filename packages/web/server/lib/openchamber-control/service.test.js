@@ -87,7 +87,7 @@ describe('OpenChamber control service canonical consumers', () => {
       projectId: 'project-1',
       workspaceId: 'workspace-1',
       options: { providerId: 'provider-1', modelId: 'model-1', agentId: 'build', variant: null, reasoningEffort: null },
-      metadata: { title: 'Migration' },
+      title: 'Migration',
     }]);
     expect(sent).toEqual([{
       sessionId: 'session-new',

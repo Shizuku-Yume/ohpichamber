@@ -126,14 +126,14 @@ describe('Host metadata conversion and admission boundaries', () => {
   it('keeps valid SQL usable when the entire legacy source is corrupt', async () => {
     const dataDir = makeDataDir();
     const first = createSessionMetadataStore({ dataDir });
-    await first.setSessionMetadata('good', { title: 'Host title' });
+    await first.setSessionMetadata('good', { notes: 'Host note' });
     await first.close();
     fs.writeFileSync(path.join(dataDir, 'sessions-metadata.json'), '{broken');
     const reopened = createSessionMetadataStore({ dataDir });
-    await expect(reopened.get('good')).resolves.toEqual({ title: 'Host title' });
+    await expect(reopened.get('good')).resolves.toEqual({ notes: 'Host note' });
     await expect(reopened.get('unknown')).rejects.toBeInstanceOf(MetadataCorruptError);
     await expect(reopened.listAll()).resolves.toMatchObject({
-      entries: { good: { metadata: { title: 'Host title' }, revision: '1' } },
+      entries: { good: { metadata: { notes: 'Host note' }, revision: '1' } },
       conversion: { status: 'corrupt', code: 'METADATA_CORRUPT' },
     });
     await reopened.close();
@@ -167,17 +167,17 @@ describe('Host metadata conversion and admission boundaries', () => {
       work: { id: 'w', sourceSessionID: 'parent' }, reviewOffer: { offered: true },
       reviewSessionID: 'review', kind: 'review', originalSessionID: 'original',
     };
-    await expect(store.importOperationalSessions([{ id: 'a', title: 'Custom', directory: '/workspace',
+    await expect(store.importOperationalSessions([{ id: 'a', directory: '/workspace',
       metadata: { openchamber: { ...operational, transcript: 'must not copy' }, notes: 'note', messages: ['never'] },
       messages: [{ role: 'user', text: 'never' }], }], 'selected')).resolves.toMatchObject({ results: { a: 'imported' }, complete: true });
-    await expect(store.get('a')).resolves.toEqual({ title: 'Custom', directory: '/workspace', notes: 'note', openchamber: operational });
+    await expect(store.get('a')).resolves.toEqual({ directory: '/workspace', notes: 'note', openchamber: operational });
     await store.close();
     const reopened = createSessionMetadataStore({ dataDir });
     await expect(reopened.importOperationalSessions([
       { id: 'a', title: 'Stale' }, { id: 'b', metadata: { openchamber: { assist: { recap: 'new' } } } },
       { id: 'bad', metadata: { openchamber: 'corrupt' } },
     ], 'selected')).resolves.toMatchObject({ results: { a: 'already-converted', b: 'imported' }, errors: { bad: 'METADATA_CORRUPT' }, complete: false });
-    await expect(reopened.get('a')).resolves.toMatchObject({ title: 'Custom' });
+    await expect(reopened.get('a')).resolves.toMatchObject({ notes: 'note' });
     await expect(reopened.get('b')).resolves.toEqual({ openchamber: { assist: { recap: 'new' } } });
     await reopened.close();
   });

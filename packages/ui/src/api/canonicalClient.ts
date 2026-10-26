@@ -229,6 +229,12 @@ export class CanonicalClient {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.SessionMetadataPatchSchema, patch),
     });
   }
+  renameSession(sessionId: string, workspaceId: string, title: string): Promise<Session> {
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/title`, scoped(C.SessionSchema, result => result.sessionId === sessionId), {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: bodyFor(C.SessionTitleRequestSchema, { workspaceId, title }),
+    });
+  }
   selectSessionBranch(sessionId: string, input: SessionBranchRequest): Promise<SessionBranchResult> {
     const parsed = C.SessionBranchRequestSchema.parse(input);
     return request(`/api/agent/v1/sessions/${id(sessionId)}/branch`, C.SessionBranchResultSchema, {

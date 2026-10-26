@@ -18,8 +18,8 @@ describe('context obligatory metadata', () => {
 
   test('pins and unpins one message without disturbing other metadata', () => {
     const message = { id: 'message_1', createdAt: 1, role: 'user' as const };
-    const metadata = withContextObligatoryMessage({ title: 'Keep' }, message, true);
-    expect(metadata).toEqual({ title: 'Keep', openchamber: { context_obligatory_messages: [message] } });
-    expect(withContextObligatoryMessage(metadata, message, false)).toEqual({ title: 'Keep', openchamber: { context_obligatory_messages: [] } });
+    const metadata = withContextObligatoryMessage({ notes: 'Keep' }, message, true);
+    expect(metadata).toEqual({ notes: 'Keep', openchamber: { context_obligatory_messages: [message] } });
+    expect(withContextObligatoryMessage(metadata, message, false)).toEqual({ notes: 'Keep', openchamber: { context_obligatory_messages: [] } });
   });
 });

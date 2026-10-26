@@ -47,5 +47,6 @@ export const ProjectionSeedSchema = payloadFields.merge(SessionSnapshotSchema).p
   turns: z.array(TurnSchema),
   messages: z.array(MessageSchema),
   mode: SessionModeSchema,
+  title: z.string().min(1).optional(),
 });
 export type ProjectionSeed = z.infer<typeof ProjectionSeedSchema>;

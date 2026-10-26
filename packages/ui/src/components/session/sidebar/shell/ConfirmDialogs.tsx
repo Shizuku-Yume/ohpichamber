@@ -37,28 +37,28 @@ export function SessionDeleteConfirmDialog(props: {
               ? value.archivedBucket
                 ? value.descendantCount === 1
                   ? t('sessions.sidebar.dialogs.deleteSession.withOneSubtask', {
-                    sessionTitle: value.session.metadata?.title || untitledSession,
+                    sessionTitle: value.session.title || untitledSession,
                     count: value.descendantCount,
                   })
                   : t('sessions.sidebar.dialogs.deleteSession.withManySubtasks', {
-                    sessionTitle: value.session.metadata?.title || untitledSession,
+                    sessionTitle: value.session.title || untitledSession,
                     count: value.descendantCount,
                   })
                 : value.descendantCount === 1
                   ? t('sessions.sidebar.dialogs.archiveSession.withOneSubtask', {
-                    sessionTitle: value.session.metadata?.title || untitledSession,
+                    sessionTitle: value.session.title || untitledSession,
                     count: value.descendantCount,
                   })
                   : t('sessions.sidebar.dialogs.archiveSession.withManySubtasks', {
-                    sessionTitle: value.session.metadata?.title || untitledSession,
+                    sessionTitle: value.session.title || untitledSession,
                     count: value.descendantCount,
                   })
               : value?.archivedBucket
                 ? t('sessions.sidebar.dialogs.deleteSession.single', {
-                  sessionTitle: value?.session.metadata?.title || untitledSession,
+                  sessionTitle: value?.session.title || untitledSession,
                 })
                 : t('sessions.sidebar.dialogs.archiveSession.single', {
-                  sessionTitle: value?.session.metadata?.title || untitledSession,
+                  sessionTitle: value?.session.title || untitledSession,
                 })}
           </DialogDescription>
         </DialogHeader>

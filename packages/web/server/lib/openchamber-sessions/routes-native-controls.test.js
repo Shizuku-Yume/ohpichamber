@@ -170,7 +170,7 @@ describe('Host native session control saga', () => {
   });
   it('publishes all admitted family identities at the destination and retains Host metadata and archive revisions', async () => {
     const { owner, store, destination, makeService } = await fixture();
-    await owner.sessionMetadataStore.setSessionMetadata('public-child', { title: 'Retained child' });
+    await owner.sessionMetadataStore.setSessionMetadata('public-child', { notes: 'Retained child' });
     await owner.archiveStore.archive(['public-child'], 1700000000000);
     const metadata = await owner.sessionMetadataStore.getState('public-child');
     const archive = await owner.archiveStore.getState('public-child');

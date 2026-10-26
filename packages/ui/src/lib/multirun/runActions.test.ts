@@ -21,7 +21,7 @@ function fixture() {
   const sessions = ['a', 'b'].map((sessionId): Session => {
     const session: Session = { sessionId, rootSessionId: sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '.',
       createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
-      metadata: { title: 'lane', notes: 'preserve', openchamber: { goal: { status: 'active' } } }, metadataRevision: '1', archiveRevision: '0' };
+      title: 'lane', metadata: {notes: 'preserve', openchamber: { goal: { status: 'active' } }}, metadataRevision: '1', archiveRevision: '0' };
     session.metadata = withMultiRunMembership(session, { version: 1, sessionID: sessionId, group, groupSlug: 'run', role: 'run', providerID: 'provider', modelID: 'model', runGroup: 'g1', index: 2 });
     return session;
   });
@@ -62,13 +62,17 @@ describe('canonical multi-run metadata actions', () => {
     expect(api.published.map((session) => session.sessionId)).toEqual(['b']);
     expect(getMultiRunMembership(api.published[0])).toMatchObject({ sessionID: 'b', runGroup: 'g1', index: 2, title: 'Renamed' });
   });
-  test('detach atomically clears marker and changes native title', async () => {
+  test('detach clears the marker and changes the OMP title', async () => {
     const api = fixture();
-    const write = spyOn(canonicalClient, 'patchSessionMetadata').mockResolvedValue({ sessionId: 'a', metadata: { title: 'Run', notes: 'preserve' }, revision: '2' });
+    const write = spyOn(canonicalClient, 'patchSessionMetadata').mockResolvedValue({ sessionId: 'a', metadata: {notes: 'preserve'}, revision: '2' });
     spies.push(write);
+    const rename = spyOn(canonicalClient, 'renameSession').mockResolvedValue({ ...api.sessions[0], title: 'Run', metadata: {notes: 'preserve'}, metadataRevision: '2' });
+    spies.push(rename);
     await detachFromRun(api.sessions[0], 'Run');
-    expect(write.mock.calls[0]).toEqual(['a', { changes: { title: 'Run', openchamber: { multirun: null } } }]);
-    expect(api.published[0].metadata).toEqual({ title: 'Run', notes: 'preserve' });
+    expect(write.mock.calls[0]).toEqual(['a', { changes: { openchamber: { multirun: null } } }]);
+    expect(rename.mock.calls[0]).toEqual(['a', 'workspace', 'Run']);
+    expect(api.published[0].metadata).toEqual({ notes: 'preserve' });
+    expect(api.published[0].title).toBe('Run');
   });
   test('runtime switch after metadata read prevents writes and publication', async () => {
     const api = fixture();

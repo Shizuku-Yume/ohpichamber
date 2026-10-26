@@ -22,7 +22,8 @@ export async function createMultiRunSession(
     projectId: workspace.projectId,
     workspaceId: workspace.workspaceId,
     options: input.selection,
-    metadata: { ...withMultiRunMembership({ metadata: null }, membership), title: input.title },
+    title: input.title,
+    metadata: withMultiRunMembership({ metadata: null }, membership),
   });
   try {
     assertCurrent();

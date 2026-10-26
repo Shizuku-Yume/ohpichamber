@@ -72,6 +72,50 @@ test('lists OMP storage including unreferenced CLI sessions and renames through 
   }
 });
 
+test('native promotion refuses a child identity or a scope other than the listed workspace', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'omp-native-promotion-scope-'));
+  const previousHome = process.env.HOME;
+  const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+  process.env.HOME = root;
+  const cwd = join(root, 'workspace');
+  const agentDirectory = join(root, 'agent');
+  await Promise.all([mkdir(cwd), mkdir(agentDirectory)]);
+  setAgentDir(agentDirectory);
+  const sessionsDirectory = SessionManager.getDefaultSessionDir(cwd, agentDirectory);
+  const workers = new WorkerRegistry({ workerEntrypoint: 'unused-test-entrypoint' });
+  const stateDirectory = join(root, 'service-state');
+  const registry = new SessionRegistry(stateDirectory, workers);
+  try {
+    const parent = await nativeSession(sessionsDirectory, cwd, 'Native parent');
+    const child = await SessionManager.open(join(sessionsDirectory, 'native-child.jsonl'), sessionsDirectory, undefined,
+      { initialCwd: cwd, parentSession: parent.sessionFile });
+    child.appendMessage(userMessage('Child prompt'));
+    await child.ensureOnDisk();
+    await child.flush();
+    const childId = child.getSessionId();
+    await child.close();
+    await registry.initialize();
+    const scope = { workspaceId: 'workspace', projectId: 'project', cwd, agentDirectory, agentDirectoryId: 'native-owner' };
+    const listed = await registry.list(scope);
+    expect(listed.items.map(item => item.sessionId)).toEqual(expect.arrayContaining([parent.sessionId, childId]));
+
+    const bootstrap = { rootSessionId: parent.sessionId, projectId: 'project', workspaceId: 'workspace', cwd, agentDirectory, displayPath: 'workspace' };
+    await expect(registry.reopen({ ...bootstrap, workspaceId: 'other-workspace' }))
+      .rejects.toMatchObject({ status: 403, code: 'UNAUTHORIZED' });
+    await expect(registry.reopen({ ...bootstrap, agentDirectoryId: 'other-owner' }))
+      .rejects.toMatchObject({ status: 403, code: 'UNAUTHORIZED' });
+    await expect(registry.reopen({ ...bootstrap, rootSessionId: childId }))
+      .rejects.toMatchObject({ status: 409, code: 'INVALID_REQUEST' });
+    await expect(readFile(join(stateDirectory, 'session-references.json'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(workers.list()).toEqual([]);
+  } finally {
+    await registry.close();
+    if (previousHome === undefined) delete process.env.HOME; else process.env.HOME = previousHome;
+    if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR; else process.env.PI_CODING_AGENT_DIR = previousAgentDir;
+    await rm(root, { recursive: true, force: true });
+  }
+}, 30_000);
+
 test('an empty workspace without an OMP session directory returns an empty list without workers', async () => {
   const root = await mkdtemp(join(tmpdir(), 'omp-session-index-empty-'));
   const previousHome = process.env.HOME;

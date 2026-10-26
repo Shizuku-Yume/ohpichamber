@@ -11,7 +11,7 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
 import { useContextStore } from '@/stores/contextStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
-import { checkIsGitRepository } from '@/lib/gitApi';
+import { checkIsGitRepository, resolveGitPrimaryRoot, resolveGitRepositoryPrefix } from '@/lib/gitApi';
 import { generateBranchName } from '@/lib/git/branchNameGenerator';
 import { parseModelIdentifier } from '@/lib/modelIdentifier';
 import { getRootBranch } from '@/lib/worktrees/worktreeStatus';
@@ -28,6 +28,7 @@ import {
   resolvePendingDraftWorktreeRequest,
 } from '@/lib/worktrees/pendingDraftWorktree';
 import { waitForWorktreeBootstrap } from '@/lib/worktrees/worktreeBootstrap';
+import { projectPathForCheckoutFolder } from '@/lib/worktrees/worktreePaths';
 import { normalizePath } from '@/lib/pathNormalization';
 import { resolveProjectForDirectory } from '@/lib/projectResolution';
 
@@ -65,6 +66,22 @@ export const resolveProjectRef = (directory: string): ProjectRef | null => {
 
   project ??= resolveProjectForDirectory(projects, normalizedDirectory);
   return project ? { id: project.id, path: project.path } : null;
+};
+
+/**
+ * The registered project a directory belongs to, following the folder inside
+ * its checkout when several projects share one repository (as the host does
+ * for `session.moveToWorktree`). Falls back to `resolveProjectRef`.
+ */
+export const resolveFolderProjectRef = async (directory: string): Promise<ProjectRef | null> => {
+  const owner = resolveProjectRef(directory);
+  const located = await Promise.all([resolveGitRepositoryPrefix(directory), resolveGitPrimaryRoot(directory)])
+    .then(([folder, primaryRoot]) => ({ folder, primaryRoot }), () => null);
+  if (!located) return owner;
+  const projects = useProjectsStore.getState().projects;
+  const projectPath = projectPathForCheckoutFolder({ directory, ...located, projectPaths: projects.map((entry) => entry.path) });
+  const project = projectPath ? projects.find((entry) => normalizePath(entry.path) === projectPath) : undefined;
+  return project ? { id: project.id, path: project.path } : owner;
 };
 
 export const createQuickWorktree = async (

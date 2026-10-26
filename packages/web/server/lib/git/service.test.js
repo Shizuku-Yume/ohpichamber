@@ -1156,6 +1156,10 @@ describe('worktree root resolution', () => {
       expect(await isGitRepository(directory)).toBe(true);
       expect(fs.realpathSync(await getRepositoryRoot(directory))).toBe(fs.realpathSync(repo));
       expect(fs.realpathSync((await resolveWorktreeTopLevel(directory)).root)).toBe(fs.realpathSync(repo));
+      // The prefix is where `directory` sits inside the checkout, empty at its root.
+      expect((await resolveWorktreeTopLevel(directory)).prefix).toBe(
+        path.relative(repo, directory).split(path.sep).join('/'),
+      );
       expect((await getStatus(directory)).isClean).toBe(true);
     }
 

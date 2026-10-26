@@ -934,6 +934,23 @@ export async function resolveGitTopLevel(directory: string): Promise<{ root: str
   return { root: typeof payload.root === 'string' && payload.root ? payload.root : directory };
 }
 
+/**
+ * The project's folder inside its repository checkout: `ai` for a project at
+ * `<repo>/ai`, `''` at the checkout root. A missing or null prefix is a failed
+ * read, not "at the repository root".
+ */
+export async function resolveGitRepositoryPrefix(directory: string): Promise<string> {
+  const response = await runtimeFetch(buildUrl(`${API_BASE}/toplevel`, directory));
+  if (!response.ok) {
+    throw new Error(`Failed to resolve the repository folder: ${response.statusText}`);
+  }
+  const payload = await response.json().catch(() => ({})) as { prefix?: string | null };
+  if (payload.prefix === undefined || payload.prefix === null) {
+    throw new Error('The server did not report the repository folder');
+  }
+  return payload.prefix;
+}
+
 export async function getGitCommitSummaries(
   directory: string,
   shas: string[]

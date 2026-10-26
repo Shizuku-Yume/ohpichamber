@@ -27,7 +27,7 @@ beforeEach(() => {
   useGlobalSessionsStore.getState().applySnapshot([], []);
 });
 
-function fixture(input: { rejectFirst?: boolean; isolate?: boolean; wait?: boolean; switchAfterCreate?: boolean; failFirstDispatch?: boolean } = {}) {
+function fixture(input: { rejectFirst?: boolean; isolate?: boolean; wait?: boolean; switchAfterCreate?: boolean; failFirstDispatch?: boolean; startFolder?: string } = {}) {
   let runtimeKey = 'multirun-owner-test';
   let count = 0;
   const metadata = new Map<string, SessionMetadata>();
@@ -46,10 +46,14 @@ function fixture(input: { rejectFirst?: boolean; isolate?: boolean; wait?: boole
   spies.push(spyOn(loader, 'ensure').mockImplementation(async (target) => { observed.push(target.sessionId); }));
   spies.push(spyOn(loader, 'getSnapshot').mockReturnValue({ ...messageLoader.EMPTY_SESSION_MESSAGE_LOAD_STATE, status: 'ready', resolved: true }));
   spies.push(spyOn(git, 'checkIsGitRepository').mockResolvedValue(Boolean(input.isolate)));
+  spies.push(spyOn(git, 'resolveGitRepositoryPrefix').mockResolvedValue(input.startFolder ?? ''));
+  spies.push(spyOn(git, 'validateWorktreeDirectory').mockResolvedValue({ valid: true, insideWorktreeRoot: true, resolvedWorktreeRoot: null, resolvedCwd: null }));
   spies.push(spyOn(worktreeStatus, 'getRootBranch').mockResolvedValue('main'));
   spies.push(spyOn(worktreeCreate, 'resolveRootTrackingRemote').mockResolvedValue(null));
   spies.push(spyOn(config, 'getWorktreeSetupWaitEnabled').mockResolvedValue(Boolean(input.wait)));
   spies.push(spyOn(worktreeBootstrap, 'waitForWorktreeBootstrap').mockImplementation(async (directory) => { order.push(`wait:${directory}`); }));
+  // The start directory probe: the checkout holds the project's folder in the tests that ask for one.
+  spies.push(spyOn(worktreeBootstrap, 'waitForWorktreeGitReady').mockResolvedValue());
   spies.push(spyOn(worktreeCreate, 'createWorktreeWithDefaults').mockImplementation(async (_project, args) => {
     worktrees.push(args);
     return { name: args.preferredName ?? 'lane', path: `/worktrees/${worktrees.length}`, branch: 'lane', label: 'lane', projectDirectory: '/repo' };
@@ -183,6 +187,12 @@ describe('canonical multi-run store', () => {
     expect(api.worktrees[0].returnAfterDirectoryCreated).toBe(true);
     expect(api.order).toEqual(wait ? ['wait:/worktrees/1', 'create:workspace_1'] : ['create:workspace_1']);
     expect(resolveWorkspaceDirectory(api.published[0].workspaceId)).toBe('/worktrees/1');
+  });
+  test('a lane of a project on a repository folder starts in that folder of its worktree', async () => {
+    const api = fixture({ isolate: true, startFolder: 'ai' });
+    const result = await useMultiRunStore.getState().createMultiRun({ name: 'run', groups: [{ prompt: 'question', models: [models[0]] }] });
+    await api.waitForDispatch(result?.sessionIds.length ?? 0);
+    expect(resolveWorkspaceDirectory(api.published[0].workspaceId)).toBe('/worktrees/1/ai');
   });
   test('no artificial five-model cap', async () => {
     const api = fixture();

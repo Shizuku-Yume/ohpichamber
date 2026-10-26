@@ -14,6 +14,7 @@ import {
 } from '@/lib/worktrees/worktreeBootstrap';
 import { invalidateResolvedProjectRootCache, resolveProjectRoot } from '@/lib/worktrees/worktreeStatus';
 import { clearWorktreeRemoval, markWorktreeRemoving } from '@/lib/worktrees/worktreeRemovalState';
+import { checkoutHoldsSubfolder } from '@/lib/worktrees/worktreePaths';
 import type {
   CreateGitWorktreePayload,
   GitWorktreeBootstrapStatus,
@@ -323,7 +324,10 @@ export const worktreeMapsEqual = (
  * under every project. The primary checkout owns the topology when it is
  * configured; otherwise the first configured checkout for that repository
  * owns it. Checkouts that are configured projects are omitted from the owned
- * worktree list because they already have their own project section.
+ * worktree list because they already have their own project section. So are
+ * checkouts that hold a configured project in a sub-folder, such as the
+ * repository root of a project at `repo/app`: deleting one would delete that
+ * project's folder.
  */
 export const partitionWorktreesByRegisteredProject = (
   projects: ReadonlyArray<Pick<ProjectRef, 'path'>>,
@@ -336,6 +340,13 @@ export const partitionWorktreesByRegisteredProject = (
       configuredProjectOrder.set(projectPath, index);
     }
   });
+  const holdsConfiguredProject = (worktreePath: string): boolean => {
+    if (configuredProjectOrder.has(worktreePath)) return true;
+    for (const projectPath of configuredProjectOrder.keys()) {
+      if (checkoutHoldsSubfolder(worktreePath, projectPath)) return true;
+    }
+    return false;
+  };
 
   type RepositorySource = {
     projectPath: string;
@@ -371,7 +382,7 @@ export const partitionWorktreesByRegisteredProject = (
     const seenPaths = new Set<string>();
     const ownedWorktrees = topologySource.worktrees.filter((worktree) => {
       const worktreePath = normalizePath(worktree.path.trim());
-      if (!worktreePath || configuredProjectOrder.has(worktreePath) || seenPaths.has(worktreePath)) {
+      if (!worktreePath || holdsConfiguredProject(worktreePath) || seenPaths.has(worktreePath)) {
         return false;
       }
       seenPaths.add(worktreePath);
@@ -728,6 +739,49 @@ export async function validateWorktreeCreate(project: ProjectRef, args: CreateWo
   return git.worktree.validate(projectDirectory, payload);
 }
 
+/**
+ * Drops a worktree whose folder is gone from this client's state, so its row
+ * leaves the sidebar at once instead of on the next topology refresh.
+ */
+const forgetRemovedWorktree = (project: ProjectRef, worktree: WorktreeMetadata): void => {
+  clearWorktreeBootstrapState(worktree.path);
+  invalidateWorktreeList(normalizePath(project.path));
+  // Removing a worktree changes the repo's worktree topology; drop cached root
+  // resolutions so root-branch lookups re-resolve against the new layout.
+  invalidateResolvedProjectRootCache();
+
+  // Update sidebar store so removed worktree disappears immediately
+  const normalizedWorktreePath = normalizePath(worktree.path);
+  const currentByProject = useSessionUIStore.getState().availableWorktreesByProject;
+  const updatedByProject = new Map(currentByProject);
+  for (const [projectKey, projectWorktrees] of currentByProject) {
+    const remainingWorktrees = projectWorktrees.filter(
+      (candidate) => normalizePath(candidate.path) !== normalizedWorktreePath,
+    );
+    if (remainingWorktrees.length !== projectWorktrees.length) {
+      updatedByProject.set(projectKey, remainingWorktrees);
+    }
+  }
+
+  // Clean up worktreeMetadata for sessions in the removed worktree
+  const currentMetadata = useSessionUIStore.getState().worktreeMetadata;
+  const updatedMetadata = new Map(currentMetadata);
+  for (const [sid, meta] of currentMetadata.entries()) {
+    if (meta && normalizePath(meta.path) === normalizedWorktreePath) {
+      updatedMetadata.delete(sid);
+    }
+  }
+
+  useSessionUIStore.setState({
+    availableWorktreesByProject: updatedByProject,
+    availableWorktrees: useSessionUIStore.getState().availableWorktrees.filter(
+      (w) => normalizePath(w.path) !== normalizedWorktreePath,
+    ),
+    worktreeMetadata: updatedMetadata,
+  });
+  clearWorktreeRemoval(worktree.path);
+};
+
 export async function removeProjectWorktree(project: ProjectRef, worktree: WorktreeMetadata, options?: {
   deleteRemoteBranch?: boolean;
   deleteLocalBranch?: boolean;
@@ -769,42 +823,5 @@ export async function removeProjectWorktree(project: ProjectRef, worktree: Workt
     throw error;
   }
 
-  clearWorktreeBootstrapState(worktree.path);
-
-  invalidateWorktreeList(normalizePath(project.path));
-  // Removing a worktree changes the repo's worktree topology; drop cached root
-  // resolutions so root-branch lookups re-resolve against the new layout.
-  invalidateResolvedProjectRootCache();
-
-  // Update sidebar store so removed worktree disappears immediately
-  const normalizedWorktreePath = normalizePath(worktree.path);
-  const currentByProject = useSessionUIStore.getState().availableWorktreesByProject;
-  const updatedByProject = new Map(currentByProject);
-  for (const [projectKey, projectWorktrees] of currentByProject) {
-    const remainingWorktrees = projectWorktrees.filter(
-      (candidate) => normalizePath(candidate.path) !== normalizedWorktreePath,
-    );
-    if (remainingWorktrees.length !== projectWorktrees.length) {
-      updatedByProject.set(projectKey, remainingWorktrees);
-    }
-  }
-
-  // Clean up worktreeMetadata for sessions in the removed worktree
-  const currentMetadata = useSessionUIStore.getState().worktreeMetadata;
-  const updatedMetadata = new Map(currentMetadata);
-  for (const [sid, meta] of currentMetadata.entries()) {
-    if (meta && normalizePath(meta.path) === normalizedWorktreePath) {
-      updatedMetadata.delete(sid);
-    }
-  }
-
-  useSessionUIStore.setState({
-    availableWorktreesByProject: updatedByProject,
-    availableWorktrees: useSessionUIStore.getState().availableWorktrees.filter(
-      (w) => normalizePath(w.path) !== normalizedWorktreePath,
-    ),
-    worktreeMetadata: updatedMetadata,
-  });
-  clearWorktreeRemoval(worktree.path);
-
+  forgetRemovedWorktree(project, worktree);
 }

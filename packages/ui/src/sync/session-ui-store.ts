@@ -475,7 +475,7 @@ export type SessionUIState = {
   clearError: () => void
   markSessionAsOpenChamberCreated: (sessionId: string) => void
   isOpenChamberCreatedSession: (sessionId: string) => boolean
-  setWorktreeMetadata: (sessionId: string, metadata: WorktreeMetadata | null) => void
+  setWorktreeMetadata: (sessionId: string, metadata: WorktreeMetadata | null, cwd?: string) => void
   overrideNewSessionDraftTarget: (options: Record<string, unknown>) => void
   resolvePendingDraftWorktreeTarget: (requestId: string, directory: string | null, options?: Record<string, unknown>) => void
   setDraftBootstrapPendingDirectory: (directory: string | null) => void
@@ -1692,12 +1692,13 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
   isOpenChamberCreatedSession: (sessionId) => get().webUICreatedSessions.has(sessionId),
 
 
-  setWorktreeMetadata: (sessionId, metadata) => {
+  setWorktreeMetadata: (sessionId, metadata, cwd) => {
     // Write to authoritative session-worktree-store
     if (metadata) {
       useSessionWorktreeStore.getState().setAttachment(sessionId, {
         worktreeRoot: metadata.worktreeRoot ?? metadata.path ?? null,
-        cwd: metadata.path ?? null,
+        // A session in a worktree may work in a folder of it (`<worktree>/ai`).
+        cwd: cwd ?? metadata.path ?? null,
         branch: metadata.branch ?? null,
         headState: metadata.headState ?? (metadata.branch ? 'branch' : 'detached'),
         worktreeStatus: metadata.worktreeStatus ?? 'ready',

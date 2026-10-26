@@ -10,6 +10,7 @@ import { getWorktreeSetupWaitEnabled, saveWorktreeSetupCommands } from '@/lib/op
 import type { ProjectRef } from '@/lib/worktrees/worktreeManager';
 import { createWorktreeWithDefaults, resolveRootTrackingRemote } from '@/lib/worktrees/worktreeCreate';
 import { waitForWorktreeBootstrap } from '@/lib/worktrees/worktreeBootstrap';
+import { resolveCreatedWorktreeStartDirectory } from '@/lib/worktrees/worktreeStartDirectory';
 import { getRootBranch } from '@/lib/worktrees/worktreeStatus';
 import { normalizePath as normalizePathImpl } from '@/lib/pathNormalization';
 import { checkIsGitRepository } from '@/lib/gitApi';
@@ -228,7 +229,7 @@ export const useMultiRunStore = create<MultiRunStore>()(
           const createdRuns: Array<{
             sessionId: string;
             workspaceId: string;
-            worktreePath: string;
+            directory: string;
             providerID: string;
             modelID: string;
             variant?: string;
@@ -289,7 +290,7 @@ export const useMultiRunStore = create<MultiRunStore>()(
                   createdRuns.push({
                     sessionId: session.sessionId,
                     workspaceId: session.workspaceId,
-                    worktreePath: directory,
+                    directory,
                     providerID: model.providerId,
                     modelID: model.modelId,
                     variant: model.variant,
@@ -327,15 +328,18 @@ export const useMultiRunStore = create<MultiRunStore>()(
                   assertCurrent();
                 }
 
-                const session = await createRun(worktreeMetadata.path);
-                registerMultiRunSession(session, worktreeMetadata.path);
+                // A checkout that never populated is removed with its branch; the lane counts as failed.
+                const startDirectory = await resolveCreatedWorktreeStartDirectory(project, worktreeMetadata);
+                assertCurrent();
+                const session = await createRun(startDirectory);
+                registerMultiRunSession(session, startDirectory);
 
-                useSessionUIStore.getState().setWorktreeMetadata(session.sessionId, enrichedMetadata);
+                useSessionUIStore.getState().setWorktreeMetadata(session.sessionId, enrichedMetadata, startDirectory);
 
                 createdRuns.push({
                   sessionId: session.sessionId,
                   workspaceId: session.workspaceId,
-                  worktreePath: worktreeMetadata.path,
+                  directory: startDirectory,
                   providerID: model.providerId,
                   modelID: model.modelId,
                   variant: model.variant,
@@ -376,7 +380,7 @@ export const useMultiRunStore = create<MultiRunStore>()(
                 sessionId: run.sessionId,
                 workspaceId: run.workspaceId,
                 attachmentWorkspaceId: params.attachmentWorkspaceId,
-                directory: run.worktreePath,
+                directory: run.directory,
                 prompt: run.prompt,
                 providerId: run.providerID,
                 modelId: run.modelID,

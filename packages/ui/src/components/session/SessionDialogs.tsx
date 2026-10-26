@@ -18,7 +18,7 @@ import type { Session } from '@openchamber/agent-contract';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { canDeleteWorktreeWithoutConfirm, getWorktreeStatus } from '@/lib/worktrees/worktreeStatus';
 import { getWorktreeDisplayName, removeProjectWorktree } from '@/lib/worktrees/worktreeManager';
-import { removeWorktreeThenArchiveSessions } from '@/lib/worktrees/worktreeRemovalFlow';
+import { archiveSessionsThenRemoveWorktree } from '@/lib/worktrees/worktreeRemovalFlow';
 import { clearWorktreeRemoval, markWorktreeRemoving } from '@/lib/worktrees/worktreeRemovalState';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import * as sessionActions from '@/sync/session-actions';
@@ -365,8 +365,8 @@ export const SessionDialogs: React.FC = () => {
     }, [canRemoveRemoteBranches, currentDirectory, deleteDialogShouldRemoveRemote, getProjectRefForWorktree, git, newSessionDraft?.directoryOverride, newSessionDraft?.open, setDraftBootstrapPendingDirectory, setNewSessionDraftTarget, sourceControl, t]);
 
     // Runs after the dialog closes so a slow removal cannot hold the UI. The
-    // worktree goes first: archiving sessions ahead of a removal that then
-    // fails would leave archived sessions attached to a worktree still on disk.
+    // sessions are archived while their folder still exists, and come back if
+    // the removal fails (`archiveSessionsThenRemoveWorktree`).
     const removeSelectedWorktreeInBackground = React.useCallback((
         worktree: WorktreeMetadata,
         sessionIds: string[],
@@ -378,9 +378,10 @@ export const SessionDialogs: React.FC = () => {
         markWorktreeRemoving(worktree.path);
         return (async () => {
             try {
-                const result = await removeWorktreeThenArchiveSessions({
+                const result = await archiveSessionsThenRemoveWorktree({
                     sessionIds,
                     removeWorktree: () => removeSelectedWorktree(worktree, deleteLocalBranch, toastId),
+                    restoreSessions: (ids) => sessionActions.unarchiveSessions(ids, { undo: true }),
                     archiveSessions: async (ids) => {
                         if (ids.length === 1) {
                             const success = await archiveSession(ids[0]);

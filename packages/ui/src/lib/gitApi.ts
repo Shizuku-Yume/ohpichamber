@@ -76,6 +76,13 @@ export async function resolveGitTopLevel(directory: string): Promise<string> {
   return result.root;
 }
 
+// Both are host-owned Git questions: Git resolves the paths (symlinks
+// included) and checks the checkout's filesystem, not the client's view of it.
+export {
+  resolveGitRepositoryPrefix,
+  validateWorktreeDirectory,
+} from './gitApiHttp';
+
 export async function getGitCommitSummaries(
   directory: string,
   shas: string[]

@@ -11,8 +11,7 @@ type NativeMessage = Extract<AgentSessionEvent, { type: 'message_start' }>['mess
 type Assistant = Extract<NativeMessage, { role: 'assistant' }>;
 function assistant(content: Assistant['content'], stopReason: Assistant['stopReason'], timestamp: number): Assistant {
   return { role: 'assistant', content, api: 'openai-completions', provider: 'fixture', model: 'fixture', stopReason, timestamp,
-    usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } };
+    usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } };
 }
 
 for (const outcome of ['failed', 'cancelled'] as const) {

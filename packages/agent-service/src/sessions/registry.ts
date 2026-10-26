@@ -500,7 +500,7 @@ export class SessionRegistry {
     this.assertControlAvailable(sessionId);
     const runtime = this.runtime(sessionId);
     if (runtime.runtimeStatus === 'unavailable') throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
-    if (runtime.activeRunId !== null || this.pendingRuns.has(sessionId)) throw new WorkerOperationError(409, 'RUN_ACTIVE');
+    if (runtime.activeRunId !== null || runtime.continuationPending === true || this.pendingRuns.has(sessionId)) throw new WorkerOperationError(409, 'RUN_ACTIVE');
     this.pendingRuns.add(sessionId);
     try {
       const result = await this.workers.request(sessionId, operation);
@@ -578,12 +578,27 @@ export class SessionRegistry {
     this.assertWritable(sessionId);
     this.assertControlAvailable(sessionId);
     const runtime = this.runtime(sessionId);
-    if (runtime.activeRunId !== null || this.pendingRuns.has(sessionId)) throw new WorkerOperationError(409, 'RUN_ACTIVE');
+    if (runtime.activeRunId !== null || runtime.continuationPending === true || this.pendingRuns.has(sessionId)) throw new WorkerOperationError(409, 'RUN_ACTIVE');
     this.controls.add(sessionId);
     try {
       const result = await this.workers.request(sessionId, { type: 'mode.set', mode });
       if (result.type !== 'mode.set') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
       return result.mode;
+    } finally { this.controls.delete(sessionId); }
+  }
+  async goal(sessionId: string, operation: Extract<WorkerOperation, { type: 'goal' }>) {
+    this.ensureOpen();
+    this.assertWritable(sessionId);
+    this.assertControlAvailable(sessionId);
+    const runtime = this.runtime(sessionId);
+    if ((operation.op === 'create' || operation.op === 'resume') && (runtime.activeRunId !== null || runtime.continuationPending === true || this.pendingRuns.has(sessionId))) {
+      throw new WorkerOperationError(409, 'RUN_ACTIVE');
+    }
+    this.controls.add(sessionId);
+    try {
+      const result = await this.workers.request(sessionId, operation);
+      if (result.type !== 'goal') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+      return result;
     } finally { this.controls.delete(sessionId); }
   }
   async branch(sessionId: string, input: SessionBranchRequest) {

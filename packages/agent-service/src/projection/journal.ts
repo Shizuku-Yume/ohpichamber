@@ -35,6 +35,7 @@ export class SessionJournal {
   private mode: SessionMode;
   private activeRunId: string | null = null;
   private runtimeStatus: RuntimeSession['runtimeStatus'] = 'idle';
+  private continuationPending = false;
   private closed = false;
 
   constructor(private readonly identity: SessionIdentity, seed: ProjectionSeed) {
@@ -80,6 +81,7 @@ export class SessionJournal {
   runtime(): RuntimeSession {
     return RuntimeSessionSchema.parse({ ...this.identity, createdAt: this.createdAt, updatedAt: this.updatedAt,
       epoch: this.epoch, headSequence: this.head.toString(), runtimeStatus: this.runtimeStatus, activeRunId: this.activeRunId, mode: this.mode,
+      continuationPending: this.continuationPending,
     });
   }
 
@@ -151,6 +153,7 @@ export class SessionJournal {
     this.branch = structuredClone(seed.branch); this.turns = structuredClone(seed.turns); this.messages = structuredClone(seed.messages);
     this.runs.clear(); this.approvals.clear(); this.questions.clear();
     this.activeRunId = null; this.runtimeStatus = 'idle';
+    this.continuationPending = false;
     this.rebuildIndexes();
   }
 
@@ -159,6 +162,7 @@ export class SessionJournal {
     if (this.activeRunId) this.settleRun(this.activeRunId, 'failed', Date.now(), 'SDK worker is unavailable');
     this.resetEpoch();
     this.runtimeStatus = 'unavailable'; this.activeRunId = null;
+    this.continuationPending = false;
     this.approvals.clear(); this.questions.clear();
   }
 
@@ -211,7 +215,10 @@ export class SessionJournal {
         this.activeRunId = event.runId; this.runtimeStatus = 'running'; return;
       case 'run.completed': case 'run.cancelled': case 'run.failed':
         this.settleRun(event.runId, event.type === 'run.completed' ? 'completed' : event.type === 'run.cancelled' ? 'cancelled' : 'failed', event.finishedAt, event.type === 'run.failed' ? event.error : undefined); return;
-      case 'session.updated': if (event.mode !== undefined) this.mode = structuredClone(event.mode); return;
+      case 'session.updated':
+        if (event.mode !== undefined) this.mode = structuredClone(event.mode);
+        if (event.continuationPending !== undefined) this.continuationPending = event.continuationPending;
+        return;
       case 'session.status': this.runtimeStatus = event.runtimeStatus; this.activeRunId = event.activeRunId; return;
       case 'turn.started': {
         const turn: Turn = { turnId: event.turnId, sessionId: this.identity.sessionId, runId: event.runId, userMessageId: event.userMessageId,

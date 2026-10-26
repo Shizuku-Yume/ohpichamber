@@ -279,6 +279,15 @@ export class CanonicalClient {
       return result;
     });
   }
+  goal(sessionId: string, input: Omit<C.GoalControlRequest, 'type'>): Promise<Extract<C.SessionControlAck, { type: 'goal' }>> {
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/control`, scoped(C.SessionControlAckSchema, result => result.type === 'goal'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: bodyFor(C.SessionControlRequestSchema, { type: 'goal', ...input }),
+    }).then(result => {
+      if (result.type !== 'goal') throw new Error('Goal response identified another control');
+      return result;
+    });
+  }
   abortSession(sessionId: string, runId: string): Promise<RunAbortAck> {
     return request(`/api/agent/v1/sessions/${id(sessionId)}/control`, scoped(C.RunAbortAckSchema, result => result.run.sessionId === sessionId && result.run.runId === runId), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.SessionControlRequestSchema, { type: 'abort', runId }) });
   }

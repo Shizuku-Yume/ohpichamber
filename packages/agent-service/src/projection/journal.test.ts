@@ -42,6 +42,22 @@ describe('SessionJournal consumer boundary', () => {
     unsubscribeSecond();
     journal.close();
   });
+  test('projects continuation pending updates through live journal events', () => {
+    const journal = new SessionJournal(session, seed);
+    const live: (CanonicalEvent | StreamInvalidated)[] = [];
+    const subscription = journal.subscribe(journal.snapshot().cursor, event => live.push(event));
+    expect(journal.runtime()).toMatchObject({ runtimeStatus: 'idle', activeRunId: null, continuationPending: false });
+
+    journal.append([input({ type: 'session.updated', continuationPending: true })]);
+    expect(journal.runtime()).toMatchObject({ runtimeStatus: 'idle', activeRunId: null, continuationPending: true });
+    expect(live.at(-1)).toMatchObject({ type: 'session.updated', continuationPending: true });
+
+    journal.append([input({ type: 'session.updated', continuationPending: false })]);
+    expect(journal.runtime()).toMatchObject({ runtimeStatus: 'idle', activeRunId: null, continuationPending: false });
+    expect(live.at(-1)).toMatchObject({ type: 'session.updated', continuationPending: false });
+    subscription.unsubscribe();
+    journal.close();
+  });
   test('transient events never advance or collide with the first durable cursor', () => {
     const journal = new SessionJournal(session, seed);
     const transient: CanonicalEvent[] = [];

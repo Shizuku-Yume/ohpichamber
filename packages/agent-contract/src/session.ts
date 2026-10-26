@@ -58,6 +58,10 @@ export const SessionModeSchema = z.discriminatedUnion('kind', [
     planReference: z.string().regex(/^local:\/\/[^\s]+$/, 'Plan references must use local:// URLs'),
   }),
   z.strictObject({ kind: z.literal('vibe') }),
+  z.strictObject({
+    kind: z.literal('goal'), status: z.enum(['active', 'paused', 'budget-limited', 'complete']),
+    objective: z.string().min(1), tokenBudget: z.number().int().positive().nullable(), tokensUsed: z.number().int().nonnegative(),
+  }),
 ]);
 export type SessionMode = z.infer<typeof SessionModeSchema>;
 export const RuntimeSessionSchema = z.strictObject({
@@ -66,6 +70,7 @@ export const RuntimeSessionSchema = z.strictObject({
   createdAt: TimestampSchema, updatedAt: TimestampSchema, epoch: EpochSchema, headSequence: CounterSchema,
   runtimeStatus: SessionRuntimeStatusSchema, activeRunId: EntityIdSchema.nullable(),
   mode: SessionModeSchema,
+  continuationPending: z.boolean().optional(),
 }).refine((session) => (session.runtimeStatus === 'idle' || session.runtimeStatus === 'unavailable') === (session.activeRunId === null), {
   message: 'Runtime activity must identify its outer run', path: ['activeRunId'],
 });
@@ -113,9 +118,17 @@ export const RunCreateRequestSchema = PromptRequestSchema;
 export type RunCreateRequest = z.infer<typeof RunCreateRequestSchema>;
 export const RunAbortRequestSchema = z.strictObject({ sessionId: EntityIdSchema, runId: EntityIdSchema });
 export type RunAbortRequest = z.infer<typeof RunAbortRequestSchema>;
+export const GoalControlRequestSchema = z.strictObject({
+  type: z.literal('goal'), op: z.enum(['create', 'resume', 'pause', 'drop']),
+  objective: z.string().trim().min(1).optional(), tokenBudget: z.number().int().positive().nullable().optional(),
+}).refine(request => request.op !== 'create' || request.objective !== undefined, {
+  message: 'Creating a goal requires an objective', path: ['objective'],
+});
+export type GoalControlRequest = z.infer<typeof GoalControlRequestSchema>;
 export const SessionControlRequestSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('abort'), runId: EntityIdSchema }),
   z.strictObject({ type: z.literal('mode.set'), mode: z.enum(['main', 'plan', 'vibe']) }),
+  GoalControlRequestSchema,
   z.strictObject({ type: z.literal('compact'), instructions: z.string().optional() }),
   z.strictObject({ type: z.literal('command'), text: z.string().min(1) }),
   z.strictObject({ type: z.literal('btw.ask'), question: z.string().min(1), recordId: EntityIdSchema.optional() }),
@@ -124,6 +137,7 @@ export const SessionControlRequestSchema = z.discriminatedUnion('type', [
 export type SessionControlRequest = z.infer<typeof SessionControlRequestSchema>;
 export const SessionControlAckSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('mode.set'), mode: SessionModeSchema }),
+  z.strictObject({ type: z.literal('goal'), mode: SessionModeSchema }),
   z.strictObject({ type: z.literal('compact'), compactionId: EntityIdSchema, tokensBefore: z.number().int().nonnegative(), completedAt: TimestampSchema }),
   z.strictObject({ type: z.literal('command'), output: z.string() }),
   z.strictObject({ type: z.literal('btw.ask'), recordId: EntityIdSchema }),

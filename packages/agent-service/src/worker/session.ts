@@ -69,6 +69,7 @@ export class WorkerSession {
   private reviewingPlan = false;
   private planRevision = 0;
   private planReviewTask: Promise<void> | undefined;
+  private publishedContinuationPending = false;
   private constructor(
     readonly session: AgentSession,
     private readonly authStorage: AuthStorage,
@@ -88,7 +89,7 @@ export class WorkerSession {
     private readonly subagentEventBus: EventBus,
     private readonly webSearch: NativeWebSearch,
   ) {
-    this.modeController = new WorkerModeController(session, title => this.proposePlan(title));
+    this.modeController = new WorkerModeController(session, title => this.proposePlan(title), start => this.startWorkerRun('goal', start), () => this.publishContinuationPending());
     this.projection = new WorkerProjection(session.sessionManager, sessionId);
     this.btw = new RpcBtwController(session, frame => {
       if (frame.type === 'btw_delta') this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'btw.delta', recordId: frame.recordId, delta: frame.delta } }]);
@@ -124,10 +125,11 @@ export class WorkerSession {
     };
     this.unsubscribe = session.subscribe(event => {
       try {
+        this.modeController.observe(event);
+        this.publishContinuationPending();
         this.emit(this.projection.consume(event));
-        if (event.type === 'message_end' || event.type === 'turn_end' || event.type === 'agent_end') {
-          void this.bind().catch(() => this.fail());
-        }
+        if (event.type === 'goal_updated' || event.type === 'agent_end') this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', mode: this.modeController.mode() } }]);
+        if (event.type === 'message_end' || event.type === 'turn_end' || event.type === 'agent_end') void this.bind().catch(() => this.fail());
       } catch { this.fail(); }
     });
   }
@@ -272,6 +274,7 @@ export class WorkerSession {
       if (!sessionFile) throw new ProjectionError(503, 'SESSION_RESTORE_FAILED', 'Session storage is unavailable');
       await rememberPrivateRoots(manager, input);
       owned = new WorkerSession(nativeSession, authStorage, sessionFile, publish, input.rootSessionId, input.cwd, onFatal, interaction, catalogs, mcp, shell, completion, admission, authorize, onSubagent, subagentEventBus, new NativeWebSearch(runtime, input.workspaceId, authorize));
+      await owned.modeController.goal.reconcile();
       await owned.modeController.restore();
       capturePolicy = async () => {
         const configuration = input.mcpConfigPath ? await readNativeMcpConfigurationIfPresent(input.mcpConfigPath, input.workspaceId) : null;
@@ -325,7 +328,15 @@ export class WorkerSession {
   }
 
   seed(): ProjectionSeed { return this.projection.seed(); }
+  get continuationPending(): boolean { return this.modeController.goal.continuationPending; }
   mode() { return this.modeController.mode(); }
+
+  private publishContinuationPending(): void {
+    const pending = this.continuationPending;
+    if (pending === this.publishedContinuationPending) return;
+    this.publishedContinuationPending = pending;
+    this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', continuationPending: pending } }]);
+  }
 
   private emit(inputs: ProjectionInput[]): void { if (inputs.length !== 0) this.publish(inputs); }
 
@@ -517,6 +528,7 @@ export class WorkerSession {
     if (this.preparation || this.projection.activeRun()) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
     const runId = randomUUID();
     this.emit(this.projection.beginRun(runId, Date.now(), [], origin));
+    this.publishContinuationPending();
     const task = (async () => {
       try {
         await this.session.sessionManager.flush();
@@ -552,8 +564,27 @@ export class WorkerSession {
     if (this.compacting) throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', 'Session compaction is in progress');
     if (this.reviewingPlan && !['abort', 'question.resolve', 'history'].includes(operation.type)) throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', 'Plan review transition is in progress');
     switch (operation.type) {
+      case 'goal': {
+        const request = operation;
+        if (request.op === 'create' || request.op === 'resume') {
+          if (this.preparation || this.projection.activeRun() || this.session.isStreaming || this.continuationPending) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
+        }
+        if (request.op === 'create' && !request.objective?.trim()) throw new ProjectionError(400, 'INVALID_REQUEST', 'A goal objective is required');
+        if (request.op === 'create' && ['plan', 'vibe'].includes(this.mode().kind)) await this.modeController.set('main');
+        if (request.op === 'pause' || request.op === 'drop') this.modeController.stopForHostAbort();
+        try {
+          await this.modeController.goal.handle({ op: request.op, objective: request.objective, token_budget: request.tokenBudget ?? undefined });
+        } catch (error) {
+          throw new ProjectionError(400, 'INVALID_REQUEST', error instanceof Error ? error.message : 'Goal operation failed');
+        }
+        if (request.op === 'drop' && this.modeController.mode().kind === 'goal') this.session.sessionManager.appendModeChange('none');
+        this.publishedContinuationPending = this.continuationPending;
+        const mode = this.modeController.mode();
+        this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', mode, continuationPending: this.continuationPending } }]);
+        return { type: 'goal', mode };
+      }
       case 'mode.set': {
-        if (this.preparation || this.projection.activeRun() || this.session.isStreaming) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
+        if (this.preparation || this.projection.activeRun() || this.session.isStreaming || this.continuationPending) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
         const mode = await this.modeController.set(operation.mode);
         this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', mode } }]);
         return { type: 'mode.set', mode };
@@ -661,7 +692,7 @@ export class WorkerSession {
         } finally { this.preparation = undefined; }
       }
       case 'prompt': {
-        if (this.preparation || this.projection.activeRun()) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
+        if (this.preparation || this.projection.activeRun() || this.continuationPending) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
         if (this.skillsApplying || !this.admission.skillsAvailable) throw new ProjectionError(503, 'SKILL_APPLY_FAILED', 'Native skills must be successfully applied before prompt admission');
         this.preparation = this.prepare(operation);
         let prepared: PreparedPrompt;
@@ -686,8 +717,8 @@ export class WorkerSession {
       case 'abort': {
         const run = this.projection.activeRun();
         if (!run || run.runId !== operation.runId) throw new ProjectionError(404, 'RUN_NOT_FOUND', 'Run not found');
+        if (run.origin === 'goal') this.modeController.stopForHostAbort();
         this.planRevision++;
-        this.projection.requestCancel(operation.runId);
         this.cancellingRunId = operation.runId;
         this.interaction.cancelAll();
         await this.session.abort();
@@ -715,7 +746,7 @@ export class WorkerSession {
         await this.binding;
         return { type: 'history', history: this.projection.history(operation.request) };
       case 'compact': {
-        if (this.preparation || this.projection.activeRun() || this.session.isStreaming || this.controllingBranch) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
+        if (this.preparation || this.projection.activeRun() || this.session.isStreaming || this.continuationPending || this.controllingBranch) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
         this.compacting = true;
         try {
           await this.binding;
@@ -745,6 +776,7 @@ export class WorkerSession {
       await this.btw.close();
       await this.catalogs.close();
       try { await this.preparation; } catch { /* The operation reports preparation failure to its caller. */ }
+      this.modeController.stopForHostAbort();
       await this.session.abort();
       await this.promptTask;
       await this.planReviewTask;

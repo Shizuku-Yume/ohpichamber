@@ -1,4 +1,5 @@
 import { CapturedSendOptionsSchema, CounterSchema, EntityIdSchema, EpochSchema, FollowUpAckSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, MCPConfigurationStateSchema, MCPServerConfigSchema, ProblemCodeSchema, PromptRequestSchema, RunSchema, SessionBranchRequestSchema, SessionBranchResultSchema, SessionModeSchema, ShellStartRequestSchema, SkillSourceRevisionsSchema, SteerAckSchema, TimestampSchema, type JsonValue, type SessionMode } from '@openchamber/agent-contract';
+import { GoalControlRequestSchema } from '@openchamber/agent-contract';
 import { isAbsolute } from 'node:path';
 import { z } from 'zod';
 import { ProjectionInputSchema, ProjectionSeedSchema } from './projection/protocol.ts';
@@ -77,6 +78,7 @@ export const WorkerOperationSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('btw.ask'), question: z.string().min(1), recordId: EntityIdSchema.optional() }),
   z.strictObject({ type: z.literal('btw.cancel'), recordId: EntityIdSchema.optional() }),
   z.strictObject({ type: z.literal('mode.set'), mode: z.enum(['main', 'plan', 'vibe']) }),
+  GoalControlRequestSchema,
   z.strictObject({ type: z.literal('abort'), runId: EntityIdSchema }),
   z.strictObject({ type: z.literal('compact'), instructions: z.string().optional() }),
   z.strictObject({ type: z.literal('command'), text: z.string().min(1) }),
@@ -114,6 +116,7 @@ const WorkerOperationResultSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('compact'), compactionId: EntityIdSchema, tokensBefore: z.number().int().nonnegative(), completedAt: TimestampSchema }),
   z.strictObject({ type: z.literal('command'), output: z.string() }),
   z.strictObject({ type: z.literal('mode.set'), mode: SessionModeSchema }),
+  z.strictObject({ type: z.literal('goal'), mode: SessionModeSchema }),
   z.strictObject({ type: z.literal('btw.ask'), recordId: EntityIdSchema }),
   z.strictObject({ type: z.literal('btw.cancel'), cancelled: z.boolean() }),
   z.strictObject({ type: z.literal('approval.resolve'), resolved: z.literal(true) }),

@@ -1343,28 +1343,14 @@ describe('submit-time effort recording', () => {
   });
 });
 
-describe('goal objective native metadata', () => {
-  test('writes the goal expanded for the captured session directory before admission', async () => {
-    const session = hostSession('session-a');
-    registerWorkspaceDirectory(session.workspaceId, '/repo');
-    useGlobalSessionsStore.getState().upsertSession(session);
-    useCommandsStore.setState({ commandsByDirectory: { '/repo/worktree': [{ commandId: 'worktree-inspect', name: 'inspect', description: '', content: 'Stale $ARGUMENTS', scope: 'workspace', source: 'workspace', editable: true }] } });
-    stub(canonicalClient, 'getSessionMetadata', async sessionId => ({ sessionId, metadata: null, revision: '0' }));
-    const writes = stub(canonicalClient, 'patchSessionMetadata', async (sessionId, patch) => ({ sessionId, metadata: patch.changes, revision: '1' }));
-    const requests = fakeFileResources({
-      expand: () => Response.json({ kind: 'command', content: 'Worktree auth' }),
-      fallback: () => new Response(null, { status: 503 }),
-    });
-    useSessionGoalArmStore.getState().setArmed(true, null);
-    await send('/inspect auth', { target: { runtimeKey: getRuntimeKey(), sessionId: 'session-a', directory: '/repo/worktree' } });
-    expect(resolvedDirectories).toEqual(['/repo/worktree']);
-    expect(requests).toEqual([{
-      workspaceId: 'workspace-1', method: 'POST', body: { text: '/inspect auth' },
-    }]);
-    expect(writes.mock.calls[0][1].changes.openchamber.goal.objective).toBe('Worktree auth');
-    expect(runCalls[0].request.input.text).toBe('Worktree auth');
-    expect(runCalls[0].request.input.context.some(context => context.kind === 'synthetic')).toBe(true);
-    expect(useGlobalSessionsStore.getState().entityById.get('session-a').metadata.openchamber.goal.objective).toBe('Worktree auth');
+describe('armed canonical goal submission', () => {
+  test('creates a goal from submitted text without sending a prompt', async () => {
+    seedCanonicalSession();
+    const createGoal = stub(canonicalClient, 'goal', async (sessionId, input) => ({ type: 'goal', mode: { kind: 'goal', status: 'active', objective: input.objective, tokenBudget: input.tokenBudget, tokensUsed: 0 } }));
+    useSessionGoalArmStore.getState().setArmed(true, null, true);
+    await send('Ship the feature');
+    expect(createGoal).toHaveBeenCalledWith('session-a', { op: 'create', objective: 'Ship the feature', tokenBudget: null });
+    expect(runCalls).toEqual([]);
   });
 });
 

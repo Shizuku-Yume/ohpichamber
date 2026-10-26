@@ -1,4 +1,8 @@
 import { VibeSessionRegistry, type VibeOwnerScope, type VibeParentSession } from '@oh-my-pi/pi-coding-agent/vibe/runtime';
+import { cfgGoalContinuationModes } from '@oh-my-pi/pi-coding-agent/goals/settings';
+import { goalFromModeData } from '@oh-my-pi/pi-coding-agent/goals/state';
+import type { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
+import { RpcGoalController, type RpcGoalResult } from '@oh-my-pi/pi-coding-agent/modes/rpc/rpc-goal';
 import { z } from 'zod';
 import { SessionModeSchema, type SessionMode } from '@openchamber/agent-contract';
 import type { AgentSession } from '@oh-my-pi/pi-coding-agent/session/agent-session';
@@ -30,13 +34,45 @@ function planReference(value: string | undefined): string {
   return parsed.success && parsed.data.kind === 'plan' ? parsed.data.planReference : 'local://PLAN.md';
 }
 
+/** Project durable mode on the selected branch, including the terminal goal record. */
+export function readSessionMode(manager: SessionManager): SessionMode {
+  const context = manager.buildSessionContext();
+  if (context.mode === 'goal' || context.mode === 'goal_paused') {
+    const data = goalFromModeData(context.modeData);
+    const parsed = SessionModeSchema.safeParse({ kind: 'goal', status: context.mode === 'goal_paused' ? 'paused' : data?.status,
+      objective: data?.objective, tokenBudget: data?.tokenBudget ?? null, tokensUsed: data?.tokensUsed });
+    if (parsed.success) return parsed.data;
+  }
+  if (context.mode === 'plan' || context.mode === 'plan_paused') return { kind: 'plan', status: context.mode === 'plan' ? 'active' : 'paused', planReference: planReference(typeof context.modeData?.planFilePath === 'string' ? context.modeData.planFilePath : undefined) };
+  if (context.mode === 'vibe') return { kind: 'vibe' };
+  const branch = manager.getBranch();
+  for (let index = branch.length - 1; index >= 0; index--) {
+    const entry = branch[index];
+    if (entry.type === 'mode_change') break;
+    if (entry.type !== 'custom' || entry.customType !== 'goal-completed') continue;
+    const data = z.object({ objective: z.string().min(1), tokenBudget: z.number().int().positive().optional(), tokensUsed: z.number().int().nonnegative() }).safeParse(entry.data);
+    if (data.success) return { kind: 'goal', status: 'complete', objective: data.data.objective, tokenBudget: data.data.tokenBudget ?? null, tokensUsed: data.data.tokensUsed };
+  }
+  return { kind: 'main' };
+}
+
 /** OMP owns durable mode; the worker restores the interactive recipe without its TUI. */
 export class WorkerModeController {
+  readonly goal: RpcGoalController;
   private previous: Previous | undefined;
   private vibePrevious: VibePrevious | undefined;
   private current: SessionMode;
 
-  constructor(private readonly session: AgentSession, private readonly propose: PlanProposalHandler = title => session.preparePlanForReview(title)) {
+  constructor(private readonly session: AgentSession, private readonly propose: PlanProposalHandler = title => session.preparePlanForReview(title), startGoalRun?: (start: () => Promise<boolean>) => Promise<boolean>, onContinuationDropped?: () => void) {
+    const continuationModes = cfgGoalContinuationModes.get(session.settings);
+    if (!continuationModes.includes('rpc')) cfgGoalContinuationModes.override(session.settings, [...continuationModes, 'rpc']);
+    const nativePrompt = session.promptCustomMessage.bind(session);
+    const goalSession = new Proxy(session, { get(target, property) {
+      if (property === 'promptCustomMessage') return (input: Parameters<AgentSession['promptCustomMessage']>[0]) => startGoalRun ? startGoalRun(() => nativePrompt(input)) : nativePrompt(input);
+      const value = Reflect.get(target, property, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    } });
+    this.goal = new RpcGoalController(goalSession, onContinuationDropped);
     const context = session.sessionManager.buildSessionContext();
     const parsed = PlanModeDataSchema.safeParse(context.modeData);
     if (!parsed.success && context.modeData !== undefined && (context.mode === 'plan' || context.mode === 'plan_paused')) {
@@ -56,10 +92,22 @@ export class WorkerModeController {
     }
   }
 
-  mode(): SessionMode { return { ...this.current }; }
+  mode(): SessionMode {
+    const goal = this.session.getGoalModeState()?.goal;
+    if (goal && goal.status !== 'dropped') return { kind: 'goal', status: goal.status, objective: goal.objective, tokenBudget: goal.tokenBudget ?? null, tokensUsed: goal.tokensUsed };
+    return readSessionMode(this.session.sessionManager);
+  }
+
+  async goalState(): Promise<RpcGoalResult> { return this.goal.handle({ op: 'get' }); }
+  observe(event: Parameters<RpcGoalController['observe']>[0]): void { this.goal.observe(event); }
+  stopForHostAbort(): void { this.goal.stopForHostAbort(); }
 
   async set(kind: 'main' | 'plan' | 'vibe'): Promise<SessionMode> {
     if (this.session.isStreaming) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
+    if (this.mode().kind === 'goal') {
+      await this.goal.handle({ op: 'drop' });
+      this.session.sessionManager.appendModeChange('none');
+    }
     if (kind === 'plan') {
       if (this.current.kind === 'vibe') await this.exitVibe();
       await this.enterPlan();

@@ -573,6 +573,9 @@ export class AgentService {
         if (control.type === 'mode.set') {
           respondJson(response, 200, SessionControlAckSchema.parse({ type: 'mode.set', mode: await this.sessions.setMode(sessionId, control.mode) })); return;
         }
+        if (control.type === 'goal') {
+          respondJson(response, 200, SessionControlAckSchema.parse(await this.sessions.goal(sessionId, control))); return;
+        }
         if (control.type === 'compact') {
           respondJson(response, 200, SessionControlAckSchema.parse(await this.sessions.compact(sessionId, control.instructions))); return;
         }

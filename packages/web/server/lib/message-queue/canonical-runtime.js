@@ -139,7 +139,7 @@ export function createCanonicalQueueRuntime({ store, service, resolveAttachments
       const before = await store.getState(queueScope(scope));
       const recovered = await store.recoverUnsentClaims(queueScope(scope));
       if (recovered.revision !== before.revision) changed(scope, recovered);
-      if (runtime.activeRunId !== null || runtime.runtimeStatus !== 'idle' || recovered.items.length === 0) return;
+      if (runtime.activeRunId !== null || runtime.continuationPending === true || runtime.runtimeStatus !== 'idle' || recovered.items.length === 0) return;
       if (recovered.items[0].status === 'leased') { schedule(scope, Math.max(RETRY_MS, recovered.items[0].lease.expiresAt - now())); return; }
       const claimed = await store.claimHead(queueScope(scope), recovered.revision, { epoch: runtime.epoch, expiresAt: now() + LEASE_MS });
       if (!claimed.capture) return;
@@ -247,6 +247,7 @@ export function createCanonicalQueueRuntime({ store, service, resolveAttachments
           schedule(scope);
         }
       } else if (event.type === 'session.status' && event.runtimeStatus === 'idle') schedule(scope);
+      else if (event.type === 'session.updated' && event.continuationPending === false) schedule(scope);
     },
     setHold: (scope, held, ttlMs = 300_000) => {
       queueScope(scope);

@@ -10,6 +10,7 @@ import type { SubagentLifecyclePayload } from '@oh-my-pi/pi-coding-agent/task';
 import { cfgToolsApprovalMode, cfgWebSearchEnabled } from '@oh-my-pi/pi-coding-agent/tools/settings';
 import { cfgSearxngEndpoint } from '@oh-my-pi/pi-coding-agent/web/settings';
 import { cfgProvidersWebSearchTimeoutSeconds } from '@oh-my-pi/pi-coding-agent/session/settings';
+import { cfgGoalContinuationModes } from '@oh-my-pi/pi-coding-agent/goals/settings';
 import { resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import { InteractionManager } from '../interaction/manager.ts';
@@ -48,6 +49,16 @@ function completion(tool?: { name: string; input: JsonObject; id: string }): Res
       : { role: 'assistant', content: 'Native operation finished.' }, finish_reason: null }] };
   const finish = { ...chunk, choices: [{ index: 0, delta: {}, finish_reason: tool ? 'tool_calls' : 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 3, total_tokens: 13 } };
   return new Response(`data: ${JSON.stringify(chunk)}\n\ndata: ${JSON.stringify(finish)}\n\ndata: [DONE]\n\n`, { headers: { 'content-type': 'text/event-stream' } });
+}
+function waitForGoal(worker: WorkerSession, predicate: () => boolean): Promise<void> {
+  if (predicate()) return Promise.resolve();
+  return new Promise<void>(resolve => {
+    const unsubscribe = worker.session.subscribe(() => {
+      if (!predicate()) return;
+      unsubscribe();
+      resolve();
+    });
+  });
 }
 
 async function fixture({ respond, invoke, machineCommands = [], onSubagent = () => {}, denyWebSearch = false, planModel = false }: {
@@ -241,6 +252,118 @@ test('worker-originated runs cancel through the normal abort operation', async (
     expect(harness.events).toContainEqual(expect.objectContaining({ event: expect.objectContaining({ type: 'run.cancelled', runId: started.event.runId }) }));
   } finally { await harness.close(); }
 }, 30000);
+
+test('aborting a goal pauses continuation until resume', async () => {
+  let requestStarted = Promise.withResolvers<void>();
+  const harness = await fixture({ respond: async () => {
+    requestStarted.resolve();
+    return new Response(new ReadableStream({}), { headers: { 'content-type': 'text/event-stream' } });
+  } });
+  try {
+    await harness.worker.operation({ type: 'goal', op: 'create', objective: 'Abort and resume' });
+    await requestStarted.promise;
+    const started = harness.events.findLast(input => input.event.type === 'run.started' && input.event.origin === 'goal');
+    if (!started || started.event.type !== 'run.started') throw new Error('Goal run did not start');
+    await harness.worker.operation({ type: 'abort', runId: started.event.runId });
+    const requestCount = harness.requests.length;
+    expect(harness.journal.runtime().mode).toMatchObject({ kind: 'goal', status: 'paused' });
+    await Promise.resolve();
+    expect(harness.requests).toHaveLength(requestCount);
+    requestStarted = Promise.withResolvers<void>();
+    await harness.worker.operation({ type: 'goal', op: 'resume' });
+    await requestStarted.promise;
+  } finally { await harness.close(); }
+}, 30000);
+
+test('RPC goal continues three turns and retains completed mode', async () => {
+  let calls = 0;
+  const harness = await fixture({ respond: payload => {
+    if (payload.messages.at(-1)?.role === 'tool') return completion();
+    calls++;
+    return calls < 3 ? completion({ name: 'read', id: `progress-${calls}`, input: { path: `missing-progress-${calls}.txt` } }) : completion({ name: 'goal', id: `goal-${calls}`, input: { op: 'complete' } });
+  } });
+  try {
+    await harness.worker.operation({ type: 'goal', op: 'create', objective: 'Finish the native proof' });
+    await waitForGoal(harness.worker, () => harness.requests.length >= 3 && harness.worker.mode().kind === 'goal' && harness.worker.mode().status === 'complete');
+    expect(harness.events.filter(input => input.event.type === 'run.started' && input.event.origin === 'goal')).toHaveLength(3);
+    expect(harness.journal.runtime().mode).toMatchObject({ kind: 'goal', status: 'complete', objective: 'Finish the native proof' });
+  } finally { await harness.close(); }
+}, 30000);
+
+test('RPC goal continuation setting gates automatic turns', async () => {
+  const harness = await fixture({ respond: () => completion() });
+  try {
+    cfgGoalContinuationModes.override(harness.worker.session.settings, ['interactive']);
+    await harness.worker.operation({ type: 'goal', op: 'create', objective: 'Do not continue without rpc' });
+    await Promise.resolve();
+    expect(harness.requests).toHaveLength(0);
+    expect(harness.journal.runtime().mode).toMatchObject({ kind: 'goal', status: 'active' });
+  } finally { await harness.close(); }
+}, 30000);
+
+test('goal pause and resume preserve objective, while drop returns main', async () => {
+  const harness = await fixture({ respond: () => completion() });
+  try {
+    cfgGoalContinuationModes.override(harness.worker.session.settings, ['interactive']);
+    await harness.worker.operation({ type: 'goal', op: 'create', objective: 'Pause this goal', tokenBudget: 20 });
+    await harness.worker.operation({ type: 'goal', op: 'pause' });
+    expect(harness.journal.runtime().mode).toMatchObject({ kind: 'goal', status: 'paused', objective: 'Pause this goal' });
+    await harness.worker.operation({ type: 'goal', op: 'resume' });
+    expect(harness.journal.runtime().mode).toMatchObject({ kind: 'goal', status: 'active', objective: 'Pause this goal' });
+    await harness.worker.operation({ type: 'goal', op: 'drop' });
+    expect(harness.journal.runtime().mode).toEqual({ kind: 'main' });
+  } finally { await harness.close(); }
+}, 30000);
+
+test('goal rejects empty objective and a tiny budget limits the first turn', async () => {
+  const harness = await fixture({ respond: () => completion() });
+  try {
+    await expect(harness.worker.operation({ type: 'goal', op: 'create', objective: '   ' })).rejects.toBeTruthy();
+    await harness.worker.operation({ type: 'goal', op: 'create', objective: 'Tiny goal', tokenBudget: 1 });
+    await waitForGoal(harness.worker, () => harness.worker.mode().kind === 'goal' && harness.worker.mode().status === 'budget-limited');
+    expect(harness.journal.runtime().mode).toMatchObject({ kind: 'goal', status: 'budget-limited', objective: 'Tiny goal' });
+  } finally { await harness.close(); }
+}, 30000);
+
+test('reopening during a goal run restores a paused goal without new work', async () => {
+  const requested = Promise.withResolvers<void>();
+  const harness = await fixture({ respond: () => {
+    requested.resolve();
+    return new Response(new ReadableStream({}), { headers: { 'content-type': 'text/event-stream' } });
+  } });
+  try {
+    await harness.worker.operation({ type: 'goal', op: 'create', objective: 'Persist interrupted goal' });
+    await requested.promise;
+    await harness.reopen();
+    expect(harness.worker.mode()).toMatchObject({ kind: 'goal', status: 'paused', objective: 'Persist interrupted goal' });
+    expect(harness.journal.runtime().activeRunId).toBeNull();
+    expect(harness.worker.continuationPending).toBe(false);
+    expect(harness.requests).toHaveLength(1);
+  } finally { await harness.close(); }
+}, 30000);
+
+for (const op of ['pause', 'drop'] as const) {
+  test(`goal ${op} during a progress-making run stops its next continuation`, async () => {
+    const requested = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const harness = await fixture({ respond: async payload => {
+      requested.resolve();
+      await release.promise;
+      return payload.messages.at(-1)?.role === 'tool' ? completion() : completion({ name: 'read', id: 'progress-before-stop', input: { path: 'missing.txt' } });
+    } });
+    try {
+      await harness.worker.operation({ type: 'goal', op: 'create', objective: 'Stop after this turn' });
+      await requested.promise;
+      await harness.worker.operation({ type: 'goal', op });
+      release.resolve();
+      await waitForGoal(harness.worker, () => harness.journal.runtime().activeRunId === null);
+      await harness.worker.session.waitForIdle();
+      expect(harness.worker.continuationPending).toBe(false);
+      expect(harness.events.filter(input => input.event.type === 'run.started')).toHaveLength(1);
+      expect(harness.worker.mode()).toMatchObject(op === 'drop' ? { kind: 'main' } : { kind: 'goal', status: 'paused' });
+    } finally { release.resolve(); await harness.close(); }
+  }, 30000);
+}
 
 test('native builtin command returns context output without starting a provider run', async () => {
   const harness = await fixture({ respond: () => completion() });

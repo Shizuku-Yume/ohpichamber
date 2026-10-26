@@ -104,3 +104,12 @@ Only Bun SDK workers read native Settings, persist `cfgProvidersCacheWarming`, f
 Web/PWA, Electron, hosted mobile and Capacitor use the same authenticated selected Host route. Mobile remains UI-only. Warming stays with the session's provider and creates no provider-entry or network-exposure capability. Configured mode is not proof that a request ran or a cache hit occurred.
 
 Native Settings flush precedes the existing service catalog-revision file commit. If persisting the service revision file fails after native Settings have flushed, the native configuration remains saved on disk while the supervisor restores the previous service revision in memory, skips live application (`liveApplication: 'not-started'`), and returns HTTP 503 `SERVICE_UNAVAILABLE` with typed `CacheWarmingPartialWriteDetails` (`{ workspaceId, configuredMode, currentRevision, nativeConfigurationCommitted: true, liveApplication: 'not-started' }`). The system does not claim atomic rollback across the native file write and service revision file. The UI checkbox catches this 503, displays the saved mode alongside a partial-write error message, and disables further writes until reload. An authoritative GET reports the effective native mode with the service's last committed revision. This follows the existing catalog durability boundary rather than introducing a second transaction protocol.
+
+## Native goal mode
+
+Session control accepts `goal` operations `create`, `pause`, `resume`, and `drop`. Creation requires a nonempty objective and accepts a positive integer token budget (or `null` for no budget). The Host authorizes the session scope and forwards the operation; it stores no native goal state. Create and resume refuse an active run; pause and drop remain available during execution.
+
+Each session worker owns an unchanged OMP `RpcGoalController`, enables the session-local `rpc` continuation mode, and feeds it every native event. Continuation submissions become canonical `origin: 'goal'` runs through the same worker-run projection used by plan approval. Abort stops the controller before aborting the native session. Reopened active goals restore paused rather than silently starting work.
+
+`SessionMode` publishes the objective, native status, optional budget and tokens used. A dropped goal reports Main. Completed goals retain a terminal display record even though OMP exits its active goal mode. Native controls do not write legacy Host supervisor metadata; that supervisor remains for entry points not yet migrated.
+

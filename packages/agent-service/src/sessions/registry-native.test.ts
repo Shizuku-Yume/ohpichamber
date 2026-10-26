@@ -6,7 +6,7 @@ import { basename, dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import { JsonValueSchema, RuntimeSessionSchema, SubagentSchema, type RuntimeSession } from '@openchamber/agent-contract';
-import type { WorkerBootstrap } from '../protocol.ts';
+import type { WorkerBootstrap, WorkerOperationResult } from '../protocol.ts';
 import { z } from 'zod';
 import { WorkerRegistry } from '../supervisor/workers.ts';
 import { SessionRegistry } from './registry.ts';
@@ -558,5 +558,34 @@ test('fork loads the child policy scope from the captured source before starting
       { sessionId: forked.sessionId, workspaceId: 'source-workspace', forkOf: rootSessionId, forkTicketId: 'fork-ticket-1', workerStarted: false },
     ]);
     expect(harness.workers.authorizationScope(forked.sessionId)).toBeDefined();
+  } finally { await harness.close(); }
+}, 60000);
+
+test('registry prompt blocks idle sessions during a pending continuation and admits after projected clear', async () => {
+  const harness = await fixture();
+  try {
+    const generation = harness.workers.authorizationScope(rootSessionId)?.workerGeneration;
+    if (!generation) throw new Error('Live root worker generation is required');
+    const operation = { type: 'prompt' as const, runId: 'continuation-prompt', request: {
+      input: { text: 'after continuation', context: [], attachments: [] },
+      options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null },
+    } };
+    await harness.sessions.onEvents(rootSessionId, generation, [{ timestamp: Date.now(), event: { type: 'session.updated', continuationPending: true } }]);
+    expect(harness.sessions.runtime(rootSessionId)).toMatchObject({ runtimeStatus: 'idle', activeRunId: null, continuationPending: true });
+
+    let requests = 0;
+    const originalRequest = harness.workers.request;
+    harness.workers.request = async (): Promise<WorkerOperationResult> => {
+      requests += 1;
+      return { type: 'prompt', run: { runId: 'continuation-prompt', sessionId: rootSessionId, status: 'pending', createdAt: Date.now() } };
+    };
+    try {
+      await expect(harness.sessions.prompt(rootSessionId, operation)).rejects.toMatchObject({ code: 'RUN_ACTIVE' });
+      expect(requests).toBe(0);
+      await harness.sessions.onEvents(rootSessionId, generation, [{ timestamp: Date.now(), event: { type: 'session.updated', continuationPending: false } }]);
+      expect(harness.sessions.runtime(rootSessionId)).toMatchObject({ runtimeStatus: 'idle', activeRunId: null, continuationPending: false });
+      await expect(harness.sessions.prompt(rootSessionId, operation)).resolves.toMatchObject({ runId: 'continuation-prompt' });
+      expect(requests).toBe(1);
+    } finally { harness.workers.request = originalRequest; }
   } finally { await harness.close(); }
 }, 60000);

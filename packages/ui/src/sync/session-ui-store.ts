@@ -83,7 +83,7 @@ import {
 } from "./session-actions"
 import { useInputStore, type SyntheticContextPart } from "./input-store"
 import { useSessionGoalArmStore } from "@/stores/useSessionGoalArmStore"
-import { setSessionGoal } from "@/lib/sessionGoalActions"
+import { setSessionGoal } from '@/lib/sessionGoalActions'
 import { wrapSystemReminder } from "@/lib/systemReminder"
 import { useUIStore } from "@/stores/useUIStore"
 import { useSelectionStore } from "./selection-store"
@@ -1804,7 +1804,7 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
     const tokenBudget = uiState.sessionGoalDefaultBudgetEnabled ? uiState.sessionGoalDefaultBudget : null
     const goalArm = inputMode !== "shell" && content.trim().length > 0
       ? useSessionGoalArmStore.getState().consume()
-      : { armed: false, objectiveOverride: null }
+      : { armed: false, objectiveOverride: null, composerGoal: false }
     let goalApplied = false
 
     // Resolve the captured destination and selection once; canonical delivery
@@ -1854,6 +1854,14 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
       markPendingUserSendAnimation(sessionId)
 
       let fileResourceExpansion: FileResourceExpandResult | null | undefined
+      if (goalArm.armed && goalArm.composerGoal) {
+        const objective = goalArm.objectiveOverride?.trim() || content.trim()
+        assertSendRuntime(capturedRuntimeKey)
+        await canonicalClient.goal(sessionId, { op: 'create', objective, tokenBudget })
+        assertSendRuntime(capturedRuntimeKey)
+        goalApplied = true
+        return
+      }
       if (goalArm.armed) {
         const budgetLine = tokenBudget !== null ? ` A token budget of ${tokenBudget} tokens applies to this goal.` : ""
         const goalIntro = wrapSystemReminder(
@@ -1927,7 +1935,7 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
       }
     })().catch((error) => {
       if (goalArm.armed && !goalApplied && getRuntimeKey() === capturedRuntimeKey) {
-        useSessionGoalArmStore.getState().setArmed(true, goalArm.objectiveOverride)
+        useSessionGoalArmStore.getState().setArmed(true, goalArm.objectiveOverride, goalArm.composerGoal)
       }
       throw error
     })

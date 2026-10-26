@@ -43,6 +43,20 @@ describe('session schemas', () => {
     expect(SessionModeSchema.parse({ kind: 'vibe' })).toEqual({ kind: 'vibe' });
     expect(SessionControlAckSchema.parse({ type: 'mode.set', mode })).toEqual({ type: 'mode.set', mode });
   });
+  test('goal mode and controls expose native state and reject invalid objectives and budgets', () => {
+    const mode = { kind: 'goal', status: 'active', objective: 'Ship the task', tokenBudget: null, tokensUsed: 0 };
+    for (const status of ['active', 'paused', 'budget-limited', 'complete']) {
+      expect(SessionModeSchema.parse({ ...mode, status })).toEqual({ ...mode, status });
+    }
+    expect(SessionModeSchema.safeParse({ ...mode, status: 'blocked' }).success).toBe(false);
+    const control = { type: 'goal', op: 'create', objective: 'Ship the task', tokenBudget: 1000 };
+    expect(SessionControlRequestSchema.parse(control)).toEqual(control);
+    expect(SessionControlAckSchema.parse({ type: 'goal', mode })).toEqual({ type: 'goal', mode });
+    for (const op of ['pause', 'resume', 'drop']) expect(SessionControlRequestSchema.parse({ type: 'goal', op })).toEqual({ type: 'goal', op });
+    for (const objective of ['', '  ', undefined]) expect(SessionControlRequestSchema.safeParse({ ...control, objective }).success).toBe(false);
+    for (const tokenBudget of [0, -1, 1.5]) expect(SessionControlRequestSchema.safeParse({ ...control, tokenBudget }).success).toBe(false);
+    expect(SessionControlRequestSchema.safeParse({ ...control, tokenBudget: null }).success).toBe(true);
+  });
   test('session controls discriminate abort compact and builtin command', () => {
     const abort = { type: 'abort', runId: 'run_01' } as const;
     const compact = { type: 'compact', instructions: 'Keep the decisions and unresolved questions.' } as const;

@@ -68,6 +68,9 @@ the keyboard mover and the column shrinks around it at settle.
 
 The composer mode selector offers Main, Plan and Vibe in the freed footer slot. Its selected value comes only from the authoritative `RuntimeSession.mode` snapshot (and subsequent `session.updated` events); it does not maintain a local mode authority. Mode controls are disabled while a run is active and send `mode.set` through `canonicalClient` when the session is idle.
 
+The goal target button arms the next composer objective with an optional token budget. Submission creates an OMP goal through canonical session control; it does not also submit a Host prompt, since the controller starts the first turn. The goal strip and management dialog read `SessionMode`, not Host goal metadata. Pause, resume, remove and budget replacement map to native pause, resume, drop and drop-and-create. These controls show no independent audit model or supervisor-only blocked/turn-count state.
+
+
 Glass does not nest: a `backdrop-filter` element is a backdrop root, so a
 glass child only blurs its parent's content. Popups therefore anchor to the
 wrapper outside the box, and the dictation overlay (`.oc-dictation-overlay`)

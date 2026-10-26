@@ -70,6 +70,7 @@ const fixture = async () => {
     }
     if (pathname.endsWith('/control')) {
       if (body.type === 'mode.set') return Response.json({ type: 'mode.set', mode: body.mode === 'main' ? { kind: 'main' } : body.mode === 'vibe' ? { kind: 'vibe' } : { kind: 'plan', status: 'active', planReference: 'local://PLAN.md' } });
+      if (body.type === 'goal') return Response.json({ type: 'goal', mode: body.op === 'drop' ? { kind: 'main' } : { kind: 'goal', status: body.op === 'pause' ? 'paused' : 'active', objective: body.objective || 'Finish the task', tokenBudget: body.tokenBudget ?? null, tokensUsed: 0 } });
       return Response.json(native.compactResult);
     }
     if (pathname === '/api/agent/v1/sessions/forked-child') return Response.json({ ...runtime('forked-child'), rootSessionId: 'forked-child' });
@@ -100,6 +101,20 @@ describe('Host native session control saga', () => {
     expect(await service.control('public-root', { type: 'mode.set', mode: 'vibe' })).toEqual({ type: 'mode.set', mode: { kind: 'vibe' } });
     expect(native.calls).toContainEqual({ pathname: '/api/agent/v1/sessions/public-root/control', body: { type: 'mode.set', mode: 'vibe' } });
   });
+  it('forwards authorized goal lifecycle commands and rejects empty objectives before native dispatch', async () => {
+    const { native, makeService } = await fixture();
+    const service = makeService();
+    const create = { type: 'goal', op: 'create', objective: 'Finish the task', tokenBudget: 5000 };
+    await expect(service.control('public-root', create)).resolves.toMatchObject({ type: 'goal', mode: { kind: 'goal', objective: create.objective, tokenBudget: 5000 } });
+    expect(native.calls.at(-1)).toEqual({ pathname: '/api/agent/v1/sessions/public-root/control', body: create });
+    await expect(service.control('public-root', { type: 'goal', op: 'pause' })).resolves.toMatchObject({ mode: { kind: 'goal', status: 'paused' } });
+    await expect(service.control('public-root', { type: 'goal', op: 'resume' })).resolves.toMatchObject({ mode: { kind: 'goal', status: 'active' } });
+    await expect(service.control('public-root', { type: 'goal', op: 'drop' })).resolves.toEqual({ type: 'goal', mode: { kind: 'main' } });
+    const count = native.calls.length;
+    await expect(service.control('public-root', { type: 'goal', op: 'create', objective: '  ' })).rejects.toMatchObject({ statusCode: 400 });
+    expect(native.calls).toHaveLength(count);
+    await expect(service.control('missing-session', create)).rejects.toMatchObject({ statusCode: 404 });
+  });
   it('refuses native mutations for deleted-space sessions before dispatch', async () => {
     const { root, store, destination, native, makeService } = await fixture();
     const spaceId = 'a1b2c3d4e5f6';
@@ -126,6 +141,7 @@ describe('Host native session control saga', () => {
       () => service.relocate(sessionId, { workspaceId: destination.workspaceId }),
       () => service.control(sessionId, { type: 'abort', runId: 'run-1' }),
       () => service.control(sessionId, { type: 'mode.set', mode: 'plan' }),
+      () => service.control(sessionId, { type: 'goal', op: 'create', objective: 'Not writable' }),
     ];
 
     for (const mutate of mutations) {

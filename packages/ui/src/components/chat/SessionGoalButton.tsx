@@ -1,10 +1,9 @@
 import React from 'react';
 import { Icon } from '@/components/icon/Icon';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useGoalCheckAvailable, useSessionGoal } from '@/hooks/useSessionGoal';
+import { useSessionGoal } from '@/hooks/useSessionGoal';
 import { useSessionGoalArmStore } from '@/stores/useSessionGoalArmStore';
 import { SESSION_GOAL_OBJECTIVE_CHAR_LIMIT } from '@/lib/sessionGoalMetadata';
-import { sessionGoalStatusColor } from '@/lib/sessionGoalPresentation';
 import { SessionGoalDialog } from '@/components/chat/SessionGoalDialog';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -19,11 +18,8 @@ interface SessionGoalButtonProps {
   withTooltip?: boolean;
 }
 
-// Composer target button — the goal switch. With no live goal one tap arms
-// goal mode (the next sent prompt becomes the objective; works on drafts
-// too) and a second tap disarms. While a goal is live the target stays lit
-// (info while running, success when complete, error when blocked / out of
-// budget) and tapping opens the manage dialog.
+// Composer target control. Arming makes the submitted text the goal objective;
+// submission creates a goal directly and the server starts its execution.
 export const SessionGoalButton: React.FC<SessionGoalButtonProps> = React.memo(({
   sessionId,
   directory,
@@ -33,57 +29,32 @@ export const SessionGoalButton: React.FC<SessionGoalButtonProps> = React.memo(({
   withTooltip = false,
 }) => {
   const { t } = useI18n();
-  const { goal, enabled } = useSessionGoal(sessionId ?? '', directory);
+  const { mode, enabled } = useSessionGoal(sessionId ?? '', directory);
   const armed = useSessionGoalArmStore((state) => state.armed);
   const setArmed = useSessionGoalArmStore((state) => state.setArmed);
   const [dialogOpen, setDialogOpen] = React.useState(false);
-  // The goal loop checks every turn with Jev or the small model; with neither
-  // a goal would stop after two failed checks, so arming is disabled with the
-  // reason. A goal that already exists stays manageable.
-  const canCheck = useGoalCheckAvailable(directory, enabled);
-  const cannotCheck = !canCheck && !goal;
 
   if (!enabled || (!sessionId && !draftOpen)) {
     return null;
   }
 
-  // A settled goal no longer drives the loop — the button goes back to being
-  // an arm switch, while still tinting with the outcome color.
-  const liveGoal = goal && goal.status !== 'complete' ? goal : null;
-  const isEngaged = armed || Boolean(liveGoal);
-
-  // One mapping for every goal surface. This button used to carry its own,
-  // which painted `paused` the same info colour as `active` — so a paused goal
-  // was indistinguishable from a running one — and `blocked` as an error rather
-  // than a warning. `armed` is not a goal status, so it keeps its own case.
-  const iconColor = goal
-    ? sessionGoalStatusColor[goal.status]
-    : (armed ? 'var(--status-info)' : undefined);
-
-  const label = goal
-    ? t('chat.goal.button.manageAria')
-    : cannotCheck
-      ? t('chat.goal.button.noSmallModel')
-      : (armed ? t('chat.goal.button.disarmAria') : t('chat.goal.button.armAria'));
-
-  // Any existing goal (live or completed) opens the manage dialog — a
-  // completed goal must be removed there before a new one can be armed.
+  const isEngaged = armed || Boolean(mode);
+  const iconColor = mode ? (mode.status === 'complete' ? 'var(--status-success)' : 'var(--status-info)') : (armed ? 'var(--status-info)' : undefined);
+  const label = mode ? t('chat.goal.button.manageAria') : (armed ? t('chat.goal.button.disarmAria') : t('chat.goal.button.armAria'));
   const handleClick = () => {
-    if (goal) {
+    if (mode) {
       setDialogOpen(true);
       return;
     }
-    if (cannotCheck) return;
-    setArmed(!armed);
+    setArmed(!armed, null, !armed);
   };
 
   const button = (
     <button
       type="button"
-      className={cn(footerIconButtonClass, cannotCheck && 'opacity-50')}
+      className={footerIconButtonClass}
       style={iconColor ? { color: iconColor } : undefined}
       onClick={handleClick}
-      aria-disabled={cannotCheck || undefined}
       // Same guard as PermissionAutoAcceptButton, but only for the ARM
       // toggle: arming happens mid-typing (the next message IS the
       // objective), so that tap must not dismiss the soft keyboard or
@@ -91,10 +62,10 @@ export const SessionGoalButton: React.FC<SessionGoalButtonProps> = React.memo(({
       // before the click lands. Opening the manage sheet (goal exists) is a
       // context switch — there the keyboard should close as usual.
       onMouseDown={(event) => {
-        if (!goal) event.preventDefault();
+        if (!mode) event.preventDefault();
       }}
       onPointerDownCapture={(event) => {
-        if (!goal && event.pointerType === 'touch') {
+        if (!mode && event.pointerType === 'touch') {
           event.preventDefault();
         }
       }}
@@ -102,7 +73,7 @@ export const SessionGoalButton: React.FC<SessionGoalButtonProps> = React.memo(({
       aria-pressed={isEngaged}
       {...(withTooltip ? {} : { title: label })}
     >
-      {isEngaged || goal ? (
+      {isEngaged || mode ? (
         <Icon name="target-fill" className={cn(iconSizeClass, 'text-current')} aria-hidden="true" />
       ) : (
         <Icon name="target" className={cn(iconSizeClass, 'text-current')} aria-hidden="true" />
@@ -132,9 +103,7 @@ interface SessionGoalObjectiveCounterProps {
   length: number;
 }
 
-// Tiny hot-path leaf next to the target button: while goal mode is armed the
-// typed message becomes the objective, which the server clamps to 2000
-// chars — surface that limit during typing instead of truncating silently.
+// Isolate the typed objective counter from the rest of the footer's render path.
 // Renders null when not armed, so normal typing shows nothing.
 export const SessionGoalObjectiveCounter: React.FC<SessionGoalObjectiveCounterProps> = React.memo(({ length }) => {
   const { t } = useI18n();

@@ -1,3 +1,4 @@
+import { readSessionMode } from './mode.ts';
 import { createHash, randomUUID } from 'node:crypto';
 import { dirname, isAbsolute } from 'node:path';
 import { z } from 'zod';
@@ -114,9 +115,10 @@ interface LiveMessage {
 
 function metadata(message: VisibleMessage): Pick<LiveMessage, 'providerId' | 'modelId' | 'usage'> {
   if (message.role !== 'assistant') return {};
-  return { providerId: message.provider, modelId: message.model, usage: TokenUsageSchema.parse(message.usage) };
+  const { input, output, cacheRead, cacheWrite, totalTokens, cost } = message.usage;
+  return { providerId: message.provider, modelId: message.model, usage: TokenUsageSchema.parse({ input, output, cacheRead, cacheWrite, totalTokens,
+    cost: { input: cost.input, output: cost.output, cacheRead: cost.cacheRead, cacheWrite: cost.cacheWrite, total: cost.total } }) };
 }
-
 function visible(message: NativeMessage): message is VisibleMessage {
   return message.role === 'assistant' || message.role === 'toolResult' || (message.role === 'user' && message.synthetic !== true);
 }
@@ -531,14 +533,7 @@ export class WorkerProjection {
   }
 
   private readHistory(): ProjectionSeed {
-    const context = this.manager.buildSessionContext();
-    const modeData = context.modeData;
-    const planReference = typeof modeData?.planFilePath === 'string' && modeData.planFilePath.startsWith('local://') ? modeData.planFilePath : 'local://PLAN.md';
-    const mode: SessionMode = context.mode === 'plan_paused'
-      ? { kind: 'plan', status: 'paused', planReference }
-      : context.mode === 'plan'
-        ? { kind: 'plan', status: 'active', planReference }
-        : context.mode === 'vibe' ? { kind: 'vibe' } : { kind: 'main' };
+    const mode = readSessionMode(this.manager);
     const entries = this.manager.getBranch();
     const references = new Map<string, Reference>();
     const terminals = new Map<string, z.infer<typeof TerminalSchema>>();

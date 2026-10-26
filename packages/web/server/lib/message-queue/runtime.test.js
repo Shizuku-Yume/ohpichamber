@@ -178,6 +178,53 @@ describe('canonical queue runtime', () => {
     assert.equal((await runtime.getState(scope)).items[0].status, 'leased');
     await runtime.stop();
   });
+  it('does not lease or send queued work while a continuation is pending, then resumes when it clears', async () => {
+    const store = storeFor();
+    const calls = [];
+    const session = { ...runtimeSession, continuationPending: true };
+    const service = {
+      request: async (pathname, init) => {
+        calls.push(pathname);
+        if (pathname === `/api/agent/v1/sessions/${SESSION}`) return response(session);
+        return response({ run: { ...run, runId: JSON.parse(init.body).runId, origin: 'host' } }, 202);
+      },
+    };
+    const accepted = Promise.withResolvers();
+    const runtime = createCanonicalQueueRuntime({ store, service, resolveAttachments: async () => [], publishQueue: () => {}, reportFailure: () => {}, onPromptAccepted: async () => accepted.resolve() });
+    await runtime.append(scope, randomUUID(), { expectedRevision: '0', content: 'wait for continuation', request: { input: { text: 'wait for continuation', attachments: [], context: [] }, options } });
+
+    await runtime.dispatch(scope);
+    assert.deepEqual(calls, [`/api/agent/v1/sessions/${SESSION}`]);
+    assert.equal((await runtime.getState(scope)).items[0].status, 'queued');
+
+    session.continuationPending = false;
+    await runtime.observe(scope, { type: 'session.updated', sessionId: SESSION, epoch: runtimeSession.epoch, sequence: '1', timestamp: Date.now(), continuationPending: false });
+    await accepted.promise;
+    assert.deepEqual(calls, [`/api/agent/v1/sessions/${SESSION}`, `/api/agent/v1/sessions/${SESSION}`, `/internal/sessions/${SESSION}/runs`]);
+    assert.equal((await runtime.getState(scope)).items[0].status, 'leased');
+    await runtime.stop();
+  });
+
+  it('does not treat an actual active goal run as a pending continuation', async () => {
+    const store = storeFor();
+    const goalRunId = randomUUID();
+    const session = { ...runtimeSession, runtimeStatus: 'running', activeRunId: goalRunId, continuationPending: true };
+    const calls = [];
+    const service = {
+      request: async (pathname) => {
+        calls.push(pathname);
+        if (pathname === `/api/agent/v1/sessions/${SESSION}`) return response(session);
+        throw new Error('A queued send must not reach an active goal run');
+      },
+    };
+    const runtime = createCanonicalQueueRuntime({ store, service, resolveAttachments: async () => [], publishQueue: () => {}, reportFailure: () => {} });
+    await runtime.append(scope, randomUUID(), { expectedRevision: '0', content: 'respect active goal', request: { input: { text: 'respect active goal', attachments: [], context: [] }, options } });
+    await runtime.dispatch(scope);
+    assert.deepEqual(calls, [`/api/agent/v1/sessions/${SESSION}`]);
+    assert.equal((await runtime.getState(scope)).items[0].status, 'queued');
+    assert.equal(session.activeRunId, goalRunId);
+    await runtime.stop();
+  });
 
 
   it('leaves a submitting capture when acceptance hooks fail', async () => {

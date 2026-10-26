@@ -206,6 +206,19 @@ describe('CanonicalClient real HTTP scope boundary', () => {
     respondWith({ type: 'mode.set', mode: { kind: 'vibe' } });
     await expect(client.setMode(sessionId, 'vibe')).resolves.toEqual({ type: 'mode.set', mode: { kind: 'vibe' } });
   });
+  test('sends goal controls and validates native goal state over canonical transport', async () => {
+    const mode = { kind: 'goal', status: 'active', objective: 'Finish the task', tokenBudget: 5000, tokensUsed: 42 };
+    respondWith({ type: 'goal', mode });
+    await expect(client.goal(sessionId, { op: 'create', objective: mode.objective, tokenBudget: mode.tokenBudget })).resolves.toEqual({ type: 'goal', mode });
+    expect(calls.at(-1)).toBe(`POST /api/agent/v1/sessions/${sessionId}/control`);
+    respondWith({ type: 'goal', mode: { ...mode, status: 'blocked' } });
+    await expect(client.goal(sessionId, { op: 'pause' })).rejects.toThrow();
+    respondWith({ type: 'goal', mode: { kind: 'main' } });
+    await expect(client.goal(sessionId, { op: 'drop' })).resolves.toEqual({ type: 'goal', mode: { kind: 'main' } });
+    const count = calls.length;
+    expect(() => client.goal(sessionId, { op: 'create', objective: '  ' })).toThrow();
+    expect(calls).toHaveLength(count);
+  });
 
   test('rejects unrelated interaction identity or generation', async () => {
     const reply: C.ApprovalReply = { version: '1', epoch, workerGeneration: generation, decision: 'approve' };

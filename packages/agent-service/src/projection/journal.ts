@@ -33,6 +33,7 @@ export class SessionJournal {
   private turns: Turn[];
   private messages: Message[];
   private mode: SessionMode;
+  private selection: ProjectionSeed['selection'];
   private activeRunId: string | null = null;
   private runtimeStatus: RuntimeSession['runtimeStatus'] = 'idle';
   private continuationPending = false;
@@ -44,6 +45,7 @@ export class SessionJournal {
     this.branch = structuredClone(seed.branch);
     this.turns = structuredClone(seed.turns);
     this.mode = structuredClone(seed.mode);
+    this.selection = structuredClone(seed.selection ?? { model: null, thinkingLevel: null });
     this.messages = structuredClone(seed.messages);
     this.rebuildIndexes();
   }
@@ -93,7 +95,7 @@ export class SessionJournal {
     }
     return SessionSnapshotSchema.parse({
       session: this.runtime(), cursor: `${this.epoch}:${this.head}`, activeRun: this.activeRunId ? this.runs.get(this.activeRunId) : null,
-      branch: this.branch,
+      branch: this.branch, selection: this.selection,
       window: { firstTurnId: turns[0]?.turnId ?? null, lastTurnId: turns.at(-1)?.turnId ?? null,
         firstMessageId: messages[0]?.messageId ?? null, lastMessageId: messages.at(-1)?.messageId ?? null,
         hasEarlier: this.turns.length > turns.length,
@@ -151,6 +153,7 @@ export class SessionJournal {
     this.resetEpoch();
     this.createdAt = seed.createdAt; this.updatedAt = seed.updatedAt; this.mode = structuredClone(seed.mode);
     this.branch = structuredClone(seed.branch); this.turns = structuredClone(seed.turns); this.messages = structuredClone(seed.messages);
+    this.selection = structuredClone(seed.selection ?? { model: null, thinkingLevel: null });
     this.runs.clear(); this.approvals.clear(); this.questions.clear();
     this.activeRunId = null; this.runtimeStatus = 'idle';
     this.continuationPending = false;
@@ -218,6 +221,7 @@ export class SessionJournal {
       case 'session.updated':
         if (event.mode !== undefined) this.mode = structuredClone(event.mode);
         if (event.continuationPending !== undefined) this.continuationPending = event.continuationPending;
+        if (event.selection !== undefined) this.selection = structuredClone(event.selection);
         return;
       case 'session.status': this.runtimeStatus = event.runtimeStatus; this.activeRunId = event.activeRunId; return;
       case 'turn.started': {

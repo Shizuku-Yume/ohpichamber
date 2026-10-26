@@ -620,17 +620,9 @@ export const createSettingsHelpers = (dependencies) => {
       result.managedRemoteTunnelSelectedPresetId = id || undefined;
     }
 
-    if (typeof candidate.defaultModel === 'string') {
-      const trimmed = candidate.defaultModel.trim();
-      result.defaultModel = trimmed.length > 0 ? trimmed : undefined;
-    }
     const lastSelectedModel = lastSelectedModelSchema.safeParse(candidate.lastSelectedModel);
     if (lastSelectedModel.success) {
       result.lastSelectedModel = lastSelectedModel.data;
-    }
-    if (typeof candidate.defaultVariant === 'string') {
-      const trimmed = candidate.defaultVariant.trim();
-      result.defaultVariant = trimmed.length > 0 ? trimmed : undefined;
     }
     if (typeof candidate.defaultAgent === 'string') {
       const trimmed = candidate.defaultAgent.trim();

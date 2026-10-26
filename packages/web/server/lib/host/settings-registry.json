@@ -492,12 +492,6 @@
     "shortcutOverrides": {
       "scope": "profile"
     },
-    "defaultModel": {
-      "scope": "profile"
-    },
-    "defaultVariant": {
-      "scope": "profile"
-    },
     "defaultAgent": {
       "scope": "profile"
     },

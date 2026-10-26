@@ -10,6 +10,7 @@ import { filterAvailableModelsByEnabledPatterns } from '@oh-my-pi/pi-coding-agen
 import { Settings, resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { discoverAuthStorage } from '@oh-my-pi/pi-coding-agent/sdk';
 import { cfgExtendedContext } from '@oh-my-pi/pi-coding-agent/session/context-settings';
+import { cfgDefaultThinkingLevel } from '@oh-my-pi/pi-coding-agent/session/settings';
 import { NativeModels, credentialReference, publicModel, type NativeCatalogModel } from './catalog-models.ts';
 import { openNativeRuntime } from './native-runtime.ts';
 
@@ -449,3 +450,19 @@ test('explicit empty headers replace old native provider headers and remain empt
     expect(persisted.openchamber.providerHeaders[configuration.providerId]).toEqual({});
   } finally { await fixture.close(); }
 });
+
+test('model catalog carries the model and thinking level OMP resolves for a new session', async () => {
+  const fixture = await openCatalogFixture();
+  try {
+    await fixture.writer.models.configureProvider({ expectedRevision: '0', configuration }, '1');
+    const reasoning = { ...configuredModel, reasoningEffortSupported: true,
+      reasoningOptions: ['low', 'medium', 'high'].map(reasoningEffort => ({ reasoningEffort, label: reasoningEffort, budgetTokens: null })) };
+    await fixture.writer.models.configureModel({ expectedRevision: '1', model: reasoning }, '2');
+    fixture.reader.settings.setModelRole('default', `${configuredModel.provider}/${configuredModel.modelId}`);
+    cfgDefaultThinkingLevel.override(fixture.reader.settings, 'medium');
+    const catalog = await fixture.reader.models.readModels('workspace_1', '1');
+    expect(catalog.defaults).toEqual({ model: { providerId: configuredModel.provider, modelId: configuredModel.modelId }, thinkingLevel: 'medium' });
+    fixture.reader.settings.setModelRole('default', `${configuredModel.provider}/${configuredModel.modelId}:high`);
+    expect((await fixture.reader.models.readModels('workspace_1', '1')).defaults.thinkingLevel).toBe('high');
+  } finally { await fixture.close(); }
+}, 30000);

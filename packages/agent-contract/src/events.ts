@@ -7,6 +7,7 @@ import { ApprovalRequestSchema, QuestionRequestSchema } from './requests.ts';
 import { QueueStateSchema } from './queue.ts';
 import { CatalogUpdateSchema } from './catalogs.ts';
 import { ShellJobSchema } from './shell.ts';
+import { SessionSelectionSchema } from './snapshot.ts';
 
 export const DataEventEnvelopeSchema = z.strictObject({
   sessionId: EntityIdSchema,
@@ -21,6 +22,7 @@ const sessionUpdatedSchema = DataEventEnvelopeSchema.extend({
   session: RuntimeSessionSchema.optional(),
   mode: SessionModeSchema.optional(),
   continuationPending: z.boolean().optional(),
+  selection: SessionSelectionSchema.optional(),
   metadata: SessionMetadataSchema.nullable().optional(),
   metadataRevision: CounterSchema.optional(),
   archivedAt: TimestampSchema.nullable().optional(),
@@ -28,7 +30,7 @@ const sessionUpdatedSchema = DataEventEnvelopeSchema.extend({
 }).refine((event) => {
   const metadataPresent = event.metadata !== undefined;
   const archivePresent = event.archivedAt !== undefined;
-  return (event.session !== undefined || event.mode !== undefined || event.continuationPending !== undefined || metadataPresent || archivePresent)
+  return (event.session !== undefined || event.mode !== undefined || event.continuationPending !== undefined || event.selection !== undefined || metadataPresent || archivePresent)
     && metadataPresent === (event.metadataRevision !== undefined)
     && archivePresent === (event.archiveRevision !== undefined)
     && (!metadataPresent || (event.metadata === null) === (event.metadataRevision === '0'));

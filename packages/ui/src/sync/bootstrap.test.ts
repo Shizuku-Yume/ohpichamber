@@ -19,7 +19,7 @@ function nativeClient(overrides: Partial<Record<string, unknown>> = {}): Canonic
   return {
     resolveWorkspace: async () => workspace,
     listSessions: async () => ({ items: [], errors: {} }),
-    getModels: async () => ({ workspaceId: workspace.workspaceId, revision: "0", models: [] }),
+    getModels: async () => ({ workspaceId: workspace.workspaceId, revision: "0", models: [], defaults: { model: null, thinkingLevel: null } }),
     getProviders: async () => ({ workspaceId: workspace.workspaceId, revision: "0", providers: [] }),
     getAgents: async () => ({ workspaceId: workspace.workspaceId, revision: "0", agents: [] }),
     getShellSnapshot: async () => shellSnapshot,
@@ -90,13 +90,13 @@ describe("native canonical bootstrap", () => {
     const { input, store } = inputFor(nativeClient({ getModels: async () => {
       modelCalls += 1
       if (modelCalls === 1) throw retryable()
-      return { workspaceId: workspace.workspaceId, revision: "1", models: [] }
+      return { workspaceId: workspace.workspaceId, revision: "1", models: [], defaults: { model: null, thinkingLevel: null } }
     } }))
     const result = bootstrapDirectory(input)
     expect(await result.sessions).toBe("complete")
     expect(await result.environment).toEqual({ status: "complete", retryable: false })
     expect(modelCalls).toBe(2)
-    expect(store.getState().models).toEqual({ workspaceId: workspace.workspaceId, revision: "1", models: [] })
+    expect(store.getState().models).toEqual({ workspaceId: workspace.workspaceId, revision: "1", models: [], defaults: { model: null, thinkingLevel: null } })
     expect(store.getState().status).toBe("complete")
   })
 
@@ -105,13 +105,13 @@ describe("native canonical bootstrap", () => {
     const nonRetryable = new CanonicalApiError({ type: "urn:test:denied", title: "Denied", status: 403, detail: "Forbidden", code: "UNAUTHORIZED", retryable: false })
     const { input, store } = inputFor(nativeClient({
       getProviders: async () => { providerCalls += 1; throw nonRetryable },
-      getModels: async () => ({ workspaceId: workspace.workspaceId, revision: "1", models: [] }),
+      getModels: async () => ({ workspaceId: workspace.workspaceId, revision: "1", models: [], defaults: { model: null, thinkingLevel: null } }),
     }))
     const result = bootstrapDirectory(input)
     expect(await result.sessions).toBe("complete")
     expect(await result.environment).toEqual({ status: "failed", retryable: false })
     expect(providerCalls).toBe(1)
-    expect(store.getState().models).toEqual({ workspaceId: workspace.workspaceId, revision: "1", models: [] })
+    expect(store.getState().models).toEqual({ workspaceId: workspace.workspaceId, revision: "1", models: [], defaults: { model: null, thinkingLevel: null } })
     expect(store.getState().status).toBe("partial")
   })
 

@@ -12,6 +12,7 @@ import { useAutoReviewStore } from '@/stores/useAutoReviewStore';
 import { useSessionGoalArmStore } from '@/stores/useSessionGoalArmStore';
 import { useBtwStore } from '@/stores/useBtwStore';
 import { useSessionUIStore, type CanonicalSkillMentions } from '@/sync/session-ui-store';
+import { ROOT_SELECTION_AGENT, useSelectionStore } from '@/sync/selection-store';
 import { prepareLocalAttachments, useDraftAttachedFiles, useInputStore, type SyntheticContextPart } from '@/sync/input-store';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { openParallelComposer } from '@/lib/multirun/openParallelComposer';
@@ -64,6 +65,7 @@ import { shouldSubmitEnter } from './composer/keyboardPolicy';
 import { getDropdownNavigationKey } from '@/components/ui/dropdown-navigation';
 import { useChatColumnActions, useChatColumnExpandedInput, useChatColumnSession, type ChatColumnSession } from './chatColumnSession';
 import { usePinnedComposerSelection } from './pinnedComposerSelection';
+import { resolveReasoningEffortToSend } from './composer/submit/resolveReasoningEffort';
 import { useChatSurfaceMode } from './useChatSurfaceMode';
 import { MobileModelButton } from './MobileModelButton';
 import { useSessionActivity } from '@/hooks/useSessionActivity';
@@ -567,6 +569,28 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         : undefined;
     const configVariant = useConfigStore((state) => state.currentVariant);
     const currentVariant = pinnedComposerSelection ? pinnedComposerSelection.variant ?? undefined : configVariant;
+    const configReasoningEffort = useConfigStore((state) => state.currentReasoningEffort);
+    const settingsDefaultReasoningEffort = useConfigStore((state) => state.settingsDefaultReasoningEffort);
+    const configuredReasoningEffort = pinnedComposerSelection ? pinnedComposerSelection.reasoningEffort : configReasoningEffort;
+    const persistedThinkingLevel = useDirectorySync(
+        React.useCallback((state) => (
+            currentSessionId ? state.snapshot[currentSessionId]?.selection?.thinkingLevel : undefined
+        ), [currentSessionId]),
+        currentSessionDirectoryForSync ?? currentDirectory ?? undefined,
+    );
+    // The picker's fallback is OMP's configured level. `auto` is a resolution
+    // mode, not an effort, so it stays off the wire and OMP decides per turn.
+    const reasoningEffortForModel = React.useCallback((
+        providerId: string | undefined,
+        modelId: string | undefined,
+        input: { captured?: { reasoningEffort?: string | null } | undefined; session?: string | null | undefined; native?: string | null | undefined; draft?: string | null | undefined },
+    ): string | undefined => {
+        if (!providerId || !modelId) return undefined;
+        const model = useConfigStore.getState().providers
+            .find((provider) => provider.providerId === providerId)?.models
+            .find((candidate) => candidate.modelId === modelId);
+        return resolveReasoningEffortToSend({ model, ompDefault: settingsDefaultReasoningEffort, ...input });
+    }, [settingsDefaultReasoningEffort]);
     const isMobile = useUIStore((state) => state.isMobile);
     const hasHardwareKeyboard = useHardwareKeyboard();
     const enterToSend = useUIStore((state) => state.enterToSend);
@@ -1363,6 +1387,16 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
 
         const queuedProviderId = expandedResource?.modelSelection?.providerId ?? currentProviderId;
         const queuedModelId = expandedResource?.modelSelection?.modelId ?? currentModelId;
+        const queuedAgent = queueSessionId
+            ? useSelectionStore.getState().getSessionAgentSelection(queueSessionId)
+                ?? useConfigStore.getState().currentAgentName
+                ?? ROOT_SELECTION_AGENT
+            : undefined;
+        const queuedSessionEffort = queueSessionId && queuedAgent !== undefined
+            ? useSelectionStore.getState().getAgentModelReasoningEffortForSession(
+                queueSessionId, queuedAgent, queuedProviderId ?? '', queuedModelId ?? '',
+            )
+            : undefined;
         try {
             await addToQueue(queueTarget, {
                 content: messageToQueue,
@@ -1373,6 +1407,11 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                     providerID: queuedProviderId,
                     modelID: queuedModelId,
                     variant: currentVariant ?? undefined,
+                    reasoningEffort: reasoningEffortForModel(queuedProviderId, queuedModelId, {
+                        session: queuedSessionEffort,
+                        native: queueSessionId ? persistedThinkingLevel : undefined,
+                        draft: configuredReasoningEffort,
+                    }),
                 } : undefined,
             });
         } catch (error) {
@@ -1400,7 +1439,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             return;
         }
         recordLinkedReferences(queueSessionId, queueTarget.directory, linked);
-    }, [getCurrentInputSnapshot, getSubmitErrorMessage, currentSessionId, currentDirectory, messageQueueTarget, inputMode, hasDrafts, loadCommands, guestCommands, attachedFiles, sanitizeAttachmentsForSend, prepareDocumentMentions, extractInlineFileMentions, runtimeFiles, agents, consumePendingSyntheticParts, mailboxTarget, inlineDraftTarget, consumeDrafts, linkedReferences, scrollToLatest, clearAttachedFiles, chatDraftIdentity, isMobile, isMobileCommentOpen, addToQueue, currentProviderId, currentModelId, currentVariant, t]);
+    }, [getCurrentInputSnapshot, getSubmitErrorMessage, currentSessionId, currentDirectory, messageQueueTarget, inputMode, hasDrafts, loadCommands, guestCommands, attachedFiles, sanitizeAttachmentsForSend, prepareDocumentMentions, extractInlineFileMentions, runtimeFiles, agents, consumePendingSyntheticParts, mailboxTarget, inlineDraftTarget, consumeDrafts, linkedReferences, scrollToLatest, clearAttachedFiles, chatDraftIdentity, isMobile, isMobileCommentOpen, addToQueue, currentProviderId, currentModelId, currentVariant, configuredReasoningEffort, persistedThinkingLevel, reasoningEffortForModel, t]);
 
     /** Put the context a queued message was captured with back on the composer chips. */
     const restoreQueuedContext = React.useCallback((context: readonly QueuedContextPart[]) => {
@@ -1628,6 +1667,26 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         const providerIdToSend = capturedSendConfig?.providerID ?? currentProviderId;
         const modelIdToSend = capturedSendConfig?.modelID ?? currentModelId;
         const variantToSend = capturedSendConfig ? capturedSendConfig.variant : currentVariant;
+        const sessionEffortAgent = currentSessionId
+            ? useSelectionStore.getState().getSessionAgentSelection(currentSessionId)
+                ?? useConfigStore.getState().currentAgentName
+                ?? ROOT_SELECTION_AGENT
+            : undefined;
+        const sessionReasoningEffort = currentSessionId && sessionEffortAgent !== undefined
+            ? useSelectionStore.getState().getAgentModelReasoningEffortForSession(
+                currentSessionId, sessionEffortAgent, providerIdToSend, modelIdToSend,
+            )
+            : undefined;
+        // A queued item owns the effort it captured: its explicit value (or
+        // unset/auto) is delivered as captured, never re-resolved against a
+        // later session or preference change.
+        const reasoningEffortToSend = reasoningEffortForModel(providerIdToSend, modelIdToSend, capturedSendConfig
+            ? { captured: capturedSendConfig }
+            : {
+                session: sessionReasoningEffort,
+                native: currentSessionId ? persistedThinkingLevel : undefined,
+                draft: configuredReasoningEffort,
+            });
 
         // The isolated space the message targets, if any: a session by its directory, a draft by
         // the creation request it still waits on or by its directory.
@@ -1783,13 +1842,15 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             delivery?: 'steer';
             skills?: CanonicalSkillMentions;
             fileResourcesExpanded?: boolean;
+            reasoningEffort?: string;
         } | undefined;
-        if (capturedTarget || capturedDraftSnapshot || delivery) {
+        if (capturedTarget || capturedDraftSnapshot || delivery || reasoningEffortToSend) {
             sendMessageOptions = {};
             if (capturedTarget) sendMessageOptions.target = capturedTarget;
             if (capturedDraftSnapshot) sendMessageOptions.draftSnapshot = capturedDraftSnapshot;
         }
         if (delivery && sendMessageOptions) sendMessageOptions.delivery = delivery;
+        if (reasoningEffortToSend) sendMessageOptions = { ...(sendMessageOptions ?? {}), reasoningEffort: reasoningEffortToSend };
 
         // Queued messages resolved their mentions when they were queued; only
         // the composer's own text can still name a document.

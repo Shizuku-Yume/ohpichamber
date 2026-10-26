@@ -638,13 +638,25 @@ export class WorkerProjection {
     const header = this.manager.getHeader();
     const createdAt = header ? Date.parse(header.timestamp) : Date.now();
     const selection = selectedBranchRevert(entries);
+    let nativeSelection: ProjectionSeed['selection'] = { model: null, thinkingLevel: null };
+    for (const entry of entries) {
+      if (entry.type === 'model_change') {
+        const slash = entry.model.indexOf('/');
+        if (slash > 0 && slash < entry.model.length - 1) {
+          nativeSelection = { ...nativeSelection,
+            model: { providerId: entry.model.slice(0, slash), modelId: entry.model.slice(slash + 1) } };
+        }
+      } else if (entry.type === 'thinking_level_change') {
+        nativeSelection = { ...nativeSelection, thinkingLevel: entry.configured ?? entry.thinkingLevel ?? null };
+      }
+    }
     for (const message of messages) {
       for (const part of message.parts) this.publicPart(part);
       if (message.providerId !== undefined) message.providerId = this.publicText(message.providerId);
       if (message.modelId !== undefined) message.modelId = this.publicText(message.modelId);
     }
     for (const turn of turns) if (turn.error !== undefined) turn.error = this.publicText(turn.error);
-    return { createdAt, updatedAt: Math.max(createdAt, updatedAt, messages.at(-1)?.createdAt ?? createdAt), mode,
+    return { createdAt, updatedAt: Math.max(createdAt, updatedAt, messages.at(-1)?.createdAt ?? createdAt), mode, selection: nativeSelection,
       branch: { branchId: `branch:${this.sessionId}`, branchVersion: (version + BigInt(virtualTurns.size)).toString(), leafMessageId,
         ...(selection?.revertedMessageId ? { revert: { messageId: selection.revertedMessageId } } : undefined) }, turns, messages,
     };

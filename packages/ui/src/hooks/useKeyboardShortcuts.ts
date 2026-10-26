@@ -4,7 +4,7 @@ import { isTerminalEventTarget } from '@/lib/terminalFocus';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { activateAdjacentSessionTab, activateSessionTabByIndex, closeSessionTabAndActivateNeighbour } from '@/lib/sessionTabs';
 import { navigateSessionHistory } from '@/lib/sessionNavigationHistory';
-import { useSelectionStore } from '@/sync/selection-store';
+import { ROOT_SELECTION_AGENT, useSelectionStore } from '@/sync/selection-store';
 import * as sessionActions from '@/sync/session-actions';
 import { normalizeContextPanelDirectoryKey, useUIStore } from '@/stores/useUIStore';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
@@ -288,23 +288,23 @@ export const useKeyboardShortcuts = () => {
       const efforts = ['off', ...model.reasoningOptions.map(option => option.reasoningEffort).filter(effort => effort !== 'off')];
       const sessionId = useSessionUIStore.getState().currentSessionId;
       const { currentAgentName, currentProviderId, currentModelId } = config;
-      const savedEffort = sessionId && currentAgentName && currentProviderId && currentModelId
-        ? useSelectionStore.getState().getAgentModelReasoningEffortForSession(sessionId, currentAgentName, currentProviderId, currentModelId)
+      const savedEffort = sessionId && currentProviderId && currentModelId
+        ? useSelectionStore.getState().getAgentModelReasoningEffortForSession(sessionId, currentAgentName ?? ROOT_SELECTION_AGENT, currentProviderId, currentModelId)
         : undefined;
       const currentEffort = savedEffort ?? config.currentReasoningEffort ?? 'off';
       const currentIndex = efforts.indexOf(currentEffort);
       const nextEffort = efforts[((currentIndex < 0 ? 0 : currentIndex) + 1) % efforts.length];
       config.setCurrentReasoningEffort(nextEffort);
       config.setCurrentVariantOverride(null, undefined);
-      if (sessionId && currentAgentName && currentProviderId && currentModelId) {
+      if (sessionId && currentProviderId && currentModelId) {
         useSelectionStore.getState().saveAgentModelReasoningEffortForSession(
           sessionId,
-          currentAgentName,
+          currentAgentName ?? ROOT_SELECTION_AGENT,
           currentProviderId,
           currentModelId,
           nextEffort,
         );
-        useSelectionStore.getState().saveAgentModelVariantForSession(sessionId, currentAgentName, currentProviderId, currentModelId, null);
+        useSelectionStore.getState().saveAgentModelVariantForSession(sessionId, currentAgentName ?? ROOT_SELECTION_AGENT, currentProviderId, currentModelId, null);
       }
     },
     cycle_favorite_model_forward: () => cycleFavoriteModel(1),

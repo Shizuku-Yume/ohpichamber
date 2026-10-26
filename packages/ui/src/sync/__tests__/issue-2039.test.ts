@@ -592,7 +592,7 @@ describe("assistant answer worktree routing", () => {
     })
     spyOn(canonicalClient, "createRun").mockImplementation(async sessionId => {
       order.push("prompt")
-      return { run: { runId: "goal-run", sessionId, status: "running", createdAt: 1 } }
+      return { run: { runId: "goal-run", sessionId, status: "running", origin: "host", createdAt: 1 } }
     })
     await useSessionUIStore.getState().createSessionFromAssistantMessage({
       sessionId: "source-session", directory: "/repo", text: "Implement the requested feature",

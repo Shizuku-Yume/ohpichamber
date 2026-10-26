@@ -129,6 +129,13 @@ export class WorkerSession {
         this.publishContinuationPending();
         this.emit(this.projection.consume(event));
         if (event.type === 'goal_updated' || event.type === 'agent_end') this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', mode: this.modeController.mode() } }]);
+        if (event.type === 'thinking_level_changed') {
+          const model = session.model;
+          this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', selection: {
+            model: model ? { providerId: model.provider, modelId: model.id } : null,
+            thinkingLevel: event.configured ?? event.thinkingLevel ?? null,
+          } } }]);
+        }
         if (event.type === 'message_end' || event.type === 'turn_end' || event.type === 'agent_end') void this.bind().catch(() => this.fail());
       } catch { this.fail(); }
     });
@@ -567,7 +574,7 @@ export class WorkerSession {
       case 'goal': {
         const request = operation;
         if (request.op === 'create' && (request.providerId || request.modelId || request.variant !== undefined || request.reasoningEffort !== undefined)) {
-          await this.selectOptions({ providerId: request.providerId, modelId: request.modelId, variant: request.variant ?? null, reasoningEffort: request.reasoningEffort ?? null });
+          await this.selectOptions({ providerId: request.providerId ?? null, modelId: request.modelId ?? null, agentId: null, variant: request.variant ?? null, reasoningEffort: request.reasoningEffort ?? null });
         }
         if (request.op === 'create' || request.op === 'resume') {
           if (this.preparation || this.projection.activeRun() || this.session.isStreaming || this.continuationPending) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');

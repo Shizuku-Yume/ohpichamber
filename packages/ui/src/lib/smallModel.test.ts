@@ -22,7 +22,7 @@ beforeEach(() => {
     expect(directory).toBe('/source');
     return { workspaceId: 'workspace-source', projectId: 'project-source', name: 'Source' };
   });
-  const models = spyOn(canonicalClient, 'getModels').mockImplementation(async workspaceId => ({ workspaceId, revision: '0', models: [{ provider: 'source', modelId: 'source-model', name: 'Source', modalities: ['text'], contextWindow: 8000, maxOutputTokens: 2000, reasoningEffortSupported: false, reasoningOptions: [], variants: [], pricing: null }] }));
+  const models = spyOn(canonicalClient, 'getModels').mockImplementation(async workspaceId => ({ workspaceId, revision: '0', defaults: { model: null, thinkingLevel: null }, models: [{ provider: 'source', modelId: 'source-model', name: 'Source', modalities: ['text'], contextWindow: 8000, maxOutputTokens: 2000, reasoningEffortSupported: false, reasoningOptions: [], variants: [], pricing: null }] }));
   const fetcher = spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json({}));
   restorers = [() => workspace.mockRestore(), () => models.mockRestore(), () => fetcher.mockRestore()];
 });

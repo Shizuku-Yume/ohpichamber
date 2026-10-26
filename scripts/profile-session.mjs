@@ -27,6 +27,7 @@ import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import process from "node:process"
 
+import { ACCESSIBILITY_CATEGORY, accessibilityInWindow, accessibilityState, describeAccessibility, FORCE_ACCESSIBILITY_ARGS } from "./perf/accessibility.mjs"
 import { CdpClient, createPageTarget, evaluateValue, findPageTarget, launchChrome, reservePort, resolveChrome, resolveProfileDir, wait } from "./perf/cdp.mjs"
 import { buildIdleProbeSource, IDLE_PROBE_GLOBAL } from "./perf/idle-probe.mjs"
 import { summarizeCpuProfile } from "./perf/cpu-profile.mjs"
@@ -34,6 +35,7 @@ import { growthPerSecond, longestTaskInWindow, metricMap, round, summarizeFrameB
 import { createProcessCpuSampler, openBrowserClient, resolveServerProcesses } from "./perf/process-cpu.mjs"
 import { buildRenderProbeSource, printRenderProbe, readRenderProbe, RENDER_PROBE_GLOBAL, summarizeRenderProbe } from "./perf/render-probe.mjs"
 import { expandProjects, expandSessionLists } from "./perf/scenario.mjs"
+import { rendererMainThread, traceWindow } from "./perf/trace-analysis.mjs"
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const cliPath = join(repoRoot, "packages/web/bin/cli.js")
@@ -62,6 +64,17 @@ Options:
                            another one. Measures what an idle session costs
                            while a different session is active in the
                            background.
+  --grow <turns>           Before recording, send this many turns into the
+                           session while the page shows it, so the history
+                           accumulates in memory the way it does for someone
+                           working in one chat. Opening a long session loads
+                           only its last turns, so without this a long session
+                           is measured with a short history in memory.
+  --grow-model <model>     Model for the grown turns
+                           (default: perf/agent-20tools-20000cps)
+  --cpu-throttle <rate>    Slow the page's CPU down this many times
+                           (Emulation.setCPUThrottlingRate), to approximate
+                           a slower machine than the one measuring
   --prompt <text>          Prompt to send (default: a long markdown+code answer)
   --model <provider/model> Model override (default: configured selection)
   --agent <id>             Agent override (default: configured selection)
@@ -91,7 +104,12 @@ Options:
                            DevTools Performance panel and Perfetto both open.
   --extra-categories <list> Comma-separated trace categories to add, such as
                            disabled-by-default-devtools.timeline.invalidationTracking
-                           (names what invalidated each style recalc)
+                           (names what invalidated each style recalc). The
+                           accessibility category is always recorded
+  --force-accessibility    Launch Chrome with its accessibility tree on, as an
+                           accessibility client turns it on (a screen reader,
+                           or a macOS app that reads other windows), so every
+                           machine and headless runs measure that case
   --render-probe           Count renders per component, renders that changed
                            nothing in the DOM, store notifications and DOM
                            mutations per region (scripts/perf/render-probe.mjs).
@@ -136,6 +154,9 @@ const parseArgs = (argv) => {
     expandProjects: false,
     expandSessions: false,
     prompt: DEFAULT_PROMPT,
+    grow: 0,
+    growModel: "perf/agent-20tools-20000cps",
+    cpuThrottle: 1,
     model: null,
     agent: null,
     settle: 12,
@@ -155,6 +176,7 @@ const parseArgs = (argv) => {
     injectScript: null,
     quiet: 0,
     extraCategories: [],
+    forceAccessibility: false,
     renderProbe: false,
     renderProbeHook: null,
     heapSampling: false,
@@ -180,6 +202,9 @@ const parseArgs = (argv) => {
     else if (value === "--view-session") options.viewSession = argv[++index]
     else if (value === "--expand-projects") options.expandProjects = true
     else if (value === "--expand-sessions") options.expandSessions = true
+    else if (value === "--grow") options.grow = Number(argv[++index])
+    else if (value === "--grow-model") options.growModel = argv[++index]
+    else if (value === "--cpu-throttle") options.cpuThrottle = Number(argv[++index])
     else if (value === "--prompt") options.prompt = argv[++index]
     else if (value === "--model") options.model = argv[++index]
     else if (value === "--agent") options.agent = argv[++index]
@@ -196,6 +221,7 @@ const parseArgs = (argv) => {
     else if (value === "--inject-script") options.injectScript = argv[++index]
     else if (value === "--quiet") options.quiet = Number(argv[++index])
     else if (value === "--extra-categories") options.extraCategories = String(argv[++index]).split(",").map((category) => category.trim()).filter(Boolean)
+    else if (value === "--force-accessibility") options.forceAccessibility = true
     else if (value === "--render-probe") options.renderProbe = true
     else if (value === "--render-probe-hook") options.renderProbeHook = argv[++index]
     else if (value === "--heap-sampling") options.heapSampling = true
@@ -205,6 +231,9 @@ const parseArgs = (argv) => {
     else throw new Error(`Unknown option: ${value}`)
   }
   if (!Number.isFinite(options.quiet) || options.quiet < 0) throw new Error("--quiet must be a number of seconds")
+  if (!Number.isInteger(options.grow) || options.grow < 0) throw new Error("--grow must be a number of turns")
+  if (!Number.isFinite(options.cpuThrottle) || options.cpuThrottle < 1) throw new Error("--cpu-throttle must be a rate of 1 or more")
+  if (options.grow > 0 && options.viewSession) throw new Error("--grow fills the displayed session; it cannot run with --view-session")
   if (options.processCpuOnly && (options.renderProbe || options.heapSampling)) throw new Error("--process-cpu-only switches every in-page instrument off; it cannot run with --render-probe or --heap-sampling")
   const parsed = new URL(options.url)
   options.port = options.port ?? parsed.port ?? "3000"
@@ -276,6 +305,25 @@ const countRenderedMessages = async (client) => {
  */
 const messageTextGrowth = (before, after) => Object.entries(after.perMessage ?? {})
   .reduce((total, [id, length]) => total + Math.max(0, length - (before.perMessage?.[id] ?? 0)), 0)
+
+/** Scrolls the chat to its end, as a reader clicking the scroll-to-bottom pill. */
+const scrollChatToEnd = async (client) => {
+  await evaluateValue(client, `(() => {
+    const scroller = document.querySelector('[data-scrollbar="chat"]')
+    if (scroller) scroller.scrollTop = scroller.scrollHeight
+  })()`)
+  await wait(500)
+}
+
+/**
+ * How many message records of the session the app holds in memory, or null
+ * when the debug hook is missing. What the timeline derives its rows from,
+ * which a virtualised DOM does not show.
+ */
+const readHistoryRecords = async (client, sessionId) => {
+  const count = await evaluateValue(client, `globalThis.__opencodeDebug?.getCachedMessageCount?.(${JSON.stringify(sessionId)}) ?? null`)
+  return Number.isInteger(count) && count >= 0 ? count : null
+}
 
 /**
  * Reads which directory the app has active and which one owns the session.
@@ -428,6 +476,8 @@ const REPORTED_METRICS = [
   { key: "longestTaskMs", fromTrace: true, label: "Longest task", unit: "ms", lowerIsBetter: true },
   { key: "taskP95Ms", fromTrace: true, label: "Task p95", unit: "ms", lowerIsBetter: true },
   { key: "taskP99Ms", fromTrace: true, label: "Task p99", unit: "ms", lowerIsBetter: true },
+  { key: "accessibilityMs", fromTrace: true, label: "Accessibility", unit: "ms", lowerIsBetter: true },
+  { key: "accessibilityLongestPassMs", fromTrace: true, label: "Longest a11y pass", unit: "ms", lowerIsBetter: true },
   { key: "blockedPercent", fromTrace: true, label: "Time in long tasks", unit: "%", lowerIsBetter: true },
   { key: "mainThreadBusyPercent", label: "Main-thread busy", unit: "%", lowerIsBetter: true },
   { key: "recalcStylePerSecond", label: "Style recalcs/sec", unit: "", lowerIsBetter: true },
@@ -453,11 +503,15 @@ const printReport = (summary, baseline) => {
   if (summary.injectedScript) console.log(`MODIFIED APP — injected script: ${summary.injectedScript}`)
   if (summary.renderProbe || summary.heapSampling) console.log(`ATTRIBUTION RUN — ${[summary.renderProbe && "render probe", summary.heapSampling && "heap sampling"].filter(Boolean).join(" and ")} on; its timings are inflated`)
   if (summary.quiet) console.log(`QUIET — no prompt was sent; ${summary.metrics.streamSeconds}s with the session open`)
+  if (summary.cpuThrottle > 1) console.log(`CPU THROTTLED ${summary.cpuThrottle}x — approximates a slower machine`)
   if (summary.attachedPort) console.log(`ATTACHED — an already running browser on port ${summary.attachedPort} showing ${summary.pageUrl}`)
   console.log(`Session: ${summary.sessionId}${summary.model ? `  Model: ${summary.model}` : ""}`)
+  console.log(`History in memory: ${summary.historyRecordsBefore ?? "unknown"} -> ${summary.historyRecordsAfter ?? "unknown"} records${summary.grownTurns ? ` (${summary.grownTurns} turns grown with the page open)` : ""}`)
   console.log("")
   if (summary.instrumented === false) {
     console.log("Uninstrumented run: trace, sampler and probe were off, so their metrics are omitted rather than shown as zero.\n")
+  } else if (summary.accessibility) {
+    console.log(`${describeAccessibility(summary.accessibility)}\n`)
   }
   for (const metric of REPORTED_METRICS) {
     if (metric.fromTrace && summary.instrumented === false) continue
@@ -603,7 +657,8 @@ const main = async () => {
   }
 
   const port = attached ? options.attach : await reservePort()
-  const chromeProcess = attached ? null : launchChrome({ chrome, profileDir, port, headless: options.headless })
+  if (attached && options.forceAccessibility) throw new Error("--force-accessibility launches Chrome; it does not apply with --attach")
+  const chromeProcess = attached ? null : launchChrome({ chrome, profileDir, port, headless: options.headless, extraArgs: options.forceAccessibility ? FORCE_ACCESSIBILITY_ARGS : [] })
   let client
   let browserClient
   try {
@@ -651,6 +706,7 @@ const main = async () => {
     if (options.injectScript) {
       await client.send("Page.addScriptToEvaluateOnNewDocument", { source: await readFile(resolve(options.injectScript), "utf8") })
     }
+    if (options.cpuThrottle > 1) await client.send("Emulation.setCPUThrottlingRate", { rate: options.cpuThrottle })
     // An attached window is measured at the size the user gave it.
     if (!attached) await client.send("Emulation.setDeviceMetricsOverride", {
       width: 1600, height: 1000, deviceScaleFactor: 1, mobile: false,
@@ -696,6 +752,29 @@ const main = async () => {
       await wait(options.settle * 1000)
     }
 
+    if (options.grow > 0) {
+      // Sent with the page showing the session, so every turn reaches the
+      // app by event and stays in memory, as it does for a live chat.
+      for (let turn = 1; turn <= options.grow; turn += 1) {
+        await runSessionCli([
+          "send", ...cliBase,
+          "--session", sessionId,
+          "--prompt", `History turn ${turn}: explain the next part.`,
+          "--model", options.growModel,
+          "--wait", "--timeout", "300",
+        ])
+        // A turn that outgrows the screen stops the follow, and the next
+        // turns would land unmounted below it. Someone working in the chat
+        // reads at the end, so return there as they would.
+        await scrollChatToEnd(client)
+        if (turn % 10 === 0 || turn === options.grow) console.log(`Grew ${turn}/${options.grow} turns`)
+      }
+      console.log(`Settling ${options.settle}s after growing the history.`)
+      await wait(options.settle * 1000)
+    }
+    const historyRecordsBefore = await readHistoryRecords(client, sessionId)
+    console.log(`History in memory: ${historyRecordsBefore ?? "unknown"} records.`)
+
     if (instrumented) {
       await evaluateValue(client, `globalThis[${JSON.stringify(IDLE_PROBE_GLOBAL)}]?.start()`)
       await evaluateValue(client, `window.__openchamberSyncPerformance?.reset()`)
@@ -708,21 +787,20 @@ const main = async () => {
       await client.send("HeapProfiler.enable")
       await client.send("HeapProfiler.startSampling", { samplingInterval: 32768, includeObjectsCollectedByMajorGC: true, includeObjectsCollectedByMinorGC: true })
     }
-    if (instrumented) await client.send("Tracing.start", {
-      transferMode: "ReportEvents",
-      // `RunTask` is only emitted under the disabled-by-default timeline
-      // category. Without it the capture silently reports zero long tasks.
-      categories: [
-        "devtools.timeline",
-        "disabled-by-default-devtools.timeline",
-        "disabled-by-default-devtools.timeline.frame",
-        "blink.user_timing",
-        // `toplevel` wraps every task on every thread of every process; the
-        // rest name what the compositor and the GPU process did inside them.
-        ...(options.threadBreakdown ? ["toplevel", "cc", "viz", "gpu", "v8.gc", "disabled-by-default-v8.gc"] : []),
-        ...options.extraCategories,
-      ].join(","),
-    })
+    // `RunTask` is only emitted under the disabled-by-default timeline
+    // category. Without it the capture silently reports zero long tasks.
+    const categories = [...new Set([
+      "devtools.timeline",
+      "disabled-by-default-devtools.timeline",
+      "disabled-by-default-devtools.timeline.frame",
+      "blink.user_timing",
+      ACCESSIBILITY_CATEGORY,
+      // `toplevel` wraps every task on every thread of every process; the
+      // rest name what the compositor and the GPU process did inside them.
+      ...(options.threadBreakdown ? ["toplevel", "cc", "viz", "gpu", "v8.gc", "disabled-by-default-v8.gc"] : []),
+      ...options.extraCategories,
+    ])]
+    if (instrumented) await client.send("Tracing.start", { transferMode: "ReportEvents", categories: categories.join(",") })
 
     const before = metricMap((await client.send("Performance.getMetrics")).metrics)
     const renderedBefore = await countRenderedMessages(client)
@@ -823,6 +901,7 @@ const main = async () => {
 
     const elapsedSeconds = (Date.now() - startedAt) / 1000
     const renderedAfter = await countRenderedMessages(client)
+    const historyRecordsAfter = await readHistoryRecords(client, sessionId)
     const after = metricMap((await client.send("Performance.getMetrics")).metrics)
     const profile = instrumented ? (await client.send("Profiler.stop")).profile : null
     const heapProfile = options.heapSampling ? (await client.send("HeapProfiler.stopSampling")).profile : null
@@ -880,6 +959,10 @@ const main = async () => {
       ? longestTaskInWindow(traceEvents, sessionIdle.micros, sessionIdle.micros + 1_000_000)
       : null
     const traceBreakdown = summarizeTraceEvents(traceEvents)
+    const recordedWindow = traceWindow(traceEvents)
+    const accessibility = instrumented
+      ? accessibilityInWindow(traceEvents, { main: rendererMainThread(traceEvents, recordedWindow).main, ...recordedWindow, recorded: true })
+      : null
     const threadBreakdown = options.threadBreakdown ? summarizeThreads(traceEvents) : null
     const delta = (name) => Number(after[name] ?? 0) - Number(before[name] ?? 0)
     const perSecond = (name) => round(delta(name) / elapsedSeconds)
@@ -908,12 +991,17 @@ const main = async () => {
       heapSampling: heapProfile ? summarizeHeapProfile(heapProfile) : null,
       assistantResponse,
       renderedStream,
+      grownTurns: options.grow,
+      cpuThrottle: options.cpuThrottle,
+      historyRecordsBefore,
+      historyRecordsAfter,
       renderedMessagesBefore: renderedBefore.messages,
       renderedMessagesAfter: renderedAfter.messages,
       renderedCharacterGrowth,
       traceComplete,
       disposableSession: !options.keepSession && !options.session,
       sessionIdle,
+      accessibility: instrumented ? accessibilityState(traceEvents, { categories, forced: options.forceAccessibility }) : null,
       metrics: {
         ...tasks,
         ...frameBudget,
@@ -921,6 +1009,10 @@ const main = async () => {
         // code highlights, the list re-measures) right after the session goes idle.
         finalizeLongestTaskMs: finalize?.longestMs ?? null,
         finalizeTasksOver16msCount: finalize?.tasksOver16msCount ?? null,
+        // Serializing the accessibility tree, paid only while an accessibility
+        // client is on (`accessibility` says whether it was).
+        accessibilityMs: accessibility?.ms ?? null,
+        accessibilityLongestPassMs: accessibility?.longestPassMs ?? null,
         blockedPercent: round((tasks.longTaskTotalMs / (elapsedSeconds * 1000)) * 100),
         mainThreadBusyPercent: round((delta("TaskDuration") / elapsedSeconds) * 100),
         recalcStylePerSecond: perSecond("RecalcStyleCount"),

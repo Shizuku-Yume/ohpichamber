@@ -311,9 +311,18 @@ export class SessionRegistry {
 
   private async readNativeSessions(workspace: SessionWorkspaceScope): Promise<SessionInfo[]> {
     const directory = SessionManager.getDefaultSessionDir(workspace.cwd, workspace.agentDirectory);
-    try { await access(directory); }
-    catch { throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', undefined, 'OMP session storage is unavailable'); }
-    return (await listSessionsReadOnly(directory, new FileSessionStorage())).filter(info => !isEmptySession(info));
+    try {
+      await access(directory);
+    } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') return [];
+      throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', undefined, 'OMP session storage is unavailable');
+    }
+    try {
+      return (await listSessionsReadOnly(directory, new FileSessionStorage())).filter(info => !isEmptySession(info));
+    } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') return [];
+      throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', undefined, 'OMP session storage is unavailable');
+    }
   }
 
   private withNativeFacts(current: RuntimeSession, info: SessionInfo): RuntimeSession {

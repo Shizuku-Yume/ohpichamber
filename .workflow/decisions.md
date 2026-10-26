@@ -426,3 +426,12 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Effort:** omp-native-parity
 - **Mine:** yes
 - **Revisit when:** OMP exposes a scoped open-by-session-file API that makes the reference index unnecessary, or a listed session must be mutated without a prior list read.
+
+## 2026-10-27 - Suppress OMP replan title refresh
+
+- **Decided:** Disable `title.refreshOnReplan` (`cfgTitleRefreshOnReplan`) in the worker's in-memory session settings. Automatic titles run only through the worker's authorized selected-model title generator after an idle turn.
+- **Instead of:** Allowing OMP's todo tool replan hook to invoke background `generateTitle()` with default candidate roles, or globally disabling titles via `PI_NO_TITLE`.
+- **Because:** OMP's replan title refresh has no provider-authorization hook and can fall back to unconfigured or unauthorized credentials, violating the enterprise boundary. The worker's own auto-title path authorizes the session's selected model before releasing credentials.
+- **Effort:** omp-native-parity
+- **Mine:** yes
+- **Revisit when:** OMP adds an authorization hook for replan title refreshes or delegates replan title generation to the host.

@@ -71,3 +71,30 @@ test('lists OMP storage including unreferenced CLI sessions and renames through 
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('an empty workspace without an OMP session directory returns an empty list without workers', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'omp-session-index-empty-'));
+  const previousHome = process.env.HOME;
+  const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+  process.env.HOME = root;
+  const cwd = join(root, 'empty-workspace');
+  const agentDirectory = join(root, 'agent');
+  await Promise.all([mkdir(cwd), mkdir(agentDirectory)]);
+  setAgentDir(agentDirectory);
+  const workers = new WorkerRegistry({ workerEntrypoint: 'unused-test-entrypoint' });
+  const stateDirectory = join(root, 'service-state');
+  const registry = new SessionRegistry(stateDirectory, workers);
+  try {
+    await registry.initialize();
+    const scope = { workspaceId: 'empty-workspace', projectId: 'project', cwd, agentDirectory };
+    const listed = await registry.list(scope);
+    expect(listed.items).toEqual([]);
+    expect(listed.errors).toEqual([]);
+    expect(workers.list()).toEqual([]);
+  } finally {
+    await registry.close();
+    if (previousHome === undefined) delete process.env.HOME; else process.env.HOME = previousHome;
+    if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR; else process.env.PI_CODING_AGENT_DIR = previousAgentDir;
+    await rm(root, { recursive: true, force: true });
+  }
+});

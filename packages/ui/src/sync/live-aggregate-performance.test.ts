@@ -6,6 +6,7 @@ const session = (sessionId: string, updatedAt: number): Session => ({ sessionId,
 describe('native live status aggregation', () => {
   test('indexes each session once instead of scanning per status', () => {
     const sessions = Array.from({ length: 50 }, (_, index) => session(`session-${index}`, index));
+    // SAFETY: 'running' is a valid literal member of SessionRuntimeStatus.
     const session_status = Object.fromEntries(sessions.map((item) => [item.sessionId, 'running' as SessionRuntimeStatus]));
     resetSyncPerformanceDiagnostics(); setSyncPerformanceDiagnosticsEnabled(true);
     const statuses = aggregateLiveSessionStatuses([{ session: sessions, session_status }]);
@@ -18,6 +19,7 @@ describe('native live status aggregation', () => {
     expect(areSessionListsEquivalent([original], [{ ...original }])).toBe(true);
     expect(areSessionListsEquivalent([original], [{ ...original, epoch: 'epoch_2' }])).toBe(false);
     expect(areSessionListsEquivalent([original], [{ ...original, headSequence: '1' }])).toBe(false);
+    expect(areSessionListsEquivalent([original], [{ ...original, title: 'Renamed' }])).toBe(false);
     expect(areSessionListsEquivalent([original], [{ ...original, title: 'Renamed', metadata: {}, metadataRevision: '1' }])).toBe(false);
   });
 });

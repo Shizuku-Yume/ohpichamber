@@ -27,6 +27,7 @@ export async function generateSelectedModelTitle(input: {
   if (!model) return null;
   const selector = formatModelString(model);
   const previousRoles = { ...cfgModelRoles.get(input.settings) };
+  const rolesProvenance = input.settings.getProvenance(cfgModelRoles);
   const previousFallback = cfgRetryModelFallback.get(input.settings);
   const fallbackProvenance = input.settings.getProvenance(cfgRetryModelFallback);
   cfgModelRoles.override(input.settings, {
@@ -41,7 +42,8 @@ export async function generateSelectedModelTitle(input: {
     const title = await input.session.generateTitle(input.firstMessage, undefined, input.signal);
     return title?.trim() || null;
   } finally {
-    cfgModelRoles.override(input.settings, previousRoles);
+    if (rolesProvenance === 'runtime') cfgModelRoles.override(input.settings, previousRoles);
+    else cfgModelRoles.clearOverride(input.settings);
     if (fallbackProvenance === 'runtime') cfgRetryModelFallback.override(input.settings, previousFallback);
     else cfgRetryModelFallback.clearOverride(input.settings);
   }

@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { Settings, resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { cfgModelRoles } from '@oh-my-pi/pi-coding-agent/config/model-settings';
 import { cfgRetryModelFallback } from '@oh-my-pi/pi-coding-agent/session/settings';
+import { cfgTitleRefreshOnReplan } from '@oh-my-pi/pi-coding-agent/utils/title-settings';
 import type { AgentSession } from '@oh-my-pi/pi-coding-agent/session/agent-session';
 import { generateSelectedModelTitle } from './auto-title.ts';
 
@@ -81,4 +82,43 @@ test('an unauthorized title provider releases no credential and leaves the sessi
   expect(generated).toBe(false);
   expect(cfgModelRoles.get(settings)).toMatchObject({ tiny: 'previous/tiny' });
   expect(cfgRetryModelFallback.get(settings)).toBe(true);
+});
+
+test('restores model roles provenance to non-runtime when no prior override existed', async () => {
+  expect(settings.getProvenance(cfgModelRoles)).not.toBe('runtime');
+  // SAFETY: the helper reads only model and generateTitle; the fixture supplies exactly those members.
+  const session = {
+    model: selectedModel,
+    generateTitle: async () => 'Fresh Title',
+  } as Pick<AgentSession, 'model' | 'generateTitle'>;
+
+  const title = await generateSelectedModelTitle({
+    session,
+    settings,
+    firstMessage: 'Test prompt',
+    authorize: async () => {},
+  });
+
+  expect(title).toBe('Fresh Title');
+  expect(settings.getProvenance(cfgModelRoles)).not.toBe('runtime');
+});
+
+test('replan-triggered OMP generation is disabled by cfgTitleRefreshOnReplan while authorized generation succeeds', async () => {
+  cfgTitleRefreshOnReplan.override(settings, false);
+  expect(cfgTitleRefreshOnReplan.get(settings)).toBe(false);
+
+  // SAFETY: the helper reads only model and generateTitle; the fixture supplies exactly those members.
+  const session = {
+    model: selectedModel,
+    generateTitle: async () => 'Authorized replan title',
+  } as Pick<AgentSession, 'model' | 'generateTitle'>;
+  const title = await generateSelectedModelTitle({
+    session,
+    settings,
+    firstMessage: 'Authorized prompt',
+    authorize: async () => {},
+  });
+
+  expect(title).toBe('Authorized replan title');
+  expect(cfgTitleRefreshOnReplan.get(settings)).toBe(false);
 });

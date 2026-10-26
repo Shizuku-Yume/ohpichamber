@@ -33,6 +33,7 @@ import { createHostToolExtension } from './host-tool.ts';
 import type { WorkerHostInvoke } from './host-actions.ts';
 import { formatModelString } from '@oh-my-pi/pi-coding-agent/config/model-resolver';
 import { generateSelectedModelTitle } from './auto-title.ts';
+import { cfgTitleRefreshOnReplan } from '@oh-my-pi/pi-coding-agent/utils/title-settings';
 import { captureNativePolicy } from './native-policy-snapshot.ts';
 import type { HostNativePolicySnapshot, NativePolicyContext } from '../native-policy-protocol.ts';
 import { createNativeBashPolicyExtension } from './native-bash-policy.ts';
@@ -245,12 +246,14 @@ export class WorkerSession {
           } catch { return 'prompt'; }
         },
       );
+      // OMP owns titles. The worker runs its own automatic title after an idle
+      // turn so the title provider can be pinned and authorized before its
+      // credentials are released; OMP's autoTitle and replan title paths have
+      // no such seam.
+      cfgTitleRefreshOnReplan.override(settings, false);
       const result = await createAgentSession({
         cwd: input.cwd, agentDir: input.agentDirectory, sessionManager: manager, authStorage, modelRegistry, settings,
         initialModelRefreshStrategy: 'offline',
-        // OMP owns titles. The worker runs its own automatic title after an idle
-        // turn so the title provider can be pinned and authorized before its
-        // credentials are released; OMP's autoTitle path has no such seam.
         autoTitle: false,
         enableMCP: mcp !== undefined, mcpManager: mcp, enableLsp: false, disableExtensionDiscovery: true,
         hasUI: true, interactivePrompts: true, subagentEventBus, extensions: [observer, createNativeBashPolicyExtension({ interaction, approval: bashPolicy.approval,
@@ -591,7 +594,12 @@ export class WorkerSession {
 
   /** Start one best-effort title attempt once the session is idle and still unnamed. */
   private scheduleAutoTitle(): void {
-    if (this.closed || this.failed || process.env.PI_NO_TITLE || this.titleGeneration || this.session.isStreaming || this.projection.activeRun() || this.session.sessionManager.getSessionName()) return;
+    if (this.closed || this.failed || process.env.PI_NO_TITLE || this.titleGeneration || this.session.isStreaming || this.projection.activeRun() || this.cancellingRunId || this.session.sessionManager.getSessionName()) return;
+    const lastTurn = this.projection.seed().turns.at(-1);
+    if (lastTurn && (lastTurn.status === 'failed' || lastTurn.status === 'cancelled')) {
+      this.pendingTitleInput = undefined;
+      return;
+    }
     const text = this.pendingTitleInput;
     if (!text) return;
     this.pendingTitleInput = undefined;
@@ -776,6 +784,7 @@ export class WorkerSession {
       case 'prompt': {
         if (this.preparation || this.projection.activeRun() || this.continuationPending) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
         if (this.skillsApplying || !this.admission.skillsAvailable) throw new ProjectionError(503, 'SKILL_APPLY_FAILED', 'Native skills must be successfully applied before prompt admission');
+        await this.stopAutoTitle();
         this.preparation = this.prepare(operation);
         let prepared: PreparedPrompt;
         try { prepared = await this.preparation; }
@@ -783,16 +792,19 @@ export class WorkerSession {
         if (this.closed || this.failed) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Worker session is unavailable');
         if (this.skillsApplying || !this.admission.skillsAvailable) throw new ProjectionError(503, 'SKILL_APPLY_FAILED', 'Native skills changed during prompt preparation');
         this.pendingTitleInput = operation.request.input.text.trim() || undefined;
-        await this.stopAutoTitle();
         this.emit(this.projection.beginRun(operation.runId, Date.now(), operation.request.input.attachments));
         const run = this.projection.activeRun();
         if (!run) throw new ProjectionError(503, 'INTERNAL_ERROR', 'Run admission failed');
         const accepted: Run = { ...run };
         this.promptTask = this.session.prompt(prepared.text, prepared.options).then(async dispatched => {
           await this.bind();
-          if (!dispatched) this.emit(this.cancellingRunId === operation.runId
-            ? this.projection.cancelRun(Date.now()) : this.projection.completeRun(Date.now()));
+          if (!dispatched) {
+            this.pendingTitleInput = undefined;
+            this.emit(this.cancellingRunId === operation.runId
+              ? this.projection.cancelRun(Date.now()) : this.projection.completeRun(Date.now()));
+          }
         }).catch(() => {
+          this.pendingTitleInput = undefined;
           this.emit(this.cancellingRunId === operation.runId
             ? this.projection.cancelRun(Date.now()) : this.projection.failRun('Agent execution failed', Date.now()));
         });
@@ -804,6 +816,8 @@ export class WorkerSession {
         if (run.origin === 'goal') this.modeController.stopForHostAbort();
         this.planRevision++;
         this.cancellingRunId = operation.runId;
+        this.pendingTitleInput = undefined;
+        await this.stopAutoTitle();
         this.interaction.cancelAll();
         await this.session.abort();
         await this.promptTask;

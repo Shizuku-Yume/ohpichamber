@@ -191,6 +191,14 @@ and the delete dialog removed the worktree and its local branch (`git worktree l
 `08-worktree-active-git.png`, `09-works-view-lists-worktree.png`, `10-final-layout.png`; console log
 `logs/console.log`, server log `logs/dev.log`.
 
+**Check after (final rebase onto `4634e8bcf1`):** `bun install --frozen-lockfile` exit 0
+(`logs/install-land.log`), `bun run type-check` exit 0 (`logs/type-check-land.log`), `bun run lint`
+exit 0 (`logs/lint-land.log`), full suite (`logs/test-land.log`): sdk, ui (374 files / 6089 tests),
+agent-contract, scripts, electron and web pass; `agent-service` had one sleep-based timing failure
+(`registry-native.test.ts`, 7.6 s test under load) and passes alone
+(`logs/agent-service-registry-rerun.log`). The earlier run of the same suite failed a different
+agent-service timing test, so the flake follows load, not this change.
+
 **Limits.** Session creation in this environment returns 503 (`SDK worker operation failed`,
 `UNSUPPORTED_CAPABILITY` from the agent service), so a worktree with a live session could not be
 created in-app; archive-safe removal with sessions is covered by `worktreeRemovalFlow.test.ts`, while

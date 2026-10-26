@@ -169,3 +169,24 @@ returned 200 `{"ready":true,"engine":"omp","version":"1.0.0"}` (`ready.json`).
 - The isolated OMP profile could not restore a finished session after a worker restart, which
   blocked the UI archive action and any subagent turn; this is an environment limit of the copied
   provider config, not a change in this branch, and is recorded with the workaround above.
+
+### Restore follow-up (2026-10-27)
+
+The first real path archived through the Host route because the isolated OMP worker returned
+`SESSION_RESTORE_FAILED` after the turn. Task 23's fix `4634e8bcf1` (native
+`usage.reasoningTokens` failing the canonical `TokenUsage` parse) explains it, and the first
+real path ran on a tree without it (`b04297e4c1`): `git merge-base --is-ancestor 4634e8bcf1
+b04297e4c1` exits 1; against the landed `65862865d0` it exits 0.
+
+Re-ran the real path in a temporary worktree at the landed tip with the agent-service dist
+rebuilt (`bun run --cwd packages/agent-service build`), an isolated `HOME` holding only the OMP
+provider config and `OPENCHAMBER_DATA_DIR=/tmp/ohpi-08r-data`, UI 6180 / API 6102. Provider:
+GPT-6 Astra via CLIProxyAPI (real, no values printed). The prompt “Reply with exactly the word:
+restored” answered “restored”; the session settled `idle` (not `unavailable`). The UI action
+(session menu → Archive → “Archive session?” → Archive) archived it: `archivedAt
+1793059058874`. After a reload the Archive page shows “1 archived session — Untitled Session —
+Just now” (`05-archive-after-ui-reload.png`), and neither the console
+(`console-restore-check.txt`) nor the dev log contains `SESSION_RESTORE_FAILED`. Verdict: the
+restore defect is fixed by `4634e8bcf1`; the earlier archive workaround was a stale-tree/stale-
+dist artifact.
+

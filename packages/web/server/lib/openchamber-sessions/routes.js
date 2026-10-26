@@ -160,6 +160,11 @@ const createCanonicalSessionService = (dependencies) => {
     if (operation === 'send') deliveryIdentity.runId = deliveryRunId;
     if (commandId !== undefined) deliveryIdentity.commandId = commandId;
     const capture = await prepareDelivery(scope, requestBody, deliveryIdentity, capturedRequest);
+    // The Host owns the mutation boundary: a cold send must reopen its root
+    // before Agent Service prompt admission sees an unavailable runtime. Capture
+    // and validation stay ahead of this so an invalid prompt starts no worker.
+    // Steer and follow-up need an already-live run, so they never reopen.
+    if (operation === 'send') await reopen(scope);
     let acknowledgment;
     let receipt;
     try {
@@ -410,10 +415,22 @@ const createCanonicalSessionService = (dependencies) => {
       const body = await request(`/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/runs/${encodeURIComponent(requestBody.runId)}/abort`, { method: 'POST' });
       return { run: RunSchema.parse(body?.run) };
     }
+    // Mode, compact, goal, command and btw need a worker. Abort above does not:
+    // a cold root has no active run, so reopening would only waste a slot.
+    await reopen(scope);
     const body = await request(`/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/control`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(parsed) });
     return SessionControlAckSchema.parse(body);
   };
-  const remove = async (id) => { const scope = await scopeFor(id); const ack = SessionDeleteAckSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' })); if (ack.sessionId !== id) throw new OpenChamberControlError('Session deletion acknowledgement identified another session', 502); if (scope.workspaceId.startsWith('archive_')) await onArchiveDeleted?.(scope, ack); return ack; };
+  const remove = async (id) => {
+    const scope = await scopeFor(id);
+    // A writable root needs its worker to delete the transcript and stop cleanly.
+    // Deleted-space roots are removed from their archive by the cold owner.
+    if (!scope.workspaceId.startsWith('archive_')) await reopen(scope);
+    const ack = SessionDeleteAckSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' }));
+    if (ack.sessionId !== id) throw new OpenChamberControlError('Session deletion acknowledgement identified another session', 502);
+    if (scope.workspaceId.startsWith('archive_')) await onArchiveDeleted?.(scope, ack);
+    return ack;
+  };
   return { create, send, steer, followUp, fork, selectBranch, relocate, delete: remove, open, history, list, control, rename, resolveDirectory: async (payload = {}) => { const scope = await resolveWorkspaceScope(payload.workspaceId); if (!scope) throw new OpenChamberControlError('Workspace was not found', 404); return scope.cwd; }, archive, unarchive, getMetadata, setMetadata, sessionMetadataStore, archiveStore };
 };
 

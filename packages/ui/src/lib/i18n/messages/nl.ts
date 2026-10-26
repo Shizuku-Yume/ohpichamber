@@ -3181,6 +3181,7 @@ export const dict = {
   'updateDialog.header.updating': 'OpenChamber bijwerken...',
   'updateDialog.changelog.title': "Wat is er nieuw",
   'updateDialog.status.installingUpdate': 'Update installeren...',
+  'updateDialog.desktopHostInstall': 'OpenChamber {version} is beschikbaar. Werk het bij op de computer waarop het draait.',
   'updateDialog.status.restarting': 'Opnieuw starten...',
   'updateDialog.status.serverRestarting': 'Server herstarten...',
   'updateDialog.status.waitingForServer': 'Wachten op server...',

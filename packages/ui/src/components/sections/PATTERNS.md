@@ -19,7 +19,7 @@ shape is genuinely missing.
 
 - Flat hierarchy through spacing and typography; no cards, boxed backgrounds, or row chrome.
 - Secondary helper text is hidden behind an info icon (`info` prop) by default; the default view stays quiet.
-- Controls use the shared size constants (`size={SETTINGS_SELECT_SIZE}` for selects) and capped widths — no full-bleed inputs. See [control sizing](references/controls.md#standard-sizes-and-widths) for inputs without a size variant.
+- Controls take their chrome from the shared primitives (`dropdownTriggerVariants()` for selects; no per-call size) and capped widths — no full-bleed inputs. See [control sizing](references/controls.md#standard-sizes-and-widths) for inputs beside dropdowns.
 - Layouts respond to the settings pane width via container queries (`@xl:` / `@3xl:`), never viewport `sm:`/`lg:` breakpoints (the pane is much narrower than the viewport inside the dialog).
 - Checkbox/radio state comes before labels; selected states are subtle and never shift layout.
 

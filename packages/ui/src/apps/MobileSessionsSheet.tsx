@@ -2393,7 +2393,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
                 title={t('sourceBoard.title')}
                 style={{ touchAction: 'manipulation' }}
               >
-                <Icon name="todo" className="size-5" />
+                <Icon name="git-pull-request" className="size-5" />
               </Button>
               <Button
                 type="button"

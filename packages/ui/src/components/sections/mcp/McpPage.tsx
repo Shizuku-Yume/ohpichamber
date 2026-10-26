@@ -14,7 +14,6 @@ import {
   SettingsCheckboxRow,
   SETTINGS_FIELD_LABEL_CLASS,
   SETTINGS_HELPER_CLASS,
-  SETTINGS_SELECT_SIZE,
 } from '@/components/sections/shared/SettingsSection';
 import {
   useAutosave,
@@ -978,7 +977,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
                     changeRemoteTransport(type);
                   }}
                 >
-                  <SelectTrigger size={SETTINGS_SELECT_SIZE} className="w-fit min-w-[100px]">
+                  <SelectTrigger className="w-fit min-w-[100px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent align="end">

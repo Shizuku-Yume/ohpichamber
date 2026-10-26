@@ -290,7 +290,8 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
       case 'undo':
         return <Icon name="arrow-go-back" className="h-3.5 w-3.5 text-muted-foreground" />;
       case 'redo':
-        return <Icon name="arrow-go-forward" className="h-3.5 w-3.5 text-muted-foreground" />;
+        // The sprite has no forward-turn arrow; the mirrored undo arrow reads as redo.
+        return <Icon name="arrow-go-back" className="h-3.5 w-3.5 -scale-x-100 text-muted-foreground" />;
       case 'timeline':
         return <Icon name="time" className="h-3.5 w-3.5" />;
       case 'compact':

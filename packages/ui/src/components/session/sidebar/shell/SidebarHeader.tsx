@@ -183,7 +183,7 @@ export function SidebarHeader(props: Props): React.ReactNode {
                   onClick={() => useUIStore.getState().setSourceBoardOpen(!isSourceBoardOpen)}
                   className={headerActionButtonClass}
                 >
-                  <Icon name="todo" className={headerActionIconClass} />
+                  <Icon name="git-pull-request" className={headerActionIconClass} />
                 </SidebarPageButton>
               ) : null}
 

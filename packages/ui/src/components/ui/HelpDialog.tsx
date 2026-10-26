@@ -204,7 +204,7 @@ export const HelpDialog: React.FC = () => {
         {
           id: 'toggle_source_board',
           descriptionKey: 'helpDialog.item.toggleSourceBoard',
-          icon: "todo",
+          icon: "git-pull-request",
           keys: '',
         },
         {

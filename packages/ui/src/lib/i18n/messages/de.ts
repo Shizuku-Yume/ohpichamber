@@ -2915,6 +2915,7 @@ export const dict = {
   'updateDialog.header.updateAvailable': 'Update verfügbar',
   'updateDialog.header.updating': 'OpenChamber wird aktualisiert...',
   'updateDialog.status.installingUpdate': 'Update wird installiert...',
+  'updateDialog.desktopHostInstall': 'OpenChamber {version} ist verfügbar. Aktualisiere es auf dem Computer, auf dem es läuft.',
   'updateDialog.status.serverRestarting': 'Server wird neu gestartet...',
   'updateDialog.status.waitingForServer': 'Warten auf Server...',
   'updateDialog.status.autoReloadHint': 'Die Seite wird automatisch neu geladen, wenn das Update abgeschlossen ist.',

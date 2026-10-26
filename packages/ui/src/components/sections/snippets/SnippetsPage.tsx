@@ -13,7 +13,6 @@ import {
   SettingsSection,
   SettingsFieldRow,
   SettingsStackedField,
-  SETTINGS_SELECT_SIZE,
 } from '@/components/sections/shared/SettingsSection';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
 
@@ -133,7 +132,7 @@ export const SnippetsPage: React.FC = () => {
               className="h-7 w-44 px-2"
             />
             <Select value={draftScope} onValueChange={(value) => setDraftScope(value as SnippetScope)}>
-              <SelectTrigger size={SETTINGS_SELECT_SIZE} className="w-fit min-w-[100px]">
+              <SelectTrigger className="w-fit min-w-[100px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent align="end">

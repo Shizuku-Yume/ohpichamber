@@ -3135,6 +3135,7 @@ export const dict: Record<I18nKey, string> = {
   "updateDialog.header.updating": "Atualizando OpenChamber...",
   "updateDialog.changelog.title": "O que há de novo",
   "updateDialog.status.installingUpdate": "Instalando atualização...",
+  "updateDialog.desktopHostInstall": "OpenChamber {version} está disponível. Atualize no computador em que ele roda.",
   "updateDialog.status.serverRestarting": "Servidor reiniciando...",
   "updateDialog.status.waitingForServer": "Aguardando o servidor...",
   "updateDialog.status.autoReloadHint": "A página será recarregada automaticamente quando a atualização terminar.",

@@ -3002,6 +3002,7 @@ export const dict = {
   'updateDialog.header.updating': 'OpenChamber güncelleniyor...',
   'updateDialog.changelog.title': 'Yenilikler',
   'updateDialog.status.installingUpdate': 'Güncelleme kuruluyor...',
+  'updateDialog.desktopHostInstall': 'OpenChamber {version} kullanılabilir. Çalıştığı bilgisayarda güncelleyin.',
   'updateDialog.status.serverRestarting': 'Sunucu yeniden başlatılıyor...',
   'updateDialog.status.waitingForServer': 'Sunucu bekleniyor...',
   'updateDialog.status.autoReloadHint': 'Güncelleme tamamlandığında sayfa otomatik olarak yeniden yüklenecek.',

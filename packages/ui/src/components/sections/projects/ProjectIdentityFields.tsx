@@ -9,7 +9,6 @@ import {
   SettingsFieldRow,
   SETTINGS_CUSTOM_TRIGGER_CLASS,
   SETTINGS_SELECT_ROW_TRIGGER_CLASS,
-  SETTINGS_SELECT_SIZE,
 } from '@/components/sections/shared/SettingsSection';
 import { selectProvidersForDirectory, useConfigStore } from '@/stores/useConfigStore';
 import { PROJECT_COLORS, PROJECT_ICONS, PROJECT_COLOR_MAP as COLOR_MAP, ProjectIconImage } from '@/lib/projectMeta';
@@ -141,7 +140,6 @@ export const ProjectIdentityFields: React.FC<ProjectIdentityFieldsProps> = ({ fo
               onValueChange={(value) => handleDefaultVariantChange(value === NO_VARIANT_VALUE ? undefined : value)}
             >
               <SelectTrigger
-                size={SETTINGS_SELECT_SIZE}
                 className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
                 aria-label={t('settings.projects.page.field.projectThinking')}
               >

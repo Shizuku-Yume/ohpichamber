@@ -19,7 +19,6 @@ import {
   SettingsSection,
   SettingsFieldRow,
   SETTINGS_FIELD_LABEL_CLASS,
-  SETTINGS_SELECT_SIZE,
 } from '@/components/sections/shared/SettingsSection';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
 import {
@@ -407,7 +406,7 @@ const SkillsInstalledPage: React.FC = () => {
                   if (value === 'workspace' || value === 'agent') setScope(value);
                 }}
               >
-                <SelectTrigger size={SETTINGS_SELECT_SIZE} className="w-fit gap-1.5">
+                <SelectTrigger className="w-fit gap-1.5">
                   {scope === 'agent'
                     ? <Icon name="user-3" className="h-3.5 w-3.5" />
                     : <Icon name="folder" className="h-3.5 w-3.5" />}

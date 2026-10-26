@@ -3181,6 +3181,7 @@ export const dict: Record<I18nKey, string> = {
   'updateDialog.header.updating': 'OpenChamber 업데이트 중…',
   'updateDialog.changelog.title': '새로운 기능',
   'updateDialog.status.installingUpdate': '업데이트 설치 중…',
+  'updateDialog.desktopHostInstall': 'OpenChamber {version}을(를) 사용할 수 있습니다. 실행 중인 컴퓨터에서 업데이트하세요.',
   'updateDialog.status.serverRestarting': '서버 재시작 중…',
   'updateDialog.status.waitingForServer': '서버 대기 중…',
   'updateDialog.status.autoReloadHint': '업데이트가 완료되면 페이지가 자동으로 새로고침됩니다.',

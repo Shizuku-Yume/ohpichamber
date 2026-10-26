@@ -419,7 +419,6 @@ function DraftTargetSelectorsView(props: DraftTargetProps) {
                             <SelectTrigger
                                 ref={worktreeTriggerRef}
                                 onKeyDown={handlePickerKeyDown}
-                                size="sm"
                                 className="h-7 min-w-0 w-fit max-w-[48vw] sm:max-w-[20rem] border-transparent bg-transparent px-1.5 hover:[background-image:none] data-[popup-open]:[background-image:none]"
                             >
                                 {hasUncommittedChanges ? (
@@ -444,7 +443,7 @@ function DraftTargetSelectorsView(props: DraftTargetProps) {
                         {projectRootBranchOption ? (
                             <SelectGroup>
                                 <SelectLabel>{t('chat.chatInput.projectRoot')}</SelectLabel>
-                                <SelectItem key={projectRootBranchOption.value} value={projectRootBranchOption.value} showSelectedBackground={false} className="max-w-[24rem] truncate">
+                                <SelectItem key={projectRootBranchOption.value} value={projectRootBranchOption.value} className="max-w-[24rem] truncate">
                                     {projectRootBranchOption.label}
                                 </SelectItem>
                             </SelectGroup>
@@ -460,13 +459,13 @@ function DraftTargetSelectorsView(props: DraftTargetProps) {
                         <SelectGroup>
                             <SelectLabel>{t('chat.chatInput.worktrees')}</SelectLabel>
                             {worktreeBranchOptions.map((option) => (
-                                <SelectItem key={option.value} value={option.value} showSelectedBackground={false} className="max-w-[24rem] truncate">
+                                <SelectItem key={option.value} value={option.value} className="max-w-[24rem] truncate">
                                     {option.pending ? '⏳ ' : ''}{option.label}
                                 </SelectItem>
                             ))}
                         </SelectGroup>
                         {selectedDirectory && !selectedBranchIsKnown ? (
-                            <SelectItem value={selectedDirectory} showSelectedBackground={false} className="max-w-[24rem] truncate">
+                            <SelectItem value={selectedDirectory} className="max-w-[24rem] truncate">
                                 {selectedBranchLabel}
                             </SelectItem>
                         ) : null}

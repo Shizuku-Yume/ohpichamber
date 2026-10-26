@@ -1083,7 +1083,7 @@ export const PullRequestSection: React.FC<{
                   ) : null}
                   {availableBaseBranches.length > 0 ? (
                     <Select value={targetBaseBranch} onValueChange={setTargetBaseBranch}>
-                      <SelectTrigger size="sm" className="w-auto min-w-0" aria-label={t('gitView.pr.field.baseBranch')}>
+                      <SelectTrigger className="w-auto min-w-0" aria-label={t('gitView.pr.field.baseBranch')}>
                         <SelectValue placeholder={t('gitView.pr.placeholder.selectBaseBranch')} />
                       </SelectTrigger>
                       <SelectContent>

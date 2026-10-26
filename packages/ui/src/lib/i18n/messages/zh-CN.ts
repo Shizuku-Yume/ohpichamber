@@ -3147,6 +3147,7 @@ export const dict: Record<I18nKey, string> = {
   'updateDialog.header.updating': '正在更新 OpenChamber...',
   'updateDialog.changelog.title': '更新内容',
   'updateDialog.status.installingUpdate': '正在安装更新...',
+  'updateDialog.desktopHostInstall': 'OpenChamber {version} 已可用。请在运行它的电脑上更新。',
   'updateDialog.status.serverRestarting': '服务器正在重启...',
   'updateDialog.status.waitingForServer': '正在等待服务器...',
   'updateDialog.status.autoReloadHint': '更新完成后页面将自动重新加载。',

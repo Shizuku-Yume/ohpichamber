@@ -61,6 +61,13 @@ export function onColor(background: string, canvas: string): string {
   return black !== null && white !== null && black >= white ? '#000000' : '#ffffff';
 }
 
+/** Hex form of a hex or rgb() color, keeping alpha; null for other CSS colors. */
+export function toHexColor(value: string): string | null {
+  const color = parseColor(value);
+  if (!color) return null;
+  return color.a < 1 ? `${hexColor(color)}${Math.round(color.a * 255).toString(16).padStart(2, '0')}` : hexColor(color);
+}
+
 export function withOpacity(value: string, alpha: number): string {
   const color = parseColor(value);
   return color ? `${hexColor(color)}${Math.round(alpha * 255).toString(16).padStart(2, '0')}` : `color-mix(in srgb, ${value} ${alpha * 100}%, transparent)`;
@@ -82,6 +89,28 @@ function oklab(color: Color) {
     a: 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
     b: 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
   };
+}
+
+function fromOklab(lab: { l: number; a: number; b: number }): Color {
+  const l = (lab.l + 0.3963377774 * lab.a + 0.2158037573 * lab.b) ** 3;
+  const m = (lab.l - 0.1055613458 * lab.a - 0.0638541728 * lab.b) ** 3;
+  const s = (lab.l - 0.0894841775 * lab.a - 1.291485548 * lab.b) ** 3;
+  const gamma = (v: number) => 255 * Math.min(1, Math.max(0, v <= 0.0031308 ? v * 12.92 : 1.055 * v ** (1 / 2.4) - 0.055));
+  return {
+    r: gamma(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
+    g: gamma(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
+    b: gamma(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s),
+    a: 1,
+  };
+}
+
+/** Move a surface toward an accent's hue and chroma while keeping its own
+ * perceptual lightness, so a tint adds color without becoming a brighter patch. */
+export function tintColor(accent: string, surface: string, amount: number, canvas = '#ffffff'): string {
+  const tint = parseColor(accent), base = parseColor(surface), under = parseColor(canvas);
+  if (!tint || !base || !under) return surface;
+  const x = oklab(over(base, under)), y = oklab(over(tint, under));
+  return hexColor(fromOklab({ l: x.l, a: x.a + (y.a - x.a) * amount, b: x.b + (y.b - x.b) * amount }));
 }
 
 /** Perceptual hue/chroma separation after alpha composition; brightness alone

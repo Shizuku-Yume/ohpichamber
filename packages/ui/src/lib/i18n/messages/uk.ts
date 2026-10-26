@@ -3135,6 +3135,7 @@ export const dict: Record<I18nKey, string> = {
   "updateDialog.header.updating": "Оновлення OpenChamber...",
   "updateDialog.changelog.title": "Що нового",
   "updateDialog.status.installingUpdate": "Встановлення оновлення...",
+  "updateDialog.desktopHostInstall": "Доступний OpenChamber {version}. Оновіть його на комп’ютері, де він працює.",
   "updateDialog.status.serverRestarting": "Перезапуск сервера...",
   "updateDialog.status.waitingForServer": "Очікування сервера...",
   "updateDialog.status.autoReloadHint": "Після завершення оновлення сторінка автоматично перезавантажиться.",

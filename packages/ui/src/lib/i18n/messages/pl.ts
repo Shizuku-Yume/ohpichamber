@@ -3232,6 +3232,7 @@ export const dict: Record<I18nKey, string> = {
   'updateDialog.status.downloading': 'Pobieranie...',
   'updateDialog.status.downloadingPayload': 'Pobieranie pakietu aktualizacji...',
   'updateDialog.status.installingUpdate': 'Instalowanie aktualizacji...',
+  'updateDialog.desktopHostInstall': 'OpenChamber {version} jest dostępny. Zaktualizuj go na komputerze, na którym działa.',
   'updateDialog.status.serverRestarting': 'Ponowne uruchamianie serwera...',
   'updateDialog.status.updating': 'Aktualizowanie...',
   'updateDialog.status.waitingForServer': 'Oczekiwanie na serwer...',

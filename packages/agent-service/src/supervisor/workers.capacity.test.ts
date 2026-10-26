@@ -33,8 +33,8 @@ test('the measured Task17 policy is the production default', () => {
   });
 });
 
-test('a new root past the cap is refused and existing workers stay untouched', async () => {
-  const tree = await workspace('refusal');
+test('a new root at the cap evicts the least recently active idle worker', async () => {
+  const tree = await workspace('evict-lru');
   const registry = new WorkerRegistry({ workerEntrypoint, workerRuntime: process.execPath,
     startupTimeoutMs: 10_000, stopTimeoutMs: 2_000,
     capacityPolicy: policy({ maxActiveRootWorkers: 2, idleEvictionTimeoutMs: 60_000, reapIntervalMs: 60_000 }) });
@@ -42,23 +42,36 @@ test('a new root past the cap is refused and existing workers stay untouched', a
     await registry.startStateless({ rootSessionId: 'catalog-root', projectId: 'project', workspaceId: 'workspace',
       cwd: tree.cwd, agentDirectory: tree.agentDirectory, agentDirectoryId: 'agent', catalogRevision: '1' });
     await startSession(registry, 'root-one', tree.cwd, tree.agentDirectory);
+    await Bun.sleep(5);
     await startSession(registry, 'root-two', tree.cwd, tree.agentDirectory);
+    await Bun.sleep(5);
 
+    await startSession(registry, 'root-three', tree.cwd, tree.agentDirectory);
+
+    const workers = registry.list();
+    expect(workers.filter(worker => worker.kind === 'session').map(worker => worker.rootSessionId).sort()).toEqual(['root-three', 'root-two']);
+    expect(workers.find(worker => worker.kind === 'stateless')?.rootSessionId).toBe('catalog-root');
+    expect(workers.filter(worker => worker.kind === 'session').every(worker => worker.state === 'ready')).toBe(true);
+  } finally {
+    try { await registry.close(); } finally { await tree.remove(); }
+  }
+}, 30_000);
+
+test('a busy-only cap is refused with the capacity outcome and leaves every worker', async () => {
+  const tree = await workspace('busy-refusal');
+  const registry = new WorkerRegistry({ workerEntrypoint, workerRuntime: process.execPath,
+    startupTimeoutMs: 10_000, stopTimeoutMs: 2_000, isSessionIdle: () => false,
+    capacityPolicy: policy({ maxActiveRootWorkers: 2, idleEvictionTimeoutMs: 60_000, reapIntervalMs: 60_000 }) });
+  try {
+    await startSession(registry, 'root-one', tree.cwd, tree.agentDirectory);
+    await startSession(registry, 'root-two', tree.cwd, tree.agentDirectory);
     const refusal = await startSession(registry, 'root-three', tree.cwd, tree.agentDirectory).catch(error => error);
     expect(refusal).toBeInstanceOf(WorkerOperationError);
     if (!(refusal instanceof WorkerOperationError)) throw new Error('Expected a typed capacity refusal');
     expect(refusal).toMatchObject({ status: 503, code: 'SERVICE_UNAVAILABLE',
       details: { reason: 'worker_capacity', activeRootWorkers: 2, maxActiveRootWorkers: 2 } });
-    expect(refusal.message).toBe('Session capacity is full (2 of 2 active). Close another session or try again later.');
-
-    const workers = registry.list();
-    expect(workers.filter(worker => worker.kind === 'session').map(worker => worker.rootSessionId).sort()).toEqual(['root-one', 'root-two']);
-    expect(workers.find(worker => worker.kind === 'stateless')?.rootSessionId).toBe('catalog-root');
-    expect(workers.filter(worker => worker.kind === 'session').every(worker => worker.state === 'ready')).toBe(true);
-
-    await registry.stop('root-one');
-    await startSession(registry, 'root-three', tree.cwd, tree.agentDirectory);
-    expect(registry.info('root-three')?.state).toBe('ready');
+    expect(refusal.message).toBe('Session capacity is full (2 of 2 active). Every worker is busy; finish or close one before sending another message.');
+    expect(registry.list().filter(worker => worker.kind === 'session').map(worker => worker.rootSessionId).sort()).toEqual(['root-one', 'root-two']);
   } finally {
     try { await registry.close(); } finally { await tree.remove(); }
   }
@@ -71,6 +84,7 @@ test('simultaneous opens cannot oversubscribe the cap', async () => {
     capacityPolicy: policy({ maxActiveRootWorkers: 2, idleEvictionTimeoutMs: 60_000, reapIntervalMs: 60_000 }) });
   try {
     const outcomes = await Promise.allSettled(['a', 'b', 'c'].map(id => startSession(registry, `root-${id}`, tree.cwd, tree.agentDirectory)));
+    // Roots still starting are not idle, so a concurrent third admission may be refused; the cap must hold.
     expect(outcomes.filter(outcome => outcome.status === 'fulfilled')).toHaveLength(2);
     const rejected = outcomes.find(outcome => outcome.status === 'rejected');
     expect(rejected?.status === 'rejected' ? rejected.reason : null).toMatchObject({ status: 503, code: 'SERVICE_UNAVAILABLE' });

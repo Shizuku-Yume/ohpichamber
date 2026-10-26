@@ -161,7 +161,8 @@ describe("canonical session snapshot loading", () => {
     store.setState({ session: [oldHost] })
     list.resolve({ items: [incoming], errors: {} })
     await load
-    expect(store.getState().session[0]?.title).toBe("Newer title")
+    // The native snapshot title remains canonical over Host metadata and list projections.
+    expect(store.getState().session[0]?.title).toBe("Saved title")
     expect(store.getState().session[0]?.metadataRevision).toBe("7")
     expect(store.getState().session[0]?.archiveRevision).toBe("8")
     expect(store.getState().session[0]?.archivedAt).toBe(3)
@@ -283,6 +284,9 @@ describe("native history coverage", () => {
     } }), onSnapshot: (_target, committed) => reportedCursors.push(committed.cursor) })
     await loader.ensure(target)
     expect(loader.getSnapshot(target).cursor).toBe("opaque-history-page")
+    // The first request is the newest turn window; older records follow its cursor.
+    expect(requests[0]?.cursor).toBeUndefined()
+    expect(requests[0]?.leafTurnId).toBe(snapshot.window.lastTurnId)
     await loader.loadOlder(target)
     expect(requests[1]?.cursor).toBe("opaque-history-page")
     expect(requests[1]?.leafTurnId).toBeUndefined()

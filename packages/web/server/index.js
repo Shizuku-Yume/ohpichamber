@@ -1275,14 +1275,8 @@ const ensureGlobalWatcherStarted = async () => {
   if (Object.keys(listed.errors).length > 0) {
     console.warn('[agent-events] persisted session discovery was partial:', Object.values(listed.errors).join(','));
   }
-  for (const session of listed.items) {
-    try {
-      await openChamberSessionService.open(session.sessionId);
-      await globalMessageStreamHub.subscribeSession(session.sessionId);
-    } catch (error) {
-      console.warn('[agent-events] persisted session observation failed:', error.code ?? 'SERVICE_UNAVAILABLE');
-    }
-  }
+  // Reads are cold: boot must not start a worker for every persisted session.
+  // Live observation starts when a session publishes its first event.
 };
 const startAgentService = async () => {
   await hostAgentRuntime.start();

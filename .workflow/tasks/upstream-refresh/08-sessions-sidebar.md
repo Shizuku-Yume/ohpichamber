@@ -7,7 +7,7 @@
 **Delivers:** Upstream's session list, unread/work markers, folders, archive and chat view shell work with OMP sessions, including the server-side session folder and draft support.
 
 **Blocked by:** 10, 23
-**Files:** Path list: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-sync-2026-10-27/plan-paths/08.tsv` (169 paths: 108 clean/new, 60 both-side, 38 conflicts). Main locations: `packages/ui/src/components/session/`, `packages/ui/src/lib/{sessionFolders,sessionListOrder,sidebarSessionRows}`, `packages/ui/src/components/views/{ChatView,ArchiveView,PlanView}`, `packages/web/server/lib/{session-folders,session-drafts}`.
+**Files:** Path list: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-sync-2026-10-27/plan-paths/08.tsv` (169 paths: 108 clean/new, 60 both-side, 38 conflicts). Main locations: `packages/ui/src/components/session/`, `packages/ui/src/lib/{sessionFolders,sessionListOrder,sidebarSessionRows}`, `packages/ui/src/components/views/{ChatView,ArchiveView,PlanView}`, `packages/web/server/lib/{session-folders,session-drafts}`. Deferred from task 23: rework `stores/{useSessionFoldersStore,useSessionDisplayStore}.ts` (+tests) and `stores/useProjectsStore.ts` from upstream on the new folder/display/project shapes. `stores/useSessionPinnedStore.ts` stays at the fork's version: its Host-owned pin source is the technical-debt entry `Session pins have no OMP source`. Consume the task 23 interfaces `stores/sessionLineage.ts`, `sync/user-message-resume.ts` and `stores/useSessionDraftsStore.ts`. `views/PlanView.tsx` drops its `useFeatureFlagsStore` import so task 24 can delete the store.
 
 **Read first:** Spec W6; `.agents/skills/sync-state-invariants/SKILL.md`; `.agents/skills/performance-engineering/SKILL.md`; `.agents/skills/locale-ui-patterns/SKILL.md`; `packages/ui/src/sync/DOCUMENTATION.md`; `packages/ui/src/stores/DOCUMENTATION.md`.
 **Covers:** W6
@@ -20,3 +20,6 @@
 - [ ] Archive and plan views match upstream behavior; Task38's spaces removal is not undone.
 - [ ] Reload and reconnect preserve selection, folders and draft text.
 - [ ] Session list performance is checked with a large fixture list; the measurement is recorded.
+- [ ] `sessionLineage`, `user-message-resume` and `useSessionDraftsStore` are consumed by the session list/actions; no delivered interface is left unreferenced.
+- [ ] The three deferred stores are reworked from upstream; `useSessionPinnedStore` stays deferred to the pin-source debt entry; no OpenCode-shaped field is faked.
+- [ ] `PlanView` no longer imports `useFeatureFlagsStore`; session pins remain deferred to the technical-debt entry `Session pins have no OMP source`.

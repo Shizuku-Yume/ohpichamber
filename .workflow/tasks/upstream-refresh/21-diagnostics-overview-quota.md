@@ -7,7 +7,7 @@
 **Delivers:** Upstream's diagnostics export, overview panel, quota/limit-failover handling, session warming and small-model routing work with the fork's providers.
 
 **Blocked by:** 10, 22, 23
-**Files:** Path list: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-sync-2026-10-27/plan-paths/21.tsv` (80 paths: 52 clean/new, 28 both-side, 19 conflicts). Main locations: `packages/web/server/lib/{diagnostics,overview,quota,limit-failover,session-warming,session-assist,small-model}`, `packages/ui/src/lib/{diagnostics,overview,quota}`, `packages/ui/src/components/{overview,usage}`.
+**Files:** Path list: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-sync-2026-10-27/plan-paths/21.tsv` (80 paths: 52 clean/new, 28 both-side, 19 conflicts). Main locations: `packages/web/server/lib/{diagnostics,overview,quota,limit-failover,session-warming,session-assist,small-model}`, `packages/ui/src/lib/{diagnostics,overview,quota}`, `packages/ui/src/components/{overview,usage}`. Consume task 23's `stores/useSessionWarmingStore.ts` for the warming state/overview; no second warming source.
 
 **Read first:** Spec W6; `.agents/skills/performance-engineering/SKILL.md`; `.agents/skills/enterprise-boundary/SKILL.md` (telemetry redaction); `.agents/skills/locale-ui-patterns/SKILL.md`.
 **Covers:** W6
@@ -19,4 +19,4 @@
 - [ ] Diagnostics output is bounded and contains no tokens, prompts or credentials.
 - [ ] Overview derives live state and does not block on a slow provider.
 - [ ] Quota/limit-failover behavior is intentional per provider and visible in the UI.
-- [ ] Session warming respects the configured policy and is observable.
+- [ ] Session warming respects the configured policy and is observable, through task 23's `useSessionWarmingStore` rather than a duplicate per-session source.

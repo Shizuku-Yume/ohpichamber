@@ -7,7 +7,7 @@
 **Delivers:** Upstream's agent workflows (fan-out runs, schema-checked answers, project-wide runs) and their panel/persistence work.
 
 **Blocked by:** 10, 22, 23
-**Files:** Path list: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-sync-2026-10-27/plan-paths/17.tsv` (25 paths: all clean/new). Main locations: `packages/web/server/lib/workflows/`, `packages/ui/src/lib/workflows/`.
+**Files:** Path list: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-sync-2026-10-27/plan-paths/17.tsv` (25 paths: all clean/new). Main locations: `packages/web/server/lib/workflows/`, `packages/ui/src/lib/workflows/`. From task 23: consume `sync/workflow-activity.ts`'s turn state and feed the shared `SessionActivityIndicator` that task 25 delivers; do not land a second workflow-state source.
 
 **Read first:** Spec W6; `.agents/skills/sync-state-invariants/SKILL.md`; `.agents/skills/ui-api-decoupling/SKILL.md`; `.agents/skills/locale-ui-patterns/SKILL.md`; `packages/ui/src/lib/workflows/DOCUMENTATION.md`.
 **Covers:** W6
@@ -20,3 +20,4 @@
 - [ ] Schema answers are validated before display.
 - [ ] Run status derives from live events and reconciles after reconnect.
 - [ ] The panel lists project-wide runs without scanning every session on each render.
+- [ ] Workflow activity reaches task 25's shared indicator through `sync/workflow-activity.ts`; the workflow store remains the only run-state source.

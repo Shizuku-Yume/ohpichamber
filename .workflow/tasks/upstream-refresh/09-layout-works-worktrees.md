@@ -7,7 +7,7 @@
 **Delivers:** Upstream's layout shell, works view, pane resizing, shortcuts, tracked items and worktree surfaces work with the fork's runtime and projects.
 
 **Blocked by:** 10, 23
-**Files:** Path list: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-sync-2026-10-27/plan-paths/09.tsv` (105 paths: 81 clean/new, 24 both-side, 12 conflicts). Main locations: `packages/ui/src/components/{layout,mini-chat}`, `packages/ui/src/lib/{worktrees,workspace,trackedItems,shortcuts}`, `packages/web/server/lib/{projects,worktrees}`.
+**Files:** Path list: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-sync-2026-10-27/plan-paths/09.tsv` (105 paths: 81 clean/new, 24 both-side, 12 conflicts). Main locations: `packages/ui/src/components/{layout,mini-chat}`, `packages/ui/src/lib/{worktrees,workspace,trackedItems,shortcuts}`, `packages/web/server/lib/{projects,worktrees}`. Deferred from task 23: rework `stores/useMultiRunStore(.test).ts` from upstream on `lib/worktrees/worktreeStartDirectory`. `components/layout/{ContextPanelRail,Header}.tsx` drop their `useFeatureFlagsStore` imports so task 24 can delete the store.
 
 **Read first:** Spec W6; `.agents/skills/performance-engineering/SKILL.md`; `.agents/skills/drag-to-reorder/SKILL.md` (pane/row ordering); `.agents/skills/locale-ui-patterns/SKILL.md`; `.agents/skills/desktop-shell/SKILL.md` (Mini Chat window).
 **Covers:** W6
@@ -20,3 +20,5 @@
 - [ ] Worktree create/switch/remove works and preserves unsaved editor state.
 - [ ] Shortcuts do not collide with the fork's reserved keys.
 - [ ] Mini Chat targets the correct runtime instance.
+- [ ] `useMultiRunStore` adopts upstream's rework on the fork's worktree start directory; multi-run state stays per project.
+- [ ] Layout files no longer import `useFeatureFlagsStore` (task 24 deletes the store after 08/09).

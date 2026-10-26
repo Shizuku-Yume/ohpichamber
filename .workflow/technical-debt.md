@@ -30,4 +30,22 @@ An entry leaves this file in one of two ways:
 
 ## Entries
 
-<!-- Add yours below. Delete this comment. -->
+## Session unread state has no OMP source
+
+- **Where:** `packages/ui/src/sync/session-unread.ts` (deferred by task 23; not created)
+- **Added:** 2026-10-27
+- **Priority:** worth-doing
+- **Problem:** upstream marks a session unread from its OpenCode `time.idle`/viewed state. OMP exposes no viewed watermark, so task 23 deferred `session-unread` rather than faking an OpenCode field.
+- **Impact:** upstream's unread markers and "unread finished sessions across restarts" cannot be adopted; later syncs will keep re-deferring the same file.
+- **Solution:** define a Host-owned viewed watermark on the canonical session/event contract, persist it with the other session state, then port the upstream unread store and UI.
+- **Cost:** touches canonical events, Host persistence and the session list; needs a data-model decision.
+
+## Session pins have no OMP source
+
+- **Where:** `packages/ui/src/sync/session-pins.ts`, `packages/ui/src/lib/sessionPins.ts` (deferred by task 23; not created)
+- **Added:** 2026-10-27
+- **Priority:** worth-doing
+- **Problem:** upstream pins sessions through OpenCode session metadata. The fork has no pin flow, so task 23 deferred `session-pins` instead of faking the metadata.
+- **Impact:** pinned sessions, pin ordering in the sidebar and the palette's pin actions stay fork-version-only; upstream changes in that path cannot be adopted.
+- **Solution:** add Host-owned pin state (canonical session metadata or a Host store), expose it through the session API, then port the upstream pin store and UI.
+- **Cost:** Host storage and contract change plus sidebar/palette consumers.

@@ -7,7 +7,7 @@ import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createProjectDirectoryRuntime } from '../host/project-directory-runtime.js';
 import { createHostSessionState } from '../host/session-state.js';
-import { runtimeSession } from '../event-stream/canonical-test-fixtures.js';
+import { history as historyFixture, runtimeSession, snapshot as snapshotFixture } from '../event-stream/canonical-test-fixtures.js';
 import { mergeMetadataPatch } from './session-metadata-store.js';
 
 let routeFixture;
@@ -97,6 +97,41 @@ describe('canonical session list persistence', () => {
       const renamed = await service.rename('session', { workspaceId: 'workspace', title: '  Renamed  ' });
       expect(calls).toEqual([{ pathname: '/api/agent/v1/sessions/session/title', body: JSON.stringify({ workspaceId: 'workspace', title: 'Renamed' }) }]);
       expect(renamed).toMatchObject({ sessionId: 'session', title: 'Renamed', metadata: null, metadataRevision: '0' });
+    } finally {
+      await state.close();
+      fs.rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
+
+  it('reads a snapshot and history without reopening a worker', async () => {
+    const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'session-cold-read-'));
+    const state = createHostSessionState({ dataDir });
+    const calls = [];
+    try {
+      await state.initialize();
+      const { createOpenChamberSessionService } = await import('./routes.js');
+      const service = createOpenChamberSessionService({
+        service: { request: async (pathname) => {
+          calls.push(pathname);
+          if (pathname.endsWith('/snapshot')) return Response.json(snapshotFixture());
+          return Response.json(historyFixture());
+        } },
+        resolveWorkspaceScope: async () => ({ ...validScope('workspace'), projectId: 'project', workspaceId: 'workspace' }),
+        resolveSessionScope: async id => ({ ...validScope(id), projectId: 'project', workspaceId: 'workspace' }),
+        resolveHostSessionScope: async id => ({ ...validScope(id), projectId: 'project', workspaceId: 'workspace' }),
+        registerSessionScope: async () => true,
+        resolveAttachments: async () => [],
+        capturePrompt: async (_scope, body) => body,
+        beforeDispatch: async () => {},
+        onPromptAccepted: async () => {},
+        sessionMetadataStore: state.sessionMetadataStore,
+        archiveStore: state.archiveStore,
+        directCommandAdmissionStore: state.directCommandAdmissionStore,
+      });
+      expect((await service.open('session')).session.sessionId).toBe('session');
+      expect((await service.history('session')).messages).toHaveLength(1);
+      expect(calls).toEqual(['/api/agent/v1/sessions/session/snapshot', '/api/agent/v1/sessions/session/history']);
+      expect(calls.some(path => path.endsWith('/reopen'))).toBe(false);
     } finally {
       await state.close();
       fs.rmSync(dataDir, { recursive: true, force: true });

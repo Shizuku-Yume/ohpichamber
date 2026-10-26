@@ -374,3 +374,12 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Effort:** omp-native-parity
 - **Mine:** yes
 - **Revisit when:** OMP exposes a title hook that accepts a Host-authorized model and fallback policy directly, or titles must use a configured small model on a different provider.
+
+## 2026-10-27 - Listed native sessions become references on first mutation
+
+- **Decided:** A read of an OMP-listed session builds a transient cold reference from the list result and never writes storage. The first mutating operation promotes that session into the persisted SessionReference index before its worker starts.
+- **Instead of:** Persisting every CLI/native session during list, or refusing to open a listed session that has no reference.
+- **Because:** list is a read and must not mutate the reference file, while a send needs the session file and Host scope to survive worker startup and restart. Promotion at the mutation boundary keeps reads cold and gives native sessions the same durable ownership as app-created sessions.
+- **Effort:** omp-native-parity
+- **Mine:** yes
+- **Revisit when:** OMP exposes a scoped open-by-session-file API that makes the reference index unnecessary, or a listed session must be mutated without a prior list read.

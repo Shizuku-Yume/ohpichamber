@@ -15,6 +15,7 @@ import { environmentI18n } from './environment.i18n';
 import { providersI18n } from './providers.i18n';
 import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
+import { markdownGithubI18n } from './markdown-github.i18n';
 
 export const dict = {
   "startup.legacyNotice.title": "Vorherige OpenCode-Daten erkannt",
@@ -126,6 +127,8 @@ export const dict = {
   ...providersI18n.de,
   ...mcpGridI18n.de,
   ...pluginsGridI18n.de,
+  ...markdownGithubI18n.de,
+  'markdownRenderer.code.proposal': 'Proposal',
   'common.language.german': 'Deutsch',
   'common.loading': 'Wird geladen...',
   'common.unavailable': 'Nicht verfügbar',
@@ -3682,4 +3685,9 @@ export const dict = {
   'sessions.scheduledTasks.dialog.toast.alreadyRunning': 'Diese Aufgabe läuft bereits',
   'sessions.scheduledTasks.dialog.toast.alreadyQueued': 'Diese Aufgabe wartet bereits in der Warteschlange und läuft, sobald ein Platz frei wird',
   'chat.modelControls.agentFavoriteAdd': 'Zu Favoriten hinzufügen. Mit Favoriten wechselt Tab nur zwischen diesen',
+  'filesView.editor.gitHunk.revert': 'Zurücksetzen',
+  'filesView.editor.gitHunk.close': 'Schließen',
+  'filesView.editor.importNotFound': "Couldn't open {path}",
+  'filesView.editor.importLookupFailed': "Couldn't look up {path}",
+  'filesView.editor.jsonSyntaxError': "Invalid JSON syntax",
 };

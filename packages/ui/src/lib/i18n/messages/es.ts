@@ -16,6 +16,7 @@ import { environmentI18n } from './environment.i18n';
 import { providersI18n } from './providers.i18n';
 import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
+import { markdownGithubI18n } from './markdown-github.i18n';
 
 export const dict: Record<I18nKey, string> = {
   "startup.legacyNotice.dismiss": "Descartar",
@@ -137,6 +138,8 @@ export const dict: Record<I18nKey, string> = {
   ...providersI18n.es,
   ...mcpGridI18n.es,
   ...pluginsGridI18n.es,
+  ...markdownGithubI18n.es,
+  'markdownRenderer.code.proposal': 'Propuesta',
   'terminalView.actions.attachSelection': 'Adjuntar salida seleccionada',
   'terminalView.actions.copySelection': 'Copiar salida seleccionada',
   'terminalView.toast.selectionCopied': 'Salida copiada',
@@ -3685,4 +3688,9 @@ export const dict: Record<I18nKey, string> = {
   'sessions.scheduledTasks.dialog.toast.alreadyRunning': 'Esta tarea ya tiene una ejecución en curso',
   'sessions.scheduledTasks.dialog.toast.alreadyQueued': 'Esta tarea ya está en la cola y se ejecutará cuando haya un hueco libre',
   'chat.modelControls.agentFavoriteAdd': 'Añadir a favoritos. Con favoritos, Tab alterna solo entre ellos',
+  'filesView.editor.gitHunk.revert': 'Revertir',
+  'filesView.editor.gitHunk.close': 'Cerrar',
+  'filesView.editor.importNotFound': "Couldn't open {path}",
+  'filesView.editor.importLookupFailed': "Couldn't look up {path}",
+  'filesView.editor.jsonSyntaxError': "Invalid JSON syntax",
 };

@@ -42,8 +42,8 @@ import { SkillsCatalogPage } from './catalog/SkillsCatalogPage';
 import { useI18n } from '@/lib/i18n';
 import { languageByExtension } from '@/lib/codemirror/languageByExtension';
 import { createFlexokiCodeMirrorTheme } from '@/lib/codemirror/flexokiTheme';
-import { shikiHighlightExtension } from '@/lib/codemirror/shikiHighlight';
-import { getResolvedShikiTheme } from '@/lib/shiki/appThemeRegistry';
+import { codeHighlightExtension } from '@/lib/codemirror/codeHighlight';
+import { getCodeTokenTheme } from '@/lib/shiki/appThemeRegistry';
 import { getLanguageFromExtension } from '@/lib/toolHelpers';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useUIStore } from '@/stores/useUIStore';
@@ -177,10 +177,10 @@ const SkillsInstalledPage: React.FC = () => {
     return [
       createFlexokiCodeMirrorTheme(currentTheme, useShiki ? { syntaxColors: false, fontSize } : { fontSize }),
       ...(language ? [language] : []),
-      ...(useShiki && shikiLanguage ? [shikiHighlightExtension({
+      ...(useShiki && shikiLanguage ? [codeHighlightExtension({
         language: shikiLanguage,
         themeName: currentTheme.metadata.id,
-        theme: getResolvedShikiTheme(currentTheme),
+        theme: getCodeTokenTheme(currentTheme),
       })] : []),
       EditorView.lineWrapping,
     ];
@@ -462,7 +462,7 @@ const SkillsInstalledPage: React.FC = () => {
                   <SimpleMarkdownRenderer
                     content={content}
                     className="typography-markdown-body"
-                    stripFrontmatter
+                    frontmatter="hide"
                     enableFileReferences={false}
                   />
                 </div>

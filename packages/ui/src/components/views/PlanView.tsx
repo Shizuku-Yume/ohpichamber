@@ -19,8 +19,8 @@ import { getLanguageFromExtension } from '@/lib/toolHelpers';
 import { useDeviceInfo } from '@/lib/device';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { createFlexokiCodeMirrorTheme } from '@/lib/codemirror/flexokiTheme';
-import { shikiHighlightExtension } from '@/lib/codemirror/shikiHighlight';
-import { getResolvedShikiTheme } from '@/lib/shiki/appThemeRegistry';
+import { codeHighlightExtension } from '@/lib/codemirror/codeHighlight';
+import { getCodeTokenTheme } from '@/lib/shiki/appThemeRegistry';
 import { languageByExtension } from '@/lib/codemirror/languageByExtension';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSessions } from '@/sync/sync-context';
@@ -386,10 +386,10 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
       extensions.push(language);
     }
     if (useShiki && shikiLanguage) {
-      extensions.push(shikiHighlightExtension({
+      extensions.push(codeHighlightExtension({
         language: shikiLanguage,
         themeName: currentTheme.metadata.id,
-        theme: getResolvedShikiTheme(currentTheme),
+        theme: getCodeTokenTheme(currentTheme),
       }));
     }
     extensions.push(EditorView.lineWrapping);

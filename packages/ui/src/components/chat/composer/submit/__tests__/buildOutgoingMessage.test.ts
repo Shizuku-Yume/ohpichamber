@@ -282,7 +282,7 @@ describe('synthetic context', () => {
         expect(result.additionalParts).toHaveLength(1);
         expect(result.additionalParts[0].text).toBe('linear body');
         expect(result.additionalParts[0].metadata?.[CONTEXT_METADATA_KEY])
-            .toEqual({ kind: 'linear-issue', identifier: 'ENG-12', title: 'Login', url: 'https://linear.app/x/issue/ENG-12' });
+            .toEqual({ kind: 'tracker-item', provider: 'linear', identifier: 'ENG-12', title: 'Login', url: 'https://linear.app/x/issue/ENG-12' });
     });
 
     test('a linked guest issue is sent as context', () => {

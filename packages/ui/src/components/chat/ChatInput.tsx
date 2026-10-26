@@ -1527,7 +1527,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                     includeDiff: false,
                     contextText: part.text,
                 });
-            } else if (payload.kind === 'linear-issue') {
+            } else if (payload.kind === 'tracker-item' && payload.provider === 'linear') {
                 restored.push({ kind: 'linear-issue', identifier: payload.identifier, title: payload.title, url: payload.url, contextText: part.text });
             } else if (payload.kind === 'guest-issue' || payload.kind === 'guest-pr') {
                 restored.push({

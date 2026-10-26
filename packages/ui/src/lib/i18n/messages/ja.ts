@@ -16,6 +16,7 @@ import { environmentI18n } from './environment.i18n';
 import { providersI18n } from './providers.i18n';
 import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
+import { markdownGithubI18n } from './markdown-github.i18n';
 
 export const dict: Record<I18nKey, string> = {
   "startup.legacyNotice.dismiss": "閉じる",
@@ -127,6 +128,8 @@ export const dict: Record<I18nKey, string> = {
   ...providersI18n.ja,
   ...mcpGridI18n.ja,
   ...pluginsGridI18n.ja,
+  ...markdownGithubI18n.ja,
+  'markdownRenderer.code.proposal': 'Proposal',
   'terminalView.actions.attachSelection': '選択した出力を添付',
   'terminalView.actions.copySelection': '選択した出力をコピー',
   'terminalView.toast.selectionCopied': '出力をコピーしました',
@@ -3684,4 +3687,9 @@ export const dict: Record<I18nKey, string> = {
   'sessions.scheduledTasks.dialog.toast.alreadyRunning': 'このタスクはすでに実行中です',
   'sessions.scheduledTasks.dialog.toast.alreadyQueued': 'このタスクはすでにキューで待機中です。空きができ次第実行されます',
   'chat.modelControls.agentFavoriteAdd': 'お気に入りに追加。お気に入りがあると、Tab はその中だけを切り替えます',
+  'filesView.editor.gitHunk.revert': '元に戻す',
+  'filesView.editor.gitHunk.close': '閉じる',
+  'filesView.editor.importNotFound': "Couldn't open {path}",
+  'filesView.editor.importLookupFailed': "Couldn't look up {path}",
+  'filesView.editor.jsonSyntaxError': "Invalid JSON syntax",
 };

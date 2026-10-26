@@ -16,6 +16,7 @@ import { environmentI18n } from './environment.i18n';
 import { providersI18n } from './providers.i18n';
 import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
+import { markdownGithubI18n } from './markdown-github.i18n';
 
 export const dict: Record<I18nKey, string> = {
   "startup.legacyNotice.title": "Виявлено попередні дані OpenCode",
@@ -137,6 +138,8 @@ export const dict: Record<I18nKey, string> = {
   ...providersI18n.uk,
   ...mcpGridI18n.uk,
   ...pluginsGridI18n.uk,
+  ...markdownGithubI18n.uk,
+  'markdownRenderer.code.proposal': 'Пропозиція',
   'terminalView.actions.attachSelection': 'Прикріпити вибраний вивід',
   'terminalView.actions.copySelection': 'Скопіювати вибраний вивід',
   'terminalView.toast.selectionCopied': 'Вивід скопійовано',
@@ -3685,4 +3688,9 @@ export const dict: Record<I18nKey, string> = {
   'sessions.scheduledTasks.dialog.toast.alreadyRunning': 'Ця задача вже виконується',
   'sessions.scheduledTasks.dialog.toast.alreadyQueued': 'Ця задача вже чекає в черзі й запуститься, щойно звільниться місце',
   'chat.modelControls.agentFavoriteAdd': 'Додати в обрані. Коли є обрані, Tab перемикає лише між ними',
+  'filesView.editor.gitHunk.revert': 'Відкотити',
+  'filesView.editor.gitHunk.close': 'Закрити',
+  'filesView.editor.importNotFound': "Couldn't open {path}",
+  'filesView.editor.importLookupFailed': "Couldn't look up {path}",
+  'filesView.editor.jsonSyntaxError': "Invalid JSON syntax",
 };

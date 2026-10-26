@@ -21,7 +21,7 @@ import { ForkSessionDialog, type ForkSessionExecution } from '@/components/sessi
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ArrowsMerge } from '@/components/icons/ArrowsMerge';
 
-import { MarkdownImageGallery, SimpleMarkdownRenderer } from '../MarkdownRenderer';
+import { SimpleMarkdownRenderer } from '../MarkdownRenderer';
 import { LongErrorText } from '../LongErrorText';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useChatSessionSelection } from '../chatColumnSession';
@@ -74,7 +74,6 @@ const CONTAIN_LAYOUT_STYLE = { contain: 'layout' as const, transform: 'translate
 const MESSAGE_FOOTER_CONTAINER_STYLE = { containerType: 'inline-size' as const, containerName: 'message-footer' };
 const INLINE_MESSAGE_ACTIONS_CLASS_NAME = 'mt-2 mb-1 flex items-center justify-start gap-1.5';
 // One shared empty list, so the gallery's props stay equal across streamed chunks.
-const NO_FINALIZED_MARKDOWN: readonly string[] = [];
 
 const getDisplayFileName = (file: string): string => {
     const normalized = file.replace(/\\/g, '/');
@@ -1295,11 +1294,6 @@ const AssistantMessageBody = React.memo(({
     const assistantTextParts = React.useMemo(() => {
         return visibleParts.filter((part) => part.type === 'text');
     }, [visibleParts]);
-    const finalizedAssistantMarkdownContents = React.useMemo(() => (
-        isMessageCompleted
-            ? assistantTextParts.map(extractTextContent).filter((text) => text.trim().length > 0)
-            : NO_FINALIZED_MARKDOWN
-    ), [assistantTextParts, isMessageCompleted]);
     const assistantPlanText = React.useMemo(() => assistantTextParts
         .map((part: Part) => extractTextContent(part).trim())
         .filter((text: string) => text.length > 0)
@@ -2460,12 +2454,6 @@ const AssistantMessageBody = React.memo(({
                     )}
                 </div>
                 <MessageFilesDisplay files={parts} workspaceId={workspaceId} onShowPopup={onShowPopup} />
-                <MarkdownImageGallery
-                    sessionId={sessionId}
-                    messageId={messageId}
-                    contents={finalizedAssistantMarkdownContents}
-                    onShowPopup={onShowPopup}
-                />
                 {shouldRenderStandaloneActionsAfterContent && (
                     <div className={INLINE_MESSAGE_ACTIONS_CLASS_NAME} data-message-actions="true">
                         <div className="flex items-center gap-1.5" data-message-action-group="true">

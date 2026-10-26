@@ -16,6 +16,7 @@ import { environmentI18n } from './environment.i18n';
 import { providersI18n } from './providers.i18n';
 import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
+import { markdownGithubI18n } from './markdown-github.i18n';
 
 export const dict: Record<I18nKey, string> = {
   "startup.legacyNotice.title": "Wykryto wcześniejsze dane OpenCode",
@@ -127,6 +128,8 @@ export const dict: Record<I18nKey, string> = {
   ...providersI18n.pl,
   ...mcpGridI18n.pl,
   ...pluginsGridI18n.pl,
+  ...markdownGithubI18n.pl,
+  'markdownRenderer.code.proposal': 'Proposal',
   'terminalView.actions.attachSelection': 'Dołącz zaznaczone dane wyjściowe',
   'terminalView.actions.copySelection': 'Kopiuj zaznaczone dane wyjściowe',
   'terminalView.toast.selectionCopied': 'Skopiowano dane wyjściowe',
@@ -3689,4 +3692,9 @@ export const dict: Record<I18nKey, string> = {
   'sessions.scheduledTasks.dialog.toast.alreadyRunning': 'To zadanie już trwa',
   'sessions.scheduledTasks.dialog.toast.alreadyQueued': 'To zadanie już czeka w kolejce i uruchomi się, gdy zwolni się miejsce',
   'chat.modelControls.agentFavoriteAdd': 'Dodaj do ulubionych. Gdy są ulubione, Tab przełącza tylko między nimi',
+  'filesView.editor.gitHunk.revert': 'Przywróć',
+  'filesView.editor.gitHunk.close': 'Zamknij',
+  'filesView.editor.importNotFound': "Couldn't open {path}",
+  'filesView.editor.importLookupFailed': "Couldn't look up {path}",
+  'filesView.editor.jsonSyntaxError': "Invalid JSON syntax",
 } as const;

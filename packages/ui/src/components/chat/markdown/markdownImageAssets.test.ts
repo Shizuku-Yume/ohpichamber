@@ -2,45 +2,71 @@ import { describe, expect, mock, test } from 'bun:test';
 
 let requestCount = 0;
 let requestPaths: string[] = [];
-let requestInits: (RequestInit | undefined)[] = [];
-
-const runtimeFetch = mock(async (path: string, init?: RequestInit) => {
-  requestCount += 1;
+type GrantBody = { callId?: string; sources: string[] };
+let lastGrantBody: GrantBody | null = null;
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==',
+  'base64',
+);
+const runtimeFetch = mock(async (path: string, init?: RequestInit & { query?: Record<string, unknown> }) => {
   requestPaths.push(path);
-  requestInits.push(init);
-  // SAFETY: the test writes this request body itself, so its shape is known here.
-  const body = JSON.parse(String(init?.body)) as { sources: string[] };
+  if (path === '/api/fs/stat') {
+    return new Response(JSON.stringify({ isFile: true, size: PNG.byteLength }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  }
+  if (path === '/api/fs/raw') {
+    return new Response(PNG, { status: 200, headers: { 'content-type': 'image/png' } });
+  }
+  requestCount += 1;
+  const body = JSON.parse(String(init?.body)) as GrantBody;
+  lastGrantBody = body;
   return new Response(JSON.stringify({
-    // Deliberately out of order: the client must map each result by sourceIndex.
-    results: body.sources.map((_source, sourceIndex) => ({
-      sourceIndex: body.sources.length - 1 - sourceIndex,
-      status: 'ready',
-      expiresAt: Date.now() + 600_000,
-      assetPath: `/api/openchamber/sessions/ses_1/markdown-image-grants/grant-${body.sources.length - 1 - sourceIndex}/raw`,
-    })),
+    results: body.sources.map((source) => ({ source, status: 'ready', path: `/repo/${source}` })),
   }), { status: 200, headers: { 'content-type': 'application/json' } });
 });
 const resolver = {
   api: () => '',
-  authenticatedAsset: (path: string, query: Record<string, string | undefined> = {}) => {
+  authenticatedAsset: (path: string, query: Record<string, string | undefined>) => {
     const params = new URLSearchParams(Object.entries(query).filter((entry): entry is [string, string] => Boolean(entry[1])));
-    return params.size > 0 ? `${path}?${params}` : path;
+    return `${path}?${params}`;
   },
 };
 
 mock.module('@/lib/runtime-fetch', () => ({ runtimeFetch }));
 mock.module('@/lib/runtime-url', () => ({ getRuntimeUrlResolver: () => resolver }));
-// Load after installing runtime mocks so these tests exercise the grant request boundary.
+
+class TestFileReader {
+  result: string | ArrayBuffer | null = null;
+  error: DOMException | null = null;
+  onload: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+
+  readAsDataURL(blob: Blob) {
+    void blob.arrayBuffer().then((buffer) => {
+      this.result = `data:${blob.type};base64,${Buffer.from(buffer).toString('base64')}`;
+      this.onload?.();
+    }).catch((error) => {
+      this.error = error as DOMException;
+      this.onerror?.();
+    });
+  }
+}
+
+globalThis.FileReader = TestFileReader as unknown as typeof FileReader;
+
 const {
   getPreparedMarkdownImageUrl,
+  ImageGrantRequestError,
+  loadPreparedImageAsDataUrl,
   prepareLocalMarkdownImages,
+  resolveWorkspaceMarkdownImageSource,
 } = await import('./markdownImageAssets');
 
 describe('Markdown image asset preparation', () => {
   test('prepares many images in one message-level request', async () => {
     requestCount = 0;
-    requestPaths = [];
-    requestInits = [];
     const sources = Array.from({ length: 12 }, (_, index) => `${index}.png`);
 
     const result = await prepareLocalMarkdownImages({
@@ -53,12 +79,17 @@ describe('Markdown image asset preparation', () => {
 
     expect(result.size).toBe(12);
     expect(requestCount).toBe(1);
-    expect(requestPaths).toEqual(['/api/openchamber/sessions/ses_batch/markdown-image-grants']);
-    expect(JSON.parse(String(requestInits[0]?.body))).toEqual({
-      directory: '/repo',
-      messageId: 'msg_batch',
-      sources,
-    });
+  });
+
+  test('names the page whose images it prepares, apart from the same images in text', async () => {
+    requestCount = 0;
+    const request = { sources: ['poster.png'], directory: '/repo', sessionId: 'ses_page', messageId: 'msg_page', signal: new AbortController().signal };
+
+    await prepareLocalMarkdownImages({ ...request, callId: 'call_1' });
+    expect(lastGrantBody).toMatchObject({ callId: 'call_1', sources: ['poster.png'] });
+    await prepareLocalMarkdownImages(request);
+
+    expect(requestCount).toBe(2);
   });
 
   test('reuses preparation for one thousand messages after virtualized remounts', async () => {
@@ -77,35 +108,41 @@ describe('Markdown image asset preparation', () => {
     expect(requestCount).toBe(1000);
   });
 
-  test('uses the server-issued markdown image grant path', () => {
+  test('reuses the existing authenticated raw-file asset URL', () => {
     const url = getPreparedMarkdownImageUrl({
       status: 'ready',
-      assetPath: '/api/openchamber/sessions/ses_1/markdown-image-grants/grant-1/raw',
+      path: '/tmp/opencode/image.png',
+      outsideFileGrant: 'grant-1',
     }, '/repo');
 
-    expect(url).toBe('/api/openchamber/sessions/ses_1/markdown-image-grants/grant-1/raw');
+    expect(url).toContain('/api/fs/raw?');
+    expect(url).toContain('path=%2Ftmp%2Fopencode%2Fimage.png');
+    expect(url).toContain('outsideFileGrant=grant-1');
   });
 
-  test('addresses a space grant to the space that issued it', () => {
-    const url = getPreparedMarkdownImageUrl({
-      status: 'ready',
-      assetPath: '/api/openchamber/sessions/ses_1/markdown-image-grants/grant-1/raw',
-    }, '/spaces/0123456789ab/project');
+  test('loads a workspace image through the local filesystem bridge', async () => {
+    requestPaths = [];
 
-    expect(url).toBe('/api/spaces/0123456789ab/openchamber/sessions/ses_1/markdown-image-grants/grant-1/raw');
+    const url = await resolveWorkspaceMarkdownImageSource(
+      'screens/image.png',
+      '/repo',
+      new AbortController().signal,
+    );
+
+    expect(url.startsWith('data:image/png;base64,')).toBe(true);
+    expect(requestPaths).toEqual(['/api/fs/stat', '/api/fs/raw']);
   });
 
-  test('maps grant results back to their requested source by index', async () => {
-    const result = await prepareLocalMarkdownImages({
-      sources: ['first.png', 'second.png'],
-      directory: '/repo',
-      sessionId: 'ses_order',
-      messageId: 'msg_order',
-      signal: new AbortController().signal,
-    });
-
-    expect(result.get('first.png')).toMatchObject({ status: 'ready', assetPath: expect.stringContaining('grant-0') });
-    expect(result.get('second.png')).toMatchObject({ status: 'ready', assetPath: expect.stringContaining('grant-1') });
+  test('reads a prepared image as a data URL for an opaque page', async () => {
+    const url = await loadPreparedImageAsDataUrl(
+      { status: 'ready', path: '/repo/image.png' },
+      '/repo',
+      new AbortController().signal,
+    );
+    expect(url.startsWith('data:image/png;base64,')).toBe(true);
   });
 
+  test('carries the status a render-page grant failed with', () => {
+    expect(new ImageGrantRequestError(400).status).toBe(400);
+  });
 });

@@ -235,7 +235,7 @@ export function buildComposerContext(
             }
             case 'linear-issue': {
                 const { identifier, title, url, contextText } = reference;
-                attach(createContextPart({ kind: 'linear-issue', identifier, title, url }, contextText));
+                attach(createContextPart({ kind: 'tracker-item', provider: 'linear', identifier, title, url }, contextText));
                 break;
             }
             case 'guest': {

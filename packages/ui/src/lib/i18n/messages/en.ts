@@ -15,6 +15,7 @@ import { environmentI18n } from './environment.i18n';
 import { providersI18n } from './providers.i18n';
 import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
+import { markdownGithubI18n } from './markdown-github.i18n';
 
 export const dict = {
   "startup.legacyNotice.dismiss": "Dismiss",
@@ -126,6 +127,7 @@ export const dict = {
   ...providersI18n.en,
   ...mcpGridI18n.en,
   ...pluginsGridI18n.en,
+  ...markdownGithubI18n.en,
   'terminalView.actions.attachSelection': 'Attach selected output',
   'terminalView.actions.copySelection': 'Copy selected output',
   'terminalView.toast.selectionCopied': 'Output copied',
@@ -3296,6 +3298,12 @@ export const dict = {
   'markdownRenderer.mermaid.actions.zoomOutTitle': 'Zoom out',
   'markdownRenderer.mermaid.actions.resetViewTitle': 'Reset view',
   'markdownRenderer.mermaid.toast.downloadFailed': 'Failed to download diagram',
+  'markdownRenderer.code.proposal': 'Proposal',
+  'filesView.editor.gitHunk.revert': 'Revert',
+  'filesView.editor.gitHunk.close': 'Close',
+  'filesView.editor.jsonSyntaxError': "Invalid JSON syntax",
+  'filesView.editor.importLookupFailed': "Couldn't look up {path}",
+  'filesView.editor.importNotFound': "Couldn't open {path}",
   'common.date.today': 'Today',
   'common.date.yesterday': 'Yesterday',
   'common.date.yesterdayWithTime': 'Yesterday {time}',

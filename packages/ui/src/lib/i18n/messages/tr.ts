@@ -15,6 +15,7 @@ import { environmentI18n } from './environment.i18n';
 import { providersI18n } from './providers.i18n';
 import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
+import { markdownGithubI18n } from './markdown-github.i18n';
 
 export const dict = {
   "startup.legacyNotice.dismiss": "Yoksay",
@@ -65,6 +66,8 @@ export const dict = {
   ...providersI18n.tr,
   ...mcpGridI18n.tr,
   ...pluginsGridI18n.tr,
+  ...markdownGithubI18n.tr,
+  'markdownRenderer.code.proposal': 'Proposal',
   'terminalView.actions.attachSelection': 'Seçili çıktıyı ekle',
   'terminalView.actions.copySelection': 'Seçili çıktıyı kopyala',
   'terminalView.toast.selectionCopied': 'Çıktı kopyalandı',
@@ -3682,4 +3685,9 @@ export const dict = {
   'sessions.scheduledTasks.dialog.toast.alreadyRunning': 'Bu görevin bir çalıştırması zaten sürüyor',
   'sessions.scheduledTasks.dialog.toast.alreadyQueued': 'Bu görev zaten kuyrukta bekliyor; yer açılınca çalışacak',
   'chat.modelControls.agentFavoriteAdd': 'Favorilere ekle. Favori varsa Tab yalnızca onlar arasında geçiş yapar',
+  'filesView.editor.gitHunk.revert': 'Geri al',
+  'filesView.editor.gitHunk.close': 'Kapat',
+  'filesView.editor.importNotFound': "Couldn't open {path}",
+  'filesView.editor.importLookupFailed': "Couldn't look up {path}",
+  'filesView.editor.jsonSyntaxError': "Invalid JSON syntax",
 };

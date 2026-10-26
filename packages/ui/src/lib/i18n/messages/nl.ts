@@ -15,6 +15,7 @@ import { environmentI18n } from './environment.i18n';
 import { providersI18n } from './providers.i18n';
 import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
+import { markdownGithubI18n } from './markdown-github.i18n';
 
 export const dict = {
   "startup.legacyNotice.descriptionGeneric": "Uw eerdere OpenCode-sessies zijn niet geïmporteerd in OpenChamber. Uw bestaande gegevens blijven ongewijzigd bewaard in uw OpenCode-gegevensmap. Meld u in Instellingen opnieuw aan bij uw providers om uw modellen te gebruiken.",
@@ -126,6 +127,8 @@ export const dict = {
   ...providersI18n.nl,
   ...mcpGridI18n.nl,
   ...pluginsGridI18n.nl,
+  ...markdownGithubI18n.nl,
+  'markdownRenderer.code.proposal': 'Proposal',
   'terminalView.actions.attachSelection': 'Geselecteerde uitvoer toevoegen',
   'terminalView.actions.copySelection': 'Geselecteerde uitvoer kopiëren',
   'terminalView.toast.selectionCopied': 'Uitvoer gekopieerd',
@@ -3684,4 +3687,9 @@ export const dict = {
   'sessions.scheduledTasks.dialog.toast.alreadyRunning': 'Deze taak heeft al een run bezig',
   'sessions.scheduledTasks.dialog.toast.alreadyQueued': 'Deze taak staat al in de wachtrij en draait zodra er plek vrijkomt',
   'chat.modelControls.agentFavoriteAdd': 'Toevoegen aan favorieten. Met favorieten wisselt Tab alleen daartussen',
+  'filesView.editor.gitHunk.revert': 'Terugdraaien',
+  'filesView.editor.gitHunk.close': 'Sluiten',
+  'filesView.editor.importNotFound': "Couldn't open {path}",
+  'filesView.editor.importLookupFailed': "Couldn't look up {path}",
+  'filesView.editor.jsonSyntaxError': "Invalid JSON syntax",
 } as const;

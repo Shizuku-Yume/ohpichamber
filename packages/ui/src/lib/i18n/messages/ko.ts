@@ -16,6 +16,7 @@ import { environmentI18n } from './environment.i18n';
 import { providersI18n } from './providers.i18n';
 import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
+import { markdownGithubI18n } from './markdown-github.i18n';
 
 export const dict: Record<I18nKey, string> = {
   "startup.legacyNotice.title": "이전 OpenCode 데이터 감지됨",
@@ -127,6 +128,8 @@ export const dict: Record<I18nKey, string> = {
   ...providersI18n.ko,
   ...mcpGridI18n.ko,
   ...pluginsGridI18n.ko,
+  ...markdownGithubI18n.ko,
+  'markdownRenderer.code.proposal': 'Proposal',
   'terminalView.actions.attachSelection': '선택한 출력 첨부',
   'terminalView.actions.copySelection': '선택한 출력 복사',
   'terminalView.toast.selectionCopied': '출력을 복사했습니다',
@@ -3684,4 +3687,9 @@ export const dict: Record<I18nKey, string> = {
   'sessions.scheduledTasks.dialog.toast.alreadyRunning': '이 작업은 이미 실행 중입니다',
   'sessions.scheduledTasks.dialog.toast.alreadyQueued': '이 작업은 이미 대기열에 있으며 자리가 나면 실행됩니다',
   'chat.modelControls.agentFavoriteAdd': '즐겨찾기에 추가. 즐겨찾기가 있으면 Tab은 그 안에서만 전환합니다',
+  'filesView.editor.gitHunk.revert': '되돌리기',
+  'filesView.editor.gitHunk.close': '닫기',
+  'filesView.editor.importNotFound': "Couldn't open {path}",
+  'filesView.editor.importLookupFailed': "Couldn't look up {path}",
+  'filesView.editor.jsonSyntaxError': "Invalid JSON syntax",
 };

@@ -99,7 +99,7 @@ beforeEach(async () => {
   requestService = async url => {
     if (url === '/api/agent/v1/ready') return Response.json({ ready: true, engine: 'omp', version: '1.0.0' });
     if (url === '/api/agent/v1/capabilities') return Response.json(capabilities);
-    if (url === '/api/agent/v1/workspaces/workspace_1/models') return Response.json({ workspaceId: 'workspace_1', revision: '0', models: [] });
+    if (url === '/api/agent/v1/workspaces/workspace_1/models') return Response.json({ workspaceId: 'workspace_1', revision: '0', models: [], defaults: { model: null, thinkingLevel: null }, planRoleAvailable: false });
     throw new Error('Unexpected private service request');
   };
   projectCatalog = { items: [{ projectId: 'project_1', name: 'Project', workspaceIds: ['workspace_1'], displayPath: '.' }], errors: {} };
@@ -496,7 +496,7 @@ describe('canonical Host authenticated real-service boundary', () => {
     servicePhase = 'ready';
     const models = await request(app).get('/api/agent/v1/workspaces/workspace_1/models').set('Authorization', `Bearer ${token}`)
       .set('X-Internal-Secret', 'caller-secret').set('X-OpenCode-Directory', privateDir).expect(200);
-    expect(models.body).toEqual({ workspaceId: 'workspace_1', revision: '0', models: [] });
+    expect(models.body).toEqual({ workspaceId: 'workspace_1', revision: '0', models: [], defaults: { model: null, thinkingLevel: null }, planRoleAvailable: false });
     expect(requests[0].init.headers).toEqual({ Accept: 'application/json' });
     expect(requests[0].url).toBe('/api/agent/v1/workspaces/workspace_1/models');
     assertProblem(await request(app).get('/api/agent/v1/internal/workers').set('Authorization', `Bearer ${token}`), 404, 'NOT_IMPLEMENTED');

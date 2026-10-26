@@ -83,11 +83,11 @@ export class SessionJournal {
   }
 
   runtime(): RuntimeSession {
-    return RuntimeSessionSchema.parse({ ...this.identity, createdAt: this.createdAt, updatedAt: this.updatedAt,
+    const runtime = { ...this.identity, createdAt: this.createdAt, updatedAt: this.updatedAt,
       epoch: this.epoch, headSequence: this.head.toString(), runtimeStatus: this.runtimeStatus, activeRunId: this.activeRunId, mode: this.mode,
-      ...(this.title === undefined ? {} : { title: this.title }),
       continuationPending: this.continuationPending,
-    });
+    };
+    return RuntimeSessionSchema.parse(this.title === undefined ? runtime : { ...runtime, title: this.title });
   }
 
   snapshot(): SessionSnapshot {

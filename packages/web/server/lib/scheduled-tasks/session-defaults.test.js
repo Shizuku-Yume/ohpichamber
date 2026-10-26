@@ -14,7 +14,7 @@ describe('resolveSessionDefaults', () => {
     expect(resolveSessionDefaults({ settings, project: { defaultModel: 'openai/gpt-6', defaultAgent: 'plan' } }))
       .toEqual({ providerId: 'openai', modelId: 'gpt-6', variant: null, agentId: null, reasoningEffort: null });
     expect(resolveSessionDefaults({ settings, project: {} }))
-      .toEqual({ providerId: 'anthropic', modelId: 'claude-sonnet-5', variant: 'high', agentId: null, reasoningEffort: null });
+      .toEqual({ providerId: null, modelId: null, variant: null, agentId: null, reasoningEffort: null });
   });
 
 

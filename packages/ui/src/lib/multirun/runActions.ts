@@ -16,7 +16,6 @@ import { loadLaneFirstPrompt, loadLaneTurnModel } from './laneData';
 import { getMultiRunMembership, multiRunMembershipPatch, type MultiRunMembership } from './identity';
 import { multiRunVariantLabel, readMultiRunIdentity, type MultiRunSummary } from './runs';
 import { generateUuid } from '@/lib/uuid';
-import { useSelectionStore } from '@/sync/selection-store';
 
 /**
  * Renames the run on every member. Each write is a merge patch of the title

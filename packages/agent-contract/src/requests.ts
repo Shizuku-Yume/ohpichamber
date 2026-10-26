@@ -62,10 +62,11 @@ export const ApprovalRequestSchema = RequestCASSchema.extend({
   }
 });
 export type ApprovalRequest = z.infer<typeof ApprovalRequestSchema>;
+export const PlanReferenceSchema = z.string().regex(/^local:\/\/[^\s?#]+$/).refine(value => !value.includes('..') && !value.includes('\\'), 'Plan reference must remain session-local');
 export const PlanReviewSchema = z.strictObject({
   type: z.literal('plan-review'),
   title: z.string().min(1),
-  planReference: z.string().regex(/^local:\/\/[^\s?#]+$/).refine(value => !value.includes('..') && !value.includes('\\'), 'Plan reference must remain session-local'),
+  planReference: PlanReferenceSchema,
   planText: z.string().min(1),
 });
 export type PlanReview = z.infer<typeof PlanReviewSchema>;

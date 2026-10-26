@@ -32,6 +32,11 @@ const promptFor = (text = 'Ship the change') => ({
   options,
 });
 const runAck = (sessionId, runId) => ({ run: { runId, sessionId, status: 'pending', createdAt: 100 } });
+const runtimeAck = (body) => ({
+  sessionId: body.rootSessionId, rootSessionId: body.rootSessionId, projectId: body.projectId, workspaceId: body.workspaceId,
+  displayPath: body.displayPath, createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0',
+  runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' }, continuationPending: false,
+});
 const steerAck = (sessionId, runId) => ({ sessionId, runId, acceptedAt: 101 });
 const followUpAck = (sessionId, followUpId) => ({ sessionId, followUpId, acceptedAt: 102 });
 
@@ -51,6 +56,8 @@ const makeHarness = async ({ dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'op
     service: {
       request: async (pathname, init = {}) => {
         const body = init.body ? JSON.parse(init.body) : undefined;
+        // Reopen is admission plumbing, not the dispatch this suite counts.
+        if (pathname.endsWith('/reopen')) return Response.json(runtimeAck(body));
         nativeCalls.push({ pathname, body });
         const result = await handler({ pathname, body, nativeCalls });
         return Response.json(result);

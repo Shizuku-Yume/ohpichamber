@@ -21,7 +21,6 @@ import {
   rankFileMentionResults,
 } from './fileMentionResults';
 import { matchesRankQuery } from '@/lib/search/fuzzySearch';
-import { AutocompleteRowTooltip } from './composer/ui/AutocompleteRowTooltip';
 
 type FileInfo = ProjectFileSearchHit;
 

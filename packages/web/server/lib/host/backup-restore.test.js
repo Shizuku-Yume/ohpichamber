@@ -146,7 +146,7 @@ describe('Host and Agent backup and restore verification', () => {
       options: {
         providerId: 'provider-1',
         modelId: 'model-1',
-        agentId: 'agent-1',
+        agentId: null,
         variant: 'variant-1',
         reasoningEffort: 'high',
       },

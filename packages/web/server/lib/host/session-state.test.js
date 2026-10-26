@@ -19,7 +19,7 @@ const snapshot = { version: 1, foldersMap: { '/workspace': [{ id: 'folder', name
 describe('Host session-state ownership', () => {
   it('fences new admissions and drains conversion, reads, selected imports and writes before closing', async () => {
     const dataDir = makeDataDir();
-    fs.writeFileSync(path.join(dataDir, 'sessions-metadata.json'), JSON.stringify({ legacy: { title: 'Legacy' } }));
+    fs.writeFileSync(path.join(dataDir, 'sessions-metadata.json'), JSON.stringify({ legacy: { notes: 'Legacy', color: 'blue' } }));
     const gate = Promise.withResolvers();
     const entered = Promise.withResolvers();
     const fsPromises = {
@@ -32,7 +32,7 @@ describe('Host session-state ownership', () => {
     const owner = createHostSessionState({ dataDir, fsPromises });
     const initialization = owner.initialize();
     const read = owner.sessionMetadataStore.get('legacy');
-    const imported = owner.sessionMetadataStore.importOperationalSessions([{ id: 'selected', title: 'Selected' }], 'user-selection');
+    const imported = owner.sessionMetadataStore.importOperationalSessions([{ id: 'selected', directory: '/selected' }], 'user-selection');
     const metadataWrite = owner.sessionMetadataStore.setSessionMetadata('legacy', { notes: 'Durable' });
     const archived = owner.archiveStore.archive(['legacy'], 42);
     const folders = owner.sessionFoldersStore.save(snapshot);
@@ -44,7 +44,7 @@ describe('Host session-state ownership', () => {
     await expect(owner.sessionFoldersStore.get()).rejects.toMatchObject({ code: 'METADATA_READ_FAILED' });
     gate.resolve();
     await initialization;
-    await expect(read).resolves.toEqual({ title: 'Legacy' });
+    await expect(read).resolves.toEqual({ notes: 'Legacy', color: 'blue' });
     await expect(imported).resolves.toMatchObject({ results: { selected: 'imported' } });
     await metadataWrite;
     await archived;
@@ -52,8 +52,8 @@ describe('Host session-state ownership', () => {
     await closed;
 
     const reopened = createHostSessionState({ dataDir });
-    await expect(reopened.sessionMetadataStore.get('legacy')).resolves.toEqual({ title: 'Legacy', notes: 'Durable' });
-    await expect(reopened.sessionMetadataStore.get('selected')).resolves.toEqual({ title: 'Selected' });
+    await expect(reopened.sessionMetadataStore.get('legacy')).resolves.toEqual({ notes: 'Durable', color: 'blue' });
+    await expect(reopened.sessionMetadataStore.get('selected')).resolves.toEqual({ directory: '/selected' });
     await expect(reopened.archiveStore.getState('legacy')).resolves.toEqual({ archivedAt: 42, revision: '1' });
     await expect(reopened.sessionFoldersStore.get()).resolves.toMatchObject({ snapshot, revision: '1' });
     await reopened.close();
@@ -61,12 +61,12 @@ describe('Host session-state ownership', () => {
 
   it('initializes domains independently when one legacy record is corrupt', async () => {
     const dataDir = makeDataDir();
-    fs.writeFileSync(path.join(dataDir, 'sessions-metadata.json'), JSON.stringify({ good: { title: 'Good' }, bad: 'invalid' }));
+    fs.writeFileSync(path.join(dataDir, 'sessions-metadata.json'), JSON.stringify({ good: { notes: 'Good' }, bad: 'invalid' }));
     fs.writeFileSync(path.join(dataDir, 'sessions-archive.json'), JSON.stringify({ good: 42 }));
     fs.writeFileSync(path.join(dataDir, 'sessions-directories.json'), JSON.stringify(snapshot));
     const owner = createHostSessionState({ dataDir });
     await expect(owner.initialize()).resolves.toMatchObject({ metadata: { status: 'partial', errors: { bad: 'METADATA_CORRUPT' } }, archive: { status: 'complete' }, folders: { status: 'complete' } });
-    await expect(owner.sessionMetadataStore.get('good')).resolves.toEqual({ title: 'Good' });
+    await expect(owner.sessionMetadataStore.get('good')).resolves.toEqual({ notes: 'Good' });
     await expect(owner.archiveStore.getState('good')).resolves.toMatchObject({ archivedAt: 42 });
     await expect(owner.sessionFoldersStore.get()).resolves.toMatchObject({ snapshot });
     await owner.close();

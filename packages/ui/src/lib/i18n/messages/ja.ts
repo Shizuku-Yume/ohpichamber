@@ -10,6 +10,7 @@ import { surfacePanelI18n } from './surface-panel.i18n';
 import { fileArtifactsI18n } from './file-artifacts.i18n';
 import { usageStatsI18n } from './usage-stats.i18n';
 import { webSearchI18n } from './websearch.i18n';
+import { ompSettingsI18n } from './omp-settings.i18n';
 import { isolatedSpacesI18n } from './isolated-spaces.i18n';
 import { sourceBoardI18n } from './source-board.i18n';
 import { environmentI18n } from './environment.i18n';
@@ -122,6 +123,7 @@ export const dict: Record<I18nKey, string> = {
   ...fileArtifactsI18n.ja,
   ...usageStatsI18n.ja,
   ...webSearchI18n.ja,
+  ...ompSettingsI18n.ja,
   ...isolatedSpacesI18n.ja,
   ...sourceBoardI18n.ja,
   ...environmentI18n.ja,
@@ -3500,7 +3502,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.permissionDock.collapseAria': '許可リクエストを折りたたむ',
   'chat.permissionDock.stepAria': 'リクエスト {index}: {tool}',
   'chat.permissionCard.allowOnce': '今回のみ許可',
-  'chat.permissionCard.alwaysAllow': '常に許可',
+  'chat.permissionCard.alwaysAllow': 'このセッションで {tool} を常に許可',
   'chat.permissionCard.alwaysAllowPatterns': '常に: {patterns}',
   'chat.permissionCard.deny': '拒否',
   'chat.permissionCard.replaceAll': 'すべての箇所を置き換えます',

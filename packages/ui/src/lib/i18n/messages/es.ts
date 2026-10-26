@@ -10,6 +10,7 @@ import { surfacePanelI18n } from './surface-panel.i18n';
 import { fileArtifactsI18n } from './file-artifacts.i18n';
 import { usageStatsI18n } from './usage-stats.i18n';
 import { webSearchI18n } from './websearch.i18n';
+import { ompSettingsI18n } from './omp-settings.i18n';
 import { isolatedSpacesI18n } from './isolated-spaces.i18n';
 import { sourceBoardI18n } from './source-board.i18n';
 import { environmentI18n } from './environment.i18n';
@@ -132,6 +133,7 @@ export const dict: Record<I18nKey, string> = {
   ...fileArtifactsI18n.es,
   ...usageStatsI18n.es,
   ...webSearchI18n.es,
+  ...ompSettingsI18n.es,
   ...isolatedSpacesI18n.es,
   ...sourceBoardI18n.es,
   ...environmentI18n.es,
@@ -3501,7 +3503,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.permissionDock.collapseAria': 'Contraer la solicitud de permiso',
   'chat.permissionDock.stepAria': 'Solicitud {index}: {tool}',
   'chat.permissionCard.allowOnce': 'Permitir una vez',
-  'chat.permissionCard.alwaysAllow': 'Permitir siempre',
+  'chat.permissionCard.alwaysAllow': 'Permitir siempre {tool} en esta sesión',
   'chat.permissionCard.alwaysAllowPatterns': 'Siempre: {patterns}',
   'chat.permissionCard.deny': 'Denegar',
   'chat.permissionCard.replaceAll': 'Reemplaza todas las apariciones',

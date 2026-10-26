@@ -10,6 +10,7 @@ import { surfacePanelI18n } from './surface-panel.i18n';
 import { fileArtifactsI18n } from './file-artifacts.i18n';
 import { usageStatsI18n } from './usage-stats.i18n';
 import { webSearchI18n } from './websearch.i18n';
+import { ompSettingsI18n } from './omp-settings.i18n';
 import { isolatedSpacesI18n } from './isolated-spaces.i18n';
 import { sourceBoardI18n } from './source-board.i18n';
 import { environmentI18n } from './environment.i18n';
@@ -122,6 +123,7 @@ export const dict: Record<I18nKey, string> = {
   ...fileArtifactsI18n['zh-TW'],
   ...usageStatsI18n['zh-TW'],
   ...webSearchI18n['zh-TW'],
+  ...ompSettingsI18n['zh-TW'],
   ...isolatedSpacesI18n['zh-TW'],
   ...sourceBoardI18n['zh-TW'],
   ...environmentI18n['zh-TW'],
@@ -3500,7 +3502,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.permissionDock.collapseAria': '收合權限請求',
   'chat.permissionDock.stepAria': '請求 {index}：{tool}',
   'chat.permissionCard.allowOnce': '允許一次',
-  'chat.permissionCard.alwaysAllow': '一律允許',
+  'chat.permissionCard.alwaysAllow': '在此工作階段中一律允許 {tool}',
   'chat.permissionCard.alwaysAllowPatterns': '一律：{patterns}',
   'chat.permissionCard.deny': '拒絕',
   'chat.permissionCard.replaceAll': '取代所有符合項目',

@@ -13,6 +13,7 @@ import {
   ProviderOAuthRequestSchema, ProviderOAuthResultSchema, ProviderModelDiscoveryRequestSchema,
   ProviderModelDiscoveryResultSchema, ProviderConfigurationReadSchema, EntityIdSchema,
   CacheWarmingModeSchema, CacheWarmingStateSchema, CacheWarmingUpdateRequestSchema,
+  OmpSettingsStateSchema, OmpSettingsUpdateRequestSchema,
 } from '@openchamber/agent-contract';
 import { PrivateCredentialResolveRequestSchema, PrivateCredentialResolveResultSchema,
   PrivateCredentialHandoffRequestSchema, PrivateCredentialHandoffResultSchema } from './private-credentials.ts';
@@ -30,6 +31,8 @@ export const CatalogOperationSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('catalog.warming.read') }),
   z.strictObject({ type: z.literal('catalog.warming.persist'), request: CacheWarmingUpdateRequestSchema }),
   z.strictObject({ type: z.literal('catalog.warming.apply'), mode: CacheWarmingModeSchema }),
+  z.strictObject({ type: z.literal('catalog.settings.read') }),
+  z.strictObject({ type: z.literal('catalog.settings.write'), request: OmpSettingsUpdateRequestSchema }),
   z.strictObject({ type: z.literal('catalog.provider.accounts.read'), providerId: EntityIdSchema }),
   z.strictObject({ type: z.literal('catalog.provider.account.mutate'), providerId: EntityIdSchema, request: ProviderAccountMutationRequestSchema }),
   z.strictObject({ type: z.literal('catalog.provider.oauth.methods') }),
@@ -66,6 +69,8 @@ export const CatalogResultSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('catalog.agents'), catalog: AgentCatalogSchema }),
   z.strictObject({ type: z.literal('catalog.warming'), state: CacheWarmingStateSchema }),
   z.strictObject({ type: z.literal('catalog.warming.applied'), mode: CacheWarmingModeSchema }),
+  z.strictObject({ type: z.literal('catalog.settings'), state: OmpSettingsStateSchema }),
+  z.strictObject({ type: z.literal('catalog.settings.mutated'), state: OmpSettingsStateSchema }),
   z.strictObject({ type: z.literal('catalog.provider.accounts'), result: ProviderAccountsSchema }),
   z.strictObject({ type: z.literal('catalog.provider.oauth.methods'), result: ProviderOAuthMethodsSchema }),
   z.strictObject({ type: z.literal('catalog.provider.oauth'), result: ProviderOAuthResultSchema }),

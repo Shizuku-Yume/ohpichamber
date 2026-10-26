@@ -16,7 +16,7 @@ import type {
   QuestionRequest, Run, RuntimeSession, SessionBranchResult, SessionDeleteAck, SessionSnapshot, SteerAck, FollowUpAck, Subagent,
   ShellJob, ShellSnapshot, ShellOutput, ShellStopResult, SkillsCatalogState, SkillsApplyResult, SkillExpandResult, SkillInstallResult,
   ProviderAccounts, ProviderOAuthMethods, ProviderOAuthResult, ProviderModelDiscoveryResult, ProviderConfigurationRead,
-  CacheWarmingState, CacheWarmingApplyResult,
+  CacheWarmingState, CacheWarmingApplyResult, OmpSettingsState,
   UsageStats, UsageToolsResponse,
   WebSearchConfigState, WebSearchMutationResult,
   PluginCatalogState, PluginMutationResult, PluginDoctorResult, PluginMarketplaceState,
@@ -88,7 +88,7 @@ type ServiceResponse =
   | ModelCatalog | ProviderCatalog | AgentCatalog
   | ProviderMutationResult | ModelMutationResult | ProviderCredentialMutationResult | AgentMutationResult
   | ProviderAccounts | ProviderOAuthMethods | ProviderOAuthResult | ProviderModelDiscoveryResult | ProviderConfigurationRead
-  | CacheWarmingState | CacheWarmingApplyResult
+  | CacheWarmingState | CacheWarmingApplyResult | OmpSettingsState
   | WebSearchConfigState | WebSearchMutationResult
   | CompletionResult | CompletionCancelResult | UsageStats | UsageToolsResponse
   | PrivateCredentialResolveResult | PrivateCredentialHandoffResult

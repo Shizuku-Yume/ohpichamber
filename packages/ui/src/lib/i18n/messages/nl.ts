@@ -9,6 +9,7 @@ import { surfacePanelI18n } from './surface-panel.i18n';
 import { fileArtifactsI18n } from './file-artifacts.i18n';
 import { usageStatsI18n } from './usage-stats.i18n';
 import { webSearchI18n } from './websearch.i18n';
+import { ompSettingsI18n } from './omp-settings.i18n';
 import { isolatedSpacesI18n } from './isolated-spaces.i18n';
 import { sourceBoardI18n } from './source-board.i18n';
 import { environmentI18n } from './environment.i18n';
@@ -121,6 +122,7 @@ export const dict = {
   ...fileArtifactsI18n.nl,
   ...usageStatsI18n.nl,
   ...webSearchI18n.nl,
+  ...ompSettingsI18n.nl,
   ...isolatedSpacesI18n.nl,
   ...sourceBoardI18n.nl,
   ...environmentI18n.nl,
@@ -2558,6 +2560,7 @@ export const dict = {
   'chat.chatInput.toast.largeTextPaste.inline': 'Inline plakken',
   'chat.chatInput.toast.attachFileFailed': 'Kan het bestand niet toevoegen',
   'chat.chatInput.toast.attachNamedFailed': 'Kan {name} niet toevoegen',
+  'chat.chatInput.toast.attachmentUnsupported': 'Deze bijlage is geen ondersteund tekstbestand of afbeelding.',
   'chat.chatInput.toast.unsupportedAttachmentModalities': '{model} ondersteunt geen {modalities}-invoer die {files} vereist. U kunt het bericht toch verzenden, maar deze bijlagen worden mogelijk genegeerd.',
   'chat.chatInput.toast.someFilesSkipped': 'Sommige bestanden zijn overgeslagen:\n{summary}',
   'chat.chatInput.toast.openSessionFirst': 'Open eerst een sessie',
@@ -3478,7 +3481,7 @@ export const dict = {
   'chat.permissionDock.collapseAria': 'Toestemmingsverzoek inklappen',
   'chat.permissionDock.stepAria': 'Verzoek {index}: {tool}',
   'chat.permissionCard.allowOnce': 'Een keer toestaan',
-  'chat.permissionCard.alwaysAllow': 'Altijd toestaan',
+  'chat.permissionCard.alwaysAllow': '{tool} altijd toestaan voor deze sessie',
   'chat.permissionCard.alwaysAllowPatterns': 'Altijd: {patterns}',
   'chat.permissionCard.deny': 'Weigeren',
   'chat.permissionCard.replaceAll': 'Vervangt elk voorkomen',

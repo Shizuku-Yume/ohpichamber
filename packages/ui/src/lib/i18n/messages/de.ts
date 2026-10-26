@@ -9,6 +9,7 @@ import { surfacePanelI18n } from './surface-panel.i18n';
 import { fileArtifactsI18n } from './file-artifacts.i18n';
 import { usageStatsI18n } from './usage-stats.i18n';
 import { webSearchI18n } from './websearch.i18n';
+import { ompSettingsI18n } from './omp-settings.i18n';
 import { isolatedSpacesI18n } from './isolated-spaces.i18n';
 import { sourceBoardI18n } from './source-board.i18n';
 import { environmentI18n } from './environment.i18n';
@@ -121,6 +122,7 @@ export const dict = {
   ...fileArtifactsI18n.de,
   ...usageStatsI18n.de,
   ...webSearchI18n.de,
+  ...ompSettingsI18n.de,
   ...isolatedSpacesI18n.de,
   ...sourceBoardI18n.de,
   ...environmentI18n.de,
@@ -2297,6 +2299,7 @@ export const dict = {
   'chat.chatInput.toast.largeTextPaste.inline': 'Direkt einfügen',
   'chat.chatInput.toast.attachFileFailed': 'Fehler beim Anhängen der Datei',
   'chat.chatInput.toast.attachNamedFailed': 'Fehler beim Anhängen von {name}',
+  'chat.chatInput.toast.attachmentUnsupported': 'Dieser Anhang ist keine unterstützte Textdatei oder Bilddatei.',
   'chat.chatInput.toast.someFilesSkipped': 'Einige Dateien wurden übersprungen:\n{summary}',
   'chat.chatInput.toast.openSessionFirst': 'Öffne zuerst eine Sitzung',
   'chat.chatInput.toast.dictationKeptForOriginalSession': 'Dictation als Entwurf in der Sitzung gespeichert, in der sie gestartet wurde',
@@ -3497,7 +3500,7 @@ export const dict = {
   'chat.permissionDock.collapseAria': 'Berechtigungsanfrage einklappen',
   'chat.permissionDock.stepAria': 'Anfrage {index}: {tool}',
   'chat.permissionCard.allowOnce': 'Einmal erlauben',
-  'chat.permissionCard.alwaysAllow': 'Immer erlauben',
+  'chat.permissionCard.alwaysAllow': '{tool} für diese Sitzung immer erlauben',
   'chat.permissionCard.alwaysAllowPatterns': 'Immer: {patterns}',
   'chat.permissionCard.deny': 'Ablehnen',
   'chat.permissionCard.replaceAll': 'Ersetzt jedes Vorkommen',

@@ -40,6 +40,8 @@ const AGENT_ROUTES = [
   { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/agents$/, response: C.AgentCatalogSchema },
   { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/cache-warming$/, response: C.CacheWarmingStateSchema },
   { method: 'PUT', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/cache-warming$/, request: C.CacheWarmingUpdateRequestSchema, response: C.CacheWarmingApplyResultSchema },
+  { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/settings$/, response: C.OmpSettingsStateSchema },
+  { method: 'PUT', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/settings$/, request: C.OmpSettingsUpdateRequestSchema, response: C.OmpSettingsStateSchema },
   { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/web-search$/, response: C.WebSearchConfigStateSchema },
   { method: 'PUT', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/web-search$/, request: C.WebSearchUpdateRequestSchema, response: C.WebSearchMutationResultSchema, websearch: true },
   { method: 'PUT', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/web-search\/credentials\/(?<websearchProviderId>[^/]+)$/, request: C.WebSearchCredentialWriteRequestSchema, response: C.WebSearchMutationResultSchema, providerEntry: true, websearch: true },

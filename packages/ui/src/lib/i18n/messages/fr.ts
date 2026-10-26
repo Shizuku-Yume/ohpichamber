@@ -9,6 +9,7 @@ import { surfacePanelI18n } from './surface-panel.i18n';
 import { fileArtifactsI18n } from './file-artifacts.i18n';
 import { usageStatsI18n } from './usage-stats.i18n';
 import { webSearchI18n } from './websearch.i18n';
+import { ompSettingsI18n } from './omp-settings.i18n';
 import { isolatedSpacesI18n } from './isolated-spaces.i18n';
 import { sourceBoardI18n } from './source-board.i18n';
 import { environmentI18n } from './environment.i18n';
@@ -121,6 +122,7 @@ export const dict = {
   ...fileArtifactsI18n.fr,
   ...usageStatsI18n.fr,
   ...webSearchI18n.fr,
+  ...ompSettingsI18n.fr,
   ...isolatedSpacesI18n.fr,
   ...sourceBoardI18n.fr,
   ...environmentI18n.fr,
@@ -2247,6 +2249,7 @@ export const dict = {
   'chat.chatInput.toast.largeTextPaste.inline': 'Coller en ligne',
   'chat.chatInput.toast.attachFileFailed': 'Impossible de joindre le fichier',
   'chat.chatInput.toast.attachNamedFailed': 'Échec de la connexion du {name}',
+  'chat.chatInput.toast.attachmentUnsupported': "Cette pièce jointe n'est pas un fichier texte ou une image pris en charge.",
   'chat.chatInput.toast.unsupportedAttachmentModalities': '{model} ne prend pas en charge l’entrée {modalities} requise par {files}. Vous pouvez tout de même envoyer le message, mais ces pièces jointes risquent d’être ignorées.',
   'chat.chatInput.toast.someFilesSkipped': 'Certains fichiers ont été ignorés :\n{summary}',
   'chat.chatInput.toast.openSessionFirst': 'Ouvrir d\'abord une session',
@@ -3498,7 +3501,7 @@ export const dict = {
   'chat.permissionDock.collapseAria': 'Replier la demande d’autorisation',
   'chat.permissionDock.stepAria': 'Demande {index} : {tool}',
   'chat.permissionCard.allowOnce': 'Autoriser une fois',
-  'chat.permissionCard.alwaysAllow': 'Toujours autoriser',
+  'chat.permissionCard.alwaysAllow': 'Toujours autoriser {tool} pour cette session',
   'chat.permissionCard.alwaysAllowPatterns': 'Toujours : {patterns}',
   'chat.permissionCard.deny': 'Refuser',
   'chat.permissionCard.replaceAll': 'Remplace toutes les occurrences',

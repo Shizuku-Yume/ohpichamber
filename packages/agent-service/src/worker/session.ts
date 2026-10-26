@@ -36,6 +36,7 @@ import { generateSelectedModelTitle } from './auto-title.ts';
 import { captureNativePolicy } from './native-policy-snapshot.ts';
 import type { HostNativePolicySnapshot, NativePolicyContext } from '../native-policy-protocol.ts';
 import { createNativeBashPolicyExtension } from './native-bash-policy.ts';
+import { NativePermissionBridge } from './native-permission-bridge.ts';
 import { BashTool } from '@oh-my-pi/pi-coding-agent/tools/bash';
 import { nativePluginExtensionPaths } from './native-plugin-loader.ts';
 import { NativeCacheWarming } from './catalog-warming.ts';
@@ -94,6 +95,7 @@ export class WorkerSession {
     private readonly onSubagent: (payload: SubagentLifecyclePayload) => void,
     private readonly subagentEventBus: EventBus,
     private readonly webSearch: NativeWebSearch,
+    private readonly permissionBridge: NativePermissionBridge,
   ) {
     this.modeController = new WorkerModeController(session, title => this.proposePlan(title), start => this.startWorkerRun('goal', start), () => this.publishContinuationPending());
     this.projection = new WorkerProjection(session.sessionManager, sessionId);
@@ -233,6 +235,16 @@ export class WorkerSession {
       });
       const subagentEventBus = new EventBus();
       const pluginExtensionPaths = await nativePluginExtensionPaths(input.cwd);
+      const permissionBridge = new NativePermissionBridge(
+        (toolCall, options, sessionRuleKey, signal) => interaction.requestPermission(toolCall, options, sessionRuleKey, signal),
+        toolCall => {
+          try {
+            const decision = bashPolicy.approval(toolCall.rawInput);
+            if (decision === 'read' || decision === 'write' || decision === 'exec') return 'prompt';
+            return decision.policy === 'allow' ? 'allow' : decision.policy === 'deny' ? 'deny' : 'prompt';
+          } catch { return 'prompt'; }
+        },
+      );
       const result = await createAgentSession({
         cwd: input.cwd, agentDir: input.agentDirectory, sessionManager: manager, authStorage, modelRegistry, settings,
         initialModelRefreshStrategy: 'offline',
@@ -243,6 +255,7 @@ export class WorkerSession {
         enableMCP: mcp !== undefined, mcpManager: mcp, enableLsp: false, disableExtensionDiscovery: true,
         hasUI: true, interactivePrompts: true, subagentEventBus, extensions: [observer, createNativeBashPolicyExtension({ interaction, approval: bashPolicy.approval,
           authorize: (toolCallId, toolInput, approvalId) => authorizeTool('bash', toolInput, { toolCallId, approvalId }),
+          nativeAuthorized: (toolCallId, toolInput) => permissionBridge.isNativeAuthorized('bash', toolInput, toolCallId),
         }), createHostToolExtension({
           scope: { sessionId: input.rootSessionId, rootSessionId: input.rootSessionId, workspaceId: input.workspaceId },
           invoke: invocation => invokeHostAction(invocation.request, invocation.signal),
@@ -258,6 +271,7 @@ export class WorkerSession {
         throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Native plugin or local extension failed to load');
       }
       const nativeSession = session;
+      nativeSession.setClientBridge(permissionBridge.clientBridge);
       mcp?.attachSession(nativeSession);
       result.setToolUIContext(interaction.ui, true);
       const warming = new NativeCacheWarming({ cwd: input.cwd, agentDirectory: input.agentDirectory, session: nativeSession });
@@ -298,7 +312,7 @@ export class WorkerSession {
       const authorizeProviderUse = async (model: { provider: string; id: string; baseUrl: string }): Promise<void> => {
         await authorizeTool('provider.use', { providerId: model.provider, modelId: model.id, endpoint: model.baseUrl });
       };
-      owned = new WorkerSession(nativeSession, authStorage, sessionFile, publish, input.rootSessionId, input.cwd, onFatal, interaction, catalogs, mcp, shell, completion, admission, authorize, authorizeProviderUse, onSubagent, subagentEventBus, new NativeWebSearch(runtime, input.workspaceId, authorize));
+      owned = new WorkerSession(nativeSession, authStorage, sessionFile, publish, input.rootSessionId, input.cwd, onFatal, interaction, catalogs, mcp, shell, completion, admission, authorize, authorizeProviderUse, onSubagent, subagentEventBus, new NativeWebSearch(runtime, input.workspaceId, authorize), permissionBridge);
       await owned.modeController.goal.reconcile();
       await owned.modeController.restore();
       capturePolicy = async () => {
@@ -451,6 +465,7 @@ export class WorkerSession {
       }));
       this.projection.resetSelection();
       const seed = this.projection.seed();
+      this.permissionBridge?.reset();
       this.interaction.cancelAll();
       return { type: 'branch', seed, result: { sessionId: this.sessionId, branch: seed.branch,
         draft: navigation.editorText === undefined ? null : { text: this.projection.publicText(navigation.editorText),
@@ -461,6 +476,7 @@ export class WorkerSession {
       if (navigationStarted && (navigated || manager.getLeafId() !== previousLeaf)) {
         // The native context may already have switched. Retire it rather than
         // allowing a prompt against a failed selection or stale agent context.
+        this.permissionBridge?.reset();
         try {
           if (previousLeaf === null) manager.resetLeaf(); else manager.branch(previousLeaf);
           await manager.appendEntriesAtomically(() => manager.appendCustomEntry(BRANCH_TYPE, previousRevert ?? { restoreLeafId: null, revertedMessageId: null }));
@@ -839,6 +855,7 @@ export class WorkerSession {
   async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
+    this.permissionBridge?.stop();
     this.pendingTitleInput = undefined;
     await this.stopAutoTitle();
     this.interaction.close();
@@ -861,7 +878,10 @@ export class WorkerSession {
           await Promise.allSettled([...this.operations]);
           try { await this.shell.close(); } finally { await this.mcp?.close(); }
         }
-      } finally { try { await this.session.dispose(); } finally { this.authStorage.close(); } }
+      } finally {
+        this.session.setClientBridge(undefined);
+        try { await this.session.dispose(); } finally { this.authStorage.close(); }
+      }
     }
   }
 }

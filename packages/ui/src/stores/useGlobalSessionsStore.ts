@@ -53,6 +53,8 @@ type GlobalSessionsState = {
   hasLoaded: boolean;
   managedChatsHydrated: boolean;
   status: GlobalSessionsStatus;
+  /** The global list request itself failed; partial per-scope errors do not set this. */
+  globalRefreshFailed: boolean;
   /** Re-read the persisted managed-chats snapshot after the chats root is
       warm; retain newer mutations and stop after an authoritative load. */
   rehydrateManagedChatSessions: () => void;
@@ -244,11 +246,11 @@ const sameSessionList = (prev: Session[], next: Session[]): boolean => {
 
 const getSessionUpdatedAt = (session: Session): number => {
   const updatedAt = session.updatedAt;
-  if (typeof updatedAt === 'number' && Number.isFinite(updatedAt)) {
+  if (Number.isFinite(updatedAt)) {
     return updatedAt;
   }
   const createdAt = session.createdAt;
-  return typeof createdAt === 'number' && Number.isFinite(createdAt) ? createdAt : 0;
+  return Number.isFinite(createdAt) ? createdAt : 0;
 };
 
 const sortSessionsByUpdated = (sessions: Session[]): Session[] => {
@@ -664,13 +666,17 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
   hasLoaded: false,
   managedChatsHydrated: false,
   status: 'idle',
+  globalRefreshFailed: false,
 
   applySnapshot: (activeSessions, archivedSessions, status = 'ready') => {
     // An authoritative snapshot may carry newer `updated` stamps for sessions
     // whose active→settled cycle this client slept through — raise their
     // ordering baselines so recent lists re-sort (see session-ordering).
     raiseSessionOrderingBaselines(activeSessions);
-    set((state) => applySnapshot(state, activeSessions, archivedSessions, status));
+    set((state) => {
+      const next = applySnapshot(state, activeSessions, archivedSessions, status);
+      return status === 'error' ? next : { ...next, globalRefreshFailed: false };
+    });
   },
 
   applySessionMutations: (mutations) => {
@@ -703,6 +709,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
       hasLoaded: false,
       managedChatsHydrated: false,
       status: 'idle',
+      globalRefreshFailed: false,
     });
   },
 
@@ -743,7 +750,11 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
           ]);
           const reconciled = overlayMutationsSince(state, active, archived, baselineRevision);
           const complete = Object.keys(result.errors).length === 0 && children.failedParents.size === 0;
-          return applySnapshot(state, reconciled.activeSessions, reconciled.archivedSessions, complete ? 'ready' : 'error', complete);
+          return {
+            ...applySnapshot(state, reconciled.activeSessions, reconciled.archivedSessions, complete ? 'ready' : 'error', complete),
+            // Per-scope discovery errors are not a total refresh failure.
+            globalRefreshFailed: false,
+          };
         });
         const committed = get();
         raiseSessionOrderingBaselines(committed.activeSessions);
@@ -755,7 +766,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
         if (!rootsReady) {
           // No classification authority arrived. Preserve both memory and the
           // persisted snapshot so a retry can hydrate it after root recovery.
-          set({ status: 'error' });
+          set({ status: 'error', globalRefreshFailed: true });
           const state = get();
           return { activeSessions: state.activeSessions, archivedSessions: state.archivedSessions };
         }
@@ -767,7 +778,10 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
             state.archivedSessions,
             baselineRevision,
           );
-          return applySnapshot(state, reconciled.activeSessions, reconciled.archivedSessions, 'error');
+          return {
+            ...applySnapshot(state, reconciled.activeSessions, reconciled.archivedSessions, 'error'),
+            globalRefreshFailed: true,
+          };
         });
         const committed = get();
         return { activeSessions: committed.activeSessions, archivedSessions: committed.archivedSessions };

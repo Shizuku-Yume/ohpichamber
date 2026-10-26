@@ -15,7 +15,7 @@ const originalGlobal = useGlobalSessionsStore.getState()
 const originalRuntime = getRuntimeKey()
 const originalBase = getRuntimeApiBaseUrl()
 const directory = "/requested/worktree"
-const session: Session = { ...nativeSnapshot("session-created", []).session, metadata: { title: "New session" }, metadataRevision: "1", archiveRevision: "0" }
+const session: Session = { ...nativeSnapshot("session-created", []).session, title: "New session", metadata: {}, metadataRevision: "1", archiveRevision: "0" }
 let childStores: ChildStoreManager
 let loader: SessionMessageLoader
 let requests: number
@@ -76,13 +76,13 @@ describe("native confirmed session creation", () => {
     expect(canonicalClient.createSession).toHaveBeenCalledWith({
       projectId: session.projectId, workspaceId: session.workspaceId,
       options: { providerId: "provider-a", modelId: "model-a", agentId: "agent-a", variant: "variant-a", reasoningEffort: "high" },
-      metadata: { notes: "Keep", title: "Chosen title" },
+      title: "Chosen title", metadata: {notes: "Keep"},
     })
   })
 
   test("retains newer Host metadata and an inline first prompt received before the create response", async () => {
     const store = childStores.ensureChild(directory, { bootstrap: false })
-    const newer = { ...session, metadata: { title: "Already renamed" }, metadataRevision: "2", headSequence: "5", updatedAt: 3 }
+    const newer = { ...session, title: "Already renamed", metadata: {}, metadataRevision: "2", headSequence: "5", updatedAt: 3 }
     const message = nativeMessage(session.sessionId, "first-message", 3)
     spyOn(canonicalClient, "createSession").mockImplementation(async () => {
       store.setState({ session: [newer], message: { [session.sessionId]: [message] } })

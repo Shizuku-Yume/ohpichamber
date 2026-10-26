@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import express from 'express';
 import { z } from 'zod';
 import { assertRootPromptAdmission } from '../message-queue/prompt-admission.js';
-import { SessionCreateAckSchema, SessionCreateRequestSchema, RuntimeSessionSchema, SessionSchema, RunSchema, RunAbortRequestSchema, SessionDeleteAckSchema, PromptRequestSchema, CapturedSendOptionsSchema, SessionSnapshotSchema, HistoryPageSchema, SessionMetadataStateSchema, SessionMetadataPatchSchema, SteerRequestSchema, SteerAckSchema, FollowUpRequestSchema, FollowUpAckSchema, ProblemDetailsSchema, ProblemCodeSchema, SessionControlRequestSchema, SessionControlAckSchema, EntityIdSchema } from '@openchamber/agent-contract';
+import { SessionCreateAckSchema, SessionCreateRequestSchema, RuntimeSessionSchema, SessionSchema, RunSchema, RunAbortRequestSchema, SessionDeleteAckSchema, PromptRequestSchema, CapturedSendOptionsSchema, SessionSnapshotSchema, HistoryPageSchema, SessionMetadataStateSchema, SessionMetadataPatchSchema, SessionTitleRequestSchema, SteerRequestSchema, SteerAckSchema, FollowUpRequestSchema, FollowUpAckSchema, ProblemDetailsSchema, ProblemCodeSchema, SessionControlRequestSchema, SessionControlAckSchema, EntityIdSchema } from '@openchamber/agent-contract';
 import { SessionBranchRequestSchema, SessionBranchResultSchema, SessionRelocateRequestSchema, SessionRelocateResultSchema } from '@openchamber/agent-contract';
 import { HostSessionRelocationPrepareSchema, HostSessionRelocationPreparedSchema, HostSessionRelocationFinalizeSchema, HostSessionRelocationFinalizedSchema, HostSessionRelocationPendingSchema } from '@openchamber/agent-service/private-protocol';
 import { OpenChamberControlError, asControlError } from '../openchamber-control/error.js';
@@ -111,6 +111,14 @@ const createCanonicalSessionService = (dependencies) => {
     const session = RuntimeSessionSchema.parse(body);
     if (session.projectId !== projectId || session.workspaceId !== workspaceId || session.rootSessionId !== rootSessionId) throw new OpenChamberControlError('Agent service returned an out-of-scope session', 502);
     if (!await registerSessionScope(session)) throw new OpenChamberControlError('Session scope registration failed', 500);
+    if (parsed.data.title) {
+      const renamed = RuntimeSessionSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(session.sessionId)}/title`, {
+        method: 'PATCH', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(SessionTitleRequestSchema.parse({ workspaceId, title: parsed.data.title })),
+      }));
+      if (renamed.sessionId !== session.sessionId || renamed.workspaceId !== workspaceId) throw new OpenChamberControlError('Session title response was out of scope', 502);
+      Object.assign(session, renamed);
+    }
     if (requestedMetadata) await metadata.set(session.sessionId, requestedMetadata, workspace.cwd);
     const stored = await sessionMetadataStore.getState(session.sessionId);
     const result = SessionCreateAckSchema.parse({ session: SessionSchema.parse({ ...session, metadata: stored?.metadata ?? null, metadataRevision: stored?.revision ?? '0', archiveRevision: '0' }) });
@@ -218,8 +226,8 @@ const createCanonicalSessionService = (dependencies) => {
     const runtime = RuntimeSessionSchema.parse(await request(`/internal/sessions/${encodeURIComponent(bootstrap.rootSessionId)}/reopen`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(bootstrap) }));
     if (runtime.sessionId !== bootstrap.rootSessionId || runtime.rootSessionId !== bootstrap.rootSessionId || runtime.projectId !== bootstrap.projectId || runtime.workspaceId !== bootstrap.workspaceId) throw new OpenChamberControlError('Session restore acknowledgement is outside the authorized scope', 502);
   };
-  const open = async (id) => { const scope = await scopeFor(id); await reopen(scope); const snapshot = SessionSnapshotSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(id)}/snapshot`)); if (snapshot.session.sessionId !== id || snapshot.session.projectId !== scope.projectId || snapshot.session.workspaceId !== scope.workspaceId) throw new OpenChamberControlError('Session snapshot is outside the authorized scope', 502); return snapshot; };
-  const history = async (id, query = '') => { const scope = await scopeFor(id); await reopen(scope); const page = HistoryPageSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(id)}/history${query ? `?${query}` : ''}`)); if (page.sessionId !== id || page.turns.some(turn => turn.projectId !== undefined && turn.projectId !== scope.projectId) || page.messages.some(message => message.projectId !== undefined && message.projectId !== scope.projectId)) throw new OpenChamberControlError('Session history is outside the authorized scope', 502); return page; };
+  const open = async (id) => { const scope = await scopeFor(id); const snapshot = SessionSnapshotSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(id)}/snapshot`)); if (snapshot.session.sessionId !== id || snapshot.session.projectId !== scope.projectId || snapshot.session.workspaceId !== scope.workspaceId) throw new OpenChamberControlError('Session snapshot is outside the authorized scope', 502); return snapshot; };
+  const history = async (id, query = '') => { const scope = await scopeFor(id); const page = HistoryPageSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(id)}/history${query ? `?${query}` : ''}`)); if (page.sessionId !== id || page.turns.some(turn => turn.projectId !== undefined && turn.projectId !== scope.projectId) || page.messages.some(message => message.projectId !== undefined && message.projectId !== scope.projectId)) throw new OpenChamberControlError('Session history is outside the authorized scope', 502); return page; };
   const list = async (workspaceId) => {
     const scopePage = workspaceId ? { items: [{ workspaceId }], errors: {} } : await (listWorkspaceScopes instanceof Function ? listWorkspaceScopes() : Promise.reject(new OpenChamberControlError('Workspace enumeration is unavailable', 503)));
     const parsedScopes = z.strictObject({ items: z.array(z.strictObject({ workspaceId: z.string().min(1) })), errors: z.record(z.string(), ProblemCodeSchema) }).parse(scopePage);
@@ -256,6 +264,22 @@ const createCanonicalSessionService = (dependencies) => {
   const unarchive = async (payload = {}) => { const parsed = parseIdBatch(payload); if (!parsed.ok) throw new OpenChamberControlError(parsed.error, 400); const scopes = await Promise.all(parsed.ids.map((id) => hostScopeFor(id))); scopes.forEach(assertWritableScope); return archiveStore.unarchive(parsed.ids); };
   const getMetadata = async (id) => { await hostScopeFor(id); const state = await sessionMetadataStore.getState(id); return SessionMetadataStateSchema.parse({ sessionId: id, revision: state?.revision ?? '0', metadata: state?.metadata ?? null }); };
   const setMetadata = async (id, payload = {}) => { const scope = await hostScopeFor(id); assertWritableScope(scope); const patch = SessionMetadataPatchSchema.parse(payload); const result = await metadata.set(id, patch.changes, scope.cwd); return SessionMetadataStateSchema.parse({ sessionId: id, revision: result.revision, metadata: result.metadata }); };
+  const rename = async (id, payload = {}) => {
+    const input = SessionTitleRequestSchema.parse(payload);
+    const scope = await hostScopeFor(id);
+    assertWritableScope(scope);
+    if (scope.workspaceId !== input.workspaceId) throw new OpenChamberControlError('Session title request is outside its Host scope', 403);
+    const runtime = RuntimeSessionSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(id)}/title`, {
+      method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input),
+    }));
+    if (runtime.sessionId !== id || runtime.rootSessionId !== scope.rootSessionId
+      || runtime.workspaceId !== scope.workspaceId || runtime.projectId !== scope.projectId)
+      throw new OpenChamberControlError('Session title response was outside its Host scope', 502);
+    const [stored, archive] = await Promise.all([sessionMetadataStore.getState(id), archiveStore.getState(id)]);
+    const projected = { ...runtime, metadata: stored?.metadata ?? null, metadataRevision: stored?.revision ?? '0', archiveRevision: archive?.revision ?? '0' };
+    if (archive?.archivedAt != null) projected.archivedAt = archive.archivedAt;
+    return SessionSchema.parse(projected);
+  };
   const selectBranch = async (sessionId, payload = {}) => {
     const input = parseCommand(SessionBranchRequestSchema, payload);
     const scope = await scopeFor(sessionId);
@@ -390,7 +414,7 @@ const createCanonicalSessionService = (dependencies) => {
     return SessionControlAckSchema.parse(body);
   };
   const remove = async (id) => { const scope = await scopeFor(id); const ack = SessionDeleteAckSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' })); if (ack.sessionId !== id) throw new OpenChamberControlError('Session deletion acknowledgement identified another session', 502); if (scope.workspaceId.startsWith('archive_')) await onArchiveDeleted?.(scope, ack); return ack; };
-  return { create, send, steer, followUp, fork, selectBranch, relocate, delete: remove, open, history, list, control, resolveDirectory: async (payload = {}) => { const scope = await resolveWorkspaceScope(payload.workspaceId); if (!scope) throw new OpenChamberControlError('Workspace was not found', 404); return scope.cwd; }, archive, unarchive, getMetadata, setMetadata, sessionMetadataStore, archiveStore };
+  return { create, send, steer, followUp, fork, selectBranch, relocate, delete: remove, open, history, list, control, rename, resolveDirectory: async (payload = {}) => { const scope = await resolveWorkspaceScope(payload.workspaceId); if (!scope) throw new OpenChamberControlError('Workspace was not found', 404); return scope.cwd; }, archive, unarchive, getMetadata, setMetadata, sessionMetadataStore, archiveStore };
 };
 
 
@@ -446,6 +470,14 @@ export const registerOpenChamberSessionRoutes = (app, dependencies) => {
     } catch (error) {
       console.error('[OpenChamberSessions] failed to store session metadata:', error);
       return sendServiceError(res, error, 'Failed to store session metadata');
+    }
+  });
+
+  app.patch('/api/openchamber/sessions/:sessionId/title', express.json({ limit: '64kb' }), async (req, res) => {
+    try {
+      return res.json(await service.rename(req.params.sessionId, req.body ?? {}));
+    } catch (error) {
+      return sendServiceError(res, error, 'Failed to rename session');
     }
   });
 
@@ -515,6 +547,7 @@ export const registerCanonicalSessionRoutes = (router, service) => {
   router.delete('/:sessionId', (req, res) => call(res, () => service.delete(req.params.sessionId), 'Failed to delete session'));
   router.get('/:sessionId/metadata', (req, res) => call(res, () => service.getMetadata(req.params.sessionId), 'Failed to read session metadata'));
   router.patch('/:sessionId/metadata', express.json({ limit: '1mb' }), (req, res) => call(res, () => service.setMetadata(req.params.sessionId, req.body || {}), 'Failed to write session metadata'));
+  router.patch('/:sessionId/title', express.json({ limit: '64kb' }), (req, res) => call(res, () => service.rename(req.params.sessionId, req.body || {}), 'Failed to rename session'));
   router.post('/:sessionId/branch', express.json({ limit: '256kb' }), (req, res) => call(res, () => service.selectBranch(req.params.sessionId, req.body || {}), 'Failed to select session branch'));
   router.post('/:sessionId/relocate', express.json({ limit: '256kb' }), (req, res) => call(res, () => service.relocate(req.params.sessionId, req.body || {}), 'Failed to relocate session'));
 };

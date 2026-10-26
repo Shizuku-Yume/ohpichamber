@@ -33,8 +33,10 @@ export class SessionJournal {
   private turns: Turn[];
   private messages: Message[];
   private mode: SessionMode;
+  private selection: ProjectionSeed['selection'];
   private activeRunId: string | null = null;
   private runtimeStatus: RuntimeSession['runtimeStatus'] = 'idle';
+  private title: string | undefined;
   private continuationPending = false;
   private closed = false;
 
@@ -44,7 +46,9 @@ export class SessionJournal {
     this.branch = structuredClone(seed.branch);
     this.turns = structuredClone(seed.turns);
     this.mode = structuredClone(seed.mode);
+    this.selection = structuredClone(seed.selection ?? { model: null, thinkingLevel: null });
     this.messages = structuredClone(seed.messages);
+    this.title = seed.title;
     this.rebuildIndexes();
   }
 
@@ -81,6 +85,7 @@ export class SessionJournal {
   runtime(): RuntimeSession {
     return RuntimeSessionSchema.parse({ ...this.identity, createdAt: this.createdAt, updatedAt: this.updatedAt,
       epoch: this.epoch, headSequence: this.head.toString(), runtimeStatus: this.runtimeStatus, activeRunId: this.activeRunId, mode: this.mode,
+      ...(this.title === undefined ? {} : { title: this.title }),
       continuationPending: this.continuationPending,
     });
   }
@@ -93,7 +98,7 @@ export class SessionJournal {
     }
     return SessionSnapshotSchema.parse({
       session: this.runtime(), cursor: `${this.epoch}:${this.head}`, activeRun: this.activeRunId ? this.runs.get(this.activeRunId) : null,
-      branch: this.branch,
+      branch: this.branch, selection: this.selection,
       window: { firstTurnId: turns[0]?.turnId ?? null, lastTurnId: turns.at(-1)?.turnId ?? null,
         firstMessageId: messages[0]?.messageId ?? null, lastMessageId: messages.at(-1)?.messageId ?? null,
         hasEarlier: this.turns.length > turns.length,
@@ -151,6 +156,7 @@ export class SessionJournal {
     this.resetEpoch();
     this.createdAt = seed.createdAt; this.updatedAt = seed.updatedAt; this.mode = structuredClone(seed.mode);
     this.branch = structuredClone(seed.branch); this.turns = structuredClone(seed.turns); this.messages = structuredClone(seed.messages);
+    this.selection = structuredClone(seed.selection ?? { model: null, thinkingLevel: null });
     this.runs.clear(); this.approvals.clear(); this.questions.clear();
     this.activeRunId = null; this.runtimeStatus = 'idle';
     this.continuationPending = false;
@@ -217,7 +223,9 @@ export class SessionJournal {
         this.settleRun(event.runId, event.type === 'run.completed' ? 'completed' : event.type === 'run.cancelled' ? 'cancelled' : 'failed', event.finishedAt, event.type === 'run.failed' ? event.error : undefined); return;
       case 'session.updated':
         if (event.mode !== undefined) this.mode = structuredClone(event.mode);
+        if (event.title !== undefined) this.title = event.title;
         if (event.continuationPending !== undefined) this.continuationPending = event.continuationPending;
+        if (event.selection !== undefined) this.selection = structuredClone(event.selection);
         return;
       case 'session.status': this.runtimeStatus = event.runtimeStatus; this.activeRunId = event.activeRunId; return;
       case 'turn.started': {

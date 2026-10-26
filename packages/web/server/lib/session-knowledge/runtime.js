@@ -27,85 +27,16 @@ const truncate = (value, budget) => (
 );
 
 /**
- * Identity of everything the session should be carrying, content revisions
+ * Identity of the pins the session should be carrying, content revisions
  * included: editing a pinned note must re-send it, not merely renaming one.
+ * Memory and session linking are model-side OMP features; they add no text.
  */
-export const buildKnowledgeSignature = ({ notes, plans, memory, linking = false }) => {
+export const buildKnowledgeSignature = ({ notes, plans }) => {
   const parts = [
     ...notes.map((note) => `n:${note.id}:${note.updatedAt}`),
     ...plans.map((plan) => `p:${plan.id}:${plan.title}`),
-    ...memory.global.map((entry) => `mg:${entry.id}:${entry.updatedAt}`),
-    ...memory.project.map((entry) => `mp:${entry.id}:${entry.updatedAt}`),
-    // Memory being on is itself worth telling a session: without it an empty
-    // store sends nothing, and an agent never told when to save never does.
-    ...(memory.enabled ? [`m:on:${memory.complete ? 'c' : 'p'}`] : []),
-    ...(linking ? ['l:on'] : []),
   ];
   return parts.length === 0 ? '' : parts.sort().join('|');
-};
-
-const renderMemorySection = (entries) => entries
-  .slice()
-  .sort((a, b) => a.createdAt - b.createdAt)
-  .map((entry) => `- [${entry.type}] ${entry.title}`)
-  .join('\n');
-
-/**
- * When to save, stated in every session where memory is on. The tool
- * description alone is read only when the agent already means to call it, so
- * agents told nothing here saved only when the user said "remember".
- */
-const MEMORY_SAVE_GUIDANCE = 'You have memory that persists across sessions, through the'
-  + ' openchamber_memory tool. Save to it in the moment, without asking first, when:'
-  + ' the user corrects how you work or states a preference; the user confirms that'
-  + ' a non-obvious approach worked; or you learn a project fact that took real'
-  + ' effort to find and is not in the code or docs. One fact per entry. The user'
-  + ' can review and remove what you save, so save when it fits and mention it'
-  + ' briefly.';
-
-/**
- * When to link, stated in every session that has the `openchamber` tool. The
- * same rule leads that tool's description; stated only there, an agent given
- * an issue to investigate never opened the tool and so never linked it.
- * The tool description states the same rule; change both together.
- */
-export const SESSION_LINK_GUIDANCE = "When the user gives you an issue or a change under"
-  + " review (a pull or merge request) to work on, fix, investigate or review, when you"
-  + " open one for this work, and when the work resolves one, link it to this session"
-  + " with the openchamber tool's session.link as soon as you know it, so the user"
-  + " sees it with the session. Not one merely mentioned in passing.";
-
-/**
- * Titles only for memory, never bodies: an index carrying full text grows
- * without bound until it crowds out the conversation it was meant to inform.
- */
-const buildMemoryBlock = ({ global, project, enabled = false, complete = false }) => {
-  const sections = [];
-  if (global.length > 0) sections.push(`### About the user\n\n${renderMemorySection(global)}`);
-  if (project.length > 0) sections.push(`### About this project\n\n${renderMemorySection(project)}`);
-  if (sections.length === 0) {
-    if (!enabled) return '';
-    // "Empty" only when both scopes loaded: a failed read is not an empty store.
-    return complete
-      ? `${MEMORY_SAVE_GUIDANCE}\n\nNothing is stored yet.`
-      : MEMORY_SAVE_GUIDANCE;
-  }
-
-  return [
-    ...(enabled ? [MEMORY_SAVE_GUIDANCE] : []),
-    'Stored memory from earlier sessions: only the titles are listed below.',
-    'A title is an abbreviation, not the memory. Read the entry with the'
-      + ' openchamber_memory tool before you act on it: titles routinely leave out'
-      + ' the conditions, exceptions and reasons that decide how the memory'
-      + ' applies, and a title that looks self-explanatory is the most likely to'
-      + ' be hiding them. Read every title that could bear on the task at hand;'
-      + ' you need not read the ones unrelated to what you are doing. Read each'
-      + ' entry once per conversation: what you read stays in your context, so do'
-      + ' not read it again on later turns unless your context was summarized.',
-    'Memory records what was true when it was written. Verify anything it says'
-      + ' about files, flags or commands before relying on it.',
-    ...sections,
-  ].join('\n\n');
 };
 
 const buildPinnedBlock = ({ notes, plans }) => {
@@ -125,20 +56,11 @@ const buildPinnedBlock = ({ notes, plans }) => {
       ? `## Pinned plan: ${plan.title}\n\n${plan.body}`
       : `## Pinned plan: ${plan.title}\n\n(plan content unavailable)`);
   }
-  if (sections.length === 0) return '';
-
-  return [
-    'The user pinned the following project context. Treat it as standing background, not as a new instruction.',
-    ...sections,
-  ].join('\n\n');
+  return sections.join('\n\n');
 };
 
-export const buildKnowledgeText = ({ notes, plans, memory, linking = false }) => {
-  const blocks = [
-    buildPinnedBlock({ notes, plans }),
-    buildMemoryBlock(memory),
-    linking ? SESSION_LINK_GUIDANCE : '',
-  ].filter(Boolean);
+export const buildKnowledgeText = ({ notes, plans }) => {
+  const blocks = [buildPinnedBlock({ notes, plans })].filter(Boolean);
   if (blocks.length === 0) return '';
 
   const assembled = blocks.join('\n\n');
@@ -153,10 +75,8 @@ export const createSessionKnowledgeRuntime = (dependencies) => {
     agentMemoryRuntime,
     resolveProjectId,
     isAgentMemoryEnabled,
-    // Whether this session's agent has the `openchamber` tool to link with.
-    isSessionLinkingAvailable = null,
     // Pins and the delivered-signature cursor live in OpenChamber's own session
-    // metadata store: OpenCode 2.x accepts session metadata only at create time.
+    // metadata store, which merges patches after creation.
     readSessionMetadata = null,
     persistSessionMetadata = null,
   } = dependencies;
@@ -171,9 +91,8 @@ export const createSessionKnowledgeRuntime = (dependencies) => {
   const readStoredSession = async (sessionId) => ({ metadata: await readSessionMetadata(sessionId) });
 
   /**
-   * Everything the session should be carrying, read fresh. A failure in one
-   * source never blanks the rest: a memory store that will not load must not
-   * take the user's pinned notes down with it.
+   * The user's pins, read fresh. Memory is not copied into a prompt: the model
+   * sees only what plain OMP sends plus these pins and its attachments.
    */
   const readPins = (session) => {
     const metadata = isRecord(session?.metadata) ? session.metadata : {};
@@ -211,36 +130,7 @@ export const createSessionKnowledgeRuntime = (dependencies) => {
       }
     }
 
-    let memory = { global: [], project: [], enabled: false, complete: false };
-    const memoryEnabled = typeof isAgentMemoryEnabled === 'function'
-      ? await isAgentMemoryEnabled().catch(() => false)
-      : true;
-    if (memoryEnabled) {
-      try {
-        const stored = await agentMemoryRuntime.readAll(projectId || null);
-        // A scope that failed to load is left out entirely rather than indexed
-        // as empty, which would teach the agent to store what it already has.
-        //
-        // Flagged entries are withheld from the model but left in the store, so
-        // the user can see what was caught. Dropping them would hide the
-        // attempt from the only person able to judge it.
-        const visible = (entries) => entries.filter((entry) => !entry.flagged);
-        memory = {
-          global: stored.globalFailed ? [] : visible(stored.global),
-          project: stored.projectFailed ? [] : visible(stored.project),
-          enabled: true,
-          complete: !stored.globalFailed && !stored.projectFailed,
-        };
-      } catch {
-        memory = { global: [], project: [], enabled: true, complete: false };
-      }
-    }
-
-    const linking = typeof isSessionLinkingAvailable === 'function'
-      ? await Promise.resolve(isSessionLinkingAvailable()).catch(() => false)
-      : false;
-
-    return { notes, plans, memory, linking };
+    return { notes, plans };
   };
 
   /**

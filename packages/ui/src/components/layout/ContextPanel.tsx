@@ -477,7 +477,7 @@ const buildCanonicalSessionTitleMap = (states: Iterable<{ session: readonly Sess
   for (const state of states) {
     for (const session of state.session) {
       if (!wanted.has(session.sessionId)) continue;
-      const title = session.metadata?.title?.trim();
+      const title = session.title?.trim();
       if (!title) continue;
       const updatedAt = session.updatedAt;
       const seenAt = updatedAtById.get(session.sessionId);

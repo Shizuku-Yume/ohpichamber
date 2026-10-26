@@ -82,7 +82,7 @@ describe("issue #1637 — native session admission keeps the effective directory
       projectId: "project-1",
       workspaceId: "workspace--projects-alpha",
       options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null },
-      metadata: { title: "test title" },
+      title: "test title", metadata: {},
     }))
     expect(selected).toEqual([{ id: "session-1", directory: PROJECT }])
     expect(useGlobalSessionsStore.getState().entityById.get("session-1")?.workspaceId).toBe("workspace--projects-alpha")

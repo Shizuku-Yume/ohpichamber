@@ -546,3 +546,23 @@ test('history keeps an earlier terminal-less turn untouched when a new run opens
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('projection seed and snapshot carry the persisted model and thinking level', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'canonical-selection-'));
+  const manager = SessionManager.create(root, root);
+  try {
+    await manager.ensureOnDisk();
+    manager.appendModelChange('fixture/model');
+    manager.appendThinkingLevelChange('high', 'high');
+    const projection = new WorkerProjection(manager, 'session');
+    const seed = projection.seed();
+    expect(seed.selection).toEqual({ model: { providerId: 'fixture', modelId: 'model' }, thinkingLevel: 'high' });
+    const journal = new SessionJournal({ sessionId: 'session', rootSessionId: 'session', projectId: 'project', workspaceId: 'workspace', displayPath: '.' }, seed);
+    expect(journal.snapshot().selection).toEqual(seed.selection);
+    manager.appendThinkingLevelChange('medium', 'auto');
+    expect(projection.seed().selection?.thinkingLevel).toBe('auto');
+  } finally {
+    await manager.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});

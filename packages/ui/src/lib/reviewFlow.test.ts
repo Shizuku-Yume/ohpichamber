@@ -14,7 +14,6 @@ import type { Session, SessionSnapshot } from '@openchamber/agent-contract';
 import { canonicalClient } from '@/api/canonicalClient';
 import * as actions from '@/sync/session-actions';
 import * as prompts from '@/lib/magicPrompts';
-import * as knowledge from '@/lib/sessionKnowledgeApi';
 import { useSelectionStore } from '@/sync/selection-store';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { sendReviewFeedbackToOriginal } from './reviewFlow';
@@ -89,7 +88,6 @@ describe('review native prompt delivery', () => {
     spies.push(spyOn(canonicalClient, 'resolveWorkspace').mockResolvedValue({ projectId: 'project', workspaceId: 'workspace', name: 'repo' }));
     const text = mode === 'plain' ? 'Generated review feedback\n#literal' : '/review "two words"\n trailing  ';
     spies.push(spyOn(prompts, 'renderMagicPrompt').mockResolvedValue(text));
-    spies.push(spyOn(knowledge, 'fetchSessionKnowledge').mockResolvedValue({ text: '', signature: '' }));
     const selection = useSelectionStore.getState();
     selection.saveSessionModelSelection('original', 'captured', 'model');
     selection.saveSessionAgentSelection('original', 'agent');
@@ -145,7 +143,6 @@ describe('review native prompt optimistic boundary', () => {
     spies.push(spyOn(canonicalClient, 'getSession').mockResolvedValue(snapshot));
     spies.push(spyOn(canonicalClient, 'listSessions').mockResolvedValue({ items: [session], errors: {} }));
     spies.push(spyOn(prompts, 'renderMagicPrompt').mockResolvedValue('Generated review feedback'));
-    spies.push(spyOn(knowledge, 'fetchSessionKnowledge').mockResolvedValue({ text: '', signature: '' }));
     spies.push(spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({})));
     const selection = useSelectionStore.getState();
     selection.saveSessionModelSelection('original', 'captured', 'model');

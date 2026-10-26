@@ -6,12 +6,12 @@ const joinParts = (message, type) => message.parts.filter((part) => part.type ==
 const stripTerminalContext = (text) => text.replace(/\n*<terminal_context>\n[\s\S]*?\n<\/terminal_context>\s*$/, '');
 
 export const createMessageSearchIndexer = ({
-  store, sessionService, resolveSessionScope, readSessionMetadata,
+  store, sessionService, resolveSessionScope,
   pageSize = 100, liveDebounceMs = LIVE_DEBOUNCE_MS, backfillPauseMs = 25, includeReasoning = () => false, logger = console,
 }) => {
   if (typeof sessionService?.open !== 'function' || typeof sessionService?.history !== 'function'
-    || typeof sessionService?.list !== 'function' || typeof resolveSessionScope !== 'function' || typeof readSessionMetadata !== 'function') {
-    throw new TypeError('Canonical session reader and Host scope/metadata readers are required');
+    || typeof sessionService?.list !== 'function' || typeof resolveSessionScope !== 'function') {
+    throw new TypeError('Canonical session reader and Host scope reader are required');
   }
   const liveTimers = new Map();
   const liveQueue = new Set();
@@ -56,10 +56,9 @@ export const createMessageSearchIndexer = ({
       if (stopped || revision(sessionId) !== before) return;
       cursor = page.nextCursor;
     } while (cursor);
-    const metadata = await readSessionMetadata(sessionId);
     const currentScope = await resolveSessionScope(sessionId);
     if (stopped || revision(sessionId) !== before || currentScope.workspaceId !== scope.workspaceId || currentScope.cwd !== scope.cwd) return;
-    store.commitSessionSync({ id: sessionId, directory: session.displayPath, title: metadata?.title ?? '', createdAt: session.createdAt,
+    store.commitSessionSync({ id: sessionId, directory: session.displayPath, title: session.title ?? '', createdAt: session.createdAt,
       updatedAt: session.updatedAt, includeReasoning: includeReasoning() });
   };
   const takeNext = () => {
@@ -129,7 +128,7 @@ export const createMessageSearchIndexer = ({
       if (event.type === 'session.deleted') { for (const id of event.deletedSessionIds) removeSession(id); return; }
       if (event.type === 'session.updated') {
         revisions.set(event.sessionId, revision(event.sessionId) + 1);
-        if (event.metadata !== undefined) store.renameSession(event.sessionId, event.metadata?.title ?? '');
+        if (event.title !== undefined) store.renameSession(event.sessionId, event.title);
         if (event.session) store.moveSession(event.sessionId, event.session.displayPath);
         queueLive(event.sessionId); return;
       }

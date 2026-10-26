@@ -5,7 +5,7 @@ import { compareSessionRevision, isSessionDiscoveryFailed, mergeSessionDirectory
 const session = (extra: Partial<Session> = {}): Session => ({
   sessionId: 'ses_one', projectId: 'pro_one', workspaceId: 'wsp_one', displayPath: 'repo',
   rootSessionId: 'ses_one', createdAt: 1, updatedAt: 2, epoch: 'epoch', headSequence: '0',
-  runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' as const }, metadata: { title: 'One' },
+  runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' as const }, title: 'One', metadata: {},
   metadataRevision: '1', archiveRevision: '0', ...extra,
 });
 
@@ -52,7 +52,7 @@ describe('native global sessions', () => {
 
   test('keeps newer metadata while accepting independent native runtime and archive changes', () => {
     const existing = session({ metadataRevision: '9007199254740993', archivedAt: 3, archiveRevision: '1' });
-    const incoming = session({ metadata: { title: 'Stale' }, metadataRevision: '9007199254740992', updatedAt: 5, archiveRevision: '2', workspaceId: 'wsp_moved' });
+    const incoming = session({ title: 'Stale', metadata: {}, metadataRevision: '9007199254740992', updatedAt: 5, archiveRevision: '2', workspaceId: 'wsp_moved' });
     const merged = mergeSessionDirectoryMetadata(incoming, existing);
     expect(merged.metadata).toBe(existing.metadata);
     expect(merged.metadataRevision).toBe('9007199254740993');
@@ -63,7 +63,7 @@ describe('native global sessions', () => {
 
   test('keeps a newer archive revision while accepting new Host metadata', () => {
     const existing = session({ archivedAt: 3, archiveRevision: '9007199254740993' });
-    const incoming = session({ metadata: { title: 'Renamed' }, metadataRevision: '2', archiveRevision: '9007199254740992' });
+    const incoming = session({ title: 'Renamed', metadata: {}, metadataRevision: '2', archiveRevision: '9007199254740992' });
     const merged = mergeSessionDirectoryMetadata(incoming, existing);
     expect(merged.archivedAt).toBe(3);
     expect(merged.archiveRevision).toBe('9007199254740993');

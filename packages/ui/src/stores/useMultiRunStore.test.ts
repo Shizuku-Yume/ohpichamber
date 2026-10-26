@@ -7,7 +7,6 @@ import * as worktreeCreate from '@/lib/worktrees/worktreeCreate';
 import * as worktreeBootstrap from '@/lib/worktrees/worktreeBootstrap';
 import * as worktreeStatus from '@/lib/worktrees/worktreeStatus';
 import * as config from '@/lib/openchamberConfig';
-import * as knowledge from '@/lib/sessionKnowledgeApi';
 import * as sessionActions from '@/sync/session-actions';
 import { useProjectsStore } from './useProjectsStore';
 import { useGlobalSessionsStore } from './useGlobalSessionsStore';
@@ -55,7 +54,6 @@ function fixture(input: { rejectFirst?: boolean; isolate?: boolean; wait?: boole
     return { name: args.preferredName ?? 'lane', path: `/worktrees/${worktrees.length}`, branch: 'lane', label: 'lane', projectDirectory: '/repo' };
   }));
   spies.push(spyOn(useGlobalSessionsStore.getState(), 'upsertSession').mockImplementation((session) => { published.push(session); }));
-  spies.push(spyOn(knowledge, 'fetchSessionKnowledge').mockResolvedValue({ text: '', signature: '' }));
   spies.push(spyOn(sessionActions, 'sendMessage').mockImplementation(async (request) => {
     expect(observed).toContain(request.sessionId);
     dispatched.push(request);

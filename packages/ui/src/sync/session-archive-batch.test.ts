@@ -12,17 +12,17 @@ afterEach(() => {
 
 describe('native session archive and metadata helpers', () => {
   test('forwards the native metadata changes wrapper to CanonicalClient', async () => {
-    const patch = { changes: { title: 'Renamed', openchamber: { work: { state: 'open' as const } } } };
+    const patch = { changes: { notes: 'Renamed', openchamber: { work: { state: 'open' as const } } } };
     const write = spyOn(canonicalClient, 'patchSessionMetadata').mockResolvedValue({
-      sessionId: 'session', revision: '7', metadata: { title: 'Renamed', openchamber: { work: { state: 'open' } } },
+      sessionId: 'session', revision: '7', metadata: {notes: 'Renamed', openchamber: { work: { state: 'open' } }},
     });
     const result = await requestSessionMetadataUpdate('session', patch);
     expect(write).toHaveBeenCalledWith('session', patch);
-    expect(result).toEqual({ outcome: 'updated', revision: '7', metadata: { title: 'Renamed', openchamber: { work: { state: 'open' } } } });
+    expect(result).toEqual({ outcome: 'updated', revision: '7', metadata: {notes: 'Renamed', openchamber: { work: { state: 'open' } }} });
   });
   test('preserves canonical metadata failure as unavailable', async () => {
     spyOn(canonicalClient, 'patchSessionMetadata').mockRejectedValue(new Error('metadata unavailable'));
-    expect(await requestSessionMetadataUpdate('session', { changes: { title: null } })).toEqual({ outcome: 'unavailable', reason: 'metadata unavailable' });
+    expect(await requestSessionMetadataUpdate('session', { changes: { notes: null } })).toEqual({ outcome: 'unavailable', reason: 'metadata unavailable' });
   });
   test('keeps Host batch partial failures distinct from successful stamps', async () => {
     switchRuntimeEndpoint({ apiBaseUrl: 'https://archive.test', runtimeKey: 'archive-test' });

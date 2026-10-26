@@ -17,7 +17,9 @@ export function createNativeBashPolicyExtension({ interaction, authorize, approv
       const native = api.getAllTools().find(tool => tool.name === 'bash');
       if (!native) return;
       api.registerTool({
-        name: native.name, label: native.name, description: native.description,
+        // ToolInfo carries identity and schema, not the built-in's display
+        // label; keep the BashTool label so the prompt inventory matches OMP.
+        name: native.name, label: 'Bash', description: native.description,
         parameters: native.parameters, approval,
         async execute(toolCallId, params, signal, onUpdate, ctx) {
           signal?.throwIfAborted();

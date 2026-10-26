@@ -29,7 +29,7 @@ test('indexes native parents, roots and authorized directories', () => {
 test('metadata-only changes preserve structural references', () => {
   const record = session('ses_one');
   const structure = buildGlobalSessionStructure([record]);
-  expect(applyGlobalSessionStructureMutations(structure, [{ sessionId: 'ses_one', previous: record, next: { ...record, metadata: { title: 'New' }, metadataRevision: '1' } }])).toBe(structure);
+  expect(applyGlobalSessionStructureMutations(structure, [{ sessionId: 'ses_one', previous: record, next: { ...record, title: 'New', metadata: {}, metadataRevision: '1' } }])).toBe(structure);
 });
 
 test('a workspace move changes only addressed directory buckets', () => {

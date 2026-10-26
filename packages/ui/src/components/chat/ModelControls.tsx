@@ -32,7 +32,7 @@ import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStor
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSelectionStore } from '@/sync/selection-store';
-import { useSessionMessagesSelector, useSessionRenderable, useSessionSelector } from '@/sync/sync-context';
+import { useDirectorySync, useSessionMessagesSelector, useSessionRenderable, useSessionSelector } from '@/sync/sync-context';
 import { useSync } from '@/sync/use-sync';
 import { useUIStore } from '@/stores/useUIStore';
 import { useModelLists } from '@/hooks/useModelLists';
@@ -51,6 +51,7 @@ import {
     shouldPreserveManualModelOverride,
 } from '@/lib/messages/userModelChoice';
 import type { ComposerModelSelection } from './pinnedComposerSelection';
+import { ROOT_SELECTION_AGENT } from '@/sync/selection-store';
 
 type IconComponent = IconName;
 
@@ -275,7 +276,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     if (selection) currentVariant = selection.variant ?? undefined;
     const configuredCurrentReasoningEffort = useConfigStore((state) => state.currentReasoningEffort);
     const currentAgentName = useConfigStore((state) => selection ? selection.agent : state.currentAgentName);
-    const settingsDefaultVariant = useConfigStore((state) => state.settingsDefaultVariant);
+    const settingsDefaultReasoningEffort = useConfigStore((state) => state.settingsDefaultReasoningEffort);
     const settingsDefaultAgent = useConfigStore((state) => state.settingsDefaultAgent);
     const defaultsLoaded = useConfigStore((state) => state.settingsDefaultsLoaded);
     const agentsResolved = canSelectAgent;
@@ -340,12 +341,38 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const uiAgentName = currentSessionId
         ? (sessionSavedAgentName || stickySessionAgentName || currentAgentName)
         : currentAgentName;
-    const savedReasoningEffort = currentSessionId && uiAgentName
-        ? getAgentModelReasoningEffortForSession(currentSessionId, uiAgentName, currentProviderId, currentModelId)
+    const effortAgentKey = uiAgentName ?? ROOT_SELECTION_AGENT;
+    const savedReasoningEffort = currentSessionId
+        ? getAgentModelReasoningEffortForSession(currentSessionId, effortAgentKey, currentProviderId, currentModelId)
+        : undefined;
+    const currentCatalogModel = providers
+        .find((provider) => provider.providerId === currentProviderId)?.models
+        .find((model) => model.modelId === currentModelId);
+    const effortOptions = React.useMemo(() => currentCatalogModel?.reasoningEffortSupported
+        ? ['off', ...currentCatalogModel.reasoningOptions.map((option) => option.reasoningEffort).filter((effort) => effort !== 'off')]
+        : [], [currentCatalogModel]);
+    // OMP's configured default is what an untouched draft runs at. `auto` stays
+    // off the wire: the worker resolves it, so the send carries no effort.
+    const ompDefaultReasoningEffort = settingsDefaultReasoningEffort
+        && (settingsDefaultReasoningEffort === 'auto' || effortOptions.includes(settingsDefaultReasoningEffort))
+        ? settingsDefaultReasoningEffort
+        : undefined;
+    // The native transcript's last thinking-level entry is the session's stored level.
+    const persistedThinkingLevel = useDirectorySync(
+        React.useCallback((state) => (
+            currentSessionId ? state.snapshot[currentSessionId]?.selection?.thinkingLevel : undefined
+        ), [currentSessionId]),
+        currentSessionDirectory ?? undefined,
+    );
+    const nativeReasoningEffort = persistedThinkingLevel
+        && (persistedThinkingLevel === 'auto' || effortOptions.includes(persistedThinkingLevel))
+        ? persistedThinkingLevel
         : undefined;
     const selectedReasoningEffort = selection
-        ? selection.reasoningEffort ?? 'off'
-        : savedReasoningEffort ?? configuredCurrentReasoningEffort ?? 'off';
+        ? selection.reasoningEffort ?? ompDefaultReasoningEffort ?? 'off'
+        : currentSessionId
+            ? savedReasoningEffort ?? nativeReasoningEffort ?? ompDefaultReasoningEffort ?? 'off'
+            : configuredCurrentReasoningEffort ?? ompDefaultReasoningEffort ?? 'off';
 
     const toggleFavoriteModel = useUIStore((state) => state.toggleFavoriteModel);
     const reorderFavoriteModel = useUIStore((state) => state.reorderFavoriteModel);
@@ -546,12 +573,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         [currentMetadata, localizeMetaLabel],
     );
 
-    const currentCatalogModel = selection
-        ? currentProvider?.models.find((model) => model.modelId === currentModelId)
-        : providers.find((provider) => provider.providerId === currentProviderId)?.models.find((model) => model.modelId === currentModelId);
-    const effortOptions = React.useMemo(() => currentCatalogModel?.reasoningEffortSupported
-        ? ['off', ...currentCatalogModel.reasoningOptions.map((option) => option.reasoningEffort).filter((effort) => effort !== 'off')]
-        : [], [currentCatalogModel]);
     const hasEfforts = effortOptions.length > 0;
     const routeOptions = currentCatalogModel?.variants ?? [];
     const hasVariants = routeOptions.length > 0;
@@ -666,11 +687,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                     : undefined);
         }
 
-        const candidates = currentSessionId
-            ? [settingsDefaultVariant, currentInherited]
-            : [currentInherited, settingsDefaultVariant];
-        return candidates.find((candidate) => candidate !== undefined && variantOptions.includes(candidate));
-    }, [currentModelId, currentProviderId, currentSessionId, currentVariantSelection, effectiveCurrentVariant, getModelVariantOptions, settingsDefaultVariant]);
+        return currentInherited !== undefined && variantOptions.includes(currentInherited)
+            ? currentInherited
+            : undefined;
+    }, [currentModelId, currentProviderId, currentVariantSelection, effectiveCurrentVariant, getModelVariantOptions]);
 
     /**
      * The session's recorded choice for this model, in the selection store's
@@ -1150,14 +1170,14 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
 
     React.useEffect(() => {
         if (selection || !isReady || !currentCatalogModel || !currentProviderId || !currentModelId || !contextHydrated) return;
-        if (effortOptions.length === 0) {
-            if (configuredCurrentReasoningEffort !== undefined) setCurrentReasoningEffort(undefined);
-            return;
+        // A selection the new model cannot run is cleared, not rewritten to
+        // `off`: clearing returns the composer to OMP's default, while `off`
+        // would be an explicit choice the user never made.
+        if (configuredCurrentReasoningEffort !== undefined
+            && (effortOptions.length === 0 || !effortOptions.includes(configuredCurrentReasoningEffort))) {
+            setCurrentReasoningEffort(undefined);
         }
-        if (selectedReasoningEffort !== 'off' && !effortOptions.includes(selectedReasoningEffort)) {
-            setCurrentReasoningEffort('off');
-        }
-    }, [configuredCurrentReasoningEffort, contextHydrated, currentCatalogModel, currentModelId, currentProviderId, effortOptions, isReady, selectedReasoningEffort, selection, setCurrentReasoningEffort]);
+    }, [configuredCurrentReasoningEffort, contextHydrated, currentCatalogModel, currentModelId, currentProviderId, effortOptions, isReady, selection, setCurrentReasoningEffort]);
 
 
     const handleVariantSelect = React.useCallback((variant: string | undefined, providerId = currentProviderId, modelId = currentModelId) => {
@@ -1167,13 +1187,13 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         if (selection) {
             if (!controlledSessionId || !selection.agent) return;
             commitVariantSelectionForModel(providerId, modelId, variant ?? null);
-            saveAgentModelReasoningEffortForSession(controlledSessionId, selection.agent, providerId, modelId, effort ?? 'off');
+            saveAgentModelReasoningEffortForSession(controlledSessionId, selection.agent ?? ROOT_SELECTION_AGENT, providerId, modelId, effort ?? 'off');
             return;
         }
         commitVariantSelectionForModel(providerId, modelId, variant ?? null);
         setCurrentReasoningEffort(effort ?? 'off');
         const agentName = resolveLiveAgentName();
-        if (currentSessionId && agentName) saveAgentModelReasoningEffortForSession(currentSessionId, agentName, providerId, modelId, effort ?? 'off');
+        if (currentSessionId) saveAgentModelReasoningEffortForSession(currentSessionId, agentName ?? ROOT_SELECTION_AGENT, providerId, modelId, effort ?? 'off');
     }, [commitVariantSelectionForModel, currentModelId, currentProviderId, currentSessionId, providers, resolveLiveAgentName, saveAgentModelReasoningEffortForSession, selection, setCurrentReasoningEffort, controlledSessionId]);
 
     const handleAgentChange = React.useCallback((agentName: string, options?: { closeModelSelector?: boolean }) => {
@@ -1264,8 +1284,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             setCurrentVariantOverride(null, resolveInheritedVariantForModel(providerId, modelId));
         }
         const sessionId = selection ? controlledSessionId : currentSessionId;
-        const agentId = selection?.agent ?? resolveLiveAgentName();
-        if (sessionId && agentId) {
+        const agentId = selection?.agent ?? resolveLiveAgentName() ?? ROOT_SELECTION_AGENT;
+        if (sessionId) {
             saveAgentModelVariantForSession(sessionId, agentId, providerId, modelId, null);
             saveAgentModelReasoningEffortForSession(sessionId, agentId, providerId, modelId, effort);
         }

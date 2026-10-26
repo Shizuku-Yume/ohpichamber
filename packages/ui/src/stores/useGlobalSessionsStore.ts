@@ -107,8 +107,8 @@ const childSessionRecord = (parent: Session, child: Subagent): Session => {
     createdAt: parent.createdAt, updatedAt: parent.updatedAt, epoch: parent.epoch, headSequence: parent.headSequence,
     mode: { kind: 'main' },
     runtimeStatus, activeRunId: runtimeStatus === 'idle' || runtimeStatus === 'unavailable' ? null : parent.activeRunId,
-    metadata: { title: child.role }, metadataRevision: parent.metadataRevision === '0' ? '1' : parent.metadataRevision,
-    archiveRevision: parent.archiveRevision,
+    title: child.role,
+    metadata: null, metadataRevision: '0', archiveRevision: parent.archiveRevision,
   });
 };
 

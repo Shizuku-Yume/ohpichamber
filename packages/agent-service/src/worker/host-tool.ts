@@ -5,22 +5,23 @@ import { HostActionRequestSchema, type HostActionRequest } from '../native-polic
 
 export interface HostToolScope { sessionId: string; rootSessionId: string; workspaceId: string }
 export interface HostToolInvocation extends HostToolScope { request: HostActionRequest; signal: AbortSignal }
+export const HOST_TOOL_DESCRIPTIONS = {
+  openchamber: 'Invoke retained OpenChamber project/model, session, schedule or file.open actions in the captured workspace.',
+  web: 'Invoke retained browser navigation, snapshot, interaction, inspection, capture and resize actions. Browser credentials remain with the Host.',
+  memory: 'Invoke memory.read, memory.list, memory.save or memory.delete in the captured session.',
+  notify: 'Invoke notify.send for an authorized OpenChamber notification.',
+} satisfies Record<HostActionRequest['toolName'], string>;
+
 export function createHostToolExtension({ scope, invoke }: { scope: HostToolScope; invoke: (request: HostToolInvocation) => Promise<JsonValue> }): ExtensionFactory {
   const captured = Object.freeze({ ...scope });
   return api => {
-    const descriptions = {
-      openchamber: 'Invoke retained OpenChamber project/model, session, schedule or file.open actions in the captured workspace.',
-      web: 'Invoke retained browser navigation, snapshot, interaction, inspection, capture and resize actions. Browser credentials remain with the Host.',
-      memory: 'Invoke memory.read, memory.list, memory.save or memory.delete in the captured session.',
-      notify: 'Invoke notify.send for an authorized OpenChamber notification.',
-    } satisfies Record<HostActionRequest['toolName'], string>;
     for (const toolName of ['openchamber', 'web', 'memory', 'notify'] as const) {
       const parameters = api.typebox.Type.Object({
         action: api.typebox.Type.String(),
         input: api.typebox.Type.Record(api.typebox.Type.String(), api.typebox.Type.Unknown()),
       });
       api.registerTool<typeof parameters>({
-        name: toolName, label: toolName, description: descriptions[toolName], parameters, approval: 'exec',
+        name: toolName, label: toolName, description: HOST_TOOL_DESCRIPTIONS[toolName], parameters, approval: 'exec', loadMode: 'essential',
         async execute(_toolCallId, params, signal) {
           const cancellation = signal ?? new AbortController().signal;
           cancellation.throwIfAborted();

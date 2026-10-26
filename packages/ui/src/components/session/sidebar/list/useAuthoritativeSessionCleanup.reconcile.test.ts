@@ -19,7 +19,7 @@ const session = (sessionId: string, displayPath = '/repo'): Session => {
   return {
     sessionId, projectId: 'project', workspaceId, displayPath, rootSessionId: sessionId,
     createdAt: 1, updatedAt: 1, epoch: 'epoch_1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
-    metadata: { title: sessionId }, metadataRevision: '1', archiveRevision: '0',
+    title: sessionId, metadata: {}, metadataRevision: '1', archiveRevision: '0',
   };
 };
 resetWorkspaceDirectories();

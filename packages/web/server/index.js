@@ -741,7 +741,6 @@ configureAgentService(hostAgentRuntime.service, {
 notificationTemplateRuntime = createNotificationTemplateRuntime({
   sessionService: openChamberSessionService,
   resolveSessionScope: hostAgentRuntime.resolveSessionScope,
-  readSessionMetadata: readStoredSessionMetadata,
   readSettingsFromDisk,
 });
 
@@ -760,7 +759,6 @@ const notificationTriggerRuntime = createNotificationTriggerRuntime({
   isAnyInteractiveClientVisible,
   sessionService: openChamberSessionService,
   resolveSessionScope: hostAgentRuntime.resolveSessionScope,
-  readSessionMetadata: readStoredSessionMetadata,
 });
 
 const setAutoAcceptSession = (sessionId, enabled) => permissionAutoAcceptRuntime.setSessionPolicy(sessionId, enabled);
@@ -788,10 +786,6 @@ const sessionKnowledgeRuntime = createSessionKnowledgeRuntime({
   // reference here would read it before it exists.
   resolveProjectId: (directory) => resolveMemoryProjectId(directory),
   isAgentMemoryEnabled,
-  isSessionLinkingAvailable: async () => {
-    const settings = await readSettingsFromDiskMigrated();
-    return settings.agentControlToolEnabled !== false;
-  },
   readSessionMetadata: readStoredSessionMetadata,
   // Pins and the delivered-signature cursor are read from OpenChamber's own store.
   persistSessionMetadata: (sessionID, directory, patch) => persistSessionMetadataPatch(sessionID, patch, { directory }),
@@ -891,7 +885,6 @@ const messageSearchRuntime = createMessageSearchRuntime({
   dataDir: OPENCHAMBER_DATA_DIR,
   sessionService: openChamberSessionService,
   resolveSessionScope: hostAgentRuntime.resolveSessionScope,
-  readSessionMetadata: readStoredSessionMetadata,
   globalEventHub: globalMessageStreamHub,
   readSettings: async () => {
     const settings = await readSettingsFromDisk();
@@ -1282,14 +1275,8 @@ const ensureGlobalWatcherStarted = async () => {
   if (Object.keys(listed.errors).length > 0) {
     console.warn('[agent-events] persisted session discovery was partial:', Object.values(listed.errors).join(','));
   }
-  for (const session of listed.items) {
-    try {
-      await openChamberSessionService.open(session.sessionId);
-      await globalMessageStreamHub.subscribeSession(session.sessionId);
-    } catch (error) {
-      console.warn('[agent-events] persisted session observation failed:', error.code ?? 'SERVICE_UNAVAILABLE');
-    }
-  }
+  // Reads are cold: boot must not start a worker for every persisted session.
+  // Live observation starts when a session publishes its first event.
 };
 const startAgentService = async () => {
   await hostAgentRuntime.start();

@@ -12,6 +12,7 @@ import type {
   SkillsCatalogState, SkillExpandRequest, SkillExpandResult, CompletionRequest, CompletionResult, CompletionCancelRequest, CompletionCancelResult,
   MCPCatalogRead, MCPConfigureRequest, MCPApplyRequest, MCPApplyResult, MCPReconnectRequest, MCPOAuthRequest, MCPOAuthResult, SteerAck, SteerRequest, Workspace,
   WorkspaceList, ProjectList, QueueAppendRequest, QueueDeleteRequest, QueueReorderRequest, QueueState, Subagent,
+  OmpSettingsState, OmpSettingsUpdateRequest,
 } from '@openchamber/agent-contract';
 
 export class CanonicalApiError extends Error {
@@ -351,6 +352,17 @@ export class CanonicalClient {
   deleteQueueItem(sessionId: string, queueItemId: string, input: QueueDeleteRequest): Promise<QueueState> { return request(`/api/agent/v1/sessions/${id(sessionId)}/queue/${id(queueItemId)}`, scoped(C.QueueStateSchema, result => result.sessionId === sessionId), { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.QueueDeleteRequestSchema, input, body => body.queueItemId === queueItemId) }); }
 
   getModels(workspaceId: string): Promise<ModelCatalog> { return request(`/api/agent/v1/workspaces/${id(workspaceId)}/models`, scoped(C.ModelCatalogSchema, result => result.workspaceId === workspaceId)); }
+
+  getOmpSettings(workspaceId: string, signal?: AbortSignal): Promise<OmpSettingsState> {
+    return request(`/api/agent/v1/workspaces/${id(workspaceId)}/settings`, scoped(C.OmpSettingsStateSchema, result => result.workspaceId === workspaceId), { signal });
+  }
+  updateOmpSettings(workspaceId: string, input: OmpSettingsUpdateRequest, signal?: AbortSignal): Promise<OmpSettingsState> {
+    const parsed = C.OmpSettingsUpdateRequestSchema.parse(input);
+    return request(`/api/agent/v1/workspaces/${id(workspaceId)}/settings`, scoped(C.OmpSettingsStateSchema,
+      result => result.workspaceId === workspaceId && BigInt(result.revision) === BigInt(parsed.expectedRevision) + 1n), {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(parsed), signal,
+    });
+  }
 
   readCacheWarming(workspaceId: string, signal?: AbortSignal): Promise<C.CacheWarmingState> {
     return request(`/api/agent/v1/workspaces/${id(workspaceId)}/cache-warming`, scoped(C.CacheWarmingStateSchema, result => result.workspaceId === workspaceId), { signal });

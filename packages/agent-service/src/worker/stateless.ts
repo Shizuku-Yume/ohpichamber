@@ -21,6 +21,7 @@ import { NativeFileResources } from './catalog-resources.ts';
 import { nativeSkillOptions } from './native-runtime.ts';
 import { NativeCacheWarming } from './catalog-warming.ts';
 import { NativeWebSearch, installWebSearchAuthorization } from './catalog-websearch.ts';
+import { NativeSettings } from './catalog-settings.ts';
 
 /** A workspace process owns native catalogs and completion, never a session or transcript. */
 export class StatelessWorker {
@@ -34,6 +35,7 @@ export class StatelessWorker {
   private readonly fileResources: NativeFileResources;
   private readonly warming: NativeCacheWarming;
   private readonly webSearch: NativeWebSearch;
+  private readonly settingsStore: NativeSettings;
   private readonly operations = new Set<Promise<WorkerOperationResult>>();
   private credentialScopeId: string;
   private activeCompletionId: string | undefined;
@@ -48,6 +50,7 @@ export class StatelessWorker {
       join(dirname(runtime.modelsPath), 'provider-account-labels.json'));
     this.oauth = new NativeProviderOAuth(runtime.authStorage, input.workerGeneration);
     this.webSearch = new NativeWebSearch(runtime, input.workspaceId, authorize);
+    this.settingsStore = new NativeSettings(runtime.settings);
     this.mcpCredentials = new NativeMcpCredentials(runtime.authStorage, input.workspaceId);
     this.fileResources = new NativeFileResources({ cwd: input.cwd, agentDirectory: input.agentDirectory,
       get extensionRoots() { return nativeExtensionRoots(runtime.settings); },
@@ -183,6 +186,10 @@ export class StatelessWorker {
       case 'catalog.warming.persist': result = { type: 'catalog.warming', state: await this.warming.persist(workspaceId, operation.request.mode, revision) }; break;
       case 'catalog.warming.apply':
         throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'Cache warming application requires a live session runtime');
+      case 'catalog.settings.read':
+        result = { type: 'catalog.settings', state: await this.settingsStore.read(workspaceId, revision) }; break;
+      case 'catalog.settings.write':
+        result = { type: 'catalog.settings.mutated', state: await this.settingsStore.write(workspaceId, revision, operation.request) }; break;
       case 'catalog.provider.accounts.read': result = { type: 'catalog.provider.accounts', result: await this.credentials.accounts(operation.providerId, revision) }; break;
       case 'catalog.provider.account.mutate':
         if (operation.request.action === 'remove') this.oauth.cancelProvider(operation.providerId);

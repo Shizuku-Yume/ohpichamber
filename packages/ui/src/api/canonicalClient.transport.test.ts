@@ -176,13 +176,34 @@ describe('CanonicalClient real HTTP scope boundary', () => {
     for (const [field, invoke] of [
       ['models', () => client.getModels(workspaceId)], ['providers', () => client.getProviders(workspaceId)], ['agents', () => client.getAgents(workspaceId)],
     ] as const) {
-      respondWith({ workspaceId: 'workspace_other', revision: '0', [field]: [] });
-      await expect(invoke()).rejects.toThrow();
-      respondWith({ workspaceId, revision: '0', [field]: [] });
+      if (field === 'models') {
+        respondWith({ workspaceId: 'workspace_other', revision: '0', models: [], defaults: { model: null, thinkingLevel: null }, planRoleAvailable: false });
+        await expect(invoke()).rejects.toThrow();
+        respondWith({ workspaceId, revision: '0', models: [], defaults: { model: null, thinkingLevel: null }, planRoleAvailable: false });
+      } else {
+        respondWith({ workspaceId: 'workspace_other', revision: '0', [field]: [] });
+        await expect(invoke()).rejects.toThrow();
+        respondWith({ workspaceId, revision: '0', [field]: [] });
+      }
       expect((await invoke()).workspaceId).toBe(workspaceId);
     }
     respondWith({ items: [], errors: {} });
     expect(await client.listSessions(workspaceId)).toEqual({ items: [], errors: {} });
+  });
+
+  test('settings reads and writes verify workspace ownership and the next revision', async () => {
+    const settingsState = { workspaceId, revision: '7', settings: [] };
+    respondWith(settingsState);
+    expect((await client.getOmpSettings(workspaceId)).revision).toBe('7');
+    expect(calls.at(-1)).toBe(`GET /api/agent/v1/workspaces/${workspaceId}/settings`);
+    respondWith({ ...settingsState, revision: '8' });
+    await expect(client.updateOmpSettings(workspaceId, { expectedRevision: '7', changes: [{ id: 'compaction.thresholdPercent', value: 60 }] })).resolves.toMatchObject({ revision: '8' });
+    expect(calls.at(-1)).toBe(`PUT /api/agent/v1/workspaces/${workspaceId}/settings`);
+    respondWith({ ...settingsState, revision: '9' });
+    await expect(client.updateOmpSettings(workspaceId, { expectedRevision: '7', changes: [{ id: 'compaction.thresholdPercent', value: 60 }] })).rejects.toThrow();
+    respondWith({ ...settingsState, workspaceId: 'workspace_other' });
+    await expect(client.getOmpSettings(workspaceId)).rejects.toThrow();
+    await expect(client.updateOmpSettings(workspaceId, { expectedRevision: '7', changes: [{ id: 'compaction.thresholdPercent', value: 60 }] })).rejects.toThrow();
   });
 
   test('rejects unrelated run, steering and follow-up receipts', async () => {

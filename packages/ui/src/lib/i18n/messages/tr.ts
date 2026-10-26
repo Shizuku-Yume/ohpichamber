@@ -9,6 +9,7 @@ import { surfacePanelI18n } from './surface-panel.i18n';
 import { fileArtifactsI18n } from './file-artifacts.i18n';
 import { usageStatsI18n } from './usage-stats.i18n';
 import { webSearchI18n } from './websearch.i18n';
+import { ompSettingsI18n } from './omp-settings.i18n';
 import { isolatedSpacesI18n } from './isolated-spaces.i18n';
 import { sourceBoardI18n } from './source-board.i18n';
 import { environmentI18n } from './environment.i18n';
@@ -60,6 +61,7 @@ export const dict = {
   ...fileArtifactsI18n.tr,
   ...usageStatsI18n.tr,
   ...webSearchI18n.tr,
+  ...ompSettingsI18n.tr,
   ...isolatedSpacesI18n.tr,
   ...sourceBoardI18n.tr,
   ...environmentI18n.tr,
@@ -2399,6 +2401,7 @@ export const dict = {
   'chat.chatInput.toast.largeTextPaste.inline': 'Satır içi yapıştır',
   'chat.chatInput.toast.attachFileFailed': 'Dosya eklenemedi',
   'chat.chatInput.toast.attachNamedFailed': '{name} eklenemedi',
+  'chat.chatInput.toast.attachmentUnsupported': 'Bu ek dosya desteklenen bir metin dosyası veya görsel değil.',
   'chat.chatInput.toast.unsupportedAttachmentModalities': '{model}, {files} için gereken {modalities} girişini desteklemiyor. Mesajı yine de gönderebilirsiniz ancak bu ekler yok sayılabilir.',
   'chat.chatInput.toast.someFilesSkipped': 'Bazı dosyalar atlandı:\\n{summary}',
   'chat.chatInput.toast.openSessionFirst': 'Önce bir session açın',

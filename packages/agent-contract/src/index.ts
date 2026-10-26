@@ -20,3 +20,4 @@ export * from './skill-repositories.ts';
 export * from './provider-management.ts';
 export * from './usage.ts';
 export * from './websearch.ts';
+export * from './settings.ts';

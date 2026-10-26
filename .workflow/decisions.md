@@ -365,3 +365,12 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Effort:** omp-native-parity
 - **Mine:** yes
 - **Revisit when:** a maintainer reports a manual title that must survive the cutover; then add an explicit versioned migration rather than a fallback.
+
+## 2026-10-27 - OMP behaviour settings route is a narrow registry view
+
+- **Decided:** `GET`/`PUT /api/agent/v1/workspaces/:workspaceId/settings` exposes only `OMP_SETTING_IDS` from the shared contract. Descriptor metadata comes from the pinned `orderedSettings()`, values are validated by each native `Setting.assertWritable`, and writes use the workspace catalog owner's uint64 revision CAS. The route excludes credentials and `auth.broker.*` (broker URL/token), raw MCP command/env/header definitions, account pools, appearance keys, remote URLs and configurable paths; those stay on their owning provider/MCP/skill surfaces or the OMP TUI. The four candidate pages (classification, routing, magic prompts, snippets) are retained because each still has a live Host/native consumer.
+- **Instead of:** A generic dotted-key settings API, copying OMP's schema into the app, or deleting active feature pages to make the settings list shorter.
+- **Because:** the route writes the same `config.yml` OMP reads, so a second schema or credential/path/egress field would create a second authority or bypass provider-entry policy. Keeping descriptors dynamic follows the pinned package and lets the UI see OMP's own defaults and enum values.
+- **Mine:** yes
+- **Revisit when:** OMP exports a supported settings mutation API with its own revision/lock semantics, or a candidate page loses its last runtime consumer.
+- **Effort:** omp-native-parity

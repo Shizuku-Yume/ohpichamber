@@ -507,13 +507,13 @@ describe('SessionAuthGate status-check failure behavior', () => {
 
     const lockedTree = await renderGate();
     const input = findElement(lockedTree, 'input');
-    expect(input).not.toBeNull();
-    (input?.props.onChange as (event: { target: { value: string } }) => void)({ target: { value: 'password-a' } });
+    if (!input) throw new Error('The locked gate has no password input');
+    (input.props.onChange as (event: { target: { value: string } }) => void)({ target: { value: 'password-a' } });
 
     const passwordTree = await renderGate();
     const form = findElement(passwordTree, 'form');
-    expect(form).not.toBeNull();
-    const pending = (form?.props.onSubmit as (event: { preventDefault: () => void }) => Promise<void>)({ preventDefault: () => undefined });
+    if (!form) throw new Error('The gate has no password form');
+    const pending = (form.props.onSubmit as (event: { preventDefault: () => void }) => Promise<void>)({ preventDefault: () => undefined });
     await Promise.resolve();
 
     runtimeApiBaseUrl = 'https://host-b.example';

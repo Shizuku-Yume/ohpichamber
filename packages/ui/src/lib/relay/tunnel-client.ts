@@ -58,6 +58,23 @@ export interface TunnelWireSocket {
   onerror: (() => void) | null;
 }
 
+// WebSocket.send takes only views backed by an ArrayBuffer. The relay's frames
+// are, so the usual path hands the same bytes over without copying; a view over
+// SharedArrayBuffer cannot be sent at all and is copied into a fresh buffer.
+const sendWebSocketData = (ws: WebSocket, data: string | ArrayBuffer | ArrayBufferView): void => {
+  if (typeof data === 'string' || data instanceof ArrayBuffer) {
+    ws.send(data);
+    return;
+  }
+  if (data.buffer instanceof ArrayBuffer) {
+    ws.send(new Uint8Array(data.buffer, data.byteOffset, data.byteLength));
+    return;
+  }
+  const copy = new Uint8Array(data.byteLength);
+  copy.set(new Uint8Array(data.buffer, data.byteOffset, data.byteLength));
+  ws.send(copy);
+};
+
 const wrapNativeWebSocket = (ws: WebSocket): TunnelWireSocket => {
   ws.binaryType = 'arraybuffer';
   const wire: TunnelWireSocket = {
@@ -65,7 +82,7 @@ const wrapNativeWebSocket = (ws: WebSocket): TunnelWireSocket => {
       return ws.readyState;
     },
     send(data) {
-      ws.send(data);
+      sendWebSocketData(ws, data);
     },
     close(code, reason) {
       ws.close(code, reason);
@@ -124,7 +141,7 @@ export const wrapBrowserWebSocket = (ws: WebSocket): RelayTunnelWebSocket => {
     onerror: null,
     onclose: null,
     send(data) {
-      ws.send(data);
+      sendWebSocketData(ws, data);
     },
     close(code, reason) {
       ws.close(code, reason);

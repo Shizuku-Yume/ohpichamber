@@ -1,11 +1,12 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { beforeEach, describe, expect, test } from 'bun:test';
+import { createSessionFoldersStore, type SessionFoldersRuntime } from './useSessionFoldersStore';
 
 const storage = new Map<string, string>();
 let storageSetCount = 0;
 let runtimeKey = 'runtime-a';
 type TestFolder = { id: string; name: string; sessionIds: string[]; createdAt: number; parentId: string | null };
 type TestFoldersMap = { [scopeKey: string]: TestFolder[] };
-/** Whatever the fake server answers: a folder snapshot, a write result or an error. */
+/** Whatever the fake Host answers: a folder snapshot, a write result or an error. */
 type ServerAnswer = {
   version?: number;
   exists?: boolean;
@@ -16,8 +17,12 @@ type ServerAnswer = {
   error?: string;
 };
 let diskResponseBody: ServerAnswer = { version: 1, exists: false };
+// The original suite only reached the Host inside its window wrapper; the
+// factory seam keeps that boundary without installing a global window.
+let connected = false;
 
-const safeStorage = {
+// A real Storage over the map, so the store's own persistence code runs.
+const deviceStorage: Storage = {
   getItem: (key: string) => storage.get(key) ?? null,
   setItem: (key: string, value: string) => {
     storageSetCount += 1;
@@ -33,38 +38,34 @@ const safeStorage = {
   get length() {
     return storage.size;
   },
-} as Storage;
-
-mock.module('./utils/safeStorage', () => ({
-  getDeferredSafeStorage: () => safeStorage,
-  getSafeStorage: () => safeStorage,
-}));
-
-mock.module('@/lib/desktop', () => ({
-  isVSCodeRuntime: () => false,
-}));
+};
 
 type ServerRequest = { method: string; body: unknown };
 const requests: ServerRequest[] = [];
-// What the fake server answers; a function sees the request.
+// What the fake Host answers; a function sees the request.
 let respond: (request: ServerRequest) => Response = () => json(diskResponseBody);
 const json = (body: ServerAnswer, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
-mock.module('@/lib/runtime-fetch', () => ({
-  runtimeFetch: mock(async (_path: string, init?: RequestInit) => {
+// The store's real transport seam: the fake Host stands in for runtimeFetch.
+const runtime: SessionFoldersRuntime = {
+  fetch: async (_path: string, init?: RequestInit) => {
     const request = { method: init?.method ?? 'GET', body: init?.body ? JSON.parse(String(init.body)) : null };
     requests.push(request);
     return respond(request);
-  }),
-}));
-mock.module('@/lib/runtime-switch', () => ({ getRuntimeKey: () => runtimeKey }));
+  },
+  runtimeKey: () => runtimeKey,
+  storage: deviceStorage,
+  immediateStorage: deviceStorage,
+  connected: () => connected,
+};
 
-const { useSessionFoldersStore, handleSessionFoldersChanged, handleSessionFoldersStreamReady } = await import('./useSessionFoldersStore');
+const { store: useSessionFoldersStore, handleSessionFoldersChanged, handleSessionFoldersStreamReady } = createSessionFoldersStore(runtime);
 
 const waitForPersist = () => new Promise((resolve) => setTimeout(resolve, 350));
 
 describe('useSessionFoldersStore folder assignments', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    connected = false;
     storage.clear();
     storageSetCount = 0;
     runtimeKey = 'runtime-a';
@@ -72,6 +73,8 @@ describe('useSessionFoldersStore folder assignments', () => {
     requests.length = 0;
     respond = () => json(diskResponseBody);
     useSessionFoldersStore.getState().resetForRuntimeSwitch(runtimeKey);
+    // The reset's hydration runs in a microtask; let it observe the offline flag.
+    await Promise.resolve();
     useSessionFoldersStore.setState({
       foldersMap: {},
       collapsedFolderIds: new Set<string>(),
@@ -159,14 +162,13 @@ describe('useSessionFoldersStore folder assignments', () => {
     expect(useSessionFoldersStore.getState().getFoldersForScope('/workspace/project').map((folder) => folder.name)).toEqual(['Browser folder']);
   });
 
-  // Server persistence and hydration only run in a browser.
+  // Connect only inside the wrapper, as the browser-only hydration did.
   const withWindow = (run: () => Promise<void>) => async () => {
-    const original = globalThis.window;
-    Object.defineProperty(globalThis, 'window', { configurable: true, value: {} });
+    connected = true;
     try {
       await run();
     } finally {
-      Object.defineProperty(globalThis, 'window', { configurable: true, value: original });
+      connected = false;
     }
   };
 

@@ -3,6 +3,7 @@
 **Effort:** upstream-refresh
 **Task type:** feature
 **Base commit:** 2e1239cd4b
+**Finished:** 2026-10-27
 
 **Delivers:** Upstream's session list, unread/work markers, folders, archive and chat view shell work with OMP sessions, including the server-side session folder and draft support.
 
@@ -16,25 +17,22 @@
 
 ## Done when
 
-- [ ] Session rows, grouping, sorting and unread state read from the fork's stores; no second source of truth is added.
-- [ ] Archive and plan views match upstream behavior; Task38's spaces removal is not undone.
-- [ ] Reload and reconnect preserve selection, folders and draft text.
-- [ ] Session list performance is checked with a large fixture list; the measurement is recorded.
-- [ ] `sessionLineage`, `user-message-resume` and `useSessionDraftsStore` are consumed by the session list/actions; no delivered interface is left unreferenced.
-- [ ] The three deferred stores are reworked from upstream; `useSessionPinnedStore` stays deferred to the pin-source debt entry; no OpenCode-shaped field is faked.
-- [ ] `PlanView` no longer imports `useFeatureFlagsStore`; session pins remain deferred to the technical-debt entry `Session pins have no OMP source`.
+- [x] Session rows, grouping, sorting and unread state read from the fork's stores; no second source of truth is added. Unread is the fork's notification-based unseen marker; upstream's `session-unread` stays with task 25 (no OMP viewed watermark).
+- [ ] Archive and plan views match upstream behavior; Task38's spaces removal is not undone. The Archive page was verified at the running app; worktree archive rows wait for 09 and the PlanView rewrite for 16, so this item is only partly delivered (see the deferral table).
+- [x] Reload and reconnect preserve selection, folders and draft text. Folder + selection survived the reload in the real path; an unsent Host draft reopened from its row; reconnect flushes/re-reads on the online event.
+- [x] Session list performance is checked with a large fixture list; the measurement is recorded (5,000 sessions → 5,040 rows, median 29.4 ms).
+- [ ] `sessionLineage`, `user-message-resume` and `useSessionDraftsStore` are consumed by the session list/actions; no delivered interface is left unreferenced. `sessionLineage` and `useSessionDraftsStore` are consumed; `user-message-resume` has no caller in this task's files (task 15's ChatInput) and stays owned by 15.
+- [ ] The three deferred stores are reworked from upstream; `useSessionPinnedStore` stays deferred to the pin-source debt entry; no OpenCode-shaped field is faked. The folder store is fully reworked; the projects store gained the folder-scope cleanup; the display store's upstream shape is the one-view redesign and moves with 09 (see the amendment proposal).
+- [x] `PlanView` no longer imports `useFeatureFlagsStore`; session pins remain deferred to the technical-debt entry `Session pins have no OMP source`.
 
 ## Progress
 
-### State at this stop (WIP, not landed)
+### State at this stop
 
 Branch `upstream-refresh/08-sessions-sidebar`, worktree `upstream-refresh-08`, base
-`2e1239cd4b`, commits `b8a25680a2` and `e605a24170`. `bun install --frozen-lockfile` exit 0
-(1406 packages); `bun run type-check` exit 0; oxlint on every changed file exit 0; focused
-suites green (folders route 15, drafts route 8, folders store 17, row model 38, archive/subtree
-17, i18n 69 across 21 files). Full `bun run lint`, full test suite, dead-code, the real path and
-the large-fixture performance measurement have NOT run yet; landing has NOT happened. The
-remaining list is at the end.
+`2e1239cd4b`. The task lands with the folder/draft protocol, the sidebar draft rows, the archive
+fixes, the injected store transport and the deferral table below; it is rebased onto the
+integration tip just before the fast-forward.
 
 ### Adopted (upstream `0056bf6a9` content, adapted to the canonical OMP model)
 
@@ -110,48 +108,64 @@ this task's list sends a message, so a call here would be invented. Expected dea
 until then: `prepareUserMessageResume`. Task 23's other delivered interfaces are consumed or
 covered.
 
-### Checks run
+### Checks at the rebased tip
 
-| Check | Exit | Evidence |
+| Check | Exit | Log |
 |---|---:|---|
-| `bun install --frozen-lockfile` | 0 | 1406 packages |
-| `bun run type-check` | 0 | final tree |
-| `bun test` focused, isolated: folders route, drafts route, row model, archive/subtree, i18n | 0 | `logs/focused-tests-2.log`, 101 pass / 24 files |
-| `bun test` focused, one process incl. folders store | 1 | `logs/focused-tests-1.log`: bun `mock.module('@/lib/runtime-switch')` in `useSessionFoldersStore.test.ts` pollutes later files of the same process; 68 pass, 2 module-load errors. The repo runner isolates suites; the store test alone is 17/17. |
-| `bunx oxlint` changed files | 0 | exit 0 |
-| `bun run lint` (full) | NOT RUN | |
-| `VITEST_MAX_WORKERS=2 bun run test` | NOT RUN | |
-| `bun run dead-code` | NOT RUN | expect `prepareUserMessageResume` |
-| Real path (dev, sessions/folders/archive/drafts, reload) | NOT RUN | ports API 6102 / UI 6180 |
-| Large-fixture performance measurement | NOT RUN | |
+| `bun install --frozen-lockfile` | 0 | `logs/install-rebased.log`, 1406 packages |
+| `bun run type-check` | 0 | `logs/type-check-rebased.log` |
+| `bun run lint` | 0 | `logs/lint-rebased.log` (one pre-existing unused-disable warning in task 10's `tooltip.tsx`) |
+| `VITEST_MAX_WORKERS=2 bun run test` | 0 | `logs/test-rebased.log`: 7/7 suites; web 375 passed / 9 skipped, 6096 tests. The known host-approval `network-defaults` failure did not reproduce, so no isolated-HOME rerun was needed. |
+| `bun run dead-code` | 1 | `logs/dead-code-rebased-2.log`: only findings owned by other open tasks — task 10 (`pause-clock`, `popup-side`, `useDurationTicker`, `usePageColors`, `color.ts`), task 15 (`createSessionDraftId`, `SessionDraftTooLargeError`), task 21/25 (`sessionWarming*`), task 11/23 (`permissionModeForNewSession`), plus the pre-existing `knip.json` hints. Nothing from this change. |
+| `bunx oxlint` on changed files | 0 | `logs/oxlint-authored-2.log` |
+| focused bun tests, one process (folders route/store, drafts route, row model, archive/subtree, i18n) | 0 | `logs/focused-tests-3.log`: 118 pass / 25 files |
+| `.workflow/bin/workflow validate` | 0 | after the task file moved to `done/` |
 
-### Remaining work (exact)
+The folder store's test no longer mocks modules: `createSessionFoldersStore(runtime)` takes the
+fetch, runtime key and device storage; the app singleton is built from `runtimeFetch`,
+`getRuntimeKey` and safeStorage (commit `89e6554ae9`). The focused set now runs in one process.
 
-1. `bun run lint`; `VITEST_MAX_WORKERS=2 bun run test` (record; rerun the known web
-   network-defaults test with HOME/XDG_CONFIG_HOME at a fresh temp dir and record both);
-   `bun run dead-code` and inspect (expect the interface finding above); logs under
-   `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-08-2026-10-27/logs/`.
-2. Performance: build the row model for a 5,000-session fixture and record build ms and row count
-   (script under the evidence dir, not the repo); note the virtualizer bounds in the running app.
-3. Real path: `bun run dev` with isolated `OPENCHAMBER_DATA_DIR` under /tmp, API 6102 / UI 6180;
-   `GET /api/agent/v1/ready` 200; create two sessions in a fixture project, create a folder, drag/
-   move one in, reload and confirm it stayed; archive a session and find it on the Archive page;
-   restore it; `PUT /api/session-drafts/demo` then reload and confirm the pen row opens and its
-   discard removes it (no composer publishing yet — named stand-in); send one prompt and watch
-   the session move into work; screenshots + console log.
-4. Finish or explicitly hand off the display-store rework: it needs the one-view components above.
-   If the plan owner wants it now, it must be split with 07/09/24/25, not faked here.
-5. Rebase onto the current integration tip, rerun install/type-check/lint/test, `git merge
-   --ff-only` in `/home/shizuku/Project/ohpichamber-worktrees/upstream-refresh-integration`,
-   recheck and rebase if it moved, move this file to `.workflow/done/upstream-refresh/`, run
-   `.workflow/bin/workflow validate`, remove the worktree and branch.
+### Performance
+
+`row-model-bench.json` (script kept out of the repo): 20 projects × 250 sessions = 5,000
+sessions, all groups fully revealed, `buildSessionSidebarRowModel` 15 iterations. Rows: 5,040;
+median 29.41 ms, mean 30.64 ms, min 25.21 ms, max 49.91 ms. The model is memoized per input and
+the virtualizer mounts ~24 rows, so this is the full-rebuild cost on a list change, not a frame
+cost. The run was on the host CPU while no other build ran.
+
+### Real path (observed)
+
+`bun run dev` with `OPENCHAMBER_DATA_DIR=/tmp/ohpi-08-data`, `HOME=/tmp/ohpi-08-home` (a copy of
+the OMP provider config, no secret printed), UI 6180 / API 6102. `GET /api/agent/v1/ready`
+returned 200 `{"ready":true,"engine":"omp","version":"1.0.0"}` (`ready.json`).
+
+- Real provider: model GPT-6 Astra (CLIProxyAPI); the prompt “Reply with exactly the word: ready”
+  produced “ready” in the transcript, and the row showed its active marker while the turn ran
+  (sidebar text `Session active …`). No provider values were printed.
+- Folder: created “Work” from the session menu's Move to folder → New folder and the session was
+  filed in it; the folder and the session under it were still there after a reload, with the
+  session selected again (`01-folder-work-before-reload.png`, `02-folder-work-after-reload.png`).
+- Draft: a Host draft was created with `PUT /api/session-drafts/ohpi08-demo` (named stand-in:
+  composer publishing is task 15, so typing alone stores only the device draft). After a reload
+  the sidebar showed the pen row “Open draft: Draft started on another client”; clicking it
+  reopened the composer with that text (`03-draft-opened.png`).
+- Archive: the page shows “1 archived session — Untitled Session — Just now”
+  (`04-archive-page.png`). The session had to be archived through the Host route the UI calls
+  (`POST /api/openchamber/sessions/archive`, 200) because the isolated OMP worker failed to
+  restore the finished session (`SESSION_RESTORE_FAILED`, status `unavailable`) and the UI
+  action rode on that status. No subsession could be produced: the available agents
+  (scout/reviewer/security-reviewer/sonic/task) have no task tool, and two explicit prompts had
+  the agent read the file itself. Archive-with-subsession behavior is covered by
+  `sessionSubtreeActions`/`archiveAllSessions` tests; the live page was verified with a
+  top-level session.
+- Servers stopped; the isolated data and home stay under `/tmp` for inspection.
 
 ### Limits
 
-- The one-view sidebar redesign, the display-store rework, project knowledge, spaces and worktree
-  archive rows are not in this WIP; they are blocked by the named owners above. `usePinnedStore`
-  stays deferred. `session-unread` is not faked; the sidebar keeps the notification-based unseen
-  marker, which is the fork's source.
-- Draft rows render and open Host drafts, but nothing publishes a draft to the Host until task
-  15 lands `useSessionDraftPublishing`; a draft created through the route (real-path stand-in) is
-  the only way to see the row today.
+- The one-view sidebar redesign, the display-store rework, project knowledge, spaces and
+  worktree archive rows stay with the owners in the table above; `usePinnedStore` stays deferred.
+- `user-message-resume` is delivered but its only caller is task 15's ChatInput; it remains
+  referenced by its own test, so no dead-code finding appears.
+- The isolated OMP profile could not restore a finished session after a worker restart, which
+  blocked the UI archive action and any subagent turn; this is an environment limit of the copied
+  provider config, not a change in this branch, and is recorded with the workaround above.

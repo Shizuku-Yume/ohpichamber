@@ -164,7 +164,7 @@ describe("generateCommitMessage diff collection", () => {
         return jsonResponse(JSON.stringify({ workspaceId: 'workspace-git', projectId: 'project-git', name: 'Git' }))
       }
       if (url.includes('/api/agent/v1/workspaces/workspace-git/models')) {
-        return jsonResponse(JSON.stringify({ workspaceId: 'workspace-git', revision: '0', models: [{ provider: 'git-provider', modelId: 'haiku', name: 'Haiku', modalities: ['text'], contextWindow: 8000, maxOutputTokens: 2000, reasoningEffortSupported: false, reasoningOptions: [], variants: [], pricing: null }] }))
+        return jsonResponse(JSON.stringify({ workspaceId: 'workspace-git', revision: '0', models: [{ provider: 'git-provider', modelId: 'haiku', name: 'Haiku', modalities: ['text'], contextWindow: 8000, maxOutputTokens: 2000, reasoningEffortSupported: false, reasoningOptions: [], variants: [], pricing: null }], planRoleAvailable: false }))
       }
       if (url.includes('/api/agent/v1/workspaces/workspace-git/completions')) {
         const body = JSON.parse(String(init?.body))

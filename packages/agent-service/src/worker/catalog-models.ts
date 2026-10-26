@@ -12,6 +12,7 @@ import { ModelsConfigFile, validateProviderConfiguration } from '@oh-my-pi/pi-co
 import { ModelsConfigSchema, type ModelsConfig } from '@oh-my-pi/pi-coding-agent/config/models-config-schema';
 import { cfgDisabledProviders, cfgEnabledModels } from '@oh-my-pi/pi-coding-agent/config/model-settings';
 import { filterAvailableModelsByEnabledPatterns } from '@oh-my-pi/pi-coding-agent/config/model-resolver';
+import { resolveRoleModelFull } from '@oh-my-pi/pi-coding-agent/session/role-models';
 import { invalidateCommandConfig, resolveConfigHeaders, resolveConfigValue } from '@oh-my-pi/pi-coding-agent/config/resolve-config-value';
 import type { AuthStorage } from '@oh-my-pi/pi-coding-agent/session/auth-storage';
 import { replaceFileAtomically } from '@oh-my-pi/pi-coding-agent/utils/atomic-file';
@@ -249,7 +250,10 @@ export class NativeModels {
         const key = modelKey({ providerId: model.provider, modelId: model.id });
         return publicModel(model, this.metadata.models[key], !disabledProviders.has(model.provider) && allowed.has(key) && this.metadata.models[key]?.enabled !== false);
       });
-    return ModelCatalogSchema.parse({ workspaceId, revision, models });
+    // Plan mode needs the `plan` role; resolve it exactly as the mode
+    // controller does so the composer can disable Plan before a session exists.
+    const planRole = resolveRoleModelFull(this.context.settings, 'plan', this.context.modelRegistry.getAvailable(), undefined);
+    return ModelCatalogSchema.parse({ workspaceId, revision, models, planRoleAvailable: planRole.model !== undefined });
   }
 
   async readProviders(workspaceId: string, revision: string): Promise<ProviderCatalog> {

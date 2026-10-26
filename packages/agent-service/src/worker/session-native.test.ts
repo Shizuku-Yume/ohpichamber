@@ -828,6 +828,23 @@ test('actual SDK edit reaches Host policy and projects its exact replace argumen
   }
 }, 30000);
 
+test('model catalog plan availability matches whether plan mode can enter', async () => {
+  const missing = await fixture({ respond: () => completion() });
+  try {
+    const catalog = await missing.worker.operation({ type: 'catalog', revision: '0', operation: { type: 'catalog.models.read' } });
+    expect(catalog).toMatchObject({ type: 'catalog', result: { type: 'catalog.models', catalog: { planRoleAvailable: false } } });
+    await expect(missing.worker.operation({ type: 'mode.set', mode: 'plan' })).rejects.toMatchObject({ status: 422, code: 'MODEL_UNAVAILABLE' });
+  } finally { await missing.close(); }
+
+  const configured = await fixture({ respond: () => completion(), planModel: true });
+  try {
+    const catalog = await configured.worker.operation({ type: 'catalog', revision: '0', operation: { type: 'catalog.models.read' } });
+    expect(catalog).toMatchObject({ type: 'catalog', result: { type: 'catalog.models', catalog: { planRoleAvailable: true } } });
+    await expect(configured.worker.operation({ type: 'mode.set', mode: 'plan' }))
+      .resolves.toMatchObject({ type: 'mode.set', mode: { kind: 'plan', status: 'active' } });
+  } finally { await configured.close(); }
+});
+
 test('native plan mode restores its tools and role model after reopening the same file', async () => {
   const harness = await fixture({ respond: () => completion(), planModel: true });
   try {

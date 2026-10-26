@@ -3,7 +3,7 @@ import { devtools } from 'zustand/middleware';
 import { hostFilesystem } from '@/lib/host-filesystem';
 import { getNormalizedParentDirectory, normalizePath } from '@/lib/pathNormalization';
 import { getDesktopHomeDirectory } from '@/lib/desktop';
-import { subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
+import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { getChatsRoot, resolveChatsRootDirectory } from '@/lib/chatDirectories';
 import { useFileSearchStore } from '@/stores/useFileSearchStore';
@@ -357,13 +357,14 @@ export const useDirectoryStore = create<DirectoryStore>()(
       // project stops being the last directory, and nothing is stored in its
       // place, for the same reason as in synchronizeHomeDirectory.
       goToNoProjectDirectory: async () => {
+        const runtimeKey = getRuntimeKey();
         const leaving = get().currentDirectory;
         const [homeDir, chatsRoot] = await Promise.all([
           cachedHomeDirectory || get().homeDirectory || initializeHomeDirectory(),
           resolveChatsRoot(),
         ]);
         // A directory opened while the lookup ran is the user's newer choice.
-        if (get().currentDirectory !== leaving) return;
+        if (getRuntimeKey() !== runtimeKey || get().currentDirectory !== leaving) return;
         const directory = noProjectDirectory(homeDir, chatsRoot);
         hostFilesystem.setDirectory(directory);
         invalidateFileSearchCache();

@@ -244,6 +244,8 @@ export function createTerminalRuntime({
           session.lastActivity = Date.now();
           publish(session, { t: 'output', d: event.data, ...(sanitized.visible !== event.data ? { r: sanitized.visible } : {}) });
         } else {
+          session.pendingHistoryControlSequence = '';
+          session.pendingThemeControlSequence = '';
           session.status = 'exited';
           session.exitCode = Number.isInteger(event.exitCode) ? event.exitCode : null;
           session.signal = Number.isInteger(event.signal) ? event.signal : null;

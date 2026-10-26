@@ -13,6 +13,7 @@ type SyntheticContextInput = { id?: string; text: string; metadata?: ContextPart
 import { mergeSessionDirectoryMetadata, resolveGlobalSessionDirectory, useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
 import { useConfigStore } from "@/stores/useConfigStore"
 import { registerSessionDirectory } from "./sync-refs"
+import { isRestorableOnItsOwn } from "./session-restore-rule"
 import { useGlobalSessionStatusStore, removeGlobalSessionStatuses } from "./global-session-status"
 import { recordSendFailure } from "./send-failure-log"
 import {
@@ -21,14 +22,14 @@ import {
 } from "@/lib/sessionReviewMetadata"
 import { withContextObligatoryMessage, type ContextObligatoryMessage } from "@/lib/contextObligatoryMessages"
 import { withoutBtwSessionLink } from "@/lib/sessionBtwMetadata"
-import { withLinkedIssue, type LinkedIssue } from "@/lib/linkedIssues"
+import { type LinkedIssue } from "@/lib/linkedIssues"
 import { withSessionWorkState, type SessionWork } from "@/lib/sessionWorkMetadata"
 import { getImperativeSessionMessageLoader } from "./session-message-loader"
 import { clearSessionPrefetch } from "./session-prefetch-cache"
 import { dropSessionCaches } from "./session-cache"
 import { useInputStore } from "./input-store"
 import { cleanupPersistedSessionState } from "./session-deletion-cleanup"
-import { requestSessionArchiveBatch, requestSessionUnarchiveBatch, type SessionArchiveStamp } from "./session-archive-batch"
+import { requestSessionArchiveBatch, requestSessionLinksUpdate, requestSessionUnarchiveBatch, type SessionArchiveStamp } from "./session-archive-batch"
 import { getRuntimeKey } from "@/lib/runtime-switch"
 import { isRelayModeActive } from "@/lib/relay/runtime-tunnel"
 import { getErrorStatus, isAmbiguousSendFailure } from "./send-failure-classification"
@@ -833,28 +834,72 @@ export async function patchSessionMetadata(
   return publishCanonicalMetadata(current, result)
 }
 
+/**
+ * Link or unlink one item on a session. The list transform lives on the
+ * OpenChamber server now, decided there from a fresh read inside the
+ * session's write queue: a UI request and an agent's `session.link` can no
+ * longer wipe each other, whichever write lands first.
+ */
 export async function setLinkedIssue(
   sessionId: string,
   directory: string | null | undefined,
   issue: LinkedIssue,
   linked: boolean,
 ): Promise<CanonicalSession> {
-  return patchSessionMetadata(sessionId, directory, (metadata) =>
-    withLinkedIssue(metadata, issue, linked))
+  return updateLinkedIssues(sessionId, directory, [issue], linked)
 }
 
 /**
- * Link several items in one metadata write. Each write replaces the whole
- * link list, so separate concurrent `setLinkedIssue` calls would keep only
- * the last one's item.
+ * Link several items in one server operation: one write-queue turn applies
+ * all of them, reading and writing the record once.
  */
 export async function addLinkedIssues(
   sessionId: string,
   directory: string | null | undefined,
   issues: readonly LinkedIssue[],
 ): Promise<CanonicalSession> {
-  return patchSessionMetadata(sessionId, directory, (metadata) =>
-    issues.reduce((current, issue) => withLinkedIssue(current, issue, true), metadata))
+  return updateLinkedIssues(sessionId, directory, issues, true)
+}
+
+async function updateLinkedIssues(
+  sessionId: string,
+  directory: string | null | undefined,
+  issues: readonly LinkedIssue[],
+  linked: boolean,
+): Promise<CanonicalSession> {
+  const runtimeKey = getRuntimeKey()
+  const targetDirectory = directory ?? getSessionDirectory(sessionId)
+  // A session no store holds still needs a record for the mirroring, and the
+  // read can fail: taken before the write, a failed read rejects with nothing
+  // landed. The read is display-only — none of the link list comes from the
+  // client — so its ordering is free, and it must not turn into a report of
+  // a link that did land.
+  const heldBeforeRequest = getGlobalSessionSnapshot(sessionId) !== null
+    || findLiveSession(sessionId) !== null
+  const fallbackRecord = heldBeforeRequest
+    ? null
+    : await readCanonicalSession(sessionId, runtimeKey)
+  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  const result = await requestSessionLinksUpdate(sessionId, issues, linked, targetDirectory)
+  if (result.outcome !== "updated") throw new Error(`session link update failed: ${result.reason}`)
+  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  // The server answered with the merged metadata; the session record is
+  // display-only here. A session a store holds is mirrored from its snapshot
+  // as the response lands; a store-miss uses the record read before the
+  // request. A stale read can no longer corrupt the link list, since none of
+  // it comes from the client. The route carries metadata, not a new revision:
+  // the metadata broadcast owns that counter.
+  const record = fallbackRecord
+    ?? getGlobalSessionSnapshot(sessionId)
+    ?? findLiveSession(sessionId)
+    ?? await readCanonicalSession(sessionId, runtimeKey)
+  const updated = publishCanonicalMetadata(record, {
+    sessionId,
+    revision: record.metadataRevision,
+    metadata: result.metadata,
+  })
+  if (targetDirectory) registerSessionDirectory(sessionId, targetDirectory)
+  return updated
 }
 
 /**
@@ -1443,9 +1488,11 @@ function commitArchivedSessions(stamps: SessionArchiveStamp[], directory: string
  * OpenChamber's own (OpenCode has no route for it), so this goes to the
  * OpenChamber unarchive route rather than the OpenCode client.
  *
- * A subsession is the agent's, not the user's: it is never restored on its
- * own. Restoring a top-level session brings its archived subsessions back with
- * it, so the agent runs it holds are whole again.
+ * A subsession is the agent's: under an archived parent it is never restored
+ * on its own. Restoring a top-level session brings its archived subsessions
+ * back with it, so the agent runs it holds are whole again. A subsession
+ * archived alone while its parent stayed active is restored on its own, back
+ * under that parent.
  */
 export async function unarchiveSession(sessionId: string, expectedRuntimeKey = getRuntimeKey()): Promise<boolean> {
   const { restoredIds } = await restoreSessionTree(sessionId, expectedRuntimeKey)
@@ -1479,7 +1526,9 @@ async function restoreSessionTree(
   rootId: string,
   expectedRuntimeKey: string,
 ): Promise<{ restoredIds: string[]; failedIds: string[] }> {
-  if (useGlobalSessionsStore.getState().entityById.get(rootId)?.parentSessionId) {
+  const { entityById } = useGlobalSessionsStore.getState()
+  const root = entityById.get(rootId)
+  if (root && !isRestorableOnItsOwn(root, entityById)) {
     recordSessionActionFailure(rootId, new Error("a subsession is restored with its parent"))
     return { restoredIds: [], failedIds: [rootId] }
   }
@@ -1556,8 +1605,8 @@ export type UnarchiveSessionsOptions = {
   expectedRuntimeKey?: string
   /**
    * Undo of an archive that just happened: put back exactly the sessions it
-   * moved, subsessions included. Without it a subsession is only restored
-   * with its parent.
+   * moved, subsessions included. Without it a subsession is restored on its
+   * own only while its parent is active (`isRestorableOnItsOwn`).
    */
   undo?: boolean
 }

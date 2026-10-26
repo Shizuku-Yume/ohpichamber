@@ -414,6 +414,8 @@ Session actions live in `session-actions.ts` (Slice C) and execute mutations thr
 - `unarchiveSessions(sessionIds)` -> calls Host unarchive route; restores confirmed IDs
 - `deleteSession(sessionId)` -> calls Host delete route; on confirmation or `404`, removes the session and clears persisted UI state
 
+Restoring a top-level session brings its archived subsessions back with it. A subsession under an archived or unknown parent comes back only with that parent, and its id alone fails. A subsession archived on its own while its parent stays active restores alone and brings its own archived subsessions; `isRestorableOnItsOwn` (`session-restore-rule.ts`) is the one rule, shared with the Archive page and the chat header's session menu. `undo` still puts back exactly what an archive just moved.
+
 ### Deletion and archive runtime guards
 
 Session actions capture the active `runtimeKey` at invocation and verify it before store mutations. If the runtime changes before a deletion or archive operation completes, the mutation is rejected. This prevents stale responses from deleting or modifying state belonging to a different runtime.

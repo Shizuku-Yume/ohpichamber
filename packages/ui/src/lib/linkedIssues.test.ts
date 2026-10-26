@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { JsonValue, Session, SessionMetadata } from '@openchamber/agent-contract';
-import type { SessionMetadataRecord } from './sessionReviewMetadata';
-import { buildLinkedGuestIssue, buildLinkedIssue, buildLinkedIssueId, buildLinkedLinearIssue, getDistinctLinkedIssues, getGitLabThreadRef, getLinkedGitHubPullRequests, getLinkedGitLabThreads, getLinkedIssues, getLinkedSidebarChanges, getLinkedSidebarIssues, withLinkedIssue, type LinkedIssue } from './linkedIssues';
+import { buildLinkedGuestIssue, buildLinkedIssue, buildLinkedIssueId, buildLinkedLinearIssue, getDistinctLinkedIssues, getGitLabThreadRef, getLinkedGitHubPullRequests, getLinkedGitLabThreads, getLinkedIssues, getLinkedSidebarChanges, getLinkedSidebarIssues, type LinkedIssue } from './linkedIssues';
 
 type LinkedRepositoryIssue = Extract<LinkedIssue, { kind: 'issue' | 'pull' }>;
 
@@ -73,17 +72,8 @@ describe('buildLinkedIssue', () => {
     const github = buildLinkedIssue({ url: 'https://github.com/team/repo/issues/12', number: 12, title: 'A', kind: 'issue', linkedAt: 1 });
     const gitlab = buildLinkedIssue({ url: 'https://gitlab.com/team/repo/-/issues/12', number: 12, title: 'B', kind: 'issue', linkedAt: 2 });
     const selfManaged = buildLinkedIssue({ url: 'https://git.example.com/team/repo/-/issues/12', number: 12, title: 'C', kind: 'issue', linkedAt: 3 });
-    const metadata = [github, gitlab, selfManaged].reduce<SessionMetadataRecord>((current, issue) => withLinkedIssue(current, issue, true), {});
-    // SAFETY: withLinkedIssue always writes openchamber.linked_issues as a LinkedIssue array.
-    expect((metadata.openchamber as { linked_issues: LinkedIssue[] }).linked_issues.map((entry) => entry.title)).toEqual(['A', 'B', 'C']);
-  });
-
-  test('re-linking a GitLab thread stored before ids carried the host replaces it', () => {
-    const legacy = { ...buildLinkedIssue({ url: 'https://gitlab.com/team/repo/-/issues/12', number: 12, title: 'Old', kind: 'issue', linkedAt: 1 }), id: 'team/repo#12' };
-    const fresh = buildLinkedIssue({ url: 'https://gitlab.com/team/repo/-/issues/12', number: 12, title: 'New', kind: 'issue', linkedAt: 2 });
-    const metadata = withLinkedIssue({ openchamber: { linked_issues: [legacy] } }, fresh, true);
-    // SAFETY: withLinkedIssue always writes openchamber.linked_issues as a LinkedIssue array.
-    expect((metadata.openchamber as { linked_issues: LinkedIssue[] }).linked_issues.map((entry) => entry.title)).toEqual(['New']);
+    const metadata = { openchamber: { linked_issues: [github, gitlab, selfManaged] } };
+    expect(metadata.openchamber.linked_issues.map((entry) => entry.title)).toEqual(['A', 'B', 'C']);
   });
 
   test('keeps GitLab merge requests distinct from issues with the same number', () => {
@@ -252,42 +242,6 @@ describe('getLinkedIssues', () => {
 
 
 });
-describe('withLinkedIssue', () => {
-  test('adds a link and preserves unrelated metadata', () => {
-    const next = withLinkedIssue(
-      { openchamber: { kind: 'review' }, notes: 'other' },
-      issue(),
-      true,
-    );
-    expect(next.notes).toBe('other');
-    expect(next.openchamber?.kind).toBe('review');
-    expect(next.openchamber?.linked_issues).toEqual([issue()]);
-  });
-
-  test('re-linking replaces the entry rather than duplicating it', () => {
-    // Linking again is how a drifted title gets refreshed.
-    const first = withLinkedIssue({}, issue({ title: 'Old' }), true);
-    const second = withLinkedIssue(first, issue({ title: 'New' }), true);
-    const stored = getLinkedIssues({ ...sessionWith(null), metadata: second });
-    expect(stored).toHaveLength(1);
-    expect(stored[0].title).toBe('New');
-  });
-
-  test('unlinking removes only the matching id', () => {
-    const other = issue({ id: 'owner/repo#99', number: 99 });
-    const both = withLinkedIssue(withLinkedIssue({}, issue(), true), other, true);
-    const next = withLinkedIssue(both, issue(), false);
-    const stored = getLinkedIssues({ ...sessionWith(null), metadata: next });
-    expect(stored).toEqual([other]);
-  });
-
-  test('unlinking something absent is a no-op, not an error', () => {
-    const next = withLinkedIssue({}, issue(), false);
-    expect(getLinkedIssues({ ...sessionWith(null), metadata: next })).toEqual([]);
-  });
-
-});
-
 describe('getLinkedGitHubPullRequests', () => {
   test('reads the repository of each linked GitHub PR from its id', () => {
     const session = sessionWith([

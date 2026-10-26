@@ -8,6 +8,7 @@ import { HostSessionRelocationPrepareSchema, HostSessionRelocationPreparedSchema
 
 import { OpenChamberControlError, asControlError } from '../openchamber-control/error.js';
 import { asNonEmptyString } from '../shared/guards.js';
+import { buildLinkedIssuesPatch, parseLinkOperation } from './session-linked-issues.js';
 const SessionForkAckSchema = z.strictObject({ sessionId: z.string().min(1), rootSessionId: z.string().min(1), sessionFile: z.string().min(1), sourceSessionId: z.string().min(1), entryId: z.string().min(1).nullable(), mode: z.enum(['selected', 'full']) });
 const SessionForkRequestSchema = z.strictObject({ messageId: EntityIdSchema.optional(), mode: z.enum(['selected', 'full']) }).refine(
   (input) => input.mode === 'selected' ? input.messageId !== undefined : input.messageId === undefined,
@@ -63,7 +64,7 @@ const parseArchiveRequest = (payload) => {
 
 
 const createCanonicalSessionService = (dependencies) => {
-  const { service, resolveWorkspaceScope, resolveSessionScope, resolveHostSessionScope, listWorkspaceScopes, registerSessionScope, resolveAttachments, capturePrompt, beforeDispatch, onPromptAccepted, directCommandAdmissionStore, publishSessionEvent, archiveStore, sessionMetadataStore, persistSessionMetadata, broadcastGlobalUiEvent, onArchiveDeleted } = dependencies;
+  const { service, resolveWorkspaceScope, resolveSessionScope, resolveHostSessionScope, listWorkspaceScopes, registerSessionScope, resolveAttachments, capturePrompt, beforeDispatch, onPromptAccepted, directCommandAdmissionStore, publishSessionEvent, archiveStore, sessionMetadataStore, persistSessionMetadata, updateSessionMetadata, broadcastGlobalUiEvent, onArchiveDeleted } = dependencies;
   const { agentScopeStore, resolveHostRelocationScope } = dependencies;
   const relocationControls = new Set();
   const requiredFunctions = [service?.request, resolveWorkspaceScope, resolveSessionScope, resolveHostSessionScope,
@@ -241,6 +242,48 @@ const createCanonicalSessionService = (dependencies) => {
   const unarchive = async (payload = {}) => { const parsed = parseIdBatch(payload); if (!parsed.ok) throw new OpenChamberControlError(parsed.error, 400); const scopes = await Promise.all(parsed.ids.map((id) => hostScopeFor(id))); scopes.forEach(assertWritableScope); return archiveStore.unarchive(parsed.ids); };
   const getMetadata = async (id) => { await hostScopeFor(id); const state = await sessionMetadataStore.getState(id); return SessionMetadataStateSchema.parse({ sessionId: id, revision: state?.revision ?? '0', metadata: state?.metadata ?? null }); };
   const setMetadata = async (id, payload = {}) => { const scope = await hostScopeFor(id); assertWritableScope(scope); const patch = SessionMetadataPatchSchema.parse(payload); const result = await metadata.set(id, patch.changes, scope.cwd); return SessionMetadataStateSchema.parse({ sessionId: id, revision: result.revision, metadata: result.metadata }); };
+  /**
+   * A metadata change decided from the record as it is when this session's
+   * write turn comes. Like `metadata.set`, the injected writer owns the store
+   * and the broadcast; the fallback is what module tests use.
+   */
+  const updateMetadata = async (sessionID, decide, directory = '') => {
+    if (typeof updateSessionMetadata === 'function') {
+      return updateSessionMetadata(sessionID, decide, { directory });
+    }
+    const result = await sessionMetadataStore.updateSessionMetadata(sessionID, decide, { directory });
+    if (result.changed) {
+      broadcastGlobalUiEvent?.({
+        type: 'openchamber:session-metadata',
+        properties: { sessionID, metadata: result.metadata, revision: result.revision },
+      });
+    }
+    return result;
+  };
+  /**
+   * Link or unlink items on a session the way the UI does (`setLinkedIssue`
+   * and `addLinkedIssues`): the list transform runs against the record as it
+   * is when this session's write turn comes, so a link an agent made while
+   * the request was in flight is read by the decide step instead of being
+   * overwritten by a stale client snapshot. The whole `linked_issues` array
+   * is never accepted from a client.
+   */
+  const setSessionLinks = async (sessionID, payload = {}) => {
+    const id = asNonEmptyString(sessionID);
+    if (!id) throw new OpenChamberControlError('a session id is required', 400);
+    const scope = await hostScopeFor(id);
+    assertWritableScope(scope);
+    // The schema decides what a link operation is; a body of any other shape
+    // is a 400, not something to pre-narrow here.
+    const parsed = parseLinkOperation(payload);
+    if (!parsed.ok) throw new OpenChamberControlError(parsed.error, 400);
+    const { metadata } = await updateMetadata(
+      id,
+      (current) => buildLinkedIssuesPatch(current, parsed.entries, parsed.linked),
+      scope.cwd,
+    );
+    return { metadata };
+  };
   const selectBranch = async (sessionId, payload = {}) => {
     const input = parseCommand(SessionBranchRequestSchema, payload);
     const scope = await scopeFor(sessionId);
@@ -364,7 +407,7 @@ const createCanonicalSessionService = (dependencies) => {
   };
   const control = async (sessionId, operation = {}) => { const scope = await scopeFor(sessionId); assertWritableScope(scope); if (operation?.type !== 'abort') throw new OpenChamberControlError('Unsupported session control operation', 400); const parsed = RunAbortRequestSchema.parse({ sessionId, runId: operation.runId }); const body = await request(`/api/agent/v1/sessions/${encodeURIComponent(parsed.sessionId)}/runs/${encodeURIComponent(parsed.runId)}/abort`, { method: 'POST' }); return { run: RunSchema.parse(body?.run) }; };
   const remove = async (id) => { const scope = await scopeFor(id); const ack = SessionDeleteAckSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' })); if (ack.sessionId !== id) throw new OpenChamberControlError('Session deletion acknowledgement identified another session', 502); if (scope.workspaceId.startsWith('archive_')) await onArchiveDeleted?.(scope, ack); return ack; };
-  return { create, send, steer, followUp, fork, selectBranch, relocate, delete: remove, open, history, list, control, resolveDirectory: async (payload = {}) => { const scope = await resolveWorkspaceScope(payload.workspaceId); if (!scope) throw new OpenChamberControlError('Workspace was not found', 404); return scope.cwd; }, archive, unarchive, getMetadata, setMetadata, sessionMetadataStore, archiveStore };
+  return { create, send, steer, followUp, fork, selectBranch, relocate, delete: remove, open, history, list, control, resolveDirectory: async (payload = {}) => { const scope = await resolveWorkspaceScope(payload.workspaceId); if (!scope) throw new OpenChamberControlError('Workspace was not found', 404); return scope.cwd; }, archive, unarchive, getMetadata, setMetadata, setSessionLinks, sessionMetadataStore, archiveStore };
 };
 
 
@@ -420,6 +463,15 @@ export const registerOpenChamberSessionRoutes = (app, dependencies) => {
     } catch (error) {
       console.error('[OpenChamberSessions] failed to store session metadata:', error);
       return sendServiceError(res, error, 'Failed to store session metadata');
+    }
+  });
+
+  app.post('/api/openchamber/sessions/:sessionId/links', express.json({ limit: '1mb' }), async (req, res) => {
+    try {
+      return res.json(await service.setSessionLinks(req.params.sessionId, req.body ?? {}));
+    } catch (error) {
+      console.error('[OpenChamberSessions] failed to update session links:', error);
+      return sendServiceError(res, error, 'Failed to update session links');
     }
   });
 

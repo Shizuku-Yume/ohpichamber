@@ -16,6 +16,7 @@ import { formatSessionDateLabel, normalizePath } from '@/components/session/side
 import { useShallow } from 'zustand/react/shallow';
 import { SessionSearchInput } from '@/components/session/SessionSearchInput';
 import { refreshSpaceArchives, useSpaceArchivesStore } from '@/lib/spaces/space-archives';
+import { isRestorableOnItsOwn } from '@/sync/session-restore-rule';
 
 type WorkspaceBucket = {
   workspaceId: string;
@@ -30,6 +31,29 @@ type WorkspaceBucket = {
 // Bound the mounted DOM: archives grow into the hundreds; batch rendering
 // keeps the list responsive without a virtualizer.
 const PAGE_SIZE = 100;
+
+// Subsessions of one parent sit together, at the place of the first of them.
+const groupByParent = (sessions: Session[]): Session[] => {
+  const byParent = new Map<string, Session[]>();
+  for (const session of sessions) {
+    if (!session.parentSessionId) continue;
+    const siblings = byParent.get(session.parentSessionId);
+    if (siblings) siblings.push(session);
+    else byParent.set(session.parentSessionId, [session]);
+  }
+  const grouped: Session[] = [];
+  const placedParents = new Set<string>();
+  for (const session of sessions) {
+    if (!session.parentSessionId) {
+      grouped.push(session);
+      continue;
+    }
+    if (placedParents.has(session.parentSessionId)) continue;
+    placedParents.add(session.parentSessionId);
+    grouped.push(...(byParent.get(session.parentSessionId) ?? []));
+  }
+  return grouped;
+};
 
 /**
  * The archive itself, mounted only while it is on screen, so every open starts
@@ -47,7 +71,15 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
   const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
   const unarchiveSession = useSessionUIStore((state) => state.unarchiveSession);
   const homeDirectory = useDirectoryStore((state) => state.homeDirectory);
-  const archivedSessions = useGlobalSessionsStore(useShallow((state) => state.archivedSessions));
+  // Narrow selections: the cache's entity map changes with every active
+  // session update, and the page only depends on which archived sessions are
+  // listed and on their parents' titles.
+  const listedSessions = useGlobalSessionsStore(useShallow((state) => state.archivedSessions
+    .filter((session) => isRestorableOnItsOwn(session, state.entityById))));
+  const parentTitlePairs = useGlobalSessionsStore(useShallow((state) => state.archivedSessions.flatMap((session) => {
+    const parent = session.parentSessionId ? state.entityById.get(session.parentSessionId) : undefined;
+    return parent ? [parent.sessionId, parent.metadata?.title ?? ''] : [];
+  })));
   const sessionsStatus = useGlobalSessionsStore((state) => state.status);
   const [query, setQuery] = React.useState(initialQuery);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = React.useState<string | null>(null);
@@ -66,9 +98,26 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
   }, [homeDirectory, spaceArchives, t]);
 
   const normalizedQuery = query.trim().toLowerCase();
-  const sortedSessions = React.useMemo(() => archivedSessions
-    .filter((session) => !session.parentSessionId)
-    .sort((a, b) => (b.archivedAt ?? 0) - (a.archivedAt ?? 0)), [archivedSessions]);
+  // A subsession under an archived parent comes back with that parent and is
+  // not listed. One archived while its parent stays active would otherwise
+  // show nowhere, so it is listed under its parent's title and restored alone.
+  const sortedSessions = React.useMemo(
+    () => [...listedSessions].sort((a, b) => (b.archivedAt ?? 0) - (a.archivedAt ?? 0)),
+    [listedSessions],
+  );
+
+  const parentTitles = React.useMemo(() => {
+    const titles = new Map<string, string>();
+    for (let index = 0; index < parentTitlePairs.length; index += 2) titles.set(parentTitlePairs[index], parentTitlePairs[index + 1]);
+    return titles;
+  }, [parentTitlePairs]);
+
+  // The parent's title, shown once above the first of its subsessions' rows.
+  const parentTitleAbove = (rows: Session[], index: number): string | null => {
+    const parentSessionId = rows[index]?.parentSessionId;
+    if (!parentSessionId || rows[index - 1]?.parentSessionId === parentSessionId) return null;
+    return parentTitles.get(parentSessionId) || t('sessions.sidebar.session.untitled');
+  };
 
   const buckets = React.useMemo<WorkspaceBucket[]>(() => {
     const byWorkspaceId = new Map<string, WorkspaceBucket>();
@@ -97,10 +146,10 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
       if (normalizedQuery.startsWith('ses_')) {
         return sortedSessions.filter((session) => session.sessionId.toLowerCase() === normalizedQuery);
       }
-      return rankByQuery(sortedSessions, normalizedQuery, (session) => [session.metadata?.title ?? '']);
+      return groupByParent(rankByQuery(sortedSessions, normalizedQuery, (session) => [session.metadata?.title ?? '']));
     }
-    if (selectedWorkspaceId === null) return sortedSessions;
-    return buckets.find((bucket) => bucket.workspaceId === selectedWorkspaceId)?.sessions ?? [];
+    if (selectedWorkspaceId === null) return groupByParent(sortedSessions);
+    return groupByParent(buckets.find((bucket) => bucket.workspaceId === selectedWorkspaceId)?.sessions ?? []);
   }, [buckets, normalizedQuery, selectedWorkspaceId, sortedSessions]);
 
   const visibleSessions = filteredSessions.slice(0, visibleCount);
@@ -176,37 +225,46 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
           className="min-h-0 flex-1 overflow-y-auto pt-1"
           style={{ paddingBottom: 'calc(0.5rem + var(--oc-safe-area-bottom, 0px))' }}
         >
-          {visibleSessions.length === 0 ? emptyState : visibleSessions.map((session) => {
+          {visibleSessions.length === 0 ? emptyState : visibleSessions.map((session, index) => {
             const workspaceId = session.workspaceId;
             const sessionDirectory = normalizePath(resolveGlobalSessionDirectory(session)) ?? '';
             const title = session.metadata?.title || t('sessions.sidebar.session.untitled');
             // A deleted space's chat has nowhere to be restored to.
             const restorable = !(spaceArchives?.has(workspaceId) ?? false);
+            const parentTitle = parentTitleAbove(visibleSessions, index);
             return (
-              <div key={session.sessionId} className="flex items-center pr-1.5">
-                <button
-                  type="button"
-                  className="flex min-h-10 min-w-0 flex-1 items-center py-1 pl-4 pr-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-                  style={{ touchAction: 'manipulation' }}
-                  onClick={() => openSession(session)}
-                >
-                  <span className="flex min-w-0 flex-1 flex-col">
-                    <span dir="auto" className="block truncate text-left typography-ui-label text-foreground">{title}</span>
-                    <span className="flex items-center gap-2.5 typography-micro text-muted-foreground">
-                      <span className="block min-w-0 flex-1 truncate">{labelOf(workspaceId, sessionDirectory)}</span>
-                      <span className="shrink-0 tabular-nums">{formatSessionDateLabel(session.archivedAt ?? session.updatedAt ?? session.createdAt)}</span>
-                    </span>
-                  </span>
-                </button>
-                {restorable ? (
-                  <Button type="button" variant="ghost" size="lg" className="w-10 shrink-0 px-0 text-muted-foreground"
-                    onClick={() => restoreSession(session)}
-                    aria-label={t('sessions.archivePage.restoreSessionAria', { title })}
-                    style={{ touchAction: 'manipulation' }}>
-                    <Icon name="inbox-unarchive" className="size-5" />
-                  </Button>
+              <React.Fragment key={session.sessionId}>
+                {parentTitle ? (
+                  <p dir="auto" className="truncate text-left px-4 pt-2 typography-micro text-muted-foreground">{parentTitle}</p>
                 ) : null}
-              </div>
+                <div className="flex items-center pr-1.5">
+                  <button
+                    type="button"
+                    className={cn(
+                      'flex min-h-10 min-w-0 flex-1 items-center py-1 pr-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+                      session.parentSessionId ? 'pl-7' : 'pl-4',
+                    )}
+                    style={{ touchAction: 'manipulation' }}
+                    onClick={() => openSession(session)}
+                  >
+                    <span className="flex min-w-0 flex-1 flex-col">
+                      <span dir="auto" className="block truncate text-left typography-ui-label text-foreground">{title}</span>
+                      <span className="flex items-center gap-2.5 typography-micro text-muted-foreground">
+                        <span className="block min-w-0 flex-1 truncate">{labelOf(workspaceId, sessionDirectory)}</span>
+                        <span className="shrink-0 tabular-nums">{formatSessionDateLabel(session.archivedAt ?? session.updatedAt ?? session.createdAt)}</span>
+                      </span>
+                    </span>
+                  </button>
+                  {restorable ? (
+                    <Button type="button" variant="ghost" size="lg" className="w-10 shrink-0 px-0 text-muted-foreground"
+                      onClick={() => restoreSession(session)}
+                      aria-label={t('sessions.archivePage.restoreSessionAria', { title })}
+                      style={{ touchAction: 'manipulation' }}>
+                      <Icon name="inbox-unarchive" className="size-5" />
+                    </Button>
+                  ) : null}
+                </div>
+              </React.Fragment>
             );
           })}
           {showMoreButton}
@@ -300,61 +358,69 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
 
           <div className="min-h-0 flex-1 overflow-y-auto px-6 py-3">
             <div className="mx-auto w-full max-w-3xl space-y-0.5">
-              {visibleSessions.length === 0 ? emptyState : visibleSessions.map((session) => {
+              {visibleSessions.length === 0 ? emptyState : visibleSessions.map((session, index) => {
                 const workspaceId = session.workspaceId;
                 const sessionDirectory = normalizePath(resolveGlobalSessionDirectory(session)) ?? '';
                 const directoryLabel = labelOf(workspaceId, sessionDirectory);
                 const title = session.metadata?.title || t('sessions.sidebar.session.untitled');
                 // A deleted space's chat has nowhere to be restored to.
                 const restorable = !(spaceArchives?.has(workspaceId) ?? false);
+                const parentTitle = parentTitleAbove(visibleSessions, index);
                 return (
-                  <div
-                    key={session.sessionId}
-                    className="group relative flex cursor-pointer items-center gap-3 rounded-md py-1 pl-2 pr-2 transition-[padding] hover:bg-interactive-hover/40 hover:pr-14 focus-within:pr-14"
-                    onClick={() => openSession(session)}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        openSession(session);
-                      }
-                    }}
-                  >
-                    <span dir="auto" className="min-w-0 flex-1 truncate text-left typography-ui-label text-foreground">
-                      {title}
-                    </span>
-                    {normalizedQuery && directoryLabel ? (
-                      <span className="max-w-40 flex-shrink-0 truncate text-[0.72rem] text-muted-foreground/70" title={sessionDirectory}>
-                        {directoryLabel}
-                      </span>
+                  <React.Fragment key={session.sessionId}>
+                    {parentTitle ? (
+                      <p dir="auto" className="truncate text-left px-2 pt-2 typography-micro text-muted-foreground">{parentTitle}</p>
                     ) : null}
-                    <span className="flex-shrink-0 text-[0.72rem] text-muted-foreground/75">
-                      {formatSessionDateLabel(session.archivedAt ?? session.updatedAt ?? session.createdAt)}
-                    </span>
-                    {restorable ? <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        restoreSession(session);
+                    <div
+                      className={cn(
+                        'group relative flex cursor-pointer items-center gap-3 rounded-md py-1 pr-2 transition-[padding] hover:bg-interactive-hover/40 hover:pr-14 focus-within:pr-14',
+                        session.parentSessionId ? 'pl-6' : 'pl-2',
+                      )}
+                      onClick={() => openSession(session)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          openSession(session);
+                        }
                       }}
-                      className="absolute right-7 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity pointer-events-none hover:text-foreground group-hover:opacity-100 group-hover:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      aria-label={t('sessions.archivePage.restoreSessionAria', { title })}
                     >
-                      <Icon name="inbox-unarchive" className="h-3.5 w-3.5" />
-                    </button> : null}
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        sessionEvents.requestDelete({ sessions: [session], mode: 'session' });
-                      }}
-                      className="absolute right-1 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity pointer-events-none hover:text-destructive group-hover:opacity-100 group-hover:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      aria-label={t('sessions.archivePage.deleteSessionAria', { title })}
-                    >
-                      <Icon name="delete-bin" className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
+                      <span dir="auto" className="min-w-0 flex-1 truncate text-left typography-ui-label text-foreground">
+                        {title}
+                      </span>
+                      {normalizedQuery && directoryLabel ? (
+                        <span className="max-w-40 flex-shrink-0 truncate text-[0.72rem] text-muted-foreground/70" title={sessionDirectory}>
+                          {directoryLabel}
+                        </span>
+                      ) : null}
+                      <span className="flex-shrink-0 text-[0.72rem] text-muted-foreground/75">
+                        {formatSessionDateLabel(session.archivedAt ?? session.updatedAt ?? session.createdAt)}
+                      </span>
+                      {restorable ? <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          restoreSession(session);
+                        }}
+                        className="absolute right-7 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity pointer-events-none hover:text-foreground group-hover:opacity-100 group-hover:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        aria-label={t('sessions.archivePage.restoreSessionAria', { title })}
+                      >
+                        <Icon name="inbox-unarchive" className="h-3.5 w-3.5" />
+                      </button> : null}
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          sessionEvents.requestDelete({ sessions: [session], mode: 'session' });
+                        }}
+                        className="absolute right-1 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity pointer-events-none hover:text-destructive group-hover:opacity-100 group-hover:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        aria-label={t('sessions.archivePage.deleteSessionAria', { title })}
+                      >
+                        <Icon name="delete-bin" className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </React.Fragment>
                 );
               })}
               {showMoreButton}

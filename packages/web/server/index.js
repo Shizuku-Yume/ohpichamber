@@ -659,6 +659,7 @@ const openChamberSessionService = createOpenChamberSessionService({
   directCommandAdmissionStore: hostSessionState.directCommandAdmissionStore,
   archiveStore,
   persistSessionMetadata: persistSessionMetadataPatch,
+  updateSessionMetadata: updateSessionMetadataWith,
   broadcastGlobalUiEvent: broadcastOpenChamberUiEvent,
   onArchiveDeleted: async (scope, ack) => {
     await agentScopeStore.removeSessionFamily(scope.rootSessionId);

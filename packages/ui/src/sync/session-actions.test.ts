@@ -24,8 +24,9 @@ import {
   getSessionLastAssistantModel, getSessionLiveActivity, patchSessionMetadata,
   moveSessionToDirectory, reconcileExternallyDeletedSession, refetchSessionMessages, replyToForm, revertToMessage,
   respondToPermission, sendMessage, setActionRefs, setSessionWorkState, optimisticSend, setOptimisticRefs,
-  unarchiveSession, unarchiveSessions, updateSessionTitle,
+  unarchiveSession, unarchiveSessions, updateSessionTitle, setLinkedIssue, addLinkedIssues,
 } from "./session-actions"
+import type { LinkedIssue } from "@/lib/linkedIssues"
 
 const originalRuntime = getRuntimeKey()
 const originalBase = getRuntimeApiBaseUrl()
@@ -1097,5 +1098,72 @@ describe("review-flow optimistic send", () => {
       snapshot: { ...state.snapshot, "session-a": snapshot },
     }))
     expect(store.getState().message["session-a"]).toEqual([existing, canonical])
+  })
+})
+
+describe("linking items through the server", () => {
+  const issue: LinkedIssue = {
+    id: "owner/repo#12",
+    number: 12,
+    title: "Rail badge count",
+    url: "https://github.com/owner/repo/issues/12",
+    kind: "issue",
+    author: "someone",
+    linkedAt: 1,
+  }
+  const guestEntry: LinkedIssue = {
+    id: "guest:linear:ENG-1",
+    providerId: "linear",
+    identifier: "ENG-1",
+    title: "Spec",
+    url: "https://linear.app/openchamber/issue/ENG-1",
+    kind: "guest",
+    thread: "issue",
+    linkedAt: 2,
+  }
+
+  test("sends the operation to the links route and mirrors the answer into the stores", async () => {
+    const store = seed()
+    // The metadata is what the server answered, not a list the client computed
+    // from its own read.
+    const metadata = { openchamber: { linked_issues: [issue, guestEntry] } }
+    const fetch = spyOn(globalThis, "fetch").mockResolvedValue(Response.json({ metadata }))
+
+    const updated = await setLinkedIssue("session-a", directory, guestEntry, true)
+
+    const calls = fetch.mock.calls.filter(([input]) => String(input).includes("/sessions/session-a/links"))
+    expect(calls).toHaveLength(1)
+    expect(JSON.parse(String(calls[0][1]?.body))).toEqual({ entries: [guestEntry], linked: true })
+    expect(updated.metadata).toEqual(metadata)
+    expect(useGlobalSessionsStore.getState().entityById.get("session-a")?.metadata).toEqual(metadata)
+    expect(store.getState().session[0]?.metadata).toEqual(metadata)
+  })
+
+  test("adds every item of a batch in one request", async () => {
+    seed()
+    const metadata = { openchamber: { linked_issues: [issue, guestEntry] } }
+    const fetch = spyOn(globalThis, "fetch").mockResolvedValue(Response.json({ metadata }))
+
+    await addLinkedIssues("session-a", directory, [issue, guestEntry])
+
+    const calls = fetch.mock.calls.filter(([input]) => String(input).includes("/sessions/session-a/links"))
+    expect(calls).toHaveLength(1)
+    expect(JSON.parse(String(calls[0][1]?.body))).toEqual({ entries: [issue, guestEntry], linked: true })
+  })
+
+  test("rejects when the server cannot serve the route, like the callers' catch expects", async () => {
+    seed()
+    spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 503 }))
+
+    await expect(setLinkedIssue("session-a", directory, issue, true))
+      .rejects.toThrow("session link update failed")
+  })
+
+  test("treats a malformed answer as unavailable instead of as a success", async () => {
+    seed()
+    spyOn(globalThis, "fetch").mockResolvedValue(Response.json({ nope: true }))
+
+    await expect(setLinkedIssue("session-a", directory, issue, true))
+      .rejects.toThrow("session link update failed")
   })
 })

@@ -41,7 +41,7 @@
 
 - **52 adopted cleanly / new**: `LiveTurnActivity`, `TurnItem`, `TurnMessageWindow`, `activityRows`, `earlierAssistantText`, `PrChecksValue`, `WorkStatusSectionList`, `WorkStatusUsageSection`, `WorkStatusWarmingToggle`, `WorkStatusWorkflowsSection`, `touchContext`, `prChecks`, `leaveWorkStatus`, `useOpenChildSession`, `useUnavailableWorkStatusSections`, `useWorkStatusSectionLayout`, `workflows` presentation components, `useBtwPanelState`, `liveActivityContext`, `useChatTurnNavigation`, `useActivityRowGlide`, `fileReferenceParser`, `usePinnedSessionDirectory`, `useShownSessionSelection`, `useDiffToolbarFit`, and all accompanying tests and i18n modules.
 - **35 changed on both sides, merged/adapted**: `ChatContainer`, `ChatInput`, `WorkStatusPanel`, `WorkStatusSubagentsSection`, `WorkStatusUsageSection`, `sections`, `ContextPanel`, `ContextPanelRail`, `contextPanelHeaderSlot`, `useKeyboardShortcuts`, `desktop`, `guests/surfaces`, `surfaces/registry`, `SessionDoneHintRow`, `SessionErrorNotice`, `SessionReviewHintRow`, `SessionSuggestionChip`, `BtwPanel`, `LiveActivityCollapse`, `ScrollToBottomButton`.
-- **4 deferred with owner / deleted**: `WorkStatusGuestView` + `status-view.ts` (task 25), `ShownToolCard` (task 25/07), `useOpenChatLink`/`sessionMentionResults` (task 25/07); `MarkdownImageGallery.tsx` and `TurnActivity.tsx` deleted upstream, fork preserves canonical/mobile equivalents.
+- **4 deferred with owner / deleted**: `WorkStatusGuestView` + `status-view.ts` (deferred to task 25), `ShownToolCard` (deferred to task 25), `useOpenChatLink` (deferred to task 07), `sessionMentionResults` (deferred to task 07); `MarkdownImageGallery.tsx` and `TurnActivity.tsx` deleted upstream, fork preserves canonical/mobile equivalents.
 
 ### Checks
 
@@ -63,10 +63,15 @@
 - **Live Activity**: live activity collapses into summary badge (`Activity > Explored codebase`); screenshot `screenshots/01-live-activity-collapsed-summary.png`.
 - **Expanded Activity**: expanding reveals tool calls (`glob **/*.ts`); screenshot `screenshots/02-live-activity-expanded.png`.
 - **Prompt Navigator**: navigator ticks jump between turn anchors and update hash; screenshot `screenshots/03-prompt-navigator-jump.png`.
-- **BTW Panel**: `/btw` opens the isolated BTW dock/panel; screenshot `screenshots/04-btw-panel-open.png` / `screenshots/04-btw-panel-opened.png`.
+- **BTW Panel**: `/btw` opens the isolated BTW dock/panel; screenshot `screenshots/04-btw-panel-open.png` / `screenshots/04-btw-panel-opened.png`. The fork boundary hides parent messages so only the BTW question and reply appear (`screenshots/04-btw-panel-boundary-fixed.png`).
 - **BTW Panel Close**: closing BTW leaves main turns intact; screenshot `screenshots/05-btw-panel-closed-main-intact.png`.
-- **Work Status Panel**: work-status panel displays Session Context, Turn stats, and Workflows presence; screenshot `screenshots/06-work-status-panel.png`.
+- **Work Status Panel**: work-status panel displays Session Context, Turn stats, and Workflows presence (`1`, `fixture-fanout`); screenshot `screenshots/06-work-status-panel-workflows.png` (also `screenshots/06-work-status-panel.png`).
 - Evidence: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-14-2026-10-27/` (`logs/`, `screenshots/`, `home/`, `data/`).
+
+### Limits
+
+- **Turn stats Elapsed 0.0s on tool calls**: Pre-existing debt recorded in `.workflow/technical-debt.md` (`## Turn stats Elapsed 0.0s on turns with tool calls`); the OMP canonical contract defines only `createdAt` and intermediate `virtualUser: true` messages produce an identical timestamp to the assistant message for `getLatestCompletedTurnStats`.
+- **Deferred components**: `WorkStatusGuestView` + `status-view.ts` (task 25, guest surfaces), `ShownToolCard` (task 25, browser frame), `useOpenChatLink` (task 07, tracker board linking), `sessionMentionResults` (task 07, provider registry and session mentions).
 
 ### Hand-off to 15
 

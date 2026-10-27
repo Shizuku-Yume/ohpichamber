@@ -1,4 +1,7 @@
 import { autocompleteScopeI18n } from './autocomplete-scope.i18n';
+import { settingsLayoutI18n } from './settings-layout.i18n';
+import { projectActionsI18n } from './project-actions.i18n';
+import { overviewI18n } from './overview.i18n';
 import { settingsDict } from './tr.settings';
 import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { referencePickerI18n } from './reference-picker.i18n';
@@ -23,7 +26,20 @@ import { workflowsI18n } from './workflows.i18n';
 import { sessionWarmingI18n } from './session-warming.i18n';
 export const dict = {
   ...autocompleteScopeI18n['tr'],
-  ...workflowsI18n['tr'],
+  'terminalView.toast.pasteFailedTouch': 'Pano okunamadı.',
+  'contextFileOpen.failure.tooLargeSize': 'Dosya açılamayacak kadar büyük ({size} üzeri)',
+  'settings.projects.page.actions.closeProject': 'Projeyi kapat',
+  'settings.projects.actions.info': 'Geçerli projenin bir eylemini çalıştırın veya durdurun.',
+  'settings.projects.team.title': 'Takım',
+  'settings.projects.team.info': 'Bu projedeki herkesle paylaşılan ayarlar.',
+  'settings.webSearch.section.providers': 'Sağlayıcılar',
+  'settings.webSearch.section.providersInfo': 'Anahtarını eklemek veya arama için kullanmak üzere bir sağlayıcı açın.',
+  'desktopHostSwitcher.status.relayLimit': 'Geçiş sınırı aşıldı',
+  'desktopHostSwitcher.toast.relayLimit': 'Geçiş sunucusu "{host}" bağlantısını reddetti: çok fazla cihaz veya yeniden bağlanma. Başka bir cihazda OpenChamber\'ı kapatın veya bir dakika bekleyip tekrar deneyin.',
+  ...workflowsI18n.tr,
+  ...settingsLayoutI18n.tr,
+  ...projectActionsI18n.tr,
+  ...overviewI18n.tr,
   ...sessionWarmingI18n['tr'],
   'chat.liveActivity.moreRows': '+{count} more',
   "startup.legacyNotice.dismiss": "Yoksay",

@@ -1,4 +1,7 @@
 import { autocompleteScopeI18n } from './autocomplete-scope.i18n';
+import { settingsLayoutI18n } from './settings-layout.i18n';
+import { projectActionsI18n } from './project-actions.i18n';
+import { overviewI18n } from './overview.i18n';
 import { settingsDict } from './de.settings';
 import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { referencePickerI18n } from './reference-picker.i18n';
@@ -23,7 +26,20 @@ import { workflowsI18n } from './workflows.i18n';
 import { sessionWarmingI18n } from './session-warming.i18n';
 export const dict = {
   ...autocompleteScopeI18n['de'],
-  ...workflowsI18n['de'],
+  'terminalView.toast.pasteFailedTouch': 'Die Zwischenablage konnte nicht gelesen werden.',
+  'contextFileOpen.failure.tooLargeSize': 'Datei ist zu groß zum Öffnen (über {size})',
+  'settings.projects.page.actions.closeProject': 'Projekt schließen',
+  'settings.projects.actions.info': 'Eine Aktion des aktuellen Projekts ausführen oder stoppen.',
+  'settings.projects.team.title': 'Team',
+  'settings.projects.team.info': 'Mit allen an diesem Projekt geteilte Einstellungen.',
+  'settings.webSearch.section.providers': 'Anbieter',
+  'settings.webSearch.section.providersInfo': 'Einen Anbieter öffnen, um dessen Schlüssel hinzuzufügen oder ihn für die Suche zu verwenden.',
+  'desktopHostSwitcher.status.relayLimit': 'Relay-Limit erreicht',
+  'desktopHostSwitcher.toast.relayLimit': 'Das Relay hat die Verbindung zu „{host}“ abgelehnt: zu viele Geräte oder Wiederverbindungen. Schließen Sie OpenChamber auf einem anderen Gerät oder warten Sie eine Minute und versuchen Sie es erneut.',
+  ...workflowsI18n.de,
+  ...settingsLayoutI18n.de,
+  ...projectActionsI18n.de,
+  ...overviewI18n.de,
   ...sessionWarmingI18n['de'],
   'chat.liveActivity.moreRows': '+{count} more',
   "startup.legacyNotice.title": "Vorherige OpenCode-Daten erkannt",

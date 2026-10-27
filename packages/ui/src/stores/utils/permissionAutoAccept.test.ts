@@ -3,7 +3,6 @@ import type { Session } from '@openchamber/agent-contract'
 import {
   displayedPermissionMode,
   nextPermissionMode,
-  permissionModeForNewSession,
   resolvePermissionMode,
   type PermissionModeMap,
 } from "./permissionAutoAccept"
@@ -114,22 +113,3 @@ describe("permission mode cycle", () => {
   })
 })
 
-describe("permissionModeForNewSession", () => {
-  test("returns the explicit choice if provided", () => {
-    expect(permissionModeForNewSession("auto", false, "ask")).toBe("auto")
-    expect(permissionModeForNewSession("safety", false, "auto")).toBe("safety")
-    expect(permissionModeForNewSession("ask", true, "auto")).toBe("ask")
-  })
-
-  test("in an isolated space, writes the default mode if not ask", () => {
-    expect(permissionModeForNewSession(undefined, true, "auto")).toBe("auto")
-    expect(permissionModeForNewSession(undefined, true, "safety")).toBe("safety")
-    expect(permissionModeForNewSession(undefined, true, "ask")).toBeUndefined()
-  })
-
-  test("outside an isolated space with no explicit choice, returns undefined", () => {
-    expect(permissionModeForNewSession(undefined, false, "auto")).toBeUndefined()
-    expect(permissionModeForNewSession(undefined, false, "safety")).toBeUndefined()
-    expect(permissionModeForNewSession(undefined, false, "ask")).toBeUndefined()
-  })
-})

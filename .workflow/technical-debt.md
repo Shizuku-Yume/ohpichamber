@@ -90,3 +90,22 @@ An entry leaves this file in one of two ways:
 - **Impact:** Any transient error or worker startup hiccup on any workspace turns the global sessions status to error, causing unbootstrapped or partially bootstrapped sidebar groups to display a "Could not refresh sessions" banner even when individual workspace session lists are healthy or have cached sessions.
 - **Solution:** Scoped discovery errors should only degrade the specific failing workspace in `useGlobalSessionsStore` rather than poisoning the entire global session status. Isolate workspace-level listing errors to their own group status, and distinguish between a complete failure to list sessions vs. partial scoped failures.
 - **Cost:** Touches `useGlobalSessionsStore`, `useSidebarGroupStatus`, and session row presentation logic; requires coordination with sidebar group status tests.
+
+## Root test contention flakes under multi-suite load
+
+- **Where:** `packages/agent-service/src/supervisor/workers.capacity.test.ts` ("a pending worker operation and a restart reservation each postpone eviction"), and intermittent web suites (`server/lib/host/canonical-plugins.test.js`, `server/lib/git/service.test.js`, `server/lib/spaces/code-out.test.js`)
+- **Added:** 2026-10-27
+- **Priority:** worth-doing
+- **Problem:** When the machine runs root tests (`bun run test` / `VITEST_MAX_WORKERS=2`) under heavy multi-process load, child process startup, scheduling, and graceful shutdown can exceed fixed assertions or timeout windows.
+  In a 3-run baseline vs. tip verification sample with clean installs and `VITEST_MAX_WORKERS=2 bun run test`:
+
+| Run | Baseline (`4d69e299e4`) | Integration Tip (`12928fb28e`) |
+|:---:|---|---|
+| Run 1 | Exit 1 (`logs/baseline-run-1.log`); failed `workers.capacity.test.ts:122` (eviction timing) | Exit 1 (`logs/tip-run-1.log`); failed `workers.capacity.test.ts:122` (eviction timing) |
+| Run 2 | Exit 1 (`logs/baseline-run-2.log`); failed `workers.capacity.test.ts:122` (eviction timing) | Exit 0 (`logs/tip-run-2.log`); 7/7 suites passed (6366 pass / 142 skip) |
+| Run 3 | Exit 0 (`logs/baseline-run-3.log`); 7/7 suites passed (6086 pass / 128 skip) | Exit 0 (`logs/tip-run-3.log`); 7/7 suites passed (6366 pass / 142 skip) |
+
+  The eviction test failed 2 of 3 runs on baseline (66.7%) and 1 of 3 runs on tip (33.3%), confirming it as a pre-existing contention flake (stabilized at tip in `2d10f973ed`). The web test files had 0 failures across all 3 baseline runs and all 3 tip runs, proving that the transient failures in `canonical-plugins`, `git/service`, and `spaces/code-out` observed in earlier runs were contention flakes caused by concurrent root suites storming the CPU/memory.
+- **Impact:** Root test gates fail intermittently on high-load machines even when code changes are correct, requiring multiple rerun attempts to obtain clean gate receipts.
+- **Solution:** Avoid fixed `sleep` boundaries in process-lifecycle integration tests in favor of bounded polling on observable state (as implemented in `2d10f973ed`), and ensure parallel test runners isolate shared temp dirs and git fixtures to prevent worker contention.
+- **Cost:** Test lifecycle assertion and polling adjustments; zero production code impact.

@@ -165,3 +165,30 @@ records the plan-surface change.
 - No dependency changes: `bun.lock` is the integration tip's, including task 12's packages.
 
 **Check after:** type-check 0, lint 0, focused UI tests 0 (32 pass), web failed files re-run 0 (291 pass), web build 0; the root suite is green except the known agent-service eviction test and the five web contention flakes that pass alone. Runtime switching kept its checked target; the live-tunnel branch is a named limit.
+
+### Follow-up verification (integration tip)
+
+#### 1. Root test receipt (`VITEST_MAX_WORKERS=2 bun run test`)
+- Command: `VITEST_MAX_WORKERS=2 bun run test`
+- Exit: 1 (`logs/root-test-max2.log`)
+- Results: 6 of 7 workspace suites passed (scripts 23/23, sdk 26/26, ui 849/849, agent-contract passed, agent-service passed, electron 54/54).
+- The web suite failed 3 test files (389 passed, 3 failed, 9 skipped out of 401):
+  - `server/lib/host/canonical-plugins.test.js`: 2 failed under concurrency/load. Ran alone: 5 passed (88.92s). Identified as known flake under load.
+  - `server/lib/git/service.test.js`: 1 failed under concurrency (`preserves mixed file bytes through stage, unstage and discard`). Ran alone under vitest: 254 passed, 3 skipped (55.78s). Contention flake under full test run load.
+  - `server/lib/spaces/code-out.test.js`: 3 failed under concurrency. Ran alone under vitest: 267 passed, 2 skipped (141.20s). Contention flake under full test run load.
+- Agent-service eviction test (`packages/agent-service/src/supervisor/workers.capacity.test.ts:109`, "a pending worker operation and a restart reservation each postpone eviction"): passed in this run; earlier cited in `.workflow/done/upstream-refresh/05-electron-shell.md:73` and task 24 checks as known timing flake.
+
+#### 2. Built web Agent Service 503 verdict and clean chat run
+- Rebuilt `packages/web` (`bun run build`, exit 0, `logs/web-build-clean.log`).
+- Verdict: Pre-existing startup probe timing behavior, not introduced by task 24.
+- Cause:
+  `GET /api/agent/v1/ready` returns 503 `SERVICE_UNAVAILABLE` during the initial 2–4 second startup window while the Host server awaits the child `agent-service` worker process to boot and transition to `phase === 'ready'` (`server/lib/host/canonical-routes.js:147`).
+  Once the child process reports ready, `/ready` transitions to HTTP 200 `{"ready":true,"engine":"omp","version":"1.0.0"}`.
+  At commit `823fe8aaac` and at the landed tip, running the built server directly with isolated `HOME=/tmp/home24` and `OPENCHAMBER_DATA_DIR=/tmp/omp-24f-data` responds HTTP 200 on `/api/agent/v1/ready` within 3 seconds. Task 24 touched only UI files and had no backend changes.
+- Clean real-path chat send:
+  Clean start with built server on port 3935 (`clean-built-server-3935`), isolated HOME and data dir.
+  `GET http://127.0.0.1:3935/api/agent/v1/ready` answered HTTP 200 immediately.
+  Added fixture project `/tmp/ohpi24-fixture` via UI.
+  Sent prompt: `"Reply with the single word: pong"`.
+  Observed assistant reply: `"pong"` from GPT-6 Astra (elapsed 2.4s, 6.7K tokens).
+  Captured screenshot: `screenshots/clean-real-path-pong.png` (and earlier run `screenshots/built-web-chat-pong.png`).

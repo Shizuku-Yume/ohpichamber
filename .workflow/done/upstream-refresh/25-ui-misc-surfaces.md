@@ -128,8 +128,8 @@ Every path in `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-sync-202
      - `packages/web/server/lib/permission-auto-accept/runtime.js:323-328`: `applyDefaultMode` was only called inside `processEvent` on `session.updated` events. The live OMP `agent-service` does not emit `session.updated` upon root session creation.
      - `packages/web/server/lib/permission-auto-accept/runtime.js:184-200`: in `resolveSessionMode`, when `current` fetched the session snapshot, `applyDefaultMode` was not called and `policy.sessions[current]` was never checked before moving up to `parentSessionId` (which is `null` for root sessions) and returning `'ask'`.
      - `packages/web/server/index.js:655-662`: `publishSessionEvent` received `'openchamber:session-created'` from session creation but did not invoke `permissionAutoAcceptRuntime.applyDefaultMode`.
-   - *Fix:*
-     - `packages/web/server/lib/permission-auto-accept/runtime.js`: exposed `applyDefaultMode`, subscribed to `globalEventHub.subscribeSnapshot` to invoke `applyDefaultMode` on initial session snapshots, and updated `resolveSessionMode` to invoke `applyDefaultMode` for root sessions loaded from snapshot and return the applied mode. Added unit test in `runtime.test.js`.
+   - *Fix & Boundary Invariant:*
+     - `packages/web/server/lib/permission-auto-accept/runtime.js`: exported `applyDefaultMode`. Enforced that `defaultMode` applies strictly at creation time, removing resolve/snapshot hooks to prevent retroactive escalation of pre-existing sessions created under 'ask' when default settings change. Added unit test in `runtime.test.js`.
      - `packages/web/server/index.js:655-662`: in `publishSessionEvent`, invoked `permissionAutoAcceptRuntime.applyDefaultMode(event.properties.sessionId)` on `'openchamber:session-created'`.
    - *Paired Real-Path Verification:*
      - (a) With Permissions set to "Ask every time" in Settings → Sessions, created a new session with agent `task` and model `Gemini 3.8 Flash`. Prompt `Run bash command: echo test-ask-approval` requested approval and rendered the approval prompt card with Deny / Always allow / Allow once options (`09-permission-ask-prompt.png`), with the sidebar showing "Permission required".
@@ -146,16 +146,16 @@ Every path in `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-sync-202
 
 ### Checks at the Rebased Tip
 
-All checks executed at rebased tip against `2435530f05`:
+All checks executed at rebased tip post-escalation-fix:
 
 | Check | Exit | Log Path | Result |
 |---|---:|---|---|
 | `bun install --frozen-lockfile` | 0 | `$ART_DIR/logs/install.log` | Clean lockfile install |
 | `bun run type-check` | 0 | `$ART_DIR/logs/type-check.log` | 0 errors across 2,929 files in 5 projects |
 | `bun run lint` | 0 | `$ART_DIR/logs/lint.log` | Clean lint across all workspaces |
-| `bunx oxlint` (authored/rewritten) | 0 | `$ART_DIR/logs/oxlint-authored.log` | 0 warnings, 0 errors |
-| Focused tests (`run-isolated-tests.mjs src`) | 0 | `$ART_DIR/logs/focused-tests.log` | 898/898 test files passed |
-| `VITEST_MAX_WORKERS=2 bun run test` | 0 | `$ART_DIR/logs/test.log` | 7/7 suites passed (web 443 passed/9 skipped, 7153 passed/142 skipped) |
+| `bunx oxlint` (touched files) | 0 | `$ART_DIR/logs/oxlint-authored.log` | 0 warnings, 0 errors |
+| Focused vitest tests (`permission-auto-accept` + importers) | 0 | `$ART_DIR/logs/focused-tests.log` | 5/5 test files passed (140/140 tests passed) |
+| Focused UI tests (`bun test permissionAutoAccept`) | 0 | `$ART_DIR/logs/focused-tests.log` | 2/2 test files passed (21/21 tests passed) |
 | `bun run dead-code` | 1 | `$ART_DIR/logs/dead-code.log` | 17 unused files & 63 exports, identical to tip baseline + cross-task interface deferrals |
 
 Artifact directory: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-25-2026-10-27/`
@@ -171,10 +171,10 @@ Executed live dev web server on port 3725 with isolated `HOME=/home/shizuku/Proj
 5. **Browser View:** Navigated browser surface (`05-browser-panel.png`), verified empty state and dev server detection.
 6. **Multi-run View:** Opened multi-run surface (`06-multirun-composer.png`), verified per-project run lanes.
 7. **Accept Everything Default Mode:** Set "Permissions" to "Accept everything" in Settings → Sessions (`07-settings-accept-everything.png`).
-8. **Auto-Accepted Session Tool Execution:** Created a new session and sent prompt "Run bash command: echo hello-task-25 and show the output." (`08-session-auto-accept-tool-run.png`). Tool was auto-executed by server without an approval modal or prompt, proving end-to-end default permission mode auto-accept.
+8. **Initial Auto-Accept Test:** Created a new session and sent prompt "Run bash command: echo hello-task-25 and show the output." (`08-session-auto-accept-tool-run.png`). Note: `bash` did not run in this session, so it did not prove tool auto-acceptance (see items 9, 10, and 11 for paired proof).
 9. **Ask Mode Approval Prompt:** With Permissions set to 'Ask every time', new session with agent `task` prompted for approval on bash command `echo test-ask-approval` (`09-permission-ask-prompt.png`).
 10. **Accept Everything Auto-Accepted Run:** With Permissions set to 'Accept everything', new session with agent `task` auto-executed bash command `echo test-auto-accepted-output` without prompt, displaying tool output in chat (`10-permission-auto-accepted-run.png`).
-
+11. **Post-Fix Auto-Accepted Rerun:** After removing snapshot/resolve hooks to prevent retroactive escalation, created a fresh session under default 'Accept everything' with agent `task` and model `Gemini 3.8 Flash`. Prompt `Run bash command: echo test-auto-accepted-rerun-output` auto-accepted and executed `bash` without approval modal or prompt, printing `test-auto-accepted-rerun-output` in chat (`11-permission-auto-accepted-rerun.png`).
 ### Limits
 
 - Isolated spaces remain unreleased without the OpenCode runtime (per decision 2026-10-24). No space session behavior is exposed or wired.

@@ -2,7 +2,7 @@
 
 **Effort:** upstream-refresh
 **Task type:** feature
-**Base commit:** aa0954a966
+**Base commit:** c4ce06dc0f
 
 **Delivers:** Upstream's diagnostics export, overview panel, quota/limit-failover handling, session warming and small-model routing work with the fork's providers.
 

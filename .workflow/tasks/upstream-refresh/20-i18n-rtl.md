@@ -2,7 +2,7 @@
 
 **Effort:** upstream-refresh
 **Task type:** feature
-**Base commit:** <commit-sha>
+**Base commit:** aa0954a966b5c89572abb15c08e710c63ae2d5be
 
 **Delivers:** Arabic and Hebrew locales with mirrored layout, plus the refreshed message catalog and RTL-safe components, work across the shell, chat and settings.
 

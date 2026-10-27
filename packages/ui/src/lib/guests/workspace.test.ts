@@ -128,6 +128,38 @@ describe('extension workspace projection', () => {
     if (other.kind !== 'sessions') throw new Error('Expected sessions');
     expect(other.sessions[0].items).toEqual([{ id: 'ITEM-2', data: { secret: true } }]);
   });
+  test('a session in the project folder of a worktree belongs to the project and to that worktree', () => {
+    const nested = { ...bSession, sessionId: 'nested-session', displayPath: 'ai', workspaceId: 'ws-b-tree-nested' };
+    registerWorkspaceDirectory('ws-b-tree-nested', '/b-tree/ai');
+    useGlobalSessionsStore.getState().applySnapshot([nested], [], 'ready');
+    manager.ensureChild('/b-tree', { bootstrap: false }).setState({ session: [], sessionTotal: 0 });
+    manager.ensureChild('/b-tree/ai', { bootstrap: false }).setState({ session: [nested], sessionTotal: 1, sessionStatusReady: true });
+
+    const [record, ...rest] = readB().sessions;
+    expect(rest).toEqual([]);
+    expect(record).toMatchObject({ id: 'nested-session', worktree: { directory: '/b-tree', branch: 'fix' } });
+  });
+  test('links show every thread on the session, whoever linked it, without another extension data', () => {
+    const linkedSession = {
+      ...bSession,
+      metadata: { title: 'b-session', openchamber: { linked_issues: [
+        buildLinkedGuestIssue({ providerId: 'other', identifier: 'X-1', title: 'Other card', url: 'https://other.example/X-1', data: { secret: true }, linkedAt: 4 }),
+        buildLinkedGuestIssue({ providerId: 'board', identifier: 'B-2', title: 'Own card', url: 'https://board.example/B-2', data: { column: 'todo' }, linkedAt: 5 }),
+        buildLinkedIssue({ number: 7, title: 'User issue', url: 'https://github.com/openchamber/openchamber/issues/7', kind: 'issue', linkedAt: 3 }),
+        buildLinkedLinearIssue({ identifier: 'ENG-1', title: 'Linear', url: 'https://linear.app/acme/ENG-1', linkedAt: 6 }),
+      ] } },
+    };
+    manager.ensureChild('/b-tree', { bootstrap: false }).setState({ session: [linkedSession], sessionTotal: 1 });
+
+    const [record] = readB().sessions;
+    expect(record.items).toEqual([{ id: 'B-2', data: { column: 'todo' } }]);
+    expect(record.links).toEqual([
+      { title: 'Other card', url: 'https://other.example/X-1', kind: 'issue', linkedAt: 4 },
+      { title: 'Own card', url: 'https://board.example/B-2', kind: 'issue', linkedAt: 5 },
+      { title: 'User issue', url: 'https://github.com/openchamber/openchamber/issues/7', kind: 'issue', linkedAt: 3 },
+      { title: 'Linear', url: 'https://linear.app/acme/ENG-1', kind: 'issue', linkedAt: 6 },
+    ]);
+  });
   test('live outcomes work with canonical status events and distinguish turn outcomes', () => {
     useConfigStore.setState({ isConnected: true });
     const status = (runtimeStatus: 'running' | 'idle', activeRunId: string | null, sequence: string) => ({

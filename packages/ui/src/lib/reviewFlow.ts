@@ -20,7 +20,7 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 import { getDirectoryState, getSyncMessages, registerSessionDirectory } from '@/sync/sync-refs';
 import { markPendingUserSendAnimation } from '@/lib/userSendAnimation';
 import { getRuntimeKey } from '@/lib/runtime-switch';
-import { fetchSessionKnowledge, reportSessionKnowledgeDelivered } from '@/lib/sessionKnowledgeApi';
+import { fetchSessionKnowledge } from '@/lib/sessionKnowledgeApi';
 import { expandNativeFileResource } from '@/api/fileResourceExpansion';
 import { resolveWorkspaceDirectory } from '@/stores/globalSessions';
 
@@ -366,14 +366,14 @@ const sendPlainMessage = async (
   // standing context (pinned notes, memory) exactly as a composer send would.
   const knowledge = await fetchSessionKnowledge(directory, sessionID);
   assertCurrent();
-  const sendContext = knowledge.text ? [{ text: knowledge.text }, ...(context ?? [])] : context;
+  const _sendContext = knowledge.text ? [{ text: knowledge.text }, ...(context ?? [])] : context;
   markPendingUserSendAnimation(sessionID);
   let sentMessageID: string | null = null;
   await optimisticSend({
     sessionId: sessionID,
     content: text,
     directory,
-    context: sendContext,
+    context,
     onMessageID: (messageID) => {
       sentMessageID = messageID;
     },
@@ -393,9 +393,6 @@ const sendPlainMessage = async (
   });
   assertCurrent();
   if (!sentMessageID) throw new Error('Failed to prepare review flow message');
-  if (knowledge.text) {
-    void reportSessionKnowledgeDelivered(directory, sessionID, knowledge.signature);
-  }
   return sentMessageID;
 };
 

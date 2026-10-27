@@ -1,3 +1,4 @@
+import { openGuestSurface } from '@/lib/guests/open-surface';
 import React from 'react';
 import {
   GUEST_BOOTSTRAP_API_VERSION,
@@ -82,7 +83,6 @@ import { openExternalUrl } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { closeGuestTabsEverywhere } from '@/lib/guests/tabs';
 import { pluginIdFromMode, type PluginContextPanelMode } from '@/lib/surfaces/modes';
-import { useUIStore } from '@/stores/useUIStore';
 import { useInputStore } from '@/sync/input-store';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSession, useSessionStatus } from '@/sync/sync-context';
@@ -677,10 +677,11 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
           showGuestToast(request);
         },
         openUrl: openExternalUrl,
-        openSurface: (surfaceMode) => {
-          const dir = directoryRef.current || '';
-          if (dir) useUIStore.getState().openContextSurface(dir, surfaceMode);
-        },
+        openSurface: (surfaceMode) => openGuestSurface({
+          mode: surfaceMode,
+          directory: directoryRef.current || null,
+          supported: true,
+        }),
         writeClipboard: async (text) => {
           const result = await copyTextToClipboard(text);
           return result.ok;

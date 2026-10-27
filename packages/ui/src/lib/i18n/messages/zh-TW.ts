@@ -1,3 +1,6 @@
+import { settingsLayoutI18n } from './settings-layout.i18n';
+import { projectActionsI18n } from './project-actions.i18n';
+import { overviewI18n } from './overview.i18n';
 import type { I18nKey } from './en';
 import { settingsDict } from './zh-TW.settings';
 import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
@@ -21,10 +24,22 @@ import { integrationsCatalogI18n } from './integrations-catalog.i18n';
 import { sessionWarmingI18n } from './session-warming.i18n';
 import { workflowsI18n } from './workflows.i18n';
 export const dict: Record<I18nKey, string> = {
-  'chat.liveActivity.moreRows': '還有 {count} 項',
-
+  'terminalView.toast.pasteFailedTouch': '無法讀取剪貼簿。',
+  'contextFileOpen.failure.tooLargeSize': '檔案過大，無法開啟（超過 {size}）',
+  'settings.projects.page.actions.closeProject': '關閉專案',
+  'settings.projects.actions.info': '執行或停止目前專案的操作。',
+  'settings.projects.team.title': '團隊',
+  'settings.projects.team.info': '與此專案中的所有人共用的設定。',
+  'settings.webSearch.section.providers': '提供者',
+  'settings.webSearch.section.providersInfo': '開啟提供者以新增其金鑰或用於搜尋。',
+  'desktopHostSwitcher.status.relayLimit': '已達到中繼限制',
+  'desktopHostSwitcher.toast.relayLimit': '中繼拒絕了與「{host}」的連線：裝置過多或重新連線次數過多。請在其他裝置上關閉 OpenChamber 或稍候一分鐘後再試。',
   ...workflowsI18n['zh-TW'],
+  ...settingsLayoutI18n['zh-TW'],
+  ...projectActionsI18n['zh-TW'],
+  ...overviewI18n['zh-TW'],
   ...sessionWarmingI18n['zh-TW'],
+  'chat.liveActivity.moreRows': '還有 {count} 項',
   "startup.legacyNotice.descriptionGeneric": "您先前的 OpenCode 會話未匯入至 OpenChamber。現有資料仍完整保留在您的 OpenCode 資料目錄中。若要使用模型，請在「設定」中重新登入供應商。",
   "startup.legacyNotice.action": "設定供應商",
   "startup.legacyNotice.title": "偵測到先前的 OpenCode 資料",

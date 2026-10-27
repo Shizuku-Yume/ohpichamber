@@ -27,6 +27,7 @@ test('an old window-protocol hello shows an explicit version mismatch and grants
   }
   const fetch = spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     const target = String(input instanceof Request ? input.url : input);
+    if (target.includes('/frame-grant')) return Response.json({ grant: 'grant-test', expiresAt: Date.now() + 60_000 });
     if (target.includes('/auth/url-token')) return Response.json({ token: 'scoped-test', expiresAt: Date.now() + 60_000 });
     if (target.includes('/event')) return new Response(new ReadableStream(), { headers: { 'content-type': 'text/event-stream' } });
     if (target.includes('/session/active')) return Response.json({});

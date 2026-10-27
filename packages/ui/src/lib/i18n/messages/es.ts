@@ -1,3 +1,6 @@
+import { settingsLayoutI18n } from './settings-layout.i18n';
+import { projectActionsI18n } from './project-actions.i18n';
+import { overviewI18n } from './overview.i18n';
 import type { I18nKey } from './en';
 import { settingsDict } from './es.settings';
 import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
@@ -22,10 +25,22 @@ import { integrationsCatalogI18n } from './integrations-catalog.i18n';
 import { sessionWarmingI18n } from './session-warming.i18n';
 import { workflowsI18n } from './workflows.i18n';
 export const dict: Record<I18nKey, string> = {
-  'chat.liveActivity.moreRows': '+{count} más',
-
-  ...workflowsI18n['es'],
+  'terminalView.toast.pasteFailedTouch': 'No se pudo leer el portapapeles.',
+  'contextFileOpen.failure.tooLargeSize': 'El archivo es demasiado grande para abrirlo (más de {size})',
+  'settings.projects.page.actions.closeProject': 'Cerrar proyecto',
+  'settings.projects.actions.info': 'Ejecutar o detener una acción del proyecto actual.',
+  'settings.projects.team.title': 'Equipo',
+  'settings.projects.team.info': 'Ajustes compartidos con todos en este proyecto.',
+  'settings.webSearch.section.providers': 'Proveedores',
+  'settings.webSearch.section.providersInfo': 'Abre un proveedor para añadir su clave o usarlo en búsquedas.',
+  'desktopHostSwitcher.status.relayLimit': 'Límite de retransmisión alcanzado',
+  'desktopHostSwitcher.toast.relayLimit': 'El relé rechazó la conexión a "{host}": demasiados dispositivos o reconexiones. Cierre OpenChamber en otro dispositivo o espere un minuto y vuelva a intentarlo.',
+  ...workflowsI18n.es,
+  ...settingsLayoutI18n.es,
+  ...projectActionsI18n.es,
+  ...overviewI18n.es,
   ...sessionWarmingI18n['es'],
+  'chat.liveActivity.moreRows': '+{count} más',
   "startup.legacyNotice.dismiss": "Descartar",
   "startup.legacyNotice.title": "Datos anteriores de OpenCode detectados",
   "startup.legacyNotice.descriptionGeneric": "Tus sesiones anteriores de OpenCode no se importaron a OpenChamber. Tus datos existentes permanecen intactos en tu directorio de datos de OpenCode. Para usar tus modelos, vuelve a iniciar sesión en tus proveedores desde Ajustes.",

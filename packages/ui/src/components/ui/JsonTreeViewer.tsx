@@ -95,7 +95,8 @@ const JsonRow = React.memo(
     onToggle: (id: string) => void;
     onCopyPath?: (path: string) => void;
   }) => {
-    const { node, isExpanded } = flatNode;
+    const { node } = flatNode;
+    const isExpanded = flatNode.kind === 'node' && flatNode.isExpanded;
     const indent = node.depth * 20;
 
     const handleToggle = React.useCallback(() => {
@@ -111,6 +112,19 @@ const JsonRow = React.memo(
       },
       [onCopyPath, node.id],
     );
+
+    if (flatNode.kind === 'close') {
+      const closeBracket = node.type === 'object' ? '}' : ']';
+      return (
+        <div
+          className="flex items-center py-0.5 px-2 rounded-sm cursor-default font-mono text-xs leading-5 whitespace-nowrap"
+          style={{ paddingLeft: `${indent + 8}px` }}
+        >
+          <span className="mr-1 w-4" />
+          <span className="text-[var(--syntax-foreground)]">{closeBracket}</span>
+        </div>
+      );
+    }
 
     const keyColor = getKeyColor(node.depth);
     const valueColor = getValueColor(node);

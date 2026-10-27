@@ -188,7 +188,7 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
         name: name.trim() || userName.trim(),
         userName: userName.trim(),
         userEmail: userEmail.trim(),
-        account: accountReference,
+        account: accountReference as GitIdentityProfile['account'],
         transport,
         signCommits,
         signingKey: signingKey.trim() || null,

@@ -58,7 +58,6 @@ export const PlansSection: React.FC<{
     [movePlan, movingPlanId, projectRef, t],
   );
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
-  const openContextPanelTab = useUIStore((state) => state.openContextPanelTab);
 
   const handleDeletePlan = React.useCallback(
     async (planId: string) => {
@@ -185,18 +184,9 @@ export const PlansSection: React.FC<{
       if (!panelDirectory) {
         return;
       }
-      openContextPanelTab(panelDirectory, {
-        mode: 'plan',
-        projectPlanId: plan.id,
-        projectPlanRef: projectRef,
-        // Storage identity is derived from the project path, not the settings
-        // id, so the tab identity uses the same derivation. Two projects
-        // sharing a settings id but not a path must not merge plan tabs.
-        dedupeKey: `plan:${resolveProjectContextId(projectRef)}:${plan.id}`,
-        label: plan.title,
-      });
+      useUIStore.getState().openProjectKnowledgePlan(panelDirectory, resolveProjectContextId(projectRef), plan.id);
     },
-    [currentDirectory, onOpenPlan, openContextPanelTab, projectRef]
+    [currentDirectory, onOpenPlan, projectRef]
   );
 
   return (

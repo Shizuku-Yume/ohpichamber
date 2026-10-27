@@ -28,7 +28,12 @@ function formatAssistantModel(record: Message): string {
   if (record.role !== 'assistant') return '';
   const providerId = record.providerId?.trim() ?? '';
   const modelId = record.modelId?.trim() ?? '';
-  return providerId && modelId ? `${providerId}/${modelId}` : modelId || providerId;
+  const model = providerId && modelId ? `${providerId}/${modelId}` : modelId || providerId;
+  const variant = 'variant' in record && typeof record.variant === 'string' ? record.variant.trim() : undefined;
+  if (!model || !variant || ['default', 'none'].includes(variant.toLowerCase())) {
+    return model;
+  }
+  return `${model}, thinking: ${variant}`;
 }
 
 function formatMessageHeader(record: Message): string {

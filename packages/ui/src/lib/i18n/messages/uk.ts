@@ -1,3 +1,6 @@
+import { settingsLayoutI18n } from './settings-layout.i18n';
+import { projectActionsI18n } from './project-actions.i18n';
+import { overviewI18n } from './overview.i18n';
 import type { I18nKey } from './en';
 import { settingsDict } from './uk.settings';
 import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
@@ -22,10 +25,22 @@ import { integrationsCatalogI18n } from './integrations-catalog.i18n';
 import { sessionWarmingI18n } from './session-warming.i18n';
 import { workflowsI18n } from './workflows.i18n';
 export const dict: Record<I18nKey, string> = {
-  'chat.liveActivity.moreRows': 'Ще {count}',
-
-  ...workflowsI18n['uk'],
+  'terminalView.toast.pasteFailedTouch': 'Не вдалося прочитати буфер обміну.',
+  'contextFileOpen.failure.tooLargeSize': 'Файл завеликий, щоб його відкрити (понад {size})',
+  'settings.projects.page.actions.closeProject': 'Закрити проєкт',
+  'settings.projects.actions.info': 'Запустити або зупинити дію поточного проєкту.',
+  'settings.projects.team.title': 'Команда',
+  'settings.projects.team.info': 'Налаштування, спільні для всіх у цьому проєкті.',
+  'settings.webSearch.section.providers': 'Постачальники',
+  'settings.webSearch.section.providersInfo': 'Відкрийте постачальника, щоб додати його ключ або використовувати для пошуку.',
+  'desktopHostSwitcher.status.relayLimit': 'Досягнуто ліміту ретранслятора',
+  'desktopHostSwitcher.toast.relayLimit': 'Ретранслятор відхилив з’єднання з "{host}": забагато пристроїв або повторних підключень. Закрийте OpenChamber на іншому пристрої або зачекайте хвилину й спробуйте знову.',
+  ...workflowsI18n.uk,
+  ...settingsLayoutI18n.uk,
+  ...projectActionsI18n.uk,
+  ...overviewI18n.uk,
   ...sessionWarmingI18n['uk'],
+  'chat.liveActivity.moreRows': 'Ще {count}',
   "startup.legacyNotice.title": "Виявлено попередні дані OpenCode",
   "startup.legacyNotice.dismiss": "Сховати",
   "startup.legacyNotice.descriptionGeneric": "Ваші попередні сесії OpenCode не були імпортовані в OpenChamber. Ваші наявні дані залишаються недоторканими в каталозі даних OpenCode. Щоб користуватися моделями, увійдіть знову до своїх провайдерів у Налаштуваннях.",

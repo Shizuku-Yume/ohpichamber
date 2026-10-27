@@ -1,3 +1,6 @@
+import { settingsLayoutI18n } from './settings-layout.i18n';
+import { projectActionsI18n } from './project-actions.i18n';
+import { overviewI18n } from './overview.i18n';
 import type { I18nKey } from './en';
 import { settingsDict } from './ja.settings';
 import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
@@ -22,10 +25,22 @@ import { integrationsCatalogI18n } from './integrations-catalog.i18n';
 import { sessionWarmingI18n } from './session-warming.i18n';
 import { workflowsI18n } from './workflows.i18n';
 export const dict: Record<I18nKey, string> = {
-  'chat.liveActivity.moreRows': 'さらに {count} 件',
-
-  ...workflowsI18n['ja'],
+  'terminalView.toast.pasteFailedTouch': 'クリップボードを読み取れませんでした。',
+  'contextFileOpen.failure.tooLargeSize': 'ファイルが大きすぎるため開けません（{size} 超）',
+  'settings.projects.page.actions.closeProject': 'プロジェクトを閉じる',
+  'settings.projects.actions.info': '現在のプロジェクトのアクションを実行または停止します。',
+  'settings.projects.team.title': 'チーム',
+  'settings.projects.team.info': 'このプロジェクトの全員と共有される設定。',
+  'settings.webSearch.section.providers': 'プロバイダー',
+  'settings.webSearch.section.providersInfo': 'プロバイダーを開いてキーを追加するか、検索に使用します。',
+  'desktopHostSwitcher.status.relayLimit': 'リレー上限に達しました',
+  'desktopHostSwitcher.toast.relayLimit': 'リレーが「{host}」への接続を拒否しました: デバイスまたは再接続が多すぎます。別のデバイスでOpenChamberを閉じるか、1分待ってから再試行してください。',
+  ...workflowsI18n.ja,
+  ...settingsLayoutI18n.ja,
+  ...projectActionsI18n.ja,
+  ...overviewI18n.ja,
   ...sessionWarmingI18n['ja'],
+  'chat.liveActivity.moreRows': 'さらに {count} 件',
   "startup.legacyNotice.dismiss": "閉じる",
   "startup.legacyNotice.title": "以前の OpenCode データが検出されました",
   "startup.legacyNotice.descriptionGeneric": "以前の OpenCode セッションは OpenChamber にインポートされていません。既存のデータは OpenCode のデータディレクトリにそのまま保持されています。モデルを使用するには、「設定」でプロバイダーに再度サインインしてください。",

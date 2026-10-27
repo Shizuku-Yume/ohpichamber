@@ -208,13 +208,13 @@ const remedyHintKey = (remedy: ErrorRemedy): I18nKey | null => {
 
 const phaseDotClass = (phase?: string): string => {
   if (phase === 'ready') {
-    return 'bg-[var(--status-success)] animate-pulse';
+    return 'bg-[var(--status-success)]';
   }
   if (phase === 'error') {
-    return 'bg-[var(--status-error)] animate-pulse';
+    return 'bg-[var(--status-error)]';
   }
   if (phase === 'degraded' || isConnectingPhase(phase)) {
-    return 'bg-[var(--status-warning)] animate-pulse';
+    return 'bg-[var(--status-warning)]';
   }
   return 'bg-muted-foreground/40';
 };
@@ -1609,7 +1609,7 @@ export const RemoteInstancesPage: React.FC = () => {
                       <div key={`pending-${pending.id}`} className="flex items-center justify-between gap-3 py-1.5">
                         <div className="min-w-0 space-y-0.5">
                           <div className="flex min-w-0 items-center gap-2">
-                            <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--status-warning)] animate-pulse" />
+                            <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--status-warning)]" />
                             <p className="typography-ui-label text-foreground truncate">{pending.label || t('settings.remoteInstances.clientAuth.field.labelPlaceholder')}</p>
                             {pending.usesRelay ? (
                               <span className="typography-micro text-muted-foreground bg-muted px-1 rounded shrink-0 leading-none pb-px border border-border/50">{t('settings.remoteInstances.clientAuth.state.viaRelay')}</span>
@@ -1730,7 +1730,7 @@ export const RemoteInstancesPage: React.FC = () => {
                         <div className="flex min-w-0 items-center gap-2">
                           <span className={cn(
                             'h-2 w-2 shrink-0 rounded-full',
-                            !probe ? 'bg-muted-foreground/30 animate-pulse' : isOnline ? 'bg-[var(--status-success)]' : 'bg-[var(--status-error)]',
+                            !probe ? 'bg-muted-foreground/30' : isOnline ? 'bg-[var(--status-success)]' : 'bg-[var(--status-error)]',
                           )} />
                           <p className="typography-ui-label text-foreground truncate">{redactSensitiveUrl(host.label)}</p>
                           {directDefaultHostId === host.id ? <span className="typography-micro text-muted-foreground shrink-0">{t('desktopHostSwitcher.header.default')}</span> : null}

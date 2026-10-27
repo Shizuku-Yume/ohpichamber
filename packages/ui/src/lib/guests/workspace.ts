@@ -6,8 +6,9 @@ import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { getAllSyncSessionMap, getDirectoryState, getSyncChildStores } from '@/sync/sync-refs';
+import { getLinkedIssues, isLinkedChange } from '@/lib/linkedIssues';
+import { checkoutHoldsDirectory, checkoutHoldsSubfolder } from '@/lib/worktrees/worktreePaths';
 import { normalizePath } from '@/lib/pathNormalization';
-import { getLinkedIssues } from '@/lib/linkedIssues';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { useUIStore } from '@/stores/useUIStore';
 import type { WorktreeMetadata } from '@/types/worktree';
@@ -64,7 +65,14 @@ const projectSession = (session: CanonicalSession, directory: string, projectId:
   const observed = live.observedById.get(id);
   const liveStatus = live.statusById.get(id)?.status;
   const attached = useSessionUIStore.getState().worktreeMetadata.get(id);
-  const worktree = worktrees.get(directory) ?? (attached && normalizePath(attached.path) === directory ? toWorktree(attached) : null);
+  const sessionDirectory = normalizePath(directory) ?? directory;
+  // A session of a project opened on a folder of its repository runs in that
+  // folder of its worktree, so a worktree holds its own sub-folders.
+  const holdingRoot = [...worktrees.keys()].filter((root) => checkoutHoldsDirectory(root, sessionDirectory))
+    .sort((a, b) => b.length - a.length)[0];
+  const attachedRoot = normalizePath(attached?.path);
+  const worktree = (holdingRoot ? worktrees.get(holdingRoot) : undefined)
+    ?? (attached && attachedRoot && checkoutHoldsDirectory(attachedRoot, sessionDirectory) ? toWorktree(attached) : null);
   let activity: GuestSessionRecord['activity'] = 'unknown';
   if (useConfigStore.getState().isConnected) {
     const childReady = child?.sessionStatusReady === true && child.sessionStatusInvalidated?.[id] !== true;
@@ -77,7 +85,16 @@ const projectSession = (session: CanonicalSession, directory: string, projectId:
   }
   // The guest SDK has no cancelled outcome; do not label cancellation a failure.
   const outcome = observed?.outcome;
-  return { id, title: session.metadata?.title ?? id, projectId, directory, parentId: session.parentSessionId ?? null, createdAt: session.createdAt, updatedAt: session.updatedAt, archivedAt: session.archivedAt ?? null, worktree, activity, outcome: activity === 'idle' && (outcome === 'completed' || outcome === 'failed') ? outcome : null, items: guestItems(session, guestId) };
+  return {
+    id, title: session.metadata?.title ?? id, projectId, directory, parentId: session.parentSessionId ?? null,
+    createdAt: session.createdAt, updatedAt: session.updatedAt, archivedAt: session.archivedAt ?? null, worktree, activity,
+    outcome: activity === 'idle' && (outcome === 'completed' || outcome === 'failed') ? outcome : null,
+    items: guestItems(session, guestId),
+    // Every extension with `sessions` sees every link, the agent's and the user's
+    // too: no more than the session titles it already reads. Another extension's
+    // opaque `data` stays out.
+    links: getLinkedIssues(session).map((item) => ({ title: item.title, url: item.url, kind: isLinkedChange(item) ? 'change' : 'issue', linkedAt: item.linkedAt })),
+  };
 };
 
 /** Store projection only. Layout-owned sync and topology discovery supply hydration. */
@@ -101,10 +118,17 @@ export const readGuestWorkspace = (query: GuestWorkspaceQuery, guestId: string):
     const state: GuestLoadState = bootstrap === 'failed' || global.status === 'error' ? 'error' : global.status === 'ready' ? 'ready' : 'loading';
     return { directory, state };
   });
+  const worktreeRoots = worktrees.map((worktree) => normalizePath(worktree.directory) ?? worktree.directory);
+  // A session of a project opened on a folder of its repository runs in that
+  // folder of its worktree (`<worktree>/ai`), so a worktree holds its sub-folders.
+  const belongsToProject = (directory: string): boolean => {
+    const key = normalizePath(directory) ?? directory;
+    return directories.has(key) || worktreeRoots.some((root) => checkoutHoldsSubfolder(root, key));
+  };
   const records = new Map<string, { session: CanonicalSession; directory: string }>();
   for (const session of getAllSyncSessionMap().values()) {
     const directory = resolveGlobalSessionDirectory(session);
-    if (directory && directories.has(directory)) records.set(session.sessionId, { session, directory });
+    if (directory && belongsToProject(directory)) records.set(session.sessionId, { session, directory });
   }
   const worktreeByPath = new Map(worktrees.map((worktree) => [normalizePath(worktree.directory) ?? worktree.directory, worktree]));
   return { ...query, state: combinedState([topologyState, ...coverage.map((entry) => entry.state)]), coverage, sessions: [...records.values()].map(({ session, directory }) => projectSession(session, directory, query.projectId, worktreeByPath, guestId)) };

@@ -786,3 +786,6 @@ void sessionFolders.hydrateFromServer();
 if (typeof window !== 'undefined') {
   window.addEventListener('online', () => sessionFolders.handleSessionFoldersStreamReady());
 }
+
+export const handleSessionFoldersChanged = (updatedAt: number = Date.now()) => sessionFolders.handleSessionFoldersChanged(updatedAt);
+export const handleSessionFoldersStreamReady = () => sessionFolders.handleSessionFoldersStreamReady();

@@ -2646,4 +2646,10 @@ export const settingsDict = {
   // integration catalog: resource monitor
   "settings.integrations.extensionCatalog.resourceMonitor.name": "Resource Monitor",
   "settings.integrations.extensionCatalog.resourceMonitor.description": "CPU and memory of your machine, OpenChamber, and dev servers.",
+'settings.projects.page.actions.closeProject': 'Close project',
+  'settings.projects.actions.info': 'Run or stop an action of the current project.',
+  'settings.projects.team.title': 'Team',
+  'settings.projects.team.info': 'Settings shared with everyone on this project.',
+  'settings.webSearch.section.providers': 'Providers',
+  'settings.webSearch.section.providersInfo': 'Open a provider to add its key or use it for search.',
 } as const;

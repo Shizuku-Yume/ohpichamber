@@ -12,7 +12,8 @@ import { usePendingComposerReferences } from '@/components/chat/composer/pending
 import type { ReferencePickerItem, ReferencePickerSelection } from '@/components/references/referencePickerItems';
 import { readLinearIssueDetail } from '@/components/references/referenceSources';
 import { resolveComposerReferences } from '@/components/references/resolveComposerReferences';
-import { readMergeMethod, rememberMergeMethod, type MergeMethod } from '@/components/views/git/mergeMethodPreference';
+import { readMergeMethod, rememberMergeMethod, type RememberedMergeMethod } from '@/components/views/git/mergeMethodPreference';
+import type { MergeMethod } from '@/lib/source-control/types';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import type { GitHubPullReference, SourceControlReadContext } from '@/lib/api/types';
 import type { PullRequestSource } from '@/lib/diff/pullRequestDiff';
@@ -34,12 +35,14 @@ const MERGE_METHOD_LABELS = {
     squash: 'gitView.pr.mergeMethod.squash',
     merge: 'gitView.pr.mergeMethod.merge',
     rebase: 'gitView.pr.mergeMethod.rebase',
+    submit: 'gitView.pr.mergeMethod.merge',
 } as const;
 
 const MERGE_METHOD_KEYS = {
     merge: 'sourceBoard.merge.method.merge',
     squash: 'sourceBoard.merge.method.squash',
     rebase: 'sourceBoard.merge.method.rebase',
+    submit: 'sourceBoard.merge.method.merge',
 } as const;
 
 /** What a session started from the item gets: the item itself, as a composer chip. */
@@ -141,7 +144,7 @@ export const SourceBoardActions: React.FC<{
 
     const mergeMethods = capabilities?.mergeChangeRequests ? capabilities.mergeMethods ?? [] : [];
     // The last method chosen anywhere, while this repository allows it.
-    const [chosenMethod, setChosenMethod] = React.useState<MergeMethod>(readMergeMethod);
+    const [chosenMethod, setChosenMethod] = React.useState<MergeMethod | RememberedMergeMethod>(readMergeMethod);
     const mergeMethod = mergeMethods.includes(chosenMethod) ? chosenMethod : mergeMethods[0] ?? null;
     const chooseMergeMethod = (value: string) => {
         const method = mergeMethods.find((candidate) => candidate === value);

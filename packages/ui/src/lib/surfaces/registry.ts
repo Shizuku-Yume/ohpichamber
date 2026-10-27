@@ -1,9 +1,6 @@
 import type { IconName } from '@/components/icon/icons';
 import type { I18nKey } from '@/lib/i18n';
-import {
-  isPluginContextPanelMode,
-  type ContextPanelMode,
-} from '@/lib/surfaces/modes';
+import { isPluginContextPanelMode, type ContextPanelMode } from '@/lib/surfaces/modes';
 
 type BuiltInContextSurfaceId =
   | 'editor'
@@ -178,7 +175,8 @@ type VisibleRailSurfacesOptions = {
   /** Surfaces the user chose to hide from the rail (and from the digit
       shortcuts, which share this filter). */
   hiddenSurfaces?: readonly string[];
-  isVSCode: boolean;
+  planModeEnabled?: boolean;
+  isVSCode?: boolean;
   screenWidth: number;
   tabs: readonly { mode: ContextPanelMode; targetPath?: string | null }[];
   /** The Tracker rail icon stays off until a GitHub or GitLab account is
@@ -189,7 +187,7 @@ type VisibleRailSurfacesOptions = {
   /** The Workflows icon shows while the session on screen has a workflow run,
       or a Workflows tab is open, and never in a build without workflows. Runs
       start from the chat, so hiding it removes no entry point. */
-  workflowsShown: boolean;
+  workflowsShown?: boolean;
   /** Installed guest panels. Empty on VS Code and when the catalog has not
       loaded or failed. */
   extras?: readonly ContextSurfaceDescriptor[];
@@ -206,6 +204,9 @@ type VisibleRailSurfacesOptions = {
 export const getVisibleContextRailSurfaces = (options: VisibleRailSurfacesOptions): ContextSurfaceDescriptor[] => {
   return sortContextSurfaces(options.railOrder, options.extras).filter((surface) => {
     if (options.hiddenSurfaces?.includes(surface.id)) {
+      return false;
+    }
+    if ((surface.id as string) === 'plan' && options.planModeEnabled === false) {
       return false;
     }
     if (isPluginContextPanelMode(surface.mode) && options.isVSCode) {
@@ -228,7 +229,7 @@ export const getVisibleContextRailSurfaces = (options: VisibleRailSurfacesOption
       && !options.tabs.some((tab) => tab.mode === 'pr' && tab.targetPath)) {
       return false;
     }
-    if (surface.id === 'workflows' && (options.isVSCode || !options.workflowsShown)) {
+    if (surface.id === 'workflows' && (options.isVSCode || !options.workflowsShown && options.workflowsShown !== undefined)) {
       return false;
     }
     if (surface.availability === 'has-content') {

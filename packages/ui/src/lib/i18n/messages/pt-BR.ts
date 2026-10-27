@@ -1,3 +1,6 @@
+import { settingsLayoutI18n } from './settings-layout.i18n';
+import { projectActionsI18n } from './project-actions.i18n';
+import { overviewI18n } from './overview.i18n';
 import type { I18nKey } from './en';
 import { settingsDict } from './pt-BR.settings';
 import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
@@ -21,10 +24,22 @@ import { integrationsCatalogI18n } from './integrations-catalog.i18n';
 import { sessionWarmingI18n } from './session-warming.i18n';
 import { workflowsI18n } from './workflows.i18n';
 export const dict: Record<I18nKey, string> = {
-  'chat.liveActivity.moreRows': '+{count} mais',
-
+  'terminalView.toast.pasteFailedTouch': 'Não foi possível ler a área de transferência.',
+  'contextFileOpen.failure.tooLargeSize': 'O arquivo é grande demais para abrir (mais de {size})',
+  'settings.projects.page.actions.closeProject': 'Fechar projeto',
+  'settings.projects.actions.info': 'Executar ou interromper uma ação do projeto atual.',
+  'settings.projects.team.title': 'Equipe',
+  'settings.projects.team.info': 'Configurações compartilhadas com todos neste projeto.',
+  'settings.webSearch.section.providers': 'Provedores',
+  'settings.webSearch.section.providersInfo': 'Abra um provedor para adicionar sua chave ou usá-lo na busca.',
+  'desktopHostSwitcher.status.relayLimit': 'Limite de retransmissão atingido',
+  'desktopHostSwitcher.toast.relayLimit': 'O relay recusou a conexão com "{host}": muitos dispositivos ou reconexões. Feche o OpenChamber em outro dispositivo ou aguarde um minuto e tente novamente.',
   ...workflowsI18n['pt-BR'],
+  ...settingsLayoutI18n['pt-BR'],
+  ...projectActionsI18n['pt-BR'],
+  ...overviewI18n['pt-BR'],
   ...sessionWarmingI18n['pt-BR'],
+  'chat.liveActivity.moreRows': '+{count} mais',
   "startup.legacyNotice.descriptionGeneric": "Suas sessões anteriores do OpenCode não foram importadas para o OpenChamber. Seus dados existentes permanecem intactos no diretório de dados do OpenCode. Para usar seus modelos, entre novamente em seus provedores nas Configurações.",
   "startup.legacyNotice.dismiss": "Dispensar",
   "startup.legacyNotice.action": "Configurar provedores",

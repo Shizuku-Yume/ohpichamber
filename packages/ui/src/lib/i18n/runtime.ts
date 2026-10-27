@@ -126,3 +126,12 @@ export function detectInitialLocale(): Locale {
 
   return DEFAULT_LOCALE;
 }
+
+/**
+ * Whether an element lays out right to left: the nearest explicit `dir`
+ * decides (the document root carries the UI direction). Read from the
+ * attribute because `matches(':dir(rtl)')` throws on WebKit before 16.4.
+ */
+export function isRightToLeft(element: Element | null | undefined): boolean {
+  return element?.closest?.('[dir="rtl"], [dir="ltr"]')?.getAttribute('dir') === 'rtl';
+}

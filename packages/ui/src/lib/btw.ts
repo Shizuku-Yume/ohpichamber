@@ -124,7 +124,8 @@ export async function startBtwSession(input: StartBtwInput): Promise<Session> {
         selections.saveAgentModelVariantForSession(forked.sessionId, agentId, model.providerId, model.modelId, input.variant);
       }
       if (input.permissionMode !== undefined) {
-        await usePermissionStore.getState().setSessionMode(forked.sessionId, input.permissionMode);
+        const write = usePermissionStore.getState().setSessionMode(forked.sessionId, input.permissionMode);
+        await write;
         assertCurrent();
       }
       // The fork inherits parent messages up to forkPointMessageID (or all messages on a full fork);

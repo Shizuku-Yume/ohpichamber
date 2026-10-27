@@ -35,6 +35,7 @@ import type {
   IssueComment,
   CreateChangeRequestInput,
   MergeChangeRequestInput,
+  MergeMethod,
   PageResult,
   Project,
   ProjectUpstream,
@@ -195,7 +196,7 @@ type PostBody =
   | { disabled: boolean }
   | CreateBody
   | UpdateBody
-  | (MutationBody<SourceControlExistingMutationTarget> & { method: 'merge' | 'squash' | 'rebase' })
+  | (MutationBody<SourceControlExistingMutationTarget> & { method: MergeMethod })
   | (MutationBody<SourceControlExistingMutationTarget> & { body: string })
   | (MutationBody<SourceControlExistingMutationTarget> & { state: SetStateInput['state'] })
   | (MutationBody<SourceControlExistingMutationTarget> & { labels: string[] })

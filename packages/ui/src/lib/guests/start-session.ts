@@ -1,3 +1,5 @@
+import { useSelectionStore } from '@/sync/selection-store';
+import { captureDefaultSendSelection } from '@/lib/defaultSendSelection';
 import { toast } from 'sonner';
 import type {
   AttachIssueRequest,
@@ -17,6 +19,7 @@ import { parseModelIdentifier } from '@/lib/modelIdentifier';
 import { resolveProjectRef } from '@/lib/worktreeSessionCreator';
 import { createWorktreeWithDefaults } from '@/lib/worktrees/worktreeCreate';
 import { waitForWorktreeBootstrap } from '@/lib/worktrees/worktreeBootstrap';
+import { resolveWorktreeStartDirectory } from '@/lib/worktrees/worktreeStartDirectory';
 import { getWorktreeSetupWaitEnabled } from '@/lib/openchamberConfig';
 import { resolveWorktreeSetupCommands } from '@/lib/sharedTrustConfirmation';
 import { guestProject, guestProjectWorktrees } from './workspace';
@@ -26,7 +29,6 @@ import type { WorktreeMetadata } from '@/types/worktree';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
 import { useUIStore } from '@/stores/useUIStore';
-import { useSelectionStore } from '@/sync/selection-store';
 import * as sessionActions from '@/sync/session-actions';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 
@@ -169,7 +171,7 @@ const resolveDefaultVariant = (providerId: string, modelId: string): string | un
   return undefined;
 };
 
-const captureGuestSendSelection = () => {
+const _captureGuestSendSelection = () => {
   const configState = useConfigStore.getState();
   const lastUsedProvider = useSelectionStore.getState().lastUsedProvider;
   const defaultModel = resolveDefaultModelSelection();
@@ -186,14 +188,14 @@ const sendGuestFirstMessage = async (
   sessionId: string,
   directory: string,
   text: string,
-  selection = captureGuestSendSelection(),
+  selection = captureDefaultSendSelection(),
 ): Promise<'sent' | 'no-model' | 'failed'> => {
   if (!selection) return 'no-model';
   try {
     await useSessionUIStore.getState().sendMessage(
       text,
-      selection.providerId,
-      selection.modelId,
+      selection.providerID,
+      selection.modelID,
       selection.agentName,
       undefined,
       undefined,
@@ -371,7 +373,7 @@ export const startGuestSession = async (args: {
   }
 
   const navigation = args.request.navigation ?? 'preserve';
-  const sendSelection = captureGuestSendSelection();
+  const sendSelection = captureDefaultSendSelection();
   let cancelled = false;
   const unsubscribe = subscribeRuntimeEndpointChanged(() => { cancelled = true; });
   const assertCurrent = () => {
@@ -387,12 +389,16 @@ export const startGuestSession = async (args: {
     return { directory: latest.path, name: latest.name ?? latest.label, branch: latest.branch,
       status: latest.worktreeStatus === 'not-a-repo' ? 'invalid' : latest.worktreeStatus ?? 'ready' };
   };
-  const createTargetSession = async (title: string, directory: string): Promise<CreatedSession | null> => {
+  const createTargetSession = async (title: string, requestedDirectory: string): Promise<CreatedSession | null> => {
+    let directory = requestedDirectory;
     if (metadata && project) {
       failure = 'bootstrap-failed';
       const wait = await getWorktreeSetupWaitEnabled(project);
       assertCurrent();
       if (wait) await waitForWorktreeBootstrap(metadata.path);
+      // Rejects only when the checkout failed to populate: that is `bootstrap-failed`,
+      // and the SDK contract keeps the worktree for the guest to decide on (packages/sdk/API.md).
+      directory = await resolveWorktreeStartDirectory(project, metadata.path);
     }
     assertCurrent();
     failure = 'session-create-failed';
@@ -405,7 +411,7 @@ export const startGuestSession = async (args: {
       undefined,
       sendSelection
         ? {
-            model: { providerId: sendSelection.providerId, modelId: sendSelection.modelId },
+            model: { providerId: sendSelection.providerID, modelId: sendSelection.modelID },
             agent: sendSelection.agentName,
             variant: sendSelection.variant,
           }

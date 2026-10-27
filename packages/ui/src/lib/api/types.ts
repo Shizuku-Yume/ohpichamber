@@ -1,3 +1,4 @@
+import type { GitPathUnavailableReason } from './git-path-diff';
 import type { WorktreeMetadata } from '@/types/worktree';
 import type { DesktopSettings } from '@/lib/settings/registry';
 import type { GitIdentityProfile, GitIdentitySummary } from './git-identity';
@@ -278,6 +279,16 @@ export interface GitPathDiffResponse extends GitDiffResponse {
   submodule: GitSubmoduleState | null;
 }
 
+export interface GetGitDiffsOptions {
+  paths: string[];
+  staged?: boolean;
+  contextLines?: number;
+}
+
+export type GitPathDiffBatchEntry =
+  | { path: string; ok: true; diff: GitPathDiffResponse }
+  | { path: string; ok: false; error: string; reason: GitPathUnavailableReason | null };
+
 export interface GetGitDiffOptions {
   path: string;
   staged?: boolean;
@@ -465,6 +476,7 @@ export type GitNetworkOperationRequest =
       forceWithLease?: { expectedRemoteSha: string };
       configureUpstream?: boolean;
       destinationSelectionId?: string;
+      review?: GitPushReviewIntent;
     })
   | (ExistingRepositoryNetworkOperationRequest & { operation: 'fetch'; fetchScope?: 'ref' })
   | (Omit<ExistingRepositoryNetworkOperationRequest, 'sourceRef' | 'destinationRef'> & {
@@ -528,6 +540,14 @@ export type GitNetworkOperationRequest =
       | { transportMode: 'managed'; credentialAccount: SourceControlIdentity & { accountId: string }; sshCredentialId?: never; unverifiedConfirmed?: never }
       | { transportMode: 'managed'; sshCredentialId: string; credentialAccount?: never; unverifiedConfirmed?: never }
     ));
+
+export type GitPushReviewIntent = {
+  target: string;
+  topic?: string;
+  wip?: boolean;
+  private?: boolean;
+  hashtags?: string[];
+};
 
 export type GitManagedSshCredential = {
   credentialId: string;
@@ -1042,6 +1062,37 @@ export interface GeneratedPullRequestDescription {
   body: string;
 }
 
+export interface GitWorktreeTitleResult {
+  title: string;
+  branch: string;
+}
+
+export interface GitWorktreeArchive {
+  id: string;
+  branch: string;
+  branchExists: boolean;
+  title: string;
+  archivedAt: number;
+  sessionIds: string[];
+}
+
+export interface ArchiveGitWorktreePayload {
+  directory: string;
+  id: string;
+  sessionIds: string[];
+  title?: string;
+}
+
+export interface GitWorktreeArchiveRestoreResult {
+  id: string;
+  conflicts: boolean;
+}
+
+export interface DeleteGitWorktreeArchivePayload {
+  id: string;
+  deleteBranch?: boolean;
+}
+
 interface GitWorktreeAPI {
   list(directory: string): Promise<GitWorktreeInfo[]>;
   validate?(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeValidationResult>;
@@ -1051,9 +1102,16 @@ interface GitWorktreeAPI {
   remove?(directory: string, payload: RemoveGitWorktreePayload): Promise<{ success: boolean }>;
   /** `directory` is the worktree to snapshot. */
   snapshot?(directory: string, payload: GitWorktreeSnapshotPayload): Promise<GitWorktreeSnapshotResult>;
+  setTitle?(directory: string, title: string): Promise<GitWorktreeTitleResult>;
+  archive?(directory: string, payload: ArchiveGitWorktreePayload): Promise<GitWorktreeArchive>;
+  listArchives?(directory: string): Promise<GitWorktreeArchive[]>;
+  restoreArchive?(directory: string, id: string): Promise<GitWorktreeArchiveRestoreResult>;
+  deleteArchive?(directory: string, payload: DeleteGitWorktreeArchivePayload): Promise<{ id: string; branchDeleted: boolean }>;
 }
 
 export interface GitAPI {
+  resolveRepositoryPrefix?(directory: string): Promise<string>;
+  getGitDiffs?(directory: string, options: GetGitDiffsOptions): Promise<GitPathDiffBatchEntry[]>;
   initializeGit(directory: string): Promise<void>;
   checkIsGitRepository(directory: string): Promise<boolean>;
   getGitStatus(directory: string, options?: { mode?: 'light'; fresh?: boolean }): Promise<GitStatus>;

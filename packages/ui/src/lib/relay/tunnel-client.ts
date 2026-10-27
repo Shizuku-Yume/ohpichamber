@@ -167,7 +167,14 @@ export interface RelayTunnelStatus {
   /** Set on an `error` the tunnel will not retry on a timer (auth failed,
    * duplicate client, limit exceeded); only an `online`/foreground wake retries. */
   terminal?: boolean;
+  /** The relay's close code behind a `terminal` error. */
+  closeCode?: number;
 }
+
+/** True while the tunnel is parked because the relay refused it over its
+ * per-server limits (too many devices at once, too many connects a minute). */
+export const isRelayLimitReached = (status: RelayTunnelStatus | null | undefined): boolean =>
+  status?.state === 'error' && status.closeCode === RelayCloseCode.LimitExceeded;
 
 interface RelayTunnelClientOptions {
   relayUrl: string;

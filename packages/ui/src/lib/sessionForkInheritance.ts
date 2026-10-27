@@ -7,9 +7,11 @@ export function withoutSourceOwnedLinks(metadata: SessionMetadata): SessionMetad
   const namespace = metadata.openchamber;
   if (!namespace) return metadata;
   const rest = omitKeys(namespace, ['btwSessionID', 'reviewSessionID']);
+  // A btw marker hides a fork from the sidebar; a scheduled marker would
+  // otherwise keep the user's own fork out of In work.
   const cleaned = rest.kind === 'btw'
     ? omitKeys(rest, ['kind', 'originalSessionID', 'btwBoundaryMessageID'])
-    : rest;
+    : (rest.kind as string) === 'scheduled' ? omitKeys(rest, ['kind']) : rest;
   const goal = cleaned.goal;
   const nextGoal = goal?.status === 'active' ? { ...goal, status: 'paused' as const, statusReason: 'paused in fork' } : goal;
   const next = nextGoal === goal ? cleaned : { ...cleaned, goal: nextGoal };

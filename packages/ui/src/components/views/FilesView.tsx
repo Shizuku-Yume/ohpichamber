@@ -4376,7 +4376,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
                   }
                 }}
               >
-                <Icon name="volume-up" className={cn('size-4', isTTSPlaying && 'animate-pulse text-[var(--primary-text)]')} />
+                <Icon name="volume-up" className={cn('size-4', isTTSPlaying && 'text-[var(--primary-text)]')} />
               </Button>
             </TooltipTrigger>
             <TooltipContent sideOffset={8}>

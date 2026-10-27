@@ -1,3 +1,5 @@
+import { cn } from '@/lib/utils';
+import { useWaitingBlink } from '@/hooks/useDurationTicker';
 import React from 'react';
 import { UsageCard } from './UsageCard';
 import { QuotaCredentials } from './QuotaCredentials';
@@ -50,6 +52,7 @@ export const UsagePage: React.FC = () => {
   const workspaceId = useConfigStore((state) => state.workspaceId);
   const catalogReady = usageQuotaReady(isInitialized, workspaceId);
   const isLoading = useQuotaStore((state) => state.isLoading);
+  const blink = useWaitingBlink(isLoading);
   const lastUpdated = useQuotaStore((state) => state.lastUpdated);
   const refreshErrors = useQuotaStore((state) => state.refreshErrors);
   const dropdownProviderIds = useQuotaStore((state) => state.dropdownProviderIds);
@@ -179,7 +182,7 @@ export const UsagePage: React.FC = () => {
       titleLeading={<ProviderLogo providerId={selectedProviderId} className="h-5 w-5 shrink-0" />}
       description={
         isLoading ? (
-          <span className="animate-pulse typography-settings-description text-muted-foreground">{t('settings.usage.page.header.refreshing')}</span>
+          <span className={cn('typography-settings-description text-muted-foreground', blink)}>{t('settings.usage.page.header.refreshing')}</span>
         ) : selectedResult?.planLabel ? (
           t('settings.usage.page.header.lastUpdatedWithPlan', {
             plan: selectedResult.planLabel,

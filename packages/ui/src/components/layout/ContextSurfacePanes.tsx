@@ -573,8 +573,10 @@ export const ContextSurfacePanes: React.FC = () => {
               <BrowserPane
                 initialUrl={tab.targetPath ?? ''}
                 directory={tab.directory}
+                siteDirectory={tab.directory}
                 tabID={tab.id}
                 ownerSessionId={tab.ownerSessionId}
+                visible={shown && browserZone.isOpen}
               />
               </PauseClock>
             </div>

@@ -860,7 +860,7 @@ let cachedOverrides: Record<string, string> | null = null;
 let inFlightOverridesRequest: Promise<Record<string, string>> | null = null;
 
 const replaceTemplateVariables = (template: string, variables: Record<string, string>) => {
-  return template.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_match, key: string) => {
+  return template.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_match: string, key: string) => {
     if (!Object.prototype.hasOwnProperty.call(variables, key)) {
       return '';
     }
@@ -1008,5 +1008,19 @@ export const resetAllMagicPromptOverrides = async (): Promise<MagicPromptOverrid
   return {
     version: typeof payload?.version === 'number' ? payload.version : 1,
     overrides: cachedOverrides,
+  };
+};
+
+export interface MagicPromptSnapshot {
+  render: (id: MagicPromptId, variables?: Record<string, string>) => string;
+}
+
+export const loadMagicPrompts = async (_directory: string | null): Promise<MagicPromptSnapshot> => {
+  const overrides: Record<string, string> = await fetchMagicPromptOverrides().catch(() => ({}));
+  return {
+    render: (id, variables = {}) => {
+      const template = overrides[id] ?? getDefaultMagicPromptTemplate(id);
+      return template.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_match: string, key: string) => variables[key] ?? '');
+    },
   };
 };

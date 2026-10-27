@@ -135,6 +135,10 @@ export const getRelativeFilePath = (filePath: string | null | undefined, directo
   return normalizedFilePath.slice(normalizedDirectory.length + 1);
 };
 
+const sameParts = (a: readonly string[], b: readonly string[]): boolean => (
+  a.length === b.length && a.every((part, index) => part === b[index])
+);
+
 /**
  * Folders that tell apart open files sharing a name, keyed by the given path.
  * Each path gets the shortest run of its closest folders no other same-named
@@ -142,10 +146,6 @@ export const getRelativeFilePath = (filePath: string | null | undefined, directo
  * has no folders of its own (the project root), get no entry. Pass paths
  * relative to the project, or the whole absolute path becomes the folder.
  */
-const sameParts = (a: readonly string[], b: readonly string[]): boolean => (
-  a.length === b.length && a.every((part, index) => part === b[index])
-);
-
 export const getDisambiguatingFolders = (paths: readonly string[]): Map<string, string> => {
   const byName = new Map<string, { path: string; folders: string[] }[]>();
   for (const path of new Set(paths)) {

@@ -38,7 +38,7 @@ import { formatChangeRequestReference, getSourceControlProviderLabel } from '@/l
 import { useRepositoryBinding } from '@/lib/source-control/repository-binding';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { getDetectedUpstreamContextKey, loadDetectedUpstreamRepo } from './detectedUpstreamRepo';
-import type { ChangeRequest, SourceControlProvider } from '@/lib/source-control/types';
+import type { ChangeRequest } from '@/lib/source-control/types';
 import { prVisualStateOf, type PrVisualState } from '@/lib/source-control/prVisualState';
 import {
   hasUnknownMutationOutcomeCode,
@@ -692,10 +692,15 @@ export const PullRequestSection: React.FC<{
     setIsGenerating(true);
     try {
       const baseRef = commitRangeBase;
-      const payload: { base: string; head: string; context?: string; files?: string[]; changeRequestProvider?: SourceControlProvider } = {
+      const changeRequestProvider = readContext?.provider
+        ? (readContext.provider === 'gitlab'
+          ? { label: 'GitLab', terminology: { promptNoun: 'merge request' } }
+          : { label: 'GitHub', terminology: { promptNoun: 'pull request' } })
+        : undefined;
+      const payload: Parameters<typeof generatePullRequestDescription>[1] = {
         base: baseRef,
         head: branch,
-        ...(readContext?.provider ? { changeRequestProvider: readContext.provider } : {}),
+        ...(changeRequestProvider ? { changeRequestProvider } : {}),
       };
       if (additionalContext) {
         payload.context = additionalContext;

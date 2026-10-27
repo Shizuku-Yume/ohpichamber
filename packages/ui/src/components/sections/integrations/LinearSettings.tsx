@@ -314,7 +314,7 @@ export const LinearSettings: React.FC = () => {
                 </>
               ) : isWaiting ? (
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="typography-micro text-muted-foreground animate-pulse">
+                  <span className="typography-micro text-muted-foreground">
                     {t('settings.integrations.linear.flow.waiting')}
                   </span>
                   <Button type="button" size="sm" variant="ghost" disabled={isBusy} onClick={stopWaiting}>

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import type { SourceControlAuthStatus, SourceControlIdentity } from '@/lib/api/types';
 import { getSourceControlAuthKey, getSourceControlReadContextAuthState, useSourceControlAuthStore } from './useSourceControlAuthStore';
 
-const identity = { provider: 'gitlab', instance: 'https://gitlab.example.com' } satisfies SourceControlIdentity;
+const identity = { provider: 'gitlab' as const, instance: 'https://gitlab.example.com' } satisfies SourceControlIdentity;
 const connectedStatus: SourceControlAuthStatus = {
   ...identity,
   status: 'connected',

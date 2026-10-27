@@ -43,6 +43,14 @@
 - Focused test: web message-queue (`server/lib/message-queue/runtime.test.js`): exit code 0 (`~/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/logs/test-web-message-queue.log`)
 - Focused test: UI queue store & sync context (`sync-context-queue-events.test.tsx`, `messageQueueStore.test.ts`): exit code 0 (`~/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/logs/test-ui-queue-store.log`)
 
+### Root Gate Results (`c89297cc93`)
+- `bun install --frozen-lockfile`: exit code 0 (`~/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/logs/root-install.log`)
+- `bun run type-check`: exit code 0 (`~/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/logs/root-type-check.log`)
+- `bun run lint`: exit code 0 (`~/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/logs/root-lint.log`)
+- `bun run test` (`VITEST_MAX_WORKERS=2`): exit code 1 (`~/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/logs/root-test.log`)
+  - 6/7 suites passed (scripts: 23/23 files, sdk: 26/26 files, ui: 909/909 files, agent-contract: 30/30 tests, agent-service: 15/15 tests, electron: 54/54 files, web: 445/455 files passed, 7163 passed / 142 skipped).
+  - Only 1 test file failed: `packages/web/server/lib/magic-prompts/routes.test.js` (missing module `../opencode/core-routes.js`). Verified pre-existing at `8ed1ebae7d^` (`c14d16ebbc`).
+- `bun run build`: exit code 0 (`~/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/logs/root-build.log`)
 ### Real Path Evidence
 Captured in live browser run with isolated `HOME=/tmp/oc-test-home` and `OPENCHAMBER_DATA_DIR=/tmp/oc-test-data` against real model provider (Gemini 3.8 Flash):
 - **01 Follow-up delivered with text attachment**: Queue follow-up with `secret-code.txt` while turn 1 runs; delivered after turn 1, model quotes exact secret code (`SECRET_CODE_REWORK_987654`), server `GET /api/agent/v1/sessions/:sessionId/queue` returns `{"sessionId":"...","revision":"5","items":[]}`, and the queue strip above composer is completely cleared.

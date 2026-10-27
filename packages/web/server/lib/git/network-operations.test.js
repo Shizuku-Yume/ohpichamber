@@ -27,6 +27,9 @@ const CLONE_CREDENTIAL = {
   credentialRevision: 3,
   providerUserId: 'https://example.com#42',
   status: 'valid',
+  // The plan reads the neutral transport credential (`secret`); `token` is
+  // kept for the fork's own resolver callbacks.
+  secret: 'clone-secret',
   token: 'clone-secret',
 };
 const temporaryDirectories = [];

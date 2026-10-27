@@ -54,13 +54,16 @@
 
 ### Remaining (exact)
 
-1. `server/lib/git/network-operations.test.js`: 26 failures. The adopted `network-operation-plan.js` now validates a managed HTTPS clone against the resolver's full credential (`credentialId`, `credentialRevision`, `providerUserId`, `secret`) and raises `INVALID_REQUEST`; the test's stand-in resolver returns a partial record (`Selected managed HTTPS credential is unavailable`). Update the stand-in resolver in the test (and any production caller that hands the plan a partial record) to the plan's contract.
-2. `server/lib/git/routes.test.js` `/contributor worktree authority/`: 6 failures, `expected 500 to be 400`. The same plan-error change: `git/routes.js` maps the plan's `INVALID_REQUEST` to 500 while the test expects the route's 400 for a client-supplied endpoint. Decide the mapping in `git/routes.js` (owner: task 22's file, plan adopted here) and keep the route's refusal code stable.
-3. `bun run test` at the root: rerun after 1-2 (web suite was 12 failed files / 32 failed tests before the fixes above; 2 of those groups are now fixed — extension contract, trackers, languages, and the three UI-import tests).
-4. `bunx oxlint` on the rewritten files; `bun run dead-code` and inspect it (expect `provider-contract.d.ts`-typed modules to be used; watch `standard-mutations`, `change-id`, `repository-network`).
-5. Real path (not started): dev server on free ports with an isolated `OPENCHAMBER_DATA_DIR`; a local fixture Git repository listing changes through the Git provider; the GitHub Enterprise 400 check over HTTP with no outbound request (a fetch stub or a loopback listener that records nothing); one token going only to a checked host.
-6. Live hosts: GitHub/GitLab/Gitea/Gerrit/Forgejo without credentials are limits, not results.
-7. Landing: `workflow validate`, move this file to `.workflow/done/upstream-refresh/`, rebase onto the moving integration tip, rerun install/type-check/lint/affected tests, ff-merge, remove the worktree and branch.
+1. Root `bun run test`: rerun (the web suite is green on its own; the root run also covers the other workspaces).
+2. `bunx oxlint` on the rewritten files; `bun run dead-code` and inspect it.
+3. Real path (not started): dev server on free ports with an isolated `OPENCHAMBER_DATA_DIR`; a local fixture Git repository listing changes through the Git provider; the GitHub Enterprise 400 check over HTTP with no outbound request; one token going only to a checked host.
+4. Live hosts: GitHub/GitLab/Gitea/Gerrit/Forgejo without credentials are limits, not results.
+5. Landing: `workflow validate`, move this file to `.workflow/done/upstream-refresh/`, rebase onto the moving integration tip, rerun install/type-check/lint/affected tests, ff-merge, remove the worktree and branch.
+
+### Fixed while finishing
+
+- `git/network-operations.test.js` (26 failures): the clone-credential stand-in now carries the neutral `secret` the adopted plan reads (it kept only `token`); 163 passed, 1 skipped.
+- `git/routes.test.js` (6 failures): the test's `vi.mock('./index.js')` now provides `markGeneratedBranchName` and `seedBranchTaskTitle`, which the adopted `worktree-creation.js` takes from the Git libraries; 66 passed.
 
 ### Checks so far (worktree, Bun 1.4.4)
 

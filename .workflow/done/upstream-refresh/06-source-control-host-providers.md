@@ -52,7 +52,7 @@
 - `walkthrough/languages.js`'s `ar`/`he` entries (task 20 owns the locales).
 - Upstream's `github/DOCUMENTATION.md` and `gitlab/DOCUMENTATION.md` changes belong to task 01's path list and are untouched here.
 
-**Check after:** install exit 0, type-check exit 0, lint exit 0, oxlint clean, dead-code shows no new finding, the web suite green (UI suite green when run alone), and the real-path run below; receipts in `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-06-2026-10-27/`.
+**Check after:** install exit 0, type-check exit 0, lint exit 0, `bun run test` exit 0 (7/7 suites passed: scripts 23/23, sdk 26/26, ui 831/831, agent-contract 10/10, agent-service 250/250, electron 54/54, web 443 passed 9 skipped / 7151 passed 142 skipped), oxlint clean, dead-code shows no new finding, and the real-path run below; receipts in `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-06-2026-10-27/`.
 
 ### Checks (worktree, Bun 1.4.4, base af13a5c57c)
 
@@ -63,6 +63,7 @@ Artifacts: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-06-
 - `bun run lint`: exit 0; `@openchamber/ui` reports one pre-existing unused oxlint-disable warning.
 - `VITEST_MAX_WORKERS=2 bun run test` with a fresh `HOME`/`XDG_CONFIG_HOME` (`root-test-maxworkers2.log`): **6/7 suites, exit 1**. The web suite is green: 438 files passed, 9 skipped, 7,090 tests passed (`web` section of the same log). The UI suite timed out in three files under the run's own 4-way parallelism (`openFenceIncremental` 5 s render, `useGlobalSessionsStore-chats-root`, `useAgentsStore.subagents`). Run alone, every UI file passes: 831/831 (`ui-test-alone.log`, exit 0). The three files also pass together (26/26).
 - `bunx oxlint` on the 14 rewritten or merged files (three-way docs are prose): exit 0, no findings.
+- Post-rebase checks (rebased onto integration tip `0bc5a1ce69`): `bun install --frozen-lockfile` exit 0 (`install-rebased.log`), `bun run type-check` exit 0 (2,814 files, 5 projects; `type-check-rebased.log`), `bun run lint` exit 0 (`lint-rebased.log`), `VITEST_MAX_WORKERS=2 bun run test` exit 0 (7/7 suites passed: scripts 23/23, sdk 26/26, ui 831/831, agent-contract 10/10, agent-service 250/250, electron 54/54, web 443 passed 9 skipped / 7,151 passed 142 skipped; `root-test-rebased-maxworkers2.log`).
 - `bun run dead-code`: exit 1 with the same baseline class as the integration tip. Compared against **this branch's own base** `af13a5c57c` (`dead-code-base-af13a5c.log`), the branch adds **no** finding and resolves eight: `source-control/project-path.js` is now imported, and `extensionProviderId`, `isExtensionProviderId`, `isReservedProviderId`, `EXTENSION_PROVIDER_PREFIX`, `isProviderUsername`, `descriptorAllowsLoopbackHttp`, `loopbackHttpPermitted` are now used. Against the newer tip `823fe8aaac` (`dead-code-baseline.log`) the only item present here and not there is `toHexColor`, which was already unused at `af13a5c57c` and was wired by a task that landed after it. The findings that remain (`openchamber-control/project-knowledge.js` for task 16, render-page image helpers for tasks 12/13, UI exports from later UI tasks) are the recorded baseline, not this branch's.
 
 ### Real path

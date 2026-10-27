@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it } from 'vitest';
 import { fetchOllamaCloudPlan, fetchOllamaCloudUsage, toUsageWindows } from './ollama-cloud.js';
 
 const PERIOD = { from: '2026-09-28T20:49:41Z', until: '2026-10-28T20:49:41Z' };

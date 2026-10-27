@@ -5,22 +5,14 @@
  * @module quota/providers/ollama-cloud
  */
 
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
-import { deleteLegacyOllamaCloudCredential } from '../credentials/store.js';
-import { asNonEmptyString, asObject, buildResult, formatMoney, getAuthEntry, normalizeAuthEntry, toNumber, toTimestamp, toUsageWindow } from '../utils/index.js';
+import { credentialAccessToken } from './selected-credential.js';
+import { asNonEmptyString, asObject, buildResult, formatMoney, toNumber, toTimestamp, toUsageWindow } from '../utils/index.js';
 
 export const providerId = 'ollama-cloud';
 export const providerName = 'Ollama Cloud';
-const aliases = ['ollama-cloud', 'ollamacloud'];
 
 const BALANCE_URL = 'https://ollama.com/api/balance';
 const ME_URL = 'https://ollama.com/api/me';
-
-const apiKeyFromAuth = (auth) => {
-  const entry = asObject(normalizeAuthEntry(getAuthEntry(auth, aliases)));
-  if (!entry) return null;
-  return asNonEmptyString(entry.key) ?? asNonEmptyString(entry.token);
-};
 
 /**
  * The account's windows, read from an already-parsed `/api/balance` payload.
@@ -74,7 +66,7 @@ export const toUsageWindows = (payload) => {
   return windows;
 };
 
-export const isConfigured = (auth) => Boolean(apiKeyFromAuth(auth));
+export const isConfigured = (credential) => Boolean(credentialAccessToken(credential));
 
 export const fetchOllamaCloudUsage = async (apiKey, fetchImpl = fetch) => {
   const response = await fetchImpl(BALANCE_URL, {
@@ -103,13 +95,8 @@ export const fetchOllamaCloudPlan = async (apiKey, fetchImpl = fetch) => {
   return asNonEmptyString(asObject(await response.json())?.Plan);
 };
 
-export const fetchQuota = async () => {
-  // Mirrors the OpenCode Go cleanup: the stored cookie is obsolete now. It is
-  // removed on the first refresh whether or not a key is readable, so a user
-  // who only ever pasted a cookie never keeps a browser session cookie on disk.
-  deleteLegacyOllamaCloudCredential();
-
-  const apiKey = apiKeyFromAuth(await readOpenCodeCredentials());
+export const fetchQuota = async ({ credential } = {}) => {
+  const apiKey = credentialAccessToken(credential);
   if (!apiKey) {
     return buildResult({ providerId, providerName, ok: false, configured: false, error: 'Not configured' });
   }
@@ -126,7 +113,7 @@ export const fetchQuota = async () => {
       providerName,
       ok: false,
       configured: true,
-      error: error instanceof Error ? error.message : 'Request failed',
+      error: error?.name === 'TimeoutError' ? 'Request timed out' : error instanceof SyntaxError ? 'Invalid response from provider' : 'Request failed',
     });
   }
 };

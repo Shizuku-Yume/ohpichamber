@@ -1,25 +1,35 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { configureOpenCodeCredentials } from '../../../opencode/auth.js';
-import { fetchGoogleQuota } from './index.js';
+import { fetchGoogleQuota as rawFetchGoogleQuota } from './index.js';
 import { refreshAntigravityToken } from '../antigravity/api.js';
 
 const GEMINI_CLIENT_ID = '681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com';
 const ANTIGRAVITY_CLIENT_ID = '1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com';
 
+let currentCredential = null;
+const fetchGoogleQuota = () => rawFetchGoogleQuota({ credential: currentCredential });
+
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   vi.useRealTimers();
-  configureOpenCodeCredentials(null);
+  currentCredential = null;
 });
 
 const configureLogin = (refresh = 'test-refresh|test-project', expires = 1) => {
-  configureOpenCodeCredentials({ list: async () => [{
-    id: 'test-google', integrationID: 'google', label: 'default', active: true,
-    value: { type: 'oauth', methodID: 'oauth', metadata: {}, access: 'old-access', refresh, expires },
-  }] });
+  if (refresh === null) {
+    currentCredential = null;
+    return;
+  }
+  const parts = String(refresh).split('|');
+  const projectId = parts[1] || undefined;
+  currentCredential = {
+    type: 'oauth',
+    access: 'old-access',
+    refresh,
+    expires,
+    ...(projectId ? { projectId } : {}),
+  };
 };
-
 const stubGoogle = (exchange, { access = 'new-access', project = 'test-project' } = {}) => {
   const clients = [];
   vi.stubGlobal('fetch', async (url, options) => {
@@ -128,7 +138,7 @@ describe('Google quota OAuth client compatibility', () => {
       value: { type: 'oauth', methodID: 'oauth', access: 'old-access', refresh: 'test-refresh|test-project', expires: 1 },
     };
     const before = structuredClone(entry);
-    configureOpenCodeCredentials({ list: async () => [entry], create: () => { throw new Error('Unexpected credential write'); }, remove: () => { throw new Error('Unexpected credential deletion'); } });
+    configureLogin(entry.value.refresh, entry.value.expires);
     const clients = [];
     vi.stubGlobal('fetch', async (url, options) => {
       expect(url).toBe('https://oauth2.googleapis.com/token');
@@ -225,7 +235,7 @@ describe('Google quota OAuth client compatibility', () => {
   });
 
   it('does not query any service without a Google credential', async () => {
-    configureOpenCodeCredentials({ list: async () => [] });
+    configureLogin(null);
     const request = vi.fn(() => { throw new Error('Unexpected request'); });
     vi.stubGlobal('fetch', request);
     const result = await fetchGoogleQuota();

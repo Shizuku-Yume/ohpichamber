@@ -6,7 +6,7 @@
 import fs from 'fs';
 import path from 'path';
 import { z } from 'zod';
-import { unwrapOpenCodeResponse } from '../opencode/response-envelope.js';
+const unwrapOpenCodeResponse = (body) => (!body || typeof body !== 'object' || Array.isArray(body) ? body : ('data' in body && !('cursor' in body) ? body.data : body));
 
 /** Idle time between keep-alive requests; OpenCode's warming default. */
 export const WARMING_INTERVAL_MS = 4 * 60 * 1000;

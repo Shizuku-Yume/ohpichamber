@@ -2,6 +2,7 @@
 export const overviewI18n = {
   en: {
     'overview.title': 'Overview',
+    'overview.error.loadFailed': 'Could not load sessions.',
     'overview.count.calm': 'Nothing needs you.',
     'overview.count.waitingOne': '1 needs you',
     'overview.count.waitingMany': '{count} need you',
@@ -75,6 +76,7 @@ export const overviewI18n = {
   },
   de: {
     'overview.title': 'Übersicht',
+    'overview.error.loadFailed': 'Sitzungen konnten nicht geladen werden.',
     'overview.count.calm': 'Nichts braucht dich.',
     'overview.count.waitingOne': '1 braucht dich',
     'overview.count.waitingMany': '{count} brauchen dich',
@@ -148,6 +150,7 @@ export const overviewI18n = {
   },
   fr: {
     'overview.title': 'Vue d’ensemble',
+    'overview.error.loadFailed': 'Impossible de charger les sessions.',
     'overview.count.calm': 'Rien n\'a besoin de vous.',
     'overview.count.waitingOne': '1 a besoin de vous',
     'overview.count.waitingMany': '{count} ont besoin de vous',
@@ -221,6 +224,7 @@ export const overviewI18n = {
   },
   nl: {
     'overview.title': 'Overzicht',
+    'overview.error.loadFailed': 'Sessies konden niet worden geladen.',
     'overview.count.calm': 'Niets wacht op jou.',
     'overview.count.waitingOne': '1 wacht op jou',
     'overview.count.waitingMany': '{count} wachten op jou',
@@ -294,6 +298,7 @@ export const overviewI18n = {
   },
   es: {
     'overview.title': 'Resumen',
+    'overview.error.loadFailed': 'No se pudieron cargar las sesiones.',
     'overview.count.calm': 'Nada te necesita.',
     'overview.count.waitingOne': '1 te necesita',
     'overview.count.waitingMany': '{count} te necesitan',
@@ -367,6 +372,7 @@ export const overviewI18n = {
   },
   ja: {
     'overview.title': '概要',
+    'overview.error.loadFailed': 'セッションを読み込めませんでした。',
     'overview.count.calm': '対応が必要なものはありません。',
     'overview.count.waitingOne': '対応が必要: 1',
     'overview.count.waitingMany': '対応が必要: {count}',
@@ -440,6 +446,7 @@ export const overviewI18n = {
   },
   'pt-BR': {
     'overview.title': 'Visão geral',
+    'overview.error.loadFailed': 'Não foi possível carregar as sessões.',
     'overview.count.calm': 'Nada precisa de você.',
     'overview.count.waitingOne': '1 precisa de você',
     'overview.count.waitingMany': '{count} precisam de você',
@@ -513,6 +520,7 @@ export const overviewI18n = {
   },
   uk: {
     'overview.title': 'Огляд',
+    'overview.error.loadFailed': 'Не вдалося завантажити сесії.',
     'overview.count.calm': 'Нічого не потребує вас.',
     'overview.count.waitingOne': 'Потребує вас: 1',
     'overview.count.waitingMany': 'Потребують вас: {count}',
@@ -586,6 +594,7 @@ export const overviewI18n = {
   },
   ko: {
     'overview.title': '개요',
+    'overview.error.loadFailed': '세션을 불러오지 못했습니다.',
     'overview.count.calm': '확인할 것이 없습니다.',
     'overview.count.waitingOne': '확인 필요 1',
     'overview.count.waitingMany': '확인 필요 {count}',
@@ -659,6 +668,7 @@ export const overviewI18n = {
   },
   pl: {
     'overview.title': 'Przegląd',
+    'overview.error.loadFailed': 'Nie udało się załadować sesji.',
     'overview.count.calm': 'Nic nie czeka na ciebie.',
     'overview.count.waitingOne': '1 czeka na ciebie',
     'overview.count.waitingMany': 'Czeka na ciebie: {count}',
@@ -732,6 +742,7 @@ export const overviewI18n = {
   },
   'zh-CN': {
     'overview.title': '概览',
+    'overview.error.loadFailed': '无法加载会话。',
     'overview.count.calm': '没有需要你处理的事。',
     'overview.count.waitingOne': '需要你: 1',
     'overview.count.waitingMany': '需要你: {count}',
@@ -805,6 +816,7 @@ export const overviewI18n = {
   },
   'zh-TW': {
     'overview.title': '概覽',
+    'overview.error.loadFailed': '無法載入工作階段。',
     'overview.count.calm': '沒有需要你處理的事。',
     'overview.count.waitingOne': '需要你: 1',
     'overview.count.waitingMany': '需要你: {count}',
@@ -878,6 +890,7 @@ export const overviewI18n = {
   },
   tr: {
     'overview.title': 'Genel bakış',
+    'overview.error.loadFailed': 'Oturumlar yüklenemedi.',
     'overview.count.calm': 'Seni bekleyen bir şey yok.',
     'overview.count.waitingOne': '1 seni bekliyor',
     'overview.count.waitingMany': '{count} seni bekliyor',
@@ -951,6 +964,7 @@ export const overviewI18n = {
   },
   ar: {
     'overview.title': 'نظرة عامة',
+    'overview.error.loadFailed': 'تعذر تحميل الجلسات.',
     'overview.count.calm': 'لا شيء بحاجة إليك.',
     'overview.count.waitingOne': 'بحاجة إليك: 1',
     'overview.count.waitingMany': 'بحاجة إليك: {count}',
@@ -1024,6 +1038,7 @@ export const overviewI18n = {
   },
   he: {
     'overview.title': 'סקירה',
+    'overview.error.loadFailed': 'לא ניתן לטעון הפעלות.',
     'overview.count.calm': 'שום דבר לא מחכה לך.',
     'overview.count.waitingOne': 'מחכה לך: 1',
     'overview.count.waitingMany': 'מחכים לך: {count}',

@@ -22,6 +22,12 @@ describe('permission auto-accept runtime', () => {
   it('converts a pre-modes policy once, as safety when the old safety net was on', async () => { const resolveLegacyEnabledMode = vi.fn(async () => 'safety'); const first = createRuntime({ stored: { permissionAutoAccept: { sessions: { root: true, child: false }, revision: 3 } }, resolveLegacyEnabledMode }); expect((await first.runtime.load()).modes).toEqual({ root: 'safety', child: 'ask' }); const restarted = createRuntime({ stored: first.getSettings(), resolveLegacyEnabledMode }); await restarted.runtime.load(); expect(resolveLegacyEnabledMode).toHaveBeenCalledTimes(1); });
   it('writes the default mode onto a new top-level session only', async () => { const { runtime, emit, getSettings } = createRuntime(); await runtime.load(); getSettings().permissionDefaultMode = 'safety'; emit(event('session.updated', 'root', { session: session({ sessionId: 'root' }) })); emit(event('session.updated', 'child', { session: session({ sessionId: 'child', parentSessionId: 'root' }) })); await flush(); await expect(runtime.resolveSessionMode('root', '/project')).resolves.toBe('safety'); expect((await runtime.load()).modes).toEqual({ root: 'safety' }); await expect(runtime.resolveSessionMode('child', '/project')).resolves.toBe('safety'); });
   it('keeps a mode the creating flow already set over the default', async () => { const { runtime, emit, getSettings } = createRuntime(); await runtime.setSessionPolicy('root', 'ask'); getSettings().permissionDefaultMode = 'auto'; emit(event('session.updated', 'root', { session: session({ sessionId: 'root' }) })); await flush(); await expect(runtime.resolveSessionMode('root', '/project')).resolves.toBe('ask'); });
+  it('applies the default mode during resolveSessionMode when a top-level session is resolved from snapshot', async () => {
+    const { runtime, getSettings } = createRuntime({ serviceRequest: async () => Response.json(snapshot('new-root')) });
+    getSettings().permissionDefaultMode = 'auto';
+    await expect(runtime.resolveSessionMode('new-root', '/project')).resolves.toBe('auto');
+    expect((await runtime.load()).modes).toEqual({ 'new-root': 'auto' });
+  });
   it('saves the next mode change after one failed to persist', async () => {
     let failNext = true;
     const { runtime, getSettings } = createRuntime({

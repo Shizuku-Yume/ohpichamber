@@ -655,6 +655,10 @@ const openChamberSessionService = createOpenChamberSessionService({
   publishSessionEvent: (event) => {
     void globalMessageStreamHub.subscribeSession(event.properties.sessionId)
       .catch((error) => console.warn('[agent-events] session observation failed:', error.code ?? 'SERVICE_UNAVAILABLE'));
+    if (event?.type === 'openchamber:session-created' && event.properties?.sessionId) {
+      void permissionAutoAcceptRuntime?.applyDefaultMode(event.properties.sessionId)
+        .catch((error) => console.warn('[permission-auto-accept] failed to apply the default mode:', error?.message ?? error));
+    }
   },
   sessionMetadataStore,
   directCommandAdmissionStore: hostSessionState.directCommandAdmissionStore,

@@ -127,6 +127,7 @@ export const MobileDeleteWorktreeDialog: React.FC<MobileDeleteWorktreeDialogProp
           removeWorktree: () => removeWorktree(target),
           restoreSessions: (ids) => unarchiveSessions(ids, { undo: true }),
           archiveSessions,
+          restoreSessions: (ids) => unarchiveSessions(ids, { undo: true }),
         });
         if (!result.removed) {
           toast.dismiss(toastId);
@@ -143,13 +144,9 @@ export const MobileDeleteWorktreeDialog: React.FC<MobileDeleteWorktreeDialogProp
           return;
         }
 
-        toast.success(t('sessions.sidebar.sessionDialogs.worktree.removedTitle', { name }), {
-          id: toastId,
-          description:
-            hasBranch && deleteRemoteBranch
-              ? t('sessions.sidebar.sessionDialogs.worktree.removedWithRemote')
-              : t('sessions.sidebar.sessionDialogs.worktree.removed'),
-        });
+        toast.success(hasBranch && deleteRemoteBranch
+          ? t('sessions.sidebar.sessionDialogs.worktree.removedWithRemote')
+          : t('sessions.sidebar.sessionDialogs.worktree.removed'), { id: toastId, description: name });
         onDeleted?.();
       } catch (error) {
         // The remote branch could not be deleted, so the worktree was kept: say
@@ -159,7 +156,7 @@ export const MobileDeleteWorktreeDialog: React.FC<MobileDeleteWorktreeDialogProp
           : error instanceof PendingGitOperationError || (error instanceof BoundGitNetworkOperationError && !error.message.includes(' '))
             ? t('gitView.publish.remoteNotGranted')
             : error instanceof Error ? error.message : t('sessions.sidebar.dialogs.deleteResult.tryAgain');
-        toast.error(t('sessions.sidebar.sessionDialogs.worktree.errorRemoveTitle', { name }), { id: toastId, description });
+        toast.error(t('sessions.sidebar.sessionDialogs.worktree.errorRemoveTitle'), { id: toastId, description });
       } finally {
         clearWorktreeRemoval(target.path);
       }
@@ -184,7 +181,7 @@ export const MobileDeleteWorktreeDialog: React.FC<MobileDeleteWorktreeDialogProp
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cn(
-        'flex w-full items-center justify-between gap-3 rounded-xl border border-border/70 px-3.5 py-3 text-left transition-colors',
+        'flex w-full items-center justify-between gap-3 rounded-xl border border-border/70 px-3.5 py-3 text-start transition-colors',
         'hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         disabled && 'pointer-events-none opacity-40',
       )}
@@ -200,7 +197,7 @@ export const MobileDeleteWorktreeDialog: React.FC<MobileDeleteWorktreeDialogProp
         <span
           className={cn(
             'absolute top-0.5 size-5 rounded-full bg-white transition-transform',
-            checked ? 'translate-x-[1.125rem]' : 'translate-x-0.5',
+            checked ? 'translate-x-[1.125rem] rtl:-translate-x-[1.125rem]' : 'translate-x-0.5 rtl:-translate-x-0.5',
           )}
         />
       </span>

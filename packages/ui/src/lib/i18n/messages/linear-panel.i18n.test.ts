@@ -25,10 +25,10 @@ describe('tracker priority translations', () => {
     const english = linearPanelI18n.en;
     for (const locale of locales) {
       for (const key of requiredKeys) {
-        const value = linearPanelI18n[locale][key];
+        const value = (linearPanelI18n as any)[locale][key];
         expect(value).toBeTruthy();
         if (locale !== 'en' && !matchingEnglishAllowed.has(key)) {
-          expect(value).not.toBe(english[key]);
+          expect(value).not.toBe((english as any)[key]);
         }
       }
     }

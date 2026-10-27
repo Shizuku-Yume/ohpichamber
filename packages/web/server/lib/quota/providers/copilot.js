@@ -69,7 +69,12 @@ const COPILOT_ENTERPRISE_HOST = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0
 export const copilotUserUrl = (enterpriseUrl) => {
   const host = `${enterpriseUrl ?? ''}`.trim();
   if (!host) return 'https://api.github.com/copilot_internal/user';
-  const url = new URL(host.includes('://') ? host : `https://${host}`);
+  let url;
+  try {
+    url = new URL(host.includes('://') ? host : `https://${host}`);
+  } catch {
+    throw new Error(INVALID_COPILOT_ENTERPRISE_URL);
+  }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error(INVALID_COPILOT_ENTERPRISE_URL);
   if (url.username || url.password || url.port || url.pathname !== '/' || url.search || url.hash) {
     throw new Error(INVALID_COPILOT_ENTERPRISE_URL);
@@ -128,7 +133,7 @@ export const fetchQuota = async ({ credential } = {}) => {
       providerName,
       ok: false,
       configured: true,
-      error: 'Request failed'
+      error: error?.message === INVALID_COPILOT_ENTERPRISE_URL ? error.message : 'Request failed'
     });
   }
 };
@@ -184,7 +189,7 @@ export const fetchQuotaAddon = async ({ credential } = {}) => {
       providerName: providerNameAddon,
       ok: false,
       configured: true,
-      error: 'Request failed'
+      error: error?.message === INVALID_COPILOT_ENTERPRISE_URL ? error.message : 'Request failed'
     });
   }
 };

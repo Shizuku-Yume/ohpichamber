@@ -21,8 +21,8 @@ export { isConfigured } from './auth.js';
 export const providerId = 'antigravity';
 export const providerName = 'Antigravity';
 
-export const fetchQuota = async () => {
-  const auth = resolveAntigravityAuth();
+export const fetchQuota = async ({ credential } = {}) => {
+  const auth = resolveAntigravityAuth(credential);
   if (!auth) {
     return buildResult({
       providerId,
@@ -33,7 +33,7 @@ export const fetchQuota = async () => {
     });
   }
 
-  const accessToken = await refreshAntigravityToken(auth.refreshToken);
+  const accessToken = auth.accessToken || (auth.refreshToken ? await refreshAntigravityToken(auth.refreshToken) : null);
   if (!accessToken) {
     return buildResult({
       providerId,

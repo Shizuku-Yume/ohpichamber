@@ -199,9 +199,35 @@ agent-contract, scripts, electron and web pass; `agent-service` had one sleep-ba
 (`logs/agent-service-registry-rerun.log`). The earlier run of the same suite failed a different
 agent-service timing test, so the flake follows load, not this change.
 
-**Limits.** Session creation in this environment returns 503 (`SDK worker operation failed`,
-`UNSUPPORTED_CAPABILITY` from the agent service), so a worktree with a live session could not be
-created in-app; archive-safe removal with sessions is covered by `worktreeRemovalFlow.test.ts`, while
-the no-session removal path (archive step skipped, checkout + branch removed) was exercised in the app.
-The console shows pre-existing warnings outside this task's surfaces (nested button in a picker dialog,
-`setState` during render in `VisibleSessionProjects`, 404s for optional assets).
+**Follow-up — 503 cause, regression verdict, removal with a live session.** The setup matched the
+session task's: a temporary worktree at the landed tip, `bun install --frozen-lockfile`, the compiled
+agent-service rebuilt (`bun run --cwd packages/agent-service build`; dev serves `dist`), an isolated
+`HOME=/tmp/ohpi-09-home` holding only copies of `~/.omp/agent/{config.yml,models.yml,mcp.json}`, a
+fresh `OPENCHAMBER_DATA_DIR=/tmp/ohpi-09-data2`, UI 6280 / API 6202. A session was created in the UI
+and a real provider answered “ready” in the transcript (model default Gemini 3.8 Flash / scout for the
+isolated profile; the host profile answered as GPT-6 Astra in a second run).
+The original 503 was `[agent-service] worker …: Worker initialization failed (UNSUPPORTED_CAPABILITY)`
+at worker open. It does not reproduce with the rebuilt dist: the landed tree creates sessions with both
+the isolated and the host profile, and the pre-09 tip `65862865d0` with the same setup also created a
+session and answered “ready” (`logs/dev-pre09.log`). Verdict: not a regression in this task's commits
+and no code fix was needed (no fix SHA); the earlier ad-hoc worktree ran the compiled agent-service
+from before the final rebase and failed at worker initialization, and the documented rebuild removes it.
+Removal with a live session was then exercised: worktree `followup-session` got a real-provider
+session, the delete dialog said “This removes the selected worktree and archives 1 linked session”,
+and deleting removed the checkout and its branch (`git worktree list` / `branch` show only `main`).
+The Host wrote the archive row (`session_archive` has the session; its OMP session file stays under the
+isolated HOME), so the session is retained, not lost. The Archive page still shows “0 archived
+sessions” after a reload: once the checkout is gone, listing the session's workspace returns
+`METADATA_READ_FAILED`, and the Host only projects archived state onto sessions of currently resolvable
+workspaces; the worktree-archive record that would list removed checkouts is deferred to the Host
+worktree-archive endpoints (tasks 01/22/24/25). This is the known archive-visibility gap, not a
+regression. Evidence: `screenshots/11-worktree-session-ready.png`,
+`12-delete-dialog-archives-linked-session.png`, `13-archive-after-worktree-reload.png`,
+`logs/dev-session.log`, `logs/dev-hosthome.log`, `logs/dev-pre09.log`,
+`logs/followup-archive-evidence.txt`. Servers stopped and the temporary worktrees and `/tmp` data
+removed afterwards.
+
+**Limits.** Archived sessions of removed worktrees are retained but not listed in the Archive page
+until the deferred worktree-archive surface lands (see the follow-up above). The console shows
+pre-existing warnings outside this task's surfaces (nested button in a picker dialog, `setState` during
+render in `VisibleSessionProjects`, 404s for optional assets).

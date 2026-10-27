@@ -16,17 +16,21 @@
 **Check:** `bun install --frozen-lockfile` and `bun run type-check` and `bun run lint` and `bun run test` all exit 0, the composer tests pass, and in the running app a file attaches and sends, a queued message goes out after the turn, a permission request is approved/denied and the prompt returns after a failed send, and a magic prompt inserts its text. Real path: one real provider turn.
 ## Progress: Task 15 Rework (2026-10-27)
 
-### Two Root Causes
+### Three Root Causes
 1. **Server message-queue routes faked UI DTO shapes (`f8f5215d69`)**: Message queue routes and broadcasts translated between UI DTOs and canonical contract types via `isUiShape` and `toServerSession`, creating dual representations and protocol divergence between Host and agent-contract.
 2. **Worker session read non-image attachments without validation (`29f99e0af8`)**: `WorkerSession.prepare()` read arbitrary non-image attachments as UTF-8 mojibake without size bounds, crashing or corrupting model prompts on binary files or oversized payloads.
+3. **Server queue delivery starvation and missing UI sync (`e62a37cf5e`)**: In `canonical-runtime.js:141`, when the runtime session was busy with an active run (`activeRunId !== null` or `runtimeStatus !== 'idle'`), the queue dispatcher returned without scheduling a retry, stranding queued items if SSE session observation wasn't active. Furthermore, `globalMessageStreamHub.subscribeSession` was never invoked on queue `append` or `start`, and `SyncProvider` in `packages/ui/src/sync/sync-context.tsx` never called `subscribeMessageQueueSync`, causing delivered items to linger in the UI queue projection strip.
 
 ### Architectural Decisions
-1. **Canonical Queue Cutover**:
+1. **Canonical Queue Cutover & Delivery Invariants**:
    - Dropped `isUiShape`, `toServerSession`, `ServerQueueItemInput`, `ServerQueueAttachmentInput`, `toServerAttachment`, and `toServerItemInput`.
    - Wired `packages/ui/src/stores/messageQueueStore.ts` directly to canonical `QueueAppendRequest`, `QueueDeleteRequest`, `QueueReorderRequest`, and `QueueState` from `@openchamber/agent-contract`.
    - Each attachment is uploaded through Host canonical attachment routes (`/api/agent/v1/attachments`) first to acquire `attachmentId` and `uri: attachment://<id>` before queue append.
    - Refetch authoritative queue state on HTTP 409 `QUEUE_CONFLICT` instead of dropping local projections or treating queue as empty.
    - Default `commandId` to `req.get('Idempotency-Key') ?? randomUUID()` at message-queue route boundary.
+   - Schedule busy retry (`schedule(scope, RETRY_MS)`) when active run is busy in `canonical-runtime.js`, and wire `ensureSessionObserved` in `index.js` on `append` and `start`.
+   - Subscribe `subscribeMessageQueueSync` in `SyncProvider` (`sync-context.tsx`) so server queue broadcast updates (`openchamber:message-queue.updated`) clear delivered queue projections.
+   - In `admitAttachmentsForQueue`, the `attachment.dataUrl?.startsWith('attachment://')` branch is retained because `packages/ui/src/sync/input-store.ts:305` writes `dataUrl: url` for restored attachments where `url` is `attachment://<id>`, and `messageQueueStore.ts:262` writes `dataUrl: att.uri`.
 2. **Attachment Size & Media Validation**:
    - Enforce 5 MB limit (`MAX_TEXT_ATTACHMENT_BYTES`) for text attachments across Host and Worker boundaries.
    - Reject binary files with null bytes or non-text MIME types via HTTP 415 `UNSUPPORTED_MEDIA_TYPE`.
@@ -36,26 +40,23 @@
 ### Checks and Exit Codes
 - `bun run type-check`: exit code 0 (`~/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/logs/type-check.log`)
 - `bun run lint`: exit code 0 (`~/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/logs/lint.log`)
-- `bunx oxlint` on authored files: exit code 0 (`~/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/logs/oxlint.log`)
-- Focused test: web message-queue: exit code 0 (`~/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/logs/test-web-message-queue.log`)
-- Focused test: attachment routes: exit code 0 (`~/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/logs/test-attachment-routes.log`)
-- Focused test: agent-service worker: exit code 0 (`~/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/logs/test-agent-service-worker.log`)
-- Focused test: UI queue store: exit code 0 (`~/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/logs/test-ui-queue-store.log`)
-- `bun run dead-code` diff against baseline: 0 new findings (`~/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/logs/dead-code-diff.log`)
+- Focused test: web message-queue (`server/lib/message-queue/runtime.test.js`): exit code 0 (`~/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/logs/test-web-message-queue.log`)
+- Focused test: UI queue store & sync context (`sync-context-queue-events.test.tsx`, `messageQueueStore.test.ts`): exit code 0 (`~/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/logs/test-ui-queue-store.log`)
 
 ### Real Path Evidence
-Captured in live browser run with isolated `HOME` and `OPENCHAMBER_DATA_DIR` against real model provider:
-- **5(a) Follow-up delivered with text attachment**: Queue follow-up with `secret-code.txt` while turn 1 runs; delivered after turn 1 and model quotes exact secret code (`SECRET_CODE_REWORK_987654`).
+Captured in live browser run with isolated `HOME=/tmp/oc-test-home` and `OPENCHAMBER_DATA_DIR=/tmp/oc-test-data` against real model provider (Gemini 3.8 Flash):
+- **01 Follow-up delivered with text attachment**: Queue follow-up with `secret-code.txt` while turn 1 runs; delivered after turn 1, model quotes exact secret code (`SECRET_CODE_REWORK_987654`), server `GET /api/agent/v1/sessions/:sessionId/queue` returns `{"sessionId":"...","revision":"5","items":[]}`, and the queue strip above composer is completely cleared.
   - Screenshot: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/screenshots/01-queued-followup-text-delivered.png`
-- **5(b) Binary zip rejected**: Attaching binary `.zip` shows cause + fix toast `"This file is binary and can't be sent as text. Attach an image or a text file."` and nothing is enqueued.
+- **02 Binary zip rejected**: Attaching binary `.zip` shows cause + fix toast `"This file is binary and can't be sent as text. Attach an image or a text file."` and nothing is enqueued.
   - Screenshot: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/screenshots/02-binary-zip-rejected.png`
-- **5(c) Delete queued item**: Clicking remove on queued item deletes it and removes it from queue strip while turn is running.
-  - Screenshot: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/screenshots/03-delete-queued-item.png`
+- **03a Queued item visible while turn runs**: Queued message strip `Temporary message to be removed` visible above composer with `edit`, `send`, and `x` (remove) buttons while turn 1 is actively running with Stop button and "Inspecting logic".
+  - Screenshot: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/screenshots/03a-queued-item-visible.png`
+- **03b Delete queued item while turn runs**: Pressing `x` (remove) on the queued item removes the item from the strip while turn 1 is still actively running. Server `GET /api/agent/v1/sessions/:sessionId/queue` returns `{"sessionId":"...","revision":"2","items":[]}`.
+  - Screenshot: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/screenshots/03b-delete-queued-item.png`
 
 ### Limits
 - Non-image binary attachments (e.g. zip/bin/tar) cannot be sent as text; users must attach images or text files.
 - Text attachments are capped at 5 MB per file.
-
 
 ## Done when
 

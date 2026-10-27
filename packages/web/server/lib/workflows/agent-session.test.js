@@ -16,7 +16,7 @@ const turn = (turnId, runId, status, assistantMessageIds, extra = {}) => ({
  * holds the successive history answers of a session; the last one repeats.
  */
 const fakeSessionService = ({ pages = [], snapshot = { session: { runtimeStatus: 'running' }, activeRun: { runId: 'run_1' } } } = {}) => {
-  const calls = { created: [], sent: [], followed: [], controlled: [], histories: 0 };
+  const calls = { created: [], sent: [], followed: [], controlled: [], unloaded: [], histories: 0 };
   let index = 0;
   return {
     calls,
@@ -42,6 +42,9 @@ const fakeSessionService = ({ pages = [], snapshot = { session: { runtimeStatus:
     control: async (sessionId, operation) => {
       calls.controlled.push({ sessionId, operation });
       return { run: { runId: operation.runId } };
+    },
+    unloadWorker: async (sessionId) => {
+      calls.unloaded.push(sessionId);
     },
   };
 };
@@ -156,5 +159,53 @@ describe('workflow agent sessions', () => {
     const before = service.calls.sent.length;
     await sessions.postSynthetic('ses_parent', { text: 'declined', resume: false });
     expect(service.calls.sent).toHaveLength(before);
+  });
+
+  it('unloads the worker when the agent turn completes', async () => {
+    const page = {
+      sessionId: 'ses_agent',
+      turns: [turn('turn_1', 'run_1', 'completed', ['m_1'])],
+      messages: [user('m_0', 'turn_1'), assistant('m_1', 'turn_1', '{"files":["alpha.ts"]}')],
+    };
+    const service = fakeSessionService({ pages: [page] });
+    const sessions = sessionsFor(service);
+    const { sessionId } = await sessions.start({
+      directory: '/repo',
+      text: 'do work',
+      signal: new AbortController().signal,
+      onSession: () => {},
+    });
+    expect(sessionId).toBe('ses_agent');
+    await sessions.unloadWorker(sessionId);
+    expect(service.calls.unloaded).toEqual(['ses_agent']);
+  });
+
+  it('retries session creation when capacity is temporarily full', async () => {
+    const page = {
+      sessionId: 'ses_agent',
+      turns: [turn('turn_1', 'run_1', 'completed', ['m_1'])],
+      messages: [user('m_0', 'turn_1'), assistant('m_1', 'turn_1', '{"files":["alpha.ts"]}')],
+    };
+    const service = fakeSessionService({ pages: [page] });
+    let attempts = 0;
+    service.create = async (payload) => {
+      attempts += 1;
+      if (attempts === 1) {
+        throw new Error('Session capacity is full (5 of 5 active). Close another session or try again later.');
+      }
+      service.calls.created.push(payload);
+      return { session: { sessionId: 'ses_agent' } };
+    };
+    const sessions = sessionsFor(service);
+    const { sessionId } = await sessions.start({
+      directory: '/repo',
+      text: 'do work',
+      signal: new AbortController().signal,
+      onSession: () => {},
+    });
+    expect(attempts).toBe(2);
+    expect(sessionId).toBe('ses_agent');
+    await sessions.unloadWorker(sessionId);
+    expect(service.calls.unloaded).toEqual(['ses_agent']);
   });
 });

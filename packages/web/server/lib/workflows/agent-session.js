@@ -138,7 +138,27 @@ export const createWorkflowAgentSessions = ({
       await sessionService.control(sessionId, { type: 'abort', runId });
     } catch (error) {
       console.warn(`[workflows] could not interrupt agent session ${sessionId}:`, error?.message ?? error);
+    } finally {
+      if (typeof sessionService.unloadWorker === 'function') {
+        await sessionService.unloadWorker(sessionId).catch(() => {});
+      }
     }
+  };
+
+  const createWithCapacityRetry = async (params, signal) => {
+    const deadline = Date.now() + 30_000;
+    while (!signal?.aborted) {
+      try {
+        return await sessionService.create(params);
+      } catch (error) {
+        const message = error?.message ?? '';
+        const isCapacity = message.includes('Session capacity is full')
+          || error?.code === 'SERVICE_UNAVAILABLE';
+        if (!isCapacity || Date.now() >= deadline) throw error;
+        await sleep(500);
+      }
+    }
+    throw new WorkflowAgentStopped();
   };
 
   /**
@@ -152,12 +172,12 @@ export const createWorkflowAgentSessions = ({
       ...await inheritedOptions(parentSessionId),
       agentId: agent || null,
     };
-    const created = await sessionService.create({
+    const created = await createWithCapacityRetry({
       projectId: workspace.projectId,
       workspaceId: workspace.workspaceId,
       options,
       ...(title ? { metadata: { title } } : {}),
-    });
+    }, signal);
     const sessionId = created?.session?.sessionId;
     if (!sessionId) throw new Error('The Agent Service returned no session id');
     onSession(sessionId);
@@ -172,14 +192,14 @@ export const createWorkflowAgentSessions = ({
   };
 
   /** A plain session for a saved workflow the user runs where no session is open. */
-  const createSession = async ({ directory, title }) => {
+  const createSession = async ({ directory, title, signal }) => {
     const workspace = await workspaceFor(directory);
-    const created = await sessionService.create({
+    const created = await createWithCapacityRetry({
       projectId: workspace.projectId,
       workspaceId: workspace.workspaceId,
       options: optionsFor(null, null),
       ...(title ? { metadata: { title } } : {}),
-    });
+    }, signal);
     const sessionId = created?.session?.sessionId;
     if (!sessionId) throw new Error('The Agent Service returned no session id');
     return sessionId;
@@ -252,6 +272,11 @@ export const createWorkflowAgentSessions = ({
       throw error;
     }
   };
+  const unloadWorker = async (sessionId) => {
+    if (typeof sessionService.unloadWorker === 'function') {
+      await sessionService.unloadWorker(sessionId).catch(() => {});
+    }
+  };
 
-  return { start, createSession, followUp, interrupt, readUsage, postSynthetic };
+  return { start, createSession, followUp, interrupt, readUsage, postSynthetic, unloadWorker };
 };

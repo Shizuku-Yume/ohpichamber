@@ -129,7 +129,8 @@ Every task leaves the integration branch green: `bun install --frozen-lockfile` 
 
 ## Open questions
 
-None. Provider credentials for source-control hosts, Tailscale, and a physical mobile device may be unavailable; each task names the stand-in and records the limit instead of claiming a result.
+- **ripgrep for `GET /api/fs/find-in-files`.** The adopted route runs ripgrep, discovered by `packages/web/server/lib/fs/ripgrep.js` in this order: a packaged desktop `Resources/ripgrep`, the `@vscode/ripgrep` platform package, then `rg` on `PATH`. Upstream ships `@vscode/ripgrep: ^1.18.0` as a dependency of `@openchamber/web` (plus Electron's `prepare:ripgrep` staging); the fork does not, and adding a dependency needs the maintainer's decision. On a host with none of the three, the route answers `501 { reason: 'search-unavailable' }`; that is what a user sees today, and the find-in-files suites skip instead of failing the suite. No fork UI calls the endpoint yet — upstream's `searchContents` client and the sidebar's Contents search are deferred to tasks 24/12 — so no empty result list is shown; when those land they must keep the 501-to-`unavailable` mapping and render the file tree's explicit "server cannot search contents" state, with a test. Maintainer decision: add `@vscode/ripgrep` at upstream's `^1.18.0` (and the Electron staging) or keep 501 as the supported no-rg behavior.
+- Provider credentials for source-control hosts, Tailscale, and a physical mobile device may be unavailable; each task names the stand-in and records the limit instead of claiming a result.
 
 ## Notes
 

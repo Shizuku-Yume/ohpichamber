@@ -49,3 +49,14 @@ An entry leaves this file in one of two ways:
 - **Impact:** pinned sessions, pin ordering in the sidebar and the palette's pin actions stay fork-version-only; upstream changes in that path cannot be adopted.
 - **Solution:** add Host-owned pin state (canonical session metadata or a Host store), expose it through the session API, then port the upstream pin store and UI.
 - **Cost:** Host storage and contract change plus sidebar/palette consumers.
+
+## Terminal shutdown test races its own SIGTERM record
+
+- **Where:** `packages/web/server/lib/terminal/shutdown.test.js` ("escalates a noncooperative workload only after the shared deadline"), `packages/web/server/lib/terminal/shutdown.js`
+- **Added:** 2026-10-27
+- **Priority:** worth-doing
+- **Problem:** the test gives a SIGTERM-ignoring child a 350 ms grace while shutdown polls `/proc` in 250 ms steps before SIGKILL. Only about 100 ms is left for the child to be scheduled and append its synchronous `SIGTERM` record, so under machine load the SIGKILL wins and `assert.deepEqual(events, ['ready','SIGTERM'])` fails while the deadline assertion still passes. Reproduced on the pre-refresh tree: at `4d69e299e4` the web suite failed 1 of 3 clean runs with exactly this assertion; at `ce1ba86ffa` the same three-run sample was green, but the root suite flaked on it twice under load, and it passes repeatedly in isolation. `shutdown.js` and its test are unchanged between those commits, so this is a pre-existing timing race, not a refresh regression.
+- **Impact:** an unattended `bun run test` can fail on this test alone, hiding real failures and blocking a gate that would otherwise be green.
+- **Solution:** make the test wait for the recorded SIGTERM with its own bounded deadline (poll the events file for up to a second) before asserting, or raise the fixture's grace to at least 1000 ms so the 250 ms polling has slack. Keep the production grace and escalation semantics.
+- **Cost:** test-only change; no production behavior.
+

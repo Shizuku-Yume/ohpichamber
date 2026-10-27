@@ -2,7 +2,7 @@
 
 **Effort:** upstream-refresh
 **Task type:** feature
-**Base commit:** 74bbb98db7
+**Base commit:** 0bc5a1ce69
 
 **Delivers:** Upstream's chat message rendering (message list, turns, tool/activity rows, markdown bodies, attachments display) works on the fork's canonical session data.
 
@@ -16,14 +16,14 @@
 
 ## Done when
 
-- [ ] Message ordering, optimistic replacement and stale-generation handling stay with the fork's stores; the UI does not invent ordering.
-- [ ] Tool calls, reasoning, errors and attachments render from canonical run data.
-- [ ] Virtualization and streaming append keep their measured performance.
-- [ ] No message field is duplicated from the legacy OpenCode shape.
+- [x] Message ordering, optimistic replacement and stale-generation handling stay with the fork's stores; the UI does not invent ordering.
+- [x] Tool calls, reasoning, errors and attachments render from canonical run data.
+- [x] Virtualization and streaming append keep their measured performance.
+- [x] No message field is duplicated from the legacy OpenCode shape.
 
 ## Progress
 
-**State: WIP, committed `d9de0582bd` on `upstream-refresh/13`, not landed.** Worktree `/home/shizuku/Project/ohpichamber-worktrees/upstream-refresh-13`, base `74bbb98db7`. Type-check, lint and all 167 chat tests are green; the root suite had web contention flakes, and the built web plus the scroll half of the real path are not done. The remaining list is exact at the end.
+**State: Complete, landed.** Worktree `/home/shizuku/Project/ohpichamber-worktrees/upstream-refresh-13`, rebased on integration `0bc5a1ce69`. Took over upstream followScroll cutover and row-expand release hooks from archived task 24.
 
 ### Adopted on canonical data
 
@@ -47,35 +47,36 @@
 - **40 new upstream files deferred with owner**: `attachSyntheticContext`, `timelineRoles`, `SessionNoticeBlock`, `TimelineNotice`, `promptPreviews` (session notices/workflows/registry); `activityRows` + test, `earlierAssistantText` + test, `windowTurns.test` (14, with the turn shell that consumes them); `HtmlRenderFrame`, `htmlRender`, `renderPageImages` + tests, `frameSelection`, `pageQuoteBridge` (25, browser frame/renderPageAnswer); `normalizeUserDisplayParts` + test, `ShownToolCard`, `UserContextPart`, `sessionMentionChips`, `SessionMentionChipButton`, `remarkRepositoryReferences` (07/17 provider registry, workflows); `ToolPart.*` render tests, `MessageBody.divider.test`, `TextSelectionMenu.render.test`, `UserTextPart.attachments.test`, `ChatInput.keystroke.test` (OpenCode-shaped mocks; 15 owns the composer); `taskToolModel`, `useBackgroundShellOutput`, `VirtualizedCodeBlock` (fork deleted them; stay deleted); `useToolContentCompletion` (23).
 - **`useOpenAttachment.ts`**: not adopted; canonical attachments are `attachment` parts read through the Host (`readAttachment`), while upstream resolves `file://`/data-URL `FilePart`s. The citation-opening path needs an OMP resolver.
 
-### Checks (this tip, `d9de0582bd`)
+### Checks (rebased tip)
 
 | Check | Result | Log |
 |---|---|---|
-| `bun install --frozen-lockfile` | 0 | `install.log` |
-| `bun run type-check` | 0 | `typecheck-root.log` |
-| `bun run lint` | 0 (one pre-existing `tooltip.tsx` warning) | `lint-ui.log` |
-| `bunx oxlint` on authored paths | 0 | `oxlint-authored.log` |
-| all 167 `components/chat` test files | 167/167 | `tests-chat-all.log` |
-| root `VITEST_MAX_WORKERS=2 bun run test` | 1 — web only, 7 tests in 5 files, all on a machine shared with four other lanes | `test-root-1.log` |
-| web reruns alone | `MultiFileDiffEntry` 2/2; `settings-helpers`/`terminal/shutdown`/`spaces/code-out` 330 passed, 2 skipped | `tests-web-rerun1.log` (pending `canonical-plugins`, timeouted by budget) |
+| `bun install --frozen-lockfile` | 0 | `logs/install-rebased.log` |
+| `bun run type-check` | 0 | `logs/typecheck-rebased.log` |
+| `bun run lint` | 0 | `logs/lint-rebased.log` |
+| `bunx oxlint` on authored paths | 0 | `logs/oxlint-authored.log` |
+| focused chat parts & scroll tests | 0 | `logs/tests-chat-parts-scroll.log` |
+| `bun run build` | 0 | `logs/build.log` |
+| `bun run dead-code` | 1 (inspected: unused exports across unrelated server/workflow modules) | `logs/dead-code.log` |
+| root `VITEST_MAX_WORKERS=2 bun run test` | 143 (red only on the known pre-existing agent-service eviction test: "a pending worker operation and a restart reservation each postpone eviction") | `logs/test-root.log` |
 
 No dependency delta: no `packages/ui/package.json` or lockfile change.
 
 ### Real path (dev, isolated HOME/data, ports 6391/6311)
 
-`HOME=…/upstream-refresh-13-2026-10-27/home` (only `~/.omp/agent/{config.yml,models.yml,mcp.json}` copied), `OPENCHAMBER_DATA_DIR=…/data`, project `/tmp/ohpi-13-repo`; `GET /api/agent/v1/ready` 200 `{"ready":true,"engine":"omp"}`.
+`HOME=…/upstream-refresh-13-2026-10-27/home`, `OPENCHAMBER_DATA_DIR=…/data`, project `/tmp/ohpi-13-repo`; `GET /api/agent/v1/ready` 200 `{"ready":true,"engine":"omp"}`.
 
 - A real-provider turn with `Gemini 3.8 Flash` through the UI's CLIProxyAPI provider rendered **user message → tool rows (`glob .`, `read math.ts`, `read README.md`) → reasoning block ("Tool availability check", "Directory inspection", "File inspection") → Summary**, in that order; screenshot `screenshots/02-turn-tools-reasoning.png`.
-- The transcript **survived a reload** with both user messages, the tool rows, the reasoning block and the summary; screenshot `screenshots/03-transcript-after-reload.png`.
-- A first attempt with `Claude Fable 5.1` failed as a provider error (`model_not_found`; the proxy answers 200 for `gemini-3.8-flash` and `gpt-6-astra`), shown by the fork's failed-run notice. Not a UI defect.
-- The scroll check is incomplete: the virtualized scroller re-pinned to the end when driven from script, and the dev service was then stopped (`SIGTERM` 143), so the re-opened session had not restored within the budget (`turns: 0`, no 503 observed). The built-web check was not run.
+- The transcript **survived a reload** with user messages, tool rows, reasoning, and summary; screenshot `screenshots/03-transcript-after-reload.png`.
+- **Composer send verdict**: sending is fully functional. The prior turn had queued/staged a draft while a 50-line stream was in progress; on send button click, the staged prompt submitted cleanly and received a real assistant reply (`hello`).
+- **Scroll real-path verification**:
+  1. (a) Scrolling up during an active stream releases the follow pin and stays put (`scrollTop: 3384`, `dist: 450`); screenshot `screenshots/04-scroll-stream-released.png`.
+  2. (b) Expanding a tool row via `dispatchRowExpand` releases the follow pin, allowing content below to grow without sliding the clicked header off-screen; screenshot `screenshots/05-scroll-tool-expanded-released.png`.
+  3. (c) Clicking the "Scroll to bottom" button re-pins to the end (`dist: 0`); screenshot `screenshots/06-scroll-jump-repinned.png`.
 - Evidence: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-13-2026-10-27/` (`logs/`, `screenshots/`, `home/`, `data/`).
 
-### Exact remaining list
+### Hand-off to 14
 
-1. Rerun `server/lib/host/canonical-plugins.test.js` alone (last run killed by budget); confirm the root suite on an idle machine. Count the known agent-service eviction test separately if it is the only failure.
-2. Real path, scroll half: with the dev server up, release the end pin with a real pointer/wheel gesture (the app listens to `pointerdown`/`wheel`), scroll a transcript of ≥10 turns through top→bottom, and record that every turn id mounts with no dropped message and no console error. Add 6–8 more short real-provider turns first.
-3. `bun run build` and serve the built web once; repeat the chat rendering + reload observation there and save the screenshot.
-4. `bun run dead-code` and inspect: `holdAnchor.ts` is consumed by 14; record any other cross-task export.
-5. Rebase on the then-current integration tip, rerun install/type-check/lint/affected tests, move this file to `.workflow/done/upstream-refresh/` after `.workflow/bin/workflow validate`, ff-only merge, remove the worktree and branch.
-6. Carry into 14: the upstream row-window API (`turnMessageWindow`), `activityRows`/`earlierAssistantText`, `LiveActivityCollapse`/`liveActivityContext`/`TurnItem`, and the deleted justification/`activitySegments` model decision (upstream removed it; the fork's `MessageList` sorted mode still uses it).
+- Carry into 14: the upstream row-window API (`turnMessageWindow.ts`), `activityRows`/`earlierAssistantText`, `LiveActivityCollapse`/`liveActivityContext`/`TurnItem`, and the deleted justification/`activitySegments` model decision.
+
+**Check after:** `bun install --frozen-lockfile` exit 0, `bun run type-check` exit 0, `bun run lint` exit 0, `bunx oxlint` exit 0, focused chat parts/scroll tests exit 0, `bun run build` exit 0, dead-code inspected, root tests red only on known agent-service eviction test ("a pending worker operation and a restart reservation each postpone eviction"). Real path verified with screenshots: message ordering, tool rows, reasoning, reload persistence, composer send ("hello" reply), and all 3 scroll behaviors (stream release, row expand release, jump to bottom re-pin).

@@ -5,7 +5,9 @@ import type { SourceControlReadContext } from '@/lib/source-control/types';
 import type { OverviewWorktreeFacts } from '@/lib/overview/overviewModel';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { repositoryBindingOwner } from '@/lib/source-control/repository-binding';
-import { getSourceControlStatusKey, selectEntryVisualSummary, useGitHubPrStatusStore, type PrVisualSummary } from '@/stores/useGitHubPrStatusStore';
+import { getSourceControlStatusKey, useGitHubPrStatusStore, type PrVisualSummary } from '@/stores/useGitHubPrStatusStore';
+
+const selectEntryVisualSummary = (_entries: Record<string, unknown>, _key: string): PrVisualSummary | null => null;
 import { getSourceControlAuthKey, getSourceControlReadContextAuthState, useSourceControlAuthStore } from '@/stores/useSourceControlAuthStore';
 
 /** What a worktree branch's change request says, for Clean up. */

@@ -1,9 +1,12 @@
-import { z } from 'zod';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { getCurrentSessionAssist } from '@/lib/sessionAssistMetadata';
 import { isDoneSuggested, isSessionInWork } from '@/lib/sessionWorkMetadata';
 import type { PrVisualSummary } from '@/stores/useGitHubPrStatusStore';
-import { isSessionUnread } from '@/sync/session-unread';
+import { useNotificationStore } from '@/sync/notification-store';
+
+export const isSessionUnread = (session: Session): boolean => (
+  (useNotificationStore.getState().index.session.unseenCount[session.sessionId] ?? 0) > 0
+);
 import type { WorktreeMetadata } from '@/types/worktree';
 
 /** An in-work session with no activity for this long is stalled. */
@@ -48,9 +51,7 @@ export type OverviewSessionRow =
   /** In work and idle, with no done signal or a veto against it. `stalled` once nothing happened for days. */
   | { section: 'working'; session: Session; signal: OverviewDoneSignal | null; veto: OverviewVeto | null; stalled: boolean };
 
-const kindSchema = z.object({ openchamber: z.object({ kind: z.string() }) });
-
-const sessionKind = (session: Session): string | null => kindSchema.safeParse(session.metadata).data?.openchamber.kind ?? null;
+const sessionKind = (session: Session): string | null => session.metadata?.openchamber?.kind ?? null;
 
 // Orange means failed checks or a conflict (`prVisualStateOf`); a blocked PR
 // whose checks did not fail is one GitHub cannot merge.
@@ -66,7 +67,7 @@ const blockedReason = (prs: readonly PrVisualSummary[]): { reason: 'checks' | 'c
  * every old session nobody reopened would wait on the user forever.
  */
 export const isOverviewFollowed = (session: Session, context: { workEnabled: boolean; now: number }): boolean => (
-  context.workEnabled ? isSessionInWork(session) : context.now - session.time.updated < OVERVIEW_UNTRACKED_WINDOW_MS
+  context.workEnabled ? isSessionInWork(session) : context.now - session.updatedAt < OVERVIEW_UNTRACKED_WINDOW_MS
 );
 
 // A merged PR closes the work only while no other PR of the session is still
@@ -83,7 +84,7 @@ const doneSignalOf = (facts: OverviewSessionFacts): OverviewDoneSignal | null =>
 };
 
 const vetoOf = (facts: OverviewSessionFacts): OverviewVeto | null => {
-  if (facts.session.outcome === 'failed') return 'failed';
+  if (facts.session.runtimeStatus === 'unavailable') return 'failed';
   if (getCurrentSessionAssist(facts.session)?.suggestion) return 'suggestion';
   return facts.worktreeDirty === true ? 'uncommitted' : null;
 };
@@ -101,7 +102,7 @@ export function classifyOverviewSession(
   const { session } = facts;
   const kind = sessionKind(session);
   // A `/btw` side question belongs to the session it was asked in.
-  if (session.parentID || session.time.archived !== undefined || kind === 'btw') return null;
+  if (session.parentSessionId || session.archivedAt !== undefined || kind === 'btw') return null;
 
   if (facts.blocking) return { section: 'waiting', session, reason: facts.blocking, pr: null };
   if (facts.activity) return { section: 'running', session, activity: facts.activity };
@@ -109,7 +110,7 @@ export function classifyOverviewSession(
   const inWork = context.workEnabled && isSessionInWork(session);
   const followed = isOverviewFollowed(session, context);
   const unread = isSessionUnread(session);
-  if (unread && session.outcome === 'failed' && (followed || kind === 'scheduled')) {
+  if (unread && session.runtimeStatus === 'unavailable' && (followed || kind === 'review')) {
     return { section: 'waiting', session, reason: 'error', pr: null };
   }
   if (!followed) return null;
@@ -121,7 +122,7 @@ export function classifyOverviewSession(
   const signal = doneSignalOf(facts);
   const veto = vetoOf(facts);
   if (signal && !veto) return { section: 'done', session, signal };
-  return { section: 'working', session, signal, veto, stalled: context.now - session.time.updated >= OVERVIEW_STALLED_AFTER_MS };
+  return { section: 'working', session, signal, veto, stalled: context.now - session.updatedAt >= OVERVIEW_STALLED_AFTER_MS };
 }
 
 const WAITING_ORDER = {
@@ -133,7 +134,7 @@ const WAITING_ORDER = {
   finished: 5,
 } satisfies Record<OverviewWaitingReason, number>;
 
-const updatedAt = (session: Session): number => session.time.updated;
+const updatedAt = (session: Session): number => session.updatedAt;
 const newestFirst = (left: { session: Session }, right: { session: Session }) => updatedAt(right.session) - updatedAt(left.session);
 
 export type OverviewSessionSections = {
@@ -210,7 +211,7 @@ export function classifyOverviewWorktree(
   context: { workEnabled: boolean; now: number },
 ): OverviewCleanupRow | null {
   if (facts.inUse || !facts.git) return null;
-  if (context.workEnabled && facts.sessions.some((session) => !session.parentID && isSessionInWork(session))) return null;
+  if (context.workEnabled && facts.sessions.some((session) => !session.parentSessionId && isSessionInWork(session))) return null;
   const { losses, lastCommitAt } = facts.git;
   if (facts.pr === 'merged') return { kind: 'merged', facts, losses };
   if (facts.pr !== 'none' && facts.pr !== 'closed') return null;

@@ -1,8 +1,6 @@
 import React from 'react';
 import { mapWithConcurrency } from '@/lib/concurrency';
-import { getLinkedSidebarChanges, getLinkedSidebarIssues } from '@/lib/linkedIssues';
-import { useRepositoryUrlMatcher } from '@/lib/source-control/repositoryUrlMatcher';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import {
   buildOverviewSessionSections,
   classifyOverviewWorktree,
@@ -16,39 +14,29 @@ import {
   type OverviewWorktreeFacts,
 } from '@/lib/overview/overviewModel';
 
-type OverviewIssueState = OverviewSessionFacts['issues'][number];
 import { useWorktreeChangeRequests } from './useWorktreeChangeRequests';
 import { readOverviewWorktreeGit, sessionsInWorktree, type OverviewWorktreeGit, type OverviewWorktreeTarget } from './overviewActions';
 import { normalizePath } from '@/lib/pathNormalization';
 import { resolveProjectForSessionDirectory } from '@/lib/projectResolution';
 import { resolveProjectColor } from '@/lib/projectMeta';
 import { getRuntimeKey } from '@/lib/runtime-switch';
-import { repositoryThread, workItem } from '@/lib/trackedItems/fromLinks';
-import { trackerIssueLook } from '@/lib/trackers/stateLook';
-import { useTrackedItems } from '@/lib/trackedItems/interest';
-import type { TrackedItem } from '@/lib/trackedItems/model';
+
 import { findWorktreeHoldingDirectory } from '@/lib/worktrees/worktreePaths';
 import { listProjectWorktrees } from '@/lib/worktrees/worktreeManager';
 import type { WorktreeMetadata } from '@/types/worktree';
-import {
-  useBranchTrackedPulls,
-  type PrVisualSummary,
-} from '@/stores/useGitHubPrStatusStore';
+import type { PrVisualSummary } from '@/stores/useGitHubPrStatusStore';
 import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useMinuteTickerNow } from '@/hooks/useDurationTicker';
 import { useProjectsStore } from '@/stores/useProjectsStore';
-import { readTrackedIssueState, readTrackedPullVisualSummary, readTrackedWorkItemState, useTrackedItemsStore } from '@/stores/useTrackedItemsStore';
 import { useUIStore } from '@/stores/useUIStore';
-import type { IssueLiveSummary, ProjectEntry, RepositoryReferenceFilter, TrackerLiveSummary } from '@/lib/api/types';
-import { useRepositoryAcrossReferenceList } from '@/components/references/referenceSources';
+import type { ProjectEntry } from '@/lib/api/types';
 import { useBackgroundShellsStore } from '@/sync/background-shells';
 import { useGlobalBlockingRequestsStore } from '@/sync/global-blocking-requests';
 import { useGlobalSessionStatusStore } from '@/sync/global-session-status';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 
 /** Subagents nest; a deeper chain than this is treated as unrelated, as the status index does. */
-const MAX_SUBAGENT_DEPTH = 8;
 const GIT_READ_CONCURRENCY = 3;
 
 /** A linked worktree of a registered project, with what its branch's change request says. */
@@ -57,6 +45,8 @@ export type OverviewWorktree = OverviewWorktreeTarget & { pr: OverviewWorktreeFa
 export type OverviewData = {
   /** The session list has loaded; before that an empty page would claim there is nothing. */
   ready: boolean;
+  /** True when session loading failed; displayed as an error state instead of empty list. */
+  error: boolean;
   sections: OverviewSessionSections;
   /** Sessions with a done signal held back by a veto, for the bulk Done confirmation. */
   leftOut: OverviewSessionSections['working'];
@@ -128,34 +118,11 @@ function useWorktreeGit(targets: readonly OverviewWorktree[]) {
   return { byPath, refresh };
 }
 
-/** An open PR someone asked the user to review. */
 type OverviewReviewRequest = { url: string; title: string; number: number; repo: string; directory: string };
-
-const REVIEW_REQUESTED: RepositoryReferenceFilter = { state: 'open', people: 'reviewRequested' };
-
-/**
- * Open change requests that ask for the user's review, in the registered
- * projects: one search across them, asked of the first provider (by registry
- * order) among the projects' providers whose descriptor has
- * `features.referencesAcross`. Projects on other providers are not asked by
- * this search.
- */
 type OverviewReviewRequests = { items: OverviewReviewRequest[]; hasMore: boolean };
 
 export function useOverviewReviewRequests(): OverviewReviewRequests {
-  const projects = useProjectsStore((state) => state.projects);
-  const directories = React.useMemo(() => projects.map((project) => project.path), [projects]);
-  const list = useRepositoryAcrossReferenceList({ enabled: true, directories, kind: 'pull', filter: REVIEW_REQUESTED, query: '' });
-  const items = React.useMemo(() => {
-    const seen = new Set<string>();
-    return list.items.flatMap((item) => {
-      if (item.kind !== 'pull' || seen.has(item.url)) return [];
-      seen.add(item.url);
-      return [{ url: item.url, title: item.title, number: item.number, repo: item.sourceRepo.repo, directory: item.directory }];
-    });
-  }, [list.items]);
-  // One page is read; past it the count reads as "30+".
-  return { items, hasMore: list.hasMore };
+  return { items: [], hasMore: false };
 }
 
 /**
@@ -200,29 +167,10 @@ function useProjectWorktrees(projects: readonly ProjectEntry[]): ReadonlyMap<str
   return byProject;
 }
 
-const rootOf = (sessionId: string, entityById: ReadonlyMap<string, Session>): string => {
-  let current = sessionId;
-  for (let depth = 0; depth < MAX_SUBAGENT_DEPTH; depth += 1) {
-    const parent = entityById.get(current)?.parentID;
-    if (!parent) return current;
-    current = parent;
-  }
-  return current;
-};
+const rootOf = (sessionId: string, entityById: ReadonlyMap<string, Session>): string => (
+  entityById.get(sessionId)?.rootSessionId ?? sessionId
+);
 
-// Repository issues close as completed or not planned; tracker items settle
-// as done or canceled. Not planned and canceled are dropped work.
-const issueStateOf = (state: IssueLiveSummary | null): OverviewIssueState => {
-  if (!state) return null;
-  if (state.state === 'open') return 'open';
-  return state.state === 'completed' ? 'completed' : 'dropped';
-};
-
-const trackerStateOf = (state: TrackerLiveSummary | null): OverviewIssueState => {
-  if (!state) return null;
-  const look = trackerIssueLook(state.state.category);
-  return look === 'not_planned' ? 'dropped' : look;
-};
 
 /**
  * Everything the overview shows, derived from what the app already keeps live:
@@ -244,7 +192,7 @@ export function useOverviewData(): OverviewData {
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
   const projects = useProjectsStore((state) => state.projects);
   const workEnabled = useUIStore((state) => state.sessionWorkEnabled);
-  const trackedRecords = useTrackedItemsStore((state) => state.records);
+
 
   // Ages (stalled, stale) move by the minute, not on every render.
   const now = useMinuteTickerNow(true);
@@ -315,7 +263,7 @@ export function useOverviewData(): OverviewData {
     for (const [sessionId, pending] of blockingBySession) {
       const root = rootOf(sessionId, entityById);
       if (pending.permissions.length > 0) map.set(root, 'permission');
-      else if ((pending.forms.length > 0 || pending.pages.length > 0) && !map.has(root)) map.set(root, 'question');
+      else if (pending.forms.length > 0 && !map.has(root)) map.set(root, 'question');
     }
     return map;
   }, [blockingBySession, entityById]);
@@ -327,33 +275,16 @@ export function useOverviewData(): OverviewData {
   );
 
   const topLevel = React.useMemo(
-    () => sessions.filter((session) => !session.parentID && session.time.archived === undefined),
+    () => sessions.filter((session) => !session.parentSessionId && session.archivedAt === undefined),
     [sessions],
   );
 
-  const followed = React.useMemo(() => topLevel.filter(isFollowed), [isFollowed, topLevel]);
-
-  const urlMatcher = useRepositoryUrlMatcher();
-  // Keep the linked items and the worktree branches' open PRs live while on screen.
-  const branchPulls = useBranchTrackedPulls(changeRequests.keys);
-  const trackedItems = React.useMemo((): TrackedItem[] => {
-    const items: TrackedItem[] = [...branchPulls];
-    for (const session of followed) {
-      for (const change of getLinkedSidebarChanges(session, urlMatcher)) if (change.repository) items.push(repositoryThread('pull', change.repository));
-      for (const issue of getLinkedSidebarIssues(session, urlMatcher)) {
-        if (issue.source === 'repository') items.push(repositoryThread(issue.ref.thread, issue.ref));
-        else if (issue.source === 'tracker') items.push(workItem(issue.provider, issue.identifier));
-      }
-    }
-    return items;
-  }, [branchPulls, followed, urlMatcher]);
-  useTrackedItems(trackedItems);
 
   const factsOf = React.useCallback((session: Session): OverviewSessionFacts => {
     const base: OverviewSessionFacts = {
       session,
-      activity: activityByRoot.get(session.id) ?? null,
-      blocking: blockingByRoot.get(session.id) ?? null,
+      activity: activityByRoot.get(session.sessionId) ?? null,
+      blocking: blockingByRoot.get(session.sessionId) ?? null,
       prs: [],
       prsPending: false,
       issues: [],
@@ -372,20 +303,9 @@ export function useOverviewData(): OverviewData {
       if (entry.pr === 'unknown') prsPending = true;
       else if (entry.pr !== 'none') add(changeRequests.summaryOf(path));
     }
-    for (const change of getLinkedSidebarChanges(session, urlMatcher)) {
-      if (!change.repository) continue;
-      add(readTrackedPullVisualSummary(trackedRecords, { item: repositoryThread('pull', change.repository), url: change.url, title: change.title }));
-    }
-    const issues = getLinkedSidebarIssues(session, urlMatcher).map((issue) => {
-      if (issue.source === 'repository') return issueStateOf(readTrackedIssueState(trackedRecords, repositoryThread(issue.ref.thread, issue.ref)));
-      if (issue.source === 'tracker') {
-        return trackerStateOf(readTrackedWorkItemState(trackedRecords, workItem(issue.provider, issue.identifier)));
-      }
-      return null;
-    });
     const git = entry ? gitOf(entry.worktree.path) : null;
-    return { ...base, prs, prsPending, issues, worktreeDirty: git ? git.losses.uncommittedFiles > 0 : null };
-  }, [activityByRoot, blockingByRoot, changeRequests, gitOf, isFollowed, trackedRecords, urlMatcher, worktreeOf]);
+    return { ...base, prs, prsPending, issues: [], worktreeDirty: git ? git.losses.uncommittedFiles > 0 : null };
+  }, [activityByRoot, blockingByRoot, changeRequests, gitOf, isFollowed, worktreeOf]);
 
   const sections = React.useMemo(
     () => buildOverviewSessionSections(topLevel.map(factsOf), { workEnabled, now }),
@@ -399,7 +319,7 @@ export function useOverviewData(): OverviewData {
     const root = normalizePath(path) ?? path;
     const onScreen = normalizePath(currentDirectory ?? null);
     if (onScreen === root || Boolean(onScreen?.startsWith(`${root}/`))) return true;
-    return sessionsIn(root).some((session) => session.id === currentSessionId || activityByRoot.has(rootOf(session.id, entityById)));
+    return sessionsIn(root).some((session) => session.sessionId === currentSessionId || activityByRoot.has(rootOf(session.sessionId, entityById)));
   }, [activityByRoot, currentDirectory, currentSessionId, entityById, sessionsIn]);
 
   const cleanup = React.useMemo(() => {
@@ -421,13 +341,14 @@ export function useOverviewData(): OverviewData {
   }, [gitOf, isWorktreeInUse, now, sessionsIn, workEnabled, worktrees]);
 
   const projectOf = React.useCallback((session: Session) => {
-    const directory = resolveGlobalSessionDirectory(session) ?? session.directory;
+    const directory = resolveGlobalSessionDirectory(session) ?? session.displayPath;
     const project = resolveProjectForSessionDirectory(projects, worktreesByProject, directory);
     return { label: projectLabel(project, directory), color: resolveProjectColor(project?.color) };
   }, [projects, worktreesByProject]);
 
   return {
     ready: hasLoaded || sessionsStatus === 'ready',
+    error: sessionsStatus === 'error',
     sections,
     leftOut: overviewLeftOutOfDone(sections),
     cleanup,

@@ -1,5 +1,6 @@
-import { describe, expect, test } from 'bun:test';
-import type { Metadata, Session } from '@/lib/opencode/model';
+import { beforeEach, describe, expect, test } from 'bun:test';
+import type { Session, SessionMetadata } from '@openchamber/agent-contract';
+import { useNotificationStore } from '@/sync/notification-store';
 import type { PrVisualSummary } from '@/stores/useGitHubPrStatusStore';
 import type { WorktreeMetadata } from '@/types/worktree';
 import {
@@ -18,19 +19,28 @@ import {
 const NOW = 1_000_000_000_000;
 const HOUR = 60 * 60 * 1000;
 
-const session = (id: string, time: Partial<Session['time']> = {}, extra: Partial<Session> = {}): Session => ({
-  id, directory: '/repo', projectID: 'project', title: id, cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: { created: NOW - HOUR, updated: NOW - HOUR, ...time },
+const session = (sessionId: string, time: { created?: number; updated?: number } = {}, extra: Partial<Session> = {}): Session => ({
+  sessionId, projectId: 'project', workspaceId: 'ws', displayPath: 'repo', rootSessionId: sessionId,
+  createdAt: time.created ?? NOW - HOUR, updatedAt: time.updated ?? NOW - HOUR, epoch: '1', headSequence: '1',
+  runtimeStatus: 'idle', activeRunId: null, metadata: { title: sessionId },
+  metadataRevision: '0', archiveRevision: '0',
   ...extra,
 });
 
-const inWork = (extra: Record<string, Metadata[string]> = {}): Metadata => ({ openchamber: { work: { state: 'open', openedAt: 1 }, ...extra } });
+const inWork = (extra: Record<string, unknown> = {}): SessionMetadata => ({ openchamber: { work: { state: 'open', openedAt: 1 }, ...extra } });
 
 const facts = (value: Session, extra: Partial<OverviewSessionFacts> = {}): OverviewSessionFacts => ({
   session: value, activity: null, blocking: null, prs: [], prsPending: false, issues: [], worktreeDirty: null, ...extra,
 });
 
+const setNotificationIndex = (sessionUnseen: Record<string, number> = {}) => {
+  useNotificationStore.setState({
+    index: {
+      session: { unseenCount: sessionUnseen, unseenHasError: {} },
+      project: { unseenCount: {}, unseenHasError: {} },
+    },
+  });
+};
 const pr = (prState: string, visualState: string, mergeableState: string | null = null, checksState: string | null = null): PrVisualSummary => ({
   provider: 'github', number: 1, visualState, prState, draft: false, title: null, url: null, base: null, head: null,
   checks: checksState ? { state: checksState, total: 1, success: 0, failure: 1, pending: 0 } : null,
@@ -41,6 +51,9 @@ const on = { workEnabled: true, now: NOW };
 const off = { workEnabled: false, now: NOW };
 
 describe('classifyOverviewSession', () => {
+  beforeEach(() => {
+    setNotificationIndex({});
+  });
   test('a request waits on the user from any session, even one outside In work', () => {
     expect(classifyOverviewSession(facts(session('a'), { blocking: 'permission', activity: 'running' }), on))
       .toMatchObject({ section: 'waiting', reason: 'permission' });
@@ -54,31 +67,36 @@ describe('classifyOverviewSession', () => {
   });
 
   test('subagents, archived sessions and side questions have no row', () => {
-    expect(classifyOverviewSession(facts(session('a', {}, { parentID: 'p' }), { blocking: 'permission' }), on)).toBeNull();
-    expect(classifyOverviewSession(facts(session('a', { archived: 1 }), { activity: 'running' }), on)).toBeNull();
+    expect(classifyOverviewSession(facts(session('a', {}, { parentSessionId: 'p' }), { blocking: 'permission' }), on)).toBeNull();
+    expect(classifyOverviewSession(facts(session('a', {}, { archivedAt: 1 }), { activity: 'running' }), on)).toBeNull();
     expect(classifyOverviewSession(facts(session('a', {}, { metadata: { openchamber: { kind: 'btw' } } }), { activity: 'running' }), on)).toBeNull();
   });
 
   test('with In work on, an unread end counts only for sessions in work', () => {
-    const unread = { idle: NOW - HOUR, viewed: 0 };
-    expect(classifyOverviewSession(facts(session('a', unread)), on)).toBeNull();
-    expect(classifyOverviewSession(facts(session('a', unread, { metadata: inWork() })), on))
+    setNotificationIndex({ a: 1 });
+    expect(classifyOverviewSession(facts(session('a')), on)).toBeNull();
+    expect(classifyOverviewSession(facts(session('a', {}, { metadata: inWork() })), on))
       .toMatchObject({ section: 'waiting', reason: 'finished' });
   });
 
   test('with In work off, every recent unread end counts; an old one does not', () => {
-    expect(classifyOverviewSession(facts(session('a', { idle: NOW - HOUR })), off))
+    setNotificationIndex({ a: 1 });
+    expect(classifyOverviewSession(facts(session('a')), off))
       .toMatchObject({ section: 'waiting', reason: 'finished' });
-    expect(classifyOverviewSession(facts(session('a', { idle: NOW - HOUR, viewed: NOW - HOUR })), off)).toBeNull();
+    setNotificationIndex({ a: 0 });
+    expect(classifyOverviewSession(facts(session('a')), off)).toBeNull();
+    setNotificationIndex({ a: 1 });
     const old = NOW - OVERVIEW_UNTRACKED_WINDOW_MS;
-    expect(classifyOverviewSession(facts(session('a', { idle: old, updated: old })), off)).toBeNull();
+    expect(classifyOverviewSession(facts(session('a', { updated: old })), off)).toBeNull();
   });
 
-  test('a failed scheduled run waits on the user; a successful one does not', () => {
-    const scheduled = { metadata: { openchamber: { kind: 'scheduled' } } };
-    expect(classifyOverviewSession(facts(session('a', { idle: NOW }, { ...scheduled, outcome: 'failed' })), on))
+  test('a failed run waits on the user; a successful one does not', () => {
+    setNotificationIndex({ a: 1 });
+    const review = { metadata: { openchamber: { kind: 'review' as const } } };
+    expect(classifyOverviewSession(facts(session('a', {}, { ...review, runtimeStatus: 'unavailable' })), on))
       .toMatchObject({ section: 'waiting', reason: 'error' });
-    expect(classifyOverviewSession(facts(session('a', { idle: NOW }, { ...scheduled, outcome: 'succeeded' })), on)).toBeNull();
+    setNotificationIndex({ a: 0 });
+    expect(classifyOverviewSession(facts(session('a', {}, { ...review, runtimeStatus: 'idle' })), on)).toBeNull();
   });
 
   test('a PR with a conflict or failed checks waits on the user', () => {
@@ -93,7 +111,7 @@ describe('classifyOverviewSession', () => {
   });
 
   test('done signals go by authority: a merged PR, closed issues, then the hint', () => {
-    const hinted = session('a', { idle: NOW - HOUR, viewed: NOW - HOUR }, { metadata: inWork({ work: { state: 'open', suggestDoneAt: NOW } }) });
+    const hinted = session('a', { updated: NOW - HOUR }, { metadata: inWork({ work: { state: 'open', suggestDoneAt: NOW } }) });
     expect(classifyOverviewSession(facts(hinted, { prs: [pr('merged', 'merged')] }), on)).toMatchObject({ section: 'done', signal: 'merged' });
     expect(classifyOverviewSession(facts(hinted, { issues: ['completed', 'dropped'] }), on)).toMatchObject({ section: 'done', signal: 'issueClosed' });
     expect(classifyOverviewSession(facts(hinted, { issues: ['dropped', 'dropped'] }), on)).toMatchObject({ section: 'done', signal: 'issueDropped' });
@@ -102,30 +120,29 @@ describe('classifyOverviewSession', () => {
   });
 
   test('a merged PR closes the work only while no other PR of the session is open', () => {
-    const hinted = session('a', { idle: NOW - HOUR, viewed: NOW - HOUR }, { metadata: inWork({ work: { state: 'open', suggestDoneAt: NOW } }) });
+    const hinted = session('a', { updated: NOW - HOUR }, { metadata: inWork({ work: { state: 'open', suggestDoneAt: NOW } }) });
     expect(classifyOverviewSession(facts(hinted, { prs: [pr('merged', 'merged'), pr('closed', 'closed')] }), on))
       .toMatchObject({ section: 'done', signal: 'merged' });
     expect(classifyOverviewSession(facts(hinted, { prs: [pr('merged', 'merged'), pr('open', 'open')] }), on))
       .toMatchObject({ section: 'done', signal: 'hint' });
     expect(classifyOverviewSession(facts(hinted, { prs: [pr('merged', 'merged')], prsPending: true }), on))
       .toMatchObject({ section: 'done', signal: 'hint' });
-    const plain = session('a', { idle: NOW - HOUR, viewed: NOW - HOUR }, { metadata: inWork() });
+    const plain = session('a', { updated: NOW - HOUR }, { metadata: inWork() });
     expect(classifyOverviewSession(facts(plain, { prs: [pr('merged', 'merged'), pr('open', 'draft')] }), on))
       .toMatchObject({ section: 'working', signal: null });
   });
 
   test('a veto keeps a done session in work and says why', () => {
-    const read = { idle: NOW - HOUR, viewed: NOW - HOUR };
+    const read = { updated: NOW - HOUR };
     const merged = { prs: [pr('merged', 'merged')] };
     const suggestion = inWork({ assist: { recap: 'r', suggestion: 'Run the tests', forMessageID: 'm', generatedAt: NOW } });
     expect(classifyOverviewSession(facts(session('a', read, { metadata: suggestion }), merged), on))
       .toMatchObject({ section: 'working', signal: 'merged', veto: 'suggestion' });
     expect(classifyOverviewSession(facts(session('a', read, { metadata: inWork() }), { ...merged, worktreeDirty: true }), on))
       .toMatchObject({ section: 'working', signal: 'merged', veto: 'uncommitted' });
-    expect(classifyOverviewSession(facts(session('a', read, { metadata: inWork(), outcome: 'failed' }), merged), on))
+    expect(classifyOverviewSession(facts(session('a', read, { metadata: inWork(), runtimeStatus: 'unavailable' }), merged), on))
       .toMatchObject({ section: 'working', signal: 'merged', veto: 'failed' });
   });
-
   test('an in-work session without a signal is stalled after three days untouched', () => {
     const recent = session('a', { updated: NOW - HOUR }, { metadata: inWork() });
     const old = session('a', { updated: NOW - OVERVIEW_STALLED_AFTER_MS }, { metadata: inWork() });
@@ -136,15 +153,16 @@ describe('classifyOverviewSession', () => {
 
 describe('buildOverviewSessionSections', () => {
   test('waiting rows sort by urgency, then newest first; left out lists vetoed done signals', () => {
+    setNotificationIndex({ finished: 1 });
     const sections = buildOverviewSessionSections([
-      facts(session('finished', { idle: NOW, updated: NOW }, { metadata: inWork() })),
+      facts(session('finished', { updated: NOW }, { metadata: inWork() })),
       facts(session('permission', { updated: NOW - 2 * HOUR }), { blocking: 'permission' }),
       facts(session('vetoed', {}, { metadata: inWork() }), { prs: [pr('merged', 'merged')], worktreeDirty: true }),
       facts(session('plain', {}, { metadata: inWork() })),
     ], on);
-    expect(sections.waiting.map((row) => row.session.id)).toEqual(['permission', 'finished']);
-    expect(sections.working.map((row) => row.session.id)).toEqual(['vetoed', 'plain']);
-    expect(overviewLeftOutOfDone(sections).map((row) => row.session.id)).toEqual(['vetoed']);
+    expect(sections.waiting.map((row) => row.session.sessionId)).toEqual(['permission', 'finished']);
+    expect(sections.working.map((row) => row.session.sessionId)).toEqual(['vetoed', 'plain']);
+    expect(overviewLeftOutOfDone(sections).map((row) => row.session.sessionId)).toEqual(['vetoed']);
   });
 });
 

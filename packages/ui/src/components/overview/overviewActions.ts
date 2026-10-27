@@ -1,6 +1,6 @@
 import { getGitLog, getGitStatus } from '@/lib/gitApi';
-import { opencodeClient } from '@/lib/opencode/client';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
+import { useGlobalSessionStatusStore } from '@/sync/global-session-status';
 import { isNothingLost, type OverviewWorktreeLosses } from '@/lib/overview/overviewModel';
 import { normalizePath } from '@/lib/pathNormalization';
 import { isSessionInWork } from '@/lib/sessionWorkMetadata';
@@ -62,7 +62,7 @@ export async function markOverviewSessionsDone(sessions: readonly Session[]): Pr
   const failed: Session[] = [];
   for (const session of sessions) {
     try {
-      await setSessionWorkState(session.id, resolveGlobalSessionDirectory(session) ?? session.directory, 'done');
+      await setSessionWorkState(session.sessionId, resolveGlobalSessionDirectory(session) ?? session.displayPath, 'done');
     } catch {
       failed.push(session);
     }
@@ -82,15 +82,13 @@ export async function readWorktreeUse(path: string): Promise<WorktreeUse> {
   const root = normalizePath(path) ?? path;
   const sessions = sessionsInWorktree(useGlobalSessionsStore.getState().activeSessions, root);
   const currentSessionId = useSessionUIStore.getState().currentSessionId;
-  if (isInside(useDirectoryStore.getState().currentDirectory, root) || sessions.some((session) => session.id === currentSessionId)) return 'inUse';
+  if (isInside(useDirectoryStore.getState().currentDirectory, root) || sessions.some((session) => session.sessionId === currentSessionId)) return 'inUse';
   const shells = useBackgroundShellsStore.getState();
-  if ([...shells.byId.values()].some((shell) => isInside(shell.directory, root)) || sessions.some((session) => shells.sessionIds.has(session.id))) {
+  if ([...shells.byId.values()].some((shell) => isInside(shell.directory, root)) || sessions.some((session) => shells.sessionIds.has(session.sessionId))) {
     return 'busy';
   }
-  // One read of the host's map covers every directory; a session missing from it is idle.
-  const statuses = await opencodeClient.getActiveSessionStatuses(root);
-  if (!statuses) return 'unknown';
-  return sessions.some((session) => session.id in statuses) ? 'busy' : 'free';
+  const activeIds = useGlobalSessionStatusStore.getState().activeSessionIds;
+  return sessions.some((session) => activeIds.has(session.sessionId)) ? 'busy' : 'free';
 }
 
 export type OverviewRemoveOutcome =
@@ -133,9 +131,9 @@ export async function removeOverviewWorktree(input: {
     if (after !== 'free') return { kind: after };
 
     const sessions = sessionsInWorktree(useGlobalSessionsStore.getState().activeSessions, path);
-    await markOverviewSessionsDone(sessions.filter((session) => !session.parentID && isSessionInWork(session)));
+    await markOverviewSessionsDone(sessions.filter((session) => !session.parentSessionId && isSessionInWork(session)));
     if (sessions.length > 0) {
-      const { failedIds } = await archiveSessions(sessions.map((session) => session.id));
+      const { failedIds } = await archiveSessions(sessions.map((session) => session.sessionId));
       if (failedIds.length > 0) throw new Error(`Could not archive ${failedIds.length} session(s)`);
     }
     await removeProjectWorktree(target.project, target.worktree, { deleteLocalBranch: true });

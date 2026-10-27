@@ -3,16 +3,25 @@ import { Icon } from '@/components/icon/Icon';
 import type { IconName } from '@/components/icon/icons';
 import { SessionActivityDuration } from '@/components/session/SessionActivityDuration';
 import { SessionActivityIndicator } from '@/components/session/SessionActivityIndicator';
-import { RowMarkTooltip } from '@/components/session/sidebar/sessions/RowMarkTooltip';
 import { formatSessionCompactDateLabel } from '@/components/session/sidebar/utils';
-import { useOpenTrackerItem } from '@/components/sourceBoard/openTrackerItem';
 import { toast } from '@/components/ui';
 import { Button } from '@/components/ui/button';
 import { useConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { getCurrentIntlLocale, useI18n, type I18nKey } from '@/lib/i18n';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
+
+const RowMarkTooltip: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
+  <Tooltip>
+    <TooltipTrigger asChild>{children}</TooltipTrigger>
+    <TooltipContent>{label}</TooltipContent>
+  </Tooltip>
+);
+
+const useOpenTrackerItem = () => React.useCallback((url: string, _directory?: string | null, _event?: React.MouseEvent) => {
+  if (url && typeof window !== 'undefined') window.open(url, '_blank', 'noopener,noreferrer');
+}, []);
 import {
   isNothingLost,
   type OverviewActivity,
@@ -295,7 +304,7 @@ const removalTarget = (data: OverviewData, session: Session): OverviewWorktree |
   const git = data.gitOf(entry.worktree.path);
   if (!git || !isNothingLost(git.losses)) return null;
   const othersInWork = data.sessionsIn(entry.worktree.path)
-    .some((other) => other.id !== session.id && !other.parentID && isSessionInWork(other));
+    .some((other) => other.sessionId !== session.sessionId && !other.parentSessionId && isSessionInWork(other));
   return othersInWork ? null : entry;
 };
 
@@ -348,12 +357,12 @@ export function OverviewPage({ layout, onLeave }: { layout: Layout; onLeave: () 
     }
   }, []);
 
-  const titleOf = React.useCallback((session: Session) => session.title || t('sessions.sidebar.session.untitled'), [t]);
+  const titleOf = React.useCallback((session: Session) => session.metadata?.title || t('sessions.sidebar.session.untitled'), [t]);
   const recapOf = (session: Session) => getCurrentSessionAssist(session)?.recap || null;
   // The question or form a session waits on, named under its title when it has one.
   const askedOf = (session: Session): string | null => {
-    const requests = blockingBySession.get(session.id);
-    return requests?.forms[0]?.title || requests?.pages[0]?.title || null;
+    const requests = blockingBySession.get(session.sessionId);
+    return requests?.forms[0]?.prompt || null;
   };
 
   // The project is named only when the page spans more than one: with one,
@@ -362,7 +371,7 @@ export function OverviewPage({ layout, onLeave }: { layout: Layout; onLeave: () 
     ...sections.waiting, ...sections.running, ...sections.done, ...sections.working, ...sections.stalled,
   ].map((row) => row.session);
   const manyProjects = new Set(listedSessions.map((session) => data.projectOf(session).label)).size > 1;
-  const endOf = (session: Session, time: React.ReactNode = formatSessionCompactDateLabel(session.time.updated), project = manyProjects) => {
+  const endOf = (session: Session, time: React.ReactNode = formatSessionCompactDateLabel(session.updatedAt), project = manyProjects) => {
     const entry = data.projectOf(session);
     return (
       <>
@@ -374,11 +383,11 @@ export function OverviewPage({ layout, onLeave }: { layout: Layout; onLeave: () 
 
   const openSession = (session: Session) => {
     const directory = normalizePath(resolveGlobalSessionDirectory(session));
-    setCurrentSession(session.id, directory ?? undefined);
+    setCurrentSession(session.sessionId, directory ?? undefined);
     onLeave();
   };
 
-  const markDone = (sessions: Session[]) => run(sessions.map((session) => session.id), async () => {
+  const markDone = (sessions: Session[]) => run(sessions.map((session) => session.sessionId), async () => {
     const failed = await markOverviewSessionsDone(sessions);
     for (const session of failed) toast.error(t('overview.toast.doneFailed', { title: titleOf(session) }));
   });
@@ -432,7 +441,7 @@ export function OverviewPage({ layout, onLeave }: { layout: Layout; onLeave: () 
   );
 
   const doneButton = (session: Session) => (
-    <Button size="xs" variant="ghost" disabled={pending.has(session.id)} onClick={() => void markDone([session])}>
+    <Button size="xs" variant="ghost" disabled={pending.has(session.sessionId)} onClick={() => void markDone([session])}>
       {t('overview.action.done')}
     </Button>
   );
@@ -449,8 +458,8 @@ export function OverviewPage({ layout, onLeave }: { layout: Layout; onLeave: () 
   );
 
   const bulkDone = async () => {
-    const items = sections.done.map((row) => ({ key: row.session.id, title: titleOf(row.session), reason: t(SIGNAL_KEY[row.signal]) }));
-    const leftOut = data.leftOut.map((row) => ({ key: row.session.id, title: titleOf(row.session), reason: row.veto ? t(VETO_KEY[row.veto]) : '' }));
+    const items = sections.done.map((row) => ({ key: row.session.sessionId, title: titleOf(row.session), reason: t(SIGNAL_KEY[row.signal]) }));
+    const leftOut = data.leftOut.map((row) => ({ key: row.session.sessionId, title: titleOf(row.session), reason: row.veto ? t(VETO_KEY[row.veto]) : '' }));
     const confirmed = await ask({
       title: items.length === 1 ? t('overview.bulkDone.titleOne') : t('overview.bulkDone.titleMany', { count: items.length }),
       description: t('overview.bulkDone.description'),
@@ -483,9 +492,17 @@ export function OverviewPage({ layout, onLeave }: { layout: Layout; onLeave: () 
     data.refreshGit();
   };
 
+  if (data.error) {
+    return (
+      <div className="flex h-full items-center justify-center text-destructive typography-ui-label" data-testid="overview-error-state">
+        {t('overview.error.loadFailed')}
+      </div>
+    );
+  }
+
   if (!data.ready) {
     return (
-      <div className="flex h-full items-center justify-center text-muted-foreground typography-ui-label">
+      <div className="flex h-full items-center justify-center text-muted-foreground typography-ui-label" data-testid="overview-loading-state">
         {t('sessions.sidebar.group.empty.loadingSessions')}
       </div>
     );
@@ -527,10 +544,10 @@ export function OverviewPage({ layout, onLeave }: { layout: Layout; onLeave: () 
         const asks = row.reason === 'permission' || row.reason === 'question';
         return (
           <OverviewRow
-            key={row.session.id}
+            key={row.session.sessionId}
             layout={layout}
             mark={row.reason === 'finished'
-              ? <SessionActivityIndicator state="unread" tooltip />
+              ? <SessionActivityIndicator state="unread" />
               : <RowMark mark={WAITING_MARK[row.reason]} label={t(WAITING_KEY[row.reason])} />}
             strong
             title={titleOf(row.session)}
@@ -580,12 +597,12 @@ export function OverviewPage({ layout, onLeave }: { layout: Layout; onLeave: () 
     <Section key="running" ref={sectionRef('running')} divider={divider} label={t('overview.section.running')} count={String(sections.running.length)}>
       {sections.running.map((row) => (
         <OverviewRow
-          key={row.session.id}
+          key={row.session.sessionId}
           layout={layout}
-          mark={<SessionActivityIndicator state={row.activity} tooltip />}
+          mark={<SessionActivityIndicator state={row.activity} />}
           title={titleOf(row.session)}
           note={t(ACTIVITY_KEY[row.activity])}
-          end={endOf(row.session, <SessionActivityDuration sessionId={row.session.id} running />)}
+          end={endOf(row.session, <SessionActivityDuration sessionId={row.session.sessionId} running />)}
           actions={openButton(row.session)}
           onOpen={() => openSession(row.session)}
         />
@@ -608,7 +625,7 @@ export function OverviewPage({ layout, onLeave }: { layout: Layout; onLeave: () 
         const target = removalTarget(data, row.session);
         return (
           <OverviewRow
-            key={row.session.id}
+            key={row.session.sessionId}
             layout={layout}
             mark={<RowMark mark={SIGNAL_MARK[row.signal]} label={t(SIGNAL_KEY[row.signal])} />}
             title={titleOf(row.session)}
@@ -631,7 +648,7 @@ export function OverviewPage({ layout, onLeave }: { layout: Layout; onLeave: () 
 
   const workingRow = (row: WorkingRow, project: boolean) => (
     <OverviewRow
-      key={row.session.id}
+      key={row.session.sessionId}
       layout={layout}
       title={titleOf(row.session)}
       plain

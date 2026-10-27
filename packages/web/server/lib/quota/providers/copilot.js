@@ -3,7 +3,8 @@ import {
   buildResult,
   toUsageWindow,
   toNumber,
-  toTimestamp
+  toTimestamp,
+  formatCredits
 } from '../utils/index.js';
 
 const buildCopilotWindows = (payload) => {
@@ -29,7 +30,7 @@ const buildCopilotWindows = (payload) => {
     }
 
     const entitlement = toNumber(snapshot.entitlement);
-    const remaining = toNumber(snapshot.remaining);
+    const remaining = toNumber(snapshot.quota_remaining) ?? toNumber(snapshot.remaining);
     let usedPercent = entitlement !== null && entitlement > 0 && remaining !== null
       ? Math.min(100, Math.max(0, 100 - (remaining / entitlement) * 100))
       : null;
@@ -39,9 +40,14 @@ const buildCopilotWindows = (payload) => {
         usedPercent = Math.min(100, Math.max(0, 100 - percentRemaining));
       }
     }
-    const valueLabel = entitlement !== null && entitlement > 0 && remaining !== null
-      ? `${remaining.toFixed(0)} / ${entitlement.toFixed(0)} left`
-      : null;
+    const used = entitlement === null || entitlement <= 0
+      ? null
+      : remaining !== null
+        ? Math.max(0, Math.min(entitlement, entitlement - remaining))
+        : null;
+    const valueLabel = used === null
+      ? null
+      : `${formatCredits(used)} / ${formatCredits(entitlement)} used`;
     windows[label] = toUsageWindow({
       usedPercent,
       windowSeconds: null,
@@ -57,7 +63,20 @@ const buildCopilotWindows = (payload) => {
 
 export const providerId = 'github-copilot';
 export const providerName = 'GitHub Copilot';
+const INVALID_COPILOT_ENTERPRISE_URL = 'Invalid GitHub Copilot Enterprise URL';
+const COPILOT_ENTERPRISE_HOST = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i;
 
+export const copilotUserUrl = (enterpriseUrl) => {
+  const host = `${enterpriseUrl ?? ''}`.trim();
+  if (!host) return 'https://api.github.com/copilot_internal/user';
+  const url = new URL(host.includes('://') ? host : `https://${host}`);
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error(INVALID_COPILOT_ENTERPRISE_URL);
+  if (url.username || url.password || url.port || url.pathname !== '/' || url.search || url.hash) {
+    throw new Error(INVALID_COPILOT_ENTERPRISE_URL);
+  }
+  if (!COPILOT_ENTERPRISE_HOST.test(url.hostname)) throw new Error(INVALID_COPILOT_ENTERPRISE_URL);
+  return `https://api.${url.hostname}/copilot_internal/user`;
+};
 
 export const isConfigured = (credential) => Boolean(credentialAccessToken(credential));
 
@@ -75,7 +94,7 @@ export const fetchQuota = async ({ credential } = {}) => {
   }
 
   try {
-    const response = await fetch('https://api.github.com/copilot_internal/user', {
+    const response = await fetch(copilotUserUrl(credential?.enterpriseUrl), {
       method: 'GET',
       headers: {
         Authorization: `token ${accessToken}`,
@@ -131,7 +150,7 @@ export const fetchQuotaAddon = async ({ credential } = {}) => {
   }
 
   try {
-    const response = await fetch('https://api.github.com/copilot_internal/user', {
+    const response = await fetch(copilotUserUrl(credential?.enterpriseUrl), {
       method: 'GET',
       headers: {
         Authorization: `token ${accessToken}`,

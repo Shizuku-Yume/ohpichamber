@@ -35,7 +35,7 @@ describe('GitHub Copilot quota provider', () => {
     expect(result.ok).toBe(true);
     expect(Object.keys(result.usage.windows)).toEqual(['premium_interactions']);
     expect(result.usage.windows.premium_interactions.usedPercent).toBe(25);
-    expect(result.usage.windows.premium_interactions.valueLabel).toBe('225 / 300 left');
+    expect(result.usage.windows.premium_interactions.valueLabel).toBe('75 / 300 used');
   });
 
   it.each([
@@ -72,5 +72,23 @@ describe('GitHub Copilot quota provider', () => {
     expect(result.ok).toBe(true);
     expect(result.usage.windows.premium_interactions.usedPercent).toBeCloseTo(24.5);
     expect(result.usage.windows.premium_interactions.valueLabel ?? null).toBeNull();
+  });
+  it('directs requests to the enterprise host when enterpriseUrl is present', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(mockResponse());
+    vi.stubGlobal('fetch', fetchMock);
+    await fetchQuota({ credential: { ...credential, enterpriseUrl: 'github.my-company.com' } });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.github.my-company.com/copilot_internal/user',
+      expect.any(Object),
+    );
+  });
+
+  it('refuses invalid enterprise URLs before making any request', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const result = await fetchQuota({ credential: { ...credential, enterpriseUrl: 'not a hostname' } });
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe('Invalid GitHub Copilot Enterprise URL');
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

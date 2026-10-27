@@ -1,6 +1,4 @@
-import { settingsLayoutI18n } from './settings-layout.i18n';
-import { projectActionsI18n } from './project-actions.i18n';
-import { overviewI18n } from './overview.i18n';
+import { autocompleteScopeI18n } from './autocomplete-scope.i18n';
 import type { I18nKey } from './en';
 import { settingsDict } from './ko.settings';
 import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
@@ -25,22 +23,11 @@ import { integrationsCatalogI18n } from './integrations-catalog.i18n';
 import { sessionWarmingI18n } from './session-warming.i18n';
 import { workflowsI18n } from './workflows.i18n';
 export const dict: Record<I18nKey, string> = {
-  'terminalView.toast.pasteFailedTouch': '클립보드를 읽을 수 없습니다.',
-  'contextFileOpen.failure.tooLargeSize': '파일이 너무 커서 열 수 없습니다({size} 초과)',
-  'settings.projects.page.actions.closeProject': '프로젝트 닫기',
-  'settings.projects.actions.info': '현재 프로젝트의 작업을 실행하거나 중지합니다.',
-  'settings.projects.team.title': '팀',
-  'settings.projects.team.info': '이 프로젝트의 모든 사용자와 공유되는 설정입니다.',
-  'settings.webSearch.section.providers': '제공자',
-  'settings.webSearch.section.providersInfo': '키를 추가하거나 검색에 사용하려면 제공자를 엽니다.',
-  'desktopHostSwitcher.status.relayLimit': '릴레이 한도 도달',
-  'desktopHostSwitcher.toast.relayLimit': '릴레이가 "{host}" 연결을 거부했습니다: 기기 또는 재연결이 너무 많습니다. 다른 기기에서 OpenChamber를 닫거나 1분 후에 다시 시도하세요.',
-  ...workflowsI18n.ko,
-  ...settingsLayoutI18n.ko,
-  ...projectActionsI18n.ko,
-  ...overviewI18n.ko,
-  ...sessionWarmingI18n['ko'],
+  ...autocompleteScopeI18n['ko'],
   'chat.liveActivity.moreRows': '{count}개 더 보기',
+
+  ...workflowsI18n['ko'],
+  ...sessionWarmingI18n['ko'],
   "startup.legacyNotice.title": "이전 OpenCode 데이터 감지됨",
   "startup.legacyNotice.action": "프로바이더 설정",
   "startup.legacyNotice.dismiss": "닫기",

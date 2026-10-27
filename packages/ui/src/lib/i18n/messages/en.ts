@@ -1,6 +1,4 @@
-import { settingsLayoutI18n } from './settings-layout.i18n';
-import { projectActionsI18n } from './project-actions.i18n';
-import { overviewI18n } from './overview.i18n';
+import { autocompleteScopeI18n } from './autocomplete-scope.i18n';
 import { settingsDict } from './en.settings';
 import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { referencePickerI18n } from './reference-picker.i18n';
@@ -24,14 +22,10 @@ import { workflowsI18n } from './workflows.i18n';
 
 import { sessionWarmingI18n } from './session-warming.i18n';
 export const dict = {
-  'terminalView.toast.pasteFailedTouch': 'Could not read the clipboard.',
-  'contextFileOpen.failure.tooLargeSize': 'File is too large to open (over {size})',
-  ...workflowsI18n.en,
-  ...settingsLayoutI18n.en,
-  ...projectActionsI18n.en,
-  ...overviewI18n.en,
-  ...sessionWarmingI18n['en'],
+  ...autocompleteScopeI18n['en'],
   'chat.liveActivity.moreRows': '+{count} more',
+
+  ...sessionWarmingI18n['en'],
   "startup.legacyNotice.dismiss": "Dismiss",
   "startup.legacyNotice.action": "Configure providers",
   "startup.legacyNotice.descriptionGeneric": "Your previous OpenCode sessions were not imported into OpenChamber. Your existing data remains untouched in your OpenCode data directory. To use your models, sign in to your providers again in Settings.",
@@ -2194,7 +2188,6 @@ export const dict = {
   'helpDialog.item.cycleTheme': 'Cycle Theme (Light → Dark → System)',
   'helpDialog.item.toggleServicesMenu': 'Toggle Services Menu',
   'helpDialog.item.openSettings': 'Open Settings',
-  'helpDialog.item.openProjectActions': 'Open Project Actions',
   'helpDialog.keyCombiner.or': 'or',
   'helpDialog.proTips.commandPalette': 'Use Command Palette ({shortcut}) to quickly access all actions',
   'helpDialog.proTips.recentSessions': 'The 5 most recent sessions appear in the Command Palette',
@@ -3709,10 +3702,6 @@ export const dict = {
   'sessions.scheduledTasks.dialog.toast.alreadyRunning': 'This task already has a run in progress',
   'sessions.scheduledTasks.dialog.toast.alreadyQueued': 'This task is already waiting in the queue and will run when a slot frees up',
   'chat.modelControls.agentFavoriteAdd': 'Add to favorites. With favorites, Tab cycles through them only',
-  'overview.title': 'Overview',
-
-  'desktopHostSwitcher.status.relayLimit': 'Relay limit reached',
-  'desktopHostSwitcher.toast.relayLimit': 'The relay refused the connection to "{host}": too many devices or reconnects. Close OpenChamber on another device or wait a minute, then try again.',
 } as const;
 
 export type I18nKey = keyof typeof dict;

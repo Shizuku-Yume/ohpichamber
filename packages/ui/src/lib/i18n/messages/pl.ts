@@ -1,6 +1,4 @@
-import { settingsLayoutI18n } from './settings-layout.i18n';
-import { projectActionsI18n } from './project-actions.i18n';
-import { overviewI18n } from './overview.i18n';
+import { autocompleteScopeI18n } from './autocomplete-scope.i18n';
 import type { I18nKey } from './en';
 import { settingsDict } from './pl.settings';
 import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
@@ -25,22 +23,11 @@ import { integrationsCatalogI18n } from './integrations-catalog.i18n';
 import { sessionWarmingI18n } from './session-warming.i18n';
 import { workflowsI18n } from './workflows.i18n';
 export const dict: Record<I18nKey, string> = {
-  'terminalView.toast.pasteFailedTouch': 'Nie udało się odczytać schowka.',
-  'contextFileOpen.failure.tooLargeSize': 'Plik jest za duży, aby go otworzyć (ponad {size})',
-  'settings.projects.page.actions.closeProject': 'Zamknij projekt',
-  'settings.projects.actions.info': 'Uruchom lub zatrzymaj akcję bieżącego projektu.',
-  'settings.projects.team.title': 'Zespół',
-  'settings.projects.team.info': 'Ustawienia współdzielone ze wszystkimi w tym projekcie.',
-  'settings.webSearch.section.providers': 'Dostawcy',
-  'settings.webSearch.section.providersInfo': 'Otwórz dostawcę, aby dodać jego klucz lub użyć go do wyszukiwania.',
-  'desktopHostSwitcher.status.relayLimit': 'Osiągnięto limit przekaźnika',
-  'desktopHostSwitcher.toast.relayLimit': 'Przekaźnik odrzucił połączenie z „{host}”: zbyt wiele urządzeń lub ponownych połączeń. Zamknij OpenChamber na innym urządzeniu lub odczekaj minutę i spróbuj ponownie.',
-  ...workflowsI18n.pl,
-  ...settingsLayoutI18n.pl,
-  ...projectActionsI18n.pl,
-  ...overviewI18n.pl,
-  ...sessionWarmingI18n['pl'],
+  ...autocompleteScopeI18n['pl'],
   'chat.liveActivity.moreRows': '+{count} więcej',
+
+  ...workflowsI18n['pl'],
+  ...sessionWarmingI18n['pl'],
   "startup.legacyNotice.title": "Wykryto wcześniejsze dane OpenCode",
   "startup.legacyNotice.descriptionGeneric": "Twoje wcześniejsze sesje OpenCode nie zostały zaimportowane do OpenChamber. Istniejące dane pozostają nienaruszone w katalogu danych OpenCode. Aby korzystać ze swoich modeli, zaloguj się ponownie do dostawców w Ustawieniach.",
   "startup.legacyNotice.action": "Skonfiguruj dostawców",

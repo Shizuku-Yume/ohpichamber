@@ -20,6 +20,10 @@ export const LOCALE_LABEL_KEYS: Record<Locale, 'common.language.english' | 'comm
   tr: 'common.language.turkish',
 };
 
+export function isRightToLeft(element: Element): boolean {
+  return element.closest('[dir="rtl"], [dir="ltr"]')?.getAttribute('dir') === 'rtl';
+}
+
 export const LOCALE_STORAGE_KEY = 'openchamber.i18n.v1';
 
 type StoredLocale = {

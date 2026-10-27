@@ -1,12 +1,12 @@
 /**
  * Which autocomplete a caret position asks for.
  *
- * Three pickers: native commands/templates, inline skills and file/agent mentions.
+ * Four pickers: native commands/templates, inline skills, file/agent mentions, and emoji shortcodes.
  * This module owns the caret trigger rules, not expansion or authorization.
  * The editor reports text and caret position, then renders the selected picker.
  *
  * Exactly one trigger is active: a leading slash command/template invocation,
- * then inline `$skill`, then file/agent mentions. Comment fields expose their
+ * then inline `$skill`, then file/agent mentions, then `:emoji`. Comment fields expose their
  * own leading-slash template picker through matchSnippetTrigger.
  */
 
@@ -14,8 +14,9 @@ import {
     getFileMentionAutocompleteQuery,
     type FileMentionAutocompleteInputSource,
 } from '../../fileMentionAutocompleteState';
+import { matchEmojiTrigger } from '@/lib/emoji/shortcodes';
 
-export type AutocompleteKind = 'command' | 'skill' | 'mention';
+export type AutocompleteKind = 'command' | 'skill' | 'mention' | 'emoji';
 
 export interface AutocompleteTrigger {
     kind: AutocompleteKind;
@@ -80,6 +81,13 @@ function matchInlineToken(
     return { kind, query };
 }
 
+/** Only typing opens it: pasted text that ends in `:word` is not asking for an emoji. */
+function matchEmoji(value: string, cursorPosition: number, context: TriggerContext): AutocompleteTrigger | null {
+    if (context.inputSource === 'paste') return null;
+    const query = matchEmojiTrigger(value, cursorPosition);
+    return query === null ? null : { kind: 'emoji', query };
+}
+
 /**
  * A native `/template` query at the start of a comment field.
  * Argument substitution is owned by the worker, not by this picker.
@@ -102,7 +110,8 @@ export function resolveAutocompleteTrigger(
 
     return matchCommandPalette(value, cursorPosition)
         ?? matchInlineToken(value, cursorPosition, '$', 'skill')
-        ?? matchMention(value, cursorPosition, context);
+        ?? matchMention(value, cursorPosition, context)
+        ?? matchEmoji(value, cursorPosition, context);
 }
 
 function matchMention(

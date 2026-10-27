@@ -32,6 +32,7 @@ const CARET_PLACED_WIDTH: Record<AutocompleteKind, number> = {
     mention: 520,
     command: 450,
     skill: 360,
+    emoji: 360,
 };
 
 /**

@@ -28,7 +28,7 @@ function renderComposer(initialText = '') {
         React.useEffect(() => { messageRef.current = message; }, [message]);
         React.useEffect(() => { identityRef.current = identity; }, [identity]);
         const { restoreDraft } = useComposerDraft({
-            message, messageRef, setMessage, confirmedMentionsRef, identity,
+            message, messageRef, setMessage, confirmedMentionsRef, identity, persistEnabled: true,
             initialDraft: { text: initialText, identity: started },
         });
         result.dictation = useDictationOrigin({

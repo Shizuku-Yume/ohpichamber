@@ -1177,6 +1177,12 @@ export const loadMagicPrompts = async (directory: string | null): Promise<MagicP
   };
 };
 
+/** Backward-compatibility helper for call sites rendering single global magic prompts. */
+export const renderMagicPrompt = async (id: MagicPromptId, variables: Record<string, string> = {}): Promise<string> => {
+  const snapshot = await loadMagicPrompts(null);
+  return snapshot.render(id, variables);
+};
+
 // Global-only calls in the legacy response shape. Settings uses them for its
 // Global scope whether or not a project is selected; they never touch a
 // project file.
@@ -1194,14 +1200,14 @@ export const fetchMagicPromptOverrides = async (): Promise<Record<string, string
   toRecord(await fetchOverrides())
 );
 
-export const saveMagicPromptOverride = (id: MagicPromptId, text: string, runtimeKey: string): Promise<MagicPromptOverridesPayload> => (
+export const saveMagicPromptOverride = (id: MagicPromptId, text: string, runtimeKey: string = getRuntimeKey()): Promise<MagicPromptOverridesPayload> => (
   mutateGlobal(promptPath(id), 'PUT', runtimeKey, 'Failed to save magic prompt', JSON.stringify({ text }))
 );
 
-export const resetMagicPromptOverride = (id: MagicPromptId, runtimeKey: string): Promise<MagicPromptOverridesPayload> => (
+export const resetMagicPromptOverride = (id: MagicPromptId, runtimeKey: string = getRuntimeKey()): Promise<MagicPromptOverridesPayload> => (
   mutateGlobal(promptPath(id), 'DELETE', runtimeKey, 'Failed to reset magic prompt')
 );
 
-export const resetAllMagicPromptOverrides = (runtimeKey: string): Promise<MagicPromptOverridesPayload> => (
+export const resetAllMagicPromptOverrides = (runtimeKey: string = getRuntimeKey()): Promise<MagicPromptOverridesPayload> => (
   mutateGlobal(API_ENDPOINT, 'DELETE', runtimeKey, 'Failed to reset all magic prompts')
 );

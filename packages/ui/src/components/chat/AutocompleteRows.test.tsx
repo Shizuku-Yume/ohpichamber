@@ -2,7 +2,6 @@ import React, { act } from 'react';
 import type { Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
 import { Window } from 'happy-dom';
-import { OpenCode } from '@opencode/client';
 
 import type { CommandAutocompleteHandle } from './CommandAutocomplete';
 
@@ -19,7 +18,6 @@ let restoreFetch: () => void;
 const globals = new Map<string, PropertyDescriptor | undefined>();
 const directory = '/autocomplete-test';
 const draft = 'https://example.com/a/b';
-const sdk = OpenCode.make({ baseUrl: 'http://autocomplete.test', fetch: () => new Promise<Response>(() => undefined) });
 
 beforeEach(async () => {
   dom = new Window({ url: 'http://localhost' });
@@ -64,11 +62,11 @@ beforeEach(async () => {
   useDirectoryStore.setState({ currentDirectory: directory });
   useUIStore.setState({ isMobile: false });
   useCommandsStore.setState({
-    commandsByDirectory: { [directory]: [{ name: 'oc-scroll', description: 'First details', scope: 'project' }] },
+    commandsByDirectory: { [directory]: [{ commandId: 'oc-scroll', name: 'oc-scroll', description: 'First details', content: '', scope: 'workspace', source: 'workspace', editable: true }] },
     loadCommands: async () => true,
   });
   useSkillsStore.setState({
-    skillsByDirectory: { [directory]: [{ id: 'oc-scroll', name: 'oc-scroll', description: 'First details', scope: 'project', source: 'agents', path: `${directory}/skills/oc-scroll/SKILL.md` }] },
+    skillsByDirectory: { [directory]: [{ skillId: 'oc-scroll', name: 'oc-scroll', description: 'First details', scope: 'workspace', readOnly: false, source: 'agents', content: '' }] },
     loadSkills: async () => true,
   });
   selections = [];
@@ -109,7 +107,7 @@ async function mountPicker(kind: 'command' | 'skill') {
     </>;
   }
   await act(async () => root.render(
-    <SyncProvider sdk={sdk} directory=""><I18nProvider><Picker /></I18nProvider></SyncProvider>,
+    <SyncProvider directory=""><I18nProvider><Picker /></I18nProvider></SyncProvider>,
   ));
   const input = host.querySelector('input');
   if (!input) throw new Error('Missing draft');

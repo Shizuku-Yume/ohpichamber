@@ -1,6 +1,4 @@
-import { settingsLayoutI18n } from './settings-layout.i18n';
-import { projectActionsI18n } from './project-actions.i18n';
-import { overviewI18n } from './overview.i18n';
+import { autocompleteScopeI18n } from './autocomplete-scope.i18n';
 import { settingsDict } from './fr.settings';
 import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { referencePickerI18n } from './reference-picker.i18n';
@@ -24,20 +22,8 @@ import { integrationsCatalogI18n } from './integrations-catalog.i18n';
 import { workflowsI18n } from './workflows.i18n';
 import { sessionWarmingI18n } from './session-warming.i18n';
 export const dict = {
-  'terminalView.toast.pasteFailedTouch': 'Impossible de lire le presse-papiers.',
-  'contextFileOpen.failure.tooLargeSize': 'Le fichier est trop volumineux pour être ouvert (plus de {size})',
-  'settings.projects.page.actions.closeProject': 'Fermer le projet',
-  'settings.projects.actions.info': 'Exécuter ou arrêter une action du projet actuel.',
-  'settings.projects.team.title': 'Équipe',
-  'settings.projects.team.info': 'Paramètres partagés avec tout le monde sur ce projet.',
-  'settings.webSearch.section.providers': 'Fournisseurs',
-  'settings.webSearch.section.providersInfo': 'Ouvrez un fournisseur pour ajouter sa clé ou l\'utiliser pour la recherche.',
-  'desktopHostSwitcher.status.relayLimit': 'Limite de relais atteinte',
-  'desktopHostSwitcher.toast.relayLimit': 'Le relais a refusé la connexion à « {host} » : trop d\'appareils ou de reconnexions. Fermez OpenChamber sur un autre appareil ou attendez une minute, puis réessayez.',
-  ...workflowsI18n.fr,
-  ...settingsLayoutI18n.fr,
-  ...projectActionsI18n.fr,
-  ...overviewI18n.fr,
+  ...autocompleteScopeI18n['fr'],
+  ...workflowsI18n['fr'],
   ...sessionWarmingI18n['fr'],
   'chat.liveActivity.moreRows': '+{count} more',
   "startup.legacyNotice.dismiss": "Ignorer",

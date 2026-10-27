@@ -1,6 +1,4 @@
-import { settingsLayoutI18n } from './settings-layout.i18n';
-import { projectActionsI18n } from './project-actions.i18n';
-import { overviewI18n } from './overview.i18n';
+import { autocompleteScopeI18n } from './autocomplete-scope.i18n';
 import { settingsDict } from './nl.settings';
 import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { referencePickerI18n } from './reference-picker.i18n';
@@ -24,20 +22,8 @@ import { integrationsCatalogI18n } from './integrations-catalog.i18n';
 import { workflowsI18n } from './workflows.i18n';
 import { sessionWarmingI18n } from './session-warming.i18n';
 export const dict = {
-  'terminalView.toast.pasteFailedTouch': 'Kan het klembord niet lezen.',
-  'contextFileOpen.failure.tooLargeSize': 'Bestand is te groot om te openen (meer dan {size})',
-  'settings.projects.page.actions.closeProject': 'Project sluiten',
-  'settings.projects.actions.info': 'Voer een actie van het huidige project uit of stop deze.',
-  'settings.projects.team.title': 'Team',
-  'settings.projects.team.info': 'Instellingen gedeeld met iedereen in dit project.',
-  'settings.webSearch.section.providers': 'Providers',
-  'settings.webSearch.section.providersInfo': 'Open een provider om diens sleutel toe te voegen of voor zoekopdrachten te gebruiken.',
-  'desktopHostSwitcher.status.relayLimit': 'Relay-limiet bereikt',
-  'desktopHostSwitcher.toast.relayLimit': 'De relay heeft de verbinding met "{host}" geweigerd: te veel apparaten of herverbindingen. Sluit OpenChamber op een ander apparaat of wacht een minuut en probeer het opnieuw.',
-  ...workflowsI18n.nl,
-  ...settingsLayoutI18n.nl,
-  ...projectActionsI18n.nl,
-  ...overviewI18n.nl,
+  ...autocompleteScopeI18n['nl'],
+  ...workflowsI18n['nl'],
   ...sessionWarmingI18n['nl'],
   'chat.liveActivity.moreRows': '+{count} more',
   "startup.legacyNotice.descriptionGeneric": "Uw eerdere OpenCode-sessies zijn niet geïmporteerd in OpenChamber. Uw bestaande gegevens blijven ongewijzigd bewaard in uw OpenCode-gegevensmap. Meld u in Instellingen opnieuw aan bij uw providers om uw modellen te gebruiken.",

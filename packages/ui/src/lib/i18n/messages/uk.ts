@@ -2385,6 +2385,8 @@ export const dict: Record<I18nKey, string> = {
   "chat.queuedMessage.reorderAria": "Перетягніть, щоб змінити порядок",
   "chat.queuedMessage.toast.queueFailed": "Не вдалося додати повідомлення в чергу. Воно повернулося в поле вводу.",
   "chat.queuedMessage.toast.takeFailed": "Не вдалося завантажити повідомлення з черги. Спробуйте ще раз.",
+  "chat.composer.error.binaryAttachmentNotSupported": "Цей файл є двійковим і не може бути надісланий як текст. Додайте зображення або текстовий файл.",
+  "chat.composer.error.textAttachmentTooLarge": "Це текстове вкладення перевищує обмеження в 5 МБ. Виберіть менший файл.",
   "chat.container.returnToParent.aria": "Повернутися до батьківської сесії",
   "chat.container.returnToParent.titleNamed": "Повернутися до: {title}",
   "chat.container.returnToParent.title": "Повернутися до батьківської сесії",

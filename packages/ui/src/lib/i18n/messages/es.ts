@@ -2385,6 +2385,8 @@ export const dict: Record<I18nKey, string> = {
   "chat.queuedMessage.reorderAria": "Arrastra para reordenar",
   "chat.queuedMessage.toast.queueFailed": "No se pudo poner el mensaje en cola. Vuelve a estar en el editor.",
   "chat.queuedMessage.toast.takeFailed": "No se pudo cargar el mensaje en cola. Inténtalo de nuevo.",
+  "chat.composer.error.binaryAttachmentNotSupported": "Este archivo es binario y no se puede enviar como texto. Adjunte una imagen o un archivo de texto.",
+  "chat.composer.error.textAttachmentTooLarge": "Este archivo adjunto de texto supera el límite de 5 MB. Elija un archivo más pequeño.",
   "chat.container.returnToParent.aria": "Volver a la sesión principal",
   "chat.container.returnToParent.titleNamed": "Volver a: {title}",
   "chat.container.returnToParent.title": "Volver a la sesión principal",

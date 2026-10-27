@@ -1341,10 +1341,34 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const handleSubmitRef = React.useRef<(options?: SubmitOptions) => Promise<void>>(async () => {});
 
     const getSubmitErrorMessage = React.useCallback((error: unknown, fallback: string) => {
-        const message = error instanceof Error ? error.message : '';
-        return message.toLowerCase().includes('runtime changed')
+        let problemStatus: number | undefined;
+        let problemCode: string | undefined;
+        if (error && typeof error === 'object') {
+            if ('problem' in error && error.problem && typeof error.problem === 'object') {
+                if ('status' in error.problem && typeof error.problem.status === 'number') {
+                    problemStatus = error.problem.status;
+                }
+                if ('code' in error.problem && typeof error.problem.code === 'string') {
+                    problemCode = error.problem.code;
+                }
+            }
+            if (problemStatus === undefined && 'status' in error && typeof error.status === 'number') {
+                problemStatus = error.status;
+            }
+            if (problemCode === undefined && 'code' in error && typeof error.code === 'string') {
+                problemCode = error.code;
+            }
+        }
+        const rawMessage = error instanceof Error ? error.message : '';
+        if (problemStatus === 415 || problemCode === 'UNSUPPORTED_MEDIA_TYPE' || rawMessage.toLowerCase().includes('binary')) {
+            return t('chat.composer.error.binaryAttachmentNotSupported');
+        }
+        if (problemStatus === 413 || problemCode === 'PAYLOAD_TOO_LARGE' || rawMessage.includes('5 MB')) {
+            return t('chat.composer.error.textAttachmentTooLarge');
+        }
+        return rawMessage.toLowerCase().includes('runtime changed')
             ? t('chat.chatInput.toast.messageSendFailed')
-            : message || fallback;
+            : rawMessage || fallback;
     }, [t]);
 
     // Add message to queue instead of sending
@@ -1475,7 +1499,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             });
         } catch (error) {
             console.warn('[queue] failed to queue message:', error);
-            toast.error(t('chat.queuedMessage.toast.queueFailed'));
+            toast.error(getSubmitErrorMessage(error, t('chat.queuedMessage.toast.queueFailed')));
             // The composer was cleared on queueing; give everything back. The
             // text is appended if the user has already typed something new.
             const currentInput = composerRef.current?.getValue() ?? messageRef.current;
@@ -2804,11 +2828,23 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         }
 
         const attachedOtherNames: string[] = [];
+        let lastOtherError: string | null = null;
         for (const file of otherFiles) {
             try {
+                if (file.size > 5 * 1024 * 1024) {
+                    lastOtherError = t('chat.composer.error.textAttachmentTooLarge');
+                    continue;
+                }
+                const sample = new Uint8Array(await file.slice(0, 8000).arrayBuffer());
+                if (sample.includes(0)) {
+                    lastOtherError = t('chat.composer.error.binaryAttachmentNotSupported');
+                    continue;
+                }
                 if (await addAttachedFile(file)) {
                     attached = true;
                     attachedOtherNames.push(file.name);
+                } else if (!lastOtherError) {
+                    lastOtherError = t('chat.composer.error.binaryAttachmentNotSupported');
                 }
             } catch (error) {
                 console.error('File attach failed', error);
@@ -2818,7 +2854,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         insertCitation(attachedOtherNames, '');
 
         if (files.length > 0 && !attached) {
-            toast.error(t('chat.chatInput.toast.attachFileFailed'));
+            toast.error(lastOtherError ?? t('chat.chatInput.toast.attachFileFailed'));
         }
     }, [addAttachedFile, insertTextAtSelection, t]);
 
@@ -3365,17 +3401,34 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         const attachmentDraftKey = useInputStore.getState().attachmentDraftKey;
         const list = Array.isArray(files) ? files : Array.from(files);
         let attached = false;
+        let lastError: string | null = null;
 
         for (const file of list) {
             try {
-                attached = (await addAttachedFile(file)) || attached;
+                const isImage = file.type.startsWith('image/');
+                if (!isImage) {
+                    if (file.size > 5 * 1024 * 1024) {
+                        lastError = t('chat.composer.error.textAttachmentTooLarge');
+                        continue;
+                    }
+                    const sample = new Uint8Array(await file.slice(0, 8000).arrayBuffer());
+                    if (sample.includes(0)) {
+                        lastError = t('chat.composer.error.binaryAttachmentNotSupported');
+                        continue;
+                    }
+                }
+                if (await addAttachedFile(file)) {
+                    attached = true;
+                } else if (!isImage && !lastError) {
+                    lastError = t('chat.composer.error.binaryAttachmentNotSupported');
+                }
             } catch (error) {
                 console.error('File attach failed', error);
             }
             if (useInputStore.getState().attachmentDraftKey !== attachmentDraftKey) return;
         }
         if (list.length > 0 && !attached) {
-            toast.error(t('chat.chatInput.toast.attachFileFailed'));
+            toast.error(lastError ?? t('chat.chatInput.toast.attachFileFailed'));
         }
     }, [addAttachedFile, t]);
 

@@ -2412,6 +2412,8 @@ export const dict = {
   'chat.queuedMessage.reorderAria': 'Drag to reorder',
   'chat.queuedMessage.toast.queueFailed': 'Couldn\'t queue the message. It\'s back in the composer.',
   'chat.queuedMessage.toast.takeFailed': 'Couldn\'t load the queued message. Please try again.',
+  'chat.composer.error.binaryAttachmentNotSupported': "This file is binary and can't be sent as text. Attach an image or a text file.",
+  'chat.composer.error.textAttachmentTooLarge': "This text attachment exceeds the 5 MB limit. Choose a smaller file.",
   'chat.container.returnToParent.aria': 'Return to parent session',
   'chat.container.returnToParent.titleNamed': 'Return to: {title}',
   'chat.container.returnToParent.title': 'Return to parent session',

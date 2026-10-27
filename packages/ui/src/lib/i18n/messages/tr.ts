@@ -2280,6 +2280,8 @@ export const dict = {
   'chat.queuedMessage.reorderAria': 'Yeniden sıralamak için sürükle',
   'chat.queuedMessage.toast.queueFailed': 'Mesaj kuyruğa eklenemedi. Yazma alanına geri kondu.',
   'chat.queuedMessage.toast.takeFailed': 'Kuyruktaki mesaj yüklenemedi. Lütfen tekrar deneyin.',
+  'chat.composer.error.binaryAttachmentNotSupported': 'Bu dosya ikilidir ve metin olarak gönderilemez. Bir resim veya metin dosyası ekleyin.',
+  'chat.composer.error.textAttachmentTooLarge': 'Bu metin eki 5 MB sınırını aşıyor. Daha küçük bir dosya seçin.',
   'chat.container.returnToParent.aria': 'Üst session\'a dön',
   'chat.container.returnToParent.titleNamed': 'Şuraya dön: {title}',
   'chat.container.returnToParent.title': 'Üst session\'a dön',

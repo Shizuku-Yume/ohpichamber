@@ -2421,6 +2421,8 @@ export const dict: Record<I18nKey, string> = {
   'chat.queuedMessage.reorderAria': '드래그하여 순서 변경',
   'chat.queuedMessage.toast.queueFailed': '메시지를 대기열에 추가하지 못했습니다. 입력창으로 되돌렸습니다.',
   'chat.queuedMessage.toast.takeFailed': '대기열의 메시지를 불러오지 못했습니다. 다시 시도해 주세요.',
+  'chat.composer.error.binaryAttachmentNotSupported': '이 파일은 바이너리 파일이므로 텍스트로 보낼 수 없습니다. 이미지 또는 텍스트 파일을 첨부해 주세요.',
+  'chat.composer.error.textAttachmentTooLarge': '이 텍스트 첨부 파일은 5MB 제한을 초과합니다. 더 작은 파일을 선택해 주세요.',
   'chat.container.returnToParent.aria': '상위 세션으로 돌아가기',
   'chat.container.returnToParent.titleNamed': '돌아가기: {title}',
   'chat.container.returnToParent.title': '상위 세션으로 돌아가기',

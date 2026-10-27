@@ -2419,6 +2419,8 @@ export const dict = {
   'chat.queuedMessage.reorderAria': 'Sleep om te herschikken',
   'chat.queuedMessage.toast.queueFailed': 'Kan het bericht niet in de wachtrij plaatsen. Het staat weer in het invoerveld.',
   'chat.queuedMessage.toast.takeFailed': 'Kan het bericht uit de wachtrij niet laden. Probeer het opnieuw.',
+  'chat.composer.error.binaryAttachmentNotSupported': 'Dit bestand is binair en kan niet als tekst worden verzonden. Voeg een afbeelding of tekstbestand toe.',
+  'chat.composer.error.textAttachmentTooLarge': 'Deze tekstbijlage overschrijdt de limiet van 5 MB. Kies een kleiner bestand.',
   'chat.container.returnToParent.aria': 'Terug naar bovenliggende sessie',
   'chat.container.returnToParent.titleNamed': 'Terug naar: {title}',
   'chat.container.returnToParent.title': 'Terug naar bovenliggende sessie',

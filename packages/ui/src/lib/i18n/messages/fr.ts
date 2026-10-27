@@ -2126,6 +2126,8 @@ export const dict = {
   'chat.queuedMessage.reorderAria': 'Glisser pour réorganiser',
   'chat.queuedMessage.toast.queueFailed': 'Impossible de mettre le message en file d\'attente. Il est de retour dans l\'éditeur.',
   'chat.queuedMessage.toast.takeFailed': 'Impossible de charger le message en file d\'attente. Veuillez réessayer.',
+  'chat.composer.error.binaryAttachmentNotSupported': "Ce fichier est binaire et ne peut pas être envoyé sous forme de texte. Joignez une image ou un fichier texte.",
+  'chat.composer.error.textAttachmentTooLarge': "Cette pièce jointe textuelle dépasse la limite de 5 Mo. Choisissez un fichier plus petit.",
   'chat.container.returnToParent.aria': 'Retour à la session parente',
   'chat.container.returnToParent.titleNamed': 'Retourner à : {title}',
   'chat.container.returnToParent.title': 'Retour à la session parente',

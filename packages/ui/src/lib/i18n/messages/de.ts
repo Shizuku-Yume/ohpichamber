@@ -2170,6 +2170,8 @@ export const dict = {
   'chat.queuedMessage.reorderAria': 'Ziehen, um neu anzuordnen',
   'chat.queuedMessage.toast.queueFailed': 'Die Nachricht konnte nicht in die Warteschlange gestellt werden. Sie ist wieder im Eingabefeld.',
   'chat.queuedMessage.toast.takeFailed': 'Die Nachricht aus der Warteschlange konnte nicht geladen werden. Bitte erneut versuchen.',
+  'chat.composer.error.binaryAttachmentNotSupported': 'Diese Datei ist binär und kann nicht als Text gesendet werden. Hängen Sie ein Bild oder eine Textdatei an.',
+  'chat.composer.error.textAttachmentTooLarge': 'Dieser Textanhang überschreitet das Limit von 5 MB. Wählen Sie eine kleinere Datei.',
   'chat.container.returnToParent.aria': 'Zurück zur übergeordneten Sitzung',
   'chat.container.returnToParent.titleNamed': 'Zurück zu: {title}',
   'chat.container.returnToParent.title': 'Zurück zur übergeordneten Sitzung',

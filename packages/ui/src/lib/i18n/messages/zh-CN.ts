@@ -2382,6 +2382,8 @@ export const dict: Record<I18nKey, string> = {
   'chat.queuedMessage.reorderAria': '拖动以重新排序',
   'chat.queuedMessage.toast.queueFailed': '无法将消息加入队列，已放回输入框。',
   'chat.queuedMessage.toast.takeFailed': '无法加载队列中的消息，请重试。',
+  'chat.composer.error.binaryAttachmentNotSupported': '此文件是二进制文件，无法作为文本发送。请附加图像或文本文件。',
+  'chat.composer.error.textAttachmentTooLarge': '此文本附件超过 5 MB 限制。请选择较小的文件。',
   'chat.container.returnToParent.aria': '返回父会话',
   'chat.container.returnToParent.titleNamed': '返回到：{title}',
   'chat.container.returnToParent.title': '返回父会话',

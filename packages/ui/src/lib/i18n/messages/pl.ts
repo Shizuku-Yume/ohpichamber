@@ -1031,6 +1031,8 @@ export const dict: Record<I18nKey, string> = {
   'chat.queuedMessage.reorderAria': 'Przeciągnij, aby zmienić kolejność',
   'chat.queuedMessage.toast.queueFailed': 'Nie udało się dodać wiadomości do kolejki. Wróciła do pola wpisywania.',
   'chat.queuedMessage.toast.takeFailed': 'Nie udało się wczytać wiadomości z kolejki. Spróbuj ponownie.',
+  'chat.composer.error.binaryAttachmentNotSupported': 'Ten plik jest binarny i nie może być wysłany jako tekst. Załącz obraz lub plik tekstowy.',
+  'chat.composer.error.textAttachmentTooLarge': 'Ten załącznik tekstowy przekracza limit 5 MB. Wybierz mniejszy plik.',
   'chat.container.returnToParent.aria': 'Powrót do sesji nadrzędnej',
   'chat.container.returnToParent.titleNamed': 'Powrót do: {title}',
   'chat.container.returnToParent.title': 'Powrót do sesji nadrzędnej',

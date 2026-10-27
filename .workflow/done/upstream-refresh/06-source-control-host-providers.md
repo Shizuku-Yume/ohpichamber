@@ -16,10 +16,10 @@
 
 ## Done when
 
-- [ ] Every provider module is registered through task 22's route composition, not ad-hoc imports in `server/index.js`.
-- [ ] A token is sent only to a checked enterprise host, with b9f03f0f10's test carried into the file that owns the auth route at the tip; the old `github/routes.*` files are deleted as upstream did, and their behavior lives in the provider modules.
-- [ ] Gitea/Gerrit/Forgejo/Lab clients have their upstream tests; no credentials are logged.
-- [ ] Unavailable live hosts are recorded as limits, not passed.
+- [x] Every provider module is registered through task 22's route composition, not ad-hoc imports in `server/index.js`.
+- [x] A token is sent only to a checked enterprise host, with b9f03f0f10's test carried into the file that owns the auth route at the tip; the old `github/routes.*` files are deleted as upstream did, and their behavior lives in the provider modules.
+- [x] Gitea/Gerrit/Forgejo/Lab clients have their upstream tests; no credentials are logged.
+- [x] Unavailable live hosts are recorded as limits, not passed.
 
 ## Progress
 
@@ -52,28 +52,32 @@
 - `walkthrough/languages.js`'s `ar`/`he` entries (task 20 owns the locales).
 - Upstream's `github/DOCUMENTATION.md` and `gitlab/DOCUMENTATION.md` changes belong to task 01's path list and are untouched here.
 
-### Remaining (exact)
+**Check after:** install exit 0, type-check exit 0, lint exit 0, oxlint clean, dead-code shows no new finding, the web suite green (UI suite green when run alone), and the real-path run below; receipts in `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-06-2026-10-27/`.
 
-1. Root `bun run test`: rerun (the web suite is green on its own; the root run also covers the other workspaces).
-2. `bunx oxlint` on the rewritten files; `bun run dead-code` and inspect it.
-3. Real path (not started): dev server on free ports with an isolated `OPENCHAMBER_DATA_DIR`; a local fixture Git repository listing changes through the Git provider; the GitHub Enterprise 400 check over HTTP with no outbound request; one token going only to a checked host.
-4. Live hosts: GitHub/GitLab/Gitea/Gerrit/Forgejo without credentials are limits, not results.
-5. Landing: `workflow validate`, move this file to `.workflow/done/upstream-refresh/`, rebase onto the moving integration tip, rerun install/type-check/lint/affected tests, ff-merge, remove the worktree and branch.
+### Checks (worktree, Bun 1.4.4, base af13a5c57c)
 
-### Fixed while finishing
-
-- `git/network-operations.test.js` (26 failures): the clone-credential stand-in now carries the neutral `secret` the adopted plan reads (it kept only `token`); 163 passed, 1 skipped.
-- `git/routes.test.js` (6 failures): the test's `vi.mock('./index.js')` now provides `markGeneratedBranchName` and `seedBranchTaskTitle`, which the adopted `worktree-creation.js` takes from the Git libraries; 66 passed.
-
-### Checks so far (worktree, Bun 1.4.4)
+Artifacts: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-06-2026-10-27/`.
 
 - `bun install --frozen-lockfile`: exit 0.
-- `bun run type-check`: exit 0 (2,745 files, 5 projects; electron, agent-contract, agent-service, mobile all clean).
-- `bun run lint`: exit 0 (`@openchamber/ui` reports one pre-existing unused oxlint-disable warning).
-- `packages/web` vitest: 447 files, 426 passed, 12 failed (32 tests) before the fixes above; `extension-provider.contract.test.js` now passes 16/16 end to end.
-- No dependency change: the refresh adds no package.
+- `bun run type-check`: exit 0 (2,745 files, 5 projects).
+- `bun run lint`: exit 0; `@openchamber/ui` reports one pre-existing unused oxlint-disable warning.
+- `VITEST_MAX_WORKERS=2 bun run test` with a fresh `HOME`/`XDG_CONFIG_HOME` (`root-test-maxworkers2.log`): **6/7 suites, exit 1**. The web suite is green: 438 files passed, 9 skipped, 7,090 tests passed (`web` section of the same log). The UI suite timed out in three files under the run's own 4-way parallelism (`openFenceIncremental` 5 s render, `useGlobalSessionsStore-chats-root`, `useAgentsStore.subagents`). Run alone, every UI file passes: 831/831 (`ui-test-alone.log`, exit 0). The three files also pass together (26/26).
+- `bunx oxlint` on the 14 rewritten or merged files (three-way docs are prose): exit 0, no findings.
+- `bun run dead-code`: exit 1 with the same baseline class as the integration tip. Compared against **this branch's own base** `af13a5c57c` (`dead-code-base-af13a5c.log`), the branch adds **no** finding and resolves eight: `source-control/project-path.js` is now imported, and `extensionProviderId`, `isExtensionProviderId`, `isReservedProviderId`, `EXTENSION_PROVIDER_PREFIX`, `isProviderUsername`, `descriptorAllowsLoopbackHttp`, `loopbackHttpPermitted` are now used. Against the newer tip `823fe8aaac` (`dead-code-baseline.log`) the only item present here and not there is `toHexColor`, which was already unused at `af13a5c57c` and was wired by a task that landed after it. The findings that remain (`openchamber-control/project-knowledge.js` for task 16, render-page image helpers for tasks 12/13, UI exports from later UI tasks) are the recorded baseline, not this branch's.
+
+### Real path
+
+Isolated `HOME`, `XDG_CONFIG_HOME` and `OPENCHAMBER_DATA_DIR` under `/tmp/oc06-realpath`, `bun run dev` on API 3966 and UI 5277, a local fixture: bare `origin.git` plus a clone with one committed change and one uncommitted change. Responses and logs: `realpath/` (`realpath-summary.json`, `responses/*.json`, `host-a.log`, `server.log`).
+
+- `GET /api/source-control/providers` → 200, `github, gitlab, gitea, gerrit, forgejo`; `instances` → 200.
+- `repository-context` and `binding` on the clone → 200, revision 0, `binding: null`; after the provider add, revision 1, state `bound`, Gitea association `ready` on the origin endpoint.
+- A PAT connected to loopback host A and the repository bound to it: `GET /api/source-control/gitea/issues/list` → 200 `{items:[],page:1,hasMore:false}`, with A's log showing `/repos/mona/teapot` and `/issues` carrying `Authorization`.
+- Git provider: `GET /api/git/status` → 200 (branch `master`, `notes.txt` modified); `GET /api/git/diff&path=notes.txt` → 200 with the `+delta` hunk.
+- **Enterprise no-egress.** A loopback listener (host C) recorded any request. Five instances answered 400 with no request reaching it: `attacker@127.0.0.1:4601`, `127.0.0.1:4601/path`, `127.0.0.1:4601`, `http://127.0.0.1:4601`, `https://127.0.0.1:4601` (`responses/enterprise-cases.json`; `host-c.log` was never created).
+- **Token-host scoping.** The PAT connected for host A never reached host B: the status read for B returned `disconnected`, a bound read naming B with A's account returned 401 `Gitea is not connected`, and a managed transport grant for B using A's credential account returned 400 `Credential account does not match the HTTPS endpoint` — the binding service refuses before `readTransportAccount` runs. Host B's log was never created. The same malformed-instance refusal is a unit test in `provider-routes.github.auth.test.js` (b9f03f0f10).
 
 ### Limits
 
-- No live source-control host was contacted.
+- Every provider observation is against loopback stand-ins; GitHub (including Enterprise), GitLab, Gitea, Gerrit, Forgejo and Linear are unverified against live hosts, and the GitHub Enterprise success path has no HTTPS stand-in.
 - `spaces/dispatcher.js` does not list `/api/tracker` as host-only; isolated spaces are excluded from this refresh and the file is fork-owned.
+- The UI suite needs the machine to itself; under the root run's load it times out at 5 s.

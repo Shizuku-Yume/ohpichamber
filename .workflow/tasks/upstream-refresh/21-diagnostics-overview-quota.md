@@ -43,13 +43,16 @@ Every path in `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-sync-202
   - Server Session Assist: `packages/web/server/lib/session-assist/` (`DOCUMENTATION.md`, `context.js`, `context.test.js`, `runtime.js`, `runtime.test.js`).
   - Server Small Model: `packages/web/server/lib/small-model/` (`DOCUMENTATION.md`, `client.js`, `index.js`, `index.test.js`).
 
-- **Retired / Excluded (3 paths):**
+- **Retired / Excluded (5 paths / symbols):**
   - `packages/web/server/lib/quota/credentials/providers.js`: retired in fork (OpenCode auth.json credentials reader).
   - `packages/web/server/lib/quota/credentials/store.js`: retired in fork (legacy cookie store).
   - `packages/web/server/lib/small-model/routes.js`: retired in fork (public small-model endpoints replaced by canonicalClient).
+  - `diagnosticErrorMessage` (`packages/web/server/lib/diagnostics/vocabulary.js:50`): retired because its only upstream consumer (`packages/web/server/lib/opencode/proxy.js:16,99,100`) was deleted in fork during OMP migration (`X-opencode-engine.tsv`).
+  - `isLimitFailoverConfigured` (`packages/web/server/lib/limit-failover/policy.js:92`): retired because its only upstream consumer (`packages/web/server/lib/opencode/managed-config-file.js:3,112`) was deleted in fork during OMP migration (`X-opencode-engine.tsv`).
 
 - **Deferred with Owner:**
   - `packages/ui/src/lib/source-control/repositoryUrlMatcher.ts`, `packages/ui/src/lib/trackedItems/*`: Owned by Task 07 (`.workflow/tasks/upstream-refresh/07-review-surfaces-board-file-views.md`).
+  - `readWorktreeUse` / `WorktreeUse` (`packages/ui/src/components/overview/overviewActions.ts:73,81`): Owned by Task 31 (`.workflow/tasks/upstream-refresh/31-one-view-sidebar-redesign.md:26`).
   - `packages/web/server/lib/diagnostics/opencode-load.js`: Retired. Not in `21.tsv`, OpenCode-specific process walker; all callers replaced with OMP Agent Service diagnostics (`packages/web/server/lib/host/canonical-routes.js:172-174`) from post-M3 hardening task 16 (`.workflow/done/post-m3-hardening/16-agent-service-diagnostics.md`).
 ### Missing Canonical Session Fields Evidence
 
@@ -74,5 +77,5 @@ Every path in `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-sync-202
 - `bun run lint`: exit 0
 - `bunx oxlint`: exit 0 (0 warnings, 0 errors across all authored files)
 - UI focused tests (`bun test packages/ui/src/{lib/diagnostics,components/overview,lib/overview,lib/quota}`): 57/57 passed (including `redacts all tokens, prompts, and credentials from diagnostics output`)
-- Server focused tests (`vitest run packages/web/server/lib/{diagnostics,overview,limit-failover,session-warming,session-assist,small-model,quota}`): 476/476 passed across 39 files
-- `bun run dead-code`: diff against baseline: 0 new unused files (17 files, identical to baseline), 63 unused exports (4 added: `readWorktreeUse`, `copilotUserUrl`, `diagnosticErrorMessage`, `isLimitFailoverConfigured`; 1 consumed: `resolveProjectColor`), 25 unused exported types (1 added: `WorktreeUse`).
+- Server focused tests (`vitest run packages/web/server/lib/{diagnostics,overview,limit-failover,session-warming,session-assist,small-model,quota}`): 478/478 passed across 39 files
+- `bun run dead-code`: diff against baseline: 0 new unused files (17 files, identical to baseline); 1 new unused export (`readWorktreeUse` in `overviewActions.ts:81`, deferred to Task 31); 1 consumed export (`resolveProjectColor` in `projectMeta.ts:86`, consumed by `useOverviewData.ts:377`); 1 new unused exported type (`WorktreeUse` in `overviewActions.ts:73`, deferred to Task 31). The namespace rename `openchamberConfig` -> `projectConfig` for `fetchProjectSetup` is caused by `start-session.integration.test.ts:13` importing `* as projectConfig from '@/lib/openchamberConfig'`, which knip associates as the primary namespace consumer instead of `issue-2039.test.ts`.

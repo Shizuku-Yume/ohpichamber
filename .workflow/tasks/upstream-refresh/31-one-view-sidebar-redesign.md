@@ -23,6 +23,7 @@
 - [ ] Reference links, activity labels, worktree rows and dialogs render on canonical session data; no OpenCode-shaped field is faked.
 - [ ] Virtualization keeps a large list usable; the measurement is recorded.
 - [ ] The mobile sheet is not changed here; task 32 consumes this model.
+- [ ] works/workActions.ts consumes overview/overviewActions.ts readWorktreeUse/WorktreeUse (adopted by task 21)
 
 ## Progress
 

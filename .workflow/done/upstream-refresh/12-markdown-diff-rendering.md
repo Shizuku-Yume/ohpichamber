@@ -150,4 +150,4 @@ Removed because only the deleted marked/DOMPurify/morphdom renderer used them (g
 - `bunx oxlint` on the authored paths: 0 (`oxlint-authored.log`).
 - `bun run build`: see `build-final.log`; the web bundle was rebuilt again after the diff-provider adoption (`build-web2.log`).
 
-**Check after:** `fc56a69956` on integration `4634e8bcf1` — `bun install --frozen-lockfile` 0, `bun run type-check` 0, `bun run lint` 0, `VITEST_MAX_WORKERS=2 bun run test` 0 (7/7 suites; 6086 passed, 128 skipped), `bun run build` 0, `GET /api/agent/v1/ready` 200; warm dev and built-web diff worker loads with no console errors and the markdown/diff real path is recorded above.
+**Check after:** implementation `0a9062f31d` on integration `65862865d0` (rebased) — `bun install --frozen-lockfile` 0, `bun run type-check` 0, `bun run lint` 0, `VITEST_MAX_WORKERS=2 bun run test` 0 (7/7 suites; 6086 passed, 128 skipped; `test-root-final2.log`), `bun run build` 0, `GET /api/agent/v1/ready` 200; warm dev and built-web diff worker loads with no console errors and the markdown/diff real path is recorded above.

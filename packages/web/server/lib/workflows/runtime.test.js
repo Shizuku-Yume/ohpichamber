@@ -254,7 +254,16 @@ describe('workflow runtime', () => {
     await runtime.approve({ runId });
     await waitFor(async () => (await act('workflow.status', { runId })).state === 'completed');
 
-    await runtime.remove({ runId });
+    // The run leaves `active` a beat after its end is saved; under load the
+    // status read can already say completed while remove still refuses.
+    await waitFor(async () => {
+      try {
+        await runtime.remove({ runId });
+        return true;
+      } catch {
+        return false;
+      }
+    });
     release();
     await new Promise((resolve) => setTimeout(resolve, 20));
     await store.flush();

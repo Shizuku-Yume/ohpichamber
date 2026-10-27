@@ -109,7 +109,16 @@ Artifacts: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-17-
 - `bun run lint`: exit 0 (`logs/lint.log`).
 - `bunx vitest run server/lib/workflows`: exit 0, 61 tests in 5 files (`logs/workflow-tests.log`).
 - `bun test src/lib/workflows` (UI): exit 0, 15 tests in 3 files (`logs/workflow-ui-tests.log`).
-- Root `bun run test`: recorded below after the landing rebase.
+- Root `bun run test`: 6365 passed / 142 skipped; one failure was the known agent-service
+  eviction test ("a pending worker operation and a restart reservation each postpone
+  eviction", another lane's), and one was this task's `runtime.test.js` delete/report race
+  under load. That test was made deterministic (it now waits until the run has left `active`
+  before deleting) and passes 3/3 on its own. A later standalone web run under machine load
+  had 7 unrelated timing failures (15-60 s timeouts in `canonical-plugins`,
+  `project-config`, `spaces`, `network-operations`, plus a DiffView render timeout and one
+  temp-dir ENOTEMPTY); no workflow test among them, and the workflow suites are green.
+  Logs: `logs/test.log`, `logs/web-test.log`, `logs/workflow-tests.log`.
+- The known agent-service eviction test is not this task's and is reported, not fixed here.
 
 ### Real path (real provider, isolated HOME/OPENCHAMBER_DATA_DIR, ports 5192/3954)
 

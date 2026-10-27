@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
+import { isProbablyBinary } from '@oh-my-pi/pi-utils';
 import { createAgentSession, type ExtensionFactory } from '@oh-my-pi/pi-coding-agent/sdk';
 import { EventBus } from '@oh-my-pi/pi-coding-agent/utils/event-bus';
 import { TASK_SUBAGENT_LIFECYCLE_CHANNEL, type SubagentLifecyclePayload } from '@oh-my-pi/pi-coding-agent/task';
@@ -34,6 +35,7 @@ import { BashTool } from '@oh-my-pi/pi-coding-agent/tools/bash';
 import { nativePluginExtensionPaths } from './native-plugin-loader.ts';
 import { NativeCacheWarming } from './catalog-warming.ts';
 
+const MAX_AUTO_READ_TEXT_BYTES = 5 * 1024 * 1024;
 type PromptOperation = Extract<WorkerOperation, { type: 'prompt' | 'steer' | 'follow-up' }>;
 type PreparedPrompt = { text: string; options: PromptOptions; context: Parameters<SessionManager['appendMessage']>[0][] };
 type NativeAdmission = { skillsAvailable: boolean; profile: Agent | null };
@@ -362,6 +364,12 @@ export class WorkerSession {
       if (attachment.mediaType.startsWith('image/')) {
         images.push({ type: 'image', data: (await readFile(reference.path)).toString('base64'), mimeType: attachment.mediaType });
       } else {
+        if (attachment.size > MAX_AUTO_READ_TEXT_BYTES) {
+          throw new ProjectionError(413, 'PAYLOAD_TOO_LARGE', `Attachment "${attachment.name}" exceeds the maximum text size limit of 5 MB`);
+        }
+        if (await isProbablyBinary(reference.path)) {
+          throw new ProjectionError(415, 'UNSUPPORTED_MEDIA_TYPE', `Attachment "${attachment.name}" is a binary file; binary attachments are not supported`);
+        }
         const content = (await readFile(reference.path)).toString('utf8');
         contextMessages.push({ role: 'fileMention', files: [{ path: attachment.name, content }], timestamp: Date.now() });
       }

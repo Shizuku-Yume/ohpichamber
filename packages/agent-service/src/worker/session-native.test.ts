@@ -633,3 +633,50 @@ test('actual SDK edit reaches Host policy and projects its exact replace argumen
     await harness.close();
   }
 }, 30000);
+
+test('worker rejects a binary attachment (415) and an over-5 MB text attachment (413)', async () => {
+  const harness = await fixture({ respond: () => completion() });
+  try {
+    const binaryPath = join(harness.root, 'sample.bin');
+    await writeFile(binaryPath, Buffer.from([0x00, 0x01, 0x02, 0xff]));
+    const binaryAttachment = {
+      attachmentId: 'bin-att',
+      name: 'sample.bin',
+      mediaType: 'application/octet-stream',
+      size: 4,
+      uri: 'attachment://bin-att',
+    };
+
+    await expect(harness.worker.operation({
+      type: 'prompt',
+      runId: 'bin-run',
+      request: {
+        ...prompt('Binary prompt'),
+        input: { text: 'Binary prompt', attachments: [binaryAttachment], context: [] },
+      },
+      attachments: [{ attachmentId: 'bin-att', path: binaryPath }],
+    })).rejects.toMatchObject({ status: 415, code: 'UNSUPPORTED_MEDIA_TYPE' });
+
+    const oversizedPath = join(harness.root, 'large.txt');
+    await writeFile(oversizedPath, 'x');
+    const oversizedAttachment = {
+      attachmentId: 'large-att',
+      name: 'large.txt',
+      mediaType: 'text/plain',
+      size: 6 * 1024 * 1024,
+      uri: 'attachment://large-att',
+    };
+
+    await expect(harness.worker.operation({
+      type: 'prompt',
+      runId: 'large-run',
+      request: {
+        ...prompt('Large prompt'),
+        input: { text: 'Large prompt', attachments: [oversizedAttachment], context: [] },
+      },
+      attachments: [{ attachmentId: 'large-att', path: oversizedPath }],
+    })).rejects.toMatchObject({ status: 413, code: 'PAYLOAD_TOO_LARGE' });
+  } finally {
+    await harness.close();
+  }
+}, 30000);

@@ -71,3 +71,20 @@ Check before: not run for this branch (new branch from the integration tip `bd67
 **Landing check at `4634e8bcf1` after the rebase:** `bun install --frozen-lockfile` 0, `bun run type-check` 0, `bun run lint` 0, `VITEST_MAX_WORKERS=2 bun run test` 0 — 7/7 suites (`install-land.log`, `type-check-land.log`, `lint-land.log`, `test-land2.log`). The earlier agent-service failures did not recur; the suite's code is unchanged by this branch.
 
 **Agent-service failure at the integration tip without this branch:** a detached worktree at `dfd74f36bd` (integration tip, task 05 not applied) ran `bun run --cwd packages/agent-service test` -> 1 with the same test, `a pending worker operation and a restart reservation each postpone eviction` (617 ms). Receipt: `agent-service-at-tip.log`. The red suite at the landing attempt is therefore pre-existing at the tip and not caused by this branch; the same test file passes alone and the failing code path is untouched (`git diff HEAD -- packages/agent-service` empty). This is recorded for the effort gate. `bun run --cwd packages/electron test` (54/54) and all other suites pass at the rebased tip.
+
+### Follow-up resolutions (2026-10-27)
+
+1. **Eviction / restart timing cause and stabilization in `packages/agent-service`:**
+   - **Investigation:** Running the agent-service suite at the pre-refresh baseline (`4d69e299e4`, task 02 landed) produced failures in 3 out of 5 runs on `workers.capacity.test.ts:122` (`(fail) a pending worker operation and a restart reservation each postpone eviction` with `expect(received).toBeUndefined()`, received `{ state: "stopping" }`). The same failure reproduced at the integration tip (`tip-4.log`), confirming the race is pre-existing (introduced in `b4836dedf0 feat(task18): enforce worker capacity and idle eviction`).
+   - **Timing Cause:** The test asserted worker eviction using a fixed sleep (`await Bun.sleep(350)`). Under system load, the reaper initiates eviction asynchronously by setting state to `'stopping'` and sending SIGTERM to the real child process; process termination and pipe closure take variable time, so the registry entry was still present in `'stopping'` state when the fixed sleep elapsed.
+   - **Fix:** In `packages/agent-service/src/supervisor/workers.capacity.test.ts`, replaced the fixed sleep with deterministic polling on observable state (`waitForEviction` with bounded deadline checking `registry.info(rootSessionId) === undefined`, and `expectNotEvictedFor` verifying state stays `'ready'` during the postponement window). No product eviction logic was altered; the fix is test-local and deterministic.
+   - **Evidence & Proof:** Evidence saved in `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-05-2026-10-27/eviction/`:
+     - Baseline (4d69e299e4) 5 runs: `baseline-1.log` to `baseline-5.log`, `baseline-summary.txt` (runs 2, 3, 5 failed on `workers.capacity.test.ts:122`).
+     - Tip before fix 5 runs: `tip-1.log` to `tip-5.log`, `tip-summary.txt`.
+     - Root before fix 2 runs: `root-before-1.log`, `root-before-2.log`, `root-before-summary.txt`.
+     - Post-fix 10 consecutive green agent-service package runs: `after-agent-1.log` through `after-agent-10.log`, all exit=0, 0 failures (`after-agent-summary.txt`).
+     - Post-fix 2 green root runs (`VITEST_MAX_WORKERS=2 bun run test`): `after-root-1.log` and `after-root-2.log`, both exit=0, 7/7 suites passed (`after-root-summary.txt`).
+
+2. **Knip configuration for `packages/electron/browser-panel-preload.cjs`:**
+   - In `knip.json`, added `"browser-panel-preload.cjs"` to `"packages/electron".entry` alongside `"preload.mjs"`.
+   - Running `bun run dead-code` confirms the file is no longer reported as unused (`knip.log`), with no other changes to knip output.

@@ -4,7 +4,7 @@ import { firstPartyIntegrationsI18n } from './first-party-integrations.i18n';
 const locales = ['en', 'de', 'fr', 'nl', 'es', 'ja', 'pt-BR', 'uk', 'ko', 'pl', 'zh-CN', 'zh-TW', 'tr', 'ar', 'he'] as const;
 
 // Product names, the same in every language.
-const sameAsEnglish = new Set<string>(['settings.integrations.linear.title']);
+const sameAsEnglish = new Set<string>(['settings.integrations.linear.title', 'settings.integrations.github.title']);
 
 describe('first-party integration translations', () => {
   test('provides every key in every supported locale, translated', () => {

@@ -88,11 +88,6 @@ export const classifyLimitFailure = (report, now) => {
   return { resetAt: now + (proposedDelay >= LONG_WAIT_MS ? proposedDelay : DEFAULT_EXHAUSTION_MS) };
 };
 
-/** Whether either option is on, so the managed OpenCode needs the plugin at all. */
-export const isLimitFailoverConfigured = (settings) => (
-  parseModelSetting(settings?.fallbackModel) !== null
-  || (Array.isArray(settings?.accountSwitchProviders) && settings.accountSwitchProviders.length > 0)
-);
 
 /**
  * `provider/model` as the settings store it, with its thinking level when one

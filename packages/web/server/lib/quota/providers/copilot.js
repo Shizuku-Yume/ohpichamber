@@ -66,7 +66,7 @@ export const providerName = 'GitHub Copilot';
 const INVALID_COPILOT_ENTERPRISE_URL = 'Invalid GitHub Copilot Enterprise URL';
 const COPILOT_ENTERPRISE_HOST = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i;
 
-export const copilotUserUrl = (enterpriseUrl) => {
+const copilotUserUrl = (enterpriseUrl) => {
   const host = `${enterpriseUrl ?? ''}`.trim();
   if (!host) return 'https://api.github.com/copilot_internal/user';
   let url;

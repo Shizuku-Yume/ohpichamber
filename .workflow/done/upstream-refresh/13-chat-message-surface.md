@@ -58,7 +58,7 @@
 | focused chat parts & scroll tests | 0 | `logs/tests-chat-parts-scroll.log` |
 | `bun run build` | 0 | `logs/build.log` |
 | `bun run dead-code` | 1 (inspected: unused exports across unrelated server/workflow modules) | `logs/dead-code.log` |
-| root `HOME=$TEST_HOME VITEST_MAX_WORKERS=2 bun run test` | 0 (clean run, 7/7 suites passed: scripts pass, sdk pass, ui 852/852 pass, agent-contract 177 pass, agent-service 250 pass/skip, electron 54/54 pass, web 443 files / 7151 tests pass) | `logs/test-root-rerun.log` |
+| root `VITEST_MAX_WORKERS=2 bun run test` (integration tip rerun, no timeout wrapper) | 0 (clean run, 7/7 suites passed: scripts 23/23, sdk 26/26, ui 852/852, agent-contract 177 pass, agent-service 243 pass / 7 skip, electron 54/54, web 443 files / 7153 pass [9 skipped, 142 skipped tests], 0 failures) | `logs/test-root-rerun-integration.log` |
 
 No dependency delta: no `packages/ui/package.json` or lockfile change.
 

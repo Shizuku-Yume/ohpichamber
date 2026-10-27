@@ -172,6 +172,46 @@ only feature change. A project was added for the worktree, then the fixture
   `workflow.answer` action is available on the `openchamber` tool, but the model's accepted
   second attempt was the bare JSON); both paths share `validateJsonSchema`.
 
+### Verification follow-up (provider, refresh-error audit, and real-path evidence)
+
+A follow-up real-path run and audit was conducted on worktree `upstream-refresh-17-verify` with
+artifacts under `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-17-verify-2026-10-27/`:
+
+1. **Provider and Model ground truth:**
+   - Provider: `CLIProxyAPI` (configured in `~/.omp/agent/config.yml` and `~/.omp/agent/models.yml`).
+   - Models: Agents `alpha` and `beta` both executed on `CLIProxyAPI/gpt-6.1-sol` (recorded in
+     run records `wf_wDKs6v2bYhjRiY00.json` and `wf_y8uiOt2EaXLVOH00.json`).
+   - The unselected project composer default showed `GPT-6 Astra` with `Unavailable` because
+     `gpt-6-astra` is the first model in `models.yml` and its preflight had not run before session
+     selection. In the active agent chat views (`workflow-alpha-session.png`) the model chip
+     properly displays `GPT-6.1 Sol`.
+
+2. **Sidebar "Could not refresh sessions. Try again" audit:**
+   - Verdict: **Pre-existing design defect**, 100% identical between baseline `4d69e299e4` and HEAD
+     (0 lines diff across `packages/agent-service/src/sessions/registry.ts`,
+     `packages/web/server/lib/openchamber-sessions/routes.js`, `packages/ui/src/stores/useGlobalSessionsStore.ts`,
+     `packages/ui/src/components/session/sidebar/list/useSidebarGroupStatus.ts`).
+   - Mechanism: `GET /api/agent/v1/sessions` calls `openChamberSessionService.list()`, iterating all
+     workspaces on the host (42 worktrees). If any worktree scope fails authorization or has an
+     in-flight command (`registry.ts:218`), the response returns HTTP 200 with non-empty `errors:
+     { [failedWorkspaceId]: 'SERVICE_UNAVAILABLE' }`. `useGlobalSessionsStore.ts:742` marks `complete:
+     false` and sets `status: 'error'`. In `useSidebarGroupStatus.ts:62`, any group whose global sessions
+     have not completed is assigned `state: 'load-failed'`, causing `SessionGroupSection.tsx:943` to render
+     the `Could not refresh sessions. Try again` banner.
+   - In our clean verification run with healthy workspace scopes, `GET /api/agent/v1/sessions` returned
+     `errors: {}` and the banner was completely absent (`workflow-after-reload.png`, `workflow-alpha-session.png`).
+
+3. **Live run, schema validation, persistence, and reload evidence:**
+   - Run record: `wf_y8uiOt2EaXLVOH00.json` under `data/workflow-runs/`.
+   - Agent states and schema checks: Both `alpha` (`8217093a-…`) and `beta` (`e69ccdf4-…`) ran
+     in parallel. First attempt non-JSON answers were rejected by `validateJsonSchema` with log
+     `"no answer matching the schema (the answer is not JSON); asking again, try 2 of 3"`. The retry
+     completed with schema-checked answers `{"files":["alpha.ts"]}` and `{"files":["beta.ts"]}`.
+   - Persistence & reload: `GET /api/openchamber/workflows?sessionId=92a8427f-…` and
+     `GET /api/openchamber/workflows/wf_y8uiOt2EaXLVOH00` after page reload confirmed run state
+     `completed` and reconciled session statuses.
+   - Screenshots: `workflow-alpha-session.png`, `workflow-parent-session.png`, `workflow-after-reload.png`.
+
 ### Limits
 
 - Workflow agents are root sessions (parent link unavailable without a Contract change,

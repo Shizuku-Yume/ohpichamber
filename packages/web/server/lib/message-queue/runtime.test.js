@@ -214,4 +214,75 @@ describe('canonical queue runtime', () => {
     assert.equal(res.body.code, 'INVALID_REQUEST');
     await runtime.stop();
   });
+
+  it('subscribes session observation on append and start', async () => {
+    const store = storeFor();
+    const observed = [];
+    const runtime = createCanonicalQueueRuntime({
+      store,
+      service: createService(),
+      resolveAttachments: async () => [],
+      publishQueue: () => {},
+      reportFailure: () => {},
+      ensureSessionObserved: async (sessionScope) => {
+        observed.push(sessionScope.sessionId);
+      },
+    });
+    await runtime.append(scope, randomUUID(), {
+      expectedRevision: '0',
+      content: 'observe prompt',
+      request,
+    });
+    assert.deepEqual(observed, [SESSION]);
+    await runtime.start();
+    assert.deepEqual(observed, [SESSION, SESSION]);
+    await runtime.stop();
+  });
+
+  it('re-schedules delivery while the runtime session is busy with an active run', async () => {
+    const store = storeFor();
+    let runStatus = 'running';
+    let activeRunId = 'run-busy';
+    let dispatchCalled = false;
+    const busyService = {
+      request: async (requestPath, init) => {
+        if (init?.method === 'POST') {
+          dispatchCalled = true;
+          const body = JSON.parse(init.body);
+          return Response.json({ run: { ...run, runId: body.runId, sessionId: SESSION } });
+        }
+        return Response.json({
+          ...runtimeSession,
+          runtimeStatus: runStatus,
+          activeRunId,
+        });
+      },
+    };
+    const runtime = createCanonicalQueueRuntime({
+      store,
+      service: busyService,
+      resolveAttachments: async () => [],
+      publishQueue: () => {},
+      reportFailure: () => {},
+    });
+
+    await runtime.append(scope, randomUUID(), {
+      expectedRevision: '0',
+      content: 'busy prompt',
+      request,
+    });
+
+    // Let the initial tick run; activeRunId is busy so it should schedule retry
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(dispatchCalled, false);
+
+    // Now the run finishes
+    runStatus = 'idle';
+    activeRunId = null;
+
+    // Trigger dispatch directly once idle
+    await runtime.dispatch(scope);
+    assert.equal(dispatchCalled, true);
+    await runtime.stop();
+  });
 });

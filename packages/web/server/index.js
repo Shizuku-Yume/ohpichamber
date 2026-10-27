@@ -918,6 +918,7 @@ notificationTriggerRuntime.setGetIsSessionAutoAccepting(
 const messageQueueRuntime = createCanonicalQueueRuntime({
   store: promptQueueStore,
   service: hostAgentRuntime.service,
+  ensureSessionObserved: async (scope) => globalMessageStreamHub.subscribeSession(scope.sessionId),
   resolveAttachments,
   capturePrompt: (...args) => hostPromptDeliveryRuntime.capturePrompt(...args),
   beforeDispatch: (scope, capture) => hostPromptDeliveryRuntime.beforeDispatch(scope, capture.request),

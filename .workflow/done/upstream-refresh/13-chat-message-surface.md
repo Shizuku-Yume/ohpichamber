@@ -58,7 +58,7 @@
 | focused chat parts & scroll tests | 0 | `logs/tests-chat-parts-scroll.log` |
 | `bun run build` | 0 | `logs/build.log` |
 | `bun run dead-code` | 1 (inspected: unused exports across unrelated server/workflow modules) | `logs/dead-code.log` |
-| root `VITEST_MAX_WORKERS=2 bun run test` | 143 (red only on the known pre-existing agent-service eviction test: "a pending worker operation and a restart reservation each postpone eviction") | `logs/test-root.log` |
+| root `HOME=$TEST_HOME VITEST_MAX_WORKERS=2 bun run test` | 0 (clean run, 7/7 suites passed: scripts pass, sdk pass, ui 852/852 pass, agent-contract 177 pass, agent-service 250 pass/skip, electron 54/54 pass, web 443 files / 7151 tests pass) | `logs/test-root-rerun.log` |
 
 No dependency delta: no `packages/ui/package.json` or lockfile change.
 
@@ -68,7 +68,8 @@ No dependency delta: no `packages/ui/package.json` or lockfile change.
 
 - A real-provider turn with `Gemini 3.8 Flash` through the UI's CLIProxyAPI provider rendered **user message → tool rows (`glob .`, `read math.ts`, `read README.md`) → reasoning block ("Tool availability check", "Directory inspection", "File inspection") → Summary**, in that order; screenshot `screenshots/02-turn-tools-reasoning.png`.
 - The transcript **survived a reload** with user messages, tool rows, reasoning, and summary; screenshot `screenshots/03-transcript-after-reload.png`.
-- **Composer send verdict**: sending is fully functional. The prior turn had queued/staged a draft while a 50-line stream was in progress; on send button click, the staged prompt submitted cleanly and received a real assistant reply (`hello`).
+- **Composer send verdict**: sending is fully functional. In screenshot 02, the previous worker typed the prompt a second time via `type_text` because they thought the initial `fill + Enter` had not registered while the prompt was inflight; the staged second copy remained in the input. On a fresh test session at `b82338e424`, typing a prompt and clicking Send immediately clears the composer to placeholder and leaves it empty throughout generation and after reply (`07-composer-cleared-after-reply.png`).
+- **Turn stats elapsed verdict**: in screenshot 02, `Elapsed 0.0s` reflected the immediately-failed prior turn (Claude Fable 5.1 `model_not_found`, delta <50ms formatted as `0.0s`). In addition, canonical messages carry `createdAt` (start timestamp) but not completion timing, so `telemetry.ts` (pre-existing from M3 `24f1012c14`) computes `lastAssistant.createdAt - user.createdAt` rather than true turn duration from `Turn.finishedAt`. When tested on a completed turn at `b82338e424`, Elapsed correctly displays elapsed duration (`Elapsed 4.7s`, `08-turn-stats-elapsed.png`). Not regressed by 13.
 - **Scroll real-path verification**:
   1. (a) Scrolling up during an active stream releases the follow pin and stays put (`scrollTop: 3384`, `dist: 450`); screenshot `screenshots/04-scroll-stream-released.png`.
   2. (b) Expanding a tool row via `dispatchRowExpand` releases the follow pin, allowing content below to grow without sliding the clicked header off-screen; screenshot `screenshots/05-scroll-tool-expanded-released.png`.
@@ -79,4 +80,4 @@ No dependency delta: no `packages/ui/package.json` or lockfile change.
 
 - Carry into 14: the upstream row-window API (`turnMessageWindow.ts`), `activityRows`/`earlierAssistantText`, `LiveActivityCollapse`/`liveActivityContext`/`TurnItem`, and the deleted justification/`activitySegments` model decision.
 
-**Check after:** `bun install --frozen-lockfile` exit 0, `bun run type-check` exit 0, `bun run lint` exit 0, `bunx oxlint` exit 0, focused chat parts/scroll tests exit 0, `bun run build` exit 0, dead-code inspected, root tests red only on known agent-service eviction test ("a pending worker operation and a restart reservation each postpone eviction"). Real path verified with screenshots: message ordering, tool rows, reasoning, reload persistence, composer send ("hello" reply), and all 3 scroll behaviors (stream release, row expand release, jump to bottom re-pin).
+**Check after:** `bun install --frozen-lockfile` exit 0, `bun run type-check` exit 0, `bun run lint` exit 0, `bunx oxlint` exit 0, focused chat parts/scroll tests exit 0, `bun run build` exit 0, dead-code inspected, root tests clean 0 on rerun with isolated HOME/XDG (7/7 suites passed, 0 failures, `logs/test-root-rerun.log`). Real path verified with screenshots: message ordering, tool rows, reasoning, reload persistence, composer send ("hello" reply), 3 scroll behaviors (stream release, row expand release, jump to bottom re-pin), composer draft clearing (`07-composer-cleared-after-reply.png`), and turn stats elapsed (`08-turn-stats-elapsed.png`).

@@ -27,3 +27,14 @@ Server-owned live state of the change requests, issues, discussions and tracker 
 ## Runtimes
 
 Web, desktop, hosted and native mobile use it over the event stream (relayed on mobile; idle traffic is the stream's existing heartbeat).
+
+## Decisions
+
+### Why one source-control reader and not one per provider
+
+Batching, grouping and backoff are the service's; how an account is chosen and what a refused token or a rate limit means are the provider's. One reader over the source-control module's `readLiveSummaries` keeps the service free of provider names, and GitHub's per-host cooldown and 401 rule live behind its own `liveSummaries` as a `{ status }` answer instead of in this module.
+
+### Why work items keep the legacy Linear shape on the wire
+
+Older clients send `{ provider: 'linear', identifier }` and older files hold it. Parsing it into `{ provider, kind: 'work-item', identifier }` keeps the key (`linear|ENG-12`) unchanged, so the same item is followed once whichever shape asked, and nothing needs migrating.
+

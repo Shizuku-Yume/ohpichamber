@@ -189,6 +189,19 @@ describe('findBranchPrCandidates', () => {
     expect(listMock).toHaveBeenCalledTimes(2);
   });
 
+  test('invalidates only the exact owner/repo `::` segment, not one that merely contains it', async () => {
+    listMock.mockResolvedValue({ data: [openPr] });
+    call({ target: { repo: { owner: 'xfoo', repo: 'bar' } }, remoteName: 'origin' });
+
+    // The match splits on `::` and compares whole segments, so invalidating
+    // `foo/bar` never drops `xfoo/bar` — an unanchored `includes("foo/bar::")`
+    // would have.
+    listMock.mockClear();
+    invalidateRepoPullsCache('foo', 'bar');
+    expect((await call({ target: { repo: { owner: 'xfoo', repo: 'bar' } }, remoteName: 'origin' })).open?.number).toBe(openPr.number);
+    expect(listMock).not.toHaveBeenCalled();
+  });
+
   test('does not let an invalidated pull-list promise refill its exact cache key', async () => {
     const firstOctokit = octokitFor('first-token', 'first-account');
     const secondOctokit = octokitFor('second-token', 'second-account');
@@ -255,13 +268,16 @@ describe('findBranchPrCandidates', () => {
 
     // Past the "no history" expiry, but far short of the found-record one. The
     // shared open list is re-fetched; the history answer is not re-queried.
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date(startedAt + 30 * 60 * 1000));
-    const { historical } = await call({ force: false });
-
-    expect(historical?.number).toBe(12);
-    expect(listMock.mock.calls.length).toBe(callsAfterFirst + 1);
-    expect(listMock.mock.calls.at(-1)?.[0]?.state).toBe('open');
+    const realNow = Date.now;
+    Date.now = () => startedAt + 30 * 60 * 1000;
+    try {
+      const { historical } = await call({ force: false });
+      expect(historical?.number).toBe(12);
+      expect(listMock.mock.calls.length).toBe(callsAfterFirst + 1);
+      expect(listMock.mock.calls.at(-1)?.[0]?.state).toBe('open');
+    } finally {
+      Date.now = realNow;
+    }
   });
 
   test('re-queries a branch with no history once its shorter window passes', async () => {
@@ -271,12 +287,15 @@ describe('findBranchPrCandidates', () => {
     await call();
     const callsAfterFirst = listMock.mock.calls.length;
 
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date(startedAt + 30 * 60 * 1000));
-    await call({ force: false });
-
-    expect(listMock.mock.calls.some((entry) => entry[0]?.state === 'all')).toBe(true);
-    expect(listMock.mock.calls.length).toBeGreaterThan(callsAfterFirst + 1);
+    const realNow = Date.now;
+    Date.now = () => startedAt + 30 * 60 * 1000;
+    try {
+      await call({ force: false });
+      expect(listMock.mock.calls.some((entry) => entry[0]?.state === 'all')).toBe(true);
+      expect(listMock.mock.calls.length).toBeGreaterThan(callsAfterFirst + 1);
+    } finally {
+      Date.now = realNow;
+    }
   });
 
   test('does not reuse a cached history miss for a different source owner', async () => {
@@ -381,6 +400,60 @@ describe('resolveGitHubPrStatus for a contributor fork checkout', () => {
       octokit: octokit(), directory, branch: 'fix/thing', remoteName: 'origin', force: true,
     });
     expect(status.pr).toBeNull();
+  });
+});
+
+describe('resolveGitHubPrStatus when GitHub refuses the repository', () => {
+  let directory;
+
+  beforeEach(async () => {
+    directory = await fs.mkdtemp(path.join(os.tmpdir(), 'pr-status-refused-'));
+    git(directory, 'init', '-q', '-b', 'feature');
+    git(directory, 'remote', 'add', 'origin', 'https://github.com/acme/app.git');
+  });
+
+  afterEach(async () => {
+    await fs.rm(directory, { recursive: true, force: true });
+  });
+
+  const restricted = 'Although you appear to have the correct authorization credentials, the `acme` organization has enabled OAuth App access restrictions.';
+  const httpError = (status, message) => Object.assign(new Error(`${message} - https://docs.github.com/`), {
+    status,
+    response: { status, data: { message } },
+  });
+  const octokit = (token, get) => ({
+    openChamberCacheIdentity: getOctokitCacheIdentity(createOctokit(token, `${token}-account`)),
+    rest: { repos: { get }, pulls: { list: async () => ({ data: [] }) } },
+  });
+
+  test('a 403 on the only remote reaches the caller with GitHub\'s message', async () => {
+    const client = octokit('refused-token', async () => { throw httpError(403, restricted); });
+
+    const failure = await resolveGitHubPrStatus({ octokit: client, directory, branch: 'feature', remoteName: 'origin', force: true })
+      .catch((error) => error);
+
+    expect(failure.status).toBe(403);
+    expect(failure.response.data.message).toBe(restricted);
+  });
+
+  test('a 404 on the only remote stays an empty answer', async () => {
+    const client = octokit('missing-token', async () => { throw httpError(404, 'Not Found'); });
+
+    const status = await resolveGitHubPrStatus({ octokit: client, directory, branch: 'feature', remoteName: 'origin', force: true });
+
+    expect(status).toMatchObject({ repo: null, pr: null });
+  });
+
+  test('a 403 on one remote does not hide another that resolves', async () => {
+    git(directory, 'remote', 'add', 'upstream', 'https://github.com/open/app.git');
+    const client = octokit('partial-token', async ({ owner }) => {
+      if (owner === 'acme') throw httpError(403, restricted);
+      return { data: { default_branch: 'main' } };
+    });
+
+    const status = await resolveGitHubPrStatus({ octokit: client, directory, branch: 'feature', remoteName: 'origin', force: true });
+
+    expect(status.repo).toMatchObject({ owner: 'open', repo: 'app' });
   });
 });
 

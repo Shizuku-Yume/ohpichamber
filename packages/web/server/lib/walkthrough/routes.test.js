@@ -34,7 +34,6 @@ describe('walkthrough routes', () => {
   let lastArgs;
   let getWalkthroughService;
   let validateReadContext;
-  let resolveWorkspaceScope;
   let generateCalls = 0;
 
   const service = {
@@ -95,7 +94,7 @@ describe('walkthrough routes', () => {
   const generate = (signal) => fetch(`${base}/api/walkthrough/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ workspaceId: 'workspace', directory: '/repo', source: SOURCE }),
+    body: JSON.stringify({ directory: '/repo', source: SOURCE }),
     signal,
   });
 
@@ -106,10 +105,9 @@ describe('walkthrough routes', () => {
     lastArgs = undefined;
     const app = express();
     app.use(express.json());
-    validateReadContext = vi.fn(async (context) => ({ ...context, instance: 'github.com' }));
-    resolveWorkspaceScope = vi.fn(async (workspaceId) => workspaceId === 'workspace' ? { workspaceId, cwd: '/repo' } : null);
     getWalkthroughService = vi.fn(async () => service);
-    registerWalkthroughRoutes(app, { getWalkthroughService, validateReadContext, resolveWorkspaceScope });
+    validateReadContext = vi.fn(async (context) => ({ ...context, instance: 'github.com' }));
+    registerWalkthroughRoutes(app, { getWalkthroughService, validateReadContext });
     server = app.listen(0);
     await new Promise((resolve) => server.once('listening', resolve));
     base = `http://127.0.0.1:${server.address().port}`;
@@ -146,7 +144,6 @@ describe('walkthrough routes', () => {
   });
 
   const prDiff = (source, context = PR_CONTEXT) => fetch(`${base}/api/walkthrough/pr-diff?${new URLSearchParams({
-    workspaceId: 'workspace',
     directory: '/repo',
     source: JSON.stringify(source),
     ...Object.fromEntries(Object.entries(context).map(([key, value]) => [key, String(value)])),
@@ -170,6 +167,22 @@ describe('walkthrough routes', () => {
     expect(generateCalls).toBe(before);
   });
 
+  it('refuses a named revision on a provider that keeps none, before reading', async () => {
+    const response = await prDiff({ kind: 'pr', number: 42, revision: 'c'.repeat(40) });
+    expect(response.status).toBe(400);
+    expect((await response.json()).code).toBe('INVALID_SOURCE_CONTROL_READ_CONTEXT');
+    expect(lastArgs).toBeUndefined();
+  });
+
+  it('takes a top-level project (an empty owner) only from a path-style provider', async () => {
+    const source = { kind: 'pr', number: 42, sourceRepo: { owner: '', repo: 'demo' } };
+    expect((await prDiff(source)).status).toBe(400);
+    expect(lastArgs).toBeUndefined();
+    const response = await prDiff(source, { ...PR_CONTEXT, provider: 'gerrit', instance: 'https://gerrit.example.com' });
+    expect(response.status).toBe(200);
+    expect(lastArgs.options.sourceRepo).toEqual({ owner: '', repo: 'demo' });
+  });
+
   it('reads no pull request diff without a validated binding context', async () => {
     validateReadContext.mockRejectedValue(Object.assign(new Error('Binding changed'), { code: 'INVALID_SOURCE_CONTROL_READ_CONTEXT' }));
     const response = await prDiff({ kind: 'pr', number: 42 });
@@ -191,7 +204,6 @@ describe('walkthrough routes', () => {
   it('serves both sides of one PR file and passes GitHub failures through', async () => {
     const source = { kind: 'pr', number: 42, sourceRepo: { owner: 'upstream', repo: 'project' } };
     const request = (params) => fetch(`${base}/api/walkthrough/pr-file?${new URLSearchParams({
-      workspaceId: 'workspace',
       directory: '/repo',
       source: JSON.stringify(source),
       ...Object.fromEntries(Object.entries(PR_CONTEXT).map(([key, value]) => [key, String(value)])),
@@ -219,7 +231,6 @@ describe('walkthrough routes', () => {
   it('reads no pull request file without a validated binding context', async () => {
     validateReadContext.mockRejectedValue(Object.assign(new Error('Binding changed'), { code: 'INVALID_SOURCE_CONTROL_READ_CONTEXT' }));
     const response = await fetch(`${base}/api/walkthrough/pr-file?${new URLSearchParams({
-      workspaceId: 'workspace',
       directory: '/repo',
       source: JSON.stringify({ kind: 'pr', number: 42 }),
       path: 'a.ts',
@@ -240,7 +251,7 @@ describe('walkthrough routes', () => {
 
     // The reloaded page sees work in progress and re-attaches to it.
     const read = await (await fetch(
-      `${base}/api/walkthrough?workspaceId=workspace&directory=/repo&source=${encodeURIComponent(JSON.stringify(SOURCE))}`,
+      `${base}/api/walkthrough?directory=/repo&source=${encodeURIComponent(JSON.stringify(SOURCE))}`,
     )).json();
     expect(read.generating).toBe(true);
 
@@ -270,7 +281,7 @@ describe('walkthrough routes', () => {
   // that contains the language instruction.
   it('carries the requested language into the service', async () => {
     await fetch(
-      `${base}/api/walkthrough?workspaceId=workspace&directory=/repo&language=uk&source=${encodeURIComponent(JSON.stringify(SOURCE))}`,
+      `${base}/api/walkthrough?directory=/repo&language=uk&source=${encodeURIComponent(JSON.stringify(SOURCE))}`,
     );
     expect(lastArgs.language).toBe('uk');
 
@@ -278,7 +289,7 @@ describe('walkthrough routes', () => {
     const pending = fetch(`${base}/api/walkthrough/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ workspaceId: 'workspace', directory: '/repo', source: SOURCE, language: 'ja' }),
+      body: JSON.stringify({ directory: '/repo', source: SOURCE, language: 'ja' }),
     });
     await vi.waitFor(() => expect(generationRequestCount).toBe(1));
     await untilGenerateCalled(seen);
@@ -290,7 +301,7 @@ describe('walkthrough routes', () => {
 
   it('ignores a language that is not a string', async () => {
     await fetch(
-      `${base}/api/walkthrough?workspaceId=workspace&directory=/repo&language[]=uk&source=${encodeURIComponent(JSON.stringify(SOURCE))}`,
+      `${base}/api/walkthrough?directory=/repo&language[]=uk&source=${encodeURIComponent(JSON.stringify(SOURCE))}`,
     );
 
     expect(lastArgs.language).toBeUndefined();
@@ -305,7 +316,7 @@ describe('walkthrough routes', () => {
     const response = await fetch(`${base}/api/walkthrough/cancel`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ workspaceId: 'workspace', directory: '/repo', source: SOURCE }),
+      body: JSON.stringify({ directory: '/repo', source: SOURCE }),
     });
 
     expect(await response.json()).toEqual({ cancelled: true });
@@ -313,13 +324,13 @@ describe('walkthrough routes', () => {
   });
 
   it.each([
-    ['read', () => fetch(`${base}/api/walkthrough?workspaceId=workspace&directory=/repo&source=${encodeURIComponent(JSON.stringify(PR_SOURCE))}`)],
+    ['read', () => fetch(`${base}/api/walkthrough?directory=/repo&source=${encodeURIComponent(JSON.stringify(PR_SOURCE))}`)],
     ['generate', () => fetch(`${base}/api/walkthrough/generate`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ workspaceId: 'workspace', directory: '/repo', source: PR_SOURCE }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ directory: '/repo', source: PR_SOURCE }),
     })],
-    ['progress', () => fetch(`${base}/api/walkthrough/progress?workspaceId=workspace&directory=/repo&source=${encodeURIComponent(JSON.stringify(PR_SOURCE))}`)],
+    ['progress', () => fetch(`${base}/api/walkthrough/progress?directory=/repo&source=${encodeURIComponent(JSON.stringify(PR_SOURCE))}`)],
     ['cancel', () => fetch(`${base}/api/walkthrough/cancel`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ workspaceId: 'workspace', directory: '/repo', source: PR_SOURCE }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ directory: '/repo', source: PR_SOURCE }),
     })],
   ])('validates PR context before service work for %s', async (_name, request) => {
     const failure = Object.assign(new Error('Source control read context is required'), {
@@ -340,7 +351,6 @@ describe('walkthrough routes', () => {
 
   it('passes the trusted immutable context to a PR read', async () => {
     const query = new URLSearchParams({
-      workspaceId: 'workspace',
       directory: '/repo',
       source: JSON.stringify(PR_SOURCE),
       ...Object.fromEntries(Object.entries(PR_CONTEXT).map(([key, value]) => [key, String(value)])),
@@ -359,15 +369,15 @@ describe('walkthrough routes', () => {
     const target = { source: PR_SOURCE, context: { ...PR_CONTEXT, directory: '/repo' } };
 
     try {
-      await clientFetchWalkthrough('/repo', target, { workspaceId: 'workspace' });
+      await clientFetchWalkthrough('/repo', target);
 
-      const generation = clientGenerateWalkthrough('/repo', target, { workspaceId: 'workspace' });
+      const generation = clientGenerateWalkthrough('/repo', target);
       await vi.waitFor(() => expect(generationRequestCount).toBe(1));
       releaseJob();
       await generation;
 
-      expect(await clientFetchWalkthroughStage('/repo', target, undefined, 'workspace')).toBeNull();
-      await clientCancelWalkthroughGeneration('/repo', target, { workspaceId: 'workspace' });
+      expect(await clientFetchWalkthroughStage('/repo', target)).toBeNull();
+      await clientCancelWalkthroughGeneration('/repo', target);
     } finally {
       setRuntimeUrlResolver(previousResolver);
     }
@@ -391,7 +401,7 @@ describe('walkthrough routes', () => {
     const response = await fetch(`${base}/api/walkthrough/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ workspaceId: 'workspace', directory: '/repo', source: PR_SOURCE, ...PR_CONTEXT, provider: 'bitbucket', instance: 'https://bitbucket.org' }),
+      body: JSON.stringify({ directory: '/repo', source: PR_SOURCE, ...PR_CONTEXT, provider: 'bitbucket', instance: 'https://bitbucket.org' }),
     });
 
     expect(response.status).toBe(422);

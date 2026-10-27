@@ -5,7 +5,7 @@ import express from 'express';
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createMutationExecutor, digestMutationInput } from '../source-control/mutation-executor.js';
+import { createMutationExecutor, digestMutationInput } from './mutation-executor.js';
 
 let auth;
 let registerGitHubRoutes;
@@ -88,7 +88,7 @@ const credentialFor = (account) => ({
 
 const jsonResponse = (value, status = 200) => Response.json(value, { status });
 
-const makeApp = ({ store = makeStore(), validateMutationContext, resolveRepo, resolveNetwork, resolveStatus } = {}) => {
+const makeApp = ({ store = makeStore(), validateMutationContext, resolveRepo, resolveNetwork, resolveStatus, modules } = {}) => {
   const app = express();
   app.use(express.json());
   const routeOptions = {
@@ -101,6 +101,7 @@ const makeApp = ({ store = makeStore(), validateMutationContext, resolveRepo, re
     resolveRepoNetwork: resolveNetwork ?? (async () => null),
   };
   if (resolveStatus) routeOptions.resolveGitHubPrStatus = resolveStatus;
+  if (modules) routeOptions.modules = modules;
   registerGitHubRoutes(app, routeOptions);
   return { app, store };
 };
@@ -116,13 +117,14 @@ beforeEach(async () => {
   previousDataDirectory = process.env.OPENCHAMBER_DATA_DIR;
   process.env.OPENCHAMBER_DATA_DIR = directory;
   vi.resetModules();
-  auth = await import('./auth.js');
-  ({ registerGitHubRoutes } = await import('./routes.js'));
+  auth = await import('../github/auth.js');
+  ({ registerGitHubRoutes } = await import('./provider-routes.github.test-support.js'));
 });
 
 afterEach(async () => {
   if (previousDataDirectory === undefined) delete process.env.OPENCHAMBER_DATA_DIR;
   else process.env.OPENCHAMBER_DATA_DIR = previousDataDirectory;
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   await fs.rm(directory, { recursive: true, force: true });
@@ -139,7 +141,7 @@ describe('canonical GitHub mutations', () => {
 
     const canonical = await request(app).post('/api/source-control/github/pr/create')
       .send({ ...context(account.accountId), title: 'Title' }).expect(501);
-    expect(canonical.body.code).toBe('SOURCE_CONTROL_MUTATION_UNAVAILABLE');
+    expect(canonical.body.code).toBe('SOURCE_CONTROL_MUTATIONS_UNAVAILABLE');
   });
 
   it.each([
@@ -238,6 +240,19 @@ describe('canonical GitHub mutations', () => {
     });
   });
 
+  it('refuses a created pull request whose base repository lives on another host', async () => {
+    const account = await auth.setGitHubAuth({ accessToken: 'token-one', user: { id: 1, login: 'actor' } });
+    const foreign = pullRequest();
+    foreign.base = { ...foreign.base, repo: { ...foreign.base.repo, html_url: 'https://gitlab.com/acme/app' } };
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(foreign)));
+    const { app, store } = makeApp();
+
+    const response = await request(app).post('/api/source-control/github/pr/create')
+      .send({ ...context(account.accountId), title: 'Title' });
+    expect(response.status).not.toBe(200);
+    expect(store.records.get('request-one')?.result?.number).toBeUndefined();
+  });
+
   it('records the created pull request number and names it in replayed receipts', async () => {
     const account = await auth.setGitHubAuth({ accessToken: 'token-one', user: { id: 1, login: 'actor' } });
     vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(pullRequest())));
@@ -281,22 +296,24 @@ describe('canonical GitHub mutations', () => {
     vi.stubGlobal('fetch', fetch);
     const { app } = makeApp();
     const payload = { ...context(account.accountId), title: 'Title' };
+    // The create itself, never the reads around it (the stack lookup after it).
+    const creates = () => fetch.mock.calls.filter(([, options]) => options?.method === 'POST').length;
 
     const [owner, duplicate] = await Promise.all([
       request(app).post('/api/source-control/github/pr/create').send(payload),
       request(app).post('/api/source-control/github/pr/create').send(payload),
     ]);
     expect([owner.body.replayed, duplicate.body.replayed].sort()).toEqual([false, true]);
-    expect(fetch).toHaveBeenCalledOnce();
+    expect(creates()).toBe(1);
 
     const replay = await request(app).post('/api/source-control/github/pr/create').send(payload).expect(200);
     expect(replay.body.replayed).toBe(true);
-    expect(fetch).toHaveBeenCalledOnce();
+    expect(creates()).toBe(1);
 
     const conflict = await request(app).post('/api/source-control/github/pr/create')
       .send({ ...payload, title: 'Changed' }).expect(409);
     expect(conflict.body.code).toBe('SOURCE_CONTROL_MUTATION_CONFLICT');
-    expect(fetch).toHaveBeenCalledOnce();
+    expect(creates()).toBe(1);
   });
 
   it.each([500, 502, 504])('records a provider %i after dispatch as outcome-unknown and never repeats it', async (status) => {
@@ -452,12 +469,73 @@ describe('canonical GitHub mutations', () => {
     };
     const store = makeStore([record]);
     const read = vi.spyOn(store, 'read');
-    await auth.removeGitHubAuthAccount(account.accountId);
+    await auth.removeGitHubAuthAccountForHost('github.com', account.accountId);
     const { app } = makeApp({ store });
 
     await request(app).post('/api/source-control/github/pr/create')
       .send({ ...context(account.accountId), title: 'Title' }).expect(401);
     expect(read).not.toHaveBeenCalled();
+  });
+
+  it('stacks a new PR on the open PR whose branch it targets, and says when GitHub would not', async () => {
+    const account = await auth.setGitHubAuth({ accessToken: 'token-one', user: { id: 1, login: 'actor' } });
+    const base = pullRequest().base;
+    const onLower = (overrides) => pullRequest({ base: { ...base, ref: 'lower', repo: { ...base.repo, default_branch: 'main' } }, ...overrides });
+    let existingStack = null;
+    let refuse = false;
+    const writes = [];
+    vi.stubGlobal('fetch', vi.fn(async (url, options) => {
+      const { pathname, searchParams } = new URL(url);
+      if (options.method === 'POST' && pathname === '/repos/acme/app/pulls') return jsonResponse(onLower({ number: 8 }), 201);
+      if (pathname === '/repos/acme/app/pulls' && searchParams.get('head') === 'acme:lower') {
+        return jsonResponse([pullRequest({ number: 6, head: { ...pullRequest().head, ref: 'lower' } })]);
+      }
+      if (pathname === '/repos/acme/app/stacks' && options.method === 'GET') return jsonResponse(existingStack ? [existingStack] : []);
+      if (pathname.startsWith('/repos/acme/app/stacks') && options.method === 'POST') {
+        writes.push({ path: pathname, body: JSON.parse(options.body) });
+        return refuse ? jsonResponse({ message: 'Validation failed' }, 422) : jsonResponse({ number: 3 }, pathname.endsWith('/add') ? 200 : 201);
+      }
+      return jsonResponse(pullRequest());
+    }));
+    const { app } = makeApp();
+    const create = (key) => request(app).post('/api/source-control/github/pr/create').send({
+      ...context(account.accountId, { idempotencyKey: key, target: { project: { owner: 'acme', name: 'app' }, head: 'feature', base: 'lower' } }),
+      title: 'Title',
+    }).expect(200);
+
+    // No stack yet: the parent and the new PR start one, bottom first.
+    expect((await create('one')).body).toMatchObject({ target: { number: 8 }, result: { stacked: true } });
+    expect(writes.at(-1)).toEqual({ path: '/repos/acme/app/stacks', body: { pull_requests: [6, 8] } });
+
+    // The parent tops a stack: the new PR joins it.
+    existingStack = { number: 3 };
+    expect((await create('two')).body.result).toEqual({ stacked: true });
+    expect(writes.at(-1)).toEqual({ path: '/repos/acme/app/stacks/3/add', body: { pull_requests: [8] } });
+
+    // GitHub refuses: the PR stands on its base, outside the stack.
+    refuse = true;
+    expect((await create('three')).body.result).toEqual({ stacked: false });
+  });
+
+  it('never stacks a PR into the default branch on an open PR out of it, such as a release PR', async () => {
+    const account = await auth.setGitHubAuth({ accessToken: 'token-one', user: { id: 1, login: 'actor' } });
+    const base = pullRequest().base;
+    const paths = [];
+    vi.stubGlobal('fetch', vi.fn(async (url, options) => {
+      const { pathname } = new URL(url);
+      paths.push(`${options.method} ${pathname}`);
+      if (options.method === 'POST' && pathname === '/repos/acme/app/pulls') {
+        return jsonResponse(pullRequest({ number: 8, base: { ...base, repo: { ...base.repo, default_branch: 'main' } } }), 201);
+      }
+      // An open release PR from main would otherwise read as the parent.
+      if (pathname === '/repos/acme/app/pulls') return jsonResponse([pullRequest({ number: 2, head: { ...pullRequest().head, ref: 'main' } })]);
+      return jsonResponse(pullRequest());
+    }));
+    const { app } = makeApp();
+    const response = await request(app).post('/api/source-control/github/pr/create')
+      .send({ ...context(account.accountId), title: 'Title' }).expect(200);
+    expect(response.body.result).toEqual({});
+    expect(paths.some((path) => path.includes('/stacks'))).toBe(false);
   });
 
   it('revalidates an existing target once before update and performs one write without another lookup', async () => {
@@ -477,32 +555,104 @@ describe('canonical GitHub mutations', () => {
     expect(methods).toEqual(['GET', 'PATCH']);
   });
 
-  it('binds merge to the exact head SHA validated before dispatch', async () => {
+  const mergeBody = (accountId) => ({
+    ...context(accountId, {
+      target: {
+        project: { owner: 'acme', name: 'app' }, number: 7,
+        head: 'feature', base: 'main', headSha: 'abc123',
+      },
+    }),
+    method: 'merge',
+  });
+
+  it('binds merge to the exact head SHA validated before dispatch, through the asynchronous merge', async () => {
     const account = await auth.setGitHubAuth({ accessToken: 'token-one', user: { id: 1, login: 'actor' } });
     const requests = [];
-    vi.stubGlobal('fetch', vi.fn(async (_url, options) => {
-      requests.push({ method: options.method, body: options.body ? JSON.parse(options.body) : null });
+    vi.stubGlobal('fetch', vi.fn(async (url, options) => {
+      requests.push({ method: options.method, path: new URL(url).pathname, body: options.body ? JSON.parse(options.body) : null });
       return options.method === 'GET'
         ? jsonResponse(pullRequest())
-        : jsonResponse({ merged: true, message: 'Pull Request successfully merged' });
+        : jsonResponse({ status: 'merged', details: { message: 'Merged', sha: 'def456' } });
     }));
     const { app } = makeApp();
 
-    const response = await request(app).post('/api/source-control/github/pr/merge').send({
-      ...context(account.accountId, {
-        target: {
-          project: { owner: 'acme', name: 'app' }, number: 7,
-          head: 'feature', base: 'main', headSha: 'abc123',
-        },
-      }),
-      method: 'merge',
-    }).expect(200);
+    const response = await request(app).post('/api/source-control/github/pr/merge').send(mergeBody(account.accountId)).expect(200);
 
     expect(response.body.result).toEqual({ merged: true });
     expect(requests).toEqual([
-      { method: 'GET', body: null },
-      { method: 'PUT', body: { merge_method: 'merge', sha: 'abc123' } },
+      { method: 'GET', path: '/repos/acme/app/pulls/7', body: null },
+      { method: 'PUT', path: '/repos/acme/app/pulls/7/merge-async', body: { merge_method: 'merge', sha: 'abc123', bypass_rules: true } },
     ]);
+  });
+
+  it('follows a background merge until it lands, and says so when it joins a merge queue', async () => {
+    const account = await auth.setGitHubAuth({ accessToken: 'token-one', user: { id: 1, login: 'actor' } });
+    let final = 'merged';
+    vi.stubGlobal('fetch', vi.fn(async (url, options) => {
+      const { pathname } = new URL(url);
+      if (options.method === 'PUT') {
+        return jsonResponse({ status: 'pending', details: { message: 'Merging', uuid: 'u-1', merge_method: 'merge', merge_action: 'default', expected_head_sha: 'abc123' } }, 202);
+      }
+      if (pathname.endsWith('/merge-async/u-1')) return jsonResponse({ status: final, details: { message: 'Done' } });
+      return jsonResponse(pullRequest());
+    }));
+    const { app } = makeApp();
+
+    expect((await request(app).post('/api/source-control/github/pr/merge').send(mergeBody(account.accountId)).expect(200)).body.result)
+      .toEqual({ merged: true });
+    final = 'enqueued';
+    expect((await request(app).post('/api/source-control/github/pr/merge').send({ ...mergeBody(account.accountId), idempotencyKey: 'request-two' }).expect(200)).body.result)
+      .toEqual({ merged: false, outcome: 'queued' });
+  });
+
+  it('reports an accepted merge as running when following it fails, and passes on a refusal GitHub explains', async () => {
+    const account = await auth.setGitHubAuth({ accessToken: 'token-one', user: { id: 1, login: 'actor' } });
+    let refuse = false;
+    vi.stubGlobal('fetch', vi.fn(async (url, options) => {
+      const { pathname } = new URL(url);
+      if (options.method === 'PUT') {
+        return refuse
+          ? jsonResponse({ message: 'Head branch was modified. Review and try the merge again.' }, 409)
+          : jsonResponse({ status: 'pending', details: { message: 'Merging', uuid: 'u-1' } }, 202);
+      }
+      if (pathname.endsWith('/merge-async/u-1')) return jsonResponse({ message: 'Server Error' }, 502);
+      return jsonResponse(pullRequest());
+    }));
+    const { app } = makeApp();
+
+    expect((await request(app).post('/api/source-control/github/pr/merge').send(mergeBody(account.accountId)).expect(200)).body.result)
+      .toEqual({ merged: false, outcome: 'merging' });
+    refuse = true;
+    const refused = await request(app).post('/api/source-control/github/pr/merge')
+      .send({ ...mergeBody(account.accountId), idempotencyKey: 'request-two' }).expect(409);
+    expect(refused.body).toEqual({ error: 'Head branch was modified. Review and try the merge again.', code: 'SOURCE_CONTROL_MUTATION_REJECTED' });
+  });
+
+  it('answers with GitHub\'s reason when a background merge fails, and merges the classic way on a host without it', async () => {
+    const account = await auth.setGitHubAuth({ accessToken: 'token-one', user: { id: 1, login: 'actor' } });
+    let asyncAvailable = true;
+    const paths = [];
+    vi.stubGlobal('fetch', vi.fn(async (url, options) => {
+      const { pathname } = new URL(url);
+      paths.push(`${options.method} ${pathname}`);
+      if (options.method === 'GET') return jsonResponse(pullRequest());
+      if (pathname.endsWith('/merge-async')) {
+        return asyncAvailable
+          ? jsonResponse({ status: 'failed', details: { message: 'Required status check "ci" is failing.' } })
+          : jsonResponse({ message: 'Not Found' }, 404);
+      }
+      return jsonResponse({ merged: true, message: 'Pull Request successfully merged' });
+    }));
+    const { app } = makeApp();
+
+    const failed = await request(app).post('/api/source-control/github/pr/merge').send(mergeBody(account.accountId)).expect(422);
+    expect(failed.body).toEqual({ error: 'Required status check "ci" is failing.', code: 'SOURCE_CONTROL_MUTATION_REJECTED' });
+
+    asyncAvailable = false;
+    paths.length = 0;
+    const classic = await request(app).post('/api/source-control/github/pr/merge').send({ ...mergeBody(account.accountId), idempotencyKey: 'request-two' }).expect(200);
+    expect(classic.body.result).toEqual({ merged: true });
+    expect(paths).toEqual(['GET /repos/acme/app/pulls/7', 'PUT /repos/acme/app/pulls/7/merge-async', 'PUT /repos/acme/app/pulls/7/merge']);
   });
 
   it.each([
@@ -558,6 +708,45 @@ describe('canonical GitHub mutations', () => {
     if (status === 200) expect(response.body.target.number).toBe(7);
   });
 
+  it('finishes the stacking an interrupted create left undone, and never stacks a PR twice', async () => {
+    const account = await auth.setGitHubAuth({ accessToken: 'token-one', user: { id: 1, login: 'actor' } });
+    const target = {
+      repositoryId: 'repo-one', bindingRevision: 3, primaryRemote: 'origin',
+      project: { id: 'acme/app', owner: 'acme', name: 'app' }, head: 'feature', base: 'lower',
+    };
+    const actor = { provider: 'github', instance: 'github.com', accountId: account.accountId };
+    const input = { kind: 'create', actor, credential: credentialFor(account), target, title: 'Title', headRemote: 'origin' };
+    const running = (key) => ({ key, inputDigest: digestMutationInput(input), kind: 'change-request-create', actor, target, state: 'running' });
+    const base = pullRequest().base;
+    const created = pullRequest({ number: 8, base: { ...base, ref: 'lower', repo: { ...base.repo, default_branch: 'main' } } });
+    let alreadyStacked = true;
+    const writes = [];
+    vi.stubGlobal('fetch', vi.fn(async (url, options) => {
+      const { pathname, searchParams } = new URL(url);
+      if (pathname === '/repos/acme/app/stacks' && options.method === 'GET') return jsonResponse(alreadyStacked ? [{ number: 3 }] : []);
+      if (pathname.startsWith('/repos/acme/app/stacks')) {
+        writes.push({ path: pathname, body: JSON.parse(options.body) });
+        return jsonResponse({ number: 4 }, 201);
+      }
+      if (searchParams.get('head') === 'acme:lower') return jsonResponse([pullRequest({ number: 6, head: { ...pullRequest().head, ref: 'lower' } })]);
+      return jsonResponse([created]);
+    }));
+    const replay = async (key) => {
+      const { app } = makeApp({ store: makeStore([running(key)]) });
+      return (await request(app).post('/api/source-control/github/pr/create')
+        .send({ ...context(account.accountId, { idempotencyKey: key, target }), title: 'Title' }).expect(200)).body;
+    };
+
+    // GitHub already keeps it in a stack: said so, nothing written.
+    expect(await replay('one')).toMatchObject({ target: { number: 8 }, result: { stacked: true } });
+    expect(writes).toEqual([]);
+
+    // Not stacked yet: it joins the open PR its base belongs to.
+    alreadyStacked = false;
+    expect((await replay('two')).result).toEqual({ stacked: true });
+    expect(writes).toEqual([{ path: '/repos/acme/app/stacks', body: { pull_requests: [6, 8] } }]);
+  });
+
   describe('comments and reviews', () => {
     const pullTarget = { project: { owner: 'acme', name: 'app' }, number: 7 };
     const recordRequests = (respond) => {
@@ -584,6 +773,38 @@ describe('canonical GitHub mutations', () => {
         { method: 'POST', path: '/repos/acme/app/issues/7/comments', body: { body: 'Looks good' } },
       ]);
       expect(store.records.get('request-one')).toMatchObject({ kind: 'change-request-comment', state: 'succeeded' });
+    });
+
+    it("comments on and merges a contributor's fork pull request from the upstream clone", async () => {
+      const account = await auth.setGitHubAuth({ accessToken: 'token-one', user: { id: 1, login: 'actor' } });
+      // The network is acme/app alone; the head lives in a fork outside it.
+      const forkPull = pullRequest({
+        head: {
+          ref: 'feature', sha: 'abc123',
+          repo: {
+            owner: { login: 'contributor' }, name: 'app', html_url: 'https://github.com/contributor/app',
+            clone_url: 'https://github.com/contributor/app.git', ssh_url: 'git@github.com:contributor/app.git',
+          },
+        },
+      });
+      const requests = recordRequests((entry) => {
+        if (entry.method === 'GET') return jsonResponse(forkPull);
+        if (entry.path.endsWith('/merge-async')) return jsonResponse({ status: 'merged', details: { message: 'Merged', sha: 'def456' } });
+        return jsonResponse({ id: 11 }, 201);
+      });
+      const resolveNetwork = vi.fn(async () => [{ owner: 'acme', repo: 'app', url: 'https://github.com/acme/app', source: 'origin' }]);
+      const { app } = makeApp({ resolveNetwork });
+
+      await request(app).post('/api/source-control/github/pr/comment')
+        .send({ ...context(account.accountId, { target: pullTarget }), body: 'Thanks' }).expect(200);
+      const merged = await request(app).post('/api/source-control/github/pr/merge')
+        .send({ ...mergeBody(account.accountId), idempotencyKey: 'request-two' }).expect(200);
+
+      expect(merged.body.result).toEqual({ merged: true });
+      expect(requests.filter((entry) => entry.method !== 'GET').map((entry) => entry.path)).toEqual([
+        '/repos/acme/app/issues/7/comments',
+        '/repos/acme/app/pulls/7/merge-async',
+      ]);
     });
 
     it('reviews the head commit the client read, with the text as the review body', async () => {
@@ -632,6 +853,155 @@ describe('canonical GitHub mutations', () => {
         .send({ ...context(account.accountId, { target: pullTarget, idempotencyKey: 'request-three' }), verdict: 'approve' }).expect(400);
 
       expect(requests).toEqual([]);
+    });
+
+    const threadOn = (number, repo = 'app') => ({
+      data: { node: { __typename: 'PullRequestReviewThread', isResolved: false, pullRequest: { number, repository: { name: repo, owner: { login: 'acme' } } } } },
+    });
+
+    it('answers and resolves a review thread of the target pull request', async () => {
+      const account = await auth.setGitHubAuth({ accessToken: 'token-one', user: { id: 1, login: 'actor' } });
+      const requests = recordRequests((entry) => {
+        if (entry.method === 'GET') return jsonResponse(pullRequest());
+        const query = entry.body.query;
+        if (query.includes('addPullRequestReviewThreadReply')) return jsonResponse({ data: { addPullRequestReviewThreadReply: { comment: { id: 'PRRC_1' } } } });
+        if (query.includes('resolveReviewThread')) return jsonResponse({ data: { resolveReviewThread: { thread: { isResolved: true } } } });
+        return jsonResponse(threadOn(7));
+      });
+      const { app, store } = makeApp();
+
+      await request(app).post('/api/source-control/github/pr/thread/reply')
+        .send({ ...context(account.accountId, { target: pullTarget }), threadId: 'PRRT_one', body: 'Fixed' }).expect(200);
+      await request(app).post('/api/source-control/github/pr/thread/resolve')
+        .send({ ...context(account.accountId, { target: pullTarget, idempotencyKey: 'request-two' }), threadId: 'PRRT_one', resolved: true }).expect(200);
+
+      const writes = requests.filter((entry) => entry.method === 'POST' && /mutation/.test(entry.body.query));
+      expect(writes.map((entry) => entry.body.variables)).toEqual([{ threadId: 'PRRT_one', body: 'Fixed' }, { threadId: 'PRRT_one' }]);
+      expect(store.records.get('request-one')).toMatchObject({ kind: 'change-request-thread-reply', state: 'succeeded' });
+      expect(store.records.get('request-two')).toMatchObject({ kind: 'change-request-thread-resolve', state: 'succeeded' });
+    });
+
+    it('refuses a thread of another pull request and writes nothing', async () => {
+      const account = await auth.setGitHubAuth({ accessToken: 'token-one', user: { id: 1, login: 'actor' } });
+      const requests = recordRequests((entry) => (entry.method === 'GET' ? jsonResponse(pullRequest()) : jsonResponse(threadOn(8))));
+      const { app } = makeApp();
+
+      const response = await request(app).post('/api/source-control/github/pr/thread/reply')
+        .send({ ...context(account.accountId, { target: pullTarget }), threadId: 'PRRT_other', body: 'Fixed' }).expect(409);
+
+      expect(response.body.code).toBe('SOURCE_CONTROL_MUTATION_TARGET_INVALID');
+      expect(requests.some((entry) => entry.method === 'POST' && /mutation/.test(entry.body.query))).toBe(false);
+    });
+
+    describe('discussions', () => {
+      const discussionTarget = { project: { owner: 'acme', name: 'app' }, number: 5 };
+      const discussionNode = (overrides = {}) => ({
+        id: 'D_five', number: 5, closed: false, labels: { nodes: [{ id: 'LA_bug', name: 'bug' }] }, ...overrides,
+      });
+      const commentNode = (number = 5, overrides = {}) => ({
+        __typename: 'DiscussionComment', isAnswer: false, replyTo: null, discussion: { number, repository: { name: 'app', owner: { login: 'acme' } } }, ...overrides,
+      });
+      // Every discussion read and write is one GraphQL POST; `writes` answers the mutations.
+      const graphqlRequests = (writes, { discussion = discussionNode(), comment = commentNode(), labels = {} } = {}) => recordRequests((entry) => {
+        const { query } = entry.body;
+        if (/^mutation/.test(query.trim())) return jsonResponse({ data: writes(query, entry.body.variables) });
+        if (query.includes('discussion(number:')) return jsonResponse({ data: { repository: { discussion } } });
+        if (query.includes('label(name:')) {
+          return jsonResponse({ data: { repository: Object.fromEntries(Object.entries(entry.body.variables)
+            .filter(([key]) => /^l\d+$/.test(key)).map(([key, name]) => [key, labels[name] ? { id: labels[name], name } : null])) } });
+        }
+        return jsonResponse({ data: { node: comment } });
+      });
+      const graphqlWrites = (requests) => requests.filter((entry) => /^mutation/.test(entry.body.query.trim())).map((entry) => entry.body.variables);
+
+      it('comments on a discussion and answers a comment of it in its thread', async () => {
+        const account = await auth.setGitHubAuth({ accessToken: 'token-one', user: { id: 1, login: 'actor' } });
+        const requests = graphqlRequests(() => ({ addDiscussionComment: { comment: { id: 'DC_new' } } }));
+        const { app, store } = makeApp();
+
+        await request(app).post('/api/source-control/github/discussions/comment')
+          .send({ ...context(account.accountId, { target: discussionTarget }), body: 'Thanks' }).expect(200);
+        await request(app).post('/api/source-control/github/discussions/comment')
+          .send({ ...context(account.accountId, { target: discussionTarget, idempotencyKey: 'request-two' }), body: 'Agreed', replyTo: 'DC_one' }).expect(200);
+
+        expect(graphqlWrites(requests)).toEqual([
+          { discussionId: 'D_five', body: 'Thanks', replyToId: null },
+          { discussionId: 'D_five', body: 'Agreed', replyToId: 'DC_one' },
+        ]);
+        expect(store.records.get('request-one')).toMatchObject({ kind: 'discussion-comment', state: 'succeeded', target: { number: 5 } });
+      });
+
+      it('refuses a reply to a comment of another discussion, or to a reply, and writes nothing', async () => {
+        const account = await auth.setGitHubAuth({ accessToken: 'token-one', user: { id: 1, login: 'actor' } });
+        const elsewhere = graphqlRequests(() => ({}), { comment: commentNode(6) });
+        const { app } = makeApp();
+        const response = await request(app).post('/api/source-control/github/discussions/comment')
+          .send({ ...context(account.accountId, { target: discussionTarget }), body: 'Agreed', replyTo: 'DC_other' }).expect(409);
+        expect(response.body.code).toBe('SOURCE_CONTROL_MUTATION_TARGET_INVALID');
+        expect(graphqlWrites(elsewhere)).toEqual([]);
+
+        const nested = graphqlRequests(() => ({}), { comment: commentNode(5, { replyTo: { id: 'DC_one' } }) });
+        await request(app).post('/api/source-control/github/discussions/comment')
+          .send({ ...context(account.accountId, { target: discussionTarget, idempotencyKey: 'request-two' }), body: 'Agreed', replyTo: 'DC_reply' }).expect(409);
+        expect(graphqlWrites(nested)).toEqual([]);
+      });
+
+      it('closes a discussion for a reason, reopens it, and chooses an answer', async () => {
+        const account = await auth.setGitHubAuth({ accessToken: 'token-one', user: { id: 1, login: 'actor' } });
+        const requests = graphqlRequests((query) => {
+          if (query.includes('closeDiscussion')) return { closeDiscussion: { discussion: { closed: true } } };
+          if (query.includes('reopenDiscussion')) return { reopenDiscussion: { discussion: { closed: false } } };
+          return { markDiscussionCommentAsAnswer: { discussion: { id: 'D_five' } } };
+        });
+        const { app, store } = makeApp();
+
+        const closed = await request(app).post('/api/source-control/github/discussions/state')
+          .send({ ...context(account.accountId, { target: discussionTarget }), state: 'closed', reason: 'outdated' }).expect(200);
+        await request(app).post('/api/source-control/github/discussions/state')
+          .send({ ...context(account.accountId, { target: discussionTarget, idempotencyKey: 'request-two' }), state: 'open' }).expect(200);
+        await request(app).post('/api/source-control/github/discussions/answer')
+          .send({ ...context(account.accountId, { target: discussionTarget, idempotencyKey: 'request-three' }), commentId: 'DC_one', answer: true }).expect(200);
+        // Closing names why; reopening names none.
+        await request(app).post('/api/source-control/github/discussions/state')
+          .send({ ...context(account.accountId, { target: discussionTarget, idempotencyKey: 'request-four' }), state: 'closed' }).expect(400);
+
+        expect(closed.body.result).toEqual({ state: 'closed' });
+        expect(graphqlWrites(requests)).toEqual([{ discussionId: 'D_five', reason: 'OUTDATED' }, { discussionId: 'D_five' }, { id: 'DC_one' }]);
+        expect(store.records.get('request-three')).toMatchObject({ kind: 'discussion-answer', state: 'succeeded' });
+      });
+
+      it('sets the labels as a whole set by their ids, and refuses a label the repository lacks', async () => {
+        const account = await auth.setGitHubAuth({ accessToken: 'token-one', user: { id: 1, login: 'actor' } });
+        const requests = graphqlRequests(() => ({ addLabelsToLabelable: { clientMutationId: null }, removeLabelsFromLabelable: { clientMutationId: null } }), {
+          labels: { idea: 'LA_idea' },
+        });
+        const { app } = makeApp();
+
+        await request(app).post('/api/source-control/github/discussions/labels')
+          .send({ ...context(account.accountId, { target: discussionTarget }), labels: ['idea'] }).expect(200);
+        const refused = await request(app).post('/api/source-control/github/discussions/labels')
+          .send({ ...context(account.accountId, { target: discussionTarget, idempotencyKey: 'request-two' }), labels: ['idea', 'missing'] }).expect(422);
+
+        expect(graphqlWrites(requests)).toEqual([{ id: 'D_five', labelIds: ['LA_idea'] }, { id: 'D_five', labelIds: ['LA_bug'] }]);
+        expect(refused.body).toEqual({ error: 'Label missing does not exist in this repository', code: 'SOURCE_CONTROL_MUTATION_REJECTED' });
+      });
+
+      it('leaves a label change unknown when the labels were added and the removal was refused', async () => {
+        const account = await auth.setGitHubAuth({ accessToken: 'token-one', user: { id: 1, login: 'actor' } });
+        recordRequests((entry) => {
+          const { query } = entry.body;
+          if (query.includes('removeLabelsFromLabelable')) return jsonResponse({ errors: [{ message: 'Refused' }] });
+          if (query.includes('addLabelsToLabelable')) return jsonResponse({ data: { addLabelsToLabelable: { clientMutationId: null } } });
+          if (query.includes('label(name:')) return jsonResponse({ data: { repository: { l0: { id: 'LA_idea', name: 'idea' } } } });
+          return jsonResponse({ data: { repository: { discussion: discussionNode() } } });
+        });
+        const { app, store } = makeApp();
+
+        await request(app).post('/api/source-control/github/discussions/labels')
+          .send({ ...context(account.accountId, { target: discussionTarget }), labels: ['idea'] });
+
+        expect(store.records.get('request-one')).toMatchObject({ kind: 'discussion-labels', state: 'outcome-unknown' });
+      });
     });
 
     it("passes GitHub's reason when it refuses a review", async () => {
@@ -799,25 +1169,43 @@ describe('canonical GitHub mutations', () => {
 
   it('does not retry or invalidate after a definite provider rejection', async () => {
     const account = await auth.setGitHubAuth({ accessToken: 'token-one', user: { id: 1, login: 'actor' } });
-    const fetch = vi.fn(async () => jsonResponse({ message: 'rejected private payload' }, 422));
+    const fetch = vi.fn(async () => jsonResponse({ message: 'A pull request already exists for acme:feature.' }, 422));
     vi.stubGlobal('fetch', fetch);
+    // The shell's status cache captures Date.now when the app is created.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(500);
     const { app, store } = makeApp();
-    const now = vi.spyOn(Date, 'now');
     const statusQuery = {
       directory: '/repo', branch: 'feature', repositoryId: 'repo-one', bindingRevision: 3,
       accountId: account.accountId, primaryRemote: 'origin', instance: 'github.com',
     };
-    now.mockReturnValue(1_000);
+    vi.setSystemTime(1_000);
     expect((await request(app).get('/api/source-control/github/pr/status').query(statusQuery)).body.fetchedAt).toBe(1_000);
 
-    now.mockReturnValue(2_000);
+    vi.setSystemTime(2_000);
     const response = await request(app).post('/api/source-control/github/pr/create')
       .send({ ...context(account.accountId), title: 'private title' }).expect(422);
-    expect(response.body).toEqual({ error: 'GitHub mutation failed', code: 'GITHUB_MUTATION_REJECTED' });
+    expect(response.body).toEqual({ error: 'A pull request already exists for acme:feature.', code: 'SOURCE_CONTROL_MUTATION_REJECTED' });
     expect(fetch).toHaveBeenCalledOnce();
     expect(store.records.get('request-one')).toMatchObject({ state: 'failed', result: { failureStatus: 422, failureCode: 'GITHUB_MUTATION_REJECTED' } });
-    now.mockReturnValue(3_000);
+    vi.setSystemTime(3_000);
     expect((await request(app).get('/api/source-control/github/pr/status').query(statusQuery)).body.fetchedAt).toBe(1_000);
+  });
+
+  it('answers with GitHub\'s reason when it refuses a read before the write', async () => {
+    const account = await auth.setGitHubAuth({ accessToken: 'token-one', user: { id: 1, login: 'actor' } });
+    const restricted = 'Although you appear to have the correct authorization credentials, the `acme` organization has enabled OAuth App access restrictions.';
+    const fetch = vi.fn(async () => jsonResponse({ message: restricted }, 403));
+    vi.stubGlobal('fetch', fetch);
+    const { app, store } = makeApp();
+
+    const response = await request(app).post('/api/source-control/github/pr/merge')
+      .send({ ...context(account.accountId, { target: { project: { owner: 'acme', name: 'app' }, number: 7 } }), method: 'squash' })
+      .expect(403);
+
+    expect(response.body).toEqual({ error: restricted, code: 'SOURCE_CONTROL_MUTATION_REJECTED' });
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(store.records.size).toBe(0);
   });
 
   it('invalidates canonical status only for the successful mutation authority', async () => {
@@ -825,34 +1213,60 @@ describe('canonical GitHub mutations', () => {
     const unrelated = await auth.setGitHubAuth({ accessToken: 'token-two', user: { id: 2, login: 'other' } });
     const fetch = vi.fn(async () => jsonResponse(pullRequest()));
     vi.stubGlobal('fetch', fetch);
+    // The shell's status cache captures Date.now when the app is created.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(500);
     const { app } = makeApp();
-    const now = vi.spyOn(Date, 'now');
     const statusQuery = (accountId, directory = '/repo', repositoryId = 'repo-one') => ({
       directory, branch: 'feature', repositoryId, bindingRevision: 3,
       accountId, primaryRemote: 'origin', instance: 'github.com',
     });
 
-    now.mockReturnValue(1_000);
+    vi.setSystemTime(1_000);
     expect((await request(app).get('/api/source-control/github/pr/status').query(statusQuery(acting.accountId))).body.fetchedAt).toBe(1_000);
-    now.mockReturnValue(2_000);
+    vi.setSystemTime(2_000);
     expect((await request(app).get('/api/source-control/github/pr/status').query(statusQuery(unrelated.accountId))).body.fetchedAt).toBe(2_000);
-    now.mockReturnValue(2_100);
+    vi.setSystemTime(2_100);
     expect((await request(app).get('/api/source-control/github/pr/status').query(statusQuery(acting.accountId, '/worktree'))).body.fetchedAt).toBe(2_100);
-    now.mockReturnValue(2_200);
+    vi.setSystemTime(2_200);
     expect((await request(app).get('/api/source-control/github/pr/status').query(statusQuery(acting.accountId, '/other', 'repo-two'))).body.fetchedAt).toBe(2_200);
 
-    now.mockReturnValue(3_000);
+    vi.setSystemTime(3_000);
     await request(app).post('/api/source-control/github/pr/create')
       .send({ ...context(acting.accountId), title: 'Title' }).expect(200);
 
-    now.mockReturnValue(4_000);
+    vi.setSystemTime(4_000);
     expect((await request(app).get('/api/source-control/github/pr/status').query(statusQuery(acting.accountId))).body.fetchedAt).toBe(4_000);
-    now.mockReturnValue(5_000);
+    vi.setSystemTime(5_000);
     expect((await request(app).get('/api/source-control/github/pr/status').query(statusQuery(unrelated.accountId))).body.fetchedAt).toBe(2_000);
-    now.mockReturnValue(6_000);
+    vi.setSystemTime(6_000);
     expect((await request(app).get('/api/source-control/github/pr/status').query(statusQuery(acting.accountId, '/worktree'))).body.fetchedAt).toBe(6_000);
-    now.mockReturnValue(7_000);
+    vi.setSystemTime(7_000);
     expect((await request(app).get('/api/source-control/github/pr/status').query(statusQuery(acting.accountId, '/other', 'repo-two'))).body.fetchedAt).toBe(2_200);
+  });
+
+  it('answers a landed write as succeeded even when dropping its caches fails', async () => {
+    const account = await auth.setGitHubAuth({ accessToken: 'token-one', user: { id: 1, login: 'actor' } });
+    const fetch = vi.fn(async () => jsonResponse(pullRequest()));
+    vi.stubGlobal('fetch', fetch);
+    const [octokit, summaries, rateLimit, patch, prStatus, checks, repo, forks, git] = await Promise.all([
+      import('../github/octokit.js'), import('../github/pr-summaries.js'), import('../github/rate-limit.js'),
+      import('../github/change-request-patch.js'), import('../github/pr-status.js'), import('../github/checks-summary.js'),
+      import('../github/repo/index.js'), import('../github/repo/fork-detection.js'), import('../git/index.js'),
+    ]);
+    const invalidateRepoPullsCache = vi.fn(() => { throw new Error('cache module failed'); });
+    const modules = async () => ({
+      octokit, summaries, rateLimit, patch, checks, repo, forks, git,
+      prStatus: { ...prStatus, invalidateRepoPullsCache },
+    });
+    const { app, store } = makeApp({ modules });
+
+    const response = await request(app).post('/api/source-control/github/pr/create')
+      .send({ ...context(account.accountId), title: 'Title' }).expect(200);
+
+    expect(response.body).toMatchObject({ replayed: false });
+    expect(invalidateRepoPullsCache).toHaveBeenCalledOnce();
+    expect(store.records.get('request-one')).toMatchObject({ state: 'succeeded' });
   });
 
   it('does not let an older canonical status read refill an invalidated authority', async () => {
@@ -921,9 +1335,14 @@ describe('canonical GitHub mutations', () => {
     const target = { project: { owner: 'acme', name: 'app' }, number: 7, head: 'feature', base: 'main', headSha: 'abc123' };
     await request(app).post('/api/source-control/github/pr/update')
       .send({ ...context(account.accountId, { target }), title: 'Changed' }).expect(200);
+    // The update revalidates its target with one read of its own.
+    expect(pullReads).toHaveLength(4);
 
-    await request(app).get('/api/source-control/github/pulls/context').query(query('/repo')).expect(200);
+    const repoContext = await request(app).get('/api/source-control/github/pulls/context').query(query('/repo')).expect(200);
+    expect(pullReads).toHaveLength(5);
+    expect(repoContext.body.changeRequest).toMatchObject({ number: 7, id: 'acme/app#7' });
     await request(app).get('/api/source-control/github/pulls/context').query(query('/worktree')).expect(200);
+    expect(pullReads).toHaveLength(6);
     await request(app).get('/api/source-control/github/pulls/context').query(query('/other', 'repo-two')).expect(200);
     expect(pullReads).toHaveLength(6);
   });

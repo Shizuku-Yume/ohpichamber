@@ -24,3 +24,14 @@
 - [ ] `session-turn-duration` and `useUIStore` are reworked and consumed; `useUpdateStore` maps task 22's desktop-host states and no VS Code-only kind.
 - [ ] `sync/workflow-activity.ts` and the four `*-sync` subscribers land with the control-stream event types and are consumed (workflow activity through task 17).
 - [ ] Session pins remain deferred to the technical-debt entry `Session pins have no OMP source`; no fake pin store is added.
+
+## Progress
+
+### Handoffs from landed tasks
+
+- **Task 17 (workflows)** delivers the workflow store as the only run-state source and the
+  panel data layer. This task's `sync/workflow-activity.ts` must derive the running-session
+  ids from `packages/ui/src/lib/workflows/store.ts` (runs with state `running` / an agent
+  running) and call `setWorkflowRunningSessions`; the tip's `SessionActivityIndicator` gains
+  the workflow state here. Task 23 deferred the file because it needed both this task's
+  indicator state and task 17's feed; no stand-in indicator exists on the tip.

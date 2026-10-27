@@ -144,7 +144,7 @@ const OPENCHAMBER_WORKFLOW_ACTIONS = Object.freeze(
  * workflow agent asked for one allows it (`../workflows/agent-session.js`), so
  * no other session carries its declaration.
  */
-const WORKFLOW_ANSWER_TOOL = 'openchamber_workflow_answer';
+export const WORKFLOW_ANSWER_TOOL = 'openchamber_workflow_answer';
 
 const OPENCHAMBER_WORKFLOW_ANSWER_ACTION_DEFINITIONS = Object.freeze([
   { action: 'workflow.answer', title: 'Submit a workflow answer', description: 'Only for a workflow agent whose prompt asks for it: answer, a JSON value matching the schema in that prompt. Checked on the spot; a mismatch says what to fix' },
@@ -163,6 +163,11 @@ const OPENCHAMBER_WORKFLOW_ANSWER_ACTIONS = Object.freeze(
  */
 const OPENCHAMBER_AGENT_TOOL_ACTION_DEFINITIONS = Object.freeze([
   ...AGENT_EXPOSED_CONTROL_ACTION_DEFINITIONS,
+  // Workflow actions ride this one tool: the Agent Service's managed catalog
+  // has no separate workflow tool, and without them an agent could not
+  // propose, follow or answer a run. The runtime answers 503 when the feature
+  // is off.
+  ...OPENCHAMBER_WORKFLOW_ACTION_DEFINITIONS,
 ]);
 
 export const OPENCHAMBER_AGENT_TOOL_ACTIONS = Object.freeze(

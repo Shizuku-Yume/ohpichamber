@@ -221,6 +221,9 @@ export const createFeatureRoutesRuntime = () => {
 
     registerOpenChamberControlRoutes(app, { controlService: openChamberControlService });
 
+    // Agent workflows, present only in a build with OPENCHAMBER_WORKFLOWS_ENABLE.
+    routeDependencies.workflows?.register(app);
+
     registerMarkdownImageGrantRoutes(app, {
       fsPromises,
       path,

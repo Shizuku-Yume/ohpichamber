@@ -143,6 +143,7 @@ import { createHostPromptDeliveryRuntime } from './lib/host/prompt-delivery-runt
 import { createSelectedCredentialResolver, createSelectedCredentialHandoff, createCatalogCredentialSelections } from './lib/host/private-credential.js';
 import { createScheduledTaskService } from './lib/scheduled-tasks/service.js';
 import { createOpenChamberControlService } from './lib/openchamber-control/service.js';
+import { createWorkflowsModule } from './lib/workflows/routes.js';
 import { createPluginNotificationEmitter } from './lib/notifications/emit-route.js';
 import { OpenChamberControlError } from './lib/openchamber-control/error.js';
 import { createSessionLinker } from './lib/openchamber-sessions/session-link.js';
@@ -937,6 +938,19 @@ const dispatchResultsRuntime = createDispatchResultsRuntime({
 });
 dispatchResultsRuntime.start();
 
+// Agent workflows: scripts that fan a task out to many agents, run here while
+// the agent that asked stays free. Absent entirely unless OPENCHAMBER_WORKFLOWS_ENABLE
+// is set, the same gate as upstream.
+const workflowsModule = createWorkflowsModule({
+  sessionService: openChamberSessionService,
+  resolveWorkspaceScope: hostAgentRuntime.resolveWorkspaceScope,
+  listWorkspaceScopes,
+  dataDir: OPENCHAMBER_DATA_DIR,
+  fsPromises,
+  path,
+  broadcast: (event) => broadcastOpenChamberUiEvent(event),
+});
+
 // Full-text search over this server's conversations (user messages and agent
 // replies). Opt-in: off by default, and off means idle. The index is derived
 // data in the data dir, fed from the same event stream; see lib/message-search.
@@ -1327,6 +1341,7 @@ const openChamberControlService = createOpenChamberControlService({
   }),
   dispatchResults: dispatchResultsRuntime,
   archiveStore: openChamberSessionService.archiveStore,
+  workflowRuntime: workflowsModule.workflowRuntime,
 });
 
 const ensureGlobalWatcherStarted = async () => {
@@ -1350,6 +1365,7 @@ const startAgentService = async () => {
   if (isShuttingDown) return hostAgentRuntime.service.getState();
   permissionAutoAcceptRuntime.start();
   await ensureGlobalWatcherStarted();
+  void workflowsModule.deliverPending?.();
   await convertLegacyQueue();
   await messageQueueRuntime.start();
   await scheduledTasksRuntime.start();
@@ -1963,6 +1979,7 @@ async function main(options = {}) {
     resolveSessionScope: hostAgentRuntime.resolveSessionScope,
     resolveHostSessionScope: hostAgentRuntime.resolveHostSessionScope,
     listQueueScopes,
+    workflows: workflowsModule,
     resolveQuotaSelection,
     listQuotaSelections,
     resolveCredential,

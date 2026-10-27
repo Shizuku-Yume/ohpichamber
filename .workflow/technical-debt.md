@@ -70,3 +70,13 @@ An entry leaves this file in one of two ways:
 - **Solution:** add Host worktree-archive records/endpoints that keep archived sessions of removed checkouts resolvable (an archived-worktree scope projected into the session list, or an archive-store listing that does not require the checkout path), port the deferred `worktreeArchive` UI and archive worktree rows, and surface discovery errors (`METADATA_READ_FAILED` and any `errors` map) in the Archive page as an explicit error state with retry.
 - **Acceptance:** after removing a worktree with sessions, the Archive page lists them after reload, and a metadata read failure renders an explicit error state, never “0 archived sessions”.
 - **Cost:** Host workspace/archive store and contract change, a new API plus UI listing and error state, and tests on both the Host route and the Archive page.
+
+## Session create cannot set a parent link
+
+- **Where:** `packages/agent-contract/src/session.ts` (`SessionCreateRequestSchema`, line 86), `packages/agent-service/src/supervisor/host-authorization-protocol.ts` (`HostSessionBootstrapSchema`, line 17), `packages/web/server/lib/openchamber-sessions/routes.js` (`create`, line 98)
+- **Added:** 2026-10-27
+- **Priority:** worth-doing
+- **Problem:** `RuntimeSession.parentSessionId` exists and archive restore already preserves it (task 01), but no create path can set it: the canonical create request is `{ projectId, workspaceId, options, metadata }` and the Host bootstrap is `WorkerBootstrapSchema` with no parent field. Only the Agent Service's own subagent tool writes a parent (`sessions/registry.ts:290-303`). Task 17's workflow agents therefore run as root sessions, unlike upstream's OpenCode child sessions, and a server-initiated fan-out cannot nest under the session that proposed it.
+- **Impact:** workflow agents appear as ordinary sessions; the chat can only hide or group them from the run record (`agents[].sessionId`). Any future server-side fan-out (multi-run, dispatched audits) repeats the same workaround.
+- **Solution:** add an optional `parentSessionId` to `SessionCreateRequestSchema` and `HostSessionBootstrapSchema`, validate it against the caller's authorized scope and the parent's workspace in the service, persist it on the runtime session and the journal, and let the session list expose the parent it already projects. Then task 17 can create workflow agents under the proposing session.
+- **Cost:** a contract change across the Host, the Agent Service and both session lists, with archive/journal and scope-validation tests; needs a data-model decision on whether non-subagent children are allowed.

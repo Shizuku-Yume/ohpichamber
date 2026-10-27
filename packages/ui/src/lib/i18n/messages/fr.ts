@@ -25,6 +25,9 @@ import { integrationsCatalogI18n } from './integrations-catalog.i18n';
 import { workflowsI18n } from './workflows.i18n';
 import { sessionWarmingI18n } from './session-warming.i18n';
 export const dict = {
+  'chat.chatInput.largeTextPaste.title': 'Texte volumineux détecté',
+  'chat.chatInput.largeTextPaste.attach': 'Joindre comme fichier',
+  'chat.chatInput.largeTextPaste.inline': 'Coller en ligne',
   ...autocompleteScopeI18n['fr'],
   'terminalView.toast.pasteFailedTouch': 'Impossible de lire le presse-papiers.',
   'contextFileOpen.failure.tooLargeSize': 'Le fichier est trop volumineux pour être ouvert (plus de {size})',

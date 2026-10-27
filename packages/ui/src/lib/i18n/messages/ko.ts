@@ -26,6 +26,9 @@ import { integrationsCatalogI18n } from './integrations-catalog.i18n';
 import { sessionWarmingI18n } from './session-warming.i18n';
 import { workflowsI18n } from './workflows.i18n';
 export const dict: Record<I18nKey, string> = {
+  'chat.chatInput.largeTextPaste.title': '긴 텍스트 감지됨',
+  'chat.chatInput.largeTextPaste.attach': '파일로 첨부',
+  'chat.chatInput.largeTextPaste.inline': '본문에 붙여넣기',
   ...autocompleteScopeI18n['ko'],
   'terminalView.toast.pasteFailedTouch': '클립보드를 읽을 수 없습니다.',
   'contextFileOpen.failure.tooLargeSize': '파일이 너무 커서 열 수 없습니다({size} 초과)',

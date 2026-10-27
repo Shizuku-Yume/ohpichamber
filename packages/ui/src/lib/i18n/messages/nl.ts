@@ -25,6 +25,9 @@ import { integrationsCatalogI18n } from './integrations-catalog.i18n';
 import { workflowsI18n } from './workflows.i18n';
 import { sessionWarmingI18n } from './session-warming.i18n';
 export const dict = {
+  'chat.chatInput.largeTextPaste.title': 'Grote hoeveelheid tekst herkent',
+  'chat.chatInput.largeTextPaste.attach': 'Als bestand toevoegen',
+  'chat.chatInput.largeTextPaste.inline': 'Inline plakken',
   ...autocompleteScopeI18n['nl'],
   'terminalView.toast.pasteFailedTouch': 'Kan het klembord niet lezen.',
   'contextFileOpen.failure.tooLargeSize': 'Bestand is te groot om te openen (meer dan {size})',

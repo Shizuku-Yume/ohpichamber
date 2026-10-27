@@ -25,6 +25,9 @@ import { workflowsI18n } from './workflows.i18n';
 
 import { sessionWarmingI18n } from './session-warming.i18n';
 export const dict = {
+  'chat.chatInput.largeTextPaste.title': 'Large text detected',
+  'chat.chatInput.largeTextPaste.attach': 'Attach as file',
+  'chat.chatInput.largeTextPaste.inline': 'Paste inline',
   ...autocompleteScopeI18n['en'],
   'terminalView.toast.pasteFailedTouch': 'Could not read the clipboard.',
   'contextFileOpen.failure.tooLargeSize': 'File is too large to open (over {size})',

@@ -26,6 +26,9 @@ import { integrationsCatalogI18n } from './integrations-catalog.i18n';
 import { sessionWarmingI18n } from './session-warming.i18n';
 import { workflowsI18n } from './workflows.i18n';
 export const dict: Record<I18nKey, string> = {
+  'chat.chatInput.largeTextPaste.title': 'Wykryto duży tekst',
+  'chat.chatInput.largeTextPaste.attach': 'Dołącz jako plik',
+  'chat.chatInput.largeTextPaste.inline': 'Wklej w treści',
   ...autocompleteScopeI18n['pl'],
   'terminalView.toast.pasteFailedTouch': 'Nie udało się odczytać schowka.',
   'contextFileOpen.failure.tooLargeSize': 'Plik jest za duży, aby go otworzyć (ponad {size})',

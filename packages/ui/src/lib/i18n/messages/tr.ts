@@ -25,6 +25,9 @@ import { integrationsCatalogI18n } from './integrations-catalog.i18n';
 import { workflowsI18n } from './workflows.i18n';
 import { sessionWarmingI18n } from './session-warming.i18n';
 export const dict = {
+  'chat.chatInput.largeTextPaste.title': 'Büyük metin algılandı',
+  'chat.chatInput.largeTextPaste.attach': 'Dosya olarak ekle',
+  'chat.chatInput.largeTextPaste.inline': 'Satır içi yapıştır',
   ...autocompleteScopeI18n['tr'],
   'terminalView.toast.pasteFailedTouch': 'Pano okunamadı.',
   'contextFileOpen.failure.tooLargeSize': 'Dosya açılamayacak kadar büyük ({size} üzeri)',

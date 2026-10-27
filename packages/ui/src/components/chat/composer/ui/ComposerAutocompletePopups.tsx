@@ -14,6 +14,7 @@
 import React from 'react';
 import { AnimatePresence } from 'motion/react';
 
+import { EmojiAutocomplete, type EmojiAutocompleteHandle } from '@/components/emoji/EmojiAutocomplete';
 import { CommandAutocomplete, type CommandAutocompleteHandle, type CommandInfo } from '../../CommandAutocomplete';
 import { FileMentionAutocomplete, type FileMentionHandle } from '../../FileMentionAutocomplete';
 import { SkillAutocomplete, type SkillAutocompleteHandle } from '../../SkillAutocomplete';
@@ -64,10 +65,12 @@ interface ComposerAutocompletePopupsProps {
     commandRef: React.RefObject<CommandAutocompleteHandle | null>;
     skillRef: React.RefObject<SkillAutocompleteHandle | null>;
     mentionRef: React.RefObject<FileMentionHandle | null>;
+    emojiRef: React.RefObject<EmojiAutocompleteHandle | null>;
     onCommandSelect: (command: CommandInfo) => void;
     onSkillSelect: (skillName: string) => void;
     onFileSelect: (file: { name: string; path: string; relativePath?: string }) => void;
     onAgentSelect: (agentName: string) => void;
+    onEmojiSelect: (emoji: string) => void;
     onClose: () => void;
 }
 
@@ -120,6 +123,16 @@ function AutocompletePopup(props: ComposerAutocompletePopupsProps & { open: Auto
                     searchQuery={query}
                     onFileSelect={props.onFileSelect}
                     onAgentSelect={props.onAgentSelect}
+                    onClose={onClose}
+                    style={style}
+                />
+            );
+        case 'emoji':
+            return (
+                <EmojiAutocomplete
+                    ref={props.emojiRef}
+                    searchQuery={query}
+                    onEmojiSelect={props.onEmojiSelect}
                     onClose={onClose}
                     style={style}
                 />

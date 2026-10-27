@@ -26,6 +26,9 @@ import { integrationsCatalogI18n } from './integrations-catalog.i18n';
 import { sessionWarmingI18n } from './session-warming.i18n';
 import { workflowsI18n } from './workflows.i18n';
 export const dict: Record<I18nKey, string> = {
+  'chat.chatInput.largeTextPaste.title': '大きなテキストを検出',
+  'chat.chatInput.largeTextPaste.attach': 'ファイルとして添付',
+  'chat.chatInput.largeTextPaste.inline': 'そのまま貼り付け',
   ...autocompleteScopeI18n['ja'],
   'terminalView.toast.pasteFailedTouch': 'クリップボードを読み取れませんでした。',
   'contextFileOpen.failure.tooLargeSize': 'ファイルが大きすぎるため開けません（{size} 超）',

@@ -25,6 +25,9 @@ import { integrationsCatalogI18n } from './integrations-catalog.i18n';
 import { workflowsI18n } from './workflows.i18n';
 import { sessionWarmingI18n } from './session-warming.i18n';
 export const dict = {
+  'chat.chatInput.largeTextPaste.title': 'Großer Text erkannt',
+  'chat.chatInput.largeTextPaste.attach': 'Als Datei anhängen',
+  'chat.chatInput.largeTextPaste.inline': 'Direkt einfügen',
   ...autocompleteScopeI18n['de'],
   'terminalView.toast.pasteFailedTouch': 'Die Zwischenablage konnte nicht gelesen werden.',
   'contextFileOpen.failure.tooLargeSize': 'Datei ist zu groß zum Öffnen (über {size})',

@@ -26,6 +26,9 @@ import { integrationsCatalogI18n } from './integrations-catalog.i18n';
 import { sessionWarmingI18n } from './session-warming.i18n';
 import { workflowsI18n } from './workflows.i18n';
 export const dict: Record<I18nKey, string> = {
+  "chat.chatInput.largeTextPaste.title": "Texto grande detectado",
+  "chat.chatInput.largeTextPaste.attach": "Adjuntar como archivo",
+  "chat.chatInput.largeTextPaste.inline": "Pegar en línea",
   ...autocompleteScopeI18n['es'],
   'terminalView.toast.pasteFailedTouch': 'No se pudo leer el portapapeles.',
   'contextFileOpen.failure.tooLargeSize': 'El archivo es demasiado grande para abrirlo (más de {size})',

@@ -26,6 +26,9 @@ import { integrationsCatalogI18n } from './integrations-catalog.i18n';
 import { sessionWarmingI18n } from './session-warming.i18n';
 import { workflowsI18n } from './workflows.i18n';
 export const dict: Record<I18nKey, string> = {
+  "chat.chatInput.largeTextPaste.title": "Виявлено великий текст",
+  "chat.chatInput.largeTextPaste.attach": "Долучити як файл",
+  "chat.chatInput.largeTextPaste.inline": "Вставити в повідомлення",
   ...autocompleteScopeI18n['uk'],
   'terminalView.toast.pasteFailedTouch': 'Не вдалося прочитати буфер обміну.',
   'contextFileOpen.failure.tooLargeSize': 'Файл завеликий, щоб його відкрити (понад {size})',

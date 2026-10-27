@@ -25,6 +25,9 @@ import { integrationsCatalogI18n } from './integrations-catalog.i18n';
 import { sessionWarmingI18n } from './session-warming.i18n';
 import { workflowsI18n } from './workflows.i18n';
 export const dict: Record<I18nKey, string> = {
+  'chat.chatInput.largeTextPaste.title': '检测到大段文本',
+  'chat.chatInput.largeTextPaste.attach': '附加为文件',
+  'chat.chatInput.largeTextPaste.inline': '直接粘贴',
   ...autocompleteScopeI18n['zh-CN'],
   'terminalView.toast.pasteFailedTouch': '无法读取剪贴板。',
   'contextFileOpen.failure.tooLargeSize': '文件过大，无法打开（超过 {size}）',

@@ -307,6 +307,13 @@ export const SETTINGS_REGISTRY = {
     parse: parseBoolean,
     ui: uiStore('agentMemoryFeatureAvailable', (v) => useUIStore.getState().setAgentMemoryFeatureAvailable(v), { autoSave: false }),
   }),
+  // Server-owned: whether this build has agent workflows (`OPENCHAMBER_WORKFLOWS_ENABLE`).
+  agentWorkflowFeatureAvailable: field({
+    scope: 'instance',
+    computed: true,
+    parse: parseBoolean,
+    ui: uiStore('agentWorkflowFeatureAvailable', (v) => useUIStore.getState().setAgentWorkflowFeatureAvailable(v), { autoSave: false }),
+  }),
   routingFeatureAvailable: field({
     scope: 'instance',
     computed: true,

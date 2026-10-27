@@ -4,7 +4,7 @@ import { isDoneSuggested, isSessionInWork } from '@/lib/sessionWorkMetadata';
 import type { PrVisualSummary } from '@/stores/useGitHubPrStatusStore';
 import { useNotificationStore } from '@/sync/notification-store';
 
-export const isSessionUnread = (session: Session): boolean => (
+const isSessionUnread = (session: Session): boolean => (
   (useNotificationStore.getState().index.session.unseenCount[session.sessionId] ?? 0) > 0
 );
 import type { WorktreeMetadata } from '@/types/worktree';

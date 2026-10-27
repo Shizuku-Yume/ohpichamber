@@ -140,7 +140,7 @@ Removed because only the deleted marked/DOMPurify/morphdom renderer used them (g
 - **Supporting modules adopted from other path lists because this renderer needs them**: `lib/invisibleText`, `lib/textSelection`, `lib/router/appOrigins`, `lib/emoji/shortcodes`, the `markdown-github.i18n` fragment and English renderer keys, `composer/attachments/filePaths.normalizeDroppedPath`, `message/selectionMarkdown.{ts,test}`, `message/imageExport.{ts,test}`, `message/parts/ToolPartDiffPreview`, `views/files/previews/useMarkdownLocalAssets.{ts,test}`, and `contexts/DiffWorkerProvider`. The diff provider cutover is required by the observed worker-init timeout; the others are the delegate targets of the refreshed renderer and editor. Task 13/07/24 own their later integration.
 - **Not carried over**: repository-reference linking, diff-origin labels, file-reference chips that depend on the source-control provider registry, and the VS Code branches. Each names its owning task above; none is replaced by an adapter or a fallback engine.
 
-## Final checks (post-rebase, commit fc56a69956)
+## Final checks (post-rebase)
 
 - `bun install --frozen-lockfile`: 0 (`frozen-install.log`).
 - `bun run type-check`: 0 (`root-type-check.log`, re-run after the diff-provider adoption: 0).
@@ -150,4 +150,6 @@ Removed because only the deleted marked/DOMPurify/morphdom renderer used them (g
 - `bunx oxlint` on the authored paths: 0 (`oxlint-authored.log`).
 - `bun run build`: see `build-final.log`; the web bundle was rebuilt again after the diff-provider adoption (`build-web2.log`).
 
-**Check after:** implementation `0a9062f31d` on integration `65862865d0` (rebased) — `bun install --frozen-lockfile` 0, `bun run type-check` 0, `bun run lint` 0, `VITEST_MAX_WORKERS=2 bun run test` 0 (7/7 suites; 6086 passed, 128 skipped; `test-root-final2.log`), `bun run build` 0, `GET /api/agent/v1/ready` 200; warm dev and built-web diff worker loads with no console errors and the markdown/diff real path is recorded above.
+**Check after:** implementation `643f44ef71` on integration `dfd74f36bd` (rebased) — `bun install --frozen-lockfile` 0, `bun run type-check` 0, `bun run lint` 0, `VITEST_MAX_WORKERS=2 bun run test` 0 (7/7 suites; 6086 passed, 128 skipped; `test-root-final4.log`), `bun run build` 0 (`build-final2.log`; agent-service dist rebuilt first), `GET /api/agent/v1/ready` 200. Post-rebase real path repeated: dev (6380/6302) renders the sample (code/table/math/mermaid, `__ohpi_pwned` null) and the Git diff (`diffs-container`, 6 lines) with no console errors (`real-path/post-rebase-markdown.png`, `post-rebase-git-diff.png`); the same on the built bundle served from `dist` on 6303 (`final-built-markdown.png`, `final-built-diff.png`). One unidentified non-renderer 404 appears when the sample opens in both dev and built (external link favicon probe); no markdown or worker asset fails. A previous full run at the preceding tip hit the load-sensitive `workers.capacity` agent-service test under host load ~11; the file passed 6/6 twice on rerun and the final full run is 7/7.
+
+**Out of scope note:** the sidebar Contents search / `searchContents` client and the `GET /api/fs/find-in-files` 501 `search-unavailable` mapping are not in this task's path list and were not adopted here; they belong to task 24. No `@vscode/ripgrep` dependency was added.

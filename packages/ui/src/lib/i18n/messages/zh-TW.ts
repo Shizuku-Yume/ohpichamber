@@ -18,7 +18,13 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 import { integrationsCatalogI18n } from './integrations-catalog.i18n';
 
+import { sessionWarmingI18n } from './session-warming.i18n';
+import { workflowsI18n } from './workflows.i18n';
 export const dict: Record<I18nKey, string> = {
+  'chat.liveActivity.moreRows': '還有 {count} 項',
+
+  ...workflowsI18n['zh-TW'],
+  ...sessionWarmingI18n['zh-TW'],
   "startup.legacyNotice.descriptionGeneric": "您先前的 OpenCode 會話未匯入至 OpenChamber。現有資料仍完整保留在您的 OpenCode 資料目錄中。若要使用模型，請在「設定」中重新登入供應商。",
   "startup.legacyNotice.action": "設定供應商",
   "startup.legacyNotice.title": "偵測到先前的 OpenCode 資料",

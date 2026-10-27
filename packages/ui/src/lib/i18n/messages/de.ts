@@ -18,7 +18,12 @@ import { pluginsGridI18n } from './plugins-grid.i18n';
 import { markdownGithubI18n } from './markdown-github.i18n';
 import { integrationsCatalogI18n } from './integrations-catalog.i18n';
 
+import { workflowsI18n } from './workflows.i18n';
+import { sessionWarmingI18n } from './session-warming.i18n';
 export const dict = {
+  ...workflowsI18n['de'],
+  ...sessionWarmingI18n['de'],
+  'chat.liveActivity.moreRows': '+{count} more',
   "startup.legacyNotice.title": "Vorherige OpenCode-Daten erkannt",
   "startup.legacyNotice.dismiss": "Schließen",
   "startup.legacyNotice.descriptionGeneric": "Ihre früheren OpenCode-Sitzungen wurden nicht in OpenChamber importiert. Ihre vorhandenen Daten bleiben unverändert in Ihrem OpenCode-Datenverzeichnis erhalten. Um Ihre Modelle zu nutzen, melden Sie sich in den Einstellungen erneut bei Ihren Anbietern an.",

@@ -18,7 +18,13 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 import { integrationsCatalogI18n } from './integrations-catalog.i18n';
 
+import { sessionWarmingI18n } from './session-warming.i18n';
+import { workflowsI18n } from './workflows.i18n';
 export const dict: Record<I18nKey, string> = {
+  'chat.liveActivity.moreRows': '还有 {count} 项',
+
+  ...workflowsI18n['zh-CN'],
+  ...sessionWarmingI18n['zh-CN'],
   "startup.legacyNotice.title": "检测到先前的 OpenCode 数据",
   "startup.legacyNotice.action": "配置提供商",
   "startup.legacyNotice.descriptionGeneric": "您之前的 OpenCode 会话未导入到 OpenChamber 中。您的现有数据仍安全保留在您的 OpenCode 数据目录中。若要使用模型，请在“设置”中重新登录模型提供商。",

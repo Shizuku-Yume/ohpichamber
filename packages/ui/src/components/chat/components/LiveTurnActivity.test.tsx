@@ -22,10 +22,12 @@ import { LiveTurnActivity } from './LiveTurnActivity';
 plugin({
     name: 'live-activity-worker-url',
     setup(build) {
-        build.onLoad({ filter: /markdown-shiki\.worker\.ts\?worker&url$/ }, ({ path }) => ({
-            contents: `export default ${JSON.stringify(pathToFileURL(path.split('?')[0]).href)};`, loader: 'js',
+        build.onResolve({ filter: /markdown-shiki\.worker\.ts\?worker&url$/ }, (args) => ({
+            path: args.path, namespace: 'worker-url-stub',
         }));
-        // Expand Vite's eager asset glob into the same real file URL map for
+        build.onLoad({ filter: /.*/, namespace: 'worker-url-stub' }, () => ({
+            contents: 'export default "blob:test-shiki-worker";', loader: 'js',
+        }));
         // Bun. This is a loader transform, not a replacement of the logo hook.
         build.onLoad({ filter: /useProviderLogo\.ts$/ }, ({ path }) => {
             const folder = resolve(dirname(path), '../assets/provider-logos');
@@ -44,7 +46,12 @@ const runtimeApis: RuntimeAPIs = {
     get git() { return unavailable(); },
     get sourceControl() { return unavailable(); },
     get files() { return unavailable(); },
-    get settings() { return unavailable(); },
+    get settings(): RuntimeAPIs['settings'] {
+        return {
+            load: async () => ({ settings: {}, source: 'web' }),
+            save: async (changes) => changes as RuntimeAPIs['settings'] extends { save(_c: infer _C): Promise<infer R> } ? R : never,
+        };
+    },
     get permissions() { return unavailable(); },
     get notifications() { return unavailable(); },
 };
@@ -160,12 +167,12 @@ describe('live Activity with the real message body', () => {
         restore();
     });
 
-    test('keeps active prose and tools visible; stop folds history but leaves the answer', async () => {
+        test('keeps active prose and tools visible; stop folds history but leaves the answer', async () => {
         const progress = assistant('progress', [text('progress-text', 'Checking the source'), ...readParts]);
         await act(async () => root.render(<Harness record={turn([progress])} />));
         expect(container.textContent).toContain('Checking the source');
-        expect(container.querySelector('[aria-controls]')).toBeNull();
-        expect(container.textContent).not.toContain('Activity');
+        expect(container.querySelector('button[aria-controls]')?.getAttribute('aria-expanded')).toBe('false');
+        expect(container.textContent).toContain('Activity');
         const final = assistant('final', [text('final-text', 'The final answer')]);
         await act(async () => root.render(<Harness record={turn([progress, final])} />));
         expect(container.textContent).toContain('The final answer');
@@ -196,7 +203,7 @@ describe('live Activity with the real message body', () => {
         const record = turn([assistant('progress', [text('progress-text', 'Still working'), ...readParts])]);
         await act(async () => root.render(<Harness record={record} />));
         expect(container.textContent).toContain('Still working');
-        expect(container.textContent).not.toContain('Activity');
+        expect(container.textContent).toContain('Activity');
         await act(async () => root.render(<Harness record={record} retired />));
         expect(container.textContent).not.toContain('Still working');
         expect(container.textContent).toContain('Activity');

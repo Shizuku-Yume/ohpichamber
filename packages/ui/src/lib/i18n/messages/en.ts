@@ -17,8 +17,13 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 import { markdownGithubI18n } from './markdown-github.i18n';
 import { integrationsCatalogI18n } from './integrations-catalog.i18n';
+import { workflowsI18n } from './workflows.i18n';
 
+import { sessionWarmingI18n } from './session-warming.i18n';
 export const dict = {
+  'chat.liveActivity.moreRows': '+{count} more',
+
+  ...sessionWarmingI18n['en'],
   "startup.legacyNotice.dismiss": "Dismiss",
   "startup.legacyNotice.action": "Configure providers",
   "startup.legacyNotice.descriptionGeneric": "Your previous OpenCode sessions were not imported into OpenChamber. Your existing data remains untouched in your OpenCode data directory. To use your models, sign in to your providers again in Settings.",
@@ -130,6 +135,7 @@ export const dict = {
   ...pluginsGridI18n.en,
   ...markdownGithubI18n.en,
   ...integrationsCatalogI18n['en'],
+  ...workflowsI18n['en'],
   'terminalView.actions.attachSelection': 'Attach selected output',
   'terminalView.actions.copySelection': 'Copy selected output',
   'terminalView.toast.selectionCopied': 'Output copied',

@@ -18,7 +18,12 @@ import { pluginsGridI18n } from './plugins-grid.i18n';
 import { markdownGithubI18n } from './markdown-github.i18n';
 import { integrationsCatalogI18n } from './integrations-catalog.i18n';
 
+import { workflowsI18n } from './workflows.i18n';
+import { sessionWarmingI18n } from './session-warming.i18n';
 export const dict = {
+  ...workflowsI18n['nl'],
+  ...sessionWarmingI18n['nl'],
+  'chat.liveActivity.moreRows': '+{count} more',
   "startup.legacyNotice.descriptionGeneric": "Uw eerdere OpenCode-sessies zijn niet geïmporteerd in OpenChamber. Uw bestaande gegevens blijven ongewijzigd bewaard in uw OpenCode-gegevensmap. Meld u in Instellingen opnieuw aan bij uw providers om uw modellen te gebruiken.",
   "startup.legacyNotice.title": "Eerdere OpenCode-gegevens gedetecteerd",
   "startup.legacyNotice.action": "Providers configureren",

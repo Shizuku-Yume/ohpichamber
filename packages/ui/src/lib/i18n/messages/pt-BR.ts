@@ -18,7 +18,13 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 import { integrationsCatalogI18n } from './integrations-catalog.i18n';
 
+import { sessionWarmingI18n } from './session-warming.i18n';
+import { workflowsI18n } from './workflows.i18n';
 export const dict: Record<I18nKey, string> = {
+  'chat.liveActivity.moreRows': '+{count} mais',
+
+  ...workflowsI18n['pt-BR'],
+  ...sessionWarmingI18n['pt-BR'],
   "startup.legacyNotice.descriptionGeneric": "Suas sessões anteriores do OpenCode não foram importadas para o OpenChamber. Seus dados existentes permanecem intactos no diretório de dados do OpenCode. Para usar seus modelos, entre novamente em seus provedores nas Configurações.",
   "startup.legacyNotice.dismiss": "Dispensar",
   "startup.legacyNotice.action": "Configurar provedores",

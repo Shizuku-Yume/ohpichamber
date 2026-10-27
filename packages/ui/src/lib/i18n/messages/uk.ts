@@ -19,7 +19,13 @@ import { pluginsGridI18n } from './plugins-grid.i18n';
 import { markdownGithubI18n } from './markdown-github.i18n';
 import { integrationsCatalogI18n } from './integrations-catalog.i18n';
 
+import { sessionWarmingI18n } from './session-warming.i18n';
+import { workflowsI18n } from './workflows.i18n';
 export const dict: Record<I18nKey, string> = {
+  'chat.liveActivity.moreRows': 'Ще {count}',
+
+  ...workflowsI18n['uk'],
+  ...sessionWarmingI18n['uk'],
   "startup.legacyNotice.title": "Виявлено попередні дані OpenCode",
   "startup.legacyNotice.dismiss": "Сховати",
   "startup.legacyNotice.descriptionGeneric": "Ваші попередні сесії OpenCode не були імпортовані в OpenChamber. Ваші наявні дані залишаються недоторканими в каталозі даних OpenCode. Щоб користуватися моделями, увійдіть знову до своїх провайдерів у Налаштуваннях.",

@@ -19,7 +19,13 @@ import { pluginsGridI18n } from './plugins-grid.i18n';
 import { markdownGithubI18n } from './markdown-github.i18n';
 import { integrationsCatalogI18n } from './integrations-catalog.i18n';
 
+import { sessionWarmingI18n } from './session-warming.i18n';
+import { workflowsI18n } from './workflows.i18n';
 export const dict: Record<I18nKey, string> = {
+  'chat.liveActivity.moreRows': 'さらに {count} 件',
+
+  ...workflowsI18n['ja'],
+  ...sessionWarmingI18n['ja'],
   "startup.legacyNotice.dismiss": "閉じる",
   "startup.legacyNotice.title": "以前の OpenCode データが検出されました",
   "startup.legacyNotice.descriptionGeneric": "以前の OpenCode セッションは OpenChamber にインポートされていません。既存のデータは OpenCode のデータディレクトリにそのまま保持されています。モデルを使用するには、「設定」でプロバイダーに再度サインインしてください。",

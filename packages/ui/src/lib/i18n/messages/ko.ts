@@ -19,7 +19,13 @@ import { pluginsGridI18n } from './plugins-grid.i18n';
 import { markdownGithubI18n } from './markdown-github.i18n';
 import { integrationsCatalogI18n } from './integrations-catalog.i18n';
 
+import { sessionWarmingI18n } from './session-warming.i18n';
+import { workflowsI18n } from './workflows.i18n';
 export const dict: Record<I18nKey, string> = {
+  'chat.liveActivity.moreRows': '{count}개 더 보기',
+
+  ...workflowsI18n['ko'],
+  ...sessionWarmingI18n['ko'],
   "startup.legacyNotice.title": "이전 OpenCode 데이터 감지됨",
   "startup.legacyNotice.action": "프로바이더 설정",
   "startup.legacyNotice.dismiss": "닫기",

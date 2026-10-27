@@ -41,6 +41,7 @@ import { normalizeContextPanelDirectoryKey, useUIStore } from '@/stores/useUISto
 import { useGuestSurfaces } from '@/hooks/useGuestSurfaces';
 import { useGuestBadgeStore } from '@/lib/guests/badge-store';
 import { isPluginContextPanelMode, pluginIdFromMode } from '@/lib/surfaces/modes';
+import { useWorkflowsSurfaceShown } from '@/lib/workflows/panel';
 import { ContextRailSurfacesDialog } from './ContextRailSurfacesDialog';
 import { shownContextModes, zoneOfMode } from '@/lib/workspace/zones';
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu';
@@ -292,18 +293,19 @@ export const ContextPanelRail: React.FC = () => {
     [panelState, contextSurfaceZones],
   );
   const changedFilesCount = gitStatus?.files.length ?? 0;
-
+  const workflowsShown = useWorkflowsSurfaceShown(tabs, effectiveDirectory || null);
   const surfaces = React.useMemo(() => {
     return getVisibleContextRailSurfaces({
       railOrder: contextRailOrder,
       hiddenSurfaces: contextRailHiddenSurfaces,
-      planModeEnabled: true,
+      isVSCode: false,
       screenWidth,
       tabs,
       sourceControlConnected,
+      workflowsShown,
       extras: guestSurfaces,
     }).map((surface) => (surface.id === 'pr' && repositoryProvider === 'gitlab' ? { ...surface, icon: 'gitlab' as const } : surface));
-  }, [contextRailHiddenSurfaces, contextRailOrder, guestSurfaces, repositoryProvider, screenWidth, sourceControlConnected, tabs]);
+  }, [contextRailHiddenSurfaces, contextRailOrder, guestSurfaces, repositoryProvider, screenWidth, sourceControlConnected, tabs, workflowsShown]);
 
   // A surface whose integration disconnected closes rather than lingering as
   // an active panel with no rail icon.

@@ -18,7 +18,12 @@ import { pluginsGridI18n } from './plugins-grid.i18n';
 import { markdownGithubI18n } from './markdown-github.i18n';
 import { integrationsCatalogI18n } from './integrations-catalog.i18n';
 
+import { workflowsI18n } from './workflows.i18n';
+import { sessionWarmingI18n } from './session-warming.i18n';
 export const dict = {
+  ...workflowsI18n['fr'],
+  ...sessionWarmingI18n['fr'],
+  'chat.liveActivity.moreRows': '+{count} more',
   "startup.legacyNotice.dismiss": "Ignorer",
   "startup.legacyNotice.action": "Configurer les fournisseurs",
   "startup.legacyNotice.title": "Données OpenCode précédentes détectées",

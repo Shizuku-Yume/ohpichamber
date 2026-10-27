@@ -19,7 +19,13 @@ import { pluginsGridI18n } from './plugins-grid.i18n';
 import { markdownGithubI18n } from './markdown-github.i18n';
 import { integrationsCatalogI18n } from './integrations-catalog.i18n';
 
+import { sessionWarmingI18n } from './session-warming.i18n';
+import { workflowsI18n } from './workflows.i18n';
 export const dict: Record<I18nKey, string> = {
+  'chat.liveActivity.moreRows': '+{count} więcej',
+
+  ...workflowsI18n['pl'],
+  ...sessionWarmingI18n['pl'],
   "startup.legacyNotice.title": "Wykryto wcześniejsze dane OpenCode",
   "startup.legacyNotice.descriptionGeneric": "Twoje wcześniejsze sesje OpenCode nie zostały zaimportowane do OpenChamber. Istniejące dane pozostają nienaruszone w katalogu danych OpenCode. Aby korzystać ze swoich modeli, zaloguj się ponownie do dostawców w Ustawieniach.",
   "startup.legacyNotice.action": "Skonfiguruj dostawców",

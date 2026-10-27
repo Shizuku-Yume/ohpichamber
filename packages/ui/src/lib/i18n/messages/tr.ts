@@ -18,7 +18,12 @@ import { pluginsGridI18n } from './plugins-grid.i18n';
 import { markdownGithubI18n } from './markdown-github.i18n';
 import { integrationsCatalogI18n } from './integrations-catalog.i18n';
 
+import { workflowsI18n } from './workflows.i18n';
+import { sessionWarmingI18n } from './session-warming.i18n';
 export const dict = {
+  ...workflowsI18n['tr'],
+  ...sessionWarmingI18n['tr'],
+  'chat.liveActivity.moreRows': '+{count} more',
   "startup.legacyNotice.dismiss": "Yoksay",
   "startup.legacyNotice.action": "Provider'ları yapılandır",
   "startup.legacyNotice.descriptionGeneric": "Önceki OpenCode oturumlarınız OpenChamber içine aktarılmadı. Mevcut verileriniz OpenCode veri dizininizde değişmeden korunmaktadır. Modellerinizi kullanmak için Ayarlar bölümünden provider'larınıza tekrar giriş yapın.",

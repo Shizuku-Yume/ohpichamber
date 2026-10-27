@@ -1,4 +1,5 @@
 import React from 'react';
+import { useSessionWorkflowRuns } from '@/lib/workflows/store';
 import { useGlobalSessionStatusStore } from '@/sync/global-session-status';
 import { Icon } from '@/components/icon/Icon';
 import type { IconName } from '@/components/icon/icons';
@@ -35,9 +36,16 @@ export const WorkStatusSubagentsSection: React.FC<Props> = ({ sessionId, directo
 
   const liveSessions = useAllLiveSessions();
   const statuses = useAllSessionStatuses();
+  // A workflow's agents are child sessions too; the Workflows section lists
+  // them under their run, so they stay out of this list.
+  const workflowRuns = useSessionWorkflowRuns(sessionId);
+  const workflowAgentIds = React.useMemo(
+    () => new Set(workflowRuns.flatMap((run) => run.agents.map((agent) => agent.sessionId))),
+    [workflowRuns],
+  );
   const children = React.useMemo(
-    () => (sessionId ? liveSessions.filter((candidate) => candidate.parentSessionId === sessionId) : []),
-    [liveSessions, sessionId],
+    () => (sessionId ? liveSessions.filter((candidate) => candidate.parentSessionId === sessionId && !workflowAgentIds.has(candidate.sessionId)) : []),
+    [liveSessions, sessionId, workflowAgentIds],
   );
 
   // Canonical sessions do not carry legacy model/cost summaries; omit them.

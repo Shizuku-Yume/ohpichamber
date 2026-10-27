@@ -47,7 +47,8 @@ Excluded on purpose: `packages/vscode`, OpenCode-engine paths, upstream folder t
 3. UI features after the design system and UI state tasks: 08 sessions/sidebar, 11 settings, 12 Markdown/diff, 13/14 chat, 15 composer, 16 knowledge, 17 workflows, 18 integrations, 19 tunnels, 20 i18n, 21 diagnostics. Each takes its own path list; shared interfaces are named in the task files.
 4. 22 web host core and 23 UI state (sync/stores) are the two hardest adaptation tasks; they land before the feature tasks that depend on their routes and stores.
 5. Documentation last: 26 English docs and assets, then 27-29 translated locales.
-6. 30 is the gate: full checks at the integration tip, one current receipt, the baseline record updated, `development.md` updated, history link created with `git merge -s ours 0056bf6a9`, and the tasks archived.
+6. One-view sidebar follow-up: 31 rebuilds the desktop sidebar on upstream's one-view row model after 07/21/25, then 32 brings the mobile sheet onto it. Task 26 documentation waits for both.
+7. 30 is the gate: full checks at the integration tip, one current receipt, the baseline record updated, `development.md` updated, history link created with `git merge -s ours 0056bf6a9`, and the tasks archived.
 
 ### Parallel sessions
 
@@ -64,6 +65,7 @@ its Check before every landing.
 | D UI foundation | 10 → 23 → 24 → 25 | design system/assets/theme, sync/stores, hooks/api/apps, misc UI | 02; 23-25 after 10 |
 | E UI features | 08, 09, 11, 12 → 13 → 14 → 15, 18, 20 | session/sidebar, layout/works, settings, markdown, chat, composer, catalog, i18n | 10 and 23; 12-15 chained; 08/09/11/18/20 independent |
 | F Docs | 26 → 27, 28, 29 | `packages/docs`, `docs/` assets | every adoption task (26 is the documentation gate, not a verification gate) |
+| H One-view sidebar | 31 → 32 | desktop one-view rows, mobile sheet | 07, 21, 25; 32 after 31 |
 | G Gate | 30 | records, baseline pin, history link | 26-29 |
 
 Shared interfaces: `packages/web/server/index.js` route registration belongs to 22; later server
@@ -140,4 +142,4 @@ Every task leaves the integration branch green: `bun install --frozen-lockfile` 
 
 **Measurement.** Upstream tip `0056bf6a9` (2026-10-26, 813 commits, `v2.5.2-1`). Delta: 4,031 paths, +299,677/-82,213; 1,135 clean, 1,223 new, 991 both-live, 226 fork-deleted, 456 upstream deletions; 640 of 1,230 shared files conflict. Fork load: 3,410 changed paths (+206,927/-242,154). Per-bucket counts are in `plan-path-summary.md`; per-path lists in `plan-paths/NN.tsv`.
 
-**Task scale.** 30 tasks across seven lanes; 01-02 are serial, the rest parallelize as the lane table in each task's `Blocked by` allows. The effort is large by design: it carries 25 adoption bands, the toolchain migration, and four documentation bands.
+**Task scale.** 32 tasks across eight lanes; 01-02 are serial, the rest parallelize as the lane table in each task's `Blocked by` allows. Tasks 31-32 are the one-view sidebar follow-ups that tasks 08/24 deferred; they own paths already counted in those tasks' lists, so the 4,031-path accounting is unchanged.

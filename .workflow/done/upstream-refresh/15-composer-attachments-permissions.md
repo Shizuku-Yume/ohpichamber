@@ -3,7 +3,7 @@
 **Effort:** upstream-refresh
 **Task type:** feature
 **Base commit:** 736f51cdc4
-**Landed commit:** 705d93d6ee
+**Landed commit:** 0e6e10b33b
 
 **Delivers:** Upstream's composer/editor, attachments, autocomplete, model controls, permission cards, forms, goals and queued messages work with the OMP session modes and message queue.
 
@@ -14,6 +14,48 @@
 **Covers:** W6
 
 **Check:** `bun install --frozen-lockfile` and `bun run type-check` and `bun run lint` and `bun run test` all exit 0, the composer tests pass, and in the running app a file attaches and sends, a queued message goes out after the turn, a permission request is approved/denied and the prompt returns after a failed send, and a magic prompt inserts its text. Real path: one real provider turn.
+## Progress: Task 15 Rework (2026-10-27)
+
+### Two Root Causes
+1. **Server message-queue routes faked UI DTO shapes (`f8f5215d69`)**: Message queue routes and broadcasts translated between UI DTOs and canonical contract types via `isUiShape` and `toServerSession`, creating dual representations and protocol divergence between Host and agent-contract.
+2. **Worker session read non-image attachments without validation (`29f99e0af8`)**: `WorkerSession.prepare()` read arbitrary non-image attachments as UTF-8 mojibake without size bounds, crashing or corrupting model prompts on binary files or oversized payloads.
+
+### Architectural Decisions
+1. **Canonical Queue Cutover**:
+   - Dropped `isUiShape`, `toServerSession`, `ServerQueueItemInput`, `ServerQueueAttachmentInput`, `toServerAttachment`, and `toServerItemInput`.
+   - Wired `packages/ui/src/stores/messageQueueStore.ts` directly to canonical `QueueAppendRequest`, `QueueDeleteRequest`, `QueueReorderRequest`, and `QueueState` from `@openchamber/agent-contract`.
+   - Each attachment is uploaded through Host canonical attachment routes (`/api/agent/v1/attachments`) first to acquire `attachmentId` and `uri: attachment://<id>` before queue append.
+   - Refetch authoritative queue state on HTTP 409 `QUEUE_CONFLICT` instead of dropping local projections or treating queue as empty.
+   - Default `commandId` to `req.get('Idempotency-Key') ?? randomUUID()` at message-queue route boundary.
+2. **Attachment Size & Media Validation**:
+   - Enforce 5 MB limit (`MAX_TEXT_ATTACHMENT_BYTES`) for text attachments across Host and Worker boundaries.
+   - Reject binary files with null bytes or non-text MIME types via HTTP 415 `UNSUPPORTED_MEDIA_TYPE`.
+   - Reject text attachments > 5 MB via HTTP 413 `PAYLOAD_TOO_LARGE`.
+   - In UI composer, validate attachments client-side in `attachFiles`/`attachFilesWithCitation` and map 413/415 errors in `getSubmitErrorMessage` to localized cause + fix copy across all 13 locales (`chat.composer.error.binaryAttachmentNotSupported`, `chat.composer.error.textAttachmentTooLarge`).
+
+### Checks and Exit Codes
+- `bun run type-check`: exit code 0 (`~/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/logs/type-check.log`)
+- `bun run lint`: exit code 0 (`~/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/logs/lint.log`)
+- `bunx oxlint` on authored files: exit code 0 (`~/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/logs/oxlint.log`)
+- Focused test: web message-queue: exit code 0 (`~/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/logs/test-web-message-queue.log`)
+- Focused test: attachment routes: exit code 0 (`~/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/logs/test-attachment-routes.log`)
+- Focused test: agent-service worker: exit code 0 (`~/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/logs/test-agent-service-worker.log`)
+- Focused test: UI queue store: exit code 0 (`~/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/logs/test-ui-queue-store.log`)
+- `bun run dead-code` diff against baseline: 0 new findings (`~/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/logs/dead-code-diff.log`)
+
+### Real Path Evidence
+Captured in live browser run with isolated `HOME` and `OPENCHAMBER_DATA_DIR` against real model provider:
+- **5(a) Follow-up delivered with text attachment**: Queue follow-up with `secret-code.txt` while turn 1 runs; delivered after turn 1 and model quotes exact secret code (`SECRET_CODE_REWORK_987654`).
+  - Screenshot: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/screenshots/01-queued-followup-text-delivered.png`
+- **5(b) Binary zip rejected**: Attaching binary `.zip` shows cause + fix toast `"This file is binary and can't be sent as text. Attach an image or a text file."` and nothing is enqueued.
+  - Screenshot: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/screenshots/02-binary-zip-rejected.png`
+- **5(c) Delete queued item**: Clicking remove on queued item deletes it and removes it from queue strip while turn is running.
+  - Screenshot: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/screenshots/03-delete-queued-item.png`
+
+### Limits
+- Non-image binary attachments (e.g. zip/bin/tar) cannot be sent as text; users must attach images or text files.
+- Text attachments are capped at 5 MB per file.
+
 
 ## Done when
 

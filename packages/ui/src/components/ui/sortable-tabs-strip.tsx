@@ -58,6 +58,7 @@ type SortableTabsStripProps = {
   onDoubleClickTab?: (id: string) => void;
   layoutMode?: 'scrollable' | 'fit';
   variant?: 'default' | 'active-pill' | 'animated';
+  pillSize?: 'form' | 'default';
   activePillInsetClassName?: string;
   activePillButtonClassName?: string;
   /** Active-pill height on desktop: `toolbar` is 28px like the toolbar

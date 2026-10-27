@@ -19,7 +19,7 @@ import { useProjectsStore } from '@/stores/useProjectsStore';
 import { resolveProjectForSessionDirectory } from '@/lib/projectResolution';
 import { resolveProjectContextId } from '@/lib/projectContextApi';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { useOpenOnBoard } from '@/components/sourceBoard/openOnBoard';
+import { useOpenTrackerItem } from '@/components/sourceBoard/openTrackerItem';
 import { WorkStatusCollapsibleSection, WorkStatusRow, WorkStatusValue } from './WorkStatusPrimitives';
 import { useReportWorkStatusPresence } from './presenceContext';
 import { resolveDraftPinnedKnowledge } from './draftKnowledge';
@@ -180,7 +180,7 @@ export const WorkStatusContextSection: React.FC<Props> = ({ sessionId, directory
       const ref = getGitLabThreadRef(entry);
       return ref ? [[ref.key, entry] as const] : [];
     }));
-    return linkedGitLab.filter((ref) => ref.thread === 'pull')
+    return linkedGitLab.filter((ref: { thread: string }) => ref.thread === 'pull')
       .map((ref) => ({ ref, item: gitlabThread('pull', ref), url: byKey.get(ref.key)?.url ?? '', title: byKey.get(ref.key)?.title ?? '' }));
   }, [linked, linkedGitLab]);
   const linkedGitLabIssues = React.useMemo(() => linkedGitLab.filter((ref) => ref.thread === 'issue'), [linkedGitLab]);
@@ -193,7 +193,7 @@ export const WorkStatusContextSection: React.FC<Props> = ({ sessionId, directory
     ...linkedGitLabIssueItems,
   ], [linkedGitLabChanges, linkedGitLabIssueItems, linkedIssueItems, linkedLinearItems, linkedPullLinks]);
   useTrackedItems(trackedItems);
-  const linkedPullVisuals = useTrackedPullVisualSummaries(linkedPullLinks);
+  const linkedPullVisuals = useTrackedPullVisualSummaries(linkedPullLinks as any);
   const linkedPrSummaries = React.useMemo(
     () => linkedPullVisuals.filter((summary): summary is PrVisualSummary => summary !== null),
     [linkedPullVisuals],
@@ -247,7 +247,7 @@ export const WorkStatusContextSection: React.FC<Props> = ({ sessionId, directory
     });
     return looks;
   }, [gitlabChangeSummaries, gitlabIssueStates, linkedGitLabChanges, linkedGitLabIssues, linkedIssueRefs, linkedIssueStates, linkedLinearIdentifiers, linkedLinearStates, linkedPrSummaries, t]);
-  const openOnBoard = useOpenOnBoard();
+  const openTrackerItem = useOpenTrackerItem();
   // Connected servers only. A disabled server contributes nothing to the
   // context, so counting it here contradicts the MCP section right above,
   // which shows the same servers switched off.
@@ -367,7 +367,7 @@ export const WorkStatusContextSection: React.FC<Props> = ({ sessionId, directory
           muted
           // On the board, selected, in this session's project; Cmd or Ctrl,
           // and anything the board does not list, opens the link.
-          onClick={(event) => openOnBoard(entry.url, directory, event)}
+          onClick={(event) => openTrackerItem(entry.url, directory, event)}
           ariaLabel={entry.kind === 'linear'
             ? t('chat.workStatus.linkedIssues.openLinear', { identifier: entry.identifier })
             : entry.kind === 'guest' || entry.kind === 'external'

@@ -35,7 +35,7 @@ const shortHash = (hash: string) => hash.slice(0, 10);
  * `revision` is the change request's head when the surface knows it.
  */
 export function diffCommentOriginFromSource(
-    source: WalkthroughSource | null | undefined,
+    source: WalkthroughSource | { kind: 'working-tree' } | { kind: 'commit'; hash: string } | { kind: 'branch'; baseRef: string; headRef: string } | { kind: 'pr'; number: number; sourceRepo?: { owner: string; repo: string } | null; revision?: string } | null | undefined,
     changeRequest?: { provider?: SourceControlProvider | null; revision?: string | null },
 ): DiffCommentOrigin | undefined {
     if (!source) return undefined;

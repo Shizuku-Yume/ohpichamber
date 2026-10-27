@@ -49,3 +49,5 @@ export const formatEffortLabel = (variant?: string) => {
     }
     return capitalizeLabel(trimmed);
 };
+
+export const isPrimaryMode = (mode?: string): boolean => mode !== 'subagent';

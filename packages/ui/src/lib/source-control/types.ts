@@ -1,4 +1,4 @@
-export type SourceControlProviderId = string;
+import type { SourceControlProviderId } from './providers/descriptor';
 
 /** Open: any id the connected server serves; an id the registry does not hold reads through the fallback descriptor. */
 export type SourceControlProvider = SourceControlProviderId;

@@ -247,6 +247,7 @@ function selectedCopyPayload(element: HTMLElement): { text: string; html: string
 }
 
 export interface MarkdownContentProps {
+  repositoryLinks?: any;
   content: string;
   variant?: MarkdownVariant;
   className?: string;

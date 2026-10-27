@@ -337,7 +337,7 @@ describe('NewWorktreeDialog behavior', () => {
             open
             onOpenChange={() => undefined}
             initialSelection={{
-              source: 'github',
+              source: 'repository',
               includeDiff: false,
               reference: {
                 kind: 'issue',
@@ -386,7 +386,7 @@ describe('NewWorktreeDialog behavior', () => {
 
       await act(async () => {
         await confirmReference?.([{
-          source: 'github',
+          source: 'repository',
           includeDiff: false,
           reference: {
             kind: 'issue',

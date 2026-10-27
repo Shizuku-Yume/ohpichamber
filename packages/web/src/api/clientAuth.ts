@@ -123,6 +123,10 @@ export const createWebClientAuthAPI = (): ClientAuthAPI => ({
     return payload;
   },
 
+  getRelayHostStatus: () => requestRelayHostStatus('/api/openchamber/relay/status', 'GET'),
+
+  resetRelayIdentity: () => requestRelayHostStatus('/api/openchamber/relay/reset-identity', 'POST'),
+
   async purgeRevokedClients(): Promise<RemoteClientPurgeRevokedResult> {
     const response = await runtimeFetch('/api/client-auth/clients', {
       method: 'DELETE',

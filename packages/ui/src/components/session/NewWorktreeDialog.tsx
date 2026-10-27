@@ -382,7 +382,7 @@ export function NewWorktreeDialog({
       return;
     }
     void resolveComposerReferences([item.selection], {
-      sourceControl,
+      sourceControl: sourceControl as any,
       context: item.kind === 'pr' ? item.context : (githubContext && githubContext !== 'missing' ? githubContext : null),
       readLinearDetail: (issueId) => (linear
         ? readLinearIssueDetail(linear, issueId)
@@ -515,16 +515,17 @@ export function NewWorktreeDialog({
     const [choice] = selections;
     if (!choice) return null;
 
-    if (choice.source === 'linear') {
-      const { issue } = choice;
+    if (choice.source === 'tracker' || (choice as any).source === 'linear') {
+      const item = 'item' in choice ? choice.item : (choice as any).issue;
       linkItem(
-        { kind: 'linear', identifier: issue.identifier, title: issue.title, url: issue.url, selection: choice },
-        `issue-${issue.identifier}-${generateBranchSlug()}`,
+        { kind: 'linear', identifier: item.identifier, title: item.title, url: item.url, selection: choice },
+        `issue-${item.identifier}-${generateBranchSlug()}`,
       );
       return null;
     }
 
-    const { reference } = choice;
+    const reference = 'reference' in choice ? choice.reference : null;
+    if (!reference) return null;
     if (reference.kind === 'issue') {
       linkItem(
         { kind: 'issue', number: reference.number, title: reference.title, url: reference.url, selection: choice },
@@ -532,9 +533,10 @@ export function NewWorktreeDialog({
       );
       return null;
     }
+    if (reference.kind !== 'pull') return null;
 
     // A PR's branch can live in one worktree only.
-    if (projectRef) {
+    if (projectRef && reference.kind === 'pull') {
       const failure = (message: string): ReferencePickerConfirmFailure => ({ failedKeys: [referencePickerItemKey(choice)], message });
       try {
         const result = await validateWorktreeCreate(projectRef, { mode: 'new', branchName: reference.head, worktreeName: reference.head });
@@ -572,7 +574,7 @@ export function NewWorktreeDialog({
   React.useEffect(() => {
     const choice = pendingInitialSelection.current;
     if (!open || !choice) return;
-    if (choice.source === 'github' && choice.reference.kind === 'pull' && githubContext === null) return;
+    if ((choice.source === 'repository' || (choice as any).source === 'github') && 'reference' in choice && choice.reference.kind === 'pull' && githubContext === null) return;
     pendingInitialSelection.current = null;
     void handleReferenceConfirmRef.current([choice]).then((failure) => {
       if (failure) toast.error(failure.message);
@@ -641,7 +643,7 @@ export function NewWorktreeDialog({
     : undefined;
   const linkedView = linked
     ? linked.kind === 'pr'
-      ? { id: linked.context.provider === 'gitlab' ? formatChangeRequestReference('gitlab', linked.pr.number) : t('session.newWorktree.prNumber', { number: linked.pr.number }), title: linked.pr.title, url: linked.pr.url, icon: <Icon name="git-pull-request" className="size-4 shrink-0 text-muted-foreground" /> }
+      ? { id: linked.context.provider === 'gitlab' ? formatChangeRequestReference('gitlab' as any, linked.pr.number) : t('session.newWorktree.prNumber', { number: linked.pr.number }), title: linked.pr.title, url: linked.pr.url, icon: <Icon name="git-pull-request" className="size-4 shrink-0 text-muted-foreground" /> }
       : linked.kind === 'issue'
         ? { id: t('session.newWorktree.issueNumber', { number: linked.number }), title: linked.title, url: linked.url, icon: <Icon name={isGitLabProject ? 'gitlab' : 'github'} className="size-4 shrink-0 text-muted-foreground" /> }
         : linked.kind === 'linear'

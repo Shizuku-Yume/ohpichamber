@@ -6,7 +6,7 @@
  *
  * It is the composer's own editor with comment policy on top, so a comment
  * reads like the prompt it ends up in: pasted images show as file chips,
- * native `/template` references as template chips, Markdown is highlighted. Agents,
+ * `#snippet` references as snippet chips, Markdown is highlighted. Agents,
  * commands and file mentions do not resolve in a comment.
  *
  * Keys: Enter submits (Shift+Enter breaks the line; with `enterSubmits` off,
@@ -22,11 +22,10 @@ import { ComposerEditor, type ComposerEditorHandle } from '@/components/chat/com
 import type { ComposerLanguageContext } from '@/components/chat/composer/language/tokenize';
 import { isIMECompositionEvent } from '@/lib/ime';
 import { cn } from '@/lib/utils';
-import { selectSnippetsForDirectory, useSnippetsStore } from '@/stores/useSnippetsStore';
-import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
+import { useSnippetsStore } from '@/stores/useSnippetsStore';
 import { useInputStore } from '@/sync/input-store';
 import type { CommentImagePaste } from './useCommentImagePaste';
-import { useCommentSnippetPicker } from './useCommentSnippetPicker';
+import { useCommentFieldPicker } from './useCommentFieldPicker';
 
 const EMPTY_NAMES: ReadonlySet<string> = new Set();
 
@@ -62,8 +61,7 @@ export function CommentTextEditor({
 }: CommentTextEditorProps) {
     const editorRef = React.useRef<ComposerEditorHandle>(null);
 
-    const directory = useEffectiveDirectory();
-    const snippets = useSnippetsStore(state => selectSnippetsForDirectory(state, directory));
+    const snippets = useSnippetsStore((state) => state.snippets);
     const attachedFiles = useInputStore((state) => state.attachedFiles);
     const themeVariant = useOptionalThemeSystem()?.currentTheme.metadata.variant === 'light' ? 'light' : 'dark';
     const { pendingFilenames } = imagePaste;
@@ -71,6 +69,7 @@ export function CommentTextEditor({
         const knownSnippetTriggers = new Set<string>();
         for (const snippet of snippets) {
             knownSnippetTriggers.add(snippet.name.toLowerCase());
+            for (const alias of (snippet as any).aliases ?? []) knownSnippetTriggers.add(alias.toLowerCase());
         }
         return {
             inputMode: 'normal',
@@ -90,7 +89,8 @@ export function CommentTextEditor({
         editorRef.current?.replaceRange(from, to, insert);
         editorRef.current?.focus();
     }, []);
-    const snippetPicker = useCommentSnippetPicker({ text: value, getCaret, replaceRange });
+    const caretCoords = React.useCallback((position: number) => editorRef.current?.caretCoords(position) ?? null, []);
+    const fieldPicker = useCommentFieldPicker({ text: value, getCaret, replaceRange, caretCoords });
 
     // Every surface opens its field ready to type, caret after any text the
     // comment started with (a keystroke that opened it, or the saved comment).
@@ -103,7 +103,7 @@ export function CommentTextEditor({
 
     const handleKeyDown = (event: KeyboardEvent): boolean => {
         if (isIMECompositionEvent(event)) return false;
-        if (snippetPicker.handleKeyDown(event)) return true;
+        if (fieldPicker.handleKeyDown(event)) return true;
         if (event.key === 'Enter' && !event.shiftKey && (enterSubmits || event.metaKey || event.ctrlKey)) {
             event.preventDefault();
             onSubmit();
@@ -129,7 +129,7 @@ export function CommentTextEditor({
 
     return (
         <div className={cn('relative min-w-0 flex-1', className)}>
-            {snippetPicker.picker}
+            {fieldPicker.picker}
             <ComposerEditor
                 ref={editorRef}
                 dataChatInput="comment"
@@ -137,9 +137,9 @@ export function CommentTextEditor({
                 languageContext={languageContext}
                 onChange={(change) => {
                     onChange(change.value);
-                    snippetPicker.sync(change.value, change.selection.start);
+                    fieldPicker.sync(change.value, change.selection.start, !change.fromPaste && !change.fromValueProp);
                 }}
-                onSelectionChange={(selection) => snippetPicker.sync(editorRef.current?.getValue() ?? value, selection.start)}
+                onSelectionChange={(selection) => fieldPicker.sync(editorRef.current?.getValue() ?? value, selection.start, false)}
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
                 onBlur={onBlur}

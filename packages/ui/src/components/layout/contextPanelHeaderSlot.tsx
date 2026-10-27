@@ -19,17 +19,17 @@ export function ContextPanelHeaderSlotProvider({ value, children }: { value: HTM
  * (`data-context-panel-toolbar`), so a surface that renders no toolbar — an
  * empty or loading state — still leaves the header named.
  */
-export function ContextPanelHeaderToolbar({ children }: { children: React.ReactNode }): React.ReactNode {
+export function ContextPanelHeaderToolbar({ children }: { children: React.ReactNode }): React.JSX.Element | null {
   const slot = React.useContext(ContextPanelHeaderSlotContext);
   if (!slot) {
-    return children;
+    return <>{children}</>;
   }
-  return createPortal(
+  return (createPortal(
     // Stretched to the header's height, so a tab strip's active underline
     // sits on the header's bottom edge like the panel's own tabs.
     <div data-context-panel-toolbar="" className="flex min-w-0 flex-1 items-stretch">
       {children}
     </div>,
     slot,
-  );
+  ) ?? null) as React.JSX.Element | null;
 }

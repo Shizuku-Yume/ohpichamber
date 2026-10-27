@@ -12,7 +12,9 @@ import { useCatalogReadiness } from '@/hooks/useCatalogReadiness';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
 interface AgentSelectorProps {
-    agentId: string;
+    agentId?: string;
+    agentName?: string;
+    filter?: (agent: any) => boolean;
     onChange: (agentId: string) => void;
     className?: string;
     dropdownPortalToBody?: boolean;
@@ -20,12 +22,14 @@ interface AgentSelectorProps {
 }
 
 export const AgentSelector: React.FC<AgentSelectorProps> = ({
-    agentId,
+    agentId: controlledId,
+    agentName,
     onChange,
     className,
     dropdownPortalToBody = false,
     directory,
 }) => {
+    const agentId = controlledId ?? agentName ?? '';
     const { t } = useI18n();
     const effectiveDirectory = useEffectiveDirectory();
     const workspaceDirectory = directory ?? effectiveDirectory ?? null;

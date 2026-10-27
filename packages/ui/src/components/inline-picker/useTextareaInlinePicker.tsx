@@ -23,7 +23,7 @@ const typeOver = (field: HTMLTextAreaElement, from: number, to: number, text: st
 };
 
 /** A paste or a drop brings text the user did not type. */
-const isPastedInput = (event: Event): boolean => (
+export const isPastedInput = (event: Event): boolean => (
   event instanceof InputEvent && /^insertFrom(Paste|Drop)/.test(event.inputType)
 );
 

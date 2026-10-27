@@ -1,12 +1,14 @@
 import React from 'react';
 import { useProjectsStore } from '@/stores/useProjectsStore';
+import { useProjectsInSidebarOrder } from '@/components/session/sidebar/list/useProjectsInSidebarOrder';
 import { useUIStore } from '@/stores/useUIStore';
 import { Button } from '@/components/ui/button';
 import { SettingsSidebarLayout } from '@/components/sections/shared/SettingsSidebarLayout';
 import { SettingsSidebarItem } from '@/components/sections/shared/SettingsSidebarItem';
 import { Icon } from "@/components/icon/Icon";
-import { PROJECT_COLOR_MAP, PROJECT_ICON_MAP, ProjectIconImage } from '@/lib/projectMeta';
+import { PROJECT_ICON_MAP, resolveProjectColor, ProjectIconImage } from '@/lib/projectMeta';
 import { cn } from '@/lib/utils';
+import { isVSCodeRuntime } from '@/lib/desktop';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useI18n } from '@/lib/i18n';
@@ -14,11 +16,12 @@ import { SETTINGS_SECTION_TITLE_CLASS } from '@/components/sections/shared/Setti
 
 export const ProjectsSidebar: React.FC<{ onItemSelect?: () => void }> = ({ onItemSelect }) => {
   const { t } = useI18n();
-  const projects = useProjectsStore((state) => state.projects);
+  const projects = useProjectsInSidebarOrder(useProjectsStore((state) => state.projects));
   const selectedId = useUIStore((state) => state.settingsProjectsSelectedId);
   const setSelectedId = useUIStore((state) => state.setSettingsProjectsSelectedId);
   const { currentTheme } = useThemeSystem();
 
+  const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
 
   const handleAddProject = React.useCallback(() => {
     sessionEvents.requestDirectoryDialog();
@@ -45,6 +48,7 @@ export const ProjectsSidebar: React.FC<{ onItemSelect?: () => void }> = ({ onIte
           <h2 className={`${SETTINGS_SECTION_TITLE_CLASS} mb-3`}>{t('settings.page.projects.title')}</h2>
           <div className="flex items-center justify-between gap-2">
             <span className="typography-meta text-muted-foreground">{t('settings.projects.sidebar.total', { count: projects.length })}</span>
+            {!isVSCode && (
               <Button
                 type="button"
                 variant="ghost"
@@ -55,6 +59,7 @@ export const ProjectsSidebar: React.FC<{ onItemSelect?: () => void }> = ({ onIte
               >
                 <Icon name="add" className="size-4" />
               </Button>
+            )}
           </div>
         </div>
       }
@@ -62,7 +67,7 @@ export const ProjectsSidebar: React.FC<{ onItemSelect?: () => void }> = ({ onIte
       {projects.map((project) => {
         const selected = project.id === selectedId;
         const iconName = project.icon ? PROJECT_ICON_MAP[project.icon] : null;
-        const color = project.color ? (PROJECT_COLOR_MAP[project.color] ?? null) : null;
+        const color = resolveProjectColor(project.color);
         const fallbackIcon = iconName
           ? (
             <Icon name={iconName} className={cn('h-4 w-4', selected ? 'text-foreground' : 'text-muted-foreground/70')} style={color ? { color } : undefined} />

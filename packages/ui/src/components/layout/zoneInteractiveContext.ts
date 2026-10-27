@@ -11,6 +11,7 @@ import type { ContextPanelMode } from '@/stores/useUIStore';
  */
 export const ZoneInteractiveContext = React.createContext(true);
 
+export const useZoneInteractive = (): boolean => React.useContext(ZoneInteractiveContext);
 
 /**
  * Whether an opening zone showing `mode` leaves `inert` at once rather than

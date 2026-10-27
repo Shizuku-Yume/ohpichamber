@@ -146,9 +146,7 @@ export function LinearProjectMapping({
             className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
             aria-label={t('settings.integrations.linear.mapping.defaultProject.aria')}
           >
-            <SelectValue placeholder={t('settings.integrations.linear.mapping.defaultProject.placeholder')}>
-              {defaultProjectLabel}
-            </SelectValue>
+            <SelectValue placeholder={t('settings.integrations.linear.mapping.defaultProject.placeholder' as any)} />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={NONE}>
@@ -199,9 +197,7 @@ export function LinearProjectMapping({
                     className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
                     aria-label={t('settings.integrations.linear.mapping.teams.aria', { team: team.key })}
                   >
-                    <SelectValue placeholder={t('settings.integrations.linear.mapping.teams.useDefault')}>
-                      {teamProjectLabel}
-                    </SelectValue>
+                    <SelectValue placeholder={t('settings.integrations.linear.mapping.teams.useDefault' as any)} />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={INHERIT}>

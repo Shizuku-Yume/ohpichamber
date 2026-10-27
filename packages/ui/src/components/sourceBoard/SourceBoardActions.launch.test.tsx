@@ -31,7 +31,7 @@ const reference: GitHubIssueReference = {
   body: '', bodyTruncated: false, createdAt: null, updatedAt: null, author: null, labels: [], commentCount: 0,
   sourceRepo: { source: 'github', owner: 'acme', repo: 'app' }, state: 'open',
 };
-const item: ReferencePickerItem = { source: 'github', reference };
+const item: ReferencePickerItem = { source: 'repository', reference };
 const project = { id: 'project-1', path: '/workspace/app' };
 const resolveCalls: unknown[] = [];
 const pushedReferences: unknown[] = [];

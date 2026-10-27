@@ -190,10 +190,6 @@ export function createPermissionAutoAcceptRuntime({
           const snapshot = SessionSnapshotSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(current)}/snapshot`));
           rememberSession(snapshot.session, directory);
           info = sessions.get(current);
-          if (snapshot.session.rootSessionId === snapshot.session.sessionId && !Object.hasOwn(policy.sessions, current)) {
-            await applyDefaultMode(snapshot.session.sessionId);
-            if (Object.hasOwn(policy.sessions, current)) return policy.sessions[current];
-          }
         } catch {
           return 'ask';
         }
@@ -342,17 +338,14 @@ export function createPermissionAutoAcceptRuntime({
 
   let started = false;
   let unsubscribeEvent;
-  let unsubscribeSnapshot;
   let unsubscribeStatus;
   let drainingPromise = null;
   const stop = () => {
     accepting = false;
     started = false;
     unsubscribeEvent?.();
-    unsubscribeSnapshot?.();
     unsubscribeStatus?.();
     unsubscribeEvent = undefined;
-    unsubscribeSnapshot = undefined;
     unsubscribeStatus = undefined;
     if (drainingPromise) return drainingPromise;
     drainingPromise = (async () => {
@@ -371,15 +364,6 @@ export function createPermissionAutoAcceptRuntime({
     accepting = true;
     started = true;
     unsubscribeEvent = globalEventHub.subscribeEvent(processEvent);
-    const processSnapshot = (snapshot, scope) => {
-      if (!accepting || !snapshot?.session) return;
-      const directory = typeof scope?.cwd === 'string' && scope.cwd ? scope.cwd : undefined;
-      rememberSession(snapshot.session, directory);
-      if (snapshot.session.rootSessionId === snapshot.session.sessionId) {
-        void applyDefaultMode(snapshot.session.sessionId).catch((error) => console.warn('[permission-auto-accept] failed to apply the default mode:', error?.message ?? error));
-      }
-    };
-    unsubscribeSnapshot = globalEventHub.subscribeSnapshot?.(processSnapshot);
     unsubscribeStatus = globalEventHub.subscribeStatus((status) => {
       if (status?.type === 'connect') void reconcilePending().catch((error) => console.warn('[permission-auto-accept] failed to reconcile permissions:', error?.message ?? error));
     });

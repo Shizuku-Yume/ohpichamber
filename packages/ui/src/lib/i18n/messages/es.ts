@@ -17,6 +17,7 @@ import { providersI18n } from './providers.i18n';
 import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 import { markdownGithubI18n } from './markdown-github.i18n';
+import { integrationsCatalogI18n } from './integrations-catalog.i18n';
 
 export const dict: Record<I18nKey, string> = {
   "startup.legacyNotice.dismiss": "Descartar",
@@ -140,6 +141,7 @@ export const dict: Record<I18nKey, string> = {
   ...pluginsGridI18n.es,
   ...markdownGithubI18n.es,
   'markdownRenderer.code.proposal': 'Propuesta',
+  ...integrationsCatalogI18n['es'],
   'terminalView.actions.attachSelection': 'Adjuntar salida seleccionada',
   'terminalView.actions.copySelection': 'Copiar salida seleccionada',
   'terminalView.toast.selectionCopied': 'Salida copiada',

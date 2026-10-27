@@ -16,6 +16,7 @@ import { providersI18n } from './providers.i18n';
 import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 import { markdownGithubI18n } from './markdown-github.i18n';
+import { integrationsCatalogI18n } from './integrations-catalog.i18n';
 
 export const dict = {
   "startup.legacyNotice.dismiss": "Yoksay",
@@ -68,6 +69,7 @@ export const dict = {
   ...pluginsGridI18n.tr,
   ...markdownGithubI18n.tr,
   'markdownRenderer.code.proposal': 'Proposal',
+  ...integrationsCatalogI18n['tr'],
   'terminalView.actions.attachSelection': 'Seçili çıktıyı ekle',
   'terminalView.actions.copySelection': 'Seçili çıktıyı kopyala',
   'terminalView.toast.selectionCopied': 'Çıktı kopyalandı',

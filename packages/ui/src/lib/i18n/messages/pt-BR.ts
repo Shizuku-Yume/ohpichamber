@@ -16,6 +16,7 @@ import { environmentI18n } from './environment.i18n';
 import { providersI18n } from './providers.i18n';
 import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
+import { integrationsCatalogI18n } from './integrations-catalog.i18n';
 
 export const dict: Record<I18nKey, string> = {
   "startup.legacyNotice.descriptionGeneric": "Suas sessões anteriores do OpenCode não foram importadas para o OpenChamber. Seus dados existentes permanecem intactos no diretório de dados do OpenCode. Para usar seus modelos, entre novamente em seus provedores nas Configurações.",
@@ -137,6 +138,7 @@ export const dict: Record<I18nKey, string> = {
   ...providersI18n['pt-BR'],
   ...mcpGridI18n['pt-BR'],
   ...pluginsGridI18n['pt-BR'],
+  ...integrationsCatalogI18n['pt-BR'],
   'terminalView.actions.attachSelection': 'Anexar saída selecionada',
   'terminalView.actions.copySelection': 'Copiar saída selecionada',
   'terminalView.toast.selectionCopied': 'Saída copiada',

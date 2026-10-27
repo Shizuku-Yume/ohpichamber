@@ -16,6 +16,7 @@ import { providersI18n } from './providers.i18n';
 import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 import { markdownGithubI18n } from './markdown-github.i18n';
+import { integrationsCatalogI18n } from './integrations-catalog.i18n';
 
 export const dict = {
   "startup.legacyNotice.title": "Vorherige OpenCode-Daten erkannt",
@@ -129,6 +130,7 @@ export const dict = {
   ...pluginsGridI18n.de,
   ...markdownGithubI18n.de,
   'markdownRenderer.code.proposal': 'Proposal',
+  ...integrationsCatalogI18n['de'],
   'common.language.german': 'Deutsch',
   'common.loading': 'Wird geladen...',
   'common.unavailable': 'Nicht verfügbar',

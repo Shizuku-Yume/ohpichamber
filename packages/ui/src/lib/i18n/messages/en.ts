@@ -16,6 +16,7 @@ import { providersI18n } from './providers.i18n';
 import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 import { markdownGithubI18n } from './markdown-github.i18n';
+import { integrationsCatalogI18n } from './integrations-catalog.i18n';
 
 export const dict = {
   "startup.legacyNotice.dismiss": "Dismiss",
@@ -128,6 +129,7 @@ export const dict = {
   ...mcpGridI18n.en,
   ...pluginsGridI18n.en,
   ...markdownGithubI18n.en,
+  ...integrationsCatalogI18n['en'],
   'terminalView.actions.attachSelection': 'Attach selected output',
   'terminalView.actions.copySelection': 'Copy selected output',
   'terminalView.toast.selectionCopied': 'Output copied',

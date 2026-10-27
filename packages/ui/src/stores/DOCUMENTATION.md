@@ -686,7 +686,7 @@ active project, which is what non-Settings callers pass. A load for another
 directory writes the map and leaves the mirror alone, so browsing another
 project in Settings cannot change what chat sees. Components select through
 `selectAgentsForDirectory` / `selectCommandsForDirectory` /
-`selectSkillsForDirectory` / `selectMcpServersForDirectory` /
+`selectAvailableSkillsForDirectory` / `selectMcpServersForDirectory` /
 `selectProvidersForDirectory`, which return stored arrays.
 
 Command discovery compares responses only with the requested directory's cache.

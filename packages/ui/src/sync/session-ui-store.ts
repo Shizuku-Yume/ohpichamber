@@ -35,7 +35,7 @@ import { isDirectoryUnknown, useDirectoryStore } from "@/stores/useDirectoryStor
 import { hostFilesystem } from "@/lib/host-filesystem"
 import { useSessionFoldersStore } from "@/stores/useSessionFoldersStore"
 import { expandNativeFileResource } from '@/api/fileResourceExpansion'
-import { selectSkillsForDirectory, useSkillsStore } from "@/stores/useSkillsStore"
+import { selectAvailableSkillsForDirectory, useSkillsStore } from "@/stores/useSkillsStore"
 import { getDeferredSafeStorage } from "@/stores/utils/safeStorage"
 import { markPendingUserSendAnimation } from "@/lib/userSendAnimation"
 import { normalizePath } from "@/lib/pathNormalization"
@@ -270,7 +270,7 @@ export async function routeMessage(params: {
       return 'command'
     }
     const invocation = /^\/([^\s]+)(?:\s([\s\S]*))?$/.exec(params.content)
-    const matchedSkill = selectSkillsForDirectory(useSkillsStore.getState(), requestDirectory)
+    const matchedSkill = selectAvailableSkillsForDirectory(useSkillsStore.getState(), requestDirectory)
       .find(skill => skill.name === invocation?.[1])
     if (matchedSkill) {
       const expandedSkill = await expandCanonicalSkills(params.sessionId, [matchedSkill.name], invocation?.[2] ?? '')

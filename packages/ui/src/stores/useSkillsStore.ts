@@ -65,8 +65,7 @@ const inFlight = new Map<string, Promise<boolean>>();
 const revisions = new Map<string, number>();
 const eventSource = 'useSkillsStore';
 export const invalidateSkillsLoadCache = (directory: string | null = resolveDirectory()) => { loadedAt.delete(keyFor(directory)); };
-export const selectSkillsForDirectory = (state: Pick<SkillsStore, 'skillsByDirectory'>, directory?: string | null): DiscoveredSkill[] => state.skillsByDirectory[keyFor(resolveDirectory(directory))] ?? emptySkills;
-export const selectAvailableSkillsForDirectory = selectSkillsForDirectory;
+export const selectAvailableSkillsForDirectory = (state: Pick<SkillsStore, 'skillsByDirectory'>, directory?: string | null): DiscoveredSkill[] => state.skillsByDirectory[keyFor(resolveDirectory(directory))] ?? emptySkills;
 const detailKey = (reference: SkillReference): string => typeof reference === 'string' ? reference : JSON.stringify([reference.scope, reference.authoredSkillId]);
 
 export const useSkillsStore = create<SkillsStore>()(devtools(persist((set, get) => {
@@ -180,7 +179,7 @@ export const useSkillsStore = create<SkillsStore>()(devtools(persist((set, get) 
       inFlight.set(directory, request);
       try { return await request; } finally { if (inFlight.get(directory) === request) inFlight.delete(directory); }
     },
-    getSkillByName: (skillId, directory) => selectSkillsForDirectory(get(), directory).find(skill => skill.skillId === skillId),
+    getSkillByName: (skillId, directory) => selectAvailableSkillsForDirectory(get(), directory).find(skill => skill.skillId === skillId),
     getSkillDetail: async (skillId, requested) => {
       const owner = generation;
       try {
@@ -215,7 +214,7 @@ export const useSkillsStore = create<SkillsStore>()(devtools(persist((set, get) 
           return result;
         });
         if (success) {
-          const created = selectSkillsForDirectory(get(), directory).find(skill => skill.authoredSkillId === config.name && skill.scope === config.scope);
+          const created = selectAvailableSkillsForDirectory(get(), directory).find(skill => skill.authoredSkillId === config.name && skill.scope === config.scope);
           set({ selectedSkillName: created?.skillId ?? null, selectedAuthoredSkill: created ? null : { scope: config.scope, authoredSkillId: config.name }, skillDraft: null });
         }
         return success;
@@ -238,7 +237,7 @@ export const useSkillsStore = create<SkillsStore>()(devtools(persist((set, get) 
         const target = writable(skillId, directory);
         const success = await mutate(directory, workspaceId => canonicalClient.fileResources.renameSkill(workspaceId, target.skillId, { scope: target.scope, expectedSourceRevision: target.expectedSourceRevision, name }));
         if (success) {
-          const native = selectSkillsForDirectory(get(), directory).find(skill => skill.authoredSkillId === name && skill.scope === target.scope);
+          const native = selectAvailableSkillsForDirectory(get(), directory).find(skill => skill.authoredSkillId === name && skill.scope === target.scope);
           set({ selectedSkillName: native?.skillId ?? null, selectedAuthoredSkill: native ? null : { scope: target.scope, authoredSkillId: name } });
         }
         return success;

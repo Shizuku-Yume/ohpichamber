@@ -931,23 +931,6 @@ const LEGACY_PROMPT_KEY_MAP: Record<string, { visible: MagicPromptId; instructio
 /** One scope's overrides by prompt id. A Map, so an id such as `__proto__` stays an id. */
 type MagicPromptOverrides = ReadonlyMap<string, string>;
 
-/** One scope of a project view. `invalid` is a failed read and carries no map. */
-type MagicPromptScopeState =
-  | { status: 'ok' | 'missing'; overrides: MagicPromptOverrides }
-  | { status: 'invalid'; reason: string };
-
-export interface MagicPromptScopesView {
-  /** The registered project the view is about. */
-  project: { id: string; path: string; file: string };
-  scopes: { global: MagicPromptScopeState; project: MagicPromptScopeState };
-}
-
-/** Selects the scope a mutation writes, in the view of one registered project. */
-interface MagicPromptScopeSelector {
-  scope: 'global' | 'project';
-  projectId: string;
-}
-
 type MagicPromptSource = 'project' | 'global' | 'builtin';
 
 /** The scopes Settings shows one prompt through; `project` is null in the Global scope. */
@@ -1020,16 +1003,6 @@ const globalPayloadSchema = z.object({
   overrides: overrideMapSchema,
 });
 
-const scopeStateSchema = z.union([
-  z.object({ status: z.enum(['ok', 'missing']), overrides: overrideMapSchema }),
-  z.object({ status: z.literal('invalid'), reason: z.string() }),
-]);
-
-const scopesPayloadSchema = z.object({
-  version: z.literal(1),
-  project: z.object({ id: z.string().min(1), path: z.string(), file: z.string() }),
-  scopes: z.object({ global: scopeStateSchema, project: scopeStateSchema }),
-});
 
 const errorPayloadSchema = z.object({ error: z.string().min(1), code: z.string().optional() });
 
@@ -1037,7 +1010,7 @@ const request = async <T>(
   path: string,
   init: {
     method: 'GET' | 'PUT' | 'DELETE';
-    query?: { projectId: string; scope?: MagicPromptScopeSelector['scope'] } | { sessionDirectory: string };
+    query?: { sessionDirectory: string };
     body?: string;
   },
   schema: z.ZodType<T>,
@@ -1078,59 +1051,6 @@ const fetchOverrides = async (sessionDirectory?: string): Promise<MagicPromptOve
     globalPayloadSchema,
     'Failed to load magic prompts',
   )).overrides
-);
-
-/** Both scopes of a registered project. A scope that failed to read stays `invalid`, the other is still reported. */
-export const fetchMagicPromptScopes = async (projectId: string): Promise<MagicPromptScopesView> => {
-  const view = await request(
-    API_ENDPOINT,
-    { method: 'GET', query: { projectId } },
-    scopesPayloadSchema,
-    'Failed to load magic prompts',
-  );
-  if (view.project.id !== projectId) {
-    throw new MagicPromptError('Magic prompts answered for another project');
-  }
-  return { project: view.project, scopes: view.scopes };
-};
-
-/**
- * A write goes only to the runtime it was decided on: `runtimeKey` is checked
- * right before the request leaves, so a call made after a runtime switch sends
- * nothing. A switch after the request left does not undo it; the caller drops
- * the answer.
- */
-const mutateScoped = async (
-  path: string,
-  method: 'PUT' | 'DELETE',
-  selector: MagicPromptScopeSelector,
-  runtimeKey: string,
-  failureMessage: string,
-  body?: string,
-): Promise<MagicPromptScopesView> => {
-  assertMagicPromptRuntime(runtimeKey);
-  const view = await request(
-    path,
-    { method, query: { scope: selector.scope, projectId: selector.projectId }, body },
-    scopesPayloadSchema,
-    failureMessage,
-  );
-  if (view.project.id !== selector.projectId) {
-    throw new MagicPromptError('Magic prompts answered for another project');
-  }
-  return { project: view.project, scopes: view.scopes };
-};
-
-export const saveScopedMagicPromptOverride = (selector: MagicPromptScopeSelector, id: MagicPromptId, text: string, runtimeKey: string) => (
-  mutateScoped(promptPath(id), 'PUT', selector, runtimeKey, 'Failed to save magic prompt', JSON.stringify({ text }))
-);
-
-export const resetScopedMagicPromptOverride = (selector: MagicPromptScopeSelector, id: MagicPromptId, runtimeKey: string) => (
-  mutateScoped(promptPath(id), 'DELETE', selector, runtimeKey, 'Failed to reset magic prompt')
-);
-
-export const resetAllScopedMagicPromptOverrides = (selector: MagicPromptScopeSelector, runtimeKey: string) => (
-  mutateScoped(API_ENDPOINT, 'DELETE', selector, runtimeKey, 'Failed to reset all magic prompts')
 );
 
 export const getMagicPromptDefinition = (id: MagicPromptId): MagicPromptDefinition => {

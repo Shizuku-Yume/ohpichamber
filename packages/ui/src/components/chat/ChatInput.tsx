@@ -106,7 +106,7 @@ import { isGuestActive } from '@/lib/guests/capabilities';
 import { routeGuestSlashCommand } from './composer/submit/guestCommands';
 import { pluginModeFromId } from '@/lib/surfaces/modes';
 import { expandCanonicalSkills } from '@/sync/session-ui-store';
-import { selectSkillsForDirectory, useSkillsStore } from '@/stores/useSkillsStore';
+import { selectAvailableSkillsForDirectory, useSkillsStore } from '@/stores/useSkillsStore';
 import { selectCommandsForDirectory, useCommandsStore } from '@/stores/useCommandsStore';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useGitStore } from '@/stores/useGitStore';
@@ -845,7 +845,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     // highlight matching tokens in the composer, the same way confirmed
     // @files are.
     const availableCommands = useCommandsStore((s) => selectCommandsForDirectory(s, currentDirectory));
-    const availableSkills = useSkillsStore((s) => selectSkillsForDirectory(s, currentDirectory));
+    const availableSkills = useSkillsStore((s) => selectAvailableSkillsForDirectory(s, currentDirectory));
     const availableSnippets = useSnippetsStore(state => selectSnippetsForDirectory(state, currentDirectory));
     const knownSlashNames = React.useMemo(() => {
         const names = new Set<string>([
@@ -1382,7 +1382,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             { listLocalDirectory: async (directory) => (await runtimeFiles.listDirectory(directory)).entries },
         );
         const availableSkillNames = new Set(
-            selectSkillsForDirectory(useSkillsStore.getState(), queueTarget.directory).map((skill) => skill.name),
+            selectAvailableSkillsForDirectory(useSkillsStore.getState(), queueTarget.directory).map((skill) => skill.name),
         );
         const queuedSkillNames = collectInlineSkillMentions(sanitizedText, availableSkillNames);
         let skillInstruction: string | null;
@@ -1959,7 +1959,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         };
 
         const availableSkillNames = new Set(
-            selectSkillsForDirectory(useSkillsStore.getState(), currentDirectory).map((skill) => skill.name),
+            selectAvailableSkillsForDirectory(useSkillsStore.getState(), currentDirectory).map((skill) => skill.name),
         );
 
         // Comments become synthetic context, which the send-time expansion

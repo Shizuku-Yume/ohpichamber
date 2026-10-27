@@ -5,7 +5,7 @@ import type { Part } from '@openchamber/agent-contract';
 import type { AgentMentionInfo } from '../types';
 import { SimpleMarkdownRenderer } from '../../MarkdownRenderer';
 import { useUIStore } from '@/stores/useUIStore';
-import { selectSkillsForDirectory, useSkillsStore } from '@/stores/useSkillsStore';
+import { selectAvailableSkillsForDirectory, useSkillsStore } from '@/stores/useSkillsStore';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useI18n } from '@/lib/i18n';
 import {
@@ -66,7 +66,7 @@ const UserTextPart: React.FC<UserTextPartProps> = ({
     const userMessageRenderingMode = useUIStore((state) => state.userMessageRenderingMode);
     const collapsibleUserMessages = useUIStore((state) => state.collapsibleUserMessages);
     const directory = useEffectiveDirectory();
-    const skills = useSkillsStore(state => selectSkillsForDirectory(state, directory));
+    const skills = useSkillsStore(state => selectAvailableSkillsForDirectory(state, directory));
     const { t } = useI18n();
     const normalizedRenderingMode = normalizeUserMessageRenderingMode(userMessageRenderingMode);
     const isCollapsed = collapsibleUserMessages && !messageExpanded;

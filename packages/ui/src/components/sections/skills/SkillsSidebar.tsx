@@ -18,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
-import { selectSkillsForDirectory, useSkillsStore, type AuthoredSkillReference, type PendingFile } from '@/stores/useSkillsStore';
+import { selectAvailableSkillsForDirectory, useSkillsStore, type AuthoredSkillReference, type PendingFile } from '@/stores/useSkillsStore';
 import { FileResourcePathSchema } from '@openchamber/agent-contract';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { useShallow } from 'zustand/react/shallow';
@@ -76,7 +76,7 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
     renameSkill: state.renameSkill,
   })));
   const directory = useSettingsDirectory();
-  const skills = useSkillsStore(state => selectSkillsForDirectory(state, directory));
+  const skills = useSkillsStore(state => selectAvailableSkillsForDirectory(state, directory));
   const fileCatalog = useSkillsStore(state => state.filesByDirectory[directory ?? '__default__']);
   const selectedAuthoredSkill = useSkillsStore(state => state.selectedAuthoredSkill);
   const applyFailed = useSkillsStore(state => state.lastMutationDirectory === directory && (state.lastMutationResult?.apply?.status === 'partial' || state.lastMutationResult?.apply?.status === 'failed'));

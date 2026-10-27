@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { CodeMirrorEditor } from '@/components/ui/CodeMirrorEditor';
 import { toast } from '@/components/ui';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
-import { selectSkillsForDirectory, useSkillsStore, type PendingFile } from '@/stores/useSkillsStore';
+import { selectAvailableSkillsForDirectory, useSkillsStore, type PendingFile } from '@/stores/useSkillsStore';
 import { useShallow } from 'zustand/react/shallow';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
@@ -80,7 +80,7 @@ const SkillsInstalledPage: React.FC = () => {
     updateSkill: state.updateSkill,
     createSkill: state.createSkill,
   })));
-  const skills = useSkillsStore(state => selectSkillsForDirectory(state, directory));
+  const skills = useSkillsStore(state => selectAvailableSkillsForDirectory(state, directory));
   const selectedAuthoredSkill = useSkillsStore(state => state.selectedAuthoredSkill);
   const authoredFiles = useSkillsStore(state => state.filesByDirectory[directory ?? '__default__']);
   const applyFailed = useSkillsStore(state => state.lastMutationDirectory === directory && (state.lastMutationResult?.apply?.status === 'partial' || state.lastMutationResult?.apply?.status === 'failed'));

@@ -56,9 +56,9 @@ run record.
 
 | Path | Disposition |
 |---|---|
-| `web/server/lib/workflows/agent-session.js` | **Rewritten** on `sessionService.create/send/followUp/history/open/control`: one session and one prompt per agent, the turn found by the send's `run.runId`, schema corrections as follow-ups, interrupt aborts the active run, `readUsage` from the last assistant message (`cost.total` + tokens), `postSynthetic` sends synthetic context that wakes the proposing session (a declined/stopped report stays in the run record: the canonical send always starts a run). `allowTools` is accepted and unused: the answer action rides the managed `openchamber` tool. |
-| `web/server/lib/workflows/agent-session.test.js` | **Rewritten** (9 tests): workspace-scoped create, model inheritance, prompt + runId turn, failed-turn mapping, stop-before-prompt, follow-up, usage mapping, interrupt, report delivery. |
-| `web/server/lib/workflows/runtime.js` | **Adapted**: local report-id minter (the fork keeps dispatch-results' minter private), answer prompt names the reachable `openchamber` tool's `workflow.answer` action. Everything else adopted whole. |
+| `web/server/lib/workflows/agent-session.js` | **Rewritten** on `sessionService.create/send/followUp/history/open/control`: one session and one prompt per agent, the turn found by the send's `run.runId`, schema corrections as follow-ups, interrupt aborts the active run, `readUsage` from the last assistant message (`cost.total` + tokens), `postSynthetic` sends synthetic context that wakes the proposing session. Capacity refusals surface immediately as the agent's failed status with the user-visible Problem Details message (no custom backoff retry, following the post-M3 settled capacity policy). Invokes `sessionService.unloadWorker` (`DELETE /internal/workers/:id`) on turn completion to evict idle session workers. |
+| `web/server/lib/workflows/agent-session.test.js` | **Rewritten** (10 tests): workspace-scoped create, model inheritance, prompt + runId turn, failed-turn mapping, stop-before-prompt, follow-up, usage mapping, interrupt, report delivery, worker unload, and immediate capacity error surfacing. |
+| `web/server/lib/workflows/runtime.js` | **Adapted**: local report-id minter (the fork keeps dispatch-results' minter private), answer prompt names the reachable `openchamber` tool's `workflow.answer` action. `MAX_CONCURRENT_AGENTS` remains at upstream's 8: runs with concurrent agents succeed without capacity exhaustion once idle worker eviction on turn completion is in place. Unloads parent session worker when the workflow run settles. |
 | `web/server/lib/workflows/runtime.test.js` | **Adapted** (two assertions: the prompt and follow-up wording). |
 | `web/server/lib/workflows/routes.js` | **Adopted + `createWorkflowsModule`**: builds the store, canonical agent sessions and runtime only when the flag is on; returns the routes, the runtime for the control service, and `deliverPending`. |
 | `web/server/lib/workflows/{feature-flag,json-schema,sandbox,script,store}.js` and their tests, `DOCUMENTATION.md` | **Adopted whole** (engine-free). The documentation gained an "In this fork (OMP)" section. |
@@ -212,6 +212,25 @@ artifacts under `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refres
      `completed` and reconciled session statuses.
    - Screenshots: `workflow-alpha-session.png`, `workflow-parent-session.png`, `workflow-after-reload.png`.
 
+
+### Post-hardening three-run verification (real provider, isolated HOME, ports 5204/3964)
+
+A three-run sample was executed after routing worker unload through the supervisor's idle-eviction path (`DELETE /internal/workers/:id` -> `WorkerRegistry.evict`), removing `createWithCapacityRetry` backoff, restoring `MAX_CONCURRENT_AGENTS = 8`, and adding unauthorized caller rejection tests.
+
+Artifacts: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-17-followup-2026-10-27/`
+
+| Run | Run ID | Parent Session | Alpha Status | Beta Status | Overall Status | Notes |
+|:---:|---|---|:---:|:---:|:---:|---|
+| 1 | `wf_EAIUu66mtw6nE8X0` | `c6025b5c-…` | completed | completed | completed | Both agents completed in 20.7s; schema checked answers `alpha.ts` and `beta.ts`. Zero capacity errors. |
+| 2 | `wf_m3I15l9G5j9hh5PY` | `c0449caf-…` | completed | completed | completed | Both agents completed; alpha took 27.5s, beta took 47.7s. 0 capacity errors. |
+| 3 | `wf_iIOf0sy069mYgmQq` | `1a67150b-…` | completed | completed | completed | Both agents completed in 22.5s. 0 capacity errors. |
+
+**Summary:** Alpha 3/3 completed, Beta 3/3 completed (100% success rate across all 3 runs). Worker capacity errors were eliminated by immediate idle worker eviction upon agent/run completion, keeping concurrent active root workers within the supervisor's `maxActiveRootWorkers: 5` cap without backoff retries.
+
+Screenshots captured:
+- `workflow-after-runs.png`: main UI view showing all 3 completed runs.
+- `workflow-alpha-session.png`: session view for completed alpha agent.
+- `workflow-parent-session.png`: session view for parent workflow run.
 ### Limits
 
 - Workflow agents are root sessions (parent link unavailable without a Contract change,

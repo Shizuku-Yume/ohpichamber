@@ -99,3 +99,12 @@ An entry leaves this file in one of two ways:
 - **Impact:** Root test gates fail intermittently on high-load machines even when code changes are correct, requiring multiple rerun attempts to obtain clean gate receipts.
 - **Solution:** Avoid fixed `sleep` boundaries in process-lifecycle integration tests in favor of bounded polling on observable state (as implemented in `2d10f973ed`), and ensure parallel test runners isolate shared temp dirs and git fixtures to prevent worker contention.
 - **Cost:** Test lifecycle assertion and polling adjustments; zero production code impact.
+## Turn stats Elapsed 0.0s on turns with tool calls
+
+- **Where:** `packages/ui/src/components/chat/work-status/telemetry.ts` (`getLatestCompletedTurnStats`), `WorkStatusTelemetrySection.tsx`
+- **Added:** 2026-10-27
+- **Priority:** worth-doing
+- **Problem:** In upstream (`0056bf6a9`), `elapsedDurationMs` was computed from legacy OpenCode message timing: `turnEndMs = lastAssistantInfo.time.completed` and `turnStartMs = user.time.created`. The OMP Canonical contract (`@openchamber/agent-contract`) exposes only message creation time (`createdAt`) and no provider timing or message completion time. `telemetry.ts` (added during M3 in `24f1012c14`) approximates elapsed time as `lastAssistant.createdAt - user.createdAt`. In multi-step turns with tool calls, `projection.ts` creates virtual user messages for intermediate steps with `createdAt = stepTimestamp`. `getLatestCompletedTurnStats` walks backwards to find `role === 'user'`, stopping at this virtual user message whose `createdAt` is identical to the assistant message's `createdAt`. As a result, `end - start` evaluates to 0 ms and formats as `Elapsed 0.0s`.
+- **Impact:** Any completed turn that executed tools displays `Elapsed 0.0s` in the Turn stats section of the work-status panel, obscuring true execution duration.
+- **Solution:** Pass the canonical `Turn` record (or query `useSessionTurns`) into `WorkStatusTelemetrySection` and use `turn.finishedAt - turn.startedAt` (or skip `virtualUser` messages and use true turn boundaries) to compute `elapsedDurationMs`.
+- **Cost:** Touches `WorkStatusTelemetrySection.tsx` and `telemetry.ts` inputs to receive canonical `Turn` data; no backend change needed as `Turn` already carries `startedAt` and `finishedAt`.

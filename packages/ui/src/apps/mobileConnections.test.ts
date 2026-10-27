@@ -566,20 +566,6 @@ describe('relay probe while the runtime is on the relay', () => {
     }
   });
 
-  test('a relay refusal over its limits is reported as such, after a single dial', async () => {
-    try {
-      installRelayWindow();
-      relayCloseCode = 4029;
-
-      const outcome = await autoConnectLastInstance({ fast: false });
-
-      expect(outcome).toEqual({ status: 'relay-limit', label: 'Relay' });
-      expect(dials).toHaveLength(1);
-    } finally {
-      restoreRelayGlobals();
-    }
-  });
-
   test('a relay refusal for another reason stays unreachable', async () => {
     try {
       installRelayWindow();

@@ -61,6 +61,7 @@ import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useGitAllBranches, useGitStore } from '@/stores/useGitStore';
 import { runBackgroundNetworkTask } from '@/lib/background-network';
 import { refreshGlobalSessions, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { seedGlobalSessionStatusFromHost } from '@/sync/host-session-status-seed';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSessionDisplayStore, type ProjectSortOrder } from '@/stores/useSessionDisplayStore';
 import { isSessionPinned, useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
@@ -781,7 +782,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
       setConfirmingRemoveProjectId(null);
       return;
     }
-    void refreshGlobalSessions(liveSessions);
+    void refreshGlobalSessions(liveSessions).then(() => seedGlobalSessionStatusFromHost());
     // intentionally only on open transition — session events keep the list current after that
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);

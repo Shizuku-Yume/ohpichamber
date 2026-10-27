@@ -331,13 +331,11 @@ test('the mounted poller recovers real store failure and starts a fresh load on 
  * empty store because its root never did (#4643).
  */
 describe('global session polling root coverage', () => {
-  // VS Code's Settings editor tab is a VSCodeApp root that lists no
-  // sessions, so there the poller is gated on the panel kind; the chat panel
-  // still polls.
+  // The desktop root lists sessions from the global store, so it starts the
+  // poller. Mini Chat and VS Code roots do not exist on the retained surfaces
+  // (VS Code is retired; Mini Chat reads the canonical sync stores).
   const rootSources: Array<[string, string, RegExp]> = [
     ['App', '../App.tsx', /^\s*useGlobalSessionsPolling\(true\);/m],
-    ['VSCodeApp', '../apps/VSCodeApp.tsx', /^\s*useGlobalSessionsPolling\(!isSettingsPanel\);/m],
-    ['ElectronMiniChatApp', '../apps/ElectronMiniChatApp.tsx', /^\s*useGlobalSessionsPolling\(true\);/m],
   ];
 
   for (const [rootName, sourcePath, mountCall] of rootSources) {

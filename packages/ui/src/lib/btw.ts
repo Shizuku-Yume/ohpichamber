@@ -127,9 +127,9 @@ export async function startBtwSession(input: StartBtwInput): Promise<Session> {
         await usePermissionStore.getState().setSessionMode(forked.sessionId, input.permissionMode);
         assertCurrent();
       }
-      const history = await canonicalClient.getHistory(forked.sessionId, { limit: 1 });
-      assertCurrent();
-      const boundaryMessageID = history.messages.at(-1)?.messageId ?? forkPointMessageID ?? null;
+      // The fork inherits parent messages up to forkPointMessageID (or all messages on a full fork);
+      // the boundary message marks the end of inherited history so BtwPanel hides parent messages.
+      const boundaryMessageID = forkPointMessageID ?? parent.messages.at(-1)?.messageId ?? null;
       const marked = await sessionActions.patchSessionMetadata(forked.sessionId, sessionDirectory, (metadata) => withBtwSessionMarker(metadata, input.parentSessionId, boundaryMessageID), expectedRuntimeKey);
       assertCurrent();
       insertForkIntoDirectoryStore(marked, sessionDirectory);

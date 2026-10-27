@@ -13,6 +13,7 @@ import { useI18n } from '@/lib/i18n';
 import { showRuntimeStatus } from '@/lib/runtimeStatus';
 import { addSelectionToChat } from '@/lib/addSelectionToChat';
 import { navigateSessionHistory } from '@/lib/sessionNavigationHistory';
+import { getZoneView, resolveZoneActiveTabId, shownContextModes, zoneOfMode } from '@/lib/workspace/zones';
 
 const getActiveElementSelectedText = (): string => {
   if (typeof document === 'undefined') {
@@ -219,10 +220,14 @@ export const useMenuActions = (
           const uiState = useUIStore.getState();
           const directoryKey = normalizeContextPanelDirectoryKey(directory);
           const panelState = uiState.contextPanelByDirectory[directoryKey];
+          // The right zone only: it is the panel this menu item always meant.
+          const rightTabId = panelState
+            ? resolveZoneActiveTabId(panelState.tabs, uiState.contextSurfaceZones, 'right', getZoneView(panelState, 'right').activeTabId)
+            : null;
           if (panelState?.isOpen) {
             uiState.closeContextPanel(directoryKey);
-          } else if (panelState?.activeTabId) {
-            uiState.setActiveContextPanelTab(directoryKey, panelState.activeTabId);
+          } else if (rightTabId) {
+            uiState.setActiveContextPanelTab(directoryKey, rightTabId);
           } else {
             uiState.openContextSurface(directoryKey, 'git');
           }
@@ -256,11 +261,10 @@ export const useMenuActions = (
           const key = normalizeContextPanelDirectoryKey(directory);
           const uiState = useUIStore.getState();
           const panel = uiState.contextPanelByDirectory[key];
-          const activeMode = panel?.isOpen ? panel.tabs.find((tab) => tab.id === panel.activeTabId)?.mode : null;
-          if (activeMode !== 'terminal') {
+          if (!shownContextModes(panel, uiState.contextSurfaceZones).has('terminal')) {
             uiState.openContextSurface(key, 'terminal');
           }
-          uiState.toggleContextPanelExpanded(key);
+          uiState.toggleContextPanelExpanded(key, zoneOfMode(uiState.contextSurfaceZones, 'terminal'));
           break;
         }
 

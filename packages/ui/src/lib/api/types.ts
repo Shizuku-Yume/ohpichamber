@@ -241,6 +241,11 @@ export interface GitStatus {
   rebaseInProgress?: GitRebaseInProgress | null;
   /** Phase 1: reason for attention-required state */
   attentionReason?: 'merge' | 'rebase' | 'cherry-pick' | 'revert' | 'bisect' | null;
+  /**
+   * True when the branch has no commit yet (a fresh `git init`). Absent from
+   * runtimes that do not report it, which reads as false.
+   */
+  unborn?: boolean;
 }
 
 export interface GitUnpushedBranchCounts {

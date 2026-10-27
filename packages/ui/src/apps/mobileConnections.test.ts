@@ -464,7 +464,6 @@ describe('relay probe while the runtime is on the relay', () => {
       openWebSocket() { throw new Error('the probe opens no socket'); },
       getStatus: () => ({ state: 'connected' }),
       subscribeStatus: () => () => undefined,
-      retry: () => undefined,
       close: () => { closed += 1; },
     };
     adoptRelayTunnel(liveRelay, tunnel);

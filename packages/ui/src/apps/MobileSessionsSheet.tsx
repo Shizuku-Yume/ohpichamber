@@ -61,12 +61,9 @@ import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useGitAllBranches, useGitStore } from '@/stores/useGitStore';
 import { runBackgroundNetworkTask } from '@/lib/background-network';
 import { refreshGlobalSessions, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
-import { useMobileSessionExpansionStore } from '@/stores/useMobileSessionExpansionStore';
-import { useMobileSessionTreeStore } from '@/stores/useMobileSessionTreeStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSessionDisplayStore, type ProjectSortOrder } from '@/stores/useSessionDisplayStore';
 import { isSessionPinned, useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
-import { orderWorktrees, useWorktreeOrderStore } from '@/stores/useWorktreeOrderStore';
 import {
   EMPTY_SESSION_ORDER_RANKS,
   orderSessionsByLifecycleScopes,
@@ -618,119 +615,31 @@ const ShowFewerRow: React.FC<{
   );
 };
 
-/** One draggable worktree row inside a project's reorder card. */
-const SortableWorktreeReorderRow: React.FC<{ worktree: WorktreeMetadata }> = ({ worktree }) => {
+/** One draggable project in Reorder projects. Worktrees follow their
+    project's discovery order, so only projects are draggable here. */
+const SortableProjectRow: React.FC<{ project: ProjectMeta }> = ({ project }) => {
   const { t } = useI18n();
-  const path = normalizePath(worktree.path);
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: path });
-  const label = worktree.branch || worktree.label || worktree.path;
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: project.id });
   return (
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 10 : 1 }}
       className={cn(
-        'flex items-center gap-1 rounded-xl bg-background px-1 py-1',
+        'flex items-center gap-1 rounded-2xl border border-border/70 bg-[var(--surface-elevated)] px-1.5 py-1.5 transition-colors',
         isDragging && 'shadow-lg shadow-black/20',
       )}
     >
       <button
         type="button"
-        className="flex size-8 shrink-0 cursor-grab touch-none items-center justify-center rounded-lg text-muted-foreground/70 transition-colors hover:text-foreground active:cursor-grabbing"
-        aria-label={t('mobile.sessions.dragHandleAria', { label })}
+        className="flex size-9 shrink-0 cursor-grab touch-none items-center justify-center rounded-xl text-muted-foreground/70 transition-colors hover:text-foreground active:cursor-grabbing"
+        aria-label={t('mobile.sessions.dragHandleAria', { label: project.label })}
         {...attributes}
         {...listeners}
       >
         <RiDragMove2Line className="size-4" />
       </button>
-      <Icon name="git-branch" className="size-4 shrink-0 text-muted-foreground" />
-      <span className="block min-w-0 flex-1 truncate typography-ui-label font-bold text-muted-foreground">{label}</span>
-    </div>
-  );
-};
-
-/** Reorder-mode project card: drag handle reorders projects globally; tapping
-    the rest of the row collapses/expands its worktrees, which reorder within
-    the project through their own nested DndContext. */
-const SortableProjectRow: React.FC<{
-  project: ProjectMeta;
-  expanded: boolean;
-  onToggleExpanded: () => void;
-  onReorderWorktrees: (orderedPaths: string[]) => void;
-}> = ({ project, expanded, onToggleExpanded, onReorderWorktrees }) => {
-  const { t } = useI18n();
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: project.id });
-  const worktreeSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
-  const hasWorktrees = project.worktrees.length > 0;
-
-  const handleWorktreeDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const paths = project.worktrees.map((worktree) => normalizePath(worktree.path));
-    const fromIndex = paths.indexOf(String(active.id));
-    const toIndex = paths.indexOf(String(over.id));
-    if (fromIndex < 0 || toIndex < 0) return;
-    const next = [...paths];
-    const [moved] = next.splice(fromIndex, 1);
-    next.splice(toIndex, 0, moved);
-    onReorderWorktrees(next);
-  };
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 10 : 1 }}
-      className={cn(
-        'rounded-2xl border border-border/70 bg-[var(--surface-elevated)] px-1.5 py-1.5 transition-colors',
-        isDragging && 'shadow-lg shadow-black/20',
-      )}
-    >
-      <div className="flex items-center gap-1">
-        <button
-          type="button"
-          className="flex size-9 shrink-0 cursor-grab touch-none items-center justify-center rounded-xl text-muted-foreground/70 transition-colors hover:text-foreground active:cursor-grabbing"
-          aria-label={t('mobile.sessions.dragHandleAria', { label: project.label })}
-          {...attributes}
-          {...listeners}
-        >
-          <RiDragMove2Line className="size-4" />
-        </button>
-        <button
-          type="button"
-          className="flex min-h-9 min-w-0 flex-1 items-center gap-2 rounded-xl px-1 text-left transition-colors hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-          onClick={onToggleExpanded}
-          aria-expanded={expanded}
-          aria-label={expanded
-            ? t('sessions.sidebar.group.collapseAria', { label: project.label })
-            : t('sessions.sidebar.group.expandAria', { label: project.label })}
-          disabled={!hasWorktrees}
-          style={{ touchAction: 'manipulation' }}
-        >
-          <MobileProjectIcon project={project} />
-          <span className="block min-w-0 flex-1 truncate typography-ui-label text-foreground">{project.label}</span>
-          {hasWorktrees ? (
-            <RiArrowDownSLine
-              className={cn('size-4 shrink-0 text-muted-foreground transition-transform', expanded && 'rotate-180')}
-            />
-          ) : null}
-        </button>
-      </div>
-      {expanded && hasWorktrees ? (
-        <DndContext sensors={worktreeSensors} collisionDetection={closestCenter} onDragEnd={handleWorktreeDragEnd}>
-          <SortableContext
-            items={project.worktrees.map((worktree) => normalizePath(worktree.path))}
-            strategy={verticalListSortingStrategy}
-          >
-            <div className="mt-1 flex flex-col gap-0.5 pl-3">
-              {project.worktrees.map((worktree) => (
-                <SortableWorktreeReorderRow key={normalizePath(worktree.path)} worktree={worktree} />
-              ))}
-            </div>
-          </SortableContext>
-        </DndContext>
-      ) : null}
+      <MobileProjectIcon project={project} />
+      <span className="block min-w-0 flex-1 truncate ps-1 typography-ui-label text-foreground">{project.label}</span>
     </div>
   );
 };
@@ -792,14 +701,25 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
   // store knows. The grouped project tree itself never asks.
   const gitBranchesByDirectory = useGitAllBranches(presented && (sidebarViewMode === 'timeline' || recentShown));
   const removeProject = useProjectsStore((state) => state.removeProject);
-  const projectExpandedMap = useMobileSessionTreeStore((state) => state.projectExpanded);
-  const worktreeExpandedMap = useMobileSessionTreeStore((state) => state.worktreeExpanded);
-  const setProjectExpanded = useMobileSessionTreeStore((state) => state.setProjectExpanded);
-  const setWorktreeExpanded = useMobileSessionTreeStore((state) => state.setWorktreeExpanded);
-  const worktreeOrderByProject = useWorktreeOrderStore((state) => state.orderByProject);
-  const setWorktreeOrder = useWorktreeOrderStore((state) => state.setWorktreeOrder);
-  const expandedParents = useMobileSessionExpansionStore((state) => state.expandedParents);
-  const toggleParent = useMobileSessionExpansionStore((state) => state.toggleParent);
+  // Expansion is the sheet's own: projects start expanded, worktree groups
+  // collapsed, and closing the sheet leaves the next open as it was last seen.
+  const [projectExpandedMap, setProjectExpandedMap] = React.useState<Record<string, boolean>>({});
+  const [worktreeExpandedMap, setWorktreeExpandedMap] = React.useState<Record<string, boolean>>({});
+  const setProjectExpanded = React.useCallback((projectId: string, expanded: boolean) => {
+    setProjectExpandedMap((previous) => ({ ...previous, [projectId]: expanded }));
+  }, []);
+  const setWorktreeExpanded = React.useCallback((key: string, expanded: boolean) => {
+    setWorktreeExpandedMap((previous) => ({ ...previous, [key]: expanded }));
+  }, []);
+  const [expandedParents, setExpandedParents] = React.useState<Record<string, boolean>>({});
+  const toggleParent = React.useCallback((sessionId: string) => {
+    setExpandedParents((previous) => {
+      const next = { ...previous };
+      if (next[sessionId]) delete next[sessionId];
+      else next[sessionId] = true;
+      return next;
+    });
+  }, []);
   const [query, setQuery] = React.useState('');
   const [editingProjectId, setEditingProjectId] = React.useState<string | null>(null);
   // Swipe-right actions: which row has its actions revealed, and whether its
@@ -836,12 +756,9 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     return seeded;
   });
   const [editingOrder, setEditingOrder] = React.useState(false);
-  // Reorder mode collapses projects by default (dragging past 40 worktrees is
-  // painful); tap outside the drag handle to expand one.
-  const [reorderExpandedProjects, setReorderExpandedProjects] = React.useState<Set<string>>(new Set());
   // Per-bucket count of sessions revealed past the default page. Ephemeral —
   // resets when the sheet closes or when a group/project is toggled. Expand
-  // state itself lives in useMobileSessionTreeStore (persisted).
+  // state is the sheet's own local state.
   // Key: `${projectId}::${bucketKey}`.
   const [visibleCountByBucket, setVisibleCountByBucket] = React.useState<Map<string, number>>(new Map());
   // Timeline mode renders one flat list of every project session. The sheet is
@@ -854,7 +771,6 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     if (!open) {
       setQuery('');
       setEditingOrder(false);
-      setReorderExpandedProjects(new Set());
       setVisibleCountByBucket(new Map());
       setTimelineVisibleCount(TIMELINE_PAGE_SIZE);
       setEditingProjectId(null);
@@ -869,10 +785,6 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     // intentionally only on open transition — session events keep the list current after that
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
-
-  React.useEffect(() => {
-    if (!editingOrder) setReorderExpandedProjects(new Set());
-  }, [editingOrder]);
 
   React.useEffect(() => {
     setTimelineVisibleCount(TIMELINE_PAGE_SIZE);
@@ -935,17 +847,14 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
           iconImage: project.iconImage,
           iconBackground: project.iconBackground,
           isGitRepo: gitProjectPaths.has(normalizePath(project.path)),
-          worktrees: orderWorktrees(
-            worktreeOrderByProject[project.id],
-            worktreesByProject.get(normalizePath(project.path)) ?? [],
-          ),
+          worktrees: worktreesByProject.get(normalizePath(project.path)) ?? [],
           addedAt: project.addedAt,
           lastOpenedAt: project.lastOpenedAt,
         })),
         projectSortOrder,
         manualProjectOrder,
       ),
-    [gitProjectPaths, manualProjectOrder, projectSortOrder, projects, worktreeOrderByProject, worktreesByProject],
+    [gitProjectPaths, manualProjectOrder, projectSortOrder, projects, worktreesByProject],
   );
 
   /**
@@ -1548,15 +1457,6 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     reorderProjects(fromIndex, toIndex);
   };
 
-  const toggleReorderProjectExpanded = (projectId: string) => {
-    setReorderExpandedProjects((current) => {
-      const next = new Set(current);
-      if (next.has(projectId)) next.delete(projectId);
-      else next.add(projectId);
-      return next;
-    });
-  };
-
   /** Short "Project · branch" string shown under the session title in search results. */
   const buildSessionContextLabel = React.useCallback(
     (session: Session): string => {
@@ -1912,17 +1812,9 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
                   strategy={verticalListSortingStrategy}
                 >
                   <div className="flex flex-col gap-1.5">
-                    {projectsMeta.map((project) => {
-                      return (
-                        <SortableProjectRow
-                          key={project.id}
-                          project={project}
-                          expanded={reorderExpandedProjects.has(project.id)}
-                          onToggleExpanded={() => toggleReorderProjectExpanded(project.id)}
-                          onReorderWorktrees={(orderedPaths) => setWorktreeOrder(project.id, orderedPaths)}
-                        />
-                      );
-                    })}
+                    {projectsMeta.map((project) => (
+                      <SortableProjectRow key={project.id} project={project} />
+                    ))}
                   </div>
                 </SortableContext>
               </DndContext>

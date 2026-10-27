@@ -125,7 +125,6 @@ export const MobileDeleteWorktreeDialog: React.FC<MobileDeleteWorktreeDialogProp
         const result = await archiveSessionsThenRemoveWorktree({
           sessionIds,
           removeWorktree: () => removeWorktree(target),
-          restoreSessions: (ids) => unarchiveSessions(ids, { undo: true }),
           archiveSessions,
           restoreSessions: (ids) => unarchiveSessions(ids, { undo: true }),
         });

@@ -15,7 +15,7 @@ import { mobileConnectionInputClass, mobileInputKeyboardProps } from './mobileCo
 import { MobileQrConnectionLoading, MobileQrScannerOverlay } from './MobileQrScannerOverlay';
 
 export type MobileConnectionNotice = {
-  kind: 'unreachable' | 'relay-limit' | 'auth-expired';
+  kind: 'unreachable' | 'auth-expired';
   label: string;
 };
 
@@ -156,9 +156,7 @@ export const MobileConnectionWelcome: React.FC<{
             <p className="min-w-0 flex-1 typography-small text-foreground">
               {notice.kind === 'auth-expired'
                 ? t('mobile.connect.notice.authExpired', { label: notice.label })
-                : notice.kind === 'relay-limit'
-                  ? t('mobile.connect.notice.relayLimit', { label: notice.label })
-                  : t('mobile.connect.notice.unreachable', { label: notice.label })}
+                : t('mobile.connect.notice.unreachable', { label: notice.label })}
             </p>
           </div>
         ) : null}

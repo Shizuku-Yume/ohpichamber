@@ -2,7 +2,7 @@
 
 **Effort:** upstream-refresh
 **Task type:** refactor
-**Base commit:** <commit-sha>
+**Base commit:** 74bbb98db7
 
 **Delivers:** The UI's hooks, runtime API clients, app shells (web/desktop/mobile) and shared types adopt upstream's fixes while keeping the fork's runtime switching.
 

@@ -98,6 +98,35 @@ switch has no fork settings field yet; the flag alone decides here.
   (`components/chat/workflows/*`); the data layer they need (`api`, `model`, `store`,
   `project`, `panel`, `saved`, `report`) is delivered and the `workflows` panel mode exists.
 
+### Dead-code findings and pending consumers
+
+Run `bun run dead-code` in the post-landing verification worktree. Findings table:
+
+| Finding | Path | Kind | Status / Owner |
+|---|---|---|---|
+| `registerWorkflowRoutes` | `packages/web/server/lib/workflows/routes.js:33` | Unused export | **Real orphan fixed.** Internal to `routes.js`; callers mount through `createWorkflowsModule().register(app)`. Unexported. |
+| `MAX_CONCURRENT_AGENTS` | `packages/web/server/lib/workflows/runtime.js:16` | Unused export | **Real orphan fixed.** Upstream caller (`agent-tool/runtime.js`) is deleted in fork; only used internally in `runtime.js`. Unexported. |
+| `MAX_AGENTS_PER_RUN` | `packages/web/server/lib/workflows/runtime.js:17` | Unused export | **Real orphan fixed.** Upstream caller (`agent-tool/runtime.js`) is deleted in fork; only used internally in `runtime.js`. Unexported. |
+| `panel.ts` | `packages/ui/src/lib/workflows/panel.ts` | Unused file | **Pending consumer: task 14 & 24/25.** Imported by `WorkflowsPanel.tsx`, `WorkStatusWorkflowsSection.tsx`, `ContextPanelRail.tsx`, `useKeyboardShortcuts.ts`. |
+| `saved.ts` | `packages/ui/src/lib/workflows/saved.ts` | Unused file | **Pending consumer: task 14.** Imported by `WorkflowsPanel.tsx` and `panel.ts`. |
+| `fetchSavedWorkflows` | `packages/ui/src/lib/workflows/api.ts:45` | Unused export | **Pending consumer: task 14.** Used by `saved.ts` and `WorkflowsPanel.tsx`. |
+| `startSavedWorkflow` | `packages/ui/src/lib/workflows/api.ts:57` | Unused export | **Pending consumer: task 14.** Imported by `WorkflowsPanel.tsx`. |
+| `fetchWorkflowRunDetail` | `packages/ui/src/lib/workflows/api.ts:68` | Unused export | **Pending consumer: task 14.** Imported by `WorkflowsPanel.tsx`. |
+| `fetchWorkflowAgentDetail` | `packages/ui/src/lib/workflows/api.ts:75` | Unused export | **Pending consumer: task 14.** Imported by `WorkflowAgentsView.tsx`. |
+| `deleteWorkflowRun` | `packages/ui/src/lib/workflows/api.ts:82` | Unused export | **Pending consumer: task 14.** Imported by `WorkflowsPanel.tsx`. |
+| `sendWorkflowRunAction` | `packages/ui/src/lib/workflows/api.ts:88` | Unused export | **Pending consumer: task 14.** Imported by `workflowRunPresentation.ts`. |
+| `workflowAgentTokens` | `packages/ui/src/lib/workflows/model.ts:116` | Unused export | **Pending consumer: task 14.** Imported by `WorkflowAgentsView.tsx`. |
+| `workflowAgentsTotals` | `packages/ui/src/lib/workflows/model.ts:123` | Unused export | **Pending consumer: task 14.** Imported by `WorkflowAgentsView.tsx`. |
+| `isWorkflowRunOpen` | `packages/ui/src/lib/workflows/model.ts:140` | Unused export | **Pending consumer: task 14.** Imported by `WorkStatusWorkflowsSection.tsx`. |
+| `useWorkflowProjectScope` | `packages/ui/src/lib/workflows/project.ts:29` | Unused export | **Pending consumer: task 14.** Imported by `WorkflowsPanel.tsx` and `panel.ts`. |
+| `getWorkflowProjectScope` | `packages/ui/src/lib/workflows/project.ts:36` | Unused export | **Pending consumer: task 14 / 24.** Imported by `panel.ts` for surface-shown check. |
+| `useWorkflowRunsStore` | `packages/ui/src/lib/workflows/store.ts:158` | Unused export | **Pending consumer: task 14 & 25.** Imported by `WorkflowsPanel.tsx`, `WorkflowRunCard.tsx`, `SessionActivityIndicator`. |
+| `useSessionWorkflowRuns` | `packages/ui/src/lib/workflows/store.ts:164` | Unused export | **Pending consumer: task 14.** Imported by `WorkStatusWorkflowsSection.tsx`. |
+| `useWorkflowRun` | `packages/ui/src/lib/workflows/store.ts:183` | Unused export | **Pending consumer: task 14.** Imported by `WorkflowRunCard.tsx`. |
+| `useProjectWorkflowRuns` | `packages/ui/src/lib/workflows/store.ts:193` | Unused export | **Pending consumer: task 14.** Imported by `WorkflowsPanel.tsx` and `panel.ts`. |
+| `WorkflowRunAction`, `SavedWorkflow`, etc. | `packages/ui/src/lib/workflows/{api,model,report}.ts` | Unused types | **Pending consumers / domain contract: task 14 & 25.** Types exported alongside domain functions. |
+| Out-of-list wiring files | `index.js`, `feature-routes-runtime.js`, `settings-helpers.js`, `actions.js`, `modes.ts` | Wiring | **No dead code.** All exports and wiring are actively consumed. |
+
 **Check after:** install, type-check, lint and the full test suite exit 0 on the tree that lands; the workflow tests pass; the real-path two-agent run and its checked answers are recorded below.
 
 ### Checks (worktree, Bun 1.4.4)

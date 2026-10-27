@@ -221,13 +221,25 @@ sessions” after a reload: once the checkout is gone, listing the session's wor
 `METADATA_READ_FAILED`, and the Host only projects archived state onto sessions of currently resolvable
 workspaces; the worktree-archive record that would list removed checkouts is deferred to the Host
 worktree-archive endpoints (tasks 01/22/24/25). This is the known archive-visibility gap, not a
-regression. Evidence: `screenshots/11-worktree-session-ready.png`,
+regression. Repeating the same flow on the pre-refresh tree `4d69e299e4` (rebuilt dist, isolated
+HOME) showed the same “0 archived sessions” after removal, and worse: the pre-refresh removal runs
+the checkout first, so its archive request failed 500 `METADATA_READ_FAILED`
+(`logs/dev-prerefresh.log`), leaving `session_archive` empty; the removed workspace listing also
+returns `METADATA_READ_FAILED` there. The gap is pre-existing, the refresh improved the archive
+write order, and no open task lands the Host worktree-archive endpoints (task 24/25 path lists have
+no such server files; 01/22 are archived). It is recorded as the fix-now technical-debt entry
+`Archived sessions of a removed worktree are not listed`, whose acceptance is: after removing a
+worktree with sessions the Archive page lists them after reload, and a metadata read failure
+renders an explicit error state, never “0 archived sessions”.
+Evidence: `screenshots/11-worktree-session-ready.png`,
 `12-delete-dialog-archives-linked-session.png`, `13-archive-after-worktree-reload.png`,
-`logs/dev-session.log`, `logs/dev-hosthome.log`, `logs/dev-pre09.log`,
-`logs/followup-archive-evidence.txt`. Servers stopped and the temporary worktrees and `/tmp` data
-removed afterwards.
+`14-prerefresh-archive-after-removal.png`, `logs/dev-session.log`, `logs/dev-hosthome.log`,
+`logs/dev-pre09.log`, `logs/dev-prerefresh.log`, `logs/followup-archive-evidence.txt`,
+`logs/followup-prerefresh-evidence.txt`. Servers stopped and the temporary worktrees and `/tmp`
+data removed afterwards.
 
 **Limits.** Archived sessions of removed worktrees are retained but not listed in the Archive page
-until the deferred worktree-archive surface lands (see the follow-up above). The console shows
+until the Host worktree-archive endpoints and the debt entry `Archived sessions of a removed worktree
+are not listed` are addressed (see the follow-up above). The console shows
 pre-existing warnings outside this task's surfaces (nested button in a picker dialog, `setState` during
 render in `VisibleSessionProjects`, 404s for optional assets).

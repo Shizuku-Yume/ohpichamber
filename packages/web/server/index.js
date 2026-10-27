@@ -93,7 +93,7 @@ import { createPushRuntime } from './lib/notifications/push-runtime.js';
 import { createApnsRuntime } from './lib/notifications/apns-runtime.js';
 import { createNotificationTemplateRuntime } from './lib/notifications/template-runtime.js';
 import { createPermissionAutoAcceptRuntime } from './lib/permission-auto-accept/runtime.js';
-import { createCanonicalQueueRuntime, createPromptQueueStore, registerCanonicalQueueRoutes, toServerSession } from './lib/message-queue/runtime.js';
+import { createCanonicalQueueRuntime, createPromptQueueStore, registerCanonicalQueueRoutes } from './lib/message-queue/runtime.js';
 import { createDispatchResultsRuntime } from './lib/dispatch-results/runtime.js';
 import { createRoutingRuntime } from './lib/routing/runtime.js';
 import { createJevClient } from './lib/routing/jev.js';
@@ -923,25 +923,7 @@ const messageQueueRuntime = createCanonicalQueueRuntime({
   beforeDispatch: (scope, capture) => hostPromptDeliveryRuntime.beforeDispatch(scope, capture.request),
   onPromptAccepted: (scope, capture) => hostPromptDeliveryRuntime.onPromptAccepted(scope, capture.request, { runId: capture.runId }),
   onScheduledTaskResult: (...args) => scheduledTasksRuntime.onScheduledTaskResult(...args),
-  publishQueue: async (properties) => {
-    try {
-      const sessionId = properties?.sessionId;
-      const queue = properties?.queue;
-      if (sessionId && queue) {
-        const scope = await hostAgentRuntime.resolveHostSessionScope(sessionId);
-        const session = toServerSession(queue, scope);
-        const revision = Number(queue.revision) || 0;
-        broadcastOpenChamberUiEvent({
-          type: 'openchamber:message-queue.updated',
-          properties: { revision, session },
-        });
-        return;
-      }
-    } catch {
-      // ignore
-    }
-    broadcastOpenChamberUiEvent({ type: 'openchamber:message-queue.updated', properties });
-  },
+  publishQueue: (properties) => broadcastOpenChamberUiEvent({ type: 'openchamber:message-queue.updated', properties }),
   reportFailure: ({ sessionId, code }) => {
     const properties = { code };
     if (sessionId) properties.sessionId = sessionId;

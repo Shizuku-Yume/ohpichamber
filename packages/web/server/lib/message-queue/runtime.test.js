@@ -4,8 +4,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, it } from 'vitest';
+import express from 'express';
+import supertest from 'supertest';
 import { createCanonicalQueueRuntime } from './canonical-runtime.js';
 import { createPromptQueueStore } from './sqlite-store.js';
+import { registerMessageQueueRoutes } from './runtime.js';
 
 const roots = [];
 const stores = [];
@@ -174,6 +177,41 @@ describe('canonical queue runtime', () => {
     const pending = await store.pendingDeliveries(privateScope);
     assert.equal(pending[0].phase, 'submitting');
     assert.deepEqual((await store.getDeliveryCapture(privateScope, pending[0].leaseId)).request.input.text, 'receipt first');
+    await runtime.stop();
+  });
+
+  it('rejects the old UI shape with 400', async () => {
+    const store = storeFor();
+    const service = createService();
+    const runtime = createCanonicalQueueRuntime({
+      store,
+      service,
+      resolveAttachments: async () => [],
+      publishQueue: () => {},
+      reportFailure: () => {},
+    });
+    const app = express();
+    app.use(express.json());
+    registerMessageQueueRoutes(app, runtime, {
+      resolveSessionScope: async () => scope,
+      listQueueScopes: async () => ({ items: [scope], errors: [] }),
+    });
+
+    const oldUiPayload = {
+      directory: '/private/worktree',
+      item: {
+        content: 'old format prompt',
+        sendConfig: { providerID: 'provider', modelID: 'model' },
+        attachments: [{ filename: 'note.txt', mimeType: 'text/plain', serverPath: 'file:///path' }],
+      },
+    };
+
+    const res = await supertest(app)
+      .post(`/api/message-queue/sessions/${SESSION}/items`)
+      .send(oldUiPayload);
+
+    assert.equal(res.status, 400);
+    assert.equal(res.body.code, 'INVALID_REQUEST');
     await runtime.stop();
   });
 });

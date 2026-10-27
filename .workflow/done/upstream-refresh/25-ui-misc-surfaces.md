@@ -56,7 +56,9 @@ Every path in `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-sync-202
 
 - **Deferred with Owner:**
   - `session-pins`: Deferred to technical-debt entry `Session pins have no OMP source`. No synthetic pin store added.
-  - `useTrackerAuthStore` / Linear comments / source-control registries: Owned by tasks 06 and 07.
+  - `useTrackerAuthStore`: Owned by Task 07 (`.workflow/tasks/upstream-refresh/07-review-surfaces-board-file-views.md:24`, `- [ ] The deferred stores (useTrackerAuthStore, ...)`).
+  - UI source-control & tracker registries (`packages/ui/src/lib/{source-control,trackers}`): Owned by Task 07 (`.workflow/tasks/upstream-refresh/07-review-surfaces-board-file-views.md:10`, `Main locations: ... packages/ui/src/lib/{source-control,trackers}`).
+  - Server source-control & tracker registries (`packages/web/server/lib/{source-control,trackers}`): Landed in Task 06 (`.workflow/done/upstream-refresh/06-source-control-host-providers.md:34,37`).
   - `packages/web/server/lib/openchamber-control/project-knowledge.js`: Owned by task 16.
 
 - **Retired / Deleted:**
@@ -121,8 +123,26 @@ Every path in `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-sync-202
 
 **Check after:** `bun install --frozen-lockfile` exit 0, `bun run type-check` exit 0, `bun run lint` exit 0, `bunx oxlint` exit 0, focused UI tests exit 0 (898/898 files passed), `VITEST_MAX_WORKERS=2 bun run test` exit 0 (7/7 suites passed: web 443 passed/9 skipped, 7153 passed/142 skipped), dead-code inspected, and the real path verified with screenshots (model picker, help dialog, command palette, terminal panel, browser panel, multi-run, and Settings 'Accept everything' followed by a tool run without approval prompt); all receipts and logs under `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-25-2026-10-27/`.
 
-3. **(c) permissionDefaultMode.realpath.test.ts disposition:**
-   - *Disposition:* Removed. It was a unit test exercising in-memory store states rather than a real path. The true consumer real path was executed and verified live against the server and real provider (see Real Path below), confirming that selecting "Accept everything" in Settings → Sessions applies `auto` to a newly created session and allows tool execution without approval prompts.
+3. **(c) permissionDefaultMode real-path proof & server auto-accept fix:**
+   - *Investigation & Cause:* When testing real-path auto-accept with a tool requiring approval (`bash`), a new session created with `permissionDefaultMode: "auto"` initially still showed the approval prompt. Traced to:
+     - `packages/web/server/lib/permission-auto-accept/runtime.js:323-328`: `applyDefaultMode` was only called inside `processEvent` on `session.updated` events. The live OMP `agent-service` does not emit `session.updated` upon root session creation.
+     - `packages/web/server/lib/permission-auto-accept/runtime.js:184-200`: in `resolveSessionMode`, when `current` fetched the session snapshot, `applyDefaultMode` was not called and `policy.sessions[current]` was never checked before moving up to `parentSessionId` (which is `null` for root sessions) and returning `'ask'`.
+     - `packages/web/server/index.js:655-662`: `publishSessionEvent` received `'openchamber:session-created'` from session creation but did not invoke `permissionAutoAcceptRuntime.applyDefaultMode`.
+   - *Fix:*
+     - `packages/web/server/lib/permission-auto-accept/runtime.js`: exposed `applyDefaultMode`, subscribed to `globalEventHub.subscribeSnapshot` to invoke `applyDefaultMode` on initial session snapshots, and updated `resolveSessionMode` to invoke `applyDefaultMode` for root sessions loaded from snapshot and return the applied mode. Added unit test in `runtime.test.js`.
+     - `packages/web/server/index.js:655-662`: in `publishSessionEvent`, invoked `permissionAutoAcceptRuntime.applyDefaultMode(event.properties.sessionId)` on `'openchamber:session-created'`.
+   - *Paired Real-Path Verification:*
+     - (a) With Permissions set to "Ask every time" in Settings → Sessions, created a new session with agent `task` and model `Gemini 3.8 Flash`. Prompt `Run bash command: echo test-ask-approval` requested approval and rendered the approval prompt card with Deny / Always allow / Allow once options (`09-permission-ask-prompt.png`), with the sidebar showing "Permission required".
+     - (b) With Permissions set to "Accept everything" in Settings → Sessions, created a new session with agent `task` and model `Gemini 3.8 Flash`. Prompt `Run bash command: echo test-auto-accepted-output` auto-accepted and executed the `bash` command without any approval prompt; tool output `test-auto-accepted-output` is visible in chat (`10-permission-auto-accepted-run.png`).
+     - *Policy file entry in `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-25-2026-10-27/data/settings.json`:*
+       ```json
+       "permissionAutoAccept": {
+         "sessions": {
+           "6d5b8320-43e9-40f8-8a34-7a42767ff169": "auto"
+         },
+         "revision": 4
+       }
+       ```
 
 ### Checks at the Rebased Tip
 
@@ -152,6 +172,8 @@ Executed live dev web server on port 3725 with isolated `HOME=/home/shizuku/Proj
 6. **Multi-run View:** Opened multi-run surface (`06-multirun-composer.png`), verified per-project run lanes.
 7. **Accept Everything Default Mode:** Set "Permissions" to "Accept everything" in Settings → Sessions (`07-settings-accept-everything.png`).
 8. **Auto-Accepted Session Tool Execution:** Created a new session and sent prompt "Run bash command: echo hello-task-25 and show the output." (`08-session-auto-accept-tool-run.png`). Tool was auto-executed by server without an approval modal or prompt, proving end-to-end default permission mode auto-accept.
+9. **Ask Mode Approval Prompt:** With Permissions set to 'Ask every time', new session with agent `task` prompted for approval on bash command `echo test-ask-approval` (`09-permission-ask-prompt.png`).
+10. **Accept Everything Auto-Accepted Run:** With Permissions set to 'Accept everything', new session with agent `task` auto-executed bash command `echo test-auto-accepted-output` without prompt, displaying tool output in chat (`10-permission-auto-accepted-run.png`).
 
 ### Limits
 

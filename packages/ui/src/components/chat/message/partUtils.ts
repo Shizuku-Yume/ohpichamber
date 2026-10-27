@@ -1,4 +1,5 @@
 import type { Part } from '@openchamber/agent-contract';
+import { isInvisibleText } from '@/lib/invisibleText';
 
 const isValidPart = (part: unknown): part is Part => {
     return Boolean(part && typeof part === 'object' && typeof (part as { type?: unknown }).type === 'string');
@@ -16,7 +17,7 @@ export const isEmptyTextPart = (part: Part): boolean => {
     if (part.type !== 'text') {
         return false;
     }
-    return part.content.trim().length === 0;
+    return isInvisibleText(part.content);
 };
 
 interface VisibleFilterOptions {

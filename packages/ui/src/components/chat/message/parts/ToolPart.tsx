@@ -59,6 +59,7 @@ import {
     nativeToolResultContent,
     renderWebSearchOutput,
     tryParseJsonOutput,
+    unwrapTextBlocks,
 } from '../toolRenderers';
 import { renderTerminalOutput } from './toolOutput';
 import {
@@ -452,7 +453,7 @@ const CopyToolOutputButton: React.FC<{ output: string }> = ({ output }) => {
 };
 
 interface JsonOutputResult {
-    data: unknown;
+    data: JsonValue;
     isJson: boolean;
 }
 
@@ -473,6 +474,10 @@ const JsonToolOutput: React.FC<{
         event.stopPropagation();
         useUIStore.getState().setToolJsonViewMode(view);
     }, []);
+
+    // A result that is really text content blocks is shown as the text it is,
+    // not as a JSON envelope the reader has to open to read one sentence.
+    const textOutput = jsonViewMode === 'summary' ? unwrapTextBlocks(jsonResult.data) : null;
 
     return (
         <div className="tool-output-surface relative p-2 rounded-xl w-full min-w-0">
@@ -513,7 +518,19 @@ const JsonToolOutput: React.FC<{
                 <CopyToolOutputButton output={renderedOutput} />
             </div>
             {jsonViewMode === 'summary' ? (
-                <JsonSummaryView data={jsonResult.data} />
+                textOutput !== null ? (
+                    <div className="typography-code pr-12 text-muted-foreground/90">
+                        <WorkerHighlightedCode
+                            language="text"
+                            code={textOutput}
+                            style={TOOL_COLLAPSED_CUSTOM_STYLE}
+                            codeStyle={CODE_TAG_PROPS.style}
+                            wrap
+                        />
+                    </div>
+                ) : (
+                    <JsonSummaryView data={jsonResult.data} />
+                )
             ) : jsonViewMode === 'formatted' ? (
                 <JsonTreeViewer data={jsonResult.data} initiallyExpandedDepth={1} maxHeight="400px" />
             ) : (

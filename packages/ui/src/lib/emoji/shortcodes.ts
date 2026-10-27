@@ -4,9 +4,9 @@ import * as React from 'react';
 export type EmojiShortcodes = ReadonlyMap<string, string>;
 
 /** One emoji as the picker lists it: its names (the first is the main one) and the words it is found by. */
-type EmojiEntry = { emoji: string; names: readonly string[]; tags: readonly string[] };
+export type EmojiEntry = { emoji: string; names: readonly string[]; tags: readonly string[] };
 
-type EmojiTable = { entries: readonly EmojiEntry[]; shortcodes: EmojiShortcodes };
+export type EmojiTable = { entries: readonly EmojiEntry[]; shortcodes: EmojiShortcodes };
 
 const SHORTCODE = /:([a-z0-9_+-]+):/g;
 
@@ -52,14 +52,14 @@ export const searchEmoji = (entries: readonly EmojiEntry[], query: string, limit
   return ranked.flat().slice(0, limit);
 };
 
-type EmojiTableState = { table: EmojiTable | null; failed: boolean };
+export type EmojiTableState = { table: EmojiTable | null; failed: boolean };
 
 /**
  * The table once `active` asks for it and it has loaded. `failed` says the
  * load did not succeed (offline, a chunk a newer deploy removed), so a picker
  * can step aside instead of waiting for it; the next activation tries again.
  */
-function useEmojiTable(active: boolean): EmojiTableState {
+export function useEmojiTable(active: boolean): EmojiTableState {
   const [loaded, setLoaded] = React.useState<EmojiTable | null>(null);
   const [failed, setFailed] = React.useState(false);
   React.useEffect(() => {

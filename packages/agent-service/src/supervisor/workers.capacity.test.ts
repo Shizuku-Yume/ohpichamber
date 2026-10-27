@@ -25,6 +25,44 @@ const startSession = (registry: WorkerRegistry, rootSessionId: string, cwd: stri
   return registry.start(bootstrap);
 };
 
+/**
+ * The reaper runs on a real interval and every eviction probe is an operation
+ * on the worker, so a fixed sleep races the probe and the process exit under
+ * load. Wait for the observable state instead: the registry entry disappears
+ * only after the worker's process has been stopped and reaped.
+ * Integration test: WorkerRegistry spawns real child processes and uses an
+ * unmockable platform timer loop, so deterministic time control will not work.
+ */
+const waitForEviction = async (registry: WorkerRegistry, rootSessionId: string, timeoutMs = 10_000) => {
+  const deadline = Date.now() + timeoutMs;
+  while (registry.info(rootSessionId) !== undefined) {
+    if (Date.now() >= deadline) {
+      throw new Error(`Timed out after ${timeoutMs} ms waiting for ${rootSessionId} to be evicted`);
+    }
+    // Integration test: polling real worker process exit against platform clock
+    await Bun.sleep(20);
+  }
+  expect(registry.info(rootSessionId)).toBeUndefined();
+};
+
+/**
+ * The negative half of the same rule: while an operation or a restart
+ * reservation is outstanding the worker must survive several reap intervals.
+ * Polling keeps the assertion on the observable state rather than on how long
+ * one sleep happened to take.
+ * Integration test: WorkerRegistry spawns real child processes and uses an
+ * unmockable platform timer loop, so deterministic time control will not work.
+ */
+const expectNotEvictedFor = async (registry: WorkerRegistry, rootSessionId: string, milliseconds: number) => {
+  const deadline = Date.now() + milliseconds;
+  while (Date.now() < deadline) {
+    expect(registry.info(rootSessionId)?.state).toBe('ready');
+    // Integration test: polling real worker process state against platform clock
+    await Bun.sleep(20);
+  }
+  expect(registry.info(rootSessionId)?.state).toBe('ready');
+};
+
 test('the measured Task17 policy is the production default', () => {
   expect(WORKER_CAPACITY_POLICY).toEqual({
     maxActiveRootWorkers: 5,
@@ -115,21 +153,19 @@ test('a pending worker operation and a restart reservation each postpone evictio
   try {
     await startSession(registry, 'root-pending-operation', tree.cwd, tree.agentDirectory, { WORKER_OPERATION_DELAY_MS: '250' });
     const pending = registry.request('root-pending-operation', { type: 'shell', operation: { type: 'snapshot' } });
-    await Bun.sleep(150);
-    expect(registry.info('root-pending-operation')?.state).toBe('ready');
+    // Real child processes and the registry's own interval share no fake
+    // clock, so the postponement window is observed against the live reaper.
+    await expectNotEvictedFor(registry, 'root-pending-operation', 150);
     await pending;
-    await Bun.sleep(350);
-    expect(registry.info('root-pending-operation')).toBeUndefined();
+    await waitForEviction(registry, 'root-pending-operation');
 
     await startSession(registry, 'root-reserved', tree.cwd, tree.agentDirectory);
     const generation = registry.info('root-reserved')?.workerGeneration;
     if (!generation) throw new Error('A ready worker generation is required');
     const reservation = registry.reserveRestart('root-reserved', generation);
-    await Bun.sleep(300);
-    expect(registry.info('root-reserved')?.state).toBe('ready');
+    await expectNotEvictedFor(registry, 'root-reserved', 300);
     reservation.release();
-    await Bun.sleep(350);
-    expect(registry.info('root-reserved')).toBeUndefined();
+    await waitForEviction(registry, 'root-reserved');
   } finally {
     try { await registry.close(); } finally { await tree.remove(); }
   }

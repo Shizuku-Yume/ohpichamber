@@ -41,7 +41,7 @@
 
 - **52 adopted cleanly / new**: `LiveTurnActivity`, `TurnItem`, `TurnMessageWindow`, `activityRows`, `earlierAssistantText`, `PrChecksValue`, `WorkStatusSectionList`, `WorkStatusUsageSection`, `WorkStatusWarmingToggle`, `WorkStatusWorkflowsSection`, `touchContext`, `prChecks`, `leaveWorkStatus`, `useOpenChildSession`, `useUnavailableWorkStatusSections`, `useWorkStatusSectionLayout`, `workflows` presentation components, `useBtwPanelState`, `liveActivityContext`, `useChatTurnNavigation`, `useActivityRowGlide`, `fileReferenceParser`, `usePinnedSessionDirectory`, `useShownSessionSelection`, `useDiffToolbarFit`, and all accompanying tests and i18n modules.
 - **35 changed on both sides, merged/adapted**: `ChatContainer`, `ChatInput`, `WorkStatusPanel`, `WorkStatusSubagentsSection`, `WorkStatusUsageSection`, `sections`, `ContextPanel`, `ContextPanelRail`, `contextPanelHeaderSlot`, `useKeyboardShortcuts`, `desktop`, `guests/surfaces`, `surfaces/registry`, `SessionDoneHintRow`, `SessionErrorNotice`, `SessionReviewHintRow`, `SessionSuggestionChip`, `BtwPanel`, `LiveActivityCollapse`, `ScrollToBottomButton`.
-- **4 deferred with owner / deleted**: `WorkStatusGuestView` + `status-view.ts` (deferred to task 25), `ShownToolCard` (deferred to task 25), `useOpenChatLink` (deferred to task 07), `sessionMentionResults` (deferred to task 07); `MarkdownImageGallery.tsx` and `TurnActivity.tsx` deleted upstream, fork preserves canonical/mobile equivalents.
+- **4 deferred with owner / deleted**: `WorkStatusGuestView` + `status-view.ts` (deferred to task 25), `ShownToolCard` (deferred to task 25), `useOpenChatLink` (deferred to task 07: `.workflow/tasks/upstream-refresh/07-review-surfaces-board-file-views.md`), `sessionMentionResults` (deferred to task 07: `.workflow/tasks/upstream-refresh/07-review-surfaces-board-file-views.md`); `MarkdownImageGallery.tsx` and `TurnActivity.tsx` deleted upstream, fork preserves canonical/mobile equivalents.
 
 ### Checks
 
@@ -71,7 +71,7 @@
 ### Limits
 
 - **Turn stats Elapsed 0.0s on tool calls**: Pre-existing debt recorded in `.workflow/technical-debt.md` (`## Turn stats Elapsed 0.0s on turns with tool calls`); the OMP canonical contract defines only `createdAt` and intermediate `virtualUser: true` messages produce an identical timestamp to the assistant message for `getLatestCompletedTurnStats`.
-- **Deferred components**: `WorkStatusGuestView` + `status-view.ts` (task 25, guest surfaces), `ShownToolCard` (task 25, browser frame), `useOpenChatLink` (task 07, tracker board linking), `sessionMentionResults` (task 07, provider registry and session mentions).
+- **Deferred components**: `WorkStatusGuestView` + `status-view.ts` (task 25, guest surfaces), `ShownToolCard` (task 25, browser frame), `useOpenChatLink` (task 07, tracker board linking: `.workflow/tasks/upstream-refresh/07-review-surfaces-board-file-views.md`), `sessionMentionResults` (task 07, provider registry and session mentions: `.workflow/tasks/upstream-refresh/07-review-surfaces-board-file-views.md`).
 
 ### Hand-off to 15
 

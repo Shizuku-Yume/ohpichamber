@@ -3,7 +3,7 @@
 **Effort:** upstream-refresh
 **Task type:** feature
 **Base commit:** 736f51cdc4
-**Landed commit:** 219e934b8d
+**Landed commit:** 705d93d6ee
 
 **Delivers:** Upstream's composer/editor, attachments, autocomplete, model controls, permission cards, forms, goals and queued messages work with the OMP session modes and message queue.
 
@@ -12,6 +12,8 @@
 
 **Read first:** Spec W6; `.agents/skills/sync-state-invariants/SKILL.md`; `.agents/skills/locale-ui-patterns/SKILL.md`; `.agents/skills/ui-api-decoupling/SKILL.md`; decisions.md: 2026-10-25 - Replace root agent selection with session modes.
 **Covers:** W6
+
+**Check:** `bun install --frozen-lockfile` and `bun run type-check` and `bun run lint` and `bun run test` all exit 0, the composer tests pass, and in the running app a file attaches and sends, a queued message goes out after the turn, a permission request is approved/denied and the prompt returns after a failed send, and a magic prompt inserts its text. Real path: one real provider turn.
 
 ## Done when
 
@@ -28,9 +30,9 @@
 1. **Skills selector (`selectSkillsForDirectory`)**: Cut over all callsites (`ChatInput`, `UserTextPart`, `useDraftStarters`, `WorkStatusContextSection`, `SkillsPage`, `SkillsSidebar`, `session-ui-store`, `useSkillsStore`, and `useSkillsStore.test`) to `selectAvailableSkillsForDirectory`. Deleted duplicate alias in `useSkillsStore.ts`.
 2. **Unconsumed exports**:
    - Dropped unused `FLOATING_COMPOSER_GAP_PX` export in `composerTailInset.ts` (consumed only internally).
-   - Dropped unused `isPastedInput` export in `useTextareaInlinePicker.tsx`. Its only upstream consumer is `InlineCommentInput.tsx`, owned by Task 07 (`.workflow/tasks/upstream-refresh/07-source-control-tracker.md`).
+   - Dropped unused `isPastedInput` export in `useTextareaInlinePicker.tsx`. Its only upstream consumer is `InlineCommentInput.tsx`, owned by Task 07 (`.workflow/tasks/upstream-refresh/07-review-surfaces-board-file-views.md`).
    - Retained and exported `EmojiAutocompleteHandle` in `EmojiAutocomplete.tsx` for consumption by `ComposerAutocompletePopups.tsx`.
-3. **Scoped magic prompts**: Removed unconsumed scoped magicPrompts methods (`fetchMagicPromptScopes`, `saveScopedMagicPromptOverride`, `resetScopedMagicPromptOverride`, `resetAllScopedMagicPromptOverrides`) without server routes; project-scoped overrides deferred to Task 16 (`.workflow/tasks/upstream-refresh/16-review-turn-leftovers.md`). Re-exported `renderMagicPrompt(template, variables)` as a compatibility wrapper over `loadMagicPrompts(null).render(...)`.
+3. **Scoped magic prompts**: Removed unconsumed scoped magicPrompts methods (`fetchMagicPromptScopes`, `saveScopedMagicPromptOverride`, `resetScopedMagicPromptOverride`, `resetAllScopedMagicPromptOverrides`) without server routes; project-scoped overrides deferred to Task 07 (`.workflow/tasks/upstream-refresh/07-review-surfaces-board-file-views.md`). Re-exported `renderMagicPrompt(template, variables)` as a compatibility wrapper over `loadMagicPrompts(null).render(...)`.
 4. **Permission mode for new session**: Dropped duplicate helper in `permissionAutoAccept.ts`; canonical default permission mode on new sessions is handled directly in `packages/web/server/index.js` on `openchamber:session-created` by Task 25 (`.workflow/done/upstream-refresh/25-ui-misc-surfaces.md`).
 5. **Emoji autocomplete & Large text paste choice**: Wired `EmojiAutocomplete` into `ComposerAutocompletePopups.tsx` and `ChatInput.tsx` with `handleEmojiSelect`. Wired `LargeTextPasteChoice` into `ChatInput.tsx` replacing toast prompt.
 6. **Message queue DTO translation**: Updated `packages/web/server/lib/message-queue/runtime.js` and `packages/web/server/index.js` to translate between canonical queue requests (`QueueAppendRequestSchema`, `QueueStateSchema`) and UI session queue DTOs (`{ directory, item }`, `{ revision, session }`).
@@ -75,7 +77,7 @@ Executed live dev web server on port 3730 (API port 3731) with isolated `HOME=/h
 
 ## Limits
 
-- `sessionReferences.ts` and `sessionReferences.test.ts` / `sessionMentionChips.tsx`: Deferred to Task 07 (`.workflow/tasks/upstream-refresh/07-source-control-tracker.md`).
-- `isPastedInput`: Consumer `InlineCommentInput.tsx` is deferred to Task 07 (`.workflow/tasks/upstream-refresh/07-source-control-tracker.md`).
-- Project-scoped magic prompt overrides: Deferred to Task 16 (`.workflow/tasks/upstream-refresh/16-review-turn-leftovers.md`).
+- `sessionReferences.ts` and `sessionReferences.test.ts` / `sessionMentionChips.tsx`: Deferred to Task 07 (`.workflow/tasks/upstream-refresh/07-review-surfaces-board-file-views.md`).
+- `isPastedInput`: Consumer `InlineCommentInput.tsx` is deferred to Task 07 (`.workflow/tasks/upstream-refresh/07-review-surfaces-board-file-views.md`).
+- Project-scoped magic prompt overrides: Deferred to Task 07 (`.workflow/tasks/upstream-refresh/07-review-surfaces-board-file-views.md`).
 - Turn stats elapsed 0.0s on tool calls: Pre-existing technical debt recorded in `.workflow/technical-debt.md`.

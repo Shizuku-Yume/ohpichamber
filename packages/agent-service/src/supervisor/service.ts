@@ -626,7 +626,7 @@ export class AgentService {
         })); return;
       }
       const stop = /^\/internal\/workers\/([^/]+)$/.exec(url.pathname);
-      if (stop && request.method === 'DELETE') { await this.workers.stop(identity(stop[1])); response.writeHead(204, { 'Cache-Control': 'no-store' }); response.end(); return; }
+      if (stop && request.method === 'DELETE') { await this.workers.evict(identity(stop[1])); response.writeHead(204, { 'Cache-Control': 'no-store' }); response.end(); return; }
       respondProblem(response, 404, 'NOT_IMPLEMENTED', 'No matching private route');
     } catch (error) {
       if (response.destroyed || response.writableEnded) return;

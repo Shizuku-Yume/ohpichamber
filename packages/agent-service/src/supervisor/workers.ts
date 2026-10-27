@@ -470,6 +470,30 @@ export class WorkerRegistry {
     });
   }
 
+  async evict(rootSessionId: string): Promise<boolean> {
+    return this.withRoot(rootSessionId, async () => {
+      const entry = this.workerEntries.get(rootSessionId);
+      if (!entry || entry.kind !== 'session' || this.closing) return true;
+      if (entry.info.state === 'starting' || this.restartReservations.has(rootSessionId) || entry.pending.size > 0
+        || [...this.actions.values()].some(action => action.entry === entry)) {
+        throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
+      }
+      if (!this.sessionIsIdle(rootSessionId)) {
+        throw new WorkerOperationError(409, 'RUN_ACTIVE');
+      }
+      if (!(await this.hasNoRunningShellJobs(entry))) {
+        throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
+      }
+      if (this.workerEntries.get(rootSessionId) !== entry || entry.info.state !== 'ready' || this.closing
+        || this.restartReservations.has(rootSessionId) || entry.pending.size > 0
+        || [...this.actions.values()].some(action => action.entry === entry)
+        || !this.sessionIsIdle(rootSessionId)) {
+        throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
+      }
+      return this.stopEntry(entry);
+    });
+  }
+
   async close(): Promise<void> {
     clearInterval(this.reapTimer);
     this.closing = true;

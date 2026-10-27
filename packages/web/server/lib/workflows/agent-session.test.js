@@ -180,32 +180,20 @@ describe('workflow agent sessions', () => {
     expect(service.calls.unloaded).toEqual(['ses_agent']);
   });
 
-  it('retries session creation when capacity is temporarily full', async () => {
-    const page = {
-      sessionId: 'ses_agent',
-      turns: [turn('turn_1', 'run_1', 'completed', ['m_1'])],
-      messages: [user('m_0', 'turn_1'), assistant('m_1', 'turn_1', '{"files":["alpha.ts"]}')],
-    };
-    const service = fakeSessionService({ pages: [page] });
+  it('surfaces capacity-full error immediately without retrying', async () => {
+    const service = fakeSessionService();
     let attempts = 0;
-    service.create = async (payload) => {
+    service.create = async () => {
       attempts += 1;
-      if (attempts === 1) {
-        throw new Error('Session capacity is full (5 of 5 active). Close another session or try again later.');
-      }
-      service.calls.created.push(payload);
-      return { session: { sessionId: 'ses_agent' } };
+      throw new Error('Session capacity is full (5 of 5 active). Close another session or try again later.');
     };
     const sessions = sessionsFor(service);
-    const { sessionId } = await sessions.start({
+    await expect(sessions.start({
       directory: '/repo',
       text: 'do work',
       signal: new AbortController().signal,
       onSession: () => {},
-    });
-    expect(attempts).toBe(2);
-    expect(sessionId).toBe('ses_agent');
-    await sessions.unloadWorker(sessionId);
-    expect(service.calls.unloaded).toEqual(['ses_agent']);
+    })).rejects.toThrow('Session capacity is full (5 of 5 active). Close another session or try again later.');
+    expect(attempts).toBe(1);
   });
 });

@@ -145,21 +145,6 @@ export const createWorkflowAgentSessions = ({
     }
   };
 
-  const createWithCapacityRetry = async (params, signal) => {
-    const deadline = Date.now() + 30_000;
-    while (!signal?.aborted) {
-      try {
-        return await sessionService.create(params);
-      } catch (error) {
-        const message = error?.message ?? '';
-        const isCapacity = message.includes('Session capacity is full')
-          || error?.code === 'SERVICE_UNAVAILABLE';
-        if (!isCapacity || Date.now() >= deadline) throw error;
-        await sleep(500);
-      }
-    }
-    throw new WorkflowAgentStopped();
-  };
 
   /**
    * Creates the agent's session in the run's workspace and prompts it once.
@@ -172,12 +157,12 @@ export const createWorkflowAgentSessions = ({
       ...await inheritedOptions(parentSessionId),
       agentId: agent || null,
     };
-    const created = await createWithCapacityRetry({
+    const created = await sessionService.create({
       projectId: workspace.projectId,
       workspaceId: workspace.workspaceId,
       options,
       ...(title ? { metadata: { title } } : {}),
-    }, signal);
+    });
     const sessionId = created?.session?.sessionId;
     if (!sessionId) throw new Error('The Agent Service returned no session id');
     onSession(sessionId);
@@ -194,12 +179,12 @@ export const createWorkflowAgentSessions = ({
   /** A plain session for a saved workflow the user runs where no session is open. */
   const createSession = async ({ directory, title, signal }) => {
     const workspace = await workspaceFor(directory);
-    const created = await createWithCapacityRetry({
+    const created = await sessionService.create({
       projectId: workspace.projectId,
       workspaceId: workspace.workspaceId,
       options: optionsFor(null, null),
       ...(title ? { metadata: { title } } : {}),
-    }, signal);
+    });
     const sessionId = created?.session?.sessionId;
     if (!sessionId) throw new Error('The Agent Service returned no session id');
     return sessionId;

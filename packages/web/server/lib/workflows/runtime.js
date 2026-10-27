@@ -13,7 +13,7 @@ import { isWorkflowRunId } from './store.js';
 // How many agents of one run work at once, and how many one run may start in
 // all. A script with a loop must not be able to spend a subscription in a
 // minute; a run that needs more is split into several.
-const MAX_CONCURRENT_AGENTS = 2;
+const MAX_CONCURRENT_AGENTS = 8;
 const MAX_AGENTS_PER_RUN = 200;
 const SCHEMA_ATTEMPTS = 3;
 const MAX_LOGS = 200;

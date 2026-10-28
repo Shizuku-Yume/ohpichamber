@@ -25,7 +25,8 @@ export function ArchivedWorktreeRow({ archive, busy, onRestore, onDelete, touch 
   const { t } = useI18n();
   const label = archivedWorktreeLabel(archive);
   const showBranch = Boolean(archive.branch) && archive.branch !== label;
-  const date = formatSessionDateLabel(archive.archivedAt);
+  // An archive written by a host before it stored the time has no date to show.
+  const date = archive.archivedAt === undefined ? '' : formatSessionDateLabel(archive.archivedAt);
   if (touch) {
     return (
       <div className="flex min-w-0 items-center gap-2 py-1 ps-3 pe-1">
@@ -34,7 +35,7 @@ export function ArchivedWorktreeRow({ archive, busy, onRestore, onDelete, touch 
           <span dir="auto" className="truncate oc-ui-start-align typography-ui-label font-medium text-foreground">{label}</span>
           <span className="truncate typography-micro text-muted-foreground">
             {showBranch ? <span className="font-mono">{archive.branch}</span> : null}
-            {showBranch ? ' · ' : null}
+            {showBranch && date ? ' · ' : null}
             {date}
           </span>
         </span>
@@ -72,7 +73,7 @@ export function ArchivedWorktreeRow({ archive, busy, onRestore, onDelete, touch 
       <span dir="auto" className="min-w-0 truncate oc-ui-start-align typography-ui-label font-medium text-foreground" title={archive.path}>{label}</span>
       <span className="min-w-0 shrink truncate typography-micro text-muted-foreground">
         {showBranch ? <span className="font-mono">{archive.branch}</span> : null}
-        {showBranch ? ' · ' : null}
+        {showBranch && date ? ' · ' : null}
         {date}
       </span>
       <Button

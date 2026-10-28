@@ -36,6 +36,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { statusToGitCode, type TurnSnapshotDiff } from './turnSnapshotDiff';
+import type { Message, ToolCallPart } from '@openchamber/agent-contract';
+import { getToolFileChanges } from '@/components/chat/message/parts/toolDiffUtils';
 import { toast } from '@/components/ui';
 
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
@@ -62,7 +64,7 @@ import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import { Icon } from "@/components/icon/Icon";
 import { WhitespaceToggleIcon } from './WhitespaceToggleIcon';
 import { getContextFileOpenFailureMessage, validateContextFileOpen } from '@/lib/contextFileOpenGuard';
-import { toAbsoluteFilePath } from '@/lib/path-utils';
+import { getRelativeFilePath, toAbsoluteFilePath } from '@/lib/path-utils';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { findDiffScrollAnchor, getRestoredDiffScrollTop, type DiffScrollAnchor } from './diffScrollAnchor';
 import { isRightToLeft, useI18n } from '@/lib/i18n';
@@ -204,6 +206,78 @@ const createTextDiffDataFromPatch = (filePath: string, patch: string, contextMod
         fileDiff: fileDiffFromPatch(filePath, patch),
         contextMode,
     };
+};
+
+/**
+ * One file's patch from every edit the turn reported for it. Each tool result
+ * carries hunks against its own base, so they are appended in call order under
+ * the first header instead of keeping a header that would truncate the parse.
+ */
+const combineTurnPatches = (patches: readonly string[]): string | undefined => {
+    const firstHunkPatch = patches.findIndex((patch) => /^@@\s/m.test(patch));
+    if (firstHunkPatch < 0) return patches[0];
+    const headerEnd = patches[firstHunkPatch].search(/^@@\s/m);
+    const hunks = patches.slice(firstHunkPatch)
+        .map((patch) => {
+            const hunkStart = patch.search(/^@@\s/m);
+            return hunkStart < 0 ? '' : patch.slice(hunkStart).trimEnd();
+        })
+        .filter((hunk) => hunk.length > 0);
+    return `${patches[firstHunkPatch].slice(0, headerEnd)}${hunks.join('\n')}\n`;
+};
+
+interface TurnFileEntry {
+    file: string;
+    status?: string;
+    additions: number;
+    deletions: number;
+    patches: string[];
+}
+
+/**
+ * The last turn's diff, from the edits the turn itself reported.
+ *
+ * The Host keeps no per-turn filesystem snapshot, so the canonical tool
+ * results are the evidence: one entry per file, line counts and patches summed
+ * across the turn's calls. A file a `write` created reports a path but no
+ * patch, and stays in the list with no lines to show.
+ */
+const projectLastTurnDiffs = (messages: readonly Message[], directory: string | null): TurnSnapshotDiff[] => {
+    const lastTurnId = messages[messages.length - 1]?.turnId;
+    if (!lastTurnId) return [];
+    const turnMessages = messages.filter((message) => message.turnId === lastTurnId);
+    const calls = new Map<string, ToolCallPart>();
+    for (const message of turnMessages) {
+        for (const part of message.parts) {
+            if (part.type === 'tool_call') calls.set(part.toolCallId, part);
+        }
+    }
+
+    const files = new Map<string, TurnFileEntry>();
+    const seen = new Set<string>();
+    for (const message of turnMessages) {
+        for (const part of message.parts) {
+            if (part.type !== 'tool_result' || seen.has(part.toolCallId)) continue;
+            seen.add(part.toolCallId);
+            for (const change of getToolFileChanges(part, calls.get(part.toolCallId))) {
+                const file = getRelativeFilePath(change.path, directory);
+                if (!file) continue;
+                const key = normalizePath(file) ?? file;
+                const entry = files.get(key) ?? { file, additions: 0, deletions: 0, patches: [] };
+                entry.file = file;
+                if (change.op === 'create') entry.status = 'added';
+                else if (change.op === 'delete') entry.status = 'deleted';
+                entry.additions += change.additions ?? 0;
+                entry.deletions += change.deletions ?? 0;
+                if (change.diff) entry.patches.push(change.diff);
+                files.set(key, entry);
+            }
+        }
+    }
+
+    return Array.from(files.values(), ({ file, status, additions, deletions, patches }) => ({
+        file, status, additions, deletions, patch: combineTurnPatches(patches),
+    }));
 };
 
 /**
@@ -1666,46 +1740,13 @@ export const DiffView: React.FC<DiffViewProps> = ({
         });
     }, []);
 
-    // v1 read the last turn's diffs off a working-tree snapshot on the user
-    // message. v2 computes them on request from the turn's snapshots
-    // (`GET /api/session/:id/diff`), merged per file, so a file edited three
-    // times in one turn is one diff. Refetched whenever the transcript moves
-    // (a turn ending is what changes the answer).
-    const [lastTurnDiffs, setLastTurnDiffs] = React.useState<TurnSnapshotDiff[]>([]);
-    // A failed read is not "this turn changed nothing": it keeps its own state
-    // and a retry, and the last good list stays until a read replaces it.
-    const [turnDiffError, setTurnDiffError] = React.useState<string | null>(null);
-    const [turnDiffAttempt, retryTurnDiff] = React.useReducer((value: number) => value + 1, 0);
-    // Another session's turn is never shown while this one's loads.
-    React.useEffect(() => {
-        setLastTurnDiffs([]);
-        setTurnDiffError(null);
-    }, [currentSessionId]);
-    const lastMessageId = sessionMessages.length > 0 ? sessionMessages[sessionMessages.length - 1].id : '';
-    React.useEffect(() => {
-        if (activeDiffScope !== 'turn' || !currentSessionId || !visible) return;
-        let cancelled = false;
-        void opencodeClient.getSessionTurnDiff(currentSessionId, { directory: rootDirectory ?? undefined })
-            .then((files) => {
-                if (cancelled) return;
-                setLastTurnDiffs(files.map((entry) => ({
-                    file: entry.file,
-                    patch: entry.patch,
-                    status: entry.status,
-                    additions: entry.additions,
-                    deletions: entry.deletions,
-                })));
-                setTurnDiffError(null);
-            })
-            .catch((error) => {
-                if (cancelled) return;
-                console.warn('[diff-view] turn diff unavailable:', error instanceof Error ? error.message : error);
-                setTurnDiffError(error instanceof Error ? error.message : t('diffView.state.failedToLoadDiff'));
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, [activeDiffScope, currentSessionId, lastMessageId, rootDirectory, t, turnDiffAttempt, visible]);
+    // The turn scope shows what the last turn itself changed. The Host keeps
+    // no per-turn snapshot, so the diff is projected from the canonical
+    // transcript's own edit evidence rather than read back from a route.
+    const lastTurnDiffs = React.useMemo(
+        () => (activeDiffScope === 'turn' ? projectLastTurnDiffs(sessionMessages, rootDirectory ?? null) : []),
+        [activeDiffScope, rootDirectory, sessionMessages],
+    );
 
     const lastTurnDiffData = React.useMemo(() => {
         const map = new Map<string, DiffData>();
@@ -3061,18 +3102,6 @@ export const DiffView: React.FC<DiffViewProps> = ({
                     </div>
                 );
             }
-        }
-
-        if (activeDiffScope === 'turn' && turnDiffError) {
-            return (
-                <div className="flex flex-1 flex-col items-center justify-center gap-2 px-4 text-sm text-muted-foreground">
-                    <div className="typography-ui-label font-semibold text-foreground">{t('diffView.state.failedToLoadDiff')}</div>
-                    <div className="typography-meta max-w-[32rem] text-center">{turnDiffError}</div>
-                    <button type="button" className="typography-ui-label text-primary hover:underline" onClick={() => { setTurnDiffError(null); retryTurnDiff(); }}>
-                        {t('diffView.actions.retry')}
-                    </button>
-                </div>
-            );
         }
 
         if (changedFiles.length === 0) {

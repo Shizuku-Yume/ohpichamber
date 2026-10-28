@@ -6,7 +6,6 @@ import { Spinner } from '@/components/ui/spinner';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useDraftSpaceTarget } from '@/lib/spaces/useDraftSpaceTarget';
 import { panelContentDirectory } from '@/lib/spaces/space-creation-requests';
-import { SpacePreparing } from '@/components/session/spaces/SpacePreparing';
 import { type TerminalStreamEvent } from '@/lib/api/types';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useFontPreferences } from '@/hooks/useFontPreferences';
@@ -40,7 +39,7 @@ import { formatShortcutForDisplay } from '@/lib/shortcuts';
 import { observeTerminalSessions } from '@/lib/terminalSessionObserver';
 import { ContextPanelHeaderToolbar } from '@/components/layout/contextPanelHeaderSlot';
 import { useInContextPanelHeader } from '@/components/layout/contextPanelHeaderSlotContext';
-import { useZoneSurfaceDragOut } from '@/components/layout/zoneSurfaceDragContext';
+import { ZoneSurfaceDragContext } from '@/components/layout/zoneSurfaceDragContext';
 import { useZoneInteractive } from '@/components/layout/zoneInteractiveContext';
 import { ZoneMoveMenuItems } from '@/components/layout/ZoneMoveMenuItems';
 
@@ -129,8 +128,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
     const isTouchTerminal = isMobile || isTablet;
     const inPanelHeader = useInContextPanelHeader();
     const useTouchTerminalInput = (isTouchTerminal || hasTouchOnlyPointer) && runtime.platform === 'web';
-    // Tabs are supported for web + desktop runtimes, including mobile (not VSCode).
-    const enableTabs = runtime.platform !== 'vscode';
     const showTerminalQuickKeysOnDesktop = useUIStore((state) => state.showTerminalQuickKeysOnDesktop);
     const showQuickKeys = isTouchTerminal || showTerminalQuickKeysOnDesktop;
 
@@ -168,11 +165,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
 
     const activeTabId = React.useMemo(() => {
         if (!directoryTerminalState) return null;
-        if (enableTabs) {
-            return directoryTerminalState.activeTabId ?? directoryTerminalState.tabs[0]?.id ?? null;
-        }
-        return directoryTerminalState.tabs[0]?.id ?? null;
-    }, [directoryTerminalState, enableTabs]);
+        return directoryTerminalState.activeTabId ?? directoryTerminalState.tabs[0]?.id ?? null;
+    }, [directoryTerminalState]);
 
     const activeTab = React.useMemo(() => {
         if (!directoryTerminalState) return undefined;
@@ -626,9 +620,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
                 return;
             }
 
-            const tabId = enableTabs
-                ? (state.activeTabId ?? state.tabs[0]?.id ?? null)
-                : (state.tabs[0]?.id ?? null);
+            const tabId = state.activeTabId ?? state.tabs[0]?.id ?? null;
             if (!tabId) {
                 return;
             }
@@ -683,7 +675,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
         activeTabId,
         hasOpenedTerminalViewport,
         createTerminalSession,
-        enableTabs,
         terminalHydrated,
         ensureDirectory,
         setConnecting,
@@ -725,9 +716,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
         if (isActionTab) return;
 
         const state = useTerminalStore.getState().getDirectoryState(terminalDirectory);
-        const tabId = enableTabs
-            ? (activeTabId ?? state?.activeTabId ?? state?.tabs[0]?.id ?? null)
-            : (state?.tabs[0]?.id ?? null);
+        const tabId = activeTabId ?? state?.activeTabId ?? state?.tabs[0]?.id ?? null;
         if (!tabId) return;
         const originalSessionId = state?.tabs.find((tab) => tab.id === tabId)?.terminalSessionId ?? null;
         if (!originalSessionId || !terminal.restartSession) return;
@@ -767,7 +756,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
         } finally {
             setIsRestarting(false);
         }
-    }, [activeTabId, disconnectStream, terminalDirectory, enableTabs, isActionTab, isRestarting, resetTerminalPreviewScan, setTabLifecycle, setTabSessionId, startStream, t, terminal, terminalLoginShell, terminalShell]);
+    }, [activeTabId, disconnectStream, terminalDirectory, isActionTab, isRestarting, resetTerminalPreviewScan, setTabLifecycle, setTabSessionId, startStream, t, terminal, terminalLoginShell, terminalShell]);
 
     const handleHardRestart = React.useCallback(async () => {
         // Keep semantics: “close tab -> new clean tab”.
@@ -879,7 +868,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
 
     // Project action tabs are named by their action and renamed on every run,
     // so only plain terminals offer Rename.
-    const zoneDragOut = useZoneSurfaceDragOut();
+    const zoneDragOut = React.useContext(ZoneSurfaceDragContext);
     const handleTabDragOut = React.useMemo(
         () => (zoneDragOut ? (_tabId: string, isOutside: (point: { x: number; y: number }) => boolean) => zoneDragOut(isOutside) : undefined),
         [zoneDragOut],
@@ -1124,7 +1113,13 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
     }
 
     if (!terminalDirectory && draftSpace?.kind === 'preparing') {
-        return <SpacePreparing />;
+        // Nothing of this computer opens while the draft's space is made.
+        return (
+            <div className="flex h-full items-center justify-center gap-2 p-4 text-center text-sm text-muted-foreground">
+                <Spinner className="h-4 w-4" />
+                <span>{t('spaces.draft.preparing')}</span>
+            </div>
+        );
     }
 
     if (!terminalDirectory) {
@@ -1143,10 +1138,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
 
     const quickKeysDisabled = !terminalSessionId || isConnecting || isRestarting || isReconnectPending;
     const shouldRenderViewport = hasOpenedTerminalViewport;
-    // Without tabs (VS Code) only the first tab exists; with tabs every open tab stays mounted.
-    const mountedTabIds = enableTabs
-        ? (directoryTerminalState?.tabs ?? []).map((tab) => tab.id)
-        : (activeTabId ? [activeTabId] : []);
+    // Every open tab stays mounted, so switching back is instant.
+    const mountedTabIds = (directoryTerminalState?.tabs ?? []).map((tab) => tab.id);
     const quickKeySize: 'lg' | 'xs' = isTouchTerminal ? 'lg' : 'xs';
     const quickKeyIconClass = isTouchTerminal ? 'w-10 p-0' : 'w-9 p-0';
     const preserveTerminalFocus = (event: React.PointerEvent<HTMLButtonElement>) => {
@@ -1272,7 +1265,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
                 onRename={handleRenameTab}
                 onClose={() => setRenamingTabId(null)}
             />
-            {enableTabs && directoryTerminalState ? (
+            {directoryTerminalState ? (
                 <ContextPanelHeaderToolbar>
                     <div className={cn('app-region-no-drag flex min-w-0 items-center gap-2 text-xs', inPanelHeader ? 'flex-1 pe-1' : cn('sticky top-0 z-20 shrink-0 bg-[var(--surface-background)]', isTouchTerminal ? 'px-4 py-1.5' : 'ps-4 pe-2.5 py-1'))}>
                         <div className={cn('min-w-0 flex-1', inPanelHeader ? 'self-stretch' : isTouchTerminal ? 'h-8' : 'h-7')}>

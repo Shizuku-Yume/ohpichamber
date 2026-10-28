@@ -9,6 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { generatePullRequestDescription, getGitLog } from '@/lib/gitApi';
+// Not on `GitAPI` in this fork: the amend is this app's own route, wired here
+// rather than through a runtime adapter only one runtime implements.
+import { addChangeIdToHead } from '@/lib/gitApiHttp';
 import { openExternalUrl } from '@/lib/url';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useDeviceInfo } from '@/lib/device';
@@ -272,7 +275,7 @@ export const PullRequestSection: React.FC<{
     [changeRequestTerm, translate],
   );
   const openSourceControlSettings = useOpenSourceControlSettings();
-  const { sourceControl, git } = useRuntimeAPIs();
+  const { sourceControl } = useRuntimeAPIs();
   const confirmation = useConfirmDialog();
   const sourceControlAuthEntries = useSourceControlAuthStore((state) => state.entries);
   const { isMobile, hasTouchInput, screenWidth } = useDeviceInfo();
@@ -905,10 +908,9 @@ export const PullRequestSection: React.FC<{
     }
   };
 
-  const addChangeIdToHead = git.addChangeIdToHead;
   const addChangeId = async () => {
     const tip = changeIdPreflight?.status === 'ready' ? changeIdPreflight.tip : null;
-    if (!addChangeIdToHead || !tip) return;
+    if (!tip) return;
     const approved = await confirmation.confirm({
       title: t('gitView.change.changeId.confirmTitle'),
       message: t('gitView.change.changeId.confirmMessage'),
@@ -918,6 +920,8 @@ export const PullRequestSection: React.FC<{
     try {
       await addChangeIdToHead(directory, tip);
       toast.success(t('gitView.change.changeId.toast.added'));
+      // The amend rewrote the branch tip; the change's own read follows it.
+      await refresh({ force: true });
     } catch (e) {
       toast.error(t('gitView.change.changeId.toast.failed'), { description: e instanceof Error ? e.message : String(e) });
     } finally {
@@ -1268,7 +1272,7 @@ export const PullRequestSection: React.FC<{
                     onWipChange={chooseDraft}
                     privateChange={privateChange}
                     onPrivateChange={setPrivateChange}
-                    onAddChangeId={addChangeIdToHead ? () => void addChangeId() : undefined}
+                    onAddChangeId={() => void addChangeId()}
                     disabled={isCreating}
                   />
                 ) : (

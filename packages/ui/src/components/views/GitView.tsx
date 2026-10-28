@@ -2339,7 +2339,13 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
   }, [t, openConflictDialog, gitDirectory, fetchStatus, fetchBranches, fetchLog, logMaxCountLocal, git]);
 
   if (draftSpace?.kind === 'preparing') {
-    return <SpacePreparing />;
+    // Nothing of this computer shows while the draft's space is made.
+    return (
+      <div className="flex h-full items-center justify-center gap-2 p-4 text-center text-sm text-muted-foreground">
+        <Spinner className="h-4 w-4" />
+        <span>{t('spaces.draft.preparing')}</span>
+      </div>
+    );
   }
 
   if (!currentDirectory) {

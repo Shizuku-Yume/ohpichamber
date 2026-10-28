@@ -19,6 +19,9 @@ export interface BranchComparisonRepository {
   readContext: SourceControlReadContext | null;
 }
 
+/** A caller that knows no remotes: no candidate is qualified by one. */
+const NO_REMOTE_NAMES: ReadonlySet<string> = new Set();
+
 /**
  * Shared base and freshness identity for Changes, mobile Changes and the
  * current-branch walkthrough. The base is always a qualified ref, or null when
@@ -31,7 +34,7 @@ export function useBranchComparisonBase(
   repository?: BranchComparisonRepository,
 ) {
   const branches = repository?.branches ?? null;
-  const remoteNames = repository?.remoteNames;
+  const remoteNames = repository?.remoteNames ?? NO_REMOTE_NAMES;
   const primaryRemote = repository?.primaryRemote;
   const readContext = repository?.readContext;
   const runtimeKey = useGitStore((state) => state.runtimeKey);

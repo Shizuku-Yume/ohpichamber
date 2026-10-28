@@ -71,10 +71,10 @@ test('the pull request diff on a host without change-request diffs says so and o
   }, originalFetch);
   const { createRoot } = await import('react-dom/client');
   const { I18nProvider } = await import('@/lib/i18n');
-  const { OpenCode } = await import('@opencode/client');
+  const { CanonicalClient } = await import('@/api/canonicalClient');
   const { SyncProvider } = await import('@/sync/sync-context');
-  // OpenCode stays unanswered: the walkthrough's pull request scope does not need it.
-  const client = canonicalClient;
+  // The agent service stays unanswered: the walkthrough's pull request scope does not need it.
+  const client = new CanonicalClient();
   const { RuntimeAPIContext } = await import('@/contexts/runtimeAPIContext');
   const { createWebAPIs } = await import('../../../../web/src/api/index');
   const { getSourceControlAuthKey, useSourceControlAuthStore } = await import('@/stores/useSourceControlAuthStore');

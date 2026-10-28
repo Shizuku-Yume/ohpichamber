@@ -50,7 +50,8 @@ export const MediaArtifact: React.FC<{
 
   const onError = (event: React.SyntheticEvent<HTMLMediaElement>) => {
     const now = Date.now();
-    if (now - lastRenewAt.current < RENEW_RETRY_WINDOW_MS) {
+    // No renewal offered, or one tried moments ago: this URL cannot be played.
+    if (!renewSrc || now - lastRenewAt.current < RENEW_RETRY_WINDOW_MS) {
       setFailed(true);
       return;
     }

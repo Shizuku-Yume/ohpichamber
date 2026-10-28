@@ -116,7 +116,7 @@ export const readTrackedIssueState = (records: TrackedRecords, item: TrackedThre
 };
 
 /** Live state of a tracker work item; null until known. */
-export const readTrackedWorkItemState = (records: TrackedRecords, item: TrackedWorkItem): TrackerLiveSummary | null => {
+const readTrackedWorkItemState = (records: TrackedRecords, item: TrackedWorkItem): TrackerLiveSummary | null => {
   const record = records[storeKey(getRuntimeKey(), trackedItemKey(item))];
   return record?.type === 'work-item' ? record.state : null;
 };
@@ -125,7 +125,7 @@ export const readTrackedWorkItemState = (records: TrackedRecords, item: TrackedW
  * The badge of a linked pull or merge request: the same colour and status
  * rule as a branch's PR. Null while its state is not known.
  */
-export const readTrackedPullVisualSummary = (
+const readTrackedPullVisualSummary = (
   records: TrackedRecords,
   { item, url, title }: { item: TrackedThread<'pull'>; url: string; title: string },
 ): PrVisualSummary | null => {

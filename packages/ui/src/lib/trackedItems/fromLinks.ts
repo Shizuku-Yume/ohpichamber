@@ -14,14 +14,3 @@ export const repositoryThread = <Kind extends TrackedThreadKind>(
 export const workItem = (provider: string, identifier: string): TrackedWorkItem => (
   { provider, kind: 'work-item', identifier: identifier.toUpperCase() }
 );
-
-export const githubThread = (kind: 'pull' | 'issue', ref: { owner: string; repo: string; number: number }) =>
-  repositoryThread(kind, { provider: 'github', instance: 'github.com', ...ref });
-
-export const gitlabThread = (kind: 'pull' | 'issue', ref: { owner?: string; repo?: string; projectPath?: string; instance?: string; number: number }) => {
-  const owner = ref.owner ?? ref.projectPath?.split('/')[0] ?? '';
-  const repo = ref.repo ?? ref.projectPath?.split('/')[1] ?? '';
-  return repositoryThread(kind, { provider: 'gitlab', instance: ref.instance ?? 'gitlab.com', owner, repo, number: ref.number });
-};
-
-export const linearIssue = (identifier: string) => workItem('linear', identifier);

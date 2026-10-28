@@ -401,10 +401,10 @@ const repositoryThreadIdentifier = (ref: RepositoryThreadRef, matcher: Repositor
  * The session's links as a list shows them: each repository thread once, at
  * its first link, however many times and by whom it was linked.
  */
-export const getDistinctLinkedIssues = (session: Session | null | undefined, matcher?: RepositoryUrlMatcher): LinkedIssue[] => {
+export const getDistinctLinkedIssues = (session: Session | null | undefined, matcher: RepositoryUrlMatcher): LinkedIssue[] => {
   const seen = new Set<string>();
   return getLinkedIssues(session).filter((entry) => {
-    const key = matcher ? getRepositoryThreadRef(entry, matcher)?.key : entry.id;
+    const key = getRepositoryThreadRef(entry, matcher)?.key;
     if (!key) return true;
     if (seen.has(key)) return false;
     seen.add(key);
@@ -463,7 +463,7 @@ export type LinkedSidebarIssue =
  * items are shown by identifier. Change requests, including extension
  * ones, are not issues here.
  */
-export const getLinkedSidebarIssues = (session: Session | null | undefined, matcher?: RepositoryUrlMatcher): LinkedSidebarIssue[] => {
+export const getLinkedSidebarIssues = (session: Session | null | undefined, matcher: RepositoryUrlMatcher): LinkedSidebarIssue[] => {
   const seen = new Set<string>();
   return getLinkedIssues(session).flatMap((entry): LinkedSidebarIssue[] => {
     const ref = getRepositoryThreadRef(entry, matcher);

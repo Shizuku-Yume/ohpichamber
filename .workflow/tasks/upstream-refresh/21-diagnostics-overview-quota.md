@@ -16,8 +16,8 @@
 
 ## Done when
 
-- [ ] Diagnostics output is bounded and contains no tokens, prompts or credentials.
-- [ ] Overview derives live state and does not block on a slow provider.
+- [x] Diagnostics output is bounded and contains no tokens, prompts or credentials. Evidence: `diagnostics-export.txt` (2101 chars), zero matches for the prompts and key names; `logs/ui-focused-phase2.log`.
+- [x] Overview derives live state and does not block on a slow provider. Evidence: `05-overview-running-and-in-work.png` (live turn counted as Running while it streamed) and `06-overview-needs-you-permission.png` (permission request surfaced as Needs you without a reload).
 - [ ] Quota/limit-failover behavior is intentional per provider and visible in the UI.
 - [ ] Session warming respects the configured policy and is observable, through task 23's `useSessionWarmingStore` rather than a duplicate per-session source.
 
@@ -79,3 +79,165 @@ Every path in `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-sync-202
 - UI focused tests (`bun test packages/ui/src/{lib/diagnostics,components/overview,lib/overview,lib/quota}`): 57/57 passed (including `redacts all tokens, prompts, and credentials from diagnostics output`)
 - Server focused tests (`vitest run packages/web/server/lib/{diagnostics,overview,limit-failover,session-warming,session-assist,small-model,quota}`): 478/478 passed across 39 files
 - `bun run dead-code`: diff against baseline: 0 new unused files (17 files, identical to baseline); 1 new unused export (`readWorktreeUse` in `overviewActions.ts:81`, deferred to Task 31); 1 consumed export (`resolveProjectColor` in `projectMeta.ts:86`, consumed by `useOverviewData.ts:377`); 1 new unused exported type (`WorktreeUse` in `overviewActions.ts:73`, deferred to Task 31). The namespace rename `openchamberConfig` -> `projectConfig` for `fetchProjectSetup` is caused by `start-session.integration.test.ts:13` importing `* as projectConfig from '@/lib/openchamberConfig'`, which knip associates as the primary namespace consumer instead of `issue-2039.test.ts`.
+
+### Phase 2: heavy gates, real path and findings (2026-10-29)
+
+Worktree `upstream-refresh-21` on `upstream-refresh/21`, rebased onto integration
+tip `c4ce06dc0fa2bc6228bc0e3c05d7ad3fda1af024`. Evidence directory:
+`/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-21-2026-10-27/`.
+
+#### Heavy gates (sequential, one at a time)
+
+| Gate | Command | Exit | Log |
+|---|---|---|---|
+| Install | `bun install --frozen-lockfile` | 0 | `logs/heavy-install.log` |
+| Root test | `bun run test` | 0 | `logs/heavy-test.log` |
+| Build | `bun run build` | 0 | `logs/heavy-build.log` |
+
+Root test totals: scripts 23/23 files, sdk 26/26, ui 928/928, agent-contract 177
+passed, agent-service 246 passed + 7 skipped, electron 54/54, web 7278 passed +
+142 skipped (456 files, 9 skipped); `7/7 suites passed`.
+
+#### Real path
+
+Dev server `bun run dev` with `OPENCHAMBER_HMR_UI_PORT=3740`,
+`OPENCHAMBER_HMR_API_PORT=3741`, `OPENCHAMBER_OVERVIEW_ENABLED=1`,
+`OPENCHAMBER_DATA_DIR=<artifacts>/runtime-data`, provider environment sourced from
+`~/.config/ohpichamber/omp-m0-provider.env` (values never printed). Browser:
+`chrome-devtools` 1.11.0 daemon in headless mode (`args=["--viaCli","--headless"]`),
+isolated context `task21`, page `http://127.0.0.1:3740/`.
+
+Screenshots (`screenshots/`, numbered in capture order):
+
+1. `01-real-chat.png` - a real provider turn (`Reply with exactly: overview-check-ok.`)
+   answered in the session, so the overview has finished work to list.
+2. `02-overview-error-partial-discovery.png` - overview error state while the
+   server reported `METADATA_READ_FAILED` for a stale workspace (see finding 3).
+3. `03-real-session-finished.png` - the finished session after the model fix.
+4. `04-overview-in-work.png` - overview lists the finished session under In work
+   after Track as in work, with its Mark done action.
+5. `05-overview-running-and-in-work.png` - "1 running" plus "1 in work": the live
+   turn in the Running section and the tracked session below it.
+6. `06-overview-needs-you-permission.png` - "1 needs you": a pending bash approval
+   shows as Needs you / asks for permission with an Answer action.
+7. `07-runtime-status-diagnostics-export.png` - Runtime status dialog with the new
+   Download diagnostics action.
+8. `08-usage-quota-unconfigured-state.png` - Settings > Usage quota list, every
+   provider "Not set" (the quota surface's real failure state here).
+
+Diagnostics export: the dialog action wrote
+`openchamber-diagnostics-2026-10-28T17-25-29-422Z.txt` (2101 characters). Saved as
+`diagnostics-export.txt`. Its header reports
+`Current health: HTTP 200, status=ok, agent service=ready`; the event list holds
+nine entries. Grep of the file for `overview-check-ok`, `Write three short
+paragraphs`, `echo hi`, `Bearer`, `sk-`, `CLIProxyAPI`, `OPENAI`, `ANTHROPIC`:
+0 matches each. The export is bounded by the 1,500-event / 24-hour UI buffer and
+the fixed-source coverage lines.
+
+Warming: `GET /api/session-warming` answers 404, so `useSessionWarmingStore`
+settles on `unavailable` and both per-session warming surfaces hide
+(`SessionWarmingModeField` returns null, `WorkStatusWarmingToggle` is gated on
+`enabled`). The workspace-level control in Settings still reads and writes the
+canonical `GET/PUT /api/agent/v1/workspaces/:workspaceId/cache-warming`
+(`agent service=ready` in `/health`). No second warming source is mounted.
+
+#### Findings fixed in this phase
+
+1. **Overview unreachable although the server enabled it.** The Host reports
+   `overviewFeatureAvailable` in the settings payload, but
+   `packages/ui/src/lib/settings/registry.ts` had no field for it, so
+   `parseSettingsDocument` dropped it and `useUIStore.overviewFeatureAvailable`
+   stayed false: no command, no page, no entry point. Registered it as a computed
+   instance field next to `routingFeatureAvailable`, regenerated
+   `packages/web/server/lib/host/settings-registry.json` (which had also drifted
+   behind the registry by 13 keys), and added a regression test. Commit
+   `b89a566f1b`.
+2. **The diagnostic timeline had no caller.** `buildDiagnosticLog` was exported
+   and never imported, and nothing saved the result, so the task's export did not
+   exist for a user. Added `downloadDiagnosticLog()` and a Download diagnostics
+   action to `RuntimeStatusDialog`, with strings in every locale (ar/he are
+   excluded by the parity rule). Commit `9307682332`.
+3. **Every export claimed the server was unavailable.** `capture.ts` rejected the
+   Host's canonical `/health` payload because it required `openCodeRunning` and
+   `isOpenCodeReady`. The schema now accepts `{ status, agentService }` and the
+   formatters report `status` and the agent service phase; engine-shaped hosts
+   keep the old lines. Test `reports the Host canonical health...`. Commit
+   `9307682332`.
+4. **A worker could not start for an effort-named model.** `smol: ...:high` and
+   the default roles reach the worker as `variant: 'high'`; for a model whose
+   thinking is effort-addressed the projection published no variants, so every
+   start failed `UNSUPPORTED_CAPABILITY`. A variant name that matches a published
+   reasoning effort is now read as that effort. Commit `7cffb1398b`.
+5. **Initialization failures lost their reason.** The reply carried only the
+   code, so the log and the status dialog said `Worker initialization failed
+   (UNSUPPORTED_CAPABILITY)` with no next step. The worker now sends a bounded
+   detail and the supervisor puts it in the diagnostic; the status dialog shows
+   `...: Selected profile tool is unavailable`. Commit `09bf2d359c`.
+6. **The quota catalog failure was silent.** `/api/quota/providers` answered 503
+   and discarded the error. It now logs the cause (`Selected credential operation
+   failed` here). Commit `dc2393b0d1`.
+
+#### Limits (not exercised, with the reason)
+
+- **Quota 429 / limit failover against the fixture.** The handed-over fixture
+  (`/tmp/quota-429-fixture.js`, HTTP 429 with `Retry-After: 60`) no longer exists
+  on this machine; it was not recreated, because it cannot be wired into a real
+  quota fetch without product changes: every quota provider calls a fixed vendor
+  URL (`https://ollama.com/api/balance`, `https://api.github.com/...`, ...) and
+  requires a stored provider credential; none is configured here
+  (`GET /api/quota/:provider` answers 503 `Selected quota credential
+  unavailable`). The UI state captured is the unconfigured one (screenshot 08).
+  `limit-failover` and `quota` logic are covered by the focused server tests
+  (437 passed, 34 files). A credentialed provider or a dev-only endpoint override
+  is needed for the fixture run.
+- **Quota credentials panel.** `packages/ui/src/components/sections/usage/QuotaCredentials.tsx`
+  calls `/api/quota/credentials/:providerId`; `packages/web/server/lib/quota/routes.js`
+  registers no such route (it has `providers`, `:providerId` and
+  `gift-reset/use`). Not exercised, not fixed here.
+- **Per-session warming runtime.** `packages/web/server/lib/session-warming/{routes,runtime}.js`
+  are mounted nowhere and target deleted OpenCode endpoints (`/api/session/active`,
+  `/api/session/:id/generate`). The fork's warming is the canonical workspace
+  `cache-warming`; the upstream per-session surface stays dark
+  (`unavailable`), and its `setMode` fallback still names the retired
+  `/api/config/warming`, unreachable because the field hides first. Owner
+  decision needed: retire the modules or implement per-session warming on the
+  Agent Service.
+- **Default `writer` agent profile.** Its `tools:` list includes tools the worker
+  session does not mount, so a session started with it fails
+  (`Selected profile tool is unavailable`, now visible in the diagnostic). The
+  scenario ran with the `task` agent. The failure policy (reject the session vs
+  restrict to the intersection) is a product decision.
+- **Partial session discovery blanks the list.** One workspace whose directory
+  is gone (`METADATA_READ_FAILED`) makes `/api/agent/v1/sessions` report
+  `errors`, and `useGlobalSessionsStore` then sets `status: 'error'` with
+  `hasLoaded: false`, so the overview shows only "Could not load sessions." even
+  though items were returned (screenshot 02). The store's documented contract
+  says an incomplete list is not authoritative, so this was not changed here;
+  the zeroed-data run (fresh `runtime-data`) is what unblocked the scenario.
+- **Server journal / local files in the export.** `/api/diagnostics/local-files`
+  is not registered, so the export says "Local file/SSH diagnostics:
+  unavailable"; the timeline is still bounded and redacted.
+- **OpenCode-shaped probe block.** The local export still probes `/api/info`,
+  `/api/provider`, `/api/session/active`, which answer 404 here and appear as
+  failed probes with timings only. Bounded, no secrets, but noise to retire with
+  the diagnostics module owner.
+- **Waiting type exercised.** Only the permission case was produced. The
+  unread-finished case cannot occur yet because the Host viewed watermark is
+  task 25's (`session-unread` was deferred in task 23).
+- **Visual review of screenshots.** The executing model cannot accept image
+  input, so each screenshot was read through its DOM/accessibility tree
+  (headings, counts, row labels, button names) rather than by looking at pixels;
+  the captured text is quoted above.
+
+#### Checks after phase 2
+
+- `bun run type-check`: exit 0 (`logs/type-check-phase2.log`)
+- `bun run lint`: exit 0 (`logs/lint-phase2.log`)
+- UI focused `bun test packages/ui/src/{lib/diagnostics,lib/settings,lib/i18n/messages.test.ts,stores/useSessionWarmingStore.test.ts}`:
+  60 passed, exit 0 (`logs/ui-focused-phase2.log`)
+- Agent Service focused `bun test packages/agent-service/src/{worker/catalog-models.test.ts,supervisor/workers.diagnostics.test.ts}`:
+  36 passed, exit 0 (`logs/agent-service-focused-phase2.log`)
+- Server focused `vitest run lib/{quota,diagnostics,overview,limit-failover}`:
+  437 passed across 34 files, exit 0 (`logs/server-focused-phase2.log`)
+- The heavy gates above were run before the phase-2 commits; type-check and lint
+  were re-run after them.

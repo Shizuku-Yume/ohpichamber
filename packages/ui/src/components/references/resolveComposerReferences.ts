@@ -15,6 +15,7 @@ import type {
     ChangeRequestContext,
     Issue,
     IssueComment,
+    LinearIssueGetResult,
     RepositoryDiscussionReference,
     RepositoryReferenceComment,
     RepositoryReferenceDetail,
@@ -34,7 +35,7 @@ export type ReferenceResolveDeps = {
     readTrackerDetail: (provider: string, itemId: string) => Promise<TrackerItem>;
     /** The tracker's name for the agent's context header (`Linear`). */
     trackerName: (provider: string) => string;
-    readLinearDetail?: (issueId: string) => Promise<any>;
+    readLinearDetail?: (issueId: string) => Promise<LinearIssueGetResult>;
 };
 
 export type ResolvedReferences = {

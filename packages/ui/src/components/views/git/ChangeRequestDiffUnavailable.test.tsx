@@ -91,10 +91,12 @@ test('a host without change-request diffs says so in place of the diff, keeps it
   // The pull request scope as the Changes and Walkthrough views draw it.
   function Harness() {
     const comparison = usePullRequestComparison('/repo', 'feature-17', CONTEXT, true);
+    // The note replaces the diff when the scope reports the diff as unavailable.
+    const diffUnavailable = 'diffUnavailable' in comparison && comparison.diffUnavailable === true;
     return <section>
       <output data-count>{comparison.prs.length}</output>
       <output data-selected>{comparison.selectedSource?.number}</output>
-      {(comparison as any).diffUnavailable && <ChangeRequestDiffUnavailable provider={comparison.provider} />}
+      {diffUnavailable && <ChangeRequestDiffUnavailable provider={comparison.provider} />}
     </section>;
   }
   const container = document.createElement('div');

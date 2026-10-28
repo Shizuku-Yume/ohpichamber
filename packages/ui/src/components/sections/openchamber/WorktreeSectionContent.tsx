@@ -76,7 +76,7 @@ export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({ 
     };
   }, [projectPath]);
 
-  const sessionsKey = React.useMemo(() => sessions.map(s => (s as any).sessionId || (s as any).id).join(','), [sessions]);
+  const sessionsKey = React.useMemo(() => sessions.map(s => s.sessionId).join(','), [sessions]);
   const { availableWorktrees, isLoadingWorktrees } = useProjectWorktrees(
     projectRef, isGitRepoLocal, sessionsKey, listProjectWorktrees,
   );
@@ -86,7 +86,7 @@ export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({ 
     const normalizedWorktreePath = normalize(worktree.path);
 
     const directSessions = sessions.filter((session) => {
-      const metadata = getWorktreeMetadata((session as any).sessionId || (session as any).id);
+      const metadata = getWorktreeMetadata(session.sessionId);
       if (metadata?.path && normalize(metadata.path) === normalizedWorktreePath) {
         return true;
       }
@@ -102,7 +102,7 @@ export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({ 
       return false;
     });
 
-    const directSessionIds = new Set(directSessions.map((s) => (s as any).sessionId || (s as any).id));
+    const directSessionIds = new Set(directSessions.map((s) => s.sessionId));
 
     const allKnownSessions = [
       ...useGlobalSessionsStore.getState().activeSessions,
@@ -117,7 +117,7 @@ export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({ 
       if (subsessions.length === 0) {
         return [];
       }
-      const subsessionIds = new Set(subsessions.map((s) => (s as any).sessionId || (s as any).id));
+      const subsessionIds = new Set(subsessions.map((s) => s.sessionId));
       return [...subsessions, ...findSubsessions(subsessionIds)];
     };
 
@@ -125,10 +125,10 @@ export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({ 
 
     const seenIds = new Set<string>();
     const allSessions = [...directSessions, ...allSubsessions].filter((session) => {
-      if (seenIds.has((session as any).sessionId || (session as any).id)) {
+      if (seenIds.has(session.sessionId)) {
         return false;
       }
-      seenIds.add((session as any).sessionId || (session as any).id);
+      seenIds.add(session.sessionId);
       return true;
     });
 

@@ -14,7 +14,6 @@ import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStor
 interface AgentSelectorProps {
     agentId?: string;
     agentName?: string;
-    filter?: (agent: any) => boolean;
     onChange: (agentId: string) => void;
     className?: string;
     dropdownPortalToBody?: boolean;

@@ -22,14 +22,12 @@ import {
   SettingsTwoColumn,
 } from '@/components/sections/shared/SettingsSection';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
-import { isPrimaryMode } from '@/components/chat/mobileControlsUtils';
 import { useI18n } from '@/lib/i18n';
 import { reportSettingsSaveState } from '@/lib/persistence';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import type { RoutingCategory, RoutingConfig } from '@/lib/routing/routingApi';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { parseModelIdentifier } from '@/lib/modelIdentifier';
-import { modelVariantNames } from '@/lib/modelVariants';
 import { isAutoModel } from '@/lib/routing/autoModel';
 import { useRoutingStore } from '@/stores/useRoutingStore';
 import { JevAccessNote } from '@/components/sections/classification/JevAccessNote';
@@ -58,9 +56,9 @@ const useModelVariants = (providerID: string | null | undefined, modelID: string
   const providers = useConfigStore((state) => state.providers);
   return React.useMemo(() => {
     if (!providerID || !modelID) return [];
-    const provider = (providers as any[]).find((entry) => entry.id === providerID || entry.providerId === providerID);
-    const model = provider?.models?.find((entry: any) => entry.id === modelID || entry.modelId === modelID);
-    return modelVariantNames(model);
+    const provider = providers.find((entry) => entry.providerId === providerID);
+    const model = provider?.models.find((entry) => entry.modelId === modelID);
+    return model?.variants.map((variant) => variant.variant) ?? [];
   }, [modelID, providerID, providers]);
 };
 
@@ -154,7 +152,6 @@ const CategoryRow: React.FC<{
               <AgentSelector
                 agentName={category.agent ?? ''}
                 onChange={(agentName) => onChange({ agent: agentName || null })}
-                filter={(agent) => isPrimaryMode(agent.mode)}
                 className={cn(SETTINGS_CUSTOM_TRIGGER_CLASS, 'w-full')}
               />
             </SettingsStackedField>

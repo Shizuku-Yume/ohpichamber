@@ -664,7 +664,7 @@ export function NewWorktreeDialog({
     : undefined;
   const linkedView = linked
     ? linked.kind === 'pr'
-      ? { id: linked.context.provider === 'gitlab' ? formatChangeRequestReference('gitlab' as any, linked.pr.number) : t('session.newWorktree.prNumber', { number: linked.pr.number }), title: linked.pr.title, url: linked.pr.url, icon: <Icon name="git-pull-request" className="size-4 shrink-0 text-muted-foreground" /> }
+      ? { id: linked.context.provider === 'gitlab' ? formatChangeRequestReference(linked.context.provider, linked.pr.number) : t('session.newWorktree.prNumber', { number: linked.pr.number }), title: linked.pr.title, url: linked.pr.url, icon: <Icon name="git-pull-request" className="size-4 shrink-0 text-muted-foreground" /> }
       : linked.kind === 'issue'
         ? { id: t('session.newWorktree.issueNumber', { number: linked.number }), title: linked.title, url: linked.url, icon: <Icon name={isGitLabProject ? 'gitlab' : 'github'} className="size-4 shrink-0 text-muted-foreground" /> }
         : linked.kind === 'tracker'

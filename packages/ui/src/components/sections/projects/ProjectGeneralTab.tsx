@@ -13,8 +13,6 @@ import {
   SETTINGS_SELECT_ROW_TRIGGER_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { selectProvidersForDirectory, useConfigStore } from '@/stores/useConfigStore';
-import { modelVariantNames } from '@/lib/modelVariants';
-import { isPrimaryMode } from '@/components/chat/mobileControlsUtils';
 import { updateSharedProjectSetup, type ProjectRef } from '@/lib/openchamberConfig';
 import { ensureSharedSetupTrusted, resetSharedSetupTrust } from '@/lib/sharedTrustConfirmation';
 import { useI18n } from '@/lib/i18n';
@@ -38,10 +36,10 @@ const ChatDefaultsSection: React.FC<{ form: ProjectIdentityFormState }> = ({ for
   const availableVariants = React.useMemo(() => {
     const { providerId, modelId } = parsedDefaultModel;
     if (!providerId || !modelId) return [];
-    const model = (providers as any[])
-      .find((provider) => provider.id === providerId || provider.providerId === providerId)
-      ?.models?.find((entry: any) => entry.id === modelId || entry.modelId === modelId);
-    return modelVariantNames(model as any);
+    const model = providers
+      .find((provider) => provider.providerId === providerId)
+      ?.models.find((entry) => entry.modelId === modelId);
+    return model?.variants.map((variant) => variant.variant) ?? [];
   }, [parsedDefaultModel, providers]);
 
   if (!form.project) return null;
@@ -58,7 +56,6 @@ const ChatDefaultsSection: React.FC<{ form: ProjectIdentityFormState }> = ({ for
           directory={form.project.path}
           agentName={form.defaultAgent || ''}
           onChange={(agentName) => form.setDefaultAgent(agentName || undefined)}
-          filter={(agent) => isPrimaryMode(agent.mode)}
           className={SETTINGS_CUSTOM_TRIGGER_CLASS}
         />
       </SettingsFieldRow>

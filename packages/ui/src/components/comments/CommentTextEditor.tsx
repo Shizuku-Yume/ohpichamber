@@ -69,7 +69,6 @@ export function CommentTextEditor({
         const knownSnippetTriggers = new Set<string>();
         for (const snippet of snippets) {
             knownSnippetTriggers.add(snippet.name.toLowerCase());
-            for (const alias of (snippet as any).aliases ?? []) knownSnippetTriggers.add(alias.toLowerCase());
         }
         return {
             inputMode: 'normal',

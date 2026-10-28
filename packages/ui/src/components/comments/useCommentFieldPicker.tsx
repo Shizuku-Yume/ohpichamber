@@ -4,7 +4,6 @@ import React from 'react';
 import { emojiInlinePicker } from '@/components/emoji/emojiInlinePicker';
 import type { CaretCoords } from '@/components/inline-picker/placement';
 import { useInlinePicker } from '@/components/inline-picker/useInlinePicker';
-import { useI18n } from '@/lib/i18n';
 import { snippetInlinePicker } from './snippetInlinePicker';
 
 const COMMENT_PICKERS = [snippetInlinePicker, emojiInlinePicker];

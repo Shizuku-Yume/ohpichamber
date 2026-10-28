@@ -2224,10 +2224,6 @@ export type RepositoryReferencesAcrossResult = {
 
 
 export interface SourceControlAPI {
-  githubReferences?(context: any, options: any): Promise<any>;
-  githubReferenceDetail?(context: any, item: any): Promise<any>;
-  githubPullStatuses?(context: any, pulls: any): Promise<any>;
-
   /**
    * The providers the connected server serves, ordered. An authoritative
    * empty list where no provider is served (VS Code); throws on failure.

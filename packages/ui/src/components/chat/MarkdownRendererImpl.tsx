@@ -52,6 +52,7 @@ import { getMarkdownSyntaxVars } from './markdown/markdownSyntaxVars';
 import { splitFrontmatter } from './markdown/frontmatter';
 import { FrontmatterProperties } from './markdown/FrontmatterProperties';
 import { isBareVideoUrl, markdownMediaCopySource, markdownMediaFilename } from './markdown/markdownVideo';
+import type { RepositoryLinkContext } from '@/lib/source-control/repositoryLinks';
 
 export type MarkdownVariant = 'assistant' | 'tool' | 'reasoning';
 
@@ -247,7 +248,7 @@ function selectedCopyPayload(element: HTMLElement): { text: string; html: string
 }
 
 export interface MarkdownContentProps {
-  repositoryLinks?: any;
+  repositoryLinks?: RepositoryLinkContext | null;
   content: string;
   variant?: MarkdownVariant;
   className?: string;

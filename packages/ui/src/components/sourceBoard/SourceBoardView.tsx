@@ -788,7 +788,7 @@ const SourceBoardBody: React.FC<{
             open={worktreeRequest !== null}
             onOpenChange={(next) => { if (!next) setWorktreeRequest(null); }}
             project={worktreeRequest?.project}
-            initialSelection={worktreeRequest?.selection as any}
+            initialSelection={worktreeRequest?.selection}
             initialSourceBranch={worktreeRequest?.onTopOf}
             onWorktreeCreated={(worktreePath) => {
                 useSessionUIStore.getState().openNewSessionDraft({ directoryOverride: worktreePath, preserveDirectoryOverride: true });

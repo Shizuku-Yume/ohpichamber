@@ -105,20 +105,6 @@ export function LinearProjectMapping({
     return project?.label?.trim() || path;
   };
 
-  const defaultProjectLabel = (value: string | undefined) => {
-    if (!value || value === NONE) {
-      return t('settings.integrations.linear.mapping.defaultProject.placeholder');
-    }
-    return projectLabel(value);
-  };
-
-  const teamProjectLabel = (value: string | undefined) => {
-    if (!value || value === INHERIT) {
-      return t('settings.integrations.linear.mapping.teams.useDefault');
-    }
-    return projectLabel(value);
-  };
-
   return (
     <div className={SETTINGS_FIELDS_STACK_CLASS}>
       {projects.length === 0 ? (
@@ -146,7 +132,7 @@ export function LinearProjectMapping({
             className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
             aria-label={t('settings.integrations.linear.mapping.defaultProject.aria')}
           >
-            <SelectValue placeholder={t('settings.integrations.linear.mapping.defaultProject.placeholder' as any)} />
+            <SelectValue placeholder={t('settings.integrations.linear.mapping.defaultProject.placeholder')} />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={NONE}>
@@ -197,7 +183,7 @@ export function LinearProjectMapping({
                     className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
                     aria-label={t('settings.integrations.linear.mapping.teams.aria', { team: team.key })}
                   >
-                    <SelectValue placeholder={t('settings.integrations.linear.mapping.teams.useDefault' as any)} />
+                    <SelectValue placeholder={t('settings.integrations.linear.mapping.teams.useDefault')} />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={INHERIT}>

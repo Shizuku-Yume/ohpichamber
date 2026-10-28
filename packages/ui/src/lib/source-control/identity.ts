@@ -1,4 +1,4 @@
-import type { SourceControlProviderDescriptor } from './providers/descriptor';
+import type { SourceControlProviderDescriptor, SourceControlProviderId } from './providers/descriptor';
 import type { GitRemote, PageResult, SourceControlAuthAccount, SourceControlBindingRead, SourceControlIdentity, SourceControlReadContext } from '@/lib/api/types';
 
 /** github.com, for the one path that is GitHub's own: the github.com device flow and its legacy auth wire. */
@@ -414,7 +414,10 @@ export const buildManagedAccountOptions = (
   }));
 };
 
-export const formatChangeRequestReference = (descriptorOrProvider?: any, number: number = 0): string => {
+export const formatChangeRequestReference = (
+  descriptorOrProvider?: SourceControlProviderDescriptor | SourceControlProviderId | null,
+  number: number = 0,
+): string => {
   if (!descriptorOrProvider || descriptorOrProvider === 'github') return `#${number}`;
   if (typeof descriptorOrProvider === 'string') {
     return descriptorOrProvider === 'gitlab' ? `!${number}` : `#${number}`;

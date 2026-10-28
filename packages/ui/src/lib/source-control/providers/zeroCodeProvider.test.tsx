@@ -218,11 +218,11 @@ describe('a source-control provider no UI code names', () => {
     const matcher = createRepositoryUrlMatcher(ordered, []);
     const pull = buildLinkedIssue({ url: `${ACME_ORIGIN}/org/tool/pulls/12`, number: 12, title: 'Teach the forge to rebase', kind: 'pull', linkedAt: 1 });
     const issue = buildLinkedIssue({ url: `${ACME_ORIGIN}/org/tool/issues/7`, number: 7, title: 'Pipelines time out', kind: 'issue', linkedAt: 2 });
-    const session: any = {
-      id: 'session-1', projectID: 'project', directory: '/work/tool', title: 'Acme work', cost: 0,
-      tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-      time: { created: 1, updated: 1 },
+    const session: Session = {
+      sessionId: 'session-1', projectId: 'project-1', workspaceId: 'workspace-1', displayPath: 'tool', rootSessionId: 'session-1',
+      createdAt: 1, updatedAt: 1, epoch: 'epoch-1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
       metadata: withLinkedIssue(withLinkedIssue({}, pull, true), issue, true),
+      metadataRevision: '1', archiveRevision: '0',
     };
 
     const changes = getLinkedSidebarChanges(session, matcher);

@@ -46,6 +46,25 @@ describe('settings registry', () => {
     expect(parseSettingsDocument({ smallModelVariant: '' })).toEqual({});
     expect(parseSettingsDocument({ smallModelVariant: 3 })).toEqual({});
   });
+  test('applies the server-owned overview feature flag to the UI store', () => {
+    const original = useUIStore.getState().overviewFeatureAvailable;
+    try {
+      useUIStore.setState({ overviewFeatureAvailable: false });
+      const parsed = parseSettingsDocument({ overviewFeatureAvailable: true });
+      expect(parsed).toEqual({ overviewFeatureAvailable: true });
+      if (!parsed) throw new Error('Expected the overview flag to parse');
+      applySettingsToStores(parsed);
+      expect(useUIStore.getState().overviewFeatureAvailable).toBe(true);
+      expect(useUIStore.getState().isOverviewOpen).toBe(false);
+      // The page closes when the server says the build lost the feature.
+      useUIStore.setState({ isOverviewOpen: true });
+      applySettingsToStores({ overviewFeatureAvailable: false });
+      expect(useUIStore.getState().overviewFeatureAvailable).toBe(false);
+      expect(useUIStore.getState().isOverviewOpen).toBe(false);
+    } finally {
+      useUIStore.setState({ overviewFeatureAvailable: original, isOverviewOpen: false });
+    }
+  });
 
   test('accepts only interface languages the UI ships', () => {
     expect(parseSettingsDocument({ locale: 'zh-CN' })).toEqual({ locale: 'zh-CN' });

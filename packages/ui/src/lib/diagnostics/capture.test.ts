@@ -488,6 +488,43 @@ describe('local diagnostic runtime', () => {
     }
   });
 
+  test('reports the Host canonical health instead of claiming an engine it does not run', async () => {
+    const originalWindow = globalThis.window;
+    const originalResolver = getRuntimeUrlResolver();
+    const originalFetch = globalThis.fetch;
+    try {
+      Object.defineProperty(globalThis, 'window', {
+        configurable: true,
+        value: {
+          location: { origin: 'http://127.0.0.1:3000', href: 'http://127.0.0.1:3000/' },
+          __OPENCHAMBER_LOCAL_ORIGIN__: 'http://127.0.0.1:3000',
+        },
+      });
+      setRuntimeUrlResolver(createRuntimeUrlResolver({ apiBaseUrl: 'http://127.0.0.1:3000' }));
+      globalThis.fetch = async (input) => {
+        const url = new URL(input instanceof Request ? input.url : input.toString());
+        if (url.pathname === '/health') return Response.json({
+          status: 'ok', timestamp: new Date().toISOString(), openchamberVersion: '3.0.0', runtime: 'web',
+          agentService: { phase: 'ready', pid: 1234, port: 45207 },
+        });
+        if (url.pathname === '/api/diagnostics/local-files') return Response.json({ events: [], coverage: [] });
+        return Response.json({});
+      };
+      clearDiagnosticEvents();
+      const output = await buildDiagnosticLog();
+      expect(output).toContain('Current health: HTTP 200, status=ok, agent service=ready');
+      expect(output).toContain('Agent service: ready');
+      expect(output).not.toContain('OpenCode load:');
+      expect(output).not.toContain('Last OpenCode start error');
+      expect(output).toContain('[server] health probe http=200 timeMs=');
+    } finally {
+      clearDiagnosticEvents();
+      globalThis.fetch = originalFetch;
+      setRuntimeUrlResolver(originalResolver);
+      Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
+    }
+  });
+
   test('names the kind of a startup error without its paths or process output', () => {
     expect(classifyStartError('OpenCode process exited before serving with signal SIGKILL. Binary used: /Users/me/bin/opencode.')).toBe('exited before serving (signal SIGKILL)');
     expect(classifyStartError('spawn /Users/me/bin/opencode ENOENT')).toBe('binary not found');

@@ -13,6 +13,10 @@ type Status = { initialized: boolean; connected: boolean; stream: string; sessio
 export type DiagnosticHealthSample = {
   at: number;
   http: number;
+  /** The Host's own readiness word from its `/health`: `ok` when it can serve. */
+  status: string | null;
+  /** The Agent Service phase the Host reports, such as `ready`. */
+  agentService: string | null;
   running: boolean | 'unknown';
   ready: boolean | 'unknown';
   secure: boolean | 'unknown';
@@ -23,6 +27,10 @@ export type DiagnosticHealthSample = {
   lastError: string | null;
 };
 const healthSchema = z.object({
+  // The Host's canonical payload (no orchestrated engine underneath it).
+  status: z.string().min(1).optional(),
+  agentService: z.object({ phase: z.string().min(1) }).nullish(),
+  // The inherited engine-shaped payload, still accepted for a runtime that reports it.
   openCodeRunning: z.boolean().optional(),
   isOpenCodeReady: z.boolean().optional(),
   openCodeSecureConnection: z.boolean().optional(),
@@ -31,7 +39,7 @@ const healthSchema = z.object({
   opencodeBinarySource: z.enum(['bundled', 'env', 'path', 'fallback', 'where', 'shell', 'policy', 'settings', 'wsl', 'unknown']).nullish().catch(null),
   opencodeLaunchWrapperType: z.enum(['bun-shebang', 'cmd-wrapper', 'node-launcher', 'node-shebang']).nullish().catch(null),
   lastOpenCodeError: z.string().nullish().catch(null),
-}).refine((health) => health.openCodeRunning !== undefined && health.isOpenCodeReady !== undefined);
+}).refine((health) => health.status !== undefined || (health.openCodeRunning !== undefined && health.isOpenCodeReady !== undefined));
 const healthFailureSchema = z.object({
   lastOpenCodeHealthFailure: z.object({
     at: z.iso.datetime(),
@@ -242,6 +250,8 @@ export async function readServerHealth(
     // contain private data; the last startup error enters only as its class.
     const sample: DiagnosticHealthSample = {
       at: Date.now(), http: response.status,
+      status: health.status ?? null,
+      agentService: health.agentService?.phase ?? null,
       running: health.openCodeRunning ?? 'unknown', ready: health.isOpenCodeReady ?? 'unknown',
       secure: health.openCodeSecureConnection ?? 'unknown', port: health.openCodePort ?? null,
       wsl: health.opencodeViaWsl ?? 'unknown',
@@ -251,7 +261,9 @@ export async function readServerHealth(
     };
     emit({
       at: sample.at, source: 'server', action: 'health probe',
-      detail: `http=${sample.http} timeMs=${sample.at - startedAt} running=${sample.running} ready=${sample.ready} secure=${sample.secure} port=${sample.port ?? 'unknown'} wsl=${sample.wsl}`,
+      detail: sample.status !== null
+        ? `http=${sample.http} timeMs=${sample.at - startedAt} status=${sample.status} agentService=${sample.agentService ?? 'unknown'}`
+        : `http=${sample.http} timeMs=${sample.at - startedAt} running=${sample.running} ready=${sample.ready} secure=${sample.secure} port=${sample.port ?? 'unknown'} wsl=${sample.wsl}`,
     });
     const processResult = processSchema.safeParse(raw);
     const managedProcess = processResult.success ? processResult.data.lastManagedOpenCodeProcess : null;

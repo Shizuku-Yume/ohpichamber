@@ -221,20 +221,29 @@ const formatOpenCodeLoad = (load: OpenCodeLoad | null): string => {
 
 declare const __APP_VERSION__: string | undefined;
 
-/** Version, platform and how OpenCode was launched: the questions a support thread opens with. */
+/** Version, platform and how the agent runtime was launched: the questions a support thread opens with. */
 const formatEnvironment = (health: DiagnosticHealthSample | null, openCodeVersion: string | undefined): string[] => [
   `OpenChamber: ${typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'unknown'} (${canUseElectronDesktopIPC() ? 'desktop' : 'web'})`,
   `Platform: ${navigator.userAgent}`,
-  `OpenCode: ${openCodeVersion ?? 'unknown'}${health ? `, binary source=${health.binarySource}, wrapper=${health.wrapper}` : ''}`,
-  `Last OpenCode start error: ${health ? health.lastError ?? 'none' : 'unknown'}`,
+  // An engine-shaped Host still reports its engine; the fork's Host does not run one.
+  ...(health && health.status !== null
+    ? [`Agent service: ${health.agentService ?? 'unknown'}`]
+    : [
+      `OpenCode: ${openCodeVersion ?? 'unknown'}${health ? `, binary source=${health.binarySource}, wrapper=${health.wrapper}` : ''}`,
+      `Last OpenCode start error: ${health ? health.lastError ?? 'none' : 'unknown'}`,
+    ]),
 ];
 
-const formatHealth = (health: DiagnosticHealthSample | null): string => (health
-  ? `HTTP ${health.http}, OpenCode running=${health.running}, ready=${health.ready}, secure=${health.secure}, port=${health.port ?? 'unknown'}, WSL=${health.wsl}`
-  : 'unavailable (health request failed or response invalid)');
+const formatHealth = (health: DiagnosticHealthSample | null): string => {
+  if (!health) return 'unavailable (health request failed or response invalid)';
+  if (health.status !== null) {
+    return `HTTP ${health.http}, status=${health.status}, agent service=${health.agentService ?? 'unknown'}`;
+  }
+  return `HTTP ${health.http}, OpenCode running=${health.running}, ready=${health.ready}, secure=${health.secure}, port=${health.port ?? 'unknown'}, WSL=${health.wsl}`;
+};
 
 const formatLog = (at: number, health: DiagnosticHealthSample | null, openCodeVersion: string | undefined, load: string, coverage: string[], events: DiagnosticEvent[]): string =>
-  `OpenChamber diagnostic timeline\nGenerated: ${new Date(at).toISOString()}\n${formatEnvironment(health, openCodeVersion).join('\n')}\n\nCurrent health: ${formatHealth(health)}\nOpenCode load: ${load}\n\nSources:\n${coverage.map((item) => `- ${item}`).join('\n')}\n\nEvents (${events.length}):\n${formatDiagnosticEvents(events)}`;
+  `OpenChamber diagnostic timeline\nGenerated: ${new Date(at).toISOString()}\n${formatEnvironment(health, openCodeVersion).join('\n')}\n\nCurrent health: ${formatHealth(health)}${health && health.status !== null ? '' : `\nOpenCode load: ${load}`}\n\nSources:\n${coverage.map((item) => `- ${item}`).join('\n')}\n\nEvents (${events.length}):\n${formatDiagnosticEvents(events)}`;
 
 const runtimeChanged = () => `OpenChamber diagnostic timeline\nGenerated: ${new Date().toISOString()}\n${formatEnvironment(null, undefined).slice(0, 2).join('\n')}\n\nSources:\n- Export interrupted: the active runtime changed while it was collected; export again\n\nEvents (0):\n`;
 
@@ -301,4 +310,29 @@ export async function buildDiagnosticLog(): Promise<string> {
   coverage.push('Server journal: bounded history of OpenCode lifecycle transitions and failed HTTP responses');
   const events = mergeDiagnosticEvents(files?.events ?? [], getDiagnosticEvents(), buffered, probes.map((probe) => probe.event));
   return formatLog(at, health, openCodeVersion, formatOpenCodeLoad(load), coverage, events);
+}
+
+/**
+ * Saves the diagnostic timeline as a text file. The browser owns where it
+ * lands (the downloads folder unless the person chose another); nothing here
+ * reads, prints or uploads the content.
+ */
+export async function downloadDiagnosticLog(): Promise<string> {
+  const text = await buildDiagnosticLog();
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const filename = `openchamber-diagnostics-${stamp}.txt`;
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
+  try {
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+  } finally {
+    // The click starts the download from this URL; revoking in the same task
+    // aborts it in browsers that read the blob after the event settles.
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+  return filename;
 }

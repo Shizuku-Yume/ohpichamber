@@ -11,7 +11,7 @@ import { setSyncRefs } from '@/sync/sync-refs';
 import { applyGlobalSessionStatusEvent, replaceGlobalSessionStatusById } from '@/sync/global-session-status';
 import { readGuestWorkspace, observeGuestWorkspace } from './workspace';
 import { guestMay } from './capabilities';
-import { buildLinkedGuestIssue, buildLinkedIssue, buildLinkedLinearIssue } from '@/lib/linkedIssues';
+import { buildLinkedGuestIssue, buildLinkedIssue, buildLinkedTrackerItem } from '@/lib/linkedIssues';
 
 const session = (sessionId: string, displayPath: string, projectId: string, workspaceId: string): Session => ({
   sessionId, projectId, workspaceId, displayPath, rootSessionId: sessionId,
@@ -111,7 +111,7 @@ describe('extension workspace projection', () => {
       buildLinkedGuestIssue({ providerId: 'board', identifier: 'ITEM-1', title: 'Mine', url: 'https://guest.example/1', data: { column: 'todo', labels: ['a'] }, linkedAt: 2 }),
       buildLinkedGuestIssue({ providerId: 'other', identifier: 'ITEM-2', title: 'Theirs', url: 'https://guest.example/2', data: { secret: true }, linkedAt: 3 }),
       buildLinkedIssue({ number: 7, title: 'Issue', url: 'https://github.com/acme/widgets/issues/7', kind: 'issue', linkedAt: 4 }),
-      buildLinkedLinearIssue({ identifier: 'ENG-1', title: 'Linear', url: 'https://linear.app/acme/ENG-1', linkedAt: 5 }),
+      buildLinkedTrackerItem({ provider: 'linear', identifier: 'ENG-1', title: 'Linear', url: 'https://linear.app/acme/ENG-1', linkedAt: 5 }),
       buildLinkedGuestIssue({ providerId: 'board', identifier: 'ITEM-3', title: 'No data', url: 'https://guest.example/3', linkedAt: 6 }),
     ];
     const linkedSession = { ...bSession, metadata: { title: 'b-session', openchamber: { linked_issues: linkedIssues } } };
@@ -146,7 +146,7 @@ describe('extension workspace projection', () => {
         buildLinkedGuestIssue({ providerId: 'other', identifier: 'X-1', title: 'Other card', url: 'https://other.example/X-1', data: { secret: true }, linkedAt: 4 }),
         buildLinkedGuestIssue({ providerId: 'board', identifier: 'B-2', title: 'Own card', url: 'https://board.example/B-2', data: { column: 'todo' }, linkedAt: 5 }),
         buildLinkedIssue({ number: 7, title: 'User issue', url: 'https://github.com/openchamber/openchamber/issues/7', kind: 'issue', linkedAt: 3 }),
-        buildLinkedLinearIssue({ identifier: 'ENG-1', title: 'Linear', url: 'https://linear.app/acme/ENG-1', linkedAt: 6 }),
+        buildLinkedTrackerItem({ provider: 'linear', identifier: 'ENG-1', title: 'Linear', url: 'https://linear.app/acme/ENG-1', linkedAt: 6 }),
       ] } },
     };
     manager.ensureChild('/b-tree', { bootstrap: false }).setState({ session: [linkedSession], sessionTotal: 1 });

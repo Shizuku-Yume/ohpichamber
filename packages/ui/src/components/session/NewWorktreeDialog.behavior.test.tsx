@@ -352,6 +352,7 @@ describe('NewWorktreeDialog behavior', () => {
                 labels: [],
                 commentCount: 0,
                 sourceRepo: { owner: 'acme', repo: 'project', source: 'origin' },
+                provider: 'github',
                 state: 'open',
               },
             }}
@@ -401,6 +402,7 @@ describe('NewWorktreeDialog behavior', () => {
             labels: [],
             commentCount: 0,
             sourceRepo: { owner: 'acme', repo: 'project', source: 'origin' },
+            provider: 'github',
             state: 'open',
           },
         }]);

@@ -18,6 +18,7 @@ Object.assign(globalThis, {
 const { JsonTreeView } = await import('./JsonTreeView');
 const i18n: I18nContextValue = {
   locale: 'en',
+  direction: 'ltr',
   locales: ['en'],
   setLocale: () => {},
   label: (locale) => locale,

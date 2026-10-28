@@ -17,6 +17,7 @@ import { clearWorktreeRemoval, markWorktreeRemoving } from '@/lib/worktrees/work
 import { checkoutHoldsSubfolder } from '@/lib/worktrees/worktreePaths';
 import type {
   CreateGitWorktreePayload,
+  GitWorktreeArchive,
   GitWorktreeBootstrapStatus,
   GitWorktreeValidationResult,
   GitChangeRequestSourceRequest,
@@ -781,6 +782,28 @@ const forgetRemovedWorktree = (project: ProjectRef, worktree: WorktreeMetadata):
   });
   clearWorktreeRemoval(worktree.path);
 };
+
+/**
+ * Archives the worktree: the server records its state with `sessionIds` (the
+ * sessions the caller archived for it) under a private ref and removes the
+ * folder, keeping the branch. The row shows the removal until git answers.
+ */
+export async function archiveProjectWorktree(
+  project: ProjectRef,
+  worktree: WorktreeMetadata,
+  input: { id: string; sessionIds: string[]; title?: string },
+): Promise<GitWorktreeArchive> {
+  markWorktreeRemoving(worktree.path);
+  let archive: GitWorktreeArchive;
+  try {
+    archive = await git.worktree.archive(normalizePath(project.path), { directory: worktree.path, ...input });
+  } catch (error) {
+    clearWorktreeRemoval(worktree.path);
+    throw error;
+  }
+  forgetRemovedWorktree(project, worktree);
+  return archive;
+}
 
 export async function removeProjectWorktree(project: ProjectRef, worktree: WorktreeMetadata, options?: {
   deleteRemoteBranch?: boolean;

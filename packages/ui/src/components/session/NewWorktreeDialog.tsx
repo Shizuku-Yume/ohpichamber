@@ -32,17 +32,19 @@ import { getRootBranch } from '@/lib/worktrees/worktreeStatus';
 import { generateBranchSlug } from '@/lib/git/branchNameGenerator';
 import { handleWorktreeCreateKeyDown } from './worktreeCreateKeyboard';
 import { NewWorktreeBranchPicker } from './NewWorktreeBranchPicker';
-import { resolveDefaultSourceBranch } from '@/lib/worktrees/worktreeSourceBranchPreference';
+import { resolveBranchOnTopSource, resolveDefaultSourceBranch } from '@/lib/worktrees/worktreeSourceBranchPreference';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useGitBranches, useGitStore, useGitLoadingBranches } from '@/stores/useGitStore';
 import { ReferencePickerDialog, type ReferencePickerConfirmFailure } from '@/components/references/ReferencePickerDialog';
 import { referencePickerItemKey, type ReferencePickerSelection } from '@/components/references/referencePickerItems';
-import { readLinearIssueDetail, useGitHubReadContext, useRepositoryReferenceProvider } from '@/components/references/referenceSources';
+import { readLinearIssueDetail, readTrackerItemDetail, useGitHubReadContext, useRepositoryReferenceProvider } from '@/components/references/referenceSources';
 import { resolveComposerReferences } from '@/components/references/resolveComposerReferences';
 import { usePendingComposerReferences } from '@/components/chat/composer/pendingComposerReferences';
 import { useInputStore } from '@/sync/input-store';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { Icon } from "@/components/icon/Icon";
+import { trackerPresentation } from '@/lib/trackers/presentation';
+import { readTrackerDescriptor } from '@/lib/trackers/registry';
 import type { SourceControlReadContext } from '@/lib/api/types';
 import { resolvePrWorktreeConfig, type PrWorktreeSource } from './prWorktreeConfig';
 import { useConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -81,7 +83,7 @@ type LinkedItem =
     selection: ReferencePickerSelection;
   }
   | { kind: 'issue'; number: number; title: string; url: string; selection: ReferencePickerSelection }
-  | { kind: 'linear'; identifier: string; title: string; url: string; selection: ReferencePickerSelection }
+  | { kind: 'tracker'; provider: string; identifier: string; title: string; url: string; selection: ReferencePickerSelection }
   | { kind: 'guest'; guest: AttachIssueRequest };
 
 interface ExistingBranchState {
@@ -123,6 +125,12 @@ interface NewWorktreeDialogProps {
   onWorktreeCreated?: (worktreePath: string) => void;
   /** Opens on "PR or issue" with this item already chosen. */
   initialSelection?: ReferencePickerSelection;
+  /**
+   * Opens on a new branch starting from this one: the next layer of a stack.
+   * The server records it as the new branch's parent, so its pull request
+   * targets it.
+   */
+  initialSourceBranch?: string;
 }
 
 export function NewWorktreeDialog({
@@ -131,9 +139,10 @@ export function NewWorktreeDialog({
   project,
   onWorktreeCreated,
   initialSelection,
+  initialSourceBranch,
 }: NewWorktreeDialogProps) {
   const { t } = useI18n();
-  const { sourceControl, git, linear } = useRuntimeAPIs();
+  const { sourceControl, git, linear, trackers } = useRuntimeAPIs();
   const trustConfirmation = useConfirmDialog();
   const isMobile = useUIStore((state) => state.isMobile);
   const githubAuthEntry = useSourceControlAuthEntry(GITHUB_SOURCE_CONTROL_IDENTITY);
@@ -250,9 +259,17 @@ export function NewWorktreeDialog({
   const worktreeName = mode === 'existing-branch' ? existingBranch.worktreeName : draft.worktreeName;
   const startsNewBranch = mode === 'new-branch' || (mode === 'from-item' && !linkedPr);
 
+  // A stacked worktree starts from the branch it was asked for, which the
+  // server fetches before creating; it never falls back to the root's branch.
+  const onTopRemote = githubContext && githubContext !== 'missing' ? githubContext.primaryRemote : 'origin';
+  React.useEffect(() => {
+    if (!open || !initialSourceBranch || !branches?.all || sourceBranch) return;
+    setSourceBranch(resolveBranchOnTopSource(branches.all, initialSourceBranch) || `remotes/${onTopRemote}/${initialSourceBranch}`);
+  }, [open, initialSourceBranch, branches?.all, sourceBranch, onTopRemote]);
+
   // Start from the branch the project root is on, once branches are known.
   React.useEffect(() => {
-    if (!open || !branches?.all || !projectDirectory || sourceBranch) return;
+    if (!open || initialSourceBranch || !branches?.all || !projectDirectory || sourceBranch) return;
     let cancelled = false;
     void getRootBranch(projectDirectory).catch(() => null).then((rootBranch) => {
       if (cancelled) return;
@@ -262,7 +279,7 @@ export function NewWorktreeDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, branches?.all, projectDirectory, sourceBranch]);
+  }, [open, initialSourceBranch, branches?.all, projectDirectory, sourceBranch]);
 
   // Reset state on each open. Resetting on close would empty the form during
   // the close animation, causing visible flicker.
@@ -382,8 +399,12 @@ export function NewWorktreeDialog({
       return;
     }
     void resolveComposerReferences([item.selection], {
-      sourceControl: sourceControl as any,
+      sourceControl,
       context: item.kind === 'pr' ? item.context : (githubContext && githubContext !== 'missing' ? githubContext : null),
+      readTrackerDetail: (provider, itemId) => (trackers
+        ? readTrackerItemDetail(trackers, provider, itemId)
+        : Promise.reject(new Error('Trackers are not available here'))),
+      trackerName: (provider) => readTrackerDescriptor(provider).name,
       readLinearDetail: (issueId) => (linear
         ? readLinearIssueDetail(linear, issueId)
         : Promise.reject(new Error('Linear is not available here'))),
@@ -515,11 +536,11 @@ export function NewWorktreeDialog({
     const [choice] = selections;
     if (!choice) return null;
 
-    if (choice.source === 'tracker' || (choice as any).source === 'linear') {
-      const item = 'item' in choice ? choice.item : (choice as any).issue;
+    if (choice.source === 'tracker') {
+      const item = choice.item;
       linkItem(
-        { kind: 'linear', identifier: item.identifier, title: item.title, url: item.url, selection: choice },
-        `issue-${item.identifier}-${generateBranchSlug()}`,
+        { kind: 'tracker', provider: choice.provider, identifier: item.identifier, title: item.title, url: item.url, selection: choice },
+        `${trackerPresentation(choice.provider).branchName(item)}-${generateBranchSlug()}`,
       );
       return null;
     }
@@ -574,7 +595,7 @@ export function NewWorktreeDialog({
   React.useEffect(() => {
     const choice = pendingInitialSelection.current;
     if (!open || !choice) return;
-    if ((choice.source === 'repository' || (choice as any).source === 'github') && 'reference' in choice && choice.reference.kind === 'pull' && githubContext === null) return;
+    if (choice.source === 'repository' && choice.reference.kind === 'pull' && githubContext === null) return;
     pendingInitialSelection.current = null;
     void handleReferenceConfirmRef.current([choice]).then((failure) => {
       if (failure) toast.error(failure.message);
@@ -646,8 +667,8 @@ export function NewWorktreeDialog({
       ? { id: linked.context.provider === 'gitlab' ? formatChangeRequestReference('gitlab' as any, linked.pr.number) : t('session.newWorktree.prNumber', { number: linked.pr.number }), title: linked.pr.title, url: linked.pr.url, icon: <Icon name="git-pull-request" className="size-4 shrink-0 text-muted-foreground" /> }
       : linked.kind === 'issue'
         ? { id: t('session.newWorktree.issueNumber', { number: linked.number }), title: linked.title, url: linked.url, icon: <Icon name={isGitLabProject ? 'gitlab' : 'github'} className="size-4 shrink-0 text-muted-foreground" /> }
-        : linked.kind === 'linear'
-          ? { id: linked.identifier, title: linked.title, url: linked.url, icon: <Icon name="linear" className="size-4 shrink-0 text-muted-foreground" /> }
+        : linked.kind === 'tracker'
+          ? { id: linked.identifier, title: linked.title, url: linked.url, icon: <Icon name={trackerPresentation(linked.provider).icon} className="size-4 shrink-0 text-muted-foreground" /> }
           : { id: linked.guest.id, title: linked.guest.title, url: linked.guest.url, icon: <GuestIcon icon={linkedGuestEntry?.icon ?? 'window'} iconSrc={linkedGuestEntry?.iconSrc} className="size-4 shrink-0" /> }
     : null;
 

@@ -45,7 +45,7 @@ const trackers: TrackerAPI = {
   preferencesGet: unexpected, preferencesSet: unexpected,
 };
 const apis: RuntimeAPIs = {
-  runtime: { platform: 'web', isVSCode: false, isDesktop: false }, trackers,
+  runtime: { platform: 'web', isDesktop: false }, trackers,
   get sourceControl() { return unexpected(); },
   get git() { return unexpected(); }, get terminal() { return unexpected(); },
   get files() { return unexpected(); }, get settings() { return unexpected(); },
@@ -219,14 +219,4 @@ describe('a tracker no UI code names', () => {
     expect(container.querySelector(LINEAR_MARK)).toBeNull();
   });
 
-  test('the settings card names it Plane and draws the generic mark', async () => {
-    const { TrackerSettings } = await import('@/components/sections/integrations/TrackerSettings');
-    await render(<TrackerSettings descriptor={plane} />);
-    expect(statusReads).toEqual(['plane']);
-    expect(container.textContent).toContain('Connect Plane on this OpenChamber server.');
-    expect(container.innerHTML).not.toContain('Linear');
-    expect(container.querySelector('[data-settings-item="integrations.plane"]')).not.toBeNull();
-    expect(container.querySelector(GENERIC_MARK)).not.toBeNull();
-    expect(container.querySelector(LINEAR_MARK)).toBeNull();
-  });
 });

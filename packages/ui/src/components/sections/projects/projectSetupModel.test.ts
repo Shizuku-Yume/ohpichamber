@@ -43,6 +43,7 @@ const setupWith = (options: {
     setupWorktree: options.personalCommands ?? [],
     setupWorktreeWait: null,
     setupWorktreeMode: options.replace ? 'replace' : 'append',
+    worktreeDirectory: null,
     projectActions: options.personal ?? [],
     projectActionsPrimaryId: null,
     draftStarters: [],

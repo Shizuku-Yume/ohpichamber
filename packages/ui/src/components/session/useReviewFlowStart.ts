@@ -32,9 +32,9 @@ export function useReviewFlowStart(
       await startReviewFlow({
         originalSessionID: sessionId,
         directory,
-        providerId: execution.providerID,
-        modelId: execution.modelID,
-        agentId: execution.agent || undefined,
+        providerId: execution.providerId,
+        modelId: execution.modelId,
+        agentId: execution.agentId || undefined,
         variant: execution.variant || undefined,
         generateHandoff: execution.generateHandoff,
         returnAfterHandoffRequest: execution.generateHandoff,

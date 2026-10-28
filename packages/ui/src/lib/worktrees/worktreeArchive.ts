@@ -2,7 +2,7 @@ import React from 'react';
 import { create } from 'zustand';
 import { GitWorktreeRequestError, type GitWorktreeArchive } from '@/lib/api/types';
 import { canArchiveWorktrees, git } from '@/lib/gitApi';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { normalizePath } from '@/lib/pathNormalization';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { resolveWorktreeSetupCommandsOrCancel } from '@/lib/sharedTrustConfirmation';
@@ -102,7 +102,7 @@ export async function archiveWorktreeWork(input: {
   /** The name the sidebar showed for the work, kept when the worktree has no task title. */
   title?: string;
 }): Promise<void> {
-  const sessionIds = input.sessions.map((session) => (session as any).sessionId || (session as any).id);
+  const sessionIds = input.sessions.map((session) => session.sessionId);
   let partial: Error | null = null;
   markWorktreeRemoving(input.worktree.path);
   try {
@@ -204,12 +204,12 @@ async function restoreArchivedWorktreeOnce(input: {
   let sessionsFailed = 0;
   if (from && to && from !== to) {
     for (const session of sessions) {
-      const directory = normalizePath(session.directory);
+      const directory = normalizePath(session.displayPath);
       if (!directory || (directory !== from && !directory.startsWith(`${from}/`))) continue;
       await moveSessionToDirectory(session, directory, `${to}${directory.slice(from.length)}`).catch(() => { sessionsFailed += 1; });
     }
   }
-  const archived = sessions.filter((session) => (session as any).archivedAt !== undefined || Boolean((session as any).time?.archived)).map((session) => (session as any).sessionId || (session as any).id);
+  const archived = sessions.filter((session) => session.archivedAt !== undefined).map((session) => session.sessionId);
   if (archived.length > 0) {
     const { failedIds } = await unarchiveSessions(archived, { undo: true });
     sessionsFailed += failedIds.length;
@@ -231,8 +231,8 @@ export async function deleteArchivedWorktree(input: { project: ProjectRef; archi
   const { entityById } = useGlobalSessionsStore.getState();
   // A session another archive of the project also holds is that archive's.
   const others = useWorktreeArchivesStore.getState().byProject.get(normalizePath(input.project.path) ?? '')?.archives ?? [];
-  const elsewhere = new Set(others.filter((archive) => archive.id !== input.archive.id).flatMap((archive) => archive.sessionIds));
-  const sessionIds = input.archive.sessionIds.filter((id) => Boolean(entityById.get(id)?.time?.archived) && !elsewhere.has(id));
+  const elsewhere = new Set(others.filter((archive) => archive.id !== input.archive.id).flatMap((archive) => archive.sessionIds ?? []));
+  const sessionIds = (input.archive.sessionIds ?? []).filter((id) => entityById.get(id)?.archivedAt !== undefined && !elsewhere.has(id));
   if (sessionIds.length > 0) {
     const { failedIds } = await deleteSessions(sessionIds);
     if (failedIds.length > 0) throw new Error(`Could not delete ${failedIds.length} session(s)`);
@@ -248,7 +248,7 @@ export async function deleteArchivedWorktree(input: { project: ProjectRef; archi
 export async function findWorktreeArchiveForSession(projectPath: string, sessionId: string): Promise<GitWorktreeArchive | null> {
   if (!canArchiveWorktrees()) return null;
   const archives = await loadWorktreeArchives(projectPath);
-  return archives.find((archive) => archive.sessionIds.includes(sessionId)) ?? null;
+  return archives.find((archive) => (archive.sessionIds ?? []).includes(sessionId)) ?? null;
 }
 
 // Worktrees restored here, for the merged-PR cleanup: restoring one whose PR

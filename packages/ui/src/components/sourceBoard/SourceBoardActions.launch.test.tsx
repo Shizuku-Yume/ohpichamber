@@ -3,7 +3,7 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
 import type { ReferencePickerItem } from '@/components/references/referencePickerItems';
-import type { GitHubIssueReference } from '@/lib/api/types';
+import type { RepositoryIssueReference } from '@/lib/api/types';
 
 const browser = new Window({ url: 'http://localhost/' });
 Object.assign(globalThis, {
@@ -26,10 +26,10 @@ Object.assign(globalThis, {
   IS_REACT_ACT_ENVIRONMENT: true,
 });
 
-const reference: GitHubIssueReference = {
+const reference: RepositoryIssueReference = {
   kind: 'issue', number: 42, title: 'Fix the board launch', url: 'https://example.test/issues/42',
   body: '', bodyTruncated: false, createdAt: null, updatedAt: null, author: null, labels: [], commentCount: 0,
-  sourceRepo: { source: 'github', owner: 'acme', repo: 'app' }, state: 'open',
+  sourceRepo: { source: 'github', owner: 'acme', repo: 'app' }, provider: 'github', state: 'open' as const,
 };
 const item: ReferencePickerItem = { source: 'repository', reference };
 const project = { id: 'project-1', path: '/workspace/app' };
@@ -108,6 +108,7 @@ describe('SourceBoardActions launch behavior', () => {
           item={item}
           project={project}
           context={null}
+          worktreeAvailable
           onStartWorktree={onStartWorktree}
           onChanged={() => undefined}
           onLeave={onLeave}

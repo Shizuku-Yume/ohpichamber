@@ -1323,7 +1323,7 @@ describe("branch PR live state pushed by the server", () => {
     pushFor(key, liveSummary({ state: "merged", checks: null }), 20)
     expect(useGitHubPrStatusStore.getState().entries[key]?.status?.pr?.state).toBe("open")
 
-    const linked = { provider: "github" as const, kind: "pull" as const, owner: "acme", repo: "app", number: 7 }
+    const linked = { provider: "github" as const, instance: "github.com", kind: "pull" as const, owner: "acme", repo: "app", number: 7 }
     useGitHubPrStatusStore.getState().applyTrackedPulls([{ key: trackedItemKey(linked), record: { type: "pull", item: linked, state: liveSummary({ state: "merged" }), fetchedAt: 100 } }])
     expect(useGitHubPrStatusStore.getState().entries[key]?.status?.pr?.state).toBe("open")
   })

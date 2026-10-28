@@ -141,7 +141,7 @@ export const readTrackedPullVisualSummary = (
 };
 
 /** Live state of each repository issue or discussion, in order, as an issue's badge reads it; null until known. */
-export const useTrackedIssueStates = (items: ReadonlyArray<TrackedThread<any>>): Array<IssueLiveSummary | null> => (
+export const useTrackedIssueStates = (items: ReadonlyArray<TrackedThread<'issue' | 'discussion'>>): Array<IssueLiveSummary | null> => (
   useTrackedItemsStore(useShallow((state) => items.map((item) => readTrackedIssueState(state.records, item))))
 );
 
@@ -152,9 +152,7 @@ export const useTrackedWorkItemStates = (items: ReadonlyArray<TrackedWorkItem>):
 
 /** Badges of linked pull and merge requests, in order; null for one whose state is not known yet. */
 export const useTrackedPullVisualSummaries = (
-  links: ReadonlyArray<{ item: TrackedThread<any>; url: string; title: string }>,
+  links: ReadonlyArray<{ item: TrackedThread<'pull'>; url: string; title: string }>,
 ): Array<PrVisualSummary | null> => (
   useTrackedItemsStore(useShallow((state) => links.map((link) => readTrackedPullVisualSummary(state.records, link))))
 );
-
-export const useTrackedLinearStates = (items: any): any => useTrackedWorkItemStates(items);

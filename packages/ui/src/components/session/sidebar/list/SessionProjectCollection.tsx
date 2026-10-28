@@ -19,12 +19,13 @@ import {
 import { repositoryBindingOwner } from '@/lib/source-control/repository-binding';
 import { runBackgroundNetworkTask } from '@/lib/background-network';
 import { getRuntimeKey } from '@/lib/runtime-switch';
-import type { GitHubPullRequestRef, SourceControlReadContext } from '@/lib/api/types';
+import type { SourceControlReadContext } from '@/lib/api/types';
 import { limitSourceControlDiscoveryCandidates } from '../sourceControlDiscovery';
 import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
-import { getLinkedGitHubPullRequests, getLinkedGitLabThreads, getLinkedSidebarIssues, type GitLabThreadRef } from '@/lib/linkedIssues';
+import { getLinkedSidebarChanges, getLinkedSidebarIssues } from '@/lib/linkedIssues';
+import { useRepositoryUrlMatcher } from '@/lib/source-control/repositoryUrlMatcher';
 import { useTrackedItems } from '@/lib/trackedItems/interest';
-import { githubThread, gitlabThread, linearIssue } from '@/lib/trackedItems/fromLinks';
+import { repositoryThread, workItem } from '@/lib/trackedItems/fromLinks';
 import type { TrackedItem } from '@/lib/trackedItems/model';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import type { SessionTreeItemProps } from '../sessions/SessionTreeItem';
@@ -499,18 +500,17 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
   // Timeline rows there; expanded project groups plus Recent rows in the
   // Projects view; In work rows in both. Collapse state from the Projects
   // view must not decide what a Timeline badge shows.
+  const urlMatcher = useRepositoryUrlMatcher();
   const shownPrs = React.useMemo(() => {
     const targets = new Map<string, { directory: string; branch: string }>();
-    // PRs and GitHub issues linked to the sessions on screen, whatever their
-    // branch.
-    const linkedRefs = new Map<string, GitHubPullRequestRef>();
-    const linkedIssueRefs = new Map<string, GitHubPullRequestRef>();
-    // GitLab merge requests and issues linked to the sessions on screen; their
-    // state comes from their instance, on its own cadence below.
-    const gitlabRefs = new Map<string, GitLabThreadRef>();
-    // Linear issues linked to the sessions on screen; their state comes from
-    // Linear, on its own cadence below.
-    const linearIdentifiers = new Set<string>();
+    // Change requests and issues linked to the sessions on screen, whatever
+    // their branch; their state comes from their own instance, on its own
+    // cadence below. Keyed by thread, so the same number as an issue and as a
+    // discussion is followed once each.
+    const repositoryItems = new Map<string, TrackedItem>();
+    // Tracker items linked to the sessions on screen, by tracker and
+    // identifier; their state comes from their tracker.
+    const trackerItems = new Map<string, { provider: string; identifier: string }>();
     const addTarget = (directory: string | null, branch: string | null | undefined) => {
       const trimmed = branch?.trim();
       if (directory && trimmed) targets.set(getGitHubPrStatusKey(directory, trimmed), { directory, branch: trimmed });
@@ -518,23 +518,29 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
     // Same pair a row derives its badge key from (resolveSessionPrLookupKey).
     const addNode = (node: SessionNode) => {
       addTarget(normalizePath(node.worktree?.path ?? null), node.worktree?.branch);
-      for (const link of getLinkedGitHubPullRequests(node.session)) {
-        linkedRefs.set(`${link.owner.toLowerCase()}/${link.repo.toLowerCase()}#${link.number}`, { owner: link.owner, repo: link.repo, number: link.number });
+      for (const change of getLinkedSidebarChanges(node.session, urlMatcher)) {
+        const ref = change.repository;
+        if (ref) repositoryItems.set(ref.key, repositoryThread('pull', ref));
       }
-      for (const issue of getLinkedSidebarIssues(node.session)) {
-        if (issue.source === 'github') {
-          linkedIssueRefs.set(`${issue.owner.toLowerCase()}/${issue.repo.toLowerCase()}#${issue.number}`, { owner: issue.owner, repo: issue.repo, number: issue.number });
-        } else if (issue.source === 'linear') {
-          linearIdentifiers.add(issue.identifier.toUpperCase());
+      for (const issue of getLinkedSidebarIssues(node.session, urlMatcher)) {
+        if (issue.source === 'repository') {
+          repositoryItems.set(
+            issue.ref.key,
+            issue.ref.thread === 'discussion'
+              ? repositoryThread('discussion', issue.ref)
+              : repositoryThread('issue', issue.ref),
+          );
+        } else if (issue.source === 'tracker') {
+          const identifier = issue.identifier.toUpperCase();
+          trackerItems.set(`${issue.provider}|${identifier}`, { provider: issue.provider, identifier });
         }
       }
-      for (const ref of getLinkedGitLabThreads(node.session)) gitlabRefs.set(ref.key, ref);
       node.children.forEach(addNode);
     };
     workItems.forEach((item) => addNode(item.node));
     if (timelineMode) {
       timelineItems.forEach((item) => addNode(item.node));
-      return { targets, linkedRefs: [...linkedRefs.values()], linkedIssueRefs: [...linkedIssueRefs.values()], linearIdentifiers: [...linearIdentifiers], gitlabRefs: [...gitlabRefs.values()] };
+      return { targets, repositoryItems: [...repositoryItems.values()], trackerItems: [...trackerItems.values()] };
     }
     recentActivitySections.forEach((section) => section.items.forEach((item) => addNode(item.node)));
     projectSections.forEach((section) => {
@@ -549,8 +555,8 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
         addTarget(directory, group.branch?.trim() || topology.gitBranches.get(directory || ''));
       });
     });
-    return { targets, linkedRefs: [...linkedRefs.values()], linkedIssueRefs: [...linkedIssueRefs.values()], linearIdentifiers: [...linearIdentifiers], gitlabRefs: [...gitlabRefs.values()] };
-  }, [projectSections, projectView.collapsedProjects, recentActivitySections, timelineItems, timelineMode, topology.gitBranches, workItems]);
+    return { targets, repositoryItems: [...repositoryItems.values()], trackerItems: [...trackerItems.values()] };
+  }, [projectSections, projectView.collapsedProjects, recentActivitySections, timelineItems, timelineMode, topology.gitBranches, urlMatcher, workItems]);
   const shownPrTargets = shownPrs.targets;
   // The discovery effect below subscribes to bindings and reads them; keep its
   // input stable while the shown branches are the same, so ordinary sidebar
@@ -729,10 +735,8 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
   const branchPulls = useBranchTrackedPulls(shownPrKeys);
   const shownTrackedItems = React.useMemo((): TrackedItem[] => [
     ...branchPulls,
-    ...shownPrs.linkedRefs.map((ref) => githubThread('pull', ref)),
-    ...shownPrs.linkedIssueRefs.map((ref) => githubThread('issue', ref)),
-    ...shownPrs.gitlabRefs.map((ref) => (ref.thread === 'pull' ? gitlabThread('pull', ref) : gitlabThread('issue', ref))),
-    ...shownPrs.linearIdentifiers.map(linearIssue),
+    ...shownPrs.repositoryItems,
+    ...shownPrs.trackerItems.map(({ provider, identifier }) => workItem(provider, identifier)),
   ], [branchPulls, shownPrs]);
   useTrackedItems(shownTrackedItems);
 

@@ -600,7 +600,8 @@ export class WorkerRegistry {
         entry.info.state = 'ready';
         ready.resolve();
       } else if (reply.data.type === 'error') {
-        ready.reject(new WorkerOperationError(503, reply.data.code));
+        ready.reject(new WorkerOperationError(503, reply.data.code, undefined,
+          reply.data.detail ?? 'SDK worker operation failed'));
       } else if (reply.data.type === 'operation.error') {
         const pending = entry.pending.get(reply.data.commandId);
         if (pending) { entry.pending.delete(reply.data.commandId); pending.reject(new WorkerOperationError(reply.data.status, reply.data.code)); }
@@ -677,7 +678,8 @@ export class WorkerRegistry {
     } catch (error) {
       const code = error instanceof WorkerOperationError ? error.code : 'WORKER_INIT_FAILED';
       try {
-        this.options.onDiagnostic?.({ level: 'error', rootSessionId: input.rootSessionId, workerGeneration, message: `Worker initialization failed (${code})` });
+        const reason = error instanceof Error && error.message && error.message !== 'SDK worker operation failed' ? `: ${error.message}` : '';
+        this.options.onDiagnostic?.({ level: 'error', rootSessionId: input.rootSessionId, workerGeneration, message: `Worker initialization failed (${code})${reason}` });
       } catch { /* diagnostics never affect lifecycle */ }
       await this.stopEntry(entry);
       throw error;

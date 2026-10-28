@@ -18,10 +18,8 @@ import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import { useProjectsStore } from '@/stores/useProjectsStore';
-import { useSourceControlAuthEntry } from '@/stores/useSourceControlAuthStore';
-import { formatChangeRequestReference, GITHUB_SOURCE_CONTROL_IDENTITY } from '@/lib/source-control/identity';
+import { formatChangeRequestReference } from '@/lib/source-control/identity';
 import { changeRequestCopy } from '@/lib/source-control/changeRequestCopy';
-import { useLinearAuthStore } from '@/stores/useLinearAuthStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { validateWorktreeCreate } from '@/lib/worktrees/worktreeManager';
@@ -36,14 +34,17 @@ import { resolveBranchOnTopSource, resolveDefaultSourceBranch } from '@/lib/work
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useGitBranches, useGitStore, useGitLoadingBranches } from '@/stores/useGitStore';
 import { ReferencePickerDialog, type ReferencePickerConfirmFailure } from '@/components/references/ReferencePickerDialog';
-import { referencePickerItemKey, type ReferencePickerSelection } from '@/components/references/referencePickerItems';
-import { readLinearIssueDetail, readTrackerItemDetail, useGitHubReadContext, useRepositoryReferenceProvider } from '@/components/references/referenceSources';
+import { referencePickerItemKey, trackerReferenceSource, type ReferencePickerSelection, type ReferencePickerSource } from '@/components/references/referencePickerItems';
+import { readLinearIssueDetail, readTrackerItemDetail, useGitHubReadContext, useRepositoryReferenceProvider, useRepositorySourceStatus } from '@/components/references/referenceSources';
 import { resolveComposerReferences } from '@/components/references/resolveComposerReferences';
 import { usePendingComposerReferences } from '@/components/chat/composer/pendingComposerReferences';
 import { useInputStore } from '@/sync/input-store';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { Icon } from "@/components/icon/Icon";
 import { trackerPresentation } from '@/lib/trackers/presentation';
+import { useTrackerSources } from '@/lib/trackers/sources';
+import { useSourceControlProvider } from '@/lib/source-control/providers/registry';
+import { ProviderIcon } from '@/components/sourceControl/ProviderIcon';
 import { readTrackerDescriptor } from '@/lib/trackers/registry';
 import type { SourceControlReadContext } from '@/lib/api/types';
 import { resolvePrWorktreeConfig, type PrWorktreeSource } from './prWorktreeConfig';
@@ -145,18 +146,13 @@ export function NewWorktreeDialog({
   const { sourceControl, git, linear, trackers } = useRuntimeAPIs();
   const trustConfirmation = useConfirmDialog();
   const isMobile = useUIStore((state) => state.isMobile);
-  const githubAuthEntry = useSourceControlAuthEntry(GITHUB_SOURCE_CONTROL_IDENTITY);
-  const githubAuthStatus = githubAuthEntry?.status ?? null;
-  const githubAuthChecked = githubAuthEntry?.hasChecked ?? false;
-  const linearAuthStatus = useLinearAuthStore((state) => state.status);
-  const linearAuthChecked = useLinearAuthStore((state) => state.hasChecked);
   const guestAttachItems = useGuestAttachItems();
   const dialogGuests = React.useMemo(
     () => guestAttachItems.filter((item) => item.mode === 'dialog'),
     [guestAttachItems],
   );
   const [guestDialogId, setGuestDialogId] = React.useState<string | null>(null);
-  const [referencePickerSource, setReferencePickerSource] = React.useState<'github' | 'linear' | null>(null);
+  const [referencePickerSource, setReferencePickerSource] = React.useState<ReferencePickerSource | null>(null);
   const activeProject = useProjectsStore((state) => state.getActiveProject());
   const projectId = project?.id ?? activeProject?.id ?? null;
   const projectDirectory = project?.path ?? activeProject?.path ?? null;
@@ -614,13 +610,14 @@ export function NewWorktreeDialog({
     setItemBranch(EMPTY_DRAFT);
   };
 
-  const isGitHubConnected = githubAuthChecked && githubAuthStatus?.connected === true;
-  // A GitLab project lists its issues and merge requests in the same picker,
-  // read with the account its context names.
-  const isGitLabProject = githubContext !== null && githubContext !== 'missing' && githubContext.provider === 'gitlab';
-  const isRepositoryConnected = isGitHubConnected || isGitLabProject;
-  const isLinearConnected = Boolean(linear) && linearAuthChecked && linearAuthStatus?.connected === true;
-  const canLinkItems = isRepositoryConnected || isLinearConnected || dialogGuests.length > 0;
+  // The picker lists the project's issues and change requests: the same
+  // answer it gives itself, offered while the read context loads.
+  const repositorySourceStatus = useRepositorySourceStatus(open ? projectDirectory : null);
+  const itemDescriptor = useSourceControlProvider(useRepositoryReferenceProvider(open ? projectDirectory : null));
+  const itemTerm = itemDescriptor.terminology.changeRequest;
+  const trackerSources = useTrackerSources();
+  const isRepositoryConnected = repositorySourceStatus === 'ready';
+  const canLinkItems = isRepositoryConnected || trackerSources.length > 0 || dialogGuests.length > 0;
 
   const isFormValid = Boolean(normalizeBranchName(branchName))
     && Boolean(slugifyWorktreeName(worktreeName))
@@ -645,10 +642,23 @@ export function NewWorktreeDialog({
 
   // Where the chosen item comes from: one source opens straight away, several ask which.
   const itemSources = [
-    ...(isRepositoryConnected ? [isGitLabProject
-      ? { id: 'github', name: 'GitLab', label: t('session.newWorktree.actions.startFromGitLabIssueMr'), icon: <Icon name="gitlab" className="size-4 shrink-0" />, open: () => setReferencePickerSource('github') }
-      : { id: 'github', name: 'GitHub', label: t('session.newWorktree.actions.startFromGitHubIssuePr'), icon: <Icon name="github" className="size-4 shrink-0" />, open: () => setReferencePickerSource('github') }] : []),
-    ...(isLinearConnected ? [{ id: 'linear', name: 'Linear', label: t('session.newWorktree.actions.startFromLinearIssue'), icon: <Icon name="linear" className="size-4 shrink-0" />, open: () => setReferencePickerSource('linear') }] : []),
+    ...(isRepositoryConnected ? [{
+      id: 'repository',
+      name: itemDescriptor.label,
+      label: t(`session.newWorktree.actions.startFromRepository.${itemTerm}`, { provider: itemDescriptor.label }),
+      icon: <ProviderIcon descriptor={itemDescriptor} className="size-4 shrink-0" />,
+      open: () => setReferencePickerSource('repository'),
+    }] : []),
+    ...trackerSources.map((descriptor) => {
+      const presentation = trackerPresentation(descriptor.id);
+      return {
+        id: `tracker:${descriptor.id}`,
+        name: descriptor.name,
+        label: t('session.newWorktree.actions.startFromTrackerItem', { provider: descriptor.name }),
+        icon: <Icon name={presentation.icon} className="size-4 shrink-0" />,
+        open: () => setReferencePickerSource(trackerReferenceSource(descriptor.id)),
+      };
+    }),
     ...dialogGuests.map((guest) => ({
       id: guest.id,
       name: guest.name,
@@ -666,7 +676,7 @@ export function NewWorktreeDialog({
     ? linked.kind === 'pr'
       ? { id: linked.context.provider === 'gitlab' ? formatChangeRequestReference(linked.context.provider, linked.pr.number) : t('session.newWorktree.prNumber', { number: linked.pr.number }), title: linked.pr.title, url: linked.pr.url, icon: <Icon name="git-pull-request" className="size-4 shrink-0 text-muted-foreground" /> }
       : linked.kind === 'issue'
-        ? { id: t('session.newWorktree.issueNumber', { number: linked.number }), title: linked.title, url: linked.url, icon: <Icon name={isGitLabProject ? 'gitlab' : 'github'} className="size-4 shrink-0 text-muted-foreground" /> }
+        ? { id: t('session.newWorktree.issueNumber', { number: linked.number }), title: linked.title, url: linked.url, icon: <ProviderIcon descriptor={itemDescriptor} className="size-4 shrink-0 text-muted-foreground" /> }
         : linked.kind === 'tracker'
           ? { id: linked.identifier, title: linked.title, url: linked.url, icon: <Icon name={trackerPresentation(linked.provider).icon} className="size-4 shrink-0 text-muted-foreground" /> }
           : { id: linked.guest.id, title: linked.guest.title, url: linked.guest.url, icon: <GuestIcon icon={linkedGuestEntry?.icon ?? 'window'} iconSrc={linkedGuestEntry?.iconSrc} className="size-4 shrink-0" /> }

@@ -23,13 +23,13 @@ import { formatChangeRequestReference } from '@/lib/source-control/providers/ter
 export type TrackerReferenceSource = `tracker:${string}`;
 
 /** `repository`: the project's issues and change requests, on whichever provider hosts it; a tracker's work items otherwise. */
-export type ReferencePickerSource = 'repository' | TrackerReferenceSource | 'github' | 'linear';
+export type ReferencePickerSource = 'repository' | TrackerReferenceSource;
 
 export const trackerReferenceSource = (provider: string): TrackerReferenceSource => `tracker:${provider}`;
 
 /** The tracker a source lists, or null for the repository. */
 export const trackerOfSource = (source: ReferencePickerSource): string | null => (
-    source === 'linear' ? 'linear' : source.startsWith('tracker:') ? source.slice('tracker:'.length) : null
+    source.startsWith('tracker:') ? source.slice('tracker:'.length) : null
 );
 
 /** One row of the picker, from either source. */

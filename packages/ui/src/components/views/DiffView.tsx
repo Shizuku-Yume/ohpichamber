@@ -1894,13 +1894,13 @@ export const DiffView: React.FC<DiffViewProps> = ({
     }, [activeDiffScope, branchScopeDefinitelyUnavailable, diffScope, onDiffScopeChange]);
 
     const comparisonSource = React.useMemo<GitComparisonSource | null>(() => {
-        if (activeDiffScope === 'pr') return (prComparison as { diffUnavailable?: boolean }).diffUnavailable ? null : selectedPr;
+        if (activeDiffScope === 'pr') return prComparison.diffUnavailable ? null : selectedPr;
         if (activeDiffScope === 'commit' && selectedCommitHash) return { kind: 'commit', hash: selectedCommitHash };
         if (activeDiffScope === 'branch' && qualifiedBranchBase && currentBranch) {
             return { kind: 'branch', baseRef: qualifiedBranchBase, headRef: currentBranch };
         }
         return null;
-    }, [activeDiffScope, qualifiedBranchBase, currentBranch, selectedCommitHash, selectedPr, (prComparison as { diffUnavailable?: boolean }).diffUnavailable]);
+    }, [activeDiffScope, qualifiedBranchBase, currentBranch, selectedCommitHash, selectedPr, prComparison.diffUnavailable]);
     const selectedPrHead = selectedPr ? prComparison.prs.find((pr) => pr.number === selectedPr.number)?.headSha : undefined;
     const commentOrigin = React.useMemo(
         () => diffCommentOriginFromSource(comparisonSource, { provider: prComparison.provider, revision: selectedPrHead }),
@@ -3017,7 +3017,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
         }
 
         if (activeDiffScope === 'pr') {
-            if ((prComparison as { diffUnavailable?: boolean }).diffUnavailable) return <ChangeRequestDiffUnavailable provider={prComparison.provider} />;
+            if (prComparison.diffUnavailable) return <ChangeRequestDiffUnavailable provider={prComparison.provider} />;
             if (!selectedPr || comparison.error) {
                 return <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
                     {!comparison.error && !prComparison.error && !prComparison.loading

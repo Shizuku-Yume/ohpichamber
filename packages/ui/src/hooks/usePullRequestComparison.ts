@@ -6,6 +6,7 @@ import { mergeIncompleteSourceControlPage, sourceControlReadContextParts } from 
 import type { PageResult } from '@/lib/source-control/types';
 import { useI18n } from '@/lib/i18n';
 import { changeRequestCopy } from '@/lib/source-control/changeRequestCopy';
+import { useChangeRequestDiffServing } from '@/lib/source-control/providers/registry';
 import { useRepositoryHost } from '@/components/references/referenceSources';
 import { useGitStore } from '@/stores/useGitStore';
 import { usePullRequestSelectionStore } from '@/stores/usePullRequestSelectionStore';
@@ -98,6 +99,9 @@ export function usePullRequestComparison(
   // Known even with no working account, so the messages name the right host.
   const hostProvider = useRepositoryHost(directory)?.provider;
   const provider = context?.provider ?? hostProvider ?? null;
+  // A served host may list its change requests and still not serve their diff.
+  const diffServing = useChangeRequestDiffServing(provider);
+  const diffUnavailable = context !== null && diffServing === 'not-served';
   // A rebind to another repository must not carry a selection across.
   const selectionKey = JSON.stringify([runtimeKey, directory, branch, context?.repositoryId ?? null]);
   const selection = usePullRequestSelectionStore((state) => state.selections.get(selectionKey) ?? null);
@@ -209,6 +213,8 @@ export function usePullRequestComparison(
     readContext: context,
     /** The host the change requests come from, for wording and numbering. */
     provider,
+    /** The host lists its change requests but does not serve their diff: nothing to compare or walk through. */
+    diffUnavailable,
     selectedSource: pendingPreference ?? selectedSource,
     prs: current?.status === 'ready' ? current.prs : NO_PULL_REQUESTS,
     query, setQuery,

@@ -1,5 +1,7 @@
 import React from 'react';
 import { formatChangeRequestReference } from '@/lib/source-control/identity';
+import type { RepositoryReferenceKind } from '@/lib/api/types';
+import { trackerReferenceSource, type TrackerReferenceSource } from '@/components/references/referencePickerItems';
 import { ComposerDictation } from '@/components/dictation/ComposerDictation';
 // sessionStore removed — currentSessionId comes from useSessionUIStore
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -277,7 +279,7 @@ const collectInlineSkillMentions = (text: string, skillNames: Set<string>): stri
     collectKnownTokenNames(text, '$', skillNames, 'exact');
 
 /** Which reference picker is open, and for GitHub on which tab. */
-type ReferencePickerState = { source: 'github'; kind?: 'issue' | 'pull' } | { source: 'linear' } | null;
+type ReferencePickerState = { source: 'repository'; kind?: RepositoryReferenceKind } | { source: TrackerReferenceSource } | null;
 
 /**
  * Record what a session was pointed at, so the work-status panel can show it
@@ -1613,7 +1615,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     }, [isBtwActive, isExpandedInput, setExpandedInput]);
 
     const openGitHubPicker = React.useCallback(() => {
-        setReferencePicker({ source: 'github' });
+        setReferencePicker({ source: 'repository' });
     }, []);
     const referencePickerDirectory = currentSessionDirectoryForSync ?? currentDirectory ?? null;
     const repositoryProvider = useRepositoryReferenceProvider(referencePickerDirectory);
@@ -1623,7 +1625,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const attachReferences = useAttachReferences(referencePickerDirectory, addLinkedReferences);
 
     const openLinearPicker = React.useCallback(() => {
-        setReferencePicker({ source: 'linear' });
+        setReferencePicker({ source: trackerReferenceSource('linear') });
     }, []);
 
     const handleSubmit = async (options?: SubmitOptions) => {
@@ -3695,7 +3697,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                                 author={reference.author}
                                 openInBrowserLabel={t('chat.chatInput.linked.issue.openInBrowserAria')}
                                 removeLabel={t('chat.chatInput.linked.issue.removeAria')}
-                                onReopenPicker={() => setReferencePicker({ source: 'github', kind: 'issue' })}
+                                onReopenPicker={() => setReferencePicker({ source: 'repository', kind: 'issue' })}
                                 onRemove={remove}
                             />
                         );
@@ -3712,7 +3714,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                                 branches={reference.head && reference.base ? { head: reference.head, base: reference.base } : undefined}
                                 openInBrowserLabel={t(changeRequestCopy('chat.chatInput.linked.pr.openInBrowserAria', reference.provider))}
                                 removeLabel={t(changeRequestCopy('chat.chatInput.linked.pr.removeAria', reference.provider))}
-                                onReopenPicker={() => setReferencePicker({ source: 'github', kind: 'pull' })}
+                                onReopenPicker={() => setReferencePicker({ source: 'repository', kind: 'pull' })}
                                 onRemove={remove}
                             />
                         );
@@ -3726,7 +3728,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                                 author={reference.author}
                                 openInBrowserLabel={t('chat.chatInput.linked.linearIssue.openInBrowserAria')}
                                 removeLabel={t('chat.chatInput.linked.linearIssue.removeAria')}
-                                onReopenPicker={() => setReferencePicker({ source: 'linear' })}
+                                onReopenPicker={() => setReferencePicker({ source: trackerReferenceSource('linear') })}
                                 onRemove={remove}
                             />
                         );
@@ -4418,7 +4420,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                 purpose="attach"
                 selection="multiple"
                 directory={referencePickerDirectory}
-                initialGitHubKind={referencePicker.source === 'github' ? referencePicker.kind : undefined}
+                initialGitHubKind={referencePicker.source === 'repository' ? referencePicker.kind : undefined}
                 onConfirm={attachReferences}
             />
         ) : null}

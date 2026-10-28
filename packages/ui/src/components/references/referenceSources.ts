@@ -268,14 +268,12 @@ export function useRepositoryReferenceProvider(directory: string | null): Source
  * connected anywhere (once a default instance's account is checked).
  */
 export function useRepositorySourceStatus(directory: string | null): ReferenceSourceStatus {
-    const { runtime } = useRuntimeAPIs();
     const context = useRepositoryReadContext(directory);
     const { hosts, defaultIdentities } = useRepositoryHosts(directory);
     const anyConnected = useSourceControlAuthStore((state) => Object.values(state.entries)
         .some((entry) => entry.status?.connected === true));
     const defaultChecked = useSourceControlAuthStore((state) => defaultIdentities
         .some((identity) => state.entries[getSourceControlAuthKey(identity)]?.hasChecked));
-    if ((runtime as { isVSCode?: boolean }).isVSCode) return 'unsupported';
     if (context !== 'missing') return 'ready';
     return hosts.length > 0 || (defaultChecked && !anyConnected) ? 'disconnected' : 'ready';
 }

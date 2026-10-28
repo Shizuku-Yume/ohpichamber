@@ -380,8 +380,8 @@ describe('NewWorktreeDialog behavior', () => {
         </I18nProvider>,
       ));
       await clickButton(dom.container, (button) => button.getAttribute('role') === 'button' && Boolean(button.textContent?.startsWith('PR or issue')), 'PR or issue option');
-      const startFromGitHub = dom.container.querySelector<HTMLButtonElement>('button[aria-label="A GitHub issue or pull request"]');
-      if (!startFromGitHub) throw new Error('Missing start-from-GitHub button');
+      const startFromGitHub = dom.container.querySelector<HTMLButtonElement>('button[aria-label$="issue or pull request"]');
+      if (!startFromGitHub) throw new Error('Missing repository source button');
       await act(async () => startFromGitHub.click());
       if (!confirmReference) throw new Error('Expected the reference picker to open');
 

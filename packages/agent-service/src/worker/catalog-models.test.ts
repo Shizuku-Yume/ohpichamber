@@ -389,6 +389,38 @@ for (const protocol of ['messages', 'generate-content'] as const) {
   });
 }
 
+test('a model addressed by thinking effort accepts its effort name as the variant', async () => {
+  const fixture = await openCatalogFixture();
+  const model = {
+    ...configuredModel,
+    reasoningEffortSupported: true,
+    reasoningOptions: [
+      { reasoningEffort: 'low', label: 'low', budgetTokens: null },
+      { reasoningEffort: 'medium', label: 'medium', budgetTokens: null },
+      { reasoningEffort: 'high', label: 'high', budgetTokens: null },
+    ],
+  };
+  try {
+    await fixture.writer.models.configureProvider({ expectedRevision: '0', configuration }, '1');
+    await fixture.writer.models.configureModel({ expectedRevision: '1', model }, '2');
+    // Settings name a thinking level as `provider/model:high`, arriving as `variant`.
+    const selected = await fixture.reader.models.selection(
+      { providerId: configuration.providerId, modelId: model.modelId },
+      { variant: 'high' },
+    );
+    expect(selected.reasoningEffort).toBe('high');
+    expect(selected.publicModel.variants).toEqual([]);
+    await expect(fixture.reader.models.selection(
+      { providerId: configuration.providerId, modelId: model.modelId },
+      { variant: 'turbo' },
+    )).rejects.toMatchObject({ code: 'UNSUPPORTED_CAPABILITY' });
+    await expect(fixture.reader.models.selection(
+      { providerId: configuration.providerId, modelId: model.modelId },
+      { variant: 'high', reasoningEffort: 'low' },
+    )).rejects.toMatchObject({ code: 'UNSUPPORTED_CAPABILITY' });
+  } finally { await fixture.close(); }
+});
+
 test('default stored credential selection never replaces a source-owned native override', async () => {
   const fixture = await openCatalogFixture();
   try {

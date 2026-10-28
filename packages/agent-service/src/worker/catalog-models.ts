@@ -182,11 +182,23 @@ function resolveModelSelection(registry: ModelRegistry, input: ModelSelection, c
   }
   const projected = publicModel(nativeModel, configured);
   const variant = controls?.variant == null ? undefined : projected.variants.find(item => item.variant === controls.variant);
-  if (controls?.variant != null && !variant) throw new ProjectionError(422, 'UNSUPPORTED_CAPABILITY', 'Selected model variant is unavailable');
+  // A model whose thinking is addressed by effort alone has no native variant
+  // routes, and settings name its level as `provider/model:high`. Treat that
+  // suffix as the effort it names instead of rejecting a selection the model
+  // supports; a name that is neither a variant nor an effort still fails.
+  const effortNamedByVariant = variant === undefined && controls?.variant != null
+    ? projected.reasoningOptions.find(option => option.reasoningEffort === controls.variant)?.reasoningEffort
+    : undefined;
+  if (controls?.variant != null && !variant && effortNamedByVariant === undefined) {
+    throw new ProjectionError(422, 'UNSUPPORTED_CAPABILITY', 'Selected model variant is unavailable');
+  }
   if (variant && controls?.reasoningEffort != null && variant.reasoningEffort !== controls.reasoningEffort) {
     throw new ProjectionError(422, 'UNSUPPORTED_CAPABILITY', 'Selected model variant conflicts with the reasoning effort');
   }
-  const requestedEffort = controls?.reasoningEffort ?? variant?.reasoningEffort ?? null;
+  if (effortNamedByVariant !== undefined && controls?.reasoningEffort != null && effortNamedByVariant !== controls.reasoningEffort) {
+    throw new ProjectionError(422, 'UNSUPPORTED_CAPABILITY', 'Selected model variant conflicts with the reasoning effort');
+  }
+  const requestedEffort = controls?.reasoningEffort ?? variant?.reasoningEffort ?? effortNamedByVariant ?? null;
   const reasoningEffort = requestedEffort === null ? null : nativeModel.thinking?.efforts.find(effort => effort === requestedEffort);
   if (requestedEffort !== null && (reasoningEffort === undefined || !projected.reasoningOptions.some(option => option.reasoningEffort === requestedEffort))) {
     throw new ProjectionError(422, 'UNSUPPORTED_CAPABILITY', 'Selected reasoning effort is unavailable');

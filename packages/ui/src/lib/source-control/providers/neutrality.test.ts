@@ -41,17 +41,53 @@ const ALLOWLIST = {
     rule: 'comparison',
     reason: 'Legacy voice provider values (server, browser, wasm) in stored settings.',
   },
-  'lib/opencode/websearch.ts': {
+  'components/chat/composer/ui/ComposerContextChips.tsx': {
     rule: 'comparison',
-    reason: 'Web search provider selection (`random`), not source control or trackers.',
+    reason: 'Fork-era change-request copy picks GitHub/GitLab wording before the descriptor reaches these chips (task 31).',
   },
-  'components/chat/permissionToolPresentation.tsx': {
+  'components/chat/ChatInput.tsx': {
     rule: 'comparison',
-    reason: 'OpenCode tool names of the Linear MCP server (`linear`, `linear_*`), not a tracker id.',
+    reason: 'Fork-era composer link copy and icon pick GitHub/GitLab wording before the descriptor reaches the row (task 31).',
   },
-  'components/chat/message/parts/toolPresentation.tsx': {
+  'components/layout/ContextPanelRail.tsx': {
     rule: 'comparison',
-    reason: 'OpenCode tool names of the Linear MCP server (`linear`, `linear_*`), not a tracker id.',
+    reason: 'Fork-era surface icon picks the GitLab mark from the project provider (task 31).',
+  },
+  'components/sections/openchamber/GitLabSettings.tsx': {
+    rule: 'comparison',
+    reason: 'GitLab’s own settings page filters GitLab identities on purpose.',
+  },
+  'components/sections/openchamber/SourceControlAccountList.tsx': {
+    rule: 'comparison',
+    reason: 'Account rows draw the provider mark before the descriptor is read (task 31).',
+  },
+  'components/sections/skills/catalog/AddCatalogDialog.tsx': {
+    rule: 'comparison',
+    reason: 'Catalog identity rows draw the provider mark before the descriptor is read (task 31).',
+  },
+  'components/views/walkthrough/WalkthroughView.tsx': {
+    rule: 'comparison',
+    reason: 'Fork-era walkthrough picks the read context from GitHub/GitLab before the provider registry answers (task 31).',
+  },
+  'hooks/usePullRequestComparison.ts': {
+    rule: 'comparison',
+    reason: 'Fork-era comparison restricts reads to GitHub/GitLab; task 24 moves it to provider serving.',
+  },
+  'lib/messages/contextParts.ts': {
+    rule: 'comparison',
+    reason: 'Legacy context-part copy names GitHub/GitLab nouns; tracker copy owns this in task 23.',
+  },
+  'lib/source-control/changeRequestCopy.ts': {
+    rule: 'comparison',
+    reason: 'The copy helper maps a stored provider string to its term; the descriptor path supersedes it where available.',
+  },
+  'lib/source-control/identity.ts': {
+    rule: 'comparison',
+    reason: '`formatChangeRequestReference` maps a stored provider string to its reference prefix.',
+  },
+  'lib/diffCommentOrigin.ts': {
+    rule: 'comparison',
+    reason: 'Stored comment origins format their prefix and noun from the provider string.',
   },
 } satisfies Record<string, AllowlistEntry>;
 

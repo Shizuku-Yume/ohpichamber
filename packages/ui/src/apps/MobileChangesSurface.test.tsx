@@ -105,12 +105,24 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
         }
         return Response.json({ path: url.searchParams.get('path'), original: '', modified: '', isBinary: true });
       // The bound status contract echoes the branch it answered for.
-      case '/api/source-control/github/pr/status': return Response.json({ connected: true, branch: url.searchParams.get('branch'),
-        repo: { owner: 'upstream', repo: 'project', url: 'https://github.com/upstream/project' },
-        pr: { number: 42, title: 'Published PR', url: 'https://github.com/upstream/project/pull/42', state: 'open', draft: false, head: 'feature', base: 'main' } });
-      case '/api/source-control/github/pulls/list': return Response.json({ connected: true, repo: { owner: 'upstream', repo: 'project' },
-        prs: [{ number: 42, title: 'Published PR', url: 'https://github.com/upstream/project/pull/42', state: 'open', draft: false,
-          head: 'feature', base: 'main', sourceRepo: { owner: 'upstream', repo: 'project', source: 'upstream' } }], hasMore: false });
+      case '/api/source-control/github/pr/status': return Response.json({
+        identity: { provider: 'github', instance: 'github.com' },
+        project: { provider: 'github', instance: 'github.com', id: 'upstream/project', owner: 'upstream', name: 'project', url: 'https://github.com/upstream/project' },
+        branch: url.searchParams.get('branch'),
+        changeRequest: {
+          provider: 'github', instance: 'github.com', id: 'upstream/project#42', number: 42,
+          project: { provider: 'github', instance: 'github.com', id: 'upstream/project', owner: 'upstream', name: 'project', url: 'https://github.com/upstream/project' },
+          title: 'Published PR', url: 'https://github.com/upstream/project/pull/42', state: 'open', draft: false, head: 'feature', base: 'main',
+        },
+      });
+      case '/api/source-control/github/pulls/list': return Response.json({
+        items: [{
+          provider: 'github', instance: 'github.com', id: 'upstream/project#42', number: 42,
+          project: { provider: 'github', instance: 'github.com', id: 'upstream/project', owner: 'upstream', name: 'project', url: 'https://github.com/upstream/project' },
+          title: 'Published PR', url: 'https://github.com/upstream/project/pull/42', state: 'open', draft: false, head: 'feature', base: 'main',
+        }],
+        page: 1, hasMore: false,
+      });
       case '/api/walkthrough/pr-diff': return new Response('diff --git a/published.png b/published.png\nindex 1111111..2222222 100644\nBinary files a/published.png and b/published.png differ\n', { headers: { 'content-type': 'text/plain' } });
       default: throw new Error(`Unexpected request ${url.pathname}`);
     }
@@ -189,7 +201,7 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
     await chooseMode('Branch');
     expect(container.querySelector('[aria-label="Sync Changes"]')).toBeNull();
     expect(checkoutControl()).toBeUndefined();
-    expect(container.textContent).toContain('Select a base branch');
+    expect(container.textContent).toContain('origin/main');
     await click('[aria-label="Base branch"]');
     await click('[data-value="refs/heads/main"]');
     expect(container.querySelector('[title="branch.png"]')).not.toBeNull();
@@ -233,6 +245,9 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
 
     await click('[aria-label="Back"]');
     await chooseMode('Pull Requests');
+    const settled = Promise.withResolvers<void>();
+    setTimeout(settled.resolve, 50);
+    await act(async () => { await settled.promise; });
     expect(container.querySelector('[aria-label="Sync Changes"]')).toBeNull();
     expect(container.querySelector('[title="published.png"]')).not.toBeNull();
     await openFile('published.png');

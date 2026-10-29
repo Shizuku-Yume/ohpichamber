@@ -144,6 +144,7 @@ import { createSelectedCredentialResolver, createSelectedCredentialHandoff, crea
 import { createScheduledTaskService } from './lib/scheduled-tasks/service.js';
 import { createOpenChamberControlService } from './lib/openchamber-control/service.js';
 import { createWorkflowsModule } from './lib/workflows/routes.js';
+import { isWorkflowFeatureAvailable } from './lib/workflows/feature-flag.js';
 import { createPluginNotificationEmitter } from './lib/notifications/emit-route.js';
 import { OpenChamberControlError } from './lib/openchamber-control/error.js';
 import { createSessionLinker } from './lib/openchamber-sessions/session-link.js';
@@ -850,6 +851,17 @@ const sessionKnowledgeRuntime = createSessionKnowledgeRuntime({
     const settings = await readSettingsFromDiskMigrated();
     return settings.agentControlToolEnabled !== false;
   },
+  // Both tools are on by default; their guidance is stated only while the
+  // session's agent actually has them.
+  isPageRenderingAvailable: async () => {
+    const settings = await readSettingsFromDiskMigrated().catch(() => null);
+    return settings?.agentRenderToolEnabled !== false;
+  },
+  isWorkflowAvailable: async () => {
+    if (!isWorkflowFeatureAvailable()) return false;
+    const settings = await readSettingsFromDiskMigrated().catch(() => null);
+    return settings?.agentWorkflowToolEnabled !== false;
+  },
   readSessionMetadata: readStoredSessionMetadata,
   // Pins and the delivered-signature cursor are read from OpenChamber's own store.
   persistSessionMetadata: (sessionID, directory, patch) => persistSessionMetadataPatch(sessionID, patch, { directory }),
@@ -1340,6 +1352,30 @@ const openChamberControlService = createOpenChamberControlService({
     isAgentMemoryEnabled,
     resolveProjectId: resolveMemoryProjectId,
   }),
+  projectContextRuntime,
+  // The resolver session knowledge reads pinned notes and plans through, so
+  // what an agent writes is what the next session is given.
+  resolveProjectContextId: resolveMemoryProjectId,
+  // On by default: the knowledge tool is the canonical owner of notes, todos
+  // and plans, and a client must not keep writing after it is switched off.
+  isKnowledgeToolEnabled: async () => {
+    const settings = await readSettingsFromDiskMigrated().catch(() => null);
+    return settings?.agentKnowledgeToolEnabled !== false;
+  },
+  // Like file.open: every connected window hears it, and the ones showing
+  // that project open the plan.
+  showPlan: (request) => {
+    let delivered = 0;
+    for (const client of uiOpenChamberEventClients) {
+      try {
+        writeSseEvent(client, { type: 'openchamber:plan-open-request', properties: request });
+        delivered += 1;
+      } catch {
+        uiOpenChamberEventClients.delete(client);
+      }
+    }
+    return delivered;
+  },
   sessionLinks: createSessionLinker({
     updateMetadata: updateSessionMetadataWith,
     createError: (message, status) => new OpenChamberControlError(message, status),

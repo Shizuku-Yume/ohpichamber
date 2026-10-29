@@ -8,6 +8,7 @@ import {
   OPENCHAMBER_KNOWLEDGE_ACTIONS,
   OPENCHAMBER_NOTIFY_ACTIONS,
 } from './actions.js';
+import { createProjectKnowledgeActions } from './project-knowledge.js';
 import { writeScreenshot } from './screenshots.js';
 import { createPageAnswers, createRenderPageAction } from './render-page.js';
 
@@ -20,6 +21,7 @@ const TOOL_ACTIONS = new Map([
   ['openchamber', new Set(OPENCHAMBER_AGENT_TOOL_ACTIONS)],
   ['web', new Set(OPENCHAMBER_WEB_ACTIONS)],
   ['memory', new Set(OPENCHAMBER_MEMORY_ACTIONS)],
+  ['openchamber_knowledge', new Set(OPENCHAMBER_KNOWLEDGE_ACTIONS)],
   ['notify', new Set(OPENCHAMBER_NOTIFY_ACTIONS)],
 ]);
 const SCHEDULE_TASK_ID_ACTIONS = new Set([
@@ -249,6 +251,15 @@ export const createOpenChamberControlService = (dependencies) => {
     fileOpen = null,
     notifyUser = null,
     agentMemoryActions = null,
+    // Notes, todos and plans behind the `openchamber_knowledge` tool.
+    projectContextRuntime = null,
+    // The resolver the knowledge tool and session knowledge share, so what an
+    // agent writes is what the next session is given.
+    resolveProjectContextId = null,
+    // Every connected window hears this; the ones showing that project open
+    // the plan (openchamber:plan-open-request).
+    showPlan = null,
+    isKnowledgeToolEnabled = async () => true,
     sessionLinks = null,
     isRenderToolEnabled = async () => true,
     // Hears when a page an agent shows starts and stops waiting for the
@@ -313,6 +324,26 @@ export const createOpenChamberControlService = (dependencies) => {
     if (!archiveStore) return null;
     return (await archiveStore.archivedAt(sessionID)) ?? null;
   };
+
+  // projectId and directory are two names for one scope. A project resolves
+  // to its first workspace's directory, the way session create and send do.
+  const resolveProjectDirectory = async (projectId) => {
+    const listed = await projects();
+    const project = listed.items.find((entry) => entry.projectId === projectId);
+    const workspaceId = project?.workspaceIds?.[0];
+    if (!workspaceId) throw new OpenChamberControlError('Project not found', 404);
+    return sessionService.resolveDirectory({ workspaceId });
+  };
+
+  const knowledgeActions = createProjectKnowledgeActions({
+    projectContextRuntime,
+    resolveProjectContextId,
+    isEnabled: isKnowledgeToolEnabled,
+    showPlan,
+    resolveDirectory: (input = {}) => (input.projectId
+      ? resolveProjectDirectory(input.projectId)
+      : sessionService.resolveDirectory(input)),
+  });
 
   const projects = async () => {
     const result = await listProjects();
@@ -847,7 +878,7 @@ export const createOpenChamberControlService = (dependencies) => {
         throw new OpenChamberControlError(`Unsupported OpenChamber action: ${action || 'missing'}`, 400);
       }
       if (OPENCHAMBER_KNOWLEDGE_ACTIONS.includes(action)) {
-        throw new OpenChamberControlError('Project knowledge is not available on this server', 503);
+        return await knowledgeActions.execute(action, input, contextDirectory, options.contextSessionId);
       }
       if (action.startsWith('memory.')) {
         if (!agentMemoryActions) {
@@ -1020,7 +1051,9 @@ export const createOpenChamberControlService = (dependencies) => {
         ? settings?.agentWebToolEnabled !== false
         : toolName === 'memory'
           ? settings?.agentMemoryToolEnabled === true
-          : settings?.agentNotifyToolEnabled === true;
+          : toolName === 'openchamber_knowledge'
+            ? settings?.agentKnowledgeToolEnabled !== false
+            : settings?.agentNotifyToolEnabled === true;
     return enabled ? null : { code: 'FEATURE_DISABLED', status: 403 };
   };
 

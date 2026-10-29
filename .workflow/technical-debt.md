@@ -108,3 +108,13 @@ An entry leaves this file in one of two ways:
 - **Impact:** Any completed turn that executed tools displays `Elapsed 0.0s` in the Turn stats section of the work-status panel, obscuring true execution duration.
 - **Solution:** Pass the canonical `Turn` record (or query `useSessionTurns`) into `WorkStatusTelemetrySection` and use `turn.finishedAt - turn.startedAt` (or skip `virtualUser` messages and use true turn boundaries) to compute `elapsedDurationMs`.
 - **Cost:** Touches `WorkStatusTelemetrySection.tsx` and `telemetry.ts` inputs to receive canonical `Turn` data; no backend change needed as `Turn` already carries `startedAt` and `finishedAt`.
+
+## Host tool errors collapse to SERVICE_UNAVAILABLE
+
+- **Where:** `packages/web/server/lib/openchamber-control/service.js` (`invokeHostAction` error mapping), `packages/web/server/lib/host/worker-authorization-channel.js`
+- **Added:** 2026-10-30
+- **Priority:** worth-doing
+- **Problem:** The status-to-code map uses `NOT_FOUND`, `CANCELLED` and `UNAVAILABLE`, which are not in `ProblemCodeSchema` (`packages/agent-contract/src/errors.ts`). `HostActionResultSchema` rejects the reply, so a missing note (`404`), an `expected` conflict (`409`) and a cancelled action (`499`) all reach the model as `{ ok: false, code: 'SERVICE_UNAVAILABLE', status: 503 }`, and the control error's message is dropped. Found in the task 16 security pass.
+- **Impact:** An agent cannot tell a stale `expected` from a missing entry or a transient failure, so the knowledge tool's documented retry rule ("refresh and retry with the same id and the fresh text") cannot be followed; other host tools share the mapping.
+- **Solution:** Map statuses onto existing `ProblemCode` values (for example `INVALID_REQUEST`, `UNAUTHORIZED`, `SERVICE_UNAVAILABLE`, a metadata conflict code for 409) and carry the message in a detail field, then assert the envelope in a route test.
+- **Cost:** Touches the shared host-action envelope used by every managed tool; needs one pass over the agent-service and web tests that assert current codes.

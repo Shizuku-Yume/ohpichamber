@@ -1,8 +1,8 @@
 # Session Knowledge
 
 What a session must be told about the project — that session's pinned notes and
-plans, and the index of what the agent has remembered — and whether it has been
-told yet.
+plans, the index of what the agent has remembered, the rules for the managed
+tools it has — and whether it has been told yet.
 
 ## Why it is here and not in the UI
 
@@ -31,7 +31,9 @@ of what the session is carrying. It lives with the session, so it survives the
 tab closing and is visible to every sender, including the ones with no tab.
 
 The signature covers content revisions, not just identity: editing a pinned note
-must re-send it, not merely renaming one.
+must re-send it, not merely renaming one. It also covers `l:on`, `r:on` and
+`w:on`, so switching a managed tool on or off re-sends the guidance that names
+it.
 
 ## Three moments, two deliveries
 
@@ -46,6 +48,28 @@ none, which is why it re-sends on its own — and it travels with
 `context-obligatory`'s pinned messages in a single turn, since two synthetic
 messages back to back read as the agent being interrupted twice.
 
+Upstream writes the same text into OpenCode session instruction entries. That
+mechanism is OpenCode surface and does not exist in OMP, so the Agent Service
+carries the block as a synthetic part and this module keeps the delivered
+signature. The text and the rules below are upstream's; the delivery is the
+fork's.
+
+## What the block carries
+
+- Pinned notes and pinned plan bodies (`buildPinnedBlock`). A plan whose
+  markdown cannot be read is marked, not dropped: losing one attachment must
+  not silently shrink the context.
+- The memory index, titles only (`buildMemoryBlock`). Titles only because an
+  index carrying full text grows without bound until it crowds out the
+  conversation it was meant to inform.
+- Guidance for the managed tools the session actually has (`buildGuidance`):
+  when to link (`SESSION_LINK_GUIDANCE`), when to draw a page
+  (`RENDER_PAGE_GUIDANCE`), and when to offer a workflow
+  (`WORKFLOW_GUIDANCE`). A rule about when to act belongs where the model reads
+  it before choosing a tool; stated only in the action's description, an agent
+  handed an issue to investigate never opened a session-control tool and never
+  linked it.
+
 ## Failure behaviour
 
 Nothing here may fail a send. A message without its background costs the agent
@@ -56,6 +80,20 @@ A source that will not load never blanks the rest: an unreadable memory store
 still delivers the pinned notes. A memory scope that failed to load is left out
 rather than indexed as empty, which would teach the agent to store again what it
 already has.
+
+While memory is on, every session is told when to save, even with an empty
+store. The tool description alone is read only when the agent already means to
+call it, so agents told nothing here saved only when the user said "remember".
+The session hears "nothing is stored yet" only when both scopes loaded. The save
+rule also says to save before the final reply: the chat shows only the text
+after a turn's last tool call as the answer.
+
+Pinned and memory text are each cut at 8,000 characters and say so. The budget
+is per source, so a huge pinned plan cannot crowd out the memory index or the
+tool guidance.
+
+An availability check that fails means "no tool": its guidance is left out
+rather than failing the send.
 
 Delivery is recorded only after the send is accepted. Recording it when the text
 is handed over would leave a failed send believing the agent had context it never

@@ -716,6 +716,25 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.agentToolsCodeMode === 'boolean') {
       result.agentToolsCodeMode = candidate.agentToolsCodeMode;
     }
+    // Settings the client registry persists; each was missing here, so the
+    // registry and this sanitizer disagreed and the value never reached disk.
+    for (const key of [
+      'agentScheduleToolEnabled', 'agentKnowledgeToolEnabled', 'agentRenderToolEnabled',
+      'agentWorkflowToolEnabled', 'openLinksInBrowserPanel', 'openTrackerLinksOnBoard',
+      'worktreeArchiveOnDoneEnabled', 'showOpenCodeUpdateNotifications', 'mobileReturnKeySends',
+      'savePastedImagesAsFiles', 'layoutAnimations',
+    ]) {
+      if (typeof candidate[key] === 'boolean') result[key] = candidate[key];
+    }
+    // The live browser tab limit is clamped to the same 1..20 range as the UI
+    // parser (`src/lib/browser/liveTabs.ts`).
+    if (typeof candidate.liveBrowserTabLimit === 'number' && Number.isFinite(candidate.liveBrowserTabLimit)) {
+      result.liveBrowserTabLimit = Math.max(1, Math.min(20, Math.round(candidate.liveBrowserTabLimit)));
+    }
+    if (typeof candidate.smallModelVariant === 'string') {
+      const trimmed = candidate.smallModelVariant.trim();
+      result.smallModelVariant = trimmed.length > 0 ? trimmed : undefined;
+    }
     if (typeof candidate.isolatedSpacesEnabled === 'boolean') {
       result.isolatedSpacesEnabled = candidate.isolatedSpacesEnabled;
     }

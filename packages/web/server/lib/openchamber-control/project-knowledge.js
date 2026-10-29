@@ -87,9 +87,18 @@ const rejectExpectedOnCreate = (input) => {
  * edits of a plan go through the agent's file tools on the path list gives.
  */
 export const createProjectKnowledgeActions = ({ projectContextRuntime: runtime, resolveProjectContextId, isEnabled, resolveDirectory, showPlan }) => {
-  const ownerOf = async (input, contextDirectory) => {
+  /**
+   * The project an action applies to. A call from an agent session is bound to
+   * that session's own project: the tool schema offers no project selector, so
+   * an override there would let one session read or write another project's
+   * notes. A CLI call, which has no session, may target one explicitly.
+   */
+  const ownerOf = async (input, contextDirectory, contextSessionId) => {
     for (const field of ['projectId', 'directory']) {
       if (input[field] !== undefined) requiredString(input, field);
+    }
+    if (contextSessionId && (input.projectId !== undefined || input.directory !== undefined)) {
+      throw new OpenChamberControlError('Project knowledge actions are scoped to the calling session; drop projectId and directory', 400);
     }
     if (input.projectId !== undefined && input.directory !== undefined) {
       throw new OpenChamberControlError('Provide only one of projectId or directory', 400);
@@ -265,7 +274,7 @@ export const createProjectKnowledgeActions = ({ projectContextRuntime: runtime, 
     if (!await isEnabled()) {
       throw new OpenChamberControlError('The project knowledge tool is turned off in OpenChamber settings', 403);
     }
-    const { projectId, directory } = await ownerOf(input, contextDirectory);
+    const { projectId, directory } = await ownerOf(input, contextDirectory, contextSessionId);
     switch (action) {
       case 'knowledge.list': return list(projectId, input);
       case 'knowledge.save': {

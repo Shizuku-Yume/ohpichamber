@@ -359,3 +359,21 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** task 04 lands the SDK source-control contract and its examples.
 - **Effort:** upstream-refresh
+
+## 2026-10-29 - Keep project knowledge delivery in session metadata, not instruction entries
+
+- **Decided:** Adopt upstream's knowledge text, memory wording and tool guidance, but keep the fork's delivery: the block travels as a synthetic part with the prompt, `session.metadata.openchamber.knowledge_context_delivered` records what the session carries, and compaction re-sends it with the pinned messages. The knowledge actions are exposed to the OMP agent as the `openchamber_knowledge` host tool.
+- **Instead of:** Upstream's `sync`, which writes per-source OpenCode session instruction entries through `/api/experimental/session/:id/instructions/entries/:key` and keeps no OpenChamber record.
+- **Because:** Instruction entries are OpenCode surface, and the fork has no OpenCode engine: the Agent Service builds prompts and delivers synthetic parts through the canonical session service. Adopting the entries would require an OMP equivalent that does not exist, and the metadata signature is what keeps scheduled tasks and agent-dispatched sessions carrying the same context as UI sends.
+- **Mine:** yes
+- **Revisit when:** the Agent Service gains a session-scoped instruction mechanism that survives compaction without a synthetic message, or upstream changes the delivery contract again.
+- **Effort:** upstream-refresh
+
+## 2026-10-30 - Let a mounted extension tool own its xd:// device write
+
+- **Decided:** The Agent Service worker's `tool_call` authorization skips the generic path/command descriptor for a `read`/`write` whose path is an `xd://<device>` URL. The device dispatch runs the extension tool, and that tool's own Host capability call (scope match, feature policy, arguments) authorizes the real action.
+- **Instead of:** judging the virtual `xd://` path with the native file policy, which refused every mounted extension tool with "Host policy refused the tool operation".
+- **Because:** OMP mounts extension tools as `xd://` devices and delegates their policy to the device (`deviceWriteTier`; `internal-urls/types.ts` marks device dispatch as always allowed). Without the carve-out, the `openchamber`, `web`, `memory`, `openchamber_knowledge` and `notify` tools register but no real agent turn can call them; the project-knowledge real path could not be exercised.
+- **Mine:** yes
+- **Revisit when:** OMP exposes extension tools as direct model tools, or provides a dedicated device-authorization hook that the worker can consult.
+- **Effort:** upstream-refresh

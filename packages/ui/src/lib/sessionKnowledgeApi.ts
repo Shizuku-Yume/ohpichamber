@@ -83,6 +83,9 @@ export const reportSessionKnowledgeDelivered = async (
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ directory, sessionId, signature }),
+        // The directory travels only in the body here, so name it for space
+        // routing too: the session lives in that space's server, not the host.
+        directory,
       });
     } catch {
       // Only means the block may be sent once more.
@@ -180,6 +183,7 @@ export const setSessionProjectContextPin = async (
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ directory, sessionId, kind, id, pinned }),
+      directory,
     });
     if (!response.ok) return null;
     return sessionProjectContextPinsResponseSchema.parse(await response.json()).pins;

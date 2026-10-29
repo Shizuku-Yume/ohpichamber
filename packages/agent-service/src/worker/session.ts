@@ -26,6 +26,7 @@ import { nativeExtensionRoots, nativeModelsContext, nativeSkillOptions, openNati
 import { NativeWebSearch, installWebSearchAuthorization } from './catalog-websearch.ts';
 import type { WorkerAuthorize } from './policy.ts';
 import { createHostToolExtension } from './host-tool.ts';
+import { isSingleDevicePath } from './internal-device-path.ts';
 import type { WorkerHostInvoke } from './host-actions.ts';
 import { formatModelString } from '@oh-my-pi/pi-coding-agent/config/model-resolver';
 import { captureNativePolicy } from './native-policy-snapshot.ts';
@@ -146,11 +147,18 @@ export class WorkerSession {
       api.on('tool_call', async event => {
         interaction.observeToolCall(event);
         if (admission.profile && admission.profile.allowedTools !== null && !admission.profile.allowedTools.includes(event.toolName)) return { block: true, reason: 'Selected agent profile does not permit this tool' };
-        if (['bash', 'openchamber', 'web', 'memory', 'notify'].includes(event.toolName)) return;
+        if (['bash', 'openchamber', 'web', 'memory', 'openchamber_knowledge', 'notify'].includes(event.toolName)) return;
         // The native search tool is the SDK's egress entry point, not a generic
         // tool grant. Host authorization already owns web-search policy (including
         // enterprise refusal), so route exactly this SDK name to that capability.
         // Every other tool keeps the descriptor/approval-aware generic path.
+        // A mounted tool device (`xd://<tool>`) is a call into an extension
+        // tool, not a file read or write: the device enforces its own policy
+        // and its inner call is authorized by the capability owner, so the
+        // generic path/command descriptor would wrongly refuse it.
+        const internalDevice = (event.toolName === 'read' || event.toolName === 'write')
+          && isSingleDevicePath(event.input?.path);
+        if (internalDevice) return;
         if (event.toolName === 'web_search') {
           try { await authorize({ type: 'web-search' }); }
           catch { return { block: true, reason: 'Host policy refused the tool operation' }; }

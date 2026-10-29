@@ -4,6 +4,7 @@ import path from 'path';
 
 import { assertGitAvailable, looksLikeAuthError, runGit } from './git.js';
 import { parseSkillRepoSource } from './source.js';
+import { removeDirectory, removeStaleCatalogFolders } from './remove-directory.js';
 
 const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/;
 
@@ -12,14 +13,6 @@ function validateSkillName(skillName) {
   if (typeof skillName !== 'string') return false;
   if (skillName.length < 1 || skillName.length > 64) return false;
   return SKILL_NAME_PATTERN.test(skillName);
-}
-
-async function safeRm(dir) {
-  try {
-    await fs.promises.rm(dir, { recursive: true, force: true });
-  } catch {
-    // ignore
-  }
 }
 
 function toFsPath(repoDir, repoRelPosixPath) {
@@ -115,6 +108,7 @@ export async function prepareSkillsFromRepository({ source, subpath, identity, c
     return { ok: false, error: { kind: 'invalidSource', message: 'Invalid or duplicate skill name' } };
   }
   const cloneUrl = identity?.transport === 'ssh' ? parsed.cloneUrlSsh : parsed.cloneUrlHttps;
+  void removeStaleCatalogFolders();
   const tempBase = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'openchamber-skills-install-'));
 
   try {
@@ -161,9 +155,9 @@ export async function prepareSkillsFromRepository({ source, subpath, identity, c
       }
       return await consume(installations);
     } finally {
-      await safeRm(stagingRoot);
+      await removeDirectory(stagingRoot);
     }
   } finally {
-    await safeRm(tempBase);
+    await removeDirectory(tempBase);
   }
 }

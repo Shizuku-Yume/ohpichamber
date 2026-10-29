@@ -157,9 +157,10 @@ const OPENCHAMBER_WORKFLOW_ANSWER_ACTIONS = Object.freeze(
 /**
  * What the managed `openchamber` tool may ask for. Scheduling stays in this
  * tool: the Host declares one control tool and moving schedule actions to a
- * second name would leave them unreachable. Knowledge, render and workflow
- * actions join this set when their feature task wires the tool and its
- * session-context guidance.
+ * second name would leave them unreachable. Workflow actions join it because
+ * the Agent Service exposes no separate workflow tool; knowledge has its own
+ * tool (`openchamber_knowledge`), so its verbs stay out and a bare `delete`
+ * keeps meaning schedule.delete here.
  */
 const OPENCHAMBER_AGENT_TOOL_ACTION_DEFINITIONS = Object.freeze([
   ...AGENT_EXPOSED_CONTROL_ACTION_DEFINITIONS,

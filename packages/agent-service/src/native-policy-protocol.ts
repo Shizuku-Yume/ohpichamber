@@ -30,12 +30,14 @@ const HostToolActions = {
   openchamber: ['projects.list', 'models.list', 'session.list', 'session.create', 'session.send', 'session.fork', 'session.status', 'session.messages', 'session.link', 'schedule.list', 'schedule.create', 'schedule.update', 'schedule.run', 'schedule.delete', 'schedule.toggle', 'file.open'],
   web: ['browser.open', 'browser.snapshot', 'browser.click', 'browser.type', 'browser.scroll', 'browser.back', 'browser.forward', 'browser.inspect', 'browser.capture', 'browser.resize'],
   memory: ['memory.read', 'memory.list', 'memory.save', 'memory.delete'],
+  openchamber_knowledge: ['knowledge.list', 'knowledge.save', 'knowledge.delete', 'knowledge.show'],
   notify: ['notify.send'],
 } as const;
 export const HostActionRequestSchema = z.discriminatedUnion('toolName', [
   z.strictObject({ toolName: z.literal('openchamber'), action: z.enum(HostToolActions.openchamber), input: JsonObjectSchema, sessionId: EntityIdSchema }),
   z.strictObject({ toolName: z.literal('web'), action: z.enum(HostToolActions.web), input: JsonObjectSchema, sessionId: EntityIdSchema }),
   z.strictObject({ toolName: z.literal('memory'), action: z.enum(HostToolActions.memory), input: JsonObjectSchema, sessionId: EntityIdSchema }),
+  z.strictObject({ toolName: z.literal('openchamber_knowledge'), action: z.enum(HostToolActions.openchamber_knowledge), input: JsonObjectSchema, sessionId: EntityIdSchema }),
   z.strictObject({ toolName: z.literal('notify'), action: z.enum(HostToolActions.notify), input: JsonObjectSchema, sessionId: EntityIdSchema }),
 ]);
 export type HostActionRequest = z.infer<typeof HostActionRequestSchema>;

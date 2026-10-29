@@ -41,7 +41,11 @@
 
 ## Blocked
 
-Waiting on the upstream refresh landing on `main`: `upstream-refresh/30` ("Gate, records and upstream history link") archived under `.workflow/done/upstream-refresh/` and `upstream-refresh/integration` (`8ee84af280`) landed on `main`. Nothing here can start before that: the refreshed files this task resolves against do not exist on `main` yet. This is a waiting dependency, not a wrong plan — no `flow-break amend` is needed. `Blocked by: None` above exists only because the blocker's task file is not in this tree until then; `next` says "needs replanning" because of the `Status: blocked` that keeps a non-startable draft out of the ready list. At the start record, set `Blocked by: upstream-refresh/30`, drop `Status: blocked`, and delete this section.
+Waiting on the upstream refresh landing on `main`: `upstream-refresh/30` ("Gate, records and upstream history link") archived under `.workflow/done/upstream-refresh/` and `upstream-refresh/integration` (`8ee84af280`) landed on `main`. Nothing here can start before that: the refreshed files this task resolves against do not exist on `main` yet.
+
+The refresh is not at task 30: its task 07 (review surfaces) is still open, and its real-path criteria are explicitly unmet for want of host routes and provider credentials. Those features are on this task's survival list (07's review board and file views reach the overlapping settings and session surfaces), so the merge waits for either task 07 to pass or a maintainer decision to waive named criteria — and the waiver must say which checks the survival list records as "waived at refresh, not re-run here". Do not merge on an assumed waiver, and do not close task 07 or the refresh from here.
+
+This is a waiting dependency, not a wrong plan — no `flow-break amend` is needed. `Blocked by: None` above exists only because the blocker's task file is not in this tree until then; `next` says "needs replanning" because of the `Status: blocked` that keeps a non-startable draft out of the ready list. At the start record, set `Blocked by: upstream-refresh/30`, drop `Status: blocked`, and delete this section.
 
 ## Progress
 

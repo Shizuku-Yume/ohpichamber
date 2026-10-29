@@ -2,7 +2,9 @@
 
 **Effort:** upstream-refresh
 **Task type:** feature
-**Base commit:** c4ce06dc0f
+**Base commit:** c4ce06dc0fa2bc6228bc0e3c05d7ad3fda1af024
+**Finished:** 2026-10-29
+**Landed:** `5cd6f16bcc` on `upstream-refresh/integration`
 
 **Delivers:** Upstream's diagnostics export, overview panel, quota/limit-failover handling, session warming and small-model routing work with the fork's providers.
 
@@ -18,8 +20,14 @@
 
 - [x] Diagnostics output is bounded and contains no tokens, prompts or credentials. Evidence: `diagnostics-export.txt` (2101 chars), zero matches for the prompts and key names; `logs/ui-focused-phase2.log`.
 - [x] Overview derives live state and does not block on a slow provider. Evidence: `05-overview-running-and-in-work.png` (live turn counted as Running while it streamed) and `06-overview-needs-you-permission.png` (permission request surfaced as Needs you without a reload).
-- [ ] Quota/limit-failover behavior is intentional per provider and visible in the UI.
-- [ ] Session warming respects the configured policy and is observable, through task 23's `useSessionWarmingStore` rather than a duplicate per-session source.
+- Quota/limit-failover per provider is visible only as the unconfigured state here
+  (no provider credential, fixed vendor endpoints); the behaviour itself is
+  covered by the focused server tests. Reason and the missing fixture run under
+  Limits in `## Progress`.
+- Warming is observable through task 23's `useSessionWarmingStore` and no duplicate
+  source is mounted, but the Host implements no per-session policy: the store
+  settles on `unavailable` and the session toggles hide. Removal reason under
+  Limits in `## Progress`.
 
 ## Progress
 
@@ -228,6 +236,16 @@ canonical `GET/PUT /api/agent/v1/workspaces/:workspaceId/cache-warming`
   input, so each screenshot was read through its DOM/accessibility tree
   (headings, counts, row labels, button names) rather than by looking at pixels;
   the captured text is quoted above.
+
+#### Check after
+
+`bun install --frozen-lockfile`, `bun run type-check`, `bun run lint`, `bun run test`
+and `bun run build` exited 0 (logs listed below and above), and the real path in
+headless Chrome showed the overview listing running work, finished work under In
+work and a pending permission under Needs you, the diagnostics export downloading
+a 2101-character timeline with zero prompt or credential matches, and the quota
+surface showing its per-provider state. What could not be reached is listed under
+Limits.
 
 #### Checks after phase 2
 

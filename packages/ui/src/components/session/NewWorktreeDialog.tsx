@@ -18,7 +18,6 @@ import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import { useProjectsStore } from '@/stores/useProjectsStore';
-import { formatChangeRequestReference } from '@/lib/source-control/identity';
 import { changeRequestCopy } from '@/lib/source-control/changeRequestCopy';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
@@ -43,7 +42,8 @@ import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { Icon } from "@/components/icon/Icon";
 import { trackerPresentation } from '@/lib/trackers/presentation';
 import { useTrackerSources } from '@/lib/trackers/sources';
-import { useSourceControlProvider } from '@/lib/source-control/providers/registry';
+import { useSourceControlProvider, useSourceControlDescriptorOf } from '@/lib/source-control/providers/registry';
+import { formatChangeRequestLabel } from '@/lib/source-control/providers/terminology';
 import { ProviderIcon } from '@/components/sourceControl/ProviderIcon';
 import { readTrackerDescriptor } from '@/lib/trackers/registry';
 import type { SourceControlReadContext } from '@/lib/api/types';
@@ -614,6 +614,7 @@ export function NewWorktreeDialog({
   // answer it gives itself, offered while the read context loads.
   const repositorySourceStatus = useRepositorySourceStatus(open ? projectDirectory : null);
   const itemDescriptor = useSourceControlProvider(useRepositoryReferenceProvider(open ? projectDirectory : null));
+  const descriptorOf = useSourceControlDescriptorOf();
   const itemTerm = itemDescriptor.terminology.changeRequest;
   const trackerSources = useTrackerSources();
   const isRepositoryConnected = repositorySourceStatus === 'ready';
@@ -674,7 +675,7 @@ export function NewWorktreeDialog({
     : undefined;
   const linkedView = linked
     ? linked.kind === 'pr'
-      ? { id: linked.context.provider === 'gitlab' ? formatChangeRequestReference(linked.context.provider, linked.pr.number) : t('session.newWorktree.prNumber', { number: linked.pr.number }), title: linked.pr.title, url: linked.pr.url, icon: <Icon name="git-pull-request" className="size-4 shrink-0 text-muted-foreground" /> }
+      ? { id: formatChangeRequestLabel(descriptorOf(linked.context.provider), linked.pr.number), title: linked.pr.title, url: linked.pr.url, icon: <Icon name="git-pull-request" className="size-4 shrink-0 text-muted-foreground" /> }
       : linked.kind === 'issue'
         ? { id: t('session.newWorktree.issueNumber', { number: linked.number }), title: linked.title, url: linked.url, icon: <ProviderIcon descriptor={itemDescriptor} className="size-4 shrink-0 text-muted-foreground" /> }
         : linked.kind === 'tracker'

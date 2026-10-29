@@ -207,8 +207,17 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
   const requestedCommitHash = requestedTarget?.source.kind === 'commit' ? requestedTarget.source.hash : undefined;
   const commitComparison = useCommitComparison(directory || null, currentBranch, visible && isCommitScope, requestedCommitHash);
   const selectedCommitHash = commitComparison.selectedCommit?.hash ?? requestedCommitHash ?? null;
+  const baseRemoteNames = useMemo(
+    () => new Set(binding.read?.repository.remotes.map((remote) => remote.name) ?? []),
+    [binding.read],
+  );
   const { base: comparisonBase, resolved: comparisonBaseResolved, revision: branchRevision } =
-    useBranchComparisonBase(directory || null, currentBranch, visible);
+    useBranchComparisonBase(directory || null, currentBranch, visible, {
+      branches,
+      remoteNames: baseRemoteNames,
+      primaryRemote: binding.contexts[0]?.primaryRemote,
+      readContext: binding.contexts[0] ?? null,
+    });
   const branchSource = useMemo<Extract<WalkthroughSource, { kind: 'branch' }> | null>(() => {
     const headRef = currentBranch;
     // A branch is never its own base, and the check belongs before the ref is

@@ -283,10 +283,19 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
   const showBranchOption = isBranchScopeAvailable(currentBranch, defaultBranch);
   const branchUnavailable = isGitRepo === false || isBranchScopeDefinitelyUnavailable(currentBranch, defaultBranch, status !== null, branches !== null);
   const setBaseOverride = useGitBaseBranchStore((state) => state.setOverride);
-  const branchComparison = useBranchComparisonBase(currentDirectory || null, currentBranch, visible && mode === 'branch' && showBranchOption);
+  const binding = useRepositoryBinding(currentDirectory || null, sourceControl);
+  const branchRemoteNames = React.useMemo(
+    () => new Set(binding.read?.repository.remotes.map((remote) => remote.name) ?? []),
+    [binding.read],
+  );
+  const branchComparison = useBranchComparisonBase(currentDirectory || null, currentBranch, visible && mode === 'branch' && showBranchOption, {
+    branches,
+    remoteNames: branchRemoteNames,
+    primaryRemote: binding.contexts[0]?.primaryRemote,
+    readContext: binding.contexts[0] ?? null,
+  });
   const commitComparison = useCommitComparison(currentDirectory || null, currentBranch, visible && mode === 'commit' && isGitRepo === true);
   const selectedCommitHash = commitComparison.selectedCommit?.hash ?? null;
-  const binding = useRepositoryBinding(currentDirectory || null, sourceControl);
   // The remote an identity is judged against and applied to: the bound
   // primary remote, resolved the way the desktop Git view resolves it.
   const bindingRemoteName = binding.read?.binding?.remotes[0]?.name

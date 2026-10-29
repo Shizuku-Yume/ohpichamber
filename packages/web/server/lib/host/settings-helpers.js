@@ -49,6 +49,15 @@ const CUSTOM_PROVIDER_ICONS_MAX = 256;
 // `provider/model` last picked in a chat composer.
 const lastSelectedModelSchema = z.string().trim().min(1).max(512);
 
+// Boolean settings the registry lists; each is accepted as a plain boolean.
+const REGISTRY_BOOLEAN_SETTINGS = Object.freeze([
+  'layoutAnimations', 'openLinksInBrowserPanel', 'openTrackerLinksOnBoard', 'worktreeArchiveOnDoneEnabled',
+  'showOpenCodeUpdateNotifications', 'agentScheduleToolEnabled', 'agentKnowledgeToolEnabled',
+  'agentRenderToolEnabled', 'agentWorkflowToolEnabled', 'mobileReturnKeySends', 'savePastedImagesAsFiles',
+]);
+const LIVE_BROWSER_TABS_MIN = 1;
+const LIVE_BROWSER_TABS_MAX = 20;
+
 /** Provider id -> icon id; unknown icons and malformed entries are dropped one by one. */
 const sanitizeCustomProviderIcons = (value) => {
   const record = z.record(z.string(), z.unknown()).safeParse(value);
@@ -873,6 +882,19 @@ export const createSettingsHelpers = (dependencies) => {
     const customProviderIcons = sanitizeCustomProviderIcons(candidate.customProviderIcons);
     if (customProviderIcons) {
       result.customProviderIcons = customProviderIcons;
+    }
+    for (const key of REGISTRY_BOOLEAN_SETTINGS) {
+      if (typeof candidate[key] === 'boolean') {
+        result[key] = candidate[key];
+      }
+    }
+    if (Number.isInteger(candidate.liveBrowserTabLimit)
+      && candidate.liveBrowserTabLimit >= LIVE_BROWSER_TABS_MIN
+      && candidate.liveBrowserTabLimit <= LIVE_BROWSER_TABS_MAX) {
+      result.liveBrowserTabLimit = candidate.liveBrowserTabLimit;
+    }
+    if (typeof candidate.smallModelVariant === 'string' && candidate.smallModelVariant.trim().length > 0) {
+      result.smallModelVariant = candidate.smallModelVariant.trim();
     }
 
     if (Array.isArray(candidate.recentAgents)) {

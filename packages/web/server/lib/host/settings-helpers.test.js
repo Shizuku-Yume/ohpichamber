@@ -851,6 +851,10 @@ describe('settings registry gate', () => {
     pwaAppName: 'OpenChamber', pwaOrientation: 'portrait', mobileKeyboardMode: 'native', desktopWindowControlsPosition: 'left', desktopWindowControlsStyle: 'classic',
     inputBarOffset: 10,
     customProviderIcons: { 'campus-llm': 'cloud' },
+    layoutAnimations: true, openLinksInBrowserPanel: false, liveBrowserTabLimit: 8,
+    openTrackerLinksOnBoard: true, worktreeArchiveOnDoneEnabled: false, showOpenCodeUpdateNotifications: true,
+    agentScheduleToolEnabled: true, agentKnowledgeToolEnabled: false, agentRenderToolEnabled: false, agentWorkflowToolEnabled: false,
+    mobileReturnKeySends: true, savePastedImagesAsFiles: true, smallModelVariant: 'high',
   };
 
   it('accepts a valid value for every persistable registry key (no server-side drift)', () => {

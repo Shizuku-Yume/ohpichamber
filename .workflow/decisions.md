@@ -453,3 +453,12 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** OMP command/template expansion stops exposing agent bindings, or prompt submission rejects non-null `agentId` by contract.
 - **Effort:** omp-native-parity
+
+## 2026-10-29 - Merge the refreshed main into parity instead of landing parity first
+
+- **Decided:** The upstream refresh lands on `main` first. Then `main` is merged into `omp-native-parity/integration`, the conflicts are resolved with the refreshed version of every overlapping file as the base and the parity intent re-applied on top, both efforts are gated together, and parity lands. The merge keeps the new upstream behavior; parity's work predates it and cannot be taken whole-file where the refresh also changed a file.
+- **Instead of:** Landing parity on `main` first and redoing the remaining refresh tasks against the mode-aware composer, or rebasing `omp-native-parity/integration` onto the refreshed `main`.
+- **Because:** The refresh is the newer baseline by maintainer decision (`decisions.md: 2026-10-10 - Latest upstream first then restore the fork`), and the two efforts share 148 files changed since `dee0c88ebd` (26 of them i18n catalogs, plus seven parity deletions the refresh modifies). Landing parity first would put the old upstream baseline on `main` and force the unfinished refresh tasks (review board, overview/diagnostics, RTL, composer and permissions) to be rebuilt on a composer parity has already rewritten, against the direction the maintainer set. A rebase would rewrite a branch the refresh and parity task branches build on, which `merge-strategy.md` forbids; a merge keeps both histories, and resolving toward the refreshed file is how the new upstream updates survive.
+- **Mine:** no
+- **Revisit when:** The refresh has not landed on `main` by 2026-10-31, `upstream-refresh/31` or `32` (the one-view sidebar redesign) lands before this merge, or parity must ship a fix before the refresh gate passes.
+- **Effort:** omp-native-parity

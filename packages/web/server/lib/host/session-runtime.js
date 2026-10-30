@@ -10,26 +10,16 @@ export const createSessionRuntime = ({ broadcastEvent, now = Date.now }) => {
   const phases = new Map();
   const cooldowns = new Map();
   const states = new Map();
-  const attention = new Map();
   const pending = new Map();
   let activeCount = 0;
   let disposed = false;
 
-  const getAttention = (sessionId) => {
-    if (disposed) return null;
-    let state = attention.get(sessionId);
-    if (!state) {
-      state = { needsAttention: false, lastUserMessageAt: null, lastStatusChangeAt: now(), viewedByClients: new Set(), status: 'unavailable' };
-      attention.set(sessionId, state);
-    }
-    return state;
-  };
   const publishState = (sessionId) => {
     const state = states.get(sessionId);
     if (!state) return;
     broadcastEvent({ type: 'openchamber:session-status', properties: {
       sessionId, status: state.status, activeRunId: state.activeRunId, timestamp: state.lastUpdateAt,
-      metadata: state.metadata, needsAttention: attention.get(sessionId)?.needsAttention ?? false,
+      metadata: state.metadata,
     } });
   };
   const setPhase = (sessionId, phase) => {
@@ -47,15 +37,9 @@ export const createSessionRuntime = ({ broadcastEvent, now = Date.now }) => {
   };
   const updateState = (sessionId, status, activeRunId, eventId, metadata = {}, hydrate = false) => {
     const prior = states.get(sessionId);
-    const observed = getAttention(sessionId);
-    if (!observed) return;
-    const wasAttention = observed.needsAttention;
-    if (!hydrate && LIVE.has(observed.status) && status === 'idle'
-      && observed.lastUserMessageAt !== null && observed.viewedByClients.size === 0) observed.needsAttention = true;
-    observed.status = status; observed.lastStatusChangeAt = now();
     states.set(sessionId, { status, activeRunId, lastUpdateAt: now(), lastEventId: eventId, metadata });
     if (!prior || prior.status !== status || prior.activeRunId !== activeRunId
-      || prior.metadata.reason !== metadata.reason || wasAttention !== observed.needsAttention) publishState(sessionId);
+      || prior.metadata.reason !== metadata.reason) publishState(sessionId);
     if (LIVE.has(status)) setPhase(sessionId, 'busy');
     else if (!hydrate && status === 'idle' && phases.get(sessionId)?.phase === 'busy') setPhase(sessionId, 'cooldown');
     else if (hydrate || status !== 'idle' || phases.get(sessionId)?.phase !== 'cooldown') setPhase(sessionId, 'idle');
@@ -74,15 +58,16 @@ export const createSessionRuntime = ({ broadcastEvent, now = Date.now }) => {
   const removeSession = (sessionId) => {
     if (phases.get(sessionId)?.phase === 'busy') activeCount -= 1;
     clearTimeout(cooldowns.get(sessionId)); cooldowns.delete(sessionId);
-    phases.delete(sessionId); states.delete(sessionId); attention.delete(sessionId); pending.delete(sessionId);
+    phases.delete(sessionId); states.delete(sessionId); pending.delete(sessionId);
   };
   const requireScope = (scope) => {
     if (!scope?.projectId || !scope?.workspaceId || !scope?.rootSessionId) throw new Error('Host session scope is required');
   };
-  const markUserMessageSent = (sessionId, at = now()) => {
+  // Prompt delivery calls this before it writes; the runtime no longer tracks
+  // attention (notifications own unread state), but the guard stays so a bad
+  // session id still fails before delivery.
+  const markUserMessageSent = (sessionId) => {
     EntityIdSchema.parse(sessionId);
-    const state = getAttention(sessionId);
-    if (state) state.lastUserMessageAt = at;
   };
   const applySnapshot = (input, scope) => {
     if (disposed) return;
@@ -128,11 +113,8 @@ export const createSessionRuntime = ({ broadcastEvent, now = Date.now }) => {
     .map(([id, state]) => [id, { status: state.status, activeRunId: state.activeRunId, lastUpdateAt: state.lastUpdateAt, metadata: state.metadata }]));
   const getPendingBlockingRequestsSnapshot = () => Object.fromEntries([...pending].map(([id, entry]) => [id,
     { approvals: [...entry.approvals.values()], questions: [...entry.questions.values()] }]));
-  const attentionSnapshot = (state) => ({ needsAttention: state.needsAttention, lastUserMessageAt: state.lastUserMessageAt,
-    lastStatusChangeAt: state.lastStatusChangeAt, status: state.status, isViewed: state.viewedByClients.size > 0 });
   const cleanupInterval = setInterval(() => {
     for (const [id, state] of states) if (now() - state.lastUpdateAt > SESSION_STATE_MAX_AGE_MS) removeSession(id);
-    for (const [id, state] of attention) if (now() - state.lastStatusChangeAt > SESSION_STATE_MAX_AGE_MS) attention.delete(id);
   }, SESSION_STATE_CLEANUP_INTERVAL_MS);
   cleanupInterval.unref?.();
 
@@ -144,17 +126,7 @@ export const createSessionRuntime = ({ broadcastEvent, now = Date.now }) => {
     getSessionState: (sessionId) => states.get(sessionId) ?? null,
     getSessionActivitySnapshot: () => Object.fromEntries([...phases].map(([id, entry]) => [id, { type: entry.phase }])),
     getActiveSessionCount: () => activeCount,
-    getSessionAttentionSnapshot: () => Object.fromEntries([...attention].filter(([, state]) => now() - state.lastStatusChangeAt <= SESSION_STATE_MAX_AGE_MS)
-      .map(([id, state]) => [id, attentionSnapshot(state)])),
-    getSessionAttentionState(sessionId) { const state = attention.get(sessionId); return state ? attentionSnapshot(state) : null; },
     markUserMessageSent,
-    markSessionViewed(sessionId, clientId) {
-      const state = getAttention(sessionId);
-      if (!state) return;
-      state.viewedByClients.add(clientId);
-      if (state.needsAttention) { state.needsAttention = false; publishState(sessionId); }
-    },
-    markSessionUnviewed(sessionId, clientId) { attention.get(sessionId)?.viewedByClients.delete(clientId); },
     interruptBusySessionsAfterRestart() {
       const sessionIds = [...states].filter(([, state]) => LIVE.has(state.status)).map(([id]) => id);
       pending.clear();
@@ -168,7 +140,7 @@ export const createSessionRuntime = ({ broadcastEvent, now = Date.now }) => {
     dispose() {
       disposed = true; clearInterval(cleanupInterval);
       for (const timer of cooldowns.values()) clearTimeout(timer);
-      cooldowns.clear(); phases.clear(); states.clear(); attention.clear(); pending.clear(); activeCount = 0;
+      cooldowns.clear(); phases.clear(); states.clear(); pending.clear(); activeCount = 0;
     },
   };
 };

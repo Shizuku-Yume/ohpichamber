@@ -22,6 +22,7 @@ import { useWebNotificationStream } from '@/hooks/useWebNotificationStream';
 import { useAgentMemorySync } from '@/hooks/useAgentMemorySync';
 import { useBrowserProviderSync } from '@/hooks/useBrowserProviderSync';
 import { useEnterprisePolicySync } from '@/hooks/useEnterprisePolicySync';
+import { useRelayLimitToast } from '@/hooks/useRelayLimitToast';
 import { useRoutingSync } from '@/hooks/useRoutingSync';
 import { usePwaInstallPrompt } from '@/hooks/usePwaInstallPrompt';
 import { useWindowTitle } from '@/hooks/useWindowTitle';
@@ -605,6 +606,8 @@ function App({ apis }: AppProps) {
   useBrowserProviderSync();
   useRoutingSync();
   useEnterprisePolicySync();
+  // Desktop windows on a relay host; the phone has its own handling in MobileApp.
+  useRelayLimitToast();
   usePwaInstallPrompt();
 
   useWindowTitle();

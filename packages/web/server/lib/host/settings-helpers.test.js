@@ -74,6 +74,14 @@ describe('settings helpers', () => {
     expect(helpers.sanitizeSettingsUpdate({ gitlabClientId: 42 })).toEqual({});
   });
 
+  it('persists only a valid tunnel HTTPS port', () => {
+    const helpers = createTestHelpers();
+    expect(helpers.sanitizeSettingsUpdate({ tunnelHttpsPort: 8443 })).toEqual({ tunnelHttpsPort: 8443 });
+    for (const invalid of [0, 65536, -1, 8443.5, '8443', null]) {
+      expect(helpers.sanitizeSettingsUpdate({ tunnelHttpsPort: invalid })).toEqual({});
+    }
+  });
+
   it('forgets the last directory when asked with an empty string', () => {
     // Removing the last project sends this. A kept last directory would be
     // turned back into a project on the next read and warmed at every start.
@@ -812,7 +820,7 @@ describe('settings registry gate', () => {
     smallModelVariant: 'high',
     autoDeleteEnabled: true, autoDeleteAfterDays: 30, sessionRetentionOnlyArchived: false, sessionRetentionAction: 'archive', mergedWorktreeCleanupEnabled: true, terminalShell: 'zsh', terminalLoginShells: ['zsh'],
     openInAppId: 'vscode', dictationEnabled: true, sttProvider: 'local', sttServerUrl: 'http://localhost:8001/v1', sttModel: 'm', sttLocalModel: 'm', sttLanguage: 'en',
-    tunnelProvider: 'cloudflare', tunnelMode: 'quick', tunnelBootstrapTtlMs: 600000, tunnelSessionTtlMs: 86400000, managedLocalTunnelConfigPath: '/tmp/x',
+    tunnelProvider: 'cloudflare', tunnelMode: 'quick', tunnelHttpsPort: 8443, tunnelBootstrapTtlMs: 600000, tunnelSessionTtlMs: 86400000, managedLocalTunnelConfigPath: '/tmp/x',
     managedRemoteTunnelHostname: 'x.example', managedRemoteTunnelToken: 'token', managedRemoteTunnelPresets: [{ id: 'a', name: 'A', hostname: 'a.example' }],
     managedRemoteTunnelSelectedPresetId: 'a', managedRemoteTunnelPresetTokens: { a: 'token' },
     sidebarProjectDisplayMode: 'all', sidebarViewMode: 'timeline', sidebarProjectSortOrder: 'manual', sidebarWorktreeSortOrder: 'recent', sidebarShowRecentSection: true,

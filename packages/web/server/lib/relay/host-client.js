@@ -17,6 +17,11 @@ import { z } from 'zod';
 // rather than closing it from the relay side, where a close to a peer that is
 // gone holds the relay's handler, billed, until it times out. Mirrors
 // parseRelayRetire in packages/ui/src/lib/relay/protocol.ts.
+//
+// `ws` rejects close reasons over 123 UTF-8 bytes (and a rejected reason leaves
+// the socket open after its map entry is gone), so peer text is only ever
+// logged, bounded and single-line: it never reaches socket.close().
+const LOG_REASON_MAX_CHARS = 200;
 const relayRetireSchema = z.object({ type: z.literal('relay-retire'), code: z.number().int(), reason: z.string().catch('') });
 const parseRelayRetire = (raw) => {
   try {
@@ -26,6 +31,8 @@ const parseRelayRetire = (raw) => {
     return null;
   }
 };
+
+const sanitizeCloseReason = (raw) => String(raw ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, LOG_REASON_MAX_CHARS);
 
 const BACKOFF_BASE_MS = 1000;
 const BACKOFF_CAP_MS = 30000;
@@ -261,7 +268,10 @@ export const startRelayHost = ({ relayUrl, identity, localPort, getLocalPort, on
     const handleMessage = async (data, isBinary) => {
       const retire = isBinary ? null : parseRelayRetire(data.toString('utf8'));
       if (retire) {
-        if (dataSockets.get(connectionId) === entry) teardownDataSocket(connectionId, 1000, retire.reason);
+        // Peer text never goes into a close frame: the code alone asks the
+        // relay to drop this connection, and a huge or malformed reason can no
+        // longer make close() throw and leak the socket.
+        if (dataSockets.get(connectionId) === entry) teardownDataSocket(connectionId, 1000);
         else socket.close(1000);
         return;
       }
@@ -372,7 +382,8 @@ export const startRelayHost = ({ relayUrl, identity, localPort, getLocalPort, on
     socket.on('close', (code, reason) => {
       // One line per device drop, so a host that keeps losing devices shows why
       // in its log: the code says which side closed and the lifetime how often.
-      logger.info?.(`[Relay] data socket closed connectionId=${connectionId} code=${code}${reason?.length ? ` reason=${reason.toString('utf8')}` : ''} after=${Math.round((Date.now() - dialedAt) / 1000)}s`);
+      const closeReason = sanitizeCloseReason(reason?.toString?.('utf8') ?? '');
+      logger.info?.(`[Relay] data socket closed connectionId=${connectionId} code=${code}${closeReason ? ` reason=${closeReason}` : ''} after=${Math.round((Date.now() - dialedAt) / 1000)}s`);
       // A retry may already own this connectionId.
       if (dataSockets.get(connectionId) === entry) teardownDataSocket(connectionId);
     });
@@ -496,7 +507,7 @@ export const startRelayHost = ({ relayUrl, identity, localPort, getLocalPort, on
       if (controlSocket !== socket) return;
       controlSocket = null;
       const code = retiredWith ? retiredWith.code : closeCode;
-      const reason = retiredWith ? retiredWith.reason : reasonBuffer ? reasonBuffer.toString('utf8') : '';
+      const reason = sanitizeCloseReason(retiredWith ? retiredWith.reason : reasonBuffer ? reasonBuffer.toString('utf8') : '');
       logger.info?.(`[Relay] control socket closed code=${code}${reason ? ` reason=${reason}` : ''} after=${Math.round((Date.now() - dialedAt) / 1000)}s`);
       if (!lastError && code && code !== 1000) {
         lastError = `control socket closed (${code}${reason ? `: ${reason}` : ''})`;

@@ -16,11 +16,11 @@ const makeService = (options = {}) => {
   let keyGeneration = 0;
   const relayKeyStore = {
     getOrCreate: async (slot, generate) => (keySlots[slot] ??= await generate()),
-    reset: async () => {
+    reset: vi.fn(async () => {
       delete keySlots.signing;
       delete keySlots.encryption;
       keyGeneration += 1;
-    },
+    }),
     generation: () => keyGeneration,
   };
   let settings = {
@@ -44,10 +44,27 @@ const makeService = (options = {}) => {
     allowPassiveHost: options.allowPassiveHost,
     logger: { warn: () => {} },
   });
-  return { service, hostLock, getSettings: () => settings };
+  return { service, hostLock, relayKeyStore, getSettings: () => settings };
 };
 
 describe('relay service identity reset', () => {
+  it('serializes a reset behind an in-flight lifecycle change', async () => {
+    const demand = Promise.withResolvers();
+    const { service, relayKeyStore } = makeService({ hasRelayDemand: async () => demand.promise });
+    try {
+      const reconcile = service.reconcile();
+      const reset = service.resetIdentity();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      // The reset must not rotate keys while reconcile is still deciding.
+      expect(relayKeyStore.reset).not.toHaveBeenCalled();
+      demand.resolve(false);
+      await Promise.all([reconcile, reset]);
+      expect(relayKeyStore.reset).toHaveBeenCalledTimes(1);
+    } finally {
+      service.stop();
+    }
+  });
+
   it('gives this copy a new server id', async () => {
     const { service } = makeService();
     try {

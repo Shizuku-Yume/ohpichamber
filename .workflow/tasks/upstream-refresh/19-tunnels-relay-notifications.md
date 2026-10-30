@@ -11,7 +11,7 @@
 **Delivers:** Upstream's relay behavior, Tailscale/Cloudflare/ngrok tunnel options and notification routing/click handling work with the fork's runtime selection.
 
 **Blocked by:** 10, 22
-**Files:** Path list: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-sync-2026-10-27/plan-paths/19.tsv` (52 paths: 44 clean/new, 8 both-side, 5 conflicts). Main locations: `packages/web/server/lib/{relay,notifications,tunnels,dev-tunnel,tailscale-tunnel*,cloudflare-tunnel,ngrok-tunnel,client-auth}`, `packages/ui/src/lib/{relay,notifications}`.
+**Files:** Path list: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-sync-2026-10-27/plan-paths/19.tsv` (52 paths: 44 clean/new, 8 both-side, 5 conflicts). Main locations: `packages/web/server/lib/{relay,notifications,tunnels,dev-tunnel,tailscale-tunnel*,cloudflare-tunnel,ngrok-tunnel,client-auth}`, `packages/ui/src/lib/{relay,notifications}`. Direct callers claimed by this task after review: `packages/web/server/index.js` (provider registration), `packages/web/server/lib/host/{settings-helpers.js,settings-registry.json,bootstrap-runtime.js,session-runtime.js}` (tunnel HTTPS port persistence; removal of the attention state the notification-route cutover orphaned), `packages/web/bin/lib/cli-tunnel-capabilities.js`, `packages/web/src/api/clientAuth.ts`, `packages/ui/src/lib/api/types.ts`, `packages/ui/src/App.tsx`, `packages/ui/src/components/sections/remote-instances/{RemoteInstancesPage.tsx,RelayConflictNotice.tsx}`, `packages/ui/src/hooks/useRelayLimitToast.ts`.
 
 **Read first:** Spec W6; `.agents/skills/relay-transport/SKILL.md`; `.agents/skills/enterprise-boundary/SKILL.md`; `.agents/skills/sync-state-invariants/SKILL.md`; `packages/web/server/lib/relay/DOCUMENTATION.md`.
 **Covers:** W6
@@ -142,3 +142,51 @@ E2EE + authenticated tunneled requests), `evidence/final-branch-smoke.txt`
 place; tunnel panel explicit `tailscale was not found.`),
 `screenshots/04-tunnel-tailscale-final-1280x800.png`, and the fixture/client
 scripts copied into `evidence/` for reproduction.
+
+
+### Review fixes (B quality + security)
+
+Adoption gap: the upstream task's path list contained the new providers and
+relay/notification modules but not their direct consumers, so adoption alone
+left the Tailscale CLI fallback, the persisted `tunnelHttpsPort`, the relay
+conflict notice/reset and the relay-limit retry toast unwired, and it restored
+upstream's directory-form space dev-tunnel dial that the fork's excluded spaces
+router cannot serve. Fixed in this batch rather than deferring to tasks 11, 22
+or 24:
+
+- Space dev tunnels dial the fork's `/api/spaces/<id>/dev-tunnel` again; the
+  directory form needs the excluded upstream spaces rewrite (recorded limit).
+- `tunnelHttpsPort` is a persisted instance setting: UI registry entry
+  (integer 1–65535, same `serve`/`funnel` tunnel-mode values as the server),
+  sanitizer branch in `host/settings-helpers.js`, regenerated
+  `host/settings-registry.json`, round-trip test.
+- CLI fallback capabilities include `tailscaleTunnelProviderCapabilities`, so
+  `tunnel start --provider tailscale` takes the provider's default `serve`.
+- Relay consumers: `ClientAuthAPI.getRelayHostStatus()/resetRelayIdentity()`
+  in the web client, `RelayConflictNotice` mounted in Remote Instances, and
+  `useRelayLimitToast` (with `retry()`) mounted in `App.tsx`.
+- Notification `run.failed` text uses the canonical `event.error` (redacted,
+  bounded) instead of an always-empty string, covered by the trigger test.
+- Removed the attention map/deps the removed notification routes orphaned;
+  `markUserMessageSent` stays as the prompt-delivery guard.
+- Security: retire reasons never reach `socket.close()` (a >123-byte reason
+  used to throw after the map entry was dropped and leak the socket), peer
+  close reasons are one sanitized line in logs/status, relay lifecycle
+  mutations are serialized (reset no longer races reconcile/start), and the
+  identity cache retries when a reset changes the key-store generation
+  mid-build. Bugs fixed, not failures suppressed.
+- Docs corrected: relay Settings statements now match the added consumers;
+  tunnel HTTPS/approval text describes the API/CLI surface, not a Settings
+  control this task does not add; notification docs use the real permission
+  prefixes, the real `fanoutPush` badge path, the message-cap order and the
+  existing notification store path.
+
+Focused evidence after the batch: vitest
+`relay/service`, `notifications/trigger-runtime`, `host/session-runtime`,
+`host/settings-helpers`, `tunnels`, `dev-tunnel` 10 files/65 tests pass plus
+settings-helpers 60/60; bun `relay/host-client` + `relay/identity` 17/17 pass
+(includes the new leak/log/reset/identity regressions); UI relay tests
+10+10+2+30+13 pass. CLI capability smoke lists
+`cloudflare,ngrok,tailscale` with `serve` default. Full type-check/lint/test,
+dead-code and the running-app smoke run after the combined integration
+followups land and the rebase is redone (see next step).

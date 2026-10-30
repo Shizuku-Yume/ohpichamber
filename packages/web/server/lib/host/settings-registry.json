@@ -286,6 +286,9 @@
     "tunnelMode": {
       "scope": "instance"
     },
+    "tunnelHttpsPort": {
+      "scope": "instance"
+    },
     "tunnelBootstrapTtlMs": {
       "scope": "instance"
     },

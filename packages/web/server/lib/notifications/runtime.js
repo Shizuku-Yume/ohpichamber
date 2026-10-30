@@ -130,7 +130,8 @@ export const createNotificationTriggerRuntime = (deps) => {
       const variables = await buildTemplateVariables(event, event.sessionId, resolved);
       sessionName = safeText(variables.session_name, resolved);
       const text = kind === 'ready' ? await fetchLastAssistantMessageText(event.sessionId)
-        : kind === 'question' ? event.question.prompt : kind === 'permission' ? event.approval.commandSummary : '';
+        : kind === 'error' ? event.error
+          : kind === 'question' ? event.question.prompt : kind === 'permission' ? event.approval.commandSummary : '';
       variables.last_message = await prepareNotificationLastMessage({ message: safeText(text, resolved), settings });
       for (const key of Object.keys(variables)) variables[key] = safeText(variables[key], resolved);
       const templates = settings.notificationTemplates ?? {};

@@ -14,11 +14,14 @@ export const RELAY_PROTOCOL_VERSION = 1;
 // closed on unknown plaintext once the E2EE handshake is done, which ends in
 // the same reconnect. Mirrored in packages/web/server/lib/relay/host-client.js.
 const relayRetireSchema = z.object({ type: z.literal('relay-retire'), code: z.number().int(), reason: z.string().catch('') });
+// Peer text may end up in status text and logs; keep it one bounded line. It is
+// never used as a WebSocket close reason (that path has a 123-byte limit).
+const sanitizeRelayReason = (raw: string): string => String(raw ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
 
 export const parseRelayRetire = (raw: string): { code: number; reason: string } | null => {
   try {
     const parsed = relayRetireSchema.safeParse(JSON.parse(raw));
-    return parsed.success ? { code: parsed.data.code, reason: parsed.data.reason } : null;
+    return parsed.success ? { code: parsed.data.code, reason: sanitizeRelayReason(parsed.data.reason) } : null;
   } catch {
     return null;
   }

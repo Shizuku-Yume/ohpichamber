@@ -28,12 +28,10 @@ describe('canonical Host session activity', () => {
     expect(runtime.getActiveSessionCount()).toBe(1);
     expect(runtime.getSessionState('session')).toMatchObject({ status: 'awaiting_approval', activeRunId: 'run', lastEventId: 'epoch:4' });
     expect(runtime.getPendingBlockingRequestsSnapshot()).toEqual({ session: { approvals: [approval()], questions: [question()] } });
-    expect(runtime.getSessionAttentionState('session').needsAttention).toBe(false);
     runtime.applySnapshot({ ...activeSnapshot(), approvals: [], questions: [] }, scope);
     expect(runtime.getPendingBlockingRequestsSnapshot()).toEqual({});
     runtime.applySnapshot(snapshot([], [], { epoch: 'replacement' }), scope);
     expect(runtime.getActiveSessionCount()).toBe(0); expect(runtime.getSessionState('session').status).toBe('idle');
-    expect(runtime.getSessionAttentionState('session').needsAttention).toBe(false);
   });
 
   it('stores canonical requests by exact ID and settles only the matching request', () => {
@@ -47,25 +45,6 @@ describe('canonical Host session activity', () => {
     f.process({ type: 'question.resolved', question: question({ version: '2', status: 'answered', response: 'A', answeredAt: 6, resolvedAt: 6 }) }, 6);
     f.process({ type: 'approval.resolved', approval: approval({ approvalId: 'second', version: '2', status: 'expired', resolvedAt: 7 }) }, 7);
     expect(f.runtime.getPendingBlockingRequestsSnapshot()).toEqual({});
-  });
-
-  it('marks unviewed outer completion as attention and broadcasts its clear through the Host broadcaster', () => {
-    vi.useFakeTimers(); vi.setSystemTime(0);
-    const f = fixture();
-    f.process({ type: 'run.started', runId: 'run', createdAt: 0 });
-    f.runtime.markUserMessageSent('session');
-    f.process({ type: 'run.completed', runId: 'run', finishedAt: 2 }, 2);
-    expect(f.runtime.getSessionAttentionState('session').needsAttention).toBe(true);
-    expect(f.events).toContainEqual({ type: 'openchamber:session-status', properties: expect.objectContaining({ sessionId: 'session', status: 'idle', needsAttention: true }) });
-    f.runtime.markSessionViewed('session', 'client');
-    expect(f.events.at(-1)).toMatchObject({ type: 'openchamber:session-status', properties: { sessionId: 'session', needsAttention: false } });
-    expect(f.runtime.getSessionAttentionState('session').isViewed).toBe(true);
-    expect(JSON.stringify(f.events)).not.toContain(scope.cwd);
-    f.process({ type: 'run.started', runId: 'next', createdAt: 3 }, 3);
-    f.process({ type: 'run.completed', runId: 'next', finishedAt: 4 }, 4);
-    expect(f.runtime.getSessionAttentionState('session').needsAttention).toBe(false);
-    f.runtime.markSessionUnviewed('session', 'client');
-    expect(f.runtime.getSessionAttentionState('session').isViewed).toBe(false);
   });
 
   it('ignores inner completion and a terminal event for another outer run', () => {
@@ -108,7 +87,7 @@ describe('canonical Host session activity', () => {
     const count = f.events.length; vi.advanceTimersByTime(2000);
     expect(f.events).toHaveLength(count); expect(f.runtime.getActiveSessionCount()).toBe(0);
     expect(f.runtime.getSessionStateSnapshot()).toEqual({}); expect(f.runtime.getSessionActivitySnapshot()).toEqual({});
-    expect(f.runtime.getPendingBlockingRequestsSnapshot()).toEqual({}); expect(f.runtime.getSessionAttentionSnapshot()).toEqual({});
+    expect(f.runtime.getPendingBlockingRequestsSnapshot()).toEqual({});
   });
 
   it('rejects foreign snapshot/request scope and does not accept legacy engine-shaped events', () => {
@@ -126,7 +105,7 @@ describe('canonical Host session activity', () => {
     expect(f.runtime.getSessionStateSnapshot()).toEqual({}); expect(f.runtime.getActiveSessionCount()).toBe(0);
     f.process({ type: 'run.started', runId: 'next', createdAt: 2 }, 2);
     f.runtime.dispose(); f.process({ type: 'run.started', runId: 'later', createdAt: 3 }, 3);
-    expect(f.runtime.getSessionStateSnapshot()).toEqual({}); expect(f.runtime.getSessionAttentionSnapshot()).toEqual({});
+    expect(f.runtime.getSessionStateSnapshot()).toEqual({});
     expect(vi.getTimerCount()).toBe(0);
   });
 });

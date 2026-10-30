@@ -43,7 +43,7 @@ Each push carries an **absolute** `aps.badge` = the number of **distinct collaps
 pushed since the app was last foregrounded**. It mirrors the lock-screen banner stack.
 
 The count is a `Set<tag>` (`pendingPushTags`) in the trigger runtime (`runtime.js`):
-`toApnsGenericPayload` adds the push `tag` and returns the set size as the badge. We key by **`tag`,
+`fanoutPush` in `runtime.js` adds the push `tag` and sends the set size as the badge. We key by **`tag`,
 not sessionId**, because the tag *is* the banner identity — iOS uses it as `apns-collapse-id`, so
 same-tag pushes replace one banner while different tags are distinct banners. One session can raise
 several banners (`ready-<id>`, `question-<id>`, `permission-<requestKey>` are different tags), so
@@ -59,7 +59,7 @@ so they are the dependable reset — the visibility beacon alone proved unreliab
 mirrors the device zeroing its icon badge on `sceneDidBecomeActive` (`AppDelegate.swift`), keeping
 server and device in sync.
 
-The value flows `runtime.js` (`toApnsGenericPayload`) → `apns-runtime.js` (`sendViaRelay` body /
+The value flows `runtime.js` (`fanoutPush`) → `apns-runtime.js` (`sendViaRelay` body /
 direct-mode `aps.badge`) → relay (`pushSendSchema.badge` → `aps.badge`). It is **not** signed (like
 `body`/`data`); the relay still only delivers to bound tokens. The set is server-global, so every
 device token of a server sees the same badge.
@@ -113,8 +113,9 @@ hides the text is the **push key** (`push-seal.js`). A current iOS or Android ap
 32-byte key that stays on the server and the phone. For such a phone the server sends the
 generic scenario title in the clear, an empty body, and `data.enc`: AES-256-GCM of what the
 phone shows. That is the session name as title and what happened as body: the agent's reply,
-the question, the command or file a permission is for, the error, the goal outcome
-(`runtime.js` → `toApnsGenericPayload` → `sealed`, at most 250 characters). The iOS
+the question, the command or file a permission is for, the run's error, the goal outcome
+(`runtime.js` `fanoutPush` → `sealed`; the detail is capped at 250 characters before the
+prefix is added). The iOS
 Notification Service Extension and Android's `SealedPushMessagingService` open it on the device.
 
 Who can read what:

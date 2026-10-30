@@ -24,7 +24,7 @@ const fixture = (settings = {}, overrides = {}) => {
   disposers.push(runtime.stop);
   return { runtime, sessionService, web, native, ui, desktop };
 };
-const terminal = (sequence = 1, type = 'run.completed') => event(sequence, { type, runId: 'run', finishedAt: 2, ...(type === 'run.failed' ? { error: 'secret /private/error-path' } : {}) });
+const terminal = (sequence = 1, type = 'run.completed') => event(sequence, { type, runId: 'run', finishedAt: 2, ...(type === 'run.failed' ? { error: 'Authorization: Bearer secret /private/workspace/error-path' } : {}) });
 const approval = (sequence, type = 'approval.requested') => event(sequence, { type,
   approval: { approvalId: 'approval', sessionId: 'session', turnId: 'turn', toolCallId: 'call', epoch: 'epoch', workerGeneration: 'generation',
     version: type.endsWith('resolved') ? '2' : '1', toolName: 'bash', actionType: 'bash_command', commandSummary: 'Read /private/workspace/image.png', details: {},
@@ -91,7 +91,11 @@ describe('canonical notification triggers', () => {
 
   it('keeps failed-run private error details out of generic public alerts', async () => {
     const f = fixture(); await f.runtime.processCanonicalEvent(terminal(1, 'run.failed'), scope);
-    expect(f.web[0].data.type).toBe('error'); expect(JSON.stringify(f.web)).not.toContain('/private/error-path');
+    expect(f.web[0].data.type).toBe('error');
+    expect(JSON.stringify(f.web)).not.toContain('/private/workspace/error-path');
+    expect(f.web[0].body).toContain('[redacted]/error-path');
+    expect(f.native[0].sealed.body).toContain('Error: ');
+    expect(f.native[0].sealed.body).toContain('[redacted]/error-path');
     expect(JSON.stringify(f.web)).not.toContain('secret');
   });
 

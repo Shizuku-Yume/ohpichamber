@@ -4,11 +4,11 @@
 **Task type:** feature
 **Base commit:** <commit-sha>
 
-**Status:** blocked; implementation frozen on `upstream-refresh/07`, awaiting task 34 acceptance, one rebase, and the heavy Check.
+**Status:** paused
 
 **Delivers:** The UI renders upstream's Board, PR/review and tracker surfaces, references and comments, plus the Files, Git, worktree and diff views, on top of the refreshed server.
 
-**Blocked by:** 06, 10, 33, 34
+**Blocked by:** none. Tasks 33 and 34 landed at integration pin `fb19558673` before this branch's single rebase; the dated blocker record below is kept as history, not as a current dependency.
 **Files:** Path list: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-sync-2026-10-27/plan-paths/07.tsv` (268 paths: 235 clean/new, 18 both-side, 9 conflicts; +24k lines). Main locations: `packages/ui/src/components/{sourceBoard,comments,references,sourceControl,github,views}`, `packages/ui/src/lib/{source-control,trackers}`, and the host-related settings sections (`git-identities`, `projects`, `routing`, `remote-instances`). Deferred ownership from task 10: `components/ui/{JsonTreeViewer.tsx,JsonTreeView.tsx,JsonTreeView.test.tsx}` (needs this task's `views/files/FileTreeRowParts`/`fileTreeRow` and task 25's `lib/jsonTreeUtils`). Deferred from task 23: `stores/{useTrackerAuthStore,useTrackedItemsStore,useSourceBoardStore,useSourceControlAuthStore,useGitHubPrStatusStore}.ts` (+tests), `stores/{useChangeRequestContextStore,useInlineCommentDraftStore,useGitStore,useWalkthroughStore}.ts` (upstream reworks on this task's descriptors/DTOs); `stores/useLinearAuthStore(.test).ts` is deleted here together with its last callers (see the planning amendment: tasks 08/11/24 closed without dropping them). Deferred from task 15: `components/chat/composer/sessionReferences.{ts,test.ts}` (consumed by `references/sessionMentionChips`), `components/comments/InlineCommentInput.tsx` consumption of `isPastedInput` from `useTextareaInlinePicker`, and project-scoped magic prompt overrides in `packages/ui/src/lib/magicPrompts.ts` with project settings. Because those deferrals were accepted by tasks that have since closed, this task also edits the consumer files they named, and no others: `components/chat/ChatInput.tsx` (task 15), `components/chat/message/{MessageBody.tsx,parts/UserTextPart.tsx,parts/userTextPartContent.ts}`, `components/chat/markdown/MarkdownLink.tsx` (task 13), `components/layout/ContextPanel.tsx` (task 09), `sections/magic-prompts/{MagicPromptsPage.tsx,MagicPromptsSidebar.tsx}` and `sections/integrations/IntegrationsPage.tsx` (task 11), `App.tsx`, `apps/MobileApp.tsx`, `apps/runtimeEndpointReset.ts` (task 24). Each edit adopts the matching upstream `0056bf6a9` wiring; no other behavior in those files changes.
 
 **Read first:** Spec W5; task 31 consumes `views/files/FileTreeRowParts`/`fileTreeRow` — keep them exported; `.agents/skills/ui-api-decoupling/SKILL.md`; `.agents/skills/locale-ui-patterns/SKILL.md`; `.agents/skills/performance-engineering/SKILL.md`; `.agents/skills/sync-state-invariants/SKILL.md`; `packages/ui/src/components/views/DOCUMENTATION.md`.
@@ -31,7 +31,14 @@
 
 ## Progress
 
-### Planning amendment (2026-10-30)
+### Current state after the single rebase (2026-10-30)
+
+This branch was rebased once onto the landed task 34 pin `fb19558673fdac1d6f137469a149eb607ffbb504`, preserving task 33's project routes, task 34's Change-Id route/client contract, task 35's archive plan, and task 31's blocked plan. Tasks 33 and 34 are landed and accepted; the older phase-1 blocker text below is dated execution history and is not a current dependency.
+
+The approved deferred wiring is implemented in `7b59644270` (rebased from the pre-rebase freeze): magic prompt scopes, composer session references, session mention chips, `ContextPanel` tracker item view, generic tracker/source-control settings, and the `useLinearAuthStore` retirement. The review-surface Change-Id control now calls `addChangeIdToHead` from `lib/gitApi` (the task 34 member), never `gitApiHttp`.
+
+Current verification for this tip is being recorded in `manifest.json` and `logs/wiring-*.log`; heavy/root/real-path receipts replace this paragraph when they settle.
+### Dated planning amendment (pre-rebase, 2026-10-30)
 
 The execution record below is restored from branch `upstream-refresh/07` at `9a8f099471`; the branch itself is unchanged. This planning copy routes the missing project endpoints to task 33 and the missing Change-Id route/client contract to task 34, retires the obsolete session-warming blocker, and keeps the provider-backed gap as a named fixture limit rather than a credential blocker.
 
@@ -132,7 +139,7 @@ Rebased at the maintainer's request. One conflict: `.workflow/tasks/upstream-ref
 
 The app boots and renders on `http://127.0.0.1:3750` with the fixture repo as project; screenshots `screenshots/02-main.png`, `03-board.png`, `04-files.png`. The Board header opens, but its body stays at “Looking for Git repositories...” and the Files tree has no entries. Direct probes from the page return 404 for `/api/git/projects` and `/api/git/project-worktrees` (`/api/fs/list` answers 200). The two project routes are absent at the observed tip `8ee84af280` and still absent at current integration `43dcd6ffc1`: `01.tsv` assigns `packages/web/server/lib/git/routes.js`, but archived task 01's Deliver/Done-when and the task 06/22 records do not own the project-overview or worktree-batch endpoints. Task 33 now owns them; the handlers exist at upstream `0056bf6a9` but not at integration. No source-control account is configured for the fixture, so issue/PR listing, PR diff and provider review comments remain unexercised; that is the Check's named fixture limit, not a hard credential blocker. Result: task 07's real path is blocked by task 33 at the host-route layer, and no UI acceptance claim is made until the fixture exercises the real routes. Fixture: `fixture-repo` (main + feature/files, renamed/deleted/binary files and one working-tree change).
 
-### Done-when status at `b7f0d9e599` (not accepted; boxes intentionally left open)
+### Dated Done-when status at `b7f0d9e599` (historical; superseded by the current receipt below)
 
 1. **Board, tracker and review components use the canonical client and task 06's routes; no direct provider fetch in the browser — UNMET.** Components use the canonical client and `RuntimeAPIs`, and no browser call to a provider origin was found. The host routes they call are absent on this branch: `POST /api/git/projects` and `POST /api/git/project-worktrees` return 404 and are now task 33's, while `PullRequestSection` directly calls `gitApiHttp.addChangeIdToHead` until task 34 adds the `POST /api/git/change-id` route and the `GitAPI.addChangeIdToHead` member. Task 01's `01.tsv` path row does not make the project endpoints task 01 deliverables. Blocked by task 33 and task 34, not by credentials.
 2. **Files/Git/diff views open the fixture repository and show changed files, hunks and sticky scrollbar behavior — NOT EXERCISED.** Unit tests for the file tree, `FileContentSearchResults`, `useRawAssetUrl`, image neighbors and `stickyScrollbarBinding` pass. In the real path the Files panel renders its toolbar but has no tree entries because repository discovery fails on the 404 above. Blocked by task 33's project routes; no credentials needed for the local fixture.
@@ -145,7 +152,7 @@ The app boots and renders on `http://127.0.0.1:3750` with the fixture repo as pr
 9. **`sessionReferences` and `sessionMentionChips` work across sessions and worktrees; `InlineCommentInput` consumes `isPastedInput` — WIRING LANDED, RUNTIME NOT EXERCISED.** `InlineCommentInput` consumes `isPastedInput`; `ChatInput.tsx` resolves composer session references, and `sessionMentionChips.tsx`/`SessionMentionChipButton.tsx` are mounted through `MessageBody.tsx`, `UserTextPart.tsx`, `userTextPartContent.ts` and `MarkdownLink.tsx`. Focused composer/UserTextPart tests pass; the cross-session/worktree walk remains unexercised.
 10. **Project-scoped magic prompt overrides wired with project settings — CODE MET, RUNTIME NOT EXERCISED.** The adopted `MagicPromptsPage.tsx` switches between global and project scope and calls `fetchMagicPromptScopes`, `saveScopedMagicPromptOverride`, `resetScopedMagicPromptOverride` and `resetAllScopedMagicPromptOverrides`; its focused test passes. No dev-server project save was run at this tip.
 
-### Blockers (distinct, none fixed here)
+### Dated blockers (resolved at `fb19558673`, kept as history)
 
 - **Task 33 — project repository batch routes.** `POST /api/git/projects` and `POST /api/git/project-worktrees` are missing at the observed tip `8ee84af280` and at current integration `43dcd6ffc1`; they exist only in upstream `0056bf6a9` (`git/routes.js`). `01.tsv` assigns `git/routes.js`, but archived task 01's Deliver/Done-when does not include these endpoints; the task 06/22 records do not own them. Task 33 now owns them; task 07 does not add the routes.
 - **Task 34 — change-id route and caller contract.** `gitApiHttp.addChangeIdToHead` exists, but `POST /api/git/change-id` is not registered and `GitAPI` has no `addChangeIdToHead` member. Task 34 owns the route, its route test and the client contract/cutover; task 07's `PullRequestSection` consumes that member instead of the direct function import once task 34 lands.
@@ -161,3 +168,13 @@ Provider-backed issue/PR listing, PR diff, references and review comments remain
 - Build: exit 0, `logs/heavy-build.log`.
 - Static: `bun run type-check` 0 and `bun run lint` 0 at the committed tip, `logs/heavy-final-type-check.log`, `logs/heavy-final-lint.log`.
 - Real path: dev-server log `logs/dev-server.log`; page probes `{"projects":404,"project-worktrees":404,"fs-list":200}`; screenshots `screenshots/02-main.png`, `screenshots/03-board.png`, `screenshots/04-files.png`; fixture `fixture-repo`. The retired session-warming probe is not part of this record.
+
+### Pause handoff (2026-10-30)
+
+- **Worker outage:** lane-07-finish-good interrupted at turn 26; external provider deepseek-v4.1-flash failed with 400 unknown provider after 429.
+- **Lineage:** branch `upstream-refresh/07`, integration tip `fb19558673fdac1d6f137469a149eb607ffbb504`, committed tip `7b59644270cb3957dea7b91f6b19cf000b18df45` (14 commits ahead).
+- **Uncommitted source:** preserved dirty paths in tree: `packages/ui/src/components/views/git/PullRequestSection.tsx`, `packages/ui/src/lib/api/types.ts`, `packages/web/src/api/clientAuth.ts`.
+- **Verified state:** heavy-1444 root-test/static logs exist (`logs/heavy-1444-root-test.log` 7/7 suites exit 0, type-check/lint exit 0); historical build proof `logs/heavy-build.log` is not recertification of interrupted dirty source (no new build); guest provider installed and bound to fake-forge (`logs/realpath-*.json`).
+- **Earliest incomplete step:** resume real-path headless Chrome scenario against fixture repo (Board issues/PRs, PR diff, Files tree, review comments).
+- **Recovery receipt:** proof recorded at `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-recovery-2026-10-30/receipt.json`; dev-server/fake-forge processes stopped cleanly.
+- **Review status:** task 07 independent review and user acceptance are not complete.

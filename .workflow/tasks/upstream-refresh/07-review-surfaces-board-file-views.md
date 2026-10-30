@@ -4,9 +4,11 @@
 **Task type:** feature
 **Base commit:** <commit-sha>
 
+**Status:** blocked
+
 **Delivers:** The UI renders upstream's Board, PR/review and tracker surfaces, references and comments, plus the Files, Git, worktree and diff views, on top of the refreshed server.
 
-**Blocked by:** 06, 10
+**Blocked by:** 06, 10, 33
 **Files:** Path list: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-sync-2026-10-27/plan-paths/07.tsv` (268 paths: 235 clean/new, 18 both-side, 9 conflicts; +24k lines). Main locations: `packages/ui/src/components/{sourceBoard,comments,references,sourceControl,github,views}`, `packages/ui/src/lib/{source-control,trackers}`, and the host-related settings sections (`git-identities`, `projects`, `routing`, `remote-instances`). Deferred ownership from task 10: `components/ui/{JsonTreeViewer.tsx,JsonTreeView.tsx,JsonTreeView.test.tsx}` (needs this task's `views/files/FileTreeRowParts`/`fileTreeRow` and task 25's `lib/jsonTreeUtils`). Deferred from task 23: `stores/{useTrackerAuthStore,useTrackedItemsStore,useSourceBoardStore,useSourceControlAuthStore,useGitHubPrStatusStore}.ts` (+tests), `stores/{useChangeRequestContextStore,useInlineCommentDraftStore,useGitStore,useWalkthroughStore}.ts` (upstream reworks on this task's descriptors/DTOs); `stores/useLinearAuthStore(.test).ts` is deleted here once tasks 08/11/24 drop their imports. Deferred from task 15: `components/chat/composer/sessionReferences.{ts,test.ts}` (consumed by `references/sessionMentionChips`), `components/comments/InlineCommentInput.tsx` consumption of `isPastedInput` from `useTextareaInlinePicker`, and project-scoped magic prompt overrides in `packages/ui/src/lib/magicPrompts.ts` with project settings.
 
 **Read first:** Spec W5; task 31 consumes `views/files/FileTreeRowParts`/`fileTreeRow` — keep them exported; `.agents/skills/ui-api-decoupling/SKILL.md`; `.agents/skills/locale-ui-patterns/SKILL.md`; `.agents/skills/performance-engineering/SKILL.md`; `.agents/skills/sync-state-invariants/SKILL.md`; `packages/ui/src/components/views/DOCUMENTATION.md`.
@@ -26,3 +28,11 @@
 - [ ] Session pins stay deferred: the missing Host source is the technical-debt entry `Session pins have no OMP source`; do not fake it.
 - [ ] `sessionReferences` and `sessionMentionChips` work across sessions and worktrees; `InlineCommentInput` consumes `isPastedInput` from `useTextareaInlinePicker`.
 - [ ] Project-scoped magic prompt overrides in `packages/ui/src/lib/magicPrompts.ts` are wired with project settings.
+
+## Blocked
+
+- **Task 33 — project repository batch routes.** `POST /api/git/projects` and `POST /api/git/project-worktrees` are absent on integration `43dcd6ffc1`, so Board repository discovery stays at “Looking for Git repositories...” and the Files tree stays empty. Task 33 owns both routes, their Host tests and the local-fixture UI path. The routes are not a task 01 deliverable: `01.tsv` assigns `packages/web/server/lib/git/routes.js`, but archived task 01's Deliver/Done-when omits both endpoints and no other task claims them until 33. This task resumes after 33 lands and must not substitute browser route mocks for the real Host route.
+- **Change-Id wiring — separate follow-up.** `gitApiHttp.addChangeIdToHead` calls `POST /api/git/change-id`, but `git/routes.js` registers no such route. `22.tsv` lists upstream's `git/routes.change-id.test.js`; task 22's archive does not record landing the route or its test, so this needs a follow-up owner and is not part of task 33's project-route scope.
+- **Cross-session walk.** Session creation hit `WorkerPoolManager: worker initialization timed out after 10000ms`; rerun the cross-session/worktree walk on a quiet machine after task 33. This is not a provider-credential limit.
+
+Provider-backed issue/PR listing, PR diff, references and review comments remain unexercised because no source-control account is configured. That is a named limit, not a hard blocker or waiver: the Check accepts the fixture alternative, and the fixture run still has to exercise the actual app and Host routes end to end. Per-session warming is retired by the maintainer decision; its former `/api/session/warming` 404 is obsolete and must not be implemented or carried as a blocker.

@@ -43,7 +43,7 @@ Excluded on purpose: `packages/vscode`, OpenCode-engine paths, upstream folder t
 ### Sequence
 
 1. Foundations: 01 security and lost-state fixes, then 02 toolchain and root build contract (TypeScript 7, Bun 1.4.4, oxlint 1.88, Electron 44, lockfile regenerated, `bun-patches` evaluated). Toolchain first is deliberate: upstream area source is authored against TypeScript 7, and refreshing under 5.9 would re-touch every refreshed file during migration (`decisions.md: 2026-10-27 - Bump the toolchain before refreshing ui and web`).
-2. Small areas in parallel after 02: 03 mobile/extensions/scripts, 04 Guest SDK and 05 Electron shell start as soon as 02 lands. 22 web host core also follows 02, and 06 server source-control hosts follows 22; 33 adds the project repository batch routes and 07 review surfaces follows 06 and 33. 09 layout/works and 10 design system start after 02 and 23 as their blockers allow.
+2. Small areas in parallel after 02: 03 mobile/extensions/scripts, 04 Guest SDK and 05 Electron shell start as soon as 02 lands. 22 web host core also follows 02, and 06 server source-control hosts follows 22; 33 adds the project repository batch routes, 34 adds the Change-Id amend route and client contract, and 07 review surfaces follows 06, 33 and 34. 09 layout/works and 10 design system start after 02 and 23 as their blockers allow.
 3. UI features after the design system and UI state tasks: 08 sessions/sidebar, 11 settings, 12 Markdown/diff, 13/14 chat, 15 composer, 16 knowledge, 17 workflows, 18 integrations, 19 tunnels, 20 i18n, 21 diagnostics. Each takes its own path list; shared interfaces are named in the task files.
 4. 22 web host core and 23 UI state (sync/stores) are the two hardest adaptation tasks; they land before the feature tasks that depend on their routes and stores.
 5. Documentation last: 26 English docs and assets, then 27-29 translated locales.
@@ -61,7 +61,7 @@ its Check before every landing.
 |---|---|---|---|
 | A Foundations | 01 → 02 | security/data-loss fixes, root manifests, lockfile, TypeScript/Bun/oxlint/Electron, `bun-patches`, `tools/` | nothing |
 | B Small areas | 03 → 04 → 05 | mobile, extensions, scripts, Guest SDK, Electron package | 02 |
-| C Server | 22 → 06 → 33 → 07, then 16/17/19/21 server halves | web host core, source-control host modules, project repository batch routes, review server, later feature routes | 02; 06/07 after 22; 07 after 33 |
+| C Server | 22 → 06 → 33 → 34 → 07, then 16/17/19/21 server halves | web host core, source-control host modules, project repository batch routes, Change-Id amend route/client contract, review server, later feature routes | 02; 06/07 after 22; 07 after 33 and 34 |
 | D UI foundation | 10 → 23 → 24 → 25 | design system/assets/theme, sync/stores, hooks/api/apps, misc UI | 02; 23-25 after 10 |
 | E UI features | 08, 09, 11, 12 → 13 → 14 → 15, 18, 20 | session/sidebar, layout/works, settings, markdown, chat, composer, catalog, i18n | 10 and 23; 12-15 chained; 08/09/11/18/20 independent |
 | F Docs | 26 → 27, 28, 29 | `packages/docs`, `docs/` assets | every adoption task (26 is the documentation gate, not a verification gate) |
@@ -142,4 +142,4 @@ Every task leaves the integration branch green: `bun install --frozen-lockfile` 
 
 **Measurement.** Upstream tip `0056bf6a9` (2026-10-26, 813 commits, `v2.5.2-1`). Delta: 4,031 paths, +299,677/-82,213; 1,135 clean, 1,223 new, 991 both-live, 226 fork-deleted, 456 upstream deletions; 640 of 1,230 shared files conflict. Fork load: 3,410 changed paths (+206,927/-242,154). Per-bucket counts are in `plan-path-summary.md`; per-path lists in `plan-paths/NN.tsv`.
 
-**Task scale.** 33 tasks across eight lanes; 01-02 are serial, the rest parallelize as the lane table in each task's `Blocked by` allows. Tasks 31-32 are the one-view sidebar follow-ups that tasks 08/24 deferred; they own paths already counted in those tasks' lists, so the 4,031-path accounting is unchanged. Task 33 owns the missing project repository batch behavior in task 01's route file plus fork-owned space-boundary files, so it adds no upstream path either.
+**Task scale.** 34 tasks across eight lanes; 01-02 are serial, the rest parallelize as the lane table in each task's `Blocked by` allows. Tasks 31-32 are the one-view sidebar follow-ups that tasks 08/24 deferred; they own paths already counted in those tasks' lists, so the 4,031-path accounting is unchanged. Task 33 owns the missing project repository batch behavior in task 01's route file plus fork-owned space-boundary files, and task 34 owns the already-counted Change-Id route/test and client contract, so neither adds an upstream path.

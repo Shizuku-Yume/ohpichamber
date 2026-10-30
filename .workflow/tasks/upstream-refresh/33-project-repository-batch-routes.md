@@ -2,7 +2,11 @@
 
 **Effort:** upstream-refresh
 **Task type:** feature
-**Base commit:** <commit-sha>
+**Base commit:** 811ecef47102ce4d737de56a7b41293e326a1e1e
+
+**Started:** 2026-10-30T08:18:01+08:00
+
+**Status:** active
 
 **Delivers:** The Host answers `POST /api/git/projects` and `POST /api/git/project-worktrees` for the canonical project-overview client, so Board/Files discovery and worktree reads stop at a real Host route instead of a 404. The routes are the missing behavior from upstream `0056bf6a9`; they run on the fork's Git service and space boundary.
 
@@ -70,3 +74,29 @@ Invalid batch (missing/empty `directories`, non-string entry, or more than 200):
 - [ ] Focused tests cover validation (missing, empty, non-string, duplicates, 200 and 201 entries), input order, field selection, canonical non-repository status/root, one directory failing without blanking others, provenance parity with the existing worktree route, and per-directory worktree failure. Topology notification and the 4-worker bound are throwaway smoke checks or invariant observations only; permanent tests must not assert `observeWorktreeTopology` call counts or worker internals.
 - [ ] Existing `gitApiHttp` batch tests stay green unchanged; no client endpoint, body shape, response field or cache behavior is renamed.
 - [ ] Real path records the app and route observations above, the fixture setup, and the provider limit. A mock that intercepts `/api/git/projects` or `/api/git/project-worktrees` in the browser does not count.
+
+## Progress
+
+### Start
+
+Worktree `/home/shizuku/Project/ohpichamber-worktrees/upstream-refresh-33`, branch `upstream-refresh/33-project-repository-batch-routes`, cut from landed plan `811ecef471`.
+`Dirty at start: none`. Blockers: `None`; no task archive prerequisite.
+
+### Check before
+
+A throwaway Express app that registers `registerGitRoutes` and posts to both endpoints (no dev server) reproduces the gap:
+
+```
+POST /api/git/projects 404 {}
+POST /api/git/project-worktrees 404 {}
+```
+
+The routes are not registered. Implementation and focused tests are on the branch; the real-path app run is pending the coordinator's release of the task-19 heavy slot.
+
+### Check after (partial; real app path pending)
+
+- Focused web suites: 2 files, 98/98 tests pass (`server/lib/git/routes.test.js`, `server/lib/spaces/dispatcher.test.js`).
+- `bunx tsc -p packages/web/tsconfig.json --noEmit` exit 0; `bun run --cwd packages/web lint` exit 0.
+- A throwaway Express app with the real Git service (no mock, no dev server) now answers both routes: `projects` 200 with a real repo entry (status/root) plus a non-repo canonical entry, and `project-worktrees` 200 with the repo's worktree list.
+- Real app + fixture UI path and the full task Check remain owed after the heavy slot is released. No archive, no landing, no task 34.
+

@@ -382,12 +382,14 @@ included. This record commit is the only later difference.
 - Web focused `bunx vitest run lib/host/settings-helpers.test.js`: exit 0,
   59 tests (`logs/combined-linear-web-focused-tests.log`)
 - `bunx oxlint -c oxlint.anti-slop.config.ts` over the changed UI and server
-  files: exit 1 from the findings the file already carries. Two of them land on
-  lines the warming removal added (`settings-helpers.js:1107`, `:1116`, both a
-  `typeof` guard in the same style as every other branch of that sanitizer); the
-  rest predate this branch. Nothing was rewritten here because the code is not
-  this branch's and the file's convention is uniform
-  (`logs/combined-linear-oxlint.log`).
+  files: exit 1 from findings the sanitizer already carries. Two of them landed
+  on lines this branch added — the `typeof` guards for the new persisted
+  switches and for `smallModelVariant` in `settings-helpers.js`. They are fixed
+  in `aa2d7a38d7`: both values now parse through zod schemas at the update
+  boundary, one field at a time, so a mistyped switch or an empty variant is
+  dropped while the valid fields in the same request still persist. The file's
+  other 206 findings predate the branch and stay untouched
+  (`logs/oxlint-settings-helpers.log`: 208 before, 206 after, none added).
 - `bun run dead-code`: exit 1 (baseline finding count); versus the pinned
   integration-tip baseline it reports no new file, and two disappear —
   `WorkStatusWarmingToggle.tsx` (deleted with the feature) and
@@ -421,3 +423,45 @@ Integration moved to `811ecef471` while this branch was being built. The three
 commits since `43dcd6ffc1` are workflow-documentation only (no file under
 `packages/ui/src/lib/i18n/messages/`, no warming code), so landing starts with a
 three-commit rebase and needs no new review.
+
+## Rebase onto `811ecef471` and the final pin (2026-10-30)
+
+Integration advanced three workflow-documentation commits while this branch was
+being prepared: `43dcd6ffc1` → `811ecef471` (task 34 record, task 33 plan, task
+07 record). No file under `packages/ui/src/lib/i18n/messages/` and no warming
+code moved.
+
+- Rebased linearly onto `811ecef471`: 20 commits above it, still zero merge
+  commits. Pre-rebase refs are kept as `backup/ar-he-warming-linear-pre-rebase-285723041d`
+  and `backup/ar-he-warming-merge-reference-47abe80a2d`; the source branches
+  remain at `upstream-refresh/fix-ar-he = 227efb1ecd` and
+  `upstream-refresh/21-warming = 3fe518e8b5`.
+- Proof of an unchanged branch: `git diff 43dcd6ffc1 811ecef471` is
+  byte-identical to `git diff backup/ar-he-warming-linear-pre-rebase-285723041d HEAD`,
+  and `git diff 811ecef471 HEAD` is byte-identical to the pre-rebase branch diff.
+  So the rebase moved only the base, never the branch's own change
+  (`logs/rebase-linear-equivalence.txt`).
+- Catalogs after the rebase: en 9,064; ar and he 8,715; 0 extra keys in ar/he;
+  349 English-fallback keys; the same workspace warming copy as before.
+- The comparison point for the heavy slot is the pinned head of this branch; its
+  manifest, with the base, the commit list and every changed file, is
+  `logs/rebase-linear-manifest.txt`.
+- Rebase-time checks: `bun run type-check` exit 0
+  (`logs/rebase-linear-type-check.log`), `bun run lint` exit 0
+  (`logs/rebase-linear-lint.log`), UI focused 152 tests/59 files exit 0
+  (`logs/rebase-linear-ui-focused-tests.log`), web focused 59 tests exit 0
+  (`logs/rebase-linear-web-focused-tests.log`).
+- Boundary-validation fix checks: `bunx oxlint` on the file 208 → 206 findings
+  (`logs/oxlint-settings-helpers.log`), web focused tests 59 passed
+  (`logs/oxlint-fix-web-tests.log`), type-check and lint exit 0
+  (`logs/oxlint-fix-type-check.log`, `logs/oxlint-fix-lint.log`), UI focused 144
+  tests/57 files exit 0 (`logs/oxlint-fix-ui-tests.log`).
+
+### Review reports
+
+- A (locale/catalog) and B (provenance) verdicts are recorded above; their
+  transcripts are `history://lane-20-followup-good.ReviewA` and
+  `history://lane-20-followup-good.ReviewB`.
+- The settings sanitizer and the locale/retirement integration are left for the
+  coordinator's closure review; this branch holds the receipts it needs.
+

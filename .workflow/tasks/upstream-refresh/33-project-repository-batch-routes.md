@@ -61,7 +61,7 @@ Worktree read failure/empty repository:
 { "directory": "/plain", "worktrees": [] }
 ```
 
-Invalid batch (missing/empty `directories`, non-string entry, or more than 200): 400 `{ "error": "…" }`. The 200 response is used for every per-directory failure, so one bad project never hides the rest.
+Missing, empty or non-array `directories`, or more than 200 unique normalized entries: 400 `{ "error": "…" }`. Entries go through the existing `resolveDirectoryQuery` normalization: whitespace is trimmed, values that do not resolve to a non-empty directory are dropped, duplicates collapse to the first occurrence, and order is preserved. The frozen client only sends strings; dropping an unresolvable entry fails only that read instead of the whole batch. The 200 response is used for every per-directory failure, so one bad project never hides the rest. A repository-check failure that is not a non-repository answer is `{ "directory": "/repo", "error": "Failed to read project repository" }`.
 
 ## Done when
 
@@ -99,4 +99,10 @@ The routes are not registered. Implementation and focused tests are on the branc
 - `bunx tsc -p packages/web/tsconfig.json --noEmit` exit 0; `bun run --cwd packages/web lint` exit 0.
 - A throwaway Express app with the real Git service (no mock, no dev server) now answers both routes: `projects` 200 with a real repo entry (status/root) plus a non-repo canonical entry, and `project-worktrees` 200 with the repo's worktree list.
 - Real app + fixture UI path and the full task Check remain owed after the heavy slot is released. No archive, no landing, no task 34.
+
+### Reviews and batched fixes
+
+- **B (quality):** 0 blocking, 4 nonblocking. Fixed: removed `projects.filter(Boolean)` so every unique input keeps its entry; task Interfaces now matches the tested normalization (unresolvable entries dropped, 400 only for missing/empty/non-array or >200); Git docs now name the hard `{ directory, error }` repository-check shape. The whitespace client mismatch was noted only; the frozen client was not changed.
+- **Security:** 0 blocking, 2 nonblocking. Fixed B1 by reconciling the contract text to the existing tested upstream normalization; fixed B2 by removing the client-supplied directory from all four new per-entry failure logs. No parser, space-UI or pre-existing boundary behavior was changed.
+- Focused suites still pass 98/98; `node --check` on the changed server route exits 0; anti-slop on the authored delta has 0 findings (artifact record). The real app/fixture smoke and W5 evidence remain pending the heavy slot; no Done-when box is checked.
 

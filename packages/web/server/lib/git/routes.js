@@ -507,7 +507,7 @@ export function registerGitRoutes(app, {
       }
     };
     await Promise.all(Array.from({ length: Math.min(PROJECT_BATCH_CONCURRENCY, directories.length) }, worker));
-    return res.json({ projects: projects.filter(Boolean) });
+    return res.json({ projects });
   };
 
   /**
@@ -544,7 +544,7 @@ export function registerGitRoutes(app, {
             try {
               entry.status = await getStatus(directory);
             } catch (error) {
-              console.error('Git project batch status failed:', directory, error);
+              console.error('Git project batch status failed:', error);
               entry.status = null;
               failures.push('status');
             }
@@ -555,7 +555,7 @@ export function registerGitRoutes(app, {
             try {
               entry.root = (await resolvePrimaryWorktreeRoot(directory))?.root ?? null;
             } catch (error) {
-              console.error('Git project batch primary root failed:', directory, error);
+              console.error('Git project batch primary root failed:', error);
               entry.root = null;
               failures.push('root');
             }
@@ -566,7 +566,7 @@ export function registerGitRoutes(app, {
         return entry;
       } catch (error) {
         if (isNonRepoGitError(error)) return nonRepoEntry(directory);
-        console.error('Failed to read git project overview:', directory, error);
+        console.error('Failed to read git project overview:', error);
         return { directory, error: 'Failed to read project repository' };
       }
     });
@@ -586,7 +586,7 @@ export function registerGitRoutes(app, {
         if (worktrees.length > 0) void observeWorktreeTopology(directory);
         return { directory, worktrees };
       } catch (error) {
-        console.error('Git project worktree batch failed:', directory, error);
+        console.error('Git project worktree batch failed:', error);
         return { directory, worktrees: null, errors: ['worktrees'] };
       }
     });

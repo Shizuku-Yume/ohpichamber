@@ -78,6 +78,22 @@ export function registerGitRoutes(app, {
     behind: 0,
   });
 
+  const enrichWorktreeProvenance = async (worktrees) => {
+    if (!(contributorProvenance?.readMany instanceof Function)) return worktrees;
+    const records = await contributorProvenance.readMany(worktrees.map((worktree) => worktree.path));
+    for (let index = 0; index < worktrees.length; index += 1) {
+      const worktree = worktrees[index];
+      const record = records[index];
+      if (record.provenance?.kind === 'contributor-fork') {
+        worktree.provenance = {
+          kind: 'contributor-fork', revision: record.revision,
+          trust: 'untrusted', push: 'destination-selection-required',
+        };
+      }
+    }
+    return worktrees;
+  };
+
   const sendNetworkOperationError = (req, res, error) => {
     const code = isString(error?.code) ? error.code : 'UNKNOWN';
     const storageFailure = code === 'GIT_NETWORK_OPERATION_STORAGE_INVALID';
@@ -451,6 +467,129 @@ export function registerGitRoutes(app, {
       console.error('Failed to check git repository:', error);
       res.status(500).json({ error: 'Failed to check git repository' });
     }
+  });
+
+  const PROJECT_BATCH_MAX_DIRECTORIES = 200;
+  const PROJECT_BATCH_CONCURRENCY = 4;
+
+  const resolveBatchDirectories = (body) => {
+    if (!isPlainObject(body) || !Array.isArray(body.directories)) return null;
+    const directories = [];
+    const seen = new Set();
+    for (const value of body.directories) {
+      const directory = resolveDirectoryQuery(value);
+      if (!directory || seen.has(directory)) continue;
+      seen.add(directory);
+      directories.push(directory);
+    }
+    return directories;
+  };
+
+  // Read one directory per worker and answer `projects` in input order. A
+  // directory that fails is that entry's own error, never the batch's.
+  const readProjectBatch = async (req, res, readDirectory) => {
+    const directories = resolveBatchDirectories(req.body);
+    if (!directories || directories.length === 0) {
+      return res.status(400).json({ error: 'directories array is required' });
+    }
+    if (directories.length > PROJECT_BATCH_MAX_DIRECTORIES) {
+      return res.status(400).json({ error: `At most ${PROJECT_BATCH_MAX_DIRECTORIES} directories may be read at once` });
+    }
+
+    const projects = new Array(directories.length);
+    let nextIndex = 0;
+    const worker = async () => {
+      for (;;) {
+        const index = nextIndex;
+        nextIndex += 1;
+        if (index >= directories.length) return;
+        projects[index] = await readDirectory(directories[index]);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(PROJECT_BATCH_CONCURRENCY, directories.length) }, worker));
+    return res.json({ projects: projects.filter(Boolean) });
+  };
+
+  /**
+   * One read for many project directories. Every entry answers the repository
+   * check; `fields` adds `status` and `root` only when the caller asks for them.
+   * A status read runs many Git processes, so a cheap repository check never
+   * pays for one. The route stays proxyable into a space because each question
+   * is answerable there on its own.
+   */
+  app.post('/api/git/projects', async (req, res) => {
+    const { isGitRepository, getStatus, resolvePrimaryWorktreeRoot, observeWorktreeTopology } = await getGitLibraries();
+    const fields = Array.isArray(req.body?.fields) ? req.body.fields : [];
+    const wantsStatus = fields.includes('status');
+    const wantsRoot = fields.includes('root');
+    const nonRepoEntry = (directory) => {
+      const entry = { directory, isGitRepository: false };
+      if (wantsStatus) entry.status = nonRepoStatusPayload();
+      if (wantsRoot) entry.root = null;
+      return entry;
+    };
+    return readProjectBatch(req, res, async (directory) => {
+      try {
+        const isRepo = await isGitRepository(directory);
+        if (!isRepo) return nonRepoEntry(directory);
+
+        const entry = { directory, isGitRepository: true };
+        const failures = [];
+        const reads = [];
+        if (wantsStatus) {
+          // Mirror GET /api/git/status: a status read notices externally
+          // added or removed worktrees.
+          void observeWorktreeTopology(directory);
+          reads.push((async () => {
+            try {
+              entry.status = await getStatus(directory);
+            } catch (error) {
+              console.error('Git project batch status failed:', directory, error);
+              entry.status = null;
+              failures.push('status');
+            }
+          })());
+        }
+        if (wantsRoot) {
+          reads.push((async () => {
+            try {
+              entry.root = (await resolvePrimaryWorktreeRoot(directory))?.root ?? null;
+            } catch (error) {
+              console.error('Git project batch primary root failed:', directory, error);
+              entry.root = null;
+              failures.push('root');
+            }
+          })());
+        }
+        await Promise.all(reads);
+        if (failures.length > 0) entry.errors = failures;
+        return entry;
+      } catch (error) {
+        if (isNonRepoGitError(error)) return nonRepoEntry(directory);
+        console.error('Failed to read git project overview:', directory, error);
+        return { directory, error: 'Failed to read project repository' };
+      }
+    });
+  });
+
+  /**
+   * Worktree lists for many projects. It stays on its own route so the space
+   * boundary can refuse it exactly like `/api/git/worktrees`.
+   */
+  app.post('/api/git/project-worktrees', async (req, res) => {
+    const { getWorktrees, observeWorktreeTopology } = await getGitLibraries();
+    return readProjectBatch(req, res, async (directory) => {
+      try {
+        const worktrees = await enrichWorktreeProvenance(await getWorktrees(directory));
+        // A non-empty listing is one of the two ways the server notices a
+        // worktree added outside the app.
+        if (worktrees.length > 0) void observeWorktreeTopology(directory);
+        return { directory, worktrees };
+      } catch (error) {
+        console.error('Git project worktree batch failed:', directory, error);
+        return { directory, worktrees: null, errors: ['worktrees'] };
+      }
+    });
   });
 
   app.post('/api/git/init', userAction(async (req, res) => {
@@ -1401,20 +1540,7 @@ export function registerGitRoutes(app, {
         return res.status(400).json({ error: 'directory parameter is required' });
       }
 
-      const worktrees = await getWorktrees(directory);
-      if (contributorProvenance?.readMany instanceof Function) {
-        const records = await contributorProvenance.readMany(worktrees.map((worktree) => worktree.path));
-        for (let index = 0; index < worktrees.length; index += 1) {
-          const worktree = worktrees[index];
-          const record = records[index];
-          if (record.provenance?.kind === 'contributor-fork') {
-            worktree.provenance = {
-              kind: 'contributor-fork', revision: record.revision,
-              trust: 'untrusted', push: 'destination-selection-required',
-            };
-          }
-        }
-      }
+      const worktrees = await enrichWorktreeProvenance(await getWorktrees(directory));
       // An empty list means "not a repository", or a bare repository with no
       // linked worktree yet; neither has topology to track. A worktree created
       // from the terminal in such a repository shows up on the next list call.

@@ -190,6 +190,8 @@ describe('space routes and directories', () => {
     expect(classifySpacePath('/api/fs/preview/grant/index.html')).toBe('refused_across_boundary');
     expect(classifySpacePath('/api/preview/proxy/3000/')).toBe('refused_across_boundary');
     expect(classifySpacePath('/api/git/worktrees')).toBe('refused_across_boundary');
+    expect(classifySpacePath('/api/git/project-worktrees')).toBe('refused_across_boundary');
+    expect(classifySpacePath('/api/git/projects')).toBeNull();
     expect(classifySpacePath('/api/git/integrate/merge')).toBe('refused_across_boundary');
     expect(classifySpacePath('/api/session/ses_1/move')).toBe('refused_across_boundary');
     // Express inside routes without regard to case.

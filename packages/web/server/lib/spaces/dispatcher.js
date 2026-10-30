@@ -80,6 +80,7 @@ const HOST_ONLY_ROUTES = Object.freeze([
 // worktree and git-integrate actions, `/api/fs/preview` and `/api/preview/proxy`.
 const REFUSED_ACROSS_BOUNDARY_ROUTES = Object.freeze([
   '/api/git/worktrees',
+  '/api/git/project-worktrees',
   '/api/git/worktree-type',
   '/api/git/integrate',
   '/api/fs/preview',

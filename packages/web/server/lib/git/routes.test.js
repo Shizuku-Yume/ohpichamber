@@ -11,6 +11,7 @@ const gitLibraries = {
   markGeneratedBranchName: vi.fn(),
   seedBranchTaskTitle: vi.fn(),
   getWorktrees: vi.fn(),
+  resolvePrimaryWorktreeRoot: vi.fn(),
   getGlobalIdentity: vi.fn(),
   getCurrentIdentity: vi.fn(),
   getRemoteUrl: vi.fn(),
@@ -38,6 +39,7 @@ vi.mock('./index.js', () => ({
   markGeneratedBranchName: gitLibraries.markGeneratedBranchName,
   seedBranchTaskTitle: gitLibraries.seedBranchTaskTitle,
   getWorktrees: gitLibraries.getWorktrees,
+  resolvePrimaryWorktreeRoot: gitLibraries.resolvePrimaryWorktreeRoot,
   getGlobalIdentity: gitLibraries.getGlobalIdentity,
   getCurrentIdentity: gitLibraries.getCurrentIdentity,
   getRemoteUrl: gitLibraries.getRemoteUrl,
@@ -704,6 +706,156 @@ describe('git worktree topology routes', () => {
 
     listener({ directories: ['/repo'], at: 123 });
     expect(emitWorktreeChanged).toHaveBeenCalledWith({ directories: ['/repo'], at: 123 });
+  });
+});
+
+describe('project repository batch routes', () => {
+  beforeEach(() => {
+    gitLibraries.isGitRepository.mockReset();
+    gitLibraries.getStatus.mockReset();
+    gitLibraries.getWorktrees.mockReset();
+    gitLibraries.resolvePrimaryWorktreeRoot.mockReset();
+    gitLibraries.observeWorktreeTopology.mockReset();
+    gitLibraries.observeWorktreeTopology.mockResolvedValue(undefined);
+  });
+
+  it('answers repository, status and root for many directories in input order', async () => {
+    gitLibraries.isGitRepository.mockImplementation(async (directory) => directory !== '/plain');
+    gitLibraries.getStatus.mockImplementation(async (directory) => ({
+      current: `branch-${directory}`, tracking: null, ahead: 0, behind: 0, files: [], isClean: true,
+    }));
+    gitLibraries.resolvePrimaryWorktreeRoot.mockImplementation(async (directory) => ({ root: `${directory}/root` }));
+    const { app, getRoute } = createRouteRegistry();
+    registerGitRoutes(app);
+    const response = createMockResponse();
+
+    await getRoute('POST', '/api/git/projects')({
+      body: { directories: ['/repo-a', '/plain', '/repo-b'], fields: ['status', 'root'] },
+    }, response);
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body.projects).toEqual([
+      { directory: '/repo-a', isGitRepository: true, status: { current: 'branch-/repo-a', tracking: null, ahead: 0, behind: 0, files: [], isClean: true }, root: '/repo-a/root' },
+      { directory: '/plain', isGitRepository: false, status: { isGitRepository: false, files: [], branch: null, ahead: 0, behind: 0 }, root: null },
+      { directory: '/repo-b', isGitRepository: true, status: { current: 'branch-/repo-b', tracking: null, ahead: 0, behind: 0, files: [], isClean: true }, root: '/repo-b/root' },
+    ]);
+  });
+
+  it('reads only the fields asked for and isolates one directory failure', async () => {
+    gitLibraries.isGitRepository.mockResolvedValue(true);
+    gitLibraries.getStatus.mockImplementation(async (directory) => {
+      if (directory === '/broken') throw new Error('boom');
+      return { current: 'main', tracking: null, ahead: 0, behind: 0, files: [], isClean: true };
+    });
+    const { app, getRoute } = createRouteRegistry();
+    registerGitRoutes(app);
+    const response = createMockResponse();
+
+    await getRoute('POST', '/api/git/projects')({
+      body: { directories: ['/ok', '/broken'], fields: ['status'] },
+    }, response);
+
+    expect(response.body.projects[0]).toEqual({
+      directory: '/ok', isGitRepository: true,
+      status: { current: 'main', tracking: null, ahead: 0, behind: 0, files: [], isClean: true },
+    });
+    expect(response.body.projects[1]).toEqual({
+      directory: '/broken', isGitRepository: true, status: null, errors: ['status'],
+    });
+    expect(gitLibraries.resolvePrimaryWorktreeRoot).not.toHaveBeenCalled();
+  });
+
+  it('reports a primary-root failure without blanking the status read', async () => {
+    gitLibraries.isGitRepository.mockResolvedValue(true);
+    gitLibraries.getStatus.mockResolvedValue({ current: 'main', tracking: null, ahead: 0, behind: 0, files: [], isClean: true });
+    gitLibraries.resolvePrimaryWorktreeRoot.mockRejectedValue(new Error('root failed'));
+    const { app, getRoute } = createRouteRegistry();
+    registerGitRoutes(app);
+    const response = createMockResponse();
+
+    await getRoute('POST', '/api/git/projects')({
+      body: { directories: ['/repo'], fields: ['status', 'root'] },
+    }, response);
+
+    expect(response.body.projects[0]).toEqual({
+      directory: '/repo',
+      isGitRepository: true,
+      status: { current: 'main', tracking: null, ahead: 0, behind: 0, files: [], isClean: true },
+      root: null,
+      errors: ['root'],
+    });
+  });
+
+  it('trims and de-duplicates directories while rejecting an invalid or oversized batch', async () => {
+    gitLibraries.isGitRepository.mockResolvedValue(true);
+    const { app, getRoute } = createRouteRegistry();
+    registerGitRoutes(app);
+    const handler = getRoute('POST', '/api/git/projects');
+    const response = createMockResponse();
+
+    await handler({ body: { directories: [' /repo ', '/repo', '', 7, '/other'] } }, response);
+    expect(response.statusCode).toBe(200);
+    expect(response.body.projects.map((entry) => entry.directory)).toEqual(['/repo', '/other']);
+
+    for (const body of [{}, { directories: [] }, { directories: 'repo' }]) {
+      const invalid = createMockResponse();
+      await handler({ body }, invalid);
+      expect(invalid.statusCode).toBe(400);
+    }
+
+    const oversized = createMockResponse();
+    await handler({ body: { directories: Array.from({ length: 201 }, (_, index) => `/repo-${index}`) } }, oversized);
+    expect(oversized.statusCode).toBe(400);
+
+    const maximum = createMockResponse();
+    await handler({ body: { directories: Array.from({ length: 200 }, (_, index) => `/repo-${index}`) } }, maximum);
+    expect(maximum.statusCode).toBe(200);
+    expect(maximum.body.projects).toHaveLength(200);
+  });
+
+  it('lists worktrees with the same provenance as the existing route', async () => {
+    gitLibraries.getWorktrees.mockResolvedValue([
+      { path: '/repo/w', name: 'w', branch: 'feature' },
+    ]);
+    const contributorProvenance = {
+      readMany: vi.fn(async () => [{ provenance: { kind: 'contributor-fork' }, revision: 3 }]),
+    };
+    const { app, getRoute } = createRouteRegistry();
+    registerGitRoutes(app, { contributorProvenance });
+    const response = createMockResponse();
+
+    await getRoute('POST', '/api/git/project-worktrees')({
+      body: { directories: ['/repo'] },
+    }, response);
+
+    expect(response.body).toEqual({
+      projects: [{
+        directory: '/repo',
+        worktrees: [{
+          path: '/repo/w', name: 'w', branch: 'feature',
+          provenance: { kind: 'contributor-fork', revision: 3, trust: 'untrusted', push: 'destination-selection-required' },
+        }],
+      }],
+    });
+  });
+
+  it('keeps a worktree read failure on its own entry', async () => {
+    gitLibraries.getWorktrees.mockImplementation(async (directory) => {
+      if (directory === '/broken') throw new Error('boom');
+      return [];
+    });
+    const { app, getRoute } = createRouteRegistry();
+    registerGitRoutes(app);
+    const response = createMockResponse();
+
+    await getRoute('POST', '/api/git/project-worktrees')({
+      body: { directories: ['/ok', '/broken'] },
+    }, response);
+
+    expect(response.body.projects).toEqual([
+      { directory: '/ok', worktrees: [] },
+      { directory: '/broken', worktrees: null, errors: ['worktrees'] },
+    ]);
   });
 });
 

@@ -17,6 +17,7 @@ import { createManagedTunnelConfigRuntime } from './lib/tunnels/managed-config.j
 import { createTunnelProviderRegistry } from './lib/tunnels/registry.js';
 import { createCloudflareTunnelProvider } from './lib/tunnels/providers/cloudflare.js';
 import { createNgrokTunnelProvider } from './lib/tunnels/providers/ngrok.js';
+import { createTailscaleTunnelProvider } from './lib/tunnels/providers/tailscale.js';
 import { allowsLocalDevOrigins, buildFrameAncestorsPolicy, createRequestSecurityRuntime, isLocalDevClientOrigin } from './lib/security/request-security.js';
 import {
   getUnauthenticatedLanErrorMessage,
@@ -1069,6 +1070,7 @@ const bootstrapRuntime = createBootstrapRuntime({
 const tunnelProviderRegistry = createTunnelProviderRegistry([
   createCloudflareTunnelProvider(),
   createNgrokTunnelProvider(),
+  createTailscaleTunnelProvider(),
 ]);
 const tunnelAuthController = createTunnelAuth();
 const tunnelWiringRuntime = createTunnelWiringRuntime({

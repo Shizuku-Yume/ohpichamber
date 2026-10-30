@@ -95,12 +95,37 @@ describe('canonical notification triggers', () => {
     expect(JSON.stringify(f.web)).not.toContain('secret');
   });
 
+  it('writes localized default text and seals the detail for a phone', async () => {
+    const f = fixture({ locale: 'de' });
+    await f.runtime.processCanonicalEvent(terminal(), scope);
+    expect(f.web[0].title).toBe('Agent ist bereit');
+    expect(f.web[0].body).toBe('Assistant hat die Aufgabe abgeschlossen');
+    expect(f.native[0].sealed).toEqual({ title: 'Host session', body: 'Final answer in [redacted]; Authorization=[redacted] [redacted]' });
+    expect(f.native[0].body).toBe('Host session');
+  });
+
+  it('completes an empty custom template field with the language default', async () => {
+    const f = fixture({ locale: 'de', notificationTemplates: { completion: { title: '', message: '' } } });
+    await f.runtime.processCanonicalEvent(terminal(), scope);
+    expect(f.web[0].title).toBe('Agent ist bereit');
+    expect(f.web[0].body).toBe('Assistant hat die Aufgabe abgeschlossen');
+  });
+
+  it('prefixes what a permission wants to do, redacted, in the sealed phone text', async () => {
+    vi.useFakeTimers(); const f = fixture();
+    await f.runtime.processCanonicalEvent(approval(1), scope);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(f.native[0].sealed.body).toBe('Wants to run: Read [redacted]/image.png');
+    expect(f.native[0].sealed.body).not.toContain('/private/workspace');
+  });
+
   it('strips conversation names and text at enterprise push egress while retaining local notifications', async () => {
     vi.stubEnv('OPENCHAMBER_ENTERPRISE_MODE', '1');
     const f = fixture({ notificationTemplates: { completion: { title: '{session_name}', message: '{last_message}' } } });
     await f.runtime.processCanonicalEvent(terminal(), scope);
     expect(f.web[0].title).toBe('Agent response is ready'); expect(f.web[0].body).toBe('');
     expect(JSON.stringify(f.web)).not.toContain('Host session'); expect(f.native[0].body).toBe('');
+    expect(f.native[0].sealed).toBeUndefined();
     expect(f.ui[0].title).toBe('Host session');
   });
 });

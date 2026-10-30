@@ -390,7 +390,7 @@ included. This record commit is the only later difference.
   the base. The two findings this branch had added there were not new behaviour:
   `811ecef471` already sanitizes the same switches, the tab limit and
   `smallModelVariant` a few hundred lines earlier (task 16,
-  `settings-helpers.js:738-754`, including the 1..20 clamp and the empty-string
+  `settings-helpers.js:719-736`, including the 1..20 clamp and the empty-string
   clear). The duplicate pass — first with `typeof`, later with a zod schema —
   and its duplicate fixture rows were removed during integration, so the file
   and its test are byte-identical to the base again and the established
@@ -494,7 +494,7 @@ and HOME under the artifact directory, provider from
   warming control still works through the canonical route.
 - The retired surface is absent: no `ذاكرة التخزين المؤقت للمطالبات`
   (`promptCacheTitle`) heading and no "chosen sessions" copy on the page.
-- Runtime status: dialog `حالة التشخيص` chrome in `rtl`, body `pre` with
+- Runtime status: dialog `حالة التشغيل` chrome in `rtl`, body `pre` with
   `dir=ltr`, computed `ltr`, `text-align: start`, spans at the left padding edge
   (`Log files:` x=341, `- Host console:` x=341, pre x=325..955).
 - Chat: Arabic prompt `مرحبًا، اكتب كلمة واحدة فقط: جاهز` answered `جاهز` by
@@ -509,7 +509,7 @@ and HOME under the artifact directory, provider from
    a blank line. The warming entry keeps its true 2026-10-29 date even though it
    now follows a 2026-10-30 entry; it was recorded during that reconciliation.
 2. `settings-helpers.js` + its test: the base already sanitizes the same switches,
-   tab limit and `smallModelVariant` (task 16, lines 738-754). The duplicate pass
+   tab limit and `smallModelVariant` (task 16, lines 719-736). The duplicate pass
    this branch carried, the zod rewrite of it, and the duplicate fixture rows are
    removed; both files are byte-identical to `811ecef471` again. Commit
    `5f1005f684` (it also carries the removed component test; the two changes were

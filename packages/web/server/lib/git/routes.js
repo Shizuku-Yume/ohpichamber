@@ -25,7 +25,7 @@ export function registerGitRoutes(app, {
   networkOperations, managedSshInventory, getSourceControlBinding, contributorProvenance, resolveChangeRequestSource,
   backfillIdentities,
   createHttpsCredentialReference, resolveSourceControlAccount, errorRedactionSecrets = [], worktreeBootstrapStore,
-  emitWorktreeChanged,
+  emitWorktreeChanged, onBranchRewritten,
 } = {}) {
   let gitLibraries = null;
   const getGitLibraries = async () => {
@@ -1299,6 +1299,27 @@ export function registerGitRoutes(app, {
       res.status(500).json({ error: error.message || 'Failed to get conflict details' });
     }
   });
+
+  // A review host's preflight: gives the checked-out commit the Change-Id
+  // trailer its commit-msg hook would have added. `source-control/change-id.js`
+  // owns the amend and every refusal; this route only reports them.
+  app.post('/api/git/change-id', userAction(async (req, res) => {
+    const directory = resolveDirectoryQuery(req.query?.directory);
+    if (!directory) return res.status(400).json({ error: 'directory parameter is required' });
+    try {
+      const { addChangeIdToHead } = await import('../source-control/change-id.js');
+      const { sha, changeId, branch } = await addChangeIdToHead(directory, req.body?.expectedHead);
+      // A cached branch status was read for the old tip.
+      onBranchRewritten?.({ directory, branch });
+      return res.json({ sha, changeId });
+    } catch (error) {
+      if (Number.isInteger(error?.status) && error.status < 500) {
+        return res.status(error.status).json({ error: error.message, code: error.code });
+      }
+      console.error('Failed to add a Change-Id:', redactGitText(error?.message, { secrets: errorRedactionSecrets }));
+      return res.status(500).json({ error: 'Failed to add a Change-Id', code: error?.code ?? 'CHANGE_ID_FAILED' });
+    }
+  }));
 
   app.post('/api/git/commit', userAction(async (req, res) => {
     const { commit } = await getGitLibraries();

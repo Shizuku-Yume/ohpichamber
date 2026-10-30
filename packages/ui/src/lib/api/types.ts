@@ -1150,6 +1150,8 @@ export interface GitAPI {
   createGitWorktree?(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeCreateResult>;
   deleteGitWorktree?(directory: string, payload: RemoveGitWorktreePayload): Promise<{ success: boolean }>;
   createGitCommit(directory: string, message: string, options?: CreateGitCommitOptions): Promise<GitCommitResult>;
+  /** Amends HEAD with a host-computed Change-Id trailer; refuses unless HEAD is still `expectedHead`. */
+  addChangeIdToHead?(directory: string, expectedHead: string): Promise<{ sha: string; changeId: string }>;
   gitPush(directory: string, options?: { remote?: string; branch?: string; options?: string[] | Record<string, unknown> }): Promise<GitPushResult>;
   gitPull(directory: string, options?: GitPullOptions): Promise<GitPullResult>;
   gitFetch(directory: string, options?: { remote?: string; branch?: string }): Promise<{ success: boolean }>;

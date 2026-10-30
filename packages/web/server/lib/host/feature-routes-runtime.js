@@ -541,6 +541,8 @@ export const createFeatureRoutesRuntime = () => {
       resolveChangeRequestSource: walkthroughBindingService.resolveChangeRequestSource,
       createHttpsCredentialReference,
       getSourceControlBinding: walkthroughBindingService.get,
+      // The Change-Id amend rewrites a branch tip, so its cached status is old.
+      onBranchRewritten: walkthroughBindingService.invalidateBranchStatus,
       resolveSourceControlAccount,
       errorRedactionSecrets: [openchamberDataDir],
       worktreeBootstrapStore,

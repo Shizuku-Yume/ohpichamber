@@ -762,6 +762,20 @@ export async function resetToCommit(
 }
 
 /**
+ * Adds the host-computed Change-Id trailer to HEAD, after checking the tip is
+ * still `expectedHead`. The HTTP adapter clears its own cache; a runtime's
+ * rewrite is announced here, so callers never hold a status of the old tip.
+ */
+export async function addChangeIdToHead(
+  directory: string,
+  expectedHead: string
+): Promise<{ sha: string; changeId: string }> {
+  const runtime = getRuntimeGit();
+  if (runtime?.addChangeIdToHead) return runtimeStatusMutation(directory, runtime.addChangeIdToHead(directory, expectedHead));
+  return gitHttp.addChangeIdToHead(directory, expectedHead);
+}
+
+/**
  * Whether `directory` exists inside the checkout at `worktreeRoot` once both
  * are canonicalized, so a symlink out of the checkout reports `insideWorktreeRoot: false`.
  */

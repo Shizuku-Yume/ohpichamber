@@ -412,4 +412,11 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Supersedes:** 2026-10-30 - Release a worktree's workers by directory inside the Agent Service, not by client-supplied ids
 - **Mine:** yes
 - **Revisit when:** the Agent Service gains a general directory-drain primitive, sessions share one worker across directories, or the supervisor restart hold proves insufficient and a persisted lease marker becomes necessary.
+## 2026-10-30 - Report a rewritten branch tip to the source-control shell through a route option
+
+- **Decided:** `registerGitRoutes` takes `onBranchRewritten`, and `feature-routes-runtime.js` passes `walkthroughBindingService.invalidateBranchStatus`. After a successful Change-Id amend the route calls it with `{ directory, branch }`; the route never imports the source-control shell or its status caches.
+- **Instead of:** importing the shell (or a status cache) inside `packages/web/server/lib/git/routes.js` so the Change-Id route could call `invalidateBranchStatus` itself.
+- **Because:** `feature-routes-runtime.js` constructs the source-control shell before the Git routes and already supplies every other source-control dependency the Git routes use (`getSourceControlBinding`, `resolveChangeRequestSource`, `backfillIdentities`). A direct import would make the Git route module depend on how the provider shell and its per-provider caches are constructed, and the Git route test could not seed a cached status without also building a provider registry; the option keeps the route a thin reporter, and the test can use the real `createChangeRequestStatusCache`.
+- **Mine:** yes
+- **Revisit when:** a second Git mutation needs the same invalidation (then a shared repository-mutation seam), or the Git routes are registered somewhere that cannot receive the shell.
 - **Effort:** upstream-refresh

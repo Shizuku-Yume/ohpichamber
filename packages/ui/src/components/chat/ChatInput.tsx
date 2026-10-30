@@ -94,6 +94,15 @@ import {
     withoutComposerReference,
     type ComposerReference,
 } from './composer/composerReferences';
+import {
+    loadSessionLinkReference,
+    sessionReferenceKey,
+    sessionReferencesInText,
+    type SessionReference,
+} from './composer/sessionReferences';
+import { findSessionLinks, sessionLinkKey, type SessionLinkTarget } from '@/lib/sessionLinks';
+import { sessionMentionChip } from '@/lib/messages/sessionMentionChip';
+import { appOwnOrigins } from '@/lib/router/appOrigins';
 import { usePendingComposerReferences } from './composer/pendingComposerReferences';
 import { postLinearSessionStarted } from '@/lib/linearSessionStatus';
 import { Icon } from "@/components/icon/Icon";
@@ -106,6 +115,7 @@ import { useGuestItemStore } from '@/lib/guests/item-store';
 import { runGuestCommand } from '@/lib/guests/run-command';
 import { useGuestsStore } from '@/lib/guests/store';
 import { isGuestActive } from '@/lib/guests/capabilities';
+import { isVSCodeRuntime } from '@/lib/desktop';
 import { routeGuestSlashCommand } from './composer/submit/guestCommands';
 import { pluginModeFromId } from '@/lib/surfaces/modes';
 import { expandCanonicalSkills } from '@/sync/session-ui-store';
@@ -896,6 +906,73 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         [attachedFiles],
     );
 
+    // Sessions and messages mentioned in the text, by `sessionLinkKey`. The
+    // text decides what goes out: a mention deleted from it is not sent.
+    const [sessionMentions, setSessionMentions] = React.useState<ReadonlyMap<string, SessionReference>>(() => new Map());
+    const sessionMentionsRef = React.useRef(sessionMentions);
+    React.useLayoutEffect(() => {
+        sessionMentionsRef.current = sessionMentions;
+    }, [sessionMentions]);
+    // The ref moves at once, so a send right after a read sees what it found.
+    const rememberSessionMentions = React.useCallback((references: readonly SessionReference[]) => {
+        if (references.length === 0) return;
+        const next = new Map(sessionMentionsRef.current);
+        for (const reference of references) next.set(sessionReferenceKey(reference), reference);
+        sessionMentionsRef.current = next;
+        setSessionMentions(next);
+    }, []);
+    const sessionLinkOrigins = React.useMemo(() => appOwnOrigins(), []);
+    // Links read once already, found or not: text typed or restored is read
+    // quietly, and a link that failed is not read again on every keystroke.
+    const attemptedSessionLinksRef = React.useRef(new Set<string>());
+    // A mentioned session or message draws as a chip once read; one this
+    // server cannot resolve stays a plain link. `announce` says so: a paste
+    // and a send do, text typed or restored does not.
+    const resolveSessionLinks = React.useCallback(async (targets: readonly SessionLinkTarget[], announce: boolean) => {
+        const pending = targets.filter((target) => !sessionMentionsRef.current.has(sessionLinkKey(target)));
+        if (pending.length === 0) return;
+        for (const target of pending) attemptedSessionLinksRef.current.add(sessionLinkKey(target));
+        const results = await Promise.allSettled(pending.map((target) => loadSessionLinkReference(target)));
+        const resolved = results.flatMap((result) => (result.status === 'fulfilled' && result.value ? [result.value] : []));
+        rememberSessionMentions(resolved);
+        if (announce && resolved.length < pending.length) toast.error(t('chat.sessionReference.unavailable'));
+    }, [rememberSessionMentions, t]);
+    // Text that comes back without a paste (a revert, a fork, a restored
+    // draft, a link typed by hand) gets its chips too.
+    React.useEffect(() => {
+        if (isVSCodeRuntime()) return;
+        const pending = findSessionLinks(message, sessionLinkOrigins)
+            .map((range) => range.target)
+            .filter((target) => !attemptedSessionLinksRef.current.has(sessionLinkKey(target)));
+        if (pending.length > 0) void resolveSessionLinks(pending, false);
+    }, [message, resolveSessionLinks, sessionLinkOrigins]);
+    // Read before a send consumes anything: a second Enter while the read is
+    // out does nothing, and a link the read cannot resolve goes as the text it is.
+    const sessionMentionReadRef = React.useRef(false);
+    const readSessionMentionsBeforeSend = React.useCallback(async (text: string): Promise<boolean> => {
+        if (isVSCodeRuntime()) return true;
+        const pending = findSessionLinks(text, sessionLinkOrigins)
+            .map((range) => range.target)
+            .filter((target) => !sessionMentionsRef.current.has(sessionLinkKey(target)));
+        if (pending.length === 0) return true;
+        if (sessionMentionReadRef.current) return false;
+        sessionMentionReadRef.current = true;
+        try {
+            await resolveSessionLinks(pending, true);
+        } finally {
+            sessionMentionReadRef.current = false;
+        }
+        return true;
+    }, [resolveSessionLinks, sessionLinkOrigins]);
+    // What the text mentions, once each, in order.
+    const sessionMentionsIn = React.useCallback((text: string): SessionReference[] => (
+        isVSCodeRuntime() ? [] : sessionReferencesInText(text, sessionLinkOrigins, sessionMentionsRef.current).references
+    ), [sessionLinkOrigins]);
+    const sessionLinkChips = React.useMemo(() => new Map([...sessionMentions].map(([key, reference]) => {
+        const chip = sessionMentionChip(reference);
+        return [key, { label: chip.label, title: chip.title, iconHref: `#oc-${chip.icon}` }] as const;
+    })), [sessionMentions]);
+
     /**
      * Everything the prompt language needs to resolve references. Rebuilt only
      * when a registry changes, so typing does not churn the tokenizer input.
@@ -910,7 +987,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         pendingAttachmentFilenames: pendingPastedAttachmentFilenamesRef.current,
         knownSkillNames,
         fileIconVariant: currentTheme.metadata.variant === 'light' ? 'light' : 'dark',
-    }), [attachmentFilenames, currentTheme.metadata.variant, inputMode, knownAgentNames, knownSkillNames, knownSlashNamesWithGuests, knownSnippetTriggers]);
+        sessionLinkChips,
+        sessionLinkOrigins,
+    }), [attachmentFilenames, currentTheme.metadata.variant, inputMode, knownAgentNames, knownSkillNames, knownSlashNamesWithGuests, knownSnippetTriggers, sessionLinkChips, sessionLinkOrigins]);
 
     const sanitizeAttachmentsForSend = React.useCallback(
         (files: readonly AttachedFile[] | undefined): AttachedFile[] => [...(files ?? [])]
@@ -1392,6 +1471,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         const queueTarget = messageQueueTarget;
         const queueSessionId = currentSessionId;
         const messageToQueue = inputSnapshot.message.replace(/^\n+|\n+$/g, '');
+        if (!(await readSessionMentionsBeforeSend(messageToQueue))) return;
         const composerAttachments = sanitizeAttachmentsForSend(attachedFiles);
 
         // A queued message is resolved now, not at delivery: the server that
@@ -1461,7 +1541,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         const context = buildComposerContext({
             inlineComments: expandedDrafts,
             syntheticTexts: syntheticParts.map((part) => part.text),
-            references: linked.map(toContextReference),
+            references: [...linked.map(toContextReference), ...sessionMentionsIn(messageToQueue)],
         }, skillInstruction);
         const attachmentsToQueue = [...composerAttachments, ...mentionAttachments];
 
@@ -1524,7 +1604,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             return;
         }
         recordLinkedReferences(queueSessionId, queueTarget.directory, linked);
-    }, [getCurrentInputSnapshot, getSubmitErrorMessage, currentSessionId, messageQueueTarget, inputMode, hasDrafts, guestCommands, attachedFiles, sanitizeAttachmentsForSend, prepareDocumentMentions, extractInlineFileMentions, runtimeFiles, agents, consumePendingSyntheticParts, mailboxTarget, inlineDraftTarget, consumeDrafts, linkedReferences, scrollToLatest, clearAttachedFiles, chatDraftIdentity, isMobile, isMobileCommentOpen, addToQueue, currentProviderId, currentModelId, currentAgentName, currentVariant, t]);
+    }, [getCurrentInputSnapshot, getSubmitErrorMessage, currentSessionId, messageQueueTarget, inputMode, hasDrafts, guestCommands, attachedFiles, sanitizeAttachmentsForSend, prepareDocumentMentions, extractInlineFileMentions, runtimeFiles, agents, consumePendingSyntheticParts, mailboxTarget, inlineDraftTarget, consumeDrafts, linkedReferences, scrollToLatest, clearAttachedFiles, chatDraftIdentity, isMobile, isMobileCommentOpen, addToQueue, currentProviderId, currentModelId, currentAgentName, currentVariant, t, readSessionMentionsBeforeSend, sessionMentionsIn]);
 
     /** Put the context a queued message was captured with back on the composer chips. */
     const restoreQueuedContext = React.useCallback((context: readonly QueuedContextPart[]) => {
@@ -1925,6 +2005,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
 
         // Queued messages resolved their mentions when they were queued; only
         // the composer's own text can still name a document.
+        if (!queuedOnly && inputSnapshot.hasContent && !(await readSessionMentionsBeforeSend(inputSnapshot.message))) return;
         const reservedFilenames = new Set([
             ...attachedFiles.map((attachment) => attachment.filename),
             ...queuedProjection.flatMap((queued) => queued.attachments?.map((attachment) => attachment.filename) ?? []),
@@ -2018,7 +2099,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                 ...buildBtwSyntheticTexts({ isBtwActive }),
                 ...(syntheticParts?.map((part) => part.text) ?? []),
             ],
-            references: isBtwActive ? [] : linkedReferences.map(toContextReference),
+            references: isBtwActive ? [] : linkedReferences.map(toContextReference).concat(
+                !queuedOnly && inputSnapshot.hasContent ? sessionMentionsIn(inputSnapshot.message) : [],
+            ),
         }, {
             parseAgentMention: (text) => {
                 if (isBtwActive) return { text };

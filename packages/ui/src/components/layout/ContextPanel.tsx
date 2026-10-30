@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
 import { SortableTabsStrip } from '@/components/ui/sortable-tabs-strip';
 import { PullRequestView } from '@/components/views/PullRequestView';
+import { TrackerItemView } from '@/components/views/TrackerItemView';
 import { lazyWithChunkRecovery } from '@/lib/chunkLoadRecovery';
 import { getDisambiguatingFolders } from '@/lib/path-utils';
 
@@ -802,7 +803,19 @@ export const ContextPanel: React.FC<{ zone?: ContextZone }> = ({ zone = 'right' 
         : activeTab?.mode === 'git'
             ? <React.Suspense fallback={null}><ContextPanelHeaderSlotProvider value={headerSlotEl}><GitView isActive={isOpen} /></ContextPanelHeaderSlotProvider></React.Suspense>
             : activeTab?.mode === 'pr'
-                ? <PullRequestView />
+                ? (activeTab.targetPath
+                    ? (
+                      <TrackerItemView
+                        key={activeTab.id}
+                        url={activeTab.targetPath}
+                        directory={activeTab.targetDirectory ?? effectiveDirectory}
+                        panelDirectory={effectiveDirectory}
+                        tabId={activeTab.id}
+                        foreign={Boolean(activeTab.targetDirectory)}
+                        visible={isOpen}
+                      />
+                    )
+                    : <PullRequestView />)
             : activeTab?.mode === 'notes'
                 ? <ContextPanelHeaderSlotProvider value={headerSlotEl}><ProjectContextPanel visible={isOpen} /></ContextPanelHeaderSlotProvider>
             : activeTab?.mode === 'workflows'

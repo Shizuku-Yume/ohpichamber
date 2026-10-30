@@ -23,7 +23,6 @@ let confirmReference: ReferenceConfirm | null = null;
 
 const projectStoreState = { getActiveProject: () => project };
 const githubAuthState = { status: { connected: true }, hasChecked: true };
-const linearAuthState = { status: null, hasChecked: true };
 const uiState = { isMobile: false };
 const gitState = { fetchBranches: async () => undefined };
 let worktreeCreations = 0;
@@ -32,7 +31,6 @@ let lastCreateNames: { branchName?: string; worktreeName?: string } | undefined;
 
 const selectProjectState = <T,>(selector: (state: typeof projectStoreState) => T): T => selector(projectStoreState);
 const selectSourceControlAuthEntry = () => githubAuthState;
-const selectLinearAuthState = <T,>(selector: (state: typeof linearAuthState) => T): T => selector(linearAuthState);
 const selectUIState = <T,>(selector: (state: typeof uiState) => T): T => selector(uiState);
 const selectGitState = <T,>(selector: (state: typeof gitState) => T): T => selector(gitState);
 
@@ -109,7 +107,6 @@ mock.module('@/lib/utils', () => ({ cn: (...values: Array<string | false | null 
 
 const actualProjectsStore = await import('@/stores/useProjectsStore');
 const actualSourceControlAuthStore = await import('@/stores/useSourceControlAuthStore');
-const actualLinearAuthStore = await import('@/stores/useLinearAuthStore');
 const actualUIStore = await import('@/stores/useUIStore');
 const actualGitStore = await import('@/stores/useGitStore');
 
@@ -120,10 +117,6 @@ mock.module('@/stores/useProjectsStore', () => ({
 mock.module('@/stores/useSourceControlAuthStore', () => ({
   ...actualSourceControlAuthStore,
   useSourceControlAuthEntry: selectSourceControlAuthEntry,
-}));
-mock.module('@/stores/useLinearAuthStore', () => ({
-  ...actualLinearAuthStore,
-  useLinearAuthStore: selectLinearAuthState,
 }));
 mock.module('@/stores/useUIStore', () => ({
   ...actualUIStore,

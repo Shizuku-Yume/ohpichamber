@@ -6,6 +6,8 @@ import {
     type AttachmentCitationLink,
 } from '@/lib/messages/inlineMessageLinks';
 import { findAttachmentCitationRanges } from '../../attachmentCitations';
+import { findSessionLinks, sessionLinkKey } from '@/lib/sessionLinks';
+import type { SessionMentionChips } from './sessionMentionChips';
 
 // Skills are named with `$`; messages sent before that used `/`, which history
 // still shows as a chip.
@@ -54,6 +56,36 @@ const escapeWithAttachmentCitations = (
     return output + escapeHtml(segment.slice(cursor));
 };
 
+/**
+ * Turns each session or message link the message mentioned into a link
+ * labelled with its chip text, which the Markdown renderer draws as the chip
+ * (`SessionMentionChipsContext`); everything else goes on to `escapeRest`.
+ */
+const withSessionMentionLinks = (
+    segment: string,
+    mentions: { chips: SessionMentionChips; origins: readonly string[] } | undefined,
+    escapeRest: (text: string) => string,
+): string => {
+    if (!mentions || mentions.chips.size === 0) return escapeRest(segment);
+    const codeSpans = [...segment.matchAll(/(`+)[\s\S]*?\1/g)].map((match) => [match.index, match.index + match[0].length]);
+    let output = '';
+    let cursor = 0;
+    for (const range of findSessionLinks(segment, mentions.origins)) {
+        const chip = mentions.chips.get(sessionLinkKey(range.target));
+        if (!chip) continue;
+        // A link the user already wrote as one (`[this](link)`, `<link>`) draws as
+        // the chip on its own (`MarkdownLink`); one in inline code stays code.
+        if (segment.slice(Math.max(0, range.start - 2), range.start) === '](' || segment[range.start - 1] === '<') continue;
+        if (codeSpans.some(([start, end]) => range.start >= start && range.start < end)) continue;
+        output += escapeRest(segment.slice(cursor, range.start));
+        // Escaped so the pointy destination cannot be closed or broken from inside.
+        const destination = range.link.replace(/[\\<>]/g, (char) => encodeURIComponent(char));
+        output += `[${escapeMarkdownLinkText(escapeHtml(chip.label))}](<${destination}>)`;
+        cursor = range.end;
+    }
+    return output + escapeRest(segment.slice(cursor));
+};
+
 // In Markdown a single "\n" is a soft break (rendered as a space). Users type plain
 // text where each newline is meant literally, so convert soft breaks into hard breaks
 // (two trailing spaces) outside of fenced code blocks, where newlines are already literal.
@@ -70,16 +102,23 @@ export const prepareUserMarkdownContent = ({
     agentMention,
     skillNames,
     attachments = [],
+    sessionMentions,
 }: {
     textContent: string;
     agentMention?: AgentMentionInfo;
     skillNames: ReadonlySet<string>;
     attachments?: ReadonlyArray<AttachmentCitationLink>;
+    /** The message's mentioned sessions and messages, and this instance's web addresses their links point at. */
+    sessionMentions?: { chips: SessionMentionChips; origins: readonly string[] };
 }): string => {
     const loneListMarker = LONE_LIST_MARKER_PATTERN.exec(textContent);
     if (loneListMarker) return `\\${loneListMarker[1]}`;
 
-    let content = mapNonFencedSegments(textContent, (segment) => escapeWithAttachmentCitations(segment, attachments));
+    let content = mapNonFencedSegments(textContent, (segment) => withSessionMentionLinks(
+        segment,
+        sessionMentions,
+        (rest) => escapeWithAttachmentCitations(rest, attachments),
+    ));
 
     // Insert agent mention links with an internal href so markdown renders them as mentions, not external links.
     if (agentMention?.token && content.includes(agentMention.token)) {

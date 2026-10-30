@@ -1,7 +1,8 @@
 import React from 'react';
 
 import { isVSCodeRuntime } from '@/lib/desktop';
-import { readContextPart, type ContextCarrierPart } from '@/lib/messages/contextParts';
+import { readContextPart } from '@/lib/messages/contextParts';
+import type { Part } from '@openchamber/agent-contract';
 import { appOwnOrigins } from '@/lib/router/appOrigins';
 import { findSessionLinks, sessionLinkKey } from '@/lib/sessionLinks';
 import { sessionMentionChip, type SessionMentionChip } from '@/lib/messages/sessionMentionChip';
@@ -13,7 +14,7 @@ export type SessionMentionChips = ReadonlyMap<string, SessionMentionChip>;
 
 const NO_CHIPS: SessionMentionChips = new Map();
 
-export function sessionMentionChipsOf(parts: readonly ContextCarrierPart[]): SessionMentionChips {
+export function sessionMentionChipsOf(parts: readonly Part[]): SessionMentionChips {
     // VS Code keeps session links inert: its sessions live on its own OpenCode.
     if (isVSCodeRuntime()) return NO_CHIPS;
     let chips: Map<string, SessionMentionChip> | null = null;

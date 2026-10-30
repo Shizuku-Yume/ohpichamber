@@ -4,9 +4,12 @@ import { Icon } from '@/components/icon/Icon';
 import { Button } from '@/components/ui/button';
 import { getExternalFaviconUrl, isAppLinkUrl, isExternalHttpUrl, isLoopbackHttpUrl, openExternalUrl } from '@/lib/url';
 import { parseSessionLink } from '@/lib/sessionLinks';
+import { sessionLinkKey } from '@/lib/sessionLinks';
 import { openSessionLink } from '@/lib/router/openSessionFromRoute';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { appOwnOrigins } from '@/lib/router/appOrigins';
+import { SessionMentionChipsContext } from '../message/parts/sessionMentionChips';
+import { SessionMentionChipButton } from '../message/parts/SessionMentionChipButton';
 import { useUIStore } from '@/stores/useUIStore';
 import { useI18n } from '@/lib/i18n';
 import { parseAgentHref, parseAttachmentHref, parseSkillHref, INLINE_REFERENCE_CHIP_CLASS, INTERACTIVE_REFERENCE_CHIP_CLASS, REFERENCE_CHIP_LABEL_CLASS, buildAgentMentionUrl } from '@/lib/messages/inlineMessageLinks';
@@ -119,6 +122,9 @@ function ScreenMarkdownHref({ href, children: originalChildren, node, ...props }
   // VS Code keeps session links inert: its sessions live on its own OpenCode,
   // so a link to a web session opens in the browser like any other.
   const session = parseSessionLink(href, appOwnOrigins());
+  // A session or message the user's message mentioned draws as its chip.
+  const mentionChips = React.useContext(SessionMentionChipsContext);
+  const mentionChip = session ? mentionChips.get(sessionLinkKey(session)) : undefined;
   const app = isAppLinkUrl(href);
   const file = presentation.fileNavigation && resolveMarkdownFile(href, directory, 'click');
   // A link whose URL is not a file but whose text is a path opens that file
@@ -184,6 +190,9 @@ function ScreenMarkdownHref({ href, children: originalChildren, node, ...props }
         <span className={REFERENCE_CHIP_LABEL_CLASS}>{attachment.filename}</span>
       </span>
     );
+  }
+  if (session && mentionChip) {
+    return <SessionMentionChipButton chip={mentionChip} target={session} />;
   }
   if (agent) {
     return (

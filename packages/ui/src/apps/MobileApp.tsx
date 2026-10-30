@@ -45,7 +45,8 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { useAgentsStore } from '@/stores/useAgentsStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useSourceControlAuthStore } from '@/stores/useSourceControlAuthStore';
-import { useLinearAuthStore } from '@/stores/useLinearAuthStore';
+import { useSourceControlProviderRegistry } from '@/lib/source-control/providers/registry';
+import { refreshTrackers } from '@/stores/useTrackerAuthStore';
 import { useGitStore } from '@/stores/useGitStore';
 import { useMcpConfigStore, type McpDraft } from '@/stores/useMcpConfigStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
@@ -759,7 +760,7 @@ function MobileAppContent({ apis }: MobileAppProps) {
   const clearError = useSessionUIStore((state) => state.clearError);
   const setIsMobile = useUIStore((state) => state.setIsMobile);
   const refreshSourceControlAuth = useSourceControlAuthStore((state) => state.refreshAll);
-  const refreshLinearAuthStatus = useLinearAuthStore((state) => state.refreshStatus);
+  const refreshSourceControlProviders = useSourceControlProviderRegistry((state) => state.refresh);
   const projects = useProjectsStore((state) => state.projects);
   // The mobile shell has no layout-level session list sync, so a lost
   // `session.deleted` is reconciled here from the same complete global
@@ -816,8 +817,9 @@ function MobileAppContent({ apis }: MobileAppProps) {
     // only refresh in place when the transport is 'unchanged'.
     const refreshInPlace = () => {
       void initializeApp();
+      void refreshSourceControlProviders(apis.sourceControl);
       void refreshSourceControlAuth(apis.sourceControl, { force: true });
-      void refreshLinearAuthStatus(apis.linear, { force: true });
+      void refreshTrackers(apis.trackers);
       if (!providersLoaded) void loadProviders({ source: 'mobileApp:nativeResume' });
       void loadAgents(useDirectoryStore.getState().currentDirectory);
     };
@@ -900,7 +902,7 @@ function MobileAppContent({ apis }: MobileAppProps) {
       lastNativeResumeSyncEventAtRef.current = now;
       window.dispatchEvent(new Event('openchamber:system-resume'));
     }
-  }, [apis.sourceControl, apis.linear, initializeApp, loadAgents, loadProviders, providersLoaded, refreshSourceControlAuth, refreshLinearAuthStatus]);
+  }, [apis.sourceControl, apis.trackers, initializeApp, loadAgents, loadProviders, providersLoaded, refreshSourceControlAuth, refreshSourceControlProviders]);
 
   useNativeMobileChrome();
   useNativeMobileLifecycle(handleNativeResume);
@@ -1173,9 +1175,10 @@ function MobileAppContent({ apis }: MobileAppProps) {
   // answer that stuck until something else forced a re-check.
   React.useEffect(() => {
     if (!isConnected) return;
+    void refreshSourceControlProviders(apis.sourceControl);
     void refreshSourceControlAuth(apis.sourceControl, { force: true });
-    void refreshLinearAuthStatus(apis.linear, { force: true });
-  }, [apis.sourceControl, apis.linear, isConnected, refreshSourceControlAuth, refreshLinearAuthStatus]);
+    void refreshTrackers(apis.trackers);
+  }, [apis.sourceControl, apis.trackers, isConnected, refreshSourceControlAuth, refreshSourceControlProviders]);
 
   // Discover all worktrees for every known project so the draft session's
   // worktree/branch dropdown can list every available branch — not only the

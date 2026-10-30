@@ -4,6 +4,7 @@ import type { Part, Session, ToolCallPart, ToolResultPart } from '@openchamber/a
 import { isQuestionTool } from '@/lib/toolHelpers';
 
 import UserTextPart from './parts/UserTextPart';
+import { sessionMentionChipsOf } from './parts/sessionMentionChips';
 import ToolPart from './parts/ToolPart';
 import AssistantTextPart from './parts/AssistantTextPart';
 import ReasoningPart from './parts/ReasoningPart';
@@ -434,6 +435,7 @@ const UserMessageBody = React.memo(({ workspaceId, messageId, parts, messageCrea
     const attachmentFilenames = React.useMemo(() => parts.flatMap((part) => (
         part.type === 'attachment' && part.name ? [part.name] : []
     )), [parts]);
+    const sessionMentionChips = React.useMemo(() => sessionMentionChipsOf(parts), [parts]);
 
     const mentionToken = agentMention?.token;
     let mentionInjected = false;
@@ -803,6 +805,7 @@ const UserMessageBody = React.memo(({ workspaceId, messageId, parts, messageCrea
                                 partIndex={index}
                                 onTruncationChange={handlePartTruncationChange}
                                 attachmentFilenames={attachmentFilenames}
+                                sessionMentionChips={sessionMentionChips}
                             />
                         </React.Fragment>
                     );

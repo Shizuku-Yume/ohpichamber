@@ -6,7 +6,7 @@
 
 **Started:** 2026-10-30T08:18:01+08:00
 
-**Status:** active
+**Finished:** 2026-10-30T10:27:14+08:00
 
 **Delivers:** The Host answers `POST /api/git/projects` and `POST /api/git/project-worktrees` for the canonical project-overview client, so Board/Files discovery and worktree reads stop at a real Host route instead of a 404. The routes are the missing behavior from upstream `0056bf6a9`; they run on the fork's Git service and space boundary.
 
@@ -65,15 +65,15 @@ Missing, empty or non-array `directories`, or more than 200 unique normalized en
 
 ## Done when
 
-- [ ] `POST /api/git/projects` and `POST /api/git/project-worktrees` are registered by `registerGitRoutes`, resolve Git only through the lazy `getGitLibraries()` import, and add no second Git implementation or engine dependency.
-- [ ] Request contract matches the existing `gitApiHttp` caller: JSON body `{ directories: string[], fields?: Array<'status' | 'root'> }`; `directories` is required, entries are trimmed, empty entries dropped, duplicates removed at first occurrence, and at most 200 entries are accepted. A missing/empty/non-array `directories`, or more than 200, answers 400 with `{ error }`. The optional `directory` query is the client's routing context only; the body entries are authoritative and a missing query is not a 400.
-- [ ] Both routes preserve input order and answer `{ projects: Entry[] }`, with a worker pool of at most 4 directories. A per-directory failure is an entry, never a whole-batch 500.
-- [ ] `/api/git/projects` always answers `isGitRepository` (a non-repository is `false`, not an error). `status` is read only when `fields` contains `status`; a status read calls `observeWorktreeTopology(directory)` without awaiting it, mirroring `GET /api/git/status`. `root` is read only when `fields` contains `root`, as `(await resolvePrimaryWorktreeRoot(directory)).root`. A requested field that fails is `null` and named in `errors` (`'status'` or `'root'`); the other field still answers. A non-repository with status requested reuses the canonical `nonRepoStatusPayload()` from the existing status route verbatim; with root requested it answers `root: null`. A non-repository error from the repository check becomes that canonical non-repository entry, not an `error`.
-- [ ] `/api/git/project-worktrees` calls `getWorktrees(directory)`, enriches provenance through the same `contributorProvenance.readMany` helper `GET /api/git/worktrees` uses (extract the shared helper rather than duplicating the loop), calls `observeWorktreeTopology` only for a non-empty listing, and answers `{ directory, worktrees }`. A read failure answers `{ directory, worktrees: null, errors: ['worktrees'] }`; a non-repository's authoritative empty list is a success.
-- [ ] The space boundary matches upstream: `/api/git/project-worktrees` is `refused_across_boundary`, while `/api/git/projects` is allowed to run for a space directory. The dispatcher tests cover both classifications and the spaces documentation lists the refused route.
-- [ ] Focused tests cover validation (missing, empty, non-string, duplicates, 200 and 201 entries), input order, field selection, canonical non-repository status/root, one directory failing without blanking others, provenance parity with the existing worktree route, and per-directory worktree failure. Topology notification and the 4-worker bound are throwaway smoke checks or invariant observations only; permanent tests must not assert `observeWorktreeTopology` call counts or worker internals.
-- [ ] Existing `gitApiHttp` batch tests stay green unchanged; no client endpoint, body shape, response field or cache behavior is renamed.
-- [ ] Real path records the app and route observations above, the fixture setup, and the provider limit. A mock that intercepts `/api/git/projects` or `/api/git/project-worktrees` in the browser does not count.
+- [x] `POST /api/git/projects` and `POST /api/git/project-worktrees` are registered by `registerGitRoutes`, resolve Git only through the lazy `getGitLibraries()` import, and add no second Git implementation or engine dependency.
+- [x] Request contract matches the existing `gitApiHttp` caller: JSON body `{ directories: string[], fields?: Array<'status' | 'root'> }`; `directories` is required, entries are trimmed, empty entries dropped, duplicates removed at first occurrence, and at most 200 entries are accepted. A missing/empty/non-array `directories`, or more than 200, answers 400 with `{ error }`. The optional `directory` query is the client's routing context only; the body entries are authoritative and a missing query is not a 400.
+- [x] Both routes preserve input order and answer `{ projects: Entry[] }`, with a worker pool of at most 4 directories. A per-directory failure is an entry, never a whole-batch 500.
+- [x] `/api/git/projects` always answers `isGitRepository` (a non-repository is `false`, not an error). `status` is read only when `fields` contains `status`; a status read calls `observeWorktreeTopology(directory)` without awaiting it, mirroring `GET /api/git/status`. `root` is read only when `fields` contains `root`, as `(await resolvePrimaryWorktreeRoot(directory)).root`. A requested field that fails is `null` and named in `errors` (`'status'` or `'root'`); the other field still answers. A non-repository with status requested reuses the canonical `nonRepoStatusPayload()` from the existing status route verbatim; with root requested it answers `root: null`. A non-repository error from the repository check becomes that canonical non-repository entry, not an `error`.
+- [x] `/api/git/project-worktrees` calls `getWorktrees(directory)`, enriches provenance through the same `contributorProvenance.readMany` helper `GET /api/git/worktrees` uses (extract the shared helper rather than duplicating the loop), calls `observeWorktreeTopology` only for a non-empty listing, and answers `{ directory, worktrees }`. A read failure answers `{ directory, worktrees: null, errors: ['worktrees'] }`; a non-repository's authoritative empty list is a success.
+- [x] The space boundary matches upstream: `/api/git/project-worktrees` is `refused_across_boundary`, while `/api/git/projects` is allowed to run for a space directory. The dispatcher tests cover both classifications and the spaces documentation lists the refused route.
+- [x] Focused tests cover validation (missing, empty, non-string, duplicates, 200 and 201 entries), input order, field selection, canonical non-repository status/root, one directory failing without blanking others, provenance parity with the existing worktree route, and per-directory worktree failure. Topology notification and the 4-worker bound are throwaway smoke checks or invariant observations only; permanent tests must not assert `observeWorktreeTopology` call counts or worker internals.
+- [x] Existing `gitApiHttp` batch tests stay green unchanged; no client endpoint, body shape, response field or cache behavior is renamed.
+- [x] Real path records the app and route observations above, the fixture setup, and the provider limit. A mock that intercepts `/api/git/projects` or `/api/git/project-worktrees` in the browser does not count.
 
 ## Progress
 
@@ -105,4 +105,21 @@ The routes are not registered. Implementation and focused tests are on the branc
 - **B (quality):** 0 blocking, 4 nonblocking. Fixed: removed `projects.filter(Boolean)` so every unique input keeps its entry; task Interfaces now matches the tested normalization (unresolvable entries dropped, 400 only for missing/empty/non-array or >200); Git docs now name the hard `{ directory, error }` repository-check shape. The whitespace client mismatch was noted only; the frozen client was not changed.
 - **Security:** 0 blocking, 2 nonblocking. Fixed B1 by reconciling the contract text to the existing tested upstream normalization; fixed B2 by removing the client-supplied directory from all four new per-entry failure logs. No parser, space-UI or pre-existing boundary behavior was changed.
 - Focused suites still pass 98/98; `node --check` on the changed server route exits 0; anti-slop on the authored delta has 0 findings (artifact record). The real app/fixture smoke and W5 evidence remain pending the heavy slot; no Done-when box is checked.
+
+### Rebase and real path
+
+- Rebased onto integration `d909d974f2f3645f8dd1a35c44920768b63f2bda`; the original Base commit stays `811ecef47102ce4d737de56a7b41293e326a1e1e`. Only conflict was task 31's dependency line; the integration version `07, 35` was kept.
+- Frozen install (Bun 1.4.4) exit 0; root type-check exit 0; root lint exit 0; focused web suites 98/98; unchanged `gitApiHttp` contract suite 64/64.
+- Real app on isolated ports 3730/3731 with the fixture repo: Board selected `fixture-repo` through its Project picker and showed Issues / Pull requests / Linear tabs; the page's own POSTs to `/api/git/projects` and `/api/git/project-worktrees` both answered **200** (network receipts below), with the project body showing `isGitRepository: true` and the worktree body listing `main` plus the linked `feature` worktree.
+- Files panel for the fixture session listed `.git`, `src`, `README.md`, `rename-me.txt` and `uncommitted.txt`; opening `README.md` showed its `Fixture` heading. Screenshots: `final/board-final.png`, `final/board-final-chooser.png`, `final/files-readme-open.png`, `final/files-final.png`. Network status/request/body: `final/network-projects-final-status.txt`, `final/network-project-worktrees-final-status.txt`, `final/network-projects-body.json`, `final/network-project-worktrees-body.json`. Provider issue/PR listing was not claimed; the baseline Board showed Connect GitHub, and the fixture is the named stand-in.
+- A/B/security history remains at `final/review-quality.md`, `final/review-security.md`, `final/review-quality-rebase.md` and `final/review-security-rebase.md`. The rebase reviewers reported 0 blocking findings; no source-text or forwarding tests were added.
+
+### Final check after
+
+- Frozen install with Bun 1.4.4: `bun install --frozen-lockfile` exit 0 (`final/install.log`, `final/install.exit`).
+- Root type-check exit 0 (`final/type-check.log`, `final/type-check.exit`); root lint exit 0 (`final/lint.log`, `final/lint.exit`).
+- Focused web suites 98/98 (`final/focused-web.log`); unchanged `gitApiHttp` contract suite 64/64 (`final/gitApiHttp-contract.log`).
+- Final root `bun run test` exit 0: 7/7 suites; web 461 files passed / 9 skipped, 7,393 tests passed / 142 skipped; electron 54/54; agent-service 250 passed / 7 skipped. Receipts: `final/root-test.log`, `final/root-test.exit`.
+- Real-path receipts: `final/board-final.png`, `final/board-final-chooser.png`, `final/files-readme-open.png`, `final/files-final.png`; network Status 200 lines in `final/network-projects-final-status.txt` and `final/network-project-worktrees-final-status.txt`; bodies in the matching `*-body.json` files.
+- This archive/docs-only commit changes no code; no heavy rerun is needed for it.
 

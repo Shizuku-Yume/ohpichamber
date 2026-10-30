@@ -117,10 +117,15 @@ describe('POST /api/git/change-id', () => {
     const response = await request(appWith())
       .post('/api/git/change-id').query({ directory }).send({ expectedHead: head }).expect(500);
 
-    // `git var GIT_COMMITTER_IDENT` exits 128 without an identity; the route
-    // publishes the failure class only, never the command or its stderr.
-    expect(response.body).toEqual({ error: 'Failed to add a Change-Id', code: 128 });
-    expect(response.text).not.toMatch(/GIT_COMMITTER_IDENT|fatal|致命|请告诉我您是谁|@/i);
+    // `git var GIT_COMMITTER_IDENT` fails without a configured identity. The
+    // body is the fixed public error, not the child process's exit code or
+    // anything Git printed.
+    expect(response.body).toMatchObject({ error: 'Failed to add a Change-Id' });
+    expect(Object.keys(response.body).sort()).toEqual(['code', 'error']);
+    expect(response.text).not.toContain('git var');
+    expect(response.text).not.toContain('Command failed');
+    expect(response.text).not.toContain(directory);
+    expect(response.text).not.toMatch(/fatal|致命|请告诉我您是谁|@/i);
     expect(git('rev-parse', 'HEAD')).toBe(head);
   });
 });

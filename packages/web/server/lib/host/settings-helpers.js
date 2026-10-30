@@ -93,24 +93,6 @@ export const createSettingsHelpers = (dependencies) => {
   // settings-helpers.test.js fails when the two lists drift apart.
   const UI_LOCALE_VALUES = new Set(['en', 'de', 'fr', 'nl', 'zh-CN', 'zh-TW', 'uk', 'es', 'pt-BR', 'ko', 'pl', 'ja', 'tr', 'ar', 'he']);
   const SIDEBAR_PROJECT_SORT_ORDER_VALUES = new Set(['manual', 'a-z', 'z-a', 'date-added', 'recent']);
-  // Registry keys that are plain switches. They need no branch of their own, but
-  // each still has to reach `result` or the registry allowlist silently drops it.
-  const PERSISTABLE_BOOLEAN_SETTINGS = Object.freeze([
-    'layoutAnimations', 'openLinksInBrowserPanel', 'openTrackerLinksOnBoard',
-    'worktreeArchiveOnDoneEnabled', 'showOpenCodeUpdateNotifications',
-    'agentScheduleToolEnabled', 'agentKnowledgeToolEnabled', 'agentRenderToolEnabled',
-    'agentWorkflowToolEnabled', 'mobileReturnKeySends', 'savePastedImagesAsFiles',
-  ]);
-  // The update body is untrusted input: each switch is parsed on its own, so a
-  // mistyped field is dropped without failing the valid fields beside it.
-  const persistableSwitchSchema = z.object(Object.fromEntries(
-    PERSISTABLE_BOOLEAN_SETTINGS.map((key) => [key, z.boolean().optional().catch(undefined)]),
-  ));
-  // An empty or non-string variant is dropped the same way; the stored value stays.
-  const smallModelVariantSchema = z.string().trim().min(1).optional().catch(undefined);
-  // Mirrors `LIVE_BROWSER_TABS_MIN`/`MAX` in packages/ui/src/lib/browser/liveTabs.ts.
-  const LIVE_BROWSER_TABS_MIN = 1;
-  const LIVE_BROWSER_TABS_MAX = 20;
   const SIDEBAR_WORKTREE_SORT_ORDER_VALUES = new Set(['recent', 'manual', 'a-z']);
   const HIDDEN_MODELS_MAX = 1024;
   const RECENT_EFFORTS_MAX_KEYS = 128;
@@ -1105,25 +1087,6 @@ export const createSettingsHelpers = (dependencies) => {
       if (trimmed.length <= STT_LANGUAGE_MAX_LENGTH) {
         result.sttLanguage = trimmed;
       }
-    }
-
-    // Plain switches the UI persists but this chain had no branch for, so the
-    // registry listed them and every write dropped them (settings-registry.json
-    // caught it once it was regenerated). Keep each one a strict boolean.
-    const switches = persistableSwitchSchema.safeParse(candidate).data ?? {};
-    for (const key of PERSISTABLE_BOOLEAN_SETTINGS) {
-      if (switches[key] !== undefined) {
-        result[key] = switches[key];
-      }
-    }
-    if (Number.isInteger(candidate.liveBrowserTabLimit)
-      && candidate.liveBrowserTabLimit >= LIVE_BROWSER_TABS_MIN
-      && candidate.liveBrowserTabLimit <= LIVE_BROWSER_TABS_MAX) {
-      result.liveBrowserTabLimit = candidate.liveBrowserTabLimit;
-    }
-    const smallModelVariant = smallModelVariantSchema.safeParse(candidate.smallModelVariant).data;
-    if (smallModelVariant !== undefined) {
-      result.smallModelVariant = smallModelVariant;
     }
 
     // The registry is the last word on what a client may persist: a key the

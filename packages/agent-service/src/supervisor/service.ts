@@ -27,7 +27,7 @@ import { SessionRegistry, type NativeArchiveImported, type NativeArchiveInventor
 import type { ApprovalPolicyCommit, ApprovalPolicyLoad } from '../interaction/manager.ts';
 import { SessionReferenceError } from '../sessions/references.ts';
 import { ArchiveImportRequestSchema } from '../sessions/archive.ts';
-import { WorkerOperationError, WorkerRegistry, type RegisteredWorkerInfo, type WorkerDiagnostic, type WorkerCapacityPolicy } from './workers.ts';
+import { WorkerOperationError, WorkerRegistry, type RegisteredWorkerInfo, type WorkerDiagnostic, type WorkerCapacityPolicy, type WorktreeLeaseAcquireResult } from './workers.ts';
 import { deliverSessionStream } from './event-stream.ts';
 import { CatalogCoordinator, CatalogCoordinatorError, type CatalogAdmission, type CatalogBootstrap } from './catalog.ts';
 import { WorkspaceCatalogs } from './workspaces.ts';
@@ -62,6 +62,7 @@ const HostSkillSourcePublicationSchema = z.strictObject({
 }).refine(input => (input.scope === 'agent') === (input.agentDirectoryId !== undefined), 'Agent source publication selects its captured owner');
 const HostSkillFilesApplySchema = z.strictObject({ scope: z.enum(['workspace', 'agent']), sourceRevision: CounterSchema, agentDirectoryId: EntityIdSchema });
 const HostSkillSourceReconcileSchema = z.strictObject({ agentDirectoryId: EntityIdSchema });
+const WorktreeLeaseRequestSchema = z.strictObject({ leaseId: z.string().min(1), directory: z.string().min(1) });
 const ListeningAddressSchema = z.object({ address: z.literal('127.0.0.1'), port: z.number().int().min(1).max(65_535) });
 class RequestError extends Error {
   constructor(readonly status: number, readonly code: ProblemCode, message: string) { super(message); }
@@ -93,6 +94,7 @@ type ServiceResponse =
   | PrivateCredentialResolveResult | PrivateCredentialHandoffResult
   | CommandCatalogState | PromptTemplateCatalogState | FileResourceSkillCatalog | FileResourceExpandResult | FileResourcePromptInputResult
   | { sources: SkillSourceRevisions }
+  | WorktreeLeaseAcquireResult
   | ShellJob | ShellSnapshot | ShellOutput | ShellStopResult;
 
 function respondJson(response: ServerResponse, status: number, body: ServiceResponse): void {
@@ -217,6 +219,8 @@ export class AgentService {
   }
   private async admit<T>(input: WorkerBootstrap, launch: (bootstrap: WorkerBootstrap) => Promise<T>, capturedAdmission?: CatalogAdmission): Promise<T> {
     const captured = this.assertAdmissionScope(input);
+    // Fast refusal before any catalog work; `launch` checks again before spawn.
+    this.workers.assertWorktreeLeaseAllows(input.cwd);
     if (capturedAdmission && (!captured || input.agentDirectoryId === undefined || !this.workspaceCatalogs.matches(input)))
       throw new WorkerOperationError(403, 'UNAUTHORIZED');
     const agentDirectoryId = await this.workspaceCatalogs.registerRoot(input);
@@ -408,6 +412,23 @@ export class AgentService {
         response.once('close', cancel);
         try { respondJson(response, 201, await this.sessions.importArchive(input, controller.signal)); }
         finally { response.off('close', cancel); }
+        return;
+      }
+      // The Host holds its supervisor restarts before this call and releases the
+      // id it supplied afterwards; the service never mints one.
+      if (request.method === 'POST' && url.pathname === '/internal/worktree-leases') {
+        const input = await readBody(request, WorktreeLeaseRequestSchema);
+        respondJson(response, 201, await this.workers.acquireWorktreeLease(input.leaseId, input.directory));
+        return;
+      }
+      const worktreeLease = /^\/internal\/worktree-leases\/([^/]+)$/.exec(url.pathname);
+      if (worktreeLease && request.method === 'DELETE') {
+        let leaseId: string;
+        try { leaseId = decodeURIComponent(worktreeLease[1]); }
+        catch { throw new RequestError(400, 'INVALID_REQUEST', 'Lease id is invalid'); }
+        await this.workers.releaseWorktreeLease(leaseId);
+        response.writeHead(204, { 'Cache-Control': 'no-store' });
+        response.end();
         return;
       }
       // Admission must precede catalog, shell and direct worker paths, not merely public run routes.

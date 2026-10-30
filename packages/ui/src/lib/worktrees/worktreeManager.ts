@@ -20,6 +20,7 @@ import type {
   GitWorktreeArchive,
   GitWorktreeBootstrapStatus,
   GitWorktreeValidationResult,
+  GitWorktreeArchive,
   GitChangeRequestSourceRequest,
   GitAPI,
   SourceControlAPI,
@@ -784,9 +785,10 @@ const forgetRemovedWorktree = (project: ProjectRef, worktree: WorktreeMetadata):
 };
 
 /**
- * Archives the worktree: the server records its state with `sessionIds` (the
- * sessions the caller archived for it) under a private ref and removes the
- * folder, keeping the branch. The row shows the removal until git answers.
+ * Archives a worktree with the sessions the caller already archived: the Host
+ * releases the folder's workers, records the worktree under its archive ref and
+ * removes the folder, keeping its branch. The one client call to
+ * `git.worktree.archive`; a refusal leaves the worktree in the topology.
  */
 export async function archiveProjectWorktree(
   project: ProjectRef,

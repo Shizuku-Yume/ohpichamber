@@ -1,8 +1,9 @@
 import React from 'react';
 import { create } from 'zustand';
+import { z } from 'zod';
+import type { Session } from '@openchamber/agent-contract';
 import { GitWorktreeRequestError, type GitWorktreeArchive } from '@/lib/api/types';
 import { canArchiveWorktrees, git } from '@/lib/gitApi';
-import type { Session } from '@openchamber/agent-contract';
 import { normalizePath } from '@/lib/pathNormalization';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { resolveWorktreeSetupCommandsOrCancel } from '@/lib/sharedTrustConfirmation';
@@ -10,8 +11,7 @@ import { archiveProjectWorktree, createWorktree, listProjectWorktrees, removePro
 import { archiveSessionsThenRemoveWorktree } from '@/lib/worktrees/worktreeRemovalFlow';
 import { clearWorktreeRemoval, markWorktreeRemoving } from '@/lib/worktrees/worktreeRemovalState';
 import { getSafeStorage } from '@/stores/utils/safeStorage';
-import { z } from 'zod';
-import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { archiveSessions, deleteSessions, moveSessionToDirectory, unarchiveSessions } from '@/sync/session-actions';
 import type { WorktreeMetadata } from '@/types/worktree';
 
@@ -56,6 +56,7 @@ export async function loadWorktreeArchives(projectPath: string): Promise<GitWork
     if (isLatest()) setProjectArchives(key, { status: 'ready', archives });
     return archives;
   } catch (error) {
+    // Failure is not an empty archive: keep the previous listing and say so.
     if (isLatest()) {
       setProjectArchives(key, { status: 'error', archives: previous, error: error instanceof Error ? error.message : String(error) });
     }
@@ -85,15 +86,15 @@ const newArchiveId = (): string => `${Date.now().toString(36)}-${Math.random().t
 
 /**
  * Archives a worktree with its sessions: the sessions go to the archive first
- * (OpenCode can change a session only while its folder exists), then the
- * server records the worktree with them and removes the folder. A session
- * that will not archive, or a worktree that will not go, restores the
- * sessions, so nothing ends up half archived. A folder git emptied only in
- * part is archived all the same (the server keeps the archive), so its
- * sessions stay with the archive and the call still fails, to say so.
+ * (the runtime can change a session only while its folder exists), then the
+ * Host releases the folder's workers, records the worktree with them and
+ * removes the folder. A session that will not archive, or a worktree that will
+ * not go, restores the sessions, so nothing ends up half archived. A folder
+ * removed only in part is archived all the same (the server keeps the archive),
+ * so its sessions stay with the archive and the call still fails, to say so.
  *
- * The worktree reads as being removed from the start, so the merged-PR
- * cleanup and a second Done leave it alone meanwhile.
+ * The worktree reads as being removed from the start, so the merged-PR cleanup
+ * and a second Done leave it alone meanwhile.
  */
 export async function archiveWorktreeWork(input: {
   project: ProjectRef;
@@ -115,7 +116,11 @@ export async function archiveWorktreeWork(input: {
           throw new Error(`Could not archive ${sessionIds.length - archivedIds.length} session(s)`);
         }
         try {
-          await archiveProjectWorktree(input.project, input.worktree, { id: newArchiveId(), sessionIds: archivedIds, title: input.title });
+          await archiveProjectWorktree(input.project, input.worktree, {
+            id: newArchiveId(),
+            sessionIds: archivedIds,
+            title: input.title ?? input.worktree.title,
+          });
         } catch (error) {
           if (!(error instanceof GitWorktreeRequestError) || error.code !== 'WORKTREE_ARCHIVE_PARTIAL') throw error;
           partial = error;
@@ -204,7 +209,7 @@ async function restoreArchivedWorktreeOnce(input: {
   let sessionsFailed = 0;
   if (from && to && from !== to) {
     for (const session of sessions) {
-      const directory = normalizePath(session.displayPath);
+      const directory = normalizePath(resolveGlobalSessionDirectory(session));
       if (!directory || (directory !== from && !directory.startsWith(`${from}/`))) continue;
       await moveSessionToDirectory(session, directory, `${to}${directory.slice(from.length)}`).catch(() => { sessionsFailed += 1; });
     }

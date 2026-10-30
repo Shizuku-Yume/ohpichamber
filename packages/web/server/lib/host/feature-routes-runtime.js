@@ -559,6 +559,7 @@ export const createFeatureRoutesRuntime = () => {
       resolveSourceControlAccount,
       errorRedactionSecrets: [openchamberDataDir],
       worktreeBootstrapStore,
+      worktreeLeaseControl: routeDependencies.worktreeLeaseControl,
       emitWorktreeChanged: ({ directories, at }) => {
         const clients = getOpenChamberEventClients();
         for (const client of clients) {

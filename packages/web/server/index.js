@@ -568,6 +568,60 @@ const hostAgentRuntime = createHostAgentRuntime({
   getEnvironmentForDirectory: async (directory) => await environmentRuntime.forDirectory(directory) ?? {},
   invokeHostAction: (scope, request, signal) => openChamberControlService.invokeHostAction(scope, request, signal),
 });
+// The Host generates the lease id before the Agent Service sees it and releases
+// that same id on every path. Restarts stay held from just before the acquire
+// until the release, so a crashed service cannot admit a new generation while
+// the archive still removes the folder.
+const worktreeLeaseControl = {
+  async acquire(directory, leaseId) {
+    hostAgentRuntime.service.holdRestarts();
+    let response;
+    try {
+      response = await hostAgentRuntime.service.request('/internal/worktree-leases', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ leaseId, directory }),
+      });
+    } catch (error) {
+      throw Object.assign(
+        new Error(`The Agent Service cannot release the worktree's workers: ${error instanceof Error ? error.message : String(error)}`),
+        { status: 503, code: 'SERVICE_UNAVAILABLE' },
+      );
+    }
+    if (!response.ok) {
+      const problem = await response.json().catch(() => null);
+      const details = problem && typeof problem.details === 'object' ? problem.details : undefined;
+      // A duplicate lease id names a lease this archive never created;
+      // releasing it would end another archive's hold.
+      if (problem?.code === 'COMMAND_IN_FLIGHT' && details?.leaseId === leaseId) {
+        hostAgentRuntime.service.resumeRestarts();
+        throw Object.assign(
+          new Error(problem?.detail || 'The worktree lease id is already held'),
+          { status: 409, code: problem.code, details, releaseNotNeeded: true },
+        );
+      }
+      throw Object.assign(
+        new Error(problem?.detail || 'The worktree lease was refused'),
+        {
+          status: Number.isInteger(problem?.status) ? problem.status : response.status,
+          code: problem?.code,
+          details,
+        },
+      );
+    }
+    return response.json();
+  },
+  async release(leaseId) {
+    try {
+      await hostAgentRuntime.service.request(`/internal/worktree-leases/${encodeURIComponent(leaseId)}`, { method: 'DELETE' });
+    } catch {
+      // A live, hung service keeps the in-memory lease until it restarts; the
+      // folder is already gone, and the resumed supervisor still starts it.
+    } finally {
+      hostAgentRuntime.service.resumeRestarts();
+    }
+  },
+};
 const promptQueueStore = createPromptQueueStore({ dataDir: OPENCHAMBER_DATA_DIR });
 const resolveCredential = createSelectedCredentialResolver({
   service: hostAgentRuntime.service,
@@ -2081,6 +2135,7 @@ async function main(options = {}) {
     globalEventHub: globalMessageStreamHub,
     permissionAutoAcceptRuntime,
     worktreeBootstrapStore,
+    worktreeLeaseControl,
     messageQueueRuntime,
     routingRuntime,
   });

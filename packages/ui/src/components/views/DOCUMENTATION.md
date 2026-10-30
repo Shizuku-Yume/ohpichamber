@@ -98,3 +98,13 @@ archive. Restore brings it back on its own, under that parent. One rule,
 `isRestorableOnItsOwn` in `sync/session-restore-rule.ts`, decides what the page
 lists, when the chat header's session menu offers Restore, and what the restore
 action accepts, so the three never disagree.
+
+The page also lists a selected project's archived worktrees above its archived
+sessions, and on the phone every project's archived worktrees above the list.
+Each row shows the worktree name, branch and archive date with **Restore** and
+**Delete** (always visible on touch). Restore creates the checkout on the
+recorded branch before the Host applies the archive, then reopens the recorded
+sessions; the row's Delete asks before removing the sessions, the archive and
+its local branch. The listing is `lib/worktrees/worktreeArchive.ts`; the
+repository's archive refs are the record, and a failed listing keeps the last
+one instead of showing an empty archive.

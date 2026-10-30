@@ -14,6 +14,8 @@ import {
   type MergedWorktreeOutcome,
 } from '@/lib/worktrees/mergedWorktreeCleanup';
 import { getWorktreeDisplayName, removeProjectWorktree } from '@/lib/worktrees/worktreeManager';
+import { archiveWorktreeWork, takeRestoredWorktree } from '@/lib/worktrees/worktreeArchive';
+import { isWorktreeRemoving } from '@/lib/worktrees/worktreeRemovalState';
 import { getSafeStorage } from '@/stores/utils/safeStorage';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { getFreshestPrStatusForBranch, useGitHubPrStatusStore } from '@/stores/useGitHubPrStatusStore';
@@ -108,6 +110,8 @@ const createDeps = (): MergedWorktreeCleanupDeps => {
     isSessionIdle: (sessionId) => getSessionLiveActivity(sessionId) === 'idle',
     isWorktreeOpen: (path) => normalizePath(useDirectoryStore.getState().currentDirectory ?? null) === normalizePath(path),
     isSessionOpen: (sessionId) => useSessionUIStore.getState().currentSessionId === sessionId,
+    isWorktreeRemoving,
+    takeRestored: takeRestoredWorktree,
     readWorktreeState: async (candidate) => {
       const path = candidate.worktree.path;
       const status = await getGitStatus(path, { fresh: true });
@@ -122,6 +126,9 @@ const createDeps = (): MergedWorktreeCleanupDeps => {
     },
     archiveSessions: (sessionIds) => archiveSessions(sessionIds),
     removeWorktree: (candidate) => removeProjectWorktree(candidate.project, candidate.worktree, { deleteLocalBranch: true }),
+    archiveWorktree: async (candidate, sessions) => {
+      await archiveWorktreeWork({ project: candidate.project, worktree: candidate.worktree, sessions });
+    },
     report,
   };
 };

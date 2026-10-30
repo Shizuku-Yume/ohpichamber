@@ -26,6 +26,10 @@ const gitLibraries = {
   observeWorktreeTopology: vi.fn(),
   subscribeWorktreeTopologyChanges: vi.fn(),
   removeWorktree: vi.fn(),
+  archiveWorktree: vi.fn(),
+  listWorktreeArchives: vi.fn(),
+  restoreWorktreeArchive: vi.fn(),
+  deleteWorktreeArchive: vi.fn(),
 };
 
 vi.mock('./index.js', () => ({
@@ -54,6 +58,10 @@ vi.mock('./index.js', () => ({
   observeWorktreeTopology: gitLibraries.observeWorktreeTopology,
   subscribeWorktreeTopologyChanges: gitLibraries.subscribeWorktreeTopologyChanges,
   removeWorktree: gitLibraries.removeWorktree,
+  archiveWorktree: gitLibraries.archiveWorktree,
+  listWorktreeArchives: gitLibraries.listWorktreeArchives,
+  restoreWorktreeArchive: gitLibraries.restoreWorktreeArchive,
+  deleteWorktreeArchive: gitLibraries.deleteWorktreeArchive,
 }));
 
 const { registerGitRoutes } = await import('./routes.js');
@@ -634,6 +642,120 @@ describe('worktree provenance listing', () => {
         provenance: { kind: 'contributor-fork', revision: 3, trust: 'untrusted', push: 'destination-selection-required' },
       },
     ]);
+  });
+});
+
+describe('git worktree archive routes', () => {
+  const worktreeBootstrapStore = { remove: vi.fn() };
+  const worktreeLeaseControl = { acquire: vi.fn(), release: vi.fn() };
+
+  beforeEach(() => {
+    gitLibraries.archiveWorktree.mockReset();
+    gitLibraries.listWorktreeArchives.mockReset();
+    gitLibraries.restoreWorktreeArchive.mockReset();
+    gitLibraries.deleteWorktreeArchive.mockReset();
+    worktreeLeaseControl.acquire.mockReset();
+    worktreeLeaseControl.release.mockReset();
+  });
+
+  it('archives with the sessions, the bootstrap store and the lease control', async () => {
+    gitLibraries.archiveWorktree.mockResolvedValue({ id: 'a1' });
+    const { app, getRoute } = createRouteRegistry();
+    registerGitRoutes(app, { worktreeBootstrapStore, worktreeLeaseControl });
+    const response = createMockResponse();
+    await getRoute('POST', '/api/git/worktrees/archives')(
+      { query: { directory: '/repo' }, body: { directory: '/repo/wt', id: 'a1', sessionIds: ['ses_1'], title: 'Login fix' } },
+      response,
+    );
+    expect(response.statusCode).toBe(200);
+    expect(gitLibraries.archiveWorktree).toHaveBeenCalledWith('/repo', {
+      directory: '/repo/wt',
+      id: 'a1',
+      sessionIds: ['ses_1'],
+      title: 'Login fix',
+    }, { bootstrapStore: worktreeBootstrapStore, worktreeWorkers: worktreeLeaseControl });
+  });
+
+  it('answers 404 for an archive that is gone', async () => {
+    gitLibraries.deleteWorktreeArchive.mockRejectedValue(Object.assign(new Error('Worktree archive not found'), { code: 'WORKTREE_ARCHIVE_NOT_FOUND' }));
+    const { app, getRoute } = createRouteRegistry();
+    registerGitRoutes(app, { worktreeBootstrapStore, worktreeLeaseControl });
+    const response = createMockResponse();
+    await getRoute('DELETE', '/api/git/worktrees/archives')({ query: { directory: '/repo' }, body: { id: 'gone' } }, response);
+    expect(response.statusCode).toBe(404);
+    expect(response.body).toMatchObject({ code: 'WORKTREE_ARCHIVE_NOT_FOUND' });
+  });
+
+  it('lists the archives of the project', async () => {
+    gitLibraries.listWorktreeArchives.mockResolvedValue([{ id: 'a1' }]);
+    const { app, getRoute } = createRouteRegistry();
+    registerGitRoutes(app, { worktreeBootstrapStore, worktreeLeaseControl });
+    const response = createMockResponse();
+    await getRoute('GET', '/api/git/worktrees/archives')({ query: { directory: '/repo' } }, response);
+    expect(response.body).toEqual({ archives: [{ id: 'a1' }] });
+  });
+
+  it('relays a lease refusal with its code and the session it names', async () => {
+    gitLibraries.archiveWorktree.mockRejectedValue(Object.assign(new Error('A run is active'), {
+      status: 409, code: 'RUN_ACTIVE', details: { sessionId: 'ses_1' },
+    }));
+    const { app, getRoute } = createRouteRegistry();
+    registerGitRoutes(app, { worktreeBootstrapStore, worktreeLeaseControl });
+    const response = createMockResponse();
+    await getRoute('POST', '/api/git/worktrees/archives')(
+      { query: { directory: '/repo' }, body: { directory: '/repo/wt', id: 'a1' } },
+      response,
+    );
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toEqual({ error: 'A run is active', code: 'RUN_ACTIVE', details: { sessionId: 'ses_1' } });
+  });
+
+  it('answers 501 for missing worktree bootstrap storage before any archive work', async () => {
+    const { app, getRoute } = createRouteRegistry();
+    registerGitRoutes(app, { worktreeLeaseControl });
+    const response = createMockResponse();
+    await getRoute('POST', '/api/git/worktrees/archives')(
+      { query: { directory: '/repo' }, body: { directory: '/repo/wt', id: 'a1' } },
+      response,
+    );
+    expect(response.statusCode).toBe(501);
+    expect(response.body).toEqual({ error: 'Worktree bootstrap storage is not available' });
+    expect(gitLibraries.archiveWorktree).not.toHaveBeenCalled();
+  });
+
+  it('answers 501 for missing worker lifecycle control before any archive work', async () => {
+    const { app, getRoute } = createRouteRegistry();
+    registerGitRoutes(app, { worktreeBootstrapStore });
+    const response = createMockResponse();
+    await getRoute('POST', '/api/git/worktrees/archives')(
+      { query: { directory: '/repo' }, body: { directory: '/repo/wt', id: 'a1' } },
+      response,
+    );
+    expect(response.statusCode).toBe(501);
+    expect(response.body).toEqual({ error: 'Worker lifecycle control is not available' });
+    expect(gitLibraries.archiveWorktree).not.toHaveBeenCalled();
+  });
+
+  it('maps a partly deleted worktree to 409 with the archive kept', async () => {
+    gitLibraries.archiveWorktree.mockRejectedValue(Object.assign(new Error('Partly deleted'), { code: 'WORKTREE_ARCHIVE_PARTIAL' }));
+    const { app, getRoute } = createRouteRegistry();
+    registerGitRoutes(app, { worktreeBootstrapStore, worktreeLeaseControl });
+    const response = createMockResponse();
+    await getRoute('POST', '/api/git/worktrees/archives')(
+      { query: { directory: '/repo' }, body: { directory: '/repo/wt', id: 'a1' } },
+      response,
+    );
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toMatchObject({ code: 'WORKTREE_ARCHIVE_PARTIAL' });
+  });
+
+  it('requires a worktree directory in the body', async () => {
+    const { app, getRoute } = createRouteRegistry();
+    registerGitRoutes(app, { worktreeBootstrapStore, worktreeLeaseControl });
+    const response = createMockResponse();
+    await getRoute('POST', '/api/git/worktrees/archives')({ query: { directory: '/repo' }, body: { id: 'a1' } }, response);
+    expect(response.statusCode).toBe(400);
+    expect(response.body).toEqual({ error: 'worktree directory is required' });
   });
 });
 

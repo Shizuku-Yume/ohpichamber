@@ -192,6 +192,8 @@ describe('space routes and directories', () => {
     expect(classifySpacePath('/api/git/worktrees')).toBe('refused_across_boundary');
     expect(classifySpacePath('/api/git/project-worktrees')).toBe('refused_across_boundary');
     expect(classifySpacePath('/api/git/projects')).toBeNull();
+    expect(classifySpacePath('/api/git/worktrees/archives')).toBe('refused_across_boundary');
+    expect(classifySpacePath('/api/git/worktrees/archives/restore')).toBe('refused_across_boundary');
     expect(classifySpacePath('/api/git/integrate/merge')).toBe('refused_across_boundary');
     expect(classifySpacePath('/api/session/ses_1/move')).toBe('refused_across_boundary');
     // Express inside routes without regard to case.
@@ -384,6 +386,8 @@ describe('space dispatcher', () => {
       ['/fs/preview/grant/index.html', 'refused_across_boundary'],
       ['/preview/proxy/3000/', 'refused_across_boundary'],
       ['/git/worktrees', 'refused_across_boundary'],
+      ['/git/worktrees/archives', 'refused_across_boundary'],
+      ['/git/worktrees/archives/restore', 'refused_across_boundary'],
       ['/git/integrate/merge', 'refused_across_boundary'],
       ['/session/ses_1/move', 'refused_across_boundary'],
       ['/Config/settings', 'host_only_route'],

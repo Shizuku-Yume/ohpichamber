@@ -43,6 +43,10 @@ import {
   previewWorktreeCreate,
   removeWorktree,
   snapshotWorktree,
+  archiveWorktree,
+  listWorktreeArchives,
+  restoreWorktreeArchive,
+  deleteWorktreeArchive,
   resolvePrimaryWorktreeRoot,
   resolveWorktreeTopLevel,
   resetToCommit,
@@ -4105,6 +4109,224 @@ describe('snapshotWorktree', () => {
     await expect(snapshotWorktree(repo, { ref: 'refs/openchamber/runs/../heads' })).rejects.toThrow('Invalid snapshot ref');
   });
 
+});
+
+// ---------------------------------------------------------------------------
+// worktree archives
+// ---------------------------------------------------------------------------
+
+describe('worktree archives', () => {
+  const createArchivableWorktree = () => {
+    const repo = createTempDir();
+    runGit(repo, ['init', '-b', 'main']);
+    runGit(repo, ['config', 'user.email', 'test@example.com']);
+    runGit(repo, ['config', 'user.name', 'Test User']);
+    fs.writeFileSync(path.join(repo, 'README.md'), '# Test\n');
+    fs.writeFileSync(path.join(repo, 'gone.txt'), 'gone\n');
+    fs.writeFileSync(path.join(repo, '.gitignore'), 'secret.env\n');
+    runGit(repo, ['add', '.']);
+    runGit(repo, ['commit', '-m', 'Initial commit']);
+    const linked = path.join(createTempDir(), 'linked');
+    runGit(repo, ['worktree', 'add', '-b', 'feature/task', linked]);
+    fs.writeFileSync(path.join(linked, 'README.md'), '# Changed\n');
+    fs.rmSync(path.join(linked, 'gone.txt'));
+    fs.writeFileSync(path.join(linked, 'new.txt'), 'untracked\n');
+    fs.writeFileSync(path.join(linked, 'secret.env'), 'TOKEN=1\n');
+    return { repo, linked };
+  };
+
+  // The Host generates the id and releases that same id on every path; the
+  // service only sees it. Tests never assert helper call counts.
+  const createLeaseControl = (options = {}) => {
+    const acquired = [];
+    const released = [];
+    return {
+      acquired,
+      released,
+      worktreeWorkers: {
+        async acquire(directory, leaseId) {
+          acquired.push({ directory, leaseId });
+          if (options.refuse) throw Object.assign(new Error('A run is active'), { status: 409, code: 'RUN_ACTIVE' });
+          return { leaseId, released: [] };
+        },
+        async release(leaseId) { released.push(leaseId); },
+      },
+    };
+  };
+
+  const withShimGit = async (mode, run) => {
+    const bin = createTempDir();
+    const realGit = execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim();
+    const shim = path.join(bin, 'git');
+    fs.writeFileSync(shim, [
+      '#!/bin/sh',
+      'if [ "$1" = "worktree" ] && [ "$2" = "remove" ]; then',
+      '  TARGET=""',
+      '  for argument in "$@"; do TARGET="$argument"; done',
+      ...(mode === 'partial' ? ['  rm -f "$TARGET/README.md"'] : []),
+      '  echo "shim refused removal" >&2',
+      '  exit 1',
+      'fi',
+      `exec "${realGit.replace(/(["\\$`])/g, '\\$1')}" "$@"`,
+      '',
+    ].join('\n'));
+    fs.chmodSync(shim, 0o755);
+    const previousPath = process.env.PATH;
+    process.env.PATH = `${bin}${path.delimiter}${previousPath ?? ''}`;
+    try {
+      return await run();
+    } finally {
+      if (previousPath === undefined) delete process.env.PATH;
+      else process.env.PATH = previousPath;
+    }
+  };
+
+  it('archives a worktree with its changes and restores them into a new checkout of the branch', async () => {
+    if (!canRunGit()) return;
+    const { repo, linked } = createArchivableWorktree();
+    const lease = createLeaseControl();
+
+    const archived = await archiveWorktree(repo, {
+      directory: linked, id: 'a1', sessionIds: ['ses_1', 'ses_2'], title: 'Login timeout fix',
+    }, { worktreeWorkers: lease.worktreeWorkers });
+    expect(archived).toMatchObject({ id: 'a1', branch: 'feature/task', title: 'Login timeout fix', sessionIds: ['ses_1', 'ses_2'] });
+    expect(fs.existsSync(linked)).toBe(false);
+    expect(runGit(repo, ['branch', '--list', 'feature/task']).trim()).toBe('feature/task');
+    expect(lease.acquired).toHaveLength(1);
+    expect(lease.released).toEqual([lease.acquired[0].leaseId]);
+
+    const [listed] = await listWorktreeArchives(repo);
+    expect(listed).toMatchObject({ id: 'a1', branch: 'feature/task', branchExists: true, title: 'Login timeout fix', sessionIds: ['ses_1', 'ses_2'] });
+    expect(fs.realpathSync(path.dirname(listed.path))).toBe(fs.realpathSync(path.dirname(linked)));
+
+    runGit(repo, ['worktree', 'add', linked, 'feature/task']);
+    await expect(restoreWorktreeArchive(linked, { id: 'a1' })).resolves.toEqual({ id: 'a1', conflicts: false });
+    expect(fs.readFileSync(path.join(linked, 'README.md'), 'utf8')).toBe('# Changed\n');
+    expect(fs.readFileSync(path.join(linked, 'new.txt'), 'utf8')).toBe('untracked\n');
+    expect(fs.existsSync(path.join(linked, 'gone.txt'))).toBe(false);
+    // Ignored files are not kept; the project's setup commands bring them back.
+    expect(fs.existsSync(path.join(linked, 'secret.env'))).toBe(false);
+    expect(runGit(linked, ['status', '--porcelain']).split('\n').filter(Boolean).sort()).toEqual([' D gone.txt', ' M README.md', '?? new.txt']);
+    expect(await listWorktreeArchives(repo)).toEqual([]);
+    // No cherry-pick is left in progress.
+    expect(() => runGit(linked, ['rev-parse', '--verify', '--quiet', 'CHERRY_PICK_HEAD'])).toThrow();
+  });
+
+  it('applies the changes over commits the branch got after archiving', async () => {
+    if (!canRunGit()) return;
+    const { repo, linked } = createArchivableWorktree();
+    const lease = createLeaseControl();
+    await archiveWorktree(repo, { directory: linked, id: 'a2' }, { worktreeWorkers: lease.worktreeWorkers });
+
+    runGit(repo, ['worktree', 'add', linked, 'feature/task']);
+    fs.writeFileSync(path.join(linked, 'later.txt'), 'later\n');
+    runGit(linked, ['add', 'later.txt']);
+    runGit(linked, ['commit', '-m', 'later']);
+
+    await expect(restoreWorktreeArchive(linked, { id: 'a2' })).resolves.toEqual({ id: 'a2', conflicts: false });
+    expect(fs.readFileSync(path.join(linked, 'later.txt'), 'utf8')).toBe('later\n');
+    expect(fs.readFileSync(path.join(linked, 'README.md'), 'utf8')).toBe('# Changed\n');
+  });
+
+  it('leaves conflicts in the checkout, which then holds the changes, and drops the archive', async () => {
+    if (!canRunGit()) return;
+    const { repo, linked } = createArchivableWorktree();
+    const lease = createLeaseControl();
+    await archiveWorktree(repo, { directory: linked, id: 'a3', sessionIds: ['ses_1'] }, { worktreeWorkers: lease.worktreeWorkers });
+
+    runGit(repo, ['worktree', 'add', linked, 'feature/task']);
+    fs.writeFileSync(path.join(linked, 'README.md'), '# Other\n');
+    runGit(linked, ['commit', '-am', 'other']);
+
+    await expect(restoreWorktreeArchive(linked, { id: 'a3' })).resolves.toEqual({ id: 'a3', conflicts: true });
+    expect(fs.readFileSync(path.join(linked, 'README.md'), 'utf8')).toContain('# Changed');
+    expect(runGit(linked, ['ls-files', '--unmerged']).trim()).not.toBe('');
+    // Kept, it would still claim sessions that are back at work.
+    expect(await listWorktreeArchives(repo)).toEqual([]);
+  });
+
+  it('keeps the archive and fails when git refuses to apply its changes', async () => {
+    if (!canRunGit()) return;
+    const { repo, linked } = createArchivableWorktree();
+    const lease = createLeaseControl();
+    await archiveWorktree(repo, { directory: linked, id: 'a4' }, { worktreeWorkers: lease.worktreeWorkers });
+
+    runGit(repo, ['worktree', 'add', linked, 'feature/task']);
+    // Something the setup commands wrote where the archive has its own file.
+    fs.writeFileSync(path.join(linked, 'new.txt'), 'written by setup\n');
+
+    await expect(restoreWorktreeArchive(linked, { id: 'a4' })).rejects.toMatchObject({ code: 'WORKTREE_ARCHIVE_NOT_APPLIED' });
+    expect(fs.readFileSync(path.join(linked, 'new.txt'), 'utf8')).toBe('written by setup\n');
+    expect((await listWorktreeArchives(repo)).map((entry) => entry.id)).toEqual(['a4']);
+  });
+
+  it('refuses the primary checkout, a folder git does not register, and a taken id', async () => {
+    if (!canRunGit()) return;
+    const { repo, linked } = createArchivableWorktree();
+    const lease = createLeaseControl();
+    await expect(archiveWorktree(repo, { directory: repo, id: 'p1' }, { worktreeWorkers: lease.worktreeWorkers })).rejects.toThrow('primary');
+    const stray = createTempDir();
+    await expect(archiveWorktree(repo, { directory: stray, id: 'p2' }, { worktreeWorkers: lease.worktreeWorkers })).rejects.toThrow();
+    expect(fs.existsSync(stray)).toBe(true);
+    await expect(archiveWorktree(repo, { directory: linked, id: '../x' }, { worktreeWorkers: lease.worktreeWorkers })).rejects.toThrow('Invalid worktree archive id');
+
+    await archiveWorktree(repo, { directory: linked, id: 'p3' }, { worktreeWorkers: lease.worktreeWorkers });
+    runGit(repo, ['worktree', 'add', linked, 'feature/task']);
+    await expect(archiveWorktree(repo, { directory: linked, id: 'p3' }, { worktreeWorkers: lease.worktreeWorkers })).rejects.toMatchObject({ status: 400 });
+    expect(fs.existsSync(linked)).toBe(true);
+  });
+
+  it('deletes an archive with its branch, but never a branch a checkout uses', async () => {
+    if (!canRunGit()) return;
+    const { repo, linked } = createArchivableWorktree();
+    const lease = createLeaseControl();
+    await archiveWorktree(repo, { directory: linked, id: 'd1' }, { worktreeWorkers: lease.worktreeWorkers });
+    await expect(deleteWorktreeArchive(repo, { id: 'd1', deleteBranch: true })).resolves.toEqual({ id: 'd1', branchDeleted: true });
+    expect(runGit(repo, ['branch', '--list', 'feature/task']).trim()).toBe('');
+    expect(await listWorktreeArchives(repo)).toEqual([]);
+
+    const second = createArchivableWorktree();
+    await archiveWorktree(second.repo, { directory: second.linked, id: 'd2' }, { worktreeWorkers: lease.worktreeWorkers });
+    runGit(second.repo, ['worktree', 'add', second.linked, 'feature/task']);
+    await expect(deleteWorktreeArchive(second.repo, { id: 'd2', deleteBranch: true })).resolves.toEqual({ id: 'd2', branchDeleted: false });
+    await expect(deleteWorktreeArchive(second.repo, { id: 'd2' })).rejects.toMatchObject({ code: 'WORKTREE_ARCHIVE_NOT_FOUND' });
+  });
+
+  it('writes no ref and leaves the folder when the lease refuses, and releases the id it was given', async () => {
+    if (!canRunGit()) return;
+    const { repo, linked } = createArchivableWorktree();
+    const lease = createLeaseControl({ refuse: true });
+    await expect(archiveWorktree(repo, { directory: linked, id: 'l1' }, { worktreeWorkers: lease.worktreeWorkers }))
+      .rejects.toMatchObject({ code: 'RUN_ACTIVE' });
+    expect(fs.existsSync(linked)).toBe(true);
+    expect(await listWorktreeArchives(repo)).toEqual([]);
+    expect(lease.released).toEqual([lease.acquired[0].leaseId]);
+  });
+
+  it('deletes the ref and rethrows when removal fails but the worktree is intact', async () => {
+    if (!canRunGit() || process.platform === 'win32') return;
+    const { repo, linked } = createArchivableWorktree();
+    const lease = createLeaseControl();
+    await withShimGit('intact', async () => {
+      await expect(archiveWorktree(repo, { directory: linked, id: 'f1' }, { worktreeWorkers: lease.worktreeWorkers }))
+        .rejects.toThrow('shim refused removal');
+    });
+    expect(fs.existsSync(path.join(linked, 'README.md'))).toBe(true);
+    expect(await listWorktreeArchives(repo)).toEqual([]);
+    expect(lease.released).toEqual([lease.acquired[0].leaseId]);
+  });
+
+  it('keeps the ref and reports a partial archive when removal leaves the folder partly deleted', async () => {
+    if (!canRunGit() || process.platform === 'win32') return;
+    const { repo, linked } = createArchivableWorktree();
+    const lease = createLeaseControl();
+    await withShimGit('partial', async () => {
+      await expect(archiveWorktree(repo, { directory: linked, id: 'f2' }, { worktreeWorkers: lease.worktreeWorkers }))
+        .rejects.toMatchObject({ code: 'WORKTREE_ARCHIVE_PARTIAL', status: 409 });
+    });
+    expect(fs.existsSync(path.join(linked, 'README.md'))).toBe(false);
+    expect((await listWorktreeArchives(repo)).map((entry) => entry.id)).toEqual(['f2']);
+  });
 });
 
 // ---------------------------------------------------------------------------

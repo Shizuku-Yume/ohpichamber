@@ -89,9 +89,15 @@ export type MergedWorktreeCleanupDeps = {
   isSessionOpen: (sessionId: string) => boolean;
   /** The worktree is the directory on screen, e.g. a new-session draft there. */
   isWorktreeOpen: (path: string) => boolean;
+  /** Something here archives or removes it right now (Done, a delete). */
+  isWorktreeRemoving: (path: string) => boolean;
+  /** The user restored it from the archive since the last pass; answers once. */
+  takeRestored: (path: string) => boolean;
   readWorktreeState: (candidate: MergedWorktreeCandidate) => Promise<{ isDirty: boolean | null; hasUnmergedCommits: boolean | null }>;
   archiveSessions: (sessionIds: string[]) => Promise<{ failedIds: string[] }>;
   removeWorktree: (candidate: MergedWorktreeCandidate) => Promise<void>;
+  /** Archives the worktree with its sessions through the Host archive route. */
+  archiveWorktree: (candidate: MergedWorktreeCandidate, sessions: readonly Session[]) => Promise<void>;
   report: (outcome: MergedWorktreeOutcome) => void;
 };
 
@@ -107,6 +113,13 @@ export async function runMergedWorktreeCleanup(
   options: { recheckKept: boolean } = { recheckKept: true },
 ): Promise<void> {
   for (const candidate of deps.listCandidates()) {
+    if (deps.isWorktreeRemoving(candidate.worktree.path)) continue;
+    // Restoring a merged worktree is the user taking it back: this PR is done
+    // with, and only a later one cleans it up again.
+    if (deps.takeRestored(candidate.worktree.path)) {
+      deps.markHandled(candidate);
+      continue;
+    }
     const handled = deps.isHandled(candidate);
     if (handled && !options.recheckKept) continue;
     const sessions = sessionsInWorktree(deps.getActiveSessions(), candidate.worktree.path);
@@ -133,15 +146,20 @@ export async function runMergedWorktreeCleanup(
 
     if (!handled) deps.markHandled(candidate);
     try {
-      if (sessionIds.length > 0) {
-        const { failedIds } = await deps.archiveSessions(sessionIds);
-        if (failedIds.length > 0) throw new Error(`Could not archive ${failedIds.length} session(s)`);
-      }
       if (decision.action === 'remove') {
+        // The archive path leaves session archiving to
+        // `archiveSessionsThenRemoveWorktree`; this removal path archives them
+        // here before the folder goes.
+        if (sessionIds.length > 0) {
+          const { failedIds } = await deps.archiveSessions(sessionIds);
+          if (failedIds.length > 0) throw new Error(`Could not archive ${failedIds.length} session(s)`);
+        }
         await deps.removeWorktree(candidate);
         deps.report({ kind: 'removed', candidate, archivedCount: sessionIds.length });
-      } else if (sessionIds.length > 0) {
-        // A kept worktree with no sessions changed nothing worth a toast.
+      } else {
+        // A kept worktree is archived with its sessions; the archive holds every
+        // change and commit, so nothing is lost and the folder can go.
+        await deps.archiveWorktree(candidate, sessions);
         deps.report({ kind: 'archived', candidate, archivedCount: sessionIds.length });
       }
     } catch (error) {

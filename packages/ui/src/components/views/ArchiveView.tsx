@@ -17,6 +17,11 @@ import { useShallow } from 'zustand/react/shallow';
 import { SessionSearchInput } from '@/components/session/SessionSearchInput';
 import { refreshSpaceArchives, useSpaceArchivesStore } from '@/lib/spaces/space-archives';
 import { isRestorableOnItsOwn } from '@/sync/session-restore-rule';
+import { useProjectsStore } from '@/stores/useProjectsStore';
+import { loadWorktreeArchives, useWorktreeArchivesByProject } from '@/lib/worktrees/worktreeArchive';
+import type { ProjectRef } from '@/lib/worktrees/worktreeManager';
+import { ArchivedWorktreeRow } from './archive/ArchivedWorktreeRow';
+import { useWorktreeArchiveActions } from './archive/useWorktreeArchiveActions';
 
 type WorkspaceBucket = {
   workspaceId: string;
@@ -25,6 +30,8 @@ type WorkspaceBucket = {
   sessions: Session[];
   // The chats of a deleted isolated space: named after the space, with no way to restore them.
   fromDeletedSpace: boolean;
+  /** Canonical project identity when the bucket belongs to a configured project. */
+  projectId?: string;
 };
 
 
@@ -85,11 +92,20 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
   const [selectedWorkspaceId, setSelectedWorkspaceId] = React.useState<string | null>(null);
   const spaceArchives = useSpaceArchivesStore((state) => state.byWorkspaceId);
   const [visibleCount, setVisibleCount] = React.useState(PAGE_SIZE);
+  const projects = useProjectsStore((state) => state.projects);
+  const archivesByProject = useWorktreeArchivesByProject();
+  const archiveActions = useWorktreeArchiveActions();
 
   // The chats of deleted spaces are read-only and named after their space; refresh when the page opens.
   React.useEffect(() => {
     void refreshSpaceArchives().catch(() => {});
   }, []);
+
+  // Archived worktrees live in each project's repository; read them each time
+  // the page opens, like the spaces above.
+  React.useEffect(() => {
+    for (const project of projects) void loadWorktreeArchives(project.path).catch(() => undefined);
+  }, [projects]);
 
   const labelOf = React.useCallback((workspaceId: string, directory: string): string => {
     const archive = spaceArchives?.get(workspaceId);
@@ -135,10 +151,26 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
         label: labelOf(workspaceId, directory),
         sessions: [session],
         fromDeletedSpace: spaceArchives?.has(workspaceId) ?? false,
+        projectId: session.projectId,
+      });
+    }
+    // A project whose only archive is a worktree without sessions is listed too.
+    for (const project of projects) {
+      const key = normalizePath(project.path);
+      const archives = key ? archivesByProject.get(key)?.archives ?? [] : [];
+      if (archives.length === 0) continue;
+      if ([...byWorkspaceId.values()].some((bucket) => bucket.projectId === project.id)) continue;
+      byWorkspaceId.set(`project:${project.id}`, {
+        workspaceId: `project:${project.id}`,
+        directory: key ?? project.path,
+        label: project.label?.trim() || labelOf(project.id, key ?? project.path),
+        sessions: [],
+        fromDeletedSpace: false,
+        projectId: project.id,
       });
     }
     return [...byWorkspaceId.values()].sort((a, b) => b.sessions.length - a.sessions.length);
-  }, [labelOf, sortedSessions, spaceArchives]);
+  }, [archivesByProject, labelOf, projects, sortedSessions, spaceArchives]);
 
   // Search spans every archived session; the workspace filter applies only while not searching.
   const filteredSessions = React.useMemo(() => {
@@ -151,6 +183,35 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
     if (selectedWorkspaceId === null) return groupByParent(sortedSessions);
     return groupByParent(buckets.find((bucket) => bucket.workspaceId === selectedWorkspaceId)?.sessions ?? []);
   }, [buckets, normalizedQuery, selectedWorkspaceId, sortedSessions]);
+
+  const selectedBucket = selectedWorkspaceId === null
+    ? null
+    : buckets.find((bucket) => bucket.workspaceId === selectedWorkspaceId) ?? null;
+  const selectedProjectId = selectedBucket?.projectId ?? null;
+  const selectedProjectPath = selectedProjectId === null
+    ? null
+    : projects.find((entry) => entry.id === selectedProjectId)?.path ?? null;
+  const selectedProject = selectedProjectId !== null && selectedProjectPath !== null
+    ? { id: selectedProjectId, path: selectedProjectPath }
+    : null;
+
+  // The selected project's archived worktrees, shown above its archived sessions.
+  const selectedWorktreeArchives = React.useMemo(() => {
+    if (normalizedQuery || selectedProjectPath === null) return [];
+    const key = normalizePath(selectedProjectPath);
+    return key ? archivesByProject.get(key)?.archives ?? [] : [];
+  }, [archivesByProject, normalizedQuery, selectedProjectPath]);
+
+  // The phone has no project panel, so every project's archived worktrees are
+  // listed above the sessions there.
+  const allWorktreeArchives = React.useMemo(() => {
+    if (normalizedQuery) return [];
+    return projects.flatMap((project) => {
+      const key = normalizePath(project.path);
+      const archives = key ? archivesByProject.get(key)?.archives ?? [] : [];
+      return archives.map((archive) => ({ project: { id: project.id, path: project.path } satisfies ProjectRef, archive }));
+    });
+  }, [archivesByProject, normalizedQuery, projects]);
 
   const visibleSessions = filteredSessions.slice(0, visibleCount);
   const remainingCount = filteredSessions.length - visibleSessions.length;
@@ -225,7 +286,21 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
           className="min-h-0 flex-1 overflow-y-auto pt-1"
           style={{ paddingBottom: 'calc(0.5rem + var(--oc-safe-area-bottom, 0px))' }}
         >
-          {visibleSessions.length === 0 ? emptyState : visibleSessions.map((session, index) => {
+          {allWorktreeArchives.length > 0 ? (
+            <div className="pb-1">
+              {allWorktreeArchives.map(({ project, archive }) => (
+                <ArchivedWorktreeRow
+                  key={archive.id}
+                  touch
+                  archive={archive}
+                  busy={archiveActions.busyIds.has(archive.id)}
+                  onRestore={() => void archiveActions.restore(project, archive)}
+                  onDelete={() => void archiveActions.remove(project, archive)}
+                />
+              ))}
+            </div>
+          ) : null}
+          {visibleSessions.length === 0 && allWorktreeArchives.length === 0 ? emptyState : visibleSessions.map((session, index) => {
             const workspaceId = session.workspaceId;
             const sessionDirectory = normalizePath(resolveGlobalSessionDirectory(session)) ?? '';
             const title = session.metadata?.title || t('sessions.sidebar.session.untitled');
@@ -269,6 +344,7 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
           })}
           {showMoreButton}
         </div>
+        {archiveActions.dialog}
       </div>
     );
   }
@@ -358,7 +434,20 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
 
           <div className="min-h-0 flex-1 overflow-y-auto px-6 py-3">
             <div className="mx-auto w-full max-w-3xl space-y-0.5">
-              {visibleSessions.length === 0 ? emptyState : visibleSessions.map((session, index) => {
+              {selectedWorktreeArchives.length > 0 && selectedProject ? (
+                <div className="pb-1">
+                  {selectedWorktreeArchives.map((archive) => (
+                    <ArchivedWorktreeRow
+                      key={archive.id}
+                      archive={archive}
+                      busy={archiveActions.busyIds.has(archive.id)}
+                      onRestore={() => void archiveActions.restore(selectedProject, archive)}
+                      onDelete={() => void archiveActions.remove(selectedProject, archive)}
+                    />
+                  ))}
+                </div>
+              ) : null}
+              {visibleSessions.length === 0 && selectedWorktreeArchives.length === 0 ? emptyState : visibleSessions.map((session, index) => {
                 const workspaceId = session.workspaceId;
                 const sessionDirectory = normalizePath(resolveGlobalSessionDirectory(session)) ?? '';
                 const directoryLabel = labelOf(workspaceId, sessionDirectory);
@@ -428,6 +517,7 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
           </div>
         </div>
       </div>
+      {archiveActions.dialog}
     </div>
   );
 }

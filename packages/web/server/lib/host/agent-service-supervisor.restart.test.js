@@ -152,4 +152,56 @@ describe('Agent Service crash recovery', () => {
     release();
     await waitFor(() => service.getState().phase === 'ready');
   });
+
+  it('keeps a crashed service down while restarts are held, then starts one generation and consumes no attempt', async () => {
+    const children = [];
+    const service = createSupervisor(children, { restartMaxAttempts: 1 });
+    await service.start();
+
+    service.holdRestarts();
+    children[0].emit('exit', 1, null);
+    children[0].emit('close');
+    // Real timers here: the supervisor arms a real setTimeout, and the close
+    // event plus any restart are asynchronous, so fake timers cannot cover it.
+    await new Promise(resolve => setTimeout(resolve, 40));
+    expect(children).toHaveLength(1);
+    expect(service.getState().phase).toBe('failed');
+
+    // A held restart start spawns nothing and keeps the phase.
+    await service.start(true);
+    expect(children).toHaveLength(1);
+
+    service.resumeRestarts();
+    await waitFor(() => children.length === 2 && service.getState().phase === 'ready');
+
+    // The hold consumed no attempt: the only configured retry is still available.
+    children[1].emit('exit', 1, null);
+    children[1].emit('close');
+    await waitFor(() => children.length === 3 && service.getState().phase === 'ready', 2_000);
+    children[2].emit('exit', 1, null);
+    children[2].emit('close');
+    await new Promise(resolve => setTimeout(resolve, 40));
+    expect(children).toHaveLength(3);
+    expect(service.getState().phase).toBe('failed');
+  });
+
+  it('refcounts concurrent holds so the first release cannot restart the service', async () => {
+    const children = [];
+    const service = createSupervisor(children);
+    await service.start();
+
+    service.holdRestarts();
+    service.holdRestarts();
+    children[0].emit('exit', 1, null);
+    children[0].emit('close');
+    await new Promise(resolve => setTimeout(resolve, 40));
+    expect(children).toHaveLength(1);
+
+    service.resumeRestarts();
+    await new Promise(resolve => setTimeout(resolve, 40));
+    expect(children).toHaveLength(1);
+
+    service.resumeRestarts();
+    await waitFor(() => children.length === 2 && service.getState().phase === 'ready');
+  });
 });

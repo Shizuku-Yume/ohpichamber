@@ -52,6 +52,8 @@ The production startup pipeline starts only the canonical Agent Service after pu
 
 `createHostAgentRuntime` exposes `start()` and `stop()` for supervisor lifecycle and `close()` for final Host teardown. Stopping the service preserves the approval policy store for a later start; final close stops the service and closes that store, and prevents another start.
 
+`createAgentServiceSupervisor` exposes refcounted `holdRestarts()`/`resumeRestarts()`. While a hold is active, `scheduleRestart` returns without consuming a restart attempt and a restart start (`start(true)`) spawns nothing; a pending restart timer is cleared. `resumeRestarts` drops one hold, and when the count reaches zero with no child it reuses the existing `start(true)`. An explicit stop clears the holds. Host composition uses one hold around a worktree archive: it acquires the Agent Service lease with a Host-generated id, then releases that id and resumes restarts in the same `finally`. A service crash during the archive therefore spawns no new generation until removal is done and the lease is released, when exactly one starts.
+
 The agent-service registry records the actual Linux process birth identity when registering it. Reaping requires that identity and the recorded binary/entrypoint, checked again before signalling; an assigned ephemeral port is not compared with the literal `--port 0` command. Missing birth verification leaves the process untouched. Non-Linux agent orphan reaping remains unverified and refuses to guess identity. Legacy managed registrations remain until task17 retires their callers.
 
 ## Operational session state

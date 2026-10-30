@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
+import { realpath } from 'node:fs/promises';
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
+import { isAbsolute, relative } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { promisify } from 'node:util';
 import { z } from 'zod';
@@ -59,6 +61,19 @@ export const WORKER_CAPACITY_POLICY = {
 export type WorkerCapacityPolicy = { readonly [K in keyof typeof WORKER_CAPACITY_POLICY]: number };
 
 export type WorkerDiagnostic = { level: 'error' | 'warn' | 'info'; rootSessionId: string; workerGeneration: string; message: string };
+
+/** The Host supplies the id; the service never mints one, so a lost 201 still names what to release. */
+export type WorktreeLeaseAcquireResult = { leaseId: string; released: string[] };
+type WorktreeLeaseState = 'acquiring' | 'active';
+type WorktreeLease = { leaseId: string; canonicalDirectory: string; state: WorktreeLeaseState; released: string[] };
+
+const WORKTREE_LEASE_ID_PATTERN = /^[A-Za-z0-9_-]{1,80}$/;
+
+// Segment-safe containment: `/work/a` is not inside `/work/ab`.
+const isInsideOrSameDirectory = (root: string, target: string): boolean => {
+  const path = relative(root, target);
+  return path === '' || (!path.startsWith('..') && !isAbsolute(path));
+};
 
 export interface WorkerRegistryOptions {
   workerEntrypoint: string;
@@ -200,6 +215,10 @@ export class WorkerRegistry {
   private readonly actions = new Map<string, ActionHandle>();
   private readonly restartReservations = new Map<string, string>();
   private readonly pendingRootAdmissions = new Set<string>();
+  // Worktree leases live in service memory: the Host supervisor restart hold
+  // and the IPC-disconnect stop cover their lifetime; no timer or marker does.
+  private readonly worktreeLeases = new Map<string, WorktreeLease>();
+  private leaseMutation: Promise<void> = Promise.resolve();
   private readonly capacityPolicy: WorkerCapacityPolicy;
   private readonly reapTimer: NodeJS.Timeout;
   private reaping = false;
@@ -236,6 +255,133 @@ export class WorkerRegistry {
     if (this.closing || !entry || entry.kind === 'usage' || !entry.child.connected || (entry.info.state !== 'starting' && entry.info.state !== 'ready')) return undefined;
     const { projectId, workspaceId, cwd, agentDirectory, agentDirectoryId } = entry.input;
     return { rootSessionId, workerGeneration: entry.info.workerGeneration, projectId, workspaceId, cwd, agentDirectory, agentDirectoryId };
+  }
+
+  /** A fast refusal for admission; `launch` checks again at its last synchronous point before `spawn`. */
+  assertWorktreeLeaseAllows(cwd: string): void {
+    for (const lease of this.worktreeLeases.values()) {
+      if (isInsideOrSameDirectory(lease.canonicalDirectory, cwd)) {
+        throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', { leaseId: lease.leaseId });
+      }
+    }
+  }
+
+  /**
+   * Releases every worker at or inside `directory` before the Host removes it,
+   * and keeps new ones out until the lease is released. Canonicalization waits
+   * outside the lease-mutation chain; the overlap check, fence install and
+   * `workerEntries` snapshot are one synchronous block inside it, so two
+   * acquires that canonicalized concurrently cannot both pass.
+   */
+  async acquireWorktreeLease(leaseId: string, directory: string): Promise<WorktreeLeaseAcquireResult> {
+    if (typeof leaseId !== 'string' || !WORKTREE_LEASE_ID_PATTERN.test(leaseId)) {
+      throw new WorkerOperationError(400, 'INVALID_REQUEST', undefined, 'Lease id is invalid');
+    }
+    if (typeof directory !== 'string' || !directory || !isAbsolute(directory)) {
+      throw new WorkerOperationError(400, 'INVALID_REQUEST', undefined, 'Worktree directory must be absolute');
+    }
+    let canonicalDirectory: string;
+    try {
+      canonicalDirectory = await realpath(directory);
+    } catch {
+      throw new WorkerOperationError(400, 'INVALID_REQUEST', undefined, 'Worktree directory does not resolve');
+    }
+    return this.withLeaseMutation(async () => {
+      const named = this.worktreeLeases.get(leaseId);
+      if (named) {
+        throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', { leaseId, directory: named.canonicalDirectory });
+      }
+      for (const lease of this.worktreeLeases.values()) {
+        if (isInsideOrSameDirectory(lease.canonicalDirectory, canonicalDirectory)
+          || isInsideOrSameDirectory(canonicalDirectory, lease.canonicalDirectory)) {
+          throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', { leaseId: lease.leaseId, directory: lease.canonicalDirectory });
+        }
+      }
+      const lease: WorktreeLease = { leaseId, canonicalDirectory, state: 'acquiring', released: [] };
+      this.worktreeLeases.set(leaseId, lease);
+      try {
+        // No await separates the fence install above from this snapshot: a start
+        // admitted before the lease is either in `workerEntries` here, or its
+        // pre-spawn check sees the fence.
+        const snapshot = [...this.workerEntries.values()]
+          .filter(entry => isInsideOrSameDirectory(canonicalDirectory, entry.input.cwd));
+        for (const entry of snapshot) {
+          const stopped = await this.stopLeasedWorker(entry, canonicalDirectory);
+          if (stopped !== null) lease.released.push(stopped);
+        }
+        lease.state = 'active';
+        return { leaseId, released: [...lease.released] };
+      } catch (error) {
+        // A refusal creates no lease; earlier idle workers stay stopped and
+        // their sessions reopen cold. No atomic rollback is claimed.
+        if (this.worktreeLeases.get(leaseId) === lease) this.worktreeLeases.delete(leaseId);
+        throw error;
+      }
+    });
+  }
+
+  /** Idempotent: an unknown id is a no-op, so a lost acquire answer is still releasable. */
+  releaseWorktreeLease(leaseId: string): Promise<void> {
+    return this.withLeaseMutation(async () => {
+      this.worktreeLeases.delete(leaseId);
+    });
+  }
+
+  private async withLeaseMutation<T>(operation: () => Promise<T>): Promise<T> {
+    const previous = this.leaseMutation;
+    const finished = Promise.withResolvers<void>();
+    this.leaseMutation = finished.promise;
+    try {
+      await previous;
+      return await operation();
+    } finally {
+      finished.resolve();
+    }
+  }
+
+  private async stopLeasedWorker(entry: WorkerEntry, leaseDirectory: string): Promise<string | null> {
+    return this.withRoot(entry.info.rootSessionId, async () => {
+      const current = this.workerEntries.get(entry.info.rootSessionId);
+      if (current !== entry) return null;
+      const refuse = (code: 'RUN_ACTIVE' | 'COMMAND_IN_FLIGHT') => new WorkerOperationError(
+        409, code, { sessionId: entry.info.rootSessionId },
+      );
+      const pendingWork = (candidate: WorkerEntry): boolean => candidate.pending.size > 0
+        || [...this.actions.values()].some(action => action.entry === candidate);
+      if (entry.kind === 'session') {
+        // Removing the folder would delete session storage inside it.
+        for (const stored of [entry.input.sessionsDirectory, entry.input.sessionFile]) {
+          if (stored && isInsideOrSameDirectory(leaseDirectory, stored)) throw refuse('COMMAND_IN_FLIGHT');
+        }
+        if (current.info.state === 'starting' || this.restartReservations.has(current.info.rootSessionId) || pendingWork(current)) {
+          throw refuse('COMMAND_IN_FLIGHT');
+        }
+        if (!this.sessionIsIdle(current.info.rootSessionId)) throw refuse('RUN_ACTIVE');
+        // A background shell job outlives its start operation; its own snapshot
+        // is the authority, and a missing or failed probe is not proven idle.
+        if (!(await this.hasNoRunningShellJobs(current))) throw refuse('COMMAND_IN_FLIGHT');
+      } else if (current.info.state === 'starting' || pendingWork(current)) {
+        throw refuse('COMMAND_IN_FLIGHT');
+      }
+      // Re-read after the probes: a start, run or operation may have arrived.
+      const again = this.workerEntries.get(entry.info.rootSessionId);
+      if (again !== current) return null;
+      if (again.info.state === 'starting' || this.restartReservations.has(entry.info.rootSessionId) || pendingWork(again)) {
+        throw refuse('COMMAND_IN_FLIGHT');
+      }
+      if (entry.kind === 'session' && !this.sessionIsIdle(entry.info.rootSessionId)) throw refuse('RUN_ACTIVE');
+      await this.stopEntry(again);
+      // `stopEntry` answers `child.exitCode === 0`, false for a normal SIGTERM
+      // exit, so prove the stop from the registry and the process tree instead.
+      const exited = again.child.exitCode !== null || again.child.signalCode !== null;
+      // Windows: waitForWorkerProcessTree returns true unconditionally; there
+      // only entry removal and child exit are proved, not the process group.
+      const groupGone = await waitForWorkerProcessTree(again.child.pid);
+      if (this.workerEntries.get(entry.info.rootSessionId) === again || !exited || !groupGone) {
+        throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', { sessionId: entry.info.rootSessionId });
+      }
+      return entry.info.rootSessionId;
+    });
   }
 
   reserveRestart(rootSessionId: string, generation: string): RestartReservation {
@@ -497,6 +643,7 @@ export class WorkerRegistry {
   async close(): Promise<void> {
     clearInterval(this.reapTimer);
     this.closing = true;
+    this.worktreeLeases.clear();
     await Promise.all([...this.workerEntries.values()].map(entry => this.stopEntry(entry)));
     await Promise.all(this.mutations.values());
   }
@@ -528,6 +675,9 @@ export class WorkerRegistry {
     const exited = Promise.withResolvers<void>();
     const workerRuntime = this.options.workerRuntime ?? defaultWorkerRuntime();
     const workerArgs = /(?:^|[\\/])bun(?:\.exe)?$/i.test(workerRuntime) ? ['--no-env-file', this.options.workerEntrypoint] : [this.options.workerEntrypoint];
+    // The last synchronous check before `spawn`: a start admitted before the
+    // lease cannot materialize a worker here, and no await separates the two.
+    this.assertWorktreeLeaseAllows(input.cwd);
     const child = spawn(workerRuntime, workerArgs, {
       cwd: input.cwd,
       env: environment,

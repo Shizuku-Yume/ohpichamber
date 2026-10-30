@@ -25,6 +25,7 @@ export function registerGitRoutes(app, {
   networkOperations, managedSshInventory, getSourceControlBinding, contributorProvenance, resolveChangeRequestSource,
   backfillIdentities,
   createHttpsCredentialReference, resolveSourceControlAccount, errorRedactionSecrets = [], worktreeBootstrapStore,
+  worktreeLeaseControl,
   emitWorktreeChanged, onBranchRewritten,
 } = {}) {
   let gitLibraries = null;
@@ -1722,6 +1723,82 @@ export function registerGitRoutes(app, {
       res.status(500).json({ error: error.message || 'Failed to snapshot worktree' });
     }
   });
+
+  // Archived worktrees: `directory` is the project (any of its checkouts),
+  // except restore, which works in the new checkout of the archive's branch.
+  const ARCHIVE_ERROR_STATUS = new Map([
+    ['WORKTREE_ARCHIVE_NOT_FOUND', 404],
+    ['WORKTREE_ARCHIVE_IN_PROGRESS', 409],
+    ['WORKTREE_ARCHIVE_NOT_APPLIED', 409],
+    ['WORKTREE_ARCHIVE_PARTIAL', 409],
+    ['WORKTREE_BOOTSTRAP_FAILED', 409],
+  ]);
+  const sendArchiveError = (res, error, fallback) => {
+    const status = ARCHIVE_ERROR_STATUS.get(error?.code)
+      ?? (Number.isInteger(error?.status) ? error.status : 500);
+    // Only an unexpected local failure is this server's fault to report.
+    if (status === 500) console.error(`${fallback}:`, error);
+    const body = { error: error?.message || fallback, code: error?.code };
+    if (error?.details && typeof error.details === 'object') body.details = error.details;
+    res.status(status).json(body);
+  };
+
+  app.get('/api/git/worktrees/archives', async (req, res) => {
+    const { listWorktreeArchives } = await getGitLibraries();
+    const directory = resolveDirectoryQuery(req.query.directory);
+    if (!directory) return res.status(400).json({ error: 'directory parameter is required' });
+    try {
+      res.json({ archives: await listWorktreeArchives(directory) });
+    } catch (error) {
+      sendArchiveError(res, error, 'Failed to list worktree archives');
+    }
+  });
+
+  app.post('/api/git/worktrees/archives', userAction(async (req, res) => {
+    const directory = resolveDirectoryQuery(req.query.directory);
+    if (!directory) return res.status(400).json({ error: 'directory parameter is required' });
+    const worktreeDirectory = typeof req.body?.directory === 'string' ? req.body.directory.trim() : '';
+    if (!worktreeDirectory) return res.status(400).json({ error: 'worktree directory is required' });
+    if (!(worktreeBootstrapStore?.remove instanceof Function)) {
+      return res.status(501).json({ error: 'Worktree bootstrap storage is not available' });
+    }
+    if (!(worktreeLeaseControl?.acquire instanceof Function) || !(worktreeLeaseControl?.release instanceof Function)) {
+      return res.status(501).json({ error: 'Worker lifecycle control is not available' });
+    }
+    const { archiveWorktree } = await getGitLibraries();
+    try {
+      res.json(await archiveWorktree(directory, {
+        directory: worktreeDirectory,
+        id: req.body?.id,
+        sessionIds: req.body?.sessionIds,
+        title: req.body?.title,
+      }, { bootstrapStore: worktreeBootstrapStore, worktreeWorkers: worktreeLeaseControl }));
+    } catch (error) {
+      sendArchiveError(res, error, 'Failed to archive worktree');
+    }
+  }));
+
+  app.post('/api/git/worktrees/archives/restore', userAction(async (req, res) => {
+    const { restoreWorktreeArchive } = await getGitLibraries();
+    const directory = resolveDirectoryQuery(req.query.directory);
+    if (!directory) return res.status(400).json({ error: 'directory parameter is required' });
+    try {
+      res.json(await restoreWorktreeArchive(directory, { id: req.body?.id }));
+    } catch (error) {
+      sendArchiveError(res, error, 'Failed to restore worktree archive');
+    }
+  }));
+
+  app.delete('/api/git/worktrees/archives', userAction(async (req, res) => {
+    const { deleteWorktreeArchive } = await getGitLibraries();
+    const directory = resolveDirectoryQuery(req.query.directory);
+    if (!directory) return res.status(400).json({ error: 'directory parameter is required' });
+    try {
+      res.json(await deleteWorktreeArchive(directory, { id: req.body?.id, deleteBranch: req.body?.deleteBranch === true }));
+    } catch (error) {
+      sendArchiveError(res, error, 'Failed to delete worktree archive');
+    }
+  }));
 
   app.get('/api/git/worktree-type', async (req, res) => {
     const { isLinkedWorktree } = await getGitLibraries();

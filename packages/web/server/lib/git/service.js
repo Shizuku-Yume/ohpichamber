@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { simpleGit } from 'simple-git';
 import { createSerialRefresh } from './serial-refresh.js';
 import { stripAppImageLauncherEnv } from '../inherited-env.js';
@@ -6026,6 +6027,34 @@ const SNAPSHOT_IDENTITY_ENV = {
   GIT_COMMITTER_EMAIL: 'snapshot@openchamber.local',
 };
 
+/** The tree of the worktree's current state (every change git does not ignore) on top of HEAD. */
+const readWorktreeStateTree = async (worktreeDirectory) => {
+  const head = (await runGitCommandOrThrow(worktreeDirectory, ['rev-parse', '--verify', 'HEAD'], 'Worktree has no HEAD commit')).stdout.trim();
+  const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'openchamber-snapshot-'));
+  const env = { ...(await buildGitEnv(worktreeDirectory)), GIT_INDEX_FILE: path.join(tempDir, 'index') };
+  try {
+    for (const args of [['read-tree', head], ['add', '-A']]) {
+      const result = await runGitCommand(worktreeDirectory, args, { env });
+      if (!result.success) throw new Error(result.message || 'Failed to read the worktree state');
+    }
+    const tree = await runGitCommand(worktreeDirectory, ['write-tree'], { env });
+    if (!tree.success) throw new Error(tree.message || 'Failed to read the worktree state');
+    return { head, tree: tree.stdout.trim() };
+  } finally {
+    await fsp.rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+  }
+};
+
+const writeWorktreeSnapshot = async (worktreeDirectory, { ref, message, oldValue }) => {
+  const { head, tree } = await readWorktreeStateTree(worktreeDirectory);
+  const env = { ...(await buildGitEnv(worktreeDirectory)), ...SNAPSHOT_IDENTITY_ENV };
+  const commit = await runGitCommand(worktreeDirectory, ['commit-tree', tree, '-p', head, '-m', message], { env });
+  if (!commit.success) throw new Error(commit.message || 'Failed to write snapshot commit');
+  const commitSha = commit.stdout.trim();
+  await runGitCommandOrThrow(worktreeDirectory, ['update-ref', ref, commitSha, ...(oldValue === undefined ? [] : [oldValue])], 'Failed to store snapshot ref');
+  return { ref, commit: commitSha, head };
+};
+
 /**
  * Records the complete state of a worktree (committed, staged, unstaged and
  * untracked-but-not-ignored files) as a commit under `ref`. A throwaway index
@@ -6037,32 +6066,291 @@ export async function snapshotWorktree(directory, input = {}) {
     throw new Error('Worktree directory is required');
   }
   const ref = assertRunSnapshotRef(input?.ref);
-  const head = (await runGitCommandOrThrow(worktreeDirectory, ['rev-parse', '--verify', 'HEAD'], 'Worktree has no HEAD commit')).stdout.trim();
+  return writeWorktreeSnapshot(worktreeDirectory, { ref, message: 'OpenChamber run snapshot' });
+}
 
-  const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'openchamber-snapshot-'));
-  const indexEnv = { GIT_INDEX_FILE: path.join(tempDir, 'index') };
+// Archived worktrees. The archive is the ref: `refs/openchamber/archive/<id>`
+// points at a snapshot commit of the worktree (every change git does not
+// ignore), whose parent is the commit the branch stood on and whose message
+// carries what restoring needs. Nothing else records an archive, so every
+// client of the repository sees the same list, and a ref keeps the snapshot
+// safe from gc until the archive is deleted.
+const WORKTREE_ARCHIVE_REF_PREFIX = 'refs/openchamber/archive/';
+const WORKTREE_ARCHIVE_SUBJECT = 'OpenChamber worktree archive';
+const WORKTREE_ARCHIVE_ID_PATTERN = /^[A-Za-z0-9_-]{1,80}$/;
+
+const worktreeArchiveError = (message, code, status) => Object.assign(
+  new Error(message),
+  code === undefined ? {} : { code },
+  status === undefined ? {} : { status },
+);
+
+const worktreeArchiveIdSchema = z.string().trim().regex(WORKTREE_ARCHIVE_ID_PATTERN);
+
+const assertWorktreeArchiveId = (id) => {
+  const parsed = worktreeArchiveIdSchema.safeParse(id);
+  if (!parsed.success) throw worktreeArchiveError('Invalid worktree archive id', undefined, 400);
+  return parsed.data;
+};
+
+const sessionIdListSchema = z.array(z.unknown()).catch([])
+  .transform((entries) => entries.flatMap((entry) => {
+    const parsed = z.string().min(1).safeParse(entry);
+    return parsed.success ? [parsed.data] : [];
+  }));
+
+const worktreeArchiveRecordSchema = z.object({
+  path: z.string().min(1),
+  branch: z.string().catch(''),
+  title: z.string().catch(''),
+  archivedAt: z.number().finite().catch(0),
+  sessionIds: sessionIdListSchema,
+});
+
+/** The archive record in a snapshot commit's message, or null when it is not one. */
+const parseWorktreeArchiveMessage = (message) => {
+  const text = String(message || '');
+  if (!text.startsWith(WORKTREE_ARCHIVE_SUBJECT)) return null;
   try {
-    const run = async (args, message, env = indexEnv) => {
-      // `env` replaces the whole environment, so start from the Git one.
-      const result = await runGitCommand(worktreeDirectory, args, { env: { ...(await buildGitEnv(worktreeDirectory)), ...env } });
-      if (!result.success) {
-        throw new Error(result.message || message);
-      }
-      return result.stdout.trim();
-    };
-    await run(['read-tree', head], 'Failed to prepare snapshot index');
-    await run(['add', '-A'], 'Failed to collect worktree changes');
-    const tree = await run(['write-tree'], 'Failed to write snapshot tree');
-    const commit = await run(
-      ['commit-tree', tree, '-p', head, '-m', 'OpenChamber run snapshot'],
-      'Failed to write snapshot commit',
-      { ...indexEnv, ...SNAPSHOT_IDENTITY_ENV },
-    );
-    await run(['update-ref', ref, commit], 'Failed to store snapshot ref', {});
-    return { ref, commit, head };
-  } finally {
-    await fsp.rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+    return worktreeArchiveRecordSchema.safeParse(JSON.parse(text.slice(WORKTREE_ARCHIVE_SUBJECT.length).trim())).data ?? null;
+  } catch {
+    return null;
   }
+};
+
+const readWorktreeArchives = async (primaryWorktree) => {
+  const listing = await runGitCommandOrThrow(primaryWorktree, [
+    'for-each-ref',
+    '--format=%(refname)%00%(objectname)%00%(parent)%00%(contents)%1e',
+    WORKTREE_ARCHIVE_REF_PREFIX,
+  ], 'Failed to list worktree archives');
+  const branches = await runGitCommand(primaryWorktree, ['for-each-ref', '--format=%(refname:short)', 'refs/heads/']);
+  const localBranches = new Set(branches.success ? String(branches.stdout || '').split('\n').map((line) => line.trim()).filter(Boolean) : []);
+  return String(listing.stdout || '').split('\x1e').flatMap((chunk) => {
+    const [ref = '', commit = '', head = '', message = ''] = chunk.replace(/^\n/, '').split('\0');
+    if (!ref.startsWith(WORKTREE_ARCHIVE_REF_PREFIX)) return [];
+    const record = parseWorktreeArchiveMessage(message);
+    if (!record) return [];
+    const id = ref.slice(WORKTREE_ARCHIVE_REF_PREFIX.length);
+    return [{ id, ref, commit, head: head.split(' ')[0] || '', ...record, branchExists: Boolean(record.branch) && localBranches.has(record.branch) }];
+  }).sort((a, b) => b.archivedAt - a.archivedAt);
+};
+
+const readWorktreeArchive = async (primaryWorktree, id) => {
+  const archiveId = assertWorktreeArchiveId(id);
+  const archive = (await readWorktreeArchives(primaryWorktree)).find((entry) => entry.id === archiveId);
+  if (!archive) throw worktreeArchiveError('Worktree archive not found', 'WORKTREE_ARCHIVE_NOT_FOUND', 404);
+  return archive;
+};
+
+// A directory that resolves to no repository, or not to a checkout of one,
+// is a caller mistake rather than a server fault.
+const resolveWorktreeArchiveProjectContext = async (directory) => {
+  try {
+    return await resolveWorktreeProjectContext(directory, { tolerateWorktreeRootConfigError: true });
+  } catch (error) {
+    throw worktreeArchiveError(
+      error instanceof Error ? error.message : 'The directory does not resolve to a Git checkout',
+      undefined,
+      400,
+    );
+  }
+};
+
+/** The repository's archived worktrees, newest first. `directory` is any of its checkouts. */
+export async function listWorktreeArchives(directory) {
+  const context = await resolveWorktreeArchiveProjectContext(directory);
+  return readWorktreeArchives(context.primaryWorktree);
+}
+
+// Worktrees being archived, by canonical path: a second archive of the same
+// worktree (Done racing the merged-PR cleanup) would snapshot a folder git is
+// deleting. Overlap with another archive is refused by the Agent Service lease.
+const worktreeArchivesInFlight = new Set();
+
+const isRegisteredWorktree = async (primaryWorktree, targetCanonical) => {
+  const entries = await listWorktreeEntries(primaryWorktree);
+  const registered = await Promise.all(entries.map(async (entry) => (entry?.worktree ? canonicalPath(entry.worktree) : null)));
+  return registered.includes(targetCanonical);
+};
+
+/**
+ * Archives the linked worktree `input.directory` of the repository at
+ * `directory`: every worker the Agent Service holds at that folder is released
+ * first, then its state is recorded under `refs/openchamber/archive/<id>` with
+ * the sessions the caller archived for it, and the worktree is removed the way
+ * `removeWorktree` removes it, keeping its branch. A removal that leaves the
+ * folder whole deletes the archive again; one that leaves it partly deleted
+ * keeps the archive and reports `WORKTREE_ARCHIVE_PARTIAL`.
+ */
+export async function archiveWorktree(directory, input = {}, options = {}) {
+  const id = assertWorktreeArchiveId(input?.id);
+  const worktreeDirectory = normalizeDirectoryPath(input?.directory);
+  if (!worktreeDirectory) throw worktreeArchiveError('Worktree directory is required', undefined, 400);
+  const { bootstrapStore, worktreeWorkers } = options ?? {};
+  if (!(worktreeWorkers?.acquire instanceof Function) || !(worktreeWorkers?.release instanceof Function)) {
+    throw worktreeArchiveError('Worker lifecycle control is not available', undefined, 501);
+  }
+  const context = await resolveWorktreeArchiveProjectContext(directory);
+  const targetCanonical = await canonicalPath(worktreeDirectory);
+  if (targetCanonical === await canonicalPath(context.primaryWorktree)) {
+    throw worktreeArchiveError('Cannot archive the primary workspace', undefined, 400);
+  }
+  // Only a checkout git registers here: the removal below would otherwise
+  // treat the folder as a leftover and delete it without a trace in git.
+  if (!(await isRegisteredWorktree(context.primaryWorktree, targetCanonical))) {
+    throw worktreeArchiveError('Not a worktree of this repository', undefined, 400);
+  }
+  if ((await readWorktreeArchives(context.primaryWorktree)).some((entry) => entry.id === id)) {
+    throw worktreeArchiveError('This worktree archive id already exists', undefined, 400);
+  }
+  if (worktreeArchivesInFlight.has(targetCanonical)) {
+    throw worktreeArchiveError('This worktree is already being archived', 'WORKTREE_ARCHIVE_IN_PROGRESS', 409);
+  }
+  worktreeArchivesInFlight.add(targetCanonical);
+  // The Host generates the id before the Agent Service sees it, so a lost 201
+  // still leaves the host holding the id it must release.
+  const leaseId = randomUUID();
+  let releaseLease = true;
+  try {
+    await worktreeWorkers.acquire(worktreeDirectory, leaseId);
+    // A new worktree's files land in the background: a snapshot taken before
+    // they do records every missing file as deleted.
+    await waitForActiveWorktreeBootstrap(worktreeDirectory);
+    const bootstrap = worktreeBootstrapState.get(await toCanonicalBootstrapStateKey(worktreeDirectory));
+    if (bootstrap?.status === WORKTREE_BOOTSTRAP_FAILED) {
+      throw worktreeArchiveError(
+        'The worktree did not finish setting up, so it cannot be archived. Delete it instead.',
+        'WORKTREE_BOOTSTRAP_FAILED',
+        409,
+      );
+    }
+
+    const head = await runGitCommand(worktreeDirectory, ['symbolic-ref', '--quiet', '--short', 'HEAD']);
+    const branch = head.success ? String(head.stdout || '').trim() : '';
+    const record = {
+      path: worktreeDirectory,
+      branch,
+      title: typeof input?.title === 'string' ? input.title.trim() : '',
+      archivedAt: Date.now(),
+      sessionIds: sessionIdListSchema.parse(input?.sessionIds),
+    };
+    const ref = `${WORKTREE_ARCHIVE_REF_PREFIX}${id}`;
+    const snapshot = await writeWorktreeSnapshot(worktreeDirectory, {
+      ref,
+      message: `${WORKTREE_ARCHIVE_SUBJECT}\n\n${JSON.stringify(record)}`,
+      oldValue: '',
+    });
+    try {
+      await removeWorktree(directory, {
+        directory: worktreeDirectory,
+        deleteLocalBranch: false,
+      }, { bootstrapStore });
+    } catch (error) {
+      // `git worktree remove --force` deletes files before it gives up on a
+      // busy one, so the archive goes only when the worktree is provably whole:
+      // still registered, on disk, and in the very state the snapshot holds.
+      const snapshotTree = (await runGitCommand(context.primaryWorktree, ['rev-parse', `${snapshot.commit}^{tree}`])).stdout?.trim();
+      const intact = await checkPathExists(worktreeDirectory)
+        && await isRegisteredWorktree(context.primaryWorktree, targetCanonical)
+        && (await readWorktreeStateTree(worktreeDirectory).catch(() => null))?.tree === snapshotTree;
+      if (intact) {
+        await runGitCommand(context.primaryWorktree, ['update-ref', '-d', ref, snapshot.commit]);
+        throw error;
+      }
+      throw worktreeArchiveError(
+        `The worktree folder could not be removed completely (${error instanceof Error ? error.message : String(error)}). It is archived; restore it once nothing holds the folder.`,
+        'WORKTREE_ARCHIVE_PARTIAL',
+        409,
+      );
+    }
+    return { id, ref, commit: snapshot.commit, head: snapshot.head, ...record, branchExists: Boolean(branch) };
+  } catch (error) {
+    // A duplicate lease id names a lease this archive never created; releasing
+    // it would end someone else's hold.
+    if (error?.releaseNotNeeded === true) releaseLease = false;
+    throw error;
+  } finally {
+    if (releaseLease) await worktreeWorkers.release(leaseId).catch(() => undefined);
+    worktreeArchivesInFlight.delete(targetCanonical);
+  }
+}
+
+/**
+ * Puts an archive's changes back into the worktree at `directory`, which the
+ * caller created on the archive's branch (or, when that branch is gone, on the
+ * archive's head commit). The changes are applied on top of whatever the
+ * branch holds now and left uncommitted, then the archive is deleted. A
+ * conflict leaves git's conflict state, which holds both sides. When git
+ * refuses to apply anything, the archive is kept and the call fails.
+ */
+export async function restoreWorktreeArchive(directory, input = {}) {
+  const worktreeDirectory = normalizeDirectoryPath(directory);
+  if (!worktreeDirectory) throw worktreeArchiveError('Worktree directory is required', undefined, 400);
+  const context = await resolveWorktreeArchiveProjectContext(worktreeDirectory);
+  const archive = await readWorktreeArchive(context.primaryWorktree, input?.id);
+  // A new worktree's files and setup commands land in the background after
+  // creation answers; changes applied meanwhile would race the checkout.
+  await waitForActiveWorktreeBootstrap(worktreeDirectory);
+  const bootstrap = worktreeBootstrapState.get(await toCanonicalBootstrapStateKey(worktreeDirectory));
+  if (bootstrap?.status === WORKTREE_BOOTSTRAP_FAILED) {
+    throw worktreeArchiveError(
+      'The worktree did not finish setting up, so its archived changes were not applied. The archive is kept.',
+      'WORKTREE_BOOTSTRAP_FAILED',
+      409,
+    );
+  }
+
+  const trees = await runGitCommandOrThrow(worktreeDirectory, ['rev-parse', `${archive.commit}^{tree}`, `${archive.head}^{tree}`], 'Failed to read the worktree archive');
+  const [snapshotTree, headTree] = String(trees.stdout || '').trim().split('\n');
+  let conflicts = false;
+  if (snapshotTree !== headTree) {
+    const env = { ...(await buildGitEnv(worktreeDirectory)), ...SNAPSHOT_IDENTITY_ENV };
+    const applied = await runGitCommand(worktreeDirectory, ['cherry-pick', '--no-commit', archive.commit], { env });
+    if (applied.success) {
+      // The changes were uncommitted when archived; staging them was only the
+      // means of applying them.
+      await runGitCommandOrThrow(worktreeDirectory, ['reset', '--quiet'], 'Failed to unstage the restored changes');
+    } else {
+      // A conflict leaves unmerged entries; a refusal (files the setup
+      // commands wrote would be overwritten) applies nothing at all.
+      const unmerged = await runGitCommand(worktreeDirectory, ['ls-files', '--unmerged']);
+      if (!unmerged.success || !String(unmerged.stdout || '').trim()) {
+        throw worktreeArchiveError(
+          `The archived changes could not be applied (${applied.message || 'git refused'}). The archive is kept.`,
+          'WORKTREE_ARCHIVE_NOT_APPLIED',
+          409,
+        );
+      }
+      conflicts = true;
+    }
+  }
+  // Once applied, conflicts included, the checkout holds the changes (git's
+  // conflict state carries both sides), so the archive goes: kept, it would
+  // still claim the sessions that are back at work.
+  await runGitCommand(context.primaryWorktree, ['update-ref', '-d', archive.ref, archive.commit]);
+  await publishWorktreeTopologyChange(context.primaryWorktree);
+  return { id: archive.id, conflicts };
+}
+
+/**
+ * Deletes an archive for good: its ref, and with `deleteBranch` its local
+ * branch too, unless a checkout uses that branch again.
+ */
+export async function deleteWorktreeArchive(directory, input = {}) {
+  const context = await resolveWorktreeArchiveProjectContext(directory);
+  const archive = await readWorktreeArchive(context.primaryWorktree, input?.id);
+  await runGitCommandOrThrow(context.primaryWorktree, ['update-ref', '-d', archive.ref, archive.commit], 'Failed to delete the worktree archive');
+  let branchDeleted = false;
+  if (input?.deleteBranch === true && archive.branchExists) {
+    const checkedOut = (await listWorktreeEntries(context.primaryWorktree))
+      .some((entry) => cleanBranchName(String(entry.branchRef || entry.branch || '').trim()) === archive.branch);
+    if (!checkedOut) {
+      const removed = await runGitCommand(context.primaryWorktree, ['branch', '-D', archive.branch]);
+      branchDeleted = removed.success;
+    }
+  }
+  return { id: archive.id, branchDeleted };
 }
 
 /** @public */

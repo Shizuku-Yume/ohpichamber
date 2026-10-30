@@ -1123,6 +1123,14 @@ export interface GitWorktreeTitleResult {
 
 export interface GitWorktreeArchive {
   id: string;
+  ref: string;
+  /** Snapshot commit: the branch's commit plus every change git did not ignore. */
+  commit: string;
+  /** The commit the branch stood on when archived. */
+  head: string;
+  /** Where the worktree was. */
+  path: string;
+  /** Empty for a worktree that had no branch checked out. */
   branch: string;
   branchExists?: boolean;
   title?: string;

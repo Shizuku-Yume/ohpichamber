@@ -2,7 +2,7 @@
 
 **Effort:** upstream-refresh
 **Task type:** feature
-**Base commit:** 811ecef47102ce4d737de56a7b41293e326a1e1e
+**Base commit:** d3e1e435a60f792853a83abb46e74063eb6ae505
 **Started:** 2026-10-30T08:31:00+08:00
 **Status:** active
 
@@ -45,7 +45,7 @@ Client contract: `GitAPI.addChangeIdToHead?(directory, expectedHead): Promise<{ 
 - [x] `GitAPI` declares the optional member and `gitApi.addChangeIdToHead` resolves the existing `gitApiHttp` implementation; the route's success/refusal behavior and the cached-status invalidation are tested. Runtime-versus-HTTP dispatch and the invalidation notification are throwaway smoke, not permanent forwarding tests.
 - [x] `gitApiHttp.addChangeIdToHead` remains the single HTTP implementation and its zod result validation is unchanged.
 - [x] Task 07's review-surface Change-Id control and its call site are handed off: there was no existing call site to cut over, so task 07 adds both and calls `gitApi.addChangeIdToHead`/the `GitAPI` member, never `gitApiHttp`, in its own commit. Task 34 records that handoff in task 07's Done-when item 1 and does not build the control.
-- [ ] Real path records the local fixture HTTP observation and names any provider-gated UI behavior that remains unexercised.
+- [x] Real path records the local fixture HTTP observation and names any provider-gated UI behavior that remains unexercised: running dev server, stale `expectedHead` 409 `STALE_HEAD`, current `expectedHead` 200 `{ sha, changeId }` with HEAD moved to that SHA and the trailer in its message, and the real `gitApiHttp.addChangeIdToHead` zod parse of that answer. The provider-gated Change-Id button is task 07's and was not exercised or built here.
 
 ## Progress
 
@@ -71,13 +71,24 @@ Check after:
 - `packages/ui`: `bun test src/lib/gitApi.test.ts` 13 passed, `bun test src/lib/gitApiHttp.test.ts` 64 passed, each file in its own process (the two files leak module state when run together, as `run-isolated-tests.mjs` documents).
 - `oxlint -c oxlint.config.ts --report-unused-disable-directives` on the changed files exit 0; `node --check` on the changed JavaScript exit 0.
 
-Owed at the final gate (heavy slot): `bun install --frozen-lockfile` with its log captured (not only the exit code), root `bun run test`, the running dev-server fixture HTTP observation (real route, real helper, client parse; no forwarding mock), and task 07's provider-gated Change-Id button. Supertest drives the real Express route and real Git over HTTP, but not a running server, so the fixture observation stays unticked. Root `bun run type-check` and `bun run lint` passed as static checks before that gate. `bun run dead-code` is already red at base (16 unused files / 60 unused exports including our member until task 07 lands), so it is a landing-gate decision, not a defect to hide.
+### Rebase and final heavy proof (2026-10-30)
 
-Merge note: lane 33 also edits `git/routes.js` (helpers near the top, batch routes before the worktree routes, a worktree-provenance block around the old line 1401) and `git/DOCUMENTATION.md` line 148. This patch sits at the options list and immediately before `POST /api/git/commit` and appends a bullet, so a `33`-then-`34` order merges both; `routes.js` is not replaced wholesale.
+- Rebased the existing branch (`03e31ee13b`) onto the landed integration tip `d3e1e435a60f792853a83abb46e74063eb6ae505`; the rebase applied without conflicts and the diff against that base is the same 10 files as before (route, route test, option wiring, client member/wrapper, two docs, task records, decisions). Task 33's batch routes and worktree-provenance helpers, task 31's `Blocked by: 07` line and task 35's plan and decisions entries are preserved. Original start base `811ecef47102ce4d737de56a7b41293e326a1e1e` remains the historical record above.
+- `bun install --frozen-lockfile` exit 0 with the log captured (`bun-install-frozen.log`).
+- Focused tests on the rebased tree: `routes.change-id.test.js` + `source-control/change-id.test.js` 18 passed; `git/routes.test.js` 72 passed (task 33 added six batch cases).
+- Type and lint on the rebased tree: `bun check -b` for `packages/ui` and `packages/web` exit 0; root `bun run type-check` exit 0; root `bun run lint` exit 0 (pre-existing warnings only).
+- Root `bun run test` exit 0: 7/7 suites, 7,396 passed, 142 skipped (`root-test.log`).
+- Real dev HTTP path against a local fixture repository (`dev-http-smoke.log`): the isolated Host ran from this worktree on `127.0.0.1:3211` with `OPENCHAMBER_DATA_DIR`/`OPENCHAMBER_CHATS_DIR` under the artifact directory and no UI build. `POST /api/git/change-id?directory=<fixture>` with a stale `expectedHead` answered `409 { code: 'STALE_HEAD' }` and left HEAD unchanged; with the current `expectedHead` it answered `200 { sha, changeId }`, moved HEAD to exactly that SHA, and `git log -1 --format=%B` shows `Change-Id: I…`.
+- The real client function parsed that answer (`client-parse-smoke.log`): `gitApiHttp.addChangeIdToHead` against the running server returned the zod-parsed `{ sha, changeId }`, and the fixture's HEAD message carries the trailer.
+- Throwaway dispatch smoke (`dispatch-smoke.log`): `gitApi.addChangeIdToHead` called a registered runtime member exactly once with the exact arguments and emitted exactly one invalidation; with no runtime registered it used `gitApiHttp`, whose own adapter emitted exactly one further invalidation. Not committed as a test.
+- The provider-gated Change-Id button remains unexercised and belongs to task 07; no UI control was added here.
+- Remaining: landing only. `bun run dead-code` is already red at integration base (16 unused files / 60 unused exports, including `addChangeIdToHead` until task 07 adds its caller), so it is a landing decision, not a defect to hide.
+
+Merge note: task 33 landed before this rebase and both edits to `git/routes.js` and `git/DOCUMENTATION.md` survived; a landing of this branch applies one option line, one route block before `POST /api/git/commit`, and one appended documentation bullet. `routes.js` is not replaced wholesale.
 
 Artifacts: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-34-2026-10-30/`.
 
-Review boundary: `811ecef471..HEAD` + `packages/web/server/lib/git/routes.js`, `routes.change-id.test.js`, `packages/web/server/lib/host/feature-routes-runtime.js`, `packages/ui/src/lib/gitApi.ts`, `packages/ui/src/lib/api/types.ts`, `packages/web/server/lib/git/DOCUMENTATION.md`, `packages/web/server/lib/source-control/DOCUMENTATION.md`; round: 1; briefs: B and security received, A pending with the coordinator; boundaries: HTTP query and body reaching a Git process and a branch ref comparison-and-swap, cached branch-status invalidation, client dispatch, response error surface; findings: 0 blocking / 5 nonblocking (3 quality, 2 security), all batched as recorded in "Review round 1".
+Review boundary: `d3e1e435..dfc8be27f3` (source closure) + `packages/web/server/lib/git/routes.js`, `routes.change-id.test.js`, `packages/web/server/lib/host/feature-routes-runtime.js`, `packages/ui/src/lib/gitApi.ts`, `packages/ui/src/lib/api/types.ts`, `packages/web/server/lib/git/DOCUMENTATION.md`, `packages/web/server/lib/source-control/DOCUMENTATION.md`, `.workflow/decisions.md`, the task 34 and task 07 records; round: 2; briefs: B and security received on the rebased pin, A pending with the coordinator; boundaries: HTTP query and body reaching a Git process and a branch ref comparison-and-swap, cached branch-status invalidation, client dispatch, response error surface; findings: round 1 0 blocking / 5 nonblocking (all batched); round 2 B 1 blocking document finding (fixed at `55ff710905`) and security PASS 0 blocking / 2 accepted unchanged nonblocking, no new findings.
 
 ### Review round 1 (2026-10-30)
 
@@ -90,3 +101,9 @@ Brief B (`review-quality.md`): 0 blocking, 3 nonblocking. Security brief (`revie
 - Security 2 — any `symbolic-ref` failure is reported as `DETACHED_HEAD`, so a missing or non-repository directory answers 409. Left unchanged: that is the canonical helper's existing refusal contract, it fails closed before the amend path, the same path oracle is reachable through `/api/git/check`, and task 34 must not fork the helper's semantics. Coordinator decision: preserve the existing `DETACHED_HEAD` mapping and change no helper API semantics now; recorded as a nonblocking tradeoff; no helper or API change and no follow-up task.
 
 Rechecks after the batch (bun 1.4.4): `routes.change-id.test.js` + `source-control/change-id.test.js` 18 tests, `git/routes.test.js` 66 tests, `bun check -b` for `packages/ui` and `packages/web`, root `bun run type-check` and `bun run lint` (exit 0; lint warnings pre-existing), focused anti-slop with no finding in the added lines, normal `oxlint.config.ts` on the changed files, `node --check`.
+
+### Review round 2 (2026-10-30, rebased pin)
+
+- Security (`review-security.md`, pin `dfc8be27f3`, base `d3e1e435`): PASS — 0 blocking, 2 accepted unchanged nonblocking (raw child-process `code` in the 500 body; `symbolic-ref` failure reported as `DETACHED_HEAD`). No new findings and no source fix scope. The round-1 brief is preserved as `review-security-round1-c3ca629.md`.
+- Quality Brief B on the same pin: one blocking finding, in the documents rather than the code. The rebase replay had inserted this task's `decisions.md` entry between the task 35 lease entry's `Revisit when` and its `Effort`, so the trailing Effort closed this entry and the task 35 entry lost its field. Fixed at `55ff710905`: `- **Effort:** upstream-refresh` and a blank line are back at the end of the task 35 entry, this entry keeps its own Effort, and no plan field was lost. Bounded receipt: `decisions-fix-receipt.txt` (diff of the repair, field placement, `workflow validate`). Source and callers were PASS in that brief; the fix is docs-only, so no code or root rerun was needed.
+- Round-2 evidence at the final pin: `bun install --frozen-lockfile` 0, focused 18, `git/routes.test.js` 72, package and root type-checks 0, root lint 0, root test 7/7 suites with 7,396 passed and 142 skipped, dev HTTP 409 stale / 200 amended with trailer, real client parse, throwaway dispatch smoke. Receipts and logs are in the artifact directory.

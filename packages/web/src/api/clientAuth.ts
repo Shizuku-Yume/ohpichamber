@@ -9,18 +9,21 @@ import type {
   RelayHostStatus,
 } from '@openchamber/ui/lib/api/types';
 import { runtimeFetch } from '@openchamber/ui/lib/runtime-fetch';
+import { z } from 'zod';
 
 const jsonOrNull = async <T>(response: Response): Promise<T | null> => {
   return (await response.json().catch(() => null)) as T | null;
 };
 
+const relayHostStatusSchema = z.object({ identityConflict: z.boolean() });
+
 const requestRelayHostStatus = async (path: string, method: 'GET' | 'POST'): Promise<RelayHostStatus> => {
   const response = await runtimeFetch(path, { method, headers: { Accept: 'application/json' } });
-  const payload = await jsonOrNull<{ identityConflict?: unknown; error?: string }>(response);
-  if (!response.ok || typeof payload?.identityConflict !== 'boolean') {
-    throw new Error(payload?.error || response.statusText || 'Failed to read relay status');
+  const payload = relayHostStatusSchema.safeParse(await response.json().catch(() => null));
+  if (!response.ok || !payload.success) {
+    throw new Error(response.statusText || 'Failed to read relay status');
   }
-  return { identityConflict: payload.identityConflict };
+  return { identityConflict: payload.data.identityConflict };
 };
 
 export const createWebClientAuthAPI = (): ClientAuthAPI => ({

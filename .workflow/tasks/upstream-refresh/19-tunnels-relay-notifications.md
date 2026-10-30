@@ -11,7 +11,7 @@
 **Delivers:** Upstream's relay behavior, Tailscale/Cloudflare/ngrok tunnel options and notification routing/click handling work with the fork's runtime selection.
 
 **Blocked by:** 10, 22
-**Files:** Path list: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-sync-2026-10-27/plan-paths/19.tsv` (52 paths: 44 clean/new, 8 both-side, 5 conflicts). Main locations: `packages/web/server/lib/{relay,notifications,tunnels,dev-tunnel,tailscale-tunnel*,cloudflare-tunnel,ngrok-tunnel,client-auth}`, `packages/ui/src/lib/{relay,notifications}`. Direct callers claimed by this task after review: `packages/web/server/index.js` (provider registration), `packages/web/server/lib/host/{settings-helpers.js,settings-registry.json,bootstrap-runtime.js,session-runtime.js}` (tunnel HTTPS port persistence; removal of the attention state the notification-route cutover orphaned), `packages/web/bin/lib/cli-tunnel-capabilities.js`, `packages/web/src/api/clientAuth.ts`, `packages/ui/src/lib/api/types.ts`, `packages/ui/src/App.tsx`, `packages/ui/src/components/sections/remote-instances/{RemoteInstancesPage.tsx,RelayConflictNotice.tsx}`, `packages/ui/src/hooks/useRelayLimitToast.ts`, `packages/ui/src/components/sections/openchamber/TunnelSettings.tsx`, `packages/ui/src/apps/{MobileApp.tsx,MobileConnectionWelcome.tsx,mobileConnections.ts}` and the RelayConflictNotice/useRelayLimitToast tests.
+**Files:** Path list: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-sync-2026-10-27/plan-paths/19.tsv` (52 paths: 44 clean/new, 8 both-side, 5 conflicts). Main locations: `packages/web/server/lib/{relay,notifications,tunnels,dev-tunnel,tailscale-tunnel*,cloudflare-tunnel,ngrok-tunnel,client-auth}`, `packages/ui/src/lib/{relay,notifications}`. Direct callers claimed by this task after review: `packages/web/server/index.js` (provider registration), `packages/web/server/lib/host/{settings-helpers.js,settings-registry.json,bootstrap-runtime.js,session-runtime.js}` (tunnel HTTPS port persistence; removal of the attention state the notification-route cutover orphaned), `packages/web/bin/lib/cli-tunnel-capabilities.js`, `packages/web/src/api/clientAuth.ts`, `packages/ui/src/lib/api/types.ts`, `packages/ui/src/lib/settings/registry.ts`, `packages/ui/src/App.tsx`, `packages/ui/src/components/sections/remote-instances/{RemoteInstancesPage.tsx,RelayConflictNotice.tsx}`, `packages/ui/src/hooks/useRelayLimitToast.ts`, `packages/ui/src/components/sections/openchamber/TunnelSettings.tsx`, `packages/ui/src/apps/{MobileApp.tsx,MobileConnectionWelcome.tsx,mobileConnections.ts}` and the RelayConflictNotice/useRelayLimitToast tests.
 
 **Read first:** Spec W6; `.agents/skills/relay-transport/SKILL.md`; `.agents/skills/enterprise-boundary/SKILL.md`; `.agents/skills/sync-state-invariants/SKILL.md`; `packages/web/server/lib/relay/DOCUMENTATION.md`.
 **Covers:** W6
@@ -231,3 +231,18 @@ Exact focused evidence (durable logs under the evidence root):
   mobile relay notice/retry) when the heavy slot returns. External tunnel
   services remain unavailable and are recorded as not exercised.
 
+
+Round-2 delta (final pin after this commit): `handleStart` now depends on
+`selectedHttpsPort` so a port changed after mount is the one POSTed; the
+HTTPS-port request field is `httpsPort: selectedHttpsPort ?? undefined` instead
+of a conditional empty spread; `ClientAuthAPI` parses relay status with a named
+`relayHostStatusSchema` (`z.boolean()`) instead of a `typeof` check; the mobile
+test set adds a behavior regression where every relay dial closes with
+`LimitExceeded` (4029) and auto-connect resolves `relay-limit` with the saved
+label (no broad module mocking); `Files:` names the UI registry and the
+TunnelSettings/Mobile paths. Authored-line anti-slop check over the changed
+files shows remaining findings only on pre-existing/adopted lines (no finding on
+the new mode/HTTPS/approval, mobile relay-limit, or relay-status lines). Final
+type-check and lint exit 0; focused web 179/179, relay bun 17/17, mobile 21/21,
+UI relay 65/65. Real served UI smoke is next, then the full root gate once the
+code boundary is frozen.

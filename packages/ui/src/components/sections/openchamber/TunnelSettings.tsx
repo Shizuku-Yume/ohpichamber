@@ -972,7 +972,7 @@ export const TunnelSettings: React.FC = () => {
         body: JSON.stringify({
           provider: tunnelProvider,
           mode: tunnelMode,
-          ...(selectedHttpsPort !== null ? { httpsPort: selectedHttpsPort } : {}),
+          httpsPort: selectedHttpsPort ?? undefined,
           ...(tunnelMode === 'managed-remote' && selectedPreset ? {
             managedRemoteTunnelPresetId: selectedPreset.id,
             managedRemoteTunnelPresetName: selectedPreset.name,
@@ -1058,6 +1058,7 @@ export const TunnelSettings: React.FC = () => {
     t,
     tunnelProvider,
     tunnelMode,
+    selectedHttpsPort,
     managedLocalConfigPath,
   ]);
 

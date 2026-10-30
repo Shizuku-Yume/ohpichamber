@@ -497,6 +497,21 @@ describe('relay probe while the runtime is on the relay', () => {
     restoreGlobals();
   };
 
+  test('a relay limit refusal is reported instead of unreachable', async () => {
+    try {
+      installRelayWindow();
+      // The relay refuses every dial with LimitExceeded.
+      relayCloseCode = 4029;
+
+      const outcome = await autoConnectLastInstance({ fast: false });
+
+      if (outcome.status !== 'relay-limit') throw new Error(`expected relay-limit, got ${outcome.status}`);
+      expect(outcome.label).toBe('Relay');
+    } finally {
+      restoreRelayGlobals();
+    }
+  });
+
   test('a background auto-connect asks through the live tunnel and leaves it open', async () => {
     try {
       installRelayWindow();

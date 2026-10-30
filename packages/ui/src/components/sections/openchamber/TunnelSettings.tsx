@@ -820,6 +820,17 @@ export const TunnelSettings: React.FC = () => {
     }
   }, [t]);
 
+  // A saved mode can predate the provider's current capability set (quick on a
+  // Tailscale install). Move to the provider's first supported mode instead of
+  // showing no selection and sending a mode the server refuses.
+  React.useEffect(() => {
+    if (tunnelModeOptions.length === 0) return;
+    if (tunnelModeOptions.some((option) => option.value === tunnelMode)) return;
+    const fallback = tunnelModeOptions[0].value;
+    setTunnelMode(fallback);
+    void saveTunnelSettings({ tunnelMode: fallback });
+  }, [saveTunnelSettings, tunnelMode, tunnelModeOptions]);
+
   const saveTtlSettings = React.useCallback(async (nextBootstrapTtlMs: number | null, nextSessionTtlMs: number) => {
     setIsSavingTtl(true);
     try {

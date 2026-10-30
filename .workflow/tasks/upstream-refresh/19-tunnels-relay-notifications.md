@@ -246,3 +246,24 @@ the new mode/HTTPS/approval, mobile relay-limit, or relay-status lines). Final
 type-check and lint exit 0; focused web 179/179, relay bun 17/17, mobile 21/21,
 UI relay 65/65. Real served UI smoke is next, then the full root gate once the
 code boundary is frozen.
+
+Actual served UI smoke (pre-rebase base 811ecef471, evidence kept):
+named loopback Tailscale stand-in `/tmp/19-tailscale-bin/tailscale` (version,
+status Running, serve/funnel printing an approval URL) plus the local relay
+fixture; headless Chrome at 1280x800. Selecting Serve/Funnel reached the
+provider (`serve --https=8443 …`, `funnel --https=8443 …` in the stand-in's
+argv log), HTTPS port select listed 443/8443/10000 and choosing 8443 persisted
+(`GET /api/config/settings`: tunnelProvider=tailscale, tunnelMode=serve,
+tunnelHttpsPort=8443); Start surfaced the approval message and an "Open approval
+page" action that called window.open with exactly the server-provided
+`https://login.tailscale.com/f/serve?node=task19fixture`; the desktop relay-limit
+toast (real `useRelayLimitToast` + `runtime-tunnel` module, transport fake) showed
+Try again, retry() was called once and the toast dismissed on connected; the
+owning-runtime notification click called
+`desktop_open_host_session(host:other-instance)` without navigating this
+window. Found during smoke and fixed: a saved `tunnelMode=quick` on a
+Tailscale-only provider left no mode selected and would POST quick; a UI effect
+now moves to the provider's first supported mode (serve).
+Evidence: evidence/tunnel-ui-smoke-prerebase.txt,
+screenshots/06-tunnel-funnel-approval-1280x800.png,
+07-relay-limit-toast-1280x800.png. No external Tailscale/Funnel claim.

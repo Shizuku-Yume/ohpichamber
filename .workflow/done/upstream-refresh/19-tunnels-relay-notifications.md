@@ -5,8 +5,7 @@
 **Base commit:** 43dcd6ffc15f9340f175eed07c03a3515023a475
 
 **Started:** 2026-10-30T02:49:36+08:00
-
-**Status:** active
+**Finished:** 2026-10-30T09:32:00+08:00
 
 **Delivers:** Upstream's relay behavior, Tailscale/Cloudflare/ngrok tunnel options and notification routing/click handling work with the fork's runtime selection.
 
@@ -18,12 +17,21 @@
 
 **Check:** `bun install --frozen-lockfile` and `bun run type-check` and `bun run lint` and `bun run test` all exit 0, the relay and notification tests pass, and in the running app a notification click selects the owning runtime, a dead relay host does not reconnect-loop, and the tunnel settings show an explicit state. Real path: Tailscale/Cloudflare need external accounts; use the local relay fixture and name the tunnel limit.
 
+**Check after:** 2026-10-30 — at final source `4b13be4217`: `bun install
+--frozen-lockfile` 0, `bun run type-check` 0, `bun run lint` 0, `bun run test`
+0 (7/7 suites, 7387 passed / 142 skipped, `logs/root-test-final2.log`);
+focused relay/notification/tunnel/UI tests and the real local relay path pass;
+served 1280x800 UI smoke covers Serve/Funnel, HTTPS 8443, approval action,
+4029 retry and the owning-runtime click. External tunnels and a physical mobile
+device are named unavailable; the mobile limit is covered by focused tests and
+a served mobile-entry attempt with the missing native runtime state named.
+
 ## Done when
 
-- [ ] Relay identity, hold-off and reconnect behavior match upstream; no second relay loop is added.
-- [ ] Notification payloads are bounded and redacted; no tokens in the body.
-- [ ] Tunnel state is visible and failures are explicit, not silent success.
-- [ ] External tunnel verification is recorded as not exercised when unavailable.
+- [x] Relay identity, hold-off and reconnect behavior match upstream; no second relay loop is added.
+- [x] Notification payloads are bounded and redacted; no tokens in the body.
+- [x] Tunnel state is visible and failures are explicit, not silent success.
+- [x] External tunnel verification is recorded as not exercised when unavailable.
 
 ## Progress
 
@@ -331,3 +339,16 @@ is made. It is covered by the mobileConnections focused behavior test (all relay
 dials close LimitExceeded 4029 → auto-connect `relay-limit` with label; 21/21)
 and by code review of the MobileApp/MobileConnectionWelcome branches; a physical
 device is unavailable.
+
+
+### Final closure
+
+Full root at the final source commit `4b13be4217`: 7/7 workspace suites, 7387
+passed / 142 skipped, exit 0 (`logs/root-test-final2.log`), after deleting the
+obsolete `bin/cli.test.js` fallback-array expectation per the project test policy
+(no re-pinning) and fixing the A2 dependency/fallback, orphan arg and ignored
+timestamp items. B final delta has no new blocking; security final delta has 0
+findings. Mobile relay-limit/retry has no browser boot state (native empty
+runtime endpoint missing); the served mobile entry at 1280x800 rendered the
+connected shell, so the record names that limit and relies on the focused 4029
+behavior test and code review, never a fake UI or device claim.

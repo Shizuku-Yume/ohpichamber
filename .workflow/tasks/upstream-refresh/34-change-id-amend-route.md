@@ -62,14 +62,18 @@ Check before: `grep -n 'change-id' packages/web/server/lib/git/routes.js` and th
 - Test: `packages/web/server/lib/git/routes.change-id.test.js` adapts the upstream route test (missing directory 400, stale `STALE_HEAD` 409 with HEAD unchanged, success 200 with the new SHA and a `Change-Id: I…` trailer) and adds the cached-status consumer test: a branch status seeded through the real `createChangeRequestStatusCache` survives a refused stale-head amend and is dropped for the rewritten branch only after a successful one.
 - Task 07's `PullRequestSection.tsx` was not touched; its Done-when item 1 records the `gitApi.addChangeIdToHead` handoff.
 
-Check after:
+Check after (final rebased pin; the pre-rebase numbers in round 1 stay historical):
 
-- `bun install --frozen-lockfile` exit 0.
-- `bun run --cwd packages/web test -- server/lib/git/routes.change-id.test.js server/lib/source-control/change-id.test.js` exit 0, 17 tests.
-- `bun run --cwd packages/web test -- server/lib/git/routes.test.js` exit 0, 66 tests.
-- `tsc -b` in `packages/ui` and in `packages/web` exit 0 was an early substitute under Bun 1.4.2 and is superseded. With `export PATH=$HOME/.local/opt/bun/v1.4.4/bun-linux-x64:$PATH` (bun 1.4.4), the task's own checks pass: `bun run --cwd packages/ui type-check` and `bun run --cwd packages/web type-check` (`bun check -b`) exit 0, and after the review batch root `bun run type-check` and `bun run lint` exit 0 (root-lint warnings only, exit 0).
-- `packages/ui`: `bun test src/lib/gitApi.test.ts` 13 passed, `bun test src/lib/gitApiHttp.test.ts` 64 passed, each file in its own process (the two files leak module state when run together, as `run-isolated-tests.mjs` documents).
-- `oxlint -c oxlint.config.ts --report-unused-disable-directives` on the changed files exit 0; `node --check` on the changed JavaScript exit 0.
+- `bun install --frozen-lockfile` exit 0 (log captured).
+- `bun run --cwd packages/web test -- server/lib/git/routes.change-id.test.js server/lib/source-control/change-id.test.js` exit 0, **18 tests**.
+- `bun run --cwd packages/web test -- server/lib/git/routes.test.js` exit 0, **72 tests** (task 33 added six batch cases after the rebase).
+- `bun run --cwd packages/ui type-check` and `bun run --cwd packages/web type-check` (`bun check -b`, bun 1.4.4) exit 0; root `bun run type-check` exit 0.
+- root `bun run lint` exit 0 (pre-existing warnings only).
+- root `bun run test` exit 0: 7/7 suites, **7,396 passed, 142 skipped**.
+- Real dev path: isolated Host on `127.0.0.1:3211`, stale `expectedHead` → 409 `STALE_HEAD`, current `expectedHead` → 200 `{ sha, changeId }` with HEAD moved to the answered SHA and `Change-Id: I…` in its message; the real `gitApiHttp.addChangeIdToHead` zod parse accepted that answer; throwaway dispatch smoke showed one runtime call and one invalidation, then one HTTP call and one further invalidation.
+- Provider UI limit: the review host's Change-Id button is task 07's and was neither exercised nor built here; no configured review host exists in this fixture.
+- `packages/ui`: `bun test src/lib/gitApi.test.ts` 13 passed, `bun test src/lib/gitApiHttp.test.ts` 64 passed, each file in its own process (the two files leak module state when run together, as `run-isolated-tests.mjs` documents). This ran before the rebase; the client function's real parse against the running server is the rebased-pin client proof.
+- Focused anti-slop: 43 pre-existing findings, 0 in the added lines, base 43; normal `oxlint -c oxlint.config.ts` on the changed files exit 0; `node --check` exit 0. `bun run dead-code` exit 1, already red at the integration base, with our member as the only new entry until task 07 adds its caller.
 
 ### Rebase and final heavy proof (2026-10-30)
 
@@ -88,7 +92,7 @@ Merge note: task 33 landed before this rebase and both edits to `git/routes.js` 
 
 Artifacts: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-34-2026-10-30/`.
 
-Review boundary: `d3e1e435..dfc8be27f3` (source closure) + `packages/web/server/lib/git/routes.js`, `routes.change-id.test.js`, `packages/web/server/lib/host/feature-routes-runtime.js`, `packages/ui/src/lib/gitApi.ts`, `packages/ui/src/lib/api/types.ts`, `packages/web/server/lib/git/DOCUMENTATION.md`, `packages/web/server/lib/source-control/DOCUMENTATION.md`, `.workflow/decisions.md`, the task 34 and task 07 records; round: 2; briefs: B and security received on the rebased pin, A pending with the coordinator; boundaries: HTTP query and body reaching a Git process and a branch ref comparison-and-swap, cached branch-status invalidation, client dispatch, response error surface; findings: round 1 0 blocking / 5 nonblocking (all batched); round 2 B 1 blocking document finding (fixed at `55ff710905`) and security PASS 0 blocking / 2 accepted unchanged nonblocking, no new findings.
+Review boundary: original base `811ecef47102ce4d737de56a7b41293e326a1e1e`, rebased base `d3e1e435a60f792853a83abb46e74063eb6ae505`; source closure `d3e1e435..dfc8be27f3` + `packages/web/server/lib/git/routes.js`, `routes.change-id.test.js`, `packages/web/server/lib/host/feature-routes-runtime.js`, `packages/ui/src/lib/gitApi.ts`, `packages/ui/src/lib/api/types.ts`, `packages/web/server/lib/git/DOCUMENTATION.md`, `packages/web/server/lib/source-control/DOCUMENTATION.md`, `.workflow/decisions.md`, the task 34 and task 07 records; round: 2; briefs: B and security received on the rebased pin, A pending with the coordinator; boundaries: HTTP query and body reaching a Git process and a branch ref comparison-and-swap, cached branch-status invalidation, client dispatch, response error surface; findings: round 1 0 blocking / 5 nonblocking (all batched); round 2 B 1 blocking document finding (fixed at `55ff710905`) and security PASS 0 blocking / 2 accepted unchanged nonblocking, no new findings.
 
 ### Review round 1 (2026-10-30)
 

@@ -187,6 +187,11 @@ Focused evidence after the batch: vitest
 settings-helpers 60/60; bun `relay/host-client` + `relay/identity` 17/17 pass
 (includes the new leak/log/reset/identity regressions); UI relay tests
 10+10+2+30+13 pass. CLI capability smoke lists
-`cloudflare,ngrok,tailscale` with `serve` default. Full type-check/lint/test,
+`cloudflare,ngrok,tailscale` with `serve` default; the real CLI surface shows
+`tunnel providers --json` as cloudflare:quick|managed-remote|managed-local,
+ngrok:quick, tailscale:serve|funnel and `tunnel --help` documents the Tailscale
+`--https-port` choices (the tailscale binary is not installed, so a real start
+is an external-service limit). The notification suite is 12 files/64 tests
+after the batch. Full type-check/lint/test,
 dead-code and the running-app smoke run after the combined integration
 followups land and the rebase is redone (see next step).

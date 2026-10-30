@@ -1309,7 +1309,9 @@ export function registerGitRoutes(app, {
     try {
       const { addChangeIdToHead } = await import('../source-control/change-id.js');
       const { sha, changeId, branch } = await addChangeIdToHead(directory, req.body?.expectedHead);
-      // A cached branch status was read for the old tip.
+      // A cached branch status was read for the old tip. Invalidation is an
+      // in-memory removal, so a rewrite that already moved the ref has no
+      // failure step here.
       onBranchRewritten?.({ directory, branch });
       return res.json({ sha, changeId });
     } catch (error) {

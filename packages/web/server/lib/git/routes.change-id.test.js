@@ -10,8 +10,27 @@ import { createChangeRequestStatusCache } from '../source-control/status-cache.j
 
 let directory;
 const git = (...args) => execFileSync('git', args, { cwd: directory, encoding: 'utf8' }).trim();
+const savedEnvironment = {};
+const isolateGitIdentity = () => {
+  for (const key of ['GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL', 'EMAIL',
+    'GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM', 'GIT_CONFIG_SYSTEM']) {
+    savedEnvironment[key] = process.env[key];
+  }
+  for (const key of ['GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL', 'EMAIL']) delete process.env[key];
+  // The route's git inherits this process; only its own config may answer.
+  process.env.GIT_CONFIG_GLOBAL = '/dev/null';
+  process.env.GIT_CONFIG_NOSYSTEM = '1';
+  delete process.env.GIT_CONFIG_SYSTEM;
+};
 
-afterEach(() => fs.rmSync(directory, { recursive: true, force: true }));
+afterEach(() => {
+  if (directory) fs.rmSync(directory, { recursive: true, force: true });
+  for (const [key, value] of Object.entries(savedEnvironment)) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+  for (const key of Object.keys(savedEnvironment)) delete savedEnvironment[key];
+});
 
 const createRepository = () => {
   directory = fs.mkdtempSync(path.join(os.tmpdir(), 'change-id-route-'));
@@ -21,6 +40,22 @@ const createRepository = () => {
   git('config', 'user.name', 'T');
   git('config', 'user.email', 't@example.com');
   git('commit', '--allow-empty', '-q', '-m', 'Base');
+};
+
+const identityEnvironment = {
+  GIT_AUTHOR_NAME: 'T', GIT_AUTHOR_EMAIL: 't@example.com',
+  GIT_COMMITTER_NAME: 'T', GIT_COMMITTER_EMAIL: 't@example.com',
+};
+
+// A repository whose commit exists but whose configuration names no identity:
+// the amend's own `git var GIT_COMMITTER_IDENT` then fails, outside every
+// refusal the helper maps.
+const createRepositoryWithoutIdentity = () => {
+  directory = fs.mkdtempSync(path.join(os.tmpdir(), 'change-id-route-'));
+  execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: directory });
+  execFileSync('git', ['commit', '--allow-empty', '-q', '-m', 'Base'], {
+    cwd: directory, env: { ...process.env, ...identityEnvironment },
+  });
 };
 
 const appWith = (options = {}) => {
@@ -72,5 +107,20 @@ describe('POST /api/git/change-id', () => {
     await request(app).post('/api/git/change-id').query({ directory }).send({ expectedHead: head }).expect(200);
     expect(cache.fresh(statusContext('main'))).toBeNull();
     expect(cache.fresh(statusContext('feature'))).not.toBeNull();
+  });
+
+  it('answers the fixed 500 body, without Git output, when the amend fails outside a refusal', async () => {
+    createRepositoryWithoutIdentity();
+    const head = git('rev-parse', 'HEAD');
+    isolateGitIdentity();
+
+    const response = await request(appWith())
+      .post('/api/git/change-id').query({ directory }).send({ expectedHead: head }).expect(500);
+
+    // `git var GIT_COMMITTER_IDENT` exits 128 without an identity; the route
+    // publishes the failure class only, never the command or its stderr.
+    expect(response.body).toEqual({ error: 'Failed to add a Change-Id', code: 128 });
+    expect(response.text).not.toMatch(/GIT_COMMITTER_IDENT|fatal|致命|请告诉我您是谁|@/i);
+    expect(git('rev-parse', 'HEAD')).toBe(head);
   });
 });

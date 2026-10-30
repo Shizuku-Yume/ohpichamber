@@ -18,7 +18,7 @@
 
 ## Done when
 
-- [ ] Board, tracker and review components use the canonical client and task 06's routes; no direct provider fetch in the browser. Task 34 published `POST /api/git/change-id` and `GitAPI.addChangeIdToHead`; `PullRequestSection` replaces its direct `gitApiHttp.addChangeIdToHead` import with `gitApi.addChangeIdToHead` in this task's own commit.
+- [ ] Board, tracker and review components use the canonical client and task 06's routes; no direct provider fetch in the browser. Task 34 published `POST /api/git/change-id`, `GitAPI.addChangeIdToHead` and the `gitApi` wrapper. This task still owns the review-surface Change-Id control and its call site: it adds them and calls `gitApi.addChangeIdToHead`, never `gitApiHttp`; task 34 added no call site because none existed.
 - [ ] Files/Git/diff views open the fixture repository and show changed files, hunks and the sticky scrollbar behavior.
 - [ ] References and comments work across sessions and worktrees.
 - [ ] View tests pass; large lists use the upstream virtualization.

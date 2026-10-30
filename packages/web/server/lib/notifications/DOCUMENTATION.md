@@ -6,6 +6,7 @@ This module provides notification message preparation utilities for the web serv
 ## Entrypoints and structure
 - `packages/web/server/lib/notifications/index.js`: public entrypoint imported by `packages/web/server/index.js`.
 - `packages/web/server/lib/notifications/routes.js`: route registration for push, visibility, and session status endpoints.
+- `packages/web/server/lib/notifications/emit-route.js`: the plugin notification route (`POST /api/notifications/emit`) and its emitter (`createPluginNotificationEmitter`, built in `packages/web/server/index.js`). Registered from `bootstrap-runtime.js`; validates title/body/tag/session/directory, rate-limits to 10 per 10 s per process, respects `nativeNotificationsEnabled`, and sends one desktop + UI notification with `kind: 'plugin'` (`requireHidden`, `showWhenFocused`).
 - `packages/web/server/lib/notifications/push-runtime.js`: push subscription persistence, VAPID initialization, and UI visibility runtime.
 - `packages/web/server/lib/notifications/apns-runtime.js`: native APNs/FCM token persistence and delivery. Relay mode signs requests through the shared host `relayKeyStore`; it does not create a signing keypair in notification settings. Direct APNs delivery uses ES256 and HTTP/2 when `OPENCHAMBER_PUSH_RELAY_DISABLED=true`. Native delivery is not gated on UI visibility; iOS suppresses foreground banners. A registered device `pushKey` seals notification text, while legacy registrations receive generic text. See `APNS.md`.
 - `packages/web/server/lib/notifications/push-seal.js`: end-to-end sealing of native push text. A phone that registers with a `pushKey` (32 bytes, base64; made by the iOS shell in the App Group, by Android's `PushSealKey`) gets each notification as the generic scenario title, an empty body and `data.enc` = `v1.` + base64(nonce || AES-256-GCM ciphertext || tag) of `{ title, body }`. Each such device is its own relay send. The iOS Notification Service Extension and Android's `SealedPushMessagingService` open it; the relay sends a sealed push to Android as a data message (openchamber-website `apps/api/src/lib/fcm.ts`) so that service runs in the background. The sealed text is richer than the clear one: `runtime.js` passes `sealed` = the session name as title and what happened as body (the agent's reply; `Question:`, `Wants to run:` / `Wants to edit:` / `Wants permission:`, `Error:` or the goal title before the detail). The detail goes through the 250-character message cap before the prefix is added. When there is no such text, the phone opens the generic text. Phones without a key keep getting the generic text in the clear. Enterprise mode sends no `sealed` text and strips the session name, so the phone shows only the scenario title.
@@ -16,6 +17,13 @@ This module provides notification message preparation utilities for the web serv
 - `packages/web/server/lib/notifications/template-locales.js`: the notification text OpenChamber writes itself, per interface language. An empty template field means "no custom text", so the notification uses these defaults. The server keeps its own list because it cannot import `packages/ui`; an unknown tag falls back to English.
 - `packages/web/server/lib/notifications/message.js`: helper implementation module.
 - `packages/web/server/lib/notifications/message.test.js`: unit tests for notification message helpers.
+
+## Plugin notification route
+`registerNotificationEmitRoutes(app, { express, emitter })` owns exactly one route,
+`POST /api/notifications/emit`. The emitter is created in `packages/web/server/index.js`
+(`createPluginNotificationEmitter`) from the same desktop/UI emitters the trigger
+runtime uses, so plugin notifications behave like native ones and are not a second
+delivery path.
 
 ## Public exports
 

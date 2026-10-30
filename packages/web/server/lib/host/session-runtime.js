@@ -96,7 +96,7 @@ export const createSessionRuntime = ({ broadcastEvent, now = Date.now }) => {
       if (current?.activeRunId && current.activeRunId !== event.runId) return;
       pending.delete(sessionId); updateState(sessionId, 'idle', null, eventId); return;
     }
-    if (event.type === 'message.created' && event.role === 'user') { markUserMessageSent(sessionId, event.timestamp); return; }
+    if (event.type === 'message.created' && event.role === 'user') { markUserMessageSent(sessionId); return; }
     if (event.type === 'approval.requested' || event.type === 'approval.resolved') {
       if (event.approval.sessionId !== sessionId) throw new Error('Canonical approval scope mismatch');
       if (event.type === 'approval.requested') getPending(sessionId).approvals.set(event.approval.approvalId, event.approval);

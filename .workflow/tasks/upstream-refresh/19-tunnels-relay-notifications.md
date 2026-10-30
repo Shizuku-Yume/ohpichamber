@@ -11,7 +11,7 @@
 **Delivers:** Upstream's relay behavior, Tailscale/Cloudflare/ngrok tunnel options and notification routing/click handling work with the fork's runtime selection.
 
 **Blocked by:** 10, 22
-**Files:** Path list: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-sync-2026-10-27/plan-paths/19.tsv` (52 paths: 44 clean/new, 8 both-side, 5 conflicts). Main locations: `packages/web/server/lib/{relay,notifications,tunnels,dev-tunnel,tailscale-tunnel*,cloudflare-tunnel,ngrok-tunnel,client-auth}`, `packages/ui/src/lib/{relay,notifications}`. Direct callers claimed by this task after review: `packages/web/server/index.js` (provider registration), `packages/web/server/lib/host/{settings-helpers.js,settings-registry.json,bootstrap-runtime.js,session-runtime.js}` (tunnel HTTPS port persistence; removal of the attention state the notification-route cutover orphaned), `packages/web/bin/lib/cli-tunnel-capabilities.js`, `packages/web/src/api/clientAuth.ts`, `packages/ui/src/lib/api/types.ts`, `packages/ui/src/lib/settings/registry.ts`, `packages/ui/src/App.tsx`, `packages/ui/src/components/sections/remote-instances/{RemoteInstancesPage.tsx,RelayConflictNotice.tsx}`, `packages/ui/src/hooks/useRelayLimitToast.ts`, `packages/ui/src/components/sections/openchamber/TunnelSettings.tsx`, `packages/ui/src/apps/{MobileApp.tsx,MobileConnectionWelcome.tsx,mobileConnections.ts}` and the RelayConflictNotice/useRelayLimitToast tests.
+**Files:** Path list: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-sync-2026-10-27/plan-paths/19.tsv` (52 paths: 44 clean/new, 8 both-side, 5 conflicts). Main locations: `packages/web/server/lib/{relay,notifications,tunnels,dev-tunnel,tailscale-tunnel*,cloudflare-tunnel,ngrok-tunnel,client-auth}`, `packages/ui/src/lib/{relay,notifications}`. Direct callers claimed by this task after review: `packages/web/server/index.js` (provider registration), `packages/web/server/lib/host/{settings-helpers.js,settings-registry.json,bootstrap-runtime.js,session-runtime.js}` (tunnel HTTPS port persistence; removal of the attention state the notification-route cutover orphaned), `packages/web/bin/lib/cli-tunnel-capabilities.js`, `packages/web/src/api/clientAuth.ts`, `packages/ui/src/lib/api/types.ts`, `packages/ui/src/lib/settings/registry.ts`, `packages/ui/src/App.tsx`, `packages/ui/src/components/sections/remote-instances/{RemoteInstancesPage.tsx,RelayConflictNotice.tsx}`, `packages/ui/src/hooks/useRelayLimitToast.ts`, `packages/ui/src/components/sections/openchamber/TunnelSettings.tsx`, `packages/ui/src/apps/{MobileApp.tsx,MobileConnectionWelcome.tsx,mobileConnections.ts}` and the RelayConflictNotice component plus the useRelayLimitToast hook (no component tests exist for either; UI relay/mobile tests cover the transport paths).
 
 **Read first:** Spec W6; `.agents/skills/relay-transport/SKILL.md`; `.agents/skills/enterprise-boundary/SKILL.md`; `.agents/skills/sync-state-invariants/SKILL.md`; `packages/web/server/lib/relay/DOCUMENTATION.md`.
 **Covers:** W6
@@ -290,3 +290,44 @@ Tailscale-only provider was normalized to `serve` on reload and persisted.
 Screenshots 08–13; parser patch smoke repeated for serve/funnel/approval/retry
 after the last edit. Named stand-in only: `/tmp/19-tailscale-bin/tailscale`;
 no external Tailscale/Funnel claim.
+
+Final red/green record at `add236983d` and after: the full `bun run test` at
+`add236983d` exited 1 with exactly one failure, `packages/web/bin/cli.test.js`
+"loads fallback tunnel provider capabilities for CLI startup" (1 failed / 7387
+passed / 142 skipped; log `logs/root-test-final-pin.log` kept). That test
+snapshotted the fallback capability array before Tailscale was added. Per the
+project test policy this is an obsolete incidental implementation/wiring
+expectation created by the feature change: the test was DELETED (with its now
+unused imports), never re-pinned to include Tailscale. Tailscale's CLI consumer
+behavior stays proven by the real `tunnel providers --json` receipt
+(cloudflare:quick|managed-remote|managed-local, ngrok:quick,
+tailscale:serve|funnel) and the remaining real CLI tests (bin/cli.test.js
+111/111 focused, `logs/focused-cli-test-final.log`). A fresh full root run
+follows on this source, not a repin or suppression.
+
+Final docs corrections: notifications DOCUMENTATION again lists the live
+`emit-route.js` entrypoint and a "Plugin notification route" section
+(`POST /api/notifications/emit`, emitter in `index.js`, registered from
+`bootstrap-runtime.js`, 10/10 s limit); tunnels DOC points `classifyRequestScope`
+at `../host/tunnel-auth.js`. Record-only fixes: the task Files no longer claims
+component tests for RelayConflictNotice/useRelayLimitToast (none exist; focused
+transport tests cover them); `evidence/dead-relay-backoff.txt` now states the
+fixture-restart recovery is the historical pre-rebase run and points the
+final-pin relay recovery at `logs/real-path-client-final-pin.log` instead of an
+empty status block. A2 nonblocking fixes: Tailscale dependency fallback no longer
+labels itself cloudflared or prints the Cloudflare install command (uses
+`tailscale` + https://tailscale.com/download); `bootstrap-runtime` no longer
+passes the unused `markUserMessageSent` into `registerNotificationRoutes`, and
+`session-runtime` calls the guard with one argument.
+
+Mobile limit smoke attempt: the actual served mobile entry
+(`/mobile.html` + `?surface=mobile`, headless 1280x800, Capacitor platform stub,
+local 4029 relay fixture, seeded saved relay connection) rendered the connected
+mobile shell, because the browser runtime resolves a live local API transport so
+MobileApp never enters its native cold-launch auto-connect path. The relay-limit
+notice path therefore has no browser boot state available: the missing runtime is
+the native shell's empty `getRuntimeApiBaseUrl()` entry. No fake UI/native claim
+is made. It is covered by the mobileConnections focused behavior test (all relay
+dials close LimitExceeded 4029 → auto-connect `relay-limit` with label; 21/21)
+and by code review of the MobileApp/MobileConnectionWelcome branches; a physical
+device is unavailable.

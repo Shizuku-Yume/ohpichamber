@@ -188,7 +188,9 @@ interface TunnelDependencyInstallInfo {
   installCommand: string;
 }
 
-const getProviderDependencyName = (provider: string): string => (provider === 'ngrok' ? 'ngrok' : 'cloudflared');
+const getProviderDependencyName = (provider: string): string => (
+  provider === 'ngrok' || provider === 'tailscale' ? provider : 'cloudflared'
+);
 
 const getClientInstallPlatform = (): string => {
   if (typeof window !== 'undefined' && typeof window.__OPENCHAMBER_PLATFORM__ === 'string') {
@@ -219,6 +221,9 @@ const getFallbackInstallCommand = (provider: string, platform = getClientInstall
       return 'brew install ngrok';
     }
     return 'https://ngrok.com/download';
+  }
+  if (provider === 'tailscale') {
+    return 'https://tailscale.com/download';
   }
 
   if (platform === 'win32') {

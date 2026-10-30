@@ -156,7 +156,10 @@ Bounding rects per shot: `logs/screenshot-bounding-rects.md`.
   `direction: rtl`, box unchecked, and the nav group reads `OMP` instead of `OPENCODE`.
 - `07-hebrew-sessions-rtl.png` (new): Hebrew Sessions page, `dir=rtl`, row
   `שמור הפעלות לא פעילות חמות / מצב סרק`, checked; `label x 680..859`,
-  `checkbox 654..674`.
+  `checkbox 654..674`. Captured on `upstream-refresh/fix-ar-he` before the
+  per-session removal, so the image still shows the retired `Prompt cache`
+  heading; it documents the Hebrew row, not the current tree, and the current
+  tree has no such heading.
 - `08-arabic-chat-reply.png` (new): Arabic chat that completed through the provider —
   prompt `مرحبًا، اكتب كلمة واحدة فقط: تم`, reply `تم`, header title
   `جلسة بلا عنوان` after the `Untitled Session` fix; mirrored layout.
@@ -232,7 +235,9 @@ Arabic locale. Headless Chrome (`chrome-devtools start --headless=true`,
   is generated status text (timestamps, URLs, HTTP codes) and stays as it is.
 - `screenshots/08-arabic-runtime-status.png` holds the Arabic dialog;
   `screenshots/08-arabic-runtime-status.txt` holds its DOM text and direction.
-- The same flow in Hebrew renders `מצב סביבת ההרצה`, `הורדת נתוני אבחון`, `העתק`.
+- The Hebrew values (`מצב סביבת ההרצה`, `הורדת נתוני אבחון`, `העתק`) were read
+  from the catalog and were seen in the running app during that round as DOM
+  text, but no Hebrew screenshot was taken; the captured dialog is Arabic.
 
 ### Validation
 
@@ -385,8 +390,8 @@ included. This record commit is the only later difference.
   152 tests / 59 files (`logs/combined-linear-ui-focused-tests.log`)
 - Web focused `bunx vitest run lib/host/settings-helpers.test.js`: exit 0,
   59 tests (`logs/combined-linear-web-focused-tests.log`)
-- `bunx oxlint -c oxlint.anti-slop.config.ts` over the changed UI and server
-  files: exit 1 from the 206 findings `settings-helpers.js` already carries on
+- `bunx oxlint -c oxlint.anti-slop.config.ts` over the changed UI and server files:
+  exit 1 from the 206 findings `settings-helpers.js` already carries on
   the base. The two findings this branch had added there were not new behaviour:
   `811ecef471` already sanitizes the same switches, the tab limit and
   `smallModelVariant` a few hundred lines earlier (task 16,
@@ -403,9 +408,10 @@ included. This record commit is the only later difference.
 
 ### Held for the heavy slot
 
-No dev server, app build or root test ran here; task 19 owns that slot. When it
-frees: the Arabic/Hebrew real path (Sessions warming row, Runtime status dialog,
-one Arabic chat) and `bun run test` at this tip.
+At the time of that section no dev server, app build or root test had run; task 19
+owned the slot. It was released later and the gate ran at this pin's source — see
+"Final root gate" below. The real path covered the Arabic Sessions warming row,
+the Runtime status dialog and one Arabic chat.
 
 ### A/B review at the pinned boundary `b75c015740`
 
@@ -478,6 +484,11 @@ and HOME under the artifact directory, provider from
 
 ### HTTP
 
+No raw network log was saved for this run: the codes below are the responses the
+page received during the smoke, transcribed here. The ordered `warming-realpath/`
+logs under the task 21 artifacts belong to the `21-warming` branch at a different
+pin.
+
 - `GET /api/agent/v1/workspaces`: 200, two workspaces.
 - `GET /api/agent/v1/workspaces/<id>/cache-warming`: 200,
   `{"revision":"2","mode":"idle"}`.
@@ -508,6 +519,9 @@ and HOME under the artifact directory, provider from
    the warming section was appended. Restored it and separated the sections with
    a blank line. The warming entry keeps its true 2026-10-29 date even though it
    now follows a 2026-10-30 entry; it was recorded during that reconciliation.
+   The header's "newest last" yields to the true decision date here: the
+   2026-10-29 entry stays appended because inserting it would rewrite an
+   append-only record.
 2. `settings-helpers.js` + its test: the base already sanitizes the same switches,
    tab limit and `smallModelVariant` (task 16, lines 719-736). The duplicate pass
    this branch carried, the zod rewrite of it, and the duplicate fixture rows are
@@ -516,9 +530,22 @@ and HOME under the artifact directory, provider from
    staged together).
 3. `RuntimeStatusDialog.tsx`: the localized empty state no longer sits inside the
    LTR machine-text block; it renders as its own paragraph and follows the
-   dialog. The mock-based component test is gone. Commit `b2fe589334`.
+   dialog. The mock-based component test is gone. Commit `b2fe589334`. This
+   branch of the component is **code-only**: the smoke always had populated
+   status text, so the empty paragraph was never rendered, and no test covers it
+   now. The commit message's "verified in the running app" overstates it; the
+   inherited direction is right by construction, not by observation.
 4. The earlier "boundary-validation fix" narrative above is corrected in place:
    the switch repair was task 16's, not this branch's.
+
+### Final root gate
+
+`bun run test` ran once at this pin's source and passed: `root test exit=0`
+(`logs/final-root-test.exit`, `logs/final-root-test.log`), 7/7 suites, UI 927/927
+test files, web 458 passed / 9 skipped files and 7,329 passed / 142 skipped tests,
+electron 54/54 test files, 250 passed / 7 skipped in the service suite; 474.83 s.
+The code pin is `b2fe589334`; every later commit (`225549212b`, `6b2e5641fa`
+and this record batch) is documentation only and does not move it.
 
 ### Checks after the batch
 

@@ -181,17 +181,53 @@ or 24:
   prefixes, the real `fanoutPush` badge path, the message-cap order and the
   existing notification store path.
 
-Focused evidence after the batch: vitest
-`relay/service`, `notifications/trigger-runtime`, `host/session-runtime`,
-`host/settings-helpers`, `tunnels`, `dev-tunnel` 10 files/65 tests pass plus
-settings-helpers 60/60; bun `relay/host-client` + `relay/identity` 17/17 pass
-(includes the new leak/log/reset/identity regressions); UI relay tests
-10+10+2+30+13 pass. CLI capability smoke lists
-`cloudflare,ngrok,tailscale` with `serve` default; the real CLI surface shows
-`tunnel providers --json` as cloudflare:quick|managed-remote|managed-local,
-ngrok:quick, tailscale:serve|funnel and `tunnel --help` documents the Tailscale
-`--https-port` choices (the tailscale binary is not installed, so a real start
-is an external-service limit). The notification suite is 12 files/64 tests
-after the batch. Full type-check/lint/test,
-dead-code and the running-app smoke run after the combined integration
-followups land and the rebase is redone (see next step).
+Final UI/relay delta after the core batch (same review round):
+
+- `TunnelSettings.tsx` now offers `serve`/`funnel` (TunnelMode union,
+  TUNNEL_MODE_OPTIONS, toUiTunnelMode, capability filter), an HTTPS port select
+  driven by the selected mode's `httpsPorts` that persists `tunnelHttpsPort`
+  through the settings registry and sends `httpsPort` on start, an
+  `approval_required` action that opens only the server-provided `approvalUrl`
+  through the existing `openExternalUrl` helper, a Tailscale provider label,
+  and session labels for serve/funnel instead of mislabelling them Managed
+  Local. Locale keys reused, none added.
+- Mobile relay limit: `mobileConnections.ts` classifies `relay-limit` from
+  `isRelayLimitReached` in relay probes/session validation/re-probe,
+  `MobileConnectionWelcome` renders the existing `mobile.connect.notice.relayLimit`
+  message, and `MobileApp` shows the notice on cold launch/resume/retry and
+  re-probes on an active-tunnel limit event; the phone keeps its own resume
+  path (no browser claim).
+- Claim watch runs inside the lifecycle queue and re-reads enabled/enterprise
+  (takeover no longer starts a host after a concurrent disable); deterministic
+  standby-disable regression added.
+- Peer close reasons use a code-point sanitizer (no control-character regex) in
+  both host-client and the UI protocol mirror; lint passes.
+- Tunnel docs now state the actual Settings select/approval action and that the
+  CLI only sends `--https-port` / prints the link; no CLI claim beyond that.
+
+Exact focused evidence (durable logs under the evidence root):
+- `logs/focused-web-final-ui.log`: vitest relay/service, notifications,
+  host/session-runtime, host/settings-helpers, tunnels, dev-tunnel — 22 files,
+  179 tests pass.
+- `logs/focused-notifications-after-fixes.log`: notifications suite 12 files,
+  64 tests pass.
+- `logs/focused-relay-bun-final-ui.log`: host-client + identity 17/17 pass
+  (retire leak, sanitized log/status, serialization, identity rebuild).
+- `logs/focused-ui-final-ui.log`: UI relay 10+10+2+30+13 and
+  mobileConnections 20/20 pass; every file exits 0.
+- `logs/type-check-final.log` exit 0 (3,004 files); `logs/lint-final.log`
+  exit 0; `logs/cli-tunnel-providers-final.json` lists
+  cloudflare:quick|managed-remote|managed-local, ngrok:quick,
+  tailscale:serve|funnel; `tunnel --help` documents `--https-port`.
+- Earlier `logs/focused-after-fixes.log` recorded a failing trigger fixture
+  before the redaction fix; it is SUPERSEDED by
+  `focused-notifications-after-fixes.log` and must not be cited as passing.
+- `lint:anti-slop` and `dead-code` fail on the pre-existing repo baseline
+  (5,803 anti-slop findings in untouched files; dead-code unused
+  source-control types/config hints); none of the new exports are listed.
+- Remaining: full `bun run test` after the combined integration followups land
+  and the rebase is redone, plus the running-app UI smoke (tailscale
+  serve/funnel selection, HTTPS persistence, approval action, desktop and
+  mobile relay notice/retry) when the heavy slot returns. External tunnel
+  services remain unavailable and are recorded as not exercised.
+

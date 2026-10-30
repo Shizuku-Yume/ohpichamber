@@ -23,7 +23,7 @@ import { useI18n } from '@/lib/i18n';
 import type { PairingConnectionPayload, PairingEndpointCandidate } from '@/lib/connectionPayload';
 import { isCapacitorApp } from '@/lib/platform';
 import { adoptRelayTunnel, getActiveRelayDescriptor, getActiveRelayTunnel, isRelayModeActive } from '@/lib/relay/runtime-tunnel';
-import { createRelayTunnelClient } from '@/lib/relay/tunnel-client';
+import { createRelayTunnelClient, isRelayLimitReached } from '@/lib/relay/tunnel-client';
 import { addRuntimeProxyHeaders, runtimeFetch } from '@/lib/runtime-fetch';
 import { getRuntimeApiBaseUrl, getRuntimeKey, switchRuntimeEndpoint } from '@/lib/runtime-switch';
 
@@ -458,7 +458,8 @@ const readHealthServerId = async (response: MobileFetchResponse): Promise<string
 
 const RELAY_CONNECT_TIMEOUT_MS = 15_000;
 
-type RelayProbeOutcome = 'ok' | 'needs-login' | 'auth-failed' | 'unreachable';
+// 'relay-limit': the relay refused the tunnel over its per-server limits.
+type RelayProbeOutcome = 'ok' | 'needs-login' | 'auth-failed' | 'unreachable' | 'relay-limit';
 
 // A relay tunnel a connect flow holds. `owned` is false for the runtime's own
 // connected tunnel, which the flow borrowed and must never close.
@@ -524,7 +525,9 @@ const probeRelaySession = async (
   try {
     const { response: session, failure } = await fetchThroughRelayWithRetry(tunnel, '/auth/session', { headers }, timeoutMs);
     logConnect('relay:session', { shared: false, ok: session?.ok === true, status: session?.status ?? null, hasToken: Boolean(token), error: failure });
-    const outcome = session ? await relaySessionOutcome(session, token) : 'unreachable';
+    const outcome = session
+      ? await relaySessionOutcome(session, token)
+      : isRelayLimitReached(tunnel.getStatus()) ? 'relay-limit' : 'unreachable';
     if (outcome === 'ok' && options?.keepTunnel) return { outcome, tunnel: { client: tunnel, owned: true } };
     tunnel.close();
     return { outcome };
@@ -864,7 +867,8 @@ type ChosenTransport =
 type ProbeResult =
   | { status: 'ok'; transport: ChosenTransport }
   | { status: 'needs-login' }
-  | { status: 'unreachable' };
+  | { status: 'unreachable' }
+  | { status: 'relay-limit' };
 
 // How long the direct (LAN/tunnel) candidates keep the track to themselves
 // before the relay probe starts. At home a live LAN answers well inside this
@@ -950,6 +954,7 @@ const probeConnectionCandidates = async (
     );
     if (outcome === 'ok') return { status: 'ok', transport: { kind: 'relay', relay: relayCandidate.relay, tunnel } };
     if (outcome === 'needs-login' || outcome === 'auth-failed') return { status: 'needs-login' };
+    if (outcome === 'relay-limit') return { status: 'relay-limit' };
     return { status: 'unreachable' };
   };
 
@@ -1061,6 +1066,8 @@ export type AutoConnectOutcome =
   /** No saved instance / no saved token — nothing to report to the user. */
   | { status: 'no-candidate' }
   | { status: 'unreachable'; label: string }
+  /** The relay refused the tunnel over its limits; retrying at once hits them again. */
+  | { status: 'relay-limit'; label: string }
   /** The saved token was rejected (expired/revoked) — the user must sign in again. */
   | { status: 'needs-login'; label: string };
 
@@ -1109,6 +1116,7 @@ export const autoConnectLastInstance = async (options?: { fast?: boolean; skipIf
   const result = await probeConnectionCandidates(candidate.candidates, token, { fast });
   logConnect('auto-connect:probe', { status: result.status, candidates: candidate.candidates.map((c) => c.kind) });
   if (result.status === 'needs-login') return { status: 'needs-login', label: candidate.label };
+  if (result.status === 'relay-limit') return { status: 'relay-limit', label: candidate.label };
   if (result.status !== 'ok') return { status: 'unreachable', label: candidate.label };
   // Background-retry guard: while this slow probe ran, the user may have
   // connected manually from the connect screen. Their choice wins — discard
@@ -1205,7 +1213,8 @@ const pairingCandidatesToMobile = (candidates: PairingEndpointCandidate[]): Mobi
 // relay transport owns an OPEN tunnel the caller must close.
 const establishLiveTransport = async (
   candidates: MobileTransportCandidate[],
-): Promise<LiveTransport | null> => {
+): Promise<LiveTransport | 'relay-limit' | null> => {
+  let relayLimited = false;
   // Same identity gate as probeConnectionCandidates: a redeem/login must not send
   // its secret to a direct address that reports a different server identity.
   const expectedServerId = relayCandidateOf({ candidates })?.serverId ?? null;
@@ -1221,6 +1230,7 @@ const establishLiveTransport = async (
       const { response: health, failure } = await fetchThroughRelayWithRetry(tunnel, '/health', undefined, RELAY_CONNECT_TIMEOUT_MS);
       logConnect('establish:relay:health', { shared: false, ok: health?.ok === true, status: health?.status ?? null, error: failure });
       if (health?.ok) return { kind: 'relay', relay: candidate.relay, tunnel, owned: true };
+      relayLimited ||= isRelayLimitReached(tunnel.getStatus());
       tunnel.close();
       continue;
     }
@@ -1235,10 +1245,10 @@ const establishLiveTransport = async (
     }
     return { kind: 'direct', url, serverId };
   }
-  return null;
+  return relayLimited ? 'relay-limit' : null;
 };
 
-type ActiveSessionCheck = 'valid' | 'invalid';
+type ActiveSessionCheck = 'valid' | 'invalid' | 'relay-limit';
 
 // Relay-aware session validation for the ACTIVE runtime (native resume path).
 // In relay mode there is no reachable URL to probe — validate through the live
@@ -1256,7 +1266,7 @@ const validateActiveRuntimeSession = async (input: {
     options?.fast ? MOBILE_FAST_PROBE_TIMEOUT_MS : RELAY_CONNECT_TIMEOUT_MS,
     runtimeFetch('/auth/session').then((response): Response | null => response).catch(() => null),
   );
-  if (!session) return 'valid';
+  if (!session) return isRelayLimitReached(getActiveRelayTunnel()?.getStatus()) ? 'relay-limit' : 'valid';
   if (session.status === 401) return 'invalid';
   if (!session.ok && session.status !== 404) return 'valid';
   const status = await readSessionStatus(session);
@@ -1285,7 +1295,7 @@ export const isActiveRuntimeConnection = (connection: MobileSavedConnection): bo
   return Boolean(runtimeKey) && secureTokenKeyOf(connection) === runtimeKey;
 };
 
-type ReprobeOutcome = 'switched' | 'unchanged' | 'unreachable' | 'needs-login' | 'no-connection';
+type ReprobeOutcome = 'switched' | 'unchanged' | 'unreachable' | 'relay-limit' | 'needs-login' | 'no-connection';
 
 // App-resume re-probe: when the app wakes (Capacitor `isActive`), the network may
 // have changed while it slept, so re-select the active device's transport and
@@ -1360,6 +1370,7 @@ export const reprobeActiveConnection = async (options?: { fast?: boolean }): Pro
     return 'switched';
   }
   if (fallback.status === 'needs-login') return 'needs-login';
+  if ([better.status, fallback.status, current].includes('relay-limit')) return 'relay-limit';
   return 'unreachable';
 };
 
@@ -1571,6 +1582,10 @@ export const useMobileConnection = (onConnected: () => void): UseMobileConnectio
         setError(t('mobile.connect.error.unreachable'));
         return;
       }
+      if (result.status === 'relay-limit') {
+        setError(t('mobile.connect.error.relayLimit'));
+        return;
+      }
       if (result.status === 'needs-login') {
         persistMetadata({ id: saved?.id, label, candidates });
         setPendingConnection({
@@ -1612,8 +1627,8 @@ export const useMobileConnection = (onConnected: () => void): UseMobileConnectio
     try {
       // 1. Find the first reachable transport across all candidates.
       const established = await establishLiveTransport(deviceCandidates);
-      if (!established) {
-        setError(t('mobile.connect.error.unreachable'));
+      if (!established || established === 'relay-limit') {
+        setError(t(established ? 'mobile.connect.error.relayLimit' : 'mobile.connect.error.unreachable'));
         return;
       }
       chosen = established;
@@ -1707,10 +1722,10 @@ export const useMobileConnection = (onConnected: () => void): UseMobileConnectio
       // tunnel; cookies never cross it, so an issued bearer token is mandatory
       // there. `issueClientToken` mints the device's token in one round-trip.
       const established = await establishLiveTransport(candidates);
-      chosen = established;
+      if (established !== 'relay-limit') chosen = established;
       if (!isCurrentOperation()) return;
       if (!chosen) {
-        setError(t('mobile.connect.error.unreachable'));
+        setError(t(established === 'relay-limit' ? 'mobile.connect.error.relayLimit' : 'mobile.connect.error.unreachable'));
         return;
       }
       const loginInit = {

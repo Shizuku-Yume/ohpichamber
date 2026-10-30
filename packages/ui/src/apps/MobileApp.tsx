@@ -75,6 +75,8 @@ import { ScheduledTasksView, type ScheduledTasksLeaveReason } from '@/components
 import { MobileWorkspaceDrawer, type MobileWorkspaceTab } from './MobileWorkspaceDrawer';
 import { DedicatedMobileAppProvider, useMobileSettingsSurfaceOpener, type MobileAppActions } from './mobileAppContext';
 import { autoConnectLastInstance, getAutoConnectTargetLabel, logMobileConnectEvent, reprobeActiveConnection, suppressAutoConnectUntilManualConnect, type AutoConnectOutcome } from './mobileConnections';
+import { subscribeActiveRelayTunnelStatus } from '@/lib/relay/runtime-tunnel';
+import { isRelayLimitReached } from '@/lib/relay/tunnel-client';
 import { isCapacitorMobileApp, useNativeAndroidBackButton, useNativeMobileChrome, useNativeMobileLifecycle } from './mobileNativeChrome';
 import { reconnectAppForTransportSwitch, resetAppForRuntimeEndpointChange } from './runtimeEndpointReset';
 import { useAppFontEffects } from './useAppFontEffects';
@@ -838,6 +840,15 @@ function MobileAppContent({ apis }: MobileAppProps) {
         disconnect('needs-login');
         return;
       }
+      if (outcome === 'relay-limit') {
+        // The relay refused this device over its limits. The parked tunnel
+        // makes no attempt of its own, so the grace ladder below would only
+        // keep the user on a frozen session. The connect screen says why;
+        // tapping the instance, or the next resume/online, tries again.
+        setAutoConnectNotice({ kind: 'relay-limit', label: getAutoConnectTargetLabel() ?? '' });
+        disconnect('relay-limit');
+        return;
+      }
       if (outcome === 'unreachable') {
         // Right after a resume or Wi-Fi switch the network is often still
         // settling (Android without a SIM has NO connectivity for a few
@@ -861,6 +872,11 @@ function MobileAppContent({ apis }: MobileAppProps) {
               if (retry === 'needs-login') {
                 setAutoConnectNotice({ kind: 'auth-expired', label: getAutoConnectTargetLabel() ?? '' });
                 disconnect('retry-needs-login');
+                return;
+              }
+              if (retry === 'relay-limit') {
+                setAutoConnectNotice({ kind: 'relay-limit', label: getAutoConnectTargetLabel() ?? '' });
+                disconnect('retry-relay-limit');
                 return;
               }
               if (!lastAttempt) {
@@ -888,6 +904,18 @@ function MobileAppContent({ apis }: MobileAppProps) {
 
   useNativeMobileChrome();
   useNativeMobileLifecycle(handleNativeResume);
+
+  // The runtime tunnel can be refused over the relay's limits on a reconnect
+  // while the app is in the foreground. It then parks without a resume to
+  // wake it, and the shell would sit on "reconnecting" over a frozen session.
+  // The resume re-probe settles it: a reachable LAN takes over, otherwise the
+  // connect screen explains the refusal.
+  React.useEffect(() => {
+    if (!isNativeMobileApp) return;
+    return subscribeActiveRelayTunnelStatus((status) => {
+      if (isRelayLimitReached(status)) handleNativeResume();
+    });
+  }, [isNativeMobileApp, handleNativeResume]);
 
   // Network-change re-probe. The resume hook only fires on background→foreground,
   // but on Android switching Wi-Fi (quick-settings tile) does NOT background the
@@ -991,6 +1019,8 @@ function MobileAppContent({ apis }: MobileAppProps) {
       // the saved instance didn't come back (unreachable vs revoked auth).
       if (outcome.status === 'unreachable') {
         setAutoConnectNotice({ kind: 'unreachable', label: outcome.label });
+      } else if (outcome.status === 'relay-limit') {
+        setAutoConnectNotice({ kind: 'relay-limit', label: outcome.label });
       } else if (outcome.status === 'needs-login') {
         setAutoConnectNotice({ kind: 'auth-expired', label: outcome.label });
       }
@@ -1047,9 +1077,15 @@ function MobileAppContent({ apis }: MobileAppProps) {
         // refuses on launch and answers 200 two minutes later). Show the
         // connect screen on the fast verdict — no splash hostage — and retry
         // once in the background with the full budget; a success reconnects
-        // the app from the connect screen on its own.
+        // the app from the connect screen on its own. A relay refusal over its
+        // limits gets no such retry: dialing again at once only counts against
+        // the same limits.
         dropToConnectScreen(label ? { kind: 'unreachable', label } : null);
         void autoConnectLastInstance({ fast: false, skipIfConnected: true }).catch(() => null);
+        return;
+      }
+      if (outcome === 'relay-limit') {
+        dropToConnectScreen(label ? { kind: 'relay-limit', label } : null);
         return;
       }
       // 'no-connection': at cold start the runtime key may not map to a saved
@@ -1061,6 +1097,8 @@ function MobileAppContent({ apis }: MobileAppProps) {
         dropToConnectScreen({ kind: 'auth-expired', label: fallback.label });
       } else if (fallback.status === 'unreachable') {
         dropToConnectScreen({ kind: 'unreachable', label: fallback.label });
+      } else if (fallback.status === 'relay-limit') {
+        dropToConnectScreen({ kind: 'relay-limit', label: fallback.label });
       } else {
         dropToConnectScreen(null);
       }

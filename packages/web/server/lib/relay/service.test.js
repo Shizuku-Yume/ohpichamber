@@ -79,6 +79,29 @@ describe('relay service identity reset', () => {
   });
 });
 
+describe('relay service claim watch', () => {
+  it('does not take the host over after the relay was disabled while standing by', async () => {
+    vi.useFakeTimers();
+    const { service, hostLock, getSettings } = makeService({ allowPassiveHost: true });
+    try {
+      hostLock.tryClaim.mockReturnValueOnce(false); // another process holds the claim at boot
+      await service.startIfEnabled();
+      expect((await service.getStatus()).state).toBe('standby');
+
+      await vi.advanceTimersByTimeAsync(30_000); // claim seen free; grace starts
+      getSettings().privateRelay.enabled = false; // a concurrent disable persisted
+      hostLock.tryClaim.mockClear();
+
+      await vi.advanceTimersByTimeAsync(150_000); // past the 2-minute grace
+      expect(hostLock.tryClaim).not.toHaveBeenCalled();
+      expect((await service.getStatus()).state).toBe('disabled');
+    } finally {
+      await service.stop();
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe('relay service passive hosting', () => {
   it('never claims or starts the host passively when passive hosting is disabled', async () => {
     const { service, hostLock } = makeService({ allowPassiveHost: false });

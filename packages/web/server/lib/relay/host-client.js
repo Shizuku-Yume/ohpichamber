@@ -32,7 +32,10 @@ const parseRelayRetire = (raw) => {
   }
 };
 
-const sanitizeCloseReason = (raw) => String(raw ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, LOG_REASON_MAX_CHARS);
+const sanitizeCloseReason = (raw) => Array.from(String(raw ?? ''), (char) => {
+  const code = char.codePointAt(0) ?? 0;
+  return code <= 0x1f || code === 0x7f ? ' ' : char;
+}).join('').replace(/\s+/g, ' ').trim().slice(0, LOG_REASON_MAX_CHARS);
 
 const BACKOFF_BASE_MS = 1000;
 const BACKOFF_CAP_MS = 30000;

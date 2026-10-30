@@ -16,7 +16,10 @@ export const RELAY_PROTOCOL_VERSION = 1;
 const relayRetireSchema = z.object({ type: z.literal('relay-retire'), code: z.number().int(), reason: z.string().catch('') });
 // Peer text may end up in status text and logs; keep it one bounded line. It is
 // never used as a WebSocket close reason (that path has a 123-byte limit).
-const sanitizeRelayReason = (raw: string): string => String(raw ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
+const sanitizeRelayReason = (raw: string): string => Array.from(String(raw ?? ''), (char) => {
+  const code = char.codePointAt(0) ?? 0;
+  return code <= 0x1f || code === 0x7f ? ' ' : char;
+}).join('').replace(/\s+/g, ' ').trim().slice(0, 200);
 
 export const parseRelayRetire = (raw: string): { code: number; reason: string } | null => {
   try {

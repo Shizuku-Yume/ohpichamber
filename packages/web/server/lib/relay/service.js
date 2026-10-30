@@ -144,11 +144,20 @@ export const createRelayService = ({
   //     other hosts or containers that cannot probe our pid.
   // This back-off is what actually ends the mutual-eviction fight: the loser
   // must STOP reconnecting, otherwise both keep replacing each other forever.
-  const ensureClaimWatch = (relayUrl) => {
+  const ensureClaimWatch = () => {
     if (!hostLock || claimWatchTimer) return;
     claimWatchTimer = setInterval(() => {
-      void (async () => {
+      // Same queue as start/stop/disable: the tick must not act on a config
+      // (enabled, enterprise, passive) that changed while it was scheduled.
+      void serializedLifecycle(async () => {
         try {
+          const config = await readConfig();
+          if (!config.enabled || relayBlockedByEnterprise()) {
+            stopClaimWatch();
+            stopHostClient();
+            status = { state: 'disabled', lastError: null, connectedClients: 0 };
+            return;
+          }
           if (hostClient) {
             if (!hostLock.tryClaim()) {
               logger.warn('[Relay] host claim taken by another instance — standing down');
@@ -170,12 +179,12 @@ export const createRelayService = ({
           if (hostLock.tryClaim()) {
             claimFreeSinceMs = null;
             logger.warn('[Relay] host claim stayed free — taking over the relay host');
-            await startHost(relayUrl);
+            await startHost(config.relayUrl);
           }
         } catch (error) {
           logger.warn(`[Relay] claim watch failed: ${describeRelayError(error)}`);
         }
-      })();
+      });
     }, CLAIM_WATCH_INTERVAL_MS);
     if (typeof claimWatchTimer.unref === 'function') claimWatchTimer.unref();
   };
@@ -206,7 +215,7 @@ export const createRelayService = ({
       const claimed = claim === 'force' ? hostLock.forceClaim() : hostLock.tryClaim();
       if (!claimed) {
         status = standbyStatus(hostLock.otherLiveClaimant());
-        ensureClaimWatch(relayUrl);
+        ensureClaimWatch();
         return;
       }
     }
@@ -221,7 +230,7 @@ export const createRelayService = ({
       },
     });
     status = hostClient.getStatus();
-    ensureClaimWatch(relayUrl);
+    ensureClaimWatch();
   };
 
   const stopHost = () => {

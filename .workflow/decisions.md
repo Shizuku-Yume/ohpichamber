@@ -412,6 +412,8 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Supersedes:** 2026-10-30 - Release a worktree's workers by directory inside the Agent Service, not by client-supplied ids
 - **Mine:** yes
 - **Revisit when:** the Agent Service gains a general directory-drain primitive, sessions share one worker across directories, or the supervisor restart hold proves insufficient and a persisted lease marker becomes necessary.
+- **Effort:** upstream-refresh
+
 ## 2026-10-30 - Report a rewritten branch tip to the source-control shell through a route option
 
 - **Decided:** `registerGitRoutes` takes `onBranchRewritten`, and `feature-routes-runtime.js` passes `walkthroughBindingService.invalidateBranchStatus`. After a successful Change-Id amend the route calls it with `{ directory, branch }`; the route never imports the source-control shell or its status caches.

@@ -1,5 +1,6 @@
 import React from 'react';
 import QRCode from 'qrcode';
+import { z } from 'zod';
 import { toast } from '@/components/ui';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { Button } from '@/components/ui/button';
@@ -31,6 +32,10 @@ type TunnelState =
 type TtlOption = { value: string; label: string; ms: number | null };
 type TunnelMode = 'quick' | 'managed-remote' | 'managed-local' | 'serve' | 'funnel';
 type ApiTunnelMode = TunnelMode;
+// Settings and start responses cross the runtime boundary as JSON: parse the
+// two fields the UI acts on instead of narrowing their runtime types.
+const tunnelHttpsPortSchema = z.number().int().min(1).max(65535);
+const approvalUrlSchema = z.string().url().refine((value) => value.startsWith('https://'), { message: 'approval URL must be https' });
 const isTunnelMode = (value: string): value is TunnelMode => (
   value === 'quick' || value === 'managed-remote' || value === 'managed-local' || value === 'serve' || value === 'funnel'
 );
@@ -563,7 +568,7 @@ export const TunnelSettings: React.FC = () => {
         : settingsData.tunnelSessionTtlMs ?? 8 * 60 * 60 * 1000;
 
       const loadedMode: TunnelMode = toUiTunnelMode(statusData.mode ?? settingsData.tunnelMode);
-      const loadedHttpsPort = typeof settingsData.tunnelHttpsPort === 'number' ? settingsData.tunnelHttpsPort : null;
+      const loadedHttpsPort = tunnelHttpsPortSchema.safeParse(settingsData.tunnelHttpsPort).data ?? null;
       const loadedProvider = settingsData.tunnelProvider ?? 'cloudflare';
       const loadedManagedLocalConfigPath = settingsData.managedLocalTunnelConfigPath ?? null;
       const dependencyAvailable = applyDependencyCheck(checkData, loadedProvider);
@@ -804,9 +809,8 @@ export const TunnelSettings: React.FC = () => {
       if (Object.prototype.hasOwnProperty.call(payload, 'tunnelProvider') && typeof payload.tunnelProvider === 'string') {
         setTunnelProvider(payload.tunnelProvider);
       }
-      if (typeof payload.tunnelHttpsPort === 'number') {
-        setHttpsPort(payload.tunnelHttpsPort);
-      }
+      const httpsPort = tunnelHttpsPortSchema.safeParse(payload.tunnelHttpsPort);
+      if (httpsPort.success) setHttpsPort(httpsPort.data);
       if (Object.prototype.hasOwnProperty.call(payload, 'managedLocalTunnelConfigPath')) {
         setManagedLocalConfigPath(payload.managedLocalTunnelConfigPath ?? null);
       }
@@ -996,9 +1000,8 @@ export const TunnelSettings: React.FC = () => {
       const data = (await res.json()) as TunnelStartResponse;
 
       if (!res.ok || !data.ok) {
-        if (typeof data.approvalUrl === 'string' && data.approvalUrl.length > 0) {
-          setApprovalUrl(data.approvalUrl);
-        }
+        const approval = approvalUrlSchema.safeParse(data.approvalUrl);
+        if (approval.success) setApprovalUrl(approval.data);
         if (tunnelMode === 'managed-remote' && typeof data.error === 'string' && data.error.includes('Managed remote tunnel token is required')) {
           setState('idle');
           setManagedRemoteValidationError(t('settings.openchamber.tunnel.toast.managedRemoteTokenRequiredBeforeStarting'));

@@ -267,3 +267,26 @@ now moves to the provider's first supported mode (serve).
 Evidence: evidence/tunnel-ui-smoke-prerebase.txt,
 screenshots/06-tunnel-funnel-approval-1280x800.png,
 07-relay-limit-toast-1280x800.png. No external Tailscale/Funnel claim.
+
+Final rebase + parser patch: branch rebased cleanly onto landed integration
+`b76832437d` (10 commits; non-workflow diff identical to pre-rebase
+`cd63260c3d`, sha 964fc200…), so the accepted task20 records and the Host
+settings `tunnelHttpsPort` entry are kept. B's last authored-code finding was
+the three `typeof` narrowings in TunnelSettings; they now use named
+`tunnelHttpsPortSchema` (integer 1–65535) and `approvalUrlSchema`
+(https URL) before any state update, with no suppression. Scoped anti-slop over
+the changed file leaves only pre-existing upstream lines (session TTL,
+tunnelProvider, response cast, data.error), none of the new parsing lines.
+
+Final-pin real path (`86d7c3f95d`, pre-parser): real pairing/redeem over the
+local relay fixture, E2EE tunneled `/health` 200, authenticated candidates 200,
+host `connectedClients` 1→0 (`logs/real-path-client-final-pin.log`). Final-pin
+served UI at 1280x800: Tailscale provider, Serve/Funnel selection, HTTPS
+443/8443/10000 with 8443 persisted, actual stand-in argv
+`serve --https=8443 …` and `funnel --https=8443 …`, approval message + action
+opening exactly the server URL, relay-limit toast Try again → retry() once →
+dismissed, owning-runtime click routed. A forced `tunnelMode=quick` under the
+Tailscale-only provider was normalized to `serve` on reload and persisted.
+Screenshots 08–13; parser patch smoke repeated for serve/funnel/approval/retry
+after the last edit. Named stand-in only: `/tmp/19-tailscale-bin/tailscale`;
+no external Tailscale/Funnel claim.

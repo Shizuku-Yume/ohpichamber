@@ -262,8 +262,9 @@ right-aligned. Generated status text is shown to users, so it must read LTR.
   document direction.
 - `apps/MobileConnectionDebugPanel.tsx`: the connection debug trail is the same
   kind of generated Latin text on a hidden diagnostics surface; same fix.
-- `components/ui/RuntimeStatusDialog.test.tsx`: asserts the body's `dir` is
-  `ltr` while the document and dialog shell stay RTL.
+- The localized empty state (`runtimeStatusDialog.empty.noData`) is not machine
+  text: it renders in its own element and follows the dialog's direction instead
+  of inheriting the body's `ltr`.
 
 ### Surveyed, already correct or not a text block
 
@@ -304,11 +305,14 @@ console:` x=341, pre x=325).
 - `bun run type-check`: exit 0 (`logs/rtl-pre-type-check.log`)
 - `bun run lint`: exit 0 (`logs/rtl-pre-lint.log`)
 - focused tests `bun test src/lib/i18n src/components/ui src/components/sections/openchamber/DefaultsSettings.test.tsx src/components/layout/HeaderSessionArchiveMenuItem.test.tsx`:
-  exit 0, 153 tests / 60 files (`logs/rtl-pre-focused-tests.log`); the new test
-  alone is `logs/rtl-pre-test.log`
-- `bunx oxlint -c oxlint.anti-slop.config.ts` over `RuntimeStatusDialog.tsx`,
-  `MobileConnectionDebugPanel.tsx`, `RuntimeStatusDialog.test.tsx`: exit 0
-  (`logs/rtl-pre-oxlint.log`)
+  exit 0, 153 tests / 60 files (`logs/rtl-pre-focused-tests.log`)
+- `bunx oxlint -c oxlint.anti-slop.config.ts` over `RuntimeStatusDialog.tsx` and
+  `MobileConnectionDebugPanel.tsx`: exit 0 (`logs/rtl-pre-oxlint.log`)
+- A component test for the body direction was written and then removed: it
+  mocked the dialog shell, so its assertion about the shell was vacuous, and the
+  broad `mock.module` is what the anti-slop rules reject. The user-visible
+  direction is verified in the running app instead (see the real-path captures
+  below and in the heavy-slot section).
 - A run that also included `src/apps` failed on 78 mobile gesture tests in this
   environment (edge swipe, host-switch); those suites are unrelated to this
   change and were not investigated.
@@ -382,14 +386,15 @@ included. This record commit is the only later difference.
 - Web focused `bunx vitest run lib/host/settings-helpers.test.js`: exit 0,
   59 tests (`logs/combined-linear-web-focused-tests.log`)
 - `bunx oxlint -c oxlint.anti-slop.config.ts` over the changed UI and server
-  files: exit 1 from findings the sanitizer already carries. Two of them landed
-  on lines this branch added — the `typeof` guards for the new persisted
-  switches and for `smallModelVariant` in `settings-helpers.js`. They are fixed
-  in `aa2d7a38d7`: both values now parse through zod schemas at the update
-  boundary, one field at a time, so a mistyped switch or an empty variant is
-  dropped while the valid fields in the same request still persist. The file's
-  other 206 findings predate the branch and stay untouched
-  (`logs/oxlint-settings-helpers.log`: 208 before, 206 after, none added).
+  files: exit 1 from the 206 findings `settings-helpers.js` already carries on
+  the base. The two findings this branch had added there were not new behaviour:
+  `811ecef471` already sanitizes the same switches, the tab limit and
+  `smallModelVariant` a few hundred lines earlier (task 16,
+  `settings-helpers.js:738-754`, including the 1..20 clamp and the empty-string
+  clear). The duplicate pass — first with `typeof`, later with a zod schema —
+  and its duplicate fixture rows were removed during integration, so the file
+  and its test are byte-identical to the base again and the established
+  behaviour is what runs (`logs/oxlint-settings-helpers.log`).
 - `bun run dead-code`: exit 1 (baseline finding count); versus the pinned
   integration-tip baseline it reports no new file, and two disappear —
   `WorkStatusWarmingToggle.tsx` (deleted with the feature) and
@@ -451,11 +456,9 @@ code moved.
   (`logs/rebase-linear-lint.log`), UI focused 152 tests/59 files exit 0
   (`logs/rebase-linear-ui-focused-tests.log`), web focused 59 tests exit 0
   (`logs/rebase-linear-web-focused-tests.log`).
-- Boundary-validation fix checks: `bunx oxlint` on the file 208 → 206 findings
-  (`logs/oxlint-settings-helpers.log`), web focused tests 59 passed
-  (`logs/oxlint-fix-web-tests.log`), type-check and lint exit 0
-  (`logs/oxlint-fix-type-check.log`, `logs/oxlint-fix-lint.log`), UI focused 144
-  tests/57 files exit 0 (`logs/oxlint-fix-ui-tests.log`).
+- After removing the duplicate, `git diff 811ecef471 -- settings-helpers.js
+  settings-helpers.test.js` is empty; the web focused suite still passes
+  (`logs/batch-web-focused-tests.log`).
 
 ### Review reports
 
@@ -465,3 +468,66 @@ code moved.
 - The settings sanitizer and the locale/retirement integration are left for the
   coordinator's closure review; this branch holds the receipts it needs.
 
+
+## Heavy-slot real path and the closure batch (2026-10-30)
+
+Ran at `e89476b134` before the batch, on this branch's own `127.0.0.1:3750/3751`,
+headless Chrome with `emulate <page> --viewport "1280x800"`, isolated data dir
+and HOME under the artifact directory, provider from
+`~/.config/ohpichamber/omp-m0-provider.env`.
+
+### HTTP
+
+- `GET /api/agent/v1/workspaces`: 200, two workspaces.
+- `GET /api/agent/v1/workspaces/<id>/cache-warming`: 200,
+  `{"revision":"2","mode":"idle"}`.
+- `GET /api/session-warming`: 404; `PUT /api/session-warming/mode`: 404;
+  `PUT /api/config/warming`: 404. The per-session surface is gone from the Host.
+- The page made no request to `/api/session-warming` at all.
+
+### UI
+
+- Sessions (`dir=rtl`, `lang=ar`): the row reads
+  `إبقاء الجلسات الخاملة نشطة / وضع الخمول`, label rect x 706..859 right of its
+  checkbox 680..700. Toggling it saved `إيقاف` and the "saved; no active
+  workers" line, and toggling back restored `وضع الخمول` — the global OMP
+  warming control still works through the canonical route.
+- The retired surface is absent: no `ذاكرة التخزين المؤقت للمطالبات`
+  (`promptCacheTitle`) heading and no "chosen sessions" copy on the page.
+- Runtime status: dialog `حالة التشخيص` chrome in `rtl`, body `pre` with
+  `dir=ltr`, computed `ltr`, `text-align: start`, spans at the left padding edge
+  (`Log files:` x=341, `- Host console:` x=341, pre x=325..955).
+- Chat: Arabic prompt `مرحبًا، اكتب كلمة واحدة فقط: جاهز` answered `جاهز` by
+  Gemini 3.8 Flash in 6.8 s, header `جلسة بلا عنوان`.
+- Captures: `screenshots/10-arabic-sessions-warming.png`,
+  `11-arabic-runtime-status-heavy.png` + `.txt`, `12-arabic-chat-heavy.png`.
+
+### Closure batch
+
+1. `.workflow/decisions.md`: the 2026-10-30 entry had lost its `Effort` line when
+   the warming section was appended. Restored it and separated the sections with
+   a blank line. The warming entry keeps its true 2026-10-29 date even though it
+   now follows a 2026-10-30 entry; it was recorded during that reconciliation.
+2. `settings-helpers.js` + its test: the base already sanitizes the same switches,
+   tab limit and `smallModelVariant` (task 16, lines 738-754). The duplicate pass
+   this branch carried, the zod rewrite of it, and the duplicate fixture rows are
+   removed; both files are byte-identical to `811ecef471` again. Commit
+   `5f1005f684` (it also carries the removed component test; the two changes were
+   staged together).
+3. `RuntimeStatusDialog.tsx`: the localized empty state no longer sits inside the
+   LTR machine-text block; it renders as its own paragraph and follows the
+   dialog. The mock-based component test is gone. Commit `b2fe589334`.
+4. The earlier "boundary-validation fix" narrative above is corrected in place:
+   the switch repair was task 16's, not this branch's.
+
+### Checks after the batch
+
+- `bun run type-check`: exit 0 (`logs/batch-type-check.log`)
+- `bun run lint`: exit 0 (`logs/batch-lint.log`)
+- UI focused: exit 0, 151 tests / 58 files (`logs/batch-ui-focused-tests.log`)
+- Web focused `settings-helpers.test.js`: exit 0, 59 tests
+  (`logs/batch-web-focused-tests.log`)
+- `bunx oxlint` on `RuntimeStatusDialog.tsx`, `MobileConnectionDebugPanel.tsx`,
+  `settings-helpers.js`: exit 1 from the 206 pre-existing sanitizer findings, none
+  from this branch (`logs/batch-oxlint.log`)
+- `git diff 811ecef471 -- settings-helpers.js settings-helpers.test.js` is empty.

@@ -101,6 +101,13 @@ export const createSettingsHelpers = (dependencies) => {
     'agentScheduleToolEnabled', 'agentKnowledgeToolEnabled', 'agentRenderToolEnabled',
     'agentWorkflowToolEnabled', 'mobileReturnKeySends', 'savePastedImagesAsFiles',
   ]);
+  // The update body is untrusted input: each switch is parsed on its own, so a
+  // mistyped field is dropped without failing the valid fields beside it.
+  const persistableSwitchSchema = z.object(Object.fromEntries(
+    PERSISTABLE_BOOLEAN_SETTINGS.map((key) => [key, z.boolean().optional().catch(undefined)]),
+  ));
+  // An empty or non-string variant is dropped the same way; the stored value stays.
+  const smallModelVariantSchema = z.string().trim().min(1).optional().catch(undefined);
   // Mirrors `LIVE_BROWSER_TABS_MIN`/`MAX` in packages/ui/src/lib/browser/liveTabs.ts.
   const LIVE_BROWSER_TABS_MIN = 1;
   const LIVE_BROWSER_TABS_MAX = 20;
@@ -1103,9 +1110,10 @@ export const createSettingsHelpers = (dependencies) => {
     // Plain switches the UI persists but this chain had no branch for, so the
     // registry listed them and every write dropped them (settings-registry.json
     // caught it once it was regenerated). Keep each one a strict boolean.
+    const switches = persistableSwitchSchema.safeParse(candidate).data ?? {};
     for (const key of PERSISTABLE_BOOLEAN_SETTINGS) {
-      if (typeof candidate[key] === 'boolean') {
-        result[key] = candidate[key];
+      if (switches[key] !== undefined) {
+        result[key] = switches[key];
       }
     }
     if (Number.isInteger(candidate.liveBrowserTabLimit)
@@ -1113,8 +1121,9 @@ export const createSettingsHelpers = (dependencies) => {
       && candidate.liveBrowserTabLimit <= LIVE_BROWSER_TABS_MAX) {
       result.liveBrowserTabLimit = candidate.liveBrowserTabLimit;
     }
-    if (typeof candidate.smallModelVariant === 'string' && candidate.smallModelVariant.trim().length > 0) {
-      result.smallModelVariant = candidate.smallModelVariant.trim();
+    const smallModelVariant = smallModelVariantSchema.safeParse(candidate.smallModelVariant).data;
+    if (smallModelVariant !== undefined) {
+      result.smallModelVariant = smallModelVariant;
     }
 
     // The registry is the last word on what a client may persist: a key the

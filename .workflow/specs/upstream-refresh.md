@@ -47,7 +47,7 @@ Excluded on purpose: `packages/vscode`, OpenCode-engine paths, upstream folder t
 3. UI features after the design system and UI state tasks: 08 sessions/sidebar, 11 settings, 12 Markdown/diff, 13/14 chat, 15 composer, 16 knowledge, 17 workflows, 18 integrations, 19 tunnels, 20 i18n, 21 diagnostics. Each takes its own path list; shared interfaces are named in the task files.
 4. 22 web host core and 23 UI state (sync/stores) are the two hardest adaptation tasks; they land before the feature tasks that depend on their routes and stores.
 5. One-view sidebar follow-up: 31 rebuilds the desktop sidebar on upstream's one-view row model after 07, then 32 brings the mobile sheet onto it.
-6. Worktree archive follow-up: 35 brings upstream's worktree archive end to end — the Host routes and service that archive a worktree into `refs/openchamber/archive/<id>`, restore it and delete it, plus the Archive page rows that drive them. It needs no open task; it waits for nothing, and it is easier after 33 because both edit the spaces dispatcher and its documentation.
+6. Worktree archive follow-up: 35 brings upstream's worktree archive end to end — the Host routes and service that archive a worktree into `refs/openchamber/archive/<id>`, restore it and delete it, the Agent Service worktree lease that releases every worker holding the folder and refuses new ones until it is gone, plus the Archive page rows that drive them. It waits for nothing: `Blocked by` is empty, and it may start before 33; landing after 33 only avoids a textual conflict, because both append to the spaces dispatcher test and its documentation.
 7. Documentation last: 26 English docs and assets, then 27-29 translated locales; 26 waits for 31, 32 and 35 because `worktrees.mdx`, the sidebar pages and the settings pages describe what those tasks build.
 8. 30 is the gate: full checks at the integration tip, one current receipt, the baseline record updated, `development.md` updated, history link created with `git merge -s ours 0056bf6a9`, and the tasks archived.
 
@@ -67,7 +67,7 @@ its Check before every landing.
 | E UI features | 08, 09, 11, 12 → 13 → 14 → 15, 18, 20 | session/sidebar, layout/works, settings, markdown, chat, composer, catalog, i18n | 10 and 23; 12-15 chained; 08/09/11/18/20 independent |
 | F Docs | 26 → 27, 28, 29 | `packages/docs`, `docs/` assets | every adoption task (26 is the documentation gate, not a verification gate) |
 | H One-view sidebar | 31 → 32 | desktop one-view rows, mobile sheet | 07; 32 after 31 |
-| I Worktree archive | 35 | worktree archive service, routes, boundary classification, Archive page rows | 01, 08 and 09 landed (all archived); 33 for the shared dispatcher files |
+| I Worktree archive | 35 | worktree archive service, routes, worker release, boundary classification, Archive page rows | 01, 08 and 09 landed (all archived); nothing to start; land after 33 to avoid a dispatcher/docs text conflict (merge order, not a dependency) |
 | G Gate | 30 | records, baseline pin, history link | 26-29 |
 
 Shared interfaces: `packages/web/server/index.js` route registration belongs to 22; later server

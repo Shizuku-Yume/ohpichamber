@@ -134,3 +134,11 @@ pairing/redeem + E2EE tunneled `/health` and authenticated candidates returned
 tunnel panel showed `tailscale was not found.` at the required 1280x800 viewport
 (`logs/real-path-client-final.log`, `evidence/final-branch-smoke.txt`,
 `screenshots/04-tunnel-tailscale-final-1280x800.png`).
+
+Final receipts on the rebased branch (HEAD `f989f3c0af`, source tree identical
+to reviewed `dcd1e629fb`): `logs/real-path-client-final.log` (real pairing +
+E2EE + authenticated tunneled requests), `evidence/final-branch-smoke.txt`
+(owning-runtime click routed `desktop_open_host_session` and left the window in
+place; tunnel panel explicit `tailscale was not found.`),
+`screenshots/04-tunnel-tailscale-final-1280x800.png`, and the fixture/client
+scripts copied into `evidence/` for reproduction.

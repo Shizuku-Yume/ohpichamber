@@ -293,6 +293,64 @@ test('a duplicate lease id and a missing or relative directory are invalid or he
   }
 }, 30_000);
 
+test('a release during canonicalization cancels the pending lease without leaving a fence', async () => {
+  const tree = await workspace('release-before-canonicalization');
+  const entered = Promise.withResolvers<void>();
+  const canonicalization = Promise.withResolvers<string>();
+  const registry = newRegistry({
+    canonicalizeDirectory: async () => {
+      entered.resolve();
+      return canonicalization.promise;
+    },
+  });
+  try {
+    const acquiring = registry.acquireWorktreeLease('lease-cancelled', tree.cwd);
+    await entered.promise;
+    await registry.releaseWorktreeLease('lease-cancelled');
+    canonicalization.resolve(tree.cwd);
+
+    expectRefusal(await refusalOf(acquiring), {
+      status: 409, code: 'COMMAND_IN_FLIGHT', details: { leaseId: 'lease-cancelled', directory: tree.cwd },
+    });
+    registry.assertWorktreeLeaseAllows(tree.cwd);
+
+    const next = await registry.acquireWorktreeLease('lease-cancelled', tree.cwd);
+    expect(next.leaseId).toBe('lease-cancelled');
+    await registry.releaseWorktreeLease('lease-cancelled');
+  } finally {
+    try { await registry.close(); } finally { await tree.remove(); }
+  }
+}, 30_000);
+
+test('a duplicate pending lease id cannot cancel its original owner', async () => {
+  const tree = await workspace('duplicate-pending-id');
+  const entered = Promise.withResolvers<void>();
+  const canonicalization = Promise.withResolvers<string>();
+  const registry = newRegistry({
+    canonicalizeDirectory: async () => {
+      entered.resolve();
+      return canonicalization.promise;
+    },
+  });
+  try {
+    const original = registry.acquireWorktreeLease('lease-owner', tree.cwd);
+    await entered.promise;
+    expectRefusal(await refusalOf(registry.acquireWorktreeLease('lease-owner', tree.cwd)), {
+      status: 409, code: 'COMMAND_IN_FLIGHT', details: { leaseId: 'lease-owner', directory: tree.cwd },
+    });
+    canonicalization.resolve(tree.cwd);
+    await original;
+
+    expectRefusal(await refusalOf(registry.start(sessionBootstrap('root-after-owner', tree))), {
+      status: 409, code: 'COMMAND_IN_FLIGHT', details: { leaseId: 'lease-owner' },
+    });
+    await registry.releaseWorktreeLease('lease-owner');
+    expect((await registry.start(sessionBootstrap('root-after-owner', tree))).state).toBe('ready');
+  } finally {
+    try { await registry.close(); } finally { await tree.remove(); }
+  }
+}, 30_000);
+
 test('the service refuses worker admission inside a lease over HTTP and admits again after release', async () => {
   const tree = await workspace('http');
   const secret = randomBytes(32).toString('hex');

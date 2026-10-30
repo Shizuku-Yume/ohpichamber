@@ -103,8 +103,11 @@ The page also lists a selected project's archived worktrees above its archived
 sessions, and on the phone every project's archived worktrees above the list.
 Each row shows the worktree name, branch and archive date with **Restore** and
 **Delete** (always visible on touch). Restore creates the checkout on the
-recorded branch before the Host applies the archive, then reopens the recorded
-sessions; the row's Delete asks before removing the sessions, the archive and
-its local branch. The listing is `lib/worktrees/worktreeArchive.ts`; the
-repository's archive refs are the record, and a failed listing keeps the last
-one instead of showing an empty archive.
+recorded branch before the Host applies the archive, then reopens only sessions
+whose current canonical workspace is still in that project and checkout; a
+session moved elsewhere is left alone. A partial-removal refusal keeps the
+server's snapshot ref and rolls back the sessions archived for the attempt.
+Delete asks before removing sessions and the archive; its optional local-branch
+deletion is unchecked by default. The listing is
+`lib/worktrees/worktreeArchive.ts`; repository refs are the record, and a failed
+listing keeps the last one instead of showing an empty archive.

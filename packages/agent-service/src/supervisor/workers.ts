@@ -64,8 +64,8 @@ export type WorkerDiagnostic = { level: 'error' | 'warn' | 'info'; rootSessionId
 
 /** The Host supplies the id; the service never mints one, so a lost 201 still names what to release. */
 export type WorktreeLeaseAcquireResult = { leaseId: string; released: string[] };
-type WorktreeLeaseState = 'acquiring' | 'active';
-type WorktreeLease = { leaseId: string; canonicalDirectory: string; state: WorktreeLeaseState; released: string[] };
+type WorktreeLease = { leaseId: string; canonicalDirectory: string; released: string[] };
+type PendingWorktreeLeaseAcquire = { directory: string; cancelled: boolean };
 
 const WORKTREE_LEASE_ID_PATTERN = /^[A-Za-z0-9_-]{1,80}$/;
 
@@ -88,6 +88,8 @@ export interface WorkerRegistryOptions {
   callbacks?: WorkerLifecycleCallbacks;
   /** Absent only in registry tests that model no session activity. */
   isSessionIdle?: (rootSessionId: string) => boolean;
+  /** Test seam for the asynchronous path canonicalization race. */
+  canonicalizeDirectory?: (directory: string) => Promise<string>;
   capacityPolicy?: WorkerCapacityPolicy;
 }
 
@@ -215,10 +217,12 @@ export class WorkerRegistry {
   private readonly actions = new Map<string, ActionHandle>();
   private readonly restartReservations = new Map<string, string>();
   private readonly pendingRootAdmissions = new Set<string>();
-  // Worktree leases live in service memory: the Host supervisor restart hold
-  // and the IPC-disconnect stop cover their lifetime; no timer or marker does.
+  // Pending ids exist only for the lifetime of their acquire promise. A release
+  // cancels a canonicalization still in flight without leaving a tombstone.
+  private readonly pendingWorktreeLeaseAcquires = new Map<string, PendingWorktreeLeaseAcquire>();
   private readonly worktreeLeases = new Map<string, WorktreeLease>();
   private leaseMutation: Promise<void> = Promise.resolve();
+  private readonly canonicalizeDirectory: (directory: string) => Promise<string>;
   private readonly capacityPolicy: WorkerCapacityPolicy;
   private readonly reapTimer: NodeJS.Timeout;
   private reaping = false;
@@ -226,6 +230,7 @@ export class WorkerRegistry {
 
   constructor(private readonly options: WorkerRegistryOptions) {
     this.capacityPolicy = options.capacityPolicy ?? WORKER_CAPACITY_POLICY;
+    this.canonicalizeDirectory = options.canonicalizeDirectory ?? realpath;
     this.reapTimer = setInterval(() => { void this.reapIdleWorkers(); }, this.capacityPolicy.reapIntervalMs);
     this.reapTimer.unref();
   }
@@ -268,10 +273,11 @@ export class WorkerRegistry {
 
   /**
    * Releases every worker at or inside `directory` before the Host removes it,
-   * and keeps new ones out until the lease is released. Canonicalization waits
-   * outside the lease-mutation chain; the overlap check, fence install and
-   * `workerEntries` snapshot are one synchronous block inside it, so two
-   * acquires that canonicalized concurrently cannot both pass.
+   * and keeps new ones out until release. The Host id is reserved for this
+   * acquire promise before asynchronous canonicalization, so DELETE can cancel
+   * that pending request without a tombstone. Canonicalization stays outside
+   * the mutation chain; overlap, fence install and `workerEntries` snapshot are
+   * one synchronous block inside it.
    */
   async acquireWorktreeLease(leaseId: string, directory: string): Promise<WorktreeLeaseAcquireResult> {
     if (typeof leaseId !== 'string' || !WORKTREE_LEASE_ID_PATTERN.test(leaseId)) {
@@ -280,49 +286,70 @@ export class WorkerRegistry {
     if (typeof directory !== 'string' || !directory || !isAbsolute(directory)) {
       throw new WorkerOperationError(400, 'INVALID_REQUEST', undefined, 'Worktree directory must be absolute');
     }
-    let canonicalDirectory: string;
-    try {
-      canonicalDirectory = await realpath(directory);
-    } catch {
-      throw new WorkerOperationError(400, 'INVALID_REQUEST', undefined, 'Worktree directory does not resolve');
+    const pending = { directory, cancelled: false };
+    const named = this.worktreeLeases.get(leaseId);
+    const acquiring = this.pendingWorktreeLeaseAcquires.get(leaseId);
+    if (named || acquiring) {
+      throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', {
+        leaseId,
+        directory: named?.canonicalDirectory ?? acquiring?.directory ?? directory,
+      });
     }
-    return this.withLeaseMutation(async () => {
-      const named = this.worktreeLeases.get(leaseId);
-      if (named) {
-        throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', { leaseId, directory: named.canonicalDirectory });
-      }
-      for (const lease of this.worktreeLeases.values()) {
-        if (isInsideOrSameDirectory(lease.canonicalDirectory, canonicalDirectory)
-          || isInsideOrSameDirectory(canonicalDirectory, lease.canonicalDirectory)) {
-          throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', { leaseId: lease.leaseId, directory: lease.canonicalDirectory });
-        }
-      }
-      const lease: WorktreeLease = { leaseId, canonicalDirectory, state: 'acquiring', released: [] };
-      this.worktreeLeases.set(leaseId, lease);
+    this.pendingWorktreeLeaseAcquires.set(leaseId, pending);
+
+    try {
+      let canonicalDirectory: string;
       try {
-        // No await separates the fence install above from this snapshot: a start
-        // admitted before the lease is either in `workerEntries` here, or its
-        // pre-spawn check sees the fence.
-        const snapshot = [...this.workerEntries.values()]
-          .filter(entry => isInsideOrSameDirectory(canonicalDirectory, entry.input.cwd));
-        for (const entry of snapshot) {
-          const stopped = await this.stopLeasedWorker(entry, canonicalDirectory);
-          if (stopped !== null) lease.released.push(stopped);
-        }
-        lease.state = 'active';
-        return { leaseId, released: [...lease.released] };
-      } catch (error) {
-        // A refusal creates no lease; earlier idle workers stay stopped and
-        // their sessions reopen cold. No atomic rollback is claimed.
-        if (this.worktreeLeases.get(leaseId) === lease) this.worktreeLeases.delete(leaseId);
-        throw error;
+        canonicalDirectory = await this.canonicalizeDirectory(directory);
+      } catch {
+        throw new WorkerOperationError(400, 'INVALID_REQUEST', undefined, 'Worktree directory does not resolve');
       }
-    });
+      return await this.withLeaseMutation(async () => {
+        if (pending.cancelled) {
+          throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', { leaseId, directory });
+        }
+        const current = this.worktreeLeases.get(leaseId);
+        if (current) {
+          throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', { leaseId, directory: current.canonicalDirectory });
+        }
+        for (const lease of this.worktreeLeases.values()) {
+          if (isInsideOrSameDirectory(lease.canonicalDirectory, canonicalDirectory)
+            || isInsideOrSameDirectory(canonicalDirectory, lease.canonicalDirectory)) {
+            throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', { leaseId: lease.leaseId, directory: lease.canonicalDirectory });
+          }
+        }
+        const lease: WorktreeLease = { leaseId, canonicalDirectory, released: [] };
+        this.worktreeLeases.set(leaseId, lease);
+        try {
+          // No await separates the fence install above from this snapshot: a start
+          // admitted before the lease is either in `workerEntries` here, or its
+          // pre-spawn check sees the fence.
+          const snapshot = [...this.workerEntries.values()]
+            .filter(entry => isInsideOrSameDirectory(canonicalDirectory, entry.input.cwd));
+          for (const entry of snapshot) {
+            const stopped = await this.stopLeasedWorker(entry, canonicalDirectory);
+            if (stopped !== null) lease.released.push(stopped);
+          }
+          return { leaseId, released: [...lease.released] };
+        } catch (error) {
+          // A refusal creates no lease; earlier idle workers stay stopped and
+          // their sessions reopen cold. No atomic rollback is claimed.
+          if (this.worktreeLeases.get(leaseId) === lease) this.worktreeLeases.delete(leaseId);
+          throw error;
+        }
+      });
+    } finally {
+      await this.withLeaseMutation(async () => {
+        if (this.pendingWorktreeLeaseAcquires.get(leaseId) === pending) this.pendingWorktreeLeaseAcquires.delete(leaseId);
+      });
+    }
   }
 
-  /** Idempotent: an unknown id is a no-op, so a lost acquire answer is still releasable. */
+  /** Idempotent: an unknown id is a no-op; a pending canonicalization is cancelled. */
   releaseWorktreeLease(leaseId: string): Promise<void> {
     return this.withLeaseMutation(async () => {
+      const pending = this.pendingWorktreeLeaseAcquires.get(leaseId);
+      if (pending) pending.cancelled = true;
       this.worktreeLeases.delete(leaseId);
     });
   }

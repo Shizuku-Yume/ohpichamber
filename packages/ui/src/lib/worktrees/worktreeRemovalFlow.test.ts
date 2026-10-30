@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { GitWorktreeRequestError } from '@/lib/api/types';
 
 import { archiveSessionsThenRemoveWorktree } from './worktreeRemovalFlow';
 
@@ -42,17 +43,19 @@ describe('archiveSessionsThenRemoveWorktree', () => {
     expect(result).toEqual({ removed: false, archive: { archivedIds: [], failedIds: [] } });
   });
 
-  test('restores the sessions and passes the error on when the removal throws', async () => {
+  test('restores archived sessions before passing on a partial-archive refusal', async () => {
     const restored: string[] = [];
-    await expect(archiveSessionsThenRemoveWorktree({
+    const partial = new GitWorktreeRequestError('WORKTREE_ARCHIVE_PARTIAL', 'folder partly removed', 409);
+    const rejected = await archiveSessionsThenRemoveWorktree({
       sessionIds: ['session-one'],
       archiveSessions: async () => ({ archivedIds: ['session-one'], failedIds: [] }),
-      removeWorktree: async () => { throw new Error('remote branch kept'); },
+      removeWorktree: async () => { throw partial; },
       restoreSessions: async (sessionIds) => {
         restored.push(...sessionIds);
         return { failedIds: [] };
       },
-    })).rejects.toThrow('remote branch kept');
+    }).catch((error) => error);
+    expect(rejected === partial).toEqual(true);
     expect(restored).toEqual(['session-one']);
   });
 

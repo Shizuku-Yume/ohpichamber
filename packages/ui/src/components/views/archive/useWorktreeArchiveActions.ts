@@ -13,7 +13,7 @@ import { archivedWorktreeLabel, deleteArchivedWorktree, restoreArchivedWorktree 
  */
 export function useWorktreeArchiveActions() {
   const { t } = useI18n();
-  const { confirm, dialog } = useConfirmDialog();
+  const { confirmWithCheckbox, dialog } = useConfirmDialog();
   const [busyIds, setBusyIds] = React.useState<ReadonlySet<string>>(() => new Set());
   const track = React.useCallback(async (id: string, work: () => Promise<void>) => {
     setBusyIds((current) => new Set(current).add(id));
@@ -48,22 +48,23 @@ export function useWorktreeArchiveActions() {
 
   const remove = React.useCallback(async (project: ProjectRef, archive: GitWorktreeArchive) => {
     const label = archivedWorktreeLabel(archive);
-    const agreed = await confirm({
+    const choice = await confirmWithCheckbox({
       title: t('sessions.archive.worktree.deleteTitle', { label }),
       message: t('sessions.archive.worktree.deleteMessage'),
       action: t('sessions.archive.worktree.deleteAction'),
       destructive: true,
+      checkbox: { label: t('sessions.archive.worktree.deleteBranchOption'), defaultChecked: false },
     });
-    if (!agreed) return;
+    if (!choice.confirmed) return;
     await track(archive.id, async () => {
       try {
-        await deleteArchivedWorktree({ project, archive });
+        await deleteArchivedWorktree({ project, archive, deleteBranch: choice.checkboxChecked });
         toast.success(t('sessions.archive.worktree.deleted'), { description: label });
       } catch (error) {
         toast.error(t('sessions.archive.worktree.deleteFailed'), { description: error instanceof Error ? error.message : String(error) });
       }
     });
-  }, [confirm, t, track]);
+  }, [confirmWithCheckbox, t, track]);
 
   return { restore, remove, busyIds, dialog };
 }

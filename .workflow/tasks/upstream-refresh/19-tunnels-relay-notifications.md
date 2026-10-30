@@ -82,3 +82,41 @@ Evidence root: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh
   under parallel load (7401 passed, 1 failed, 142 skipped). Running that file alone passed
   5/5. Recorded as a load-sensitive observation, not proof of unrelatedness; final acceptance
   rerun happens on an idle machine after the real path.
+
+### Real path (local relay fixture, running app)
+
+Evidence root as above; headless Chrome only, `emulate --viewport 1280x800` for the final shot.
+
+- Local relay fixture (`/tmp/19-fixture-relay.mjs`, kept with the evidence): a
+  WebSocket room broker implementing the production data path (host-control
+  `sync`/`connected`/`disconnected`, one host-data socket per
+  connectionId, opaque text/binary forwarding). It deliberately ignores relay
+  auth, like the existing flow-control fixture.
+- Running app (`bun run dev`, data dir in the evidence root, HOME isolated,
+  `OPENCHAMBER_RELAY_URL=ws://127.0.0.1:3799/ws`): `POST /api/openchamber/relay/enable`
+  returned `state: connecting`, then `state: connected`; the fixture logged the
+  real host-control connection with the app's serverId.
+- Real client: the app's `createRelayTunnelClient` (UI transport) created a
+  relay-only pairing session, redeemed it (`clientToken` 53 chars), completed the
+  E2EE handshake through the fixture, got HTTP 200 for `GET /health` and HTTP 200
+  for an authenticated `GET /api/client-auth/connection/candidates`; host status
+  showed `connectedClients: 1` and the candidate set `["relay"]`
+  (`logs/real-path-client.log`, `evidence/dev-log-with-relay-backoff.log`).
+- Dead relay host: stopping the fixture produced exponential reconnect attempts
+  (1s/2s/4s/8s/16s; 6 attempts in 25s, `state: reconnecting`, `lastError:
+  ECONNREFUSED`) and no tight loop; restarting the fixture reconnected the host
+  (`evidence/dead-relay-backoff.txt`).
+- Tunnel settings in the running app: provider list includes `tailscale`; with it
+  selected the panel shows the explicit `tailscale was not found.` state and its
+  install command, and Start tunnel surfaces the explicit UI-password error
+  (`screenshots/01`, `02`, and the 1280x800 `03`).
+- Notification click: in the running app a dispatched
+  `openchamber:open-session` event carrying another runtime's `runtimeKey` calls
+  `desktop_open_host_session({runtimeKey, sessionId})` and leaves this window
+  where it is; the same event without a foreign `runtimeKey` opens the session
+  in this window (`evidence/notification-click-owning-runtime.txt`). Electron's
+  `notification-host-routing.test.mjs` passes 13/13.
+- External tunnels (Tailscale/Cloudflare/ngrok against real services) are NOT
+  exercised: no external accounts and no installed `tailscale`/`cloudflared`.
+  The server-side provider registration, availability reporting and explicit
+  failure paths are covered by the provider/tunnel tests above.

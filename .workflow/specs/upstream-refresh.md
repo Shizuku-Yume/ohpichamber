@@ -46,9 +46,10 @@ Excluded on purpose: `packages/vscode`, OpenCode-engine paths, upstream folder t
 2. Small areas in parallel after 02: 03 mobile/extensions/scripts, 04 Guest SDK and 05 Electron shell start as soon as 02 lands. 22 web host core also follows 02, and 06 server source-control hosts follows 22; 33 adds the project repository batch routes, 34 adds the Change-Id amend route and client contract, and 07 review surfaces follows 06, 33 and 34. 09 layout/works and 10 design system start after 02 and 23 as their blockers allow.
 3. UI features after the design system and UI state tasks: 08 sessions/sidebar, 11 settings, 12 Markdown/diff, 13/14 chat, 15 composer, 16 knowledge, 17 workflows, 18 integrations, 19 tunnels, 20 i18n, 21 diagnostics. Each takes its own path list; shared interfaces are named in the task files.
 4. 22 web host core and 23 UI state (sync/stores) are the two hardest adaptation tasks; they land before the feature tasks that depend on their routes and stores.
-5. Documentation last: 26 English docs and assets, then 27-29 translated locales.
-6. One-view sidebar follow-up: 31 rebuilds the desktop sidebar on upstream's one-view row model after 07, then 32 brings the mobile sheet onto it. Task 26 documentation waits for both.
-7. 30 is the gate: full checks at the integration tip, one current receipt, the baseline record updated, `development.md` updated, history link created with `git merge -s ours 0056bf6a9`, and the tasks archived.
+5. One-view sidebar follow-up: 31 rebuilds the desktop sidebar on upstream's one-view row model after 07, then 32 brings the mobile sheet onto it.
+6. Worktree archive follow-up: 35 brings upstream's worktree archive end to end — the Host routes and service that archive a worktree into `refs/openchamber/archive/<id>`, restore it and delete it, plus the Archive page rows that drive them. It needs no open task; it waits for nothing, and it is easier after 33 because both edit the spaces dispatcher and its documentation.
+7. Documentation last: 26 English docs and assets, then 27-29 translated locales; 26 waits for 31, 32 and 35 because `worktrees.mdx`, the sidebar pages and the settings pages describe what those tasks build.
+8. 30 is the gate: full checks at the integration tip, one current receipt, the baseline record updated, `development.md` updated, history link created with `git merge -s ours 0056bf6a9`, and the tasks archived.
 
 ### Parallel sessions
 
@@ -66,6 +67,7 @@ its Check before every landing.
 | E UI features | 08, 09, 11, 12 → 13 → 14 → 15, 18, 20 | session/sidebar, layout/works, settings, markdown, chat, composer, catalog, i18n | 10 and 23; 12-15 chained; 08/09/11/18/20 independent |
 | F Docs | 26 → 27, 28, 29 | `packages/docs`, `docs/` assets | every adoption task (26 is the documentation gate, not a verification gate) |
 | H One-view sidebar | 31 → 32 | desktop one-view rows, mobile sheet | 07; 32 after 31 |
+| I Worktree archive | 35 | worktree archive service, routes, boundary classification, Archive page rows | 01, 08 and 09 landed (all archived); 33 for the shared dispatcher files |
 | G Gate | 30 | records, baseline pin, history link | 26-29 |
 
 Shared interfaces: `packages/web/server/index.js` route registration belongs to 22; later server
@@ -142,4 +144,4 @@ Every task leaves the integration branch green: `bun install --frozen-lockfile` 
 
 **Measurement.** Upstream tip `0056bf6a9` (2026-10-26, 813 commits, `v2.5.2-1`). Delta: 4,031 paths, +299,677/-82,213; 1,135 clean, 1,223 new, 991 both-live, 226 fork-deleted, 456 upstream deletions; 640 of 1,230 shared files conflict. Fork load: 3,410 changed paths (+206,927/-242,154). Per-bucket counts are in `plan-path-summary.md`; per-path lists in `plan-paths/NN.tsv`.
 
-**Task scale.** 34 tasks across eight lanes; 01-02 are serial, the rest parallelize as the lane table in each task's `Blocked by` allows. Tasks 31-32 are the one-view sidebar follow-ups that tasks 08/24 deferred; they own paths already counted in those tasks' lists, so the 4,031-path accounting is unchanged. Task 33 owns the missing project repository batch behavior in task 01's route file plus fork-owned space-boundary files, and task 34 owns the already-counted Change-Id route/test and client contract, so neither adds an upstream path.
+**Task scale.** 35 tasks across nine lanes; 01-02 are serial, the rest parallelize as the lane table in each task's `Blocked by` allows. Tasks 31-32 are the one-view sidebar follow-ups that tasks 08/24 deferred; they own paths already counted in those tasks' lists, so the 4,031-path accounting is unchanged. Task 33 owns the missing project repository batch behavior in task 01's route file plus fork-owned space-boundary files, and task 34 owns the already-counted Change-Id route/test and client contract, so neither adds an upstream path. Task 35 owns the worktree archive that tasks 08 and 09 deferred to "Host endpoints", on paths already counted in tasks 01, 08 and 09, so it adds no upstream path either.

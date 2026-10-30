@@ -6,7 +6,7 @@
 
 **Delivers:** The English product documentation and `sidebar.config.json` describe the refreshed UI and OMP behavior, with no OpenCode engine claims.
 
-**Blocked by:** 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 31, 32
+**Blocked by:** 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 31, 32, 35
 **Files:** Path list: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-sync-2026-10-27/plan-paths/26.tsv` (34 English docs). Main locations: `packages/docs/content/docs/*.mdx` and `packages/docs/sidebar.config.json`; doc assets belong to task 29.
 
 **Read first:** Spec W7; `packages/docs/README.md`; `.workflow/STYLE.md`; the task files of the features whose pages changed; `bun run docs:validate`.
@@ -19,4 +19,5 @@
 - [ ] Every page describes behavior that exists after the refresh; unverified platform behavior is labelled.
 - [ ] No page names OpenCode as the engine or links a removed VS Code surface.
 - [ ] Navigation covers the new pages and removes deleted ones.
+- [ ] `worktrees.mdx` documents archived worktrees as the app behaves after tasks 31 and 35: archiving from a worktree's row (the action task 31 wires, the route task 35 adds), **Restore** on the Archive page bringing back the branch, its changes and its sessions, and deleting an archived worktree with or without its branch.
 - [ ] Images and badges resolve locally; no upstream evidence images are restored.

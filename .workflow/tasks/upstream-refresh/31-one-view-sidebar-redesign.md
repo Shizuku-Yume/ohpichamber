@@ -28,3 +28,7 @@
 ## Progress
 
 Planned by the 2026-10-27 amendment from task 24's deferral and task 08's "Deferred rows" table. The 08 task proposed 09 as the owner before it was archived; this task is the successor because 09 was already closed.
+
+### Planning amendment (2026-10-30)
+
+Task 07 owns `useLinearAuthStore`'s deletion, including the app-shell and settings callers (`App.tsx`, `apps/MobileApp.tsx`, `apps/runtimeEndpointReset.ts`, `sections/integrations/LinearSettings.tsx`) and the `linear` runtime API. This task edits no part of it: the sidebar importers were already migrated by task 07, so the line that asked this task to remove the store existed only on task 07's branch copy of this record and was dropped at the 2026-10-30 amendment. Everything else here is unchanged.

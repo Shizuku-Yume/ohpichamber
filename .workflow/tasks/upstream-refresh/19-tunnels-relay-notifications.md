@@ -120,3 +120,17 @@ Evidence root as above; headless Chrome only, `emulate --viewport 1280x800` for 
   exercised: no external accounts and no installed `tailscale`/`cloudflared`.
   The server-side provider registration, availability reporting and explicit
   failure paths are covered by the provider/tunnel tests above.
+
+### Rebase onto the plan landing
+
+The workflow plan docs landed on integration as `811ecef471` (docs only, after
+`f152005352`). This branch was rebased onto it before the final gate; the only
+conflict-free replay touched the task file, and the source tree is identical to
+the reviewed pin `dcd1e629fb` (`git diff` between the two source trees is empty;
+the reviewed base stays `43dcd6ffc1`). Post-rebase the real path was exercised
+again on the final branch: relay host connected to the local fixture, a real
+pairing/redeem + E2EE tunneled `/health` and authenticated candidates returned
+200, the owning-runtime click routed to `desktop_open_host_session`, and the
+tunnel panel showed `tailscale was not found.` at the required 1280x800 viewport
+(`logs/real-path-client-final.log`, `evidence/final-branch-smoke.txt`,
+`screenshots/04-tunnel-tailscale-final-1280x800.png`).

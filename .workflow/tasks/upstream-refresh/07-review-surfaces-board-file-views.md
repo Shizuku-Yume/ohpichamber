@@ -2,13 +2,13 @@
 
 **Effort:** upstream-refresh
 **Task type:** feature
-**Base commit:** <commit-sha>
+**Base commit:** aa0954a966b5c89572abb15c08e710c63ae2d5be
 
 **Status:** paused
 
 **Delivers:** The UI renders upstream's Board, PR/review and tracker surfaces, references and comments, plus the Files, Git, worktree and diff views, on top of the refreshed server.
 
-**Blocked by:** none. Tasks 33 and 34 landed at integration pin `fb19558673` before this branch's single rebase; the dated blocker record below is kept as history, not as a current dependency.
+**Blocked by:** None
 **Files:** Path list: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-sync-2026-10-27/plan-paths/07.tsv` (268 paths: 235 clean/new, 18 both-side, 9 conflicts; +24k lines). Main locations: `packages/ui/src/components/{sourceBoard,comments,references,sourceControl,github,views}`, `packages/ui/src/lib/{source-control,trackers}`, and the host-related settings sections (`git-identities`, `projects`, `routing`, `remote-instances`). Deferred ownership from task 10: `components/ui/{JsonTreeViewer.tsx,JsonTreeView.tsx,JsonTreeView.test.tsx}` (needs this task's `views/files/FileTreeRowParts`/`fileTreeRow` and task 25's `lib/jsonTreeUtils`). Deferred from task 23: `stores/{useTrackerAuthStore,useTrackedItemsStore,useSourceBoardStore,useSourceControlAuthStore,useGitHubPrStatusStore}.ts` (+tests), `stores/{useChangeRequestContextStore,useInlineCommentDraftStore,useGitStore,useWalkthroughStore}.ts` (upstream reworks on this task's descriptors/DTOs); `stores/useLinearAuthStore(.test).ts` is deleted here together with its last callers (see the planning amendment: tasks 08/11/24 closed without dropping them). Deferred from task 15: `components/chat/composer/sessionReferences.{ts,test.ts}` (consumed by `references/sessionMentionChips`), `components/comments/InlineCommentInput.tsx` consumption of `isPastedInput` from `useTextareaInlinePicker`, and project-scoped magic prompt overrides in `packages/ui/src/lib/magicPrompts.ts` with project settings. Because those deferrals were accepted by tasks that have since closed, this task also edits the consumer files they named, and no others: `components/chat/ChatInput.tsx` (task 15), `components/chat/message/{MessageBody.tsx,parts/UserTextPart.tsx,parts/userTextPartContent.ts}`, `components/chat/markdown/MarkdownLink.tsx` (task 13), `components/layout/ContextPanel.tsx` (task 09), `sections/magic-prompts/{MagicPromptsPage.tsx,MagicPromptsSidebar.tsx}` and `sections/integrations/IntegrationsPage.tsx` (task 11), `App.tsx`, `apps/MobileApp.tsx`, `apps/runtimeEndpointReset.ts` (task 24). Each edit adopts the matching upstream `0056bf6a9` wiring; no other behavior in those files changes.
 
 **Read first:** Spec W5; task 31 consumes `views/files/FileTreeRowParts`/`fileTreeRow` — keep them exported; `.agents/skills/ui-api-decoupling/SKILL.md`; `.agents/skills/locale-ui-patterns/SKILL.md`; `.agents/skills/performance-engineering/SKILL.md`; `.agents/skills/sync-state-invariants/SKILL.md`; `packages/ui/src/components/views/DOCUMENTATION.md`.
@@ -30,6 +30,11 @@
 - [ ] Project-scoped magic prompt overrides in `packages/ui/src/lib/magicPrompts.ts` are wired with project settings.
 
 ## Progress
+
+### Resume after model restoration (2026-10-30)
+
+Resumed from handoff commit `283259fc8a94c0da03030e01f66418de19006829`; source edits from the interrupted Change-Id integration remain dirty and preserved. Tasks 33/34 are landed at `fb19558673fdac1d6f137469a149eb607ffbb504`. The prior heavy root test, per-package type-checks, and root lint are real receipts; the build and headless fixture acceptance remain incomplete. Fake forge and dev server were stopped cleanly at handoff; fixture data, installed Teahouse guest, token, and repository binding are preserved in `realpath-data` and artifact logs.
+
 
 ### Current state after the single rebase (2026-10-30)
 
@@ -71,6 +76,7 @@ Not this task's slice: the Host worktree-archive routes and service, the Agent S
 ### Branch and lineage
 
 - Worktree: `/home/shizuku/Project/ohpichamber-worktrees/upstream-refresh-07`, branch `upstream-refresh/07`.
+- Lineage: original branch base aa0954a966b5c89572abb15c08e710c63ae2d5be; rebased onto integration tip fb19558673fdac1d6f137469a149eb607ffbb504. Tasks 33 and 34 landed at integration pin fb19558673 before this branch's single rebase; dated blocker record is kept as history.
 - Rebased onto the integration tip `c4ce06dc0` (task 20 i18n landed there).
 - Tip after phase 1: `1de0b6d400` (11 commits above the integration tip); working tree clean.
 - Phase 1 is complete; heavy gates (full `bun run test`, `bun install --frozen-lockfile`, real-path browser scenario) are deferred to the maintainer's "go heavy".
@@ -178,3 +184,12 @@ Provider-backed issue/PR listing, PR diff, references and review comments remain
 - **Earliest incomplete step:** resume real-path headless Chrome scenario against fixture repo (Board issues/PRs, PR diff, Files tree, review comments).
 - **Recovery receipt:** proof recorded at `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-recovery-2026-10-30/receipt.json`; dev-server/fake-forge processes stopped cleanly.
 - **Review status:** task 07 independent review and user acceptance are not complete.
+
+### Pause handoff after quota interruption (2026-10-31)
+
+- **Interruption:** turn 30 failed with 429 rate limit (retry-after 5333000ms); development paused pending provider restoration.
+- **Lineage and uncommitted source:** branch `upstream-refresh/07` at HEAD `283259fc8a94c0da03030e01f66418de19006829`; 5 dirty package paths preserved uncommitted (`PullRequestSection.tsx`, `lib/api/types.ts`, `clientAuth.ts`, `server/index.js`, `feature-routes-runtime.js`).
+- **Magic prompt wiring:** composition dependencies (`resolvePrimaryWorktreeRoot`, `resolveWorktreeTopLevel`) applied to `server/index.js` and `feature-routes-runtime.js`; snapshots exist (`project-prompt-after-reload-settled.snapshot.txt`) but not final certification.
+- **Cross-worktree runtime:** screenshot `screenshots/task07-cross-worktree-current.png` (viewport 1905x2053, not 1280 smoke) shows session mention chip rendered, but tool failures occur and no completed assistant reply was returned.
+- **Unclaimed acceptance:** whole W5 acceptance, remaining focused checks, and final root review remain not claimed.
+- **Teardown & receipt:** dev-server and fake-forge ports (3750, 3751, 38569, 41819) confirmed closed and processes exited; recovery receipt at `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-recovery-2026-10-30/interruption-3/receipt.json`.

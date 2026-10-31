@@ -264,6 +264,7 @@ Task 07 has landed and carries archive helper copies. Task 35 owns archive behav
 
 ### Blocked handoff on archive authority review (2026-10-31)
 
+
 - **Worker failure:** turn 13 failed with 400 unknown provider (`gpt-6-luna`); task work stopped.
 - **Plan review:** external `archive-authority-amendment-v4.json` received conditional technical readiness from `plan-authority-quality-v4.md` and `plan-authority-security-v4.md`; the v3 design findings are closed at plan level, not implementation acceptance.
 - **Required implementation gates:** fail closed on unsupported full HEAD/tree/index/conflict-stage fingerprint reconstruction and clean up the temporary helper; retain an inert binding when ref-CAS completion is ambiguous; preflight branch-in-use as 409 and recheck branch OID before exact ref mutation.

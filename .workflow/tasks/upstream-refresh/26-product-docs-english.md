@@ -19,5 +19,5 @@
 - [ ] Every page describes behavior that exists after the refresh; unverified platform behavior is labelled.
 - [ ] No page names OpenCode as the engine or links a removed VS Code surface.
 - [ ] Navigation covers the new pages and removes deleted ones.
-- [ ] `worktrees.mdx` documents archived worktrees as the app behaves after tasks 31 and 35: archiving from a worktree's row (task 31 renders the worktree rows; task 35 wires the archive action and the Host route), **Restore** on the Archive page creating the checkout on the recorded branch, applying the archived changes and then reopening the recorded sessions, and deleting an archived worktree with or without its branch.
+- [ ] `worktrees.mdx` documents worktree-row archive and Archive-page restore into a caller-created checkout after task 35: Host-verified active sessions reopen after the changes, while previously archived sessions remain archived. Explain confirmed new-checkout recovery, branch deletion defaulting to keep, and legacy unbound Git-only restore/delete with explicit warnings that sessions are not moved, unarchived or deleted and confirmation for unverified branch deletion.
 - [ ] Images and badges resolve locally; no upstream evidence images are restored.

@@ -422,3 +422,12 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** a second Git mutation needs the same invalidation (then a shared repository-mutation seam), or the Git routes are registered somewhere that cannot receive the shell.
 - **Effort:** upstream-refresh
+
+## 2026-11-01 - Bind worktree archives to Host session authority
+
+- **Decided:** Use the bounded Host association and Git-ref listing described in task 35. Allow unbound legacy Git-only restore/delete with a prominent no-session-effects warning and explicit confirmation for unverified branch deletion. Successful restore preserves pre-existing archived sessions and timestamps. Authorize protected integration fast-forward only for task 07 and the independently reviewed plan amendment.
+- **Instead of:** Trusting Git record paths or session IDs, requiring legacy reassociation before Git-only actions, unarchiving previously archived sessions, or granting broader integration mutation.
+- **Because:** Host identity and durable scope are required to avoid acting on unrelated sessions; the user explicitly chose the legacy and restore behaviors and bounded integration authorization. Conditional technical reviews do not establish implementation or runtime acceptance.
+- **Mine:** no
+- **Revisit when:** A separately authorized legacy reassociation protocol or a different session-state policy is adopted.
+- **Effort:** upstream-refresh

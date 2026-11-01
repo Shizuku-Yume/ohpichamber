@@ -127,3 +127,13 @@ An entry leaves this file in one of two ways:
 - **Impact:** Anyone relying on "keep this one long session warm without paying for pings on throwaway ones" loses that control after the refresh; the canonical workspace mode is the only choice, applied to every active worker in the workspace.
 - **Solution:** Add a canonical session-level warming route and state on the Agent Service (revision CAS, per-session apply outcome, native `AgentSession.setCacheWarmingMode` per session), then rebuild the Settings choice and the session toggle against it; no Host-side timer loop.
 - **Cost:** New contract and route in `packages/agent-contract` and `packages/agent-service`, worker-level session application, a store and sync subscriber in the UI, and 15 locales of copy; the workspace control and its tests must keep passing.
+
+## Session relocation can race worktree archive before admission
+
+- **Where:** `packages/agent-service` session relocation and worktree admission; task 35 security review `review-security.md`, finding 3.
+- **Added:** 2026-11-01
+- **Priority:** worth-doing
+- **Problem:** Relocation can move session files into a worktree before the later worker admission/pre-spawn fence, so the worktree archive lease does not guard that earlier file move.
+- **Impact:** A concurrent relocation and archive can race; task 35 cannot claim its worker fence protects the file move.
+- **Solution:** Design and assign an Agent Service relocation/archive boundary that serializes or otherwise protects the file move against archive; retain this entry until that owner lands.
+- **Cost:** Requires a separate concurrency design and real race coverage; task 35 does not expand its worker lease to solve it.

@@ -1,7 +1,6 @@
 import React from 'react';
 
 import { isVSCodeRuntime } from '@/lib/desktop';
-import { readContextPart } from '@/lib/messages/contextParts';
 import type { Part } from '@openchamber/agent-contract';
 import { appOwnOrigins } from '@/lib/router/appOrigins';
 import { findSessionLinks, sessionLinkKey } from '@/lib/sessionLinks';
@@ -9,7 +8,7 @@ import { sessionMentionChip, type SessionMentionChip } from '@/lib/messages/sess
 import type { InlineTextNode } from './attachmentCitationChips';
 import { SessionMentionChipButton } from './SessionMentionChipButton';
 
-/** A sent message's mentioned sessions and messages, by `sessionLinkKey`, from the context parts it carries. */
+/** A sent message's mentioned sessions and messages, by `sessionLinkKey`. */
 export type SessionMentionChips = ReadonlyMap<string, SessionMentionChip>;
 
 const NO_CHIPS: SessionMentionChips = new Map();
@@ -19,10 +18,11 @@ export function sessionMentionChipsOf(parts: readonly Part[]): SessionMentionChi
     if (isVSCodeRuntime()) return NO_CHIPS;
     let chips: Map<string, SessionMentionChip> | null = null;
     for (const part of parts) {
-        const payload = readContextPart(part);
-        if (payload?.kind !== 'session' && payload?.kind !== 'session-message') continue;
-        chips ??= new Map();
-        chips.set(sessionLinkKey({ sessionId: payload.sessionId, messageId: payload.messageId ?? null }), sessionMentionChip(payload));
+        if (part.type !== 'text' || !part.sessionMentions) continue;
+        for (const mention of part.sessionMentions) {
+            chips ??= new Map();
+            chips.set(sessionLinkKey({ sessionId: mention.sessionId, messageId: mention.messageId ?? null }), sessionMentionChip(mention));
+        }
     }
     return chips ?? NO_CHIPS;
 }

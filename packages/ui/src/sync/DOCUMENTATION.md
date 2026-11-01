@@ -46,6 +46,14 @@ Discovery failures are scoped. `client.listSessions(workspaceId)` returns `{ ite
 
 Web, PWA, and Electron use the retained Host owner. Hosted mobile and Capacitor use the active Host through shared runtime transport. VS Code is retired and receives no new support.
 
+Prompt, goal and review metadata operations retain the runtime key and switch
+revision captured at submission through their asynchronous Host reads and
+dispatch. A switch away and back invalidates the old operation as well as a
+switch to a different Host; an accepted operation is not replayed automatically.
+Session knowledge reads also recheck that owner after waiting for an earlier
+delivery report and before issuing the next Host request; ordinary read failures
+may omit knowledge, but stale ownership rejects the send.
+
 ## Canonical workspace resolution and directory bootstrap
 
 Directory bootstrap operates through `CanonicalClient` consuming `@openchamber/agent-contract` DTOs.
@@ -122,6 +130,7 @@ The Host SSE stream emits native `CanonicalEvent` variants directly. There is no
 - Turns: `turn.started`, `turn.completed`
 - Messages: `message.created`, `message.updated`
 - Parts: `part.started`, `part.delta`, `part.completed`
+- User text parts can carry typed `sessionMentions`; started/completed events and history/snapshot recovery retain those identities for the shared transcript renderers.
 - Tools: `tool.started`, `tool.completed`
 - Approvals: `approval.requested`, `approval.resolved`
 - Questions: `question.requested`, `question.resolved`

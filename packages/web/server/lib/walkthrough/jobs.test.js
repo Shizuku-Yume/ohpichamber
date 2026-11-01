@@ -97,9 +97,10 @@ describe('generation jobs', () => {
   it('resolves the model on the composer provider and model it was given', async () => {
     generateSmallModelText.mockResolvedValue({ text: RESPONSE });
 
-    await generateWalkthrough({ directory: '/repo', source: SOURCE, providerID: 'anthropic', modelID: 'claude-opus-5' });
+    await generateWalkthrough({ directory: '/repo', workspaceId: 'workspace-1', source: SOURCE, providerID: 'anthropic', modelID: 'claude-opus-5' });
 
-    expect(describeSmallModel.mock.calls.at(-1)[0]).toMatchObject({ directory: '/repo', preferredProviderID: 'anthropic', preferredModelID: 'claude-opus-5' });
+    expect(describeSmallModel.mock.calls.at(-1)[0]).toMatchObject({ workspaceId: 'workspace-1', preferredProviderID: 'anthropic', preferredModelID: 'claude-opus-5' });
+    expect(generateSmallModelText.mock.calls.at(-1)[0]).toMatchObject({ workspaceId: 'workspace-1' });
   });
 
   it('runs the saved walkthrough model at its saved thinking level, and a model picked for one review at its own', async () => {

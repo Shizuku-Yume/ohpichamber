@@ -8,10 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { generatePullRequestDescription, getGitLog } from '@/lib/gitApi';
-// Not on `GitAPI` in this fork: the amend is this app's own route, wired here
-// rather than through a runtime adapter only one runtime implements.
-import { addChangeIdToHead } from '@/lib/gitApiHttp';
+import { addChangeIdToHead, generatePullRequestDescription, getGitLog } from '@/lib/gitApi';
 import { openExternalUrl } from '@/lib/url';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useDeviceInfo } from '@/lib/device';

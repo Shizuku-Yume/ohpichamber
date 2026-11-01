@@ -57,6 +57,54 @@ describe('canonical session route contracts', () => {
     const uiEntry = {
       id: 'linear:ENG-12', identifier: 'ENG-12', title: 'Spec', url: 'https://linear.app/acme/issue/eng-12', kind: 'linear', linkedAt: 9,
     };
+    const trackerEntry = {
+      id: 'jira:OPS-4', provider: 'jira', identifier: 'OPS-4', title: 'Outage', url: 'https://jira.example/browse/OPS-4', kind: 'tracker', linkedAt: 10,
+    };
+
+    it('persists mixed tracker operations through the Host and preserves existing links', async () => {
+      const { app } = createApp({ routes, sessionMetadataStore: routeFixture.sessionMetadataStore });
+      const sessionId = 'ses_admitted';
+      const legacyLinear = { ...uiEntry, provider: 'linear' };
+      await routeFixture.sessionMetadataStore.setSessionMetadata(sessionId, { openchamber: { linked_issues: [legacyLinear, agentEntry] } });
+      const issue = { id: 'acme/app#8', number: 8, title: 'Issue', url: 'https://github.com/acme/app/issues/8', kind: 'issue', linkedAt: 11 };
+
+      const linked = await request(app).post(`/api/openchamber/sessions/${sessionId}/links`)
+        .send({ entries: [trackerEntry, issue], linked: true }).expect(200);
+      expect(linked.body.metadata.openchamber.linked_issues).toEqual([legacyLinear, agentEntry, trackerEntry, issue]);
+      const readBack = await request(app).get(`/api/openchamber/sessions/${sessionId}/metadata`).expect(200);
+      expect(readBack.body.metadata).toEqual(linked.body.metadata);
+
+      const neutralLinear = { ...legacyLinear, kind: 'tracker' };
+      const linearRelinked = await request(app).post(`/api/openchamber/sessions/${sessionId}/links`)
+        .send({ entries: [neutralLinear], linked: true }).expect(200);
+      expect(linearRelinked.body.metadata.openchamber.linked_issues).toEqual([agentEntry, trackerEntry, issue, legacyLinear]);
+
+      const unlinked = await request(app).post(`/api/openchamber/sessions/${sessionId}/links`)
+        .send({ entries: [trackerEntry, issue], linked: false }).expect(200);
+      expect(unlinked.body.metadata.openchamber.linked_issues).toEqual([agentEntry, legacyLinear]);
+      expect((await routeFixture.sessionMetadataStore.getState(sessionId)).metadata).toEqual(unlinked.body.metadata);
+    });
+
+    it('rejects invalid tracker identities atomically and checks Host scope', async () => {
+      const { app, sessionMetadataStore } = createApp({ routes });
+      sessionMetadataStore.entries.set('ses_admitted', { openchamber: { linked_issues: [uiEntry] } });
+      for (const bad of [
+        { ...trackerEntry, provider: undefined },
+        { ...trackerEntry, provider: 'INVALID' },
+        { ...trackerEntry, identifier: '' },
+        { ...trackerEntry, identifier: '  ' },
+        { ...trackerEntry, id: 'jira:OTHER-1' },
+        { ...trackerEntry, linkedAt: undefined },
+        { ...trackerEntry, author: 42 },
+        { ...trackerEntry, unexpected: true },
+      ]) {
+        await request(app).post('/api/openchamber/sessions/ses_admitted/links')
+          .send({ entries: [agentEntry, bad], linked: true }).expect(400);
+      }
+      await request(app).post('/api/openchamber/sessions/ses_foreign/links')
+        .send({ entries: [trackerEntry], linked: true }).expect(404);
+      expect(await sessionMetadataStore.get('ses_admitted')).toEqual({ openchamber: { linked_issues: [uiEntry] } });
+    });
 
     it('appends to the links already on the record and announces the merged metadata', async () => {
       const { app, sessionMetadataStore } = createApp({ routes });

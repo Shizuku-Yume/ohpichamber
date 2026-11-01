@@ -446,7 +446,7 @@ export const SourceBoardPullLinks: React.FC<{
             if (target.mobileDirectory === currentDirectory) ui.closeMainSurfaces();
             else useSessionUIStore.getState().openNewSessionDraft({ selectedProjectId: project.id, directoryOverride: project.path });
             // A repository under the folder is shown in place of the Git selection, which stays as it was.
-            usePullRequestSelectionStore.getState().requestDiff(target.mobileRequestDirectory, source, target.mobileRepository);
+            usePullRequestSelectionStore.getState().requestDiff(target.mobileRequestDirectory, source, context, target.mobileRepository);
             onLeave?.();
             mobile.openChanges();
             return;
@@ -458,7 +458,7 @@ export const SourceBoardPullLinks: React.FC<{
         // keyed by that same folder.
         const { panelDirectory, targetDirectory, requestDirectory } = target;
         if (surface === 'diff') {
-            usePullRequestSelectionStore.getState().requestDiff(requestDirectory, source);
+            usePullRequestSelectionStore.getState().requestDiff(requestDirectory, source, context);
             ui.openContextPanelTab(panelDirectory, { mode: 'diff', diffScope: 'pr', targetDirectory });
             return;
         }

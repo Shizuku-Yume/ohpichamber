@@ -40,6 +40,14 @@ Streaming steer and follow-up admission bind captured context, developer instruc
 
 Captured context retains input order, with each entry's developer instructions preceding its associated custom context message in both direct prompts and queued deliveries. Direct admission appends every native context role through the same transcript owners rather than mixing immediate messages with conditional `nextTurn` buffering while a previous turn unwinds.
 
+The worker extracts validated session and session-message identities from captured `PromptContext` metadata and binds them to the exact native user entry in its existing canonical reference. Canonical user text parts expose them as `sessionMentions` in live part events, snapshots, and branch-aware cold history; private paths in display fields are redacted. Older references without mentions remain valid. The native transcript remains the only transcript owner.
+
+`sessionMentions` is optional for existing v1 native references. Host and UI
+must deploy the updated strict canonical decoder together: older decoders are
+not assumed to accept the new field. Pending references are associated with
+the exact native message object persisted by the SDK, not role/timestamp or
+latest-turn inference; SDK objects stay private to the worker.
+
 The service journal retains the newest 1,000 ordered events and a tail of 100 turns. Snapshot and cursor are captured together. SSE validates cursor syntax and replay coverage before headers: malformed cursors return 400 `INVALID_CURSOR`; stale epochs or missing coverage return 410 `RESYNC_REQUIRED`. Live epoch changes and delivery overflow invalidate and close the stream. Reopening a worker creates a new epoch; historical messages never imply live activity.
 
 History uses an opaque cursor bound to the selected branch version and leaf. It is not an SSE cursor. Session deletion uses the native SDK storage owner before removing its private service reference. Archive and operational metadata remain with Host SQLite.

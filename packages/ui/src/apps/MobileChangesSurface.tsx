@@ -30,6 +30,7 @@ import { remoteTraits,
   identityDisplayName,
   identityAccountConnected,
   activeIdentityFor,
+  hasSameSourceControlReadContext,
 } from '@/lib/source-control/identity';
 import { useConnectedAccountIds, useSourceControlAuthStore } from '@/stores/useSourceControlAuthStore';
 import type { GitIdentityProfile } from '@/lib/api/types';
@@ -47,6 +48,7 @@ import { useCommitComparison } from '@/hooks/useCommitComparison';
 import { usePullRequestComparison } from '@/hooks/usePullRequestComparison';
 import { PullRequestComparisonSelector } from '@/components/views/git/PullRequestComparisonSelector';
 import { useGitComparison, type GitComparisonFile, type GitComparisonSource } from '@/hooks/useGitComparison';
+import { usePullRequestSelectionStore } from '@/stores/usePullRequestSelectionStore';
 import { useGitBaseBranchStore } from '@/stores/useGitBaseBranchStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { cn } from '@/lib/utils';
@@ -158,7 +160,8 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
   // When the root is not itself a repository, changes come from the resolved
   // nested repository instead.
   const { rootIsGitRepo, gitDirectory, nestedRepos } = repository;
-  const currentDirectory = gitDirectory ?? rootDirectory;
+  const requestedRepository = usePullRequestSelectionStore((state) => state.changesRepositories.get(rootDirectory));
+  const currentDirectory = requestedRepository ?? gitDirectory ?? rootDirectory;
   const status = useGitStatus(currentDirectory || null);
   const choosesPushDestination = useIsContributorWorktree(currentDirectory);
   const branches = useGitBranches(currentDirectory || null);
@@ -239,6 +242,12 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
     setModeMenuOpen(false);
   }, [ownerKey]);
   React.useEffect(() => { if (!visible) setModeMenuOpen(false); }, [visible]);
+  const requestedPr = usePullRequestSelectionStore((state) => state.diffRequests.get(rootDirectory));
+  const requestedContext = usePullRequestSelectionStore((state) => state.diffContexts.get(rootDirectory));
+  React.useEffect(() => {
+    if (!visible || !requestedPr) return;
+    changeMode('pr');
+  }, [changeMode, requestedPr, visible]);
 
   // Allow the host (MobileApp) to push us into a specific diff when the surface
   // is reopened or when an external trigger (e.g. a changed-file tap in chat) requests
@@ -321,8 +330,20 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
       ? t('gitView.identity.configChanged')
       : t('gitView.context.needsAttention');
   }, [binding.read, binding.status, t]);
-  const prComparison = usePullRequestComparison(currentDirectory || null, currentBranch, binding.contexts[0] ?? null, visible && mode === 'pr' && isGitRepo === true);
+  const activeRequestedContext = binding.status === 'ready' && requestedContext
+    && binding.contexts.some((context) => hasSameSourceControlReadContext(context, requestedContext))
+    ? requestedContext : undefined;
+  React.useEffect(() => {
+    if (requestedContext && binding.status === 'ready' && !activeRequestedContext) {
+      usePullRequestSelectionStore.getState().clearDiffContext(rootDirectory, requestedContext);
+    }
+  }, [activeRequestedContext, binding.status, requestedContext, rootDirectory]);
+  const prComparison = usePullRequestComparison(currentDirectory || null, currentBranch, activeRequestedContext ?? (binding.status === 'ready' ? binding.contexts[0] : null) ?? null, visible && mode === 'pr' && isGitRepo === true, activeRequestedContext && requestedPr && hasSameSourceControlReadContext(activeRequestedContext, requestedPr.context) ? requestedPr.source : undefined);
   const selectedPr = prComparison.selectedSource;
+  React.useEffect(() => {
+    if (!requestedPr || !activeRequestedContext || !status || selectedPr !== requestedPr.source) return;
+    usePullRequestSelectionStore.getState().settleDiffRequest(rootDirectory, requestedPr);
+  }, [activeRequestedContext, requestedPr, rootDirectory, selectedPr, status]);
   const comparisonSource = React.useMemo<GitComparisonSource | null>(() => {
     if (mode === 'pr') return selectedPr;
     if (mode === 'branch' && currentBranch && branchComparison.base) return { kind: 'branch', baseRef: branchComparison.base, headRef: currentBranch };
@@ -943,8 +964,9 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
         {rootIsGitRepo === false && Array.isArray(nestedRepos) && nestedRepos.length > 0 ? (
           <NestedRepoPicker
             repositories={nestedRepos}
-            selectedRepository={gitDirectory ?? null}
+            selectedRepository={requestedRepository ?? gitDirectory ?? null}
             onSelectRepository={(repository) => {
+              usePullRequestSelectionStore.getState().clearChangesRepository(rootDirectory);
               if (rootDirectory) selectNestedRepo(rootDirectory, repository);
             }}
             repositoryRoot={rootDirectory ?? undefined}

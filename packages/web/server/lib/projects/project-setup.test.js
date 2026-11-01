@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import os from 'os';
 import path from 'path';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'fs/promises';
+import { renameSync, symlinkSync } from 'fs';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'fs/promises';
 
 import { createProjectConfigRuntime } from './project-config.js';
 import { createProjectIdFromPath, projectPathFromId } from './project-id.js';
@@ -594,6 +595,104 @@ describe('shared file keys owned by other writers', () => {
     if (content !== undefined) await writeFile(sharedPath, content);
     return { repo, sharedPath, projectId: createProjectIdFromPath(repo) };
   };
+
+  it('refuses escaped shared directory reads, prompt saves and resets, and setup writes', async () => {
+    const { runtime, tempRoot, cleanup } = await createRuntime();
+    try {
+      const repo = path.join(tempRoot, 'repo');
+      const outside = path.join(tempRoot, 'outside');
+      await mkdir(repo);
+      await mkdir(outside);
+      const outsideFile = path.join(outside, 'project.json');
+      const original = JSON.stringify({ version: 1, magicPrompts: { 'a.visible': 'outside' } });
+      await writeFile(outsideFile, original);
+      await symlink(outside, path.join(repo, '.openchamber'), 'dir');
+      const projectId = createProjectIdFromPath(repo);
+
+      expect(await runtime.readSharedProjectFile(repo)).toMatchObject({ status: 'invalid' });
+      expect((await runtime.readProjectSetup(projectId)).shared.status).toBe('invalid');
+      await expect(runtime.updateSharedProjectEntry(projectId, repo, 'magicPrompts', () => ({ 'a.visible': 'changed' }))).rejects.toMatchObject({ code: 'shared_config_invalid' });
+      await expect(runtime.updateSharedProjectEntry(projectId, repo, 'magicPrompts', () => undefined)).rejects.toMatchObject({ code: 'shared_config_invalid' });
+      await expect(runtime.updateSharedProjectSetup(projectId, { setupWorktree: ['changed'] })).rejects.toThrow();
+      expect(await readFile(outsideFile, 'utf8')).toBe(original);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('refuses a shared project file symlink, including a dangling one', async () => {
+    const { runtime, tempRoot, cleanup } = await createRuntime();
+    try {
+      const { repo, sharedPath, projectId } = await setupRepo(tempRoot);
+      const outsideFile = path.join(tempRoot, 'outside.json');
+      const original = JSON.stringify({ version: 1, magicPrompts: { 'a.visible': 'outside' } });
+      await writeFile(outsideFile, original);
+      await symlink(outsideFile, sharedPath);
+      for (const dangling of [false, true]) {
+        if (dangling) await rm(outsideFile);
+        expect(await runtime.readSharedProjectFile(repo)).toMatchObject({ status: 'invalid' });
+        await expect(runtime.updateSharedProjectEntry(projectId, repo, 'magicPrompts', () => ({ 'a.visible': 'changed' }))).rejects.toMatchObject({ code: 'shared_config_invalid' });
+        await expect(runtime.updateSharedProjectEntry(projectId, repo, 'magicPrompts', () => undefined)).rejects.toMatchObject({ code: 'shared_config_invalid' });
+        await expect(runtime.updateSharedProjectSetup(projectId, { setupWorktree: ['changed'] })).rejects.toThrow();
+        if (!dangling) expect(await readFile(outsideFile, 'utf8')).toBe(original);
+      }
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('rechecks containment if the shared directory changes during a mutation', async () => {
+    const { runtime, tempRoot, cleanup } = await createRuntime();
+    try {
+      const { repo, sharedPath, projectId } = await setupRepo(tempRoot, JSON.stringify({ version: 1, magicPrompts: { 'a.visible': 'inside' } }));
+      const outside = path.join(tempRoot, 'outside');
+      await mkdir(outside);
+      const original = JSON.stringify({ version: 1, magicPrompts: { 'a.visible': 'outside' } });
+      await writeFile(path.join(outside, 'project.json'), original);
+      await expect(runtime.updateSharedProjectEntry(projectId, repo, 'magicPrompts', () => {
+        renameSync(path.dirname(sharedPath), path.join(repo, 'saved'));
+        symlinkSync(outside, path.dirname(sharedPath), 'dir');
+        return { 'a.visible': 'changed' };
+      })).rejects.toThrow();
+      expect(await readFile(path.join(outside, 'project.json'), 'utf8')).toBe(original);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('round-trips and resets a normal checkout shared prompt', async () => {
+    const { runtime, tempRoot, cleanup } = await createRuntime();
+    try {
+      const repo = path.join(tempRoot, 'repo');
+      await mkdir(repo);
+      const projectId = createProjectIdFromPath(repo);
+      const sharedPath = path.join(repo, '.openchamber', 'project.json');
+      await runtime.updateSharedProjectEntry(projectId, repo, 'magicPrompts', () => ({ 'a.visible': 'inside' }));
+      expect((await runtime.readSharedProjectFile(repo)).document.magicPrompts).toEqual({ 'a.visible': 'inside' });
+      expect(JSON.parse(await readFile(sharedPath, 'utf8')).magicPrompts).toEqual({ 'a.visible': 'inside' });
+      await runtime.updateSharedProjectEntry(projectId, repo, 'magicPrompts', () => undefined);
+      await expect(readFile(sharedPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('accepts a selected checkout root that is itself a symlink', async () => {
+    const { runtime, tempRoot, cleanup } = await createRuntime();
+    try {
+      const repo = path.join(tempRoot, 'repo');
+      const selected = path.join(tempRoot, 'selected');
+      await mkdir(repo);
+      await symlink(repo, selected, 'dir');
+      const projectId = createProjectIdFromPath(selected);
+      await runtime.updateSharedProjectEntry(projectId, selected, 'magicPrompts', () => ({ 'a.visible': 'inside' }));
+      expect((await runtime.readSharedProjectFile(selected)).document.magicPrompts).toEqual({ 'a.visible': 'inside' });
+      await runtime.updateSharedProjectEntry(projectId, selected, 'magicPrompts', () => undefined);
+      await expect(readFile(path.join(repo, '.openchamber', 'project.json'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+    } finally {
+      await cleanup();
+    }
+  });
 
   it('keeps Magic Prompts and unknown keys through setup saves, repairs and the last setup removal', async () => {
     const { runtime, tempRoot, cleanup } = await createRuntime();

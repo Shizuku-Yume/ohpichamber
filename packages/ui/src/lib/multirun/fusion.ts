@@ -3,9 +3,9 @@ import type { ModelSelection, Session } from '@openchamber/agent-contract';
 import { resolveWorkspaceDirectory } from '@/stores/globalSessions';
 import type { GitWorktreeSnapshotResult } from '@/lib/api/types';
 import { getGitRangeDiff, snapshotGitWorktree } from '@/lib/gitApi';
-import { renderMagicPrompt } from '@/lib/magicPrompts';
+import { loadMagicPrompts, type MagicPromptSnapshot } from '@/lib/magicPrompts';
 import { getWorktreeSetupWaitEnabled } from '@/lib/openchamberConfig';
-import { getRuntimeKey } from '@/lib/runtime-switch';
+import { getRuntimeKey, getRuntimeSwitchRevision } from '@/lib/runtime-switch';
 import { resolveWorktreeSetupCommands } from '@/lib/sharedTrustConfirmation';
 import { waitForWorktreeBootstrap } from '@/lib/worktrees/worktreeBootstrap';
 import { resolveCreatedWorktreeStartDirectory } from '@/lib/worktrees/worktreeStartDirectory';
@@ -144,8 +144,9 @@ export async function startRunFusion(input: {
 }): Promise<{ sessionId: string; directory: string; mode: FusionMode }> {
   const { run, judge } = input;
   const runtimeKey = getRuntimeKey();
+  const runtimeRevision = getRuntimeSwitchRevision();
   const assertCurrent = () => {
-    if (getRuntimeKey() !== runtimeKey) throw new Error('Runtime changed');
+    if (getRuntimeKey() !== runtimeKey || getRuntimeSwitchRevision() !== runtimeRevision) throw new Error('Runtime changed');
   };
 
   const sources = await loadFusionSources(run, input.sourceIds, input.sessionById, assertCurrent);
@@ -165,6 +166,7 @@ export async function startRunFusion(input: {
   let directory = projectDirectory;
   const context: Array<{ text: string }> = [];
   let createdWorktree: Awaited<ReturnType<typeof createWorktreeWithDefaults>> | null = null;
+  let magicPrompts: MagicPromptSnapshot;
 
   if (mode === 'code' && project) {
     const snapshots: GitWorktreeSnapshotResult[] = [];
@@ -204,7 +206,9 @@ export async function startRunFusion(input: {
     directory = await resolveCreatedWorktreeStartDirectory(project, createdWorktree);
     assertCurrent();
 
-    context.push({ text: await renderMagicPrompt('session.fusion.codeInstructions', {
+    magicPrompts = await loadMagicPrompts(directory);
+    assertCurrent();
+    context.push({ text: magicPrompts.render('session.fusion.codeInstructions', {
       baseCommit,
       attemptCount: String(sources.length),
     }) });
@@ -227,7 +231,9 @@ export async function startRunFusion(input: {
     });
     context.push({ text: '\n\n--- FUSION INPUTS END ---\nNow build the fused result in this worktree.' });
   } else {
-    context.push({ text: await renderMagicPrompt('session.fusion.instructions') });
+    magicPrompts = await loadMagicPrompts(directory);
+    assertCurrent();
+    context.push({ text: magicPrompts.render('session.fusion.instructions') });
     context.push(...taskBlocks(prompts).map((text) => ({ text })));
     sources.forEach((source, index) => {
       context.push({ text: `\n\n--- RESULT ${index + 1}: ${source.label} ---\n${source.reply}\n--- END RESULT ${index + 1} ---` });
@@ -236,7 +242,7 @@ export async function startRunFusion(input: {
   }
   assertCurrent();
 
-  const visiblePrompt = await renderMagicPrompt('session.fusion.visible');
+  const visiblePrompt = magicPrompts.render('session.fusion.visible');
   const fusionSession = await createMultiRunSession({
     title: `${run.title} · ${judge.modelName ?? judge.modelId}`,
     directory,
@@ -266,6 +272,7 @@ export async function startRunFusion(input: {
   if (sessionOwner && (!currentSession || currentSession.workspaceId !== sessionOwner.workspaceId || currentSession.epoch !== sessionOwner.epoch)) throw new Error('Fusion session changed');
   await sendMessage({
     runtimeKey,
+    runtimeRevision,
     sessionId: fusionSession.sessionId,
     request: {
       options: { ...(expanded?.modelSelection ?? { providerId: judge.providerId, modelId: judge.modelId }), variant: judge.variant ?? null, agentId: expanded?.agentId ?? judge.agent ?? null, reasoningEffort: null },

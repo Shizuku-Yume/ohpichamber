@@ -4,9 +4,8 @@
  * Every user-attached context item — an inline code comment, a terminal
  * selection, a browser annotation, a GitHub PR comment or failed check, a
  * linked issue or PR — is built as local composer text plus structured
- * metadata. The send boundary formats that local context into canonical
- * prompt text. Native transcript Part records carry content, not metadata;
- * the read-back helpers here inspect local composer and queued context only.
+ * metadata, then captured in the canonical prompt. Transcript text parts expose typed session mention identities;
+ * the local metadata helpers here remain for composer and queued context.
  */
 
 import { z } from 'zod';

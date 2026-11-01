@@ -62,8 +62,6 @@ const UserTextPart: React.FC<UserTextPartProps> = ({
     attachmentFilenames,
     sessionMentionChips = NO_SESSION_MENTIONS,
 }) => {
-    // Canonical parts retain context prompt text, but do not carry legacy
-    // structured context metadata.
     const serializedText = part.type === 'text' ? part.content : '';
     const terminalContextState = React.useMemo(() => extractTerminalContexts(serializedText), [serializedText]);
     const textContent = terminalContextState.visibleText;

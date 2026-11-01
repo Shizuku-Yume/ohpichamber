@@ -151,6 +151,7 @@ tool patch is parsed while the turn streams.
   renderers. Mobile keeps file-reference annotation disabled entirely,
   including filesystem stat probes; web/PWA and Electron retain the normal
   annotation limits and directory-scoped file navigation.
+- User text parts carry typed session mention identities when captured at send. The shared plain and Markdown renderers use those identities for chips in live events and reloaded history; links without a captured identity remain ordinary links.
 - Final assistant Markdown rendering is independent from image gallery
   extraction: gallery presence never changes the chat body. Assistant image
   syntax consistently renders as a shared image icon followed by its filename,

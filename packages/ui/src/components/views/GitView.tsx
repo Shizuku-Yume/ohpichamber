@@ -2615,6 +2615,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
             <IntegrateCommitsSection
               key={integrateCommitsProps.worktreeMetadata.path}
               repoRoot={integrateCommitsProps.repoRoot}
+              promptDirectory={currentDirectory}
               sourceBranch={integrateCommitsProps.sourceBranch}
               worktreeMetadata={integrateCommitsProps.worktreeMetadata}
               localBranches={localBranches}

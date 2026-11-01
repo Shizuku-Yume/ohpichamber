@@ -119,7 +119,7 @@ import { readIdleStopSetting, startIdleStop } from './lib/spaces/idle-stop.js';
 import { SPACE_IDLE_EXIT_CODE } from './lib/spaces/layout.js';
 import { createSwitchController, registerSpaceRoutes } from './lib/spaces/routes.js';
 import { spacesHostEnabled } from './lib/spaces/release.js';
-import { configureGitEnvironment, configureProjectWorktreeDirectory, resolvePrimaryWorktreeRoot, getWorktrees } from './lib/git/service.js';
+import { configureGitEnvironment, configureProjectWorktreeDirectory, resolvePrimaryWorktreeRoot, resolveWorktreeTopLevel, getWorktrees } from './lib/git/service.js';
 import { createEnvironmentStore } from './lib/environment/store.js';
 import { createEnvironmentRuntime } from './lib/environment/runtime.js';
 import { createWorktreeBootstrapStore } from './lib/git/worktree-bootstrap-storage.js';
@@ -2019,6 +2019,8 @@ async function main(options = {}) {
     sessionFoldersStore,
     isRequestOriginAllowed,
     resolveWorkspaceScope: hostAgentRuntime.resolveWorkspaceScope,
+    resolveWorkspaceDirectory: hostAgentRuntime.resolveWorkspaceDirectory,
+    resolveRepositoryWorkspace: hostAgentRuntime.resolveRepositoryWorkspace,
     resolveSessionScope: hostAgentRuntime.resolveSessionScope,
     resolveHostSessionScope: hostAgentRuntime.resolveHostSessionScope,
     listQueueScopes,
@@ -2064,6 +2066,8 @@ async function main(options = {}) {
     buildAugmentedPath: () => serverUtilsRuntime.buildAugmentedPath(),
     resolveGitBinaryForSpawn: () => (process.platform === 'win32' ? 'git.exe' : 'git'),
     projectConfigRuntime,
+    resolvePrimaryWorktreeRoot,
+    resolveWorktreeTopLevel,
     projectContextRuntime,
     agentMemoryRuntime,
     isAgentMemoryEnabled,

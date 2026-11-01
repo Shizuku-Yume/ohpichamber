@@ -18,13 +18,33 @@ import { z } from 'zod';
  * thread) rides along untouched.
  */
 
-const LINKED_ISSUE_KINDS = ['issue', 'pull', 'linear', 'guest', 'external'];
+const LINKED_ISSUE_KINDS = ['issue', 'pull', 'linear', 'tracker', 'guest', 'external'];
+
+const trackerEntrySchema = z.strictObject({
+  id: z.string().min(1),
+  kind: z.literal('tracker'),
+  provider: z.string().regex(/^[a-z][a-z0-9-]{0,31}$/),
+  identifier: z.string().min(1).refine((value) => value.trim() === value),
+  title: z.string().min(1),
+  url: z.string().min(1),
+  linkedAt: z.number().int().nonnegative(),
+  author: z.string().optional(),
+  authorAvatarUrl: z.string().optional(),
+}).refine((entry) => entry.id === `${entry.provider}:${entry.identifier}`, {
+  path: ['id'], message: 'tracker id must match provider and identifier',
+});
 
 const linkedEntrySchema = z.looseObject({
   id: z.string().min(1),
   title: z.string().min(1),
   url: z.string().min(1),
   kind: z.enum(LINKED_ISSUE_KINDS),
+}).superRefine((entry, ctx) => {
+  if (entry.kind !== 'tracker') return;
+  const tracker = trackerEntrySchema.safeParse(entry);
+  if (!tracker.success) {
+    for (const issue of tracker.error.issues) ctx.addIssue(issue);
+  }
 });
 
 const linkOperationSchema = z.object({
@@ -40,7 +60,9 @@ export const parseLinkOperation = (payload) => {
     const where = issue && issue.path.length > 0 ? ` at ${issue.path.join('.')}` : '';
     return { ok: false, error: `invalid link operation${where}: ${issue?.message ?? 'expected entries and linked'}` };
   }
-  return { ok: true, entries: parsed.data.entries, linked: parsed.data.linked };
+  return { ok: true, entries: parsed.data.entries.map((entry) => (
+    entry.kind === 'tracker' && entry.provider === 'linear' ? { ...entry, kind: 'linear' } : entry
+  )), linked: parsed.data.linked };
 };
 
 const normalizedThreadUrl = (url) => url.trim().replace(/\/+$/, '').toLowerCase();

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { RuntimeFetchOptions } from '@openchamber/ui/lib/runtime-fetch';
+import { switchRuntimeEndpoint } from '@openchamber/ui/lib/runtime-switch';
 import { linearLikeTrackerDescriptor } from '@openchamber/ui/lib/trackers/descriptor.fixture';
 import { BUILT_IN_LINEAR_TRACKER, createWebTrackerAPI } from './trackers';
 
@@ -104,6 +105,61 @@ describe('web trackers: providers', () => {
     ));
     await api.authStatus('linear');
     expect(fetchMock.mock.calls.slice(-2).map(([path]) => path)).toEqual(['/api/tracker/providers', '/api/linear/auth/status']);
+  });
+
+  it.each(['legacy', 'neutral'] as const)('refuses a %s mutation when the runtime switches during wire selection', async (wire) => {
+    let runtime = 'host-a';
+    let finishProviders!: (response: Response) => void;
+    const pendingProviders = new Promise<Response>((resolve) => { finishProviders = resolve; });
+    const requests: Array<{ runtime: string; path: string; method?: string }> = [];
+    const fetch = vi.fn((path: string, init?: RuntimeFetchOptions): Promise<Response> => {
+      requests.push({ runtime, path, method: init?.method });
+      if (requests.length === 1) return pendingProviders;
+      if (path === '/api/tracker/providers') return Promise.resolve(Response.json({ providers: [BUILT_IN_LINEAR_TRACKER] }));
+      return Promise.resolve(Response.json({ connected: false }));
+    });
+    const api = createWebTrackerAPI({ fetch, runtimeKey: () => runtime });
+    const mutation = api.mappingSet('linear', { defaultProjectPath: '/host-a/project', containerProjectPaths: {} });
+
+    runtime = 'host-b';
+    finishProviders(wire === 'legacy'
+      ? new Response('Not Found', { status: 404 })
+      : Response.json({ providers: [BUILT_IN_LINEAR_TRACKER] }));
+    await expect(mutation).rejects.toThrow('Tracker runtime changed');
+    expect(requests).toEqual([{ runtime: 'host-a', path: '/api/tracker/providers', method: undefined }]);
+
+    await expect(api.mappingSet('linear', { defaultProjectPath: '/host-b/project', containerProjectPaths: {} })).resolves.toEqual({ connected: false });
+    expect(requests.slice(1)).toEqual([
+      { runtime: 'host-b', path: '/api/tracker/providers', method: undefined },
+      { runtime: 'host-b', path: '/api/tracker/linear/mapping', method: 'PUT' },
+    ]);
+  });
+
+  it('refuses a read when the runtime switches during wire selection', async () => {
+    let runtime = 'host-a';
+    let finishProviders!: (response: Response) => void;
+    const fetch = vi.fn()
+      .mockImplementationOnce(() => new Promise<Response>((resolve) => { finishProviders = resolve; }))
+      .mockResolvedValue(Response.json({ connected: false }));
+    const api = createWebTrackerAPI({ fetch, runtimeKey: () => runtime });
+    const read = api.mappingGet('linear');
+    runtime = 'host-b';
+    finishProviders(Response.json({ providers: [BUILT_IN_LINEAR_TRACKER] }));
+    await expect(read).rejects.toThrow('Tracker runtime changed');
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not dispatch after switching away and back to the same runtime key', async () => {
+    switchRuntimeEndpoint({ apiBaseUrl: 'https://host-a.test', runtimeKey: 'host-a' });
+    let finishProviders!: (response: Response) => void;
+    const fetch = vi.fn().mockImplementationOnce(() => new Promise<Response>((resolve) => { finishProviders = resolve; }));
+    const api = createWebTrackerAPI({ fetch });
+    const mutation = api.mappingSet('linear', { defaultProjectPath: '/host-a/project', containerProjectPaths: {} });
+    switchRuntimeEndpoint({ apiBaseUrl: 'https://host-b.test', runtimeKey: 'host-b' });
+    switchRuntimeEndpoint({ apiBaseUrl: 'https://host-a.test', runtimeKey: 'host-a' });
+    finishProviders(Response.json({ providers: [BUILT_IN_LINEAR_TRACKER] }));
+    await expect(mutation).rejects.toThrow('Tracker runtime changed');
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });
 

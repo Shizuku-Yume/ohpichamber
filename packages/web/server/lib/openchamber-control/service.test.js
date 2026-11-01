@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { SessionJournal } from '../../../../agent-service/src/projection/journal.ts';
 import { createOpenChamberControlService } from './service.js';
 
 const scopeForWorkspace = {
@@ -73,6 +74,40 @@ const createHarness = (settings = {
 };
 
 describe('OpenChamber control service canonical consumers', () => {
+  it('reads complete and most-recent messages through the canonical paginated journal across workspaces', async () => {
+    const sessionId = 'session-other';
+    const turns = Array.from({ length: 205 }, (_, index) => ({
+      turnId: `turn-${index}`, runId: `run-${index}`, sessionId, status: 'completed',
+      userMessageId: `message-${index}`, assistantMessageIds: [], startedAt: index + 1, finishedAt: index + 1,
+    }));
+    const messages = turns.map((turn, index) => ({
+      messageId: turn.userMessageId, sessionId, turnId: turn.turnId, role: 'user', createdAt: index + 1,
+      parts: [{ type: 'text', partId: `part-${index}`, content: `message ${index}` }],
+    }));
+    const journal = new SessionJournal({ sessionId, projectId: 'project-1', workspaceId: 'workspace-2', displayPath: '.', rootSessionId: sessionId }, {
+      createdAt: 1, updatedAt: 205, branch: { branchId: 'branch-1', branchVersion: '1', leafMessageId: 'message-204' }, turns, messages,
+    });
+    const { control } = createHarness(undefined, {
+      resolveSessionScope: async (id) => id === 'session-1' ? { rootSessionId: id, ...scopeForWorkspace } : id === sessionId ? { rootSessionId: id, ...otherScope } : null,
+      sessionService: {
+        open: async () => ({ session: { runtimeStatus: 'idle' } }),
+        history: async (id, query) => {
+          const params = new URLSearchParams(query);
+          return journal.history({ sessionId: id, limit: Number(params.get('limit')), ...(params.has('cursor') ? { cursor: params.get('cursor') } : {}) });
+        },
+      },
+    });
+    const scope = { rootSessionId: 'session-1', ...scopeForWorkspace };
+    const invoke = (input) => control.invokeHostAction(scope, { sessionId: 'session-1', toolName: 'openchamber', action: 'session.messages', input: { sessionId, ...input } });
+    const all = await invoke({ all: true });
+    expect(all.ok).toBe(true);
+    expect(all.value.messages.map((message) => message.text)).toEqual(messages.map((message) => message.parts[0].content));
+    const last = await invoke({ limit: 2 });
+    expect(last.ok).toBe(true);
+    expect(last.value.messages.map((message) => message.text)).toEqual(['message 203', 'message 204']);
+    await expect(invoke({ workspaceId: 'workspace-1' })).resolves.toMatchObject({ ok: false, status: 403 });
+  });
+
   it('creates a scoped session and dispatches a canonical prompt without private path fields', async () => {
     const { control, created, sent } = createHarness();
 

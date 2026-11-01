@@ -9,7 +9,7 @@
 import { SessionMetadataSchema, type SessionMetadata, type SessionMetadataPatch } from '@openchamber/agent-contract';
 import { canonicalClient } from '@/api/canonicalClient';
 import { z } from 'zod';
-import type { LinkedIssue } from '@/lib/linkedIssues';
+import { toStoredLinkedIssue, type LinkedIssue } from '@/lib/linkedIssues';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 
 const archiveResponseSchema = z.object({
@@ -134,7 +134,7 @@ export async function requestSessionLinksUpdate(
     response = await runtimeFetch(`/api/openchamber/sessions/${encodeURIComponent(sessionID)}/links`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ entries, linked }),
+      body: JSON.stringify({ entries: entries.map(toStoredLinkedIssue), linked }),
       directory,
     });
   } catch (error) {

@@ -525,7 +525,7 @@ export class WorkerSession {
               const queued = queue.at(-1);
               if (!queued || queued.role !== 'user') throw new ProjectionError(503, 'INTERNAL_ERROR', 'Native queued user message is unavailable');
               if (prepared.context.length > 0) this.queuedContext.set(queued, prepared.context);
-              messageId = this.projection.admitQueuedPrompt(queued, operation.request.input.attachments);
+              messageId = this.projection.admitQueuedPrompt(queued, operation.request.input.attachments, operation.request.input.context);
               acceptedAt = Date.now();
             },
           });
@@ -544,7 +544,7 @@ export class WorkerSession {
         finally { this.preparation = undefined; }
         if (this.closed || this.failed) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Worker session is unavailable');
         if (this.skillsApplying || !this.admission.skillsAvailable) throw new ProjectionError(503, 'SKILL_APPLY_FAILED', 'Native skills changed during prompt preparation');
-        this.emit(this.projection.beginRun(operation.runId, Date.now(), operation.request.input.attachments));
+        this.emit(this.projection.beginRun(operation.runId, Date.now(), operation.request.input.attachments, operation.request.input.context));
         const run = this.projection.activeRun();
         if (!run) throw new ProjectionError(503, 'INTERNAL_ERROR', 'Run admission failed');
         const accepted: Run = { ...run };

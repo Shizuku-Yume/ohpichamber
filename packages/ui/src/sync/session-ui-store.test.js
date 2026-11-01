@@ -18,6 +18,7 @@ import { setActionRefs } from './session-actions';
 import { useSessionWorktreeStore } from './session-worktree-store';
 import { routeMessage, useSessionUIStore } from './session-ui-store';
 import { useSelectionStore } from './selection-store';
+import { buildComposerContext, buildOutgoingMessage, queuedContextToParts } from '@/components/chat/composer/submit/buildOutgoingMessage';
 import { deferred, nativeSnapshot } from './session-message-loader-test-fixtures';
 
 const originalRuntime = getRuntimeKey();
@@ -1179,6 +1180,18 @@ describe('native prompt routing', () => {
       ],
     });
   });
+  test('preserves direct and queued composer session mentions in canonical prompt context', async () => {
+    seedCanonicalSession();
+    const mention = { kind: 'session', sessionId: 'target', title: 'Target', contextText: 'Read target' };
+    const input = { inlineComments: [], syntheticTexts: [], references: [mention] };
+    const deps = { parseAgentMention: (text) => ({ text }), extractFileMentions: (text) => ({ text, attachments: [] }), sanitizeAttachments: (files) => files ?? [], collectSkillNames: () => [] };
+    const direct = buildOutgoingMessage({ ...input, queued: [], composerText: 'openchamber://session/target', composerAttachments: [] }, deps);
+    const queued = queuedContextToParts(buildComposerContext(input, null));
+    for (const additionalParts of [direct.additionalParts, queued]) {
+      await route({ additionalParts });
+      expect(runCalls.at(-1).request.input.context).toContainEqual({ kind: 'context', text: 'Read target', metadata: { openchamberContext: expect.objectContaining({ kind: 'session', sessionId: 'target', title: 'Target' }) } });
+    }
+  });
   test('rejects a captured stale runtime before dispatch', async () => {
     await expect(route({ runtimeKey: 'different-runtime' })).rejects.toBeInstanceOf(Error);
     expect(runCalls).toEqual([]);
@@ -1190,6 +1203,30 @@ describe('native prompt routing', () => {
     knowledge.resolve('obsolete');
     await expect(sending).rejects.toBeInstanceOf(Error);
     expect(runCalls).toEqual([]);
+  });
+  test('does not dispatch after A-B-A while knowledge is pending', async () => {
+    const key = getRuntimeKey(); const base = getRuntimeApiBaseUrl();
+    const knowledge = deferred();
+    const sending = route({ sessionKnowledge: knowledge.promise });
+    switchRuntimeEndpoint({ apiBaseUrl: 'https://other.test', runtimeKey: 'other-native' });
+    switchRuntimeEndpoint({ apiBaseUrl: base, runtimeKey: key });
+    knowledge.resolve('obsolete');
+    await expect(sending).rejects.toThrow('runtime changed');
+    expect(runCalls).toEqual([]);
+  });
+  test('does not issue skill expansion after A-B-A during catalog lookup', async () => {
+    seedCanonicalSession();
+    const key = getRuntimeKey(); const base = getRuntimeApiBaseUrl(); const catalog = deferred();
+    const read = stub(canonicalClient, 'getSkillsCatalog', () => catalog.promise);
+    const expand = stub(canonicalClient, 'expandSkill', async () => { throw new Error('must not expand'); });
+    const sending = route({ skills: { names: ['review'] } });
+    await Promise.resolve(); await Promise.resolve();
+    expect(read).toHaveBeenCalled();
+    switchRuntimeEndpoint({ apiBaseUrl: 'https://other.test', runtimeKey: 'other-native' });
+    switchRuntimeEndpoint({ apiBaseUrl: base, runtimeKey: key });
+    catalog.resolve({ skills: [{ skillId: 'review', name: 'review' }], worker: { workerGeneration: 'generation' }, catalogRevision: '1' });
+    await expect(sending).rejects.toThrow('runtime changed');
+    expect(expand).not.toHaveBeenCalled(); expect(runCalls).toEqual([]);
   });
   test('rejects a run acknowledgement for another session', async () => {
     canonicalClient.createRun = async () => runAck('foreign-session');
@@ -1365,6 +1402,19 @@ describe('goal objective native metadata', () => {
     expect(runCalls[0].request.input.text).toBe('Worktree auth');
     expect(runCalls[0].request.input.context.some(context => context.kind === 'synthetic')).toBe(true);
     expect(useGlobalSessionsStore.getState().entityById.get('session-a').metadata.openchamber.goal.objective).toBe('Worktree auth');
+  });
+
+  test('does not write goal metadata or dispatch after A-B-A during objective file write', async () => {
+    const session = hostSession('session-a'); useGlobalSessionsStore.getState().upsertSession(session);
+    const gate = deferred(); const started = deferred(); const key = getRuntimeKey(); const base = getRuntimeApiBaseUrl();
+    const patch = stub(canonicalClient, 'patchSessionMetadata', async () => { throw new Error('unexpected patch'); });
+    fakeFileResources({ fallback: async request => { if (new URL(request.url).pathname.startsWith('/api/goals/objective/')) { started.resolve(); return gate.promise; } return Response.json({}); } });
+    useSessionGoalArmStore.getState().setArmed(true, 'Goal objective');
+    const sending = send('goal'); await started.promise;
+    switchRuntimeEndpoint({ apiBaseUrl: 'https://other.test', runtimeKey: 'other-native' });
+    switchRuntimeEndpoint({ apiBaseUrl: base, runtimeKey: key });
+    gate.resolve(new Response(null, { status: 200 }));
+    await expect(sending).rejects.toThrow('Runtime changed'); expect(patch).not.toHaveBeenCalled(); expect(runCalls).toEqual([]);
   });
 });
 

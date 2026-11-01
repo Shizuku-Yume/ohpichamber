@@ -509,23 +509,23 @@ export const createOpenChamberControlService = (dependencies) => {
     .join('')
     .trim();
 
-  const MESSAGE_PAGE_LIMIT = 200;
+  const MESSAGE_PAGE_LIMIT = 100;
   const sessionMessages = async (sessionID, role, limit) => {
     const collected = [];
     const turns = new Map();
     const seenCursors = new Set();
     let cursor;
-    for (let pageNumber = 0; pageNumber < 100; pageNumber += 1) {
+    while (true) {
       const query = new URLSearchParams({ limit: String(MESSAGE_PAGE_LIMIT), ...(cursor ? { cursor } : {}) });
       const page = await sessionService.history(sessionID, query.toString());
       for (const turn of Array.isArray(page?.turns) ? page.turns : []) turns.set(turn.turnId, turn);
       const messages = Array.isArray(page?.messages) ? page.messages : [];
       collected.push(...messages);
       const next = asNonEmptyString(page?.nextCursor);
-      if (!next || messages.length === 0 || seenCursors.has(next)) break;
+      if (!next) break;
+      if (seenCursors.has(next)) throw new OpenChamberControlError('History cursor repeated', 500);
       seenCursors.add(next);
       cursor = next;
-      if (limit !== undefined && collected.filter((message) => role === 'all' || message.role === role).length >= limit) break;
     }
     const result = collected
       .filter((message) => (message.role === 'user' || message.role === 'assistant') && (role === 'all' || message.role === role))

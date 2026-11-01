@@ -30,6 +30,7 @@ import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import type { ProjectEntry, TrackerContainer } from '@/lib/api/types';
 import { useI18n } from '@/lib/i18n';
 import { isIMECompositionEvent } from '@/lib/ime';
+import { getRuntimeKey, subscribeRuntimeEndpointWillChange } from '@/lib/runtime-switch';
 import { rankByQuery } from '@/lib/search/fuzzySearch';
 import { cn, formatDirectoryName } from '@/lib/utils';
 import { trackerPresentation } from '@/lib/trackers/presentation';
@@ -334,6 +335,14 @@ export const SourceBoardContainerPicker: React.FC<{
     const accounts = status?.connected ? status.accounts ?? NO_ACCOUNTS : NO_ACCOUNTS;
     const current = accounts.find((account) => account.current) ?? null;
     const [switching, setSwitching] = React.useState(false);
+    const runtimeGeneration = React.useRef(0);
+    React.useEffect(() => {
+        const unsubscribe = subscribeRuntimeEndpointWillChange(() => {
+            runtimeGeneration.current += 1;
+            setSwitching(false);
+        });
+        return () => { runtimeGeneration.current += 1; unsubscribe(); };
+    }, []);
     const accountName = (account: (typeof accounts)[number]) => account.name?.trim() || account.id;
     const canSwitch = descriptor.capabilities.multipleAccounts && accounts.length > 1 && Boolean(current) && Boolean(trackers);
     const containerName = containers.find((container) => container.id === selectedContainerId)?.name ?? t(copy.containerAll);
@@ -342,15 +351,20 @@ export const SourceBoardContainerPicker: React.FC<{
 
     const activate = async (accountId: string) => {
         if (!current || accountId === current.id || switching || !trackers) return;
+        const runtimeKey = getRuntimeKey();
+        const generation = runtimeGeneration.current;
+        const isCurrentRuntime = () => generation === runtimeGeneration.current && runtimeKey === getRuntimeKey();
         setSwitching(true);
         try {
-            useTrackerAuthStore.getState().setStatus(provider, await trackers.authActivate(provider, accountId));
+            const nextStatus = await trackers.authActivate(provider, accountId);
+            if (!isCurrentRuntime()) return;
+            useTrackerAuthStore.getState().setStatus(provider, nextStatus);
             onAccountSwitched();
             toast.success(t(copy.accountSwitched));
         } catch (error) {
-            toast.error(t(copy.accountSwitchFailed), { description: error instanceof Error ? error.message : String(error) });
+            if (isCurrentRuntime()) toast.error(t(copy.accountSwitchFailed), { description: error instanceof Error ? error.message : String(error) });
         } finally {
-            setSwitching(false);
+            if (isCurrentRuntime()) setSwitching(false);
         }
     };
 

@@ -865,6 +865,20 @@ describe("native metadata publication", () => {
     expect(write).not.toHaveBeenCalled()
   })
 
+  test("metadata patch does not write after an A-B-A switch during its Host read", async () => {
+    const store = seed()
+    const pending = deferred<{ sessionId: string; revision: string; metadata: null }>()
+    spyOn(canonicalClient, "getSessionMetadata").mockImplementation(() => pending.promise)
+    const write = spyOn(canonicalClient, "patchSessionMetadata")
+    const operation = patchSessionMetadata("session-a", directory, metadata => ({ ...metadata, title: "stale" }))
+    changeRuntime()
+    switchRuntimeEndpoint({ apiBaseUrl: "https://actions.test", runtimeKey: "actions" })
+    pending.resolve({ sessionId: "session-a", revision: "1", metadata: null })
+    await expect(operation).rejects.toThrow("runtime changed")
+    expect(write).not.toHaveBeenCalled()
+    expect(store.getState().session[0].metadata?.title).toBe("Before")
+  })
+
   test("an obsolete title response cannot overwrite live metadata", async () => {
     const store = seed()
     spyOn(canonicalClient, "patchSessionMetadata").mockImplementation(async sessionId => { changeRuntime(); return { sessionId, revision: "2", metadata: { title: "Old runtime" } } })
@@ -1149,6 +1163,21 @@ describe("linking items through the server", () => {
     const calls = fetch.mock.calls.filter(([input]) => String(input).includes("/sessions/session-a/links"))
     expect(calls).toHaveLength(1)
     expect(JSON.parse(String(calls[0][1]?.body))).toEqual({ entries: [issue, guestEntry], linked: true })
+  })
+
+  test("serializes Linear in its documented stored form alongside neutral tracker links", async () => {
+    seed()
+    const linear: LinkedIssue = { id: "linear:ENG-3", kind: "tracker", provider: "linear", identifier: "ENG-3", title: "Spec", url: "https://linear.app/x/issue/ENG-3", linkedAt: 3 }
+    const tracker: LinkedIssue = { id: "jira:OPS-4", kind: "tracker", provider: "jira", identifier: "OPS-4", title: "Outage", url: "https://jira.example/browse/OPS-4", linkedAt: 4 }
+    const storedLinear = { ...linear, kind: "linear" }
+    const metadata = { openchamber: { linked_issues: [issue, storedLinear, tracker] } }
+    const fetch = spyOn(globalThis, "fetch").mockResolvedValue(Response.json({ metadata }))
+
+    const updated = await addLinkedIssues("session-a", directory, [issue, linear, tracker])
+
+    const calls = fetch.mock.calls.filter(([input]) => String(input).includes("/sessions/session-a/links"))
+    expect(JSON.parse(String(calls[0][1]?.body))).toEqual({ entries: [issue, storedLinear, tracker], linked: true })
+    expect(updated.metadata).toEqual(metadata)
   })
 
   test("rejects when the server cannot serve the route, like the callers' catch expects", async () => {

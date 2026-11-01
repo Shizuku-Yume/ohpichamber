@@ -14,6 +14,7 @@ import { toast } from '@/components/ui';
 import { Icon } from "@/components/icon/Icon";
 import { getConflictDetails, type MergeConflictDetails } from '@/lib/gitApi';
 import { loadMagicPrompts } from '@/lib/magicPrompts';
+import { getRuntimeKey, getRuntimeSwitchRevision } from '@/lib/runtime-switch';
 import { useI18n } from '@/lib/i18n';
 
 interface ConflictDialogProps {
@@ -46,26 +47,37 @@ export const ConflictDialog: React.FC<ConflictDialogProps> = ({
   const [isLoading, setIsLoading] = React.useState(false);
   const [conflictDetails, setConflictDetails] = React.useState<MergeConflictDetails | null>(null);
   const [loadError, setLoadError] = React.useState<string | null>(null);
+  const detailsOwner = React.useRef<{ runtimeKey: string; revision: number } | null>(null);
 
   // Fetch conflict details when dialog opens
   React.useEffect(() => {
     if (!open || !directory) return;
+    const runtimeKey = getRuntimeKey();
+    const revision = getRuntimeSwitchRevision();
+    let cancelled = false;
+    const isCurrent = () => !cancelled && getRuntimeKey() === runtimeKey && getRuntimeSwitchRevision() === revision;
 
     setIsLoading(true);
     setLoadError(null);
     setConflictDetails(null);
+    detailsOwner.current = null;
 
     getConflictDetails(directory)
       .then((details) => {
+        if (!isCurrent()) return;
+        detailsOwner.current = { runtimeKey, revision };
         setConflictDetails(details);
       })
       .catch((err) => {
+        if (!isCurrent()) return;
         const message = err instanceof Error ? err.message : t('gitView.conflict.loadFailed');
         setLoadError(message);
       })
       .finally(() => {
+        if (!isCurrent()) return;
         setIsLoading(false);
       });
+    return () => { cancelled = true; };
   }, [open, directory, t]);
 
   const buildConflictContext = React.useCallback(async (): Promise<{
@@ -111,11 +123,11 @@ export const ConflictDialog: React.FC<ConflictDialogProps> = ({
 
   // The context, null without conflict details, or undefined when the magic
   // prompts could not be read: that failure is shown here and the dialog stays.
-  const prepareConflictContext = async () => {
+  const prepareConflictContext = async (isCurrent: () => boolean) => {
     try {
       return await buildConflictContext();
     } catch (error) {
-      toast.error(t('magicPrompts.toast.loadFailed'), { description: error instanceof Error ? error.message : undefined });
+      if (isCurrent()) toast.error(t('magicPrompts.toast.loadFailed'), { description: error instanceof Error ? error.message : undefined });
       return undefined;
     }
   };
@@ -131,8 +143,12 @@ export const ConflictDialog: React.FC<ConflictDialogProps> = ({
   };
 
   const handleResolveInCurrentSession = async () => {
-    const context = await prepareConflictContext();
-    if (context === undefined) return;
+    const runtimeKey = getRuntimeKey();
+    const revision = getRuntimeSwitchRevision();
+    const isCurrent = () => getRuntimeKey() === runtimeKey && getRuntimeSwitchRevision() === revision;
+    if (detailsOwner.current?.runtimeKey !== runtimeKey || detailsOwner.current.revision !== revision) return;
+    const context = await prepareConflictContext(isCurrent);
+    if (!isCurrent() || context === undefined) return;
     if (!context) {
       toast.error(t('gitView.conflict.noDetailsAvailable'));
       return;
@@ -156,8 +172,12 @@ export const ConflictDialog: React.FC<ConflictDialogProps> = ({
   };
 
   const handleResolveInNewSession = async () => {
-    const context = await prepareConflictContext();
-    if (context === undefined) return;
+    const runtimeKey = getRuntimeKey();
+    const revision = getRuntimeSwitchRevision();
+    const isCurrent = () => getRuntimeKey() === runtimeKey && getRuntimeSwitchRevision() === revision;
+    if (detailsOwner.current?.runtimeKey !== runtimeKey || detailsOwner.current.revision !== revision) return;
+    const context = await prepareConflictContext(isCurrent);
+    if (!isCurrent() || context === undefined) return;
     if (!context) {
       toast.error(t('gitView.conflict.noDetailsAvailable'));
       return;

@@ -53,6 +53,13 @@ sibling, so a setup save and a prompt save never clobber each other. The lock
 covers only writers sharing one projects dir and project id; a server with
 another data dir, the VS Code extension host and a hand edit are last write wins.
 
+The Host resolves the selected checkout to its canonical root and rejects a
+symlinked `.openchamber` directory or `project.json` on read, write and reset.
+It rechecks after creating a missing directory and before replacement/removal;
+temporary siblings are created exclusively. Unsafe paths are invalid, not an
+empty project override. These checks do not make concurrent namespace changes
+by an unrelated same-user process atomic; the lock covers cooperating writers.
+
 `PUT /api/projects/:projectId/config/shared` (`updateSharedProjectSetup`) writes
 the setup keys. The patch replaces the keys it names over the current file
 (a broken file counts as empty, so a write repairs it); the result is written

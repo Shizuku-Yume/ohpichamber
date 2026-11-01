@@ -8,7 +8,7 @@ import { loadMagicPrompts } from './magicPrompts';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { runtimeFetch } from '@/lib/runtime-fetch';
-import { subscribeRuntimeEndpointWillChange } from './runtime-switch';
+import { getRuntimeSwitchRevision } from './runtime-switch';
 import { notifyGitStatusInvalidated } from './gitStatusInvalidation';
 export type ChangeRequestProviderWords = {
   label: string;
@@ -16,8 +16,6 @@ export type ChangeRequestProviderWords = {
   features?: { changeRequestTemplates?: string[] };
 };
 
-let generationRuntime = 0;
-subscribeRuntimeEndpointWillChange(() => { generationRuntime += 1; });
 
 export type {
   GitRemote,
@@ -170,22 +168,26 @@ const COMMIT_DIFF_TOTAL_CHAR_LIMIT = 120_000;
 // concurrency and keeps the browser connection pool able to serve the UI.
 const COMMIT_DIFF_CONCURRENCY = 2;
 
-const collectSelectedFileDiffs = async (directory: string, files: string[]): Promise<string> => {
+const collectSelectedFileDiffs = async (directory: string, files: string[], assertCurrent: () => void): Promise<string> => {
   const limited = files.slice(0, COMMIT_DIFF_FILE_LIMIT);
   const chunks = await mapWithConcurrency(limited, COMMIT_DIFF_CONCURRENCY, async (path) => {
+    assertCurrent();
     try {
       const [staged, unstaged] = await Promise.all([
         gitHttp.getGitDiff(directory, { path, staged: true }).catch(() => null),
         gitHttp.getGitDiff(directory, { path, staged: false }).catch(() => null),
       ]);
+      assertCurrent();
       const text = [staged?.diff, unstaged?.diff]
         .filter((diff): diff is string => diff !== undefined && diff.trim().length > 0)
         .join('\n');
       return text ? text : `--- ${path} (no textual diff available)`;
     } catch {
+      assertCurrent();
       return `--- ${path} (diff unavailable)`;
     }
   });
+  assertCurrent();
 
   let total = '';
   for (const chunk of chunks) {
@@ -233,7 +235,8 @@ export async function generateCommitMessage(
   options?: { providerId?: string; modelId?: string }
 ): Promise<{ message: import('./api/types').GeneratedCommitMessage }> {
   const startedAt = Date.now();
-  const runtime = generationRuntime;
+  const runtime = getRuntimeSwitchRevision();
+  const assertCurrent = () => { if (runtime !== getRuntimeSwitchRevision()) throw new DOMException('Runtime changed', 'AbortError'); };
   const { currentProviderId, currentModelId } = useConfigStore.getState();
 
   console.info('[git-generation][browser] request', {
@@ -244,7 +247,9 @@ export async function generateCommitMessage(
   });
 
   const recentCommits = await collectRecentCommitSubjects(directory);
+  assertCurrent();
   const prompts = await loadMagicPrompts(directory);
+  assertCurrent();
   const visiblePrompt = prompts.render('git.commit.generate.visible');
   const hiddenPrompt = prompts.render('git.commit.generate.instructions', {
     selected_files: files.map((file) => `- ${file}`).join('\n'),
@@ -252,8 +257,8 @@ export async function generateCommitMessage(
   });
 
   try {
-    const diffs = await collectSelectedFileDiffs(directory, files);
-    if (runtime !== generationRuntime) throw new DOMException('Runtime changed', 'AbortError');
+    const diffs = await collectSelectedFileDiffs(directory, files, assertCurrent);
+    assertCurrent();
     const request: SmallModelRequest = {
       system: visiblePrompt,
       prompt: `${hiddenPrompt}\n\nDiffs of the selected files:\n${diffs}`,
@@ -326,13 +331,15 @@ const readOptionalRepoTextFile = async (directory: string, relativePath: string)
 // A repository that ships a PR template expects descriptions in its shape, so
 // the template wins over the built-in section layout. Missing template is the
 // normal case, not a failure: probing stops at the first file that has content.
-const collectPullRequestTemplate = async (directory: string, provider: ChangeRequestProviderWords | undefined): Promise<string> => {
+const collectPullRequestTemplate = async (directory: string, provider: ChangeRequestProviderWords | undefined, assertCurrent: () => void): Promise<string> => {
   // A provider's own templates (GitLab's merge request template) come before any GitHub-style one the project may also carry.
   const own = provider?.features?.changeRequestTemplates ?? [];
   const paths = [...own, ...PULL_REQUEST_TEMPLATE_PATHS.filter((candidate) => !own.includes(candidate))];
   const noun = provider?.terminology.promptNoun ?? 'pull request';
   for (const relativePath of paths) {
+    assertCurrent();
     const content = await readOptionalRepoTextFile(directory, relativePath);
+    assertCurrent();
     const trimmed = content?.trim();
     if (!trimmed) continue;
     console.info('[git-generation][browser] pull request template detected', {
@@ -362,7 +369,8 @@ export async function generatePullRequestDescription(
   payload: { base: string; head: string; context?: string; providerId?: string; modelId?: string; changeRequestProvider?: ChangeRequestProviderWords }
 ): Promise<import('./api/types').GeneratedPullRequestDescription> {
   const startedAt = Date.now();
-  const runtime = generationRuntime;
+  const runtime = getRuntimeSwitchRevision();
+  const assertCurrent = () => { if (runtime !== getRuntimeSwitchRevision()) throw new DOMException('Runtime changed', 'AbortError'); };
   const { currentProviderId, currentModelId } = useConfigStore.getState();
 
   const commitLog = await getGitLog(directory, {
@@ -370,6 +378,7 @@ export async function generatePullRequestDescription(
     to: payload.head,
     maxCount: 50,
   });
+  assertCurrent();
   const COMMIT_BODY_CHAR_LIMIT = 2_000;
   const commits = commitLog.all
     .filter(entry => entry.hash.length > 0)
@@ -385,20 +394,24 @@ export async function generatePullRequestDescription(
 
   const filesSet = new Set<string>();
   await Promise.all(commits.map(async (commit) => {
+    assertCurrent();
     try {
       const response = await getCommitFiles(directory, commit.hash);
+      assertCurrent();
       for (const file of response.files) {
         if (file.path.trim().length > 0) {
           filesSet.add(file.path.trim());
         }
       }
     } catch (error) {
+      assertCurrent();
       console.warn('[git-generation][browser] failed to collect commit files', {
         hash: commit.hash,
         error: error instanceof Error ? error.message : String(error),
       });
     }
   }));
+  assertCurrent();
   const changedFiles = Array.from(filesSet).sort().slice(0, 300);
 
   console.info('[git-generation][browser] request', {
@@ -412,6 +425,7 @@ export async function generatePullRequestDescription(
   });
 
   const prompts = await loadMagicPrompts(directory);
+  assertCurrent();
   const visiblePrompt = prompts.render('git.pr.generate.visible', {
     change_request: payload.changeRequestProvider
       ? `${payload.changeRequestProvider.label} ${payload.changeRequestProvider.terminology.promptNoun}`
@@ -428,12 +442,12 @@ export async function generatePullRequestDescription(
     }).join('\n'),
     changed_files: changedFiles.length > 0 ? changedFiles.map((file) => `- ${file}`).join('\n') : '- none detected',
     additional_context_block: payload.context?.trim() ? `\n\nAdditional context:\n${payload.context.trim()}` : '',
-    pr_template_block: await collectPullRequestTemplate(directory, payload.changeRequestProvider),
+    pr_template_block: await collectPullRequestTemplate(directory, payload.changeRequestProvider, assertCurrent),
   });
 
 
   try {
-    if (runtime !== generationRuntime) throw new DOMException('Runtime changed', 'AbortError');
+    assertCurrent();
     const request: SmallModelRequest = {
       system: visiblePrompt,
       prompt: hiddenPrompt,

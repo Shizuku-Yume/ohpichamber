@@ -7,6 +7,7 @@ import type { TrackerAuthStatus, TrackerDescriptor } from '@/lib/api/types';
 import { trackerPresentation } from '@/lib/trackers/presentation';
 import { openExternalUrl } from '@/lib/url';
 import { useI18n } from '@/lib/i18n';
+import { getRuntimeKey, subscribeRuntimeEndpointWillChange } from '@/lib/runtime-switch';
 import { focusDesktopWindow, isDesktopShell } from '@/lib/desktop';
 import { Icon } from '@/components/icon/Icon';
 import { BusyDots } from '@/components/ui/busy-dots';
@@ -71,6 +72,14 @@ export const TrackerSettings: React.FC<{ descriptor: TrackerDescriptor }> = ({ d
   const [isWaiting, setIsWaiting] = React.useState(false);
   const [open, setOpen] = React.useState(false);
   const pollTimerRef = React.useRef<number | null>(null);
+  const runtimeGeneration = React.useRef(0);
+  React.useEffect(() => {
+    const unsubscribe = subscribeRuntimeEndpointWillChange(() => {
+      runtimeGeneration.current += 1;
+      setIsBusy(false);
+    });
+    return () => { runtimeGeneration.current += 1; unsubscribe(); };
+  }, []);
 
   const stopWaiting = React.useCallback(() => {
     if (pollTimerRef.current != null) {
@@ -126,14 +135,19 @@ export const TrackerSettings: React.FC<{ descriptor: TrackerDescriptor }> = ({ d
 
   const activateAccount = React.useCallback(async (accountId: string) => {
     if (!trackers || !accountId) return;
+    const runtimeKey = getRuntimeKey();
+    const generation = runtimeGeneration.current;
+    const isCurrentRuntime = () => generation === runtimeGeneration.current && runtimeKey === getRuntimeKey();
     setIsBusy(true);
     try {
-      setTrackerStatus(providerId, await trackers.authActivate(providerId, accountId));
+      const nextStatus = await trackers.authActivate(providerId, accountId);
+      if (!isCurrentRuntime()) return;
+      setTrackerStatus(providerId, nextStatus);
       toast.success(t(copy.toastAccountSwitched, { provider }));
     } catch {
-      toast.error(t(copy.toastAccountSwitchFailed, { provider }));
+      if (isCurrentRuntime()) toast.error(t(copy.toastAccountSwitchFailed, { provider }));
     } finally {
-      setIsBusy(false);
+      if (isCurrentRuntime()) setIsBusy(false);
     }
   }, [copy, provider, providerId, setTrackerStatus, t, trackers]);
 

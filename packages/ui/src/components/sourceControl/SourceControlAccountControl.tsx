@@ -11,6 +11,7 @@ import {
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import type { SourceControlAuthAccount, SourceControlAuthStatus, SourceControlIdentity } from '@/lib/api/types';
 import { useI18n } from '@/lib/i18n';
+import { getRuntimeKey, subscribeRuntimeEndpointWillChange } from '@/lib/runtime-switch';
 import { cn } from '@/lib/utils';
 import { getManagedCredentialSourceLabelKey } from '@/lib/source-control/identity';
 import { useSourceControlProvider } from '@/lib/source-control/providers/registry';
@@ -38,16 +39,29 @@ export const SourceControlAccountControl: React.FC<{ className?: string; identit
   const status: SourceControlAuthStatus | null = entry?.status ?? null;
   const setStatus = useSourceControlAuthStore((state) => state.setStatus);
   const [isSwitching, setIsSwitching] = React.useState(false);
+  const runtimeGeneration = React.useRef(0);
+  React.useEffect(() => {
+    const unsubscribe = subscribeRuntimeEndpointWillChange(() => {
+      runtimeGeneration.current += 1;
+      setIsSwitching(false);
+    });
+    return () => { runtimeGeneration.current += 1; unsubscribe(); };
+  }, []);
 
   const switchAccount = React.useCallback(async (accountId: string) => {
     if (!accountId || isSwitching) return;
+    const runtimeKey = getRuntimeKey();
+    const generation = runtimeGeneration.current;
+    const isCurrentRuntime = () => generation === runtimeGeneration.current && runtimeKey === getRuntimeKey();
     setIsSwitching(true);
     try {
-      setStatus(identity, await sourceControl.authActivate(identity, accountId));
+      const nextStatus = await sourceControl.authActivate(identity, accountId);
+      if (!isCurrentRuntime()) return;
+      setStatus(identity, nextStatus);
     } catch (error) {
-      console.error('Failed to switch source control account:', error);
+      if (isCurrentRuntime()) console.error('Failed to switch source control account:', error);
     } finally {
-      setIsSwitching(false);
+      if (isCurrentRuntime()) setIsSwitching(false);
     }
   }, [identity, isSwitching, setStatus, sourceControl]);
 

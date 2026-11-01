@@ -34,6 +34,7 @@ describe('walkthrough routes', () => {
   let lastArgs;
   let getWalkthroughService;
   let validateReadContext;
+  let resolveWorkspaceDirectory;
   let generateCalls = 0;
 
   const service = {
@@ -107,7 +108,8 @@ describe('walkthrough routes', () => {
     app.use(express.json());
     getWalkthroughService = vi.fn(async () => service);
     validateReadContext = vi.fn(async (context) => ({ ...context, instance: 'github.com' }));
-    registerWalkthroughRoutes(app, { getWalkthroughService, validateReadContext });
+    resolveWorkspaceDirectory = vi.fn(async () => ({ workspaceId: 'workspace-1' }));
+    registerWalkthroughRoutes(app, { getWalkthroughService, validateReadContext, resolveWorkspaceDirectory, resolveRepositoryWorkspace: resolveWorkspaceDirectory });
     server = app.listen(0);
     await new Promise((resolve) => server.once('listening', resolve));
     base = `http://127.0.0.1:${server.address().port}`;
@@ -130,6 +132,17 @@ describe('walkthrough routes', () => {
     }
     if (generateCalls <= seen) throw new Error('the route never asked the service to generate');
   };
+
+  it.each(['get', 'generate'])('rejects unauthorized workspace on %s without loading service or falling back', async (operation) => {
+    resolveWorkspaceDirectory.mockResolvedValue(null);
+    const response = operation === 'get'
+      ? await fetch(`${base}/api/walkthrough?${new URLSearchParams({ directory: '/outside', source: JSON.stringify(SOURCE) })}`)
+      : await fetch(`${base}/api/walkthrough/generate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ directory: '/outside', source: SOURCE }) });
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ code: 'UNAUTHORIZED' });
+    expect(resolveWorkspaceDirectory).toHaveBeenCalledWith('/outside');
+    expect(getWalkthroughService).not.toHaveBeenCalled();
+  });
 
   it('answers a generation request that nobody interrupted', async () => {
     const seen = generateCalls;

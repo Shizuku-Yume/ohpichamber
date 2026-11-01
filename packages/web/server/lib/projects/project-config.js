@@ -1,3 +1,4 @@
+import { constants as fsConstants } from 'node:fs';
 import { DateTime, IANAZone } from 'luxon';
 import { CronExpressionParser } from 'cron-parser';
 
@@ -1017,19 +1018,53 @@ export const createProjectConfigRuntime = (deps) => {
   const projectPathOf = (projectID, personalRaw) => (
     projectPathFromId(projectID) || (typeof personalRaw.projectPath === 'string' ? personalRaw.projectPath.trim() : '')
   );
-  const sharedConfigPathOf = (projectPath) => path.join(projectPath, ...SHARED_CONFIG_RELATIVE_PATH.split('/'));
 
-  // A missing file is `missing`; one that cannot be read or parsed is
-  // `invalid` with a reason, never "no shared setup".
-  const readSharedProjectFile = async (projectPath) => {
-    let raw;
-    try {
-      raw = await fsPromises.readFile(sharedConfigPathOf(projectPath), 'utf8');
-    } catch (error) {
-      if (error && typeof error === 'object' && error.code === 'ENOENT') return { status: 'missing' };
-      return { status: 'invalid', reason: error instanceof Error ? error.message : String(error) };
+  // The selected checkout itself may be a symlink, but entries inside it are
+  // repository-controlled. Reject symlinked parents and files before reading
+  // or mutating them. The checks do not make an unrelated concurrent namespace
+  // replacement atomic; the project lock only coordinates our own writers.
+  const checkedSharedProjectPath = async (projectPath, createParent = false) => {
+    const root = await fsPromises.realpath(projectPath);
+    if (!(await fsPromises.stat(root)).isDirectory()) throw new Error('project checkout not found');
+    const parent = path.join(root, '.openchamber');
+    const file = path.join(parent, 'project.json');
+    const inspect = async (entry, directory) => {
+      let info;
+      try { info = await fsPromises.lstat(entry); }
+      catch (error) { if (error?.code === 'ENOENT') return false; throw error; }
+      if (info.isSymbolicLink() || (directory ? !info.isDirectory() : !info.isFile())) {
+        throw Object.assign(new Error('unsafe shared project configuration path'), { code: 'shared_config_invalid' });
+      }
+      const resolved = await fsPromises.realpath(entry);
+      const relative = path.relative(root, resolved);
+      if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+        throw Object.assign(new Error('unsafe shared project configuration path'), { code: 'shared_config_invalid' });
+      }
+      return true;
+    };
+    let parentExists = await inspect(parent, true);
+    if (!parentExists && createParent) {
+      try { await fsPromises.mkdir(parent); }
+      catch (error) { if (error?.code !== 'EEXIST') throw error; }
+      parentExists = await inspect(parent, true);
+      if (!parentExists) throw new Error('shared project configuration directory unavailable');
     }
-    return parseSharedProjectConfig(raw);
+    const fileExists = parentExists ? await inspect(file, false) : false;
+    return { parent, file, parentExists, fileExists };
+  };
+
+  const readSharedProjectFile = async (projectPath) => {
+    let handle;
+    try {
+      const checked = await checkedSharedProjectPath(projectPath);
+      if (!checked.fileExists) return { status: 'missing' };
+      handle = await fsPromises.open(checked.file, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0));
+      return parseSharedProjectConfig(await handle.readFile('utf8'));
+    } catch (error) {
+      return { status: 'invalid', reason: error instanceof Error ? error.message : String(error) };
+    } finally {
+      await handle?.close();
+    }
   };
 
   const readSharedProjectConfig = async (projectID, personalRaw) => {
@@ -1052,17 +1087,20 @@ export const createProjectConfigRuntime = (deps) => {
   // An empty result removes the file, and the `.openchamber` folder when that
   // leaves it empty.
   const writeSharedProjectFile = async (projectPath, text) => {
-    const filePath = sharedConfigPathOf(projectPath);
+    const checked = await checkedSharedProjectPath(projectPath, text !== null);
     if (text === null) {
-      await fsPromises.rm(filePath, { force: true });
-      await fsPromises.rmdir(path.dirname(filePath)).catch(() => {});
+      if (checked.fileExists) {
+        await checkedSharedProjectPath(projectPath);
+        await fsPromises.rm(checked.file);
+      }
+      if (checked.parentExists) await fsPromises.rmdir(checked.parent).catch(() => {});
       return;
     }
-    await fsPromises.mkdir(path.dirname(filePath), { recursive: true });
-    const temporaryPath = `${filePath}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const temporaryPath = `${checked.file}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
     try {
-      await fsPromises.writeFile(temporaryPath, text, 'utf8');
-      await fsPromises.rename(temporaryPath, filePath);
+      await fsPromises.writeFile(temporaryPath, text, { encoding: 'utf8', flag: 'wx' });
+      await checkedSharedProjectPath(projectPath);
+      await fsPromises.rename(temporaryPath, checked.file);
     } catch (error) {
       await fsPromises.rm(temporaryPath, { force: true }).catch(() => {});
       throw error;

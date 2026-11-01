@@ -82,14 +82,19 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
       // The identity strip beside the branch reads these on mount.
       case '/api/git/identities': return Response.json([]);
       case '/api/git/global-identity': return Response.json(null);
-      case '/api/source-control/binding': return Response.json({
-        status: 'bound', revision: 1,
-        repository: { supported: true, repositoryId: 'repo', configRevision: 'rev', bare: false,
-          remotes: [{ name: 'origin', fetch: ENDPOINT, push: ENDPOINT }] },
-        binding: { repositoryId: 'repo', configRevision: 'rev', revision: 1, state: 'bound',
-          providers: [{ provider: 'github', instance: 'github.com', accountId: ACCOUNT_ID, primaryRemote: 'origin', readiness: 'ready', endpoint: ENDPOINT }],
-          remotes: [], auxiliary: [] },
-      });
+      case '/api/source-control/binding': {
+        const guest = url.searchParams.get('directory') === '/board-repo';
+        const id = guest ? 'guest-repo' : 'repo';
+        const revision = guest ? 3 : 1;
+        return Response.json({
+          status: 'bound', revision,
+          repository: { supported: true, repositoryId: id, configRevision: 'rev', bare: false,
+            remotes: [{ name: guest ? 'upstream' : 'origin', fetch: ENDPOINT, push: ENDPOINT }] },
+          binding: { repositoryId: id, configRevision: 'rev', revision, state: 'bound',
+            providers: [{ provider: guest ? 'ext-source-control-provider' : 'github', instance: 'github.com', accountId: guest ? 'ext-source-control-provider#7' : ACCOUNT_ID, primaryRemote: guest ? 'upstream' : 'origin', readiness: 'ready', endpoint: ENDPOINT }],
+            remotes: [], auxiliary: [] },
+        });
+      }
       case '/api/git/branch-base': return Response.json({ base: null });
       case '/api/git/range-files': return Response.json({ files: [{ path: url.searchParams.get('base') === 'refs/heads/parent' ? 'parent.png' : 'branch.png', status: 'M' }] });
       case '/api/git/range-diff':
@@ -258,6 +263,48 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
     expect(prRequest?.searchParams.get('accountId')).toBe(ACCOUNT_ID);
     expect(prRequest?.searchParams.get('repositoryId')).toBe('repo');
     expect(requests.filter((url) => url.pathname === '/api/git/file-diff')).toHaveLength(0);
+
+    // A board handoff on the phone selects and validates its own repository.
+    const { usePullRequestSelectionStore } = await import('@/stores/usePullRequestSelectionStore');
+    const { useSourceControlProviderRegistry } = await import('@/lib/source-control/providers/registry');
+    const { acmeDescriptor } = await import('@/lib/source-control/providers/descriptor.fixture');
+    const guest = 'ext-source-control-provider';
+    const guestContext = { provider: guest, instance: 'https://github.com', accountId: `${guest}#7`, repositoryId: 'guest-repo', bindingRevision: 3, directory: '/board-repo', primaryRemote: 'upstream' };
+    const guestUser = { ...USER, provider: guest, instance: guestContext.instance };
+    const guestStatus = { ...CONNECTED, provider: guest, instance: guestContext.instance, user: guestUser, accounts: CONNECTED.accounts.map((account) => ({ ...account, id: guestContext.accountId, credentialId: guestContext.accountId, user: guestUser })) };
+    useSourceControlAuthStore.setState((state) => ({ entries: { ...state.entries, [getSourceControlAuthKey(guestContext)]: { status: guestStatus, isLoading: false, hasChecked: true } } }));
+    const descriptor = acmeDescriptor({ id: guest, label: 'Teahouse' });
+    useSourceControlProviderRegistry.setState({ ordered: [descriptor], byId: new Map([[guest, descriptor]]), status: 'ready', holdsList: true });
+    await act(async () => { seed('/board-repo'); });
+    await act(async () => usePullRequestSelectionStore.getState().requestDiff('/repo', { kind: 'pr', number: 2, sourceRepo: { owner: 'mona', repo: 'teapot' } }, guestContext, '/board-repo'));
+    for (let round = 0; round < 4; round += 1) await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
+    const guestRequest = requests.find((url) => url.pathname === '/api/walkthrough/pr-diff' && url.searchParams.get('provider') === guest);
+    expect(guestRequest?.searchParams.get('directory')).toBe('/board-repo');
+    expect(guestRequest?.searchParams.get('accountId')).toBe(guestContext.accountId);
+    expect(guestRequest?.searchParams.get('repositoryId')).toBe(guestContext.repositoryId);
+    expect(JSON.parse(guestRequest?.searchParams.get('source') ?? '{}')).toEqual({ kind: 'pr', number: 2, sourceRepo: { owner: 'mona', repo: 'teapot' } });
+    expect(container.querySelector('[title="published.png"]')).not.toBeNull();
+    // A consumed Board context must not outlive an authoritative rebind.
+    const { repositoryBindingOwner } = await import('@/lib/source-control/repository-binding');
+    const bound = { status: 'bound' as const, revision: 3, repository: { supported: true, repositoryId: 'guest-repo', configRevision: 'rev', bare: false, remotes: [{ name: 'upstream', fetch: ENDPOINT, push: ENDPOINT }] }, binding: { repositoryId: 'guest-repo', configRevision: 'rev', revision: 3, state: 'bound' as const, providers: [{ provider: guest, instance: guestContext.instance, accountId: guestContext.accountId, primaryRemote: 'upstream', readiness: 'ready' as const, endpoint: ENDPOINT }], remotes: [], auxiliary: [] } };
+    const mutation = repositoryBindingOwner.captureMutation(repositoryBindingOwner.scope('/board-repo'), bound);
+    const beforeRebind = requests.length;
+    const replacement = { ...guestContext, accountId: `${guest}#8`, bindingRevision: 4 };
+    const replacementStatus = { ...guestStatus, accounts: guestStatus.accounts.map((account) => ({ ...account, id: replacement.accountId, credentialId: replacement.accountId })) };
+    useSourceControlAuthStore.setState((state) => ({ entries: { ...state.entries, [getSourceControlAuthKey(replacement)]: { status: replacementStatus, isLoading: false, hasChecked: true } } }));
+    await act(async () => {
+      usePullRequestSelectionStore.getState().requestDiff('/repo', { kind: 'pr', number: 97, sourceRepo: { owner: 'mona', repo: 'teapot' } }, guestContext, '/board-repo');
+      expect(repositoryBindingOwner.setMutationResult(mutation, { ...bound, revision: 4, binding: { ...bound.binding, revision: 4, providers: bound.binding.providers.map((entry) => ({ ...entry, accountId: replacement.accountId })) } })).toBe(true);
+      mutation.release();
+    });
+    for (let round = 0; round < 4; round += 1) await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
+    expect(requests.slice(beforeRebind).filter((url) => url.pathname === '/api/walkthrough/pr-diff').every((url) => url.searchParams.get('bindingRevision') !== '3')).toBe(true);
+    expect(usePullRequestSelectionStore.getState().diffContexts.get('/repo')).toBeUndefined();
+    expect([...usePullRequestSelectionStore.getState().selections.entries()].some(([key, value]) => key.includes(replacement.accountId) && value.source.number === 97)).toBe(false);
+    await act(async () => usePullRequestSelectionStore.getState().requestDiff('/repo', { kind: 'pr', number: 2, sourceRepo: { owner: 'mona', repo: 'teapot' } }, replacement, '/board-repo'));
+    for (let round = 0; round < 4; round += 1) await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
+    expect(requests.slice(beforeRebind).some((url) => url.pathname === '/api/walkthrough/pr-diff' && url.searchParams.get('bindingRevision') === '4')).toBe(true);
+    await act(async () => usePullRequestSelectionStore.getState().clearChangesRepository('/repo'));
 
     await act(async () => { seed('/repo', { ...status, isClean: false, files: [{ path: 'working.png', index: 'M', working_dir: ' ' }] }); });
     initialDiff = { path: 'working.png', staged: true };

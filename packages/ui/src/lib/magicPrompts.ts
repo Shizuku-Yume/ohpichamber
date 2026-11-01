@@ -1206,8 +1206,3 @@ export const resetAllMagicPromptOverrides = (runtimeKey: string = getRuntimeKey(
   mutateGlobal(API_ENDPOINT, 'DELETE', runtimeKey, 'Failed to reset all magic prompts')
 );
 
-/** Backward-compatibility helper for call sites rendering single global magic prompts. */
-export const renderMagicPrompt = async (id: MagicPromptId, variables: Record<string, string> = {}): Promise<string> => {
-  const snapshot = await loadMagicPrompts(null);
-  return snapshot.render(id, variables);
-};

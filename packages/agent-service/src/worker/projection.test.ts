@@ -15,6 +15,44 @@ function assistant(content: Assistant['content'], stopReason: Assistant['stopRea
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } };
 }
 
+test('binds queued mention provenance to its native entry even when timestamps collide', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'canonical-mention-identity-'));
+  const manager = SessionManager.create(root, root);
+  let reopened: SessionManager | undefined;
+  try {
+    await manager.ensureOnDisk();
+    const projection = new WorkerProjection(manager, 'session');
+    projection.beginRun('run', 1);
+    const first = { role: 'user' as const, content: 'first', timestamp: 7 };
+    const second = { role: 'user' as const, content: 'second', timestamp: 7 };
+    const firstMention = { kind: 'session' as const, sessionId: 'first-session', title: 'First' };
+    const secondMention = { kind: 'session' as const, sessionId: 'second-session', title: 'Second' };
+    projection.admitQueuedPrompt(first, [], [{ kind: 'context', text: 'first context', metadata: { openchamberContext: firstMention } }]);
+    projection.admitQueuedPrompt(second, [], [{ kind: 'context', text: 'second context', metadata: { openchamberContext: secondMention } }]);
+    for (const message of [first, second]) {
+      projection.consume({ type: 'message_start', message });
+      projection.consume({ type: 'message_end', message });
+    }
+    manager.appendMessage(second);
+    manager.appendMessage(first);
+    projection.bindPending();
+    await manager.flush();
+    const history = projection.history({ sessionId: 'session' });
+    const byContent = (text: string) => history.messages.find(message => message.parts.some(part => part.type === 'text' && part.content === text));
+    expect(byContent('first')?.parts).toContainEqual(expect.objectContaining({ sessionMentions: [firstMention] }));
+    expect(byContent('second')?.parts).toContainEqual(expect.objectContaining({ sessionMentions: [secondMention] }));
+    const file = manager.getSessionFile();
+    if (!file) throw new Error('Native session file is required');
+    await manager.close();
+    reopened = await SessionManager.open(file, root, undefined, { initialCwd: root, throwIfMissing: true });
+    expect(new WorkerProjection(reopened, 'session').seed().messages).toEqual(history.messages);
+  } finally {
+    await reopened?.close();
+    await manager.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 for (const outcome of ['failed', 'cancelled'] as const) {
   test(`native history retains tool terminal state and completed cycles before a ${outcome} run`, async () => {
     const root = await mkdtemp(join(tmpdir(), 'canonical-history-'));

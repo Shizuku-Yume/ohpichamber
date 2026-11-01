@@ -22,6 +22,8 @@ import { createOutboundHandles } from './outbound-handles.js';
 import { detachExtensionDescriptors } from './provider-descriptors.test-support.js';
 import { createSourceControlProviders } from './provider-registry.js';
 import { registerSourceControlRoutes } from './routes.js';
+import { registerWalkthroughRoutes } from '../walkthrough/routes.js';
+import { getPullRequestDiff, getPullRequestFileContents } from '../walkthrough/pull-request.js';
 
 // The source-control role end to end: the checked-in example extension,
 // installed and approved through the guest routes, its real service spawned
@@ -104,6 +106,14 @@ beforeAll(async () => {
         return Promise.reject(new Error('the server stopped'));
       },
     },
+  });
+  registerWalkthroughRoutes(app, {
+    resolveWorkspaceDirectory: async () => ({ workspaceId: 'workspace-1' }),
+    validateReadContext: shell.validateReadContext,
+    getWalkthroughService: async () => ({
+      getPullRequestDiff: (directory, number, context, options) => getPullRequestDiff(directory, number, context, { ...options, readChangeRequestPatch: shell.readChangeRequestPatch }),
+      getPullRequestFileContents: (directory, number, context, options) => getPullRequestFileContents(directory, number, context, { ...options, readChangeRequestFile: shell.readChangeRequestFile }),
+    }),
   });
   extensionProviders = createExtensionProviders({
     listGuests: () => listInstalledGuests({ persistPath }),
@@ -209,6 +219,19 @@ describe('an extension as a Git host, end to end', () => {
     expect((await read('/repo/branches', { owner: 'mona', repo: 'teapot' })).body).toEqual({ branches: ['main', 'feature', 'docs'] });
     // Off in the manifest: the shell answers, the service is never asked.
     expect((await read('/references/labels', { owner: 'mona', repo: 'teapot' })).status).toBe(501);
+  });
+
+  it('serves the guest patch and file through validated walkthrough routes', async () => {
+    const source = { kind: 'pr', number: 2, sourceRepo: { owner: 'mona', repo: 'teapot' } };
+    const query = readQuery({ provider: PROVIDER, source: JSON.stringify(source) });
+    const patch = await fetch(`${base}/api/walkthrough/pr-diff?${query}`);
+    expect(patch.status).toBe(200);
+    expect(await patch.text()).toContain('+Steep for three minutes.');
+    const file = await fetch(`${base}/api/walkthrough/pr-file?${query}&path=README.md&status=M`);
+    expect(file.status).toBe(200);
+    expect(await file.json()).toEqual({ original: 'Steep for two minutes.\n', modified: 'Steep for three minutes.\nThen pour.\n' });
+    const invalid = await fetch(`${base}/api/walkthrough/pr-diff?${readQuery({ provider: PROVIDER, accountId: 'wrong', source: JSON.stringify(source) })}`);
+    expect(invalid.ok).toBe(false);
   });
 
   it('answers the reads other modules make with a validated context', async () => {

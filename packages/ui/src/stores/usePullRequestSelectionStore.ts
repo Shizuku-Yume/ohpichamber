@@ -1,5 +1,11 @@
 import { create } from 'zustand';
 import type { PullRequestSource } from '@/lib/diff/pullRequestDiff';
+import type { SourceControlReadContext } from '@/lib/source-control/types';
+
+export interface PullRequestDiffRequest {
+  source: PullRequestSource;
+  context: SourceControlReadContext;
+}
 
 interface PullRequestSelection {
   source: PullRequestSource;
@@ -9,7 +15,9 @@ interface PullRequestSelection {
 interface PullRequestSelectionState {
   selections: Map<string, PullRequestSelection>;
   /** A pull request another surface asked Changes to show, per directory. */
-  diffRequests: Map<string, PullRequestSource>;
+  diffRequests: Map<string, PullRequestDiffRequest>;
+  /** Authority selected by the board, retained after the request is consumed. */
+  diffContexts: Map<string, SourceControlReadContext>;
   /**
    * The repository the phone's Changes shows, per folder that is not one
    * itself, in place of the Git selection: the one a requested PR belongs to,
@@ -19,10 +27,11 @@ interface PullRequestSelectionState {
   select: (key: string, source: PullRequestSource) => void;
   acceptHandoff: (key: string, source: PullRequestSource) => void;
   /** Each call is a new request, so asking for the same PR again shows it again. */
-  requestDiff: (directory: string, source: PullRequestSource, repository?: string | null) => void;
+  requestDiff: (directory: string, source: PullRequestSource, context: SourceControlReadContext, repository?: string | null) => void;
   clearChangesRepository: (directory: string) => void;
   /** Drops `source` once Changes has taken it, so it never comes back on another branch. */
-  settleDiffRequest: (directory: string, source: PullRequestSource) => void;
+  settleDiffRequest: (directory: string, request: PullRequestDiffRequest) => void;
+  clearDiffContext: (directory: string, context: SourceControlReadContext) => void;
 }
 
 const remember = (state: PullRequestSelectionState, key: string, selection: PullRequestSelection) => {
@@ -40,30 +49,42 @@ const remember = (state: PullRequestSelectionState, key: string, selection: Pull
 export const usePullRequestSelectionStore = create<PullRequestSelectionState>((set) => ({
   selections: new Map(),
   diffRequests: new Map(),
+  diffContexts: new Map(),
   changesRepositories: new Map(),
   select: (key, source) => set((state) => remember(state, key, { source, handoff: state.selections.get(key)?.handoff ?? null })),
   // A retained request is consumed once even if the walkthrough tab remounts.
   acceptHandoff: (key, source) => set((state) => state.selections.get(key)?.handoff === source
     ? state : remember(state, key, { source, handoff: source })),
-  requestDiff: (directory, source, repository = null) => set((state) => {
+  requestDiff: (directory, source, context, repository = null) => set((state) => {
     const diffRequests = new Map(state.diffRequests);
-    diffRequests.set(directory, { ...source });
-    if (!repository && !state.changesRepositories.has(directory)) return { diffRequests };
+    diffRequests.set(directory, { source: { ...source }, context });
+    const diffContexts = new Map(state.diffContexts);
+    diffContexts.set(directory, context);
+    if (!repository && !state.changesRepositories.has(directory)) return { diffRequests, diffContexts };
     const changesRepositories = new Map(state.changesRepositories);
     if (repository) changesRepositories.set(directory, repository);
     else changesRepositories.delete(directory);
-    return { diffRequests, changesRepositories };
+    return { diffRequests, diffContexts, changesRepositories };
   }),
   clearChangesRepository: (directory) => set((state) => {
-    if (!state.changesRepositories.has(directory)) return state;
     const changesRepositories = new Map(state.changesRepositories);
+    const diffContexts = new Map(state.diffContexts);
     changesRepositories.delete(directory);
-    return { changesRepositories };
+    diffContexts.delete(directory);
+    return { changesRepositories, diffContexts };
   }),
-  settleDiffRequest: (directory, source) => set((state) => {
-    if (state.diffRequests.get(directory) !== source) return state;
+  settleDiffRequest: (directory, request) => set((state) => {
+    if (state.diffRequests.get(directory) !== request) return state;
     const diffRequests = new Map(state.diffRequests);
     diffRequests.delete(directory);
     return { diffRequests };
+  }),
+  clearDiffContext: (directory, context) => set((state) => {
+    if (state.diffContexts.get(directory) !== context) return state;
+    const diffContexts = new Map(state.diffContexts);
+    diffContexts.delete(directory);
+    const diffRequests = new Map(state.diffRequests);
+    if (diffRequests.get(directory)?.context === context) diffRequests.delete(directory);
+    return { diffContexts, diffRequests };
   }),
 }));

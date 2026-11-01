@@ -1,3 +1,4 @@
+import { hasSameSourceControlReadContext } from '@/lib/source-control/identity';
 import React from 'react';
 
 import { useUIStore, type PendingDiffScope } from '@/stores/useUIStore';
@@ -1781,16 +1782,24 @@ export const DiffView: React.FC<DiffViewProps> = ({
     const currentBranch = status?.current ?? null;
     // A pull request opened from the issues and PRs board.
     const requestedPr = usePullRequestSelectionStore((state) => (effectiveDirectory ? state.diffRequests.get(effectiveDirectory) : undefined));
-    const prComparison = usePullRequestComparison(effectiveDirectory ?? null, currentBranch, binding.contexts[0] ?? null, visible && activeDiffScope === 'pr' && !isVSCodeRuntime(), requestedPr);
-    // Set only when the server serves the project's provider: change-request diffs exist only for those.
+    const requestedContext = usePullRequestSelectionStore((state) => (effectiveDirectory ? state.diffContexts.get(effectiveDirectory) : undefined));
+    const activeRequestedContext = binding.status === 'ready' && requestedContext
+        && binding.contexts.some((context) => hasSameSourceControlReadContext(context, requestedContext))
+        ? requestedContext : undefined;
+    React.useEffect(() => {
+        if (effectiveDirectory && requestedContext && binding.status === 'ready' && !activeRequestedContext) {
+            usePullRequestSelectionStore.getState().clearDiffContext(effectiveDirectory, requestedContext);
+        }
+    }, [activeRequestedContext, binding.status, effectiveDirectory, requestedContext]);
+    const prComparison = usePullRequestComparison(effectiveDirectory ?? null, currentBranch, activeRequestedContext ?? (binding.status === 'ready' ? binding.contexts[0] : null) ?? null, visible && activeDiffScope === 'pr' && !isVSCodeRuntime(), activeRequestedContext && requestedPr && hasSameSourceControlReadContext(activeRequestedContext, requestedPr.context) ? requestedPr.source : undefined);
     const pullRequestContext = prComparison.readContext;
     const selectedPr = prComparison.selectedSource;
     const prChangeRequestTerm = useChangeRequestTerm(prComparison.provider);
     // Taken once the branch is known: the selection it landed in is the real one.
     React.useEffect(() => {
-        if (!effectiveDirectory || !requestedPr || !status || selectedPr !== requestedPr) return;
+        if (!effectiveDirectory || !requestedPr || !activeRequestedContext || !status || selectedPr !== requestedPr.source) return;
         usePullRequestSelectionStore.getState().settleDiffRequest(effectiveDirectory, requestedPr);
-    }, [effectiveDirectory, requestedPr, selectedPr, status]);
+    }, [activeRequestedContext, effectiveDirectory, requestedPr, selectedPr, status]);
     const commitComparison = useCommitComparison(effectiveDirectory ?? null, currentBranch, visible && activeDiffScope === 'commit' && !isVSCodeRuntime());
     const selectedCommitHash = commitComparison.selectedCommit?.hash ?? null;
     React.useEffect(() => {

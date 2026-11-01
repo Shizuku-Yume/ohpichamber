@@ -3,15 +3,16 @@ import { describe, expect, test } from 'bun:test';
 import { usePullRequestSelectionStore } from './usePullRequestSelectionStore';
 
 const source = { kind: 'pr' as const, number: 12, sourceRepo: { owner: 'acme', repo: 'project' } };
+const context = { provider: 'github', instance: 'github.com', accountId: 'account', repositoryId: 'repo', bindingRevision: 1, directory: '/repo', primaryRemote: 'origin' };
 
 describe('pull request diff requests', () => {
   test('a repeated request is a new one, and a taken one is dropped', () => {
     const store = usePullRequestSelectionStore.getState();
-    store.requestDiff('/repo', source);
+    store.requestDiff('/repo', source, context);
     const first = usePullRequestSelectionStore.getState().diffRequests.get('/repo');
-    store.requestDiff('/repo', source);
+    store.requestDiff('/repo', source, context);
     const second = usePullRequestSelectionStore.getState().diffRequests.get('/repo');
-    expect(second).toEqual(source);
+    expect(second).toEqual({ source, context });
     expect(second).not.toBe(first);
 
     // Settling an older request leaves the newer one in place.
@@ -25,16 +26,16 @@ describe('pull request diff requests', () => {
   test('a request names the repository the phone shows under a folder, until another request or a pick', () => {
     const store = usePullRequestSelectionStore.getState();
     const repositories = () => usePullRequestSelectionStore.getState().changesRepositories;
-    store.requestDiff('/work', source, '/work/api');
+    store.requestDiff('/work', source, context, '/work/api');
     expect(repositories().get('/work')).toBe('/work/api');
     // A settled request keeps showing its repository.
     const request = usePullRequestSelectionStore.getState().diffRequests.get('/work');
     if (!request) throw new Error('Expected a request');
     store.settleDiffRequest('/work', request);
     expect(repositories().get('/work')).toBe('/work/api');
-    store.requestDiff('/work', source);
+    store.requestDiff('/work', source, context);
     expect(repositories().has('/work')).toBe(false);
-    store.requestDiff('/work', source, '/work/app');
+    store.requestDiff('/work', source, context, '/work/app');
     store.clearChangesRepository('/work');
     expect(repositories().has('/work')).toBe(false);
   });

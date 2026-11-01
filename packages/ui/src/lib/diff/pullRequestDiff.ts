@@ -48,7 +48,7 @@ export async function fetchPullRequestDiff(directory: string, source: PullReques
 
 const pullRequestFileSchema = z.object({ original: z.string(), modified: z.string() });
 
-/** Both sides of one PR file from GitHub, for expanding collapsed context on demand. */
+/** Both sides of one change-request file, for expanding collapsed context on demand. */
 export async function fetchPullRequestFile(
   directory: string,
   source: PullRequestSource,

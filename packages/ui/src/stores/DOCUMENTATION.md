@@ -174,11 +174,11 @@ keep-alive workspace pane is hidden.
 
 `usePullRequestSelectionStore.ts` shares session-only PR choices across desktop,
 mobile Changes and walkthrough, keyed by runtime, directory, checked-out branch
-and bound repository, so a rebind to another repository starts without a choice. Explicit selection bounds remembered choices to 100 entries. A choice
+and full bound read context, so a rebind or account change starts without a choice. Explicit selection bounds remembered choices to 100 entries. A choice
 contains the PR number and its repository, so fork and upstream PRs with equal
 numbers remain distinct. `usePullRequestComparison` owns the searchable,
 paginated list while PR mode is active and reads it through
-`SourceControlAPI.changeRequestsList` with the bound GitHub context. The shared
+`SourceControlAPI.changeRequestsList` with the bound provider context. The shared
 status store, asked through that same context, supplies the initial choice,
 independently of list pagination. An absent match requires selection. External walkthrough handoffs
 apply once, and later picker changes

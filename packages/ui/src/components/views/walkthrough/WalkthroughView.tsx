@@ -262,7 +262,7 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
       releaseActiveSourceControlContexts(capturedRuntimeKey, directory, sourceControlContextsOwnerId);
     };
   }, [beginActiveSourceControlContextsLoad, binding.contexts, binding.scope.runtimeKey, commitActiveSourceControlContexts, directory, releaseActiveSourceControlContexts, sourceControlAuthEntries, sourceControlContextsOwnerId]);
-  const readContext = binding.contexts[0] ?? null;
+  const readContext = requestedTarget && 'context' in requestedTarget ? requestedTarget.context : binding.contexts[0] ?? null;
   const readAuthEntry = readContext ? sourceControlAuthEntries[getSourceControlAuthKey(readContext)] : undefined;
   const readAuth = readContext
     ? getSourceControlReadContextAuthState(readAuthEntry, readContext)
@@ -300,8 +300,7 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
   const prComparison = usePullRequestComparison(directory || null, currentBranch, readContext, visible && isPrScope,
     requestedTarget?.source.kind === 'pr' ? requestedTarget.source : undefined);
   const selectedPr = prComparison.selectedSource;
-  // Pull requests on GitHub and merge requests on GitLab both have a published diff to walk through.
-  const readsChangeRequests = readContext?.provider === 'github' || readContext?.provider === 'gitlab';
+  const readsChangeRequests = Boolean(readContext) && !prComparison.diffUnavailable;
   const changeRequestProvider = prComparison.provider;
 
   const target = useMemo<WalkthroughTarget>(

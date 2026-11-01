@@ -81,6 +81,7 @@ export const createFeatureRoutesRuntime = () => {
   };
 
   let walkthroughService = null;
+  let magicPromptOverridesForDirectory;
   let walkthroughBindingService = null;
   let gitRepositoryCredentialRuntime = null;
   let networkOperations = null;
@@ -95,18 +96,19 @@ export const createFeatureRoutesRuntime = () => {
         ...service,
         // Forward only the request options by name: the remaining slots are
         // dependency overrides and must not be reachable from a route.
-        getPullRequestDiff: (directory, number, readContext, { allowEmpty, sourceRepo } = {}) => pullRequest.getPullRequestDiff(
+        getPullRequestDiff: (directory, number, readContext, { allowEmpty, sourceRepo, revision } = {}) => pullRequest.getPullRequestDiff(
           directory,
           number,
           readContext,
           {
             allowEmpty,
             sourceRepo,
+            revision,
             onAccountUnavailable: walkthroughBindingService?.accountUnavailable,
-            readGitLabChangeRequestPatch: walkthroughBindingService?.readGitLabChangeRequestPatch,
+            readChangeRequestPatch: walkthroughBindingService?.readChangeRequestPatch,
           },
         ),
-        getPullRequestFileContents: (directory, number, readContext, { path, previousPath, status, sourceRepo }) => pullRequest.getPullRequestFileContents(
+        getPullRequestFileContents: (directory, number, readContext, { path, previousPath, status, sourceRepo, revision }) => pullRequest.getPullRequestFileContents(
           directory,
           number,
           readContext,
@@ -115,10 +117,16 @@ export const createFeatureRoutesRuntime = () => {
             previousPath,
             status,
             sourceRepo,
+            revision,
             onAccountUnavailable: walkthroughBindingService?.accountUnavailable,
-            readGitLabChangeRequestFile: walkthroughBindingService?.readGitLabChangeRequestFile,
+            readChangeRequestFile: walkthroughBindingService?.readChangeRequestFile,
           },
         ),
+        readWalkthroughInstructions: async (directory) => {
+          if (!magicPromptOverridesForDirectory) throw new Error('Magic prompt reader is unavailable');
+          const overrides = await magicPromptOverridesForDirectory(directory);
+          return overrides['walkthrough.instructions'] ?? '';
+        },
       };
     }
     return walkthroughService;
@@ -175,12 +183,16 @@ export const createFeatureRoutesRuntime = () => {
       routingRuntime,
       globalEventHub,
       resolveWorkspaceScope,
+      resolveWorkspaceDirectory,
+      resolveRepositoryWorkspace,
       resolveSessionScope,
       resolveHostSessionScope,
       listQueueScopes,
       resolveQuotaSelection,
       listQuotaSelections,
       resolveCredential,
+      resolvePrimaryWorktreeRoot,
+      resolveWorktreeTopLevel,
       openchamberVersion,
     } = routeDependencies;
 
@@ -368,7 +380,8 @@ export const createFeatureRoutesRuntime = () => {
     });
     registerWalkthroughRoutes(app, {
       getWalkthroughService,
-      resolveWorkspaceScope,
+      resolveWorkspaceDirectory,
+      resolveRepositoryWorkspace,
       validateReadContext: walkthroughBindingService.validateReadContext,
     });
     // Live state of the linked pull requests, merge requests and issues the
@@ -563,11 +576,16 @@ export const createFeatureRoutesRuntime = () => {
     registerLinearRoutes(app);
     registerTrackerRoutes(app, { registry: trackers });
     registerDevServerRoutes(app, { scanner: devServerScanner, getOwnPorts });
-    registerMagicPromptRoutes(app, {
+    ({ overridesForDirectory: magicPromptOverridesForDirectory } = registerMagicPromptRoutes(app, {
       fsPromises,
       path,
       openchamberDataDir,
-    });
+      projectConfigRuntime,
+      readSettingsFromDisk,
+      sanitizeProjects,
+      resolvePrimaryWorktreeRoot,
+      resolveWorktreeTopLevel,
+    }));
     registerProjectContextRoutes(app, { projectContextRuntime });
     registerProjectDirectoryRoutes(app, {
       fsPromises,

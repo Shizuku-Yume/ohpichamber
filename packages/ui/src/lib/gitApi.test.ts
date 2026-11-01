@@ -187,6 +187,25 @@ describe("generateCommitMessage diff collection", () => {
 
   const jsonResponse = (body: string): Response =>
     new Response(body, { status: 200, headers: { "Content-Type": "application/json" } })
+  const fixtureFetch = async (input: Parameters<typeof fetch>[0], init?: RequestInit): Promise<Response> => {
+    const url = String(input)
+    if (url.includes('/git/diff')) {
+      diffRequestCount++; activeDiffRequests++; peakDiffRequests = Math.max(peakDiffRequests, activeDiffRequests)
+      await Promise.resolve(); activeDiffRequests--
+      return jsonResponse(JSON.stringify({ path: 'src/file.ts', diff: '--- a/src/file.ts\n+++ b/src/file.ts\n', submodule: null }))
+    }
+    if (url.includes('/api/git/log')) return jsonResponse(JSON.stringify({ all: [{ hash: 'abcdef0123', date: '2026-10-14T00:00:00Z', message: 'Keep scoped completion', refs: '', body: '', author_name: 'Test Author', author_email: 'author@example.test', filesChanged: 1, insertions: 1, deletions: 0, parents: [] }], latest: null, total: 1 }))
+    if (url.includes('/api/git/commit-files')) return jsonResponse(JSON.stringify({ files: [{ path: 'src/file.ts', changeType: 'M', insertions: 1, deletions: 0, isBinary: false }] }))
+    if (url.includes('/api/magic-prompts')) return jsonResponse(JSON.stringify({ version: 1, overrides: {} }))
+    if (url.includes('/api/agent/v1/workspaces/resolve')) return jsonResponse(JSON.stringify({ workspaceId: 'workspace-git', projectId: 'project-git', name: 'Git' }))
+    if (url.includes('/api/agent/v1/workspaces/workspace-git/models')) return jsonResponse(JSON.stringify({ workspaceId: 'workspace-git', revision: '0', models: [{ provider: 'git-provider', modelId: 'haiku', name: 'Haiku', modalities: ['text'], contextWindow: 8000, maxOutputTokens: 2000, reasoningEffortSupported: false, reasoningOptions: [], variants: [], pricing: null }] }))
+    if (url.includes('/api/agent/v1/workspaces/workspace-git/completions')) {
+      const body = JSON.parse(String(init?.body)); expect(body.format.kind).toBe('json')
+      return jsonResponse(JSON.stringify({ completionId: body.completionId, selection: body.selection, status: 'completed', output: { kind: 'json', value: { subject: 'chore: bound diff collection', highlights: [] } }, finishReason: 'complete', usage: null }))
+    }
+    if (url.includes('/auth/url-token')) return jsonResponse(JSON.stringify({ token: 'test-url-token', expiresAt: Date.now() + 60_000 }))
+    return jsonResponse('{}')
+  }
 
   beforeEach(() => {
     activeDiffRequests = 0
@@ -194,45 +213,7 @@ describe("generateCommitMessage diff collection", () => {
     diffRequestCount = 0
     invalidateSettingsCache()
     useConfigStore.setState({ currentProviderId: 'git-provider', currentModelId: 'haiku' })
-    request = spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
-      const url = String(input)
-      if (url.includes("/git/diff")) {
-        diffRequestCount += 1
-        activeDiffRequests += 1
-        peakDiffRequests = Math.max(peakDiffRequests, activeDiffRequests)
-        await new Promise((resolve) => setTimeout(resolve, 1))
-        activeDiffRequests -= 1
-        return jsonResponse(JSON.stringify({
-          path: "src/file.ts",
-          diff: "--- a/src/file.ts\n+++ b/src/file.ts\n",
-          submodule: null,
-        }))
-      }
-      if (url.includes("/api/git/log")) {
-        return jsonResponse(JSON.stringify({ all: [{ hash: 'abcdef0123', date: '2026-10-14T00:00:00Z', message: 'Keep scoped completion', refs: '', body: '', author_name: 'Test Author', author_email: 'author@example.test', filesChanged: 1, insertions: 1, deletions: 0, parents: [] }], latest: null, total: 1 }))
-      }
-      if (url.includes('/api/git/commit-files')) {
-        return jsonResponse(JSON.stringify({ files: [{ path: 'src/file.ts', changeType: 'M', insertions: 1, deletions: 0, isBinary: false }] }))
-      }
-      if (url.includes("/api/magic-prompts")) {
-        return jsonResponse(JSON.stringify({ version: 1, overrides: {} }))
-      }
-      if (url.includes('/api/agent/v1/workspaces/resolve')) {
-        return jsonResponse(JSON.stringify({ workspaceId: 'workspace-git', projectId: 'project-git', name: 'Git' }))
-      }
-      if (url.includes('/api/agent/v1/workspaces/workspace-git/models')) {
-        return jsonResponse(JSON.stringify({ workspaceId: 'workspace-git', revision: '0', models: [{ provider: 'git-provider', modelId: 'haiku', name: 'Haiku', modalities: ['text'], contextWindow: 8000, maxOutputTokens: 2000, reasoningEffortSupported: false, reasoningOptions: [], variants: [], pricing: null }] }))
-      }
-      if (url.includes('/api/agent/v1/workspaces/workspace-git/completions')) {
-        const body = JSON.parse(String(init?.body))
-        expect(body.format.kind).toBe('json')
-        return jsonResponse(JSON.stringify({ completionId: body.completionId, selection: body.selection, status: 'completed', output: { kind: 'json', value: { subject: 'chore: bound diff collection', highlights: [] } }, finishReason: 'complete', usage: null }))
-      }
-      if (url.includes("/auth/url-token")) {
-        return jsonResponse(JSON.stringify({ token: "test-url-token", expiresAt: Date.now() + 60_000 }))
-      }
-      return jsonResponse("{}")
-    })
+    request = spyOn(globalThis, "fetch").mockImplementation(fixtureFetch)
     switchRuntimeEndpoint({ apiBaseUrl: "https://git.test", runtimeKey: "git-api-commit-diff" })
   })
 
@@ -240,6 +221,49 @@ describe("generateCommitMessage diff collection", () => {
     request.mockRestore()
     invalidateSettingsCache()
   })
+
+  test.each(['commit', 'pr'] as const)('%s does not read prompts or files after its log returns on another runtime', async (kind) => {
+    let release!: (response: Response) => void; let started!: () => void;
+    const gate = new Promise<Response>((resolve) => { release = resolve })
+    const reached = new Promise<void>((resolve) => { started = resolve })
+    const paths: string[] = []
+    request.mockImplementation(async (input) => {
+      const url = String(input); paths.push(url)
+      if (url.includes('/api/git/log')) { started(); return gate }
+      return jsonResponse('{}')
+    })
+    const pending = kind === 'commit' ? generateCommitMessage('/repo', files) : generatePullRequestDescription('/repo', { base: 'main', head: 'topic' })
+    await reached
+    switchRuntimeEndpoint({ apiBaseUrl: 'https://other.test', runtimeKey: 'git-other' })
+    release(jsonResponse(JSON.stringify({ all: [{ hash: 'abc', date: '2026-10-14', message: 'subject', refs: '', body: '', author_name: 'Test', author_email: 'test@example.test', filesChanged: 1, insertions: 1, deletions: 0, parents: [] }], latest: null, total: 1 })))
+    await expect(pending).rejects.toThrow('Runtime changed')
+    expect(paths.some((url) => url.includes('/api/magic-prompts') || url.includes('/git/commit-files') || url.includes('/git/diff'))).toBe(false)
+  })
+
+  test('commit stops launching queued file diffs after a switch', async () => {
+    let release!: () => void; let started!: () => void; const gate = new Promise<void>(r => { release = r }); const reached = new Promise<void>(r => { started = r });
+    let count = 0;
+    request.mockImplementation(async (input, init) => {
+      if (String(input).includes('/git/diff')) { count++; started(); await gate; return jsonResponse(JSON.stringify({ path: 'file', diff: 'diff', submodule: null })); }
+      return fixtureFetch(input, init);
+    });
+    const pending = generateCommitMessage('/repo', files); await reached;
+    switchRuntimeEndpoint({ apiBaseUrl: 'https://other.test', runtimeKey: 'git-other' }); release();
+    await expect(pending).rejects.toThrow('Runtime changed'); expect(count).toBeLessThanOrEqual(4);
+  });
+
+  test('PR stops before prompt reads when commit-file collection switches runtime', async () => {
+    let release!: () => void; let started!: () => void; const gate = new Promise<void>(r => { release = r }); const reached = new Promise<void>(r => { started = r });
+    const paths: string[] = [];
+    request.mockImplementation(async (input, init) => {
+      const url = String(input); paths.push(url);
+      if (url.includes('/api/git/commit-files')) { started(); await gate; return jsonResponse('{"files":[]}'); }
+      return fixtureFetch(input, init);
+    });
+    const pending = generatePullRequestDescription('/repo', { base: 'main', head: 'topic' }); await reached;
+    switchRuntimeEndpoint({ apiBaseUrl: 'https://other.test', runtimeKey: 'git-other' }); release();
+    await expect(pending).rejects.toThrow('Runtime changed'); expect(paths.some(url => url.includes('/api/magic-prompts') || url.includes('/api/fs/read'))).toBe(false);
+  });
 
   test("caps diff collection at two selected files in flight", async () => {
     const result = await generateCommitMessage("/repo", files)

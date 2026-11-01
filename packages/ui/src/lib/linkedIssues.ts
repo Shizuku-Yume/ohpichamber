@@ -328,16 +328,21 @@ export const buildLinkedTrackerItem = (input: {
 });
 
 /** An entry as it is stored in session metadata and sent to the server. */
-type StoredLinkedIssue = Exclude<LinkedIssue, LinkedTrackerItem> | (Omit<LinkedTrackerItem, 'kind'> & { kind: 'tracker' | 'linear' });
+type StoredLinkedIssue = Exclude<LinkedIssue, LinkedTrackerItem>
+  | (Omit<LinkedTrackerItem, 'kind' | 'provider'> & { kind: 'linear'; provider: 'linear' })
+  | LinkedTrackerItem;
 
 /**
  * The stored form of an entry: a Linear item keeps `kind: 'linear'` (with
  * `provider` beside it), which older clients read and keep when they rewrite
  * the list (`storedTrackerLinkKind`). Readers accept both kinds.
  */
-export const toStoredLinkedIssue = (entry: LinkedIssue): StoredLinkedIssue => (
-  entry.kind === 'tracker' ? { ...entry, kind: storedTrackerLinkKind(entry.provider) } : entry
-);
+export const toStoredLinkedIssue = (entry: LinkedIssue): StoredLinkedIssue => {
+  if (entry.kind !== 'tracker') return entry;
+  return storedTrackerLinkKind(entry.provider) === 'linear'
+    ? { ...entry, kind: 'linear', provider: 'linear' }
+    : entry;
+};
 
 export const getLinkedIssues = (session: Session | null | undefined): LinkedIssue[] => {
   const openchamber = getSessionMetadata(session).openchamber;

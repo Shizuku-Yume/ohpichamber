@@ -112,6 +112,7 @@ export function createHostAgentRuntime({
     stop: () => service.stop(),
     close,
     service, skillFileOwner, resolveWorkspaceScope, resolveWorkspaceDirectory: scopeRuntime.resolveWorkspaceDirectory, resolveSessionScope, resolveHostSessionScope,
+    resolveRepositoryWorkspace: scopeRuntime.resolveRepositoryWorkspace,
     resolveHostRelocationScope: scopeRuntime.resolveRelocationSourceScope,
   };
 }

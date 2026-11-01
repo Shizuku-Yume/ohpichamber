@@ -365,6 +365,10 @@ test('actual SDK steer/follow-up admission retains queued identity, captured con
     if (++requestCount === 1) { firstRequest.resolve(); await release.promise; }
     return completion();
   } });
+  const directMention = { kind: 'session' as const, sessionId: 'referenced-session', title: `${harness.root}/private-title` };
+  const publicDirectMention = { ...directMention, title: '[workspace]/private-title' };
+  const queuedMention = { kind: 'session-message' as const, sessionId: 'other-session', messageId: 'other-message', sessionTitle: 'Other session', excerpt: 'Referenced message' };
+  let cold: WorkerSession | undefined;
   const followedUp = Promise.withResolvers<void>();
   const finished = Promise.withResolvers<void>();
   let followUpId: string | undefined;
@@ -379,7 +383,7 @@ test('actual SDK steer/follow-up admission retains queued identity, captured con
     expect(harness.requests).toHaveLength(0);
     await harness.worker.operation({ type: 'prompt', runId: 'streaming-run', request: {
       ...prompt('Keep this initial turn open.'), input: { text: 'Keep this initial turn open.', attachments: [], context: [
-        { kind: 'context', text: 'DIRECT_CONTEXT_ENTRY', metadata: {}, instructions: 'DIRECT_ASSOCIATED_INSTRUCTION' },
+        { kind: 'context', text: 'DIRECT_CONTEXT_ENTRY', metadata: { openchamberContext: directMention }, instructions: 'DIRECT_ASSOCIATED_INSTRUCTION' },
         { kind: 'instruction', text: 'DIRECT_LATER_INSTRUCTION' },
         { kind: 'synthetic', text: 'DIRECT_SYNTHETIC_ENTRY' },
         { kind: 'context', text: 'DIRECT_LAST_CONTEXT', metadata: {} },
@@ -396,7 +400,7 @@ test('actual SDK steer/follow-up admission retains queued identity, captured con
     expect(steered).toMatchObject({ type: 'steer', ack: { sessionId: rootSessionId, runId: 'streaming-run', acceptedAt: expect.any(Number) } });
     const queued = await harness.worker.operation({ type: 'follow-up', request: {
       ...prompt('FOLLOW_UP_MARKER'), input: { text: 'FOLLOW_UP_MARKER', attachments: [attachment], context: [
-        { kind: 'context', text: 'FOLLOW_UP_CONTEXT', metadata: { captured: true }, deliveryReceiptId: 'delivery', instructions: 'FOLLOW_UP_ASSOCIATED_INSTRUCTION' },
+        { kind: 'context', text: 'FOLLOW_UP_CONTEXT', metadata: { openchamberContext: queuedMention }, deliveryReceiptId: 'delivery', instructions: 'FOLLOW_UP_ASSOCIATED_INSTRUCTION' },
         { kind: 'instruction', text: 'FOLLOW_UP_LATER_INSTRUCTION' },
         { kind: 'synthetic', text: 'FOLLOW_UP_SYNTHETIC_ENTRY' },
         { kind: 'context', text: 'FOLLOW_UP_LAST_CONTEXT', metadata: {} },
@@ -415,13 +419,30 @@ test('actual SDK steer/follow-up admission retains queued identity, captured con
     const followUp = history.history.messages.find(message => message.messageId === followUpId);
     expect(followUp?.parts).toEqual(expect.arrayContaining([{ type: 'attachment', partId: `${followUpId}:attachment:0`, ...attachment }]));
     expect(JSON.stringify(followUp)).toContain('FOLLOW_UP_MARKER');
+    const direct = history.history.messages.find(message => message.role === 'user' && message.parts.some(part => part.type === 'text' && part.content.includes('Keep this initial turn open.')));
+    expect(direct?.parts).toContainEqual(expect.objectContaining({ type: 'text', sessionMentions: [publicDirectMention] }));
+    expect(followUp?.parts).toContainEqual(expect.objectContaining({ type: 'text', sessionMentions: [queuedMention] }));
+    const startedParts = harness.events.flatMap(({ event }) => event.type === 'part.started' ? [event.part] : []);
+    expect(startedParts).toContainEqual(expect.objectContaining({ type: 'text', sessionMentions: [publicDirectMention] }));
+    expect(startedParts).toContainEqual(expect.objectContaining({ type: 'text', sessionMentions: [queuedMention] }));
+    const snapshot = harness.journal.snapshot();
+    expect(snapshot.messages.find(message => message.messageId === followUpId)?.parts).toContainEqual(expect.objectContaining({ type: 'text', sessionMentions: [queuedMention] }));
+    await harness.worker.close();
+    cold = await WorkerSession.open({ type: 'bootstrap', rootSessionId, workerGeneration: 'cold-mention-generation', projectId: 'project',
+      workspaceId: 'workspace', agentDirectoryId: 'source', cwd: harness.root, agentDirectory: dirname(harness.mcpConfigPath),
+      sessionFile: harness.worker.sessionFile, sessionsDirectory: dirname(harness.worker.sessionFile) }, () => {},
+      () => { throw new Error('Mention recovery must not request interaction'); }, () => { throw new Error('Mention recovery must not fail'); },
+      async () => {}, async () => { throw new Error('Mention recovery must not invoke Host tools'); }, () => {});
+    const reloaded = cold.seed().messages;
+    expect(reloaded.find(message => message.messageId === direct?.messageId)?.parts).toContainEqual(expect.objectContaining({ type: 'text', sessionMentions: [publicDirectMention] }));
+    expect(reloaded.find(message => message.messageId === followUpId)?.parts).toContainEqual(expect.objectContaining({ type: 'text', sessionMentions: [queuedMention] }));
     expect(JSON.stringify(harness.requests)).toContain('STEERING_INSTRUCTION');
     expect(JSON.stringify(harness.requests)).toContain('FOLLOW_UP_CONTEXT');
     expectContextOrder(harness.requests.find(request => JSON.stringify(request.messages).includes('FOLLOW_UP_CONTEXT')), [
       'FOLLOW_UP_ASSOCIATED_INSTRUCTION', 'FOLLOW_UP_CONTEXT', 'FOLLOW_UP_LATER_INSTRUCTION', 'FOLLOW_UP_SYNTHETIC_ENTRY', 'FOLLOW_UP_LAST_CONTEXT',
     ]);
     expect(harness.fatal()).toBe(false);
-  } finally { release.resolve(); unsubscribe(); await harness.close(); }
+  } finally { release.resolve(); unsubscribe(); await cold?.close(); await harness.close(); }
 }, 30000);
 
 test('actual native undo/redo retains sibling transcript and cold-reopen selection without changing workspace files', async () => {

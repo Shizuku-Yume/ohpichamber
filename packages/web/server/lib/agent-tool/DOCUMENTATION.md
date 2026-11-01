@@ -89,6 +89,9 @@ session cannot keep writing.
   or sleep, and the session's final answer is delivered into the calling
   session when it finishes (`../dispatch-results/`). `session.messages` reads
   what is there; the control service keeps `wait` for the CLI only.
+  It follows canonical history cursors before applying the requested most-recent
+  message limit; `all` reads the complete available history. Explicit target
+  sessions are resolved through the Host's authoritative workspace scope.
 - Optional behavior switches (`worktree`, `pullRequest`, `goal`, `agent`,
   `variant`, `returnResult`) state their default and an explicit "only when
   the user asks" rule so agents do not invent worktrees, goal mode, or result

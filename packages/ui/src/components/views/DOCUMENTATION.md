@@ -45,9 +45,11 @@ while previewing, so same-length edits in the middle invalidate cached output.
 ## Pull request comparisons
 
 DiffView, mobile Changes and walkthrough share `PullRequestComparisonSelector`
-and the selection owned by `usePullRequestComparison`. PR mode reads GitHub's
-published patch through `/api/walkthrough/pr-diff`. It includes no local edits
+and the selection owned by `usePullRequestComparison`. PR mode reads the bound
+provider's published patch through `/api/walkthrough/pr-diff`. It includes no local edits
 or unpushed commits. `lib/diff/pullRequestDiff.ts` splits the response once;
+Board handoffs are accepted only while their own read context matches a fresh
+binding; a source from an old account is never adopted under a replacement account.
 `useGitComparison` serves file patches from that same snapshot. Snapshot revisions
 invalidate the view's patch cache atomically, including edits with unchanged
 file names and line counts. Opening a file adds no network request.

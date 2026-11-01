@@ -33,9 +33,10 @@ import { getInlineCommentDraftKey, useInlineCommentDraftStore, type InlineCommen
 import { selectSnippetsForDirectory, useSnippetsStore } from '@/stores/useSnippetsStore';
 import { expandNativeFileResource, expandWorkspaceSkillNames } from '@/api/fileResourceExpansion';
 import type { FileResourceExpandResult } from '@openchamber/agent-contract';
-import { renderMagicPrompt } from '@/lib/magicPrompts';
+import { loadMagicPrompts } from '@/lib/magicPrompts';
+import { waitForPendingDraftWorktreeRequest } from '@/lib/worktrees/pendingDraftWorktree';
 import { startReviewFlow } from '@/lib/reviewFlow';
-import { getRuntimeKey, subscribeRuntimeEndpointWillChange } from '@/lib/runtime-switch';
+import { getRuntimeKey, getRuntimeSwitchRevision, subscribeRuntimeEndpointWillChange } from '@/lib/runtime-switch';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import {
     createChatDraftIdentity,
@@ -294,22 +295,21 @@ type ReferencePickerState = { source: 'repository'; kind?: RepositoryReferenceKi
 /**
  * Record what a session was pointed at, so the work-status panel can show it
  * as a context source long after the message scrolled away. A snapshot only —
- * never re-fetched, never authoritative. Failures are swallowed: the message
- * went out (or was queued), and a missing bookkeeping entry must not surface
- * as an error.
+ * never re-fetched, never authoritative. A failed write is reported separately
+ * from the already-sent message.
  */
-const recordLinkedReferences = (
+const recordLinkedReferences = async (
     sessionId: string,
     directory: Parameters<typeof sessionActions.addLinkedIssues>[1],
     references: readonly ComposerReference[],
 ) => {
     if (references.length === 0) return;
     const linkedAt = Date.now();
-    void sessionActions.addLinkedIssues(
+    await sessionActions.addLinkedIssues(
         sessionId,
         directory,
         references.map((reference) => toLinkedIssue(reference, linkedAt)),
-    ).catch(() => undefined);
+    );
 };
 
 const hasUserMessages = (sessionId: string, directory?: string) => {
@@ -1719,6 +1719,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             return;
         }
         const submitRuntimeKey = getRuntimeKey();
+        const submitRuntimeRevision = getRuntimeSwitchRevision();
         const queuedOnly = options?.queuedOnly ?? false;
         const queuedMessageId = options?.queuedMessageId;
         const delivery = options?.delivery === 'steer' && sessionPhase !== 'idle' ? 'steer' : undefined;
@@ -1726,6 +1727,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         // Snapshot the draft and current-session identity before the first
         // async gap so a later sidebar selection cannot reroute the send.
         const capturedDraftSnapshot = newSessionDraftOpen ? { ...newSessionDraft } : null;
+        const capturedDraftProjectPath = capturedDraftSnapshot?.selectedProjectId
+            ? useProjectsStore.getState().projects.find((project) => project.id === capturedDraftSnapshot.selectedProjectId)?.path ?? null
+            : null;
         const inputSnapshot = options?.presetText != null
             ? {
                 message: options.presetText,
@@ -2174,8 +2178,26 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                 const variables = buildCommandVariables(command, argument);
                 try {
                     await sessionActions.waitForConnectionOrThrow();
-                    const visibleText = await renderMagicPrompt(command.visiblePrompt, variables.visible);
-                    const instructionsText = await renderMagicPrompt(command.instructionsPrompt, variables.instructions);
+                    if (getRuntimeKey() !== submitRuntimeKey || getRuntimeSwitchRevision() !== submitRuntimeRevision) throw new Error('Runtime changed');
+                    let promptDirectory: string | null;
+                    if (capturedTarget) {
+                        promptDirectory = capturedTarget.directory;
+                    } else if (capturedDraftSnapshot?.target === 'chat') {
+                        promptDirectory = null;
+                    } else if (capturedDraftSnapshot) {
+                        promptDirectory = capturedDraftSnapshot.pendingWorktreeRequestId
+                            ? await waitForPendingDraftWorktreeRequest(capturedDraftSnapshot.pendingWorktreeRequestId)
+                            : capturedDraftSnapshot.bootstrapPendingDirectory ?? capturedDraftSnapshot.directoryOverride ?? capturedDraftProjectPath;
+                        if (!promptDirectory) throw new Error('Project directory is unavailable');
+                    } else {
+                        promptDirectory = currentSessionDirectoryForSync ?? currentDirectory;
+                        if (!promptDirectory) throw new Error('Session directory is unavailable');
+                    }
+                    if (getRuntimeKey() !== submitRuntimeKey || getRuntimeSwitchRevision() !== submitRuntimeRevision) throw new Error('Runtime changed');
+                    const prompts = await loadMagicPrompts(promptDirectory);
+                    if (getRuntimeKey() !== submitRuntimeKey || getRuntimeSwitchRevision() !== submitRuntimeRevision) throw new Error('Runtime changed');
+                    const visibleText = prompts.render(command.visiblePrompt, variables.visible);
+                    const instructionsText = prompts.render(command.instructionsPrompt, variables.instructions);
                     await sendMessage(
                         visibleText,
                         providerIdToSend,
@@ -2186,10 +2208,12 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                         [...additionalParts, { text: instructionsText, synthetic: true }],
                         variantToSend,
                         inputMode,
-                        sendMessageOptions,
+                        { ...sendMessageOptions, runtimeRevision: submitRuntimeRevision },
                     );
+                    if (getRuntimeKey() !== submitRuntimeKey || getRuntimeSwitchRevision() !== submitRuntimeRevision) throw new Error('Runtime changed');
                     scrollToBottom?.();
                 } catch (error) {
+                    if (getRuntimeKey() !== submitRuntimeKey || getRuntimeSwitchRevision() !== submitRuntimeRevision) return;
                     restoreConsumedInput();
                     toast.error(getSubmitErrorMessage(error, t(command.errorToastKey)));
                 }
@@ -2327,8 +2351,13 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                 : sessionState.currentSessionDirectory
                     ?? (linkTargetSessionId ? sessionState.getDirectoryForSession(linkTargetSessionId) : null)
                     ?? currentDirectory;
-            if (linkTargetSessionId) {
-                recordLinkedReferences(linkTargetSessionId, linkTargetDirectory, linkedReferences);
+            if (linkTargetSessionId && getRuntimeKey() === submitRuntimeKey) {
+                void recordLinkedReferences(linkTargetSessionId, linkTargetDirectory, linkedReferences).catch((error: unknown) => {
+                    console.error('Session link update failed:', error);
+                    toast.error(t('chat.workStatus.linkedIssues.linkFailed'));
+                });
+            } else if (linkedReferences.length > 0) {
+                toast.error(t('chat.workStatus.linkedIssues.linkFailed'));
             }
             // A session that starts with a Linear issue attached reports itself
             // on that issue (the Linear card's Session comments), however it

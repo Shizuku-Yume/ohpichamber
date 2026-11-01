@@ -1,7 +1,8 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
 import { Window } from 'happy-dom';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import type { TrackerAuthStatus } from '@/lib/api/types';
 
 const browser = new Window({ url: 'http://localhost/' });
 Object.assign(globalThis, {
@@ -57,6 +58,60 @@ test('the container picker renders while the tracker status has no account list'
       );
     });
     expect(host.textContent).toContain('All teams');
+  }
+});
+
+test('the board ignores an account activation after a runtime switch', async () => {
+  // Load the real picker after its browser globals are installed.
+  const { I18nProvider } = await import('@/lib/i18n');
+  const { RuntimeAPIContext } = await import('@/contexts/runtimeAPIContext');
+  const { createWebAPIs } = await import('../../../../web/src/api/index');
+  const { useTrackerAuthStore } = await import('@/stores/useTrackerAuthStore');
+  const { useTrackerRegistry } = await import('@/lib/trackers/registry');
+  const { linearLikeTrackerDescriptor } = await import('@/lib/trackers/descriptor.fixture');
+  const { switchRuntimeEndpoint } = await import('@/lib/runtime-switch');
+  const { toast } = await import('@/components/ui');
+  const { SourceBoardContainerPicker } = await import('./SourceBoardPickers');
+  const apis = createWebAPIs();
+  const linear = linearLikeTrackerDescriptor();
+  useTrackerRegistry.setState({ ordered: [linear], byId: new Map([[linear.id, linear]]), status: 'ready', holdsList: true });
+  const status: TrackerAuthStatus = { connected: true, account: { id: 'one', name: 'One', current: true }, accounts: [
+    { id: 'one', name: 'One', current: true }, { id: 'two', name: 'Two', current: false },
+  ] };
+  const { promise, resolve } = Promise.withResolvers<TrackerAuthStatus>();
+  let calls = 0;
+  let switched = 0;
+  apis.trackers!.authActivate = async () => { calls += 1; return promise; };
+  const success = spyOn(toast, 'success');
+  try {
+    useTrackerAuthStore.getState().resetForRuntimeSwitch();
+    useTrackerAuthStore.getState().setStatus('linear', status);
+    await act(async () => root.render(<I18nProvider><RuntimeAPIContext.Provider value={apis}>
+      <SourceBoardContainerPicker provider="linear" containers={[]} selectedContainerId={null} onSelectContainer={() => {}} onAccountSwitched={() => { switched += 1; }} />
+    </RuntimeAPIContext.Provider></I18nProvider>));
+    const trigger = host.querySelector<HTMLElement>('[data-slot="dropdown-menu-trigger"]');
+    expect(trigger).not.toBeNull();
+    await act(async () => {
+      trigger!.focus();
+      trigger!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    });
+    const item = [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')].find((element) => element.textContent?.includes('Two'));
+    expect(item).toBeDefined();
+    await act(async () => { item!.click(); });
+    expect(calls).toBe(1);
+    await act(async () => {
+      switchRuntimeEndpoint({ apiBaseUrl: 'https://host-b.example', runtimeKey: 'host-b' });
+      useTrackerAuthStore.getState().resetForRuntimeSwitch();
+      useTrackerAuthStore.getState().setStatus('linear', { connected: false });
+      resolve(status);
+      await promise;
+    });
+    expect(useTrackerAuthStore.getState().entries.linear?.status).toEqual({ connected: false });
+    expect(switched).toBe(0);
+    expect(success).not.toHaveBeenCalled();
+  } finally {
+    success.mockRestore();
+    useTrackerAuthStore.getState().resetForRuntimeSwitch();
   }
 });
 

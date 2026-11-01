@@ -1,5 +1,3 @@
-export type RelayHostStatus = { identityConflict: boolean };
-
 export type {
   TrackerAPI,
   TrackerAccount,

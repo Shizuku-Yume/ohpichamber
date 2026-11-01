@@ -423,6 +423,8 @@ Invariants:
 - `components/sourceControl/SourceControlAccountControl.tsx` is the connected
   account of a project's host (avatar and switcher), drawn from that host's
   descriptor; a project with no known host shows none.
+  Account activation responses are committed only while their starting runtime
+  remains active; switching endpoints invalidates pending completions.
 - An identity's icon key is either a built-in mark (`branch`, `briefcase`, ...)
   or a provider id; the Git header, Git Settings and the identity editor draw a
   provider id with `ProviderIcon`, and the editor offers one mark per served

@@ -242,7 +242,7 @@ describe('the links beside a picked revision', () => {
     await render(apis(), links(older));
     await click(buttonNamed('Changes'));
     expect(usePullRequestSelectionStore.getState().diffRequests.get('/work/app'))
-      .toEqual({ kind: 'pr', number: 12, sourceRepo: { owner: 'acme', repo: 'app' }, revision: older });
+      .toEqual({ source: { kind: 'pr', number: 12, sourceRepo: { owner: 'acme', repo: 'app' }, revision: older }, context: reviewContext });
     await click(buttonNamed('Walkthrough'));
     expect(useWalkthroughStore.getState().getRequestedTarget('/work/app')?.source)
       .toEqual({ kind: 'pr', number: 12, sourceRepo: { owner: 'acme', repo: 'app' }, revision: older });
@@ -251,6 +251,6 @@ describe('the links beside a picked revision', () => {
     await render(apis(), links(null));
     await click(buttonNamed('Changes'));
     expect(usePullRequestSelectionStore.getState().diffRequests.get('/work/app'))
-      .toEqual({ kind: 'pr', number: 12, sourceRepo: { owner: 'acme', repo: 'app' } });
+      .toEqual({ source: { kind: 'pr', number: 12, sourceRepo: { owner: 'acme', repo: 'app' } }, context: reviewContext });
   });
 });

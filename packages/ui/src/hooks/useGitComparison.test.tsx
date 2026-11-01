@@ -3,12 +3,11 @@ import { expect, test } from 'bun:test';
 import { Window } from 'happy-dom';
 import type { GitComparisonSource } from './useGitComparison';
 
-const PR_CONTEXT = {
-  provider: 'github', instance: 'github.com', accountId: 'github.com#7', repositoryId: 'repo-1',
-  bindingRevision: 4, directory: '/repo', primaryRemote: 'origin',
-} as const;
-
-test('comparison reads preserve scope, report failures, retry, and stop while hidden', async () => {
+test.each(['github', 'ext-source-control-provider'])('comparison reads preserve scope, report failures, retry, and stop while hidden: %s', async (provider) => {
+  const PR_CONTEXT = {
+    provider, instance: 'https://forge.example', accountId: 'account-7', repositoryId: 'repo-1',
+    bindingRevision: 4, directory: '/repo', primaryRemote: 'origin',
+  };
   const dom = new Window({ url: 'http://localhost' });
   const originals = new Map<string, PropertyDescriptor | undefined>();
   const globals = {
@@ -137,6 +136,7 @@ test('comparison reads preserve scope, report failures, retry, and stop while hi
     expect(requests[9].url.pathname).toBe('/api/walkthrough/pr-diff');
     expect(JSON.parse(requests[9].url.searchParams.get('source') ?? '')).toEqual(source);
     // The published diff is read through the bound context, never an ambient account.
+    expect(requests[9].url.searchParams.get('provider')).toBe(provider);
     expect(requests[9].url.searchParams.get('accountId')).toBe(PR_CONTEXT.accountId);
     expect(requests[9].url.searchParams.get('repositoryId')).toBe(PR_CONTEXT.repositoryId);
     const publishedPatch = 'diff --git a/pr.ts b/pr.ts\n--- a/pr.ts\n+++ b/pr.ts\n@@ -1 +1 @@\n-old\n+published\n';

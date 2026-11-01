@@ -30,6 +30,16 @@ const mapNonFencedSegments = (markdown: string, mapSegment: (segment: string) =>
         .map((segment, index) => (index % 2 === 1 ? segment : mapSegment(segment)))
         .join('');
 };
+const mapNonInlineCode = (segment: string, mapSegment: (text: string) => string): string => {
+    let output = '';
+    let cursor = 0;
+    for (const match of segment.matchAll(/(`+)(?!`)[\s\S]*?(?<!`)\1(?!`)/g)) {
+        output += mapSegment(segment.slice(cursor, match.index)) + match[0];
+        cursor = match.index + match[0].length;
+    }
+    return output + mapSegment(segment.slice(cursor));
+};
+
 
 const escapeMarkdownLinkText = (text: string): string => text.replace(/[\\`*_~[\]]/g, '\\$&');
 
@@ -67,21 +77,19 @@ const withSessionMentionLinks = (
     escapeRest: (text: string) => string,
 ): string => {
     if (!mentions || mentions.chips.size === 0) return escapeRest(segment);
-    const codeSpans = [...segment.matchAll(/(`+)[\s\S]*?\1/g)].map((match) => [match.index, match.index + match[0].length]);
     let output = '';
     let cursor = 0;
     for (const range of findSessionLinks(segment, mentions.origins)) {
         const chip = mentions.chips.get(sessionLinkKey(range.target));
         if (!chip) continue;
-        // A link the user already wrote as one (`[this](link)`, `<link>`) draws as
-        // the chip on its own (`MarkdownLink`); one in inline code stays code.
-        if (segment.slice(Math.max(0, range.start - 2), range.start) === '](' || segment[range.start - 1] === '<') continue;
-        if (codeSpans.some(([start, end]) => range.start >= start && range.start < end)) continue;
-        output += escapeRest(segment.slice(cursor, range.start));
-        // Escaped so the pointy destination cannot be closed or broken from inside.
+        // Markdown links already reach MarkdownLink. Convert angle autolinks
+        // ourselves because escaping the remaining text would make them literal.
+        if (segment.slice(Math.max(0, range.start - 2), range.start) === '](') continue;
+        const angleLink = segment[range.start - 1] === '<' && segment[range.end] === '>';
+        output += escapeRest(segment.slice(cursor, angleLink ? range.start - 1 : range.start));
         const destination = range.link.replace(/[\\<>]/g, (char) => encodeURIComponent(char));
         output += `[${escapeMarkdownLinkText(escapeHtml(chip.label))}](<${destination}>)`;
-        cursor = range.end;
+        cursor = range.end + (angleLink ? 1 : 0);
     }
     return output + escapeRest(segment.slice(cursor));
 };
@@ -114,11 +122,11 @@ export const prepareUserMarkdownContent = ({
     const loneListMarker = LONE_LIST_MARKER_PATTERN.exec(textContent);
     if (loneListMarker) return `\\${loneListMarker[1]}`;
 
-    let content = mapNonFencedSegments(textContent, (segment) => withSessionMentionLinks(
-        segment,
+    let content = mapNonFencedSegments(textContent, (segment) => mapNonInlineCode(segment, (part) => withSessionMentionLinks(
+        part,
         sessionMentions,
         (rest) => escapeWithAttachmentCitations(rest, attachments),
-    ));
+    )));
 
     // Insert agent mention links with an internal href so markdown renders them as mentions, not external links.
     if (agentMention?.token && content.includes(agentMention.token)) {

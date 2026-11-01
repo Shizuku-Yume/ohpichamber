@@ -14,7 +14,7 @@ const modelIdSchema = z.string().trim().min(1).max(200).optional().catch(undefin
 // client is still there.
 const clientIsGone = (res) => res.writableEnded || res.destroyed;
 
-export function registerWalkthroughRoutes(app, { getWalkthroughService, validateReadContext }) {
+export function registerWalkthroughRoutes(app, { getWalkthroughService, validateReadContext, resolveWorkspaceDirectory, resolveRepositoryWorkspace }) {
   const respondWithError = (res, error, fallback) => {
     let bindingStatus = 0;
     if (error?.code === 'INVALID_SOURCE_CONTROL_BINDING' || error?.code === 'INVALID_SOURCE_CONTROL_READ_CONTEXT') {
@@ -43,6 +43,12 @@ export function registerWalkthroughRoutes(app, { getWalkthroughService, validate
       return null;
     }
   };
+  const workspaceForDirectory = async (directory, readContext) => {
+    const scope = await (readContext ? resolveRepositoryWorkspace(directory) : resolveWorkspaceDirectory(directory));
+    if (!scope?.workspaceId) throw Object.assign(new Error('Workspace is unavailable'), { statusCode: 403, code: 'UNAUTHORIZED' });
+    return scope.workspaceId;
+  };
+
 
   const validatePullRequestContext = async (source, input, directory) => {
     if (source?.kind !== 'pr') return undefined;
@@ -90,10 +96,12 @@ export function registerWalkthroughRoutes(app, { getWalkthroughService, validate
 
       const source = readSource(req.query.source);
       const readContext = await validatePullRequestContext(source, req.query, directory);
+      const workspaceId = await workspaceForDirectory(readContext?.directory ?? directory, readContext);
       const { getWalkthrough, getPullRequestDiff, readWalkthroughInstructions } = await getWalkthroughService();
       const result = await getWalkthrough(
         {
           directory: readContext?.directory ?? directory,
+          workspaceId,
           source,
           model: typeof req.query.model === 'string' ? req.query.model : undefined,
           providerID: providerIdSchema.parse(req.query.providerID),
@@ -134,8 +142,7 @@ export function registerWalkthroughRoutes(app, { getWalkthroughService, validate
     }
   });
 
-  // One file, both sides, straight from GitHub: the comparison view expands
-  // collapsed context on demand without touching the working tree.
+  // One file, both sides, from its provider: expand context without touching the working tree.
   app.get('/api/walkthrough/pr-file', async (req, res) => {
     try {
       const query = new URL(req.originalUrl, 'http://localhost').searchParams;
@@ -173,10 +180,12 @@ export function registerWalkthroughRoutes(app, { getWalkthroughService, validate
       }
 
       const readContext = await validatePullRequestContext(source, req.body, directory);
+      const workspaceId = await workspaceForDirectory(readContext?.directory ?? directory, readContext);
       const { generateWalkthrough, getPullRequestDiff, readWalkthroughInstructions } = await getWalkthroughService();
       const result = await generateWalkthrough(
         {
           directory: readContext?.directory ?? directory,
+          workspaceId,
           source,
           force: force === true,
           model: typeof model === 'string' ? model : undefined,

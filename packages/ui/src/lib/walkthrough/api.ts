@@ -146,7 +146,7 @@ const readContextFields = (context: Readonly<SourceControlReadContext>) => ({
 });
 
 export const buildTargetQuery = (directory: string, target: WalkthroughTarget): WalkthroughQuery => {
-  const query: WalkthroughQuery = { directory, source: JSON.stringify(target.source) };
+  const query: WalkthroughQuery = { directory: isPullRequestTarget(target) ? target.context.directory : directory, source: JSON.stringify(target.source) };
   if (isPullRequestTarget(target)) {
     const context = readContextFields(target.context);
     Object.assign(query, context, { bindingRevision: String(context.bindingRevision) });
@@ -182,7 +182,7 @@ export async function generateWalkthrough(
 ): Promise<WalkthroughResult> {
   const body: GenerateWalkthroughBody = {
     ...(options.workspaceId ? { workspaceId: options.workspaceId } : {}),
-    directory,
+    directory: isPullRequestTarget(target) ? target.context.directory : directory,
     source: target.source,
     force: options.force === true,
   };
@@ -213,7 +213,7 @@ export async function cancelWalkthroughGeneration(
   target: WalkthroughTarget,
   options: { workspaceId?: string } = {},
 ): Promise<void> {
-  const body: CancelWalkthroughBody = { ...(options.workspaceId ? { workspaceId: options.workspaceId } : {}), directory, source: target.source };
+  const body: CancelWalkthroughBody = { ...(options.workspaceId ? { workspaceId: options.workspaceId } : {}), directory: isPullRequestTarget(target) ? target.context.directory : directory, source: target.source };
   if (isPullRequestTarget(target)) Object.assign(body, readContextFields(target.context));
   const response = await runtimeFetch(`${BASE}/cancel`, {
     method: 'POST',

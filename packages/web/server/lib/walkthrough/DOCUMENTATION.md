@@ -65,6 +65,13 @@ of observations. A generation that cannot read them fails with
 readiness with them and does not fail. They are not part of the cache key, like
 the thinking level: changing them keeps the review on screen until the user
 regenerates.
+The Host resolves the requested directory to an authorized workspace before a
+walkthrough read or generation. For a validated PR repository nested under a
+registered project or worktree, the owning authorized workspace supplies model
+selection while the validated repository directory still supplies the patch and
+preferences. Model discovery and completion use that workspace ID; an unavailable
+owner is refused rather than falling back to another workspace's credentials.
+
 
 ### Why observations and not "what a reviewer should check"
 

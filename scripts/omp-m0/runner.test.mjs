@@ -128,7 +128,10 @@ describe('M0 disposable runner failure contract', () => {
               const stat = await readFile(`/proc/${descendant.pid}/stat`, 'utf8');
               const row = stat.slice(stat.lastIndexOf(')') + 2).trim().split(/\s+/);
               live = row[19] === descendant.startTicks && !['Z', 'X'].includes(row[0]);
-            } catch (error) { if (error.code !== 'ENOENT') throw error; }
+            } catch (error) {
+              // The process may exit after procfs opens stat but before its read.
+              if (error.code !== 'ENOENT' && error.code !== 'ESRCH') throw error;
+            }
             expect(live).toBe(false);
           }
           if (unrelatedIdentity) {

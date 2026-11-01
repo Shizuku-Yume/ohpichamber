@@ -3,6 +3,7 @@
  */
 
 import { canonicalClient } from '@/api/canonicalClient';
+import { getRuntimeKey } from '@/lib/runtime-switch';
 import { findSessionLinks, sessionLinkKey, type SessionLinkTarget } from '@/lib/sessionLinks';
 import { ensureGlobalSessionsLoaded } from '@/stores/useGlobalSessionsStore';
 
@@ -62,23 +63,31 @@ export const sessionReferenceKey = (reference: { sessionId: string; messageId?: 
 export const sessionLinkText = (sessionId: string): string => `openchamber://session/${sessionId}`;
 
 export const loadSessionLinkReference = async (target: SessionLinkTarget): Promise<SessionReference | null> => {
+    const runtimeKey = getRuntimeKey();
     const snapshot = await ensureGlobalSessionsLoaded();
+    if (getRuntimeKey() !== runtimeKey) return null;
     const session = [...snapshot.activeSessions, ...snapshot.archivedSessions].find((entry) => entry.sessionId === target.sessionId);
     if (!session) return null;
-    const sessionTitle = (session as { title?: string }).title || session.sessionId;
+    const sessionTitle = session.metadata?.title || session.sessionId;
     if (!target.messageId) return sessionReference({ id: session.sessionId, title: sessionTitle });
     try {
-        const history = await canonicalClient.getHistory(session.sessionId);
-        const msg = history.messages.find((m) => m.messageId === target.messageId);
-        if (msg) {
-            const parts = msg.parts.map((p) => (p.type === 'text' ? { type: 'text' as const, text: p.content } : p));
-            return sessionMessageReference({ id: session.sessionId, title: sessionTitle }, { info: { id: msg.messageId, role: msg.role }, parts })
-                ?? { ...sessionReference({ id: session.sessionId, title: sessionTitle }), messageId: target.messageId };
-        }
+        let cursor: string | undefined;
+        do {
+            const history = cursor
+                ? await canonicalClient.getHistory(session.sessionId, { cursor })
+                : await canonicalClient.getHistory(session.sessionId);
+            if (getRuntimeKey() !== runtimeKey) return null;
+            const msg = history.messages.find((m) => m.messageId === target.messageId);
+            if (msg) {
+                const parts = msg.parts.map((p) => (p.type === 'text' ? { type: 'text' as const, text: p.content } : p));
+                return sessionMessageReference({ id: session.sessionId, title: sessionTitle }, { info: { id: msg.messageId, role: msg.role }, parts });
+            }
+            cursor = history.nextCursor ?? undefined;
+        } while (cursor);
     } catch {
-        // Fall back to session reference if history read fails
+        return null;
     }
-    return { ...sessionReference({ id: session.sessionId, title: sessionTitle }), messageId: target.messageId };
+    return null;
 };
 
 type MentionsInText = { references: SessionReference[]; unresolved: SessionLinkTarget[] };

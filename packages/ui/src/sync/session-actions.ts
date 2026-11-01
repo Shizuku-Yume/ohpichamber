@@ -30,7 +30,7 @@ import { dropSessionCaches } from "./session-cache"
 import { useInputStore } from "./input-store"
 import { cleanupPersistedSessionState } from "./session-deletion-cleanup"
 import { requestSessionArchiveBatch, requestSessionLinksUpdate, requestSessionUnarchiveBatch, type SessionArchiveStamp } from "./session-archive-batch"
-import { getRuntimeKey } from "@/lib/runtime-switch"
+import { getRuntimeKey, getRuntimeSwitchRevision } from "@/lib/runtime-switch"
 import { isRelayModeActive } from "@/lib/relay/runtime-tunnel"
 import { getErrorStatus, isAmbiguousSendFailure } from "./send-failure-classification"
 import { promoteRestoredSessionOrdering } from "./session-ordering"
@@ -47,24 +47,24 @@ import { installHostSession, installRuntimeRun, installSessionMetadata, installS
 import { registerWorkspaceDirectory, resolveWorkspaceDirectory } from "@/stores/globalSessions"
 import type { State } from "./types"
 
-async function readCanonicalSession(sessionId: string, runtimeKey: string): Promise<CanonicalSession> {
-  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+async function readCanonicalSession(sessionId: string, runtimeKey: string, runtimeRevision = getRuntimeSwitchRevision()): Promise<CanonicalSession> {
+  if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
   const knownChild = getGlobalSessionSnapshot(sessionId) ?? findLiveSession(sessionId)
   if (knownChild?.parentSessionId) {
     const history = await canonicalClient.getHistory(sessionId)
-    if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+    if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
     if (history.sessionId !== sessionId) throw new Error("Session history identified another session")
     return knownChild
   }
   const snapshot = await canonicalClient.getSession(sessionId)
-  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
   const metadata = await canonicalClient.getSessionMetadata(sessionId)
-  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
   if (snapshot.session.sessionId !== sessionId || metadata.sessionId !== sessionId) throw new Error("Session response identified another session")
   let host = getGlobalSessionSnapshot(sessionId) ?? findLiveSession(sessionId)
   if (!host) {
     const page = await canonicalClient.listSessions(snapshot.session.workspaceId)
-    if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+    if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
     host = page.items.find((session) => session.sessionId === sessionId) ?? null
     if (!host) throw new Error("Host session projection is unavailable")
   }
@@ -107,6 +107,7 @@ export type SessionSendInput = {
   request: PromptRequest
   mode?: "run" | "steer" | "follow-up"
   runtimeKey?: string
+  runtimeRevision?: number
   commandId?: string
 }
 
@@ -117,16 +118,19 @@ export type SessionSendInput = {
  */
 export async function sendMessage(input: SessionSendInput): Promise<Run | null> {
   const runtimeKey = input.runtimeKey ?? getRuntimeKey()
-  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  const runtimeRevision = input.runtimeRevision ?? getRuntimeSwitchRevision()
+  if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
   const request = PromptRequestSchema.parse(input.request)
   await waitForConnectionOrThrow()
-  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
   if (input.mode === "steer") {
     const result = await canonicalClient.steer(input.sessionId, request, input.commandId)
+    if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
     if (result.sessionId !== input.sessionId) throw new Error("Steer response identified another session")
     return null
   } else if (input.mode === "follow-up") {
     const result = await canonicalClient.followUp(input.sessionId, request, input.commandId)
+    if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
     if (result.sessionId !== input.sessionId) throw new Error("Follow-up response identified another session")
     return null
   } else {
@@ -135,7 +139,7 @@ export async function sendMessage(input: SessionSendInput): Promise<Run | null> 
     const baselines = captureRunControlBaselines(input.sessionId)
     const result = await canonicalClient.createRun(input.sessionId, request, input.commandId)
     if (result.run.sessionId !== input.sessionId) throw new Error("Run response identified another session")
-    if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+    if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
     // The accepted run is authoritative control state even before its event
     // arrives; without this the composer can keep offering Send for a live run.
     publishRuntimeRun(result.run, baselines)
@@ -727,11 +731,12 @@ export async function createSession(
   navigation: "open" | "preserve" = "open",
 ): Promise<CanonicalSession | null> {
   const runtimeKey = getRuntimeKey()
+  const runtimeRevision = getRuntimeSwitchRevision()
   try {
     const effectiveDirectory = directoryOverride ?? dir()
     if (!effectiveDirectory) throw new Error("No directory for session creation")
     const workspace = await canonicalClient.resolveWorkspace(effectiveDirectory)
-    if (isStaleRuntime(runtimeKey)) return null
+    if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) return null
     const admittedMetadata = { ...metadata }
     if (title !== undefined) admittedMetadata.title = title
     const { session } = await canonicalClient.createSession({
@@ -746,7 +751,7 @@ export async function createSession(
       },
       metadata: SessionMetadataSchema.parse(admittedMetadata),
     })
-    if (isStaleRuntime(runtimeKey)) return null
+    if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) return null
     registerWorkspaceDirectory(workspace.workspaceId, effectiveDirectory)
     _childStores?.ensureChild(effectiveDirectory, { bootstrap: false })
     publishCanonicalSession(session, effectiveDirectory)
@@ -755,7 +760,7 @@ export async function createSession(
     useSessionUIStore.getState().markSessionAsOpenChamberCreated(session.sessionId)
     return session
   } catch (error) {
-    if (isStaleRuntime(runtimeKey)) return null
+    if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) return null
     // A canonical refusal such as the Agent Service capacity outcome carries
     // the sentence to show. Let the draft lifecycle report it instead of
     // turning every refusal into the same silent null; ordinary transport
@@ -816,19 +821,20 @@ export async function patchSessionMetadata(
   directory: string | null | undefined,
   updater: (metadata: SessionMetadataRecord) => SessionMetadataRecord,
   expectedRuntimeKey?: string,
+  expectedRuntimeRevision = getRuntimeSwitchRevision(),
 ): Promise<CanonicalSession> {
   const runtimeKey = expectedRuntimeKey ?? getRuntimeKey()
-  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
-  const current = getGlobalSessionSnapshot(sessionId) ?? await readCanonicalSession(sessionId, runtimeKey)
-  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  if (isStaleRuntime(runtimeKey) || expectedRuntimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
+  const current = getGlobalSessionSnapshot(sessionId) ?? await readCanonicalSession(sessionId, runtimeKey, expectedRuntimeRevision)
+  if (isStaleRuntime(runtimeKey) || expectedRuntimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
   const metadata = await canonicalClient.getSessionMetadata(sessionId)
-  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  if (isStaleRuntime(runtimeKey) || expectedRuntimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
   if (metadata.sessionId !== sessionId) throw new Error("Metadata response identified another session")
   const currentMetadata = metadata.metadata ?? {}
   const nextMetadata = SessionMetadataSchema.parse(updater(currentMetadata))
   const patch = SessionMetadataPatchSchema.parse({ changes: buildMetadataMergePatch(currentMetadata, nextMetadata) })
   const result = await canonicalClient.patchSessionMetadata(sessionId, patch)
-  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  if (isStaleRuntime(runtimeKey) || expectedRuntimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
   if (result.sessionId !== sessionId) throw new Error("Metadata response identified another session")
   if (directory) registerSessionDirectory(sessionId, resolveGlobalSessionDirectory(current) ?? directory)
   return publishCanonicalMetadata(current, result)
@@ -1779,6 +1785,7 @@ function reconcileAcceptedSend(input: {
  */
 export async function optimisticSend(input: {
   runtimeKey?: string
+  runtimeRevision?: number
   sessionId: string
   content: string
   directory?: string | null
@@ -1795,8 +1802,9 @@ export async function optimisticSend(input: {
     throw new Error("Optimistic refs not set — is useSync() mounted?")
   }
   const runtimeKey = input.runtimeKey ?? getRuntimeKey()
+  const runtimeRevision = input.runtimeRevision ?? getRuntimeSwitchRevision()
   const assertRuntimeUnchanged = () => {
-    if (isStaleRuntime(runtimeKey)) throw new Error("Message was not sent because the runtime changed.")
+    if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("Message was not sent because the runtime changed.")
   }
   assertRuntimeUnchanged()
   await waitForConnectionOrThrow()
@@ -1833,8 +1841,8 @@ export async function optimisticSend(input: {
   } catch (error) {
     // A definite failure removes only the unconfirmed record. Once an echo
     // has promoted this ID, optimisticRemove refuses to delete it.
-    _optimisticRemove({ sessionId: input.sessionId, directory, messageId: correlationId })
-    if (!isStaleRuntime(runtimeKey)) {
+    if (!isStaleRuntime(runtimeKey) && runtimeRevision === getRuntimeSwitchRevision()) {
+      _optimisticRemove({ sessionId: input.sessionId, directory, messageId: correlationId })
       recordSendFailure({
         sessionId: input.sessionId, messageId: correlationId, directory: directory ?? null,
         status: getErrorStatus(error), ambiguous: isAmbiguousSendFailure(error), confirmationChecked: false,
@@ -1850,7 +1858,7 @@ export async function optimisticSend(input: {
     await refetchSessionMessages(input.sessionId)
     assertRuntimeUnchanged()
   } catch (error) {
-    if (isStaleRuntime(runtimeKey)) throw error
+    if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw error
     console.warn("[session-actions] accepted review send history refresh failed", error)
   }
   reconcileAcceptedSend({

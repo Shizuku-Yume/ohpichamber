@@ -30,7 +30,7 @@ import type {
 } from '@openchamber/ui/lib/api/types';
 import { trackerDescriptorListSchema } from '@openchamber/ui/lib/trackers/descriptor';
 import { runtimeFetch } from '@openchamber/ui/lib/runtime-fetch';
-import { getRuntimeKey } from '@openchamber/ui/lib/runtime-switch';
+import { getRuntimeKey, getRuntimeSwitchRevision } from '@openchamber/ui/lib/runtime-switch';
 import { BUILT_IN_LINEAR_TRACKER, createLegacyLinearTrackerAPI } from './trackers-legacy-linear';
 import {
   authStartSchema,
@@ -92,19 +92,28 @@ export const createWebTrackerAPI = ({
   // `providers()`. A failed read is not remembered: the next call asks again.
   // The adapter outlives a runtime switch, so the answer belongs to the
   // runtime it was read on; another runtime asks its own server.
-  let wire: { runtimeKey: string; request: Promise<Wire> } | null = null;
-  const readWireOnce = (): Promise<Wire> => {
+  let wire: { runtimeKey: string; revision: number; request: Promise<Wire> } | null = null;
+  const readWireOnce = (owner: string, revision: number): Promise<Wire> => {
     const request = readWire(fetch);
-    const entry = { runtimeKey: runtimeKey(), request };
+    const entry = { runtimeKey: owner, revision, request };
     wire = entry;
     request.catch(() => {
       if (wire === entry) wire = null;
     });
     return request;
   };
-  const onLegacyWire = async (): Promise<boolean> => {
-    const held = wire?.runtimeKey === runtimeKey() ? wire.request : null;
-    return (await (held ?? readWireOnce())).kind === 'legacy-linear';
+  const assertOwner = (owner: string): void => {
+    if (runtimeKey() !== owner) throw new Error('Tracker runtime changed during operation');
+  };
+  const onWire = async <T>(dispatch: (legacyWire: boolean) => Promise<T>): Promise<T> => {
+    const owner = runtimeKey();
+    const revision = getRuntimeSwitchRevision();
+    const held = wire?.runtimeKey === owner && wire.revision === revision ? wire.request : null;
+    const selected = await (held ?? readWireOnce(owner, revision));
+    assertOwner(owner);
+    if (getRuntimeSwitchRevision() !== revision) throw new Error('Tracker runtime changed during operation');
+    // Dispatch synchronously after the ownership check, before another switch can run.
+    return dispatch(selected.kind === 'legacy-linear');
   };
 
   const call = <T>(provider: TrackerProviderId, path: string, request: TrackerRequest, schema: z.ZodType<T>, failure: string) => (
@@ -130,63 +139,58 @@ export const createWebTrackerAPI = ({
 
   return {
     async providers(): Promise<TrackerDescriptor[]> {
-      const answer = await readWireOnce();
+      const owner = runtimeKey();
+      const revision = getRuntimeSwitchRevision();
+      const answer = await readWireOnce(owner, revision);
+      assertOwner(owner);
+      if (getRuntimeSwitchRevision() !== revision) throw new Error('Tracker runtime changed during operation');
       return answer.kind === 'legacy-linear' ? [BUILT_IN_LINEAR_TRACKER] : answer.descriptors;
     },
 
-    async authStatus(provider): Promise<TrackerAuthStatus> {
-      if (await onLegacyWire()) return legacy.authStatus(provider);
-      return call(provider, '/auth/status', GET, authStatusSchema, 'Failed to load tracker status');
-    },
+    authStatus: (provider): Promise<TrackerAuthStatus> => onWire((legacyWire) => (
+      legacyWire ? legacy.authStatus(provider) : call(provider, '/auth/status', GET, authStatusSchema, 'Failed to load tracker status')
+    )),
 
-    async authStart(provider, origin?: TrackerAuthOrigin): Promise<TrackerAuthStart> {
-      if (await onLegacyWire()) return legacy.authStart(provider, origin);
-      return call(provider, '/auth/start', { method: 'POST', body: JSON.stringify({ origin }) }, authStartSchema, 'Failed to start tracker sign-in');
-    },
+    authStart: (provider, origin?: TrackerAuthOrigin): Promise<TrackerAuthStart> => onWire((legacyWire) => (
+      legacyWire ? legacy.authStart(provider, origin) : call(provider, '/auth/start', { method: 'POST', body: JSON.stringify({ origin }) }, authStartSchema, 'Failed to start tracker sign-in')
+    )),
 
-    async authDisconnect(provider): Promise<{ removed: boolean }> {
-      if (await onLegacyWire()) return legacy.authDisconnect(provider);
-      return call(provider, '/auth', { method: 'DELETE' }, z.object({ removed: z.boolean().catch(false) }), 'Failed to disconnect tracker')
-        .then(({ removed }) => ({ removed }));
-    },
+    authDisconnect: (provider): Promise<{ removed: boolean }> => onWire((legacyWire) => (
+      legacyWire ? legacy.authDisconnect(provider) : call(provider, '/auth', { method: 'DELETE' }, z.object({ removed: z.boolean().catch(false) }), 'Failed to disconnect tracker')
+        .then(({ removed }) => ({ removed }))
+    )),
 
-    async authActivate(provider, accountId): Promise<TrackerAuthStatus> {
-      if (await onLegacyWire()) return legacy.authActivate(provider, accountId);
-      return call(provider, '/auth/activate', { method: 'POST', body: JSON.stringify({ accountId }) }, authStatusSchema, 'Failed to switch tracker account');
-    },
+    authActivate: (provider, accountId): Promise<TrackerAuthStatus> => onWire((legacyWire) => (
+      legacyWire ? legacy.authActivate(provider, accountId) : call(provider, '/auth/activate', { method: 'POST', body: JSON.stringify({ accountId }) }, authStatusSchema, 'Failed to switch tracker account')
+    )),
 
-    async list(provider, options): Promise<TrackerListResult> {
-      if (await onLegacyWire()) return legacy.list(provider, options);
-      return call(provider, `/items/list${listQuery(options)}`, GET, listResultSchema, 'Failed to load tracker items');
-    },
+    list: (provider, options): Promise<TrackerListResult> => onWire((legacyWire) => (
+      legacyWire ? legacy.list(provider, options) : call(provider, `/items/list${listQuery(options)}`, GET, listResultSchema, 'Failed to load tracker items')
+    )),
 
-    async refreshListReads(provider): Promise<void> {
-      if (await onLegacyWire()) return legacy.refreshListReads(provider);
+    refreshListReads: (provider): Promise<void> => onWire(async (legacyWire) => {
+      if (legacyWire) return legacy.refreshListReads(provider);
       await call(provider, '/read-cache/refresh?scope=lists', { method: 'POST' }, z.unknown(), 'Failed to refresh tracker lists');
-    },
+    }),
 
-    async get(provider, id): Promise<TrackerItemResult> {
-      if (await onLegacyWire()) return legacy.get(provider, id);
-      return call(provider, `/items/get?${new URLSearchParams({ id }).toString()}`, GET, itemResultSchema, 'Failed to load tracker item');
-    },
+    get: (provider, id): Promise<TrackerItemResult> => onWire((legacyWire) => (
+      legacyWire ? legacy.get(provider, id) : call(provider, `/items/get?${new URLSearchParams({ id }).toString()}`, GET, itemResultSchema, 'Failed to load tracker item')
+    )),
 
-    async states(provider, containerId): Promise<TrackerStatesResult> {
-      if (await onLegacyWire()) return legacy.states(provider, containerId);
-      return call(provider, `/states?${new URLSearchParams({ containerId }).toString()}`, GET, statesResultSchema, 'Failed to load workflow states');
-    },
+    states: (provider, containerId): Promise<TrackerStatesResult> => onWire((legacyWire) => (
+      legacyWire ? legacy.states(provider, containerId) : call(provider, `/states?${new URLSearchParams({ containerId }).toString()}`, GET, statesResultSchema, 'Failed to load workflow states')
+    )),
 
-    async updateState(provider, input: TrackerStateUpdateInput): Promise<TrackerItemResult> {
-      if (await onLegacyWire()) return legacy.updateState(provider, input);
-      return call(provider, '/items/update', { method: 'POST', body: JSON.stringify({ id: input.id, stateId: input.stateId }) }, itemResultSchema, 'Failed to update tracker item');
-    },
+    updateState: (provider, input: TrackerStateUpdateInput): Promise<TrackerItemResult> => onWire((legacyWire) => (
+      legacyWire ? legacy.updateState(provider, input) : call(provider, '/items/update', { method: 'POST', body: JSON.stringify({ id: input.id, stateId: input.stateId }) }, itemResultSchema, 'Failed to update tracker item')
+    )),
 
-    async mappingGet(provider): Promise<TrackerMappingResult> {
-      if (await onLegacyWire()) return legacy.mappingGet(provider);
-      return call(provider, '/mapping', GET, mappingResultSchema, 'Failed to load project mapping');
-    },
+    mappingGet: (provider): Promise<TrackerMappingResult> => onWire((legacyWire) => (
+      legacyWire ? legacy.mappingGet(provider) : call(provider, '/mapping', GET, mappingResultSchema, 'Failed to load project mapping')
+    )),
 
-    async mappingSet(provider, mapping: TrackerMappingWrite): Promise<TrackerMappingResult> {
-      if (await onLegacyWire()) return legacy.mappingSet(provider, mapping);
+    mappingSet: (provider, mapping: TrackerMappingWrite): Promise<TrackerMappingResult> => onWire((legacyWire) => {
+      if (legacyWire) return legacy.mappingSet(provider, mapping);
       return call(
         provider,
         '/mapping',
@@ -194,25 +198,23 @@ export const createWebTrackerAPI = ({
         mappingResultSchema,
         'Failed to save project mapping',
       );
-    },
+    }),
 
-    async sessionStatusPost(provider, input: TrackerSessionStatusPostInput): Promise<TrackerSessionStatusPostResult> {
-      if (await onLegacyWire()) return legacy.sessionStatusPost(provider, input);
+    sessionStatusPost: (provider, input: TrackerSessionStatusPostInput): Promise<TrackerSessionStatusPostResult> => onWire((legacyWire) => {
+      if (legacyWire) return legacy.sessionStatusPost(provider, input);
       return call(provider, '/session-status', {
         method: 'POST',
         body: JSON.stringify({ kind: input.kind, sessionId: input.sessionId, identifier: input.identifier, sessionOrigin: input.sessionOrigin }),
       }, sessionStatusResultSchema, 'Failed to post session status');
-    },
+    }),
 
-    async preferencesGet(provider): Promise<TrackerPreferences> {
-      if (await onLegacyWire()) return legacy.preferencesGet(provider);
-      return call(provider, '/preferences', GET, preferencesSchema, 'Failed to load tracker preferences');
-    },
+    preferencesGet: (provider): Promise<TrackerPreferences> => onWire((legacyWire) => (
+      legacyWire ? legacy.preferencesGet(provider) : call(provider, '/preferences', GET, preferencesSchema, 'Failed to load tracker preferences')
+    )),
 
-    async preferencesSet(provider, preferences: TrackerPreferences): Promise<TrackerPreferences> {
-      if (await onLegacyWire()) return legacy.preferencesSet(provider, preferences);
-      return call(provider, '/preferences', { method: 'PUT', body: JSON.stringify({ sessionComments: preferences.sessionComments }) }, preferencesSchema, 'Failed to save tracker preferences');
-    },
+    preferencesSet: (provider, preferences: TrackerPreferences): Promise<TrackerPreferences> => onWire((legacyWire) => (
+      legacyWire ? legacy.preferencesSet(provider, preferences) : call(provider, '/preferences', { method: 'PUT', body: JSON.stringify({ sessionComments: preferences.sessionComments }) }, preferencesSchema, 'Failed to save tracker preferences')
+    )),
   };
 };
 

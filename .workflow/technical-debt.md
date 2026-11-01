@@ -135,5 +135,6 @@ An entry leaves this file in one of two ways:
 - **Priority:** worth-doing
 - **Problem:** Relocation can move session files into a worktree before the later worker admission/pre-spawn fence, so the worktree archive lease does not guard that earlier file move.
 - **Impact:** A concurrent relocation and archive can race; task 35 cannot claim its worker fence protects the file move.
-- **Solution:** Design and assign an Agent Service relocation/archive boundary that serializes or otherwise protects the file move against archive; retain this entry until that owner lands.
+- **Owner:** Director, accountable for routing and assigning the separate Agent Service relocation/archive follow-up after task 35; evidence is `review-security.md`, finding 3, in `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-35-2026-10-30/`.
+- **Solution:** Route a follow-up to reproduce the concurrent file-move/archive race and design a boundary protecting the move against archive; retain this entry until fixed or explicitly declined. This is not a task 35 dependency or a worker-lease expansion.
 - **Cost:** Requires a separate concurrency design and real race coverage; task 35 does not expand its worker lease to solve it.

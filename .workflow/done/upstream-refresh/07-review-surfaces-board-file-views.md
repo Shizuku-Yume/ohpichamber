@@ -4,7 +4,7 @@
 **Task type:** feature
 **Base commit:** aa0954a966b5c89572abb15c08e710c63ae2d5be
 
-**Status:** paused
+**Finished:** 2026-11-01T11:47:31+08:00
 
 **Delivers:** The UI renders upstream's Board, PR/review and tracker surfaces, references and comments, plus the Files, Git, worktree and diff views, on top of the refreshed server.
 
@@ -18,16 +18,16 @@
 
 ## Done when
 
-- [ ] Board, tracker and review components use the canonical client and task 06's routes; no direct provider fetch in the browser. Task 34 published `POST /api/git/change-id`, `GitAPI.addChangeIdToHead` and the `gitApi` wrapper. This task still owns the review-surface Change-Id control and its call site: it adds them and calls `gitApi.addChangeIdToHead`, never `gitApiHttp`; task 34 added no call site because none existed.
-- [ ] Files/Git/diff views open the fixture repository and show changed files, hunks and the sticky scrollbar behavior.
-- [ ] References and comments work across sessions and worktrees.
-- [ ] View tests pass; large lists use the upstream virtualization.
-- [ ] `JsonTreeViewer`/`JsonTreeView` adopt upstream on this task's file-tree pieces and task 25's `jsonTreeUtils`; no fork copy remains.
-- [ ] The deferred stores (`useTrackerAuthStore`, `useTrackedItemsStore`, `useSourceBoardStore`, `useSourceControlAuthStore`, `useGitHubPrStatusStore`, `useChangeRequestContextStore`, `useInlineCommentDraftStore`, `useGitStore`, `useWalkthroughStore`) are reworked from upstream on the new registry/DTO shapes; no OpenCode-shaped field is faked.
-- [ ] `useLinearAuthStore` is deleted: this task retires its last callers (`App.tsx`, `apps/MobileApp.tsx`, `apps/runtimeEndpointReset.ts`, `sections/integrations/LinearSettings.tsx`) to `useTrackerAuthStore`'s `refreshTrackers`/`resetForRuntimeSwitch` and the `linear` runtime API that only they read, then deletes the store and its test; tasks 08/11/24 closed without dropping their imports, and task 31 carries no part of this. No Linear-shaped auth field is faked in its place.
-- [ ] Session pins stay deferred: the missing Host source is the technical-debt entry `Session pins have no OMP source`; do not fake it.
-- [ ] `sessionReferences` and `sessionMentionChips` work across sessions and worktrees; `InlineCommentInput` consumes `isPastedInput` from `useTextareaInlinePicker`. The wiring lands in the consumer files named in `Files` (`ChatInput.tsx` for composer references; `MessageBody.tsx`, `UserTextPart.tsx`, `userTextPartContent.ts`, `MarkdownLink.tsx` for the chips), which tasks 15 and 13 deferred here.
-- [ ] Project-scoped magic prompt overrides in `packages/ui/src/lib/magicPrompts.ts` are wired with project settings.
+- [x] Board, tracker and review components use the canonical client and task 06's routes; no direct provider fetch in the browser. Task 34 published `POST /api/git/change-id`, `GitAPI.addChangeIdToHead` and the `gitApi` wrapper. This task still owns the review-surface Change-Id control and its call site: it adds them and calls `gitApi.addChangeIdToHead`, never `gitApiHttp`; task 34 added no call site because none existed.
+- [x] Files/Git/diff views open the fixture repository and show changed files, hunks and the sticky scrollbar behavior.
+- [x] References and comments work across sessions and worktrees.
+- [x] View tests pass; large lists use the upstream virtualization.
+- [x] `JsonTreeViewer`/`JsonTreeView` adopt upstream on this task's file-tree pieces and task 25's `lib/jsonTreeUtils`; no fork copy remains.
+- [x] The deferred stores (`useTrackerAuthStore`, `useTrackedItemsStore`, `useSourceBoardStore`, `useSourceControlAuthStore`, `useGitHubPrStatusStore`, `useChangeRequestContextStore`, `useInlineCommentDraftStore`, `useGitStore`, `useWalkthroughStore`) are reworked from upstream on the new registry/DTO shapes; no OpenCode-shaped field is faked.
+- [x] `useLinearAuthStore` is deleted: this task retires its last callers (`App.tsx`, `apps/MobileApp.tsx`, `apps/runtimeEndpointReset.ts`, `sections/integrations/LinearSettings.tsx`) to `useTrackerAuthStore`'s `refreshTrackers`/`resetForRuntimeSwitch` and the `linear` runtime API that only they read, then deletes the store and its test; tasks 08/11/24 closed without dropping their imports, and task 31 carries no part of this. No Linear-shaped auth field is faked in its place.
+- [x] Session pins stay deferred: the missing Host source is the technical-debt entry `Session pins have no OMP source`; do not fake it.
+- [x] `sessionReferences` and `sessionMentionChips` work across sessions and worktrees; `InlineCommentInput` consumes `isPastedInput` from `useTextareaInlinePicker`. The wiring lands in the consumer files named in `Files` (`ChatInput.tsx` for composer references; `MessageBody.tsx`, `UserTextPart.tsx`, `userTextPartContent.ts`, `MarkdownLink.tsx` for the chips), which tasks 15 and 13 deferred here.
+- [x] Project-scoped magic prompt overrides in `packages/ui/src/lib/magicPrompts.ts` are wired with project settings.
 
 ## Progress
 
@@ -227,6 +227,14 @@ Provider-backed issue/PR listing, PR diff, references and review comments remain
 - A pending session-knowledge delivery report could cross a runtime switch before its next read; owner checks now reject A→B and A→B→A before that read. Focused before/after and combined regression results are recorded in `logs/task07-knowledge-barrier-before-2026-11-01.txt` and `logs/task07-knowledge-barrier-after-2026-11-01.txt`.
 - Real Host `session.messages` returned HTTP 400 because the control service requested a canonical history page of 200 while the typed contract permits at most 100. It now follows canonical cursors at 100 and applies the most-recent limit after complete traversal. A regression exercises Host action dispatch against the real `SessionJournal` over 205 turns, including an authorized different-worktree target and a rejected mismatched explicit workspace; the focused service suite passed 8 tests. No authorization was relaxed.
 - Normal Host and a real Gemini worker subsequently invoked `session.messages` successfully for the different-worktree reference (two real messages) and a same-workspace session (empty result), then rendered the response. The original reference survives browser reload as a button and typed canonical `sessionMentions`; that is distinct from the later successful action. The Board PR hunk rendered through the normal Host; a separate long-patch fixture established a visible sticky horizontal track at both vertical offsets and synchronized its horizontal position to the code column at 1280×800. Evidence and fixture limitations: `logs/task07-fixed-host-runtime-2026-11-01.json` and `logs/task07-reference-reload-2026-11-01.json` under the task artifact root.
-- Independent requirements recheck A closed its five findings; bounded quality B and security reviews of the new knowledge/history owners passed. The frozen source and subsequent documentation checks passed as recorded below. Maintainer acceptance and any landing remain separate and unauthorized; task status remains paused.
+- Independent requirements recheck A closed its five findings; bounded quality B and security reviews of the new knowledge/history owners passed. The frozen source and subsequent documentation checks passed as recorded below. This was the pre-acceptance checkpoint; the later maintainer decision is recorded under Accepted delivery.
 - The task's original pre-implementation fixture Check was not run or is unavailable; later pre-fix Host history and knowledge-barrier failures are narrower regressions and are not a substitute for that original baseline. The 440-path frozen correction snapshot passed install, type-check, lint, root test, build and oxlint; dead-code exited 1 with no added names against its recorded baseline (`logs/task07-final-corrections-qa-2026-11-01/receipt.json`).
   A normal built Host with a local GitLab stand-in created review discussion `thread1` and a reply through Board, then read both after switching between distinct sessions in the root and registered worktree. Each session attached its selected comment into its own composer draft; no message was sent from those drafts. The initial fixture write failed before creating a thread due to the stand-in's request parser; the corrected fixture and distinct action succeeded. Details, screenshots and limitations: `logs/task07-gitlab-thread-cross-worktree-2026-11-01.json`.
+
+### Accepted delivery (2026-11-01)
+
+- The maintainer accepted task 07's verified delivery and authorized its protected integration fast-forward. This archive is on the task branch; integration landing is pending and the overall effort remains in progress.
+- Check after: frozen install, type-check, lint, root test and build exited 0 on the 440-path source snapshot; the built Host and local fixtures exercised Board issues/PRs, PR diff, Files, sticky scroll and a created review discussion. Evidence and limits are recorded above and in the final QA and runtime receipts. Later changes before this archive were documentation only.
+- Check before: the original pre-implementation fixture Check was not run or is unavailable; later narrower failures do not replace it.
+- Independent requirements review A's bounded final recheck closed all five findings; quality B and security rechecks passed on their reviewed boundaries. Final frozen-source QA and narrow documentation checks are recorded in `logs/task07-final-corrections-qa-2026-11-01/receipt.json` and `logs/task07-docs-final-qa-2026-11-01/receipt.json` under the task artifact root. Dead-code remained exit 1 with no new baseline names.
+- Original Check-before remains unavailable, not a retrospective pass. GitLab/Teahouse/Gerrit evidence uses local fixtures; review comment attachments were unsent drafts. Browser evidence is headless Linux, not a live forge, packaged desktop or physical mobile certification. The earlier shared-editor process deviation remains recorded above.

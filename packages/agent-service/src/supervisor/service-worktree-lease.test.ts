@@ -76,10 +76,10 @@ const startStateless = (registry: WorkerRegistry, rootSessionId: string, tree: L
   })
 );
 
-const startUsage = (registry: WorkerRegistry, tree: LeaseWorkspace) => (
+const startUsage = (registry: WorkerRegistry, tree: LeaseWorkspace, rootSessionId = 'usage-worker', cwd = tree.stateDirectory) => (
   registry.startUsage({
-    rootSessionId: 'usage-worker', projectId: 'usage-worker', workspaceId: 'usage-worker',
-    cwd: tree.stateDirectory, agentDirectory: tree.stateDirectory, agentDirectoryId: 'usage-worker', catalogRevision: '0',
+    rootSessionId, projectId: rootSessionId, workspaceId: rootSessionId,
+    cwd, agentDirectory: tree.stateDirectory, agentDirectoryId: rootSessionId, catalogRevision: '0',
   })
 );
 
@@ -105,20 +105,26 @@ test('a lease stops session and stateless workers at the directory, leaves usage
     expect(registry.info('root-session')).toBeUndefined();
     expect(registry.info('catalog-root')).toBeUndefined();
     expect(registry.info('usage-worker')?.state).toBe('ready');
-
     expectRefusal(await refusalOf(registry.start(sessionBootstrap('root-session', tree))), {
       status: 409, code: 'COMMAND_IN_FLIGHT', details: { leaseId: 'lease-1' },
     });
     expectRefusal(await refusalOf(startStateless(registry, 'catalog-root', tree)), {
       status: 409, code: 'COMMAND_IN_FLIGHT', details: { leaseId: 'lease-1' },
     });
+    expectRefusal(await refusalOf(startUsage(registry, tree, 'usage-inside', tree.cwd)), {
+      status: 409, code: 'COMMAND_IN_FLIGHT', details: { leaseId: 'lease-1' },
+    });
+    expect(registry.info('usage-inside')).toBeUndefined();
 
     await registry.releaseWorktreeLease('lease-1');
     const reopened = await registry.start(sessionBootstrap('root-session', tree));
     expect(reopened.state).toBe('ready');
     await startStateless(registry, 'catalog-root', tree);
     expect(registry.info('catalog-root')?.state).toBe('ready');
-    // The usage worker never matched the leased path.
+    const admittedUsage = await startUsage(registry, tree, 'usage-inside', tree.cwd);
+    expect(admittedUsage.state).toBe('ready');
+    expect(registry.info('usage-inside')?.state).toBe('ready');
+    // The usage worker outside the lease remained untouched throughout.
     expect(registry.info('usage-worker')?.state).toBe('ready');
   } finally {
     try { await registry.close(); } finally { await tree.remove(); }

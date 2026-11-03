@@ -5,7 +5,6 @@
 **Base commit:** d909d974f2f3645f8dd1a35c44920768b63f2bda
 **Started:** 2026-10-30T09:54:55+08:00
 **Finished:** 2026-11-04T02:05:00+08:00
-**Status:** complete
 
 **Delivers:** A finished worktree can be archived, restored, and deleted for good. The Host answers upstream's worktree-archive endpoints against `refs/openchamber/archive/<id>`, releasing every OMP worker that holds the folder before the folder is removed and holding Agent Service restarts for the duration of the archive. The Archive page lists each project's archived worktrees with **Restore** and **Delete**, so merged-worktree cleanup and the row's own archive action stop at a real Host route instead of a missing one.
 

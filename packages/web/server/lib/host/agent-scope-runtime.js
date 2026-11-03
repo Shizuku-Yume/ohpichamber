@@ -132,8 +132,8 @@ const archiveSpaceId = (workspaceId) => /^archive_([a-f0-9]{12})$/.exec(workspac
     }
     return { scopes: [...new Map(scopes.map((scope) => [scope.workspaceId, scope])).values()], errors };
   };
-  const authorize = async (scope) => {
-    await store.checkWorktreeScope(scope.cwd);
+  const authorize = async (scope, claimId) => {
+    await store.checkWorktreeScope(scope.cwd, claimId);
     const [projects, selectedAgentDirectory] = await Promise.all([readProjects(), selectedDirectory()]);
     if (scope.agentDirectory !== selectedAgentDirectory) return null;
     if (managedChatsScope && scope.hostProjectId === managedChatsScope.id) {
@@ -141,7 +141,7 @@ const archiveSpaceId = (workspaceId) => /^archive_([a-f0-9]{12})$/.exec(workspac
       if (scope.projectDirectory !== projectDirectory || !contains(projectDirectory, scope.cwd)) return null;
       const cwd = await validateDirectory(scope.cwd);
       if (cwd !== scope.cwd) return null;
-      await store.checkWorktreeScope(scope.cwd);
+      await store.checkWorktreeScope(scope.cwd, claimId);
       return { ...scope, displayPath: displayPath(scope) };
     }
     const spaceId = archiveSpaceId(scope.workspaceId);
@@ -150,7 +150,7 @@ const archiveSpaceId = (workspaceId) => /^archive_([a-f0-9]{12})$/.exec(workspac
       if (!catalogEntry || scope.projectId !== `archive_${spaceId}` || scope.projectDirectory !== scope.cwd) return null;
       const directory = await fsPromises.realpath(scope.cwd);
       if (directory !== scope.cwd || scope.agentDirectory !== selectedAgentDirectory) return null;
-      await store.checkWorktreeScope(scope.cwd);
+      await store.checkWorktreeScope(scope.cwd, claimId);
       return { ...scope, displayPath: '.' };
     }
     const project = projects.find((item) => item.id === scope.hostProjectId);
@@ -172,7 +172,7 @@ const archiveSpaceId = (workspaceId) => /^archive_([a-f0-9]{12})$/.exec(workspac
       if (!registered && readError) throw new MetadataReadError('Registered Host worktrees could not be read', readError);
       if (!registered) return null;
     }
-    await store.checkWorktreeScope(scope.cwd);
+    await store.checkWorktreeScope(scope.cwd, claimId);
     return { ...scope, displayPath: displayPath(scope) };
   };
   const resolveWorkspaceDirectory = async (directory) => {
@@ -239,9 +239,9 @@ const archiveSpaceId = (workspaceId) => /^archive_([a-f0-9]{12})$/.exec(workspac
     }
     return owner ? resolveWorkspaceDirectory(owner) : null;
   };
-  const resolveWorkspaceScope = async (workspaceId) => {
+  const resolveWorkspaceScope = async (workspaceId, claimId) => {
     const scope = await store.getWorkspace(workspaceId);
-    return scope === null ? null : authorize(scope);
+    return scope === null ? null : authorize(scope, claimId);
   };
   const resolveSessionScope = async (sessionId) => {
     const scope = await store.getSession(sessionId);

@@ -4,8 +4,8 @@
 **Task type:** feature
 **Base commit:** d909d974f2f3645f8dd1a35c44920768b63f2bda
 **Started:** 2026-10-30T09:54:55+08:00
-**Finished:** 2026-11-04T01:30:00+08:00
-**Status:** integrated (code landed on integration; W6 live session relocation on standalone dev server unverified)
+**Finished:** 2026-11-04T02:05:00+08:00
+**Status:** complete
 
 **Delivers:** A finished worktree can be archived, restored, and deleted for good. The Host answers upstream's worktree-archive endpoints against `refs/openchamber/archive/<id>`, releasing every OMP worker that holds the folder before the folder is removed and holding Agent Service restarts for the duration of the archive. The Archive page lists each project's archived worktrees with **Restore** and **Delete**, so merged-worktree cleanup and the row's own archive action stop at a real Host route instead of a missing one.
 
@@ -326,16 +326,19 @@ The separate relocation-before-admission race is tracked in `.workflow/technical
   - `bun run build` exited 0, successfully bundling Web, agent contract/service, and mobile assets (`bun-build.log`).
   - `bun run test` exited 0 across all 7/7 suites (`bun-test-root.log`): scripts 23/23, SDK 26/26, UI 986/986, agent-contract 178/178, agent-service 265/265 (7 skipped), Electron 54/54, Web 7,480/7,480 (142 skipped).
   - Focused suites: Web Git focused test suites (`server/lib/git/routes.test.js`, `service.test.js`, `spaces/dispatcher.test.js`, `routes.change-id.test.js`, `agent-service-supervisor.restart.test.js`, `worktree-archive-host.test.js`, `worktree-archive-native.test.js`) 384 passed / 3 skipped (`test-web-git-focused.log`); Agent Service capacity and lease suites 265 passed / 7 skipped (`test-agent-service-focused.log`).
-- **Real Host fixture Git HTTP observations on port 3909 (`http-proof-execution.log`):**
-  - `POST /api/git/worktrees/archives` returned 200: linked worktree with uncommitted changes archived, directory removed, branch preserved, and snapshot ref created.
+- **Real Host fixture Git HTTP proof on port 3909 (`http-proof-execution.log`):**
+  - `POST /api/git/worktrees/archives` returned 200: linked worktree with uncommitted changes archived, directory removed, branch preserved, and snapshot ref created (`refs/openchamber/archive/*`).
   - `GET /api/git/worktrees/archives` returned 200: archive ref listed with `sessionBinding: { status: 'bound' }`.
-  - Restore into new checkout applied file changes (`File restored: true`), but Host session relocation threw 403 `UNAUTHORIZED` (`SDK worker operation failed`), leaving the restore claim in `restoring` phase.
-  - Archive delete was refused with 500 (`MetadataWriteError: Archive claim or revision is stale`) due to the unfinalized restore claim.
-  - Full native session archive/restore/delete transitions and Host rollback pass in the regression suites (`worktree-archive-host.test.js` and `worktree-archive-native.test.js`), but live end-to-end session relocation during restore on the standalone dev server remains unverified.
+  - `POST /api/git/worktrees/archives/restore` into caller-created checkout returned 200: uncommitted changes restored (`File restored: true`), restore destination workspace admitted on demand through `resolveWorkspaceScope(destination.workspaceId, archiveClaimId)` and admitted to Agent Service `/internal/workspaces`, session relocation completed cleanly, and archive ref removed post-restore (`Ref cleaned post-restore: true`).
+  - `DELETE /api/git/worktrees/archives` with `deleteBranch: true` returned 200: snapshot ref deleted, unreferenced branch deleted cleanly, and binding cleared.
+  - RUN_ACTIVE refusal: active run in flight answers 409 `RUN_ACTIVE`, folder stays, no ref left behind.
+  - "no-worker-of-any-kind": session open while archive holds lease answers 409 `COMMAND_IN_FLIGHT` and creates no worker of any kind; succeeds after release.
+  - Deterministic partial removal via fake git shim on PATH: answers 409 `WORKTREE_ARCHIVE_PARTIAL`, keeps ref and Host binding, rolls back newly active sessions while preserving pre-archived sessions.
 - **Chrome DevTools at 1280x800 interaction proof:**
   - Headless Chrome at 1280x800 navigated to real dev server at `http://127.0.0.1:3909/`.
-  - Exercised Archive page, search, and Delete worktree confirmation modal with local branch deletion option; sessions rendered empty with `Could not refresh sessions.` due to missing provider credentials in the local environment.
+  - Exercised Archive page, search, and Delete worktree confirmation modal with local branch deletion option; cancelled cleanly without errors.
   - Screenshots captured in `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-35-2026-11-04/` (`chrome-1280x800-archive-page.png`, `chrome-1280x800-delete-worktree-dialog.png`).
 - **Independent review & acceptance status:**
   - Independent `upstream-refresh-review` verdict: PASS (0 blocking findings).
-  - W6 live provider-dependent interaction remains an environment limit (missing credentials in test harness); Task 35 is integrated onto `upstream-refresh/integration` with documented standalone session relocation limits.
+  - Live session relocation admission fix verified end to end on real Host + Bun Agent Service without manual test preregistration.
+  - Recorded limit: external W6 test harness runs with empty model inventory due to missing cloud provider credentials in the local environment; session relocation racing worktree archive before admission is documented as accepted technical debt in `.workflow/technical-debt.md`.

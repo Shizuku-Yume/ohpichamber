@@ -63,8 +63,20 @@ it('archives and restores real native sessions through the registered Host Git r
       return response;
     } };
     const sessions = createOpenChamberSessionService({ service: transport, agentScopeStore: store,
-      resolveWorkspaceDirectory: async (directory) => scopes.get(directory) ?? null,
-      resolveWorkspaceScope: (id) => [...scopes.values()].find((scope) => scope.workspaceId === id) ?? null,
+      resolveWorkspaceDirectory: async (directory) => scopes.get(directory) ?? (await store.ensureWorkspace({ hostProjectId: 'host-project', projectDirectory: project, workspaceDirectory: directory, agentDirectory, name: 'Project' })),
+      resolveWorkspaceScope: async (id) => {
+        const found = [...scopes.values()].find((scope) => scope.workspaceId === id) ?? (await store.getWorkspace(id));
+        if (!found) return null;
+        if (!scopes.has(found.cwd)) {
+          const response = await native.request(`/internal/workspaces/${encodeURIComponent(found.workspaceId)}`, {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ projectId: found.projectId, cwd: found.cwd, agentDirectory, agentDirectoryId: found.agentDirectoryId, env }),
+          });
+          expect(response.status, await response.text()).toBe(201);
+          scopes.set(found.cwd, { ...found, displayPath: path.relative(project, found.cwd) || '.', env });
+        }
+        return scopes.get(found.cwd);
+      },
       resolveSessionScope: (id) => store.getSession(id), resolveHostSessionScope: (id) => store.getSession(id),
       resolveHostRelocationScope: (id) => store.getSession(id),
       registerSessionScope: async (session) => { await store.bindSession({ sessionId: session.sessionId, rootSessionId: session.rootSessionId, workspaceId: session.workspaceId }); return true; },
@@ -89,7 +101,7 @@ it('archives and restores real native sessions through the registered Host Git r
     const archived = await request(app).post('/api/git/worktrees/archives').query({ directory: project }).send({ directory: checkout, id: 'native-fixture' });
     expect(archived.status, JSON.stringify(archived.body)).toBe(200);
     const target = path.join(root, 'target'); git('worktree', 'add', '-q', target, 'native-archive');
-    const targetScope = await register(target);
+    const targetScope = await store.ensureWorkspace({ hostProjectId: 'host-project', projectDirectory: project, workspaceDirectory: target, agentDirectory, name: 'Project' });
     const restored = await request(app).post('/api/git/worktrees/archives/restore').query({ directory: target }).send({ id: 'native-fixture' });
     expect(restored.status, JSON.stringify(restored.body)).toBe(200);
     expect((await store.getSession(first.sessionId)).workspaceId).toBe(targetScope.workspaceId);

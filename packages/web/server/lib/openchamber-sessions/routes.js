@@ -426,7 +426,7 @@ const createCanonicalSessionService = (dependencies) => {
       if (!source) throw new OpenChamberControlError('Session scope was not found', 404);
       assertWritableScope(source);
       await agentScopeStore.checkWorktreeScope(source.cwd, archiveClaimId);
-      const destination = archiveClaimId ? await agentScopeStore.getWorkspace(input.workspaceId) : await resolveWorkspaceScope(input.workspaceId);
+      const destination = await resolveWorkspaceScope(input.workspaceId, archiveClaimId);
       if (!destination || destination.projectId !== source.projectId || destination.agentDirectoryId !== source.agentDirectoryId)
         throw new OpenChamberControlError('Relocation destination is outside the source Host owner', 403);
       assertWritableScope(destination);

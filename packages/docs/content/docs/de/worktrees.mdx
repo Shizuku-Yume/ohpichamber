@@ -13,21 +13,53 @@ Eine Worktree-Sitzung läuft in einer eigenen ausgecheckten Kopie deines Repos a
 2. Wähle unter **Start from** eine Option:
    - **new branch** — benenne den Branch
    - **existing branch** — checke einen bereits vorhandenen Branch aus
-   - **PR or issue** — wähle einen Eintrag aus GitHub, Linear oder einer Erweiterung; der Branch wird danach benannt (ein PR checkt seinen eigenen Branch aus), und der Eintrag wird an deine erste Nachricht angehängt
-3. Prüfe **Based on** (der Branch, von dem ein neuer Branch ausgeht, standardmäßig der aktuelle Branch des Projekts) und **Folder name**; ändere sie nur, wenn es nötig ist.
+   - **PR or issue** — wähle einen Eintrag aus GitHub, GitLab, Gitea, Forgejo, Gerrit, Linear oder einer Erweiterung; der Branch wird danach benannt (ein PR checkt seinen eigenen Branch aus, eine Gerrit-Änderung ihr neuestes Patchset auf `change-<number>`), und der Eintrag wird an deine erste Nachricht angehängt
+3. Prüfe **Based on** (der Branch, von dem ein neuer Branch ausgeht, standardmäßig der Standard-Branch des Remotes, etwa `origin/main`) und **Folder name**; ändere sie nur, wenn es nötig ist.
 4. Erstelle ihn. Hat das Projekt Setup-Befehle, laufen sie direkt danach.
 
-OpenChamber legt den Branch an, richtet den Ordner ein und öffnet dort eine neue Sitzung, bereit für deine erste Nachricht. Du kannst auch direkt von einer [todo](/notes-todos-plans/) oder einem [GitHub issue or PR](/github/) aus damit beginnen.
+OpenChamber legt den Branch an, richtet den Ordner ein und öffnet dort eine neue Sitzung, bereit für deine erste Nachricht. Du kannst auch direkt von einer [todo](/notes-todos-plans/) oder einem [Issue oder Pull Request](/github/) aus damit beginnen.
 
-Ohne Rückfragen geht es mit **Schneller Worktree** im selben Branch-Menü: OpenChamber benennt den Branch selbst und richtet die neue Sitzung darauf aus.
+Ohne Rückfragen geht es mit **Schneller Worktree** im selben Branch-Menü: OpenChamber gibt dem Branch einen vorläufigen Namen und richtet die neue Sitzung darauf aus. Sobald der Agent der Aufgabe einen Namen gibt, benennt er auch den Branch danach um, etwa in `fix/login-timeout`, solange der Branch noch nicht gepusht wurde.
+
+## In der Seitenleiste
+
+Ein Worktree ist eine Zeile in der Seitenleiste, darunter alle Sitzungen darin. Unter seinem Projekt steht er zwischen den anderen Sitzungen des Projekts nach seiner letzten Aktivität. Ein Worktree, in dem du gerade gearbeitet hast, steht also weit oben. Die Zeile zeigt den Namen der Aufgabe, sobald der Agent sie benannt hat (bis dahin den Titel der Sitzung, in der du dort zuletzt gearbeitet hast), den Pull Request oder das Issue, dem er folgt, als farbige Markierung, und ob dort eine Sitzung läuft oder Neuigkeiten für dich hat. Ein Worktree, der für einen Pull Request oder ein Issue angelegt wurde, trägt zuerst dessen Titel, bis der Agent einen kürzeren Namen wählt. Fahre mit der Maus darüber, um den Branch zu sehen. Klicke darauf, um die Sitzung zu öffnen, in der du dort zuletzt gearbeitet hast; um die Liste aufzuklappen, fahre über das Branch-Symbol links davon und klicke auf den Pfeil, der an seiner Stelle erscheint. Sein Menü benennt die Aufgabe um, legt den Worktree in einen Ordner des Projekts, archiviert ihn oder löscht ihn. Auf dem Handy tippst du auf den Pfeil in der Zeile, um die Liste aufzuklappen, und wischst die Zeile zur Seite, um sie als erledigt zu markieren, die Aufgabe umzubenennen, den Worktree zu archivieren oder ihn zu löschen. Wie Arbeiten in den Bereich In Arbeit kommen und ihn verlassen, steht unter [Sitzungen in Arbeit](/de/sessions-in-work/).
+
+## Projekte, die auf einem Ordner des Repositorys geöffnet sind
+
+Öffnest du ein Projekt auf einem Ordner innerhalb eines Repositorys, etwa `repo/ai`, öffnen sich neue Worktrees ebenfalls dort. Eine Sitzung in einem neuen Worktree startet im selben Ordner des Checkouts, sodass der Agent die Konfiguration findet, die dort liegt. Ein Projekt, das auf dem Repository-Stammverzeichnis geöffnet ist, startet wie bisher im Worktree-Stammverzeichnis. Hat ein Branch diesen Ordner nicht, startet die Sitzung im Worktree-Stammverzeichnis, und OpenChamber weist darauf hin.
 
 ## Die Arbeit zurückbringen
 
 Wenn die Arbeit gut ist, verwende **Integrate** in der Git-Ansicht, um die Commits des Worktrees auf einen anderen Branch (etwa `main`) zu übertragen. Wenn ein Konflikt auftritt, kannst du den Konflikt dem Agenten zur Lösung geben.
 
-## Aufräumen
+## Aufräumen und archivieren
 
-Das Löschen oder Archivieren der Sitzung kann den Worktree entfernen. Du entscheidest, ob auch der Branch gelöscht werden soll — lokal und, falls vorhanden, remote. Nichts wird gelöscht, ohne dass du es anforderst.
+Wenn die Aufgabe abgeschlossen ist, wähle **Worktree archivieren** im Menü der Zeile oder halte Shift gedrückt und klicke auf die Archiv-Schaltfläche, die anstelle der Schaltfläche für eine neue Sitzung in der Zeile angezeigt wird. OpenChamber archiviert ihn:
+
+1. Der Host verifiziert den Worktree und riegelt ihn ab, gibt jeden aktiven Worker frei, der das Verzeichnis belegt, und verhindert, dass mitten im Archivieren neue Befehle eintreffen.
+2. Nicht committete Änderungen und Branch-Zustände werden in Snapshot-Referenzen unter `refs/openchamber/archive/<id>` erfasst.
+3. Der Ordner wird sicher vom Datenträger entfernt, während der Git-Branch, der uncommittete Snapshot und die zugehörigen Sitzungsdatensätze erhalten bleiben.
+4. Wenn eine Sitzung im Worktree aktiv streamt oder ausgeführt wird, wird der Archivierungsvorgang sicher verweigert, bis die Ausführung beendet ist.
+
+Wenn du eine Worktree-Zeile als erledigt markierst, wird sie lediglich aus dem Block **In Arbeit** entfernt. Um einen Worktree automatisch zu archivieren, sobald du ihn als erledigt markierst oder sein Pull Request gemergt wurde, aktiviere **Einstellungen → Sitzungen → Abgeschlossene Worktrees**.
+
+### Aus dem Archiv wiederherstellen
+
+Die Seite **Archiv** listet archivierte Worktrees unter ihren jeweiligen Projekten auf:
+
+- **Wiederherstellen:** Bringt den archivierten Worktree in ein vom Aufrufer erstelltes Checkout (`openchamber/worktree-...`) zurück. Der Host stellt nicht committete Dateien aus der Snapshot-Referenz wieder her, führt die Setup-Befehle des Projekts erneut aus und verlegt aktive Sitzungen an den neuen Checkout-Ort.
+- **Erhalt des Sitzungszustands:** Vom Host verifizierte aktive Sitzungen werden im wiederhergestellten Worktree wieder geöffnet, sobald Änderungen übernommen wurden. Sitzungen, die bereits vor der Worktree-Archivierung archiviert waren, bleiben in der Archivliste archiviert. Von Git ignorierte Dateien (wie `node_modules` oder `.env`) werden durch die Projekt-Setup-Befehle neu erstellt.
+- **Bestätigte Wiederherstellung in neuem Checkout:** Der Wiederherstellungsablauf stellt automatisch sicher, dass das neue Checkout-Verzeichnis in den Workspace-Geltungsbereich des Hosts aufgenommen wird, bevor Sitzungen wieder geöffnet werden.
+
+### Worktrees löschen und Branch-Sicherheit
+
+Um einen Worktree dauerhaft zu entfernen:
+
+- **Aus der aktiven Seitenleiste:** Wähle **Löschen** im Menü der Worktree-Zeile.
+- **Von der Archiv-Seite:** Klicke auf **Löschen** in der Zeile eines archivierten Worktrees.
+- **Branch-Löschung standardmäßig deaktiviert:** Beim Löschen eines archivierten Worktrees bleiben der Git-Branch und sein Commit-Verlauf standardmäßig erhalten. Der Bestätigungsdialog zum Löschen bietet das Kontrollkästchen **Lokalen Branch auch löschen**, das standardmäßig nicht aktiviert ist.
+- **Ältere ungebundene reine Git-Archive:** Ältere Snapshot-Referenzen ohne Host-eigene Bindungen an den Sitzungszustand erlauben nur eine reine Git-Wiederherstellung. OpenChamber warnt ausdrücklich davor, dass zugehörige Sitzungen weder verschoben noch dearchiviert oder gelöscht werden. Das Löschen eines ungebundenen Archivs erfordert eine ausdrückliche Bestätigung für das Löschen nicht verifizierter Branches.
 
 ## Wenn etwas seltsam aussieht
 

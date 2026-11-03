@@ -44,6 +44,8 @@ export const isWorktreeRemoving = (path: string): boolean =>
 export const useWorktreeRemoving = (path: string | null | undefined): boolean =>
   useWorktreeRemovalStore((state) => selectRemoving(state, path));
 
+export const useRemovingWorktreePaths = (): ReadonlySet<string> =>
+  useWorktreeRemovalStore((state) => state.removingPaths);
 
 // Paths from the previous instance can collide with the next one's.
 subscribeRuntimeEndpointChanged(() => {

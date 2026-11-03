@@ -1,8 +1,8 @@
 import { SidebarTerminalActivity } from './SidebarTerminalActivity';
 import React from 'react';
 import type { Session } from '@openchamber/agent-contract';
-import { useSessionUIStore } from '@/sync/session-ui-store';
 import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
+import { useSessionUIStore } from '@/sync/session-ui-store';
 import { usePrefetchSessionMessages } from '@/sync/use-sync';
 import {
   getSourceControlAuthKey,
@@ -21,8 +21,9 @@ import { runBackgroundNetworkTask } from '@/lib/background-network';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import type { SourceControlReadContext } from '@/lib/api/types';
 import { limitSourceControlDiscoveryCandidates } from '../sourceControlDiscovery';
+import { reconcileRegisteredContextDirectories, type RegisteredContextDirectories } from './registeredContextDirectories';
 import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
-import { getLinkedSidebarChanges, getLinkedSidebarIssues } from '@/lib/linkedIssues';
+import { getLinkedSidebarChanges, getLinkedSidebarIssues, type RepositoryThreadRef } from '@/lib/linkedIssues';
 import { useRepositoryUrlMatcher } from '@/lib/source-control/repositoryUrlMatcher';
 import { useTrackedItems } from '@/lib/trackedItems/interest';
 import { repositoryThread, workItem } from '@/lib/trackedItems/fromLinks';
@@ -32,7 +33,7 @@ import type { SessionTreeItemProps } from '../sessions/SessionTreeItem';
 import { useArchivedAutoFolders } from '../folders/useArchivedAutoFolders';
 import { ProjectSessionSelectionEffect } from '../projects/useProjectSessionSelection';
 import type { WorktreeMetadata } from '@/types/worktree';
-import { buildActiveSessionNode, useRecentSessionCollection, useSessionProjectCollection } from './sessionCollection';
+import { buildActiveSessionNode, useSessionProjectCollection } from './sessionCollection';
 import { useChildStoreManager } from '@/sync/sync-context';
 import { createSessionOwnershipIndex } from '../sessions/sessionOwnership';
 import { useProjectSessionLists } from '../projects/useProjectSessionLists';
@@ -40,23 +41,24 @@ import { useSessionSidebarSections } from '../projects/useSessionSidebarSections
 import { SessionPrefetchProvider } from './useSessionPrefetch';
 import { isPathWithinProject, normalizePath } from '../utils';
 import type { SessionGroup, SessionNode } from '../types';
-import { SessionProjectScroller } from '../projects/SessionProjectScroller';
+import { SessionProjectScroller, type SessionProjectListProps } from '../projects/SessionProjectScroller';
 import { useSessionGrouping } from '../projects/useSessionGrouping';
 import { SessionBulkActions } from '../folders/SessionBulkActions';
 import { useSessionFoldersStore } from '@/stores/useSessionFoldersStore';
-import { useSessionDraftsStore, type SessionDraft } from '@/stores/useSessionDraftsStore';
-import type { useSessionProjectViewState } from '../projects/useSessionProjectViewState';
-import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
-import type { SidebarViewMode } from '@/stores/useSessionDisplayStore';
+import { isWorkExpanded, type useSessionProjectViewState } from '../projects/useSessionProjectViewState';
+import { resolveSidebarGrouping, useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { holdOrder, rankByLatestActivity } from './projectSort';
 import type { DeleteSessionConfirmState } from '../sessions/useSessionActions';
 import { useExpandedParents } from '../sessions/useExpandedParents';
 import { getChatsRootFromDirectory, isChatDirectoryPath } from '@/lib/chatDirectories';
 import { useChatsRoot } from '@/hooks/useChatsRoot';
 import { isCapacitorApp } from '@/lib/platform';
-import { deriveRecentActivitySections, deriveTimelineActivityItems, sessionTreeMatchesSidebarQuery } from '../recent/activitySections';
+import { deriveTimelineActivityItems, matchZoneSessionsForSidebarQuery, pruneSessionTreeForSidebarQuery } from '../recent/activitySections';
 import { resolveSidebarSessionLocations } from '../recent/sessionLocation';
-import { buildSessionSidebarRowModel } from '../sessionSidebarRowModel';
+import { buildSessionSidebarRowModel, type SessionSidebarWorkEntry } from '../sessionSidebarRowModel';
+import { useRemovingWorktreePaths } from '@/lib/worktrees/worktreeRemovalState';
+import { buildSidebarWorkIndex, isWorktreeWorkGroup, orderSidebarWorks, type SidebarWorkRef } from '../works/sidebarWorks';
+import { useSessionDraftsStore, type SessionDraft } from '@/stores/useSessionDraftsStore';
 import { useSidebarGroupStatus } from './useSidebarGroupStatus';
 import { getSessionFolderOwnerKey, getSessionFolderScopes } from '../sessions/sessionFolderIdentity';
 import { SessionRowOrderProvider } from '../sessions/sessionRowOrder';
@@ -64,8 +66,8 @@ import { canRequestNativeDirectoryAccess } from '@/lib/desktop';
 import { useSidebarSpaces, type SpaceMark } from '@/lib/spaces/spaces-store';
 import { useUIStore } from '@/stores/useUIStore';
 import { isSessionInWork } from '@/lib/sessionWorkMetadata';
+import { isSessionPinned } from '@/stores/useSessionPinnedStore';
 import { buildMultiRunIndex } from '@/lib/multirun/runs';
-import { selectBlockingBadgeSessionScopes } from '../sessions/sessionNodeItemUtils';
 
 // A branch without a live change request is asked again when something could
 // have opened one: an agent turn finishing in its directory (at once), or the
@@ -76,13 +78,13 @@ const SIDEBAR_MISSING_CHANGE_REQUEST_RETURN_MS = 60_000;
 // new reference on every render.
 const EMPTY_STANDALONE_GROUPS: SessionGroup[] = [];
 
-const EMPTY_TIMELINE_ITEMS: ReturnType<typeof deriveTimelineActivityItems> = [];
+const EMPTY_ZONE_ITEMS: ReturnType<typeof deriveTimelineActivityItems> = [];
+const EMPTY_WORK_ENTRIES: readonly SessionSidebarWorkEntry[] = [];
+const EMPTY_IDS: ReadonlySet<string> = new Set();
 const NO_DRAFTS: readonly SessionDraft[] = [];
-const EMPTY_WORK_SESSIONS: readonly Session[] = [];
-
-const isRootSession = (session: Session): boolean => {
-  return !session.parentSessionId;
-};
+/** Pinned root sessions, and the works In work lists. */
+type ZoneWorks = { pinned: readonly Session[]; work: readonly SidebarWorkRef[] };
+const EMPTY_ZONE_WORKS: ZoneWorks = { pinned: [], work: [] };
 
 type Project = {
   id: string;
@@ -99,6 +101,8 @@ type SessionProjectCollectionProps = {
   topology: {
     projects: Project[];
     availableWorktreesByProject: Map<string, WorktreeMetadata[]>;
+    knownDirectories: Set<string>;
+    isVSCode: boolean;
     worktreeMetadata: Map<string, WorktreeMetadata>;
     gitBranches: Map<string, string | null>;
     projectRepoStatus: Map<string, boolean | null>;
@@ -110,12 +114,14 @@ type SessionProjectCollectionProps = {
     hasSessionSearchQuery: boolean;
     normalizedSessionSearchQuery: string;
     activeProjectId: string | null;
+    showInlineArchived: boolean;
+    useGroupedSections: boolean;
     homeDirectory: string | null;
     mobileVariant: boolean;
+    hideDirectoryControls: boolean;
+    showOnlyMainWorkspace: boolean;
     isDesktopShellRuntime: boolean;
-    stickyZoneHeaders: boolean;
     projectSortOrder: import('@/stores/useSessionDisplayStore').ProjectSortOrder;
-    sidebarViewMode: SidebarViewMode;
     emptyState: React.ReactNode;
     searchEmptyState: React.ReactNode;
     isSessionsLoading: boolean;
@@ -128,6 +134,8 @@ type SessionProjectCollectionProps = {
      * than recomputed there, so the number and the rows can never disagree.
      */
     onSearchMatchCountChange: (count: number) => void;
+    /** Draws the list in place of the desktop's scroller: the phone's rows over the same model. */
+    renderList?: (props: SessionProjectListProps) => React.ReactNode;
   };
   actions: {
     rowActions: {
@@ -136,7 +144,6 @@ type SessionProjectCollectionProps = {
       resetSessionSearch: () => void;
     };
     alwaysShowActions: boolean;
-    notifyOnSubtasks: boolean;
     setActiveProjectIdOnly: (id: string) => void;
     setSessionSwitcherOpen: (open: boolean) => void;
     openNewSessionDraft: (options?: { selectedProjectId?: string | null; directoryOverride?: string | null; preserveDirectoryOverride?: boolean }) => void;
@@ -151,22 +158,22 @@ type SessionProjectCollectionProps = {
     persistActiveSessionByProject: (value: Map<string, string>) => void;
     projectViewActions: Pick<
       ReturnType<typeof useSessionProjectViewState>['actions'],
-      'getOrderedGroups' | 'setGroupOrderByProject' | 'toggleGroup' | 'toggleProject' | 'setCollapsedActivities'
+      'toggleGroup' | 'toggleWork' | 'toggleProject' | 'setCollapsedActivities'
     >;
   };
 };
 
 const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topology, view, actions }) => {
-  const { alwaysShowActions, notifyOnSubtasks, projectViewActions, rowActions, ...scrollerActions } = actions;
+  const { alwaysShowActions, projectViewActions, rowActions, ...scrollerActions } = actions;
   const foldersMap = useSessionFoldersStore((state) => state.foldersMap);
   const collapsedFolderIds = useSessionFoldersStore((state) => state.collapsedFolderIds);
   const createFolder = useSessionFoldersStore((state) => state.createFolder);
   const addSessionToFolder = useSessionFoldersStore((state) => state.addSessionToFolder);
   const projectView = view.projectView;
-  const { getOrderedGroups, setGroupOrderByProject, toggleGroup, toggleProject, setCollapsedActivities } = projectViewActions;
-  const collection = useSessionProjectCollection({ isVisible: true });
+  const { toggleGroup, toggleWork, toggleProject, setCollapsedActivities } = projectViewActions;
+  const collection = useSessionProjectCollection({ knownDirectories: topology.knownDirectories, isVSCode: topology.isVSCode, isVisible: true });
   const spaceList = useSidebarSpaces();
-  // Recent and Timeline rows label a space session with the space's name where a worktree session shows its branch.
+  // Zone rows label a space session with the space's name where a worktree session shows its branch.
   const spaceLabelById = React.useMemo(() => new Map(spaceList.map((space) => [space.id, space.name])), [spaceList]);
   const spacesByProject = React.useMemo(() => {
     const byProject = new Map<string, SpaceMark[]>();
@@ -196,23 +203,38 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
       return next;
     });
   }, []);
-  const showRecentSection = useSessionDisplayStore((state) => state.showRecentSection);
+  // A collapsed project or worktree group forgets its Show more: expanding it
+  // again starts from the first page, however it was collapsed (its header,
+  // Collapse all). Covers the groups, whose keys are `${projectId}:${groupId}`.
+  React.useEffect(() => {
+    setVisibleSessionCountByGroup((current) => {
+      if (current.size === 0) return current;
+      const isCollapsedKey = (key: string): boolean => (
+        projectView.collapsedGroups.has(key)
+        || [...projectView.collapsedProjects].some((projectId) => key.startsWith(`${projectId}:`))
+      );
+      const stale = [...current.keys()].filter(isCollapsedKey);
+      if (stale.length === 0) return current;
+      const next = new Map(current);
+      for (const key of stale) next.delete(key);
+      return next;
+    });
+  }, [projectView.collapsedGroups, projectView.collapsedProjects]);
   const showChatsSection = useSessionDisplayStore((state) => state.showChatsSection);
   const projectDisplayMode = useSessionDisplayStore((state) => state.projectDisplayMode);
   const singleProjectId = useSessionDisplayStore((state) => state.singleProjectId);
   const setSingleProjectId = useSessionDisplayStore((state) => state.setSingleProjectId);
-  const supportsSingleProjectMode = !isCapacitorApp();
+  const supportsSingleProjectMode = !topology.isVSCode && !isCapacitorApp();
   const singleProjectMode = supportsSingleProjectMode && projectDisplayMode === 'single';
-  const timelineMode = view.sidebarViewMode === 'timeline';
-  const recentSessions = useRecentSessionCollection({
-    enabled: showRecentSection && !singleProjectMode && !timelineMode,
-    pinnedSessionIds: collection.pinnedSessionIds,
-    sessionOrderRanks: collection.sessionOrderRanks,
-    sessions: collection.rootSessions,
-  });
+  // VS Code lists every session under its workspace and keeps sessions in
+  // work there too; it has neither the list by time nor worktree works.
+  const sidebarGrouping = useSessionDisplayStore(resolveSidebarGrouping);
+  const keepWorkInPlaceSetting = useSessionDisplayStore((state) => state.keepWorkInPlace);
+  const timeGrouping = !topology.isVSCode && sidebarGrouping === 'time';
+  const keepWorkInPlace = topology.isVSCode || keepWorkInPlaceSetting;
   const runIndex = React.useMemo(() => buildMultiRunIndex(
     collection.rootSessions,
-    (session) => normalizePath(topology.worktreeMetadata.get(session.sessionId)?.projectDirectory ?? resolveGlobalSessionDirectory(session)),
+    (session) => normalizePath(topology.worktreeMetadata.get(session.sessionId)?.projectDirectory ?? resolveGlobalSessionDirectory(session) ?? null),
   ), [collection.rootSessions, topology.worktreeMetadata]);
   // Grouping only needs membership. Keeping the map stable while membership is
   // unchanged keeps every project section cached across ordinary updates.
@@ -244,14 +266,13 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
     setCurrentSession(sessionId, sessionDirectory);
   }, [setCurrentSession]);
   const prefetchSession = usePrefetchSessionMessages();
-  const worktreeSortOrder = useSessionDisplayStore((state) => state.worktreeSortOrder);
   const { buildGroupedSessions, filterSessionNodesForSearch, buildGroupSearchText } = useSessionGrouping({
     homeDirectory: view.homeDirectory,
     worktreeMetadata: topology.worktreeMetadata,
     pinnedSessionIds: collection.pinnedSessionIds,
     sessionOrderRanks: collection.sessionOrderRanks,
     gitBranches: topology.gitBranches,
-    worktreeSortOrder,
+    isVSCode: topology.isVSCode,
     sessionOwners: ownership.bySessionId,
     spacesByProject,
     runKeyBySessionId,
@@ -262,13 +283,14 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
   // for every group the sidebar renders — the chats group included. A group the
   // hook never sees renders an empty list while a search is active.
   const chatGroup = React.useMemo<SessionGroup | null>(() => {
+    if (topology.isVSCode) return null;
     const chatsRoot = knownChatsRoot
       ?? collection.chatSessions.map((session) => getChatsRootFromDirectory(resolveGlobalSessionDirectory(session))).find(Boolean)
       ?? null;
     if (!chatsRoot) return null;
     const folderScopes = Array.from(new Set([
       chatsRoot,
-      ...collection.chatSessions.map((session) => resolveGlobalSessionDirectory(session)).filter(Boolean),
+      ...collection.chatSessions.map((session) => normalizePath(resolveGlobalSessionDirectory(session) ?? null)).filter(Boolean),
     ])).filter((directory): directory is string => Boolean(directory))
       .map((directory) => ({ scopeKey: directory, directory }));
     return {
@@ -283,10 +305,10 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
       folderScopes,
       draftTarget: 'chat',
       sessions: collection.chatSessions
-        .filter((session) => session.archivedAt === undefined && isRootSession(session))
+        .filter((session) => !session.archivedAt && !collection.nestedSessionIds.has(session.sessionId))
         .map((session) => buildActiveSessionNode(collection.childrenMap, session)),
     };
-  }, [collection.chatSessions, collection.childrenMap, knownChatsRoot]);
+  }, [collection.chatSessions, collection.childrenMap, collection.nestedSessionIds, knownChatsRoot, topology.isVSCode]);
   const standaloneGroups = React.useMemo<SessionGroup[]>(
     () => chatGroup ? [chatGroup] : EMPTY_STANDALONE_GROUPS,
     [chatGroup],
@@ -316,11 +338,12 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
   React.useEffect(() => () => onSearchMatchCountChange(0), [onSearchMatchCountChange]);
 
   const childStores = useChildStoreManager();
-  const sectionsForSidebarRender = React.useMemo(() => sectionsForRender.map((section) => (
+  const source = view.useGroupedSections ? sectionsForRender : flatSectionsForRender;
+  const sectionsForSidebarRender = React.useMemo(() => view.showInlineArchived ? source : source.map((section) => (
     section.groups.some((group) => group.isArchivedBucket)
       ? { ...section, groups: section.groups.filter((group) => !group.isArchivedBucket) }
       : section
-  )), [sectionsForRender]);
+  )), [source, view.showInlineArchived]);
   const getFolderScopesForProject = React.useCallback((projectId: string) => {
     const section = flatSectionsForRender.find((entry) => entry.project.id === projectId);
     return section?.groups.find((group) => !group.isArchivedBucket)?.folderScopes ?? [];
@@ -348,6 +371,7 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
   const activeContextRegistrations = useGitHubPrStatusStore((state) => state.activeContextRegistrations);
   const sourceControlContextsOwnerId = React.useId();
   const retriedMissingChangeRequestKeysRef = React.useRef<Set<string>>(new Set());
+  const registeredContextDirectoriesRef = React.useRef<RegisteredContextDirectories>(new Map());
   const sessionOrderIndex = React.useMemo(
     () => new Map(collection.orderedSessions.map((session, index) => [session.sessionId, index])),
     [collection.orderedSessions],
@@ -362,57 +386,135 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
     if (!holdsProjectOrder) setHeldProjectOrder(null);
   }, [holdsProjectOrder]);
   const orderedSectionsForRender = React.useMemo(() => {
-    // The saved drag order belongs to the manual worktree sort only.
-    const sections = worktreeSortOrder !== 'manual' ? sectionsForSidebarRender : sectionsForSidebarRender.map((section) => {
-      const groups = getOrderedGroups(section.project.id, section.groups);
-      return groups === section.groups ? section : { ...section, groups };
-    });
     // "Recent" needs the sessions, which only exist from here on.
-    const ranked = rankByLatestActivity(sections, view.projectSortOrder, (section) => section.project.id, ownership.sessionsByProject);
+    const ranked = rankByLatestActivity(sectionsForSidebarRender, view.projectSortOrder, (section) => section.project.id, ownership.sessionsByProject);
     return [...(heldProjectOrder && holdsProjectOrder ? holdOrder(ranked, heldProjectOrder, (section) => section.project.id) : ranked)];
-  }, [getOrderedGroups, heldProjectOrder, holdsProjectOrder, ownership.sessionsByProject, sectionsForSidebarRender, view.projectSortOrder, worktreeSortOrder]);
+  }, [heldProjectOrder, holdsProjectOrder, ownership.sessionsByProject, sectionsForSidebarRender, view.projectSortOrder]);
   React.useEffect(() => {
     shownProjectOrderRef.current = orderedSectionsForRender.map((section) => section.project.id);
   }, [orderedSectionsForRender]);
-  const recentActivitySections = React.useMemo(() => {
-    const nodes = new Map(recentSessions.map((session) => [
-      session.sessionId, buildActiveSessionNode(collection.childrenMap, session),
-    ]));
-    const pending = [...nodes.values()];
-    const recentTreeSessions = [];
-    while (pending.length > 0) {
-      const node = pending.pop();
-      if (!node) break;
-      recentTreeSessions.push(node.session);
-      pending.push(...node.children);
+  // Pinned sessions: top-level, unarchived project sessions (Chats keep their
+  // pins in Chats), in the shared lifecycle order; while the Pinned zone
+  // lists them they leave their project. Works in work: a session work when its root or any session
+  // nested under it is in work, a worktree work when any of its sessions is.
+  // A work whose root session is pinned is listed in Pinned only.
+  const sessionWorkEnabled = useUIStore((state) => state.sessionWorkEnabled);
+  const showWorkSection = useSessionDisplayStore((state) => state.showWorkSection);
+  const showPinnedSection = useSessionDisplayStore((state) => state.showPinnedSection);
+  const detailedZoneRows = useSessionDisplayStore((state) => state.detailedZoneRows);
+  const workIndex = React.useMemo(() => buildSidebarWorkIndex(projectSections), [projectSections]);
+  const rootSessionIds = React.useMemo(() => new Set(collection.rootSessions.map((session) => session.sessionId)), [collection.rootSessions]);
+  // Drafts of new sessions not sent yet, where their session would go: a
+  // worktree's in its group, the project root's at the top of the project. The
+  // open one stays listed (selected) until it is sent or thrown away; a draft
+  // with nothing typed yet is not stored and has no row.
+  const storedDrafts = useSessionDraftsStore((state) => (state.runtimeKey === getRuntimeKey() ? state.drafts : NO_DRAFTS));
+  const openDraftDirectory = useSessionUIStore((state) => (
+    !state.currentSessionId && state.newSessionDraft.open && state.newSessionDraft.target === 'project'
+      ? normalizePath(state.newSessionDraft.directoryOverride ?? null)
+      : null
+  ));
+  const draftPlacement = React.useMemo(() => {
+    const byGroupKey = new Map<string, SessionDraft[]>();
+    const rootDrafts: Array<{ draft: SessionDraft; projectId: string }> = [];
+    if (topology.isVSCode) return { byGroupKey, rootDrafts };
+    const drafts = [...storedDrafts].sort((left, right) => right.updatedAt - left.updatedAt);
+    for (const draft of drafts) {
+      const directory = normalizePath(draft.directory);
+      if (!directory) continue;
+      // The draft's own project first; otherwise the project whose folder
+      // holds it most closely, as nested projects share a prefix.
+      const section = projectSections.find((entry) => entry.project.id === draft.projectId)
+        ?? projectSections
+          .filter((entry) => isPathWithinProject(directory, entry.project.normalizedPath))
+          .sort((left, right) => right.project.normalizedPath.length - left.project.normalizedPath.length)[0];
+      if (!section) continue;
+      const worktreeGroup = section.groups.find((group) => isWorktreeWorkGroup(group) && isPathWithinProject(directory, group.directory));
+      const group = worktreeGroup ?? section.groups.find((entry) => entry.isMain);
+      if (!group) continue;
+      const groupKey = `${section.project.id}:${group.id}`;
+      byGroupKey.set(groupKey, [...(byGroupKey.get(groupKey) ?? []), draft]);
+      if (!worktreeGroup) rootDrafts.push({ draft, projectId: section.project.id });
     }
+    return { byGroupKey, rootDrafts };
+  }, [projectSections, storedDrafts, topology.isVSCode]);
+  const removingWorktreePaths = useRemovingWorktreePaths();
+  // The works the block listed last time, in order (see the removal case below).
+  const lastWorkKeysRef = React.useRef<readonly string[]>([]);
+  const zoneWorks = React.useMemo((): ZoneWorks => {
+    const showWork = sessionWorkEnabled && showWorkSection;
+    if (!showWork && !showPinnedSection) return EMPTY_ZONE_WORKS;
+    const pinned = showPinnedSection
+      ? collection.orderedSessions.filter((session) => rootSessionIds.has(session.sessionId)
+        && !session.archivedAt
+        && !isChatDirectoryPath(resolveGlobalSessionDirectory(session))
+        && isSessionPinned(collection.pinnedSessionIds, resolveGlobalSessionDirectory(session), session.sessionId))
+      : [];
+    const pinnedIds = new Set(pinned.map((session) => session.sessionId));
+    const work = showWork
+      // A subagent's own work state never puts its run in work: the user works
+      // in the sessions they started, as the Done button on a row reads it.
+      ? orderSidebarWorks(collection.orderedSessions, workIndex, (session) => (
+        !session.parentSessionId && !session.archivedAt && !isChatDirectoryPath(resolveGlobalSessionDirectory(session)) && isSessionInWork(session)
+      )).filter((ref) => ref.kind !== 'session' || !pinnedIds.has(ref.rootSessionId))
+      : [];
+    // A worktree with no session yet is in work while a draft is begun there:
+    // the user just made it for a task. It opens the block, as the newest.
+    const begun = showWork
+      ? workIndex.worktreeWorks.filter((ref) => ref.group.sessions.length === 0 && !work.some((entry) => entry.key === ref.key) && (
+        draftPlacement.byGroupKey.has(ref.key)
+        || Boolean(openDraftDirectory && isPathWithinProject(openDraftDirectory, normalizePath(ref.group.directory ?? null)))
+      ))
+      : [];
+    const listed = [...begun, ...work];
+    // A worktree being removed keeps its place until git is done: archiving
+    // its sessions first must not drop it from the block mid-removal.
+    if (showWork && removingWorktreePaths.size > 0) {
+      const listedKeys = new Set(listed.map((ref) => ref.key));
+      lastWorkKeysRef.current.forEach((key, index) => {
+        if (listedKeys.has(key)) return;
+        const ref = workIndex.worktreeWorks.find((entry) => entry.key === key);
+        const path = normalizePath(ref?.group.directory ?? null);
+        if (ref && path && removingWorktreePaths.has(path)) listed.splice(Math.min(index, listed.length), 0, ref);
+      });
+    }
+    if (pinned.length === 0 && listed.length === 0) return EMPTY_ZONE_WORKS;
+    return { pinned, work: listed };
+  }, [collection.orderedSessions, collection.pinnedSessionIds, draftPlacement, openDraftDirectory, removingWorktreePaths, rootSessionIds, sessionWorkEnabled, showPinnedSection, showWorkSection, workIndex]);
+  React.useEffect(() => {
+    lastWorkKeysRef.current = zoneWorks.work.map((ref) => ref.key);
+  }, [zoneWorks]);
+  // Worktree works start folded (`isWorkExpanded`); the row model reads one
+  // set of folded groups, so theirs join the groups' own.
+  const worktreeWorkKeys = React.useMemo(() => new Set(workIndex.worktreeWorks.map((ref) => ref.key)), [workIndex]);
+  const collapsedGroups = React.useMemo(() => {
+    if (worktreeWorkKeys.size === 0) return projectView.collapsedGroups;
+    const next = new Set(projectView.collapsedGroups);
+    for (const key of worktreeWorkKeys) {
+      if (isWorkExpanded(projectView.workExpansion, key)) next.delete(key);
+      else next.add(key);
+    }
+    return next;
+  }, [projectView.collapsedGroups, projectView.workExpansion, worktreeWorkKeys]);
+  const toggleGroupOrWork = React.useCallback((key: string) => {
+    if (worktreeWorkKeys.has(key)) toggleWork(key);
+    else toggleGroup(key);
+  }, [toggleGroup, toggleWork, worktreeWorkKeys]);
+  const workSessions = React.useMemo(
+    () => zoneWorks.work.length === 0 ? [] : collection.orderedSessions.filter((session) => (
+      !session.parentSessionId && !session.archivedAt && !isChatDirectoryPath(resolveGlobalSessionDirectory(session)) && isSessionInWork(session)
+    )),
+    [collection.orderedSessions, zoneWorks.work.length],
+  );
+  // The root sessions the zones list, which search lists there only.
+  const zoneSessionIds = React.useMemo(() => new Set([
+    ...zoneWorks.pinned.map((session) => session.sessionId),
+    ...zoneWorks.work.flatMap((ref) => ref.kind === 'session' ? [ref.rootSessionId] : []),
+  ]), [zoneWorks]);
+  const buildZoneItems = React.useCallback((zone: readonly Session[]) => {
+    if (zone.length === 0) return EMPTY_ZONE_ITEMS;
     const locations = resolveSidebarSessionLocations({
-      sessions: recentTreeSessions,
-      projects: topology.projects,
-      ownerBySessionId: ownership.bySessionId,
-      spaceLabelById,
-      availableWorktreesByProject: topology.availableWorktreesByProject,
-      gitBranches: topology.gitBranches,
-      homeDirectory: view.homeDirectory,
-      hideBranchMatchingProjectLabel: true,
-    });
-    return deriveRecentActivitySections({
-      sessions: recentSessions,
-      getSessionLocation: (sessionId) => locations.get(sessionId) ?? null,
-      getSessionNode: (session) => nodes.get(session.sessionId) ?? buildActiveSessionNode(collection.childrenMap, session),
-      query: view.hasSessionSearchQuery ? view.normalizedSessionSearchQuery : '',
-    });
-  }, [collection.childrenMap, ownership.bySessionId, recentSessions, spaceLabelById, topology.availableWorktreesByProject, topology.gitBranches, topology.projects, view.hasSessionSearchQuery, view.homeDirectory, view.normalizedSessionSearchQuery]);
-
-  // Timeline lists the project sessions themselves, in the shared lifecycle
-  // order (pinned first), with no project, worktree, or folder structure.
-  const timelineItems = React.useMemo(() => {
-    if (!timelineMode) return EMPTY_TIMELINE_ITEMS;
-    const rootIds = new Set(collection.rootSessions.map((session) => session.sessionId));
-    const sessions = collection.orderedSessions.filter((session) => rootIds.has(session.sessionId) && session.archivedAt === undefined);
-    const badgeScopesBySessionId = new Map<string, ReturnType<typeof selectBlockingBadgeSessionScopes>>();
-    const locations = resolveSidebarSessionLocations({
-      sessions,
+      sessions: [...zone],
       projects: topology.projects,
       ownerBySessionId: ownership.bySessionId,
       spaceLabelById,
@@ -422,94 +524,100 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
       rootBranchByProjectId: topology.projectRootBranches,
       hideBranchMatchingProjectLabel: false,
     });
-    const items = deriveTimelineActivityItems({
-      sessions,
-      getSessionLocation: (sessionId) => locations.get(sessionId) ?? null,
-      // Timeline rows never expand. Keep descendants for the badges before
-      // flattening the rendered node; archive/delete still resolve them at action time.
-      getSessionNode: (session) => {
-        const tree = buildActiveSessionNode(collection.childrenMap, session);
-        const location = locations.get(session.sessionId);
-        badgeScopesBySessionId.set(session.sessionId, selectBlockingBadgeSessionScopes(tree, false, location?.groupDirectory ?? resolveGlobalSessionDirectory(session)));
-        return { ...tree, children: [], worktree: location?.worktree ?? null };
-      },
-      query: view.hasSessionSearchQuery ? view.normalizedSessionSearchQuery : '',
-    });
-    return items.map((item) => ({ ...item, blockingBadgeSessionScopes: badgeScopesBySessionId.get(item.node.session.sessionId) }));
-  }, [collection.childrenMap, collection.orderedSessions, collection.rootSessions, ownership.bySessionId, spaceLabelById, timelineMode, topology.availableWorktreesByProject, topology.gitBranches, topology.projectRootBranches, topology.projects, view.hasSessionSearchQuery, view.homeDirectory, view.normalizedSessionSearchQuery]);
-
-  // Sessions in work: top-level, unarchived project sessions (Chats are plain
-  // conversations and never in work), in the shared lifecycle order.
-  // They leave every other projection, so the row model gets the id set too.
-  // `sessionWorkKeepInGroup` keeps them under their project group and folders.
-  const sessionWorkEnabled = useUIStore((state) => state.sessionWorkEnabled);
-  const sessionWorkKeepInGroup = useUIStore((state) => state.sessionWorkKeepInGroup);
-  const workSessions = React.useMemo(() => {
-    if (!sessionWorkEnabled) return EMPTY_WORK_SESSIONS;
-    const sessions = collection.orderedSessions.filter((session) => !session.parentSessionId && session.archivedAt === undefined && !isChatDirectoryPath(resolveGlobalSessionDirectory(session)) && isSessionInWork(session));
-    return sessions.length > 0 ? sessions : EMPTY_WORK_SESSIONS;
-  }, [collection.orderedSessions, sessionWorkEnabled]);
-  const workSessionIds = React.useMemo(() => new Set(workSessions.map((session) => session.sessionId)), [workSessions]);
-  const workItems = React.useMemo(() => {
-    if (workSessions.length === 0) return EMPTY_TIMELINE_ITEMS;
-    const locations = resolveSidebarSessionLocations({
-      sessions: [...workSessions],
-      projects: topology.projects,
-      ownerBySessionId: ownership.bySessionId,
-      spaceLabelById,
-      availableWorktreesByProject: topology.availableWorktreesByProject,
-      gitBranches: topology.gitBranches,
-      homeDirectory: view.homeDirectory,
-      rootBranchByProjectId: topology.projectRootBranches,
-      hideBranchMatchingProjectLabel: !timelineMode,
-    });
-    // Timeline rows never expand; the Projects view keeps subsessions
-    // reachable, the way Recent does, and searches the whole tree: these
-    // sessions are nowhere else in the sidebar.
-    const badgeScopesBySessionId = new Map<string, ReturnType<typeof selectBlockingBadgeSessionScopes>>();
-    const nodes = new Map(workSessions.map((session) => {
-      const tree = buildActiveSessionNode(collection.childrenMap, session);
-      if (timelineMode) {
-        badgeScopesBySessionId.set(session.sessionId, selectBlockingBadgeSessionScopes(tree, false, locations.get(session.sessionId)?.groupDirectory ?? resolveGlobalSessionDirectory(session)));
-      }
-      const node: SessionNode = {
-        ...tree,
-        children: timelineMode ? [] : tree.children,
-        worktree: locations.get(session.sessionId)?.worktree ?? null,
-      };
-      return [session.sessionId, node];
-    }));
     const query = view.hasSessionSearchQuery ? view.normalizedSessionSearchQuery : '';
-    const listed = query
-      ? workSessions.filter((session) => {
-        const node = nodes.get(session.sessionId);
-        return node ? sessionTreeMatchesSidebarQuery(node, query) : false;
-      })
-      : [...workSessions];
+    const trees = new Map(zone.map((session) => [session.sessionId, buildActiveSessionNode(collection.childrenMap, session)]));
+    const nodes = new Map(zone.map((session) => {
+      const tree = trees.get(session.sessionId) ?? buildActiveSessionNode(collection.childrenMap, session);
+      const worktree = locations.get(session.sessionId)?.worktree ?? null;
+      // Zone rows open to what is nested under them, like the project tree,
+      // and a search shows the branches that lead to a match.
+      const shown = query ? pruneSessionTreeForSidebarQuery(tree, query) ?? tree : tree;
+      return [session.sessionId, { ...shown, worktree }];
+    }));
+    const matched = matchZoneSessionsForSidebarQuery(
+      zone,
+      (session: Session) => trees.get(session.sessionId) ?? buildActiveSessionNode(collection.childrenMap, session),
+      query,
+      'tree',
+    );
     const items = deriveTimelineActivityItems({
-      sessions: listed,
+      sessions: matched.sessions,
       getSessionLocation: (sessionId) => locations.get(sessionId) ?? null,
       getSessionNode: (session) => nodes.get(session.sessionId) ?? buildActiveSessionNode(collection.childrenMap, session),
       query: '',
     });
-    return timelineMode
-      ? items.map((item) => ({ ...item, blockingBadgeSessionScopes: badgeScopesBySessionId.get(item.node.session.sessionId) }))
-      : items;
-  }, [collection.childrenMap, ownership.bySessionId, spaceLabelById, timelineMode, topology.availableWorktreesByProject, topology.gitBranches, topology.projectRootBranches, topology.projects, view.hasSessionSearchQuery, view.homeDirectory, view.normalizedSessionSearchQuery, workSessions]);
-  // Worktree branches whose PR badge is on screen in the current mode:
-  // Timeline rows there; expanded project groups plus Recent rows in the
-  // Projects view; In work rows in both. Collapse state from the Projects
-  // view must not decide what a Timeline badge shows.
+    // The search count comes from the match: the project subtracts every
+    // match in a tree that moved here. A row works its badges out from its
+    // own expansion.
+    return items.map((item) => ({
+      ...item,
+      searchMatchCount: matched.matchCountById.get(item.node.session.sessionId),
+    }));
+  }, [collection.childrenMap, ownership.bySessionId, spaceLabelById, topology.availableWorktreesByProject, topology.gitBranches, topology.projectRootBranches, topology.projects, view.hasSessionSearchQuery, view.homeDirectory, view.normalizedSessionSearchQuery]);
+  // Works as the row model lists them: a session work's row from the zone
+  // items (search may have left it out), a worktree work as its group.
+  const toWorkEntries = React.useCallback((refs: readonly SidebarWorkRef[]): readonly SessionSidebarWorkEntry[] => {
+    if (refs.length === 0) return EMPTY_WORK_ENTRIES;
+    const roots = refs.flatMap((ref) => {
+      if (ref.kind !== 'session') return [];
+      const session = collection.sessionById.get(ref.rootSessionId);
+      return session ? [session] : [];
+    });
+    const itemById = new Map(buildZoneItems(roots).map((item) => [item.node.session.sessionId, item]));
+    return refs.flatMap((ref): SessionSidebarWorkEntry[] => {
+      if (ref.kind === 'worktree') return [{ kind: 'worktree', groupKey: ref.key, projectId: ref.projectId, group: ref.group }];
+      const item = itemById.get(ref.rootSessionId);
+      return item ? [{ kind: 'session', item }] : [];
+    });
+  }, [buildZoneItems, collection.sessionById]);
+  const pinnedItems = React.useMemo(() => buildZoneItems(zoneWorks.pinned), [buildZoneItems, zoneWorks.pinned]);
+  const workEntries = React.useMemo(() => toWorkEntries(zoneWorks.work), [toWorkEntries, zoneWorks.work]);
+  // Grouped by time: every other work of every project, most recent first,
+  // then the worktrees nobody has started a session in yet.
+  const timeEntries = React.useMemo((): readonly SessionSidebarWorkEntry[] | null => {
+    if (!timeGrouping) return null;
+    const listedKeys = new Set(zoneWorks.work.map((ref) => ref.key));
+    for (const session of zoneWorks.pinned) listedKeys.add(`session:${session.sessionId}`);
+    const refs = orderSidebarWorks(collection.orderedSessions, workIndex, (session) => (
+      !session.archivedAt && !isChatDirectoryPath(resolveGlobalSessionDirectory(session))
+    )).filter((ref) => !listedKeys.has(ref.key));
+    const seen = new Set(refs.map((ref) => ref.key));
+    for (const ref of workIndex.worktreeWorks) {
+      if (!seen.has(ref.key) && !listedKeys.has(ref.key)) refs.push(ref);
+    }
+    // New works the user has only drafted open the list.
+    return [
+      ...draftPlacement.rootDrafts.map(({ draft, projectId }): SessionSidebarWorkEntry => ({ kind: 'draft', draft, projectId })),
+      ...toWorkEntries(refs),
+    ];
+  }, [collection.orderedSessions, draftPlacement, timeGrouping, toWorkEntries, workIndex, zoneWorks]);
+  // What leaves its project for the zones. A pinned work always does: the
+  // Pinned zone is shown only by choice, and then the work is there. A work
+  // in work leaves unless kept in place by choice, and still leaves during a
+  // search, which lists each match once.
+  const movesWorkOut = !keepWorkInPlace || view.hasSessionSearchQuery;
+  const movedSessionIds = React.useMemo(() => {
+    const ids = zoneWorks.pinned.map((session) => session.sessionId);
+    if (movesWorkOut) {
+      for (const ref of zoneWorks.work) if (ref.kind === 'session') ids.push(ref.rootSessionId);
+    }
+    return ids.length > 0 ? new Set(ids) : EMPTY_IDS;
+  }, [movesWorkOut, zoneWorks]);
+  const movedGroupKeys = React.useMemo(() => {
+    if (!movesWorkOut) return EMPTY_IDS;
+    const keys = zoneWorks.work.flatMap((ref) => ref.kind === 'worktree' ? [ref.key] : []);
+    return keys.length > 0 ? new Set(keys) : EMPTY_IDS;
+  }, [movesWorkOut, zoneWorks.work]);
+  // Branches whose PR badge is on screen: the works in Pinned and In work,
+  // then the list by time or the expanded projects.
   const urlMatcher = useRepositoryUrlMatcher();
   const shownPrs = React.useMemo(() => {
     const targets = new Map<string, { directory: string; branch: string }>();
     // Change requests and issues linked to the sessions on screen, whatever
-    // their branch; their state comes from their own instance, on its own
-    // cadence below. Keyed by thread, so the same number as an issue and as a
-    // discussion is followed once each.
-    const repositoryItems = new Map<string, TrackedItem>();
+    // their branch; their state comes from their instance.
+    const repositoryRefs = new Map<string, RepositoryThreadRef>();
     // Tracker items linked to the sessions on screen, by tracker and
-    // identifier; their state comes from their tracker.
+    // identifier; their state comes from their tracker, on its own cadence.
     const trackerItems = new Map<string, { provider: string; identifier: string }>();
     const addTarget = (directory: string | null, branch: string | null | undefined) => {
       const trimmed = branch?.trim();
@@ -518,45 +626,46 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
     // Same pair a row derives its badge key from (resolveSessionPrLookupKey).
     const addNode = (node: SessionNode) => {
       addTarget(normalizePath(node.worktree?.path ?? null), node.worktree?.branch);
-      for (const change of getLinkedSidebarChanges(node.session, urlMatcher)) {
-        const ref = change.repository;
-        if (ref) repositoryItems.set(ref.key, repositoryThread('pull', ref));
-      }
-      for (const issue of getLinkedSidebarIssues(node.session, urlMatcher)) {
-        if (issue.source === 'repository') {
-          repositoryItems.set(
-            issue.ref.key,
-            issue.ref.thread === 'discussion'
-              ? repositoryThread('discussion', issue.ref)
-              : repositoryThread('issue', issue.ref),
-          );
-        } else if (issue.source === 'tracker') {
-          const identifier = issue.identifier.toUpperCase();
-          trackerItems.set(`${issue.provider}|${identifier}`, { provider: issue.provider, identifier });
+      if (!topology.isVSCode) {
+        for (const change of getLinkedSidebarChanges(node.session, urlMatcher)) {
+          if (change.repository) repositoryRefs.set(change.repository.key, change.repository);
+        }
+        for (const issue of getLinkedSidebarIssues(node.session, urlMatcher)) {
+          if (issue.source === 'repository') repositoryRefs.set(issue.ref.key, issue.ref);
+          else if (issue.source === 'tracker') {
+            const identifier = issue.identifier.toUpperCase();
+            trackerItems.set(`${issue.provider}|${identifier}`, { provider: issue.provider, identifier });
+          }
         }
       }
       node.children.forEach(addNode);
     };
-    workItems.forEach((item) => addNode(item.node));
-    if (timelineMode) {
-      timelineItems.forEach((item) => addNode(item.node));
-      return { targets, repositoryItems: [...repositoryItems.values()], trackerItems: [...trackerItems.values()] };
+    // A worktree work's group row shows its branch PR; its sessions show the
+    // PRs and issues linked to them.
+    const addGroup = (group: SessionGroup) => {
+      group.sessions.forEach(addNode);
+      if (group.isMain || group.isArchivedBucket) return;
+      const directory = normalizePath(group.directory ?? null);
+      addTarget(directory, group.branch?.trim() || topology.gitBranches.get(directory || ''));
+    };
+    const addEntry = (entry: SessionSidebarWorkEntry) => {
+      if (entry.kind === 'session') addNode(entry.item.node);
+      else if (entry.kind === 'worktree') addGroup(entry.group);
+    };
+    pinnedItems.forEach((item) => addNode(item.node));
+    if (!projectView.collapsedActivities.has('work')) workEntries.forEach(addEntry);
+    if (timeEntries) {
+      if (!projectView.collapsedActivities.has('timeline')) timeEntries.forEach(addEntry);
+      return { targets, repositoryRefs: [...repositoryRefs.values()], trackerItems: [...trackerItems.values()] };
     }
-    recentActivitySections.forEach((section) => section.items.forEach((item) => addNode(item.node)));
     projectSections.forEach((section) => {
       if (projectView.collapsedProjects.has(section.project.id)) return;
       section.groups.forEach((group) => {
-        if (group.isArchivedBucket) return;
-        // Root sessions show linked PRs too; only worktree groups have a
-        // branch PR of their own.
-        group.sessions.forEach(addNode);
-        if (group.isMain) return;
-        const directory = normalizePath(group.directory ?? null);
-        addTarget(directory, group.branch?.trim() || topology.gitBranches.get(directory || ''));
+        if (!group.isArchivedBucket) addGroup(group);
       });
     });
-    return { targets, repositoryItems: [...repositoryItems.values()], trackerItems: [...trackerItems.values()] };
-  }, [projectSections, projectView.collapsedProjects, recentActivitySections, timelineItems, timelineMode, topology.gitBranches, urlMatcher, workItems]);
+    return { targets, repositoryRefs: [...repositoryRefs.values()], trackerItems: [...trackerItems.values()] };
+  }, [pinnedItems, projectSections, projectView.collapsedActivities, projectView.collapsedProjects, timeEntries, topology.gitBranches, topology.isVSCode, urlMatcher, workEntries]);
   const shownPrTargets = shownPrs.targets;
   // The discovery effect below subscribes to bindings and reads them; keep its
   // input stable while the shown branches are the same, so ordinary sidebar
@@ -578,10 +687,17 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
   // summaries below instead.
   React.useEffect(() => {
     const candidates = discoveryCandidates;
+    const discoveryRuntimeKey = getRuntimeKey();
+    const candidateDirectories = new Set(candidates.map((candidate) => candidate.directory));
+    reconcileRegisteredContextDirectories(
+      registeredContextDirectoriesRef.current,
+      discoveryRuntimeKey,
+      candidateDirectories,
+      (runtimeKey, directory) => releaseActiveSourceControlContexts(runtimeKey, directory, sourceControlContextsOwnerId),
+    );
     if (candidates.length === 0) return;
 
     let cancelled = false;
-    const discoveryRuntimeKey = getRuntimeKey();
     const discover = async (changedDirectory?: string, retryAfterMs = SIDEBAR_MISSING_CHANGE_REQUEST_RETURN_MS) => {
       const now = Date.now();
       const contextsByDirectory = new Map<string, Promise<SourceControlReadContext[] | null>>();
@@ -693,7 +809,6 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
       }
     });
     void discover();
-    const candidateDirectories = new Set(candidates.map((candidate) => candidate.directory));
     const releaseActivity = subscribeOpenchamberEvents((event) => {
       if (!cancelled && event.type === 'source-control-activity' && candidateDirectories.has(event.directory)) {
         void discover(event.directory, 0);
@@ -709,9 +824,6 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
       releases.forEach((release) => release());
       releaseActivity();
       document.removeEventListener('visibilitychange', onReturn);
-      for (const candidate of candidates) {
-        releaseActiveSourceControlContexts(discoveryRuntimeKey, candidate.directory, sourceControlContextsOwnerId);
-      }
     };
   }, [
     beginActiveSourceControlContextsLoad,
@@ -725,6 +837,12 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
     sourceControl,
     sourceControlContextsOwnerId,
   ]);
+  React.useEffect(() => () => reconcileRegisteredContextDirectories(
+    registeredContextDirectoriesRef.current,
+    getRuntimeKey(),
+    new Set(),
+    (runtimeKey, directory) => releaseActiveSourceControlContexts(runtimeKey, directory, sourceControlContextsOwnerId),
+  ), [releaseActiveSourceControlContexts, sourceControlContextsOwnerId]);
   // Batched summaries go to the bound entries the shown rows read.
   const shownPrKeys = React.useMemo(
     () => getActiveSourceControlStatusKeys(activeContextRegistrations, shownPrTargets.values()),
@@ -735,7 +853,7 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
   const branchPulls = useBranchTrackedPulls(shownPrKeys);
   const shownTrackedItems = React.useMemo((): TrackedItem[] => [
     ...branchPulls,
-    ...shownPrs.repositoryItems,
+    ...shownPrs.repositoryRefs.map((ref) => repositoryThread(ref.thread, ref)),
     ...shownPrs.trackerItems.map(({ provider, identifier }) => workItem(provider, identifier)),
   ], [branchPulls, shownPrs]);
   useTrackedItems(shownTrackedItems);
@@ -761,16 +879,17 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
     normalizedSessionSearchQuery: view.normalizedSessionSearchQuery,
     groupSearchDataByGroup,
     collapsedGroups: projectView.collapsedGroups,
+    hideDirectoryControls: view.hideDirectoryControls,
     mobileVariant: view.mobileVariant,
     alwaysShowActions,
     activeProjectId: view.activeProjectId,
-    notifyOnSubtasks,
     pinnedSessionIds: collection.pinnedSessionIds,
     sessionOrderIndex,
     expandedParents,
     editingId,
     editingRowKey,
     editTitle,
+    sessionBatchSize: singleProjectMode && !view.useGroupedSections ? 20 : undefined,
     setEditingId,
     setEditingRowKey,
     setEditTitle,
@@ -782,14 +901,12 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
     setDeleteSessionConfirm,
     startFolderRename,
     startSessionWorktreeMenuLoad: actions.startSessionWorktreeMenuLoad,
-    onEditProject: timelineMode ? scrollerActions.openProjectEditDialog : undefined,
     folderRename,
     setFolderRenameDraft,
     clearFolderRename,
   }), [
     collection.pinnedSessionIds,
     alwaysShowActions,
-    notifyOnSubtasks,
     projectView.collapsedGroups,
     groupSearchDataByGroup,
     sessionOrderIndex,
@@ -803,14 +920,15 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
     startFolderRename,
     deleteSessionConfirm,
     actions.startSessionWorktreeMenuLoad,
-    scrollerActions.openProjectEditDialog,
-    timelineMode,
     rowActions,
     toggleParent,
+    view.hideDirectoryControls,
     view.hasSessionSearchQuery,
     view.activeProjectId,
     view.mobileVariant,
     view.normalizedSessionSearchQuery,
+    view.useGroupedSections,
+    singleProjectMode,
   ]);
   const groupActions = React.useMemo(() => ({
     showMoreGroupSessions,
@@ -818,11 +936,11 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
     setActiveProjectIdOnly: scrollerActions.setActiveProjectIdOnly,
     setSessionSwitcherOpen: scrollerActions.setSessionSwitcherOpen,
     openNewSessionDraft: scrollerActions.openNewSessionDraft,
-    onToggleCollapsedGroup: toggleGroup,
+    onToggleCollapsedGroup: toggleGroupOrWork,
   }), [
     resetGroupSessionLimit,
     showMoreGroupSessions,
-    toggleGroup,
+    toggleGroupOrWork,
     scrollerActions.openNewSessionDraft,
     scrollerActions.setActiveProjectIdOnly,
     scrollerActions.setSessionSwitcherOpen,
@@ -851,61 +969,29 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
     }
     return nextFolderAuthorityByOwner;
   }, [bootstrapSnapshot, chatGroup, childStores, collection.hasAuthoritativeGlobalSessions, orderedSectionsForRender]);
-  // Drafts of new sessions not sent yet, where their session would go: the
-  // group whose directory holds the draft, else the project root's. They are
-  // read from the Host so a draft begun on another client lists here too.
-  const storedDrafts = useSessionDraftsStore((state) => (state.runtimeKey === getRuntimeKey() ? state.drafts : NO_DRAFTS));
-  React.useEffect(() => {
-    void useSessionDraftsStore.getState().load();
-  }, []);
-  const draftsByGroupKey = React.useMemo(() => {
-    const byGroupKey = new Map<string, SessionDraft[]>();
-    const drafts = [...storedDrafts].sort((left, right) => right.updatedAt - left.updatedAt);
-    for (const draft of drafts) {
-      const directory = normalizePath(draft.directory);
-      if (!directory) continue;
-      // The draft's own project first; otherwise the project whose folder
-      // holds it most closely, as nested projects share a prefix.
-      const section = projectSections.find((entry) => entry.project.id === draft.projectId)
-        ?? projectSections
-          .filter((entry) => isPathWithinProject(directory, entry.project.normalizedPath))
-          .sort((left, right) => right.project.normalizedPath.length - left.project.normalizedPath.length)[0];
-      if (!section) continue;
-      // A worktree's draft belongs to that worktree's group; anything else in
-      // the project goes to the root's.
-      const holdingGroup = section.groups
-        .filter((entry) => !entry.isArchivedBucket && entry.directory && isPathWithinProject(directory, normalizePath(entry.directory) ?? ''))
-        .sort((left, right) => (normalizePath(right.directory)?.length ?? 0) - (normalizePath(left.directory)?.length ?? 0))[0];
-      const group = holdingGroup ?? section.groups.find((entry) => entry.isMain);
-      if (!group) continue;
-      const groupKey = `${section.project.id}:${group.id}`;
-      byGroupKey.set(groupKey, [...(byGroupKey.get(groupKey) ?? []), draft]);
-    }
-    return byGroupKey;
-  }, [projectSections, storedDrafts]);
   const visibleCountByContainer = React.useMemo(() => new Map([
     ...visibleSessionCountByGroup,
     ...visibleActivityCountByKey,
   ]), [visibleActivityCountByKey, visibleSessionCountByGroup]);
   const sidebarRowModel = React.useMemo(() => buildSessionSidebarRowModel({
     mode: view.hasSessionSearchQuery ? 'search' : 'normal',
-    viewMode: timelineMode ? 'timeline' : 'projects',
     sections: orderedSectionsForRender,
     authoritativeSections: projectSections,
     // Hidden only from the list: folders and search keep the group.
     chatGroup: showChatsSection ? chatGroup : null,
-    recentSections: recentActivitySections,
-    draftsByGroupKey,
-    timelineItems,
-    workItems,
-    workSessionIds,
-    keepWorkInGroup: sessionWorkKeepInGroup,
-    showRecentSection: showRecentSection && !singleProjectMode && !timelineMode,
+    pinnedItems,
+    workEntries,
+    timeEntries,
+    draftsByGroupKey: draftPlacement.byGroupKey,
+    movedSessionIds,
+    movedGroupKeys,
+    zoneSessionIds,
+    detailedZoneRows,
     foldersMap,
     groupSearchDataByGroup,
     normalizedQuery: view.normalizedSessionSearchQuery,
     collapsedProjects: projectView.collapsedProjects,
-    collapsedGroups: projectView.collapsedGroups,
+    collapsedGroups,
     collapsedFolders: collapsedFolderIds,
     collapsedActivities: projectView.collapsedActivities,
     expandedParents,
@@ -915,13 +1001,31 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
     groupStatusByKey,
     folderAuthorityByOwner,
     activeProjectId: view.activeProjectId,
-    singleProjectMode: singleProjectMode && !timelineMode,
+    singleProjectMode,
     singleProjectId: selectedSingleProjectId,
+    showOnlyMainWorkspace: view.showOnlyMainWorkspace,
+    hideDirectoryControls: view.hideDirectoryControls,
+    sessionBatchSize: singleProjectMode && !view.useGroupedSections ? 20 : undefined,
     runIndex,
-  }), [runIndex, chatGroup, showChatsSection, projectView.collapsedActivities, timelineItems, timelineMode, workItems, workSessionIds, sessionWorkKeepInGroup, collapsedFolderIds, collection.pinnedSessionIds, draftsByGroupKey, expandedParents, folderAuthorityByOwner, foldersMap, groupSearchDataByGroup, groupStatusByKey, orderedSectionsForRender, projectSections, projectView.collapsedGroups, projectView.collapsedProjects, recentActivitySections, selectedSingleProjectId, sessionOrderIndex, showRecentSection, singleProjectMode, view.activeProjectId, view.hasSessionSearchQuery, view.normalizedSessionSearchQuery, visibleCountByContainer]);
+  }), [runIndex, chatGroup, showChatsSection, projectView.collapsedActivities, pinnedItems, workEntries, timeEntries, draftPlacement, movedSessionIds, movedGroupKeys, zoneSessionIds, detailedZoneRows, collapsedFolderIds, collection.pinnedSessionIds, expandedParents, folderAuthorityByOwner, foldersMap, groupSearchDataByGroup, groupStatusByKey, orderedSectionsForRender, projectSections, collapsedGroups, projectView.collapsedProjects, selectedSingleProjectId, sessionOrderIndex, singleProjectMode, view.activeProjectId, view.hasSessionSearchQuery, view.hideDirectoryControls, view.normalizedSessionSearchQuery, view.showOnlyMainWorkspace, view.useGroupedSections, visibleCountByContainer]);
   React.useEffect(() => {
     onSearchMatchCountChange(sidebarRowModel.searchMatchCount);
   }, [onSearchMatchCountChange, sidebarRowModel.searchMatchCount]);
+  // An empty worktree group or folder is always open; a collapse saved from
+  // when it had sessions is dropped, so the next session there shows at once.
+  // Collapsing is the user's call again once there is something to hide.
+  React.useEffect(() => {
+    // Search filters rows, so a group or folder can look empty without being so.
+    if (view.hasSessionSearchQuery) return;
+    const toggleFolderCollapse = useSessionFoldersStore.getState().toggleFolderCollapse;
+    for (const row of sidebarRowModel.rows) {
+      if (row.kind === 'group-header' && row.empty && projectView.collapsedGroups.has(row.groupKey)) {
+        toggleGroup(row.groupKey);
+      } else if (row.kind === 'folder-header' && row.empty && collapsedFolderIds.has(row.folder.id)) {
+        toggleFolderCollapse(row.folder.id);
+      }
+    }
+  }, [collapsedFolderIds, projectView.collapsedGroups, sidebarRowModel.rows, toggleGroup, view.hasSessionSearchQuery]);
   const scrollerModel = React.useMemo(() => ({
     rowModel: sidebarRowModel,
     sectionsForRender: orderedSectionsForRender,
@@ -960,21 +1064,17 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
   const scrollerView = React.useMemo(() => ({
     homeDirectory: view.homeDirectory,
     hasSessionSearchQuery: view.hasSessionSearchQuery,
-    stickyZoneHeaders: view.stickyZoneHeaders,
+    hideDirectoryControls: view.hideDirectoryControls,
     mobileVariant: view.mobileVariant,
     alwaysShowActions,
     projectSortOrder: view.projectSortOrder,
-    worktreeSortOrder,
-    timelineView: timelineMode,
   }), [
-    timelineMode,
-    worktreeSortOrder,
     view.homeDirectory,
     view.hasSessionSearchQuery,
+    view.hideDirectoryControls,
     view.mobileVariant,
     alwaysShowActions,
     view.projectSortOrder,
-    view.stickyZoneHeaders,
   ]);
   const scrollerActionSet = React.useMemo(() => ({
     group: groupActions,
@@ -987,7 +1087,6 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
     openProjectEditDialog: scrollerActions.openProjectEditDialog,
     removeProject: scrollerActions.removeProject,
     reorderProjects: scrollerActions.reorderProjects,
-    setGroupOrderByProject,
     renderProjectStatusIndicator: scrollerActions.renderProjectStatusIndicator,
     setSingleProjectId,
   }), [
@@ -1000,7 +1099,6 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
     scrollerActions.reorderProjects,
     scrollerActions.setActiveProjectIdOnly,
     scrollerActions.setSessionSwitcherOpen,
-    setGroupOrderByProject,
     toggleProject,
     scrollerActions.renderProjectStatusIndicator,
     setSingleProjectId,
@@ -1020,7 +1118,7 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
     />
     <SessionPrefetchProvider
       sortedSessions={collection.orderedSessions}
-      recentSessions={recentSessions}
+      workSessions={workSessions}
       prefetchSession={prefetchSession}
     >
     <SessionRowOrderProvider
@@ -1040,7 +1138,9 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
         }}
         onPointerLeave={() => setHeldProjectOrder(null)}
       >
-        <SessionProjectScroller model={scrollerModel} view={scrollerView} actions={scrollerActionSet} />
+        {view.renderList
+          ? view.renderList({ model: scrollerModel, view: scrollerView, actions: scrollerActionSet })
+          : <SessionProjectScroller model={scrollerModel} view={scrollerView} actions={scrollerActionSet} />}
       </div>
     </SessionRowOrderProvider>
     </SessionPrefetchProvider>

@@ -39,6 +39,7 @@ import { getLinkedSidebarIssues, type LinkedSidebarIssue } from '@/lib/linkedIss
 import { useRepositoryUrlMatcher } from '@/lib/source-control/repositoryUrlMatcher';
 import { buildSessionIssueItems } from '../sessions/sessionPrSummaries';
 import { useOpenTrackerItem } from '@/components/sourceBoard/openTrackerItem';
+import { useProjectsStore } from '@/stores/useProjectsStore';
 import { SIDEBAR_REF_TOOLTIP_CLOSE_DELAY_MS, SidebarRefLinks, type SidebarRefLink } from '../sessions/SidebarRefLinks';
 import { useI18n } from '@/lib/i18n';
 import { useChildStoreManager } from '@/sync/sync-context';
@@ -71,6 +72,7 @@ export type SessionGroupSectionProps = {
   projectId?: string | null;
   hideGroupLabel?: boolean;
   renderBody?: boolean;
+  isEmpty?: boolean;
   hasSessionSearchQuery: boolean;
   normalizedSessionSearchQuery: string;
   groupSearchDataByGroup: WeakMap<SessionGroup, GroupSearchData>;
@@ -87,7 +89,7 @@ export type SessionGroupSectionProps = {
   openNewSessionDraft: (options?: { selectedProjectId?: string | null; directoryOverride?: string | null; preserveDirectoryOverride?: boolean; targetFolderId?: string; target?: 'chat' | 'project' }) => void;
   pinnedSessionIds: Set<string>;
   sessionOrderIndex: Map<string, number>;
-  notifyOnSubtasks: boolean;
+  notifyOnSubtasks?: boolean;
   expandedParents: Set<string>;
   editingId: string | null;
   editingRowKey: string | null;
@@ -118,7 +120,6 @@ export type SessionGroupSectionProps = {
   | 'setDeleteSessionConfirm'
   | 'startFolderRename'
   | 'startSessionWorktreeMenuLoad'
-  | 'onEditProject'
 >;
 
 const CollapsedFolderActivity: React.FC<{
@@ -326,6 +327,7 @@ function SessionGroupSectionBase(props: SessionGroupSectionProps): React.ReactNo
     hasSessionSearchQuery,
     normalizedSessionSearchQuery,
     groupSearchDataByGroup,
+    isEmpty = false,
     visibleSessionCount,
     sessionBatchSize,
     collapsedGroups,
@@ -339,7 +341,7 @@ function SessionGroupSectionBase(props: SessionGroupSectionProps): React.ReactNo
     openNewSessionDraft,
     pinnedSessionIds,
     sessionOrderIndex,
-    notifyOnSubtasks,
+    notifyOnSubtasks = false,
     onToggleCollapsedGroup,
     dragHandleProps,
     compactBodyPadding = false,
@@ -352,6 +354,10 @@ function SessionGroupSectionBase(props: SessionGroupSectionProps): React.ReactNo
     setFolderRenameDraft,
     clearFolderRename,
   } = props;
+  const projectDirectory = useProjectsStore((state) =>
+    projectId ? state.projects.find((entry) => entry.id === projectId)?.path ?? null : null,
+  );
+  const boardDirectory = projectDirectory ?? group.directory ?? null;
   const toggleFolderCollapse = useSessionFoldersStore((state) => state.toggleFolderCollapse);
   const renameFolder = useSessionFoldersStore((state) => state.renameFolder);
   const deleteFolder = useSessionFoldersStore((state) => state.deleteFolder);
@@ -815,7 +821,6 @@ function SessionGroupSectionBase(props: SessionGroupSectionProps): React.ReactNo
               expandedParents={expandedParents}
               hasSessionSearchQuery={hasSessionSearchQuery}
               normalizedSessionSearchQuery={normalizedSessionSearchQuery}
-              notifyOnSubtasks={notifyOnSubtasks}
               editingId={editingId}
               editingRowKey={editingRowKey}
                editTitle={editTitle}
@@ -970,7 +975,6 @@ function SessionGroupSectionBase(props: SessionGroupSectionProps): React.ReactNo
     expandedParents={expandedParents}
     hasSessionSearchQuery={hasSessionSearchQuery}
     normalizedSessionSearchQuery={normalizedSessionSearchQuery}
-    notifyOnSubtasks={notifyOnSubtasks}
     editingId={editingId}
     editingRowKey={editingRowKey}
      editTitle={editTitle}
@@ -1097,15 +1101,17 @@ function SessionGroupSectionBase(props: SessionGroupSectionProps): React.ReactNo
       <TooltipTrigger asChild closeDelay={SIDEBAR_REF_TOOLTIP_CLOSE_DELAY_MS}>
       <div
         className="min-w-0 flex-1"
-        onClick={() => onToggleCollapsedGroup(groupKey)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            onToggleCollapsedGroup(groupKey);
-          }
-        }}
+        {...(isEmpty ? {} : {
+          onClick: () => onToggleCollapsedGroup(groupKey),
+          role: 'button',
+          tabIndex: 0,
+          onKeyDown: (event: React.KeyboardEvent) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              onToggleCollapsedGroup(groupKey);
+            }
+          },
+        })}
         aria-label={isCollapsed
           ? t('sessions.sidebar.group.expandAria', { label: group.label })
           : t('sessions.sidebar.group.collapseAria', { label: group.label })}
@@ -1178,7 +1184,7 @@ function SessionGroupSectionBase(props: SessionGroupSectionProps): React.ReactNo
                       onKeyDown={(event) => event.stopPropagation()}
                       onClick={(event) => {
                         event.stopPropagation();
-                        if (groupPrSummary.url) openTrackerItem(groupPrSummary.url, group.directory ?? null, event);
+                        if (groupPrSummary.url) openTrackerItem(groupPrSummary.url, boardDirectory, event);
                       }}
                     >
                       {groupPrReference}
@@ -1201,7 +1207,7 @@ function SessionGroupSectionBase(props: SessionGroupSectionProps): React.ReactNo
                         event.stopPropagation();
                         // The `+N` only counts the others; the tooltip lists them.
                         if (event.target instanceof Element && event.target.closest('[data-ref-more]')) return;
-                        openTrackerItem(primaryGroupIssue.url, group.directory ?? null, event);
+                        openTrackerItem(primaryGroupIssue.url, boardDirectory, event);
                       }}
                     >
                       <Icon name={primaryGroupIssue.icon} className="h-3 w-3" />
@@ -1236,11 +1242,11 @@ function SessionGroupSectionBase(props: SessionGroupSectionProps): React.ReactNo
       </TooltipTrigger>
       {groupPrLinks.length > 0 ? (
         <TooltipContent side="right" sideOffset={8} className="max-w-xs">
-          <SidebarRefLinks items={groupPrLinks} directory={group.directory ?? null} />
+          <SidebarRefLinks items={groupPrLinks} directory={boardDirectory} />
         </TooltipContent>
       ) : !groupPrSummary && primaryGroupIssue ? (
         <TooltipContent side="right" sideOffset={8} className="max-w-xs">
-          <SidebarRefLinks items={groupIssueItems} directory={group.directory ?? null} />
+          <SidebarRefLinks items={groupIssueItems} directory={boardDirectory} />
         </TooltipContent>
       ) : null}
       </Tooltip>

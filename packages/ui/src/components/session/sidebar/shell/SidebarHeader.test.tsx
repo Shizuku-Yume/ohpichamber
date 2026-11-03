@@ -8,6 +8,9 @@ import { useUIStore } from '@/stores/useUIStore';
 import { SidebarHeader } from './SidebarHeader';
 
 const baseProps = {
+  hideDirectoryControls: false,
+  showProjectDisplayControls: true,
+  showSectionControls: true,
   handleOpenDirectoryDialog: () => undefined,
   showSourceBoard: true,
   headerActionIconClass: 'h-4.5 w-4.5',
@@ -53,6 +56,8 @@ beforeEach(() => {
     HTMLElement: browser.HTMLElement,
     InputEvent: browser.InputEvent,
     KeyboardEvent: browser.KeyboardEvent,
+    MouseEvent: browser.MouseEvent,
+    PointerEvent: browser.PointerEvent,
     IS_REACT_ACT_ENVIRONMENT: true,
   })) {
     descriptors.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
@@ -130,6 +135,20 @@ describe('SidebarHeader', () => {
     expect(document.querySelector('[aria-label="Add project"]')).not.toBeNull();
     expect(document.querySelector('[aria-label="Display mode"]')).not.toBeNull();
   });
+  test('compact variant with hideDirectoryControls renders only the compact search input', async () => {
+    await act(async () => root.render(
+      <I18nProvider>
+        <TooltipProvider>
+          <SidebarHeader {...baseProps} hideDirectoryControls={true} />
+        </TooltipProvider>
+      </I18nProvider>,
+    ));
+
+    expect(document.querySelector('input')).not.toBeNull();
+    expect(document.querySelector('[aria-label="Add project"]')).toBeNull();
+    expect(document.querySelector('[aria-label="Display mode"]')).toBeNull();
+  });
+
 
   test('a page button opens its page, shows it pressed, and closes it on the next click', async () => {
     const initial = useUIStore.getState();

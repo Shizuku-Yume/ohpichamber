@@ -8,6 +8,8 @@ import type { I18nKey, I18nParams } from '@/lib/i18n';
 import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { readGlobalSessionLineage } from '@/stores/sessionLineage';
 import { useSessionUIStore, type SessionUIState } from '@/sync/session-ui-store';
+import { buildActiveSessionNode } from '../list/sessionCollection';
+import type { SessionNode } from '../types';
 
 type Translate = (key: I18nKey, params?: I18nParams) => string;
 
@@ -45,6 +47,40 @@ export const collectSessionSubtreeIds = (
   for (const descendant of descendants) ids.add(descendant.sessionId);
   ids.delete(rootId);
   return [...ids];
+};
+
+/**
+ * A session's active subtree from the global cache, built the way the project
+ * tree builds it: it stops at an archived session and everything below it.
+ * Detailed zone rows render a root with no children, so an
+ * action that needs the subagents of such a row resolves them here when the
+ * user acts.
+ */
+export const buildActiveSessionTreeFromCache = (root: Session): SessionNode => {
+  const childrenByParentId = new Map<string, Session[]>();
+  for (const session of readGlobalSessionLineage().descendantsOf(root.sessionId, 'active')) {
+    const parentId = session.parentSessionId;
+    if (!parentId) continue;
+    const siblings = childrenByParentId.get(parentId) ?? [];
+    siblings.push(session);
+    childrenByParentId.set(parentId, siblings);
+  }
+  return buildActiveSessionNode(childrenByParentId, root);
+};
+
+/**
+ * Every descendant a move to another worktree takes along: the row's rendered
+ * tree (`knownDescendants`) plus the active subtree from the global lineage,
+ * so a move from a flat row, the header or the project tree takes the same
+ * subagents along.
+ */
+export const collectSessionMoveDescendants = (root: Session, knownDescendants: readonly Session[]): Session[] => {
+  const descendants = new Map(knownDescendants.map((session) => [session.sessionId, session]));
+  for (const descendant of readGlobalSessionLineage().descendantsOf(root.sessionId, 'active')) {
+    if (!descendants.has(descendant.sessionId)) descendants.set(descendant.sessionId, descendant);
+  }
+  descendants.delete(root.sessionId);
+  return [...descendants.values()];
 };
 
 // The first recorded server answer for the failed ids, as a toast description.

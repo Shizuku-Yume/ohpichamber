@@ -48,10 +48,10 @@ const setOwner = (owners: Map<string, DirectoryOwner>, directory: string, candid
 };
 
 export const createSessionOwnershipIndex = (
-  sessions: Session[],
-  projects: Project[],
+  sessions: readonly Session[],
+  projects: readonly Project[],
   availableWorktreesByProject: Map<string, Worktree[]>,
-  archivedSessions: Session[] = [],
+  archivedSessions: readonly Session[] = [],
   spaces: readonly SpaceMark[] = [],
 ): SessionOwnershipIndex => {
   const ownerByDirectory = new Map<string, DirectoryOwner>();
@@ -143,7 +143,7 @@ export const createSessionOwnershipIndex = (
   };
 
   const bucket = (
-    input: Session[],
+    input: readonly Session[],
     target: Map<string, Session[]>,
     scopeTarget?: Map<string, Set<string>>,
   ): void => {
@@ -154,9 +154,9 @@ export const createSessionOwnershipIndex = (
       bySessionId.set(session.sessionId, owner);
       const projectSessions = target.get(owner.projectId);
       if (projectSessions) {
-        projectSessions.push(session);
+        projectSessions.push(session as Session);
       } else {
-        target.set(owner.projectId, [session]);
+        target.set(owner.projectId, [session as Session]);
       }
       if (!scopeTarget) continue;
       const scopeSessions = scopeTarget.get(owner.scopeDirectory);

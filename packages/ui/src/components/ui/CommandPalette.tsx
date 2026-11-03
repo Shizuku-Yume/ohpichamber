@@ -1,4 +1,3 @@
-import { isBtwSession } from '@/lib/sessionBtwMetadata';
 import React from 'react';
 import {
   Command,
@@ -20,10 +19,10 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useEnterpriseMode, useJevBlockedByEnterprise } from '@/stores/useEnterprisePolicyStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useGlobalSessionsStore, resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
+import { orderVisibleRootSessions } from '@/lib/sessionListOrder';
 import { settingsPageTitleKey } from '@/lib/settings/pageTitle';
 import {
   EMPTY_SESSION_ORDER_RANKS,
-  orderSessionsByLifecycleScopes,
   useSessionOrderingStore,
 } from '@/sync/session-ordering';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -565,12 +564,10 @@ export const CommandPalette: React.FC = () => {
   // ---------------------------------------------------------------------------
   // Sessions
   // ---------------------------------------------------------------------------
-  const orderedActiveSessions = React.useMemo(() => {
-    // btw forks stay hidden until promoted to a full session; subagent
-    // sessions are reached through their parent, not listed on their own.
-    const visibleSessions = activeSessions.filter((session) => !isBtwSession(session) && !session.parentSessionId);
-    return orderSessionsByLifecycleScopes(visibleSessions, pinnedSessionIds, sessionOrderRanks);
-  }, [activeSessions, pinnedSessionIds, sessionOrderRanks]);
+  const orderedActiveSessions = React.useMemo(
+    () => orderVisibleRootSessions(activeSessions, pinnedSessionIds, sessionOrderRanks),
+    [activeSessions, pinnedSessionIds, sessionOrderRanks],
+  );
 
   const allBranches = useGitAllBranches();
   const worktreeMetadata = useSessionUIStore((s) => s.worktreeMetadata);

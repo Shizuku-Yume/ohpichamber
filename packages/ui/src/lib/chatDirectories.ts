@@ -87,6 +87,11 @@ async function getChatRoots(): Promise<ChatRoots> {
   return pending;
 }
 
+export function resetChatRootsCacheForTest(): void {
+  chatsRootByRuntime.clear();
+  chatsRootCacheByRuntime.clear();
+}
+
 /** Required before a global snapshot can classify or persist managed chats. */
 export async function ensureChatsRootDirectory(): Promise<void> {
   await getChatRoots();

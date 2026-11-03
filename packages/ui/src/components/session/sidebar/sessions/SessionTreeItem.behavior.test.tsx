@@ -16,16 +16,19 @@ mock.module('./SessionNodeItem', () => ({
   },
 }));
 
-mock.module('./hooks/useSessionActions', () => ({
+mock.module('./useSessionActions', () => ({
   useSessionActions: (args: {
     setEditingId: (id: string | null) => void;
+    setEditingRowKey: (key: string | null) => void;
     setEditTitle: (title: string) => void;
+    editingOccurrenceKey: string | null;
   }) => ({
     handleSaveEdit: () => undefined,
     handleCancelEdit: () => undefined,
     handleSessionSelect: () => undefined,
     handleSessionDoubleClick: (id: string, title: string) => {
       args.setEditingId(id);
+      args.setEditingRowKey(args.editingOccurrenceKey ?? null);
       args.setEditTitle(title);
     },
     handleCopySessionId: () => undefined,
@@ -73,7 +76,7 @@ describe('SessionTreeItem public behavior', () => {
       const [menuKey, setMenuKey] = React.useState<string | null>(null);
       const rows = [
         { renderContext: 'project' as const, groupDirectory: '/workspace', rowKey: 'project:session:same-session' },
-        { renderContext: 'recent' as const, groupDirectory: '/workspace', rowKey: 'recent:session:same-session' },
+        { renderContext: 'mixed-compact' as const, groupDirectory: '/workspace', rowKey: 'mixed:session:same-session' },
       ];
       return <>{rows.map((context) => <SessionTreeItem
         key={context.renderContext}
@@ -82,7 +85,6 @@ describe('SessionTreeItem public behavior', () => {
         expandedParents={new Set()}
         hasSessionSearchQuery={false}
         normalizedSessionSearchQuery=""
-        notifyOnSubtasks={false}
         editingId={editingId}
         editingRowKey={editingRowKey}
         setEditingId={setEditingId}

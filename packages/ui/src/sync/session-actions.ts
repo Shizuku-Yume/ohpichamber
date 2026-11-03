@@ -2106,6 +2106,17 @@ export class NothingToForkError extends Error {
 }
 
 /**
+ * The session's folder no longer exists, and metadata write is refused.
+ * Archive is OpenChamber's own record and still works, so the UI offers it.
+ */
+export class SessionDirectoryMissingError extends Error {
+  constructor(sessionId: string) {
+    super(`the folder of session ${sessionId} no longer exists`)
+    this.name = "SessionDirectoryMissingError"
+  }
+}
+
+/**
  * `/fork`: fork after the last finished turn and open the fork. A running turn
  * in the source session is left alone and not copied.
  */

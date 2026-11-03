@@ -4,7 +4,7 @@ import { Window } from 'happy-dom';
 const previousStorage = Object.getOwnPropertyDescriptor(globalThis, 'window');
 const testWindow = new Window();
 Object.defineProperty(globalThis, 'window', { configurable: true, value: testWindow });
-const { defaultSidebarViewMode, migrateSessionDisplayState, useSessionDisplayStore } = await import('./useSessionDisplayStore');
+const { defaultSidebarViewMode, migrateSessionDisplayState, resolveSidebarGrouping, useSessionDisplayStore } = await import('./useSessionDisplayStore');
 afterAll(() => {
   testWindow.close();
   if (previousStorage) Object.defineProperty(globalThis, 'window', previousStorage);
@@ -20,6 +20,56 @@ describe('useSessionDisplayStore worktree sorting', () => {
     expect(migrateSessionDisplayState({}, 8).worktreeSortOrder).toBe('manual');
   });
 });
+describe('useSessionDisplayStore one-view preferences', () => {
+  test('defaults to one-view initial state', () => {
+    const state = useSessionDisplayStore.getState();
+    expect(state.showWorkSection).toBe(true);
+    expect(state.showPinnedSection).toBe(true);
+    expect(state.keepWorkInPlace).toBe(false);
+    expect(state.listSessionGrouping).toBe('project');
+    expect(state.sidebarGrouping).toBeNull();
+  });
+
+  test('v10→v11 preserves legacy timeline preference while default and projects stay project', () => {
+    const timelineUser = migrateSessionDisplayState({ sidebarViewMode: 'timeline' }, 10);
+    expect(timelineUser.showWorkSection).toBe(true);
+    expect(timelineUser.showPinnedSection).toBe(true);
+    expect(timelineUser.keepWorkInPlace).toBe(false);
+    expect(timelineUser.sidebarGrouping).toBe('time');
+    expect(timelineUser.listSessionGrouping).toBe('time');
+    expect(resolveSidebarGrouping(timelineUser as Parameters<typeof resolveSidebarGrouping>[0])).toBe('time');
+
+    const projectsUser = migrateSessionDisplayState({ sidebarViewMode: 'projects' }, 10);
+    expect(projectsUser.showWorkSection).toBe(true);
+    expect(projectsUser.showPinnedSection).toBe(true);
+    expect(projectsUser.keepWorkInPlace).toBe(false);
+    expect(projectsUser.sidebarGrouping).toBeNull();
+    expect(projectsUser.listSessionGrouping).toBe('project');
+    expect(resolveSidebarGrouping(projectsUser as Parameters<typeof resolveSidebarGrouping>[0])).toBe('project');
+
+    const defaultUser = migrateSessionDisplayState({ showRecentSection: true }, 10);
+    expect(defaultUser.showWorkSection).toBe(true);
+    expect(defaultUser.showPinnedSection).toBe(true);
+    expect(defaultUser.keepWorkInPlace).toBe(false);
+    expect(defaultUser.sidebarGrouping).toBeNull();
+    expect(defaultUser.listSessionGrouping).toBe('project');
+    expect(resolveSidebarGrouping(defaultUser as Parameters<typeof resolveSidebarGrouping>[0])).toBe('project');
+  });
+
+  test('v11→v12 sets detailedZoneRows for mobile surface on non-project view', () => {
+    expect(migrateSessionDisplayState({ sidebarViewMode: 'timeline' }, 11, 'mobile').detailedZoneRows).toBe(true);
+    expect(migrateSessionDisplayState({ sidebarViewMode: 'projects' }, 11, 'mobile').detailedZoneRows).toBeUndefined();
+    expect(migrateSessionDisplayState({ sidebarViewMode: 'timeline' }, 11, 'desktop').detailedZoneRows).toBeUndefined();
+  });
+
+  test('resolveSidebarGrouping resolves explicit grouping or falls back to timeline/projects', () => {
+    expect(resolveSidebarGrouping({ sidebarGrouping: 'time', sidebarViewMode: 'projects', listSessionGrouping: 'project' })).toBe('time');
+    expect(resolveSidebarGrouping({ sidebarGrouping: null, sidebarViewMode: 'timeline', listSessionGrouping: 'time' })).toBe('time');
+    expect(resolveSidebarGrouping({ sidebarGrouping: null, sidebarViewMode: 'timeline', listSessionGrouping: 'project' })).toBe('project');
+    expect(resolveSidebarGrouping({ sidebarGrouping: null, sidebarViewMode: 'projects', listSessionGrouping: 'time' })).toBe('project');
+  });
+});
+
 
 describe('useSessionDisplayStore project sorting', () => {
   test('defaults to manual ordering', () => {
@@ -122,12 +172,12 @@ describe('useSessionDisplayStore animated activity', () => {
       await useSessionDisplayStore.persist.rehydrate();
       expect(useSessionDisplayStore.getState().animatedActivityIndicators).toBe(false);
       expect(useSessionDisplayStore.getState().sidebarViewMode).toBe('timeline');
-      expect(useSessionDisplayStore.persist.getOptions().version).toBe(10);
+      expect(useSessionDisplayStore.persist.getOptions().version).toBe(12);
       expect('showArchivedSessions' in useSessionDisplayStore.getState()).toBe(false);
       useSessionDisplayStore.getState().setAnimatedActivityIndicators(true);
       const enabledSnapshot = stored;
       expect(JSON.parse(enabledSnapshot)).toMatchObject({
-        version: 10,
+        version: 12,
         state: { animatedActivityIndicators: true, sidebarViewMode: 'timeline', showRecentSection: false },
       });
       expect('showArchivedSessions' in JSON.parse(enabledSnapshot).state).toBe(false);

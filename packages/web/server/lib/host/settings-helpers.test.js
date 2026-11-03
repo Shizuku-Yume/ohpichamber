@@ -206,19 +206,37 @@ describe('settings helpers', () => {
     expect(helpers.sanitizeSettingsUpdate({
       sidebarProjectDisplayMode: 'single',
       sidebarViewMode: 'timeline',
+      sidebarListSessionGrouping: 'time',
+      sidebarGrouping: 'project',
+      sidebarKeepWorkInPlace: true,
       sidebarProjectSortOrder: 'z-a',
       sidebarShowRecentSection: false,
+      sidebarShowWorkSection: false,
+      sidebarShowPinnedSection: true,
+      sidebarDetailedZoneRows: true,
     })).toEqual({
       sidebarProjectDisplayMode: 'single',
       sidebarViewMode: 'timeline',
+      sidebarListSessionGrouping: 'time',
+      sidebarGrouping: 'project',
+      sidebarKeepWorkInPlace: true,
       sidebarProjectSortOrder: 'z-a',
       sidebarShowRecentSection: false,
+      sidebarShowWorkSection: false,
+      sidebarShowPinnedSection: true,
+      sidebarDetailedZoneRows: true,
     });
     expect(helpers.sanitizeSettingsUpdate({
       sidebarProjectDisplayMode: 'grid',
       sidebarViewMode: 'grid',
+      sidebarListSessionGrouping: 'invalid',
+      sidebarGrouping: 'invalid',
+      sidebarKeepWorkInPlace: 'true',
       sidebarProjectSortOrder: 'random',
       sidebarShowRecentSection: 'false',
+      sidebarShowWorkSection: 'false',
+      sidebarShowPinnedSection: 'true',
+      sidebarDetailedZoneRows: 'true',
     })).toEqual({});
   });
 
@@ -823,7 +841,7 @@ describe('settings registry gate', () => {
     tunnelProvider: 'cloudflare', tunnelMode: 'quick', tunnelHttpsPort: 8443, tunnelBootstrapTtlMs: 600000, tunnelSessionTtlMs: 86400000, managedLocalTunnelConfigPath: '/tmp/x',
     managedRemoteTunnelHostname: 'x.example', managedRemoteTunnelToken: 'token', managedRemoteTunnelPresets: [{ id: 'a', name: 'A', hostname: 'a.example' }],
     managedRemoteTunnelSelectedPresetId: 'a', managedRemoteTunnelPresetTokens: { a: 'token' },
-    sidebarProjectDisplayMode: 'all', sidebarViewMode: 'timeline', sidebarProjectSortOrder: 'manual', sidebarWorktreeSortOrder: 'recent', sidebarShowRecentSection: true,
+    sidebarProjectDisplayMode: 'all', sidebarViewMode: 'timeline', sidebarListSessionGrouping: 'project', sidebarGrouping: 'time', sidebarKeepWorkInPlace: true, sidebarProjectSortOrder: 'manual', sidebarWorktreeSortOrder: 'recent', sidebarShowRecentSection: true, sidebarShowWorkSection: true, sidebarShowPinnedSection: true, sidebarDetailedZoneRows: true,
     workStatusPanelEnabled: true, workStatusHiddenSections: ['mcp'], workStatusHiddenSectionsExplicit: true, workStatusSectionOrder: ['mcp', 'session'],
     showReasoningTraces: true, streamingAutoFollowEnabled: true, collapsibleThinkingBlocks: true, expandReasoningWhileStreaming: true, showTextJustificationActivity: true,
     chatRenderMode: 'live', activityRenderMode: 'summary', mermaidRenderingMode: 'svg', userMessageRenderingMode: 'markdown', collapsibleUserMessages: true,

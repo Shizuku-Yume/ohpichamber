@@ -326,6 +326,18 @@
       "scope": "profile",
       "perSurface": true
     },
+    "sidebarListSessionGrouping": {
+      "scope": "profile",
+      "perSurface": true
+    },
+    "sidebarGrouping": {
+      "scope": "profile",
+      "perSurface": true
+    },
+    "sidebarKeepWorkInPlace": {
+      "scope": "profile",
+      "perSurface": true
+    },
     "sidebarProjectSortOrder": {
       "scope": "profile"
     },
@@ -337,6 +349,18 @@
       "perSurface": true
     },
     "sidebarShowChatsSection": {
+      "scope": "profile",
+      "perSurface": true
+    },
+    "sidebarShowWorkSection": {
+      "scope": "profile",
+      "perSurface": true
+    },
+    "sidebarShowPinnedSection": {
+      "scope": "profile",
+      "perSurface": true
+    },
+    "sidebarDetailedZoneRows": {
       "scope": "profile",
       "perSurface": true
     },

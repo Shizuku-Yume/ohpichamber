@@ -336,8 +336,10 @@ The separate relocation-before-admission race is tracked in `.workflow/technical
   - Deterministic partial removal via fake git shim on PATH: answers 409 `WORKTREE_ARCHIVE_PARTIAL`, keeps ref and Host binding, rolls back newly active sessions while preserving pre-archived sessions.
 - **Chrome DevTools at 1280x800 interaction proof:**
   - Headless Chrome at 1280x800 navigated to real dev server at `http://127.0.0.1:3909/`.
-  - Exercised Archive page, search, and Delete worktree confirmation modal with local branch deletion option; cancelled cleanly without errors.
-  - Screenshots captured in `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-35-2026-11-04/` (`chrome-1280x800-archive-page.png`, `chrome-1280x800-delete-worktree-dialog.png`).
+  - Verified visible `ArchivedWorktreeRow` displaying worktree title, branch name (`feat-login-archive`), date, and Restore/Delete controls.
+  - Exercised worktree archive delete confirmation modal with the "Also delete the local branch" checkbox and cancelled cleanly.
+  - Exercised Host-backed Restore action: restored worktree checkout with uncommitted files and displayed completion toast (`Worktree restored Login Feature Fix`).
+  - Screenshots captured in `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-35-2026-11-04/` (`chrome-1280x800-archived-worktree-row.png`, `chrome-1280x800-delete-archive-dialog.png`, `chrome-1280x800-worktree-restored.png`).
 - **Independent review & acceptance status:**
   - Independent `upstream-refresh-review` verdict: PASS (0 blocking findings).
   - Live session relocation admission fix verified end to end on real Host + Bun Agent Service without manual test preregistration.

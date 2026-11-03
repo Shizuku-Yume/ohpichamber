@@ -1,6 +1,9 @@
 /** Archived worktrees: archiving from the sidebar, restoring and deleting from Archive and the Worktrees page, the merged-PR cleanup. Merged into each locale's main dictionary. */
 export const worktreeArchiveI18n = {
   en: {
+    "sessions.archive.worktree.legacyWarning": "Unverified archive: sessions will not be moved, unarchived, or deleted. The branch identity is unverified.",
+    "sessions.archive.worktree.recoverNew": "Restore in a new checkout",
+    "sessions.archive.worktree.recoverWarning": "The previous checkout is unchanged. Restore the saved changes in a new checkout?",
     "sessions.sidebar.work.menu.archive": "Archive worktree",
     "sessions.sidebar.work.archive.done": "Worktree archived",
     "sessions.sidebar.work.archive.kept": "Worktree not archived",
@@ -35,6 +38,9 @@ export const worktreeArchiveI18n = {
     "settings.openchamber.mergedWorktreeCleanup.field.enable": "Archive a worktree after its PR is merged",
   },
   de: {
+    "sessions.archive.worktree.legacyWarning": "Nicht überprüftes Archiv: Sitzungen werden nicht verschoben, wiederhergestellt oder gelöscht. Die Branch-Identität ist nicht überprüft.",
+    "sessions.archive.worktree.recoverNew": "In neuem Checkout wiederherstellen",
+    "sessions.archive.worktree.recoverWarning": "Der bisherige Checkout bleibt unverändert. Gesicherte Änderungen in einem neuen Checkout wiederherstellen?",
     "sessions.sidebar.work.menu.archive": "Worktree archivieren",
     "sessions.sidebar.work.archive.done": "Worktree archiviert",
     "sessions.sidebar.work.archive.kept": "Worktree nicht archiviert",
@@ -69,6 +75,9 @@ export const worktreeArchiveI18n = {
     "settings.openchamber.mergedWorktreeCleanup.field.enable": "Worktree archivieren, nachdem sein PR gemergt wurde",
   },
   fr: {
+    "sessions.archive.worktree.legacyWarning": "Archive non vérifiée : les sessions ne seront ni déplacées, ni désarchivées, ni supprimées. L'identité de la branche n'est pas vérifiée.",
+    "sessions.archive.worktree.recoverNew": "Restaurer dans un nouveau checkout",
+    "sessions.archive.worktree.recoverWarning": "Le checkout précédent reste inchangé. Restaurer les modifications dans un nouveau checkout ?",
     "sessions.sidebar.work.menu.archive": "Archiver le worktree",
     "sessions.sidebar.work.archive.done": "Worktree archivé",
     "sessions.sidebar.work.archive.kept": "Worktree non archivé",
@@ -103,6 +112,9 @@ export const worktreeArchiveI18n = {
     "settings.openchamber.mergedWorktreeCleanup.field.enable": "Archiver un worktree une fois sa PR fusionnée",
   },
   nl: {
+    "sessions.archive.worktree.legacyWarning": "Niet-geverifieerd archief: sessies worden niet verplaatst, uit het archief gehaald of verwijderd. De branchidentiteit is niet geverifieerd.",
+    "sessions.archive.worktree.recoverNew": "Herstellen in een nieuwe checkout",
+    "sessions.archive.worktree.recoverWarning": "De vorige checkout blijft ongewijzigd. De opgeslagen wijzigingen in een nieuwe checkout herstellen?",
     "sessions.sidebar.work.menu.archive": "Worktree archiveren",
     "sessions.sidebar.work.archive.done": "Worktree gearchiveerd",
     "sessions.sidebar.work.archive.kept": "Worktree niet gearchiveerd",
@@ -137,6 +149,9 @@ export const worktreeArchiveI18n = {
     "settings.openchamber.mergedWorktreeCleanup.field.enable": "Worktree archiveren nadat zijn PR is gemerged",
   },
   es: {
+    "sessions.archive.worktree.legacyWarning": "Archivo sin verificar: las sesiones no se moverán, desarchivarán ni eliminarán. La identidad de la rama no está verificada.",
+    "sessions.archive.worktree.recoverNew": "Restaurar en un checkout nuevo",
+    "sessions.archive.worktree.recoverWarning": "El checkout anterior no cambiará. ¿Restaurar los cambios guardados en uno nuevo?",
     "sessions.sidebar.work.menu.archive": "Archivar el worktree",
     "sessions.sidebar.work.archive.done": "Worktree archivado",
     "sessions.sidebar.work.archive.kept": "Worktree sin archivar",
@@ -171,6 +186,9 @@ export const worktreeArchiveI18n = {
     "settings.openchamber.mergedWorktreeCleanup.field.enable": "Archivar un worktree cuando se fusione su PR",
   },
   ja: {
+    "sessions.archive.worktree.legacyWarning": "未検証のアーカイブです。セッションの移動、アーカイブ解除、削除は行われません。ブランチの識別情報も未検証です。",
+    "sessions.archive.worktree.recoverNew": "新しいチェックアウトに復元",
+    "sessions.archive.worktree.recoverWarning": "以前のチェックアウトは変更されません。保存した変更を新しいチェックアウトに復元しますか？",
     "sessions.sidebar.work.menu.archive": "ワークツリーをアーカイブ",
     "sessions.sidebar.work.archive.done": "ワークツリーをアーカイブしました",
     "sessions.sidebar.work.archive.kept": "ワークツリーはアーカイブされませんでした",
@@ -205,6 +223,9 @@ export const worktreeArchiveI18n = {
     "settings.openchamber.mergedWorktreeCleanup.field.enable": "PR がマージされたらワークツリーをアーカイブする",
   },
   'pt-BR': {
+    "sessions.archive.worktree.legacyWarning": "Arquivo não verificado: as sessões não serão movidas, desarquivadas ou excluídas. A identidade da branch não foi verificada.",
+    "sessions.archive.worktree.recoverNew": "Restaurar em um novo checkout",
+    "sessions.archive.worktree.recoverWarning": "O checkout anterior não será alterado. Restaurar as alterações salvas em um novo checkout?",
     "sessions.sidebar.work.menu.archive": "Arquivar o worktree",
     "sessions.sidebar.work.archive.done": "Worktree arquivado",
     "sessions.sidebar.work.archive.kept": "Worktree não arquivado",
@@ -239,6 +260,9 @@ export const worktreeArchiveI18n = {
     "settings.openchamber.mergedWorktreeCleanup.field.enable": "Arquivar o worktree depois que o PR dele for mesclado",
   },
   uk: {
+    "sessions.archive.worktree.legacyWarning": "Неперевірений архів: сеанси не буде переміщено, розархівовано чи видалено. Ідентичність гілки не перевірено.",
+    "sessions.archive.worktree.recoverNew": "Відновити в новому checkout",
+    "sessions.archive.worktree.recoverWarning": "Попередній checkout залишиться без змін. Відновити збережені зміни в новому checkout?",
     "sessions.sidebar.work.menu.archive": "Архівувати worktree",
     "sessions.sidebar.work.archive.done": "Worktree заархівовано",
     "sessions.sidebar.work.archive.kept": "Worktree не заархівовано",
@@ -273,6 +297,9 @@ export const worktreeArchiveI18n = {
     "settings.openchamber.mergedWorktreeCleanup.field.enable": "Архівувати worktree після злиття його PR",
   },
   ko: {
+    "sessions.archive.worktree.legacyWarning": "확인되지 않은 보관 항목입니다. 세션은 이동, 보관 해제 또는 삭제되지 않습니다. 브랜치 식별 정보도 확인되지 않았습니다.",
+    "sessions.archive.worktree.recoverNew": "새 체크아웃에서 복원",
+    "sessions.archive.worktree.recoverWarning": "기존 체크아웃은 변경되지 않습니다. 저장된 변경 사항을 새 체크아웃에 복원할까요?",
     "sessions.sidebar.work.menu.archive": "워크트리 보관",
     "sessions.sidebar.work.archive.done": "워크트리를 보관했습니다",
     "sessions.sidebar.work.archive.kept": "워크트리를 보관하지 않았습니다",
@@ -307,6 +334,9 @@ export const worktreeArchiveI18n = {
     "settings.openchamber.mergedWorktreeCleanup.field.enable": "PR이 병합되면 워크트리 보관",
   },
   pl: {
+    "sessions.archive.worktree.legacyWarning": "Niezweryfikowane archiwum: sesje nie zostaną przeniesione, przywrócone z archiwum ani usunięte. Tożsamość gałęzi nie została zweryfikowana.",
+    "sessions.archive.worktree.recoverNew": "Przywróć w nowym checkout",
+    "sessions.archive.worktree.recoverWarning": "Poprzedni checkout pozostanie bez zmian. Przywrócić zapisane zmiany w nowym checkout?",
     "sessions.sidebar.work.menu.archive": "Zarchiwizuj worktree",
     "sessions.sidebar.work.archive.done": "Zarchiwizowano worktree",
     "sessions.sidebar.work.archive.kept": "Nie zarchiwizowano worktree",
@@ -341,6 +371,9 @@ export const worktreeArchiveI18n = {
     "settings.openchamber.mergedWorktreeCleanup.field.enable": "Archiwizuj worktree po scaleniu jego PR",
   },
   'zh-CN': {
+    "sessions.archive.worktree.legacyWarning": "未验证的归档：会话不会被移动、取消归档或删除。分支身份未经验证。",
+    "sessions.archive.worktree.recoverNew": "在新的检出目录中恢复",
+    "sessions.archive.worktree.recoverWarning": "原检出目录不会改变。要在新的检出目录中恢复已保存的更改吗？",
     "sessions.sidebar.work.menu.archive": "归档工作树",
     "sessions.sidebar.work.archive.done": "工作树已归档",
     "sessions.sidebar.work.archive.kept": "工作树未归档",
@@ -375,6 +408,9 @@ export const worktreeArchiveI18n = {
     "settings.openchamber.mergedWorktreeCleanup.field.enable": "工作树的 PR 合并后归档",
   },
   'zh-TW': {
+    "sessions.archive.worktree.legacyWarning": "未驗證的封存：工作階段不會被移動、解除封存或刪除。分支身分尚未驗證。",
+    "sessions.archive.worktree.recoverNew": "在新的檢出目錄中還原",
+    "sessions.archive.worktree.recoverWarning": "原檢出目錄不會變更。要在新的檢出目錄中還原已儲存的變更嗎？",
     "sessions.sidebar.work.menu.archive": "封存工作樹",
     "sessions.sidebar.work.archive.done": "工作樹已封存",
     "sessions.sidebar.work.archive.kept": "工作樹未封存",
@@ -409,6 +445,9 @@ export const worktreeArchiveI18n = {
     "settings.openchamber.mergedWorktreeCleanup.field.enable": "工作樹的 PR 合併後封存",
   },
   tr: {
+    "sessions.archive.worktree.legacyWarning": "Doğrulanmamış arşiv: oturumlar taşınmaz, arşivden çıkarılmaz veya silinmez. Dal kimliği doğrulanmamıştır.",
+    "sessions.archive.worktree.recoverNew": "Yeni bir checkout içinde geri yükle",
+    "sessions.archive.worktree.recoverWarning": "Önceki checkout değişmez. Kaydedilen değişiklikler yeni bir checkout içinde geri yüklensin mi?",
     "sessions.sidebar.work.menu.archive": "Worktree’yi arşivle",
     "sessions.sidebar.work.archive.done": "Worktree arşivlendi",
     "sessions.sidebar.work.archive.kept": "Worktree arşivlenmedi",
@@ -443,6 +482,9 @@ export const worktreeArchiveI18n = {
     "settings.openchamber.mergedWorktreeCleanup.field.enable": "PR’ı birleştirildikten sonra worktree’yi arşivle",
   },
   ar: {
+    "sessions.archive.worktree.legacyWarning": "أرشيف غير متحقق منه: لن تُنقل الجلسات أو تُخرج من الأرشيف أو تُحذف. هوية الفرع غير متحققة.",
+    "sessions.archive.worktree.recoverNew": "الاستعادة في نسخة عمل جديدة",
+    "sessions.archive.worktree.recoverWarning": "لن تتغير نسخة العمل السابقة. هل تريد استعادة التغييرات المحفوظة في نسخة جديدة؟",
     "sessions.sidebar.work.menu.archive": "أرشفة شجرة العمل",
     "sessions.sidebar.work.archive.done": "تمت أرشفة شجرة العمل",
     "sessions.sidebar.work.archive.kept": "لم تتم أرشفة شجرة العمل",
@@ -477,6 +519,9 @@ export const worktreeArchiveI18n = {
     "settings.openchamber.mergedWorktreeCleanup.field.enable": "أرشفة شجرة العمل بعد دمج طلب السحب (PR) الخاص بها",
   },
   he: {
+    "sessions.archive.worktree.legacyWarning": "ארכיון לא מאומת: הפעלות לא יועברו, לא ישוחזרו מהארכיון ולא יימחקו. זהות הענף לא אומתה.",
+    "sessions.archive.worktree.recoverNew": "שחזור בעותק עבודה חדש",
+    "sessions.archive.worktree.recoverWarning": "עותק העבודה הקודם לא ישתנה. לשחזר את השינויים השמורים בעותק חדש?",
     "sessions.sidebar.work.menu.archive": "העברת עץ העבודה לארכיון",
     "sessions.sidebar.work.archive.done": "עץ העבודה הועבר לארכיון",
     "sessions.sidebar.work.archive.kept": "עץ העבודה לא הועבר לארכיון",

@@ -1,10 +1,11 @@
 import React from 'react';
 import { toast } from '@/components/ui';
 import { useConfirmDialog } from '@/components/ui/confirm-dialog';
-import type { GitWorktreeArchive } from '@/lib/api/types';
+import { GitWorktreeRequestError, type GitWorktreeArchive } from '@/lib/api/types';
 import { useI18n } from '@/lib/i18n';
+import { git } from '@/lib/gitApi';
 import type { ProjectRef } from '@/lib/worktrees/worktreeManager';
-import { archivedWorktreeLabel, deleteArchivedWorktree, restoreArchivedWorktree } from '@/lib/worktrees/worktreeArchive';
+import { archivedWorktreeLabel, deleteArchivedWorktree, loadWorktreeArchives, restoreArchivedWorktree } from '@/lib/worktrees/worktreeArchive';
 
 /**
  * Restore and delete for archived worktrees, with their toasts and the
@@ -13,7 +14,7 @@ import { archivedWorktreeLabel, deleteArchivedWorktree, restoreArchivedWorktree 
  */
 export function useWorktreeArchiveActions() {
   const { t } = useI18n();
-  const { confirmWithCheckbox, dialog } = useConfirmDialog();
+  const { confirm, confirmWithCheckbox, dialog } = useConfirmDialog();
   const [busyIds, setBusyIds] = React.useState<ReadonlySet<string>>(() => new Set());
   const track = React.useCallback(async (id: string, work: () => Promise<void>) => {
     setBusyIds((current) => new Set(current).add(id));
@@ -28,29 +29,47 @@ export function useWorktreeArchiveActions() {
     }
   }, []);
 
-  const restore = React.useCallback((project: ProjectRef, archive: GitWorktreeArchive) => track(archive.id, async () => {
+  const restore = React.useCallback(async (project: ProjectRef, archive: GitWorktreeArchive) => {
     const label = archivedWorktreeLabel(archive);
-    try {
-      const result = await restoreArchivedWorktree({ project, archive });
-      if (result.outcome === 'cancelled') return;
-      if (result.conflicts) {
-        toast.warning(t('sessions.archive.worktree.restoredWithConflicts'), { description: t('sessions.archive.worktree.restoredWithConflictsDescription') });
-      } else {
-        toast.success(t('sessions.archive.worktree.restored'), { description: label });
+    if (archive.sessionBinding.status === 'unbound' && !await confirm({ title: t('sessions.archive.worktree.restoreAria', { label }),
+      message: t('sessions.archive.worktree.legacyWarning'), action: t('sessions.archive.worktree.restore') })) return;
+    await track(archive.id, async () => {
+      try {
+        let recovery: { head: string; revision: number } | undefined;
+        if (archive.sessionBinding.phase === 'restoring' && archive.sessionBinding.revision) {
+          try {
+            const resumed = await git.worktree.restoreArchive(project.path, archive.id, { mode: 'same_target', revision: archive.sessionBinding.revision });
+            void loadWorktreeArchives(project.path).catch(() => undefined);
+            if (resumed.conflicts) toast.warning(t('sessions.archive.worktree.restoredWithConflicts'), { description: t('sessions.archive.worktree.restoredWithConflictsDescription') });
+            else toast.success(t('sessions.archive.worktree.restored'), { description: label });
+            return;
+          } catch (error) {
+            if (!(error instanceof GitWorktreeRequestError) || error.code !== 'WORKTREE_ARCHIVE_RESTORE_RECOVERY_REQUIRED') throw error;
+            const fresh = (await loadWorktreeArchives(project.path)).find(item => item.id === archive.id);
+            if (!fresh?.sessionBinding.recoveryHead || !fresh.sessionBinding.revision) throw error;
+            recovery = { head: fresh.sessionBinding.recoveryHead, revision: fresh.sessionBinding.revision };
+            if (!await confirm({ title: t('sessions.archive.worktree.recoverNew'), message: t('sessions.archive.worktree.recoverWarning'),
+              action: t('sessions.archive.worktree.recoverNew') })) return;
+          }
+        }
+        const result = await restoreArchivedWorktree({ project, archive, recovery });
+        if (result.outcome === 'cancelled') return;
+        if (result.conflicts) {
+          toast.warning(t('sessions.archive.worktree.restoredWithConflicts'), { description: t('sessions.archive.worktree.restoredWithConflictsDescription') });
+        } else {
+          toast.success(t('sessions.archive.worktree.restored'), { description: label });
+        }
+      } catch (error) {
+        toast.error(t('sessions.archive.worktree.restoreFailed'), { description: error instanceof Error ? error.message : String(error) });
       }
-      if (result.sessionsFailed > 0) {
-        toast.warning(t('sessions.archive.worktree.sessionsNotRestored'), { description: t('sessions.archive.worktree.sessionsNotRestoredDescription') });
-      }
-    } catch (error) {
-      toast.error(t('sessions.archive.worktree.restoreFailed'), { description: error instanceof Error ? error.message : String(error) });
-    }
-  }), [t, track]);
+    });
+  }, [confirm, t, track]);
 
   const remove = React.useCallback(async (project: ProjectRef, archive: GitWorktreeArchive) => {
     const label = archivedWorktreeLabel(archive);
     const choice = await confirmWithCheckbox({
       title: t('sessions.archive.worktree.deleteTitle', { label }),
-      message: t('sessions.archive.worktree.deleteMessage'),
+      message: archive.sessionBinding.status === 'unbound' ? t('sessions.archive.worktree.legacyWarning') : t('sessions.archive.worktree.deleteMessage'),
       action: t('sessions.archive.worktree.deleteAction'),
       destructive: true,
       checkbox: { label: t('sessions.archive.worktree.deleteBranchOption'), defaultChecked: false },

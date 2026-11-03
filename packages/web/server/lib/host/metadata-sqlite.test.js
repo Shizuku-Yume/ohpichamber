@@ -87,6 +87,7 @@ describe('host metadata schema versioning and migrations', () => {
       expect(tables).toContain('prompt_queue_owner');
       expect(tables).toContain('prompt_queue_item');
       expect(tables).toContain('host_attachments');
+      expect(tables).toContain('host_session_admissions');
     } finally {
       db.close();
     }

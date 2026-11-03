@@ -1135,17 +1135,13 @@ export interface GitWorktreeArchive {
   branchExists?: boolean;
   title?: string;
   archivedAt?: number;
-  sessionIds?: string[];
-  ref?: string;
-  commit?: string;
-  head?: string;
-  path: string;
+  /** Host-derived authority; Git metadata does not authorize session mutations. */
+  sessionBinding: { status: 'bound' | 'verified-empty' | 'unbound' | 'ref-changed'; phase?: string; revision?: number; recoveryHead?: string };
 }
 
 export interface ArchiveGitWorktreePayload {
   directory: string;
   id: string;
-  sessionIds: string[];
   title?: string;
 }
 
@@ -1171,7 +1167,7 @@ interface GitWorktreeAPI {
   setTitle?(directory: string, title: string): Promise<GitWorktreeTitleResult>;
   archive?(directory: string, payload: ArchiveGitWorktreePayload): Promise<GitWorktreeArchive>;
   listArchives?(directory: string): Promise<GitWorktreeArchive[]>;
-  restoreArchive?(directory: string, id: string): Promise<GitWorktreeArchiveRestoreResult>;
+  restoreArchive?(directory: string, id: string, recovery?: { mode: 'new_checkout' | 'same_target'; revision: number }): Promise<GitWorktreeArchiveRestoreResult>;
   deleteArchive?(directory: string, payload: DeleteGitWorktreeArchivePayload): Promise<{ id: string; branchDeleted: boolean }>;
 }
 

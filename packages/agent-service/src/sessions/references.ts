@@ -21,8 +21,14 @@ const SessionRelocationIntentSchema = z.strictObject({
 export type SessionRelocationIntent = z.infer<typeof SessionRelocationIntentSchema>;
 const ChildReferenceSchema = SubagentSchema.extend({ rootSessionId: EntityIdSchema, workspaceId: EntityIdSchema, projectId: EntityIdSchema, sessionFile: z.string().min(1) });
 export type ChildReference = Readonly<z.infer<typeof ChildReferenceSchema>>;
-const PersistedSchema = z.strictObject({ references: z.record(z.string(), JsonValueSchema), subagents: z.record(z.string(), z.array(ChildReferenceSchema)).default({}), relocations: z.record(z.string(), SessionRelocationIntentSchema).default({}) })
-  .refine(state => Object.entries(state.relocations).every(([id, intent]) => id === intent.source.rootSessionId), 'Relocation index must retain its root owner');
+const WorktreeDeleteSchema = z.strictObject({
+  operationId: EntityIdSchema, nativeSessionId: z.string().min(1), reference: SessionReferenceSchema, children: z.array(ChildReferenceSchema),
+  artifacts: z.strictObject({ device: z.string(), inode: z.string() }).nullable(), state: z.enum(['pending', 'completed']),
+});
+export type WorktreeDeleteIntent = z.infer<typeof WorktreeDeleteSchema>;
+const PersistedSchema = z.strictObject({ references: z.record(z.string(), JsonValueSchema), subagents: z.record(z.string(), z.array(ChildReferenceSchema)).default({}), relocations: z.record(z.string(), SessionRelocationIntentSchema).default({}), worktreeDeletes: z.record(z.string(), WorktreeDeleteSchema).default({}) })
+  .refine(state => Object.entries(state.relocations).every(([id, intent]) => id === intent.source.rootSessionId), 'Relocation index must retain its root owner')
+  .refine(state => Object.entries(state.worktreeDeletes).every(([id, intent]) => id === intent.reference.rootSessionId), 'Delete intent must retain its root owner');
  type References = z.infer<typeof PersistedSchema>['references'];
 const FileErrorSchema = z.object({ code: z.string() });
 
@@ -50,6 +56,7 @@ export class SessionReferences {
   private values: References = {};
   private subagentValues: Record<string, ChildReference[]> = {};
   private relocations: Record<string, SessionRelocationIntent> = {};
+  private worktreeDeletes: Record<string, WorktreeDeleteIntent> = {};
   private readonly records = new Map<string, SessionReference>();
   private readonly childRecords = new Map<string, ChildReference>();
   private readonly malformed = new Set<string>();
@@ -77,6 +84,7 @@ export class SessionReferences {
     this.values = state.references;
     this.subagentValues = state.subagents;
     this.relocations = state.relocations;
+    this.worktreeDeletes = state.worktreeDeletes;
     for (const rows of Object.values(this.subagentValues)) for (const row of rows) {
       const parsed = ChildReferenceSchema.safeParse(row);
       if (parsed.success) this.childRecords.set(parsed.data.subagentId, parsed.data);
@@ -147,6 +155,8 @@ export class SessionReferences {
     const parsed = ChildReferenceSchema.parse(value);
     return this.enqueue(async () => {
       this.assertWritable(parsed.rootSessionId);
+      this.assertWritable(parsed.childSessionId);
+      this.assertWritable(parsed.subagentId);
       const collision = this.childRecords.get(parsed.subagentId);
       if ((collision && (collision.rootSessionId !== parsed.rootSessionId || collision.childSessionId !== parsed.childSessionId))
         || this.records.has(parsed.childSessionId) || [...this.childRecords.values()].some(row => row.childSessionId === parsed.childSessionId && row.subagentId !== parsed.subagentId)) {
@@ -164,6 +174,7 @@ export class SessionReferences {
     if (parsed.some(value => value.rootSessionId !== rootSessionId)) throw new SessionReferenceError(400, 'INVALID_REQUEST', 'Child references must retain their root owner');
     return this.enqueue(async () => {
       this.assertWritable(rootSessionId);
+      for (const child of parsed) { this.assertWritable(child.childSessionId); this.assertWritable(child.subagentId); }
       const ids = new Set<string>();
       const subagentIds = new Set<string>();
       for (const child of parsed) {
@@ -197,6 +208,8 @@ export class SessionReferences {
   child(sessionId: string): ChildReference | null { this.ensureReady(); return this.childRecords.get(sessionId) ?? null; }
 
   assertWritable(sessionId: string): void {
+    if (this.worktreeDeletes[sessionId] || Object.values(this.worktreeDeletes).some(intent => intent.children.some(child => child.childSessionId === sessionId || child.subagentId === sessionId)))
+      throw new SessionReferenceError(409, 'COMMAND_IN_FLIGHT', 'A worktree archive delete is pending');
     if (this.malformed.has(sessionId)) throw new SessionReferenceError(500, 'SESSION_RESTORE_FAILED', 'Session reference is corrupt');
     const root = this.records.get(sessionId) ?? this.records.get([...this.childRecords.values()].find(child => child.childSessionId === sessionId || child.subagentId === sessionId)?.rootSessionId ?? '');
     if (root?.deletedSpace) throw new SessionReferenceError(409, 'SESSION_READ_ONLY', 'Deleted-space sessions are permanently read-only');
@@ -217,6 +230,8 @@ export class SessionReferences {
         }
       }
       const ids = [parsed.rootSessionId, ...rows.map(child => child.childSessionId)];
+      for (const id of ids) this.assertWritable(id);
+      for (const child of rows) this.assertWritable(child.subagentId);
       if (new Set(ids).size !== ids.length || new Set(rows.map(child => child.subagentId)).size !== rows.length
         || ids.some(id => Object.hasOwn(this.values, id) || [...this.childRecords.values()].some(child => child.childSessionId === id))
         || rows.some(child => this.childRecords.has(child.subagentId))) throw new SessionReferenceError(409, 'INVALID_REQUEST', 'Archive identity collides with an existing session');
@@ -240,6 +255,54 @@ export class SessionReferences {
       this.values = references; this.subagentValues = subagents; this.records.delete(sessionId);
     });
   }
+  worktreeDelete(sessionId: string): WorktreeDeleteIntent | null {
+    this.ensureReady();
+    const intent = this.worktreeDeletes[sessionId];
+    return intent ? structuredClone(intent) : null;
+  }
+
+  beginWorktreeDelete(intent: WorktreeDeleteIntent): Promise<void> {
+    this.ensureReady();
+    const parsed = WorktreeDeleteSchema.parse(intent);
+    return this.enqueue(async () => {
+      const id = parsed.reference.rootSessionId;
+      this.assertWritable(id);
+      if (parsed.state !== 'pending' || this.relocations[id] || JSON.stringify(this.get(id)) !== JSON.stringify(parsed.reference)
+        || JSON.stringify(this.listSubagents(id)) !== JSON.stringify(parsed.children))
+        throw new SessionReferenceError(409, 'SESSION_RELOCATION_CONFLICT', 'Native session family changed before delete');
+      const intents = { ...this.worktreeDeletes, [id]: parsed };
+      await this.persist(this.values, this.relocations, this.subagentValues, undefined, intents);
+      this.worktreeDeletes = intents;
+    });
+  }
+
+  completeWorktreeDelete(sessionId: string, operationId: string): Promise<void> {
+    this.ensureReady();
+    return this.enqueue(async () => {
+      const intent = this.worktreeDeletes[sessionId];
+      if (!intent || intent.operationId !== operationId) throw new SessionReferenceError(409, 'SESSION_RELOCATION_CONFLICT', 'Delete intent changed');
+      if (intent.state === 'completed') return;
+      const references = { ...this.values }; delete references[sessionId];
+      const subagents = { ...this.subagentValues }; delete subagents[sessionId];
+      const intents = { ...this.worktreeDeletes, [sessionId]: { ...intent, state: 'completed' as const } };
+      await this.persist(references, this.relocations, subagents, undefined, intents);
+      for (const child of intent.children) this.childRecords.delete(child.subagentId);
+      this.values = references; this.subagentValues = subagents; this.records.delete(sessionId); this.worktreeDeletes = intents;
+    });
+  }
+
+  retireWorktreeDelete(sessionId: string, operationId: string): Promise<void> {
+    this.ensureReady();
+    return this.enqueue(async () => {
+      const intent = this.worktreeDeletes[sessionId];
+      if (!intent) return;
+      if (intent.operationId !== operationId || intent.state !== 'completed') throw new SessionReferenceError(409, 'SESSION_RELOCATION_CONFLICT', 'Delete intent is not complete');
+      const intents = { ...this.worktreeDeletes }; delete intents[sessionId];
+      await this.persist(this.values, this.relocations, this.subagentValues, undefined, intents);
+      this.worktreeDeletes = intents;
+    });
+  }
+
 
   put(reference: SessionReference): Promise<void> {
     this.ensureReady();
@@ -276,15 +339,25 @@ export class SessionReferences {
     return result;
   }
 
-  private async persist(references: References, relocations = this.relocations, subagents = this.subagentValues, signal?: AbortSignal): Promise<void> {
+  private async persist(references: References, relocations = this.relocations, subagents = this.subagentValues, signal?: AbortSignal, worktreeDeletes = this.worktreeDeletes): Promise<void> {
     const temporary = `${this.file}.${randomUUID()}.tmp`;
     try {
       await mkdir(this.stateDirectory, { recursive: true, mode: 0o700 });
       const handle = await open(temporary, 'wx', 0o600);
-      try { await handle.writeFile(JSON.stringify({ references, relocations, subagents }), 'utf8'); }
+      try { await handle.writeFile(JSON.stringify({ references, relocations, subagents, worktreeDeletes }), 'utf8'); await handle.sync(); }
       finally { await handle.close(); }
       if (signal?.aborted) throw new SessionReferenceError(503, 'SESSION_RESTORE_FAILED', 'Archive import was cancelled before publication');
       await rename(temporary, this.file);
+      if (process.platform !== 'win32') {
+        try {
+          const directory = await open(this.stateDirectory, 'r');
+          try { await directory.sync(); } finally { await directory.close(); }
+        } catch (error) {
+          // The rename may already be visible; never continue with stale in-memory state.
+          this.closed = true;
+          throw error;
+        }
+      }
     } catch {
       try { await unlink(temporary); } catch { /* no committed state changed */ }
       throw new SessionReferenceError(500, 'SESSION_RESTORE_FAILED', 'Unable to persist session references');

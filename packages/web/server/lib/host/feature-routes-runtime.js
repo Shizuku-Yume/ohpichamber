@@ -560,6 +560,7 @@ export const createFeatureRoutesRuntime = () => {
       errorRedactionSecrets: [openchamberDataDir],
       worktreeBootstrapStore,
       worktreeLeaseControl: routeDependencies.worktreeLeaseControl,
+      worktreeArchiveSessionService: routeDependencies.worktreeArchiveSessionService,
       emitWorktreeChanged: ({ directories, at }) => {
         const clients = getOpenChamberEventClients();
         for (const client of clients) {

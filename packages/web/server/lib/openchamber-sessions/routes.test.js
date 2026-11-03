@@ -210,9 +210,12 @@ describe('canonical session route contracts', () => {
 describe('canonical session list persistence', () => {
   const createService = async (state, sessions) => {
     const { createOpenChamberSessionService } = await import('./routes.js');
+    const directory = path.dirname(state.databasePath);
+    const workspace = await state.agentScopeStore.ensureWorkspace({ hostProjectId: 'project', projectId: 'project', workspaceId: 'workspace', projectDirectory: directory, workspaceDirectory: directory, agentDirectory: directory, name: 'Project' });
     return createOpenChamberSessionService({
       service: { request: async () => Response.json({ items: sessions, errors: [] }) },
-      resolveWorkspaceScope: async () => ({ ...validScope('workspace'), projectId: 'project', workspaceId: 'workspace' }),
+      agentScopeStore: state.agentScopeStore,
+      resolveWorkspaceScope: async () => workspace,
       resolveSessionScope: async id => validScope(id),
       resolveHostSessionScope: async id => validScope(id),
       registerSessionScope: async () => true,

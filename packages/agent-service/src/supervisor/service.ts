@@ -433,7 +433,8 @@ export class AgentService {
       }
       // Admission must precede catalog, shell and direct worker paths, not merely public run routes.
       const sessionMutation = /^\/(?:api\/agent\/v1|internal)\/sessions\/([^/]+)/.exec(url.pathname);
-      if (request.method !== 'GET' && request.method !== 'DELETE' && sessionMutation) this.sessions.assertWritable(identity(sessionMutation[1]));
+      const archiveDeleteControl = request.method === 'POST' && /^\/internal\/sessions\/[^/]+\/worktree-archive-delete(?:\/retire)?$/.test(url.pathname);
+      if (request.method !== 'GET' && request.method !== 'DELETE' && sessionMutation && !archiveDeleteControl) this.sessions.assertWritable(identity(sessionMutation[1]));
       const authorization = /^\/internal\/authorizations\/([^/]+)$/.exec(url.pathname);
       if (authorization && request.method === 'GET') {
         const scope = this.authorizationScope(identity(authorization[1]));
@@ -545,6 +546,19 @@ export class AgentService {
         const sessionId = EntityIdSchema.safeParse(url.searchParams.get('sessionId'));
         if (!sessionId.success) throw new RequestError(400, 'INVALID_REQUEST', 'Session identity is required');
         respondJson(response, 200, this.sessions.listSubagents(sessionId.data)); return;
+      }
+      const privateWorktreeDelete = /^\/internal\/sessions\/([^/]+)\/worktree-archive-delete$/.exec(url.pathname);
+      if (privateWorktreeDelete && request.method === 'POST') {
+        const input = await readBody(request, z.strictObject({ operationId: EntityIdSchema, projectId: EntityIdSchema, workspaceId: EntityIdSchema,
+          agentDirectoryId: EntityIdSchema, sessionIds: z.array(EntityIdSchema).min(1) }));
+        respondJson(response, 200, await this.sessions.deleteWorktreeArchiveFamily(identity(privateWorktreeDelete[1]), input)); return;
+      }
+      const privateWorktreeDeleteRetire = /^\/internal\/sessions\/([^/]+)\/worktree-archive-delete\/retire$/.exec(url.pathname);
+      if (privateWorktreeDeleteRetire && request.method === 'POST') {
+        const input = await readBody(request, z.strictObject({ operationId: EntityIdSchema, projectId: EntityIdSchema, workspaceId: EntityIdSchema,
+          agentDirectoryId: EntityIdSchema, sessionIds: z.array(EntityIdSchema).min(1) }));
+        await this.sessions.retireWorktreeArchiveDelete(identity(privateWorktreeDeleteRetire[1]), input);
+        response.writeHead(204, { 'Cache-Control': 'no-store' }); response.end(); return;
       }
       const privateEntry = /^\/internal\/sessions\/([^/]+)\/native-entry\/([^/]+)$/.exec(url.pathname);
       if (privateEntry && request.method === 'GET') { respondJson(response, 200, await this.sessions.resolveNativeEntry(identity(privateEntry[1]), identity(privateEntry[2]))); return; }

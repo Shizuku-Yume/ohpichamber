@@ -658,10 +658,11 @@ describe('git worktree archive routes', () => {
     worktreeLeaseControl.release.mockReset();
   });
 
-  it('archives with the sessions, the bootstrap store and the lease control', async () => {
+  it('ignores caller session IDs and passes the Host authority with worker control', async () => {
     gitLibraries.archiveWorktree.mockResolvedValue({ id: 'a1' });
     const { app, getRoute } = createRouteRegistry();
-    registerGitRoutes(app, { worktreeBootstrapStore, worktreeLeaseControl });
+    const worktreeArchiveSessionService = {};
+    registerGitRoutes(app, { worktreeBootstrapStore, worktreeLeaseControl, worktreeArchiveSessionService });
     const response = createMockResponse();
     await getRoute('POST', '/api/git/worktrees/archives')(
       { query: { directory: '/repo' }, body: { directory: '/repo/wt', id: 'a1', sessionIds: ['ses_1'], title: 'Login fix' } },
@@ -671,9 +672,8 @@ describe('git worktree archive routes', () => {
     expect(gitLibraries.archiveWorktree).toHaveBeenCalledWith('/repo', {
       directory: '/repo/wt',
       id: 'a1',
-      sessionIds: ['ses_1'],
       title: 'Login fix',
-    }, { bootstrapStore: worktreeBootstrapStore, worktreeWorkers: worktreeLeaseControl });
+    }, { bootstrapStore: worktreeBootstrapStore, worktreeWorkers: worktreeLeaseControl, archiveSessions: worktreeArchiveSessionService });
   });
 
   it('answers 404 for an archive that is gone', async () => {
@@ -689,10 +689,10 @@ describe('git worktree archive routes', () => {
   it('lists the archives of the project', async () => {
     gitLibraries.listWorktreeArchives.mockResolvedValue([{ id: 'a1' }]);
     const { app, getRoute } = createRouteRegistry();
-    registerGitRoutes(app, { worktreeBootstrapStore, worktreeLeaseControl });
+    registerGitRoutes(app, { worktreeBootstrapStore, worktreeLeaseControl, worktreeArchiveSessionService: { prepareWorktreeArchiveDelete: async () => null } });
     const response = createMockResponse();
     await getRoute('GET', '/api/git/worktrees/archives')({ query: { directory: '/repo' } }, response);
-    expect(response.body).toEqual({ archives: [{ id: 'a1' }] });
+    expect(response.body).toEqual({ archives: [{ id: 'a1', sessionIds: [], sessionBinding: { status: 'unbound' } }] });
   });
 
   it('relays a lease refusal with its code and the session it names', async () => {

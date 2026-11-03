@@ -698,6 +698,8 @@ const updateSessionMetadataWith = async (sessionID, decide, { directory = '' } =
 const openChamberSessionService = createOpenChamberSessionService({
   service: hostAgentRuntime.service,
   resolveWorkspaceScope: hostAgentRuntime.resolveWorkspaceScope,
+  resolveWorkspaceDirectory: agentScopeRuntime.resolveWorkspaceDirectory,
+  resolveHostWorkspaceScope: agentScopeRuntime.resolveWorkspaceScope,
   resolveSessionScope: hostAgentRuntime.resolveSessionScope,
   resolveHostSessionScope: hostAgentRuntime.resolveHostSessionScope,
   resolveHostRelocationScope: hostAgentRuntime.resolveHostRelocationScope,
@@ -2136,6 +2138,7 @@ async function main(options = {}) {
     permissionAutoAcceptRuntime,
     worktreeBootstrapStore,
     worktreeLeaseControl,
+    worktreeArchiveSessionService: openChamberSessionService,
     messageQueueRuntime,
     routingRuntime,
   });

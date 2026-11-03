@@ -600,7 +600,7 @@ export const git = {
     snapshot: snapshotGitWorktree,
     archive: (directory: string, payload: import('./api/types').ArchiveGitWorktreePayload) => runtimeWorktreeArchives().archive(directory, payload),
     listArchives: (directory: string) => runtimeWorktreeArchives().listArchives(directory),
-    restoreArchive: (directory: string, id: string) => runtimeWorktreeArchives().restoreArchive(directory, id),
+    restoreArchive: (directory: string, id: string, recovery?: { mode: 'new_checkout' | 'same_target'; revision: number }) => runtimeWorktreeArchives().restoreArchive(directory, id, recovery),
     deleteArchive: (directory: string, payload: import('./api/types').DeleteGitWorktreeArchivePayload) => runtimeWorktreeArchives().deleteArchive(directory, payload),
   },
 };

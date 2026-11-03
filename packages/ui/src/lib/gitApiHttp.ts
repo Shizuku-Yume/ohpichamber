@@ -1615,7 +1615,7 @@ const worktreeArchiveSchema = z.object({
   branchExists: z.boolean(),
   title: z.string(),
   archivedAt: z.number(),
-  sessionIds: z.array(z.string()),
+  sessionBinding: z.strictObject({ status: z.enum(['bound', 'verified-empty', 'unbound', 'ref-changed']), phase: z.string().optional(), revision: z.number().int().positive().optional(), recoveryHead: z.string().optional() }),
 });
 
 const worktreeArchiveRequest = async <T>(path: string, directory: string, init: RequestInit, schema: z.ZodType<T>, fallback: string): Promise<T> => {
@@ -1641,8 +1641,8 @@ export const listGitWorktreeArchives = async (directory: string): Promise<GitWor
   (await worktreeArchiveRequest('', directory, { method: 'GET' }, z.object({ archives: z.array(worktreeArchiveSchema) }), 'Failed to list worktree archives')).archives
 );
 
-export const restoreGitWorktreeArchive = (directory: string, id: string): Promise<GitWorktreeArchiveRestoreResult> => (
-  worktreeArchiveRequest('/restore', directory, { method: 'POST', body: JSON.stringify({ id }) }, z.object({ id: z.string(), conflicts: z.boolean() }), 'Failed to restore worktree archive')
+export const restoreGitWorktreeArchive = (directory: string, id: string, recovery?: { mode: 'new_checkout' | 'same_target'; revision: number }): Promise<GitWorktreeArchiveRestoreResult> => (
+  worktreeArchiveRequest('/restore', directory, { method: 'POST', body: JSON.stringify({ id, recovery }) }, z.object({ id: z.string(), conflicts: z.boolean() }), 'Failed to restore worktree archive')
 );
 
 export const deleteGitWorktreeArchive = (directory: string, payload: DeleteGitWorktreeArchivePayload): Promise<{ id: string; branchDeleted: boolean }> => (

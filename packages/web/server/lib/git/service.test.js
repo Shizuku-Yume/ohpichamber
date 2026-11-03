@@ -11,6 +11,8 @@ import { loadSourceSections, parseSource, sourceKey } from '../walkthrough/sourc
 import { registerGitRoutes } from './routes.js';
 import { isUserAction } from '../environment/refresh-scope.js';
 import { normalizeGitOutputPath } from './output-path.js';
+import { createHostSessionState } from '../host/session-state.js';
+import { createOpenChamberSessionService } from '../openchamber-sessions/routes.js';
 
 import {
   configureGitEnvironment,
@@ -43,10 +45,10 @@ import {
   previewWorktreeCreate,
   removeWorktree,
   snapshotWorktree,
-  archiveWorktree,
+  archiveWorktree as archiveWorktreeService,
   listWorktreeArchives,
-  restoreWorktreeArchive,
-  deleteWorktreeArchive,
+  restoreWorktreeArchive as restoreWorktreeArchiveService,
+  deleteWorktreeArchive as deleteWorktreeArchiveService,
   resolvePrimaryWorktreeRoot,
   resolveWorktreeTopLevel,
   resetToCommit,
@@ -4116,6 +4118,46 @@ describe('snapshotWorktree', () => {
 // ---------------------------------------------------------------------------
 
 describe('worktree archives', () => {
+  const hosts = new Map();
+  afterEach(async () => { for (const host of hosts.values()) await host.owner.close(); hosts.clear(); });
+  const hostFor = async (repo) => {
+    let host = hosts.get(repo);
+    if (host) return host;
+    const dataDir = createTempDir();
+    const agentDirectory = createTempDir();
+    const owner = createHostSessionState({ dataDir });
+    const scopes = new Map();
+    const register = async (cwd) => {
+      const canonical = fs.realpathSync(cwd);
+      if (!scopes.has(canonical)) scopes.set(canonical, await owner.agentScopeStore.ensureWorkspace({ hostProjectId: 'fixture-host', projectDirectory: repo, workspaceDirectory: canonical, agentDirectory, name: 'Fixture' }));
+      return scopes.get(canonical);
+    };
+    await register(repo);
+    const service = createOpenChamberSessionService({
+      service: { request: async () => { throw new Error('Unexpected native session operation'); } }, agentScopeStore: owner.agentScopeStore,
+      resolveWorkspaceDirectory: async (cwd) => scopes.get(fs.realpathSync(cwd)) ?? null,
+      resolveWorkspaceScope: (id) => owner.agentScopeStore.getWorkspace(id),
+      resolveSessionScope: (id) => owner.agentScopeStore.getSession(id), resolveHostSessionScope: (id) => owner.agentScopeStore.getSession(id),
+      resolveHostRelocationScope: (id) => owner.agentScopeStore.getSession(id), registerSessionScope: async () => true,
+      resolveAttachments: async () => [], capturePrompt: async (_scope, prompt) => prompt, beforeDispatch: async () => {}, onPromptAccepted: async () => {},
+      directCommandAdmissionStore: owner.directCommandAdmissionStore, archiveStore: owner.archiveStore, sessionMetadataStore: owner.sessionMetadataStore,
+    });
+    host = { owner, register, service }; hosts.set(repo, host); return host;
+  };
+  const archiveWorktree = async (repo, input, options) => {
+    const host = await hostFor(repo);
+    if (fs.existsSync(input.directory)) await host.register(input.directory);
+    return archiveWorktreeService(repo, input, { ...options, archiveSessions: host.service });
+  };
+  const restoreWorktreeArchive = async (directory, input) => {
+    const repo = fs.realpathSync(runGit(directory, ['rev-parse', '--path-format=absolute', '--git-common-dir']).trim().replace(/[/\\]\.git$/, ''));
+    const host = await hostFor(repo); await host.register(directory);
+    return restoreWorktreeArchiveService(directory, input, { archiveSessions: host.service });
+  };
+  const deleteWorktreeArchive = async (repo, input) => {
+    const host = await hostFor(repo);
+    return deleteWorktreeArchiveService(repo, input, { archiveSessions: host.service });
+  };
   const createArchivableWorktree = () => {
     const repo = createTempDir();
     runGit(repo, ['init', '-b', 'main']);
@@ -4189,18 +4231,18 @@ describe('worktree archives', () => {
     const archived = await archiveWorktree(repo, {
       directory: linked, id: 'a1', sessionIds: ['ses_1', 'ses_2'], title: 'Login timeout fix',
     }, { worktreeWorkers: lease.worktreeWorkers });
-    expect(archived).toMatchObject({ id: 'a1', branch: 'feature/task', title: 'Login timeout fix', sessionIds: ['ses_1', 'ses_2'] });
+    expect(archived).toMatchObject({ id: 'a1', branch: 'feature/task', title: 'Login timeout fix', sessionIds: [], sessionBinding: { status: 'verified-empty' } });
     expect(fs.existsSync(linked)).toBe(false);
     expect(runGit(repo, ['branch', '--list', 'feature/task']).trim()).toBe('feature/task');
     expect(lease.acquired).toHaveLength(1);
     expect(lease.released).toEqual([lease.acquired[0].leaseId]);
 
     const [listed] = await listWorktreeArchives(repo);
-    expect(listed).toMatchObject({ id: 'a1', branch: 'feature/task', branchExists: true, title: 'Login timeout fix', sessionIds: ['ses_1', 'ses_2'] });
+    expect(listed).toMatchObject({ id: 'a1', branch: 'feature/task', branchExists: true, title: 'Login timeout fix', sessionIds: [] });
     expect(fs.realpathSync(path.dirname(listed.path))).toBe(fs.realpathSync(path.dirname(linked)));
 
     runGit(repo, ['worktree', 'add', linked, 'feature/task']);
-    await expect(restoreWorktreeArchive(linked, { id: 'a1' })).resolves.toEqual({ id: 'a1', conflicts: false });
+    await expect(restoreWorktreeArchive(linked, { id: 'a1' })).resolves.toMatchObject({ id: 'a1', conflicts: false });
     expect(fs.readFileSync(path.join(linked, 'README.md'), 'utf8')).toBe('# Changed\n');
     expect(fs.readFileSync(path.join(linked, 'new.txt'), 'utf8')).toBe('untracked\n');
     expect(fs.existsSync(path.join(linked, 'gone.txt'))).toBe(false);
@@ -4223,7 +4265,7 @@ describe('worktree archives', () => {
     runGit(linked, ['add', 'later.txt']);
     runGit(linked, ['commit', '-m', 'later']);
 
-    await expect(restoreWorktreeArchive(linked, { id: 'a2' })).resolves.toEqual({ id: 'a2', conflicts: false });
+    await expect(restoreWorktreeArchive(linked, { id: 'a2' })).resolves.toMatchObject({ id: 'a2', conflicts: false });
     expect(fs.readFileSync(path.join(linked, 'later.txt'), 'utf8')).toBe('later\n');
     expect(fs.readFileSync(path.join(linked, 'README.md'), 'utf8')).toBe('# Changed\n');
   });
@@ -4238,7 +4280,7 @@ describe('worktree archives', () => {
     fs.writeFileSync(path.join(linked, 'README.md'), '# Other\n');
     runGit(linked, ['commit', '-am', 'other']);
 
-    await expect(restoreWorktreeArchive(linked, { id: 'a3' })).resolves.toEqual({ id: 'a3', conflicts: true });
+    await expect(restoreWorktreeArchive(linked, { id: 'a3' })).resolves.toMatchObject({ id: 'a3', conflicts: true });
     expect(fs.readFileSync(path.join(linked, 'README.md'), 'utf8')).toContain('# Changed');
     expect(runGit(linked, ['ls-files', '--unmerged']).trim()).not.toBe('');
     // Kept, it would still claim sessions that are back at work.
@@ -4281,15 +4323,16 @@ describe('worktree archives', () => {
     const { repo, linked } = createArchivableWorktree();
     const lease = createLeaseControl();
     await archiveWorktree(repo, { directory: linked, id: 'd1' }, { worktreeWorkers: lease.worktreeWorkers });
-    await expect(deleteWorktreeArchive(repo, { id: 'd1', deleteBranch: true })).resolves.toEqual({ id: 'd1', branchDeleted: true });
+    await expect(deleteWorktreeArchive(repo, { id: 'd1', deleteBranch: true })).resolves.toMatchObject({ id: 'd1', branchDeleted: true });
     expect(runGit(repo, ['branch', '--list', 'feature/task']).trim()).toBe('');
     expect(await listWorktreeArchives(repo)).toEqual([]);
 
     const second = createArchivableWorktree();
     await archiveWorktree(second.repo, { directory: second.linked, id: 'd2' }, { worktreeWorkers: lease.worktreeWorkers });
     runGit(second.repo, ['worktree', 'add', second.linked, 'feature/task']);
-    await expect(deleteWorktreeArchive(second.repo, { id: 'd2', deleteBranch: true })).resolves.toEqual({ id: 'd2', branchDeleted: false });
-    await expect(deleteWorktreeArchive(second.repo, { id: 'd2' })).rejects.toMatchObject({ code: 'WORKTREE_ARCHIVE_NOT_FOUND' });
+    await expect(deleteWorktreeArchive(second.repo, { id: 'd2', deleteBranch: true })).rejects.toMatchObject({ status: 409, code: 'WORKTREE_ARCHIVE_BRANCH_IN_USE' });
+    expect((await listWorktreeArchives(second.repo)).map((entry) => entry.id)).toEqual(['d2']);
+    expect(runGit(second.repo, ['branch', '--list', 'feature/task']).trim()).toContain('feature/task');
   });
 
   it('writes no ref and leaves the folder when the lease refuses, and releases the id it was given', async () => {

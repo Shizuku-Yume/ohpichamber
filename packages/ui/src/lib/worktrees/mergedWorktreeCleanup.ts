@@ -147,9 +147,8 @@ export async function runMergedWorktreeCleanup(
     if (!handled) deps.markHandled(candidate);
     try {
       if (decision.action === 'remove') {
-        // The archive path leaves session archiving to
-        // `archiveSessionsThenRemoveWorktree`; this removal path archives them
-        // here before the folder goes.
+        // Plain worktree removal archives selected sessions here. The archive
+        // path below delegates all session effects to the Host.
         if (sessionIds.length > 0) {
           const { failedIds } = await deps.archiveSessions(sessionIds);
           if (failedIds.length > 0) throw new Error(`Could not archive ${failedIds.length} session(s)`);

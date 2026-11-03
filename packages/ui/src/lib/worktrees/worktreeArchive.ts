@@ -5,16 +5,11 @@ import type { Session } from '@openchamber/agent-contract';
 import type { GitWorktreeArchive } from '@/lib/api/types';
 import { canArchiveWorktrees, git } from '@/lib/gitApi';
 import { normalizePath } from '@/lib/pathNormalization';
-import { checkoutHoldsDirectory } from '@/lib/worktrees/worktreePaths';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { resolveWorktreeSetupCommandsOrCancel } from '@/lib/sharedTrustConfirmation';
 import { archiveProjectWorktree, createWorktree, listProjectWorktrees, removeProjectWorktree, type ProjectRef } from '@/lib/worktrees/worktreeManager';
-import { archiveSessionsThenRemoveWorktree } from '@/lib/worktrees/worktreeRemovalFlow';
 import { clearWorktreeRemoval, markWorktreeRemoving } from '@/lib/worktrees/worktreeRemovalState';
 import { getSafeStorage } from '@/stores/utils/safeStorage';
-import { resolveWorkspaceDirectory } from '@/stores/globalSessions';
-import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
-import { archiveSessions, deleteSessions, moveSessionToDirectory, unarchiveSessions } from '@/sync/session-actions';
 import type { WorktreeMetadata } from '@/types/worktree';
 
 /**
@@ -86,16 +81,7 @@ subscribeRuntimeEndpointChanged(() => {
 
 const newArchiveId = (): string => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
-/**
- * Archives a worktree with its sessions: the sessions go to the archive first
- * (the runtime can change a session only while its folder exists), then the
- * Host releases the folder's workers, records the worktree with them and
- * removes the folder. A session that will not archive, or any archive failure,
- * restores the sessions, so nothing ends up half archived.
- *
- * The worktree reads as being removed from the start, so the merged-PR cleanup
- * and a second Done leave it alone meanwhile.
- */
+/** Archives the worktree through the Host-owned session and worker lifecycle. */
 export async function archiveWorktreeWork(input: {
   project: ProjectRef;
   worktree: WorktreeMetadata;
@@ -103,26 +89,12 @@ export async function archiveWorktreeWork(input: {
   /** The name the sidebar showed for the work, kept when the worktree has no task title. */
   title?: string;
 }): Promise<void> {
-  const sessionIds = input.sessions
-    .filter((session) => isSessionInWorktreeArchive(session, input.project, input.worktree.path))
-    .map((session) => session.sessionId);
+  // Session scope is derived by the Host, not from this client's loaded page.
   markWorktreeRemoving(input.worktree.path);
   try {
-    await archiveSessionsThenRemoveWorktree({
-      sessionIds,
-      archiveSessions: (ids) => archiveSessions(ids),
-      restoreSessions: (ids) => unarchiveSessions(ids, { undo: true }),
-      removeWorktree: async (archivedIds) => {
-        if (archivedIds.length !== sessionIds.length) {
-          throw new Error(`Could not archive ${sessionIds.length - archivedIds.length} session(s)`);
-        }
-        await archiveProjectWorktree(input.project, input.worktree, {
-          id: newArchiveId(),
-          sessionIds: archivedIds,
-          title: input.title ?? input.worktree.title,
-        });
-        return true;
-      },
+    await archiveProjectWorktree(input.project, input.worktree, {
+      id: newArchiveId(),
+      title: input.title ?? input.worktree.title,
     });
   } finally {
     clearWorktreeRemoval(input.worktree.path);
@@ -137,26 +109,9 @@ export const archivedWorktreeLabel = (archive: GitWorktreeArchive): string => (
 
 const lastSegment = (path: string): string => normalizePath(path)?.split('/').filter(Boolean).pop() ?? '';
 
-/**
- * Archive metadata may name only sessions still owned by its project and
- * located in the archived checkout. Workspace paths come from the active
- * runtime's caller-bound directory map, not from archive metadata.
- */
-export const isSessionInWorktreeArchive = (
-  session: Pick<Session, 'projectId' | 'workspaceId'>,
-  project: Pick<ProjectRef, 'id'>,
-  archivePath: string,
-): boolean => {
-  const archiveDirectory = normalizePath(archivePath);
-  const sessionDirectory = normalizePath(resolveWorkspaceDirectory(session.workspaceId));
-  return session.projectId === project.id
-    && archiveDirectory !== null
-    && sessionDirectory !== null
-    && checkoutHoldsDirectory(archiveDirectory, sessionDirectory);
-};
 
 export type WorktreeArchiveRestore =
-  | { outcome: 'restored'; worktree: WorktreeMetadata; conflicts: boolean; sessionsFailed: number }
+  | { outcome: 'restored'; worktree: WorktreeMetadata; conflicts: boolean }
   /** The user closed the prompt about the project's shared setup commands. */
   | { outcome: 'cancelled' };
 
@@ -175,6 +130,7 @@ const restoresInFlight = new Map<string, Promise<WorktreeArchiveRestore>>();
 export function restoreArchivedWorktree(input: {
   project: ProjectRef;
   archive: GitWorktreeArchive;
+  recovery?: { revision: number; head: string };
 }): Promise<WorktreeArchiveRestore> {
   const running = restoresInFlight.get(input.archive.id);
   if (running) return running;
@@ -186,13 +142,16 @@ export function restoreArchivedWorktree(input: {
 async function restoreArchivedWorktreeOnce(input: {
   project: ProjectRef;
   archive: GitWorktreeArchive;
+  recovery?: { revision: number; head: string };
 }): Promise<WorktreeArchiveRestore> {
   const { project, archive } = input;
   const setupCommands = await resolveWorktreeSetupCommandsOrCancel(project);
   if (setupCommands === null) return { outcome: 'cancelled' };
 
   const worktreeName = lastSegment(archive.path);
-  const worktree = archive.branchExists
+  const worktree = input.recovery
+    ? await createWorktree(project, { mode: 'new', branchName: `archive-recovery-${newArchiveId()}`, startRef: input.recovery.head, worktreeName, setupCommands })
+    : archive.branchExists
     ? await createWorktree(project, { mode: 'existing', existingBranch: archive.branch, worktreeName, setupCommands })
     : await createWorktree(project, {
       mode: 'new',
@@ -203,67 +162,29 @@ async function restoreArchivedWorktreeOnce(input: {
     });
   let conflicts: boolean;
   try {
-    ({ conflicts } = await git.worktree.restoreArchive(worktree.path, archive.id));
+    ({ conflicts } = await git.worktree.restoreArchive(worktree.path, archive.id, input.recovery ? { mode: 'new_checkout', revision: input.recovery.revision } : undefined));
   } catch (error) {
-    // The archive is kept, so a retry must find the branch free again: the
-    // checkout made for it goes, and a branch made for it with it.
-    await removeProjectWorktree(project, worktree, { deleteLocalBranch: !archive.branchExists }).catch(() => undefined);
+    const keepCheckout = input.recovery || (error && typeof error === 'object' && 'code' in error && ['WORKTREE_ARCHIVE_RESTORE_RECOVERY_REQUIRED', 'WORKTREE_ARCHIVE_DELETE_RECOVERY_REQUIRED'].includes(String(error.code)));
+    if (!keepCheckout) {
+      await removeProjectWorktree(project, worktree, { deleteLocalBranch: Boolean(input.recovery) || !archive.branchExists }).catch(() => undefined);
+    }
     throw error;
+  } finally {
+    void listProjectWorktrees(project, { force: true }).catch(() => undefined);
+    void loadWorktreeArchives(project.path).catch(() => undefined);
   }
   noteRestoredWorktree(worktree.path);
 
-  const from = normalizePath(archive.path);
-  const to = normalizePath(worktree.path);
-  const { entityById } = useGlobalSessionsStore.getState();
-  const sessions = (archive.sessionIds ?? []).flatMap((id) => {
-    const session = entityById.get(id);
-    return session && isSessionInWorktreeArchive(session, project, archive.path) ? [session] : [];
-  });
-  let sessionsFailed = 0;
-  if (from && to && from !== to) {
-    for (const session of sessions) {
-      const directory = normalizePath(resolveGlobalSessionDirectory(session));
-      if (!directory || !checkoutHoldsDirectory(from, directory)) continue;
-      await moveSessionToDirectory(session, directory, `${to}${directory.slice(from.length)}`).catch(() => { sessionsFailed += 1; });
-    }
-  }
-  const archived = sessions.filter((session) => session.archivedAt !== undefined).map((session) => session.sessionId);
-  if (archived.length > 0) {
-    const { failedIds } = await unarchiveSessions(archived, { undo: true });
-    sessionsFailed += failedIds.length;
-  }
 
-  void listProjectWorktrees(project, { force: true }).catch(() => undefined);
-  void loadWorktreeArchives(project.path).catch(() => undefined);
-  return { outcome: 'restored', worktree, conflicts, sessionsFailed };
+  return { outcome: 'restored', worktree, conflicts };
 }
 
-/**
- * Deletes this archive's snapshot and only its still-archived sessions whose
- * current project and canonical workspace still match the recorded checkout.
- * A session moved elsewhere, or restored to work after a conflicting restore,
- * is not the archive's to delete. The local branch is kept unless requested;
- * sessions go first, so a failed session deletion leaves the archive intact.
- */
+/** Delete the snapshot through the Host, which owns all associated session effects. */
 export async function deleteArchivedWorktree(input: {
   project: ProjectRef;
   archive: GitWorktreeArchive;
   deleteBranch?: boolean;
 }): Promise<void> {
-  const { entityById } = useGlobalSessionsStore.getState();
-  // A session another archive of the project also holds is that archive's.
-  const others = useWorktreeArchivesStore.getState().byProject.get(normalizePath(input.project.path) ?? '')?.archives ?? [];
-  const elsewhere = new Set(others.filter((archive) => archive.id !== input.archive.id).flatMap((archive) => archive.sessionIds ?? []));
-  const sessionIds = (input.archive.sessionIds ?? []).filter((id) => {
-    const session = entityById.get(id);
-    return session?.archivedAt !== undefined
-      && !elsewhere.has(id)
-      && isSessionInWorktreeArchive(session, input.project, input.archive.path);
-  });
-  if (sessionIds.length > 0) {
-    const { failedIds } = await deleteSessions(sessionIds);
-    if (failedIds.length > 0) throw new Error(`Could not delete ${failedIds.length} session(s)`);
-  }
   try {
     await git.worktree.deleteArchive(normalizePath(input.project.path) ?? input.project.path, {
       id: input.archive.id,
@@ -274,12 +195,6 @@ export async function deleteArchivedWorktree(input: {
   }
 }
 
-/** The project's archive that holds `sessionId`, read fresh; null when none does. */
-export async function findWorktreeArchiveForSession(projectPath: string, sessionId: string): Promise<GitWorktreeArchive | null> {
-  if (!canArchiveWorktrees()) return null;
-  const archives = await loadWorktreeArchives(projectPath);
-  return archives.find((archive) => (archive.sessionIds ?? []).includes(sessionId)) ?? null;
-}
 
 // Worktrees restored here, for the merged-PR cleanup: restoring one whose PR
 // is merged is the user taking it back, and the cleanup would otherwise

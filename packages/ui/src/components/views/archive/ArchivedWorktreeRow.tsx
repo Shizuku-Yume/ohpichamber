@@ -33,6 +33,7 @@ export function ArchivedWorktreeRow({ archive, busy, onRestore, onDelete, touch 
         <Icon name="git-branch" className="size-3.5 shrink-0 self-start mt-[0.1875rem] text-muted-foreground" />
         <span className="flex min-w-0 flex-1 flex-col">
           <span dir="auto" className="truncate oc-ui-start-align typography-ui-label font-medium text-foreground">{label}</span>
+          {archive.sessionBinding.status === 'unbound' ? <span className="typography-micro text-destructive">{t('sessions.archive.worktree.legacyWarning')}</span> : null}
           <span className="truncate typography-micro text-muted-foreground">
             {showBranch ? <span className="font-mono">{archive.branch}</span> : null}
             {showBranch && date ? ' · ' : null}
@@ -44,7 +45,7 @@ export function ArchivedWorktreeRow({ archive, busy, onRestore, onDelete, touch 
           size="sm"
           variant="outline"
           className="shrink-0"
-          disabled={busy}
+          disabled={busy || archive.sessionBinding.status === 'ref-changed'}
           onClick={onRestore}
           aria-label={t('sessions.archive.worktree.restoreAria', { label })}
           style={{ touchAction: 'manipulation' }}
@@ -57,7 +58,7 @@ export function ArchivedWorktreeRow({ archive, busy, onRestore, onDelete, touch 
           size="lg"
           variant="ghost"
           className="w-10 shrink-0 px-0 text-muted-foreground"
-          disabled={busy}
+          disabled={busy || archive.sessionBinding.status === 'ref-changed'}
           onClick={onDelete}
           aria-label={t('sessions.archive.worktree.deleteAria', { label })}
           style={{ touchAction: 'manipulation' }}
@@ -71,6 +72,7 @@ export function ArchivedWorktreeRow({ archive, busy, onRestore, onDelete, touch 
     <div className="group/worktree flex min-w-0 items-center gap-2 py-1 ps-2 pe-1">
       <Icon name="git-branch" className="size-3.5 shrink-0 text-muted-foreground" />
       <span dir="auto" className="min-w-0 truncate oc-ui-start-align typography-ui-label font-medium text-foreground" title={archive.path}>{label}</span>
+      {archive.sessionBinding.status === 'unbound' ? <span className="typography-micro text-destructive">{t('sessions.archive.worktree.legacyWarning')}</span> : null}
       <span className="min-w-0 shrink truncate typography-micro text-muted-foreground">
         {showBranch ? <span className="font-mono">{archive.branch}</span> : null}
         {showBranch && date ? ' · ' : null}
@@ -81,7 +83,7 @@ export function ArchivedWorktreeRow({ archive, busy, onRestore, onDelete, touch 
         size="xs"
         variant="outline"
         className="ms-auto shrink-0"
-        disabled={busy}
+        disabled={busy || archive.sessionBinding.status === 'ref-changed'}
         onClick={onRestore}
         aria-label={t('sessions.archive.worktree.restoreAria', { label })}
       >
@@ -92,7 +94,7 @@ export function ArchivedWorktreeRow({ archive, busy, onRestore, onDelete, touch 
         <TooltipTrigger asChild>
           <button
             type="button"
-            disabled={busy}
+            disabled={busy || archive.sessionBinding.status === 'ref-changed'}
             onClick={onDelete}
             className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover/worktree:opacity-100 focus-visible:opacity-100 focus-visible:outline-none disabled:opacity-50"
             aria-label={t('sessions.archive.worktree.deleteAria', { label })}

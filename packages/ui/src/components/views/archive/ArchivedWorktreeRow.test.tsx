@@ -27,7 +27,7 @@ const archive: GitWorktreeArchive = {
   branchExists: true,
   title: 'Login fix',
   archivedAt: Date.parse('2026-10-29T10:00:00Z'),
-  sessionIds: ['ses_1'],
+  sessionBinding: { status: 'bound', phase: 'archived' },
 };
 
 beforeEach(() => {
@@ -84,4 +84,15 @@ test('a busy row disables both actions, and touch shows Delete without hover', a
   await act(async () => restore.click());
   expect(restored).toBe(0);
   expect(deleted).toBe(0);
+});
+
+test('warns when legacy archive session and branch ownership is unverified', async () => {
+  await render(<ArchivedWorktreeRow archive={{ ...archive, sessionBinding: { status: 'unbound' } }} busy={false} onRestore={() => {}} onDelete={() => {}} />);
+  expect(document.body.textContent).toContain('sessions will not be moved, unarchived, or deleted');
+  expect(document.body.textContent).toContain('branch identity is unverified');
+});
+
+test('disables changed-ref archive actions', async () => {
+  await render(<ArchivedWorktreeRow archive={{ ...archive, sessionBinding: { status: 'ref-changed' } }} busy={false} onRestore={() => {}} onDelete={() => {}} />);
+  expect([...document.querySelectorAll('button')].every(button => button.disabled)).toBe(true);
 });

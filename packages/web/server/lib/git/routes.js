@@ -25,7 +25,7 @@ export function registerGitRoutes(app, {
   networkOperations, managedSshInventory, getSourceControlBinding, contributorProvenance, resolveChangeRequestSource,
   backfillIdentities,
   createHttpsCredentialReference, resolveSourceControlAccount, errorRedactionSecrets = [], worktreeBootstrapStore,
-  worktreeLeaseControl,
+  worktreeLeaseControl, worktreeArchiveSessionService,
   emitWorktreeChanged, onBranchRewritten,
 } = {}) {
   let gitLibraries = null;
@@ -1735,7 +1735,7 @@ export function registerGitRoutes(app, {
   ]);
   const sendArchiveError = (res, error, fallback) => {
     const status = ARCHIVE_ERROR_STATUS.get(error?.code)
-      ?? (Number.isInteger(error?.status) ? error.status : 500);
+      ?? (Number.isInteger(error?.status) ? error.status : Number.isInteger(error?.statusCode) ? error.statusCode : 500);
     // Only an unexpected local failure is this server's fault to report.
     if (status === 500) console.error(`${fallback}:`, error);
     const body = { error: error?.message || fallback, code: error?.code };
@@ -1748,7 +1748,18 @@ export function registerGitRoutes(app, {
     const directory = resolveDirectoryQuery(req.query.directory);
     if (!directory) return res.status(400).json({ error: 'directory parameter is required' });
     try {
-      res.json({ archives: await listWorktreeArchives(directory) });
+      if (!worktreeArchiveSessionService?.prepareWorktreeArchiveDelete) return res.status(503).json({ error: 'Host archive authority is unavailable', code: 'WORKTREE_ARCHIVE_AUTHORITY_UNAVAILABLE' });
+      const archives = await listWorktreeArchives(directory);
+      const joined = await Promise.all(archives.map(async (archive) => {
+        const owner = await worktreeArchiveSessionService.prepareWorktreeArchiveDelete({ projectDirectory: directory, archiveId: archive.id });
+        const binding = owner?.binding;
+        const status = !binding ? 'unbound' : binding.archiveRef !== archive.ref || binding.snapshotCommit !== archive.commit
+          ? 'ref-changed' : binding.sessions.length ? 'bound' : 'verified-empty';
+        return { ...archive, sessionIds: [], sessionBinding: { status, ...(binding ? { phase: binding.phase, revision: binding.revision,
+          ...(binding.phase === 'restoring' && binding.targetWorkspaceId && binding.applyAttempted && !binding.sessions.some((item) => ['move_intent', 'restored'].includes(item.progress))
+            ? { recoveryHead: binding.preapplyHead } : {}) } : {}) } };
+      }));
+      res.json({ archives: joined });
     } catch (error) {
       sendArchiveError(res, error, 'Failed to list worktree archives');
     }
@@ -1770,9 +1781,8 @@ export function registerGitRoutes(app, {
       res.json(await archiveWorktree(directory, {
         directory: worktreeDirectory,
         id: req.body?.id,
-        sessionIds: req.body?.sessionIds,
         title: req.body?.title,
-      }, { bootstrapStore: worktreeBootstrapStore, worktreeWorkers: worktreeLeaseControl }));
+      }, { bootstrapStore: worktreeBootstrapStore, worktreeWorkers: worktreeLeaseControl, archiveSessions: worktreeArchiveSessionService }));
     } catch (error) {
       sendArchiveError(res, error, 'Failed to archive worktree');
     }
@@ -1783,7 +1793,7 @@ export function registerGitRoutes(app, {
     const directory = resolveDirectoryQuery(req.query.directory);
     if (!directory) return res.status(400).json({ error: 'directory parameter is required' });
     try {
-      res.json(await restoreWorktreeArchive(directory, { id: req.body?.id }));
+      res.json(await restoreWorktreeArchive(directory, { id: req.body?.id, recovery: req.body?.recovery }, { archiveSessions: worktreeArchiveSessionService }));
     } catch (error) {
       sendArchiveError(res, error, 'Failed to restore worktree archive');
     }
@@ -1794,7 +1804,7 @@ export function registerGitRoutes(app, {
     const directory = resolveDirectoryQuery(req.query.directory);
     if (!directory) return res.status(400).json({ error: 'directory parameter is required' });
     try {
-      res.json(await deleteWorktreeArchive(directory, { id: req.body?.id, deleteBranch: req.body?.deleteBranch === true }));
+      res.json(await deleteWorktreeArchive(directory, { id: req.body?.id, deleteBranch: req.body?.deleteBranch === true }, { archiveSessions: worktreeArchiveSessionService }));
     } catch (error) {
       sendArchiveError(res, error, 'Failed to delete worktree archive');
     }

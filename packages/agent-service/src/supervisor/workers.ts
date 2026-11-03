@@ -642,6 +642,14 @@ export class WorkerRegistry {
       return entry ? this.stopEntry(entry) : true;
     });
   }
+  async withStoppedRoot<T>(rootSessionId: string, operation: () => Promise<T>): Promise<T> {
+    return this.withRoot(rootSessionId, async () => {
+      if (this.closing || this.workerEntries.has(rootSessionId) || this.restartReservations.has(rootSessionId))
+        throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
+      return operation();
+    });
+  }
+
 
   async evict(rootSessionId: string): Promise<boolean> {
     return this.withRoot(rootSessionId, async () => {

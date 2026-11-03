@@ -19,12 +19,41 @@ export type MobileProjectIconProject = {
 
 export const MobileProjectIcon: React.FC<{
   project: MobileProjectIconProject;
-  size?: 'sm' | 'md';
+  /** xs sits inside a 16px text line, sm in a small row, md in a header's 32px slot. */
+  size?: 'xs' | 'sm' | 'md';
 }> = ({ project, size = 'md' }) => {
   const { currentTheme } = useThemeSystem();
 
   const ProjectIcon = project.icon ? PROJECT_ICON_MAP[project.icon] : null;
   const iconColor = project.color ? PROJECT_COLOR_MAP[project.color] ?? null : null;
+
+  if (size === 'xs') {
+    const fallbackIcon = ProjectIcon ? (
+      <Icon name={ProjectIcon} className="size-3.5" style={iconColor ? { color: iconColor } : undefined} />
+    ) : (
+      <RiFolder6Line className="size-3.5" style={iconColor ? { color: iconColor } : undefined} />
+    );
+    const image = project.iconImage ? (
+      <ProjectIconImage
+        project={{ id: project.id, iconImage: project.iconImage ?? null }}
+        options={{
+          themeVariant: currentTheme.metadata.variant,
+          iconColor: currentTheme.colors.surface.foreground,
+        }}
+        className="size-full object-contain"
+        fallback={fallbackIcon}
+      />
+    ) : null;
+    const imageBackground = project.iconBackground ? { backgroundColor: project.iconBackground } : undefined;
+    return (
+      <span
+        className="flex size-3.5 shrink-0 items-center justify-center overflow-hidden rounded-[3px] text-muted-foreground"
+        style={imageBackground}
+      >
+        {image ?? fallbackIcon}
+      </span>
+    );
+  }
 
   const containerClasses = size === 'sm' ? 'size-6 rounded-md' : 'size-8 rounded-lg';
   const innerClasses = size === 'sm' ? 'size-3.5' : 'size-4';

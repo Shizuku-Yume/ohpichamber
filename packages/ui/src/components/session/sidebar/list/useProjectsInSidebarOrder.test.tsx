@@ -62,7 +62,7 @@ describe('useProjectsInSidebarOrder', () => {
     renders = 0;
     useGlobalSessionsStore.getState().resetForRuntimeSwitch();
     useProjectsStore.setState({ projects, manualProjectOrder: ['delta', 'bravo', 'charlie', 'alpha'] });
-    useSessionDisplayStore.setState({ sidebarViewMode: 'projects', projectSortOrder: 'manual' });
+    useSessionDisplayStore.setState({ projectSortOrder: 'manual' });
   });
 
   afterEach(async () => {
@@ -91,7 +91,7 @@ describe('useProjectsInSidebarOrder', () => {
   });
 
   test('follows the stored sort whatever the old List view setting says', async () => {
-    useSessionDisplayStore.setState({ sidebarViewMode: 'timeline', projectSortOrder: 'a-z' });
+    useSessionDisplayStore.setState({ listSessionGrouping: 'time', projectSortOrder: 'a-z' });
     await act(async () => root.render(<Harness items={projects} />));
     expect(shown).toEqual(['alpha', 'bravo', 'charlie', 'delta']);
   });

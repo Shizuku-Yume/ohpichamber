@@ -76,7 +76,6 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
         pinnedSessionIds,
         sessionOrderRanks,
         gitBranches,
-        worktreeSortOrder: 'recent' as const,
       }).buildGroupedSessions;
       return null;
     };
@@ -110,7 +109,6 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
         pinnedSessionIds: new Set(),
         sessionOrderRanks: new Map(),
         gitBranches: new Map(),
-        worktreeSortOrder: 'recent' as const,
       }).buildGroupedSessions;
       return null;
     };
@@ -133,13 +131,12 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  test('stable worktree sorts ignore session activity', () => {
+  test('worktrees follow their latest activity', () => {
     const worktree = (name: string): WorktreeMetadata => ({
       source: 'sdk', name, path: `/workspace/.wt/${name}`, projectDirectory: '/workspace', branch: name, label: name,
     });
     const busy = { ...session('busy'), displayPath: '/workspace/.wt/zeta', updatedAt: 99 };
-
-    const worktreeOrder = (worktreeSortOrder: 'recent' | 'a-z') => {
+    const worktreeOrder = () => {
       const state: { build?: ReturnType<typeof useSessionGrouping>['buildGroupedSessions'] } = {};
       const Harness = () => {
         state.build = useSessionGrouping({
@@ -148,7 +145,7 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
           pinnedSessionIds: new Set(),
           sessionOrderRanks: new Map(),
           gitBranches: new Map(),
-          worktreeSortOrder,
+          isVSCode: false,
         }).buildGroupedSessions;
         return null;
       };
@@ -159,8 +156,7 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
         .map((group) => group.label);
     };
 
-    expect(worktreeOrder('recent')).toEqual(['alpha', 'zeta']);
-    expect(worktreeOrder('a-z')).toEqual(['alpha', 'zeta']);
+    expect(worktreeOrder()).toEqual(['zeta', 'alpha']);
   });
 
   test('uses the row-local descendant snapshot for archive and hard-delete actions', async () => {
@@ -213,7 +209,6 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
         pinnedSessionIds: new Set(),
         sessionOrderRanks: new Map(),
         gitBranches: new Map(),
-        worktreeSortOrder: 'recent' as const,
         sessionOwners: ownership.bySessionId,
       }).buildGroupedSessions;
       return null;
@@ -239,7 +234,6 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
         pinnedSessionIds: new Set(),
         sessionOrderRanks: new Map(),
         gitBranches: new Map(),
-        worktreeSortOrder: 'recent' as const,
       }).buildGroupedSessions;
       return null;
     };

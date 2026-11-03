@@ -156,9 +156,9 @@ describe('settings runtime', () => {
     const { runtime, settingsFilePath, tempRoot, cleanup } = await createRuntime();
     const preferences = {
       sidebarProjectDisplayMode: 'single',
-      sidebarViewMode: 'timeline',
+      sidebarGrouping: 'time',
       sidebarProjectSortOrder: 'date-added',
-      sidebarShowRecentSection: false,
+      sidebarShowChatsSection: false,
     };
     try {
       await runtime.persistSettings(preferences);

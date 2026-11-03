@@ -4,33 +4,15 @@ import { getSettingsSurface } from '@/lib/settings/surface';
 import type { SettingsSurface } from '@/lib/settings/registry';
 
 type ProjectSortOrder = 'manual' | 'a-z' | 'z-a' | 'date-added' | 'recent';
-// Worktree groups inside a project. 'recent' floats worktrees with the latest
-// session activity to the top, so the list moves as sessions run; 'manual'
-// and 'a-z' keep positions stable.
-type WorktreeSortOrder = 'recent' | 'manual' | 'a-z';
-
-// The Tree/List pair the one view replaced, read only until a grouping is
-// chosen (`resolveSidebarGrouping`). 'projects' was Tree; 'timeline' was
-// List, laid out by `listSessionGrouping`.
-export type SidebarViewMode = 'projects' | 'timeline';
-// `sidebarGrouping`, and the old List's: 'project' puts each project's sessions under its header;
-// 'time' lists every project's sessions together, newest activity first.
 export type ListSessionGrouping = 'project' | 'time';
 type ProjectDisplayMode = 'all' | 'single';
-
-// The phone starts on the timeline: its sheet has no room for nested project
-// trees. Every other surface keeps the grouped sidebar people know.
-export const defaultSidebarViewMode = (): SidebarViewMode => (
-  getSettingsSurface() === 'mobile' ? 'timeline' : 'projects'
-);
 
 type SessionDisplayStore = {
   projectDisplayMode: ProjectDisplayMode;
   singleProjectId: string | null;
   setProjectDisplayMode: (mode: ProjectDisplayMode) => void;
   setSingleProjectId: (projectId: string) => void;
-  sidebarViewMode: SidebarViewMode;
-  setSidebarViewMode: (mode: SidebarViewMode) => void;
+
   listSessionGrouping: ListSessionGrouping;
   setListSessionGrouping: (grouping: ListSessionGrouping) => void;
   /**
@@ -46,8 +28,7 @@ type SessionDisplayStore = {
   /** Local display preference; motion remains opt-in. */
   animatedActivityIndicators: boolean;
   setAnimatedActivityIndicators: (enabled: boolean) => void;
-  /** Live field for MobileSessionsSheet until task 32 migrates it. */
-  showRecentSection: boolean;
+
   /** The managed Chats block in the sidebar (web and desktop). */
   showChatsSection: boolean;
   /** The In work block; hidden, its sessions stay in their projects. */
@@ -61,16 +42,12 @@ type SessionDisplayStore = {
    */
   detailedZoneRows: boolean;
   projectSortOrder: ProjectSortOrder;
-  /** Live field for MobileSessionsSheet until task 32 migrates it. */
-  worktreeSortOrder: WorktreeSortOrder;
-  setShowRecentSection: (show: boolean) => void;
+
   setShowChatsSection: (show: boolean) => void;
   setShowWorkSection: (show: boolean) => void;
   setShowPinnedSection: (show: boolean) => void;
   setDetailedZoneRows: (detailed: boolean) => void;
-  toggleRecentSection: () => void;
   setProjectSortOrder: (order: ProjectSortOrder) => void;
-  setWorktreeSortOrder: (order: WorktreeSortOrder) => void;
 };
 
 export const migrateSessionDisplayState = (
@@ -83,6 +60,9 @@ export const migrateSessionDisplayState = (
     sessionGroupingMode?: string;
     stickyZoneHeaders?: boolean;
     showArchivedSessions?: boolean;
+    showRecentSection?: boolean;
+    sidebarViewMode?: string;
+    worktreeSortOrder?: string;
   };
   if (version < 2) {
     state.projectSortOrder = 'manual';
@@ -129,6 +109,11 @@ export const migrateSessionDisplayState = (
   if (version < 12 && surface === 'mobile' && state.sidebarViewMode !== 'projects') {
     state.detailedZoneRows = true;
   }
+  if (version < 13) {
+    delete state.showRecentSection;
+    delete state.sidebarViewMode;
+    delete state.worktreeSortOrder;
+  }
   return state;
 };
 
@@ -138,9 +123,9 @@ export const migrateSessionDisplayState = (
  * project both group under projects.
  */
 export const resolveSidebarGrouping = (
-  state: Pick<SessionDisplayStore, 'sidebarGrouping' | 'sidebarViewMode' | 'listSessionGrouping'>,
+  state: Pick<SessionDisplayStore, 'sidebarGrouping' | 'listSessionGrouping'>,
 ): ListSessionGrouping => state.sidebarGrouping
-  ?? (state.sidebarViewMode === 'timeline' && state.listSessionGrouping === 'time' ? 'time' : 'project');
+  ?? (state.listSessionGrouping === 'time' ? 'time' : 'project');
 
 export const useSessionDisplayStore = create<SessionDisplayStore>()(
   persist(
@@ -151,39 +136,34 @@ export const useSessionDisplayStore = create<SessionDisplayStore>()(
       singleProjectId: null,
       setProjectDisplayMode: (mode) => set({ projectDisplayMode: mode }),
       setSingleProjectId: (projectId) => set({ singleProjectId: projectId }),
-      sidebarViewMode: defaultSidebarViewMode(),
-      setSidebarViewMode: (mode) => set({ sidebarViewMode: mode }),
+
       listSessionGrouping: 'project',
       setListSessionGrouping: (grouping) => set({ listSessionGrouping: grouping }),
       sidebarGrouping: null,
       setSidebarGrouping: (grouping) => set({ sidebarGrouping: grouping }),
       keepWorkInPlace: false,
       setKeepWorkInPlace: (keep) => set({ keepWorkInPlace: keep }),
-      showRecentSection: false,
+
       showChatsSection: true,
       showWorkSection: true,
       showPinnedSection: true,
       detailedZoneRows: getSettingsSurface() === 'mobile',
       projectSortOrder: 'manual',
-      worktreeSortOrder: 'manual',
-      setShowRecentSection: (show) => set({ showRecentSection: show }),
+
       setShowChatsSection: (show) => set({ showChatsSection: show }),
       setShowWorkSection: (show) => set({ showWorkSection: show }),
       setShowPinnedSection: (show) => set({ showPinnedSection: show }),
       setDetailedZoneRows: (detailed) => set({ detailedZoneRows: detailed }),
-      toggleRecentSection: () => set((state) => ({ showRecentSection: !state.showRecentSection })),
       setProjectSortOrder: (order) => set({ projectSortOrder: order }),
-      setWorktreeSortOrder: (order) => set({ worktreeSortOrder: order }),
     }),
     {
       name: 'session-display-mode',
-      version: 12,
+      version: 13,
       migrate: migrateSessionDisplayState,
     },
   ),
 );
 
 export type {
-  ProjectSortOrder,
-  WorktreeSortOrder
+  ProjectSortOrder
 };

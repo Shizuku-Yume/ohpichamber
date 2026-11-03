@@ -59,7 +59,6 @@ const renderSections = (
       pinnedSessionIds: new Set(),
       sessionOrderRanks: new Map(),
       gitBranches: new Map(),
-      worktreeSortOrder: 'recent' as const,
     });
     captured = useSessionSidebarSections({
       normalizedProjects: projectSessions ? [{ id: 'project', path: CHATS_ROOT, normalizedPath: CHATS_ROOT }] : [],

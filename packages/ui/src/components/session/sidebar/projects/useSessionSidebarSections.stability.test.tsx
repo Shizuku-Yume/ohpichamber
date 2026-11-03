@@ -67,7 +67,6 @@ const Harness = ({ inputs, capture }: { inputs: Inputs; capture: (sections: Sect
     pinnedSessionIds: stableMaps.pinnedSessionIds,
     sessionOrderRanks: inputs.ranks,
     gitBranches: stableMaps.gitBranches,
-    worktreeSortOrder: 'recent',
     sessionOwners: inputs.owners,
   });
   // Rebuilt on every render, the way the sidebar rebuilds the ownership index.

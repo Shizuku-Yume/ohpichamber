@@ -68,7 +68,7 @@ elapsed counters retain their existing precedence and behavior. A session
 row's title carries its state too: semibold at full strength while a finished
 turn is unseen or a permission or question waits on the user, full strength
 while it runs, muted otherwise; the active row keeps the selection colors. The display
-store is at version 10 (v10 dropped the Recent toggle): missing preferences inherit the default during hydration,
+store is at version 13 (v13 dropped showRecentSection, sidebarViewMode, and worktreeSortOrder): missing preferences inherit the default during hydration,
 while an explicitly saved choice survives reload.
 
 Full-app active records remain in the collection when their directory is no

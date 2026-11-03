@@ -322,10 +322,6 @@
     "sidebarProjectDisplayMode": {
       "scope": "profile"
     },
-    "sidebarViewMode": {
-      "scope": "profile",
-      "perSurface": true
-    },
     "sidebarListSessionGrouping": {
       "scope": "profile",
       "perSurface": true
@@ -340,13 +336,6 @@
     },
     "sidebarProjectSortOrder": {
       "scope": "profile"
-    },
-    "sidebarWorktreeSortOrder": {
-      "scope": "profile"
-    },
-    "sidebarShowRecentSection": {
-      "scope": "profile",
-      "perSurface": true
     },
     "sidebarShowChatsSection": {
       "scope": "profile",

@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client';
 import type { ApprovalRequest, CanonicalEvent, QuestionRequest } from '@openchamber/agent-contract';
 import { applyGlobalBlockingRequestEvents, resetGlobalBlockingRequests } from '@/sync/global-blocking-requests';
 import { installHookTestDom } from '@/components/session/sidebar/test-utils/testDom';
-import { usePendingRequestCounts, type PendingRequestCounts } from './usePendingRequestCounts';
+import { usePendingRequests, type PendingRequests } from './usePendingRequests';
 
 const FAMILY = ['parent', 'child'] as const;
 const EPOCH = 'epoch-1';
@@ -41,40 +41,46 @@ const questionResolved = (sessionId: string, questionId: string, sequence: strin
   },
 });
 
-describe('usePendingRequestCounts', () => {
-  test('counts the whole family, ignores other sessions, and clears on resolution', async () => {
+describe('usePendingRequests', () => {
+  test('covers the whole family, ignores other sessions, and clears on reply', async () => {
     const dom = installHookTestDom();
     const root = createRoot(dom.container);
-    type CountsCapture = { renders: number; counts: PendingRequestCounts | null };
-    const capture: CountsCapture = { renders: 0, counts: null };
+    type PendingCapture = { renders: number; pending: PendingRequests | null };
+    const capture: PendingCapture = { renders: 0, pending: null };
     const Harness = () => {
       capture.renders += 1;
-      capture.counts = usePendingRequestCounts(FAMILY);
+      capture.pending = usePendingRequests(FAMILY);
       return null;
     };
     try {
       await act(async () => root.render(React.createElement(Harness)));
-      expect(capture.counts).toEqual({ permissionCount: 0, formCount: 0 });
+      expect(capture.pending).toEqual({ hasPermission: false, hasForm: false });
 
-      // A request in an unrelated session neither counts nor re-renders the row.
+      // A request in an unrelated session neither shows nor re-renders the row.
       const idleRenders = capture.renders;
-      await act(async () => applyGlobalBlockingRequestEvents('/other', [
-        approvalAsked('unrelated', 'approval-other', '1'),
-      ]));
+      await act(async () => applyGlobalBlockingRequestEvents('/other', [approvalAsked('unrelated', 'p-other', '1')]));
       expect(capture.renders).toBe(idleRenders);
 
-      // A subagent's approval and the parent's question both land on the row.
+      // A subagent's permission and the parent's question both land on the row.
       await act(async () => applyGlobalBlockingRequestEvents('/workspace', [
-        approvalAsked('child', 'approval-1', '1'),
-        questionAsked('parent', 'question-1', '2'),
+        approvalAsked('child', 'p1', '2'),
+        questionAsked('parent', 'q1', '3'),
       ]));
-      expect(capture.counts).toEqual({ permissionCount: 1, formCount: 1 });
+      expect(capture.pending).toEqual({ hasPermission: true, hasForm: true });
+
+      // A second request of the same kind changes nothing the row shows.
+      const pendingRenders = capture.renders;
+      await act(async () => applyGlobalBlockingRequestEvents('/workspace', [
+        approvalAsked('parent', 'p2', '4'),
+      ]));
+      expect(capture.renders).toBe(pendingRenders);
 
       await act(async () => applyGlobalBlockingRequestEvents('/workspace', [
-        approvalResolved('child', 'approval-1', '3'),
-        questionResolved('parent', 'question-1', '4'),
+        approvalResolved('child', 'p1', '5'),
+        approvalResolved('parent', 'p2', '6'),
+        questionResolved('parent', 'q1', '7'),
       ]));
-      expect(capture.counts).toEqual({ permissionCount: 0, formCount: 0 });
+      expect(capture.pending).toEqual({ hasPermission: false, hasForm: false });
     } finally {
       await act(async () => root.unmount());
       resetGlobalBlockingRequests();

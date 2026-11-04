@@ -27,7 +27,7 @@ When this effort is done:
 - Agent Service diagnostics are observable, worker capacity has a measured policy, Host SQLite stores are versioned with a backup procedure, and existing OpenCode users get a first-run notice.
 - The owed PROBE-05 benchmark and packaged live-region measurement have results.
 - The Guest SDK transport change is versioned, and product docs claim only verified behavior.
-- M4 and M5 are re-planned into executable specs and tasks. The OMP vendor upgrade has a runbook, and the upstream-sync question has an answer for the maintainer.
+- M5 is re-planned into executable specs and surface tasks; M4 replanning is explicitly deferred to a dedicated milestone effort. The OMP vendor upgrade has a runbook, and the upstream-sync question has an answer for the maintainer.
 
 ## How it is built
 
@@ -97,7 +97,7 @@ Landing order: lane A's task 01 lands first. Other lanes may build before that, 
 - **H12.** PROBE-05 and the packaged live-region measurement have recorded results.
 - **H13.** The Guest SDK transport change has an explicit version or compatibility decision, and SDK examples name the supported version.
 - **H14.** Product docs and package READMEs describe only verified behavior or label it.
-- **H15.** M4 and M5 each have an approved spec and tasks, the OMP vendor upgrade runbook reproduces the current pin, and the upstream-sync question is answered for the maintainer.
+- **H15.** M5 has an approved spec and surface tasks, M4 replanning is explicitly deferred per maintainer decision (task 25 paused), the OMP vendor upgrade runbook reproduces the current pin, and the upstream-sync question is answered for the maintainer.
 
 ## Settled decision and open questions
 
@@ -107,9 +107,10 @@ Settled decisions are recorded here for reference. Remaining questions belong to
 2. **Resolved (2026-10-23; recorded 2026-10-24): Isolated spaces** (Task08): remove the OpenCode space runtime and keep spaces unreleased until an OMP runtime is built as a separate effort. Task38 owns that removal and remains unassigned pending a dedicated owner. Decision: `decisions.md: 2026-10-24 - Keep isolated spaces unreleased without the OpenCode runtime`.
 3. **Resolved (2026-10-24): Mobile in the release matrix** (task 26): keep Capacitor mobile as a supported surface; release stays blocked until physical-device certification passes on a Pixel 8 (Android 15/API 35, arm64-v8a) and a physical iPhone (iOS 26, TestFlight). Decision: `decisions.md: 2026-10-24 - Keep Capacitor mobile in the M5 release matrix`.
 4. **Windows signing** (task 14): which certificate and secret names the release jobs use.
-5. **Native packages for non-Linux targets** (after task 12): vendor registry prebuilt binaries pinned by integrity, or build from the pinned Rust source.
+5. **Resolved (2026-11-04): Native packages for non-Linux targets** (task 29): accept official registry native leaves with verified SLSA provenance, SHA-256/SHA-512 integrity, and target OS/CPU match to unlock the M5 non-Linux release matrix, while preserving unrun target runtime certification. Decision: `decisions.md: 2026-11-04 - Accept official registry native leaves with SLSA provenance for non-Linux targets`.
 6. **Resolved (2026-10-24): npm standalone distribution** (task 26): bundle a per-platform Agent Runtime into `@openchamber/web` using the Electron-verified staged payload; do not publish the Agent Service, Contract or vendored OMP packages. Decision: `decisions.md: 2026-10-24 - Bundle the Agent Runtime into @openchamber/web`.
 7. **Resolved (2026-10-27): Upstream OpenChamber sync** (after task 28): adopt the upstream-first area refresh and run it now to `0056bf6a9` (v2.5.2+1), including features. Work continues in [upstream-refresh](upstream-refresh.md). Decision: `decisions.md: 2026-10-27 - Adopt the upstream-first area refresh now`.
+8. **Resolved (2026-11-04): M4 replanning deferred** (task 25): defer M4 replanning to a dedicated future milestone effort; task 25 is kept paused to preserve deferred status without falsely claiming completion.
 
 ## Notes
 

@@ -27,7 +27,7 @@ The release notes and product docs describe exactly the matrix that has evidence
 
 `scope.md` owns the retained product surfaces: Web/PWA, Electron Desktop, Mobile (Capacitor) and the Guest SDK. This spec owns the release matrix that certifies them.
 
-The maintained OS/architecture matrix is the six native targets the maintainer approved when choosing task 29's source-build route: macOS arm64, macOS x64, Windows x64, Windows arm64, Linux x64 and Linux arm64. That route builds and vendors the leaves; a target is certified only after those leaves exist and its artifact passes. VS Code and OpenCode are neither surfaces nor certification rows. An inherited job or target with no row below is removed or explicitly disabled, not kept as an untested extra.
+The maintained OS/architecture matrix is the six native targets: macOS arm64, macOS x64, Windows x64, Windows arm64, Linux x64 and Linux arm64. Linux x64 leaf is packed from source; the five non-Linux leaves are official registry packages verified by signed SLSA provenance attestation matching commit `650f3a108229ee11bf68ba3377f4e8c3391cd424`, exact SHA-512/SHA-256 integrity, and target `os`/`cpu` declarations, accepted per maintainer decision on 2026-11-04 to unlock the M5 release matrix without claiming unrun target-platform runtime certification. A target is certified only after its artifact passes the surface checks. VS Code and OpenCode are neither surfaces nor certification rows. An inherited job or target with no row below is removed or explicitly disabled, not kept as an untested extra.
 
 | Surface | Target | Runner / device | Toolchain and signing |
 |---|---|---|---|
@@ -42,7 +42,7 @@ The maintained OS/architecture matrix is the six native targets the maintainer a
 | Docker | linux/amd64, linux/arm64 | Linux x64 and native arm64 hosts with Docker Engine 28 and BuildKit | `oven/bun:1.4.2` base; buildx; `docker compose` |
 | npm | Linux x64 (additional OS/arch rows only after their own runner install) | Linux x64 host; the matching runner for any additional row | Node 24.14+ for the Host; Bun 1.4.2 for the Agent Service; clean npm prefix; per-platform bundled Agent Runtime |
 
-Bun 1.4.2 and Node 24 are pinned by the repository and every runner uses those versions. A job that cannot get its target runner fails loudly; it does not fall back to a different architecture or an emulated binary without naming it.
+Bun 1.4.4 and Node 24 are pinned by the repository and every runner uses those versions. A job that cannot get its target runner fails loudly; it does not fall back to a different architecture or an emulated binary without naming it.
 
 ### Release candidate
 
@@ -84,7 +84,7 @@ A receipt names the candidate commit, runner image or device model and OS build,
 - **Drop npm standalone and send every Web/PWA user to Docker.** Docker is the simpler server path, but the current product documentation and the public `@openchamber/web` package both present a global install, and the maintainer chose to keep that path by bundling the verified runtime.
 - **Build isolated spaces' OMP runtime in M5.** The source inventory in `post-m3-hardening/08` showed a second Agent Service boundary, new distribution, supervision, grants and escape evidence. The maintainer kept spaces unreleased; that work remains a separate effort.
 - **Certify only Linux x64 because it is the only reachable host.** It would make the release claim smaller than the product matrix and leave Windows/macOS users with untested artifacts.
-- **Build the five missing native leaves inside the release jobs.** Task 29 builds and pins them from source. Release jobs consume the vendored result, so a release failure cannot silently change the runtime identity.
+- **Build the five missing native leaves inside the release jobs.** The maintainer accepted the attested registry leaves for non-Linux targets verified by SLSA provenance and SHA-256/SHA-512 integrity. Release jobs consume the vendored leaves, so a release failure cannot silently change the runtime identity.
 
 ## How we will know it works
 

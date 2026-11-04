@@ -449,3 +449,21 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** no
 - **Revisit when:** A separately authorized legacy reassociation protocol or a different session-state policy is adopted.
 - **Effort:** upstream-refresh
+
+## 2026-11-04 - Accept official registry native leaves with SLSA provenance for non-Linux targets
+
+- **Decided:** Accept official npm registry native leaf packages (`darwin-arm64`, `darwin-x64`, `linux-arm64`, `win32-arm64`, `win32-x64`) for OMP 18.16.0 when verified by signed SLSA provenance attestation matching pinned commit `650f3a108229ee11bf68ba3377f4e8c3391cd424`, exact archive SHA-512/SHA-256 integrity, and target `os`/`cpu` match in `copy-manifest.json`. Linux x64 leaf remains built and packed from source. This unlocks the M5 non-Linux release matrix without claiming unrun target-platform runtime certification.
+- **Instead of:** Requiring hermetic cross-toolchain source builds for all six targets on a single host, or blocking the M5 release matrix indefinitely.
+- **Because:** The maintainer explicitly approved the attested registry leaves for non-Linux targets. Each artifact is individually verified against the author's signed SLSA provenance and exact archive digests. Host runtime certification on target platforms remains a distinct release gate and is not certified until real target devices/runners execute the tests.
+- **Mine:** no (maintainer decision).
+- **Revisit when:** Hermetic cross-compilation toolchains are provisioned or upstream OMP changes build/packaging infrastructure.
+- **Effort:** post-m3-hardening
+
+## 2026-11-04 - Defer M4 replanning to a dedicated milestone effort
+
+- **Decided:** Defer M4 replanning from Post-M3 Hardening to a dedicated future milestone effort. Keep task 25 paused in place to record the deferred status truthfully without falsely claiming completion.
+- **Instead of:** Marking M4 replanning completed without an approved M4 spec and tasks, or deleting the task.
+- **Because:** The maintainer explicitly decided to defer M4 replanning while closing Post-M3 Hardening's remaining gates and archiving task 26. Prerequisite `omp-opencode-comparison/01` remains unexecuted. Preserving the task as paused avoids both false completion claims and accidental loss of plan context.
+- **Mine:** no (maintainer decision).
+- **Revisit when:** The maintainer schedules the dedicated M4 milestone effort and executes the comparison audit.
+- **Effort:** post-m3-hardening

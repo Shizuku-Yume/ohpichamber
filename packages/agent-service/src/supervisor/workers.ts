@@ -66,6 +66,7 @@ export type WorkerDiagnostic = { level: 'error' | 'warn' | 'info'; rootSessionId
 export type WorktreeLeaseAcquireResult = { leaseId: string; released: string[] };
 type WorktreeLease = { leaseId: string; canonicalDirectory: string; released: string[] };
 type PendingWorktreeLeaseAcquire = { directory: string; cancelled: boolean };
+type RelocationFence = { sessionId: string; sourceCanonical: string; destinationCanonical: string };
 
 const WORKTREE_LEASE_ID_PATTERN = /^[A-Za-z0-9_-]{1,80}$/;
 
@@ -221,6 +222,7 @@ export class WorkerRegistry {
   // cancels a canonicalization still in flight without leaving a tombstone.
   private readonly pendingWorktreeLeaseAcquires = new Map<string, PendingWorktreeLeaseAcquire>();
   private readonly worktreeLeases = new Map<string, WorktreeLease>();
+  private readonly relocationFences = new Map<string, RelocationFence>();
   private leaseMutation: Promise<void> = Promise.resolve();
   private readonly canonicalizeDirectory: (directory: string) => Promise<string>;
   private readonly capacityPolicy: WorkerCapacityPolicy;
@@ -265,7 +267,8 @@ export class WorkerRegistry {
   /** A fast refusal for admission; `launch` checks again at its last synchronous point before `spawn`. */
   assertWorktreeLeaseAllows(cwd: string): void {
     for (const lease of this.worktreeLeases.values()) {
-      if (isInsideOrSameDirectory(lease.canonicalDirectory, cwd)) {
+      if (isInsideOrSameDirectory(lease.canonicalDirectory, cwd)
+        || isInsideOrSameDirectory(cwd, lease.canonicalDirectory)) {
         throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', { leaseId: lease.leaseId });
       }
     }
@@ -318,6 +321,18 @@ export class WorkerRegistry {
             throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', { leaseId: lease.leaseId, directory: lease.canonicalDirectory });
           }
         }
+        for (const fence of this.relocationFences.values()) {
+          if (isInsideOrSameDirectory(canonicalDirectory, fence.destinationCanonical)
+            || isInsideOrSameDirectory(fence.destinationCanonical, canonicalDirectory)
+            || isInsideOrSameDirectory(canonicalDirectory, fence.sourceCanonical)
+            || isInsideOrSameDirectory(fence.sourceCanonical, canonicalDirectory)) {
+            throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', {
+              leaseId,
+              directory: canonicalDirectory,
+              relocationSessionId: fence.sessionId,
+            });
+          }
+        }
         const lease: WorktreeLease = { leaseId, canonicalDirectory, released: [] };
         this.worktreeLeases.set(leaseId, lease);
         try {
@@ -351,6 +366,70 @@ export class WorkerRegistry {
       const pending = this.pendingWorktreeLeaseAcquires.get(leaseId);
       if (pending) pending.cancelled = true;
       this.worktreeLeases.delete(leaseId);
+    });
+  }
+
+  /**
+   * Installs a mutual fence protecting destination and source directories
+   * BEFORE any session files are moved on disk during relocation.
+   * Synchronized through `withLeaseMutation` so concurrent worktree lease
+   * acquires cannot interleave with the file move.
+   */
+  async acquireRelocationFence(
+    sessionId: string,
+    sourceDirectory: string,
+    destinationDirectory: string,
+  ): Promise<{ release: () => Promise<void> }> {
+    let sourceCanonical: string;
+    let destinationCanonical: string;
+    try {
+      sourceCanonical = await this.canonicalizeDirectory(sourceDirectory);
+    } catch {
+      sourceCanonical = sourceDirectory;
+    }
+    try {
+      destinationCanonical = await this.canonicalizeDirectory(destinationDirectory);
+    } catch {
+      destinationCanonical = destinationDirectory;
+    }
+
+    return await this.withLeaseMutation(async () => {
+      for (const lease of this.worktreeLeases.values()) {
+        if (isInsideOrSameDirectory(lease.canonicalDirectory, destinationCanonical)
+          || isInsideOrSameDirectory(destinationCanonical, lease.canonicalDirectory)
+          || isInsideOrSameDirectory(lease.canonicalDirectory, sourceCanonical)
+          || isInsideOrSameDirectory(sourceCanonical, lease.canonicalDirectory)) {
+          throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', { leaseId: lease.leaseId, directory: lease.canonicalDirectory });
+        }
+      }
+      for (const [leaseId, pending] of this.pendingWorktreeLeaseAcquires) {
+        if (isInsideOrSameDirectory(pending.directory, destinationCanonical)
+          || isInsideOrSameDirectory(destinationCanonical, pending.directory)
+          || isInsideOrSameDirectory(pending.directory, sourceCanonical)
+          || isInsideOrSameDirectory(sourceCanonical, pending.directory)) {
+          throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', { leaseId, directory: pending.directory });
+        }
+      }
+      const existing = this.relocationFences.get(sessionId);
+      if (existing) {
+        throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', { sessionId });
+      }
+
+      const fence: RelocationFence = { sessionId, sourceCanonical, destinationCanonical };
+      this.relocationFences.set(sessionId, fence);
+
+      let released = false;
+      return {
+        release: async () => {
+          if (released) return;
+          released = true;
+          await this.withLeaseMutation(async () => {
+            if (this.relocationFences.get(sessionId) === fence) {
+              this.relocationFences.delete(sessionId);
+            }
+          });
+        },
+      };
     });
   }
 
@@ -679,6 +758,7 @@ export class WorkerRegistry {
     clearInterval(this.reapTimer);
     this.closing = true;
     this.worktreeLeases.clear();
+    this.relocationFences.clear();
     await Promise.all([...this.workerEntries.values()].map(entry => this.stopEntry(entry)));
     await Promise.all(this.mutations.values());
   }

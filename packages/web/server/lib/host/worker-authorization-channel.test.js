@@ -54,6 +54,25 @@ describe('private Host action authorization', () => {
     test.channel.handleMessage(test.child, test.request);
     expect(await test.reply).toMatchObject({ result: { ok: false, code: 'UNAUTHORIZED', status: 403 } });
   });
+  it('preserves canonical failure codes and detail message in worker action result', async () => {
+    const test = await scenario(async () => ({
+      ok: false,
+      code: 'METADATA_CONFLICT',
+      status: 409,
+      detail: 'Project note changed; reload before saving',
+    }));
+    test.channel.handleMessage(test.child, test.request);
+    expect(await test.reply).toEqual({
+      type: 'worker.action.result',
+      requestId: 'request',
+      result: {
+        ok: false,
+        code: 'METADATA_CONFLICT',
+        status: 409,
+        detail: 'Project note changed; reload before saving',
+      },
+    });
+  });
   it.each(['cancel', 'disconnect'])('aborts the actual pending capability on %s without writing or returning stale success', async kind => {
     const entered = Promise.withResolvers(); const release = Promise.withResolvers(); const ended = Promise.withResolvers();
     const test = await scenario(async ({ signal, root }) => {

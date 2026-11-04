@@ -85,7 +85,7 @@ export const SubagentSchema = z.strictObject({
 export type Subagent = z.infer<typeof SubagentSchema>;
 export const SessionCreateRequestSchema = z.strictObject({
   projectId: EntityIdSchema, workspaceId: EntityIdSchema, options: CapturedSendOptionsSchema,
-  metadata: SessionMetadataSchema.optional(),
+  metadata: SessionMetadataSchema.optional(), parentSessionId: EntityIdSchema.optional(),
 });
 export type SessionCreateRequest = z.infer<typeof SessionCreateRequestSchema>;
 export const SessionCreateAckSchema = z.strictObject({ session: SessionSchema });

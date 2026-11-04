@@ -98,6 +98,7 @@ describe('session schemas', () => {
     const removed = { sessionId: id, deletedSessionIds: [id, 'ses_02'] };
     const subagent = { subagentId: 'sub_01', parentSessionId: id, childSessionId: 'ses_02', role: 'worker', status: 'completed' };
     expect(SessionCreateRequestSchema.parse(create)).toEqual(create);
+    expect(SessionCreateRequestSchema.parse({ ...create, parentSessionId: 'ses_parent' })).toEqual({ ...create, parentSessionId: 'ses_parent' });
     expect(SessionCreateAckSchema.parse(created)).toEqual(created);
     expect(SessionDeleteRequestSchema.parse(remove)).toEqual(remove);
     expect(SessionDeleteAckSchema.parse(removed)).toEqual(removed);

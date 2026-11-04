@@ -53,6 +53,7 @@ type GlobalSessionsState = {
   hasLoaded: boolean;
   managedChatsHydrated: boolean;
   status: GlobalSessionsStatus;
+  discoveryErrors: ReadonlyMap<string, string>;
   /** Re-read the persisted managed-chats snapshot after the chats root is
       warm; retain newer mutations and stop after an authoritative load. */
   rehydrateManagedChatSessions: () => void;
@@ -387,6 +388,7 @@ const applySnapshot = (
   /** False for a partial page merged mid-load: the lists are incomplete, so
       they must not claim the authority `hasLoaded` grants. */
   markLoaded = status === 'ready',
+  discoveryErrors = state.discoveryErrors,
 ): Partial<GlobalSessionsState> | GlobalSessionsState => {
   activeSessions = activeSessions.map((session) => {
     const previous = state.entityById.get(session.sessionId);
@@ -424,6 +426,7 @@ const applySnapshot = (
     && nextReviewTransferMap === state.reviewTransferBySessionId
     && (state.hasLoaded || !markLoaded)
     && state.status === status
+    && state.discoveryErrors === discoveryErrors
   ) {
     return state;
   }
@@ -437,6 +440,7 @@ const applySnapshot = (
     reviewTransferBySessionId: nextReviewTransferMap,
     hasLoaded: markLoaded ? true : state.hasLoaded,
     status,
+    discoveryErrors,
   };
 };
 
@@ -663,6 +667,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
   hasLoaded: false,
   managedChatsHydrated: false,
   status: 'idle',
+  discoveryErrors: new Map(),
 
   applySnapshot: (activeSessions, archivedSessions, status = 'ready') => {
     // An authoritative snapshot may carry newer `updated` stamps for sessions
@@ -702,6 +707,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
       hasLoaded: false,
       managedChatsHydrated: false,
       status: 'idle',
+      discoveryErrors: new Map(),
     });
   },
 
@@ -741,8 +747,12 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
             ...retained,
           ]);
           const reconciled = overlayMutationsSince(state, active, archived, baselineRevision);
-          const complete = Object.keys(result.errors).length === 0 && children.failedParents.size === 0;
-          return applySnapshot(state, reconciled.activeSessions, reconciled.archivedSessions, complete ? 'ready' : 'error', complete);
+          const newErrors = new Map<string, string>(Object.entries(result.errors));
+          for (const parentId of children.failedParents) newErrors.set(parentId, 'SERVICE_UNAVAILABLE');
+          // Scoped discovery errors degrade only the specific failing workspace(s) via discoveryErrors,
+          // rather than poisoning the entire global store status to 'error'. Global status stays 'ready'
+          // and markLoaded is true so healthy workspaces remain ready.
+          return applySnapshot(state, reconciled.activeSessions, reconciled.archivedSessions, 'ready', true, newErrors);
         });
         const committed = get();
         raiseSessionOrderingBaselines(committed.activeSessions);

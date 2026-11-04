@@ -105,7 +105,7 @@ session cannot keep writing.
 
 - The Host binds an action request to the session scope it captured at worker
   start. A scope that no longer matches the live session is refused
-  (`SCOPE_MISMATCH`), so a stale worker cannot act on another project.
+  (`UNAUTHORIZED`), so a stale worker cannot act on another project.
 - Inputs map to a fixed action allowlist per tool. There is no arbitrary CLI,
   shell, route, or URL forwarding.
 - Session/worktree deletion and project-path registration are not exposed.

@@ -190,3 +190,21 @@ test('a subsession archived while its parent stays active is listed under the pa
   expect(document.querySelector('[aria-label="Restore Fix capture"]')).not.toBeNull();
   expect(document.querySelector('[aria-label="Restore Old child"]')).toBeNull();
 });
+test('renders discovery error banner with retry button on partial discovery error, while listing healthy archived sessions', async () => {
+  useGlobalSessionsStore.setState({
+    archivedSessions: [session('ses_healthy', 'Healthy archived chat', 10)],
+    activeSessions: [],
+    status: 'ready',
+    discoveryErrors: new Map([['wsp_failing', 'METADATA_READ_FAILED']]),
+  });
+  await act(async () => root.render(<I18nProvider><ArchiveView /></I18nProvider>));
+  const banner = document.querySelector('.bg-destructive\\/10');
+  expect(banner).not.toBeNull();
+  expect(banner?.textContent).toContain('Could not refresh sessions.');
+  const retryBtn = banner?.querySelector('button');
+  expect(retryBtn).not.toBeNull();
+  expect(retryBtn?.textContent).toBe('Try again');
+
+  const titles = [...document.querySelectorAll('[role="button"] > span:first-child')].map((row) => row.textContent);
+  expect(titles).toContain('Healthy archived chat');
+});

@@ -130,6 +130,19 @@ const archiveSpaceId = (workspaceId) => /^archive_([a-f0-9]{12})$/.exec(workspac
         else errors[workspaceId] = 'METADATA_READ_FAILED';
       } catch (error) { errors[workspaceId] = failureCode(error); }
     }
+    if (typeof store.listArchivedWorktreeWorkspaces === 'function') {
+      const archivedWorkspaces = await store.listArchivedWorktreeWorkspaces();
+      for (const workspaceId of archivedWorkspaces) {
+        try {
+          const scope = await store.getWorkspace(workspaceId);
+          if (scope) {
+            const allowed = await authorize(scope);
+            if (allowed) scopes.push(allowed);
+            else errors[workspaceId] = 'METADATA_READ_FAILED';
+          }
+        } catch (error) { errors[workspaceId] = failureCode(error); }
+      }
+    }
     return { scopes: [...new Map(scopes.map((scope) => [scope.workspaceId, scope])).values()], errors };
   };
   const authorize = async (scope, claimId) => {
@@ -152,6 +165,14 @@ const archiveSpaceId = (workspaceId) => /^archive_([a-f0-9]{12})$/.exec(workspac
       if (directory !== scope.cwd || scope.agentDirectory !== selectedAgentDirectory) return null;
       await store.checkWorktreeScope(scope.cwd, claimId);
       return { ...scope, displayPath: '.' };
+    }
+    if (typeof store.isWorktreeArchived === 'function' && (await store.isWorktreeArchived(scope.workspaceId))) {
+      const project = projects.find((item) => item.id === scope.hostProjectId);
+      if (!project) return null;
+      const projectDirectory = await validateDirectory(project.path);
+      if (projectDirectory !== scope.projectDirectory || scope.agentDirectory !== selectedAgentDirectory) return null;
+      await store.checkWorktreeScope(scope.cwd, claimId);
+      return { ...scope, displayPath: displayPath(scope) };
     }
     const project = projects.find((item) => item.id === scope.hostProjectId);
     if (!project) return null;

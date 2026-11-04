@@ -118,20 +118,34 @@ const createCanonicalSessionService = (dependencies) => {
   const create = async (payload = {}) => {
     const parsed = SessionCreateRequestSchema.safeParse(payload);
     if (!parsed.success) throw new OpenChamberControlError('Session create request is invalid', 400);
-    const { projectId, workspaceId, metadata: requestedMetadata } = parsed.data;
+    const { projectId, workspaceId, metadata: requestedMetadata, parentSessionId } = parsed.data;
     const options = CapturedSendOptionsSchema.parse(parsed.data.options);
     const workspace = await resolveWorkspaceScope(workspaceId);
     if (!workspace || workspace.projectId !== projectId) throw new OpenChamberControlError('Workspace does not belong to project', 404);
     assertWritableScope(workspace);
+    if (parentSessionId !== undefined) {
+      const parentScope = await resolveSessionScope(parentSessionId);
+      if (!parentScope) throw new OpenChamberControlError('Parent session was not found', 404);
+      if (parentScope.workspaceId !== workspaceId || parentScope.projectId !== projectId) {
+        throw new OpenChamberControlError('Parent session is outside the authorized workspace and project', 403);
+      }
+      assertWritableScope(parentScope);
+    }
     const rootSessionId = randomUUID();
     const workspaceDisplay = z.object({ displayPath: z.string().optional(), env: z.record(z.string(), z.string()).optional() }).passthrough().parse(workspace);
     const displayPath = workspaceDisplay.displayPath && !workspaceDisplay.displayPath.startsWith('/') && !workspaceDisplay.displayPath.startsWith('\\') && !/^[A-Za-z]:/.test(workspaceDisplay.displayPath) ? workspaceDisplay.displayPath : 'workspace';
-    const sessionBootstrap = { rootSessionId, projectId, workspaceId, cwd: workspace.cwd, agentDirectory: workspace.agentDirectory, agentDirectoryId: workspace.agentDirectoryId, displayPath, options };
+    const sessionBootstrap = {
+      rootSessionId, projectId, workspaceId,
+      cwd: workspace.cwd, agentDirectory: workspace.agentDirectory, agentDirectoryId: workspace.agentDirectoryId,
+      displayPath, options,
+    };
+    if (parentSessionId !== undefined) sessionBootstrap.parentSessionId = parentSessionId;
     if (workspaceDisplay.env) sessionBootstrap.env = workspaceDisplay.env;
     const session = await withSessionAdmission(workspace, 'create', rootSessionId, async (settled) => {
       const body = await request('/internal/sessions', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(sessionBootstrap) });
       const runtime = RuntimeSessionSchema.parse(body);
       if (runtime.projectId !== projectId || runtime.workspaceId !== workspaceId || runtime.rootSessionId !== rootSessionId) throw new OpenChamberControlError('Agent service returned an out-of-scope session', 502);
+      if (parentSessionId !== undefined && runtime.parentSessionId !== parentSessionId) throw new OpenChamberControlError('Agent service returned an out-of-scope parent linkage', 502);
       if (!await registerSessionScope(runtime)) throw new OpenChamberControlError('Session scope registration failed', 500);
       settled();
       return runtime;
@@ -597,8 +611,29 @@ const createCanonicalSessionService = (dependencies) => {
       return ack;
     } finally { agentScopeStore.releaseSessionDelete(reservation); }
   };
+  const listArchivedWorktreeSessions = async ({ projectDirectory, archiveId }) => {
+    if (!agentScopeStore) throw new OpenChamberControlError('Host archive authority is unavailable', 503);
+    const resolveProject = dependencies.resolveWorkspaceDirectory;
+    const project = resolveProject ? await resolveProject(projectDirectory) : null;
+    if (!project) throw new OpenChamberControlError('Project directory is unavailable', 404);
+    const binding = await agentScopeStore.getWorktreeArchive({ hostProjectId: project.hostProjectId, archiveId });
+    if (!binding) return { sessions: [] };
+    const sessions = await Promise.all(binding.sessions.map(async (item) => {
+      const metadataState = await sessionMetadataStore.getState(item.sessionId);
+      const archiveState = await archiveStore.getState(item.sessionId);
+      return {
+        sessionId: item.sessionId,
+        rootSessionId: item.rootSessionId,
+        workspaceId: item.workspaceId,
+        metadata: metadataState?.metadata ?? null,
+        archivedAt: archiveState?.archivedAt ?? null,
+        progress: item.progress,
+      };
+    }));
+    return { sessions };
+  };
   const unloadWorker = async (id) => { try { await request(`/internal/workers/${encodeURIComponent(id)}`, { method: 'DELETE' }); } catch {} };
-  return { create, send, steer, followUp, fork, selectBranch, relocate, delete: remove, open, history, list, control, resolveDirectory: async (payload = {}) => { const scope = await resolveWorkspaceScope(payload.workspaceId); if (!scope) throw new OpenChamberControlError('Workspace was not found', 404); return scope.cwd; }, archive, unarchive, getMetadata, setMetadata, setSessionLinks, sessionMetadataStore, archiveStore, unloadWorker, captureWorktreeArchive, prepareWorktreeArchiveRemoval, finishWorktreeArchive, rollbackWorktreeArchive, discardWorktreeArchive, resolveWorktreeArchivePinnedTarget, prepareWorktreeArchiveRestore, pinWorktreeArchiveRestore, markWorktreeArchiveRestoreAttempted, finishWorktreeArchiveRestore, finalizeWorktreeArchiveRestore, releaseWorktreeArchiveRestore, cleanupWorktreeArchiveRestore, prepareWorktreeArchiveDelete, claimWorktreeArchiveDelete, deleteWorktreeArchiveSessions, finalizeWorktreeArchiveDelete, resolveAdmissionRecovery: (owner) => owner.recoveringRemoval, markWorktreeArchiveDeleteCasCompleted: (owner, revision) => agentScopeStore.markWorktreeArchiveDeleteCasCompleted(owner.key, owner.claimId, revision), markWorktreeArchiveRestoreCasStarted: (owner, revision) => agentScopeStore.markWorktreeArchiveRestoreCasStarted(owner.key, owner.claimId, revision), markWorktreeArchiveRestoreCasCompleted: (owner, revision) => agentScopeStore.markWorktreeArchiveRestoreCasCompleted(owner.key, owner.claimId, revision) };
+  return { create, send, steer, followUp, fork, selectBranch, relocate, delete: remove, open, history, list, listArchivedWorktreeSessions, control, resolveDirectory: async (payload = {}) => { const scope = await resolveWorkspaceScope(payload.workspaceId); if (!scope) throw new OpenChamberControlError('Workspace was not found', 404); return scope.cwd; }, archive, unarchive, getMetadata, setMetadata, setSessionLinks, sessionMetadataStore, archiveStore, unloadWorker, captureWorktreeArchive, prepareWorktreeArchiveRemoval, finishWorktreeArchive, rollbackWorktreeArchive, discardWorktreeArchive, resolveWorktreeArchivePinnedTarget, prepareWorktreeArchiveRestore, pinWorktreeArchiveRestore, markWorktreeArchiveRestoreAttempted, finishWorktreeArchiveRestore, finalizeWorktreeArchiveRestore, releaseWorktreeArchiveRestore, cleanupWorktreeArchiveRestore, prepareWorktreeArchiveDelete, claimWorktreeArchiveDelete, deleteWorktreeArchiveSessions, finalizeWorktreeArchiveDelete, resolveAdmissionRecovery: (owner) => owner.recoveringRemoval, markWorktreeArchiveDeleteCasCompleted: (owner, revision) => agentScopeStore.markWorktreeArchiveDeleteCasCompleted(owner.key, owner.claimId, revision), markWorktreeArchiveRestoreCasStarted: (owner, revision) => agentScopeStore.markWorktreeArchiveRestoreCasStarted(owner.key, owner.claimId, revision), markWorktreeArchiveRestoreCasCompleted: (owner, revision) => agentScopeStore.markWorktreeArchiveRestoreCasCompleted(owner.key, owner.claimId, revision) };
 };
 
 
@@ -712,6 +747,18 @@ export const registerOpenChamberSessionRoutes = (app, dependencies) => {
   app.post('/api/openchamber/sessions/:sessionId/control', express.json({ limit: '1mb' }), async (req, res) => {
     try { return res.json(await service.control(req.params.sessionId, req.body || {})); }
     catch (error) { return sendServiceError(res, error, 'Failed to control session'); }
+  });
+  app.get('/api/openchamber/worktrees/archives/sessions', async (req, res) => {
+    try {
+      const projectDirectory = req.query.projectDirectory;
+      const archiveId = req.query.archiveId;
+      if (typeof projectDirectory !== 'string' || typeof archiveId !== 'string') {
+        return res.status(400).json({ error: 'projectDirectory and archiveId are required' });
+      }
+      return res.json(await service.listArchivedWorktreeSessions({ projectDirectory, archiveId }));
+    } catch (error) {
+      return sendServiceError(res, error, 'Failed to list archived worktree sessions');
+    }
   });
 };
 export const registerCanonicalSessionRoutes = (router, service) => {

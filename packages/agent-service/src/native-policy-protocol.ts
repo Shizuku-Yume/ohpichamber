@@ -43,6 +43,6 @@ export const HostActionRequestSchema = z.discriminatedUnion('toolName', [
 export type HostActionRequest = z.infer<typeof HostActionRequestSchema>;
 export const HostActionResultSchema = z.discriminatedUnion('ok', [
   z.strictObject({ ok: z.literal(true), value: JsonValueSchema }),
-  z.strictObject({ ok: z.literal(false), code: ProblemCodeSchema, status: z.number().int().min(400).max(599) }),
+  z.strictObject({ ok: z.literal(false), code: ProblemCodeSchema, status: z.number().int().min(400).max(599), detail: z.string().optional() }),
 ]);
 export type HostActionResult = z.infer<typeof HostActionResultSchema>;

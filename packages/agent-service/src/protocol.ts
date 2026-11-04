@@ -21,6 +21,7 @@ const WorkerApprovalPolicySchema = z.strictObject({
 export type WorkerApprovalPolicy = z.infer<typeof WorkerApprovalPolicySchema>;
 export const WorkerBootstrapSchema = z.strictObject({
   rootSessionId: EntityIdSchema, projectId: EntityIdSchema, workspaceId: EntityIdSchema,
+  parentSessionId: EntityIdSchema.optional(),
   cwd: PrivatePathSchema, agentDirectory: PrivatePathSchema,
   sessionsDirectory: PrivatePathSchema.optional(), sessionFile: PrivatePathSchema.optional(),
   mcpConfigPath: PrivatePathSchema.optional(), options: CapturedSendOptionsSchema.optional(), env: z.record(z.string(), z.string()).optional(),

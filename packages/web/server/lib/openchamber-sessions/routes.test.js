@@ -205,6 +205,63 @@ describe('canonical session route contracts', () => {
       expect(broadcastGlobalUiEvent).not.toHaveBeenCalled();
     });
   });
+
+  describe('session create with parent link', () => {
+    it('authorizes parent session in the same workspace and sets parentSessionId', async () => {
+      const capturedBootstrap = [];
+      const dir = path.join(routeFixtureDataDir, 'ws_1');
+      fs.mkdirSync(dir, { recursive: true });
+      await routeFixture.agentScopeStore.ensureWorkspace({
+        hostProjectId: 'proj_1', projectId: 'proj_1', workspaceId: 'ws_1',
+        projectDirectory: dir, workspaceDirectory: dir, agentDirectory: dir, name: 'Project',
+      });
+      const service = {
+        request: vi.fn(async (path, init) => {
+          if (path === '/internal/sessions') {
+            const body = JSON.parse(init.body);
+            capturedBootstrap.push(body);
+            return Response.json(runtimeSession({ sessionId: body.rootSessionId, rootSessionId: body.rootSessionId, projectId: body.projectId, workspaceId: body.workspaceId, parentSessionId: body.parentSessionId }));
+          }
+          return Response.json({});
+        }),
+      };
+      const { app } = createApp({
+        routes,
+        service,
+        agentScopeStore: routeFixture.agentScopeStore,
+        resolveSessionScope: async (id) => id === 'ses_parent' ? validScope('ses_parent') : null,
+      });
+      const response = await request(app)
+        .post('/api/openchamber/sessions')
+        .send({ projectId: 'proj_1', workspaceId: 'ws_1', options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null }, parentSessionId: 'ses_parent' })
+        .expect(200);
+
+      expect(response.body.session).toMatchObject({ parentSessionId: 'ses_parent', workspaceId: 'ws_1' });
+      expect(capturedBootstrap[0]).toMatchObject({ parentSessionId: 'ses_parent', workspaceId: 'ws_1' });
+    });
+
+    it('rejects session create when parent session is missing with 404', async () => {
+      const { app } = createApp({
+        routes,
+        resolveSessionScope: async () => null,
+      });
+      await request(app)
+        .post('/api/openchamber/sessions')
+        .send({ projectId: 'proj_1', workspaceId: 'ws_1', options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null }, parentSessionId: 'ses_missing' })
+        .expect(404);
+    });
+
+    it('rejects session create when parent belongs to another workspace with 403', async () => {
+      const { app } = createApp({
+        routes,
+        resolveSessionScope: async () => ({ ...validScope('ses_foreign'), workspaceId: 'ws_foreign' }),
+      });
+      await request(app)
+        .post('/api/openchamber/sessions')
+        .send({ projectId: 'proj_1', workspaceId: 'ws_1', options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null }, parentSessionId: 'ses_foreign' })
+        .expect(403);
+    });
+  });
 });
 
 describe('canonical session list persistence', () => {
@@ -264,6 +321,61 @@ describe('canonical session list persistence', () => {
       expect(listed.errors).toEqual({ corrupt: 'METADATA_CORRUPT' });
     } finally {
       connection.close();
+      await state.close();
+      fs.rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
+
+  it('lists archived worktree sessions via listArchivedWorktreeSessions endpoint', async () => {
+    const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'session-archive-wt-'));
+    const state = createHostSessionState({ dataDir });
+    try {
+      await state.initialize();
+      const directory = path.dirname(state.databasePath);
+      const anchor = await state.agentScopeStore.ensureWorkspace({
+        hostProjectId: 'project', projectId: 'project', workspaceId: 'ws_anchor',
+        projectDirectory: directory, workspaceDirectory: directory, agentDirectory: directory, name: 'Project',
+      });
+      await state.agentScopeStore.bindSession({
+        sessionId: 'ses_archived', rootSessionId: 'ses_archived', workspaceId: anchor.workspaceId, agentDirectoryId: anchor.agentDirectoryId,
+      });
+      await state.archiveStore.archive(['ses_archived'], 1700);
+      await state.sessionMetadataStore.setSessionMetadata('ses_archived', { title: 'Archived worktree task' });
+      const binding = await state.agentScopeStore.createWorktreeArchive({
+        hostProjectId: 'project', archiveId: 'arc_1', archiveRef: 'refs/openchamber/archive/arc_1',
+        snapshotCommit: 'a'.repeat(40), anchorWorkspaceId: anchor.workspaceId, claimId: 'claim_1',
+        claimGeneration: 'gen_1', branchName: 'feature', branchOid: null,
+      });
+      await state.agentScopeStore.archiveWorktreeSessions({ hostProjectId: 'project', archiveId: 'arc_1' }, 'claim_1', 1700);
+      await state.agentScopeStore.setWorktreeArchivePhase({ hostProjectId: 'project', archiveId: 'arc_1' }, 'claim_1', 2, 'removal_pending');
+      await state.agentScopeStore.finishWorktreeArchive({ hostProjectId: 'project', archiveId: 'arc_1' }, 'claim_1');
+
+      const { createOpenChamberSessionService } = await import('./routes.js');
+      const service = createOpenChamberSessionService({
+        service: { request: async () => Response.json({ items: [], errors: [] }) },
+        agentScopeStore: state.agentScopeStore,
+        resolveWorkspaceDirectory: async (dir) => (dir === directory ? { hostProjectId: 'project', projectId: 'project' } : null),
+        resolveWorkspaceScope: async () => anchor,
+        resolveSessionScope: async (id) => validScope(id),
+        resolveHostSessionScope: async (id) => validScope(id),
+        registerSessionScope: async () => true,
+        resolveAttachments: async () => [],
+        capturePrompt: async (_scope, body) => body,
+        beforeDispatch: async () => {},
+        onPromptAccepted: async () => {},
+        sessionMetadataStore: state.sessionMetadataStore,
+        archiveStore: state.archiveStore,
+        directCommandAdmissionStore: state.directCommandAdmissionStore,
+      });
+
+      const result = await service.listArchivedWorktreeSessions({ projectDirectory: directory, archiveId: 'arc_1' });
+      expect(result.sessions).toHaveLength(1);
+      expect(result.sessions[0]).toMatchObject({
+        sessionId: 'ses_archived',
+        metadata: { title: 'Archived worktree task' },
+        archivedAt: 1700,
+      });
+    } finally {
       await state.close();
       fs.rmSync(dataDir, { recursive: true, force: true });
     }

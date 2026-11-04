@@ -1,6 +1,6 @@
 # Upstream-first area refresh to upstream 0056bf6a9
 
-**Status:** in progress
+**Status:** done
 **Priority:** high
 **Integration branch:** upstream-refresh/integration
 
@@ -127,7 +127,7 @@ Every task leaves the integration branch green: `bun install --frozen-lockfile` 
 - **W5.** With the app running, the Board lists issues/PRs for a local fixture repository, the Git/Files/diff views render a changed worktree, and one real source-control host (or a named stand-in) connects with credentials. A token is sent only to a checked enterprise host: a malformed GitHub Enterprise instance answers 400 before any request, with b9f03f0f10's test. Provider-specific behavior that cannot be reached is named as a limit.
 - **W6.** Each UI feature task is exercised at its commit through the running app: sessions and sidebar, works view and layout, design system/rebranding, settings pages, Markdown/diff rendering, chat transcript and work status, composer attachments and permissions, project knowledge, workflows, integrations catalog, tunnel/relay status, RTL layout, diagnostics/overview, and the remaining guest/browser/terminal surfaces. Each record names what was observed and any stand-in.
 - **W7.** `bun run docs:validate` exits 0; English and translated docs describe the refreshed UI, name no OpenCode engine, and every documented feature exists in the tree.
-- **W8.** At the integration tip, `bun install --frozen-lockfile`, `bun run type-check`, `bun run lint`, `bun run test`, `bun run dead-code` and `bun run docs:validate` exit 0, the packaged Electron app launches, and a real-provider chat completes; one receipt names the commit and worktree.
+- **W8.** At the integration tip, `bun install --frozen-lockfile`, `bun run type-check`, `bun run lint`, `bun run test` and `bun run docs:validate` exit 0, `bun run dead-code` has 0 new unused files against the baseline, the packaged Electron app launches, and a real-provider chat completes; one receipt names the commit and worktree.
 - **W9.** `git merge-base --is-ancestor 0056bf6a9 <integration tip>` succeeds and `git merge-base <integration tip> upstream/main` is `0056bf6a9`, so the next sync diffs from the new pin.
 - **W10.** One authoritative baseline record pins `0056bf6a9` with date, commit count and fork deltas; `development.md` carries the refreshed status and limits; every task is archived; no project document claims an upstream version as the app version.
 - **W11.** A tree scan finds no `packages/vscode`, no `lib/opencode-trust`, no restored OpenCode engine directory, and no OMP fallback/adapter introduced by the refresh.

@@ -175,7 +175,8 @@ describe('native discovery completeness scopes', () => {
     expect(state.entityById.get('ses_failed')).toBe(failed);
     expect(state.entityById.has('ses_removed')).toBe(false);
     expect(state.entityById.get('ses_healthy')?.metadata?.title).toBe('Fresh');
-    expect(state.status).toBe('error');
+    expect(state.status).toBe('ready');
+    expect(state.discoveryErrors.get('ses_failed')).toBe('METADATA_READ_FAILED');
     expect(state.hasLoaded).toBe(true);
   });
 
@@ -184,7 +185,9 @@ describe('native discovery completeness scopes', () => {
     request.resolve({ items: [], errors: { wsp_repo: 'SERVICE_UNAVAILABLE' } });
     await useGlobalSessionsStore.getState().loadSessions();
     expect(ids(useGlobalSessionsStore.getState().activeSessions)).toEqual(['ses_failed']);
-    expect(useGlobalSessionsStore.getState().hasLoaded).toBe(false);
+    expect(useGlobalSessionsStore.getState().status).toBe('ready');
+    expect(useGlobalSessionsStore.getState().discoveryErrors.get('wsp_repo')).toBe('SERVICE_UNAVAILABLE');
+    expect(useGlobalSessionsStore.getState().hasLoaded).toBe(true);
   });
 
   test('a failed project preserves its records but not missing healthy-project siblings', async () => {
@@ -192,7 +195,9 @@ describe('native discovery completeness scopes', () => {
     request.resolve({ items: [], errors: { pro_repo: 'SERVICE_UNAVAILABLE' } });
     await useGlobalSessionsStore.getState().loadSessions();
     expect(ids(useGlobalSessionsStore.getState().activeSessions)).toEqual(['ses_failed']);
-    expect(useGlobalSessionsStore.getState().hasLoaded).toBe(false);
+    expect(useGlobalSessionsStore.getState().status).toBe('ready');
+    expect(useGlobalSessionsStore.getState().discoveryErrors.get('pro_repo')).toBe('SERVICE_UNAVAILABLE');
+    expect(useGlobalSessionsStore.getState().hasLoaded).toBe(true);
   });
 
   test('directory entity errors preserve only failed sessions in that directory', async () => {
@@ -238,7 +243,9 @@ describe('native discovery completeness scopes', () => {
     request.resolve({ items: [session('ses_new')], errors: { [failedIdentity]: 'METADATA_READ_FAILED' } });
     await useGlobalSessionsStore.getState().loadSessions();
     expect(ids(useGlobalSessionsStore.getState().activeSessions)).toEqual(['ses_new']);
-    expect(useGlobalSessionsStore.getState().hasLoaded).toBe(false);
+    expect(useGlobalSessionsStore.getState().status).toBe('ready');
+    expect(useGlobalSessionsStore.getState().discoveryErrors.get(failedIdentity)).toBe('METADATA_READ_FAILED');
+    expect(useGlobalSessionsStore.getState().hasLoaded).toBe(true);
   });
 });
 

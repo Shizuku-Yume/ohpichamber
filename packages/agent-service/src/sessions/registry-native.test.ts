@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { watch } from 'node:fs';
+import { existsSync, watch } from 'node:fs';
 import { lstat, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative } from 'node:path';
@@ -633,5 +633,111 @@ test('registry prompt blocks idle sessions during a pending continuation and adm
       await expect(harness.sessions.prompt(rootSessionId, operation)).resolves.toMatchObject({ runId: 'continuation-prompt' });
       expect(requests).toBe(1);
     } finally { harness.workers.request = originalRequest; }
+  } finally { await harness.close(); }
+}, 60000);
+test('prepareRelocation is refused before moving session files when destination worktree is leased', async () => {
+  const harness = await fixture();
+  try {
+    await harness.workers.acquireWorktreeLease('lease-dest-1', harness.destination.cwd);
+    let admitCalled = false;
+    await expect(harness.sessions.prepareRelocation(rootSessionId, {
+      transactionId: 'lease-refusal-before-move',
+      sourceWorkspaceId: harness.source.workspaceId,
+      destination: harness.destination,
+    }, async (input, launch) => {
+      admitCalled = true;
+      return launch(input);
+    })).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });
+
+    expect(admitCalled).toBe(false);
+    expect(existsSync(harness.destinationFile)).toBe(false);
+    expect(existsSync(harness.source.sessionFile)).toBe(true);
+    expect(harness.sessions.relocation(rootSessionId).relocation).toBeNull();
+  } finally { await harness.close(); }
+}, 60000);
+
+test('worktree archive lease cannot acquire destination or source while relocation is in flight', async () => {
+  const harness = await fixture();
+  try {
+    const moveStarted = Promise.withResolvers<void>();
+    const allowMove = Promise.withResolvers<void>();
+    let leaseError: Error | undefined;
+
+    const relocationPromise = harness.sessions.prepareRelocation(rootSessionId, {
+      transactionId: 'lease-race-during-move',
+      sourceWorkspaceId: harness.source.workspaceId,
+      destination: harness.destination,
+    }, async (input, launch) => {
+      moveStarted.resolve();
+      await allowMove.promise;
+      return launch(input);
+    });
+
+    await moveStarted.promise;
+    // Relocation fence is active; lease acquire against destination must be rejected with 409
+    try {
+      await harness.workers.acquireWorktreeLease('lease-racing', harness.destination.cwd);
+    } catch (error) {
+      leaseError = error as Error;
+    }
+    expect(leaseError).toMatchObject({ status: 409, code: 'COMMAND_IN_FLIGHT' });
+
+    allowMove.resolve();
+    const prepared = await relocationPromise;
+    expect(prepared.session).toMatchObject({ sessionId: rootSessionId, workspaceId: harness.destination.workspaceId });
+
+    // Once relocation finishes, the fence is released and lease can be acquired
+    const lease = await harness.workers.acquireWorktreeLease('lease-post-relocation', harness.destination.cwd);
+    expect(lease.leaseId).toBe('lease-post-relocation');
+    await harness.workers.releaseWorktreeLease('lease-post-relocation');
+  } finally { await harness.close(); }
+}, 60000);
+
+test('creates and persists child session with parentSessionId linkage across restart and listing', async () => {
+  const harness = await fixture();
+  try {
+    const childSessionId = 'retained-child-session';
+    const childManager = SessionManager.create(harness.source.cwd, harness.source.sessionsDirectory);
+    childManager.appendMessage({ role: 'user', content: 'Child prompt', timestamp: Date.now() });
+    await childManager.ensureOnDisk();
+    await childManager.flush();
+    const childFile = childManager.getSessionFile()!;
+    await childManager.close();
+
+    const childInput: WorkerBootstrap & { displayPath: string } = {
+      rootSessionId: childSessionId,
+      projectId: harness.source.projectId,
+      workspaceId: harness.source.workspaceId,
+      cwd: harness.source.cwd,
+      agentDirectory: harness.source.agentDirectory,
+      agentDirectoryId: harness.source.agentDirectoryId,
+      displayPath: 'source',
+      sessionFile: childFile,
+      sessionsDirectory: harness.source.sessionsDirectory,
+      parentSessionId: rootSessionId,
+      env: harness.source.env,
+    };
+    const opened = await harness.sessions.open(childInput);
+    expect(opened.parentSessionId).toBe(rootSessionId);
+    expect(harness.sessions.runtime(childSessionId).parentSessionId).toBe(rootSessionId);
+    expect(harness.sessions.journal(childSessionId).snapshot().session.parentSessionId).toBe(rootSessionId);
+
+    const listed = await harness.sessions.list(harness.source);
+    const childInList = listed.items.find(s => s.sessionId === childSessionId);
+    expect(childInList?.parentSessionId).toBe(rootSessionId);
+
+    await harness.restart();
+    const restored = harness.sessions.runtime(childSessionId);
+    expect(restored.parentSessionId).toBe(rootSessionId);
+    const restoredList = await harness.sessions.list(harness.source);
+    expect(restoredList.items.find(s => s.sessionId === childSessionId)?.parentSessionId).toBe(rootSessionId);
+
+    const inventory = await harness.sessions.archiveManifest();
+    const archivedChild = inventory.chats.find(c => c.id === childSessionId);
+    expect(archivedChild?.parentSessionId).toBe(rootSessionId);
+
+    const reopened = await harness.sessions.reopen({ ...childInput, parentSessionId: undefined });
+    expect(reopened.parentSessionId).toBe(rootSessionId);
+    expect(harness.sessions.runtime(childSessionId).parentSessionId).toBe(rootSessionId);
   } finally { await harness.close(); }
 }, 60000);

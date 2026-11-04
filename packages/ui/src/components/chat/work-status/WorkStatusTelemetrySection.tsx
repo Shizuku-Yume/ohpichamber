@@ -60,10 +60,15 @@ export const WorkStatusTelemetrySection: React.FC<Props> = ({ sessionId, directo
     { enabled: eligibleForStats },
   );
 
+  const turns = useDirectorySync(
+    React.useCallback((state) => (sessionId ? state.snapshot[sessionId]?.turns ?? null : null), [sessionId]),
+    directory ?? undefined,
+  );
+
   const computed = React.useMemo(() => {
     if (!eligibleForStats) return null;
-    return getLatestCompletedTurnStats(records);
-  }, [eligibleForStats, records]);
+    return getLatestCompletedTurnStats(records, turns);
+  }, [eligibleForStats, records, turns]);
 
   // Retain only one committed result, never message history or a global ID cache.
   const [retained, setRetained] = React.useState<{ scope: string; stats: CompletedTurnStats | null } | null>(null);

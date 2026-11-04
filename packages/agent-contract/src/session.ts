@@ -106,6 +106,7 @@ export const SessionCreateRequestSchema = z.strictObject({
   projectId: EntityIdSchema, workspaceId: EntityIdSchema, options: CapturedSendOptionsSchema,
   title: z.string().trim().min(1).optional(),
   metadata: SessionMetadataSchema.optional(),
+  parentSessionId: EntityIdSchema.optional(),
 });
 export type SessionCreateRequest = z.infer<typeof SessionCreateRequestSchema>;
 export const SessionCreateAckSchema = z.strictObject({ session: SessionSchema });

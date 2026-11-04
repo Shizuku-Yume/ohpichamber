@@ -115,7 +115,7 @@ Web and Electron can create, stream, abort, reload, and reopen a session through
 
 ## M4: OpenChamber orchestration features
 
-**Status (2026-10-23):** do not execute this list directly. Several features below are already wired to the canonical service; [post-M3 hardening](../specs/post-m3-hardening.md) task 25 re-plans M4 as per-feature verification after the OMP/OpenCode comparison audit.
+**Status (2026-11-04):** do not execute this list directly. M4 replanning is explicitly deferred per maintainer decision on 2026-11-04 (task 25 paused). Features already wired to the canonical service remain in place and will be re-planned into verification tasks in a dedicated milestone effort following the comparison audit.
 
 ### Work
 
@@ -139,7 +139,7 @@ Each feature has a focused behavior check covering normal completion, failure, r
 
 ## M5: release and retained surfaces
 
-**Status (2026-10-24):** re-planned by [M5: Release and retained surfaces](../specs/m5-release-surfaces.md). The surface spec owns the release matrix, runner/device requirements and checks; this section keeps the milestone order and the retained boundaries. Prerequisites owned elsewhere are `post-m3-hardening/13` (non-Linux process cleanup), `29` (six native leaves) and `38` (isolated-space runtime removal).
+**Status (2026-11-04):** re-planned and approved by [M5: Release and retained surfaces](../specs/m5-release-surfaces.md) and tasks `.workflow/tasks/m5-release-surfaces/01`-`09`. Task 26 is archived; the native leaf gate was resolved by task 29 accepting official registry leaves with SLSA provenance, unlocking the non-Linux release matrix while preserving unrun target runtime certification. Prerequisites `post-m3-hardening/13` and `38` are archived; surfaces can proceed as runner/device prerequisites resolve.
 
 ### Work
 

@@ -210,23 +210,35 @@ describe('OpenChamber control service canonical consumers', () => {
   it('enforces Host action scope and feature availability instead of forwarding untrusted requests', async () => {
     const { control } = createHarness();
 
-    await expect(control.invokeHostAction({ cwd: '/repo/app' }, {})).resolves.toEqual({ ok: false, code: 'INVALID_SCOPE', status: 400 });
+    await expect(control.invokeHostAction({ cwd: '/repo/app' }, {})).resolves.toEqual({ ok: false, code: 'INVALID_REQUEST', status: 400, detail: 'Invalid session scope' });
     await expect(control.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
       toolName: 'openchamber', action: 'session.status', sessionId: 'other-session', input: {},
-    })).resolves.toEqual({ ok: false, code: 'INVALID_REQUEST', status: 400 });
+    })).resolves.toEqual({ ok: false, code: 'INVALID_REQUEST', status: 400, detail: 'Invalid host action request' });
     await expect(control.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
       toolName: 'web', action: 'browser.open', sessionId: 'session-1', input: { url: 'https://example.com' },
-    })).resolves.toMatchObject({ ok: false, code: 'UNAVAILABLE', status: 503 });
+    })).resolves.toMatchObject({ ok: false, code: 'SERVICE_UNAVAILABLE', status: 503, detail: 'The in-app browser is not available on this server' });
     await expect(control.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
       toolName: 'openchamber', action: 'unsupported.action', sessionId: 'session-1', input: {},
-    })).resolves.toMatchObject({ ok: false, status: 400 });
+    })).resolves.toMatchObject({ ok: false, code: 'INVALID_REQUEST', status: 400 });
     const disabled = createHarness({ agentControlToolEnabled: false, agentWebToolEnabled: true, agentMemoryToolEnabled: true, agentNotifyToolEnabled: false }).control;
     await expect(disabled.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
       toolName: 'openchamber', action: 'session.status', sessionId: 'session-1', input: { sessionId: 'session-1' },
-    })).resolves.toEqual({ ok: false, code: 'FEATURE_DISABLED', status: 403 });
+    })).resolves.toEqual({ ok: false, code: 'UNAUTHORIZED', status: 403, detail: 'openchamber tool is disabled' });
     await expect(disabled.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
       toolName: 'notify', action: 'notify.send', sessionId: 'session-1', input: { title: 't' },
-    })).resolves.toEqual({ ok: false, code: 'FEATURE_DISABLED', status: 403 });
+    })).resolves.toEqual({ ok: false, code: 'UNAUTHORIZED', status: 403, detail: 'notify tool is disabled' });
+    const conflictHarness = createHarness(undefined, {
+      resolveProjectContextId: async () => 'project-1',
+      projectContextRuntime: {
+        updateNote: async () => { throw Object.assign(new Error('Project note changed; reload before saving'), { status: 409 }); },
+        readContext: async () => ({ notes: [{ id: 'n1', body: 'stale' }], todos: [], plans: [] }),
+        plansDirFor: () => '/repo/.plans',
+      },
+    }).control;
+    await expect(conflictHarness.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
+      toolName: 'openchamber_knowledge', action: 'knowledge.save', sessionId: 'session-1',
+      input: { kind: 'note', id: 'n1', body: 'new', expected: 'stale' },
+    })).resolves.toEqual({ ok: false, code: 'METADATA_CONFLICT', status: 409, detail: 'Project note changed; reload before saving' });
   });
 });
 

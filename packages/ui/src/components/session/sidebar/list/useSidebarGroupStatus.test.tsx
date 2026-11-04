@@ -5,9 +5,10 @@ import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { ChildStoreManager } from '@/sync/child-store';
 import { FilesystemError } from '@/lib/api/files-errors';
 import { installHookTestDom } from '../test-utils/testDom';
-import type { SessionGroup } from '../types';
+import type { SessionGroup, SessionNode } from '../types';
 import type { ProjectSection } from '../projects/sessionProjectRender';
-import { useSidebarGroupStatus } from './useSidebarGroupStatus';
+import { useSidebarGroupStatus, type SidebarGroupStatusResult } from './useSidebarGroupStatus';
+import { registerWorkspaceDirectory } from '@/stores/globalSessions';
 
 const sections: ProjectSection[] = [];
 const chatGroup: SessionGroup = {
@@ -216,6 +217,85 @@ test('directory active-list coverage cannot finish an archived group before the 
     expect(captured.current?.groupStatusByKey.get('project:archived')?.state).toBe('loading');
     await act(async () => useGlobalSessionsStore.getState().applySnapshot([], []));
     expect(captured.current?.groupStatusByKey.get('project:archived')?.state).toBe('ready');
+  } finally {
+    await act(async () => root.unmount());
+    manager.disposeAll();
+    dom.restore();
+  }
+});
+
+test('scoped discovery error degrades only the failing workspace while healthy groups remain ready', async () => {
+  const dom = installHookTestDom();
+  const root = createRoot(dom.container);
+  const manager = new ChildStoreManager();
+  manager.configure({ onBootstrap: () => undefined });
+  const multiWorktreeSections: ProjectSection[] = [{
+    project: projectSections[0].project,
+    groups: [
+      { ...projectGroup, id: 'healthy-wt', directory: '/project/healthy', folderScopes: [{ scopeKey: '/project/healthy', directory: '/project/healthy' }] },
+      { ...projectGroup, id: 'failing-wt', directory: '/project/failing', folderScopes: [{ scopeKey: '/project/failing', directory: '/project/failing' }] },
+    ],
+  }];
+  const captured = React.createRef<SidebarGroupStatusResult | null>();
+  const Harness = () => {
+    captured.current = useSidebarGroupStatus({ childStores: manager, sections: multiWorktreeSections, chatGroup: null, canGrantAccess: false });
+    return null;
+  };
+    registerWorkspaceDirectory('wsp_healthy', '/project/healthy');
+    registerWorkspaceDirectory('wsp_failing', '/project/failing');
+  try {
+    await act(async () => root.render(<Harness />));
+    await act(async () => {
+      useGlobalSessionsStore.setState({
+        hasLoaded: true,
+        status: 'ready',
+        discoveryErrors: new Map([['wsp_failing', 'METADATA_READ_FAILED']]),
+      });
+    });
+    expect(captured.current?.groupStatusByKey.get('project:healthy-wt')?.state).toBe('ready');
+    expect(captured.current?.groupStatusByKey.get('project:failing-wt')?.state).toBe('load-failed');
+  } finally {
+    await act(async () => root.unmount());
+    manager.disposeAll();
+    dom.restore();
+  }
+});
+test('scoped discovery error degrades group by exact session workspaceId even when directory is unregistered', async () => {
+  const dom = installHookTestDom();
+  const root = createRoot(dom.container);
+  const manager = new ChildStoreManager();
+  manager.configure({ onBootstrap: () => undefined });
+  const mockSession = (workspaceId: string): SessionNode => ({
+    session: {
+      sessionId: `ses_${workspaceId}`, workspaceId, projectId: 'project',
+      rootSessionId: `ses_${workspaceId}`, createdAt: 1, updatedAt: 1, epoch: 'e',
+      headSequence: '0', runtimeStatus: 'idle', activeRunId: null, displayPath: 'p',
+      metadata: { title: 'T' }, metadataRevision: '1', archiveRevision: '0',
+    },
+    children: [],
+    worktree: null,
+  });
+  const sectionsWithSession: ProjectSection[] = [{
+    project: projectSections[0].project,
+    groups: [
+      { ...projectGroup, id: 'exact-wt', directory: '/project/unregistered', folderScopes: [{ scopeKey: '/project/unregistered', directory: '/project/unregistered' }], sessions: [mockSession('wsp_exact_error')] },
+    ],
+  }];
+  const captured = React.createRef<SidebarGroupStatusResult | null>();
+  const Harness = () => {
+    captured.current = useSidebarGroupStatus({ childStores: manager, sections: sectionsWithSession, chatGroup: null, canGrantAccess: false });
+    return null;
+  };
+  try {
+    await act(async () => root.render(<Harness />));
+    await act(async () => {
+      useGlobalSessionsStore.setState({
+        hasLoaded: true,
+        status: 'ready',
+        discoveryErrors: new Map([['wsp_exact_error', 'COMMAND_IN_FLIGHT']]),
+      });
+    });
+    expect(captured.current?.groupStatusByKey.get('project:exact-wt')?.state).toBe('load-failed');
   } finally {
     await act(async () => root.unmount());
     manager.disposeAll();

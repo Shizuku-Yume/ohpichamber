@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { Message } from '@openchamber/agent-contract';
+import type { Message, Turn } from '@openchamber/agent-contract';
 import { formatTelemetryDuration, formatTelemetryTokens, formatThroughputRate, getLatestCompletedTurnStats, mergeTimeIntervals, sumIntervalsDuration } from './telemetry';
 
 const user = (id = 'u1', createdAt = 0): Message => ({ messageId: id, sessionId: 'session', turnId: id, role: 'user', createdAt, parts: [] });
@@ -58,5 +58,75 @@ describe('turn telemetry', () => {
     // Without input tokens a cache hit rate has no denominator, so it is
     // unavailable rather than 0%.
     expect(stats?.cacheHitPercent).toBeNull();
+  });
+  test('calculates true elapsed duration and aggregates multi-step tool calls from canonical Turn', () => {
+    // Intermediate virtual user messages created at tool completion timestamp
+    const userPrompt: Message = { messageId: 'u1', sessionId: 'session', turnId: 'turn-1', role: 'user', createdAt: 1000, parts: [] };
+    const assistantStep1: Message = { messageId: 'a1', sessionId: 'session', turnId: 'turn-1', role: 'assistant', createdAt: 2000, parts: [], usage: usage(100, 50) };
+    const virtualUserStep: Message = { messageId: 'vu1', sessionId: 'session', turnId: 'turn-1', role: 'user', createdAt: 4500, parts: [] };
+    const assistantStep2: Message = { messageId: 'a2', sessionId: 'session', turnId: 'turn-1', role: 'assistant', createdAt: 4500, parts: [], usage: usage(200, 150) };
+
+    const turnRecord: Turn = {
+      turnId: 'turn-1',
+      sessionId: 'session',
+      runId: 'run-1',
+      status: 'completed',
+      userMessageId: 'u1',
+      assistantMessageIds: ['a1', 'a2'],
+      startedAt: 1000,
+      finishedAt: 5500,
+    };
+
+    const stats = getLatestCompletedTurnStats([userPrompt, assistantStep1, virtualUserStep, assistantStep2], [turnRecord]);
+    expect(stats).toMatchObject({
+      lastAssistantMessageId: 'a2',
+      stepsCount: 2,
+      elapsedDurationMs: 4500,
+      inputTokens: 300,
+      outputTokens: 200,
+      totalGeneratedTokens: 200,
+    });
+    expect(formatTelemetryDuration(stats!.elapsedDurationMs!)).toBe('4.5s');
+  });
+  test('selects latest completed turn when multiple historical turns exist', () => {
+    const turn1: Turn = {
+      turnId: 'turn-1', sessionId: 'session', runId: 'run-1', status: 'completed',
+      userMessageId: 'u1', assistantMessageIds: ['a1'], startedAt: 1000, finishedAt: 3000,
+    };
+    const turn2: Turn = {
+      turnId: 'turn-2', sessionId: 'session', runId: 'run-2', status: 'completed',
+      userMessageId: 'u2', assistantMessageIds: ['a2'], startedAt: 4000, finishedAt: 7500,
+    };
+    const turnRunning: Turn = {
+      turnId: 'turn-3', sessionId: 'session', runId: 'run-3', status: 'running',
+      userMessageId: 'u3', assistantMessageIds: [], startedAt: 8000,
+    };
+
+    const messages: Message[] = [
+      { messageId: 'u1', sessionId: 'session', turnId: 'turn-1', role: 'user', createdAt: 1000, parts: [] },
+      { messageId: 'a1', sessionId: 'session', turnId: 'turn-1', role: 'assistant', createdAt: 3000, parts: [], usage: usage(50, 50) },
+      { messageId: 'u2', sessionId: 'session', turnId: 'turn-2', role: 'user', createdAt: 4000, parts: [] },
+      { messageId: 'a2', sessionId: 'session', turnId: 'turn-2', role: 'assistant', createdAt: 7500, parts: [], usage: usage(150, 150) },
+    ];
+
+    const stats = getLatestCompletedTurnStats(messages, [turn1, turn2, turnRunning]);
+    expect(stats).toMatchObject({
+      lastAssistantMessageId: 'a2',
+      stepsCount: 1,
+      elapsedDurationMs: 3500,
+      inputTokens: 150,
+      outputTokens: 150,
+    });
+    expect(formatTelemetryDuration(stats!.elapsedDurationMs!)).toBe('3.5s');
+  });
+  test('skips virtual user step messages with identical timestamp to assistant when turns record is absent', () => {
+    const userPrompt: Message = { messageId: 'u1', sessionId: 'session', turnId: 'turn-1', role: 'user', createdAt: 1000, parts: [] };
+    const assistantStep1: Message = { messageId: 'a1', sessionId: 'session', turnId: 'turn-1', role: 'assistant', createdAt: 2000, parts: [], usage: usage(100, 50) };
+    const virtualUserStep: Message = { messageId: 'vu1', sessionId: 'session', turnId: 'turn-1', role: 'user', createdAt: 4500, parts: [] };
+    const assistantStep2: Message = { messageId: 'a2', sessionId: 'session', turnId: 'turn-1', role: 'assistant', createdAt: 4500, parts: [], usage: usage(200, 150) };
+
+    const stats = getLatestCompletedTurnStats([userPrompt, assistantStep1, virtualUserStep, assistantStep2]);
+    expect(stats?.elapsedDurationMs).toBe(3500);
+    expect(formatTelemetryDuration(stats!.elapsedDurationMs!)).toBe('3.5s');
   });
 });

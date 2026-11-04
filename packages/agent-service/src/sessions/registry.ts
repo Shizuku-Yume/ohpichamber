@@ -671,7 +671,7 @@ export class SessionRegistry {
       // this snapshot must replay from the same epoch the cursor names.
       if (this.closing || this.deleting.has(rootSessionId) || this.entries.get(rootSessionId) !== entry) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
       const journal = new SessionJournal({ sessionId, rootSessionId: entry.reference.rootSessionId,
-        parentSessionId: child?.parentSessionId, projectId: entry.reference.projectId, workspaceId: entry.reference.workspaceId, displayPath: entry.reference.displayPath }, projection.seed());
+        parentSessionId: child?.parentSessionId ?? entry.reference.parentSessionId, projectId: entry.reference.projectId, workspaceId: entry.reference.workspaceId, displayPath: entry.reference.displayPath }, projection.seed());
       journal.unavailable();
       this.coldJournals.set(sessionId, journal);
       return journal.snapshot();
@@ -957,14 +957,18 @@ export class SessionRegistry {
     if (this.pendingRuns.has(sessionId) || (entry.state !== 'unloaded' && entry.opened && entry.opened.journal.runtime().activeRunId !== null)) {
       throw new WorkerOperationError(409, 'RUN_ACTIVE');
     }
+    this.workers.assertWorktreeLeaseAllows(destination.cwd);
+    this.workers.assertWorktreeLeaseAllows(source.cwd);
     this.controls.add(sessionId);
     let manager: SessionManager | undefined;
     let intent: SessionRelocationIntent | undefined;
+    let relocationFence: { release: () => Promise<void> } | undefined;
     try {
       this.interactions.closeSession(sessionId);
       if (entry.state !== 'unloaded') entry.opened?.journal.close();
       await this.workers.stop(sessionId);
       await this.subagentLifecycleTails.get(sessionId);
+      relocationFence = await this.workers.acquireRelocationFence(sessionId, source.cwd, destination.cwd);
       manager = await SessionManager.open(source.sessionFile, source.sessionsDirectory, undefined, { initialCwd: source.cwd, throwIfMissing: true });
       await manager.flush();
       await rememberPrivateRoots(manager, source);
@@ -995,7 +999,11 @@ export class SessionRegistry {
         catch { throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED'); }
       } else this.setUnloaded(source);
       throw error;
-    } finally { await manager?.close(); this.controls.delete(sessionId); }
+    } finally {
+      await manager?.close();
+      await relocationFence?.release();
+      this.controls.delete(sessionId);
+    }
   }
 
   async finalizeRelocation(sessionId: string, input: z.infer<typeof HostSessionRelocationFinalizeSchema>, admit: RelocationAdmission) {
@@ -1006,7 +1014,9 @@ export class SessionRegistry {
     const intent = this.references.relocation(sessionId);
     if (!intent || intent.transactionId !== request.transactionId) throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT');
     this.controls.add(sessionId);
+    let relocationFence: { release: () => Promise<void> } | undefined;
     try {
+      relocationFence = await this.workers.acquireRelocationFence(sessionId, intent.source.cwd, intent.destination.cwd);
       if (request.action === 'rollback') return { session: await this.rollbackRelocation(intent) };
       const entry = this.entries.get(sessionId);
       if (entry?.state !== 'live' || entry.input.workspaceId !== intent.destination.workspaceId || entry.opened.journal.runtime().runtimeStatus !== 'idle') {
@@ -1016,7 +1026,10 @@ export class SessionRegistry {
         && entry.opened.journal.runtime().runtimeStatus === 'idle' ? entry.opened.journal.runtime() : await this.launchRelocation(intent, admit);
       await this.references.finishRelocation(sessionId, request.transactionId, { ...intent.destination, updatedAt: runtime.updatedAt });
       return { session: runtime };
-    } finally { this.controls.delete(sessionId); }
+    } finally {
+      await relocationFence?.release();
+      this.controls.delete(sessionId);
+    }
   }
 
   private async launchRelocation(intent: SessionRelocationIntent, admit: RelocationAdmission): Promise<RuntimeSession> {
@@ -1225,6 +1238,7 @@ export class SessionRegistry {
     const opened = { generation, sessionFile, journal: journal ?? new SessionJournal({
       sessionId, rootSessionId: sessionId, projectId: entry.input.projectId,
       workspaceId: entry.input.workspaceId, displayPath: entry.input.displayPath,
+      parentSessionId: entry.input.parentSessionId,
     }, seed) };
     entry.opened = opened;
     this.openInteractions(sessionId, opened, entry.input.workspaceId);
@@ -1297,6 +1311,7 @@ export class SessionRegistry {
       if (resolved.sessionsDirectory === undefined && reference.sessionsDirectory !== undefined) resolved.sessionsDirectory = reference.sessionsDirectory;
       if (resolved.mcpConfigPath === undefined && reference.mcpConfigPath !== undefined) resolved.mcpConfigPath = reference.mcpConfigPath;
       if (resolved.options === undefined && reference.options !== undefined) resolved.options = reference.options;
+      if (resolved.parentSessionId === undefined && reference.parentSessionId !== undefined) resolved.parentSessionId = reference.parentSessionId;
     }
     const entry: Extract<Entry, { state: 'opening' }> = { state: 'opening', input: resolved };
     if (previous?.state === 'live') entry.opened = previous.opened;
@@ -1323,6 +1338,7 @@ export class SessionRegistry {
         sessionsDirectory: bootstrap.sessionsDirectory, options: bootstrap.options,
         sessionFile: entry.opened.sessionFile, displayPath,
         createdAt: runtime.createdAt, updatedAt: runtime.updatedAt,
+        parentSessionId: bootstrap.parentSessionId ?? reference?.parentSessionId,
       });
       this.entries.set(input.rootSessionId, { state: 'live', input: resolved, opened: entry.opened });
       return runtime;

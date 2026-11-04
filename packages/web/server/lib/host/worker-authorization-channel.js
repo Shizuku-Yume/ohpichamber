@@ -67,9 +67,13 @@ export const createHostWorkerAuthorizationChannel = ({ isCurrentChild, capturedS
           result = decision.success && await live() ? decision.data : action ? actionUnavailable : unavailable;
         }
       } catch (error) {
-        const failure = action && Number.isInteger(error?.status) && error.status >= 400 && error.status <= 599
-          ? HostActionResultSchema.safeParse({ ok: false, code: error.code ?? 'INTERNAL_ERROR', status: error.status }) : null;
-        result = failure?.success ? failure.data : action ? actionUnavailable : unavailable;
+        let failurePayload = null;
+        if (action && Number.isInteger(error?.status) && error.status >= 400 && error.status <= 599) {
+          const payload = { ok: false, code: error.code ?? 'INTERNAL_ERROR', status: error.status };
+          if (error?.message) payload.detail = String(error.message);
+          failurePayload = HostActionResultSchema.safeParse(payload);
+        }
+        result = failurePayload?.success ? failurePayload.data : action ? actionUnavailable : unavailable;
       }
       if (active() && remove(requestId, handle)) send(child, requestId, result, action);
     })();

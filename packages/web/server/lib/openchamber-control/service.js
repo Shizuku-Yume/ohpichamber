@@ -1,3 +1,4 @@
+import { ProblemCodeSchema } from '@openchamber/agent-contract';
 import { asNonEmptyString } from '../shared/guards.js';
 import { OpenChamberControlError, asControlError } from './error.js';
 import {
@@ -1066,12 +1067,12 @@ export const createOpenChamberControlService = (dependencies) => {
   };
   const featurePolicy = async (toolName, action) => {
     const actions = TOOL_ACTIONS.get(toolName);
-    if (!actions || !actions.has(action)) return { code: 'INVALID_REQUEST', status: 400 };
+    if (!actions || !actions.has(action)) return { code: 'INVALID_REQUEST', status: 400, detail: `Unsupported ${toolName} action: ${action}` };
     let settings;
     try {
       settings = await readSettingsFromDiskMigrated();
     } catch {
-      return { code: 'UNAVAILABLE', status: 503 };
+      return { code: 'SERVICE_UNAVAILABLE', status: 503, detail: 'Failed to read settings' };
     }
     const enabled = toolName === 'openchamber'
       ? settings?.agentControlToolEnabled !== false
@@ -1082,42 +1083,50 @@ export const createOpenChamberControlService = (dependencies) => {
           : toolName === 'openchamber_knowledge'
             ? settings?.agentKnowledgeToolEnabled !== false
             : settings?.agentNotifyToolEnabled === true;
-    return enabled ? null : { code: 'FEATURE_DISABLED', status: 403 };
+    return enabled ? null : { code: 'UNAUTHORIZED', status: 403, detail: `${toolName} tool is disabled` };
   };
 
   const invokeHostAction = async (scope, request, signal) => {
-    const fail = (code, status) => ({ ok: false, code, status });
+  const fail = (code, status, detail) => {
+    const payload = { ok: false, code, status };
+    if (detail) payload.detail = String(detail);
+    return payload;
+  };
     if (!scope || typeof scope !== 'object' || typeof scope.rootSessionId !== 'string' || !scope.rootSessionId
       || typeof scope.projectId !== 'string' || !scope.projectId || typeof scope.workspaceId !== 'string' || !scope.workspaceId
       || typeof scope.cwd !== 'string' || !scope.cwd || typeof scope.agentDirectory !== 'string' || !scope.agentDirectory
       || (scope.agentDirectoryId !== undefined && (typeof scope.agentDirectoryId !== 'string' || !scope.agentDirectoryId))) {
-      return fail('INVALID_SCOPE', 400);
+      return fail('INVALID_REQUEST', 400, 'Invalid session scope');
     }
     if (!request || typeof request !== 'object' || Array.isArray(request) || typeof request.toolName !== 'string' || !request.toolName
       || typeof request.action !== 'string' || !request.action || request.sessionId !== scope.rootSessionId
       || (request.input !== undefined && (typeof request.input !== 'object' || request.input === null || Array.isArray(request.input)))) {
-      return fail('INVALID_REQUEST', 400);
+      return fail('INVALID_REQUEST', 400, 'Invalid host action request');
     }
     const policy = await featurePolicy(request.toolName, request.action);
-    if (policy) return fail(policy.code, policy.status);
-    if (typeof resolveSessionScope !== 'function') return fail('INTERNAL_ERROR', 503);
+    if (policy) return fail(policy.code, policy.status, policy.detail);
+    if (typeof resolveSessionScope !== 'function') return fail('INTERNAL_ERROR', 503, 'Session scope resolver unavailable');
     try {
       const resolved = await resolveSessionScope(request.sessionId);
       if (!resolved || resolved.rootSessionId !== scope.rootSessionId || resolved.projectId !== scope.projectId
         || resolved.workspaceId !== scope.workspaceId || resolved.cwd !== scope.cwd
         || resolved.agentDirectory !== scope.agentDirectory
         || (scope.agentDirectoryId !== undefined && resolved.agentDirectoryId !== scope.agentDirectoryId)) {
-        return fail('SCOPE_MISMATCH', 403);
+        return fail('UNAUTHORIZED', 403, 'Session is outside the authorized scope');
       }
       const input = request.input ?? {};
       const value = await execute(request.action, input, scope.cwd, { signal, contextSessionId: request.sessionId });
       return { ok: true, value: value === undefined ? null : value };
     } catch (error) {
-      const status = Number.isInteger(error?.statusCode) ? error.statusCode : 500;
-      const code = typeof error?.code === 'string' && error.code
-        ? error.code
-        : (status === 400 ? 'INVALID_REQUEST' : status === 404 ? 'NOT_FOUND' : status === 499 ? 'CANCELLED' : status === 503 ? 'UNAVAILABLE' : 'INTERNAL_ERROR');
-      return fail(code, status);
+      const status = Number.isInteger(error?.statusCode) ? error.statusCode : Number.isInteger(error?.status) ? error.status : 500;
+      const validExplicitCode = typeof error?.code === 'string' && ProblemCodeSchema.safeParse(error.code).success ? error.code : null;
+      const code = validExplicitCode
+        ?? (status === 400 || status === 404 ? 'INVALID_REQUEST'
+          : status === 403 ? 'UNAUTHORIZED'
+          : status === 409 ? 'METADATA_CONFLICT'
+          : status === 499 || status === 503 ? 'SERVICE_UNAVAILABLE'
+          : 'INTERNAL_ERROR');
+      return fail(code, status, error?.message);
     }
   };
 

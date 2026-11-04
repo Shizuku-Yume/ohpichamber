@@ -35,7 +35,7 @@ export class WorkerHostActions {
     if (!pending) return;
     this.pending.delete(requestId); pending.signal.removeEventListener('abort', pending.abort);
     if (result.ok) pending.resolve(result.value);
-    else pending.reject(new ProjectionError(result.status, result.code, 'Host capability refused the action'));
+    else pending.reject(new ProjectionError(result.status, result.code, result.detail ?? 'Host capability refused the action'));
   }
   close(): void {
     if (this.closed) return;

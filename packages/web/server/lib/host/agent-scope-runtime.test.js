@@ -341,4 +341,55 @@ describe('configured Host scope authority', () => {
     expect(await request(app).get('/api/agent/v1/subagents').query({ sessionId: root.sessionId })).toMatchObject({ status: 200, body: [] });
     await reopened.close();
   });
+
+  it('discovers and retains archived worktree workspace when checkout directory is physically absent without requiring validateDirectory', async () => {
+    const { projectDirectory, agentDirectory, owner, runtime } = await fixture();
+    const worktreeDirectory = path.join(projectDirectory, 'worktree-to-delete');
+    fs.mkdirSync(worktreeDirectory);
+    const scope = await owner.agentScopeStore.ensureWorkspace({
+      hostProjectId: 'host-project',
+      projectDirectory,
+      workspaceDirectory: worktreeDirectory,
+      agentDirectory,
+      name: 'Worktree',
+    });
+    await owner.agentScopeStore.bindSession({
+      sessionId: 'ses_archived_wt',
+      rootSessionId: 'ses_archived_wt',
+      workspaceId: scope.workspaceId,
+    });
+    const key = { hostProjectId: 'host-project', archiveId: 'arc_deleted_wt' };
+    let binding = await owner.agentScopeStore.createWorktreeArchive({
+      ...key,
+      archiveRef: 'refs/openchamber/archive/arc_deleted_wt',
+      snapshotCommit: 'a'.repeat(40),
+      anchorWorkspaceId: scope.workspaceId,
+      claimId: 'claim_archived',
+      claimGeneration: `host_${process.pid}_test`,
+      branchName: 'feature-deleted',
+      branchOid: null,
+    });
+    binding = await owner.agentScopeStore.archiveWorktreeSessions(key, 'claim_archived', 1700000000000);
+    binding = await owner.agentScopeStore.setWorktreeArchivePhase(key, 'claim_archived', binding.revision, 'removal_pending');
+    await owner.agentScopeStore.finishWorktreeArchive(key, 'claim_archived');
+    expect(await owner.agentScopeStore.isWorktreeArchived(scope.workspaceId)).toBe(true);
+    expect(await owner.agentScopeStore.listArchivedWorktreeWorkspaces()).toContain(scope.workspaceId);
+
+    // Physically delete the checkout directory on disk
+    fs.rmSync(worktreeDirectory, { recursive: true, force: true });
+    expect(fs.existsSync(worktreeDirectory)).toBe(false);
+
+    // listWorkspaces must discover and retain the archived workspace scope without calling validateDirectory on the deleted checkout
+    const listed = await runtime.listWorkspaces();
+    expect(listed.errors).toEqual({});
+    const found = listed.items.find((item) => item.workspaceId === scope.workspaceId);
+    expect(found).toBeDefined();
+    expect(found?.workspaceId).toBe(scope.workspaceId);
+
+    // resolveWorkspaceScope also authorizes and retains the archived workspace
+    const resolved = await runtime.resolveWorkspaceScope(scope.workspaceId);
+    expect(resolved).not.toBeNull();
+    expect(resolved?.workspaceId).toBe(scope.workspaceId);
+    expect(resolved?.cwd).toBe(worktreeDirectory);
+  });
 });

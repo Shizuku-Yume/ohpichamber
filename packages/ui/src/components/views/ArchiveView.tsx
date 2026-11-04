@@ -88,6 +88,18 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
     return parent ? [parent.sessionId, parent.title ?? ''] : [];
   })));
   const sessionsStatus = useGlobalSessionsStore((state) => state.status);
+  const discoveryErrors = useGlobalSessionsStore((state) => state.discoveryErrors);
+  const loadSessions = useGlobalSessionsStore((state) => state.loadSessions);
+  const [isRetrying, setIsRetrying] = React.useState(false);
+  const handleRetry = React.useCallback(async () => {
+    setIsRetrying(true);
+    try {
+      await loadSessions();
+    } finally {
+      setIsRetrying(false);
+    }
+  }, [loadSessions]);
+  const hasDiscoveryErrors = Boolean(discoveryErrors && discoveryErrors.size > 0);
   const [query, setQuery] = React.useState(initialQuery);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = React.useState<string | null>(null);
   const spaceArchives = useSpaceArchivesStore((state) => state.byWorkspaceId);
@@ -216,6 +228,7 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
   const visibleSessions = filteredSessions.slice(0, visibleCount);
   const remainingCount = filteredSessions.length - visibleSessions.length;
   const totalCount = sortedSessions.length;
+  const isFailed = sessionsStatus === 'error' || (totalCount === 0 && hasDiscoveryErrors);
 
   const selectWorkspace = React.useCallback((workspaceId: string | null) => {
     setSelectedWorkspaceId(workspaceId);
@@ -252,13 +265,28 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
     ? t('sessions.archivePage.countSingle', { count: filteredSessions.length })
     : t('sessions.archivePage.countPlural', { count: filteredSessions.length });
   const emptyLabel = () => {
-    if (totalCount === 0 && sessionsStatus === 'error') return t('sessions.sidebar.group.empty.loadFailed');
+    if (totalCount === 0 && (sessionsStatus === 'error' || hasDiscoveryErrors)) return t('sessions.sidebar.group.empty.loadFailed');
     if (totalCount === 0 && sessionsStatus !== 'ready') return t('sessions.sidebar.group.empty.loadingSessions');
     return normalizedQuery ? t('sessions.archivePage.empty.noMatches') : t('sessions.archivePage.empty.noArchived');
   };
+  const discoveryErrorBanner = hasDiscoveryErrors ? (
+    <div className="mb-2 flex items-center justify-between rounded-md border border-destructive/20 bg-destructive/10 px-3 py-1.5 text-xs text-destructive">
+      <span>{t('sessions.sidebar.group.empty.loadFailed')}</span>
+      <Button variant="ghost" size="xs" onClick={() => void handleRetry()} disabled={isRetrying} className="h-6 px-2 text-xs hover:bg-destructive/20">
+        {isRetrying ? t('sessions.sidebar.group.empty.loadingSessions') : t('sessions.sidebar.group.empty.retry')}
+      </Button>
+    </div>
+  ) : null;
   const emptyState = (
-    <div className="py-10 text-center text-muted-foreground">
+    <div className="py-10 text-center text-muted-foreground space-y-3">
       <p className="typography-ui-label font-semibold">{emptyLabel()}</p>
+      {isFailed ? (
+        <div>
+          <Button variant="outline" size="sm" onClick={() => void handleRetry()} disabled={isRetrying}>
+            {isRetrying ? t('sessions.sidebar.group.empty.loadingSessions') : t('sessions.sidebar.group.empty.retry')}
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
   const showMoreButton = remainingCount > 0 ? (
@@ -300,6 +328,7 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
               ))}
             </div>
           ) : null}
+          {discoveryErrorBanner}
           {visibleSessions.length === 0 && allWorktreeArchives.length === 0 ? emptyState : visibleSessions.map((session, index) => {
             const workspaceId = session.workspaceId;
             const sessionDirectory = normalizePath(resolveGlobalSessionDirectory(session)) ?? '';
@@ -447,6 +476,7 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
                   ))}
                 </div>
               ) : null}
+              {discoveryErrorBanner}
               {visibleSessions.length === 0 && selectedWorktreeArchives.length === 0 ? emptyState : visibleSessions.map((session, index) => {
                 const workspaceId = session.workspaceId;
                 const sessionDirectory = normalizePath(resolveGlobalSessionDirectory(session)) ?? '';

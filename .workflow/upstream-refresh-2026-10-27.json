@@ -1,0 +1,139 @@
+{
+  "upstream": {
+    "repository": "https://github.com/openchamber/openchamber",
+    "revision": "0056bf6a9ca4aa229817af5bf37533f602a16cc3",
+    "shortRevision": "0056bf6a9",
+    "updated": "2026-10-26T14:28:38+02:00",
+    "describe": "v2.5.2-1-g0056bf6a9c",
+    "commitsSinceBaseline": 813,
+    "baselineRevision": "1f9320062c9a3c70925cf3243f1ee0c6e5f16765",
+    "mergeBaseWithUpstreamMain": "0056bf6a9ca4aa229817af5bf37533f602a16cc3"
+  },
+  "status": "authoritative",
+  "historicalPointer": {
+    "previousBaseline": ".workflow/upstream-baseline.json",
+    "previousRevision": "1f9320062c9a3c70925cf3243f1ee0c6e5f16765",
+    "adoptionDate": "2026-10-10"
+  },
+  "measurement": {
+    "totals": {
+      "totalPathsChanged": 4031,
+      "linesAdded": 299677,
+      "linesDeleted": 82213,
+      "cleanLive": 1135,
+      "newAdoptable": 1223,
+      "bothLive": 991,
+      "bothForkDeleted": 226,
+      "upstreamDeletedForkUntouched": 121,
+      "upstreamDeletedForkChanged": 13,
+      "upstreamDeletedForkGone": 322,
+      "textualConflicts": 640,
+      "sharedFilesTouchedBothSides": 1230,
+      "forkChangedPaths": 3410,
+      "forkOnlyChangedPaths": 1858
+    },
+    "categoryCounts": {
+      "primary": {
+        "bugfix": 408,
+        "deps": 41,
+        "refactor": 15,
+        "feature": 157,
+        "chore": 18,
+        "security": 4,
+        "other": 19,
+        "opencode-engine": 40,
+        "tests": 19,
+        "release-ci-collab": 52,
+        "docs-site": 12,
+        "vscode": 7,
+        "performance": 21
+      },
+      "tags": {
+        "bugfix": 500,
+        "deps": 43,
+        "refactor": 15,
+        "feature": 167,
+        "chore": 25,
+        "security": 4,
+        "opencode-engine": 44,
+        "other": 19,
+        "release-ci-collab": 62,
+        "tests": 19,
+        "docs-site": 12,
+        "vscode": 7,
+        "performance": 22
+      }
+    },
+    "taskBucketCounts": {
+      "adoptionTasks01To25": 2932,
+      "docTasks26To29": 392,
+      "exclusionsTotal": 707,
+      "totalReconciled": 4031,
+      "unassigned": 0
+    },
+    "exclusions": {
+      "packages/vscode": {
+        "paths": 85,
+        "reason": "Package removed by the fork; 68 delete/modify and no live path"
+      },
+      "opencode-engine": {
+        "paths": 138,
+        "reason": "Replaced by the Agent Service; 83 already deleted, no retained owner"
+      },
+      "isolated-spaces": {
+        "paths": 91,
+        "reason": "Unreleased; Task38 removes the OpenCode runtime, and no OMP runtime exists yet"
+      },
+      ".github": {
+        "paths": 324,
+        "reason": "Fork removed upstream collaboration and CI; includes renovate.json"
+      },
+      "changelog": {
+        "paths": 10,
+        "reason": "Maintainer-owned release notes; includes CHANGELOG.md"
+      },
+      "pr-evidence": {
+        "paths": 10,
+        "reason": "Upstream review images"
+      },
+      "nix": {
+        "paths": 7,
+        "reason": "New upstream packaging area (nix/, flake.*) with no fork counterpart"
+      },
+      "agent-guidance": {
+        "paths": 30,
+        "reason": ".agents, .claude, .opencode are fork-owned"
+      },
+      "fork-docs": {
+        "paths": 8,
+        "reason": "docs/isolated-spaces is a fork record; upstream deleted its copies"
+      },
+      "upstream-root-docs": {
+        "paths": 4,
+        "reason": "AGENTS.md, README.md, SECURITY.md, CONTRIBUTING.md are fork-owned"
+      }
+    }
+  },
+  "artifactLocations": {
+    "syncArtifacts": "/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-sync-2026-10-27/",
+    "pathCoverageTsv": "/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-sync-2026-10-27/plan-path-coverage.tsv",
+    "pathSummaryMd": "/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-sync-2026-10-27/plan-path-summary.md",
+    "aggregateJson": "/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-sync-2026-10-27/aggregate.json",
+    "conflictsJson": "/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-sync-2026-10-27/conflicts.json",
+    "commitsCsv": "/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-sync-2026-10-27/commits.csv",
+    "task30Evidence": "/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-30-2026-11-04/"
+  },
+  "toolchain": {
+    "node": ">=24.14.0",
+    "bun": "1.4.4",
+    "oxlint": "1.88.0",
+    "electron": "44.x"
+  },
+  "forkVersions": {
+    "root": "3.0.0",
+    "mobile": "1.13.2",
+    "agentContract": "1.0.0",
+    "agentService": "1.0.0",
+    "versionPolicy": "Fork version retained at 3.0.0; upstream 2.5.2 release number is not adopted."
+  }
+}

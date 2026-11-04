@@ -1,12 +1,13 @@
 # 11: Merge the refreshed main into the parity integration branch
 
 **Effort:** omp-native-parity
+**Status:** blocked
 **Task type:** feature
 **Base commit:** 64de3c9c95b7e5a3dc8d49924d47da216b89c6c8
 
 **Delivers:** `omp-native-parity/integration` carries the refreshed `main` — the upstream area refresh landed on `main` (upstream `0056bf6a9`, ~143 commits since `dee0c88ebd`, 1958 files) — with every parity behaviour re-applied on top: OMP-native sessions and prompt, OMP defaults and settings, cold reads, the composer mode dropdown in the agent-picker slot, the named approval card, and no root agent picker. Every upstream feature that touches a shared file still works after the merge.
 
-**Blocked by:** upstream-refresh/30
+**Blocked by:** None
 
 **Dependencies:** the upstream refresh landing on `main`: `upstream-refresh/30-gate-records-history-link.md` ("Gate, records and upstream history link", the refresh effort's final gate task) archived under `.workflow/done/upstream-refresh/` and `upstream-refresh/integration` (`8ee84af280`) landed on `main`, with these verified follow-ups merged into it first: task 20's `upstream-refresh/fix-ar-he` (`76dc5b5c72` Runtime status ar/he copy, `4f8ebec202` workspace-warming ar/he copy, `8045ad1fa4` LTR diagnostics body) and task 21's `upstream-refresh/21-warming` (`883a101709` per-session warming deletion, `716182d57c` settings sanitizer for the registry's plain keys). If either branch is not in the landed `main`, stop and re-base this plan on what actually landed before merging. That task file is not in this tree until the refresh lands, so the start record changes this field to `Blocked by: upstream-refresh/30`, drops `Status: blocked` and deletes `## Blocked`.
 
@@ -19,6 +20,15 @@
 **Where it runs:** in `~/Project/ohpichamber-worktrees/onp-integration`. The deliverable is a merge commit on `omp-native-parity/integration` itself, so there is no task branch: `git merge main` there after recording the Base commit. If the tree is dirty with someone else's files, stop instead of stashing them.
 
 **Check:** Before: `git merge-base --is-ancestor $(git rev-parse main) HEAD` fails, and the refresh's surfaces are absent here (sidebar folders/archive, overview/diagnostics panel, `ar`/`he` catalogs, workflows panel, refreshed composer permissions). After: `git merge-base --is-ancestor <refreshed main tip> HEAD` succeeds; `bun install --frozen-lockfile`, `bun run type-check`, `bun run lint`, `bun run test`, `bun run build` and `bun run dead-code` exit 0 with no new dead-code finding against `main`; the resolution record names each overlapping path with what upstream added that was kept; per-locale i18n key counts lose no refresh key; the headless-Chrome real path with a real provider (draft chat Main→Plan, Vibe, Goal; one send; a bash approval card) passes with screenshots.
+
+## Blocked
+
+- **Dead-code exit 0 criterion:** The task check and Done-when criteria specify that `bun run dead-code` exits 0 with no new dead-code finding against `main`. Observed: `bun run dead-code` exits 1 on both latest `main` (`46c8dcc8aa`) and candidate (`88e347538b`), showing identical inherited 143 findings (17 files, 63 exports, 60 types, 3 config hints) with 0 new findings introduced. Closing the task cleanly requires either repository-wide dead-code removal outside parity scope or an explicit maintainer decision to baseline or waive the inherited finding count rather than falsely claiming an exit-0 pass.
+- **Whole-file parity version exceptions requiring plan reconciliation:** Done-when item 2 states: "No file the refresh changed takes parity's whole-file version." During merge reconciliation, two justified exceptions were reviewed:
+  1. `packages/ui/src/components/chat/btw/useBtwPanelState.ts`: Kept parity's whole-file version to retire unused fork-only helpers (`btwHoldsDock`, `parentPromoted`) because parity replaces session-fork BTW panel docking with ephemeral BTW text state (`ephemeralRecordId`, `ephemeralText`, `ephemeralStatus`).
+  2. `packages/web/server/lib/session-knowledge/runtime.test.js`: Kept parity's whole-file version, omitting upstream refresh assertions demanding prompt guidance injection for `render_page` and `workflow` tools because Parity Task 03 strictly forbids prompt guidance injection into worker prompts.
+  These two exceptions are architecturally sound but strictly contradict Done-when item 2, requiring explicit plan reconciliation and maintainer decision rather than silently weakening task acceptance.
+- **Landing and spec acceptance authority:** The user explicitly requested landing on `main`, but has not explicitly signed off either effort spec (`omp-native-chat` or `omp-native-parity`). Per workflow conventions, acceptance cannot be assumed or claimed without explicit user sign-off, specs remain in progress, and task 11 cannot be closed or archived.
 
 ## Done when
 
@@ -53,7 +63,7 @@
 - Reconciled `host-tool.ts`: registered `openchamber_knowledge` with essential load mode.
 - Reconciled `projection.ts` & `session.ts`: preserved `SessionMentionSchema` and prompt context while retaining `RunOrigin` for worker runs and OMP title handling.
 - Reconciled `web/server`: preserved worktree archive restore/delete routes, linked issues, OMP session rename, cold reads without waking workers, and prompt parity (no memory or save/link guidance copied into prompts).
-- Reconciled `ui` catalogs: preserved all 9,000+ refreshed upstream keys in all 26 catalogs, added parity keys (`chat.chatInput.mode.*`, `chat.planReview.*`, `chat.compact.instructions.*`, `chat.modelControls.off/routes/effort`, `chat.permissionCard.alwaysAllow`), added `ompSettingsI18n` and `workerRunsI18n`, and kept `ar` and `he` catalogs complete.
+- Reconciled `ui` catalogs: preserved refreshed upstream keys across all 26 catalogs, added parity keys (`chat.chatInput.mode.*`, `chat.planReview.*`, `chat.compact.instructions.*`, `chat.modelControls.off/routes/effort`, `chat.permissionCard.alwaysAllow`), added `ompSettingsI18n` and `workerRunsI18n`. Corrected ar/he catalog counts: baseline 8,719 keys, final 8,739 keys, 349 inherited missing keys vs en, 16 intentional per-session warming key removals (`settings.openchamber.defaults.sessionWarming.*` per task 21), and 36 parity keys added with translations.
 - Reconciled `ui` components, stores, sync, and views: kept one-view sidebar architecture and v13 store migration; preserved ephemeral BTW panel; retained canonical OMP goal submission and mode selector; dropped root agent pickers in `ChatInput.tsx`, `ModelControls.tsx`, `CommandAutocomplete.tsx`, `DefaultsSettings.tsx`, `ScheduledTaskEditorDialog.tsx`, and `SourceBoardActions.tsx`.
 
 ### 2026-11-05 Route Fix & Invariant Regression Verification
@@ -91,9 +101,9 @@ Independently verified from actual diffs between merge base `dee0c88ebd`, refres
 - `packages/web/server/lib/openchamber-sessions/fork-inheritance.test.js`: Fork inheritance tests retired by parity; kept deleted.
 - `packages/web/server/lib/session-goal/DOCUMENTATION.md`: Retired by parity; kept deleted.
 
-#### 2. Uncertain / Overridden Paths (2 paths) — Attention Required
-- `packages/ui/src/components/chat/btw/useBtwPanelState.ts` [KEPT PARITY]: Upstream refresh added `parentPromoted?: boolean` and `btwHoldsDock(panel, parentHasRequest)` to support session-fork BTW panel docking. Parity replaces session-fork BTW with ephemeral BTW text state (`ephemeralRecordId`, `ephemeralText`, `ephemeralStatus`). Staged merge keeps parity's version verbatim; upstream's `btwHoldsDock` has 0 callers across the repository.
-- `packages/web/server/lib/session-knowledge/runtime.test.js` [KEPT PARITY]: Upstream refresh added tests verifying prompt guidance injection for `render_page` and `workflow` tools. Parity Task 03 strictly forbids prompt guidance injection (memory titles, session links, tool instructions) into worker prompts. Staged merge retains parity's prompt-parity tests verbatim; upstream tool guidance tests are omitted.
+#### 2. Uncertain / Overridden Paths (2 paths) — Attention Required (Whole-File Parity Exceptions)
+- `packages/ui/src/components/chat/btw/useBtwPanelState.ts` [KEPT PARITY]: Upstream refresh added `parentPromoted?: boolean` and `btwHoldsDock(panel, parentHasRequest)` to support session-fork BTW panel docking. Parity replaces session-fork BTW with ephemeral BTW text state (`ephemeralRecordId`, `ephemeralText`, `ephemeralStatus`), retiring unused fork-only helpers. Kept parity's whole-file version; upstream's `btwHoldsDock` has 0 callers across the repository. This is an explicit whole-file parity exception requiring plan reconciliation against Done-when item 2.
+- `packages/web/server/lib/session-knowledge/runtime.test.js` [KEPT PARITY]: Upstream refresh added tests verifying prompt guidance injection for `render_page` and `workflow` tools. Parity Task 03 strictly forbids prompt guidance injection (memory titles, session links, tool instructions) into worker prompts. Kept parity's whole-file version verbatim, omitting assertions demanding forbidden prompt injection. This is an explicit whole-file parity exception requiring plan reconciliation against Done-when item 2.
 
 #### 3. Refreshed Main Clean Paths (13 paths) — Parity Changes Superseded or Relocated
 - `packages/ui/src/apps/MobileSessionsSheet.tsx` [KEPT MAIN]: Upstream Task 32 completely refactored the mobile sheet (2,974 lines of diff) and extracted session row rendering into `SessionSidebarRows`. Parity's `session.title` patch on the retired local `SessionRow` was superseded because row rendering now routes through `SessionSidebarRows` where OMP row models apply.
@@ -134,5 +144,30 @@ Independently verified from actual diffs between merge base `dee0c88ebd`, refres
   - `server/lib/host/direct-command-admission-store.test.mjs`: Reconciled direct command admission store tests with agentScopeStore workspace registration.
 - **UI Subsystem (111 paths):**
   - Hot-spots: `ChatInput.tsx`, `ModelControls.tsx`, `ComposerFooter.tsx`, `buildOutgoingMessage.ts`, `useConfigStore.ts`, `session-ui-store.ts`, `sync-context.tsx`, `useUIStore.ts`, `messageQueueStore.ts`, `ContextPanel.tsx`, `SessionSidebarRows.tsx`, `SourceBoardActions.tsx`, `ScheduledTaskEditorDialog.tsx`, `CommandAutocomplete.tsx`, `DefaultsSettings.tsx`, `SessionWarmingCheckbox.tsx`.
-  - Catalogs: All 26 refreshed upstream catalogs preserved whole; parity keys added (`chat.chatInput.mode.*`, `chat.planReview.*`, `chat.compact.instructions.*`, `chat.modelControls.off/routes/effort`, `chat.permissionCard.alwaysAllow`); `ar` and `he` catalogs complete.
+  - Catalogs: All 26 refreshed upstream catalogs preserved whole; parity keys added (`chat.chatInput.mode.*`, `chat.planReview.*`, `chat.compact.instructions.*`, `chat.modelControls.off/routes/effort`, `chat.permissionCard.alwaysAllow`); ar and he catalogs carry 8,739 keys (baseline 8,719 - 16 per-session warming removals + 36 parity keys with translations; 349 inherited missing vs en).
   - Reconciled components: ContextPanel, MarkdownViewer, DiffView helpers, SessionStatusBanner, SessionDetailHeader, SettingsLayout, etc., preserving upstream design system and layout works while enforcing OMP composer mode, approval cards, and no root agent pickers.
+
+### 2026-11-05 Final Integration, Regression Fixes, and Verification
+- Confirmed ancestry: `native-chat` tip `b309346` is an ancestor of parity (`64de3c9c95`).
+- Merge commits:
+  - `61a849b42b`: Merged refreshed main `577c803032` into parity integration (`64de3c9c95`).
+  - `35bfc36bd5`: Merged latest main `46c8dcc8aa` (closing post-m3-hardening and transitioning m5 to in progress).
+- Follow-up defect fixes:
+  - `d1bcbc8d7b`: fix(omp): preserve parentSessionId on cold reads and reconcile P1 test contracts.
+  - `88e347538b`: feat(host): admit native todo session operations through Host authorizer.
+- Final gate verification on candidate `88e347538b`:
+  - `bun install --frozen-lockfile`: exit 0.
+  - `bun run type-check`: exit 0 (0 errors across 5 projects / 3,196 files).
+  - `bun run lint`: exit 0 across all workspaces.
+  - `bun run test`: 7/7 workspace suites passed cleanly: scripts 23/23, SDK 26/26, UI 999/999 files, agent-contract 178/178, agent-service 362 passed / 7 skipped / 0 failed, Electron 54/54, Web 465 files / 7,484 passed / 142 skipped.
+  - `bun run build`: exit 0 confirmed passed by gate worker.
+  - `python3 .workflow/bin/workflow-core.py validate`: exit 0 (199 task files valid).
+  - `bun run dead-code`: exit 1 on both latest main `46c8dcc8aa` and candidate `88e347538b`; identical inherited 143 findings (17 files, 63 exports, 60 types, 3 config hints) with 0 new findings; task 11 literal exit-zero criterion is unmet.
+- Headless Chrome real-provider validation on candidate `88e347538b` against real provider `CLIProxyAPI/gemini-3.8-flash` (High thinking effort, private credentials untouched; full evidence and logs in `/home/shizuku/Project/ohpichamber-omp-artifacts/onp-merge-2026-11-05/evidence.md`):
+  - **Draft Mode Switcher:** Composer mode dropdown in agent-picker slot cleanly switched Main → Plan, Vibe, Goal; selecting Goal mounted dedicated `Set Session Goal` dialog (`final-01-mode-dropdown.png` - `final-04-goal-dialog.png`).
+  - **Conversation Completion:** Streaming completion succeeded on haiku prompt (`"Silent runners check, / Catching bugs before they ship, / Clean suite passes green."`), auto-titled session as `"Write haiku about automated testing"`, turn stats recorded.
+  - **Named Bash Approval Card:** Configured `tools.approval.bash: ask`. Tool prompt rendered named ACP card displaying `bash`, description `"Run a command"`, command `"echo \"FINAL-SMOKE-BASH-APPROVAL\""`, and options `Deny`, `Always allow bash for this session`, `Allow once`. Clicking `Allow once` executed command, rendered output `FINAL-SMOKE-BASH-APPROVAL`, and auto-titled session as `"Run bash echo command"` (`final-11-bash-approval-card.png`, `final-12-bash-approved-output.png`). Config restored immediately.
+  - **Workspace Warming Checkbox:** Exact cycle `idle` → `off` (persisted revision 3) → `idle` (persisted revision 4) → `off` (persisted revision 5). After full page reload, read back persisted `{"workspaceId": "ws_...", "revision": "5", "mode": "off"}` with checkbox UI reflecting `Off` (`final-05-warming-off1.png` - `final-08-warming-off-reloaded.png`). No per-session warming controls present.
+  - **RTL Locale Runtime Status Dialog:** Arabic (`ar`) and Hebrew (`he`) with document `dir="rtl"` opened Runtime Status dialog with RTL shell and localized actions while diagnostics `<pre>` retained explicit `dir="ltr"` and `text-start` (`final-09-arabic-rtl-dialog.png`, `final-10-hebrew-rtl-dialog.png`).
+  - **Native Todo Tool & TodoTray:** Admitted through Host authorizer (`88e347538b`); model invoked `todo(op="init", ...)` with two phases (`Discovery` and `Execution`); `data-testid="todo-tray"` mounted above composer rendering headings and items (`Discovery`: `Check files`, `Plan changes`; `Execution`: `Apply edits`). Full page reload preserved tray rendering both phases (`final-15-todo-tool-success.png`, `final-16-todo-tray-reloaded.png`).
+- Task Status: Set `Status: blocked` with `Blocked by: None`. The user explicitly requested landing on `main`, but neither effort spec has received explicit maintainer sign-off; task 11 is not archived, neither spec is closed, and acceptance is not claimed pending maintainer decision on dead-code baseline and whole-file parity reconciliation.

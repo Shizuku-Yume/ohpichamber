@@ -1,6 +1,6 @@
 # M5: Release and retained surfaces
 
-**Status:** proposed
+**Status:** in progress
 **Priority:** high
 
 ## What this is for

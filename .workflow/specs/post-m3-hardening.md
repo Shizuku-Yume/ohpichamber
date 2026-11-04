@@ -1,6 +1,6 @@
 # Post-M3 hardening and re-planning
 
-**Status:** in progress
+**Status:** done
 **Priority:** high
 
 ## What this is for
@@ -97,7 +97,7 @@ Landing order: lane A's task 01 lands first. Other lanes may build before that, 
 - **H12.** PROBE-05 and the packaged live-region measurement have recorded results.
 - **H13.** The Guest SDK transport change has an explicit version or compatibility decision, and SDK examples name the supported version.
 - **H14.** Product docs and package READMEs describe only verified behavior or label it.
-- **H15.** M5 has an approved spec and surface tasks, M4 replanning is explicitly deferred per maintainer decision (task 25 paused), the OMP vendor upgrade runbook reproduces the current pin, and the upstream-sync question is answered for the maintainer.
+- **H15.** M5 has an approved spec and surface tasks, M4 replanning is explicitly deferred to a dedicated milestone effort per maintainer decision on 2026-11-04 (task 25 archived as deferred), the OMP vendor upgrade runbook reproduces the current pin, and the upstream-sync question is answered for the maintainer.
 
 ## Settled decision and open questions
 
@@ -110,7 +110,7 @@ Settled decisions are recorded here for reference. Remaining questions belong to
 5. **Resolved (2026-11-04): Native packages for non-Linux targets** (task 29): accept official registry native leaves with verified SLSA provenance, SHA-256/SHA-512 integrity, and target OS/CPU match to unlock the M5 non-Linux release matrix, while preserving unrun target runtime certification. Decision: `decisions.md: 2026-11-04 - Accept official registry native leaves with SLSA provenance for non-Linux targets`.
 6. **Resolved (2026-10-24): npm standalone distribution** (task 26): bundle a per-platform Agent Runtime into `@openchamber/web` using the Electron-verified staged payload; do not publish the Agent Service, Contract or vendored OMP packages. Decision: `decisions.md: 2026-10-24 - Bundle the Agent Runtime into @openchamber/web`.
 7. **Resolved (2026-10-27): Upstream OpenChamber sync** (after task 28): adopt the upstream-first area refresh and run it now to `0056bf6a9` (v2.5.2+1), including features. Work continues in [upstream-refresh](upstream-refresh.md). Decision: `decisions.md: 2026-10-27 - Adopt the upstream-first area refresh now`.
-8. **Resolved (2026-11-04): M4 replanning deferred** (task 25): defer M4 replanning to a dedicated future milestone effort; task 25 is kept paused to preserve deferred status without falsely claiming completion.
+8. **Resolved (2026-11-04): M4 replanning deferred** (task 25): defer M4 replanning to a dedicated future milestone effort; task 25 is archived with explicit deferred status, keeping M4 clearly deferred without falsely claiming completion.
 
 ## Notes
 

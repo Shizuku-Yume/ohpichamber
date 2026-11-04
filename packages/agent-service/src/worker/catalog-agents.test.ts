@@ -85,7 +85,7 @@ test('canonical profiles distinguish inherit null, explicit none and exact array
     for (const agentId of ['task', 'sonic']) {
       expect(catalog.agents.find(agent => agent.agentId === agentId)?.allowedTools).toBeNull();
     }
-    expect(catalog.agents.find(agent => agent.agentId === 'scout')?.allowedTools).toEqual(['read', 'find', 'grep', 'glob', 'yield']);
+    expect(catalog.agents.find(agent => agent.agentId === 'scout')?.allowedTools).toEqual(['read', 'find', 'grep', 'glob']);
     const empty = { agentId: 'empty-tools', name: 'Empty tools', description: 'No model tools', model: null, allowedTools: [] };
     await agents.create({ expectedRevision: '0', agent: empty }, '1');
     expect(await agents.profile('empty-tools')).toEqual(empty);
@@ -94,8 +94,8 @@ test('canonical profiles distinguish inherit null, explicit none and exact array
     expect(await agents.profile('inherit-tools')).toEqual(inherited);
     await mkdir(join(cwd, '.omp', 'agents'), { recursive: true });
     await writeFile(join(cwd, '.omp', 'agents', 'raw-empty.md'), '---\nname: raw-empty\ndescription: Raw empty tools\ntools: []\n---\n\nBody\n');
-    // Raw native YAML without canonical metadata is parsed by the SDK, which appends yield to an explicit empty list.
-    expect((await agents.profile('raw-empty')).allowedTools).toEqual(['yield']);
+    // Raw native YAML without canonical metadata is parsed by the SDK, which preserves explicit empty tools list.
+    expect((await agents.profile('raw-empty')).allowedTools).toEqual([]);
   } finally {
     runtime.authStorage.close();
     resetSettingsForTest();

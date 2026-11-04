@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { getExtensionUISelectOptionLabel } from '@oh-my-pi/pi-coding-agent/extensibility/extensions';
 import type {
+  ExtensionApprovalAnswer,
+  ExtensionApprovalPrompt,
   ExtensionAskDialogOption,
   ExtensionAskDialogQuestion,
   ExtensionAskDialogResult,
@@ -68,10 +70,12 @@ export class WorkerInteraction {
     const captured = this.inputs.get(toolCallId);
     const turnId = this.callbacks.currentTurn();
     if (this.closed || !turnId || !captured || JSON.stringify(captured) !== JSON.stringify(input)) return false;
-    return await this.requestApproval(turnId, toolCallId, 'bash', captured, 'Host policy requires approval for this exact command', ['Approve', 'Reject'], signal) === 'Approve';
+    const choice = await this.requestApproval(turnId, toolCallId, 'bash', captured, 'Host policy requires approval for this exact command', ['Approve', 'Reject'], signal);
+    return choice === 'Approve';
   }
 
   readonly ui: ExtensionUIContext = {
+    approve: (prompt, dialogOptions) => this.handleApprove(prompt, dialogOptions),
     select: (title, options, dialogOptions) => this.select(title, options, dialogOptions),
     confirm: async (title, message, options) => {
       const result = await this.askDialog([{ id: 'confirm', question: `${title}\n${message}`, options: [{ label: 'Yes' }, { label: 'No' }] }], options);
@@ -97,6 +101,9 @@ export class WorkerInteraction {
     editor: async () => { throw new Error('Terminal editor UI is unavailable in the Agent Service worker'); },
     addAutocompleteProvider: () => {},
     setEditorComponent: () => {},
+    getEditorComponent: () => undefined,
+    rerenderMessage: () => {},
+    getLinkClicksAvailable: () => false,
     get theme(): Theme { ensureThemeSync(); return theme; },
     getAllThemes: async () => [],
     getTheme: async () => undefined,
@@ -104,6 +111,23 @@ export class WorkerInteraction {
     getToolsExpanded: () => false,
     setToolsExpanded: () => {},
   };
+
+  private async handleApprove(prompt: ExtensionApprovalPrompt, dialogOptions?: { signal?: AbortSignal }): Promise<ExtensionApprovalAnswer> {
+    if (this.closed) return 'deny';
+    const turnId = this.callbacks.currentTurn();
+    if (!turnId) return 'deny';
+    const observer = [...this.observed.values()][0];
+    if (!observer) return 'deny';
+    this.observed.delete(observer.toolCallId);
+    const input = this.inputs.get(observer.toolCallId);
+    if (!input) throw new Error('Native approval has no captured execution input');
+    this.inputs.delete(observer.toolCallId);
+    const reason = observer.reason ?? prompt.compact ?? prompt.full;
+    const choices: [string, string] = ['Approve', 'Reject'];
+    const choice = await this.requestApproval(turnId, observer.toolCallId, observer.toolName, input, reason, choices, dialogOptions?.signal);
+    if (choice === 'Approve') return 'once';
+    return 'deny';
+  }
 
   private async select(title: string, options: ExtensionUISelectItem[], dialogOptions?: { signal?: AbortSignal }): Promise<string | undefined> {
     if (this.closed) return undefined;
@@ -123,13 +147,17 @@ export class WorkerInteraction {
     if (!input) throw new Error('Native approval has no captured execution input');
     this.inputs.delete(observer.toolCallId);
     const labels = options.map(getExtensionUISelectOptionLabel);
-    const approve = labels[0];
-    const reject = labels[1];
-    if (labels.length !== 2 || approve === undefined || reject === undefined) throw new Error('Native approval choices are invalid');
-    return this.requestApproval(turnId, observer.toolCallId, observer.toolName, input, observer.reason ?? '', [approve, reject], dialogOptions?.signal);
+    const approve = labels.find(l => l.startsWith('Approve Once') || l === 'Approve') ?? labels[0];
+    const reject = labels.find(l => l === 'Deny' || l === 'Reject') ?? labels[labels.length - 1];
+    if (approve === undefined || reject === undefined) throw new Error('Native approval choices are invalid');
+    const choices: [string, string] = [approve, reject];
+    return this.requestApproval(turnId, observer.toolCallId, observer.toolName, input, observer.reason ?? '', choices, dialogOptions?.signal);
   }
 
-  private async requestApproval(turnId: string, toolCallId: string, toolName: string, input: JsonObject, reason: string, choices: [string, string], signal?: AbortSignal): Promise<string | undefined> {
+  private async requestApproval(
+    turnId: string, toolCallId: string, toolName: string, input: JsonObject, reason: string,
+    choices: [string, string], signal?: AbortSignal,
+  ): Promise<string | undefined> {
     const approvalId = randomUUID();
     const [approve, reject] = choices;
     const interaction: WorkerInteractionMessage = {

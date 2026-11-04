@@ -33,6 +33,7 @@ import { captureNativePolicy } from './native-policy-snapshot.ts';
 import type { HostNativePolicySnapshot, NativePolicyContext } from '../native-policy-protocol.ts';
 import { createNativeBashPolicyExtension } from './native-bash-policy.ts';
 import { BashTool } from '@oh-my-pi/pi-coding-agent/tools/bash';
+import { cfgTaskPerCallModel } from '@oh-my-pi/pi-coding-agent/task/settings';
 import { nativePluginExtensionPaths } from './native-plugin-loader.ts';
 import { NativeCacheWarming } from './catalog-warming.ts';
 
@@ -47,6 +48,7 @@ export class WorkerSession {
   private readonly operations = new Set<Promise<WorkerOperationResult>>();
   private readonly defaultToolNames: string[];
   private readonly defaultMountedNames: string[];
+  private readonly defaultRegisteredNames: string[];
   private readonly queuedContext = new WeakMap<AgentMessage, PreparedPrompt['context']>();
   private readonly nativeQueuedPreparation: AgentSession['agent']['prepareQueuedMessages'];
   private binding: Promise<void> = Promise.resolve();
@@ -79,13 +81,14 @@ export class WorkerSession {
     this.projection = new WorkerProjection(session.sessionManager, sessionId);
     this.defaultToolNames = session.getActiveToolNames();
     this.defaultMountedNames = session.getMountedXdevToolNames();
+    this.defaultRegisteredNames = session.getAllToolNames();
     this.nativeQueuedPreparation = session.agent.prepareQueuedMessages;
     this.subagentEventBus.on(TASK_SUBAGENT_LIFECYCLE_CHANNEL, data => {
       // SAFETY: The worker publishes this channel only with SubagentLifecyclePayload.
       this.onSubagent(data as SubagentLifecyclePayload);
     });
-    session.agent.prepareQueuedMessages = async (messages, signal) => {
-      const nativePreparation = await this.nativeQueuedPreparation?.(messages, signal);
+    session.agent.prepareQueuedMessages = async (messages, signal, ...rest) => {
+      const nativePreparation = await this.nativeQueuedPreparation?.(messages, signal, ...(rest as [never]));
       return {
         commit: () => {
           const nativeContext = nativePreparation?.commit();
@@ -203,6 +206,7 @@ export class WorkerSession {
       });
       const subagentEventBus = new EventBus();
       const pluginExtensionPaths = await nativePluginExtensionPaths(input.cwd);
+      cfgTaskPerCallModel.override(settings, 'on');
       const result = await createAgentSession({
         cwd: input.cwd, agentDir: input.agentDirectory, sessionManager: manager, authStorage, modelRegistry, settings,
         initialModelRefreshStrategy: 'offline',
@@ -314,7 +318,7 @@ export class WorkerSession {
       if (profile.allowedTools.some(name => !available.some(tool => tool.name === name))) throw new ProjectionError(422, 'UNSUPPORTED_CAPABILITY', 'Selected profile tool is unavailable');
       await this.session.setActiveToolsByName([...profile.allowedTools]);
     } else if (this.admission.profile) {
-      await this.session.restoreNonMCPToolPresentation(this.defaultToolNames, this.defaultMountedNames);
+      await this.session.restoreNonMCPToolPresentation(this.defaultToolNames, this.defaultMountedNames, this.defaultRegisteredNames);
     }
     this.admission.profile = profile;
   }

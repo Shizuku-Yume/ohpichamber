@@ -1,0 +1,161 @@
+{
+  "sourceRevision": "650f3a108229ee11bf68ba3377f4e8c3391cd424",
+  "artifactSetSha256": "ff74779f3557a4f52e0e4f2569ad50d9f35451310fc05e0b798c7470fdc3b735",
+  "files": [
+    {
+      "source": "tarballs/oh-my-pi-omp-stats-18.16.0.tgz",
+      "destination": "vendor/omp/650f3a10/tarballs/oh-my-pi-omp-stats-18.16.0.tgz",
+      "sha256": "4c64e3e72c3774db1e133ed3cd04bc85d857127e90d0fd4b393e3f1b816cc343",
+      "size": 234013
+    },
+    {
+      "source": "tarballs/oh-my-pi-omptype-18.16.0.tgz",
+      "destination": "vendor/omp/650f3a10/tarballs/oh-my-pi-omptype-18.16.0.tgz",
+      "sha256": "e0843df7d1b8ee3f75bbca37b2d4212de13f0c132a2d0199396ba8ef6350da77",
+      "size": 95213
+    },
+    {
+      "source": "tarballs/oh-my-pi-pi-agent-core-18.16.0.tgz",
+      "destination": "vendor/omp/650f3a10/tarballs/oh-my-pi-pi-agent-core-18.16.0.tgz",
+      "sha256": "08db188fc511c0ba08c1ff3a39746fe5ffa9619e5203a8e9c000ba0a314a9246",
+      "size": 275641
+    },
+    {
+      "source": "tarballs/oh-my-pi-pi-ai-18.16.0.tgz",
+      "destination": "vendor/omp/650f3a10/tarballs/oh-my-pi-pi-ai-18.16.0.tgz",
+      "sha256": "2b08aad383110cbd3ebd95b5495fcd08250a4879cca5f7b7c711758f01252496",
+      "size": 1679969
+    },
+    {
+      "source": "tarballs/oh-my-pi-pi-catalog-18.16.0.tgz",
+      "destination": "vendor/omp/650f3a10/tarballs/oh-my-pi-pi-catalog-18.16.0.tgz",
+      "sha256": "3bef46809140f5218ce6997a44ec9faf71f8bd59193b069de925d34ef1277ac6",
+      "size": 829304
+    },
+    {
+      "source": "tarballs/oh-my-pi-pi-coding-agent-18.16.0.tgz",
+      "destination": "vendor/omp/650f3a10/tarballs/oh-my-pi-pi-coding-agent-18.16.0.tgz",
+      "sha256": "fd3fd729f3cacf86bbcafb452390f3f74f8dacc3f5294617738b22d1b6411bb2",
+      "size": 13795034
+    },
+    {
+      "source": "tarballs/oh-my-pi-pi-mnemopi-18.16.0.tgz",
+      "destination": "vendor/omp/650f3a10/tarballs/oh-my-pi-pi-mnemopi-18.16.0.tgz",
+      "sha256": "1ae584cae03570b14cce90ca8001f5e2a33a68436c28bca3d31adf034cd2b9d3",
+      "size": 193844
+    },
+    {
+      "source": "tarballs/oh-my-pi-pi-natives-18.16.0.tgz",
+      "destination": "vendor/omp/650f3a10/tarballs/oh-my-pi-pi-natives-18.16.0.tgz",
+      "sha256": "a5fc30ac3c7201d1c66fa38880d161763c73a425d7a31a7570faa728f1f7ced6",
+      "size": 131237
+    },
+    {
+      "source": "tarballs/oh-my-pi-pi-natives-darwin-arm64-18.16.0.tgz",
+      "destination": "vendor/omp/650f3a10/tarballs/oh-my-pi-pi-natives-darwin-arm64-18.16.0.tgz",
+      "sha256": "7a910be03a22d4540c98398a53ddbe1b758a8d90cb720ffbee3e74dd464b262a",
+      "size": 43462466
+    },
+    {
+      "source": "tarballs/oh-my-pi-pi-natives-darwin-x64-18.16.0.tgz",
+      "destination": "vendor/omp/650f3a10/tarballs/oh-my-pi-pi-natives-darwin-x64-18.16.0.tgz",
+      "sha256": "73fd8aa3e72f4ab7f0e4edc71fe0bcdc514e75f9de5e7383518a08ec3520e6d5",
+      "size": 46863587
+    },
+    {
+      "source": "tarballs/oh-my-pi-pi-natives-linux-arm64-18.16.0.tgz",
+      "destination": "vendor/omp/650f3a10/tarballs/oh-my-pi-pi-natives-linux-arm64-18.16.0.tgz",
+      "sha256": "97dcd74aa2460eafaeee74f0613c0d05330d30fdc9ca59564c76c072f25840da",
+      "size": 46340870
+    },
+    {
+      "source": "tarballs/oh-my-pi-pi-natives-linux-x64-18.16.0.tgz",
+      "destination": "vendor/omp/650f3a10/tarballs/oh-my-pi-pi-natives-linux-x64-18.16.0.tgz",
+      "sha256": "9f0ad4990330aba3c545af4b382b6f32f1d2d9559b7dd98a51774be7db9dc2da",
+      "size": 97785071
+    },
+    {
+      "source": "tarballs/oh-my-pi-pi-natives-win32-arm64-18.16.0.tgz",
+      "destination": "vendor/omp/650f3a10/tarballs/oh-my-pi-pi-natives-win32-arm64-18.16.0.tgz",
+      "sha256": "620fac90e1a571abc1f918a4bcb1cf5f20c4e8d445d4fd73175db9c95081a1d6",
+      "size": 43194155
+    },
+    {
+      "source": "tarballs/oh-my-pi-pi-natives-win32-x64-18.16.0.tgz",
+      "destination": "vendor/omp/650f3a10/tarballs/oh-my-pi-pi-natives-win32-x64-18.16.0.tgz",
+      "sha256": "08450554989fd51fa74c7d131cd446b1fded026c027e01b947ff710510b85334",
+      "size": 46433232
+    },
+    {
+      "source": "tarballs/oh-my-pi-pi-tui-18.16.0.tgz",
+      "destination": "vendor/omp/650f3a10/tarballs/oh-my-pi-pi-tui-18.16.0.tgz",
+      "sha256": "5e5f4ccfa8cae6baa9f1eb5388baea8100cefd2644d554af863b5a53e8444c33",
+      "size": 2287015
+    },
+    {
+      "source": "tarballs/oh-my-pi-pi-utils-18.16.0.tgz",
+      "destination": "vendor/omp/650f3a10/tarballs/oh-my-pi-pi-utils-18.16.0.tgz",
+      "sha256": "2fe1907d0cde1b9b520dc5e74b0c042e6715b539ee0908a684f232246bd4852b",
+      "size": 402542
+    },
+    {
+      "source": "tarballs/oh-my-pi-pi-wire-18.16.0.tgz",
+      "destination": "vendor/omp/650f3a10/tarballs/oh-my-pi-pi-wire-18.16.0.tgz",
+      "sha256": "9c07a2b918a504e55ca589c34c7ad51431ec4a374933c605fdac7d23f777e191",
+      "size": 27169
+    },
+    {
+      "source": "tarballs/oh-my-pi-snapcompact-18.16.0.tgz",
+      "destination": "vendor/omp/650f3a10/tarballs/oh-my-pi-snapcompact-18.16.0.tgz",
+      "sha256": "c71bfbdabe78632492de118b58d957033f6ada6a4153a31952fff0ee9b2d5d28",
+      "size": 45264
+    },
+    {
+      "source": "inputs/consumer/patches/@ark%2Fschema@0.56.2.patch",
+      "destination": "vendor/omp/650f3a10/patches/@ark%2Fschema@0.56.2.patch",
+      "sha256": "5421df0afd80cba41063a8db9c841ac7ca0dea1635f716d5fe28c0de66f979b2",
+      "size": 1431
+    },
+    {
+      "source": "inputs/consumer/patches/puppeteer-core@25.3.0.patch",
+      "destination": "vendor/omp/650f3a10/patches/puppeteer-core@25.3.0.patch",
+      "sha256": "6b1a58844185cd5096b7cff14012d171d01d344d4d3d2206d65975d67ed6c5d7",
+      "size": 37801
+    }
+  ],
+  "platform": "all-targets",
+  "targets": {
+    "linux-x64": {
+      "builtFromSource": true,
+      "verifiedOnHost": true
+    },
+    "linux-arm64": {
+      "builtFromSource": false,
+      "verifiedOnHost": false,
+      "standIn": "provenance-attested registry leaf"
+    },
+    "darwin-arm64": {
+      "builtFromSource": false,
+      "verifiedOnHost": false,
+      "standIn": "provenance-attested registry leaf"
+    },
+    "darwin-x64": {
+      "builtFromSource": false,
+      "verifiedOnHost": false,
+      "standIn": "provenance-attested registry leaf"
+    },
+    "win32-x64": {
+      "builtFromSource": false,
+      "verifiedOnHost": false,
+      "standIn": "provenance-attested registry leaf"
+    },
+    "win32-arm64": {
+      "builtFromSource": false,
+      "verifiedOnHost": false,
+      "standIn": "provenance-attested registry leaf"
+    }
+  },
+  "limits": [
+    "Linux x64 native package is built from source and runtime-verified; the remaining five target leaves have verified npm provenance, target os/cpu, and 18.16.0 version stamp, with runtime execution unrun on this Linux x64 host."
+  ]
+}

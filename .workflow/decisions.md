@@ -216,6 +216,24 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Revisit when:** The maintainer reintroduces a supported pre-`v2` consumer, or the manifest schema changes independently of the transport.
 - **Effort:** post-m3-hardening
 
+## 2026-10-24 - Keep Capacitor mobile in the M5 release matrix
+
+- **Decided:** Keep Capacitor mobile as a supported surface in the M5 release matrix. Release stays blocked until physical-device certification passes on a Pixel 8 running Android 15/API 35 and a physical iPhone running iOS 26 through TestFlight, covering pairing, canonical chat, reconnect, approval/question recovery, push-click routing and offline queue.
+- **Instead of:** Removing mobile from the release matrix and product docs until device evidence exists.
+- **Because:** `scope.md` retains Mobile, the shell and signed iOS/Android workflows already exist, and the missing piece is device evidence rather than implementation. Keeping the row with a blocked release is more honest than hiding a retained surface.
+- **Mine:** no
+- **Revisit when:** the maintainer drops mobile from product scope or device access is unavailable for the planned release.
+- **Effort:** post-m3-hardening
+
+## 2026-10-24 - Bundle the Agent Runtime into @openchamber/web
+
+- **Decided:** Make npm standalone distribution work by bundling a per-platform Agent Runtime payload into `@openchamber/web`, using the same staged payload and identity verification the Electron build already produces. Do not publish `@openchamber/agent-service`, `@openchamber/agent-contract` or the vendored OMP closure; a packed `@openchamber/web` must contain no `workspace:*` dependency.
+- **Instead of:** Publishing the Agent Service and Contract packages with the OMP closure, or dropping npm standalone from the supported matrix and pointing Web/PWA deployment only at Docker.
+- **Because:** the maintainer chose bundling. Publishing would put third-party OMP package names and native artifacts under this project's registry ownership, while dropping npm would remove the documented Web/PWA install path. The Electron staging path already proves payload identity, so one verified runtime recipe serves both artifacts.
+- **Mine:** no
+- **Revisit when:** the bundled payload exceeds the npm package limit, a platform runtime cannot be produced from the approved native leaf, or the maintainer drops npm standalone from product scope.
+- **Effort:** post-m3-hardening
+
 ## 2026-10-25 - Drive OMP modes in-process instead of the rpc-ui subprocess
 
 - **Decided:** Keep OMP inside the Agent Service worker and reuse the pinned package's RPC-mode modules in-process (`RpcGoalController`, `RpcBtwController`, `executeAcpBuiltinSlashCommand`). Plan and vibe get a worker mode controller that follows `interactive-mode.ts` without importing it.

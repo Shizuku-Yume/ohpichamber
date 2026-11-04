@@ -77,17 +77,29 @@ Before M1 source changes, the assembled frozen installation, workspace build, ty
 
 ## OMP source preparation
 
-On 2026-10-11, the maintainer selected the latest official OMP repository source for the next step, rather than the earlier package research baseline. The source snapshot is retained outside this application's workspace.
+On 2026-11-04, the maintainer approved updating the pinned OMP source to latest official npm dist-tag 18.16.0, verified by signed SLSA provenance attestation.
 
 - Repository: `https://github.com/can1357/oh-my-pi`, branch `main`.
-- Pinned revision: `c9de2b02b997f37cc89639282ed35dec86f139e8`, the latest entry in the public commit feed at acquisition; its timestamp is `2026-10-11T04:38:09Z`.
-- Acquisition: the repository API returned HTTP 403, so the public Atom feed supplied the revision and the SHA-addressed codeload archive supplied the source. This is a source snapshot without Git history, not a Git clone.
-- Archive SHA-256: `06b6a671af953f5cdefe95cbd44271a5c20d9b9e951173af7d10d71e1b0dc150`. All 8,962 extracted regular files matched their archive contents; the archive contained no symlinks.
-- The acquired `packages/coding-agent/package.json` declares `@oh-my-pi/pi-coding-agent` version `18.8.9`; this is source metadata, not an installed or exercised SDK version.
-- The current shell reports Node `24.18.0` and Bun `1.4.2`, meeting this application's declared toolchain requirements.
+- Pinned revision: `650f3a108229ee11bf68ba3377f4e8c3391cd424`, verified against the npm SLSA provenance payload for `@oh-my-pi/pi-coding-agent@18.16.0`.
+- Acquisition: archive `https://github.com/can1357/oh-my-pi/archive/650f3a108229ee11bf68ba3377f4e8c3391cd424.tar.gz`.
+- Archive SHA-256: `5988bc63bae01f242138333572e45551ced2cea602656ff225ac5bfab6f92821`.
+- Package version: `@oh-my-pi/pi-coding-agent` version `18.16.0`.
+- First-party package closure and Linux x64 native leaf packed from source per runbook into `vendor/omp/650f3a10/tarballs/`.
+- Validation results (2026-11-04):
+  - 13 source-derived first-party packages plus Linux x64 leaf (`PI_NATIVES_VERSION_STAMP:18.16.0`) vendored under `vendor/omp/650f3a10/tarballs/` with `copy-manifest.json` and `dependency-owners.json`.
+  - Rebased SDK patch (`vendor/omp/650f3a10/patches/@oh-my-pi%2Fpi-coding-agent@...`) providing `observeBashJobs`, `BashJobEvent` in `job-manager.ts`, `onChunk`/`finished`/`started` in `bash.ts`, and `initialModelRefreshStrategy` in `sdk.ts`.
+  - `bun install --frozen-lockfile`: pass (0 changes).
+  - `bun run type-check`: pass (0 type errors in 3,190 files across 5 projects).
+  - `bun run lint`: pass (0 errors across all workspaces).
+  - `bun run dead-code`: pass (0 findings in agent-service or vendor scopes).
+  - Agent service test suite (`bun test --timeout 15000 packages/agent-service/src`): 270 passed, 7 skipped (non-Linux), 0 failed across 44 files (277 total), including focused `interaction.test.ts` regression tests (5/5).
+  - Live SDK execution (`session-native.test.ts`): 18/18 passed.
+  - Supervisor integration tests (`agent-service-supervisor.*.test.js`): 35/35 passed.
+  - Electron runtime staging & verification: `prepare:agent-runtime` staged 158 packages; `verify:agent-runtime` passed with `{"bunVersion":"1.4.4","packageCount":158,"readiness":{"ready":true,"engine":"omp","version":"1.0.0"}}`.
+  - Full workspace test runner (`node scripts/run-isolated-tests.mjs --suites`): all 7 workspaces passed (scripts 23/23 files, sdk 26/26 files, ui 993/993 files, agent-contract 178/178 tests, agent-service 270/277 tests, electron 54/54 files, web 7480/7622 tests).
+  - Non-Linux native leaves: the five non-Linux npm artifacts (`darwin-arm64`, `darwin-x64`, `linux-arm64`, `win32-arm64`, `win32-x64`) are individually SLSA-attested with exact archive SHA-512 digest matching the attestation subject and pinned commit `650f3a108229ee11bf68ba3377f4e8c3391cd424` predicate, but source build was not performed on this host. This is not a pass against the source-build criterion; Task 29 remains blocked, and no landing or archiving will be performed. Preexisting task 26 dirty paths preserved.
 
-No OMP dependencies were installed, build or runtime was launched, application dependencies were changed, or Git commands were run during source acquisition. The M0 fixture evidence and contract reconciliation are recorded below; they do not close the M0 gate.
-
+No application dependencies were changed outside the OMP pin update. The M0 fixture evidence and contract reconciliation are recorded below; they do not close the M0 gate.
 ## M0 fixture evidence
 
 On 2026-10-11, the pinned OMP 18.8.9 source at revision `c9de2b02...` was exercised on Linux x64 with fixture runs. The [lifecycle artifact](omp-migration/m0/lifecycle.json) passed 9 probes, and the [capabilities artifact](omp-migration/m0/capabilities-fixture.json) recorded 8 passed and 5 partial probes. The [isolation artifact](omp-migration/m0/isolation-artifact.json) passed dedicated workers but failed all shared-process cwd/env modes and failed the 100 MiB idle RSS budget. Focused runner/process-group/pidfd cleanup tests passed.

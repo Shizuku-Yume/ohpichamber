@@ -3,7 +3,7 @@ import { arrayMove } from '@dnd-kit/sortable';
 import { useI18n } from '@/lib/i18n';
 import { useUIStore } from '@/stores/useUIStore';
 import { selectCommandsForDirectory, useCommandsStore } from '@/stores/useCommandsStore';
-import { selectSkillsForDirectory, useSkillsStore } from '@/stores/useSkillsStore';
+import { selectAvailableSkillsForDirectory, useSkillsStore } from '@/stores/useSkillsStore';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { updateDesktopSettings } from '@/lib/persistence';
@@ -68,7 +68,7 @@ export function useDraftStarters(): UseDraftStartersResult {
     const globalRaw = useUIStore((s) => s.globalDraftStarters);
     const directory = useEffectiveDirectory();
     const commands = useCommandsStore(state => selectCommandsForDirectory(state, directory));
-    const skills = useSkillsStore(state => selectSkillsForDirectory(state, directory));
+    const skills = useSkillsStore(state => selectAvailableSkillsForDirectory(state, directory));
     const activeProjectId = useProjectsStore((s) => s.activeProjectId);
     const projects = useProjectsStore((s) => s.projects);
 

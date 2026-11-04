@@ -112,3 +112,4 @@ describe("permission mode cycle", () => {
     expect(nextPermissionMode("auto", false)).toBe("ask")
   })
 })
+

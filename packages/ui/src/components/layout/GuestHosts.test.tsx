@@ -45,6 +45,7 @@ test(`${variant.name}: actions and commands use the execution entry and clean up
   }
   const fetch = spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     const target = String(input instanceof Request ? input.url : input);
+    if (target.includes('/frame-grant')) return Response.json({ grant: 'grant-test', expiresAt: Date.now() + 60_000 });
     if (target.includes('/auth/url-token')) return Response.json({ token: 'scoped-test', expiresAt: Date.now() + 60_000 });
     // Sync bootstrap uses the canonical client; its routes are answered here.
     if (target.includes('/event')) return new Response(new ReadableStream(), { headers: { 'content-type': 'text/event-stream' } });

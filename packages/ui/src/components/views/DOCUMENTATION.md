@@ -45,9 +45,11 @@ while previewing, so same-length edits in the middle invalidate cached output.
 ## Pull request comparisons
 
 DiffView, mobile Changes and walkthrough share `PullRequestComparisonSelector`
-and the selection owned by `usePullRequestComparison`. PR mode reads GitHub's
-published patch through `/api/walkthrough/pr-diff`. It includes no local edits
+and the selection owned by `usePullRequestComparison`. PR mode reads the bound
+provider's published patch through `/api/walkthrough/pr-diff`. It includes no local edits
 or unpushed commits. `lib/diff/pullRequestDiff.ts` splits the response once;
+Board handoffs are accepted only while their own read context matches a fresh
+binding; a source from an old account is never adopted under a replacement account.
 `useGitComparison` serves file patches from that same snapshot. Snapshot revisions
 invalidate the view's patch cache atomically, including edits with unchanged
 file names and line counts. Opening a file adds no network request.
@@ -83,3 +85,29 @@ Most focused tests use Bun. `MultiFileDiffEntry.vitest.tsx` exercises the real
 diff component through the web workspace's Vitest runner because its transitive
 UI imports require Vite asset transforms. The web test configuration includes
 UI `*.vitest.tsx` fixtures; the isolated Bun runner intentionally does not.
+
+## Archive page
+
+`ArchiveView` lists archived top-level sessions. A subsession whose parent is
+archived too is left out: it comes back when the parent is restored. A
+subsession archived while its parent stays active is listed, indented under a
+row with the parent's title, and the subsessions of one parent sit together at
+the place of the newest of them. Without that row such a session would show
+nowhere: the sidebar hides archived sessions, and the parent is not in the
+archive. Restore brings it back on its own, under that parent. One rule,
+`isRestorableOnItsOwn` in `sync/session-restore-rule.ts`, decides what the page
+lists, when the chat header's session menu offers Restore, and what the restore
+action accepts, so the three never disagree.
+
+The page also lists a selected project's archived worktrees above its archived
+sessions, and on the phone every project's archived worktrees above the list.
+Each row shows the worktree name, branch and archive date with **Restore** and
+**Delete** (always visible on touch). Restore creates the checkout on the
+recorded branch before the Host applies the archive, then reopens only sessions
+whose current canonical workspace is still in that project and checkout; a
+session moved elsewhere is left alone. A partial-removal refusal keeps the
+server's snapshot ref and rolls back the sessions archived for the attempt.
+Delete asks before removing sessions and the archive; its optional local-branch
+deletion is unchecked by default. The listing is
+`lib/worktrees/worktreeArchive.ts`; repository refs are the record, and a failed
+listing keeps the last one instead of showing an empty archive.

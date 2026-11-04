@@ -109,7 +109,7 @@ Settled decisions are recorded here for reference. Remaining questions belong to
 4. **Windows signing** (task 14): which certificate and secret names the release jobs use.
 5. **Native packages for non-Linux targets** (after task 12): vendor registry prebuilt binaries pinned by integrity, or build from the pinned Rust source.
 6. **npm standalone distribution** (task 26): publish the Agent Service packages, bundle them into `@openchamber/web`, or drop npm standalone from the supported matrix.
-7. **Upstream OpenChamber sync** (after task 28): which policy to adopt.
+7. **Resolved (2026-10-27): Upstream OpenChamber sync** (after task 28): adopt the upstream-first area refresh and run it now to `0056bf6a9` (v2.5.2+1), including features. Work continues in [upstream-refresh](upstream-refresh.md). Decision: `decisions.md: 2026-10-27 - Adopt the upstream-first area refresh now`.
 
 ## Notes
 

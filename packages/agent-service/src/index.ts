@@ -106,6 +106,9 @@ async function main(): Promise<void> {
     };
     process.once('SIGTERM', stop);
     process.once('SIGINT', stop);
+    // A hard-killed Host closes the private IPC channel: the detached service
+    // and its unrelated workers must not keep running without their owner.
+    process.once('disconnect', stop);
     await owned.start();
   } catch {
     // Standalone `bun run start` has no Host IPC channel and fails closed here.

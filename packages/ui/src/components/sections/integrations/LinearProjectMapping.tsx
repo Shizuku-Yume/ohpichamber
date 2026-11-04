@@ -5,7 +5,6 @@ import {
   SettingsFieldRow,
   SETTINGS_FIELDS_STACK_CLASS,
   SETTINGS_SELECT_ROW_TRIGGER_CLASS,
-  SETTINGS_SELECT_SIZE,
 } from '@/components/sections/shared/SettingsSection';
 import { reportSettingsSaveState } from '@/lib/persistence';
 import { useI18n } from '@/lib/i18n';
@@ -106,20 +105,6 @@ export function LinearProjectMapping({
     return project?.label?.trim() || path;
   };
 
-  const defaultProjectLabel = (value: string | undefined) => {
-    if (!value || value === NONE) {
-      return t('settings.integrations.linear.mapping.defaultProject.placeholder');
-    }
-    return projectLabel(value);
-  };
-
-  const teamProjectLabel = (value: string | undefined) => {
-    if (!value || value === INHERIT) {
-      return t('settings.integrations.linear.mapping.teams.useDefault');
-    }
-    return projectLabel(value);
-  };
-
   return (
     <div className={SETTINGS_FIELDS_STACK_CLASS}>
       {projects.length === 0 ? (
@@ -144,13 +129,10 @@ export function LinearProjectMapping({
           }}
         >
           <SelectTrigger
-            size={SETTINGS_SELECT_SIZE}
             className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
             aria-label={t('settings.integrations.linear.mapping.defaultProject.aria')}
           >
-            <SelectValue placeholder={t('settings.integrations.linear.mapping.defaultProject.placeholder')}>
-              {defaultProjectLabel}
-            </SelectValue>
+            <SelectValue placeholder={t('settings.integrations.linear.mapping.defaultProject.placeholder')} />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={NONE}>
@@ -198,13 +180,10 @@ export function LinearProjectMapping({
                   }}
                 >
                   <SelectTrigger
-                    size={SETTINGS_SELECT_SIZE}
                     className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
                     aria-label={t('settings.integrations.linear.mapping.teams.aria', { team: team.key })}
                   >
-                    <SelectValue placeholder={t('settings.integrations.linear.mapping.teams.useDefault')}>
-                      {teamProjectLabel}
-                    </SelectValue>
+                    <SelectValue placeholder={t('settings.integrations.linear.mapping.teams.useDefault')} />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={INHERIT}>

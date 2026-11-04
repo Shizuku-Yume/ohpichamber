@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { constants, type Stats } from 'node:fs';
 import { lstat, mkdir, open, realpath, rename, unlink, readdir, type FileHandle } from 'node:fs/promises';
+
+import { removeTemporaryFile } from './temporary-file.ts';
 import { join } from 'node:path';
 import { ProjectionError } from '../projection/journal.ts';
 
@@ -81,10 +83,7 @@ export class PluginLocalSource {
       // Recheck parent identity immediately before the atomic commit.
       if (await this.directory(false) !== directory) throw new ProjectionError(403, 'UNAUTHORIZED', 'Extension directory changed');
       await rename(temporary, target);
-    } finally {
-      try { await unlink(temporary); }
-      catch (error) { if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error; }
-    }
+    } finally { await removeTemporaryFile(temporary); }
   }
 
   async delete(extensionId: string): Promise<void> {

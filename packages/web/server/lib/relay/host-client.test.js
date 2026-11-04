@@ -391,7 +391,7 @@ describe('relay host-client data socket retry', () => {
     relay = null;
   });
 
-  const startHost = async (outcomes) => {
+  const startHost = async (outcomes, logger = { warn: () => {}, info: () => {} }) => {
     relay = await startScriptedRelay(outcomes);
     const identity = await buildIdentity();
     let markConnected;
@@ -403,7 +403,7 @@ describe('relay host-client data socket retry', () => {
       onStatus: (status) => {
         if (status.state === 'connected') markConnected();
       },
-      logger: { warn: () => {}, info: () => {} },
+      logger,
     });
     await connected;
   };
@@ -436,6 +436,32 @@ describe('relay host-client data socket retry', () => {
 
     expect(await relay.waitForDials(2, 2500)).toBe(false);
     expect(relay.state.dials).toEqual(['conn-gone']);
+  }, 10000);
+
+  it('closes a data socket on a retire frame with an unbounded reason instead of leaking it', async () => {
+    await startHost([]);
+    relay.send({ type: 'connected', connectionId: 'conn-retire' });
+    expect(await relay.waitForDials(1, 2000)).toBe(true);
+    await sleep(100);
+    const dataSocket = relay.state.dataSockets[0];
+    const closed = new Promise((resolve) => dataSocket.on('close', resolve));
+    // 500 bytes exceeds ws's 123-byte close reason; passing it to close() used
+    // to throw after the host dropped its map entry, leaving this socket open.
+    dataSocket.send(JSON.stringify({ type: 'relay-retire', code: 1000, reason: 'x'.repeat(500) }));
+    const closeCode = await Promise.race([closed, sleep(3000).then(() => 'timeout')]);
+    expect(closeCode).not.toBe('timeout');
+    expect(await relay.waitForDials(2, 1500)).toBe(false);
+  }, 10000);
+
+  it('keeps peer close reasons to one sanitized log line and out of status line breaks', async () => {
+    const lines = [];
+    await startHost([], { warn: () => {}, info: (line) => lines.push(line) });
+    relay.send({ type: 'relay-retire', code: 4001, reason: 'evicted\nFAKE LOG' });
+    await sleep(100);
+    const status = host.getStatus();
+    expect(status.lastError ?? '').not.toContain('\n');
+    expect(lines.join('\n')).not.toContain('\nFAKE');
+    expect(lines.some((line) => line.includes('FAKE LOG'))).toBe(true);
   }, 10000);
 
   it('leaves a data socket that opened and then closed to the client reconnect', async () => {
@@ -471,6 +497,126 @@ class BunLikeFailingSocket extends EventEmitter {
 
   ping() {}
 }
+
+describe('relay host-client control reconnect', () => {
+  const fakeIdentity = {
+    serverId: 'fake-server-id',
+    hostEncPrivateKey: null,
+    signRelayAuth: () => ({ ts: 1, sig: 'sig', pk: 'pk' }),
+  };
+
+  // Opens the control socket, has the relay close it with `code`, and reports
+  // how many control dials follow within 1.5 s.
+  const redialsAfterClose = async (code) => {
+    const sockets = [];
+    const host = startRelayHost({
+      relayUrl: 'wss://relay.example.test/ws',
+      identity: fakeIdentity,
+      getLocalPort: () => 1,
+      logger: { warn: () => {} },
+      createSocket: (url) => {
+        const socket = new BunLikeFailingSocket(url);
+        sockets.push(socket);
+        return socket;
+      },
+    });
+    try {
+      const control = sockets[0];
+      control.readyState = WebSocket.OPEN;
+      control.emit('open');
+      control.readyState = WebSocket.CLOSED;
+      control.emit('close', code, Buffer.from('reason'));
+      await sleep(1500);
+      return sockets.length - 1;
+    } finally {
+      host.stop();
+    }
+  };
+
+  it('reconnects after a dropped control socket on the short backoff', async () => {
+    expect(await redialsAfterClose(1006)).toBe(1);
+  });
+
+  it('holds off when another host with the same identity took the slot', async () => {
+    expect(await redialsAfterClose(4001)).toBe(0);
+  });
+
+  // The relay retires a replaced control socket with a frame; the host closes
+  // it with 1000, and the frame's code decides the reconnect.
+  const redialsAfterRetire = async (code) => {
+    const sockets = [];
+    const host = startRelayHost({
+      relayUrl: 'wss://relay.example.test/ws',
+      identity: fakeIdentity,
+      getLocalPort: () => 1,
+      logger: { warn: () => {} },
+      createSocket: (url) => {
+        const socket = new BunLikeFailingSocket(url);
+        socket.close = (closeCode) => {
+          socket.readyState = WebSocket.CLOSED;
+          socket.emit('close', closeCode, Buffer.from(''));
+        };
+        sockets.push(socket);
+        return socket;
+      },
+    });
+    try {
+      const control = sockets[0];
+      control.readyState = WebSocket.OPEN;
+      control.emit('open');
+      control.emit('message', Buffer.from(JSON.stringify({ type: 'relay-retire', code, reason: 'retired' })), false);
+      await sleep(1500);
+      return sockets.length - 1;
+    } finally {
+      host.stop();
+    }
+  };
+
+  it('holds off when the relay retires the control socket as replaced', async () => {
+    expect(await redialsAfterRetire(4001)).toBe(0);
+  });
+
+  it('reconnects when the relay retires an unresponsive control socket', async () => {
+    expect(await redialsAfterRetire(4003)).toBe(1);
+  });
+});
+
+describe('relay host-client relay retire', () => {
+  it('drops a data socket the relay asks it to close', async () => {
+    const sockets = [];
+    const host = startRelayHost({
+      relayUrl: 'wss://relay.example.test/ws',
+      identity: { serverId: 'fake-server-id', hostEncPrivateKey: null, signRelayAuth: () => ({ ts: 1, sig: 'sig', pk: 'pk' }) },
+      getLocalPort: () => 1,
+      logger: { warn: () => {}, info: () => {} },
+      createSocket: (url) => {
+        const socket = new BunLikeFailingSocket(url);
+        socket.closedWith = null;
+        socket.close = (code) => { socket.closedWith = code; };
+        sockets.push(socket);
+        return socket;
+      },
+    });
+    try {
+      const control = sockets[0];
+      control.readyState = WebSocket.OPEN;
+      control.emit('open');
+      control.emit('message', Buffer.from(JSON.stringify({ type: 'connected', connectionId: 'conn-1' })), false);
+      const data = sockets[1];
+      data.readyState = WebSocket.OPEN;
+      data.emit('open');
+      expect(host.getStatus().connectedClients).toBe(1);
+
+      data.emit('message', Buffer.from(JSON.stringify({ type: 'relay-retire', code: 1001, reason: 'Client disconnected' })), false);
+      await sleep(20);
+
+      expect(data.closedWith).toBe(1000);
+      expect(host.getStatus().connectedClients).toBe(0);
+    } finally {
+      host.stop();
+    }
+  });
+});
 
 describe('relay host-client error redaction', () => {
   const fakeIdentity = {

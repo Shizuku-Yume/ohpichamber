@@ -9,6 +9,7 @@ import {
   fetchGoogleQuotaBuckets,
   fetchGoogleModels
 } from './api.js';
+import { refreshGoogleAccessToken } from './oauth.js';
 
 export const providerId = 'google';
 export const providerName = 'Google';
@@ -31,10 +32,18 @@ export const fetchGoogleQuota = async ({ credential } = {}) => {
   const sourceErrors = [];
 
   for (const source of authSources) {
-    const accessToken = source.accessToken;
+    let accessToken = source.accessToken;
     if (!accessToken || (typeof source.expires === 'number' && source.expires <= Date.now())) {
-      sourceErrors.push('Selected Google OAuth credential requires re-authentication');
-      continue;
+      if (!source.refreshToken) {
+        sourceErrors.push(`${source.sourceLabel}: Missing refresh token`);
+        continue;
+      }
+      const refreshed = await refreshGoogleAccessToken(source.refreshToken, 'gemini', { fallbackToAntigravity: true });
+      if (!refreshed.ok) {
+        sourceErrors.push(`${source.sourceLabel}: Failed to refresh OAuth token`);
+        continue;
+      }
+      accessToken = refreshed.accessToken;
     }
 
     const projectId = source.projectId ?? DEFAULT_PROJECT_ID;

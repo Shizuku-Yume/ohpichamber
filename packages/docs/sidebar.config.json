@@ -345,6 +345,8 @@
           "link": "/multi-run/",
           "translations": {
             "nl": "Parallelle runs",
+            "zh-CN": "多重运行",
+            "ko": "다중 실행",
             "fr": "Multi-run",
             "ja": "Multi-run",
             "de": "Mehrfachausführung",
@@ -356,6 +358,8 @@
           "link": "/git/",
           "translations": {
             "nl": "Git en GitHub",
+            "zh-CN": "Git 与 GitHub",
+            "ko": "Git 및 GitHub",
             "fr": "Git et GitHub",
             "ja": "Git と GitHub",
             "de": "Git und GitHub",
@@ -568,20 +572,20 @@
           }
         },
         {
-          "label": "Commands & Snippets",
-          "link": "/commands-snippets/",
+          "label": "Chat Input",
+          "link": "/chat-input/",
           "translations": {
-            "nl": "Opdrachten en snippets",
-            "uk": "Команди та сніпети",
-            "zh-CN": "命令与代码片段",
-            "es": "Comandos y fragmentos",
-            "pt-BR": "Comandos e trechos",
-            "ko": "명령 및 스니펫",
-            "pl": "Polecenia i fragmenty",
-            "fr": "Commandes et snippets",
-            "ja": "コマンドとスニペット",
-            "de": "Befehle und Snippets",
-            "tr": "Komutlar ve parçacıklar"
+            "nl": "Chatinvoer",
+            "uk": "Введення в чаті",
+            "zh-CN": "聊天输入",
+            "es": "Entrada del chat",
+            "pt-BR": "Entrada do chat",
+            "ko": "채팅 입력",
+            "pl": "Wprowadzanie w czacie",
+            "fr": "Saisie dans le chat",
+            "ja": "チャット入力",
+            "de": "Chat-Eingabe",
+            "tr": "Sohbet girişi"
           }
         },
         {

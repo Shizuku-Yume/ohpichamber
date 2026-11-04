@@ -1,3 +1,4 @@
+import { checkoutHoldsDirectory } from '@/lib/worktrees/worktreePaths';
 import { canonicalClient } from '@/api/canonicalClient';
 import type { Session } from '@openchamber/agent-contract';
 import { normalizePath } from '@/lib/pathNormalization';
@@ -8,8 +9,8 @@ import { resolveWorkspaceDirectory } from '@/stores/globalSessions';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import type { WorktreeMetadata } from '@/types/worktree';
 import { getMultiRunIdentity } from './identity';
+import { type RunMemberLocation } from './memberLocation';
 import type { MultiRunSummary } from './runs';
 
 
@@ -34,8 +35,6 @@ const projectRefFor = (path: string): ProjectRef => {
   const project = useProjectsStore.getState().projects.find((entry) => normalizePath(entry.path) === path);
   return { id: project?.id ?? `path:${path}`, path };
 };
-
-export type RunMemberLocation = { project: ProjectRef; worktree: WorktreeMetadata | null };
 
 /**
  * Where a member lives: its project, and the worktree when it has one. A
@@ -158,7 +157,9 @@ export async function keepRunMember(
       await removeProjectWorktree(location.project, worktree, { deleteLocalBranch: true });
       assertCurrent();
       const directoryStore = useDirectoryStore.getState();
-      if (normalizePath(directoryStore.currentDirectory) === normalizePath(worktree.path)) {
+      const currentDirectory = normalizePath(directoryStore.currentDirectory);
+      const removedCheckout = normalizePath(worktree.path);
+      if (currentDirectory && removedCheckout && checkoutHoldsDirectory(removedCheckout, currentDirectory)) {
         directoryStore.setDirectory(location.project.path, { showOverlay: false });
       }
     } catch {

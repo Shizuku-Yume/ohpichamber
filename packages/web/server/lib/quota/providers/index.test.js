@@ -4,7 +4,7 @@ import { fetchQuotaForProvider, listConfiguredQuotaProviders } from './index.js'
 const selection = { workspaceId: 'workspace_1', agentDirectoryId: 'agent_1', providerId: 'cline-pass', credentialRef: 'credential_1' };
 describe('selected quota dispatcher', () => {
   it('lists public selections without secret resolution', async () => {
-    expect(await listConfiguredQuotaProviders({ selections: [{ providerId: 'deepseek' }, { providerId: 'not-supported' }] })).toEqual(['deepseek']);
+    expect(await listConfiguredQuotaProviders({ selections: [{ providerId: 'deepseek' }, { providerId: 'antigravity' }, { providerId: 'not-supported' }] })).toEqual(['deepseek', 'antigravity']);
   });
   it('lists one logical product for multiple explicit native owners and rejects inherited registry keys', async () => {
     expect(await listConfiguredQuotaProviders({ selections: [

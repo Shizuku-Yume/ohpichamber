@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { SESSION_LINK_GUIDANCE, buildKnowledgeSignature, buildKnowledgeText, createSessionKnowledgeRuntime } from './runtime.js';
+import { RENDER_PAGE_GUIDANCE, SESSION_LINK_GUIDANCE, WORKFLOW_GUIDANCE, buildKnowledgeSignature, buildKnowledgeText, createSessionKnowledgeRuntime } from './runtime.js';
 
 const DIRECTORY = '/work/project';
 const PROJECT_ID = 'path_project';
@@ -31,6 +31,8 @@ const createRuntime = (overrides = {}) => createSessionKnowledgeRuntime({
   ...('persistSessionMetadata' in overrides ? { persistSessionMetadata: overrides.persistSessionMetadata } : {}),
   ...('isAgentMemoryEnabled' in overrides ? { isAgentMemoryEnabled: overrides.isAgentMemoryEnabled } : {}),
   ...('isSessionLinkingAvailable' in overrides ? { isSessionLinkingAvailable: overrides.isSessionLinkingAvailable } : {}),
+  ...('isPageRenderingAvailable' in overrides ? { isPageRenderingAvailable: overrides.isPageRenderingAvailable } : {}),
+  ...('isWorkflowAvailable' in overrides ? { isWorkflowAvailable: overrides.isWorkflowAvailable } : {}),
 });
 
 /** An in-memory stand-in for `session-metadata-store.js`. */
@@ -335,16 +337,63 @@ describe('reading what a session was told', () => {
   });
 });
 
+describe('the tools the session has', () => {
+  test('render and workflow guidance is stated only while the tool is there', async () => {
+    const withTools = await createRuntime({
+      projectContextRuntime: { readContext: async () => ({ notes: [], todos: [], plans: [] }) },
+      isAgentMemoryEnabled: async () => false,
+      isPageRenderingAvailable: async () => true,
+      isWorkflowAvailable: async () => true,
+    }).resolvePending(DIRECTORY, '');
+    expect(withTools.text).toContain(RENDER_PAGE_GUIDANCE);
+    expect(withTools.text).toContain(WORKFLOW_GUIDANCE);
+
+    const withoutTools = await createRuntime({
+      projectContextRuntime: { readContext: async () => ({ notes: [], todos: [], plans: [] }) },
+      isAgentMemoryEnabled: async () => false,
+      isPageRenderingAvailable: async () => false,
+      isWorkflowAvailable: async () => false,
+    }).resolvePending(DIRECTORY, '');
+    expect(withoutTools.text).toBe('');
+  });
+
+  test('switching a tool on or off owes the guidance again', () => {
+    const base = { notes: [], plans: [], memory: { global: [], project: [] } };
+    expect(buildKnowledgeSignature({ ...base, rendering: true })).not.toBe(buildKnowledgeSignature(base));
+    expect(buildKnowledgeSignature({ ...base, workflows: true })).not.toBe(buildKnowledgeSignature(base));
+  });
+
+  test('a failing availability check is no tool, not a broken send', async () => {
+    const { text } = await createRuntime({
+      projectContextRuntime: { readContext: async () => ({ notes: [], todos: [], plans: [] }) },
+      isAgentMemoryEnabled: async () => false,
+      isPageRenderingAvailable: async () => { throw new Error('settings unreadable'); },
+    }).resolvePending(DIRECTORY, '');
+    expect(text).not.toContain(RENDER_PAGE_GUIDANCE);
+  });
+});
+
 describe('size', () => {
-  test('an oversized block is cut and says so', () => {
+  test('an oversized source is cut and says so', () => {
     const text = buildKnowledgeText({
       notes: [note({ body: 'x'.repeat(20_000) })],
       plans: [],
       memory: { global: [], project: [] },
     });
 
-    expect(text.length).toBeLessThan(8_200);
-    expect(text).toContain('project knowledge truncated');
+    expect(text.length).toBeLessThan(8_100);
+    expect(text).toContain('(truncated)');
+  });
+
+  test('a huge pin does not crowd out the memory index', () => {
+    const text = buildKnowledgeText({
+      notes: [note({ body: 'x'.repeat(20_000) })],
+      plans: [],
+      memory: { global: [memory()], project: [], enabled: true, complete: true },
+    });
+
+    expect(text).toContain('Uses bun');
+    expect(text).toContain('Save to it in the moment');
   });
 });
 

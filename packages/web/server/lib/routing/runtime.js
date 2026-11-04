@@ -35,6 +35,38 @@ const errorMessage = (error) => (error instanceof Error ? error.message : String
 
 
 
+/** Extensions that name an image when its media type is not a `data:` URL. */
+const IMAGE_EXTENSIONS = new Set(['avif', 'bmp', 'gif', 'heic', 'heif', 'ico', 'jpeg', 'jpg', 'png', 'svg', 'webp']);
+
+// The Host prompt carries attachments as `{ attachmentId, name, mediaType, uri }`;
+// Jev reads text only, so a pasted image has to be stated in the request it
+// judges. Kept beside `routingRequestTextOf` rather than inside the caller,
+// so the rule lives with the classifier it serves.
+const isImageAttachment = (attachment) => {
+  const mediaType = typeof attachment?.mediaType === 'string' ? attachment.mediaType.trim().toLowerCase() : '';
+  if (mediaType.startsWith('image/')) return true;
+  const name = typeof attachment?.name === 'string' ? attachment.name.toLowerCase() : '';
+  const dot = name.lastIndexOf('.');
+  return dot > 0 && IMAGE_EXTENSIONS.has(name.slice(dot + 1));
+};
+
+/**
+ * The attachment fact for the classifier: without it the router discards the
+ * one cue that distinguishes "look at this screenshot" from "fix the
+ * image-upload endpoint".
+ */
+export const attachmentHint = (input) => {
+  const attachments = Array.isArray(input?.attachments) ? input.attachments : [];
+  const images = attachments.filter(isImageAttachment);
+  if (images.length === 0) return '';
+  const names = images.map((attachment) => (typeof attachment?.name === 'string' ? attachment.name.trim() : '')).filter(Boolean).slice(0, 3);
+  const count = images.length === 1 ? 'an image' : `${images.length} images`;
+  return `\n\n[The user attached ${count}${names.length > 0 ? `: ${names.join(', ')}` : ''}]`;
+};
+
+/** What the classifier sees for this send: the user's words plus the attachment fact. */
+export const routingRequestTextOf = (input) => `${(input?.text ?? '').trim()}${attachmentHint(input)}`.trim();
+
 const customEndpointInputSchema = z.object({
   url: z.string().trim().min(1).max(2000),
   model: z.string().trim().min(1).max(200),

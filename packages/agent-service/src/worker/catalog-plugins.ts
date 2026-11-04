@@ -13,6 +13,7 @@ import { JsonObjectSchema, type JsonObject, type InstalledPluginEntry, type Plug
 import type { NativePluginOperation, NativePluginResult } from '../catalogs/plugins.ts';
 import { ProjectionError } from '../projection/journal.ts';
 import { PluginLocalSource } from './plugin-local-source.ts';
+import { removeTemporaryFile } from './temporary-file.ts';
 
 export interface NativePluginsContext {
   cwd: string;
@@ -253,9 +254,6 @@ export class NativePlugins {
     try {
       await writeFile(temporary, source, { flag: 'wx', mode: 0o600 });
       await rename(temporary, path);
-    } finally {
-      try { await unlink(temporary); }
-      catch (error) { if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error; }
-    }
+    } finally { await removeTemporaryFile(temporary); }
   }
 }

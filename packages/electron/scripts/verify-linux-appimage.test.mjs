@@ -15,6 +15,13 @@ const writeElf = (filePath, architecture) => {
   fs.writeFileSync(filePath, header, { mode: 0o755 });
 };
 
+const writeIcon = (root, relativePath) => {
+  fs.mkdirSync(path.dirname(path.join(root, relativePath)), { recursive: true });
+  fs.writeFileSync(path.join(root, relativePath), 'icon');
+  fs.rmSync(path.join(root, '.DirIcon'), { force: true });
+  fs.symlinkSync(relativePath, path.join(root, '.DirIcon'));
+};
+
 const createPayload = () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-payload-test-'));
   fs.writeFileSync(path.join(root, 'openchamber.desktop'), [
@@ -37,6 +44,7 @@ const createPayload = () => {
   for (const name of ['pty.node', 'sherpa-onnx.node']) {
     writeElf(path.join(root, 'resources/app.asar.unpacked/node_modules', name), 'x64');
   }
+  writeIcon(root, 'usr/share/icons/hicolor/512x512/apps/openchamber.png');
   return root;
 };
 
@@ -55,6 +63,12 @@ const addUnpackedNative = (root, relativePath, architecture) => {
   writeElf(file, architecture);
   return file;
 };
+
+const verify = (root) => verifyExtractedPayload({
+  root,
+  targetArchitecture: 'x64',
+  runBunVersion: () => '1.4.2',
+});
 
 test('reads supported ELF architectures', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-elf-test-'));
@@ -188,6 +202,44 @@ test('fails on wrong Bun version or native architecture', () => {
       targetArchitecture: 'x64',
       runBunVersion: () => '1.4.2',
     }), /Native module architecture mismatch/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('accepts a scalable theme icon', () => {
+  const root = createPayload();
+  try {
+    fs.rmSync(path.join(root, 'usr/share/icons/hicolor/512x512'), { recursive: true });
+    writeIcon(root, 'usr/share/icons/hicolor/scalable/apps/openchamber.svg');
+    assert.equal(verify(root).nativeModuleCount, 2);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('fails when the theme cannot resolve Icon=openchamber', () => {
+  for (const relativePath of [
+    'usr/share/icons/hicolor/scalable/openchamber.svg',
+    'usr/share/icons/hicolor/1024x1024/apps/openchamber.png',
+  ]) {
+    const root = createPayload();
+    try {
+      fs.rmSync(path.join(root, 'usr/share/icons/hicolor/512x512'), { recursive: true });
+      writeIcon(root, relativePath);
+      assert.throws(() => verify(root), /Missing theme icon/, relativePath);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test('fails when .DirIcon is dangling', () => {
+  const root = createPayload();
+  try {
+    fs.rmSync(path.join(root, '.DirIcon'));
+    fs.symlinkSync('usr/share/icons/hicolor/scalable/openchamber.svg', path.join(root, '.DirIcon'));
+    assert.throws(() => verify(root), /\.DirIcon does not resolve/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

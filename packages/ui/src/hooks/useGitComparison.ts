@@ -69,7 +69,7 @@ export function useGitComparison(
       let files: GitComparisonFile[];
       if (target.kind === 'pr') {
         if (!context) throw new Error(t(changeRequestCopy('session.githubPrPicker.empty.notConnected', provider)));
-        files = await prCache.load(pushScope, target, () => fetchPullRequestDiff(directory, target, context), force, targetAuthority);
+        files = await prCache.load(pushScope, target, () => fetchPullRequestDiff(context.directory, target, context), force, targetAuthority);
       } else if (target.kind === 'branch') {
         files = (await getGitRangeFiles(directory, { base: target.baseRef, head: target.headRef, includeWorkingTree: true }))
           .map((file) => ({ ...file, insertions: 0, deletions: 0 }));
@@ -109,13 +109,12 @@ export function useGitComparison(
       : getGitCommitDiff(directory, { hash: target.hash, path: filePath, previousPath: file.previousPath, contextLines });
   }, [directory, enabled, filesByPath, key, t]);
 
-  // PR patches come from GitHub at fixed context, so expanding one file means
-  // reading both of its sides from GitHub rather than asking git for more lines.
+  // Provider patches have fixed context; expansion reads both published sides.
   const fetchFullFile = useCallback(async (filePath: string): Promise<{ original: string; modified: string }> => {
     const { key: targetKey, source: target, enabled: active, readContext: context } = sourceRef.current;
     const file = filesByPath.get(filePath);
     if (!directory || targetKey !== key || target?.kind !== 'pr' || !context || !file || !enabled || !active) throw new Error(t('diffView.state.failedToLoadDiff'));
-    return fetchPullRequestFile(directory, target, context, { path: file.path, previousPath: file.previousPath, status: file.status });
+    return fetchPullRequestFile(context.directory, target, context, { path: file.path, previousPath: file.previousPath, status: file.status });
   }, [directory, enabled, filesByPath, key, t]);
 
   return {

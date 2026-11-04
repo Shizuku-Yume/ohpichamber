@@ -20,6 +20,3 @@ export const listModelVariantIds = (variants: ModelVariantSource): string[] => {
   return Object.keys(variants);
 };
 
-/** Names of the thinking levels a model exposes, empty when it has none. */
-export const modelVariantNames = (model: { readonly variants?: ModelVariantSource } | undefined): string[] =>
-  listModelVariantIds(model?.variants);

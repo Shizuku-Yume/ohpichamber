@@ -23,7 +23,6 @@ let confirmReference: ReferenceConfirm | null = null;
 
 const projectStoreState = { getActiveProject: () => project };
 const githubAuthState = { status: { connected: true }, hasChecked: true };
-const linearAuthState = { status: null, hasChecked: true };
 const uiState = { isMobile: false };
 const gitState = { fetchBranches: async () => undefined };
 let worktreeCreations = 0;
@@ -32,7 +31,6 @@ let lastCreateNames: { branchName?: string; worktreeName?: string } | undefined;
 
 const selectProjectState = <T,>(selector: (state: typeof projectStoreState) => T): T => selector(projectStoreState);
 const selectSourceControlAuthEntry = () => githubAuthState;
-const selectLinearAuthState = <T,>(selector: (state: typeof linearAuthState) => T): T => selector(linearAuthState);
 const selectUIState = <T,>(selector: (state: typeof uiState) => T): T => selector(uiState);
 const selectGitState = <T,>(selector: (state: typeof gitState) => T): T => selector(gitState);
 
@@ -109,7 +107,6 @@ mock.module('@/lib/utils', () => ({ cn: (...values: Array<string | false | null 
 
 const actualProjectsStore = await import('@/stores/useProjectsStore');
 const actualSourceControlAuthStore = await import('@/stores/useSourceControlAuthStore');
-const actualLinearAuthStore = await import('@/stores/useLinearAuthStore');
 const actualUIStore = await import('@/stores/useUIStore');
 const actualGitStore = await import('@/stores/useGitStore');
 
@@ -120,10 +117,6 @@ mock.module('@/stores/useProjectsStore', () => ({
 mock.module('@/stores/useSourceControlAuthStore', () => ({
   ...actualSourceControlAuthStore,
   useSourceControlAuthEntry: selectSourceControlAuthEntry,
-}));
-mock.module('@/stores/useLinearAuthStore', () => ({
-  ...actualLinearAuthStore,
-  useLinearAuthStore: selectLinearAuthState,
 }));
 mock.module('@/stores/useUIStore', () => ({
   ...actualUIStore,
@@ -166,6 +159,7 @@ mock.module('@/lib/openchamberConfig', () => ({
 }))
 mock.module('@/lib/sharedTrustConfirmation', () => ({
   resolveWorktreeSetupCommands: async () => ['trusted-from-project'],
+  resolveWorktreeSetupCommandsOrCancel: async () => ['trusted-from-project'],
 }));
 mock.module('@/lib/worktrees/worktreeStatus', () => ({ getRootBranch: async () => 'main' }));
 mock.module('@/lib/git/branchNameGenerator', () => ({
@@ -336,7 +330,7 @@ describe('NewWorktreeDialog behavior', () => {
             open
             onOpenChange={() => undefined}
             initialSelection={{
-              source: 'github',
+              source: 'repository',
               includeDiff: false,
               reference: {
                 kind: 'issue',
@@ -351,6 +345,7 @@ describe('NewWorktreeDialog behavior', () => {
                 labels: [],
                 commentCount: 0,
                 sourceRepo: { owner: 'acme', repo: 'project', source: 'origin' },
+                provider: 'github',
                 state: 'open',
               },
             }}
@@ -378,14 +373,14 @@ describe('NewWorktreeDialog behavior', () => {
         </I18nProvider>,
       ));
       await clickButton(dom.container, (button) => button.getAttribute('role') === 'button' && Boolean(button.textContent?.startsWith('PR or issue')), 'PR or issue option');
-      const startFromGitHub = dom.container.querySelector<HTMLButtonElement>('button[aria-label="A GitHub issue or pull request"]');
-      if (!startFromGitHub) throw new Error('Missing start-from-GitHub button');
+      const startFromGitHub = dom.container.querySelector<HTMLButtonElement>('button[aria-label$="issue or pull request"]');
+      if (!startFromGitHub) throw new Error('Missing repository source button');
       await act(async () => startFromGitHub.click());
       if (!confirmReference) throw new Error('Expected the reference picker to open');
 
       await act(async () => {
         await confirmReference?.([{
-          source: 'github',
+          source: 'repository',
           includeDiff: false,
           reference: {
             kind: 'issue',
@@ -400,6 +395,7 @@ describe('NewWorktreeDialog behavior', () => {
             labels: [],
             commentCount: 0,
             sourceRepo: { owner: 'acme', repo: 'project', source: 'origin' },
+            provider: 'github',
             state: 'open',
           },
         }]);

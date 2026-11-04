@@ -8,6 +8,30 @@
 
 const FILE_URI_PREFIX = 'file://';
 
+/** Turn a dropped `file://` URI back into a plain path. */
+export function normalizeDroppedPath(rawPath: string): string {
+    const input = rawPath.trim();
+    if (!input.toLowerCase().startsWith(FILE_URI_PREFIX)) {
+        return input;
+    }
+
+    try {
+        let pathname = decodeURIComponent(new URL(input).pathname || '');
+        // file:///C:/... parses with a leading slash before the drive letter.
+        if (/^\/[A-Za-z]:\//.test(pathname)) {
+            pathname = pathname.slice(1);
+        }
+        return pathname || input;
+    } catch {
+        const stripped = input.replace(/^file:\/\//i, '');
+        try {
+            return decodeURIComponent(stripped);
+        } catch {
+            return stripped;
+        }
+    }
+}
+
 /**
  * Percent-encode a path for use in a `file://` URL, leaving separators intact
  * and preserving a Windows drive letter, which must not be encoded.

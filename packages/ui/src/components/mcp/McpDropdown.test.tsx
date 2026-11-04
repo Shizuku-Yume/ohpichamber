@@ -8,6 +8,7 @@ import { I18nProvider } from '@/lib/i18n';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useMcpConfigStore } from '@/stores/useMcpConfigStore';
 import { useMcpStore } from '@/stores/useMcpStore';
+import { useSessionUIStore } from '@/sync/session-ui-store';
 
 type LoadMcpConfigs = (options?: { force?: boolean; directory?: string | null }) => Promise<boolean>;
 
@@ -20,7 +21,13 @@ describe('MCP dropdown status reads', () => {
   let sessionsSpy: ReturnType<typeof spyOn>;
   let originalLoadMcpConfigs: LoadMcpConfigs;
   let dom: Window;
-  const loadMcpConfigs = mock(async () => true);
+  const initialSessionState = useSessionUIStore.getState();
+  const extraSpies: Array<{ mockRestore: () => void }> = [];
+  const configRequests: Array<Parameters<LoadMcpConfigs>[0]> = [];
+  const loadMcpConfigs = mock(async (options?: Parameters<LoadMcpConfigs>[0]) => {
+    configRequests.push(options);
+    return true;
+  });
 
   const renderNode = async (element: React.ReactNode) => {
     const host = document.createElement('div');
@@ -63,6 +70,11 @@ describe('MCP dropdown status reads', () => {
     };
 
     useDirectoryStore.setState({ currentDirectory: 'C:/proj-a' });
+    useSessionUIStore.setState({
+      currentSessionId: null,
+      currentSessionDirectory: null,
+      newSessionDraft: { ...initialSessionState.newSessionDraft, open: false },
+    });
     useMcpStore.setState({
       byDirectory: {},
       loadingKeys: {},
@@ -86,6 +98,8 @@ describe('MCP dropdown status reads', () => {
     configSpy.mockRestore();
     sessionsSpy.mockRestore();
     useMcpConfigStore.setState({ loadMcpConfigs: originalLoadMcpConfigs });
+    for (const spy of extraSpies.splice(0)) spy.mockRestore();
+    useSessionUIStore.setState(initialSessionState);
     restoreGlobals();
   });
 
@@ -146,4 +160,5 @@ describe('MCP dropdown status reads', () => {
 
     expect(listSpy.mock.calls.length).toBe(1);
   });
+
 });

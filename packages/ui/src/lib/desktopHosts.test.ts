@@ -141,6 +141,22 @@ describe('desktop host runtime headers', () => {
   });
 });
 
+describe('desktop SSH forwarding metadata', () => {
+  test('reads the active SSH forward without treating ordinary hosts as forwarded', async () => {
+    await withDesktopBridge(async () => ({
+      hosts: [
+        { id: 'ssh-1', label: 'SSH', url: 'http://127.0.0.1:54000', sshForwarded: true },
+        { id: 'local-2', label: 'Local server', url: 'http://127.0.0.1:54001' },
+      ],
+      defaultHostId: 'ssh-1',
+    }), async () => {
+      const { hosts } = await desktopHostsGet();
+      expect(hosts[0]?.sshForwarded).toBe(true);
+      expect(hosts[1]?.sshForwarded).toBeUndefined();
+    });
+  });
+});
+
 describe('remote host update', () => {
   test('asks the shell to update a saved host by id only', async () => {
     const calls: Array<{ cmd: string; args: unknown }> = [];
@@ -217,7 +233,7 @@ describe('probeRelayDesktopHost', () => {
 
   const stubTunnel = (
     responses: Array<Response | Error>,
-    state: RelayTunnelStatus['state'] = 'reconnecting',
+    status: RelayTunnelStatus = { state: 'reconnecting' },
   ) => {
     const calls: string[] = [];
     let closed = false;
@@ -229,7 +245,7 @@ describe('probeRelayDesktopHost', () => {
         if (next instanceof Error) throw next;
         return next;
       },
-      getStatus: () => ({ state }),
+      getStatus: () => status,
       close: () => { closed = true; },
     });
     return { calls, isClosed: () => closed };
@@ -253,12 +269,28 @@ describe('probeRelayDesktopHost', () => {
 
   test('a terminal tunnel state ends the probe without retrying', async () => {
     // Auth failed / duplicate client / limit reached will not resolve by waiting.
-    const tunnel = stubTunnel([new Error('relay connection replaced by another client')], 'error');
+    const tunnel = stubTunnel(
+      [new Error('relay connection replaced by another client')],
+      { state: 'error', terminal: true, closeCode: 4002 },
+    );
 
     const result = await withTimerWindow(() => probeRelayDesktopHost(relay, { clientToken: 'token' }));
 
     expect(result.status).toBe('unreachable');
     expect(tunnel.calls).toEqual(['/health']);
+  });
+
+  test('a relay refusal over its limits is reported as relay-limit', async () => {
+    const tunnel = stubTunnel(
+      [new Error('relay connection limit reached')],
+      { state: 'error', lastError: 'relay connection limit reached', terminal: true, closeCode: 4029 },
+    );
+
+    const result = await withTimerWindow(() => probeRelayDesktopHost(relay, { clientToken: 'token' }));
+
+    expect(result).toEqual({ status: 'relay-limit', latencyMs: 0 });
+    expect(tunnel.calls).toEqual(['/health']);
+    expect(tunnel.isClosed()).toBe(true);
   });
 
   test('a rejected client token is reported as auth, not unreachable', async () => {

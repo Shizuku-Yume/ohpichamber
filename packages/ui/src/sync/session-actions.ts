@@ -13,6 +13,7 @@ type SyntheticContextInput = { id?: string; text: string; metadata?: ContextPart
 import { mergeSessionDirectoryMetadata, resolveGlobalSessionDirectory, useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
 import { useConfigStore } from "@/stores/useConfigStore"
 import { registerSessionDirectory } from "./sync-refs"
+import { isRestorableOnItsOwn } from "./session-restore-rule"
 import { useGlobalSessionStatusStore, removeGlobalSessionStatuses } from "./global-session-status"
 import { recordSendFailure } from "./send-failure-log"
 import {
@@ -21,15 +22,15 @@ import {
 } from "@/lib/sessionReviewMetadata"
 import { withContextObligatoryMessage, type ContextObligatoryMessage } from "@/lib/contextObligatoryMessages"
 import { withoutBtwSessionLink } from "@/lib/sessionBtwMetadata"
-import { withLinkedIssue, type LinkedIssue } from "@/lib/linkedIssues"
+import { type LinkedIssue } from "@/lib/linkedIssues"
 import { withSessionWorkState, type SessionWork } from "@/lib/sessionWorkMetadata"
 import { getImperativeSessionMessageLoader } from "./session-message-loader"
 import { clearSessionPrefetch } from "./session-prefetch-cache"
 import { dropSessionCaches } from "./session-cache"
 import { useInputStore } from "./input-store"
 import { cleanupPersistedSessionState } from "./session-deletion-cleanup"
-import { requestSessionArchiveBatch, requestSessionUnarchiveBatch, type SessionArchiveStamp } from "./session-archive-batch"
-import { getRuntimeKey } from "@/lib/runtime-switch"
+import { requestSessionArchiveBatch, requestSessionLinksUpdate, requestSessionUnarchiveBatch, type SessionArchiveStamp } from "./session-archive-batch"
+import { getRuntimeKey, getRuntimeSwitchRevision } from "@/lib/runtime-switch"
 import { isRelayModeActive } from "@/lib/relay/runtime-tunnel"
 import { getErrorStatus, isAmbiguousSendFailure } from "./send-failure-classification"
 import { promoteRestoredSessionOrdering } from "./session-ordering"
@@ -46,24 +47,24 @@ import { installHostSession, installRuntimeRun, installSessionMetadata, installS
 import { registerWorkspaceDirectory, resolveWorkspaceDirectory } from "@/stores/globalSessions"
 import type { State } from "./types"
 
-async function readCanonicalSession(sessionId: string, runtimeKey: string): Promise<CanonicalSession> {
-  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+async function readCanonicalSession(sessionId: string, runtimeKey: string, runtimeRevision = getRuntimeSwitchRevision()): Promise<CanonicalSession> {
+  if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
   const knownChild = getGlobalSessionSnapshot(sessionId) ?? findLiveSession(sessionId)
   if (knownChild?.parentSessionId) {
     const history = await canonicalClient.getHistory(sessionId)
-    if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+    if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
     if (history.sessionId !== sessionId) throw new Error("Session history identified another session")
     return knownChild
   }
   const snapshot = await canonicalClient.getSession(sessionId)
-  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
   const metadata = await canonicalClient.getSessionMetadata(sessionId)
-  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
   if (snapshot.session.sessionId !== sessionId || metadata.sessionId !== sessionId) throw new Error("Session response identified another session")
   let host = getGlobalSessionSnapshot(sessionId) ?? findLiveSession(sessionId)
   if (!host) {
     const page = await canonicalClient.listSessions(snapshot.session.workspaceId)
-    if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+    if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
     host = page.items.find((session) => session.sessionId === sessionId) ?? null
     if (!host) throw new Error("Host session projection is unavailable")
   }
@@ -106,6 +107,7 @@ export type SessionSendInput = {
   request: PromptRequest
   mode?: "run" | "steer" | "follow-up"
   runtimeKey?: string
+  runtimeRevision?: number
   commandId?: string
 }
 
@@ -116,16 +118,19 @@ export type SessionSendInput = {
  */
 export async function sendMessage(input: SessionSendInput): Promise<Run | null> {
   const runtimeKey = input.runtimeKey ?? getRuntimeKey()
-  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  const runtimeRevision = input.runtimeRevision ?? getRuntimeSwitchRevision()
+  if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
   const request = PromptRequestSchema.parse(input.request)
   await waitForConnectionOrThrow()
-  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
   if (input.mode === "steer") {
     const result = await canonicalClient.steer(input.sessionId, request, input.commandId)
+    if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
     if (result.sessionId !== input.sessionId) throw new Error("Steer response identified another session")
     return null
   } else if (input.mode === "follow-up") {
     const result = await canonicalClient.followUp(input.sessionId, request, input.commandId)
+    if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
     if (result.sessionId !== input.sessionId) throw new Error("Follow-up response identified another session")
     return null
   } else {
@@ -134,7 +139,7 @@ export async function sendMessage(input: SessionSendInput): Promise<Run | null> 
     const baselines = captureRunControlBaselines(input.sessionId)
     const result = await canonicalClient.createRun(input.sessionId, request, input.commandId)
     if (result.run.sessionId !== input.sessionId) throw new Error("Run response identified another session")
-    if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+    if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
     // The accepted run is authoritative control state even before its event
     // arrives; without this the composer can keep offering Send for a live run.
     publishRuntimeRun(result.run, baselines)
@@ -726,11 +731,12 @@ export async function createSession(
   navigation: "open" | "preserve" = "open",
 ): Promise<CanonicalSession | null> {
   const runtimeKey = getRuntimeKey()
+  const runtimeRevision = getRuntimeSwitchRevision()
   try {
     const effectiveDirectory = directoryOverride ?? dir()
     if (!effectiveDirectory) throw new Error("No directory for session creation")
     const workspace = await canonicalClient.resolveWorkspace(effectiveDirectory)
-    if (isStaleRuntime(runtimeKey)) return null
+    if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) return null
     const admittedMetadata = { ...metadata }
     if (title !== undefined) admittedMetadata.title = title
     const { session } = await canonicalClient.createSession({
@@ -745,7 +751,7 @@ export async function createSession(
       },
       metadata: SessionMetadataSchema.parse(admittedMetadata),
     })
-    if (isStaleRuntime(runtimeKey)) return null
+    if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) return null
     registerWorkspaceDirectory(workspace.workspaceId, effectiveDirectory)
     _childStores?.ensureChild(effectiveDirectory, { bootstrap: false })
     publishCanonicalSession(session, effectiveDirectory)
@@ -754,7 +760,7 @@ export async function createSession(
     useSessionUIStore.getState().markSessionAsOpenChamberCreated(session.sessionId)
     return session
   } catch (error) {
-    if (isStaleRuntime(runtimeKey)) return null
+    if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) return null
     // A canonical refusal such as the Agent Service capacity outcome carries
     // the sentence to show. Let the draft lifecycle report it instead of
     // turning every refusal into the same silent null; ordinary transport
@@ -815,46 +821,91 @@ export async function patchSessionMetadata(
   directory: string | null | undefined,
   updater: (metadata: SessionMetadataRecord) => SessionMetadataRecord,
   expectedRuntimeKey?: string,
+  expectedRuntimeRevision = getRuntimeSwitchRevision(),
 ): Promise<CanonicalSession> {
   const runtimeKey = expectedRuntimeKey ?? getRuntimeKey()
-  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
-  const current = getGlobalSessionSnapshot(sessionId) ?? await readCanonicalSession(sessionId, runtimeKey)
-  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  if (isStaleRuntime(runtimeKey) || expectedRuntimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
+  const current = getGlobalSessionSnapshot(sessionId) ?? await readCanonicalSession(sessionId, runtimeKey, expectedRuntimeRevision)
+  if (isStaleRuntime(runtimeKey) || expectedRuntimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
   const metadata = await canonicalClient.getSessionMetadata(sessionId)
-  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  if (isStaleRuntime(runtimeKey) || expectedRuntimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
   if (metadata.sessionId !== sessionId) throw new Error("Metadata response identified another session")
   const currentMetadata = metadata.metadata ?? {}
   const nextMetadata = SessionMetadataSchema.parse(updater(currentMetadata))
   const patch = SessionMetadataPatchSchema.parse({ changes: buildMetadataMergePatch(currentMetadata, nextMetadata) })
   const result = await canonicalClient.patchSessionMetadata(sessionId, patch)
-  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  if (isStaleRuntime(runtimeKey) || expectedRuntimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
   if (result.sessionId !== sessionId) throw new Error("Metadata response identified another session")
   if (directory) registerSessionDirectory(sessionId, resolveGlobalSessionDirectory(current) ?? directory)
   return publishCanonicalMetadata(current, result)
 }
 
+/**
+ * Link or unlink one item on a session. The list transform lives on the
+ * OpenChamber server now, decided there from a fresh read inside the
+ * session's write queue: a UI request and an agent's `session.link` can no
+ * longer wipe each other, whichever write lands first.
+ */
 export async function setLinkedIssue(
   sessionId: string,
   directory: string | null | undefined,
   issue: LinkedIssue,
   linked: boolean,
 ): Promise<CanonicalSession> {
-  return patchSessionMetadata(sessionId, directory, (metadata) =>
-    withLinkedIssue(metadata, issue, linked))
+  return updateLinkedIssues(sessionId, directory, [issue], linked)
 }
 
 /**
- * Link several items in one metadata write. Each write replaces the whole
- * link list, so separate concurrent `setLinkedIssue` calls would keep only
- * the last one's item.
+ * Link several items in one server operation: one write-queue turn applies
+ * all of them, reading and writing the record once.
  */
 export async function addLinkedIssues(
   sessionId: string,
   directory: string | null | undefined,
   issues: readonly LinkedIssue[],
 ): Promise<CanonicalSession> {
-  return patchSessionMetadata(sessionId, directory, (metadata) =>
-    issues.reduce((current, issue) => withLinkedIssue(current, issue, true), metadata))
+  return updateLinkedIssues(sessionId, directory, issues, true)
+}
+
+async function updateLinkedIssues(
+  sessionId: string,
+  directory: string | null | undefined,
+  issues: readonly LinkedIssue[],
+  linked: boolean,
+): Promise<CanonicalSession> {
+  const runtimeKey = getRuntimeKey()
+  const targetDirectory = directory ?? getSessionDirectory(sessionId)
+  // A session no store holds still needs a record for the mirroring, and the
+  // read can fail: taken before the write, a failed read rejects with nothing
+  // landed. The read is display-only — none of the link list comes from the
+  // client — so its ordering is free, and it must not turn into a report of
+  // a link that did land.
+  const heldBeforeRequest = getGlobalSessionSnapshot(sessionId) !== null
+    || findLiveSession(sessionId) !== null
+  const fallbackRecord = heldBeforeRequest
+    ? null
+    : await readCanonicalSession(sessionId, runtimeKey)
+  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  const result = await requestSessionLinksUpdate(sessionId, issues, linked, targetDirectory)
+  if (result.outcome !== "updated") throw new Error(`session link update failed: ${result.reason}`)
+  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  // The server answered with the merged metadata; the session record is
+  // display-only here. A session a store holds is mirrored from its snapshot
+  // as the response lands; a store-miss uses the record read before the
+  // request. A stale read can no longer corrupt the link list, since none of
+  // it comes from the client. The route carries metadata, not a new revision:
+  // the metadata broadcast owns that counter.
+  const record = fallbackRecord
+    ?? getGlobalSessionSnapshot(sessionId)
+    ?? findLiveSession(sessionId)
+    ?? await readCanonicalSession(sessionId, runtimeKey)
+  const updated = publishCanonicalMetadata(record, {
+    sessionId,
+    revision: record.metadataRevision,
+    metadata: result.metadata,
+  })
+  if (targetDirectory) registerSessionDirectory(sessionId, targetDirectory)
+  return updated
 }
 
 /**
@@ -1443,9 +1494,11 @@ function commitArchivedSessions(stamps: SessionArchiveStamp[], directory: string
  * OpenChamber's own (OpenCode has no route for it), so this goes to the
  * OpenChamber unarchive route rather than the OpenCode client.
  *
- * A subsession is the agent's, not the user's: it is never restored on its
- * own. Restoring a top-level session brings its archived subsessions back with
- * it, so the agent runs it holds are whole again.
+ * A subsession is the agent's: under an archived parent it is never restored
+ * on its own. Restoring a top-level session brings its archived subsessions
+ * back with it, so the agent runs it holds are whole again. A subsession
+ * archived alone while its parent stayed active is restored on its own, back
+ * under that parent.
  */
 export async function unarchiveSession(sessionId: string, expectedRuntimeKey = getRuntimeKey()): Promise<boolean> {
   const { restoredIds } = await restoreSessionTree(sessionId, expectedRuntimeKey)
@@ -1479,7 +1532,9 @@ async function restoreSessionTree(
   rootId: string,
   expectedRuntimeKey: string,
 ): Promise<{ restoredIds: string[]; failedIds: string[] }> {
-  if (useGlobalSessionsStore.getState().entityById.get(rootId)?.parentSessionId) {
+  const { entityById } = useGlobalSessionsStore.getState()
+  const root = entityById.get(rootId)
+  if (root && !isRestorableOnItsOwn(root, entityById)) {
     recordSessionActionFailure(rootId, new Error("a subsession is restored with its parent"))
     return { restoredIds: [], failedIds: [rootId] }
   }
@@ -1556,8 +1611,8 @@ export type UnarchiveSessionsOptions = {
   expectedRuntimeKey?: string
   /**
    * Undo of an archive that just happened: put back exactly the sessions it
-   * moved, subsessions included. Without it a subsession is only restored
-   * with its parent.
+   * moved, subsessions included. Without it a subsession is restored on its
+   * own only while its parent is active (`isRestorableOnItsOwn`).
    */
   undo?: boolean
 }
@@ -1730,6 +1785,7 @@ function reconcileAcceptedSend(input: {
  */
 export async function optimisticSend(input: {
   runtimeKey?: string
+  runtimeRevision?: number
   sessionId: string
   content: string
   directory?: string | null
@@ -1746,8 +1802,9 @@ export async function optimisticSend(input: {
     throw new Error("Optimistic refs not set — is useSync() mounted?")
   }
   const runtimeKey = input.runtimeKey ?? getRuntimeKey()
+  const runtimeRevision = input.runtimeRevision ?? getRuntimeSwitchRevision()
   const assertRuntimeUnchanged = () => {
-    if (isStaleRuntime(runtimeKey)) throw new Error("Message was not sent because the runtime changed.")
+    if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("Message was not sent because the runtime changed.")
   }
   assertRuntimeUnchanged()
   await waitForConnectionOrThrow()
@@ -1784,8 +1841,8 @@ export async function optimisticSend(input: {
   } catch (error) {
     // A definite failure removes only the unconfirmed record. Once an echo
     // has promoted this ID, optimisticRemove refuses to delete it.
-    _optimisticRemove({ sessionId: input.sessionId, directory, messageId: correlationId })
-    if (!isStaleRuntime(runtimeKey)) {
+    if (!isStaleRuntime(runtimeKey) && runtimeRevision === getRuntimeSwitchRevision()) {
+      _optimisticRemove({ sessionId: input.sessionId, directory, messageId: correlationId })
       recordSendFailure({
         sessionId: input.sessionId, messageId: correlationId, directory: directory ?? null,
         status: getErrorStatus(error), ambiguous: isAmbiguousSendFailure(error), confirmationChecked: false,
@@ -1801,7 +1858,7 @@ export async function optimisticSend(input: {
     await refetchSessionMessages(input.sessionId)
     assertRuntimeUnchanged()
   } catch (error) {
-    if (isStaleRuntime(runtimeKey)) throw error
+    if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw error
     console.warn("[session-actions] accepted review send history refresh failed", error)
   }
   reconcileAcceptedSend({
@@ -2045,6 +2102,17 @@ export class NothingToForkError extends Error {
   constructor() {
     super("No completed turn to fork from")
     this.name = "NothingToForkError"
+  }
+}
+
+/**
+ * The session's folder no longer exists, and metadata write is refused.
+ * Archive is OpenChamber's own record and still works, so the UI offers it.
+ */
+export class SessionDirectoryMissingError extends Error {
+  constructor(sessionId: string) {
+    super(`the folder of session ${sessionId} no longer exists`)
+    this.name = "SessionDirectoryMissingError"
   }
 }
 

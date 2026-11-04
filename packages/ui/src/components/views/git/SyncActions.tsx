@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Icon } from "@/components/icon/Icon";
+import { Spinner } from "@/components/ui/spinner";
 import type { GitRemote } from '@/lib/gitApi';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -77,8 +78,9 @@ export const SyncActions: React.FC<SyncActionsProps> = ({
   // "Publish" on a fresh contributor PR reads as unpublished work; this one
   // only ever pushes to a destination picked in the dialog.
   const publishLabel = t(choosesPushDestination ? 'gitView.publish.pushTo' : 'gitView.publish.title');
-  const primaryLabel = [
-    publish ? publishLabel : t('gitView.sync.sync'),
+  const primaryWord = publish ? publishLabel : t('gitView.sync.sync');
+  // Without a branch there is nothing to count against, so no counts.
+  const primaryCounts = detached ? '' : [
     behindCount > 0 ? `↓${behindCount}` : null,
     aheadCount > 0 ? `↑${aheadCount}` : null,
   ].filter(Boolean).join(' ');
@@ -100,13 +102,12 @@ export const SyncActions: React.FC<SyncActionsProps> = ({
   };
 
   return (
-    <div className="inline-flex items-center rounded-[9px] [corner-shape:squircle] supports-[corner-shape:squircle]:rounded-[50px] border border-border/60 bg-[var(--surface-elevated)] overflow-hidden">
+    <div className="inline-flex items-center rounded-md border border-border/60 bg-[var(--surface-elevated)] overflow-hidden">
       <Tooltip>
         <TooltipTrigger asChild>
           <span className="inline-flex" tabIndex={blocksRebaseSync || detached ? 0 : undefined}>
-            {/* The two halves are plain buttons inside one rounded frame: the
-                shared Button brings its own squircle corners, which made each
-                half read as a separate round button. */}
+            {/* The two halves are plain buttons inside one rounded frame, so
+                they read as one split control. */}
             <button
               type="button"
               onClick={handleSync}
@@ -118,11 +119,21 @@ export const SyncActions: React.FC<SyncActionsProps> = ({
               aria-label={publish ? publishLabel : t('gitView.sync.syncChanges')}
             >
               {syncAction === 'sync' || syncAction === 'publish' ? (
-                <Icon name="loader-4" className="size-4 animate-spin" />
+                <Spinner className="size-4" />
               ) : (
                 <Icon name="refresh" className="size-4" />
               )}
-              <span className="whitespace-nowrap tabular-nums">{primaryLabel}</span>
+              {/* A narrow Git panel header hides the word
+                  (`sync-actions__label`, index.css), then, only if that is
+                  not enough, the counts too (`sync-actions__text`); the
+                  tooltip names the action and the counts. */}
+              {primaryCounts ? (
+                <span className="sync-actions__text whitespace-nowrap tabular-nums">
+                  <span className="sync-actions__label">{primaryWord}</span> {primaryCounts}
+                </span>
+              ) : (
+                <span className="sync-actions__text sync-actions__label whitespace-nowrap">{primaryWord}</span>
+              )}
             </button>
           </span>
         </TooltipTrigger>
@@ -134,7 +145,7 @@ export const SyncActions: React.FC<SyncActionsProps> = ({
           <button
             type="button"
             className={cn(
-              'inline-flex h-7 w-6 items-center justify-center border-l border-[var(--interactive-border)] text-muted-foreground',
+              'inline-flex h-7 w-6 items-center justify-center border-s border-[var(--interactive-border)] text-muted-foreground',
               'transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50'
             )}
             disabled={isDropdownDisabled}
@@ -206,7 +217,7 @@ export const SyncActions: React.FC<SyncActionsProps> = ({
                     title={t('gitView.header.removeRemoteTitle', { name: remote.name })}
                   >
                     {removingRemoteName === remote.name ? (
-                      <Icon name="loader-4" className="size-3.5 animate-spin" />
+                      <Spinner className="size-3.5" />
                     ) : (
                       <Icon name="close" className="size-3.5" />
                     )}

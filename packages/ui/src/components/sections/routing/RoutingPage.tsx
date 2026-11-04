@@ -15,7 +15,6 @@ import {
   SETTINGS_HELPER_CLASS,
   SETTINGS_OPTION_STACK_CLASS,
   SETTINGS_SELECT_ROW_TRIGGER_CLASS,
-  SETTINGS_SELECT_SIZE,
   SettingsCheckboxRow,
   SettingsFieldRow,
   SettingsSection,
@@ -52,15 +51,15 @@ const isStoredFormOf = (server: RoutingConfig, draft: RoutingConfig): boolean =>
 
 const slugify = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 64);
 
-/** The thinking levels the native catalog reports for one model; empty when the model has none. */
-const useModelVariants = (providerId: string | null | undefined, modelId: string | null | undefined): string[] => {
+/** The thinking levels OpenCode reports for one model; empty when the model has none. */
+const useModelVariants = (providerID: string | null | undefined, modelID: string | null | undefined): string[] => {
   const providers = useConfigStore((state) => state.providers);
   return React.useMemo(() => {
-    if (!providerId || !modelId) return [];
-    const provider = providers.find((entry) => entry.providerId === providerId);
-    const model = provider?.models.find((entry) => entry.modelId === modelId);
-    return model?.variants.map((entry) => entry.variant) ?? [];
-  }, [modelId, providerId, providers]);
+    if (!providerID || !modelID) return [];
+    const provider = providers.find((entry) => entry.providerId === providerID);
+    const model = provider?.models.find((entry) => entry.modelId === modelID);
+    return model?.variants.map((variant) => variant.variant) ?? [];
+  }, [modelID, providerID, providers]);
 };
 
 /**
@@ -73,22 +72,22 @@ const knownVariant = (value: string | null | undefined, variants: string[]): str
 );
 
 const VariantSelect: React.FC<{
-  providerId: string | null | undefined;
-  modelId: string | null | undefined;
+  providerID: string | null | undefined;
+  modelID: string | null | undefined;
   value: string | null;
   onChange: (variant: string | null) => void;
   ariaLabel: string;
   className?: string;
-}> = ({ providerId, modelId, value, onChange, ariaLabel, className }) => {
+}> = ({ providerID, modelID, value, onChange, ariaLabel, className }) => {
   const { t } = useI18n();
-  const variants = useModelVariants(providerId, modelId);
+  const variants = useModelVariants(providerID, modelID);
   const selected = knownVariant(value, variants) ?? DEFAULT_VARIANT_VALUE;
   const label = (variant: string) => (variant === DEFAULT_VARIANT_VALUE
     ? t('settings.routing.thinking.default')
     : variant.charAt(0).toUpperCase() + variant.slice(1));
   return (
     <Select value={selected} onValueChange={(next) => onChange(next === DEFAULT_VARIANT_VALUE ? null : next)} disabled={variants.length === 0}>
-      <SelectTrigger size={SETTINGS_SELECT_SIZE} className={cn(SETTINGS_SELECT_ROW_TRIGGER_CLASS, className)} aria-label={ariaLabel}>
+      <SelectTrigger className={cn(SETTINGS_SELECT_ROW_TRIGGER_CLASS, className)} aria-label={ariaLabel}>
         <SelectValue>{label(selected)}</SelectValue>
       </SelectTrigger>
       <SelectContent>
@@ -125,7 +124,7 @@ const CategoryRow: React.FC<{
           type="button"
           onClick={onToggle}
           aria-expanded={expanded}
-          className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1.5 text-left hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1.5 text-start hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Icon name={expanded ? 'arrow-down-s' : 'arrow-right-s'} className="size-4 flex-shrink-0 text-muted-foreground" />
           <span className="typography-ui-label font-medium text-foreground truncate">{category.name || category.id}</span>
@@ -151,7 +150,7 @@ const CategoryRow: React.FC<{
             </SettingsStackedField>
             <SettingsStackedField label={t('settings.routing.category.agent')} info={t('settings.routing.category.agentInfo')} controlClassName="max-w-none">
               <AgentSelector
-                agentId={category.agent ?? ''}
+                agentName={category.agent ?? ''}
                 onChange={(agentName) => onChange({ agent: agentName || null })}
                 className={cn(SETTINGS_CUSTOM_TRIGGER_CLASS, 'w-full')}
               />
@@ -167,8 +166,8 @@ const CategoryRow: React.FC<{
             </SettingsStackedField>
             <SettingsStackedField label={t('settings.routing.category.thinking')} controlClassName="max-w-none">
               <VariantSelect
-                providerId={category.model?.providerID}
-                modelId={category.model?.modelID}
+                providerID={category.model?.providerID}
+                modelID={category.model?.modelID}
                 value={category.variant}
                 onChange={(variant) => onChange({ variant })}
                 ariaLabel={t('settings.routing.category.thinking')}
@@ -283,7 +282,7 @@ export const RoutingPage: React.FC = () => {
       fallback: { model: { providerID: parsed.providerId, modelID: parsed.modelId }, variant: settingsDefaultVariant ?? null },
     }));
   // `update` is stable; the effect keys on what decides whether to prefill.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, serverConfig, settingsDefaultModel, settingsDefaultVariant]);
 
   const update = React.useCallback((mutate: (config: RoutingConfig) => RoutingConfig) => {
@@ -402,8 +401,8 @@ export const RoutingPage: React.FC = () => {
                 info={t('settings.routing.auto.fallbackThinkingInfo')}
               >
                 <VariantSelect
-                  providerId={draft.fallback?.model.providerID}
-                  modelId={draft.fallback?.model.modelID}
+                  providerID={draft.fallback?.model.providerID}
+                  modelID={draft.fallback?.model.modelID}
                   value={draft.fallback?.variant ?? null}
                   onChange={(variant) => update((config) => (config.fallback ? { ...config, fallback: { ...config.fallback, variant } } : config))}
                   ariaLabel={t('settings.routing.auto.fallbackThinking')}

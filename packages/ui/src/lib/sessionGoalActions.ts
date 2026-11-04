@@ -6,6 +6,7 @@ import { toast } from '@/components/ui';
 import { deleteGoalObjectiveFile, writeGoalObjectiveFile } from '@/lib/goalObjectiveFiles';
 import { SESSION_GOAL_OBJECTIVE_CHAR_LIMIT, type SessionGoalPayload, type SessionGoalStatus } from '@/lib/sessionGoalMetadata';
 import { omitKeys } from '@/lib/omitKeys';
+import { getRuntimeKey, getRuntimeSwitchRevision } from '@/lib/runtime-switch';
 
 const createGoalId = (): string => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 
@@ -13,6 +14,8 @@ const writeGoal = (
   sessionId: string,
   directory: string | undefined,
   update: (currentGoal: NonNullable<NonNullable<SessionMetadata['openchamber']>['goal']> | null) => NonNullable<NonNullable<SessionMetadata['openchamber']>['goal']> | null,
+  runtimeKey?: string,
+  runtimeRevision?: number,
 ) => patchSessionMetadata(sessionId, directory, (metadata) => {
   const namespace = metadata.openchamber ?? {};
   const nextGoal = update(namespace.goal ?? null);
@@ -23,13 +26,14 @@ const writeGoal = (
     return Object.keys(rest).length > 0 ? { ...metadata, openchamber: rest } : omitKeys(metadata, ['openchamber']);
   }
   return { ...metadata, openchamber: nextNamespace };
-});
+}, runtimeKey, runtimeRevision);
 
 const TRIM_MARKER = '\n\n[… objective trimmed for the auditor — the full text was delivered in the chat message …]\n\n';
 
-const fitObjective = async (raw: string, directory: string | undefined, sessionId: string): Promise<string> => {
+const fitObjective = async (raw: string, directory: string | undefined, sessionId: string, assertCurrent: () => void): Promise<string> => {
   if (raw.length <= SESSION_GOAL_OBJECTIVE_CHAR_LIMIT) return raw;
   const distilled = await distillGoalObjective(raw, { directory, sessionId });
+  assertCurrent();
   if (distilled) return distilled.slice(0, SESSION_GOAL_OBJECTIVE_CHAR_LIMIT);
   const half = Math.max(0, Math.floor((SESSION_GOAL_OBJECTIVE_CHAR_LIMIT - TRIM_MARKER.length) / 2));
   toast.error(formatMessage(useI18nStore.getState().dictionary, 'chat.goal.toast.distillFallback'));
@@ -38,18 +42,22 @@ const fitObjective = async (raw: string, directory: string | undefined, sessionI
 
 export interface SetSessionGoalInput { objective: string; tokenBudget: number | null }
 
-export async function setSessionGoal(sessionId: string, directory: string | undefined, input: SetSessionGoalInput, existing: SessionGoalPayload | null): Promise<void> {
+export async function setSessionGoal(sessionId: string, directory: string | undefined, input: SetSessionGoalInput, existing: SessionGoalPayload | null, runtimeKey = getRuntimeKey(), runtimeRevision = getRuntimeSwitchRevision()): Promise<void> {
+  const assertCurrent = () => { if (runtimeKey !== getRuntimeKey() || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error('Runtime changed'); };
+  assertCurrent();
   const rawObjective = input.objective.trim();
-  const objective = await fitObjective(rawObjective, directory, sessionId);
+  const objective = await fitObjective(rawObjective, directory, sessionId, assertCurrent);
+  assertCurrent();
   const tokenBudget = input.tokenBudget !== null && Number.isFinite(input.tokenBudget) && input.tokenBudget > 0 ? Math.floor(input.tokenBudget) : null;
   const objectiveFile = await writeGoalObjectiveFile(sessionId, objective);
+  assertCurrent();
   const now = Date.now();
   await writeGoal(sessionId, directory, (currentGoal) => {
     if (existing && currentGoal && currentGoal.id === existing.id && existing.status !== 'complete') {
       return { ...currentGoal, objective: objectiveFile ? '' : objective, objectiveFile, tokenBudget, status: 'active', statusReason: 'resumed', blockedStreak: 0, updatedAt: now };
     }
     return { id: createGoalId(), objective: objectiveFile ? '' : objective, objectiveFile, status: 'active', tokenBudget, tokensUsed: 0, turnsUsed: 0, blockedStreak: 0, note: '', statusReason: '', lastAccountedMessageID: '', createdAt: now, updatedAt: now };
-  });
+  }, runtimeKey, runtimeRevision);
 }
 
 export async function setSessionGoalStatus(sessionId: string, directory: string | undefined, status: Extract<SessionGoalStatus, 'active' | 'paused' | 'complete'>): Promise<void> {

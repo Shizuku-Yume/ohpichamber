@@ -101,4 +101,15 @@ describe('message wire schemas', () => {
     expect(MessageSchema.parse(message).turnId).toBe('turn-1');
     expect(() => MessageSchema.parse({ ...message, role: 'developer' })).toThrow();
   });
+
+  test('round-trips typed session mentions and rejects malformed identities', () => {
+    const mentions = [
+      { kind: 'session', sessionId: 's1', title: 'Session' },
+      { kind: 'session-message', sessionId: 's2', messageId: 'm2', sessionTitle: 'Other', excerpt: 'Hello' },
+    ];
+    const part = { ...textPart, sessionMentions: mentions };
+    expect(PartSchema.parse(JSON.parse(JSON.stringify(part)))).toEqual(part);
+    expect(PartSchema.safeParse({ ...part, sessionMentions: [{ kind: 'session-message', sessionId: 's', sessionTitle: 'T', excerpt: 'E' }] }).success).toBe(false);
+    expect(PartSchema.safeParse({ ...part, sessionMentions: [{ ...mentions[0], metadata: {} }] }).success).toBe(false);
+  });
 });

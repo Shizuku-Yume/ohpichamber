@@ -76,7 +76,6 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
     >
       <SelectTrigger
         id={id}
-        size="lg"
         className={cn('max-w-full', className)}
       >
         <SelectValue placeholder={t('multirun.agentSelector.placeholder')} />

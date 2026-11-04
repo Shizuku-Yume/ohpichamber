@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   ProblemCodeSchema, ProblemDetailsSchema, QueueAppendRequestSchema,
   QueueDeleteRequestSchema, QueueReorderRequestSchema, QueueStateSchema,
@@ -10,7 +11,6 @@ import { createPromptQueueStore, PromptQueueError } from './sqlite-store.js';
  * SQLite owns durable queue state and the OMP service owns execution admission.
  */
 export { createCanonicalQueueRuntime, createPromptQueueStore };
-
 const scopeFor = async (resolveSessionScope, sessionId) => {
   const scope = await resolveSessionScope(sessionId);
   if (!scope || scope.sessionId !== sessionId) throw new PromptQueueError('SESSION_NOT_FOUND', 404, 'Session scope is not available');
@@ -57,12 +57,18 @@ export function registerMessageQueueRoutes(app, runtime, { resolveSessionScope, 
       const listed = await listQueueScopes();
       if (!listed || !Array.isArray(listed.items) || !Array.isArray(listed.errors)) throw new PromptQueueError('INTERNAL_ERROR', 503, 'Queue scope listing is unavailable');
       const items = [];
+      let maxRevision = 0;
       const errors = listed.errors.map((error) => ({ code: ProblemCodeSchema.safeParse(error?.code).success ? error.code : 'INTERNAL_ERROR' }));
       for (const scope of listed.items) {
-        try { items.push(QueueStateSchema.parse(await runtime.getState(scope))); }
+        try {
+          const state = QueueStateSchema.parse(await runtime.getState(scope));
+          items.push(state);
+          const rev = Number(state.revision) || 0;
+          if (rev > maxRevision) maxRevision = rev;
+        }
         catch (error) { errors.push({ code: ProblemCodeSchema.safeParse(error?.code).success ? error.code : 'INTERNAL_ERROR' }); }
       }
-      res.json({ items, errors });
+      res.json({ revision: maxRevision, items, errors });
     } catch (error) { respondError(res, error, 'Failed to load message queue'); }
   });
 
@@ -70,7 +76,7 @@ export function registerMessageQueueRoutes(app, runtime, { resolveSessionScope, 
     try {
       const scope = await scopeFor(resolveSessionScope, req.params.sessionId);
       const { commandId: bodyCommandId, request } = appendInput(req.body);
-      const commandId = bodyCommandId ?? req.get('Idempotency-Key');
+      const commandId = bodyCommandId ?? req.get('Idempotency-Key') ?? randomUUID();
       res.json(QueueStateSchema.parse(await runtime.append(scope, commandId, request)));
     } catch (error) { respondError(res, error, 'Failed to queue message'); }
   });
@@ -88,7 +94,6 @@ export function registerMessageQueueRoutes(app, runtime, { resolveSessionScope, 
       res.json(QueueStateSchema.parse(await runtime.remove(scope, deleteInput(req.body, req.params.itemId))));
     } catch (error) { respondError(res, error, 'Failed to remove queued message'); }
   });
-
   app.put('/api/message-queue/sessions/:sessionId/hold', async (req, res) => {
     try {
       const scope = await scopeFor(resolveSessionScope, req.params.sessionId);
@@ -100,7 +105,7 @@ export function registerCanonicalQueueRoutes(router, runtime, { resolveSessionSc
   if (typeof resolveSessionScope !== 'function') throw new TypeError('resolveSessionScope is required');
   const scope = (id) => scopeFor(resolveSessionScope, id);
   router.get('/sessions/:sessionId/queue', async (req, res) => { try { res.json(QueueStateSchema.parse(await runtime.getState(await scope(req.params.sessionId)))); } catch (error) { respondError(res, error, 'Failed to load prompt queue'); } });
-  router.post('/sessions/:sessionId/queue', async (req, res) => { try { const { commandId: bodyCommandId, request } = appendInput(req.body); const commandId = bodyCommandId ?? req.get('Idempotency-Key'); res.json(QueueStateSchema.parse(await runtime.append(await scope(req.params.sessionId), commandId, request))); } catch (error) { respondError(res, error, 'Failed to append prompt queue'); } });
+  router.post('/sessions/:sessionId/queue', async (req, res) => { try { const { commandId: bodyCommandId, request } = appendInput(req.body); const commandId = bodyCommandId ?? req.get('Idempotency-Key') ?? randomUUID(); res.json(QueueStateSchema.parse(await runtime.append(await scope(req.params.sessionId), commandId, request))); } catch (error) { respondError(res, error, 'Failed to append prompt queue'); } });
   router.put('/sessions/:sessionId/queue/order', async (req, res) => { try { res.json(QueueStateSchema.parse(await runtime.reorder(await scope(req.params.sessionId), QueueReorderRequestSchema.parse(req.body)))); } catch (error) { respondError(res, error, 'Failed to reorder prompt queue'); } });
   router.delete('/sessions/:sessionId/queue/:queueItemId', async (req, res) => { try { res.json(QueueStateSchema.parse(await runtime.remove(await scope(req.params.sessionId), deleteInput(req.body, req.params.queueItemId)))); } catch (error) { respondError(res, error, 'Failed to remove prompt queue item'); } });
 }

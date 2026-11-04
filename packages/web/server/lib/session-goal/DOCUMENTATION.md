@@ -37,7 +37,10 @@ target button arms "the next prompt is the objective", and the run-as-goal
 flows (fork-from-answer dialog, plan implement dialog) arm the same way —
 the plan flow additionally supplies an objective OVERRIDE carrying the plan
 content, since "Implement this plan: X" alone gives the audit nothing to
-judge against. The armed send also attaches a synthetic system-reminder
+judge against. Queueing a message consumes the arm too: the goal travels on
+that queued item (`goal` in `../message-queue`) and starts when that item is
+delivered, by the server queue or by a send from the queue row, and a queued
+item without a goal never consumes the composer's arm. The armed send also attaches a synthetic system-reminder
 part telling the agent goal mode is active and that each turn should end
 with a factual done/verified/remaining statement for the independent audit.
 Freshness/stale-write protection is by `id`: every runtime write re-reads the
@@ -221,3 +224,22 @@ ordering used by create and scheduled goals.
 - `tokensUsed` only counts completed assistant messages seen within the
   40-message fetch window per tick; extremely long busy stretches between
   idles undercount (acceptable: budget is a guardrail, not billing).
+
+## Decisions
+
+### Why failed session reads retry before blocking
+
+The activity checks already retry unknown reads after a quiet window. The
+initial session read follows that policy so a transient transport failure does
+not leave an active goal without a scheduled tick. The bounded backoff allows
+recovery without sending a continuation from unknown state. At exhaustion, the
+runtime attempts to block with a resumable reason because an unscheduled active
+goal gives the user no explanation for the stopped turns.
+
+Retry settlement passes a write-time predicate through `persistSessionGoal`.
+The server checks it inside the metadata store's existing per-session write
+queue, so a queued pause, clear, completion or replacement cannot be overwritten.
+The predicate also rejects a retry window invalidated by a goal change, session
+status event, user abort or runtime stop.
+A rejected write returns `false` and emits no settlement notification. Direct
+OpenCode writes outside this store still lack a cross-process compare-and-set.

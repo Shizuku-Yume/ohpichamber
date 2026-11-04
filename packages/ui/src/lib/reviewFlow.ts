@@ -1,6 +1,6 @@
 import type { Message, Session } from '@openchamber/agent-contract';
 import { canonicalClient, CanonicalApiError } from '@/api/canonicalClient';
-import { renderMagicPrompt } from '@/lib/magicPrompts';
+import { loadMagicPrompts, type MagicPromptSnapshot } from '@/lib/magicPrompts';
 import {
   getOriginalSessionID,
   getReviewSessionID,
@@ -19,8 +19,8 @@ import { useSelectionStore } from '@/sync/selection-store';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { getDirectoryState, getSyncMessages, registerSessionDirectory } from '@/sync/sync-refs';
 import { markPendingUserSendAnimation } from '@/lib/userSendAnimation';
-import { getRuntimeKey } from '@/lib/runtime-switch';
-import { fetchSessionKnowledge, reportSessionKnowledgeDelivered } from '@/lib/sessionKnowledgeApi';
+import { getRuntimeKey, getRuntimeSwitchRevision } from '@/lib/runtime-switch';
+import { fetchSessionKnowledge } from '@/lib/sessionKnowledgeApi';
 import { expandNativeFileResource } from '@/api/fileResourceExpansion';
 import { resolveWorkspaceDirectory } from '@/stores/globalSessions';
 
@@ -112,6 +112,17 @@ export const assertAutoReviewRuntimeStillCurrent = (expectedRuntimeKey?: string)
   }
 };
 
+type ReviewOwner = { runtimeKey: string; revision: number };
+const captureReviewOwner = (expectedRuntimeKey?: string): ReviewOwner => {
+  assertAutoReviewRuntimeStillCurrent(expectedRuntimeKey);
+  return { runtimeKey: expectedRuntimeKey ?? getRuntimeKey(), revision: getRuntimeSwitchRevision() };
+};
+const assertReviewOwner = (owner: ReviewOwner): void => {
+  if (getRuntimeKey() !== owner.runtimeKey || getRuntimeSwitchRevision() !== owner.revision) {
+    throw new Error('Review stopped because the runtime changed.');
+  }
+};
+
 
 export const hasFinalReviewMarker = (text: string): boolean => {
   const lines = text.trim().split('\n').map((line) => line.trim()).filter(Boolean);
@@ -153,13 +164,14 @@ const autoReviewReviewerInstructions = (): Array<{ text: string; synthetic: true
 
 // A review session starts with the same review rules as /workspace-review,
 // so its findings carry severities the loop's stop condition can rely on.
-const reviewSessionInstructions = async (autoReview: boolean | undefined): Promise<Array<{ text: string }>> => {
-  const reviewRules = { text: await renderMagicPrompt('session.review.instructions') };
+const reviewSessionInstructions = (prompts: MagicPromptSnapshot, autoReview: boolean | undefined): Array<{ text: string }> => {
+  const reviewRules = { text: prompts.render('session.review.instructions') };
   return autoReview ? [reviewRules, ...autoReviewReviewerInstructions()] : [reviewRules];
 };
 
-const runAutoReviewLoop = async (originalSessionID: string): Promise<void> => {
+const runAutoReviewLoop = async (originalSessionID: string, owner: ReviewOwner): Promise<void> => {
   while (true) {
+    assertReviewOwner(owner);
     const run = useAutoReviewStore.getState().runsByOriginalSessionID[originalSessionID];
     if (!run || run.status !== 'running') return;
     if (!isAutoReviewRuntimeCurrent(run.runtimeKey)) {
@@ -200,6 +212,7 @@ const runAutoReviewLoop = async (originalSessionID: string): Promise<void> => {
         const isFinalReview = hasFinalReviewMarker(latest.text);
         const reviewFeedback = isFinalReview ? stripFinalReviewMarker(latest.text) : latest.text;
         const sentMessageID = await sendReviewFeedbackToOriginal(run.reviewSessionID, run.directory, reviewFeedback, run.runtimeKey);
+        assertReviewOwner(owner);
         if (isFinalReview) {
           useAutoReviewStore.getState().completeRun(run.originalSessionID);
           return;
@@ -232,6 +245,7 @@ const runAutoReviewLoop = async (originalSessionID: string): Promise<void> => {
       try {
         const waitAfterCreatedAt = Date.now();
         const sentMessageID = await sendImplementationResponseToReviewer(run.originalSessionID, run.directory, latest.text, true, run.runtimeKey);
+        assertReviewOwner(owner);
         useAutoReviewStore.getState().updateRun(run.originalSessionID, (current) => ({
           ...current,
           phase: 'waiting_for_reviewer',
@@ -255,8 +269,10 @@ const startAutoReviewRun = (run: AutoReviewRun): void => {
 export const resumeAutoReviewRun = (originalSessionID: string): void => {
   const run = useAutoReviewStore.getState().runsByOriginalSessionID[originalSessionID];
   if (!run || run.status !== 'running' || !isAutoReviewRuntimeCurrent(run.runtimeKey) || activeAutoReviewLoops.has(originalSessionID)) return;
+  const owner = captureReviewOwner(run.runtimeKey);
   activeAutoReviewLoops.add(originalSessionID);
-  void runAutoReviewLoop(run.originalSessionID).catch((error) => {
+  void runAutoReviewLoop(run.originalSessionID, owner).catch((error) => {
+    if (getRuntimeKey() !== owner.runtimeKey || getRuntimeSwitchRevision() !== owner.revision) return;
     console.error('[review-flow] auto-review loop failed', error);
     const message = error instanceof Error ? error.message : String(error);
     useAutoReviewStore.getState().updateRun(run.originalSessionID, (current) => ({
@@ -269,9 +285,10 @@ export const resumeAutoReviewRun = (originalSessionID: string): void => {
   });
 };
 
-const waitForAssistantText = async (sessionID: string, directory: string, afterCreatedAt: number): Promise<string> => {
+const waitForAssistantText = async (sessionID: string, directory: string, afterCreatedAt: number, owner: ReviewOwner): Promise<string> => {
   const deadline = Date.now() + HANDOFF_TIMEOUT_MS;
   while (Date.now() < deadline) {
+    assertReviewOwner(owner);
     // v2 completes every step, and a step that says "let me check" before a
     // tool call has text too. Only the finished turn holds the handoff.
     if (!isSessionIdle(sessionID, directory)) {
@@ -335,16 +352,16 @@ const sendPlainMessage = async (
   sessionID: string,
   directory: string,
   text: string,
-  modelContext?: SessionModelContext | null,
+  modelContext: SessionModelContext | null | undefined,
   /** Context items sent ahead of the prompt as synthetic messages. */
-  context?: Array<{ text: string }>,
-  expectedRuntimeKey?: string,
+  context: Array<{ text: string }> | undefined,
+  owner: ReviewOwner,
 ): Promise<string> => {
-  const runtimeKey = expectedRuntimeKey ?? getRuntimeKey();
+  const runtimeKey = owner.runtimeKey;
   const session = useGlobalSessionsStore.getState().entityById.get(sessionID);
   const directoryOwner = session ? resolveWorkspaceDirectory(session.workspaceId) : undefined;
   const assertCurrent = () => {
-    assertAutoReviewRuntimeStillCurrent(runtimeKey);
+    assertReviewOwner(owner);
     const current = useGlobalSessionsStore.getState().entityById.get(sessionID);
     if (session && (!current || current.workspaceId !== session.workspaceId || current.epoch !== session.epoch || resolveWorkspaceDirectory(session.workspaceId) !== directoryOwner)) throw new Error('Review prompt scope changed');
   };
@@ -364,12 +381,14 @@ const sendPlainMessage = async (
   }
   // Review sessions are real work sessions, so they carry the project's
   // standing context (pinned notes, memory) exactly as a composer send would.
-  const knowledge = await fetchSessionKnowledge(directory, sessionID);
+  const knowledge = await fetchSessionKnowledge(directory, sessionID, owner);
   assertCurrent();
   const sendContext = knowledge.text ? [{ text: knowledge.text }, ...(context ?? [])] : context;
   markPendingUserSendAnimation(sessionID);
   let sentMessageID: string | null = null;
   await optimisticSend({
+    runtimeKey,
+    runtimeRevision: owner.revision,
     sessionId: sessionID,
     content: text,
     directory,
@@ -384,6 +403,7 @@ const sendPlainMessage = async (
       return sendMessage({
         sessionId: sessionID,
         runtimeKey,
+        runtimeRevision: owner.revision,
         request: {
           input: { text, attachments: [], context: promptContext.map((item) => ({ kind: 'synthetic' as const, text: item.text })) },
           options: { providerId: resolved.providerId, modelId: resolved.modelId, agentId: resolved.agentId ?? null, variant: resolved.variant ?? null, reasoningEffort: null },
@@ -393,9 +413,6 @@ const sendPlainMessage = async (
   });
   assertCurrent();
   if (!sentMessageID) throw new Error('Failed to prepare review flow message');
-  if (knowledge.text) {
-    void reportSessionKnowledgeDelivered(directory, sessionID, knowledge.signature);
-  }
   return sentMessageID;
 };
 
@@ -415,12 +432,12 @@ const openReviewSessionPanel = (directory: string, session: Session): void => {
   });
 };
 
-const readHostSession = async (sessionID: string): Promise<Session> => {
-  const runtimeKey = getRuntimeKey();
+const readHostSession = async (sessionID: string, owner: ReviewOwner): Promise<Session> => {
+  assertReviewOwner(owner);
   const snapshot = await canonicalClient.getSession(sessionID);
-  assertAutoReviewRuntimeStillCurrent(runtimeKey);
+  assertReviewOwner(owner);
   const sessions = await canonicalClient.listSessions(snapshot.session.workspaceId);
-  assertAutoReviewRuntimeStillCurrent(runtimeKey);
+  assertReviewOwner(owner);
   const session = sessions.items.find((entry) => entry.sessionId === sessionID);
   if (!session || sessions.errors[sessionID] || sessions.errors[snapshot.session.workspaceId]) {
     throw new Error('Host session projection is unavailable');
@@ -428,9 +445,9 @@ const readHostSession = async (sessionID: string): Promise<Session> => {
   return session;
 };
 
-const getSessionOrNull = async (sessionID: string): Promise<Session | null> => {
+const getSessionOrNull = async (sessionID: string, owner: ReviewOwner): Promise<Session | null> => {
   try {
-    return await readHostSession(sessionID);
+    return await readHostSession(sessionID, owner);
   } catch (error) {
     if (error instanceof CanonicalApiError && error.problem.status === 404) return null;
     throw error;
@@ -461,17 +478,18 @@ const createOrReuseReviewSession = async (
   originalSessionID: string,
   directory: string,
   selection: SessionModelContext,
-  expectedRuntimeKey?: string,
+  owner: ReviewOwner,
 ): Promise<Session> => {
-  assertAutoReviewRuntimeStillCurrent(expectedRuntimeKey);
-  const original = await readHostSession(originalSessionID);
-  assertAutoReviewRuntimeStillCurrent(expectedRuntimeKey);
+  assertReviewOwner(owner);
+  const original = await readHostSession(originalSessionID, owner);
+  assertReviewOwner(owner);
   const existingReviewID = getReviewSessionID(original);
   if (existingReviewID) {
-    const existing = await getSessionOrNull(existingReviewID);
-    assertAutoReviewRuntimeStillCurrent(expectedRuntimeKey);
+    const existing = await getSessionOrNull(existingReviewID, owner);
+    assertReviewOwner(owner);
     if (existing && isReviewSession(existing)) return existing;
-    await patchSessionMetadata(originalSessionID, directory, (metadata) => withoutReviewSessionLink(metadata, existingReviewID), expectedRuntimeKey);
+    await patchSessionMetadata(originalSessionID, directory, (metadata) => withoutReviewSessionLink(metadata, existingReviewID), owner.runtimeKey, owner.revision);
+    assertReviewOwner(owner);
   }
 
   const review = (await canonicalClient.createSession({
@@ -480,12 +498,13 @@ const createOrReuseReviewSession = async (
     options: { providerId: selection.providerId, modelId: selection.modelId, agentId: selection.agentId ?? null, variant: selection.variant ?? null, reasoningEffort: null },
     metadata: withReviewSessionMarker({ title: getReviewSessionTitle(original) }, originalSessionID),
   })).session;
-  assertAutoReviewRuntimeStillCurrent(expectedRuntimeKey);
+  assertReviewOwner(owner);
   registerSessionDirectory(review.sessionId, directory);
   try {
-    await patchSessionMetadata(originalSessionID, directory, (metadata) => withReviewSessionLink(metadata, review.sessionId), expectedRuntimeKey);
+    await patchSessionMetadata(originalSessionID, directory, (metadata) => withReviewSessionLink(metadata, review.sessionId), owner.runtimeKey, owner.revision);
+    assertReviewOwner(owner);
   } catch (error) {
-    assertAutoReviewRuntimeStillCurrent(expectedRuntimeKey);
+    assertReviewOwner(owner);
     await canonicalClient.deleteSession(review.sessionId).catch((deleteError) => {
       console.warn('[review-flow] failed to delete unlinked review session after link failure', deleteError);
     });
@@ -493,12 +512,16 @@ const createOrReuseReviewSession = async (
   }
   useGlobalSessionsStore.getState().upsertSession(review);
   await inheritPermissionAutoAccept(originalSessionID, review.sessionId);
+  assertReviewOwner(owner);
   return review;
 };
 
 export const startReviewFlow = async (input: StartReviewFlowInput): Promise<void> => {
+  const owner = captureReviewOwner();
   await waitForConnectionOrThrow();
-  const expectedAutoReviewRuntimeKey = input.autoReview ? getRuntimeKey() : undefined;
+  assertReviewOwner(owner);
+  const prompts = await loadMagicPrompts(input.directory);
+  assertReviewOwner(owner);
   const reviewSelection: SessionModelContext = {
     providerId: input.providerId,
     modelId: input.modelId,
@@ -508,21 +531,24 @@ export const startReviewFlow = async (input: StartReviewFlowInput): Promise<void
   let reviewPrompt: string;
 
   if (input.generateHandoff ?? true) {
-    const visibleText = await renderMagicPrompt('session.reviewHandoff.visible');
-    const instructionsText = await renderMagicPrompt('session.reviewHandoff.instructions');
+    const visibleText = prompts.render('session.reviewHandoff.visible');
+    const instructionsText = prompts.render('session.reviewHandoff.instructions');
     const startedAt = Date.now();
     await sendPlainMessage(input.originalSessionID, input.directory, visibleText, null, [
       { text: instructionsText },
-    ], expectedAutoReviewRuntimeKey);
+    ], owner);
+    assertReviewOwner(owner);
 
     const continueFromHandoff = async (): Promise<void> => {
-      const handoff = await waitForAssistantText(input.originalSessionID, input.directory, startedAt);
-      assertAutoReviewRuntimeStillCurrent(expectedAutoReviewRuntimeKey);
-      const handoffReviewPrompt = await renderMagicPrompt('session.reviewSession.visible', { handoff });
-      const reviewSession = await createOrReuseReviewSession(input.originalSessionID, input.directory, reviewSelection, expectedAutoReviewRuntimeKey);
-      const runtimeKey = expectedAutoReviewRuntimeKey ?? getRuntimeKey();
+      const handoff = await waitForAssistantText(input.originalSessionID, input.directory, startedAt, owner);
+      assertReviewOwner(owner);
+      const handoffReviewPrompt = prompts.render('session.reviewSession.visible', { handoff });
+      const reviewSession = await createOrReuseReviewSession(input.originalSessionID, input.directory, reviewSelection, owner);
+      assertReviewOwner(owner);
+      const runtimeKey = owner.runtimeKey;
       const waitAfterCreatedAt = Date.now();
-      const sentMessageID = await sendPlainMessage(reviewSession.sessionId, input.directory, handoffReviewPrompt, reviewSelection, await reviewSessionInstructions(input.autoReview), input.autoReview ? runtimeKey : undefined);
+      const sentMessageID = await sendPlainMessage(reviewSession.sessionId, input.directory, handoffReviewPrompt, reviewSelection, reviewSessionInstructions(prompts, input.autoReview), owner);
+      assertReviewOwner(owner);
       if (input.autoReview) {
         startAutoReviewRun({
           originalSessionID: input.originalSessionID,
@@ -552,13 +578,15 @@ export const startReviewFlow = async (input: StartReviewFlowInput): Promise<void
     await continueFromHandoff();
     return;
   } else {
-    reviewPrompt = await renderMagicPrompt('session.reviewSessionWithoutHandoff.visible');
+    reviewPrompt = prompts.render('session.reviewSessionWithoutHandoff.visible');
   }
 
-  const reviewSession = await createOrReuseReviewSession(input.originalSessionID, input.directory, reviewSelection, expectedAutoReviewRuntimeKey);
-  const runtimeKey = expectedAutoReviewRuntimeKey ?? getRuntimeKey();
+  const reviewSession = await createOrReuseReviewSession(input.originalSessionID, input.directory, reviewSelection, owner);
+  assertReviewOwner(owner);
+  const runtimeKey = owner.runtimeKey;
   const waitAfterCreatedAt = Date.now();
-  const sentMessageID = await sendPlainMessage(reviewSession.sessionId, input.directory, reviewPrompt, reviewSelection, await reviewSessionInstructions(input.autoReview), input.autoReview ? runtimeKey : undefined);
+  const sentMessageID = await sendPlainMessage(reviewSession.sessionId, input.directory, reviewPrompt, reviewSelection, reviewSessionInstructions(prompts, input.autoReview), owner);
+  assertReviewOwner(owner);
   if (input.autoReview) {
     startAutoReviewRun({
       originalSessionID: input.originalSessionID,
@@ -579,33 +607,40 @@ export const startReviewFlow = async (input: StartReviewFlowInput): Promise<void
 };
 
 export const sendReviewFeedbackToOriginal = async (reviewSessionID: string, directory: string, reviewFeedback: string, expectedRuntimeKey?: string): Promise<string> => {
-  assertAutoReviewRuntimeStillCurrent(expectedRuntimeKey);
-  const reviewSession = await readHostSession(reviewSessionID);
+  const owner = captureReviewOwner(expectedRuntimeKey);
+  const reviewSession = await readHostSession(reviewSessionID, owner);
+  assertReviewOwner(owner);
   const originalSessionID = getOriginalSessionID(reviewSession);
   if (!originalSessionID) throw new Error('Original session is missing');
-  const prompt = await renderMagicPrompt('session.reviewFeedbackToImplementer.visible', { review_feedback: reviewFeedback });
-  assertAutoReviewRuntimeStillCurrent(expectedRuntimeKey);
-  return sendPlainMessage(originalSessionID, directory, prompt, undefined, undefined, expectedRuntimeKey);
+  const prompts = await loadMagicPrompts(directory);
+  assertReviewOwner(owner);
+  const prompt = prompts.render('session.reviewFeedbackToImplementer.visible', { review_feedback: reviewFeedback });
+  return sendPlainMessage(originalSessionID, directory, prompt, undefined, undefined, owner);
 };
 
 export const sendImplementationResponseToReviewer = async (originalSessionID: string, directory: string, implementationResponse: string, autoReview = false, expectedRuntimeKey?: string): Promise<string> => {
-  assertAutoReviewRuntimeStillCurrent(expectedRuntimeKey);
-  const originalSession = await readHostSession(originalSessionID);
+  const owner = captureReviewOwner(expectedRuntimeKey);
+  const originalSession = await readHostSession(originalSessionID, owner);
+  assertReviewOwner(owner);
   const reviewSessionID = getReviewSessionID(originalSession);
   if (!reviewSessionID) throw new Error('Review session is missing');
   let reviewSession: Session;
   try {
-    reviewSession = await readHostSession(reviewSessionID);
+    reviewSession = await readHostSession(reviewSessionID, owner);
+    assertReviewOwner(owner);
   } catch (error) {
-    assertAutoReviewRuntimeStillCurrent(expectedRuntimeKey);
+    assertReviewOwner(owner);
     if (error instanceof CanonicalApiError && error.problem.status === 404) {
-      await patchSessionMetadata(originalSessionID, directory, (metadata) => withoutReviewSessionLink(metadata, reviewSessionID), expectedRuntimeKey);
+      await patchSessionMetadata(originalSessionID, directory, (metadata) => withoutReviewSessionLink(metadata, reviewSessionID), owner.runtimeKey, owner.revision);
+      assertReviewOwner(owner);
     }
     throw error;
   }
-  const prompt = await renderMagicPrompt('session.implementationResponseToReviewer.visible', { implementation_response: implementationResponse });
-  assertAutoReviewRuntimeStillCurrent(expectedRuntimeKey);
-  const sentMessageID = await sendPlainMessage(reviewSessionID, directory, prompt, undefined, autoReview ? autoReviewReviewerInstructions() : undefined, expectedRuntimeKey);
+  const prompts = await loadMagicPrompts(directory);
+  assertReviewOwner(owner);
+  const prompt = prompts.render('session.implementationResponseToReviewer.visible', { implementation_response: implementationResponse });
+  const sentMessageID = await sendPlainMessage(reviewSessionID, directory, prompt, undefined, autoReview ? autoReviewReviewerInstructions() : undefined, owner);
+  assertReviewOwner(owner);
   if (!autoReview) {
     openReviewSessionPanel(directory, reviewSession);
   }

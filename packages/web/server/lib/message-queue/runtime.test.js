@@ -4,8 +4,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, it } from 'vitest';
+import express from 'express';
+import supertest from 'supertest';
 import { createCanonicalQueueRuntime } from './canonical-runtime.js';
 import { createPromptQueueStore } from './sqlite-store.js';
+import { registerMessageQueueRoutes } from './runtime.js';
 
 const roots = [];
 const stores = [];
@@ -174,6 +177,112 @@ describe('canonical queue runtime', () => {
     const pending = await store.pendingDeliveries(privateScope);
     assert.equal(pending[0].phase, 'submitting');
     assert.deepEqual((await store.getDeliveryCapture(privateScope, pending[0].leaseId)).request.input.text, 'receipt first');
+    await runtime.stop();
+  });
+
+  it('rejects the old UI shape with 400', async () => {
+    const store = storeFor();
+    const service = createService();
+    const runtime = createCanonicalQueueRuntime({
+      store,
+      service,
+      resolveAttachments: async () => [],
+      publishQueue: () => {},
+      reportFailure: () => {},
+    });
+    const app = express();
+    app.use(express.json());
+    registerMessageQueueRoutes(app, runtime, {
+      resolveSessionScope: async () => scope,
+      listQueueScopes: async () => ({ items: [scope], errors: [] }),
+    });
+
+    const oldUiPayload = {
+      directory: '/private/worktree',
+      item: {
+        content: 'old format prompt',
+        sendConfig: { providerID: 'provider', modelID: 'model' },
+        attachments: [{ filename: 'note.txt', mimeType: 'text/plain', serverPath: 'file:///path' }],
+      },
+    };
+
+    const res = await supertest(app)
+      .post(`/api/message-queue/sessions/${SESSION}/items`)
+      .send(oldUiPayload);
+
+    assert.equal(res.status, 400);
+    assert.equal(res.body.code, 'INVALID_REQUEST');
+    await runtime.stop();
+  });
+
+  it('subscribes session observation on append and start', async () => {
+    const store = storeFor();
+    const observed = [];
+    const runtime = createCanonicalQueueRuntime({
+      store,
+      service: createService(),
+      resolveAttachments: async () => [],
+      publishQueue: () => {},
+      reportFailure: () => {},
+      ensureSessionObserved: async (sessionScope) => {
+        observed.push(sessionScope.sessionId);
+      },
+    });
+    await runtime.append(scope, randomUUID(), {
+      expectedRevision: '0',
+      content: 'observe prompt',
+      request,
+    });
+    assert.deepEqual(observed, [SESSION]);
+    await runtime.start();
+    assert.deepEqual(observed, [SESSION, SESSION]);
+    await runtime.stop();
+  });
+
+  it('re-schedules delivery while the runtime session is busy with an active run', async () => {
+    const store = storeFor();
+    let runStatus = 'running';
+    let activeRunId = 'run-busy';
+    let dispatchCalled = false;
+    const busyService = {
+      request: async (requestPath, init) => {
+        if (init?.method === 'POST') {
+          dispatchCalled = true;
+          const body = JSON.parse(init.body);
+          return Response.json({ run: { ...run, runId: body.runId, sessionId: SESSION } });
+        }
+        return Response.json({
+          ...runtimeSession,
+          runtimeStatus: runStatus,
+          activeRunId,
+        });
+      },
+    };
+    const runtime = createCanonicalQueueRuntime({
+      store,
+      service: busyService,
+      resolveAttachments: async () => [],
+      publishQueue: () => {},
+      reportFailure: () => {},
+    });
+
+    await runtime.append(scope, randomUUID(), {
+      expectedRevision: '0',
+      content: 'busy prompt',
+      request,
+    });
+
+    // Let the initial tick run; activeRunId is busy so it should schedule retry
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(dispatchCalled, false);
+
+    // Now the run finishes
+    runStatus = 'idle';
+    activeRunId = null;
+
+    // Trigger dispatch directly once idle
+    await runtime.dispatch(scope);
+    assert.equal(dispatchCalled, true);
     await runtime.stop();
   });
 });

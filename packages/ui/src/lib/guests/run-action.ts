@@ -5,6 +5,7 @@ import { create } from 'zustand';
 import type { I18nKey, I18nParams } from '@/lib/i18n';
 import { isMobileSurfaceRuntime } from '@/lib/runtimeSurface';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
+import { generateUuid } from '@/lib/uuid';
 import type { GuestActionEntry } from './actions.ts';
 import { isGuestActive } from './capabilities.ts';
 import { openGuestWithItem } from './dialog-store.ts';
@@ -41,7 +42,7 @@ const runBackgroundAction = (entry: GuestActionEntry, item: GuestActionItem, run
   // Bound hidden documents even when repeated clicks arrive before a frame can answer.
   if (useGuestActionHostStore.getState().requests.length >= 8) return Promise.resolve({ ok: false, reason: 'unavailable' });
   return new Promise((resolve) => {
-    const id = crypto.randomUUID();
+    const id = generateUuid();
     let active = true;
     let sent = false;
     const isActive = () => active && isCurrentAction(entry, item, runtimeKey);

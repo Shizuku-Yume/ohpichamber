@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { verifyPackagedAppContents } = require('./packaged-app-contents.cjs');
 
 module.exports = async (context) => {
   const resourcesPath = context.electronPlatformName === 'darwin'
@@ -11,6 +12,7 @@ module.exports = async (context) => {
     platform: context.electronPlatformName,
     architecture,
   });
+  verifyPackagedAppContents(resourcesPath);
   if (context.electronPlatformName !== 'darwin') return;
 
   const sourceAssetsPath = path.join(__dirname, '..', 'resources', 'icons', 'Assets.car');

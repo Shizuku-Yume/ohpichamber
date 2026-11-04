@@ -5,7 +5,7 @@ import type { Part } from '@openchamber/agent-contract';
 import type { AgentMentionInfo } from '../types';
 import { SimpleMarkdownRenderer } from '../../MarkdownRenderer';
 import { useUIStore } from '@/stores/useUIStore';
-import { selectSkillsForDirectory, useSkillsStore } from '@/stores/useSkillsStore';
+import { selectAvailableSkillsForDirectory, useSkillsStore } from '@/stores/useSkillsStore';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useI18n } from '@/lib/i18n';
 import {
@@ -19,6 +19,8 @@ import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 import { withAttachmentChips, type InlineTextNode } from './attachmentCitationChips';
 import { prepareUserMarkdownContent, SKILL_TOKEN_PATTERN } from './userTextPartContent';
 import { extractTerminalContexts } from '@/lib/messages/terminalContext';
+import { SessionMentionChipsContext, withSessionMentionChips, type SessionMentionChips } from './sessionMentionChips';
+import { appOwnOrigins } from '@/lib/router/appOrigins';
 
 type UserTextPartProps = {
     part: Part;
@@ -37,9 +39,12 @@ type UserTextPartProps = {
     onTruncationChange: (partIndex: number, truncated: boolean) => void;
     /** Names of the files attached to this message; `[name]` in the text renders as a file chip. */
     attachmentFilenames: readonly string[];
+    /** Sessions and messages the message mentioned; their links in the text draw as chips. */
+    sessionMentionChips?: SessionMentionChips;
 };
 
 const EMPTY_ATTACHMENT_LINKS: AttachmentCitationLink[] = [];
+const NO_SESSION_MENTIONS: SessionMentionChips = new Map();
 
 
 const normalizeUserMessageRenderingMode = (mode: unknown): 'markdown' | 'plain' => {
@@ -55,9 +60,8 @@ const UserTextPart: React.FC<UserTextPartProps> = ({
     partIndex,
     onTruncationChange,
     attachmentFilenames,
+    sessionMentionChips = NO_SESSION_MENTIONS,
 }) => {
-    // Canonical parts retain context prompt text, but do not carry legacy
-    // structured context metadata.
     const serializedText = part.type === 'text' ? part.content : '';
     const terminalContextState = React.useMemo(() => extractTerminalContexts(serializedText), [serializedText]);
     const textContent = terminalContextState.visibleText;
@@ -66,7 +70,7 @@ const UserTextPart: React.FC<UserTextPartProps> = ({
     const userMessageRenderingMode = useUIStore((state) => state.userMessageRenderingMode);
     const collapsibleUserMessages = useUIStore((state) => state.collapsibleUserMessages);
     const directory = useEffectiveDirectory();
-    const skills = useSkillsStore(state => selectSkillsForDirectory(state, directory));
+    const skills = useSkillsStore(state => selectAvailableSkillsForDirectory(state, directory));
     const { t } = useI18n();
     const normalizedRenderingMode = normalizeUserMessageRenderingMode(userMessageRenderingMode);
     const isCollapsed = collapsibleUserMessages && !messageExpanded;
@@ -206,8 +210,9 @@ const UserTextPart: React.FC<UserTextPartProps> = ({
             agentMention,
             skillNames: new Set(skillByName.keys()),
             attachments: attachmentLinks,
+            sessionMentions: { chips: sessionMentionChips, origins: appOwnOrigins() },
         });
-    }, [agentMention, attachmentLinks, skillByName, textContent]);
+    }, [agentMention, attachmentLinks, sessionMentionChips, skillByName, textContent]);
 
     const plainTextNodes = React.useMemo(() => {
         const nodes: InlineTextNode[] = [];
@@ -275,13 +280,19 @@ const UserTextPart: React.FC<UserTextPartProps> = ({
         });
     }, [agentMention, openSkill, skillByName, textContent]);
 
-    // Attachment citations become file chips in the plain-text path too.
+    // Attachment citations and mentioned sessions become chips in the plain-text path too.
     const plainTextContent = React.useMemo(() => {
-        if (attachmentFilenames.length === 0) return plainTextNodes;
+        if (attachmentFilenames.length === 0 && sessionMentionChips.size === 0) return plainTextNodes;
         return plainTextNodes.flatMap((node, nodeIndex) => (
-            React.isValidElement<unknown>(node) ? node : withAttachmentChips(node, attachmentFilenames, `attachment-${nodeIndex}`)
+            React.isValidElement<unknown>(node)
+                ? node
+                : withSessionMentionChips(node, sessionMentionChips, `session-${nodeIndex}`).flatMap((run, runIndex) => (
+                    React.isValidElement<unknown>(run)
+                        ? run
+                        : withAttachmentChips(run, attachmentFilenames, `attachment-${nodeIndex}-${runIndex}`)
+                ))
         ));
-    }, [attachmentFilenames, plainTextNodes]);
+    }, [attachmentFilenames, plainTextNodes, sessionMentionChips]);
 
     if (part.type !== 'text' || ((!textContent || textContent.trim().length === 0) && terminalContextState.contexts.length === 0)) {
         return null;
@@ -300,29 +311,31 @@ const UserTextPart: React.FC<UserTextPartProps> = ({
                 onClick={handleClick}
             >
                 {normalizedRenderingMode === 'markdown' ? (
-                    <SimpleMarkdownRenderer
-                        content={processedMarkdownContent}
-                        className={cn(
-                            "[&_.markdown-content>*:first-child]:mt-0 [&_.markdown-content>*:last-child]:mb-0",
-                            isCollapsed && [
-                                "[&_.markdown-content>*]:my-0",
-                                "[&_[data-component='markdown-code']]:my-0",
-                                "[&_[data-component='markdown-code']]:inline",
-                                "[&_[data-component='markdown-code']]:border-0",
-                                "[&_[data-component='markdown-code']]:bg-transparent",
-                                "[&_[data-component='markdown-code']>*:first-child]:hidden",
-                                "[&_[data-component='markdown-code']>div]:inline",
-                                 "[&_[data-component='markdown-code']>div]:p-0",
-                                 "[&_[data-component='markdown-code']_pre]:inline",
-                                 "[&_[data-component='markdown-code']_code]:inline",
-                                 "[&_[data-md-code-line]]:!inline",
-                                 "[&_[data-md-code-line-number]]:hidden",
-                                 "[&_[data-md-code-line-break]]:!inline",
-                             ]
-                        )}
-                        disableLinkSafety
-                        enableFileReferences={false}
-                    />
+                    <SessionMentionChipsContext.Provider value={sessionMentionChips}>
+                        <SimpleMarkdownRenderer
+                            content={processedMarkdownContent}
+                            className={cn(
+                                "[&_.markdown-content>*:first-child]:mt-0 [&_.markdown-content>*:last-child]:mb-0",
+                                isCollapsed && [
+                                    "[&_.markdown-content>*]:my-0",
+                                    "[&_[data-component='markdown-code']]:my-0",
+                                    "[&_[data-component='markdown-code']]:inline",
+                                    "[&_[data-component='markdown-code']]:border-0",
+                                    "[&_[data-component='markdown-code']]:bg-transparent",
+                                    "[&_[data-component='markdown-code']>*:first-child]:hidden",
+                                    "[&_[data-component='markdown-code']>div]:inline",
+                                     "[&_[data-component='markdown-code']>div]:p-0",
+                                     "[&_[data-component='markdown-code']_pre]:inline",
+                                     "[&_[data-component='markdown-code']_code]:inline",
+                                     "[&_[data-md-code-line]]:!inline",
+                                     "[&_[data-md-code-line-number]]:hidden",
+                                     "[&_[data-md-code-line-break]]:!inline",
+                                 ]
+                            )}
+                            disableLinkSafety
+                            enableFileReferences={false}
+                        />
+                    </SessionMentionChipsContext.Provider>
                 ) : (
                     plainTextContent
                 )}

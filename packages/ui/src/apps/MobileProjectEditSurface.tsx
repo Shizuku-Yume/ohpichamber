@@ -1,21 +1,5 @@
 import React from 'react';
-import { RiCheckLine, RiDeleteBinLine, RiDragMove2Line, RiFolder6Line } from '@remixicon/react';
-import {
-  DndContext,
-  type DragEndEvent,
-  KeyboardSensor,
-  PointerSensor,
-  closestCenter,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core';
-import {
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { RiCheckLine, RiDeleteBinLine, RiFolder6Line } from '@remixicon/react';
 
 import { Icon } from '@/components/icon/Icon';
 import { Button } from '@/components/ui/button';
@@ -25,12 +9,10 @@ import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useI18n } from '@/lib/i18n';
 import { PROJECT_COLORS, PROJECT_COLOR_MAP, PROJECT_ICONS, PROJECT_ICON_MAP, ProjectIconImage } from '@/lib/projectMeta';
 import { cn } from '@/lib/utils';
-import { normalizePath as normalizePathImpl } from '@/lib/pathNormalization';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { SpaceRow } from '@/components/session/spaces/SpaceRow';
 import { spacesOfProject, useSpacesJourneyRead } from '@/lib/spaces/spaces-store';
-import { useWorktreeOrderStore } from '@/stores/useWorktreeOrderStore';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { useWorktreeRemoving } from '@/lib/worktrees/worktreeRemovalState';
 
@@ -75,41 +57,22 @@ const MobileProjectSpaces: React.FC<{ projectPath: string }> = ({ projectPath })
   );
 };
 
-const normalizePath = (value: string | null | undefined): string => normalizePathImpl(value) ?? '';
-
-const SortableWorktreeRow: React.FC<{
+/** One of the project's worktrees, with its Delete. */
+const WorktreeRow: React.FC<{
   worktree: WorktreeMetadata;
   onDelete: () => void;
 }> = ({ worktree, onDelete }) => {
   const { t } = useI18n();
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: worktree.path });
-  const style: React.CSSProperties = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    zIndex: isDragging ? 10 : 1,
-  };
   const label = worktree.branch || worktree.label || worktree.path;
   const removing = useWorktreeRemoving(worktree.path);
   return (
     <div
-      ref={setNodeRef}
-      style={style}
       className={cn(
         'flex items-center gap-1 rounded-2xl border border-border/70 bg-[var(--surface-elevated)] px-1.5 py-1.5 transition-colors',
-        isDragging && 'shadow-lg shadow-black/20',
         removing && 'opacity-60',
       )}
       aria-busy={removing || undefined}
     >
-      <button
-        type="button"
-        className="flex size-9 shrink-0 cursor-grab touch-none items-center justify-center rounded-xl text-muted-foreground/70 transition-colors hover:text-foreground active:cursor-grabbing"
-        aria-label={t('mobile.projectEdit.dragWorktreeAria', { label })}
-        {...attributes}
-        {...listeners}
-      >
-        <RiDragMove2Line className="size-4" />
-      </button>
       {removing ? (
         <span className="inline-flex shrink-0 text-muted-foreground" role="status" aria-label={t('sessions.sidebar.group.worktreeRemoving')}>
           <Icon name="loader-4" className="size-4 animate-spin" />
@@ -145,7 +108,6 @@ export const MobileProjectEditSurface: React.FC<MobileProjectEditSurfaceProps> =
   const updateProjectMeta = useProjectsStore((state) => state.updateProjectMeta);
   const discoverProjectIcon = useProjectsStore((state) => state.discoverProjectIcon);
   const removeProjectIcon = useProjectsStore((state) => state.removeProjectIcon);
-  const setWorktreeOrder = useWorktreeOrderStore((state) => state.setWorktreeOrder);
   // Read the live icon image from the store so discover/remove reflect instantly.
   const currentIconImage = useProjectsStore((state) =>
     project ? state.projects.find((entry) => entry.id === project.id)?.iconImage ?? null : null,
@@ -155,40 +117,21 @@ export const MobileProjectEditSurface: React.FC<MobileProjectEditSurfaceProps> =
   const [icon, setIcon] = React.useState<string | null>(null);
   const [color, setColor] = React.useState<string | null>(null);
   const [isDiscovering, setIsDiscovering] = React.useState(false);
-  const [orderedWorktrees, setOrderedWorktrees] = React.useState<WorktreeMetadata[]>([]);
   const [worktreeToDelete, setWorktreeToDelete] = React.useState<WorktreeMetadata | null>(null);
 
   const projectId = project?.id ?? null;
+  // Worktrees follow the project's discovery order; upstream dropped the
+  // mobile-only manual order, so no persisted reorder state remains.
+  const worktrees = project?.worktrees ?? [];
 
   React.useEffect(() => {
     if (!open || !project) return;
     setName(project.label);
     setIcon(project.icon ?? null);
     setColor(project.color ?? null);
-    setOrderedWorktrees(project.worktrees);
     // Re-seed only when the edited project or sheet visibility changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, projectId]);
-
-  // Keep the worktree list in sync as the underlying project data updates
-  // (e.g. after a deletion), without clobbering an in-progress drag order.
-  React.useEffect(() => {
-    if (!open || !project) return;
-    setOrderedWorktrees((previous) => {
-      const incomingPaths = project.worktrees.map((worktree) => worktree.path);
-      const previousPaths = previous.map((worktree) => worktree.path);
-      const sameSet =
-        incomingPaths.length === previousPaths.length &&
-        incomingPaths.every((path) => previousPaths.includes(path));
-      return sameSet ? previous : project.worktrees;
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project?.worktrees]);
-
-  const dndSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
 
   const handleSave = () => {
     if (!project) return;
@@ -228,22 +171,6 @@ export const MobileProjectEditSurface: React.FC<MobileProjectEditSurfaceProps> =
       }
       toast.success(t('projectEditDialog.toast.iconRemoved'));
     });
-  };
-
-  const handleWorktreeDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id || !project) return;
-    const fromIndex = orderedWorktrees.findIndex((worktree) => worktree.path === active.id);
-    const toIndex = orderedWorktrees.findIndex((worktree) => worktree.path === over.id);
-    if (fromIndex < 0 || toIndex < 0) return;
-    const next = [...orderedWorktrees];
-    const [moved] = next.splice(fromIndex, 1);
-    next.splice(toIndex, 0, moved);
-    setOrderedWorktrees(next);
-    setWorktreeOrder(
-      project.id,
-      next.map((worktree) => normalizePath(worktree.path)),
-    );
   };
 
   const currentColorVar = color ? PROJECT_COLOR_MAP[color] ?? null : null;
@@ -405,32 +332,20 @@ export const MobileProjectEditSurface: React.FC<MobileProjectEditSurfaceProps> =
                 <label className="typography-ui-label font-medium text-foreground">
                   {t('mobile.projectEdit.worktreesTitle')}
                 </label>
-                {orderedWorktrees.length === 0 ? (
+                {worktrees.length === 0 ? (
                   <p className="typography-meta text-muted-foreground">
                     {t('mobile.projectEdit.worktreesEmpty')}
                   </p>
                 ) : (
-                  <>
-                    <p className="typography-meta text-muted-foreground">
-                      {t('mobile.projectEdit.reorderHint')}
-                    </p>
-                    <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleWorktreeDragEnd}>
-                      <SortableContext
-                        items={orderedWorktrees.map((worktree) => worktree.path)}
-                        strategy={verticalListSortingStrategy}
-                      >
-                        <div className="flex flex-col gap-1.5">
-                          {orderedWorktrees.map((worktree) => (
-                            <SortableWorktreeRow
-                              key={worktree.path}
-                              worktree={worktree}
-                              onDelete={() => setWorktreeToDelete(worktree)}
-                            />
-                          ))}
-                        </div>
-                      </SortableContext>
-                    </DndContext>
-                  </>
+                  <div className="flex flex-col gap-1.5">
+                    {worktrees.map((worktree) => (
+                      <WorktreeRow
+                        key={worktree.path}
+                        worktree={worktree}
+                        onDelete={() => setWorktreeToDelete(worktree)}
+                      />
+                    ))}
+                  </div>
                 )}
               </div>
             ) : null}
@@ -448,9 +363,6 @@ export const MobileProjectEditSurface: React.FC<MobileProjectEditSurfaceProps> =
           worktree={worktreeToDelete}
           onClose={() => setWorktreeToDelete(null)}
           onDeleted={() => {
-            setOrderedWorktrees((previous) =>
-              previous.filter((worktree) => worktree.path !== worktreeToDelete?.path),
-            );
             onWorktreesChanged?.();
           }}
         />

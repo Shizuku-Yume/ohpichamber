@@ -2,6 +2,7 @@ import React from 'react';
 import { animate, type AnimationPlaybackControls } from 'motion';
 import type { Part } from '@openchamber/agent-contract';
 import { cn } from '@/lib/utils';
+import { isInvisibleText } from '@/lib/invisibleText';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Icon } from '@/components/icon/Icon';
 import type { IconName } from '@/components/icon/icons';
@@ -15,6 +16,7 @@ import { useStreamingTextThrottle } from '../../hooks/useStreamingTextThrottle';
 import { commitStreamedText } from '../../lib/streamTextCommit';
 import type { StreamPhase } from '../types';
 import { useReasoningReveal } from '@/components/chat/search/reasoningReveal';
+import { dispatchRowExpand } from '@/components/chat/lib/scroll/timelineScrollIntent';
 
 const TOOL_ROW_TEXT_CLASS = '!text-[length:var(--text-meta)] !leading-5 sm:!leading-6 tracking-normal';
 const TOOL_ROW_TITLE_CLASS = cn('typography-meta font-medium', TOOL_ROW_TEXT_CLASS);
@@ -23,14 +25,14 @@ const TOOL_ROW_DESCRIPTION_CLASS = cn('typography-meta', TOOL_ROW_TEXT_CLASS);
 type ReasoningVariant = 'thinking' | 'justification';
 
 const cleanReasoningText = (text: string): string => {
-    if (typeof text !== 'string' || text.trim().length === 0) {
+    if (typeof text !== 'string' || isInvisibleText(text)) {
         return '';
     }
 
     return text
         .split('\n')
         .map((line: string) => line.replace(/^>\s?/, '').trimEnd())
-        .filter((line: string) => line.trim().length > 0)
+        .filter((line: string) => !isInvisibleText(line))
         .join('\n')
         .trim();
 };
@@ -229,7 +231,11 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
     const title = presentation?.title
         ?? t(variant === 'justification' ? 'chat.reasoningTrace.justification' : 'chat.reasoningTrace.thinking');
 
+    const rowRef = React.useRef<HTMLDivElement>(null);
     const handleToggle = React.useCallback(() => {
+        // The timeline holding the row lets go of the end before it grows, so
+        // opening a fold below the fold's header does not drag the header away.
+        if (!isExpanded) dispatchRowExpand(rowRef.current);
         setShouldRenderExpandedContent(true);
         setExpansion({ expanded: !isExpanded, source: 'user' });
     }, [isExpanded]);
@@ -367,7 +373,7 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
     // reasoning starts even before the block-level reveal (commitStreamedText)
     // has committed a first complete line — otherwise "Thinking…" never shows
     // for the first moments of a short, single-paragraph response.
-    if (!isStreaming && (!text || text.trim().length === 0)) {
+    if (!isStreaming && isInvisibleText(text)) {
         return null;
     }
 
@@ -393,7 +399,7 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
     );
 
     return (
-        <div data-reasoning-block-id={blockId} data-reasoning-message-id={reasoningMessageId} data-message-text-export-root="true">
+        <div ref={rowRef} data-reasoning-block-id={blockId} data-reasoning-message-id={reasoningMessageId} data-message-text-export-root="true">
             <div
                 role="button"
                 tabIndex={0}

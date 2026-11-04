@@ -12,6 +12,7 @@ vi.mock('../package-manager.js', () => ({
   checkForUpdates: vi.fn(),
   getUpdateCommand: vi.fn(),
   detectPackageManagerDetails: vi.fn(),
+  isUnmanagedInstall: vi.fn(() => false),
 }));
 
 const childProcess = await import('child_process');
@@ -215,6 +216,22 @@ describe('OpenChamber desktop host update route', () => {
   });
 });
 
+describe('desktop-host update ownership', () => {
+  it('answers 409 before restarting when the desktop host owns the install', async () => {
+    const desktopUpdater = {
+      check: vi.fn(async () => ({ available: true, version: '1.17.1' })),
+      install: vi.fn(async () => ({ available: true, version: '1.17.1', installBlocked: 'desktop-host' })),
+      restart: vi.fn(async () => undefined),
+    };
+    const { app } = createApp({ environment: { OPENCHAMBER_RUNTIME: 'desktop' }, desktopUpdater });
+
+    const response = await request(app).post('/api/openchamber/update-install').expect(409);
+
+    expect(response.body).toEqual({ code: 'DESKTOP_UPDATE_LOCAL_ONLY', error: 'Update OpenChamber on the computer it runs on.' });
+    expect(desktopUpdater.restart).not.toHaveBeenCalled();
+  });
+});
+
 describe('OpenChamber foreground update route', () => {
   it('marks an available update as blocked when the foreground server has no service manager', async () => {
     const { app } = createApp();
@@ -222,6 +239,15 @@ describe('OpenChamber foreground update route', () => {
     const response = await request(app).get('/api/openchamber/update-check?appType=web').expect(200);
 
     expect(response.body).toMatchObject({ available: true, installBlocked: 'service-manager' });
+  });
+
+  it('marks the update manual when the install is unmanaged', async () => {
+    packageManager.isUnmanagedInstall.mockReturnValueOnce(true);
+    const { app } = createApp();
+
+    const response = await request(app).get('/api/openchamber/update-check?appType=web').expect(200);
+
+    expect(response.body).toMatchObject({ available: true, installBlocked: 'manual-install' });
   });
 
   it('leaves the update installable for a systemd-owned or daemon server', async () => {

@@ -11,7 +11,7 @@ import {
     type PermissionPolicySnapshot,
 } from "./utils/permissionAutoAccept";
 import { getAllSyncSessionMap } from "@/sync/sync-refs";
-import { runtimeFetch } from "@/lib/runtime-fetch";
+import { runtimeFetch, type RuntimeFetchOptions } from "@/lib/runtime-fetch";
 import { createDeferredSafeJSONStorage } from "./utils/safeStorage";
 import { useSessionUIStore } from "@/sync/session-ui-store";
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -29,6 +29,7 @@ interface PermissionStore {
     reset: () => void;
     getSessionMode: (sessionId: string) => PermissionMode;
     setSessionMode: (sessionId: string, mode: PermissionMode) => Promise<void>;
+    refreshSpaceModes: (spaceId: string) => Promise<boolean>;
 }
 
 const readSnapshot = async (response: Response): Promise<PermissionPolicySnapshot> => {
@@ -38,7 +39,7 @@ const readSnapshot = async (response: Response): Promise<PermissionPolicySnapsho
     return policySnapshotFromWire(parsed.data);
 };
 
-const requestSnapshot = async (path: string, init?: RequestInit) => readSnapshot(await runtimeFetch(path, init));
+const requestSnapshot = async (path: string, init?: RuntimeFetchOptions) => readSnapshot(await runtimeFetch(path, init));
 
 // `enabled` rides along for servers from before the modes, which know only on/off.
 const putSessionMode = (sessionId: string, mode: PermissionMode, directory?: string) => requestSnapshot(
@@ -163,6 +164,19 @@ export const usePermissionStore = create<PermissionStore>()(persist((set, get) =
                 set({ saving: pendingSavingOperations.size > 0 });
             }
         }
+    },
+
+    refreshSpaceModes: async (spaceId: string): Promise<boolean> => {
+        const runtimeKey = getRuntimeKey();
+        let snapshot: PermissionPolicySnapshot;
+        try {
+            snapshot = await requestSnapshot("/api/permission-auto-accept", { directory: `/spaces/${spaceId}` });
+        } catch {
+            return false;
+        }
+        if (getRuntimeKey() !== runtimeKey) return false;
+        get().applySnapshot(snapshot, runtimeKey);
+        return true;
     },
 
 }), {

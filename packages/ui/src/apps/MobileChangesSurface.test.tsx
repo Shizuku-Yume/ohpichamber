@@ -1,10 +1,8 @@
 import React, { act } from 'react';
 import { expect, test } from 'bun:test';
 import { Window } from 'happy-dom';
-import { readFileSync } from 'node:fs';
-import { runInNewContext } from 'node:vm';
-import ts from 'typescript';
 import type { GitLogEntry, GitStatus } from '@/lib/api/types';
+import { commitAndSwitchDirtyBranch } from '@/lib/source-control/dirty-branch-switch';
 import type { SourceControlAuthStatus, SourceControlUser } from '@/lib/source-control/types';
 
 // Pull requests are read through the checkout's bound GitHub context, so the
@@ -21,48 +19,26 @@ const CONNECTED: SourceControlAuthStatus = {
 };
 
 test('dirty branch switching publishes through the managed chooser and keeps the branch after a failed push', async () => {
-  const source = ts.createSourceFile('MobileChangesSurface.tsx',
-    readFileSync(new URL('./MobileChangesSurface.tsx', import.meta.url), 'utf8'),
-    ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-  const findCallback = (node: ts.Node): ts.ArrowFunction | undefined => {
-    if (ts.isJsxAttribute(node) && node.name.getText(source) === 'onCommitAndSwitch'
-      && node.initializer && ts.isJsxExpression(node.initializer)
-      && node.initializer.expression && ts.isArrowFunction(node.initializer.expression)) {
-      return node.initializer.expression;
-    }
-    return ts.forEachChild(node, findCallback);
-  };
-  const callback = findCallback(source);
-  if (!callback) throw new Error('Missing dirty-switch callback');
-  const script = ts.transpileModule(`(${callback.getText(source)})('Save changes', pushAfter)`, {
-    compilerOptions: { target: ts.ScriptTarget.ESNext },
-  }).outputText;
-
   for (const outcome of ['published', 'failed', 'local'] as const) {
     const events: string[] = [];
-    await runInNewContext(script, {
-      pendingDirtySwitchBranch: 'main', currentDirectory: '/project/nested',
-      status: { current: 'feature', tracking: 'origin/feature' },
-      pushAfter: outcome !== 'local',
-      git: {
-        createGitCommit: async (directory: string) => { events.push(`commit:${directory}`); },
-        gitPush: () => { throw new Error('Legacy push must not be called'); },
+    await commitAndSwitchDirtyBranch({
+      branch: 'main',
+      directory: '/project/nested',
+      sourceBranch: 'feature',
+      createCommit: async (directory: string) => { events.push(`commit:${directory}`); },
+      preparePush: async () => {
+        events.push('prepare:push');
+        return async () => {
+          events.push('publish');
+          if (outcome === 'failed') throw new Error('Push rejected');
+        };
       },
-      publishChooser: {
-        prepare: async (action: string) => {
-          events.push(`prepare:${action}`);
-          return async () => {
-            events.push('publish');
-            if (outcome === 'failed') throw new Error('Push rejected');
-          };
-        },
-      },
+      refresh: async () => { events.push('refresh'); },
+      close: () => { events.push('close'); },
+      checkout: async (branch: string) => { events.push(`checkout:${branch}`); },
       toast: { success: () => {}, error: () => { events.push('error'); } },
       t: (key: string) => key,
-      refreshStatusAndBranches: async () => { events.push('refresh'); },
-      setPendingDirtySwitchBranch: () => { events.push('close'); },
-      performCheckout: async (branch: string) => { events.push(`checkout:${branch}`); },
-    });
+    }, 'Save changes', outcome !== 'local');
     expect(events).toEqual(outcome === 'local'
       ? ['commit:/project/nested', 'refresh', 'close', 'checkout:main']
       : outcome === 'failed'
@@ -106,14 +82,19 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
       // The identity strip beside the branch reads these on mount.
       case '/api/git/identities': return Response.json([]);
       case '/api/git/global-identity': return Response.json(null);
-      case '/api/source-control/binding': return Response.json({
-        status: 'bound', revision: 1,
-        repository: { supported: true, repositoryId: 'repo', configRevision: 'rev', bare: false,
-          remotes: [{ name: 'origin', fetch: ENDPOINT, push: ENDPOINT }] },
-        binding: { repositoryId: 'repo', configRevision: 'rev', revision: 1, state: 'bound',
-          providers: [{ provider: 'github', instance: 'github.com', accountId: ACCOUNT_ID, primaryRemote: 'origin', readiness: 'ready', endpoint: ENDPOINT }],
-          remotes: [], auxiliary: [] },
-      });
+      case '/api/source-control/binding': {
+        const guest = url.searchParams.get('directory') === '/board-repo';
+        const id = guest ? 'guest-repo' : 'repo';
+        const revision = guest ? 3 : 1;
+        return Response.json({
+          status: 'bound', revision,
+          repository: { supported: true, repositoryId: id, configRevision: 'rev', bare: false,
+            remotes: [{ name: guest ? 'upstream' : 'origin', fetch: ENDPOINT, push: ENDPOINT }] },
+          binding: { repositoryId: id, configRevision: 'rev', revision, state: 'bound',
+            providers: [{ provider: guest ? 'ext-source-control-provider' : 'github', instance: 'github.com', accountId: guest ? 'ext-source-control-provider#7' : ACCOUNT_ID, primaryRemote: guest ? 'upstream' : 'origin', readiness: 'ready', endpoint: ENDPOINT }],
+            remotes: [], auxiliary: [] },
+        });
+      }
       case '/api/git/branch-base': return Response.json({ base: null });
       case '/api/git/range-files': return Response.json({ files: [{ path: url.searchParams.get('base') === 'refs/heads/parent' ? 'parent.png' : 'branch.png', status: 'M' }] });
       case '/api/git/range-diff':
@@ -129,12 +110,24 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
         }
         return Response.json({ path: url.searchParams.get('path'), original: '', modified: '', isBinary: true });
       // The bound status contract echoes the branch it answered for.
-      case '/api/source-control/github/pr/status': return Response.json({ connected: true, branch: url.searchParams.get('branch'),
-        repo: { owner: 'upstream', repo: 'project', url: 'https://github.com/upstream/project' },
-        pr: { number: 42, title: 'Published PR', url: 'https://github.com/upstream/project/pull/42', state: 'open', draft: false, head: 'feature', base: 'main' } });
-      case '/api/source-control/github/pulls/list': return Response.json({ connected: true, repo: { owner: 'upstream', repo: 'project' },
-        prs: [{ number: 42, title: 'Published PR', url: 'https://github.com/upstream/project/pull/42', state: 'open', draft: false,
-          head: 'feature', base: 'main', sourceRepo: { owner: 'upstream', repo: 'project', source: 'upstream' } }], hasMore: false });
+      case '/api/source-control/github/pr/status': return Response.json({
+        identity: { provider: 'github', instance: 'github.com' },
+        project: { provider: 'github', instance: 'github.com', id: 'upstream/project', owner: 'upstream', name: 'project', url: 'https://github.com/upstream/project' },
+        branch: url.searchParams.get('branch'),
+        changeRequest: {
+          provider: 'github', instance: 'github.com', id: 'upstream/project#42', number: 42,
+          project: { provider: 'github', instance: 'github.com', id: 'upstream/project', owner: 'upstream', name: 'project', url: 'https://github.com/upstream/project' },
+          title: 'Published PR', url: 'https://github.com/upstream/project/pull/42', state: 'open', draft: false, head: 'feature', base: 'main',
+        },
+      });
+      case '/api/source-control/github/pulls/list': return Response.json({
+        items: [{
+          provider: 'github', instance: 'github.com', id: 'upstream/project#42', number: 42,
+          project: { provider: 'github', instance: 'github.com', id: 'upstream/project', owner: 'upstream', name: 'project', url: 'https://github.com/upstream/project' },
+          title: 'Published PR', url: 'https://github.com/upstream/project/pull/42', state: 'open', draft: false, head: 'feature', base: 'main',
+        }],
+        page: 1, hasMore: false,
+      });
       case '/api/walkthrough/pr-diff': return new Response('diff --git a/published.png b/published.png\nindex 1111111..2222222 100644\nBinary files a/published.png and b/published.png differ\n', { headers: { 'content-type': 'text/plain' } });
       default: throw new Error(`Unexpected request ${url.pathname}`);
     }
@@ -176,7 +169,7 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
   const render = () => act(async () => {
     root.render(<I18nProvider><RuntimeAPIContext.Provider value={apis}>
       <MobileChangesPane rootDirectory={directory}
-        repository={{ rootIsGitRepo: true, gitDirectory: directory, nestedRepos: null, nestedRepoSelection: null }}
+        repository={{ rootIsGitRepo: true, gitDirectory: directory, nestedRepos: null, nestedRepoSelection: null, repositoryOptions: null }}
         visible={visible} initialDiff={initialDiff} />
     </RuntimeAPIContext.Provider></I18nProvider>);
   });
@@ -213,7 +206,7 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
     await chooseMode('Branch');
     expect(container.querySelector('[aria-label="Sync Changes"]')).toBeNull();
     expect(checkoutControl()).toBeUndefined();
-    expect(container.textContent).toContain('Select a base branch');
+    expect(container.textContent).toContain('origin/main');
     await click('[aria-label="Base branch"]');
     await click('[data-value="refs/heads/main"]');
     expect(container.querySelector('[title="branch.png"]')).not.toBeNull();
@@ -257,6 +250,9 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
 
     await click('[aria-label="Back"]');
     await chooseMode('Pull Requests');
+    const settled = Promise.withResolvers<void>();
+    setTimeout(settled.resolve, 50);
+    await act(async () => { await settled.promise; });
     expect(container.querySelector('[aria-label="Sync Changes"]')).toBeNull();
     expect(container.querySelector('[title="published.png"]')).not.toBeNull();
     await openFile('published.png');
@@ -267,6 +263,48 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
     expect(prRequest?.searchParams.get('accountId')).toBe(ACCOUNT_ID);
     expect(prRequest?.searchParams.get('repositoryId')).toBe('repo');
     expect(requests.filter((url) => url.pathname === '/api/git/file-diff')).toHaveLength(0);
+
+    // A board handoff on the phone selects and validates its own repository.
+    const { usePullRequestSelectionStore } = await import('@/stores/usePullRequestSelectionStore');
+    const { useSourceControlProviderRegistry } = await import('@/lib/source-control/providers/registry');
+    const { acmeDescriptor } = await import('@/lib/source-control/providers/descriptor.fixture');
+    const guest = 'ext-source-control-provider';
+    const guestContext = { provider: guest, instance: 'https://github.com', accountId: `${guest}#7`, repositoryId: 'guest-repo', bindingRevision: 3, directory: '/board-repo', primaryRemote: 'upstream' };
+    const guestUser = { ...USER, provider: guest, instance: guestContext.instance };
+    const guestStatus = { ...CONNECTED, provider: guest, instance: guestContext.instance, user: guestUser, accounts: CONNECTED.accounts.map((account) => ({ ...account, id: guestContext.accountId, credentialId: guestContext.accountId, user: guestUser })) };
+    useSourceControlAuthStore.setState((state) => ({ entries: { ...state.entries, [getSourceControlAuthKey(guestContext)]: { status: guestStatus, isLoading: false, hasChecked: true } } }));
+    const descriptor = acmeDescriptor({ id: guest, label: 'Teahouse' });
+    useSourceControlProviderRegistry.setState({ ordered: [descriptor], byId: new Map([[guest, descriptor]]), status: 'ready', holdsList: true });
+    await act(async () => { seed('/board-repo'); });
+    await act(async () => usePullRequestSelectionStore.getState().requestDiff('/repo', { kind: 'pr', number: 2, sourceRepo: { owner: 'mona', repo: 'teapot' } }, guestContext, '/board-repo'));
+    for (let round = 0; round < 4; round += 1) await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
+    const guestRequest = requests.find((url) => url.pathname === '/api/walkthrough/pr-diff' && url.searchParams.get('provider') === guest);
+    expect(guestRequest?.searchParams.get('directory')).toBe('/board-repo');
+    expect(guestRequest?.searchParams.get('accountId')).toBe(guestContext.accountId);
+    expect(guestRequest?.searchParams.get('repositoryId')).toBe(guestContext.repositoryId);
+    expect(JSON.parse(guestRequest?.searchParams.get('source') ?? '{}')).toEqual({ kind: 'pr', number: 2, sourceRepo: { owner: 'mona', repo: 'teapot' } });
+    expect(container.querySelector('[title="published.png"]')).not.toBeNull();
+    // A consumed Board context must not outlive an authoritative rebind.
+    const { repositoryBindingOwner } = await import('@/lib/source-control/repository-binding');
+    const bound = { status: 'bound' as const, revision: 3, repository: { supported: true, repositoryId: 'guest-repo', configRevision: 'rev', bare: false, remotes: [{ name: 'upstream', fetch: ENDPOINT, push: ENDPOINT }] }, binding: { repositoryId: 'guest-repo', configRevision: 'rev', revision: 3, state: 'bound' as const, providers: [{ provider: guest, instance: guestContext.instance, accountId: guestContext.accountId, primaryRemote: 'upstream', readiness: 'ready' as const, endpoint: ENDPOINT }], remotes: [], auxiliary: [] } };
+    const mutation = repositoryBindingOwner.captureMutation(repositoryBindingOwner.scope('/board-repo'), bound);
+    const beforeRebind = requests.length;
+    const replacement = { ...guestContext, accountId: `${guest}#8`, bindingRevision: 4 };
+    const replacementStatus = { ...guestStatus, accounts: guestStatus.accounts.map((account) => ({ ...account, id: replacement.accountId, credentialId: replacement.accountId })) };
+    useSourceControlAuthStore.setState((state) => ({ entries: { ...state.entries, [getSourceControlAuthKey(replacement)]: { status: replacementStatus, isLoading: false, hasChecked: true } } }));
+    await act(async () => {
+      usePullRequestSelectionStore.getState().requestDiff('/repo', { kind: 'pr', number: 97, sourceRepo: { owner: 'mona', repo: 'teapot' } }, guestContext, '/board-repo');
+      expect(repositoryBindingOwner.setMutationResult(mutation, { ...bound, revision: 4, binding: { ...bound.binding, revision: 4, providers: bound.binding.providers.map((entry) => ({ ...entry, accountId: replacement.accountId })) } })).toBe(true);
+      mutation.release();
+    });
+    for (let round = 0; round < 4; round += 1) await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
+    expect(requests.slice(beforeRebind).filter((url) => url.pathname === '/api/walkthrough/pr-diff').every((url) => url.searchParams.get('bindingRevision') !== '3')).toBe(true);
+    expect(usePullRequestSelectionStore.getState().diffContexts.get('/repo')).toBeUndefined();
+    expect([...usePullRequestSelectionStore.getState().selections.entries()].some(([key, value]) => key.includes(replacement.accountId) && value.source.number === 97)).toBe(false);
+    await act(async () => usePullRequestSelectionStore.getState().requestDiff('/repo', { kind: 'pr', number: 2, sourceRepo: { owner: 'mona', repo: 'teapot' } }, replacement, '/board-repo'));
+    for (let round = 0; round < 4; round += 1) await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
+    expect(requests.slice(beforeRebind).some((url) => url.pathname === '/api/walkthrough/pr-diff' && url.searchParams.get('bindingRevision') === '4')).toBe(true);
+    await act(async () => usePullRequestSelectionStore.getState().clearChangesRepository('/repo'));
 
     await act(async () => { seed('/repo', { ...status, isClean: false, files: [{ path: 'working.png', index: 'M', working_dir: ' ' }] }); });
     initialDiff = { path: 'working.png', staged: true };
@@ -403,7 +441,7 @@ test('bounds Revert All fan-out to two in-flight revert requests', async () => {
     await act(async () => {
       root.render(<I18nProvider><RuntimeAPIContext.Provider value={apis}>
         <MobileChangesPane rootDirectory="/repo"
-          repository={{ rootIsGitRepo: true, gitDirectory: '/repo', nestedRepos: null, nestedRepoSelection: null }}
+          repository={{ rootIsGitRepo: true, gitDirectory: '/repo', nestedRepos: null, nestedRepoSelection: null, repositoryOptions: null }}
           visible />
       </RuntimeAPIContext.Provider></I18nProvider>);
     });

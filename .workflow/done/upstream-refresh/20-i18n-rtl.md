@@ -1,0 +1,560 @@
+# 20: i18n and RTL
+
+**Effort:** upstream-refresh
+**Task type:** feature
+**Base commit:** aa0954a966b5c89572abb15c08e710c63ae2d5be
+**Finished:** 2026-10-27
+
+**Delivers:** Arabic and Hebrew locales with mirrored layout, plus the refreshed message catalog and RTL-safe components, work across the shell, chat and settings.
+
+**Blocked by:** 10, 23
+**Files:** Path list: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-sync-2026-10-27/plan-paths/20.tsv` (109 paths: 66 clean/new, 41 both-side, 27 conflicts; +41.7k lines). Main locations: `packages/ui/src/lib/i18n/`. Deferred from task 10: `components/ui/{OverlayScrollbar.tsx,sonner.tsx,sonner.test.tsx,sortable-tabs-strip.tsx}` (need this task's `direction`/`isRightToLeft`/`getLocaleDirection`), plus the RTL logical-class changes in `components/onboarding/ChooserScreen.tsx` that task 10 kept. Use the shared clock (`components/ui/pause-clock.tsx`, `hooks/useDurationTicker.ts`, `hooks/usePageColors.ts`) for spinners/busy indicators in scope so they are not dead code.
+
+**Read first:** Spec W6; `.agents/skills/locale-ui-patterns/SKILL.md`; `packages/ui/src/lib/i18n/DOCUMENTATION.md`; the fork's locale rules.
+**Covers:** W6
+
+**Check:** `bun install --frozen-lockfile` and `bun run type-check` and `bun run lint` and `bun run test` all exit 0, the i18n tests pass, and in the running app switching to Arabic mirrors the layout, keeps icons directional, and no label is clipped in the sidebar, chat composer or settings. Real path: send one message in RTL mode.
+
+## Done when
+
+- [x] The layout uses logical CSS properties where the new locales need them; no physical-side duplication.
+- [x] Message keys are shared across locales; missing keys fall back visibly.
+- [x] The fork's existing locales keep their translations; no key is silently dropped.
+- [x] RTL is exercised on the settings and chat surfaces, not only the shell.
+- [x] OverlayScrollbar, sonner and the sortable tab strip adopt upstream with the direction helpers; ChooserScreen gets the logical-class changes.
+- [x] `pause-clock`, `useDurationTicker` and `usePageColors` have their consumers where this task touches spinners/busy indicators.
+
+## Progress
+
+### Base and Commit Lineage
+- Base SHA: `aa0954a966b5c89572abb15c08e710c63ae2d5be`
+- Worktree: `/home/shizuku/Project/ohpichamber-worktrees/upstream-refresh-20`
+- Branch: `upstream-refresh/20`
+
+### Catalog Merge Results
+1. **Upstream Catalog Adoption**: Adopted upstream 0056bf6a9 message catalog across all domains. Added Arabic (`ar`) and Hebrew (`he`) locale catalogs directly from upstream (`ar.ts`, `ar.settings.ts`, `he.ts`, `he.settings.ts`).
+2. **Retained Fork Keys (372 keys)**:
+   - Preserved all 372 active fork keys across all 13 existing fork locales (`en`, `de`, `fr`, `nl`, `es`, `ja`, `pt-BR`, `uk`, `ko`, `pl`, `zh-CN`, `zh-TW`, `tr`).
+   - Covered Task 15 attachment error strings (`chat.composer.error.binaryAttachmentNotSupported`, `chat.composer.error.textAttachmentTooLarge`), OMP session warming (`settings.openchamber.defaults.warming.*`), legacy data notification (`startup.legacyNotice.*`), native providers (`settings.providers.native.*`), merged worktree cleanup (`settings.openchamber.mergedWorktreeCleanup.*`), and mobile navigation copy.
+   - For `ar` and `he`, the 375 fork-only keys without upstream translations fall back visibly through the catalog fallback mechanism (`dictionary[key] ?? enDict[key] ?? key`).
+3. **Dropped Keys (27 keys)**: Verified with `git grep` that 27 obsolete/superseded keys had 0 call sites across `packages/ui/src` and the entire repository outside i18n (e.g. `settings.providers.page.openCodeGo.authCookie`, `mobileUpdate.toast.actions.dismiss`, `settings.skills.page.field.disableModelInvocation`, `chat.chatInput.toast.largeTextPaste.*`). Removed from all locales.
+4. **Excluded Upstream Engine Keys**: Excluded 15 `opencodeCompatibility.*` keys that name OpenCode as the engine.
+
+### Per-Locale Key Counts (compared to English `en` with 9,083 keys)
+- `de`: 9,083 total, 0 missing, 0 extra
+- `fr`: 9,083 total, 0 missing, 0 extra
+- `nl`: 9,083 total, 0 missing, 0 extra
+- `es`: 9,083 total, 0 missing, 0 extra
+- `ja`: 9,083 total, 0 missing, 0 extra
+- `pt-BR`: 9,083 total, 0 missing, 0 extra
+- `uk`: 9,083 total, 0 missing, 0 extra
+- `ko`: 9,083 total, 0 missing, 0 extra
+- `pl`: 9,083 total, 0 missing, 0 extra
+- `zh-CN`: 9,083 total, 0 missing, 0 extra
+- `zh-TW`: 9,083 total, 0 missing, 0 extra
+- `tr`: 9,083 total, 0 missing, 0 extra
+- `ar`: 8,739 total, 349 missing (visible fallback to English), 0 extra
+- `he`: 8,739 total, 349 missing (visible fallback to English), 0 extra
+
+### Real Path Evidence
+Captured live via `chrome-devtools` against dev server running on port 5280 with isolated data dir and real OMP Gemini 3.8 Flash provider:
+- `01-arabic-settings-rtl.png`: Arabic selected in Settings Appearance; `document.documentElement.dir === 'rtl'`; sidebar mirrored to inline-start (right), settings labels unclipped.
+- `02-arabic-chat-reply.png`: Sent Arabic prompt "مرحبا، اكتب كلمة واحدة: تأكيد", received model reply "تأكيد" from Gemini 3.8 Flash; work status telemetry, mirrored composer input, and RTL message layout verified.
+- `03-arabic-visible-fallback.png`: Visible fallback verified in Sessions settings; fork keys without upstream Arabic translation (e.g. `settings.openchamber.sessionWork.field.keepInGroup`: "Keep tracked sessions in their project group" and `settings.openchamber.mergedWorktreeCleanup.title`: "After a PR is merged") display clean English text instead of raw translation keys.
+- `04-hebrew-shell-rtl.png`: Hebrew selected; `document.documentElement.dir === 'rtl'`; shell rendered in Hebrew with mirrored navigation and panel layouts.
+- `05-english-restored-ltr.png`: Switched back to English; `document.documentElement.dir === 'ltr'`; layout and LTR direction fully restored.
+
+### Logical CSS Properties & Spinner Consumers
+- `OverlayScrollbar.tsx`: `horizontalScrollOrigin` tracks scrollLeft in RTL (negative offset); horizontal thumb transform maps appropriately.
+- `sonner.tsx`: `dir={getLocaleDirection(locale)}` bound on Toaster; consumes `<Spinner />` (line 110), which consumes `useSpinnerPhase` from `useDurationTicker.ts:39`.
+- `sortable-tabs-strip.tsx`: Mirrors active pill nudge direction in RTL (`towardLater = isRtl ? -PILL_NUDGE_PX : PILL_NUDGE_PX`), uses logical `start`/`end` overflow detection, and logical shadow gradients.
+- `ChooserScreen.tsx`: Uses symmetric logical spacing (`p-8`, `px-3`, `py-1.5`, `gap-1`, `items-center`, `justify-center`, `text-center`) with zero physical sides.
+
+### Validation Gates
+- `bun install --frozen-lockfile`: exit code 0 (`logs/root-install.log`)
+- `bun run type-check`: exit code 0 (`logs/root-type-check.log`)
+- `bun run lint`: exit code 0 (`logs/root-lint.log`)
+- `bunx oxlint`: exit code 0 (`logs/oxlint-authored.log`)
+- `VITEST_MAX_WORKERS=2 bun run test`: exit code 0 across 7/7 workspaces (`logs/root-test.log`):
+  - UI: 924/924 test files passed
+  - Web: 446/446 test files passed, 7,171 tests passed (9 skipped)
+  - Electron: 54/54 test files passed
+- `bun run build`: exit code 0 (`logs/root-build.log`)
+- `bun run dead-code`: exit code 1 (baseline knip finding count), `diff -u baseline-dead-code.log root-dead-code.log` is completely identical with 0 diff lines (`logs/root-dead-code.log`)
+
+## Follow-up: OpenCode-as-engine review and the warming error (2026-10-29)
+
+Branch `upstream-refresh/fix-ar-he`, worktree `upstream-refresh-fix-ar-he`, on top of
+the integration tip `c4ce06dc0f`. Not landed.
+
+### The ar/he catalog fix under review
+
+The handoff commits `c461747495` + `028bab9252` were reviewed value by value against
+the English source. Corrected count: the change covers **41 keys** in each locale,
+written as **51 catalog entries** per locale (10 of those keys also live in the
+`*.settings.ts` split), i.e. **102 values** — not "51 values, 26 ar / 25 he".
+
+- Every replaced value now says what its English value says. The engine references
+  became `Agent Service` / `جلسات الوكيل` / `הפעלות סוכן`, and
+  `settings.view.nav.group.opencode` became `OMP` in both locales, matching `en`.
+- Host-infrastructure names stay: keys where `en` still says OpenCode (the CLI,
+  `opencode.json`, OpenCode Go, plugins) keep the name in ar/he. A scan of the built
+  catalogs reports **0** ar and **0** he values that name OpenCode where `en` does not.
+- Two values were rewritten beyond the engine name, and both match the current
+  English: `settings.providers.page.custom.field.apiKey.info` (dropped the stale
+  `{env:VAR_NAME}` sentence) and `sessions.sidebar.session.action.upstreamErrorWithRef`
+  (drops the "search the OpenCode log" clause). No `{placeholder}` set changed.
+- `028bab9252` fixed the mangled `sessionWarming*` values the first commit left;
+  both now match `en` sentence for sentence.
+
+The test in `messages.test.ts` pins the rule, not the source text: it reads the built
+dictionaries and fails when any locale names OpenCode on a key whose English value
+does not. Run against the pre-fix catalogs it reports 41 failures per locale (82
+total), 0 after the fix. It previously indexed English with a `key as keyof typeof
+enDict` assertion; it now uses a `Record<string, string>` view.
+
+### Settings → Sessions warming error
+
+Symptom under Arabic: "Could not read or save warming settings…" in English, next to
+an unchecked box.
+
+- The message is `settings.openchamber.defaults.warming.error`, and none of the twelve
+  `settings.openchamber.defaults.warming.*` keys (nor `summaryPrefix`,
+  `summaryRuntimeDefault`, `sessionWarming.label`, `smallModel.overrideModel`,
+  `walkthroughModel.overrideModel`, `option.defaultLowercase`) existed in ar/he — the
+  English came from the catalog fallback.
+- The failure underneath is a real read failure, reproducible: when the Settings
+  project directory no longer exists, `POST /api/agent/v1/workspaces/resolve` answers
+  `404 UNAUTHORIZED` and `SessionWarmingCheckbox` sets its error state, leaving the box
+  unchecked and disabled. Reproduced with the previous run's data directory, whose
+  only project (`…/worktrees/upstream-refresh-20`) had been deleted.
+- In a clean dev run the read and the save both work: the row reads `Idle mode`,
+  `PUT …/cache-warming` returns `applied`/`no-active-workers`, and no error appears.
+  So the read/save path itself is healthy; the error comes from resolving a stale
+  project directory, and the visible defect was the missing translation.
+- Fix: the 17 keys added to `ar.ts`, `ar.settings.ts`, `he.ts`, `he.settings.ts`.
+  The stale-project condition and its misleading wording are left as a limit below.
+- Removed one more untranslated string found in the real path: the header rendered a
+  hardcoded `'Untitled Session'` (`Header.tsx`) while the sidebar used the translated
+  key; it now resolves `sessions.sidebar.session.untitled`.
+
+### Real path evidence (headless)
+
+Dev server on `127.0.0.1:3750` (UI) / `3751` (API), isolated data dir and HOME under
+the artifact directory, real OMP provider (Gemini 3.8 Flash). Browser automation ran
+headless: `chrome-devtools start --headless=true`, viewport 1280x800 via
+`chrome-devtools emulate <page> --viewport "1280x800"`; no visible window, no Xvfb.
+Bounding rects per shot: `logs/screenshot-bounding-rects.md`.
+
+- `03-arabic-visible-fallback.png` (retaken): Arabic Sessions page, `dir=rtl`; the
+  warming label sits right of its checkbox (`label x 706..859`, `checkbox 680..700`,
+  pane right edge 881) and reads `إبقاء الجلسات الخاملة نشطة / وضع الخمول`; the saved
+  outcome is Arabic. Remaining Latin text is product names only (`OPENCHAMBER`, `Git`,
+  `OMP`); no OpenCode.
+- `06-arabic-warming-error.png` (new): same page in the stale-project data dir — the
+  error line is now Arabic (`تعذّرت قراءة إعدادات الإبقاء على النشاط أو حفظها…`),
+  `direction: rtl`, box unchecked, and the nav group reads `OMP` instead of `OPENCODE`.
+- `07-hebrew-sessions-rtl.png` (new): Hebrew Sessions page, `dir=rtl`, row
+  `שמור הפעלות לא פעילות חמות / מצב סרק`, checked; `label x 680..859`,
+  `checkbox 654..674`. Captured on `upstream-refresh/fix-ar-he` before the
+  per-session removal, so the image still shows the retired `Prompt cache`
+  heading; it documents the Hebrew row, not the current tree, and the current
+  tree has no such heading.
+- `08-arabic-chat-reply.png` (new): Arabic chat that completed through the provider —
+  prompt `مرحبًا، اكتب كلمة واحدة فقط: تم`, reply `تم`, header title
+  `جلسة بلا عنوان` after the `Untitled Session` fix; mirrored layout.
+
+### Validation
+
+- `bun run type-check`: exit 0 (`logs/followup-type-check.log`)
+- `bun run lint`: exit 0, only the three pre-existing react-hooks warnings
+  (`logs/followup-lint.log`)
+- focused i18n tests `bun test src/lib/i18n src/components/sections/openchamber/DefaultsSettings.test.tsx src/components/layout/HeaderSessionArchiveMenuItem.test.tsx`:
+  exit 0, 67 tests / 39 files (`logs/followup-focused-i18n-tests.log`)
+- `bunx oxlint -c oxlint.anti-slop.config.ts packages/ui/src/lib/i18n/messages.test.ts`:
+  exit 0. The same command over `Header.tsx` reports 21 findings, all on lines this
+  branch did not touch (pre-existing backlog); none at the changed lines.
+- `bun run dead-code`: exit 1 (baseline finding count); the report is identical to the
+  integration-tip baseline apart from bunx resolution lines —
+  `logs/followup-dead-code.diff`
+- A wider `bun test` over whole component directories (not the repository's suite
+  runner) reports 22 failures in unrelated suites that surface missing desktop-settings
+  fixtures (`parseVimMappings(undefined)`), panel timers and SSH inventory mocks; they
+  do not touch this change and were not investigated further.
+
+### Remaining limits
+
+- 349 English-fallback keys remain in ar/he by task decision; on the Sessions page
+  this still shows `Keep tracked sessions in their project group` and
+  `Move sessions into work automatically` in English.
+- The per-session warming section (`/api/session-warming`) answered 404 on this tip,
+  a documented task 21 gap. The combined branch below removes that feature, so the
+  `Prompt cache` heading no longer renders.
+- A Settings project whose directory has been deleted still makes the warming row
+  report a read failure (now in the user's language) instead of saying the workspace
+  is unavailable. The read runs once per directory and runtime, so the row keeps the
+  error until the Settings page points at a different, authorized directory or the
+  runtime reconnects; there is no retry.
+
+## Rebase onto task 21 and the Runtime status dialog (2026-10-29)
+
+Branch `upstream-refresh/fix-ar-he` rebased onto the integration tip
+`8ee84af280` (task 21). The rebase applied cleanly: none of the four branch
+commits conflicted with `c4ce06dc0f..8ee84af280`.
+
+### What task 21 left untranslated
+
+`git diff c4ce06dc0f..8ee84af280 -- packages/ui/src/lib/i18n/messages/` shows
+four new `runtimeStatusDialog.*` keys in each of the twelve maintained locales,
+plus `overview.error.loadFailed` in all fourteen — including ar and he, so that
+one needed nothing. The rest of the dialog (`title`, `description`,
+`actions.copy`, the copy toasts, the empty state) and the command palette entry
+that opens it were never translated either, so an Arabic or Hebrew UI opened a
+fully English dialog around the new action.
+
+Translated into ar and he: the four keys task 21 added, the eight surrounding
+`runtimeStatusDialog.*` keys, and `commandPalette.item.showRuntimeStatus` — 13
+keys per locale, placed with the same meaning as `en`. Engine references stay
+`Agent Service`; diagnostics reuse the About dialog's wording
+(`بيانات التشخيص` / `נתוני אבחון`). ar/he now hold 8,739 of the 9,088 English
+keys. The two-language placeholder check is unchanged (the one known exception,
+`sessions.sidebar.draft.attachmentsSingle`, drops `{count}` on purpose because
+the singular needs no number).
+
+### Real path
+
+Dev server on `127.0.0.1:3750/3751`, isolated data dir under the artifact
+directory, provider variables from `~/.config/ohpichamber/omp-m0-provider.env`,
+Arabic locale. Headless Chrome (`chrome-devtools start --headless=true`,
+`emulate <page> --viewport "1280x800"`).
+
+- Command palette (`Ctrl+P`) lists `إظهار حالة التشغيل`; opening it shows the
+  dialog `حالة التشغيل` / `اعرض جاهزية المضيف و Agent Service والتشخيصات الحالية.`
+  with `تنزيل بيانات التشخيص` and `نسخ`, `dir=rtl`, dialog right edge 976 and the
+  action row on the dialog's left (trailing) edge. The diagnostics body below it
+  is generated status text (timestamps, URLs, HTTP codes) and stays as it is.
+- `screenshots/08-arabic-runtime-status.png` holds the Arabic dialog;
+  `screenshots/08-arabic-runtime-status.txt` holds its DOM text and direction.
+- The Hebrew values (`מצב סביבת ההרצה`, `הורדת נתוני אבחון`, `העתק`) were read
+  from the catalog and were seen in the running app during that round as DOM
+  text, but no Hebrew screenshot was taken; the captured dialog is Arabic.
+
+### Validation
+
+- `bun run type-check`: exit 0 (`logs/rebase-type-check.log`)
+- `bun run lint`: exit 0, the same three pre-existing react-hooks warnings
+  (`logs/rebase-lint.log`)
+- focused tests `bun test src/lib/i18n src/components/sections/openchamber/DefaultsSettings.test.tsx src/components/layout/HeaderSessionArchiveMenuItem.test.tsx src/components/ui`:
+  exit 0, 152 tests / 59 files (`logs/rebase-focused-i18n-tests.log`)
+- `bunx oxlint -c oxlint.anti-slop.config.ts` over `ar.ts`, `he.ts`,
+  `messages.test.ts`, `Header.tsx`: exit 1 from the 21 pre-existing `Header.tsx`
+  findings, none on the two lines this branch changes and none in the catalogs or
+  the test (`logs/rebase-oxlint.log`)
+
+
+## Diagnostics text under RTL (2026-10-29)
+
+The Arabic Runtime status dialog rendered its generated status body inside a
+`<pre>` that inherited `dir=rtl`, so the bidi algorithm reordered neutral
+characters: `Log files:` displayed as `:Log files`, a leading `-` moved to the
+end of its line, `(api=/api/)` flipped its parentheses, and every line was
+right-aligned. Generated status text is shown to users, so it must read LTR.
+
+### Fixed here
+
+- `components/ui/RuntimeStatusDialog.tsx`: the status body now carries
+  `dir="ltr"` and logical `text-start`; the dialog chrome keeps following the
+  document direction.
+- `apps/MobileConnectionDebugPanel.tsx`: the connection debug trail is the same
+  kind of generated Latin text on a hidden diagnostics surface; same fix.
+- The localized empty state (`runtimeStatusDialog.empty.noData`) is not machine
+  text: it renders in its own element and follows the dialog's direction instead
+  of inheriting the body's `ltr`.
+
+### Surveyed, already correct or not a text block
+
+- Markdown code blocks (`MarkdownCode` via `CodeBlockContainer`),
+  `MarkdownMermaid`, `FrontmatterProperties`, `WorkflowsPanel`,
+  `WorkflowAnswerBlock` and two blocks in `UserTextPart` already set
+  `dir="ltr"`.
+- The terminal (`components/terminal/TerminalViewport`) renders through the
+  libghostty canvas surface, so bidi does not reorder its output.
+- `AboutDialog` only copies diagnostics to the clipboard; it renders no text
+  block.
+
+### Surveyed, same defect, not fixed in this task
+
+- `chat/message/parts/PlainDiffFallback.tsx` — plain patch text.
+- `chat/BackgroundShellsStrip.tsx` — shell command in the row tooltip.
+- `chat/message/parts/ToolPart.tsx` — shell tool input text.
+- `chat/PermissionCard.tsx` — permission details JSON.
+- `chat/message/parts/GeneratedJsonResultCard.tsx` — JSON tool result.
+- `chat/ErrorResponseDetails.tsx` — error payload body.
+- `chat/ChatErrorBoundary.tsx` and `ui/ErrorBoundary.tsx` — component stacks.
+- `session/spaces/SpaceSetupOutput.tsx` — space setup command output.
+- `sections/remote-instances/RemoteInstancesPage.tsx` — remote output block.
+- `chat/message/parts/UserTextPart.tsx:337` — pasted context text.
+
+### Real path
+
+Headless Chrome, dev server on `127.0.0.1:3750/3751`, Arabic locale,
+1280x800. `screenshots/09-arabic-runtime-status-ltr-body.png` shows the dialog;
+`screenshots/09-arabic-runtime-status-ltr-body.txt` records the document
+`dir=rtl`, dialog computed direction `rtl`, the body's `dir` attribute `ltr`,
+computed direction `ltr`, `text-align: start`, and span rects proving the body
+starts at the left edge of its padding box (`Log files:` x=341, `- Host
+console:` x=341, pre x=325).
+
+### Validation
+
+- `bun run type-check`: exit 0 (`logs/rtl-pre-type-check.log`)
+- `bun run lint`: exit 0 (`logs/rtl-pre-lint.log`)
+- focused tests `bun test src/lib/i18n src/components/ui src/components/sections/openchamber/DefaultsSettings.test.tsx src/components/layout/HeaderSessionArchiveMenuItem.test.tsx`:
+  exit 0, 153 tests / 60 files (`logs/rtl-pre-focused-tests.log`)
+- `bunx oxlint -c oxlint.anti-slop.config.ts` over `RuntimeStatusDialog.tsx` and
+  `MobileConnectionDebugPanel.tsx`: exit 0 (`logs/rtl-pre-oxlint.log`)
+- A component test for the body direction was written and then removed: it
+  mocked the dialog shell, so its assertion about the shell was vacuous, and the
+  broad `mock.module` is what the anti-slop rules reject. The user-visible
+  direction is verified in the running app instead (see the real-path captures
+  below and in the heavy-slot section).
+- A run that also included `src/apps` failed on 78 mobile gesture tests in this
+  environment (edge swipe, host-switch); those suites are unrelated to this
+  change and were not investigated.
+
+## Combined follow-up branch: ar/he plus the warming removal (2026-10-30)
+
+Branch `upstream-refresh/ar-he-warming-linear`, worktree
+`upstream-refresh-ar-he-warming-linear`, built linearly on the integration tip
+`43dcd6ffc1`. It carries the ar/he follow-up (`upstream-refresh/fix-ar-he`) and
+the per-session warming removal (`upstream-refresh/21-warming`) so either can
+land without landing the other into a conflicted tree. Both source branches and
+the merge-based reference branch below are kept.
+
+### How it was built
+
+`git cherry-pick` of the fifteen local follow-up commits in their existing
+order — the eight from `fix-ar-he`, then the seven from `21-warming` — onto
+`43dcd6ffc1`. No merge commits, so the history stays linear as
+`.workflow/merge-strategy.md` requires. The upstream range was not involved.
+
+Two commits conflicted and were resolved the same way in both attempts:
+
+- `refactor(warming): remove upstream's per-session warming`: four catalog files.
+  Kept this branch's translation of `settings.openchamber.defaults.field.sessionWarmingInfo`
+  (the English sentence it translates is unchanged by the removal), and took the
+  removal's side for the retired per-session block.
+- `docs(workflow): record the per-session warming deletion…`: `.workflow/technical-debt.md`.
+  Kept both appended entries — integration's "Host tool errors collapse to
+  SERVICE_UNAVAILABLE" first, then "Per-session warming has no Agent Service
+  implementation".
+
+One follow-up commit, `fix(i18n): drop the retired per-session warming key from
+ar/he`, removes `settings.openchamber.defaults.sessionWarming.label`. The ar/he
+branch had added it for the retired Settings field; the removal never saw it
+because it did not exist in that branch's base, so it survived the pick and
+would have broken key parity.
+
+### The merge-based reference branch
+
+`upstream-refresh/ar-he-warming` (worktree `upstream-refresh-ar-he-warming`) was
+built first with two `--no-ff` merges and the identical resolutions. It is kept
+only as a resolution reference: at the code boundary, `git diff
+upstream-refresh/ar-he-warming ada837a5e1` (the linear branch's last non-doc
+commit) is empty, so the linear branch carries exactly that tree, task records
+included. This record commit is the only later difference.
+
+### Post-merge state
+
+- Catalogs: en 9,064 keys; ar and he 8,715 each; 0 keys in ar/he that en lacks;
+  349 English-fallback keys per locale; 0 ar/he values naming OpenCode on a key
+  whose English does not; no `{placeholder}` drift beyond the intentional
+  `sessions.sidebar.draft.attachmentsSingle` singular.
+- The retired namespace is gone from every locale: no
+  `settings.openchamber.defaults.sessionWarming.*`, `promptCacheTitle`,
+  `sessions.warming.toggleFailed`, `chat.workStatus.warming.*`,
+  `sessions.sidebar.session.menu(.Hint).keepWarm/stopWarm`, and no
+  `session-warming.i18n.ts` import anywhere.
+- The supported workspace warming copy survives and is translated in ar/he:
+  `settings.openchamber.defaults.field.sessionWarming`,
+  `…field.sessionWarmingInfo`, and all eleven `…warming.*` keys.
+
+### Checks on the combined branch
+
+- `bun run type-check`: exit 0 (`logs/combined-linear-type-check.log`)
+- `bun run lint`: exit 0, the same three pre-existing react-hooks warnings
+  (`logs/combined-linear-lint.log`)
+- UI focused `bun test src/lib/i18n src/components/ui
+  src/components/sections/openchamber/DefaultsSettings.test.tsx
+  src/components/layout/HeaderSessionArchiveMenuItem.test.tsx`: exit 0,
+  152 tests / 59 files (`logs/combined-linear-ui-focused-tests.log`)
+- Web focused `bunx vitest run lib/host/settings-helpers.test.js`: exit 0,
+  59 tests (`logs/combined-linear-web-focused-tests.log`)
+- `bunx oxlint -c oxlint.anti-slop.config.ts` over the changed UI and server files:
+  exit 1 from the 206 findings `settings-helpers.js` already carries on
+  the base. The two findings this branch had added there were not new behaviour:
+  `811ecef471` already sanitizes the same switches, the tab limit and
+  `smallModelVariant` a few hundred lines earlier (task 16,
+  `settings-helpers.js:719-736`, including the 1..20 clamp and the empty-string
+  clear). The duplicate pass — first with `typeof`, later with a zod schema —
+  and its duplicate fixture rows were removed during integration, so the file
+  and its test are byte-identical to the base again and the established
+  behaviour is what runs (`logs/oxlint-settings-helpers.log`).
+- `bun run dead-code`: exit 1 (baseline finding count); versus the pinned
+  integration-tip baseline it reports no new file, and two disappear —
+  `WorkStatusWarmingToggle.tsx` (deleted with the feature) and
+  `project-knowledge.js` (adopted by integration after that baseline was taken)
+  (`logs/combined-linear-dead-code.log`, `logs/combined-linear-dead-code.diff`).
+
+### Held for the heavy slot
+
+At the time of that section no dev server, app build or root test had run; task 19
+owned the slot. It was released later and the gate ran at this pin's source — see
+"Final root gate" below. The real path covered the Arabic Sessions warming row,
+the Runtime status dialog and one Arabic chat.
+
+### A/B review at the pinned boundary `b75c015740`
+
+- **A (locale/catalog):** correct, no defect. Key parity holds with 0 keys only in
+  ar/he, the retired namespace is gone from source and callers, the surviving
+  workspace warming copy reads correctly in both locales, the 13 Runtime status /
+  palette keys exist and the OpenCode-as-engine rule has no violation. It counted
+  9,075 en / 8,729 ar / 8,729 he and 346 missing by walking the source files; the
+  runtime dictionaries measured here are 9,064 / 8,715 / 8,715 with 349 missing.
+  The difference is the counting method (literal keys across the split files versus
+  the assembled dictionary); both agree on 0 extra keys.
+- **B (provenance):** correct. All 15 source commits have ordered counterparts, 13
+  patch-identical and 2 adapted by the conflict resolutions; the history is linear
+  with no upstream commit in its ancestry; both debt entries are present; the
+  ar/he `field.sessionWarmingInfo` translations and the retired-key removal match
+  the rules; `git diff ada837a5e1 upstream-refresh/ar-he-warming` is empty; the
+  source branches, `main` and the integration ref were not rewritten.
+
+Integration moved to `811ecef471` while this branch was being built. The three
+commits since `43dcd6ffc1` are workflow-documentation only (no file under
+`packages/ui/src/lib/i18n/messages/`, no warming code), so landing starts with a
+three-commit rebase and needs no new review.
+
+## Rebase onto `811ecef471` and the final pin (2026-10-30)
+
+Integration advanced three workflow-documentation commits while this branch was
+being prepared: `43dcd6ffc1` → `811ecef471` (task 34 record, task 33 plan, task
+07 record). No file under `packages/ui/src/lib/i18n/messages/` and no warming
+code moved.
+
+- Rebased linearly onto `811ecef471`: 20 commits above it, still zero merge
+  commits. Pre-rebase refs are kept as `backup/ar-he-warming-linear-pre-rebase-285723041d`
+  and `backup/ar-he-warming-merge-reference-47abe80a2d`; the source branches
+  remain at `upstream-refresh/fix-ar-he = 227efb1ecd` and
+  `upstream-refresh/21-warming = 3fe518e8b5`.
+- Proof of an unchanged branch: `git diff 43dcd6ffc1 811ecef471` is
+  byte-identical to `git diff backup/ar-he-warming-linear-pre-rebase-285723041d HEAD`,
+  and `git diff 811ecef471 HEAD` is byte-identical to the pre-rebase branch diff.
+  So the rebase moved only the base, never the branch's own change
+  (`logs/rebase-linear-equivalence.txt`).
+- Catalogs after the rebase: en 9,064; ar and he 8,715; 0 extra keys in ar/he;
+  349 English-fallback keys; the same workspace warming copy as before.
+- The comparison point for the heavy slot is the pinned head of this branch; its
+  manifest, with the base, the commit list and every changed file, is
+  `logs/rebase-linear-manifest.txt`.
+- Rebase-time checks: `bun run type-check` exit 0
+  (`logs/rebase-linear-type-check.log`), `bun run lint` exit 0
+  (`logs/rebase-linear-lint.log`), UI focused 152 tests/59 files exit 0
+  (`logs/rebase-linear-ui-focused-tests.log`), web focused 59 tests exit 0
+  (`logs/rebase-linear-web-focused-tests.log`).
+- After removing the duplicate, `git diff 811ecef471 -- settings-helpers.js
+  settings-helpers.test.js` is empty; the web focused suite still passes
+  (`logs/batch-web-focused-tests.log`).
+
+### Review reports
+
+- A (locale/catalog) and B (provenance) verdicts are recorded above; their
+  transcripts are `history://lane-20-followup-good.ReviewA` and
+  `history://lane-20-followup-good.ReviewB`.
+- The settings sanitizer and the locale/retirement integration are left for the
+  coordinator's closure review; this branch holds the receipts it needs.
+
+
+## Heavy-slot real path and the closure batch (2026-10-30)
+
+Ran at `e89476b134` before the batch, on this branch's own `127.0.0.1:3750/3751`,
+headless Chrome with `emulate <page> --viewport "1280x800"`, isolated data dir
+and HOME under the artifact directory, provider from
+`~/.config/ohpichamber/omp-m0-provider.env`.
+
+### HTTP
+
+No raw network log was saved for this run: the codes below are the responses the
+page received during the smoke, transcribed here. The ordered `warming-realpath/`
+logs under the task 21 artifacts belong to the `21-warming` branch at a different
+pin.
+
+- `GET /api/agent/v1/workspaces`: 200, two workspaces.
+- `GET /api/agent/v1/workspaces/<id>/cache-warming`: 200,
+  `{"revision":"2","mode":"idle"}`.
+- `GET /api/session-warming`: 404; `PUT /api/session-warming/mode`: 404;
+  `PUT /api/config/warming`: 404. The per-session surface is gone from the Host.
+- The page made no request to `/api/session-warming` at all.
+
+### UI
+
+- Sessions (`dir=rtl`, `lang=ar`): the row reads
+  `إبقاء الجلسات الخاملة نشطة / وضع الخمول`, label rect x 706..859 right of its
+  checkbox 680..700. Toggling it saved `إيقاف` and the "saved; no active
+  workers" line, and toggling back restored `وضع الخمول` — the global OMP
+  warming control still works through the canonical route.
+- The retired surface is absent: no `ذاكرة التخزين المؤقت للمطالبات`
+  (`promptCacheTitle`) heading and no "chosen sessions" copy on the page.
+- Runtime status: dialog `حالة التشغيل` chrome in `rtl`, body `pre` with
+  `dir=ltr`, computed `ltr`, `text-align: start`, spans at the left padding edge
+  (`Log files:` x=341, `- Host console:` x=341, pre x=325..955).
+- Chat: Arabic prompt `مرحبًا، اكتب كلمة واحدة فقط: جاهز` answered `جاهز` by
+  Gemini 3.8 Flash in 6.8 s, header `جلسة بلا عنوان`.
+- Captures: `screenshots/10-arabic-sessions-warming.png`,
+  `11-arabic-runtime-status-heavy.png` + `.txt`, `12-arabic-chat-heavy.png`.
+
+### Closure batch
+
+1. `.workflow/decisions.md`: the 2026-10-30 entry had lost its `Effort` line when
+   the warming section was appended. Restored it and separated the sections with
+   a blank line. The warming entry keeps its true 2026-10-29 date even though it
+   now follows a 2026-10-30 entry; it was recorded during that reconciliation.
+   The header's "newest last" yields to the true decision date here: the
+   2026-10-29 entry stays appended because inserting it would rewrite an
+   append-only record.
+2. `settings-helpers.js` + its test: the base already sanitizes the same switches,
+   tab limit and `smallModelVariant` (task 16, lines 719-736). The duplicate pass
+   this branch carried, the zod rewrite of it, and the duplicate fixture rows are
+   removed; both files are byte-identical to `811ecef471` again. Commit
+   `5f1005f684` (it also carries the removed component test; the two changes were
+   staged together).
+3. `RuntimeStatusDialog.tsx`: the localized empty state no longer sits inside the
+   LTR machine-text block; it renders as its own paragraph and follows the
+   dialog. The mock-based component test is gone. Commit `b2fe589334`. This
+   branch of the component is **code-only**: the smoke always had populated
+   status text, so the empty paragraph was never rendered, and no test covers it
+   now. The commit message's "verified in the running app" overstates it; the
+   inherited direction is right by construction, not by observation.
+4. The earlier "boundary-validation fix" narrative above is corrected in place:
+   the switch repair was task 16's, not this branch's.
+
+### Final root gate
+
+`bun run test` ran once at this pin's source and passed: `root test exit=0`
+(`logs/final-root-test.exit`, `logs/final-root-test.log`), 7/7 suites, UI 927/927
+test files, web 458 passed / 9 skipped files and 7,329 passed / 142 skipped tests,
+electron 54/54 test files, 250 passed / 7 skipped in the service suite; 474.83 s.
+The code pin is `b2fe589334`; every later commit (`225549212b`, `6b2e5641fa`
+and this record batch) is documentation only and does not move it.
+
+### Checks after the batch
+
+- `bun run type-check`: exit 0 (`logs/batch-type-check.log`)
+- `bun run lint`: exit 0 (`logs/batch-lint.log`)
+- UI focused: exit 0, 151 tests / 58 files (`logs/batch-ui-focused-tests.log`)
+- Web focused `settings-helpers.test.js`: exit 0, 59 tests
+  (`logs/batch-web-focused-tests.log`)
+- `bunx oxlint` on `RuntimeStatusDialog.tsx`, `MobileConnectionDebugPanel.tsx`,
+  `settings-helpers.js`: exit 1 from the 206 pre-existing sanitizer findings, none
+  from this branch (`logs/batch-oxlint.log`)
+- `git diff 811ecef471 -- settings-helpers.js settings-helpers.test.js` is empty.

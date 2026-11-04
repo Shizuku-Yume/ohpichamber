@@ -74,6 +74,8 @@ const hasMatchingContext = (
   const context = result.source?.kind === 'pr' ? result.readContext : undefined;
   return result.source?.kind === 'pr'
     && result.source.number === target.source.number
+    // A server that ignored the revision answered for the current one.
+    && (result.source.revision ?? null) === (target.source.revision?.toLowerCase() ?? null)
     && context !== undefined
     && hasSameSourceControlReadContext(context, target.context);
 };
@@ -144,7 +146,7 @@ const readContextFields = (context: Readonly<SourceControlReadContext>) => ({
 });
 
 export const buildTargetQuery = (directory: string, target: WalkthroughTarget): WalkthroughQuery => {
-  const query: WalkthroughQuery = { directory, source: JSON.stringify(target.source) };
+  const query: WalkthroughQuery = { directory: isPullRequestTarget(target) ? target.context.directory : directory, source: JSON.stringify(target.source) };
   if (isPullRequestTarget(target)) {
     const context = readContextFields(target.context);
     Object.assign(query, context, { bindingRevision: String(context.bindingRevision) });
@@ -180,7 +182,7 @@ export async function generateWalkthrough(
 ): Promise<WalkthroughResult> {
   const body: GenerateWalkthroughBody = {
     ...(options.workspaceId ? { workspaceId: options.workspaceId } : {}),
-    directory,
+    directory: isPullRequestTarget(target) ? target.context.directory : directory,
     source: target.source,
     force: options.force === true,
   };
@@ -194,6 +196,7 @@ export async function generateWalkthrough(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
     signal: options.signal,
+    directory,
   });
   if (!response.ok) {
     return throwFromResponse(response, 'Failed to generate walkthrough');
@@ -210,12 +213,13 @@ export async function cancelWalkthroughGeneration(
   target: WalkthroughTarget,
   options: { workspaceId?: string } = {},
 ): Promise<void> {
-  const body: CancelWalkthroughBody = { ...(options.workspaceId ? { workspaceId: options.workspaceId } : {}), directory, source: target.source };
+  const body: CancelWalkthroughBody = { ...(options.workspaceId ? { workspaceId: options.workspaceId } : {}), directory: isPullRequestTarget(target) ? target.context.directory : directory, source: target.source };
   if (isPullRequestTarget(target)) Object.assign(body, readContextFields(target.context));
   const response = await runtimeFetch(`${BASE}/cancel`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+    directory,
   });
   if (!response.ok) {
     await throwFromResponse(response, 'Failed to cancel walkthrough generation');

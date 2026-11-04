@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { listModelVariantIds, modelVariantNames } from './modelVariants';
+import { listModelVariantIds } from './modelVariants';
 
 describe('listModelVariantIds', () => {
   test('reads ids from the OpenCode 2 array, not array indices', () => {
@@ -13,7 +13,5 @@ describe('listModelVariantIds', () => {
 
   test('is empty for a model without variants', () => {
     expect(listModelVariantIds(undefined)).toEqual([]);
-    expect(modelVariantNames(undefined)).toEqual([]);
-    expect(modelVariantNames({})).toEqual([]);
   });
 });

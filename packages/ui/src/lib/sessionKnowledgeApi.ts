@@ -6,13 +6,14 @@
  * conversation that was compacted kept a tab-local belief that the agent still
  * had context the summary had just removed.
  *
- * Nothing here throws. A message must go out even when its background cannot
- * be fetched: sending without the block costs the agent some context, failing
- * the send costs the user their message.
+ * Ordinary fetch failures leave the message deliverable without the block.
+ * A runtime switch instead rejects the obsolete operation before another Host
+ * can receive its directory or session identity.
  */
 
 import { runtimeFetch } from './runtime-fetch';
 import { z } from 'zod';
+import { getRuntimeKey, getRuntimeSwitchRevision } from './runtime-switch';
 
 interface SessionKnowledge {
   /** Empty when the session already carries what it needs. */
@@ -33,7 +34,12 @@ const deliveryReports = new Map<string, Promise<void>>();
 export const fetchSessionKnowledge = async (
   directory: string | null,
   sessionId: string | null,
+  owner = { runtimeKey: getRuntimeKey(), revision: getRuntimeSwitchRevision() },
 ): Promise<SessionKnowledge> => {
+  const assertCurrent = () => {
+    if (owner.runtimeKey !== getRuntimeKey() || owner.revision !== getRuntimeSwitchRevision()) throw new Error('runtime changed');
+  };
+  assertCurrent();
   if (!directory) {
     return EMPTY;
   }
@@ -41,6 +47,7 @@ export const fetchSessionKnowledge = async (
   if (sessionId) {
     await deliveryReports.get(sessionId);
   }
+  assertCurrent();
 
   try {
     const params = new URLSearchParams({ directory });
@@ -50,15 +57,18 @@ export const fetchSessionKnowledge = async (
     const response = await runtimeFetch(`/api/session-knowledge?${params.toString()}`, {
       cache: 'no-store',
     });
+    assertCurrent();
     if (!response.ok) {
       return EMPTY;
     }
     const payload = await response.json() as Partial<SessionKnowledge> | null;
+    assertCurrent();
     return {
       text: typeof payload?.text === 'string' ? payload.text : '',
       signature: typeof payload?.signature === 'string' ? payload.signature : '',
     };
   } catch {
+    assertCurrent();
     return EMPTY;
   }
 };
@@ -83,6 +93,9 @@ export const reportSessionKnowledgeDelivered = async (
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ directory, sessionId, signature }),
+        // The directory travels only in the body here, so name it for space
+        // routing too: the session lives in that space's server, not the host.
+        directory,
       });
     } catch {
       // Only means the block may be sent once more.
@@ -180,6 +193,7 @@ export const setSessionProjectContextPin = async (
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ directory, sessionId, kind, id, pinned }),
+      directory,
     });
     if (!response.ok) return null;
     return sessionProjectContextPinsResponseSchema.parse(await response.json()).pins;

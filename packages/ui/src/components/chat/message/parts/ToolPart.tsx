@@ -8,6 +8,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { getSyncSessions } from '@/sync/sync-refs';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useChatColumnActions, useChatSessionSelection } from '../../chatColumnSession';
+import { dispatchRowExpand } from '@/components/chat/lib/scroll/timelineScrollIntent';
 import { cn } from '@/lib/utils';
 import { SimpleMarkdownRenderer } from '../../MarkdownRenderer';
 import { BlockLine } from './BlockLine';
@@ -59,6 +60,7 @@ import {
     nativeToolResultContent,
     renderWebSearchOutput,
     tryParseJsonOutput,
+    unwrapTextBlocks,
 } from '../toolRenderers';
 import { renderTerminalOutput } from './toolOutput';
 import {
@@ -452,7 +454,7 @@ const CopyToolOutputButton: React.FC<{ output: string }> = ({ output }) => {
 };
 
 interface JsonOutputResult {
-    data: unknown;
+    data: JsonValue;
     isJson: boolean;
 }
 
@@ -473,6 +475,10 @@ const JsonToolOutput: React.FC<{
         event.stopPropagation();
         useUIStore.getState().setToolJsonViewMode(view);
     }, []);
+
+    // A result that is really text content blocks is shown as the text it is,
+    // not as a JSON envelope the reader has to open to read one sentence.
+    const textOutput = jsonViewMode === 'summary' ? unwrapTextBlocks(jsonResult.data) : null;
 
     return (
         <div className="tool-output-surface relative p-2 rounded-xl w-full min-w-0">
@@ -513,7 +519,19 @@ const JsonToolOutput: React.FC<{
                 <CopyToolOutputButton output={renderedOutput} />
             </div>
             {jsonViewMode === 'summary' ? (
-                <JsonSummaryView data={jsonResult.data} />
+                textOutput !== null ? (
+                    <div className="typography-code pr-12 text-muted-foreground/90">
+                        <WorkerHighlightedCode
+                            language="text"
+                            code={textOutput}
+                            style={TOOL_COLLAPSED_CUSTOM_STYLE}
+                            codeStyle={CODE_TAG_PROPS.style}
+                            wrap
+                        />
+                    </div>
+                ) : (
+                    <JsonSummaryView data={jsonResult.data} />
+                )
             ) : jsonViewMode === 'formatted' ? (
                 <JsonTreeViewer data={jsonResult.data} initiallyExpandedDepth={1} maxHeight="400px" />
             ) : (
@@ -1092,6 +1110,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
     animateTailText = true,
 }) => {
     const { t } = useI18n();
+    const rowRef = React.useRef<HTMLDivElement>(null);
     const runtime = React.useContext(RuntimeAPIContext);
     const mobileActions = useMobileAppActions();
     const selection = useChatSessionSelection();
@@ -1170,9 +1189,18 @@ const ToolPart: React.FC<ToolPartProps> = ({
         mobileActions?.openFiles();
     }, [currentDirectory, mobileActions, quickOpenTarget, runtime]);
 
+    // Opening a row below its header grows it downward. The timeline is told
+    // before the growth so it can let go of the end first, as a gesture does;
+    // otherwise the viewport slides by the whole row and carries the header
+    // the reader clicked off the top.
+    const toggleRow = () => {
+        if (!isExpanded) dispatchRowExpand(rowRef.current);
+        onToggle(part.partId);
+    };
+
     const handleMainClick = () => {
         if (isSubagentTool(toolName) || !runtime?.editor || !quickOpenTarget) {
-            onToggle(part.partId);
+            toggleRow();
             return;
         }
         openQuickTarget();
@@ -1207,7 +1235,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
             resetKey={part}
             toolName={toolName}
         >
-            <div>
+            <div ref={rowRef}>
                 <div
                     className="group/tool flex gap-1.5 pr-2 pl-px py-1.5 rounded-xl items-center cursor-pointer"
                     onClick={handleMainClick}
@@ -1219,14 +1247,14 @@ const ToolPart: React.FC<ToolPartProps> = ({
                     <div className="flex items-center flex-shrink-0">
                         <div
                             className="relative h-5 w-3.5 flex-shrink-0"
-                            onClick={(event) => { event.stopPropagation(); onToggle(part.partId); }}
+                            onClick={(event) => { event.stopPropagation(); toggleRow(); }}
                         >
                             <button
                                 type="button"
                                 className="absolute inset-0 flex items-center justify-center bg-transparent p-0 border-0"
                                 aria-expanded={isExpanded}
                                 aria-label={title}
-                                onClick={(event) => { event.stopPropagation(); onToggle(part.partId); }}
+                                onClick={(event) => { event.stopPropagation(); toggleRow(); }}
                             >
                                 <span
                                     className={cn(
@@ -1314,7 +1342,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
                 >
                     {shouldRenderExpandedContent ? (
                         <div className="relative ml-2 pl-3">
-                            <BlockLine onToggle={() => onToggle(part.partId)} topOffset={1} />
+                            <BlockLine onToggle={toggleRow} topOffset={1} />
                             <ToolExpandedContent
                                 part={part}
                                 call={call}

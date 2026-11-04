@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { getRuntimeKey, getRuntimeSwitchRevision } from '@/lib/runtime-switch';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,7 +21,7 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useInputStore } from '@/sync/input-store';
 import { rankByQuery } from '@/lib/search/fuzzySearch';
 import { getGitCommitSummaries } from '@/lib/gitApi';
-import { renderMagicPrompt } from '@/lib/magicPrompts';
+import { loadMagicPrompts } from '@/lib/magicPrompts';
 import {
   abortIntegrate,
   computeIntegratePlan,
@@ -44,6 +45,7 @@ type IntegrateUiState =
 
 export const IntegrateCommitsSection: React.FC<{
   repoRoot: string;
+  promptDirectory: string | undefined;
   sourceBranch: string;
   worktreeMetadata: WorktreeMetadata;
   localBranches: string[];
@@ -54,6 +56,7 @@ export const IntegrateCommitsSection: React.FC<{
   showHeader?: boolean;
 }> = ({
   repoRoot,
+  promptDirectory,
   sourceBranch,
   worktreeMetadata,
   localBranches,
@@ -93,6 +96,7 @@ export const IntegrateCommitsSection: React.FC<{
   );
 
   const [ui, setUi] = React.useState<IntegrateUiState>({ kind: 'idle' });
+  const conflictOwner = React.useRef<{ runtimeKey: string; revision: number } | null>(null);
   const [showAllCommits, setShowAllCommits] = React.useState(false);
   const [commitSummaries, setCommitSummaries] = React.useState<Array<{ sha: string; short: string; subject: string }>>([]);
 
@@ -103,6 +107,9 @@ export const IntegrateCommitsSection: React.FC<{
 
   React.useEffect(() => {
     if (!conflictStorageKey || typeof window === 'undefined') return;
+    const runtimeKey = getRuntimeKey();
+    const revision = getRuntimeSwitchRevision();
+    const isCurrent = () => getRuntimeKey() === runtimeKey && getRuntimeSwitchRevision() === revision;
     const raw = window.localStorage.getItem(conflictStorageKey);
     if (!raw) return;
     let cancelled = false;
@@ -114,16 +121,17 @@ export const IntegrateCommitsSection: React.FC<{
       }
       void (async () => {
         const ok = await isCherryPickInProgress(parsed.tempWorktreePath).catch(() => false);
-        if (cancelled) return;
+        if (cancelled || !isCurrent()) return;
         if (!ok) {
           window.localStorage.removeItem(conflictStorageKey);
           return;
         }
         const details = await getIntegrateConflictDetails(parsed.tempWorktreePath).catch(() => null);
-        if (cancelled) return;
+        if (cancelled || !isCurrent()) return;
         if (!details) {
           return;
         }
+        conflictOwner.current = { runtimeKey, revision };
         setUi({ kind: 'conflict', state: parsed, details });
       })();
     } catch {
@@ -186,11 +194,12 @@ export const IntegrateCommitsSection: React.FC<{
   const openNewSessionDraft = useSessionUIStore((s) => s.openNewSessionDraft);
 
   const buildConflictContext = React.useCallback(async (payload: { state: IntegrateInProgress; details: IntegrateConflictDetails }) => {
-    const visibleText = await renderMagicPrompt('git.integrate.cherrypick.resolve.visible', {
+    const prompts = await loadMagicPrompts(promptDirectory ?? payload.state.repoRoot);
+    const visibleText = prompts.render('git.integrate.cherrypick.resolve.visible', {
       current_commit: payload.state.currentCommit,
       target_branch: payload.state.targetBranch,
     });
-    const instructionsText = await renderMagicPrompt('git.integrate.cherrypick.resolve.instructions', {
+    const instructionsText = prompts.render('git.integrate.cherrypick.resolve.instructions', {
       repo_root: payload.state.repoRoot,
       temp_worktree_path: payload.state.tempWorktreePath,
       source_branch: payload.state.sourceBranch,
@@ -212,7 +221,7 @@ export const IntegrateCommitsSection: React.FC<{
     }, null, 2)}`;
 
     return { visibleText, instructionsText, payloadText };
-  }, []);
+  }, [promptDirectory]);
 
   const setPendingInputText = useInputStore((s) => s.setPendingInputText);
   const setPendingSyntheticParts = useInputStore((s) => s.setPendingSyntheticParts);
@@ -221,7 +230,19 @@ export const IntegrateCommitsSection: React.FC<{
     payload: { state: IntegrateInProgress; details: IntegrateConflictDetails },
     useNewSession: boolean
   ) => {
-    const context = await buildConflictContext(payload);
+    const runtimeKey = getRuntimeKey();
+    const revision = getRuntimeSwitchRevision();
+    const isCurrent = () => getRuntimeKey() === runtimeKey && getRuntimeSwitchRevision() === revision;
+    if (conflictOwner.current?.runtimeKey !== runtimeKey || conflictOwner.current.revision !== revision) return;
+    let context: Awaited<ReturnType<typeof buildConflictContext>>;
+    try {
+      context = await buildConflictContext(payload);
+    } catch (error) {
+      // The magic prompts could not be read; nothing is opened or filled in.
+      if (isCurrent()) toast.error(t('magicPrompts.toast.loadFailed'), { description: error instanceof Error ? error.message : undefined });
+      return;
+    }
+    if (!isCurrent()) return;
 
     if (useNewSession) {
       // Open new session with the conflict context as initial prompt + synthetic parts
@@ -251,6 +272,9 @@ export const IntegrateCommitsSection: React.FC<{
 
   const handleMove = React.useCallback(async () => {
     if (ui.kind !== 'ready') return;
+    const runtimeKey = getRuntimeKey();
+    const revision = getRuntimeSwitchRevision();
+    const isCurrent = () => getRuntimeKey() === runtimeKey && getRuntimeSwitchRevision() === revision;
     if (ui.plan.commits.length === 0) {
       toast.message(t('gitView.integrate.noCommitsToMoveToast'));
       return;
@@ -258,6 +282,7 @@ export const IntegrateCommitsSection: React.FC<{
     setUi({ kind: 'running', plan: ui.plan });
     try {
       const result = await integrateWorktreeCommits(ui.plan);
+      if (!isCurrent()) return;
       if (result.kind === 'success') {
         toast.success(t('gitView.integrate.commitsMovedToast'), {
           description: result.moved === 1
@@ -272,11 +297,13 @@ export const IntegrateCommitsSection: React.FC<{
       if (result.kind === 'conflict') {
         toast.error(t('gitView.integrate.cherryPickConflictToast'), { description: t('gitView.integrate.cherryPickConflictDescription') });
         setUi({ kind: 'conflict', state: result.state, details: result.details });
+        conflictOwner.current = { runtimeKey, revision };
         if (conflictStorageKey && typeof window !== 'undefined') {
           window.localStorage.setItem(conflictStorageKey, JSON.stringify(result.state));
         }
       }
     } catch (e) {
+      if (!isCurrent()) return;
       const message = e instanceof Error ? e.message : String(e);
       toast.error(t('gitView.integrate.failedToMoveToast'), { description: message });
       const next = await computeIntegratePlan({ repoRoot, sourceBranch, targetBranch }).catch(() => null);
@@ -302,8 +329,12 @@ export const IntegrateCommitsSection: React.FC<{
 
   const handleContinue = React.useCallback(async () => {
     if (ui.kind !== 'conflict') return;
+    const runtimeKey = getRuntimeKey();
+    const revision = getRuntimeSwitchRevision();
+    const isCurrent = () => getRuntimeKey() === runtimeKey && getRuntimeSwitchRevision() === revision;
     try {
       const result = await continueIntegrate(ui.state);
+      if (!isCurrent()) return;
       if (result.kind === 'success') {
         toast.success(t('gitView.integrate.cherryPickFinishedToast'));
         const next = await computeIntegratePlan({ repoRoot, sourceBranch, targetBranch }).catch(() => null);
@@ -316,12 +347,14 @@ export const IntegrateCommitsSection: React.FC<{
         return;
       }
       if (result.kind === 'conflict') {
+        conflictOwner.current = { runtimeKey, revision };
         setUi({ kind: 'conflict', state: result.state, details: result.details });
         if (conflictStorageKey && typeof window !== 'undefined') {
           window.localStorage.setItem(conflictStorageKey, JSON.stringify(result.state));
         }
       }
     } catch (e) {
+      if (!isCurrent()) return;
       const message = e instanceof Error ? e.message : String(e);
       toast.error(t('gitView.integrate.cherryPickContinueFailedToast'), { description: message });
     }
@@ -475,7 +508,7 @@ export const IntegrateCommitsSection: React.FC<{
           )}
 
           {ui.kind === 'conflict' && (
-            <div className="rounded-md border border-border/60 bg-background/60 p-3 space-y-2">
+            <div className="rounded-md oc-tile p-3 space-y-2">
               <div className="typography-meta text-foreground">
                 {t('gitView.integrate.conflictsInFiles', { count: ui.details.unmergedFiles.length })}
               </div>
@@ -484,7 +517,7 @@ export const IntegrateCommitsSection: React.FC<{
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {ui.details.unmergedFiles.slice(0, 6).map((file) => (
-                  <span key={file} className="font-mono text-xs px-2 py-0.5 rounded bg-muted/40 text-muted-foreground">
+                  <span key={file} className="font-mono text-xs px-2 py-0.5 rounded oc-tile-inset text-muted-foreground">
                     {file}
                   </span>
                 ))}

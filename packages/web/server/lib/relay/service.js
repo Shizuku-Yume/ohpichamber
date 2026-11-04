@@ -129,33 +129,45 @@ export const createRelayService = ({
     hostClient = null;
   };
 
-  const standbyStatus = (holderPid) => ({
+  const standbyStatus = (holder) => ({
     state: 'standby',
-    lastError: `relay host is owned by another local OpenChamber process (pid ${holderPid})`,
+    lastError: holder?.host
+      ? `relay host is owned by another OpenChamber process sharing this data dir (pid ${holder.pid} on ${holder.host})`
+      : 'relay host is owned by another OpenChamber process sharing this data dir',
     connectedClients: 0,
   });
 
   // Claim watcher, active while the relay is enabled:
   //   - standby → claimant died → take over (start our host);
-  //   - running → another live process claimed → stand down (stop, standby).
+  //   - running → another live process claimed → stand down (stop, standby);
+  //     otherwise refresh the claim, which keeps it live for instances on
+  //     other hosts or containers that cannot probe our pid.
   // This back-off is what actually ends the mutual-eviction fight: the loser
   // must STOP reconnecting, otherwise both keep replacing each other forever.
-  const ensureClaimWatch = (relayUrl) => {
+  const ensureClaimWatch = () => {
     if (!hostLock || claimWatchTimer) return;
     claimWatchTimer = setInterval(() => {
-      void (async () => {
+      // Same queue as start/stop/disable: the tick must not act on a config
+      // (enabled, enterprise, passive) that changed while it was scheduled.
+      void serializedLifecycle(async () => {
         try {
+          const config = await readConfig();
+          if (!config.enabled || relayBlockedByEnterprise()) {
+            stopClaimWatch();
+            stopHostClient();
+            status = { state: 'disabled', lastError: null, connectedClients: 0 };
+            return;
+          }
           if (hostClient) {
-            if (!hostLock.holdsClaim() && hostLock.liveClaimantPid() !== null) {
-              logger.warn('[Relay] host claim taken by another local instance — standing down');
-              const holder = hostLock.liveClaimantPid();
+            if (!hostLock.tryClaim()) {
+              logger.warn('[Relay] host claim taken by another instance — standing down');
               stopHostClient();
-              status = standbyStatus(holder);
+              status = standbyStatus(hostLock.otherLiveClaimant());
             }
             return;
           }
           if (status.state !== 'standby' || !allowPassiveHost) return;
-          if (hostLock.liveClaimantPid() !== null) {
+          if (hostLock.otherLiveClaimant() !== null) {
             claimFreeSinceMs = null;
             return;
           }
@@ -167,12 +179,12 @@ export const createRelayService = ({
           if (hostLock.tryClaim()) {
             claimFreeSinceMs = null;
             logger.warn('[Relay] host claim stayed free — taking over the relay host');
-            await start(relayUrl);
+            await startHost(config.relayUrl);
           }
         } catch (error) {
           logger.warn(`[Relay] claim watch failed: ${describeRelayError(error)}`);
         }
-      })();
+      });
     }, CLAIM_WATCH_INTERVAL_MS);
     if (typeof claimWatchTimer.unref === 'function') claimWatchTimer.unref();
   };
@@ -184,7 +196,7 @@ export const createRelayService = ({
     claimFreeSinceMs = null;
   };
 
-  const start = async (relayUrl, { claim = 'try' } = {}) => {
+  const startHost = async (relayUrl, { claim = 'try' } = {}) => {
     if (hostClient) return;
     // Every path into the relay host passes here: boot, demand, enable, pairing.
     if (relayBlockedByEnterprise()) {
@@ -202,8 +214,8 @@ export const createRelayService = ({
     if (hostLock) {
       const claimed = claim === 'force' ? hostLock.forceClaim() : hostLock.tryClaim();
       if (!claimed) {
-        status = standbyStatus(hostLock.liveClaimantPid());
-        ensureClaimWatch(relayUrl);
+        status = standbyStatus(hostLock.otherLiveClaimant());
+        ensureClaimWatch();
         return;
       }
     }
@@ -218,21 +230,21 @@ export const createRelayService = ({
       },
     });
     status = hostClient.getStatus();
-    ensureClaimWatch(relayUrl);
+    ensureClaimWatch();
   };
 
-  const stop = () => {
+  const stopHost = () => {
     stopClaimWatch();
     stopHostClient();
     if (hostLock) hostLock.release();
     status = { state: 'disabled', lastError: null, connectedClients: 0 };
   };
 
-  const startIfEnabled = async () => {
+  const startIfEnabledHost = async () => {
     try {
       const config = await readConfig();
       if (config.enabled) {
-        await start(config.relayUrl);
+        await startHost(config.relayUrl);
       }
     } catch (error) {
       logger.warn(`[Relay] startup failed: ${describeRelayError(error)}`);
@@ -242,7 +254,7 @@ export const createRelayService = ({
   // Drive the relay lifecycle from demand: run it when a device or pending
   // session uses the relay, stop it when none remain. Called on startup and after
   // pairing/device changes, so the operator never toggles it manually.
-  const reconcile = async () => {
+  const reconcileHost = async () => {
     try {
       const demand = await hasRelayDemand();
       const config = await readConfig();
@@ -250,11 +262,11 @@ export const createRelayService = ({
         if (!config.enabled) await writeConfig({ enabled: true, relayUrl: config.relayUrl });
         if (!hostClient) {
           const next = await readConfig();
-          await start(next.relayUrl);
+          await startHost(next.relayUrl);
         }
       } else {
         if (config.enabled) await writeConfig({ enabled: false, relayUrl: config.relayUrl });
-        stop();
+        stopHost();
       }
     } catch (error) {
       logger.warn(`[Relay] reconcile failed: ${describeRelayError(error)}`);
@@ -284,6 +296,9 @@ export const createRelayService = ({
       relayUrl: config.relayUrl,
       relayUrlLocked: config.relayUrlLocked,
       blockedByEnterprise: relayBlockedByEnterprise(),
+      // Another host with this identity keeps taking the relay slot: usually
+      // the data dir was copied to a second machine (host-client.js).
+      identityConflict: hostClient ? live.identityConflict : false,
       ...(live.lastError ? { lastError: live.lastError } : {}),
     };
   };
@@ -316,7 +331,7 @@ export const createRelayService = ({
   // relay pairing link IS the demand signal, so the relay turns itself on here
   // rather than requiring a separate manual toggle. Idempotent: a no-op when the
   // relay is already enabled and running.
-  const ensureEnabledForPairing = async () => {
+  const ensureEnabledForPairingHost = async () => {
     // Direct pairing still works: the pairing route drops a failed relay candidate.
     if (relayBlockedByEnterprise()) throw Object.assign(new Error(RELAY_BLOCKED_ERROR), { statusCode: 403 });
     const config = await readConfig();
@@ -329,10 +344,49 @@ export const createRelayService = ({
       // instance the user is pairing against MUST be the one devices reach,
       // even if another local process currently holds the machine's claim
       // (its claim watcher sees the takeover and stands down).
-      await start(next.relayUrl, { claim: 'force' });
+      await startHost(next.relayUrl, { claim: 'force' });
     }
     return buildPairingCandidate();
   };
+
+  // Gives this copy its own identity. Both copies of a copied data dir hold the
+  // same keys and evict each other at the relay; after the reset, devices that
+  // know the old identity keep reaching the other copy until they pair here again.
+  const resetIdentityHost = async () => {
+    const wasHosting = hostClient !== null;
+    stopHostClient();
+    await relayKeyStore.reset();
+    // A reset only runs through this queue, but a host started before it can
+    // still be live; stop whatever exists now so no host keeps signing with
+    // the abandoned identity.
+    stopHostClient();
+    if (!wasHosting) return;
+    const config = await readConfig();
+    if (!config.enabled || relayBlockedByEnterprise()) return;
+    // Explicit identity rotation is user intent: claim the host like enable.
+    await startHost(config.relayUrl, { claim: 'force' });
+  };
+
+  // One lifecycle mutation at a time: boot, demand reconcile, explicit
+  // enable/disable and identity reset read and replace the same host and key
+  // state. Serializing them also keeps a reset from restarting a host built
+  // from the identity it is replacing.
+  let lifecycleQueue = Promise.resolve();
+  const serializedLifecycle = (task) => {
+    const run = lifecycleQueue.then(task, task);
+    lifecycleQueue = run.then(() => undefined, () => undefined);
+    return run;
+  };
+  const start = (relayUrl, options) => serializedLifecycle(() => startHost(relayUrl, options));
+  const stop = () => serializedLifecycle(() => stopHost());
+  const startIfEnabled = () => serializedLifecycle(() => startIfEnabledHost());
+  const reconcile = () => serializedLifecycle(() => reconcileHost());
+  const ensureEnabledForPairing = () => serializedLifecycle(() => ensureEnabledForPairingHost());
+  const resetIdentity = () => serializedLifecycle(() => resetIdentityHost());
+  const enableRelay = (relayUrl) => serializedLifecycle(async () => {
+    stopHost();
+    await startHost(relayUrl, { claim: 'force' });
+  });
 
   const registerRoutes = (app) => {
     app.get('/api/openchamber/relay/status', async (_req, res) => {
@@ -351,12 +405,20 @@ export const createRelayService = ({
         const current = await readConfig();
         const relayUrl = typeof req.body?.relayUrl === 'string' ? normalizeRelayUrl(req.body.relayUrl) : current.relayUrl;
         await writeConfig({ enabled: true, relayUrl });
-        if (hostClient) stop();
         // Explicit user action: take the machine's host claim like pairing does.
-        await start(relayUrl, { claim: 'force' });
+        await enableRelay(relayUrl);
         res.json(await getStatus());
       } catch (error) {
         res.status(500).json({ error: error?.message ?? 'Failed to enable relay' });
+      }
+    });
+
+    app.post('/api/openchamber/relay/reset-identity', async (_req, res) => {
+      try {
+        await resetIdentity();
+        res.json(await getStatus());
+      } catch (error) {
+        res.status(500).json({ error: error?.message ?? 'Failed to reset relay identity' });
       }
     });
 
@@ -380,6 +442,7 @@ export const createRelayService = ({
     stop,
     getStatus,
     getServerId,
+    resetIdentity,
     getPairingCandidate,
     ensureEnabledForPairing,
   };

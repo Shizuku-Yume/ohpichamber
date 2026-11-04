@@ -1,3 +1,4 @@
+import type { GuestOpenSurfaceResult } from '@/lib/guests/open-surface';
 import {
   HostRequestError,
   type GuestStorageRequest,
@@ -31,6 +32,7 @@ import {
   type HostReadyContext,
   type HostRequestErrorCode,
   type HostResultPayload,
+  type LateGenerateResult,
   type ResolveResultPayload,
   type SessionSnapshot,
   type StartSessionResult,
@@ -57,7 +59,7 @@ type HostBridgeEffects = {
   openSession: (sessionId: string) => void;
   toast: (request: ToastRequest) => void;
   openUrl: (url: string) => Promise<boolean>;
-  openSurface: (mode: ContextPanelMode) => void;
+  openSurface: (mode: ContextPanelMode) => GuestOpenSurfaceResult;
   writeClipboard: (text: string) => Promise<boolean>;
   compose: (text: string, mode: 'replace' | 'append') => void;
   attach: (issue: AttachIssueRequest) => void;
@@ -148,6 +150,13 @@ export const buildResolveMessage = (id: string, command: string, args: string): 
   type: 'resolve',
   id,
   payload: { command, args },
+});
+
+export const buildGenerateLateMessage = (result: LateGenerateResult): HostMessage => ({
+  channel: OPENCHAMBER_SDK_CHANNEL,
+  v: OPENCHAMBER_SDK_API_VERSION,
+  type: 'generate-late',
+  payload: result,
 });
 
 export const buildSessionLifecycleMessage = (event: SessionLifecycleEvent): HostMessage => ({
@@ -273,6 +282,7 @@ export const answerGuestMessage = async (
     case 'file-change':
     case 'file-save':
     case 'file-unsupported':
+    case 'generate-late-listen':
       return null;
     case 'toast':
       effects.toast(message.payload);
@@ -288,8 +298,8 @@ export const answerGuestMessage = async (
       if (!isContextPanelMode(message.payload.surfaceId)) {
         return errorResult(message.id, 'Unknown surface.');
       }
-      effects.openSurface(message.payload.surfaceId);
-      return okResult(message.id);
+      const opened = effects.openSurface(message.payload.surfaceId);
+      return opened.ok ? okResult(message.id) : errorResult(message.id, opened.message, opened.code);
     }
     case 'clipboard-write': {
       const copied = await effects.writeClipboard(message.payload.text);

@@ -3,7 +3,7 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
 import type { ReferencePickerItem } from '@/components/references/referencePickerItems';
-import type { GitHubIssueReference } from '@/lib/api/types';
+import type { RepositoryIssueReference } from '@/lib/api/types';
 
 const browser = new Window({ url: 'http://localhost/' });
 Object.assign(globalThis, {
@@ -26,12 +26,12 @@ Object.assign(globalThis, {
   IS_REACT_ACT_ENVIRONMENT: true,
 });
 
-const reference: GitHubIssueReference = {
+const reference: RepositoryIssueReference = {
   kind: 'issue', number: 42, title: 'Fix the board launch', url: 'https://example.test/issues/42',
   body: '', bodyTruncated: false, createdAt: null, updatedAt: null, author: null, labels: [], commentCount: 0,
-  sourceRepo: { source: 'github', owner: 'acme', repo: 'app' }, state: 'open',
+  sourceRepo: { source: 'github', owner: 'acme', repo: 'app' }, provider: 'github', state: 'open' as const,
 };
-const item: ReferencePickerItem = { source: 'github', reference };
+const item: ReferencePickerItem = { source: 'repository', reference };
 const project = { id: 'project-1', path: '/workspace/app' };
 const resolveCalls: unknown[] = [];
 const pushedReferences: unknown[] = [];
@@ -69,15 +69,24 @@ mock.module('@/components/icon/Icon', () => ({ Icon: () => null }));
 mock.module('@/components/icons/DiffIcon', () => ({ DiffViewIcon: () => null }));
 mock.module('@/components/ui/confirm-dialog', () => ({ useConfirmDialog: () => ({ confirm: async () => false, dialog: null }) }));
 mock.module('@/hooks/useRuntimeAPIs', () => ({ useRuntimeAPIs: () => ({ sourceControl: {}, linear: null }) }));
-mock.module('@/lib/i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
+mock.module('@/lib/i18n', () => ({
+  useI18n: () => ({ t: (key: string) => key }),
+  formatMessage: (_dictionary: unknown, key: string) => key,
+  useI18nStore: { getState: () => ({ locale: 'en', dictionary: {} }) },
+}));
 mock.module('@/stores/usePullRequestSelectionStore', () => ({ usePullRequestSelectionStore: () => null }));
 mock.module('@/stores/useWalkthroughStore', () => ({ useWalkthroughStore: () => null }));
-mock.module('@/stores/useUIStore', () => ({ useUIStore }));
+const actualUIStore = await import('@/stores/useUIStore');
+mock.module('@/stores/useUIStore', () => ({ ...actualUIStore, useUIStore }));
 mock.module('@/sync/session-ui-store', () => ({ useSessionUIStore }));
-mock.module('@/sync/sync-context', () => ({ useSession: () => ({ metadata: { title: 'Current session' } }) }));
+mock.module('@/sync/sync-context', () => ({
+  useSession: () => ({ metadata: { title: 'Current session' } }),
+  useSessionDirectory: () => '/workspace/app',
+}));
 mock.module('@/components/chat/composer/pendingComposerReferences', () => ({ usePendingComposerReferences: { getState: () => ({ push: (references: unknown[]) => pushedReferences.push(...references) }) } }));
 mock.module('@/components/references/resolveComposerReferences', () => ({ resolveComposerReferences: async (selection: unknown[]) => { resolveCalls.push(selection); return { references: selection, failures: [] }; } }));
-mock.module('@/components/references/referenceSources', () => ({ readLinearIssueDetail: async () => null }));
+const actualReferenceSources = await import('@/components/references/referenceSources');
+mock.module('@/components/references/referenceSources', () => ({ ...actualReferenceSources, readLinearIssueDetail: async () => null }));
 mock.module('@/stores/useProjectsStore', () => ({ useProjectsStore: () => [] }));
 
 const { SourceBoardActions } = await import('./SourceBoardActions');
@@ -108,6 +117,7 @@ describe('SourceBoardActions launch behavior', () => {
           item={item}
           project={project}
           context={null}
+          worktreeAvailable
           onStartWorktree={onStartWorktree}
           onChanged={() => undefined}
           onLeave={onLeave}
@@ -126,7 +136,7 @@ describe('SourceBoardActions launch behavior', () => {
     expect(openedDrafts).toEqual([{ selectedProjectId: 'project-1', directoryOverride: '/workspace/app' }]);
     expect(left).toHaveBeenCalledTimes(1);
     expect(resolveCalls).toHaveLength(1);
-    expect(pushedReferences).toEqual([{ source: 'github', reference, includeDiff: false }]);
+    expect(pushedReferences).toEqual([{ source: 'repository', reference, includeDiff: false }]);
   });
 
   test('closes board surfaces before attaching to the current session', async () => {
@@ -139,7 +149,7 @@ describe('SourceBoardActions launch behavior', () => {
     expect(closedSurfaces).toEqual([1]);
     expect(left).toHaveBeenCalledTimes(1);
     expect(resolveCalls).toHaveLength(1);
-    expect(pushedReferences).toEqual([{ source: 'github', reference, includeDiff: false }]);
+    expect(pushedReferences).toEqual([{ source: 'repository', reference, includeDiff: false }]);
   });
 
   test('delegates worktree creation with the selected project and reference', async () => {
@@ -148,7 +158,7 @@ describe('SourceBoardActions launch behavior', () => {
     const button = [...host.querySelectorAll('button')].find((entry) => entry.textContent?.includes('sourceBoard.actions.newWorktreeSession'));
     expect(button).toBeTruthy();
     await act(async () => button?.click());
-    expect(worktree).toHaveBeenCalledWith(project, { source: 'github', reference, includeDiff: false });
+    expect(worktree).toHaveBeenCalledWith(project, { source: 'repository', reference, includeDiff: false });
     expect(openedDrafts).toHaveLength(0);
   });
 });

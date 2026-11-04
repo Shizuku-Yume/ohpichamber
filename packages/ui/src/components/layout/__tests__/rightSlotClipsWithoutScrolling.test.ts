@@ -21,7 +21,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const source = readFileSync(join(__dirname, '..', 'ContextPanel.tsx'), 'utf-8');
 
 const slotElement = (): string => {
-  const start = source.indexOf('data-right-slot=""');
+  const start = source.indexOf('data-right-slot={');
   expect(start).toBeGreaterThan(-1);
   const end = source.indexOf('style={panelStyle}', start);
   expect(end).toBeGreaterThan(start);

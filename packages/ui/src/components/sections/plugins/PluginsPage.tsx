@@ -21,7 +21,6 @@ import {
   SettingsFieldRow,
   SettingsSection,
   SettingsStackedField,
-  SETTINGS_SELECT_SIZE,
 } from '@/components/sections/shared/SettingsSection';
 import { AUTOSAVE_SAVED, AUTOSAVE_UNCHANGED, autosaveFailed, useAutosave, type AutosaveResult } from '@/components/sections/shared/SettingsAutosave';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
@@ -639,7 +638,7 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
                 if (value === 'user' || value === 'project') setMarketplaceScope(value);
               }}
             >
-              <SelectTrigger size={SETTINGS_SELECT_SIZE} aria-label={t('settings.plugins.page.field.scope')}>
+              <SelectTrigger aria-label={t('settings.plugins.page.field.scope')}>
                 <SelectValue>
                   {marketplaceScope === 'user' ? t('settings.plugins.scope.user') : t('settings.plugins.scope.project')}
                 </SelectValue>

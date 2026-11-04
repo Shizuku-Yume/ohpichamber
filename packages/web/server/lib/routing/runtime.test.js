@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createRoutingRuntime } from './runtime.js';
+import { attachmentHint, createRoutingRuntime, routingRequestTextOf } from './runtime.js';
 import { createRoutingStore, resolveEffectiveConfig } from './store.js';
 import { excerptHead, excerptHeadTail, turnsToHistory } from './history.js';
 import { createJevClient, decidePermission, decideRouting } from './jev.js';
@@ -110,6 +110,46 @@ const makeRuntime = async ({
   return { runtime, store, service, jev, events, state, resolveCredential };
 };
 const send = (extra = {}) => ({ sessionId: 's1', workspaceId: SCOPE.workspaceId, model: AUTO, requestText: 'find the root cause', ...extra });
+
+const image = (name, mediaType = 'image/png') => ({ attachmentId: 'attachment_1', name, mediaType, size: 12, uri: 'attachment://attachment_1' });
+
+describe('attachment hint for the classifier', () => {
+  it('describes a pasted image from its media type and names it', () => {
+    expect(attachmentHint({ text: "what's wrong?", attachments: [image('screenshot.png')] }))
+      .toBe('\n\n[The user attached an image: screenshot.png]');
+  });
+  it('counts several images and lists at most three names', () => {
+    const attachments = ['a.png', 'b.jpg', 'c.webp', 'd.gif'].map((name) => image(name));
+    expect(attachmentHint({ text: 'compare these', attachments })).toBe(
+      '\n\n[The user attached 4 images: a.png, b.jpg, c.webp]',
+    );
+  });
+  it('recognizes an image by its extension when the media type is generic', () => {
+    expect(attachmentHint({ text: 'look', attachments: [image('FIGURE-1.PNG', 'application/octet-stream')] }))
+      .toBe('\n\n[The user attached an image: FIGURE-1.PNG]');
+  });
+  it('stays silent without images, without attachments, or for non-image files', () => {
+    expect(attachmentHint({ text: 'read the log', attachments: [image('notes.txt', 'text/plain')] })).toBe('');
+    expect(attachmentHint({ text: 'sign this', attachments: [image('contract.pdf', 'application/pdf')] })).toBe('');
+    expect(attachmentHint({ text: 'no files here' })).toBe('');
+    expect(attachmentHint({ text: '' })).toBe('');
+  });
+  it('survives a malformed attachments value', () => {
+    expect(attachmentHint({ text: 'hi', attachments: 'nope' })).toBe('');
+    expect(attachmentHint({ text: 'hi', attachments: [{ mediaType: null, name: null }] })).toBe('');
+  });
+});
+
+describe('routing request text', () => {
+  it('appends the attachment fact to the words being classified', () => {
+    const input = { text: "what's wrong?", attachments: [image('screenshot.png')] };
+    expect(routingRequestTextOf(input)).toBe("what's wrong?\n\n[The user attached an image: screenshot.png]");
+  });
+  it('is the trimmed words alone when nothing image-shaped is attached', () => {
+    const input = { text: '  fix the typo in README  ', attachments: [image('notes.txt', 'text/plain')] };
+    expect(routingRequestTextOf(input)).toBe('fix the typo in README');
+  });
+});
 
 describe('request content and decision policy', () => {
   it('bounds history excerpts and keeps the last three turns oldest first', () => {

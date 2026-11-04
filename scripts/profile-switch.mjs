@@ -9,7 +9,7 @@
  *
  * Reported per switch, in milliseconds after the click:
  * - `ack`: the clicked row is highlighted as active (first visible reaction);
- * - `content`: the timeline holds messages that were not in the DOM before
+ * - `content`: the timeline renders messages that were not rendered before
  *   (they may still be hidden behind the reveal gate);
  * - `visible`: those messages are actually on screen: every new message that
  *   intersects the chat viewport has an effective opacity of 1, so the
@@ -34,12 +34,14 @@ import { mkdir, readFile, writeFile } from "node:fs/promises"
 import { join, resolve } from "node:path"
 import process from "node:process"
 
+import { ACCESSIBILITY_CATEGORY, accessibilityInWindow, accessibilityState, describeAccessibility, FORCE_ACCESSIBILITY_ARGS } from "./perf/accessibility.mjs"
 import { CdpClient, createPageTarget, evaluateValue, launchChrome, reservePort, resolveChrome, resolveProfileDir, wait } from "./perf/cdp.mjs"
 import { summarizeCpuProfile } from "./perf/cpu-profile.mjs"
 import { expandProjects, expandSessionLists } from "./perf/scenario.mjs"
 import { percentile, round } from "./perf/metrics.mjs"
 import { createNetworkRecorder, endpointPattern, summarizeRequests } from "./perf/network.mjs"
 import { buildRenderProbeSource, printRenderProbe, readRenderProbe, RENDER_PROBE_GLOBAL, summarizeRenderProbe } from "./perf/render-probe.mjs"
+import { rendererMainThread } from "./perf/trace-analysis.mjs"
 
 const HELP = `Usage: bun run profile:switch -- [options]
 
@@ -97,6 +99,12 @@ Options:
   --render-probe-hook <Component:index>
                            With --render-probe, record the call stacks that
                            dispatch to this component's hook
+  --extra-categories <list> Comma-separated trace categories to add. The
+                           accessibility category is always recorded
+  --force-accessibility    Launch Chrome with its accessibility tree on, as an
+                           accessibility client turns it on (a screen reader,
+                           or a macOS app that reads other windows), so every
+                           machine and headless runs measure that case
   --chrome <path>          Chrome/Chromium executable
   --profile-dir <path>     Chrome profile to reuse (default: a fresh temporary
                            profile per run, removed afterwards). Its storage
@@ -131,6 +139,8 @@ const parseArgs = (argv) => {
     injectScript: null,
     renderProbe: false,
     renderProbeHook: null,
+    extraCategories: [],
+    forceAccessibility: false,
     chrome: null,
     profileDir: null,
     headless: false,
@@ -159,6 +169,8 @@ const parseArgs = (argv) => {
     else if (value === "--inject-script") options.injectScript = argv[++index]
     else if (value === "--render-probe") options.renderProbe = true
     else if (value === "--render-probe-hook") options.renderProbeHook = argv[++index]
+    else if (value === "--extra-categories") options.extraCategories = String(argv[++index]).split(",").map((category) => category.trim()).filter(Boolean)
+    else if (value === "--force-accessibility") options.forceAccessibility = true
     else if (value === "--chrome") options.chrome = argv[++index]
     else if (value === "--profile-dir") options.profileDir = resolve(argv[++index])
     else if (value === "--headless") options.headless = true
@@ -180,7 +192,10 @@ const parseArgs = (argv) => {
 // to what the user sees if the reveal mechanism changes. The attribute is
 // recorded separately (`revealCleared`, `revealStates`) to explain the number.
 const buildProbeSource = (sessionId, shiftWindowMs) => `(() => {
-  const messageIds = () => [...document.querySelectorAll('[data-message-id]')].map((el) => el.getAttribute('data-message-id'))
+  // Rendered messages only: a retained timeline keeps its messages in the DOM
+  // under display:none, and showing it again is the switch being measured.
+  const renderedMessages = () => [...document.querySelectorAll('[data-message-id]')].filter((el) => el.checkVisibility())
+  const messageIds = () => renderedMessages().map((el) => el.getAttribute('data-message-id'))
   const before = new Set(messageIds())
   const state = {
     t0: null, ack: null, content: null, visible: null, revealCleared: null, messageCount: null,
@@ -190,7 +205,7 @@ const buildProbeSource = (sessionId, shiftWindowMs) => `(() => {
   }
   const row = () => document.querySelector('[data-session-row="${sessionId}"]')
   const revealState = () => document.querySelector('[data-timeline-reveal]')?.getAttribute('data-timeline-reveal') ?? 'none'
-  const newMessages = () => [...document.querySelectorAll('[data-message-id]')].filter((el) => !before.has(el.getAttribute('data-message-id')))
+  const newMessages = () => renderedMessages().filter((el) => !before.has(el.getAttribute('data-message-id')))
   const scrollerOf = (el) => {
     for (let node = el.parentElement; node; node = node.parentElement) {
       const overflow = getComputedStyle(node).overflowY
@@ -224,7 +239,7 @@ const buildProbeSource = (sessionId, shiftWindowMs) => `(() => {
     }
     noteReveal()
   })
-  observer.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["class", "aria-current", "data-timeline-reveal"] })
+  observer.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["class", "style", "aria-current", "data-timeline-reveal"] })
   const layoutShiftObserver = typeof PerformanceObserver === 'function' && PerformanceObserver.supportedEntryTypes?.includes('layout-shift')
     ? new PerformanceObserver((list) => { for (const entry of list.getEntries()) state.layoutShifts.push(entry) })
     : null
@@ -354,6 +369,8 @@ const SWITCH_METRICS = {
   visible: (entry) => entry.visible,
   revealCleared: (entry) => entry.revealCleared,
   longestTask: (entry) => entry.longestTask,
+  accessibilityMs: (entry) => entry.accessibility?.ms ?? null,
+  accessibilityLongestPassMs: (entry) => entry.accessibility?.longestPassMs ?? null,
   requests: (entry) => entry.requestCount,
   decodedKb: (entry) => entry.network?.decodedKb ?? null,
   encodedKb: (entry) => entry.network?.encodedKb ?? null,
@@ -444,7 +461,7 @@ const main = async () => {
     : null
 
   const port = await reservePort()
-  const chromeProcess = launchChrome({ chrome, profileDir: profile.dir, port, headless: options.headless })
+  const chromeProcess = launchChrome({ chrome, profileDir: profile.dir, port, headless: options.headless, extraArgs: options.forceAccessibility ? FORCE_ACCESSIBILITY_ARGS : [] })
   let client
   try {
     const target = await createPageTarget(port)
@@ -516,10 +533,8 @@ const main = async () => {
     client.on("Tracing.dataCollected", ({ value }) => { for (const event of value ?? []) traceEvents.push(event) })
     await client.send("Profiler.setSamplingInterval", { interval: 250 })
     await client.send("Profiler.start")
-    await client.send("Tracing.start", {
-      transferMode: "ReportEvents",
-      categories: ["devtools.timeline", "disabled-by-default-devtools.timeline", "blink.user_timing"].join(","),
-    })
+    const categories = [...new Set(["devtools.timeline", "disabled-by-default-devtools.timeline", "blink.user_timing", ACCESSIBILITY_CATEGORY, ...options.extraCategories])]
+    await client.send("Tracing.start", { transferMode: "ReportEvents", categories: categories.join(",") })
 
     const switches = []
     let index = 0
@@ -608,6 +623,7 @@ const main = async () => {
       const end = marks[markIndex + 1].ts
       const longest = tasks.filter((event) => event.ts >= start && event.ts <= end).reduce((max, event) => Math.max(max, event.dur / 1000), 0)
       switches[switchIndex].longestTask = tasks.length === 0 ? null : round(longest)
+      switches[switchIndex].accessibility = accessibilityInWindow(traceEvents, { main: rendererMainThread(traceEvents, { start, end }).main, start, end, recorded: true })
       switchIndex += 1
     }
 
@@ -632,6 +648,7 @@ const main = async () => {
       coldReload: options.coldReload,
       shiftWindowMs: options.shiftWindow,
       frameLiveness,
+      accessibility: accessibilityState(traceEvents, { categories, forced: options.forceAccessibility }),
       ...summarizeSwitches(switches, titles),
       switches,
       cpuProfile: summarizeCpuProfile(profile),
@@ -641,14 +658,14 @@ const main = async () => {
     await writeFile(join(output, "cpu-profile.cpuprofile"), JSON.stringify(profile))
     if (renderProbeRaw) await writeFile(join(output, "render-probe.json"), renderProbeRaw)
 
-    console.log("")
+    console.log(`\n${describeAccessibility(summary.accessibility)}`)
     const line = (label, value, unit = "ms") => (value ? `${label} ${value.median}${unit} (p95 ${value.p95})` : `${label} -`)
     for (const visit of ["cold", "warm"]) {
       const visitStats = summary[visit]
       if (!visitStats) continue
       console.log(`${visit} (${visitStats.switches}): ${[
         line("ack", visitStats.ack), line("content", visitStats.content), line("visible", visitStats.visible),
-        line("shift", visitStats.shiftMaxPx, "px"), line("longest task", visitStats.longestTask),
+        line("shift", visitStats.shiftMaxPx, "px"), line("longest task", visitStats.longestTask), line("accessibility", visitStats.accessibilityMs),
         line("requests", visitStats.requests, ""), line("decoded", visitStats.decodedKb, "KB"),
       ].join(" · ")}`)
       if (visitStats.notVisible > 0) console.log(`  ${visitStats.notVisible} switch(es) showed content that never became fully visible`)

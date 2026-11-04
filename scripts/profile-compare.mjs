@@ -51,6 +51,10 @@ Measurement:
                            scenarios (use with --build diag for real names)
   --save-trace             Session scenarios keep trace.json; the table then
                            adds frames, restyled elements, layerize and GPU rows
+  --force-accessibility    Session, switch and toggle scenarios launch Chrome
+                           with its accessibility tree on, the way a screen
+                           reader or a macOS app that reads other windows turns
+                           it on, so the result does not depend on the machine
 
 Locations:
   --root <dir>             Worktrees, builds, server state, seed and Chrome
@@ -78,6 +82,11 @@ const SCENARIOS = {
   code: { kind: "session", args: () => ["--model", "perf/code-300cps"] },
   unicode: { kind: "session", args: () => ["--model", "perf/unicode-300cps"] },
   agent: { kind: "session", args: () => ["--model", "perf/agent-40tools-300cps"] },
+  // A chat someone works in: agentic history grown with the page open (a
+  // seeded session opens with only its last turns in memory), on a CPU slowed
+  // four times, where what scales with history shows as dropped frames.
+  grow: { kind: "session", args: () => ["--grow", "100", "--grow-model", "perf/agent-20reads-20000cps", "--model", "perf/agent-20reads-300cps", "--cpu-throttle", "4"] },
+  "grow-short": { kind: "session", args: () => ["--grow", "10", "--grow-model", "perf/agent-20reads-20000cps", "--model", "perf/agent-20reads-300cps", "--cpu-throttle", "4"] },
   long: { kind: "session", seed: true, args: (seed) => ["--session", seed.long, "--model", "perf/stream-300cps"] },
   quiet: { kind: "session", seed: true, args: (seed) => ["--session", seed.long, "--quiet", "20"] },
   cpu: { kind: "session", uninstrumented: true, args: () => ["--model", "perf/stream-300cps", "--process-cpu-only", "--headed"] },
@@ -87,8 +96,12 @@ const SCENARIOS = {
   "startup-warm": { kind: "startup", once: true, args: (_seed, runs) => ["--cache", "warm", "--runs", String(runs), "--warmup", "1"] },
   heap: { kind: "heap", seed: true, once: true, args: () => ["--count", "20"] },
   composer: { kind: "composer", seed: true, args: (seed) => ["--session", seed.long] },
-  toggle: { kind: "toggle", seed: true, once: true, args: (_seed, runs) => ["--title", "perf: long 120", "--count", String(runs), "--headless"] },
-  "toggle-short": { kind: "toggle", seed: true, once: true, args: (_seed, runs) => ["--title", "perf: short A", "--count", String(runs), "--headless"] },
+  // Headed: frame pacing from a software compositor says nothing about a
+  // user's frames. Opens a visible window.
+  toggle: { kind: "toggle", seed: true, once: true, args: (_seed, runs) => ["--title", "perf: long 120", "--count", String(runs)] },
+  "toggle-short": { kind: "toggle", seed: true, once: true, args: (_seed, runs) => ["--title", "perf: short A", "--count", String(runs)] },
+  // The full-width context surface: wide enough to re-wrap the transcript.
+  "toggle-context": { kind: "toggle", seed: true, once: true, args: (_seed, runs) => ["--title", "perf: long 120", "--surface", "context", "--count", String(runs)] },
 }
 
 const SCRIPTS = {
@@ -104,7 +117,7 @@ const SCRIPTS = {
 const parseArgs = (argv) => {
   const options = {
     before: "HEAD", after: null, scenarios: ["stream", "code", "agent", "switch", "idle"], runs: 5, rounds: 1, build: "prod",
-    renderProbe: false, saveTrace: false, root: join(REPO_ROOT, "tmp/perf-compare"), output: null, port: 4799, fixturePort: 4798,
+    renderProbe: false, saveTrace: false, forceAccessibility: false, root: join(REPO_ROOT, "tmp/perf-compare"), output: null, port: 4799, fixturePort: 4798,
     opencodeBinary: undefined, dryRun: false,
   }
   for (let index = 0; index < argv.length; index += 1) {
@@ -118,6 +131,7 @@ const parseArgs = (argv) => {
     else if (value === "--build") options.build = argv[++index]
     else if (value === "--render-probe") options.renderProbe = true
     else if (value === "--save-trace") options.saveTrace = true
+    else if (value === "--force-accessibility") options.forceAccessibility = true
     else if (value === "--root") options.root = resolve(argv[++index])
     else if (value === "--output") options.output = resolve(argv[++index])
     else if (value === "--port") options.port = Number(argv[++index])
@@ -215,7 +229,8 @@ const prepareSide = async (side, source, options) => {
   const dist = distFor(worktree, options.build)
   const reusable = stamp?.hash === source.hash && existsSync(worktree)
   const builtFor = stamp?.builds?.[options.build]
-  const needsBuild = !reusable || builtFor !== source.hash || !existsSync(join(dist, "index.html"))
+  const assets = join(dist, "assets")
+  const needsBuild = !reusable || builtFor !== source.hash || !existsSync(join(dist, "index.html")) || (options.build === "prod" && (!existsSync(assets) || !readdirSync(assets).some((file) => file.endsWith(".js.map"))))
   if (options.dryRun) {
     console.log(`${side}: ${source.label} @ ${source.commit.slice(0, 9)}${source.patch ? ` + ${source.patch.length} bytes of diff + ${source.untracked.length} untracked files` : ""} (source ${source.hash})`)
     console.log(`  worktree ${worktree}: ${reusable ? "reuse" : existsSync(worktree) ? "recreate" : "create"}; ${options.build} build: ${needsBuild ? "build" : "up to date"} -> ${dist}`)
@@ -243,7 +258,7 @@ const prepareSide = async (side, source, options) => {
   const web = join(worktree, "packages/web")
   const env = isolatedEnv({ NODE_OPTIONS: "--max-old-space-size=6144" })
   if (options.build === "prod") {
-    await runOrThrow(`${side}: production build`, "bun", ["run", "build"], { cwd: web, env, log: join(logs, `${side}-build-prod.log`) })
+    await runOrThrow(`${side}: production build`, "bun", ["run", "build", "--sourcemap", "hidden"], { cwd: web, env, log: join(logs, `${side}-build-prod.log`) })
   } else {
     // An older commit predates the diagnostic config; it is a build tool, not app code.
     if (!existsSync(join(web, "vite.diag.config.ts"))) copyFileSync(join(REPO_ROOT, "packages/web/vite.diag.config.ts"), join(web, "vite.diag.config.ts"))
@@ -299,6 +314,7 @@ const scenarioCommand = ({ name, scenario, seed, options, paths, side, url, outp
   if (scenario.kind === "session") extra.push("--dir", paths.project)
   if (options.renderProbe && ["session", "switch", "idle", "toggle"].includes(scenario.kind) && !scenario.uninstrumented) extra.push("--render-probe")
   if (options.saveTrace && scenario.kind === "session" && !scenario.uninstrumented) extra.push("--save-trace")
+  if (options.forceAccessibility && ["session", "switch", "toggle"].includes(scenario.kind)) extra.push("--force-accessibility")
   return [SCRIPTS[scenario.kind], ...common, ...extra, ...scenario.args(seed, options.runs), "--output", output, "--label", `${side} ${name}`]
 }
 
@@ -335,9 +351,11 @@ const main = async () => {
   mkdirSync(options.output, { recursive: true })
   const metaFile = join(options.output, "sources.json")
   const meta = { before: { ref: sources.before.label, commit: sources.before.commit, hash: sources.before.hash }, after: { ref: sources.after.label, commit: sources.after.commit, hash: sources.after.hash }, build: options.build }
+  // Only when on, so result directories from before this option still resume.
+  if (options.forceAccessibility) meta.forceAccessibility = true
   const previous = readJson(metaFile)
   if (previous && JSON.stringify({ ...previous, recordedAt: undefined }) !== JSON.stringify({ ...meta, recordedAt: undefined })) {
-    throw new Error(`${options.output} holds results for other sources or another build (${metaFile}); pass a new --output or delete it.`)
+    throw new Error(`${options.output} holds results for other sources, another build or another accessibility setting (${metaFile}); pass a new --output or delete it.`)
   }
   writeFileSync(metaFile, JSON.stringify({ ...meta, recordedAt: previous?.recordedAt ?? new Date().toISOString() }, null, 2))
 

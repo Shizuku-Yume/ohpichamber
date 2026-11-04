@@ -1,3 +1,4 @@
+import { createRipgrepResolver } from '../fs/ripgrep.js';
 import { registerFsRoutes } from '../fs/routes.js';
 import { registerEnvironmentRoutes } from '../environment/routes.js';
 import { registerQuotaRoutes } from '../quota/routes.js';
@@ -5,13 +6,14 @@ import { registerWalkthroughRoutes } from '../walkthrough/routes.js';
 import { registerSessionGoalRoutes } from '../session-goal/routes.js';
 import { registerSourceControlRoutes } from '../source-control/routes.js';
 import { registerLinearRoutes } from '../linear/routes.js';
-import { registerGuestRoutes } from '../guests/routes.js';
-import { registerBuiltInGuests } from '../guests/catalog.js';
+import { registerGuestRoutes, settleGuestDeactivationListeners } from '../guests/routes.js';
+import { listInstalledGuests, registerBuiltInGuests } from '../guests/catalog.js';
 import { extensionsPersistPath } from '../guests/persist.js';
 import { registerGitRoutes } from '../git/routes.js';
 import { registerDevServerRoutes } from '../dev-servers/routes.js';
 import { registerMagicPromptRoutes } from '../magic-prompts/routes.js';
 import { registerSessionFoldersRoutes } from '../session-folders/routes.js';
+import { registerSessionDraftRoutes } from '../session-drafts/routes.js';
 import { registerProjectContextRoutes } from '../project-context/routes.js';
 import { registerProjectDirectoryRoutes, registerProjectSetupRoutes } from '../projects/routes.js';
 import { registerAgentMemoryRoutes } from '../agent-memory/routes.js';
@@ -32,15 +34,20 @@ import { registerOpenChamberSessionRoutes } from '../openchamber-sessions/routes
 import { registerOpenChamberControlRoutes } from '../openchamber-control/routes.js';
 import { registerMarkdownImageGrantRoutes } from '../markdown-image-grants/routes.js';
 import { createSkillRepositoryIdentityResolver } from './skill-repository-identity.js';
+import fs from 'node:fs';
 import crypto from 'node:crypto';
-import { getGitHubAuthByAccountId } from '../github/auth.js';
-import { getGitHubCliCredential } from '../github/octokit.js';
-import { createSourceControlAuthStore } from '../gitlab/auth-storage.js';
-import { refreshGitLabAccessToken, resolveGitLabClientId } from '../gitlab/device-flow.js';
+import { createSourceControlAuthStore } from '../source-control/auth-storage.js';
+import { createSourceControlProviders } from '../source-control/provider-registry.js';
+import { createOutboundHandles } from '../source-control/outbound-handles.js';
+import { createExtensionProviders } from '../source-control/extension-providers.js';
+import { createTrackerRegistry } from '../trackers/registry.js';
+import { registerTrackerRoutes } from '../trackers/routes.js';
+import { SOURCE_CONTROL_OUTBOUND_PATH } from '@openchamber/sdk';
+import { setHostCallbackRoute } from '../guests/host-callback.js';
 import { createGitCredentialResolver, createHttpsCredentialReference, parseGitCredentialReference } from '../git/credential-resolver.js';
 import { createGitRepositoryCredentialRuntime } from '../git/repository-credential-runtime.js';
 import { managedSshCommand } from '../git/network-operations.js';
-import { createNetworkOperations } from '../git/network-operations.js';
+import { createNetworkOperations, createTrustedDirectoriesConfig } from '../git/network-operations.js';
 import { createManagedSshCredentialStore } from '../git/ssh-credential-storage.js';
 import { createManagedSshInventory } from '../git/credentials.js';
 import { createContributorProvenanceStore } from '../git/contributor-provenance-storage.js';
@@ -74,6 +81,7 @@ export const createFeatureRoutesRuntime = () => {
   };
 
   let walkthroughService = null;
+  let magicPromptOverridesForDirectory;
   let walkthroughBindingService = null;
   let gitRepositoryCredentialRuntime = null;
   let networkOperations = null;
@@ -88,18 +96,19 @@ export const createFeatureRoutesRuntime = () => {
         ...service,
         // Forward only the request options by name: the remaining slots are
         // dependency overrides and must not be reachable from a route.
-        getPullRequestDiff: (directory, number, readContext, { allowEmpty, sourceRepo } = {}) => pullRequest.getPullRequestDiff(
+        getPullRequestDiff: (directory, number, readContext, { allowEmpty, sourceRepo, revision } = {}) => pullRequest.getPullRequestDiff(
           directory,
           number,
           readContext,
           {
             allowEmpty,
             sourceRepo,
+            revision,
             onAccountUnavailable: walkthroughBindingService?.accountUnavailable,
-            readGitLabChangeRequestPatch: walkthroughBindingService?.readGitLabChangeRequestPatch,
+            readChangeRequestPatch: walkthroughBindingService?.readChangeRequestPatch,
           },
         ),
-        getPullRequestFileContents: (directory, number, readContext, { path, previousPath, status, sourceRepo }) => pullRequest.getPullRequestFileContents(
+        getPullRequestFileContents: (directory, number, readContext, { path, previousPath, status, sourceRepo, revision }) => pullRequest.getPullRequestFileContents(
           directory,
           number,
           readContext,
@@ -108,10 +117,16 @@ export const createFeatureRoutesRuntime = () => {
             previousPath,
             status,
             sourceRepo,
+            revision,
             onAccountUnavailable: walkthroughBindingService?.accountUnavailable,
-            readGitLabChangeRequestFile: walkthroughBindingService?.readGitLabChangeRequestFile,
+            readChangeRequestFile: walkthroughBindingService?.readChangeRequestFile,
           },
         ),
+        readWalkthroughInstructions: async (directory) => {
+          if (!magicPromptOverridesForDirectory) throw new Error('Magic prompt reader is unavailable');
+          const overrides = await magicPromptOverridesForDirectory(directory);
+          return overrides['walkthrough.instructions'] ?? '';
+        },
       };
     }
     return walkthroughService;
@@ -168,12 +183,16 @@ export const createFeatureRoutesRuntime = () => {
       routingRuntime,
       globalEventHub,
       resolveWorkspaceScope,
+      resolveWorkspaceDirectory,
+      resolveRepositoryWorkspace,
       resolveSessionScope,
       resolveHostSessionScope,
       listQueueScopes,
       resolveQuotaSelection,
       listQuotaSelections,
       resolveCredential,
+      resolvePrimaryWorktreeRoot,
+      resolveWorktreeTopLevel,
       openchamberVersion,
     } = routeDependencies;
 
@@ -218,6 +237,9 @@ export const createFeatureRoutesRuntime = () => {
 
     registerOpenChamberControlRoutes(app, { controlService: openChamberControlService });
 
+    // Agent workflows, present only in a build with OPENCHAMBER_WORKFLOWS_ENABLE.
+    routeDependencies.workflows?.register(app);
+
     registerMarkdownImageGrantRoutes(app, {
       fsPromises,
       path,
@@ -234,21 +256,56 @@ export const createFeatureRoutesRuntime = () => {
     registerQuotaRoutes(app, { getQuotaProviders, resolveQuotaSelection, listQuotaSelections, resolveCredential });
     registerSessionGoalRoutes(app);
     const gitBinary = resolveGitBinaryForSpawn();
-    const gitlabAuthStore = createSourceControlAuthStore({
+    // One server token store for every provider. OAuth tokens that expire
+    // (GitLab's live two hours) are renewed before they lapse, through the
+    // implementation of the provider that issued them.
+    const sourceControlAuthStore = createSourceControlAuthStore({
       filePath: path.join(openchamberDataDir, 'source-control-auth.json'),
-      // GitLab OAuth tokens live two hours; the store renews them before they lapse.
-      refreshOAuthToken: async ({ origin, refreshToken }) => refreshGitLabAccessToken({
-        origin, refreshToken, clientId: await resolveGitLabClientId(origin, readSettingsFromDisk),
-      }),
+      refreshOAuthToken: async ({ provider, origin, refreshToken }) => {
+        const impl = await sourceControlProviders.implementation(provider);
+        if (!(impl?.auth.refreshOAuthToken instanceof Function)) throw new Error('Source control OAuth renewal is unavailable');
+        return impl.auth.refreshOAuthToken({ instance: origin, refreshToken });
+      },
     });
-    // A GitHub account is either one OpenChamber stores or the gh CLI login
-    // the user switched to; reads already accept both, so Git transport
-    // (fork PR worktrees, clones) must too.
-    const resolveSourceControlAccount = async ({ provider, instance, accountId, credentialRevision }) => {
-      if (provider !== 'github') return gitlabAuthStore.readAccount(instance, accountId, credentialRevision);
-      return await getGitHubAuthByAccountId(accountId, credentialRevision)
-        ?? getGitHubCliCredential(accountId, credentialRevision);
-    };
+    // An extension's Git host reaches its forge only through these handles,
+    // served on the callback listener its service is told about.
+    const sourceControlOutboundHandles = createOutboundHandles();
+    setHostCallbackRoute(SOURCE_CONTROL_OUTBOUND_PATH, {
+      refusal: sourceControlOutboundHandles.refusal,
+      serve: sourceControlOutboundHandles.serve,
+    });
+    // The provider registry: descriptors now, implementations on first use.
+    const sourceControlProviders = createSourceControlProviders({
+      authStore: sourceControlAuthStore,
+      extensionServices: {
+        handles: sourceControlOutboundHandles,
+        persistPath: extensionsPersistPath(openchamberDataDir),
+        // The row as it is now: the catalog applies enterprise policy on every read.
+        currentGuest: async (guestId) => (await listInstalledGuests({ persistPath: extensionsPersistPath(openchamberDataDir) }))
+          .find((guest) => guest.id === guestId) ?? null,
+        // Only called while serving a request, after the reconciler below exists.
+        reconcile: () => extensionSourceControlProviders.reconcile(),
+      },
+      readSettings: readSettingsFromDisk,
+      configRoot: openchamberDataDir,
+      hostServices: {
+        github: {
+          // A worktree made from a fork PR has no upstream; its provenance says
+          // which remote the branch came from, so PR status can find the PR.
+          readContributorProvenance: (directory) => contributorProvenance.read(directory),
+        },
+      },
+    });
+    // Tracker ids share the provider-id namespace with source control, so an
+    // overlap fails at startup instead of shadowing a provider.
+    const trackers = createTrackerRegistry(undefined, {
+      foreignIds: sourceControlProviders.list().map((descriptor) => descriptor.id),
+    });
+    // The exact credential behind an account reference, as a neutral Git
+    // transport credential: a stored account, or a CLI login the user
+    // switched to, so Git transport accepts what reads do.
+    const resolveSourceControlAccount = ({ provider, instance, accountId, credentialRevision }) => sourceControlProviders
+      .readTransportCredential({ provider, instance, credentialId: accountId, credentialRevision });
     const resolveTransportRepository = createPrivateRepositoryIdentityResolver({
       getTransportRevision: (directory) => readEffectiveGitTransportRevision(directory, { gitBinary }),
     });
@@ -293,8 +350,15 @@ export const createFeatureRoutesRuntime = () => {
       await configureRepositoryTransport(directory, { credentialHelper, sshCommand });
     };
     // Shared short-lived answers for provider reads; registered before the
-    // GitHub, GitLab and Linear routes it fronts.
-    const providerReadCache = createProviderReadCache();
+    // source-control and tracker routes it fronts. A change made through them,
+    // or a refresh the user asked for, also reads the followed items again.
+    let trackedItemsService = null;
+    const providerReadCache = createProviderReadCache({
+      sourceControlProviderIds: sourceControlProviders.list().map((descriptor) => descriptor.id),
+      trackerIds: trackers.list(),
+      onChange: (provider) => trackedItemsService?.refreshProvider(provider),
+      onItemRefresh: (provider, item) => trackedItemsService?.refreshItem(provider, item),
+    });
     app.use(providerReadCache.middleware);
     walkthroughBindingService = registerSourceControlRoutes(app, {
       onRepositoryTransportChanged: syncRepositoryTransport,
@@ -304,6 +368,7 @@ export const createFeatureRoutesRuntime = () => {
       resolveTransportRepository,
       auditStore: sourceControlAuditStore,
       runtimeIdentity: gitRuntimeIdentity,
+      providers: sourceControlProviders,
       readTransportAccount: resolveSourceControlAccount,
       resolveCheckoutAuxiliary: async ({ directory, parentEndpoint, parentRemoteName, kind, path: checkoutPath }) => {
         if (!(networkOperations?.inspectCheckoutHydration instanceof Function)) return null;
@@ -312,20 +377,11 @@ export const createFeatureRoutesRuntime = () => {
         });
         return inspection.requirements.find((entry) => entry.kind === kind && entry.path === checkoutPath) ?? null;
       },
-      github: {
-        // A worktree made from a fork PR has no upstream; its provenance says
-        // which remote the branch came from, so PR status can find the PR.
-        readContributorProvenance: contributorProvenance.read,
-      },
-      gitlab: {
-        configRoot: openchamberDataDir,
-        store: gitlabAuthStore,
-        readSettings: readSettingsFromDisk,
-      },
     });
     registerWalkthroughRoutes(app, {
       getWalkthroughService,
-      resolveWorkspaceScope,
+      resolveWorkspaceDirectory,
+      resolveRepositoryWorkspace,
       validateReadContext: walkthroughBindingService.validateReadContext,
     });
     // Live state of the linked pull requests, merge requests and issues the
@@ -336,8 +392,8 @@ export const createFeatureRoutesRuntime = () => {
       }
       return null;
     };
-    const trackedItemsService = createTrackedItemsService({
-      readers: createTrackedItemReaders({ readGitLabLiveSummaries: walkthroughBindingService.readGitLabLiveSummaries }),
+    trackedItemsService = createTrackedItemsService({
+      readers: createTrackedItemReaders({ readLiveSummaries: walkthroughBindingService.readLiveSummaries, trackers }),
       persistence: createTrackedItemsPersistence({ dataDir: openchamberDataDir }),
       isConnectionOpen: (connectionId) => findEventClient(connectionId) !== null,
       send: (connectionId, event) => {
@@ -402,12 +458,8 @@ export const createFeatureRoutesRuntime = () => {
       fsImpl: fsPromises,
     });
     const gitCredentialResolver = createGitCredentialResolver({
-      readGitHubAccount: (accountId, credentialRevision) => resolveSourceControlAccount({
-        provider: 'github', instance: 'github.com', accountId, credentialRevision,
-      }),
-      readGitLabAccount: (instance, accountId, credentialRevision) => resolveSourceControlAccount({
-        provider: 'gitlab', instance, accountId, credentialRevision,
-      }),
+      readTransportCredential: sourceControlProviders.readTransportCredential,
+      describeProvider: sourceControlProviders.describe,
       lookupManagedSshKey: sshCredentialStore.lookup,
       fsImpl: fsPromises,
       snapshotRoot: path.join(openchamberDataDir, 'git-ssh-operation-keys'),
@@ -448,9 +500,48 @@ export const createFeatureRoutesRuntime = () => {
       gitBinary,
       validateGitIdentity,
       resolveGitIdentity,
+      trustedDirectoriesConfig: createTrustedDirectoriesConfig({ gitBinary }),
     });
     await registerBuiltInGuests({ persistPath: extensionsPersistPath(openchamberDataDir), root: routeDependencies.builtInExtensionsDir });
-    registerGuestRoutes(app, { openchamberDataDir, openchamberVersion, resolveGitBinaryForSpawn, resolveOptionalProjectDirectory, getSmallModelService, resolveWorkspaceScope, onGuestDeactivated, surfaceViewerHeaders });
+    // Extensions that act as a Git host, kept in step with the catalog; every
+    // client re-reads the provider list when the set changes.
+    const extensionSourceControlProviders = createExtensionProviders({
+      listGuests: () => listInstalledGuests({ persistPath: extensionsPersistPath(openchamberDataDir) }),
+      register: walkthroughBindingService.registerExtensionProvider,
+      unregister: walkthroughBindingService.unregisterExtensionProvider,
+      dropSection: (id) => sourceControlAuthStore.dropSection(id),
+      emitChanged: () => {
+        const clients = getOpenChamberEventClients();
+        for (const client of clients) {
+          try {
+            writeSseEvent(client, { type: 'openchamber:source-control-providers-changed', properties: {} });
+          } catch {
+            clients.delete(client);
+          }
+        }
+      },
+    });
+    registerGuestRoutes(app, {
+      openchamberDataDir,
+      openchamberVersion,
+      resolveGitBinaryForSpawn,
+      resolveOptionalProjectDirectory,
+      getSmallModelService,
+      resolveWorkspaceScope,
+      // One failing listener never skips the other: a browser role that fails
+      // to hand back still lets the Git host be withdrawn.
+      onGuestDeactivated: settleGuestDeactivationListeners([
+        { name: 'hand back an extension role', listener: onGuestDeactivated },
+        { name: 'withdraw an extension Git host', listener: (event) => extensionSourceControlProviders.deactivated(event) },
+      ]),
+      onGuestActivated: () => extensionSourceControlProviders.reconcile(),
+      surfaceViewerHeaders,
+      trackers,
+    });
+    // The providers extensions served before the restart, before any request reads the list.
+    await extensionSourceControlProviders.reconcile().catch((error) => {
+      console.warn('Failed to load extension Git hosts:', error?.message ?? error);
+    });
     gitWorktreeCreation = registerGitRoutes(app, {
       // Identities for accounts connected before identities carried one are
       // made the first time identities are listed: a moment someone asked for,
@@ -463,9 +554,13 @@ export const createFeatureRoutesRuntime = () => {
       resolveChangeRequestSource: walkthroughBindingService.resolveChangeRequestSource,
       createHttpsCredentialReference,
       getSourceControlBinding: walkthroughBindingService.get,
+      // The Change-Id amend rewrites a branch tip, so its cached status is old.
+      onBranchRewritten: walkthroughBindingService.invalidateBranchStatus,
       resolveSourceControlAccount,
       errorRedactionSecrets: [openchamberDataDir],
       worktreeBootstrapStore,
+      worktreeLeaseControl: routeDependencies.worktreeLeaseControl,
+      worktreeArchiveSessionService: routeDependencies.worktreeArchiveSessionService,
       emitWorktreeChanged: ({ directories, at }) => {
         const clients = getOpenChamberEventClients();
         for (const client of clients) {
@@ -481,12 +576,18 @@ export const createFeatureRoutesRuntime = () => {
       },
     });
     registerLinearRoutes(app);
+    registerTrackerRoutes(app, { registry: trackers });
     registerDevServerRoutes(app, { scanner: devServerScanner, getOwnPorts });
-    registerMagicPromptRoutes(app, {
+    ({ overridesForDirectory: magicPromptOverridesForDirectory } = registerMagicPromptRoutes(app, {
       fsPromises,
       path,
       openchamberDataDir,
-    });
+      projectConfigRuntime,
+      readSettingsFromDisk,
+      sanitizeProjects,
+      resolvePrimaryWorktreeRoot,
+      resolveWorktreeTopLevel,
+    }));
     registerProjectContextRoutes(app, { projectContextRuntime });
     registerProjectDirectoryRoutes(app, {
       fsPromises,
@@ -505,6 +606,7 @@ export const createFeatureRoutesRuntime = () => {
       sessionFoldersStore: routeDependencies.sessionFoldersStore,
       openchamberDataDir,
     });
+    registerSessionDraftRoutes(app, { fsPromises, path, openchamberDataDir });
     registerFsRoutes(app, {
       os,
       path,
@@ -515,6 +617,7 @@ export const createFeatureRoutesRuntime = () => {
       resolveProjectDirectory,
       buildAugmentedPath,
       resolveGitBinaryForSpawn,
+      resolveRipgrepBinary: createRipgrepResolver({ fs, path, buildSearchPath: buildAugmentedPath }).resolveRipgrepBinary,
       openchamberUserConfigRoot,
       cloneRepository: networkOperations.cloneRepository,
       managedChatsRoot,

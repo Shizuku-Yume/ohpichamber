@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import type { FileResourceSkillEntry, SkillFileCatalogState, SkillFilesState, SkillInstallResult } from '@openchamber/agent-contract';
 import { canonicalClient } from '@/api/canonicalClient';
-import { invalidateSkillsLoadCache, selectSkillsForDirectory, useSkillsStore } from './useSkillsStore';
+import { invalidateSkillsLoadCache, selectAvailableSkillsForDirectory, useSkillsStore } from './useSkillsStore';
 import { useProjectsStore } from './useProjectsStore';
 
 const directory = '/native-skills';
@@ -65,7 +65,7 @@ describe('native authored skills', () => {
     catalog.mockResolvedValueOnce({ workspaceId: 'workspace', skills: [other] });
     expect(await store.loadSkills('/other-settings-project')).toBe(true);
     expect(useSkillsStore.getState().skills).toEqual([entry]);
-    expect(selectSkillsForDirectory(useSkillsStore.getState(), '/other-settings-project')).toEqual([other]);
+    expect(selectAvailableSkillsForDirectory(useSkillsStore.getState(), '/other-settings-project')).toEqual([other]);
   });
   test('successful empty discovery clears only the addressed directory and remains cached', async () => {
     const store = useSkillsStore.getState();
@@ -101,7 +101,7 @@ describe('native authored skills', () => {
     catalog.mockRejectedValueOnce(new Error('offline'));
     invalidateSkillsLoadCache(directory);
     expect(await store.loadSkills(directory)).toBe(false);
-    expect(selectSkillsForDirectory(useSkillsStore.getState(), directory)).toEqual([entry]);
+    expect(selectAvailableSkillsForDirectory(useSkillsStore.getState(), directory)).toEqual([entry]);
   });
   test('external native roots remain viewable but never enter authoring mutations', async () => {
     const external = { ...entry, authoredSkillId: undefined, readOnly: true, scope: 'inherited' as const };
@@ -125,6 +125,6 @@ describe('native authored skills', () => {
     store.resetForRuntimeSwitch();
     pending.resolve({ workspaceId: 'workspace', skills: [entry] });
     expect(await loading).toBe(false);
-    expect(selectSkillsForDirectory(useSkillsStore.getState(), directory)).toEqual([]);
+    expect(selectAvailableSkillsForDirectory(useSkillsStore.getState(), directory)).toEqual([]);
   });
 });

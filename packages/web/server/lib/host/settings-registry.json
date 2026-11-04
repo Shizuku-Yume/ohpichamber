@@ -1,6 +1,57 @@
 {
   "version": 1,
   "fields": {
+    "layoutAnimations": {
+      "scope": "profile",
+      "surfaces": [
+        "web",
+        "desktop"
+      ]
+    },
+    "openLinksInBrowserPanel": {
+      "scope": "profile",
+      "surfaces": [
+        "desktop"
+      ]
+    },
+    "liveBrowserTabLimit": {
+      "scope": "profile",
+      "surfaces": [
+        "desktop"
+      ]
+    },
+    "openTrackerLinksOnBoard": {
+      "scope": "profile",
+      "surfaces": [
+        "web",
+        "desktop",
+        "mobile"
+      ]
+    },
+    "worktreeArchiveOnDoneEnabled": {
+      "scope": "instance"
+    },
+    "showOpenCodeUpdateNotifications": {
+      "scope": "profile"
+    },
+    "agentScheduleToolEnabled": {
+      "scope": "instance"
+    },
+    "agentKnowledgeToolEnabled": {
+      "scope": "instance"
+    },
+    "agentRenderToolEnabled": {
+      "scope": "instance"
+    },
+    "agentWorkflowToolEnabled": {
+      "scope": "instance"
+    },
+    "mobileReturnKeySends": {
+      "scope": "profile"
+    },
+    "savePastedImagesAsFiles": {
+      "scope": "profile"
+    },
     "themeId": {
       "scope": "profile",
       "perSurface": true
@@ -175,7 +226,15 @@
       "scope": "instance",
       "computed": true
     },
+    "agentWorkflowFeatureAvailable": {
+      "scope": "instance",
+      "computed": true
+    },
     "routingFeatureAvailable": {
+      "scope": "instance",
+      "computed": true
+    },
+    "overviewFeatureAvailable": {
       "scope": "instance",
       "computed": true
     },
@@ -227,6 +286,9 @@
     "tunnelMode": {
       "scope": "instance"
     },
+    "tunnelHttpsPort": {
+      "scope": "instance"
+    },
     "tunnelBootstrapTtlMs": {
       "scope": "instance"
     },
@@ -260,21 +322,34 @@
     "sidebarProjectDisplayMode": {
       "scope": "profile"
     },
-    "sidebarViewMode": {
+    "sidebarListSessionGrouping": {
+      "scope": "profile",
+      "perSurface": true
+    },
+    "sidebarGrouping": {
+      "scope": "profile",
+      "perSurface": true
+    },
+    "sidebarKeepWorkInPlace": {
       "scope": "profile",
       "perSurface": true
     },
     "sidebarProjectSortOrder": {
       "scope": "profile"
     },
-    "sidebarWorktreeSortOrder": {
-      "scope": "profile"
-    },
-    "sidebarShowRecentSection": {
+    "sidebarShowChatsSection": {
       "scope": "profile",
       "perSurface": true
     },
-    "sidebarShowChatsSection": {
+    "sidebarShowWorkSection": {
+      "scope": "profile",
+      "perSurface": true
+    },
+    "sidebarShowPinnedSection": {
+      "scope": "profile",
+      "perSurface": true
+    },
+    "sidebarDetailedZoneRows": {
       "scope": "profile",
       "perSurface": true
     },
@@ -507,6 +582,9 @@
     "smallModelOverride": {
       "scope": "profile"
     },
+    "smallModelVariant": {
+      "scope": "profile"
+    },
     "walkthroughModelOverride": {
       "scope": "profile"
     },
@@ -723,6 +801,18 @@
       "scope": "device",
       "local": true
     },
+    "mobileWorkspaceTabOrder": {
+      "scope": "device",
+      "local": true
+    },
+    "mobileWorkspaceHiddenTabs": {
+      "scope": "device",
+      "local": true
+    },
+    "mobileWorkStatusHiddenSections": {
+      "scope": "device",
+      "local": true
+    },
     "contextEditorTreeVisible": {
       "scope": "device",
       "local": true
@@ -816,6 +906,22 @@
       "local": true
     },
     "projectContextSidebarWidth": {
+      "scope": "device",
+      "local": true
+    },
+    "sidebarFoldedForExpandedZone": {
+      "scope": "device",
+      "local": true
+    },
+    "contextSurfaceZones": {
+      "scope": "device",
+      "local": true
+    },
+    "fileTreeSide": {
+      "scope": "device",
+      "local": true
+    },
+    "contextZoneSizes": {
       "scope": "device",
       "local": true
     },

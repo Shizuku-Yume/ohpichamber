@@ -30,6 +30,7 @@ export const nextPermissionMode = (mode: PermissionMode, safetyAvailable: boolea
   return "ask";
 };
 
+
 export type PermissionPolicySnapshot = {
   modes: PermissionModeMap;
   revision?: number;

@@ -119,7 +119,7 @@ export class NativeCredentials {
     if (credential.type === 'api_key') {
       if (credential.key.startsWith('!')) throw new ProjectionError(422, 'CREDENTIAL_UNAVAILABLE', 'Command-backed credentials require native provider authentication');
       let key: string | undefined;
-      try { key = await resolveConfigValue(credential.key); } catch {}
+      try { key = await resolveConfigValue(credential.key); } catch { /* reported as unavailable below */ }
       if (!key) throw new ProjectionError(404, 'CREDENTIAL_UNAVAILABLE', 'Selected provider credential is unavailable');
       return PrivateCredentialResolveResultSchema.parse({ ...request, credential: { type: 'api_key', key } });
     }

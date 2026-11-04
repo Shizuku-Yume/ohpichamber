@@ -141,7 +141,10 @@ process.on('message', raw => {
   }
   void initialization.catch(error => {
     const code = error instanceof ProjectionError ? error.code : command.type === 'bootstrap' && command.sessionFile ? 'SESSION_RESTORE_FAILED' : 'SERVICE_UNAVAILABLE';
-    if (!stopping) send({ type: 'error', workerGeneration: command.workerGeneration, code });
+    // The codes are coarse (a projection rejection and a failed bootstrap share
+    // SERVICE_UNAVAILABLE); the reason is what an operator can act on.
+    const detail = error instanceof Error && error.message ? error.message.slice(0, 200) : undefined;
+    if (!stopping) send({ type: 'error', workerGeneration: command.workerGeneration, code, ...(detail ? { detail } : {}) });
     void stop(1);
   });
 });

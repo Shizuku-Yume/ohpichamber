@@ -132,21 +132,26 @@ const archiveSpaceId = (workspaceId) => /^archive_([a-f0-9]{12})$/.exec(workspac
     }
     return { scopes: [...new Map(scopes.map((scope) => [scope.workspaceId, scope])).values()], errors };
   };
-  const authorize = async (scope) => {
+  const authorize = async (scope, claimId) => {
+    await store.checkWorktreeScope(scope.cwd, claimId);
     const [projects, selectedAgentDirectory] = await Promise.all([readProjects(), selectedDirectory()]);
     if (scope.agentDirectory !== selectedAgentDirectory) return null;
     if (managedChatsScope && scope.hostProjectId === managedChatsScope.id) {
       const projectDirectory = await managedRoot();
       if (scope.projectDirectory !== projectDirectory || !contains(projectDirectory, scope.cwd)) return null;
       const cwd = await validateDirectory(scope.cwd);
-      return cwd === scope.cwd ? { ...scope, displayPath: displayPath(scope) } : null;
+      if (cwd !== scope.cwd) return null;
+      await store.checkWorktreeScope(scope.cwd, claimId);
+      return { ...scope, displayPath: displayPath(scope) };
     }
     const spaceId = archiveSpaceId(scope.workspaceId);
     if (spaceId) {
       const catalogEntry = getArchiveCatalog().find((entry) => entry.spaceId === spaceId && entry.directory === scope.cwd);
       if (!catalogEntry || scope.projectId !== `archive_${spaceId}` || scope.projectDirectory !== scope.cwd) return null;
       const directory = await fsPromises.realpath(scope.cwd);
-      return directory === scope.cwd && scope.agentDirectory === selectedAgentDirectory ? { ...scope, displayPath: '.' } : null;
+      if (directory !== scope.cwd || scope.agentDirectory !== selectedAgentDirectory) return null;
+      await store.checkWorktreeScope(scope.cwd, claimId);
+      return { ...scope, displayPath: '.' };
     }
     const project = projects.find((item) => item.id === scope.hostProjectId);
     if (!project) return null;
@@ -167,6 +172,7 @@ const archiveSpaceId = (workspaceId) => /^archive_([a-f0-9]{12})$/.exec(workspac
       if (!registered && readError) throw new MetadataReadError('Registered Host worktrees could not be read', readError);
       if (!registered) return null;
     }
+    await store.checkWorktreeScope(scope.cwd, claimId);
     return { ...scope, displayPath: displayPath(scope) };
   };
   const resolveWorkspaceDirectory = async (directory) => {
@@ -211,9 +217,31 @@ const archiveSpaceId = (workspaceId) => /^archive_([a-f0-9]{12})$/.exec(workspac
     if (discoveryFailed) throw new MetadataReadError('Configured Host workspace discovery is unavailable');
     return null;
   };
-  const resolveWorkspaceScope = async (workspaceId) => {
+  // Select an already authorized workspace for a validated repository below it;
+  // the repository itself is not admitted as a workspace.
+  const resolveRepositoryWorkspace = async (directory) => {
+    const exact = await resolveWorkspaceDirectory(directory);
+    if (exact) return exact;
+    const parsed = WorkspaceDirectorySchema.safeParse(directory);
+    if (!parsed.success) return null;
+    const requested = await validateDirectoryPath(parsed.data);
+    if (!requested.ok) return null;
+    const canonical = await validateDirectory(requested.directory);
+    let owner = null;
+    for (const project of await readProjects()) {
+      const projectDirectory = await validateDirectory(project.path);
+      if (contains(projectDirectory, canonical) && (!owner || projectDirectory.length > owner.length)) owner = projectDirectory;
+      for (const worktree of await getWorktrees(projectDirectory)) {
+        if (worktree.prunable) continue;
+        const worktreeDirectory = await validateDirectory(worktree.path);
+        if (contains(worktreeDirectory, canonical) && (!owner || worktreeDirectory.length > owner.length)) owner = worktreeDirectory;
+      }
+    }
+    return owner ? resolveWorkspaceDirectory(owner) : null;
+  };
+  const resolveWorkspaceScope = async (workspaceId, claimId) => {
     const scope = await store.getWorkspace(workspaceId);
-    return scope === null ? null : authorize(scope);
+    return scope === null ? null : authorize(scope, claimId);
   };
   const resolveSessionScope = async (sessionId) => {
     const scope = await store.getSession(sessionId);
@@ -264,5 +292,5 @@ const archiveSpaceId = (workspaceId) => /^archive_([a-f0-9]{12})$/.exec(workspac
     const { scopes, errors } = await discover();
     return { items: scopes.filter((scope) => projectId === undefined || scope.projectId === projectId).map(publicWorkspace), errors };
   };
-  return { initialize, createChatWorkspace, archiveScope, registerArchiveSession, resolveWorkspaceScope, resolveWorkspaceDirectory, resolveSessionScope, resolveRelocationSourceScope, registerSessionScope, listProjects, listWorkspaces };
+  return { initialize, createChatWorkspace, archiveScope, registerArchiveSession, resolveWorkspaceScope, resolveWorkspaceDirectory, resolveRepositoryWorkspace, resolveSessionScope, resolveRelocationSourceScope, registerSessionScope, listProjects, listWorkspaces };
 };

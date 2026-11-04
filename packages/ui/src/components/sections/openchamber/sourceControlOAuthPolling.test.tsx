@@ -338,7 +338,6 @@ mock.module('@/components/sections/shared/SettingsSection', () => ({
   SETTINGS_FIELDS_STACK_CLASS: '',
   SETTINGS_HELPER_CLASS: '',
   SETTINGS_SELECT_ROW_TRIGGER_CLASS: '',
-  SETTINGS_SELECT_SIZE: 'sm',
   SettingsControlGroup: ({ children }: ElementProps) => children ?? null,
   SettingsFieldRow: ({ children, description }: ElementProps) => [description ?? null, children ?? null],
   SettingsStackedField: ({ children }: ElementProps) => children ?? null,
@@ -366,7 +365,11 @@ mock.module('@/lib/worktrees/worktreeBootstrap', () => ({ waitForWorktreeGitRead
 mock.module('@/lib/utils', () => ({
   cn: (...values: Array<string | false | null | undefined>) => values.filter(Boolean).join(' '),
 }));
+// Test seam: `mock.module` must see the real exports before anything imports
+// the module, so this one cannot be a static import.
+const actualRuntimeSwitch = await import('@/lib/runtime-switch');
 mock.module('@/lib/runtime-switch', () => ({
+  ...actualRuntimeSwitch,
   getRuntimeKey: () => runtimeKey,
   subscribeRuntimeEndpointWillChange: (listener: () => void) => {
     runtimeWillChange = listener;
@@ -848,7 +851,7 @@ describe('source-control account presentation', () => {
     };
     const tree = await renderSettled(GitLabSettingsHarness);
     expect(collectText(tree)).toContain('octocat');
-    expect(collectText(tree)).toContain('settings.github.page.accountSource.oauth');
+    expect(collectText(tree)).toContain('settings.sourceControl.accountSource.oauth');
     expect(collectText(tree)).toContain('settings.gitlab.cli.label');
     expect(collectText(tree)).toContain('settings.gitlab.status.operationFailed');
 

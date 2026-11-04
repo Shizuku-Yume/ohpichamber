@@ -16,7 +16,7 @@ const queueScope = (scope) => ({
 const scopeKey = (scope) => JSON.stringify([scope.projectId, scope.workspaceId, scope.sessionId]);
 
 /** One Host queue dispatcher; service acknowledgements never mean a run is terminal. */
-export function createCanonicalQueueRuntime({ store, service, resolveAttachments, publishQueue, reportFailure, capturePrompt = async (_scope, request) => request, beforeDispatch = async () => {}, onPromptAccepted = async () => {}, onScheduledTaskResult = async () => {}, now = Date.now }) {
+export function createCanonicalQueueRuntime({ store, service, resolveAttachments, publishQueue, reportFailure, capturePrompt = async (_scope, request) => request, beforeDispatch = async () => {}, onPromptAccepted = async () => {}, onScheduledTaskResult = async () => {}, ensureSessionObserved = async () => {}, now = Date.now }) {
   if (!store || !service || typeof service.request !== 'function') throw new TypeError('canonical queue requires store and Agent service');
   if (typeof resolveAttachments !== 'function' || typeof publishQueue !== 'function' || typeof reportFailure !== 'function') throw new TypeError('canonical queue requires attachments and publication callbacks');
   if (typeof capturePrompt !== 'function' || typeof beforeDispatch !== 'function' || typeof onPromptAccepted !== 'function' || typeof onScheduledTaskResult !== 'function') throw new TypeError('canonical queue requires delivery hooks');
@@ -138,7 +138,11 @@ export function createCanonicalQueueRuntime({ store, service, resolveAttachments
       const before = await store.getState(queueScope(scope));
       const recovered = await store.recoverUnsentClaims(queueScope(scope));
       if (recovered.revision !== before.revision) changed(scope, recovered);
-      if (runtime.activeRunId !== null || runtime.runtimeStatus !== 'idle' || recovered.items.length === 0) return;
+      if (runtime.activeRunId !== null || runtime.runtimeStatus !== 'idle') {
+        if (recovered.items.length > 0) schedule(scope, RETRY_MS);
+        return;
+      }
+      if (recovered.items.length === 0) return;
       if (recovered.items[0].status === 'leased') { schedule(scope, Math.max(RETRY_MS, recovered.items[0].lease.expiresAt - now())); return; }
       const claimed = await store.claimHead(queueScope(scope), recovered.revision, { epoch: runtime.epoch, expiresAt: now() + LEASE_MS });
       if (!claimed.capture) return;
@@ -204,6 +208,7 @@ export function createCanonicalQueueRuntime({ store, service, resolveAttachments
   return {
     getState: (scope) => store.getState(queueScope(scope)),
     append: async (scope, commandId, request) => {
+      void ensureSessionObserved(scope).catch(() => {});
       const captured = await capturePrompt(scope, request.request);
       const queue = await store.append(queueScope(scope), commandId, { ...request, request: captured });
       changed(scope, queue); schedule(scope); return queue;
@@ -256,7 +261,10 @@ export function createCanonicalQueueRuntime({ store, service, resolveAttachments
     start: async () => {
       const listed = await store.list();
       for (const error of listed.errors) reportFailure(error);
-      for (const entry of listed.items) schedule(entry.scope);
+      for (const entry of listed.items) {
+        void ensureSessionObserved(entry.scope).catch(() => {});
+        schedule(entry.scope);
+      }
       return listed;
     },
     stop: async () => {

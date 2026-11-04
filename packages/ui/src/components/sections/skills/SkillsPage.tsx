@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { CodeMirrorEditor } from '@/components/ui/CodeMirrorEditor';
 import { toast } from '@/components/ui';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
-import { selectSkillsForDirectory, useSkillsStore, type PendingFile } from '@/stores/useSkillsStore';
+import { selectAvailableSkillsForDirectory, useSkillsStore, type PendingFile } from '@/stores/useSkillsStore';
 import { useShallow } from 'zustand/react/shallow';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
@@ -19,7 +19,6 @@ import {
   SettingsSection,
   SettingsFieldRow,
   SETTINGS_FIELD_LABEL_CLASS,
-  SETTINGS_SELECT_SIZE,
 } from '@/components/sections/shared/SettingsSection';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
 import {
@@ -43,8 +42,8 @@ import { SkillsCatalogPage } from './catalog/SkillsCatalogPage';
 import { useI18n } from '@/lib/i18n';
 import { languageByExtension } from '@/lib/codemirror/languageByExtension';
 import { createFlexokiCodeMirrorTheme } from '@/lib/codemirror/flexokiTheme';
-import { shikiHighlightExtension } from '@/lib/codemirror/shikiHighlight';
-import { getResolvedShikiTheme } from '@/lib/shiki/appThemeRegistry';
+import { codeHighlightExtension } from '@/lib/codemirror/codeHighlight';
+import { getCodeTokenTheme } from '@/lib/shiki/appThemeRegistry';
 import { getLanguageFromExtension } from '@/lib/toolHelpers';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useUIStore } from '@/stores/useUIStore';
@@ -81,7 +80,7 @@ const SkillsInstalledPage: React.FC = () => {
     updateSkill: state.updateSkill,
     createSkill: state.createSkill,
   })));
-  const skills = useSkillsStore(state => selectSkillsForDirectory(state, directory));
+  const skills = useSkillsStore(state => selectAvailableSkillsForDirectory(state, directory));
   const selectedAuthoredSkill = useSkillsStore(state => state.selectedAuthoredSkill);
   const authoredFiles = useSkillsStore(state => state.filesByDirectory[directory ?? '__default__']);
   const applyFailed = useSkillsStore(state => state.lastMutationDirectory === directory && (state.lastMutationResult?.apply?.status === 'partial' || state.lastMutationResult?.apply?.status === 'failed'));
@@ -178,10 +177,10 @@ const SkillsInstalledPage: React.FC = () => {
     return [
       createFlexokiCodeMirrorTheme(currentTheme, useShiki ? { syntaxColors: false, fontSize } : { fontSize }),
       ...(language ? [language] : []),
-      ...(useShiki && shikiLanguage ? [shikiHighlightExtension({
+      ...(useShiki && shikiLanguage ? [codeHighlightExtension({
         language: shikiLanguage,
         themeName: currentTheme.metadata.id,
-        theme: getResolvedShikiTheme(currentTheme),
+        theme: getCodeTokenTheme(currentTheme),
       })] : []),
       EditorView.lineWrapping,
     ];
@@ -407,7 +406,7 @@ const SkillsInstalledPage: React.FC = () => {
                   if (value === 'workspace' || value === 'agent') setScope(value);
                 }}
               >
-                <SelectTrigger size={SETTINGS_SELECT_SIZE} className="w-fit gap-1.5">
+                <SelectTrigger className="w-fit gap-1.5">
                   {scope === 'agent'
                     ? <Icon name="user-3" className="h-3.5 w-3.5" />
                     : <Icon name="folder" className="h-3.5 w-3.5" />}
@@ -463,7 +462,7 @@ const SkillsInstalledPage: React.FC = () => {
                   <SimpleMarkdownRenderer
                     content={content}
                     className="typography-markdown-body"
-                    stripFrontmatter
+                    frontmatter="hide"
                     enableFileReferences={false}
                   />
                 </div>

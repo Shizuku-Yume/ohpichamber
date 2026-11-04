@@ -24,8 +24,9 @@ import {
   getSessionLastAssistantModel, getSessionLiveActivity, patchSessionMetadata,
   moveSessionToDirectory, reconcileExternallyDeletedSession, refetchSessionMessages, replyToForm, revertToMessage,
   respondToPermission, sendMessage, setActionRefs, setSessionWorkState, optimisticSend, setOptimisticRefs,
-  unarchiveSession, unarchiveSessions, updateSessionTitle,
+  unarchiveSession, unarchiveSessions, updateSessionTitle, setLinkedIssue, addLinkedIssues,
 } from "./session-actions"
+import type { LinkedIssue } from "@/lib/linkedIssues"
 
 const originalRuntime = getRuntimeKey()
 const originalBase = getRuntimeApiBaseUrl()
@@ -864,6 +865,20 @@ describe("native metadata publication", () => {
     expect(write).not.toHaveBeenCalled()
   })
 
+  test("metadata patch does not write after an A-B-A switch during its Host read", async () => {
+    const store = seed()
+    const pending = deferred<{ sessionId: string; revision: string; metadata: null }>()
+    spyOn(canonicalClient, "getSessionMetadata").mockImplementation(() => pending.promise)
+    const write = spyOn(canonicalClient, "patchSessionMetadata")
+    const operation = patchSessionMetadata("session-a", directory, metadata => ({ ...metadata, title: "stale" }))
+    changeRuntime()
+    switchRuntimeEndpoint({ apiBaseUrl: "https://actions.test", runtimeKey: "actions" })
+    pending.resolve({ sessionId: "session-a", revision: "1", metadata: null })
+    await expect(operation).rejects.toThrow("runtime changed")
+    expect(write).not.toHaveBeenCalled()
+    expect(store.getState().session[0].metadata?.title).toBe("Before")
+  })
+
   test("an obsolete title response cannot overwrite live metadata", async () => {
     const store = seed()
     spyOn(canonicalClient, "patchSessionMetadata").mockImplementation(async sessionId => { changeRuntime(); return { sessionId, revision: "2", metadata: { title: "Old runtime" } } })
@@ -1097,5 +1112,87 @@ describe("review-flow optimistic send", () => {
       snapshot: { ...state.snapshot, "session-a": snapshot },
     }))
     expect(store.getState().message["session-a"]).toEqual([existing, canonical])
+  })
+})
+
+describe("linking items through the server", () => {
+  const issue: LinkedIssue = {
+    id: "owner/repo#12",
+    number: 12,
+    title: "Rail badge count",
+    url: "https://github.com/owner/repo/issues/12",
+    kind: "issue",
+    author: "someone",
+    linkedAt: 1,
+  }
+  const guestEntry: LinkedIssue = {
+    id: "guest:linear:ENG-1",
+    providerId: "linear",
+    identifier: "ENG-1",
+    title: "Spec",
+    url: "https://linear.app/openchamber/issue/ENG-1",
+    kind: "guest",
+    thread: "issue",
+    linkedAt: 2,
+  }
+
+  test("sends the operation to the links route and mirrors the answer into the stores", async () => {
+    const store = seed()
+    // The metadata is what the server answered, not a list the client computed
+    // from its own read.
+    const metadata = { openchamber: { linked_issues: [issue, guestEntry] } }
+    const fetch = spyOn(globalThis, "fetch").mockResolvedValue(Response.json({ metadata }))
+
+    const updated = await setLinkedIssue("session-a", directory, guestEntry, true)
+
+    const calls = fetch.mock.calls.filter(([input]) => String(input).includes("/sessions/session-a/links"))
+    expect(calls).toHaveLength(1)
+    expect(JSON.parse(String(calls[0][1]?.body))).toEqual({ entries: [guestEntry], linked: true })
+    expect(updated.metadata).toEqual(metadata)
+    expect(useGlobalSessionsStore.getState().entityById.get("session-a")?.metadata).toEqual(metadata)
+    expect(store.getState().session[0]?.metadata).toEqual(metadata)
+  })
+
+  test("adds every item of a batch in one request", async () => {
+    seed()
+    const metadata = { openchamber: { linked_issues: [issue, guestEntry] } }
+    const fetch = spyOn(globalThis, "fetch").mockResolvedValue(Response.json({ metadata }))
+
+    await addLinkedIssues("session-a", directory, [issue, guestEntry])
+
+    const calls = fetch.mock.calls.filter(([input]) => String(input).includes("/sessions/session-a/links"))
+    expect(calls).toHaveLength(1)
+    expect(JSON.parse(String(calls[0][1]?.body))).toEqual({ entries: [issue, guestEntry], linked: true })
+  })
+
+  test("serializes Linear in its documented stored form alongside neutral tracker links", async () => {
+    seed()
+    const linear: LinkedIssue = { id: "linear:ENG-3", kind: "tracker", provider: "linear", identifier: "ENG-3", title: "Spec", url: "https://linear.app/x/issue/ENG-3", linkedAt: 3 }
+    const tracker: LinkedIssue = { id: "jira:OPS-4", kind: "tracker", provider: "jira", identifier: "OPS-4", title: "Outage", url: "https://jira.example/browse/OPS-4", linkedAt: 4 }
+    const storedLinear = { ...linear, kind: "linear" }
+    const metadata = { openchamber: { linked_issues: [issue, storedLinear, tracker] } }
+    const fetch = spyOn(globalThis, "fetch").mockResolvedValue(Response.json({ metadata }))
+
+    const updated = await addLinkedIssues("session-a", directory, [issue, linear, tracker])
+
+    const calls = fetch.mock.calls.filter(([input]) => String(input).includes("/sessions/session-a/links"))
+    expect(JSON.parse(String(calls[0][1]?.body))).toEqual({ entries: [issue, storedLinear, tracker], linked: true })
+    expect(updated.metadata).toEqual(metadata)
+  })
+
+  test("rejects when the server cannot serve the route, like the callers' catch expects", async () => {
+    seed()
+    spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 503 }))
+
+    await expect(setLinkedIssue("session-a", directory, issue, true))
+      .rejects.toThrow("session link update failed")
+  })
+
+  test("treats a malformed answer as unavailable instead of as a success", async () => {
+    seed()
+    spyOn(globalThis, "fetch").mockResolvedValue(Response.json({ nope: true }))
+
+    await expect(setLinkedIssue("session-a", directory, issue, true))
+      .rejects.toThrow("session link update failed")
   })
 })

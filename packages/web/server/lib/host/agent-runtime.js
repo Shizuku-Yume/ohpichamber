@@ -74,8 +74,8 @@ export function createHostAgentRuntime({
       || registration.agentDirectoryId !== scope.agentDirectoryId) throw unavailable();
     return { ...scope, env };
   };
-  const resolveWorkspaceScope = async (workspaceId) => {
-    const scope = await scopeRuntime.resolveWorkspaceScope(workspaceId);
+  const resolveWorkspaceScope = async (workspaceId, claimId) => {
+    const scope = await scopeRuntime.resolveWorkspaceScope(workspaceId, claimId);
     return scope === null ? null : admitWorkspace(scope);
   };
   const resolveHostSessionScope = async (sessionId) => {
@@ -112,6 +112,7 @@ export function createHostAgentRuntime({
     stop: () => service.stop(),
     close,
     service, skillFileOwner, resolveWorkspaceScope, resolveWorkspaceDirectory: scopeRuntime.resolveWorkspaceDirectory, resolveSessionScope, resolveHostSessionScope,
+    resolveRepositoryWorkspace: scopeRuntime.resolveRepositoryWorkspace,
     resolveHostRelocationScope: scopeRuntime.resolveRelocationSourceScope,
   };
 }

@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { createRequire } from 'node:module';
 
 import { isAgentMemoryFeatureAvailable } from '../agent-memory/feature-flag.js';
+import { isOverviewFeatureAvailable } from '../overview/feature-flag.js';
+import { isWorkflowFeatureAvailable } from '../workflows/feature-flag.js';
 import { isPermissionMode } from '../permission-auto-accept/modes.js';
 import { idleStopSchema } from '../spaces/idle-stop.js';
 
@@ -47,6 +49,15 @@ const CUSTOM_PROVIDER_ICONS_MAX = 256;
 // `provider/model` last picked in a chat composer.
 const lastSelectedModelSchema = z.string().trim().min(1).max(512);
 
+// Boolean settings the registry lists; each is accepted as a plain boolean.
+const REGISTRY_BOOLEAN_SETTINGS = Object.freeze([
+  'layoutAnimations', 'openLinksInBrowserPanel', 'openTrackerLinksOnBoard', 'worktreeArchiveOnDoneEnabled',
+  'showOpenCodeUpdateNotifications', 'agentScheduleToolEnabled', 'agentKnowledgeToolEnabled',
+  'agentRenderToolEnabled', 'agentWorkflowToolEnabled', 'mobileReturnKeySends', 'savePastedImagesAsFiles',
+]);
+const LIVE_BROWSER_TABS_MIN = 1;
+const LIVE_BROWSER_TABS_MAX = 20;
+
 /** Provider id -> icon id; unknown icons and malformed entries are dropped one by one. */
 const sanitizeCustomProviderIcons = (value) => {
   const record = z.record(z.string(), z.unknown()).safeParse(value);
@@ -86,12 +97,11 @@ export const createSettingsHelpers = (dependencies) => {
   const MOBILE_KEYBOARD_MODE_VALUES = new Set(['native', 'resize-content']);
   const TERMINAL_SHELL_VALUES = new Set(['auto', 'bash', 'zsh', 'sh', 'fish', 'pwsh', 'powershell', 'cmd', 'dash', 'ksh', 'nu']);
   const SIDEBAR_PROJECT_DISPLAY_MODE_VALUES = new Set(['all', 'single']);
-  const SIDEBAR_VIEW_MODE_VALUES = new Set(['projects', 'timeline']);
+  const SIDEBAR_LIST_SESSION_GROUPING_VALUES = new Set(['project', 'time']);
   // The interface languages (`LOCALES` in packages/ui/src/lib/i18n/runtime.ts);
   // settings-helpers.test.js fails when the two lists drift apart.
-  const UI_LOCALE_VALUES = new Set(['en', 'de', 'fr', 'nl', 'zh-CN', 'zh-TW', 'uk', 'es', 'pt-BR', 'ko', 'pl', 'ja', 'tr']);
+  const UI_LOCALE_VALUES = new Set(['en', 'de', 'fr', 'nl', 'zh-CN', 'zh-TW', 'uk', 'es', 'pt-BR', 'ko', 'pl', 'ja', 'tr', 'ar', 'he']);
   const SIDEBAR_PROJECT_SORT_ORDER_VALUES = new Set(['manual', 'a-z', 'z-a', 'date-added', 'recent']);
-  const SIDEBAR_WORKTREE_SORT_ORDER_VALUES = new Set(['recent', 'manual', 'a-z']);
   const HIDDEN_MODELS_MAX = 1024;
   const RECENT_EFFORTS_MAX_KEYS = 128;
   const RECENT_EFFORTS_MAX_VARIANTS_PER_KEY = 5;
@@ -338,20 +348,29 @@ export const createSettingsHelpers = (dependencies) => {
     if (SIDEBAR_PROJECT_DISPLAY_MODE_VALUES.has(candidate.sidebarProjectDisplayMode)) {
       result.sidebarProjectDisplayMode = candidate.sidebarProjectDisplayMode;
     }
-    if (SIDEBAR_VIEW_MODE_VALUES.has(candidate.sidebarViewMode)) {
-      result.sidebarViewMode = candidate.sidebarViewMode;
+    if (SIDEBAR_LIST_SESSION_GROUPING_VALUES.has(candidate.sidebarListSessionGrouping)) {
+      result.sidebarListSessionGrouping = candidate.sidebarListSessionGrouping;
+    }
+    if (SIDEBAR_LIST_SESSION_GROUPING_VALUES.has(candidate.sidebarGrouping)) {
+      result.sidebarGrouping = candidate.sidebarGrouping;
+    }
+    if (typeof candidate.sidebarKeepWorkInPlace === 'boolean') {
+      result.sidebarKeepWorkInPlace = candidate.sidebarKeepWorkInPlace;
     }
     if (SIDEBAR_PROJECT_SORT_ORDER_VALUES.has(candidate.sidebarProjectSortOrder)) {
       result.sidebarProjectSortOrder = candidate.sidebarProjectSortOrder;
     }
-    if (SIDEBAR_WORKTREE_SORT_ORDER_VALUES.has(candidate.sidebarWorktreeSortOrder)) {
-      result.sidebarWorktreeSortOrder = candidate.sidebarWorktreeSortOrder;
-    }
-    if (typeof candidate.sidebarShowRecentSection === 'boolean') {
-      result.sidebarShowRecentSection = candidate.sidebarShowRecentSection;
-    }
     if (typeof candidate.sidebarShowChatsSection === 'boolean') {
       result.sidebarShowChatsSection = candidate.sidebarShowChatsSection;
+    }
+    if (typeof candidate.sidebarShowWorkSection === 'boolean') {
+      result.sidebarShowWorkSection = candidate.sidebarShowWorkSection;
+    }
+    if (typeof candidate.sidebarShowPinnedSection === 'boolean') {
+      result.sidebarShowPinnedSection = candidate.sidebarShowPinnedSection;
+    }
+    if (typeof candidate.sidebarDetailedZoneRows === 'boolean') {
+      result.sidebarDetailedZoneRows = candidate.sidebarDetailedZoneRows;
     }
 
     if (Array.isArray(candidate.securityScopedBookmarks)) {
@@ -598,6 +617,9 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.tunnelMode === 'string') {
       result.tunnelMode = normalizeTunnelMode(candidate.tunnelMode);
     }
+    if (Number.isInteger(candidate.tunnelHttpsPort) && candidate.tunnelHttpsPort >= 1 && candidate.tunnelHttpsPort <= 65535) {
+      result.tunnelHttpsPort = candidate.tunnelHttpsPort;
+    }
     if (candidate.managedLocalTunnelConfigPath === null) {
       result.managedLocalTunnelConfigPath = null;
     } else if (typeof candidate.managedLocalTunnelConfigPath === 'string') {
@@ -713,6 +735,25 @@ export const createSettingsHelpers = (dependencies) => {
     }
     if (typeof candidate.agentToolsCodeMode === 'boolean') {
       result.agentToolsCodeMode = candidate.agentToolsCodeMode;
+    }
+    // Settings the client registry persists; each was missing here, so the
+    // registry and this sanitizer disagreed and the value never reached disk.
+    for (const key of [
+      'agentScheduleToolEnabled', 'agentKnowledgeToolEnabled', 'agentRenderToolEnabled',
+      'agentWorkflowToolEnabled', 'openLinksInBrowserPanel', 'openTrackerLinksOnBoard',
+      'worktreeArchiveOnDoneEnabled', 'showOpenCodeUpdateNotifications', 'mobileReturnKeySends',
+      'savePastedImagesAsFiles', 'layoutAnimations',
+    ]) {
+      if (typeof candidate[key] === 'boolean') result[key] = candidate[key];
+    }
+    // The live browser tab limit is clamped to the same 1..20 range as the UI
+    // parser (`src/lib/browser/liveTabs.ts`).
+    if (typeof candidate.liveBrowserTabLimit === 'number' && Number.isFinite(candidate.liveBrowserTabLimit)) {
+      result.liveBrowserTabLimit = Math.max(1, Math.min(20, Math.round(candidate.liveBrowserTabLimit)));
+    }
+    if (typeof candidate.smallModelVariant === 'string') {
+      const trimmed = candidate.smallModelVariant.trim();
+      result.smallModelVariant = trimmed.length > 0 ? trimmed : undefined;
     }
     if (typeof candidate.isolatedSpacesEnabled === 'boolean') {
       result.isolatedSpacesEnabled = candidate.isolatedSpacesEnabled;
@@ -849,6 +890,19 @@ export const createSettingsHelpers = (dependencies) => {
     const customProviderIcons = sanitizeCustomProviderIcons(candidate.customProviderIcons);
     if (customProviderIcons) {
       result.customProviderIcons = customProviderIcons;
+    }
+    for (const key of REGISTRY_BOOLEAN_SETTINGS) {
+      if (typeof candidate[key] === 'boolean') {
+        result[key] = candidate[key];
+      }
+    }
+    if (Number.isInteger(candidate.liveBrowserTabLimit)
+      && candidate.liveBrowserTabLimit >= LIVE_BROWSER_TABS_MIN
+      && candidate.liveBrowserTabLimit <= LIVE_BROWSER_TABS_MAX) {
+      result.liveBrowserTabLimit = candidate.liveBrowserTabLimit;
+    }
+    if (typeof candidate.smallModelVariant === 'string' && candidate.smallModelVariant.trim().length > 0) {
+      result.smallModelVariant = candidate.smallModelVariant.trim();
     }
 
     if (Array.isArray(candidate.recentAgents)) {
@@ -1122,6 +1176,9 @@ export const createSettingsHelpers = (dependencies) => {
       // Tells the client whether agent memory exists in this build at all, so
       // its settings row and panel tab can be absent rather than merely off.
       agentMemoryFeatureAvailable: isAgentMemoryFeatureAvailable(),
+      overviewFeatureAvailable: isOverviewFeatureAvailable(),
+      // Whether this build has agent workflows (OPENCHAMBER_WORKFLOWS_ENABLE).
+      agentWorkflowFeatureAvailable: isWorkflowFeatureAvailable(),
       // Jev routing needs the OpenChamber server and is always available here.
       routingFeatureAvailable: true,
       ...(pwaAppName ? { pwaAppName } : {}),

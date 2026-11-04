@@ -8,7 +8,9 @@
   "workspaces": {
     ".": {
       "entry": [
+        "fix-deprecation.js",
         "oxlint.config.ts",
+        "oxlint.anti-slop.config.ts",
         "postcss.config.js",
         "scripts/**/*.{js,cjs,mjs,ts}"
       ],
@@ -29,6 +31,7 @@
     },
     "packages/web": {
       "entry": [
+        "bin/cli.js",
         "src/mobile-main.tsx",
         "src/mini-chat-main.tsx",
         "src/main.tsx",
@@ -48,6 +51,7 @@
         "entry.mjs",
         "main.mjs",
         "preload.mjs",
+        "browser-panel-preload.cjs",
         "tray.mjs",
         "ssh-manager.mjs",
         "*.{test,spec}.{js,cjs,mjs}",

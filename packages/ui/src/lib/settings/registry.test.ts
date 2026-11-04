@@ -41,6 +41,31 @@ describe('settings registry', () => {
       useUIStore.setState(original, true);
     }
   });
+  test('round-trips the small model thinking variant', () => {
+    expect(parseSettingsDocument({ smallModelVariant: 'high' })).toEqual({ smallModelVariant: 'high' });
+    expect(parseSettingsDocument({ smallModelVariant: '' })).toEqual({});
+    expect(parseSettingsDocument({ smallModelVariant: 3 })).toEqual({});
+  });
+  test('applies the server-owned overview feature flag to the UI store', () => {
+    const original = useUIStore.getState().overviewFeatureAvailable;
+    try {
+      useUIStore.setState({ overviewFeatureAvailable: false });
+      const parsed = parseSettingsDocument({ overviewFeatureAvailable: true });
+      expect(parsed).toEqual({ overviewFeatureAvailable: true });
+      if (!parsed) throw new Error('Expected the overview flag to parse');
+      applySettingsToStores(parsed);
+      expect(useUIStore.getState().overviewFeatureAvailable).toBe(true);
+      expect(useUIStore.getState().isOverviewOpen).toBe(false);
+      // The page closes when the server says the build lost the feature.
+      useUIStore.setState({ isOverviewOpen: true });
+      applySettingsToStores({ overviewFeatureAvailable: false });
+      expect(useUIStore.getState().overviewFeatureAvailable).toBe(false);
+      expect(useUIStore.getState().isOverviewOpen).toBe(false);
+    } finally {
+      useUIStore.setState({ overviewFeatureAvailable: original, isOverviewOpen: false });
+    }
+  });
+
   test('accepts only interface languages the UI ships', () => {
     expect(parseSettingsDocument({ locale: 'zh-CN' })).toEqual({ locale: 'zh-CN' });
     expect(parseSettingsDocument({ locale: 'xx' })).toEqual({});
@@ -159,6 +184,17 @@ describe('settings registry', () => {
     });
     expect(parseSettingsDocument(null)).toBeNull();
     expect(parseSettingsDocument([])).toBeNull();
+  });
+
+  test('reads the removed Sorted chat mode as collapsed activity until the user picks a mode', () => {
+    expect(parseSettingsDocument({ chatRenderMode: 'sorted', activityRenderMode: 'summary' }))
+      .toEqual({ chatRenderMode: 'sorted', activityRenderMode: 'collapsed' });
+    expect(parseSettingsDocument({ chatRenderMode: 'sorted' }))
+      .toEqual({ chatRenderMode: 'sorted', activityRenderMode: 'collapsed' });
+    // Picking a mode in Settings writes chatRenderMode 'live' along with it.
+    expect(parseSettingsDocument({ chatRenderMode: 'live', activityRenderMode: 'summary' }))
+      .toEqual({ chatRenderMode: 'live', activityRenderMode: 'summary' });
+    expect(parseSettingsDocument({ activityRenderMode: 'summary' })).toEqual({ activityRenderMode: 'summary' });
   });
 
   test('applies only the fields a snapshot carries and leaves the rest alone', () => {

@@ -127,11 +127,13 @@ mock.module('@/components/sections/shared/SettingsSection', () => ({
   SettingsCheckboxRow: ({ children, label }: { children?: React.ReactNode; label?: React.ReactNode }) => (
     <div>{label}{children}</div>
   ),
+  SettingsChipGroup: ({ options }: { options?: Array<{ label: React.ReactNode }> }) => (
+    <div>{options?.map((option, index) => <span key={index}>{option.label}</span>)}</div>
+  ),
   SettingsInset: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   SettingsGroupTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
   SETTINGS_CUSTOM_TRIGGER_CLASS: '',
   SETTINGS_SELECT_ROW_TRIGGER_CLASS: '',
-  SETTINGS_SELECT_SIZE: 'sm',
   SETTINGS_OPTION_STACK_CLASS: '',
   SETTINGS_FIELDS_STACK_CLASS: '',
   SETTINGS_HELPER_CLASS: '',

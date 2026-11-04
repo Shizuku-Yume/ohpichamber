@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
+import { isProbablyBinary } from '@oh-my-pi/pi-utils';
 import { createAgentSession, type ExtensionFactory } from '@oh-my-pi/pi-coding-agent/sdk';
 import { EventBus } from '@oh-my-pi/pi-coding-agent/utils/event-bus';
 import { TASK_SUBAGENT_LIFECYCLE_CHANNEL, type SubagentLifecyclePayload } from '@oh-my-pi/pi-coding-agent/task';
@@ -25,6 +26,7 @@ import { nativeExtensionRoots, nativeModelsContext, nativeSkillOptions, openNati
 import { NativeWebSearch, installWebSearchAuthorization } from './catalog-websearch.ts';
 import type { WorkerAuthorize } from './policy.ts';
 import { createHostToolExtension } from './host-tool.ts';
+import { isSingleDevicePath } from './internal-device-path.ts';
 import type { WorkerHostInvoke } from './host-actions.ts';
 import { formatModelString } from '@oh-my-pi/pi-coding-agent/config/model-resolver';
 import { captureNativePolicy } from './native-policy-snapshot.ts';
@@ -34,6 +36,7 @@ import { BashTool } from '@oh-my-pi/pi-coding-agent/tools/bash';
 import { nativePluginExtensionPaths } from './native-plugin-loader.ts';
 import { NativeCacheWarming } from './catalog-warming.ts';
 
+const MAX_AUTO_READ_TEXT_BYTES = 5 * 1024 * 1024;
 type PromptOperation = Extract<WorkerOperation, { type: 'prompt' | 'steer' | 'follow-up' }>;
 type PreparedPrompt = { text: string; options: PromptOptions; context: Parameters<SessionManager['appendMessage']>[0][] };
 type NativeAdmission = { skillsAvailable: boolean; profile: Agent | null };
@@ -144,11 +147,18 @@ export class WorkerSession {
       api.on('tool_call', async event => {
         interaction.observeToolCall(event);
         if (admission.profile && admission.profile.allowedTools !== null && !admission.profile.allowedTools.includes(event.toolName)) return { block: true, reason: 'Selected agent profile does not permit this tool' };
-        if (['bash', 'openchamber', 'web', 'memory', 'notify'].includes(event.toolName)) return;
+        if (['bash', 'openchamber', 'web', 'memory', 'openchamber_knowledge', 'notify'].includes(event.toolName)) return;
         // The native search tool is the SDK's egress entry point, not a generic
         // tool grant. Host authorization already owns web-search policy (including
         // enterprise refusal), so route exactly this SDK name to that capability.
         // Every other tool keeps the descriptor/approval-aware generic path.
+        // A mounted tool device (`xd://<tool>`) is a call into an extension
+        // tool, not a file read or write: the device enforces its own policy
+        // and its inner call is authorized by the capability owner, so the
+        // generic path/command descriptor would wrongly refuse it.
+        const internalDevice = (event.toolName === 'read' || event.toolName === 'write')
+          && isSingleDevicePath(event.input?.path);
+        if (internalDevice) return;
         if (event.toolName === 'web_search') {
           try { await authorize({ type: 'web-search' }); }
           catch { return { block: true, reason: 'Host policy refused the tool operation' }; }
@@ -362,10 +372,14 @@ export class WorkerSession {
       if (attachment.mediaType.startsWith('image/')) {
         images.push({ type: 'image', data: (await readFile(reference.path)).toString('base64'), mimeType: attachment.mediaType });
       } else {
-        contextMessages.push({ role: 'custom', customType: 'ohpichamber.attachment', display: false,
-          content: `Attached file ${attachment.name}: ${reference.path}`, details: attachment,
-          attribution: 'agent', timestamp: Date.now(),
-        });
+        if (attachment.size > MAX_AUTO_READ_TEXT_BYTES) {
+          throw new ProjectionError(413, 'PAYLOAD_TOO_LARGE', `Attachment "${attachment.name}" exceeds the maximum text size limit of 5 MB`);
+        }
+        if (await isProbablyBinary(reference.path)) {
+          throw new ProjectionError(415, 'UNSUPPORTED_MEDIA_TYPE', `Attachment "${attachment.name}" is a binary file; binary attachments are not supported`);
+        }
+        const content = (await readFile(reference.path)).toString('utf8');
+        contextMessages.push({ role: 'fileMention', files: [{ path: attachment.name, content }], timestamp: Date.now() });
       }
     }
     if (operation.type === 'prompt') {
@@ -441,6 +455,20 @@ export class WorkerSession {
     return task;
   }
 
+  private async mcpResult(request: Extract<WorkerOperation, { type: 'mcp' }>['operation']): Promise<WorkerOperationResult> {
+    if (!this.mcp) throw new ProjectionError(503, 'MCP_APPLY_FAILED', 'MCP runtime ownership is unavailable');
+    switch (request.type) {
+      case 'read': return { type: 'mcp', result: { type: 'catalog', catalog: this.mcp.read(request.configuration) } };
+      case 'persist': return { type: 'mcp', result: { type: 'persisted', configuration: await this.mcp.persist(request.request, request.configuration) } };
+      case 'apply': return { type: 'mcp', result: { type: 'applied', result: await this.mcp.apply(request.request, request.configuration) } };
+      case 'reconnect': return { type: 'mcp', result: { type: 'catalog', catalog: await this.mcp.reconnect(request.serverId, request.request, request.configuration) } };
+      case 'oauth.status': return { type: 'mcp', result: { type: 'oauth', result: await this.mcp.oauthRead(request.serverId, request.configuration) } };
+      case 'oauth': return { type: 'mcp', result: { type: 'oauth', result: await this.mcp.oauthExecute(request.serverId, request.request, request.configuration) } };
+      case 'test': return { type: 'mcp', result: { type: 'tested', result: await this.mcp.test(request.serverId, request.configuration) } };
+      case 'secret.write': throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'MCP credential writes belong to the workspace owner');
+    }
+  }
+
   private async executeOperation(operation: WorkerOperation): Promise<WorkerOperationResult> {
     if (this.closed || this.failed) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Worker session is unavailable');
     if (this.controllingBranch) throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', 'Native branch selection is in progress');
@@ -465,20 +493,7 @@ export class WorkerSession {
         throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'Historical usage reads belong to the cold usage worker');
       case 'mcp.configuration.read':
         throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'Configuration hydration belongs to the workspace worker');
-      case 'mcp': {
-        if (!this.mcp) throw new ProjectionError(503, 'MCP_APPLY_FAILED', 'MCP runtime ownership is unavailable');
-        const request = operation.operation;
-        switch (request.type) {
-          case 'read': return { type: 'mcp', result: { type: 'catalog', catalog: this.mcp.read(request.configuration) } };
-          case 'persist': return { type: 'mcp', result: { type: 'persisted', configuration: await this.mcp.persist(request.request, request.configuration) } };
-          case 'apply': return { type: 'mcp', result: { type: 'applied', result: await this.mcp.apply(request.request, request.configuration) } };
-          case 'reconnect': return { type: 'mcp', result: { type: 'catalog', catalog: await this.mcp.reconnect(request.serverId, request.request, request.configuration) } };
-          case 'oauth.status': return { type: 'mcp', result: { type: 'oauth', result: await this.mcp.oauthRead(request.serverId, request.configuration) } };
-          case 'oauth': return { type: 'mcp', result: { type: 'oauth', result: await this.mcp.oauthExecute(request.serverId, request.request, request.configuration) } };
-          case 'test': return { type: 'mcp', result: { type: 'tested', result: await this.mcp.test(request.serverId, request.configuration) } };
-          case 'secret.write': throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'MCP credential writes belong to the workspace owner');
-        }
-      }
+      case 'mcp': return this.mcpResult(operation.operation);
       case 'shell':
         if (operation.operation.type === 'start') await this.authorize({ type: 'shell', request: operation.operation.request });
         return { type: 'shell', result: await this.shell.operation(operation.operation) };
@@ -510,7 +525,7 @@ export class WorkerSession {
               const queued = queue.at(-1);
               if (!queued || queued.role !== 'user') throw new ProjectionError(503, 'INTERNAL_ERROR', 'Native queued user message is unavailable');
               if (prepared.context.length > 0) this.queuedContext.set(queued, prepared.context);
-              messageId = this.projection.admitQueuedPrompt(queued, operation.request.input.attachments);
+              messageId = this.projection.admitQueuedPrompt(queued, operation.request.input.attachments, operation.request.input.context);
               acceptedAt = Date.now();
             },
           });
@@ -529,7 +544,7 @@ export class WorkerSession {
         finally { this.preparation = undefined; }
         if (this.closed || this.failed) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Worker session is unavailable');
         if (this.skillsApplying || !this.admission.skillsAvailable) throw new ProjectionError(503, 'SKILL_APPLY_FAILED', 'Native skills changed during prompt preparation');
-        this.emit(this.projection.beginRun(operation.runId, Date.now(), operation.request.input.attachments));
+        this.emit(this.projection.beginRun(operation.runId, Date.now(), operation.request.input.attachments, operation.request.input.context));
         const run = this.projection.activeRun();
         if (!run) throw new ProjectionError(503, 'INTERNAL_ERROR', 'Run admission failed');
         const accepted: Run = { ...run };

@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
+import { SessionJournal } from '../../../../agent-service/src/projection/journal.ts';
 import { createOpenChamberControlService } from './service.js';
 
 const scopeForWorkspace = {
@@ -17,7 +18,7 @@ const createHarness = (settings = {
   agentWebToolEnabled: true,
   agentMemoryToolEnabled: true,
   agentNotifyToolEnabled: true,
-}) => {
+}, overrides = {}) => {
   const created = [];
   const sent = [];
   const forked = [];
@@ -67,11 +68,46 @@ const createHarness = (settings = {
       remove: async () => [],
       setEnabled: async () => ({ enabled: true }),
     },
+    ...overrides,
   });
   return { control, created, sent, forked, requests };
 };
 
 describe('OpenChamber control service canonical consumers', () => {
+  it('reads complete and most-recent messages through the canonical paginated journal across workspaces', async () => {
+    const sessionId = 'session-other';
+    const turns = Array.from({ length: 205 }, (_, index) => ({
+      turnId: `turn-${index}`, runId: `run-${index}`, sessionId, status: 'completed',
+      userMessageId: `message-${index}`, assistantMessageIds: [], startedAt: index + 1, finishedAt: index + 1,
+    }));
+    const messages = turns.map((turn, index) => ({
+      messageId: turn.userMessageId, sessionId, turnId: turn.turnId, role: 'user', createdAt: index + 1,
+      parts: [{ type: 'text', partId: `part-${index}`, content: `message ${index}` }],
+    }));
+    const journal = new SessionJournal({ sessionId, projectId: 'project-1', workspaceId: 'workspace-2', displayPath: '.', rootSessionId: sessionId }, {
+      createdAt: 1, updatedAt: 205, branch: { branchId: 'branch-1', branchVersion: '1', leafMessageId: 'message-204' }, turns, messages,
+    });
+    const { control } = createHarness(undefined, {
+      resolveSessionScope: async (id) => id === 'session-1' ? { rootSessionId: id, ...scopeForWorkspace } : id === sessionId ? { rootSessionId: id, ...otherScope } : null,
+      sessionService: {
+        open: async () => ({ session: { runtimeStatus: 'idle' } }),
+        history: async (id, query) => {
+          const params = new URLSearchParams(query);
+          return journal.history({ sessionId: id, limit: Number(params.get('limit')), ...(params.has('cursor') ? { cursor: params.get('cursor') } : {}) });
+        },
+      },
+    });
+    const scope = { rootSessionId: 'session-1', ...scopeForWorkspace };
+    const invoke = (input) => control.invokeHostAction(scope, { sessionId: 'session-1', toolName: 'openchamber', action: 'session.messages', input: { sessionId, ...input } });
+    const all = await invoke({ all: true });
+    expect(all.ok).toBe(true);
+    expect(all.value.messages.map((message) => message.text)).toEqual(messages.map((message) => message.parts[0].content));
+    const last = await invoke({ limit: 2 });
+    expect(last.ok).toBe(true);
+    expect(last.value.messages.map((message) => message.text)).toEqual(['message 203', 'message 204']);
+    await expect(invoke({ workspaceId: 'workspace-1' })).resolves.toMatchObject({ ok: false, status: 403 });
+  });
+
   it('creates a scoped session and dispatches a canonical prompt without private path fields', async () => {
     const { control, created, sent } = createHarness();
 
@@ -162,5 +198,57 @@ describe('OpenChamber control service canonical consumers', () => {
     await expect(disabled.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
       toolName: 'notify', action: 'notify.send', sessionId: 'session-1', input: { title: 't' },
     })).resolves.toEqual({ ok: false, code: 'FEATURE_DISABLED', status: 403 });
+  });
+});
+
+describe('models.search over the canonical catalog', () => {
+  const harness = () => createHarness({
+    agentControlToolEnabled: true,
+    favoriteModels: [{ providerId: 'b', modelId: 'old' }],
+    hiddenModels: [{ providerId: 'a', modelId: 'secret' }],
+  }, {
+    service: {
+      request: async (pathname) => {
+        if (pathname.endsWith('/models')) {
+          return Response.json({ workspaceId: 'workspace-1', revision: '1', models: [
+            { provider: 'a', modelId: 'new', name: 'Alpha New', variants: [{ variant: 'high' }], status: 'active' },
+            { provider: 'a', modelId: 'older', name: 'Alpha Older', variants: [], status: 'active' },
+            { provider: 'a', modelId: 'secret', name: 'Alpha Secret', variants: [], status: 'deprecated' },
+            { provider: 'b', modelId: 'old', name: 'Beta Old', variants: [], status: 'deprecated' },
+            { provider: 'b', modelId: 'newer', name: 'Beta Newer', variants: [], status: 'beta' },
+          ] });
+        }
+        if (pathname.endsWith('/providers')) {
+          return Response.json({ workspaceId: 'workspace-1', revision: '1', providers: [
+            { providerId: 'a', name: 'Alpha' }, { providerId: 'b', name: 'Beta' },
+          ] });
+        }
+        return Response.json({});
+      },
+    },
+  });
+
+  it('leads with the favorite, hides what the picker hides, and pages', async () => {
+    const { control } = harness();
+    const first = await control.execute('models.search', {}, '/repo/app');
+    expect(first.models.map(({ id }) => id)).toEqual(['b/old', 'a/new', 'a/older', 'b/newer']);
+    expect(first.models[0]).toMatchObject({ preference: 'favorite', provider: 'Beta', variants: [] });
+    expect(first.models[1].preference).toBeUndefined();
+    expect(first.total).toBe(4);
+
+    const alpha = await control.execute('models.search', { provider: 'alpha' }, '/repo/app');
+    expect(alpha.models.map(({ id }) => id)).toEqual(['a/new', 'a/older']);
+
+    const paged = await control.execute('models.search', { query: 'NEW', limit: 1 }, '/repo/app');
+    expect(paged).toMatchObject({ models: [{ id: 'a/new' }], total: 2, next: 1 });
+  });
+});
+
+describe('browser.close over the browser control bridge', () => {
+  it('forwards the close and its tab to the browser control', async () => {
+    const request = vi.fn(async () => ({ closed: true }));
+    const { control } = createHarness(undefined, { browserControl: { request } });
+    await expect(control.execute('browser.close', { tabId: 'tab-1' }, '/repo/app')).resolves.toEqual({ closed: true });
+    expect(request).toHaveBeenCalledWith('browser.close', { tabId: 'tab-1' }, expect.objectContaining({ timeoutMs: 20_000 }));
   });
 });

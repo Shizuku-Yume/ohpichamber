@@ -926,7 +926,7 @@ describe('useConfigStore provider persistence', () => {
     useConfigStore.setState({
       activeDirectoryKey: DIRECTORY,
       providers: [provider('openai', 'gpt-5.5', ['low', 'high'])],
-      
+      settingsDefaultModel: 'openai/gpt-5.5',
       settingsDefaultVariant: 'high',
       currentProviderId: 'openai',
       currentModelId: 'gpt-5.5',
@@ -1029,7 +1029,7 @@ describe('useConfigStore provider persistence', () => {
     useConfigStore.setState({
       activeDirectoryKey: DIRECTORY,
       providers: [provider('openai', 'gpt-5.5', ['low', 'medium', 'high'])],
-      
+      settingsDefaultModel: 'openai/gpt-5.5',
       settingsDefaultVariant: 'high',
       currentProviderId: 'openai',
       currentModelId: 'gpt-5.5',
@@ -1074,7 +1074,7 @@ describe('useConfigStore provider persistence', () => {
     useConfigStore.setState({
       activeDirectoryKey: DIRECTORY,
       providers: [provider('openai', 'gpt-5.5', ['low', 'high'])],
-      
+      settingsDefaultModel: 'openai/gpt-5.5',
       settingsDefaultVariant: 'low',
       currentProviderId: 'openai',
       currentModelId: 'gpt-5.5',
@@ -1100,7 +1100,7 @@ describe('useConfigStore provider persistence', () => {
     useConfigStore.setState({
       activeDirectoryKey: DIRECTORY,
       providers: [provider('openai', 'gpt-5.5', ['low', 'high'])],
-      
+      settingsDefaultModel: 'openai/gpt-5.5',
       settingsDefaultVariant: 'low',
       currentProviderId: 'openai',
       currentModelId: 'gpt-5.5',
@@ -1124,7 +1124,7 @@ describe('useConfigStore provider persistence', () => {
     useConfigStore.setState({
       activeDirectoryKey: DIRECTORY,
       providers: [provider('openai', 'gpt-5.5', ['low', 'high'])],
-      
+      settingsDefaultModel: 'openai/gpt-5.5',
       settingsDefaultVariant: 'high',
       currentProviderId: 'other',
       currentModelId: 'other-model',
@@ -2729,7 +2729,7 @@ describe('useConfigStore provider persistence', () => {
   });
   test('setAgent binds a native ID to its native provider/model pair, not its display name', () => {
     seedAgentCatalog([testAgent('profile:review', { name: 'Review', model: { providerId: 'native', modelId: 'reasoner' } })]);
-    useConfigStore.setState({ providers: [provider('native', 'reasoner', ['high'])], settingsDefaultVariant: 'high' });
+    useConfigStore.setState({ providers: [provider('native', 'reasoner', ['high'])], settingsDefaultModel: 'native/reasoner', settingsDefaultVariant: 'high' });
     useConfigStore.getState().setAgent('profile:review');
     expect(useConfigStore.getState()).toMatchObject({ currentAgentName: 'profile:review', currentProviderId: 'native', currentModelId: 'reasoner', currentVariant: 'high' });
     expect(useConfigStore.getState()).not.toHaveProperty('agents');

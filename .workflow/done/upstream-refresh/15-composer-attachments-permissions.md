@@ -1,0 +1,143 @@
+# 15: Composer, attachments and permissions
+
+**Effort:** upstream-refresh
+**Task type:** feature
+**Base commit:** 736f51cdc4
+**Landed commit:** 0e6e10b33b
+
+**Delivers:** Upstream's composer/editor, attachments, autocomplete, model controls, permission cards, forms, goals and queued messages work with the OMP session modes and message queue.
+
+**Blocked by:** 10, 14, 23
+**Files:** Path list: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-sync-2026-10-27/plan-paths/15.tsv` (112 paths: 64 clean/new, 46 both-side, 33 conflicts). Main locations: `packages/ui/src/components/chat/{composer,editor}`, composer components (`ChatInput`, `Form*`, `Permission*`, `SessionGoal*`, `QueuedMessagesStrip`, `ModelControls`), `packages/ui/src/components/inline-picker`, `packages/ui/src/lib/{magicPrompts,permissions,actions}`, and the server `magic-prompts`, `message-queue`, `permission-auto-accept`, `commands` modules. Deferred from task 10: `components/emoji/{EmojiAutocomplete.tsx,emojiInlinePicker.tsx,useEmojiPicker.tsx,useEmojiPicker.test.tsx,DOCUMENTATION.md}` and `components/ui/textarea.tsx`.
+
+**Read first:** Spec W6; `.agents/skills/sync-state-invariants/SKILL.md`; `.agents/skills/locale-ui-patterns/SKILL.md`; `.agents/skills/ui-api-decoupling/SKILL.md`; decisions.md: 2026-10-25 - Replace root agent selection with session modes.
+**Covers:** W6
+
+**Check:** `bun install --frozen-lockfile` and `bun run type-check` and `bun run lint` and `bun run test` all exit 0, the composer tests pass, and in the running app a file attaches and sends, a queued message goes out after the turn, a permission request is approved/denied and the prompt returns after a failed send, and a magic prompt inserts its text. Real path: one real provider turn.
+## Progress: Task 15 Rework (2026-10-27)
+
+### Three Root Causes
+1. **Server message-queue routes faked UI DTO shapes (`f8f5215d69`)**: Message queue routes and broadcasts translated between UI DTOs and canonical contract types via `isUiShape` and `toServerSession`, creating dual representations and protocol divergence between Host and agent-contract.
+2. **Worker session read non-image attachments without validation (`29f99e0af8`)**: `WorkerSession.prepare()` read arbitrary non-image attachments as UTF-8 mojibake without size bounds, crashing or corrupting model prompts on binary files or oversized payloads.
+3. **Server queue delivery starvation and missing UI sync (`e62a37cf5e`)**: In `canonical-runtime.js:141`, when the runtime session was busy with an active run (`activeRunId !== null` or `runtimeStatus !== 'idle'`), the queue dispatcher returned without scheduling a retry, stranding queued items if SSE session observation wasn't active. Furthermore, `globalMessageStreamHub.subscribeSession` was never invoked on queue `append` or `start`, and `SyncProvider` in `packages/ui/src/sync/sync-context.tsx` never called `subscribeMessageQueueSync`, causing delivered items to linger in the UI queue projection strip.
+
+### Architectural Decisions
+1. **Canonical Queue Cutover & Delivery Invariants**:
+   - Dropped `isUiShape`, `toServerSession`, `ServerQueueItemInput`, `ServerQueueAttachmentInput`, `toServerAttachment`, and `toServerItemInput`.
+   - Wired `packages/ui/src/stores/messageQueueStore.ts` directly to canonical `QueueAppendRequest`, `QueueDeleteRequest`, `QueueReorderRequest`, and `QueueState` from `@openchamber/agent-contract`.
+   - Each attachment is uploaded through Host canonical attachment routes (`/api/agent/v1/attachments`) first to acquire `attachmentId` and `uri: attachment://<id>` before queue append.
+   - Refetch authoritative queue state on HTTP 409 `QUEUE_CONFLICT` instead of dropping local projections or treating queue as empty.
+   - Default `commandId` to `req.get('Idempotency-Key') ?? randomUUID()` at message-queue route boundary.
+   - Schedule busy retry (`schedule(scope, RETRY_MS)`) when active run is busy in `canonical-runtime.js`, and wire `ensureSessionObserved` in `index.js` on `append` and `start`.
+   - Subscribe `subscribeMessageQueueSync` in `SyncProvider` (`sync-context.tsx`) so server queue broadcast updates (`openchamber:message-queue.updated`) clear delivered queue projections.
+   - In `admitAttachmentsForQueue`, the `attachment.dataUrl?.startsWith('attachment://')` branch is retained because `packages/ui/src/sync/input-store.ts:305` writes `dataUrl: url` for restored attachments where `url` is `attachment://<id>`, and `messageQueueStore.ts:262` writes `dataUrl: att.uri`.
+2. **Attachment Size & Media Validation**:
+   - Enforce 5 MB limit (`MAX_TEXT_ATTACHMENT_BYTES`) for text attachments across Host and Worker boundaries.
+   - Reject binary files with null bytes or non-text MIME types via HTTP 415 `UNSUPPORTED_MEDIA_TYPE`.
+   - Reject text attachments > 5 MB via HTTP 413 `PAYLOAD_TOO_LARGE`.
+   - In UI composer, validate attachments client-side in `attachFiles`/`attachFilesWithCitation` and map 413/415 errors in `getSubmitErrorMessage` to localized cause + fix copy across all 13 locales (`chat.composer.error.binaryAttachmentNotSupported`, `chat.composer.error.textAttachmentTooLarge`).
+
+### Checks and Exit Codes
+- `bun run type-check`: exit code 0 (`~/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/logs/type-check.log`)
+- `bun run lint`: exit code 0 (`~/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/logs/lint.log`)
+- Focused test: web message-queue (`server/lib/message-queue/runtime.test.js`): exit code 0 (`~/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/logs/test-web-message-queue.log`)
+- Focused test: UI queue store & sync context (`sync-context-queue-events.test.tsx`, `messageQueueStore.test.ts`): exit code 0 (`~/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/logs/test-ui-queue-store.log`)
+
+### Root Gate Results (`c89297cc93` -> `ce6a68a834`)
+- Initial root gate (`c89297cc93`):
+  - `bun install --frozen-lockfile`: exit code 0 (`~/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/logs/root-install.log`)
+  - `bun run type-check`: exit code 0 (`~/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/logs/root-type-check.log`)
+  - `bun run lint`: exit code 0 (`~/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/logs/root-lint.log`)
+  - `bun run test` (`VITEST_MAX_WORKERS=2`): exit code 1 (`~/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/logs/root-test.log`)
+    - 6/7 suites passed (scripts: 23/23 files, sdk: 26/26 files, ui: 909/909 files, agent-contract: 30/30 tests, agent-service: 15/15 tests, electron: 54/54 files, web: 445/455 files passed, 7163 passed / 142 skipped).
+    - Only 1 test file failed: `packages/web/server/lib/magic-prompts/routes.test.js` due to broken import `../opencode/core-routes.js` introduced in upstream adoption commit `c1cc1083eb`.
+  - `bun run build`: exit code 0 (`~/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/logs/root-build.log`)
+- Final Green Gate (`ce6a68a834`):
+  - Fixed `packages/web/server/lib/magic-prompts/routes.test.js` to import `registerCommonRequestMiddleware` from real owner `../host/core-routes.js` (registered in `feature-routes-runtime.js:485`).
+  - Focused test `server/lib/magic-prompts/routes.test.js`: 8/8 passed.
+  - `bun run test` (`VITEST_MAX_WORKERS=2`): exit code 0 (`~/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/logs/root2-test.log`)
+    - 7/7 suites passed (scripts: 23/23 files, sdk: 26/26 files, ui: 909/909 files, agent-contract: 30/30 tests, agent-service: 246 passed / 7 skipped, electron: 54/54 files, web: 446/455 files passed, 7171 passed / 142 skipped).
+  - `bun run type-check`: exit code 0 (`~/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/logs/root2-type-check.log`)
+  - `bun run lint`: exit code 0 (`~/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/logs/root2-lint.log`)
+
+### Real Path Evidence
+Captured in live browser run with isolated `HOME=/tmp/oc-test-home` and `OPENCHAMBER_DATA_DIR=/tmp/oc-test-data` against real model provider (Gemini 3.8 Flash):
+- **01 Follow-up delivered with text attachment**: Queue follow-up with `secret-code.txt` while turn 1 runs; delivered after turn 1, model quotes exact secret code (`SECRET_CODE_REWORK_987654`), server `GET /api/agent/v1/sessions/:sessionId/queue` returns `{"sessionId":"...","revision":"5","items":[]}`, and the queue strip above composer is completely cleared.
+  - Screenshot: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/screenshots/01-queued-followup-text-delivered.png`
+- **02 Binary zip rejected**: Attaching binary `.zip` shows cause + fix toast `"This file is binary and can't be sent as text. Attach an image or a text file."` and nothing is enqueued.
+  - Screenshot: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/screenshots/02-binary-zip-rejected.png`
+- **03a Queued item visible while turn runs**: Queued message strip `Temporary message to be removed` visible above composer with `edit`, `send`, and `x` (remove) buttons while turn 1 is actively running with Stop button and "Inspecting logic".
+  - Screenshot: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/screenshots/03a-queued-item-visible.png`
+- **03b Delete queued item while turn runs**: Pressing `x` (remove) on the queued item removes the item from the strip while turn 1 is still actively running. Server `GET /api/agent/v1/sessions/:sessionId/queue` returns `{"sessionId":"...","revision":"2","items":[]}`.
+  - Screenshot: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-15-rework-2026-10-27/screenshots/03b-delete-queued-item.png`
+
+### Limits
+- Non-image binary attachments (e.g. zip/bin/tar) cannot be sent as text; users must attach images or text files.
+- Text attachments are capped at 5 MB per file.
+
+## Done when
+
+- [x] The composer keeps the fork's session modes (main/plan/vibe/goal); no root agent picker returns.
+- [x] Permission decisions go to the Host/Agent Service authority, not only the UI.
+- [x] Drafts, attachments and queue survive reload where upstream says they do.
+- [x] Editor behavior (IME, Escape, PageUp/PageDown, paste) matches upstream tests.
+- [x] Emoji autocomplete/inline picker/textarea adopt upstream's files on the fork's shortcode and picker contracts; no fork copy remains.
+- [x] The queue `goal` field, `setServerHold`, `useSessionDraftsStore` and `user-message-resume` are consumed: a queued goal starts, drafts survive reload, and an archived root restores once after an accepted send.
+- [x] `permissionModeForNewSession` is used by the new-session path, not duplicated.
+
+## Dispositions
+
+1. **Skills selector (`selectSkillsForDirectory`)**: Cut over all callsites (`ChatInput`, `UserTextPart`, `useDraftStarters`, `WorkStatusContextSection`, `SkillsPage`, `SkillsSidebar`, `session-ui-store`, `useSkillsStore`, and `useSkillsStore.test`) to `selectAvailableSkillsForDirectory`. Deleted duplicate alias in `useSkillsStore.ts`.
+2. **Unconsumed exports**:
+   - Dropped unused `FLOATING_COMPOSER_GAP_PX` export in `composerTailInset.ts` (consumed only internally).
+   - Dropped unused `isPastedInput` export in `useTextareaInlinePicker.tsx`. Its only upstream consumer is `InlineCommentInput.tsx`, owned by Task 07 (`.workflow/tasks/upstream-refresh/07-review-surfaces-board-file-views.md`).
+   - Retained and exported `EmojiAutocompleteHandle` in `EmojiAutocomplete.tsx` for consumption by `ComposerAutocompletePopups.tsx`.
+3. **Scoped magic prompts**: Removed unconsumed scoped magicPrompts methods (`fetchMagicPromptScopes`, `saveScopedMagicPromptOverride`, `resetScopedMagicPromptOverride`, `resetAllScopedMagicPromptOverrides`) without server routes; project-scoped overrides deferred to Task 07 (`.workflow/tasks/upstream-refresh/07-review-surfaces-board-file-views.md`). Re-exported `renderMagicPrompt(template, variables)` as a compatibility wrapper over `loadMagicPrompts(null).render(...)`.
+4. **Permission mode for new session**: Dropped duplicate helper in `permissionAutoAccept.ts`; canonical default permission mode on new sessions is handled directly in `packages/web/server/index.js` on `openchamber:session-created` by Task 25 (`.workflow/done/upstream-refresh/25-ui-misc-surfaces.md`).
+5. **Emoji autocomplete & Large text paste choice**: Wired `EmojiAutocomplete` into `ComposerAutocompletePopups.tsx` and `ChatInput.tsx` with `handleEmojiSelect`. Wired `LargeTextPasteChoice` into `ChatInput.tsx` replacing toast prompt.
+6. **Message queue DTO translation**: Updated `packages/web/server/lib/message-queue/runtime.js` and `packages/web/server/index.js` to translate between canonical queue requests (`QueueAppendRequestSchema`, `QueueStateSchema`) and UI session queue DTOs (`{ directory, item }`, `{ revision, session }`).
+7. **Worker text attachments**: Updated `packages/agent-service/src/worker/session.ts` to include `role: 'fileMention'` with text content for non-image attachments so the model can inspect file contents directly without violating host workspace directory restrictions.
+
+## Checks
+
+| Check | Exit Code | Log Path |
+|---|---|---|
+| `bun run type-check` | 0 | `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-15-2026-10-27/logs/type-check.log` |
+| `bun run lint` | 0 | `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-15-2026-10-27/logs/lint.log` |
+| `bunx oxlint` (touched files) | 0 | `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-15-2026-10-27/logs/oxlint.log` |
+| Focused composer / unit / queue tests (56 files: 50 isolated + 6 unit) | 0 | `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-15-2026-10-27/logs/focused-tests.log` |
+| `bun run build` | 0 | `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-15-2026-10-27/logs/build.log` |
+| `bun run dead-code` (knip) | 1 (baseline clean) | `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-15-2026-10-27/logs/dead-code.log` |
+
+## Real Path Observations
+
+Executed live dev web server on port 3730 (API port 3731) with isolated `HOME=/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-15-2026-10-27/home`, `OPENCHAMBER_DATA_DIR=/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-15-2026-10-27/data`, and real CLIProxyAPI / Gemini 3.8 Flash provider.
+
+1. **Inline picker (`@`, `$`, `/`)**: Typed `@` (opened mention picker, inserted `@scout `), `$` (opened skill picker, inserted `$find-docs `), and `/` (opened command palette at start, inserted `/debug `). All three tokens inserted into composer.
+   - Screenshot: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-15-2026-10-27/screenshots/01-inline-pickers.png`
+2. **Emoji autocomplete**: Typed `:fire` in composer, autocomplete popup displayed matching emoji entries (`🧑‍🚒`, `🚒`, `🔥`, `🎆`, etc.), navigated down to `🔥` and pressed Enter, inserting `🔥 ` into composer.
+   - Screenshot: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-15-2026-10-27/screenshots/02-emoji-autocomplete.png`
+3. **Attachment sent and referenced**: Attached `task15-attached-note.txt` containing `SECRET_CODE_FOR_ATTACHMENT_TEST=ALPHA_BRAVO_9911`. Attachment chip displayed with size (84 B), was sent to model, and Gemini 3.8 Flash read the attached file and repeated the code `ALPHA_BRAVO_9911` exactly.
+   - Screenshot: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-15-2026-10-27/screenshots/03-attachment-sent-and-referenced.png`
+4. **Large text paste choices**: Pasted 35 lines into composer, displaying `LargeTextPasteChoice` with "Attach as file" and "Paste inline" buttons (`04-large-paste-choice-offer.png`). Clicking "Attach as file" converted text to virtual attachment chip `pasted-context-1.txt` (`04-large-paste-attached.png`). Clicking "Paste inline" inserted the multiline text directly into composer (`04-large-paste-inline.png`). Both choices behaved as labeled.
+   - Screenshots:
+     - `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-15-2026-10-27/screenshots/04-large-paste-choice-offer.png`
+     - `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-15-2026-10-27/screenshots/04-large-paste-attached.png`
+     - `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-15-2026-10-27/screenshots/04-large-paste-inline.png`
+5. **Queued messages**: While turn was actively synthesizing, sent a second question. `QueuedMessagesStrip` appeared above composer with the queued message (`05-queued-messages-strip.png`). Once the first turn completed, the queued message was automatically delivered and answered by the model (`05-queued-message-delivered.png`).
+   - Screenshots:
+     - `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-15-2026-10-27/screenshots/05-queued-messages-strip.png`
+     - `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-15-2026-10-27/screenshots/05-queued-message-delivered.png`
+6. **Draft preset chips**: On an empty session composer, `DraftPresetChips` displayed starters ("Explore the codebase", "Catch me up", "Weigh my options", etc.) (`06-draft-preset-chips.png`). Clicking a starter immediately applied the prompt.
+   - Screenshot: `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-15-2026-10-27/screenshots/06-draft-preset-chips.png`
+7. **Permission control (Ask mode)**: With composer permission control set to "Permissions: ask every time" and agent set to `task`, sent command to run bash `echo test-ask-prompt-15`. `PermissionCard` appeared prompting for approval (`07-permission-ask-prompt.png`). Clicking "Allow once" executed the bash tool and displayed the output (`07-permission-approved-run.png`).
+   - Screenshots:
+     - `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-15-2026-10-27/screenshots/07-permission-ask-prompt.png`
+     - `/home/shizuku/Project/ohpichamber-omp-artifacts/upstream-refresh-15-2026-10-27/screenshots/07-permission-approved-run.png`
+
+## Limits
+
+- `sessionReferences.ts` and `sessionReferences.test.ts` / `sessionMentionChips.tsx`: Deferred to Task 07 (`.workflow/tasks/upstream-refresh/07-review-surfaces-board-file-views.md`).
+- `isPastedInput`: Consumer `InlineCommentInput.tsx` is deferred to Task 07 (`.workflow/tasks/upstream-refresh/07-review-surfaces-board-file-views.md`).
+- Project-scoped magic prompt overrides: Deferred to Task 07 (`.workflow/tasks/upstream-refresh/07-review-surfaces-board-file-views.md`).
+- Turn stats elapsed 0.0s on tool calls: Pre-existing technical debt recorded in `.workflow/technical-debt.md`.

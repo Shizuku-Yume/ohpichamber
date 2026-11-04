@@ -21,7 +21,7 @@ import { RuntimeAPIProvider } from '@/contexts/RuntimeAPIProvider';
 import { useAuthSessionStore } from '@/lib/runtime-auth-expiry';
 import { registerRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { Toaster } from '@/components/ui/sonner';
+import { MobileToaster } from './MobileToaster';
 import { usePushVisibilityBeacon } from '@/hooks/usePushVisibilityBeacon';
 import { useRouter } from '@/hooks/useRouter';
 import { useTerminalSessionKeepalive } from '@/hooks/useTerminalSessionKeepalive';
@@ -36,7 +36,6 @@ import { readTabletLayout, useOrientation, useTabletLayout } from '@/lib/device'
 import { useHardwareKeyboard } from '@/lib/hardwareKeyboard';
 import { useI18n } from '@/lib/i18n';
 import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
-import { runtimeFetch } from '@/lib/runtime-fetch';
 import { getRuntimeApiBaseUrl, subscribeRuntimeEndpointChanged, switchRuntimeEndpoint, MOBILE_DISCONNECTED_RUNTIME_KEY } from '@/lib/runtime-switch';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useAuthoritativeSessionCleanup } from '@/components/session/sidebar/list/useAuthoritativeSessionCleanup';
@@ -45,9 +44,9 @@ import { cn } from '@/lib/utils';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useAgentsStore } from '@/stores/useAgentsStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
-import { useFeatureFlagsStore } from '@/stores/useFeatureFlagsStore';
 import { useSourceControlAuthStore } from '@/stores/useSourceControlAuthStore';
-import { useLinearAuthStore } from '@/stores/useLinearAuthStore';
+import { useSourceControlProviderRegistry } from '@/lib/source-control/providers/registry';
+import { refreshTrackers } from '@/stores/useTrackerAuthStore';
 import { useGitStore } from '@/stores/useGitStore';
 import { useMcpConfigStore, type McpDraft } from '@/stores/useMcpConfigStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
@@ -77,6 +76,8 @@ import { ScheduledTasksView, type ScheduledTasksLeaveReason } from '@/components
 import { MobileWorkspaceDrawer, type MobileWorkspaceTab } from './MobileWorkspaceDrawer';
 import { DedicatedMobileAppProvider, useMobileSettingsSurfaceOpener, type MobileAppActions } from './mobileAppContext';
 import { autoConnectLastInstance, getAutoConnectTargetLabel, logMobileConnectEvent, reprobeActiveConnection, suppressAutoConnectUntilManualConnect, type AutoConnectOutcome } from './mobileConnections';
+import { subscribeActiveRelayTunnelStatus } from '@/lib/relay/runtime-tunnel';
+import { isRelayLimitReached } from '@/lib/relay/tunnel-client';
 import { isCapacitorMobileApp, useNativeAndroidBackButton, useNativeMobileChrome, useNativeMobileLifecycle } from './mobileNativeChrome';
 import { reconnectAppForTransportSwitch, resetAppForRuntimeEndpointChange } from './runtimeEndpointReset';
 import { useAppFontEffects } from './useAppFontEffects';
@@ -759,8 +760,7 @@ function MobileAppContent({ apis }: MobileAppProps) {
   const clearError = useSessionUIStore((state) => state.clearError);
   const setIsMobile = useUIStore((state) => state.setIsMobile);
   const refreshSourceControlAuth = useSourceControlAuthStore((state) => state.refreshAll);
-  const refreshLinearAuthStatus = useLinearAuthStore((state) => state.refreshStatus);
-  const setPlanModeEnabled = useFeatureFlagsStore((state) => state.setPlanModeEnabled);
+  const refreshSourceControlProviders = useSourceControlProviderRegistry((state) => state.refresh);
   const projects = useProjectsStore((state) => state.projects);
   // The mobile shell has no layout-level session list sync, so a lost
   // `session.deleted` is reconciled here from the same complete global
@@ -817,8 +817,9 @@ function MobileAppContent({ apis }: MobileAppProps) {
     // only refresh in place when the transport is 'unchanged'.
     const refreshInPlace = () => {
       void initializeApp();
+      void refreshSourceControlProviders(apis.sourceControl);
       void refreshSourceControlAuth(apis.sourceControl, { force: true });
-      void refreshLinearAuthStatus(apis.linear, { force: true });
+      void refreshTrackers(apis.trackers);
       if (!providersLoaded) void loadProviders({ source: 'mobileApp:nativeResume' });
       void loadAgents(useDirectoryStore.getState().currentDirectory);
     };
@@ -839,6 +840,15 @@ function MobileAppContent({ apis }: MobileAppProps) {
         // land back on the connect screen instead of silently bouncing them.
         setAutoConnectNotice({ kind: 'auth-expired', label: getAutoConnectTargetLabel() ?? '' });
         disconnect('needs-login');
+        return;
+      }
+      if (outcome === 'relay-limit') {
+        // The relay refused this device over its limits. The parked tunnel
+        // makes no attempt of its own, so the grace ladder below would only
+        // keep the user on a frozen session. The connect screen says why;
+        // tapping the instance, or the next resume/online, tries again.
+        setAutoConnectNotice({ kind: 'relay-limit', label: getAutoConnectTargetLabel() ?? '' });
+        disconnect('relay-limit');
         return;
       }
       if (outcome === 'unreachable') {
@@ -866,6 +876,11 @@ function MobileAppContent({ apis }: MobileAppProps) {
                 disconnect('retry-needs-login');
                 return;
               }
+              if (retry === 'relay-limit') {
+                setAutoConnectNotice({ kind: 'relay-limit', label: getAutoConnectTargetLabel() ?? '' });
+                disconnect('retry-relay-limit');
+                return;
+              }
               if (!lastAttempt) {
                 retryAt(attempt + 1);
                 return;
@@ -887,10 +902,22 @@ function MobileAppContent({ apis }: MobileAppProps) {
       lastNativeResumeSyncEventAtRef.current = now;
       window.dispatchEvent(new Event('openchamber:system-resume'));
     }
-  }, [apis.sourceControl, apis.linear, initializeApp, loadAgents, loadProviders, providersLoaded, refreshSourceControlAuth, refreshLinearAuthStatus]);
+  }, [apis.sourceControl, apis.trackers, initializeApp, loadAgents, loadProviders, providersLoaded, refreshSourceControlAuth, refreshSourceControlProviders]);
 
   useNativeMobileChrome();
   useNativeMobileLifecycle(handleNativeResume);
+
+  // The runtime tunnel can be refused over the relay's limits on a reconnect
+  // while the app is in the foreground. It then parks without a resume to
+  // wake it, and the shell would sit on "reconnecting" over a frozen session.
+  // The resume re-probe settles it: a reachable LAN takes over, otherwise the
+  // connect screen explains the refusal.
+  React.useEffect(() => {
+    if (!isNativeMobileApp) return;
+    return subscribeActiveRelayTunnelStatus((status) => {
+      if (isRelayLimitReached(status)) handleNativeResume();
+    });
+  }, [isNativeMobileApp, handleNativeResume]);
 
   // Network-change re-probe. The resume hook only fires on background→foreground,
   // but on Android switching Wi-Fi (quick-settings tile) does NOT background the
@@ -994,6 +1021,8 @@ function MobileAppContent({ apis }: MobileAppProps) {
       // the saved instance didn't come back (unreachable vs revoked auth).
       if (outcome.status === 'unreachable') {
         setAutoConnectNotice({ kind: 'unreachable', label: outcome.label });
+      } else if (outcome.status === 'relay-limit') {
+        setAutoConnectNotice({ kind: 'relay-limit', label: outcome.label });
       } else if (outcome.status === 'needs-login') {
         setAutoConnectNotice({ kind: 'auth-expired', label: outcome.label });
       }
@@ -1050,9 +1079,15 @@ function MobileAppContent({ apis }: MobileAppProps) {
         // refuses on launch and answers 200 two minutes later). Show the
         // connect screen on the fast verdict — no splash hostage — and retry
         // once in the background with the full budget; a success reconnects
-        // the app from the connect screen on its own.
+        // the app from the connect screen on its own. A relay refusal over its
+        // limits gets no such retry: dialing again at once only counts against
+        // the same limits.
         dropToConnectScreen(label ? { kind: 'unreachable', label } : null);
         void autoConnectLastInstance({ fast: false, skipIfConnected: true }).catch(() => null);
+        return;
+      }
+      if (outcome === 'relay-limit') {
+        dropToConnectScreen(label ? { kind: 'relay-limit', label } : null);
         return;
       }
       // 'no-connection': at cold start the runtime key may not map to a saved
@@ -1064,6 +1099,8 @@ function MobileAppContent({ apis }: MobileAppProps) {
         dropToConnectScreen({ kind: 'auth-expired', label: fallback.label });
       } else if (fallback.status === 'unreachable') {
         dropToConnectScreen({ kind: 'unreachable', label: fallback.label });
+      } else if (fallback.status === 'relay-limit') {
+        dropToConnectScreen({ kind: 'relay-limit', label: fallback.label });
       } else {
         dropToConnectScreen(null);
       }
@@ -1138,9 +1175,10 @@ function MobileAppContent({ apis }: MobileAppProps) {
   // answer that stuck until something else forced a re-check.
   React.useEffect(() => {
     if (!isConnected) return;
+    void refreshSourceControlProviders(apis.sourceControl);
     void refreshSourceControlAuth(apis.sourceControl, { force: true });
-    void refreshLinearAuthStatus(apis.linear, { force: true });
-  }, [apis.sourceControl, apis.linear, isConnected, refreshSourceControlAuth, refreshLinearAuthStatus]);
+    void refreshTrackers(apis.trackers);
+  }, [apis.sourceControl, apis.trackers, isConnected, refreshSourceControlAuth, refreshSourceControlProviders]);
 
   // Discover all worktrees for every known project so the draft session's
   // worktree/branch dropdown can list every available branch — not only the
@@ -1212,25 +1250,6 @@ function MobileAppContent({ apis }: MobileAppProps) {
       unsubscribe();
     };
   }, [isConnected, projects]);
-
-  React.useEffect(() => {
-    let cancelled = false;
-
-    const run = async () => {
-      const res = await runtimeFetch('/health', { method: 'GET' }).catch(() => null);
-      if (!res || !res.ok || cancelled) return;
-      const data = (await res.json().catch(() => null)) as null | { planModeExperimentalEnabled?: unknown };
-      if (!data || cancelled) return;
-      const raw = data.planModeExperimentalEnabled;
-      setPlanModeEnabled(raw === true || raw === 1 || raw === '1' || raw === 'true');
-    };
-
-    void run();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [setPlanModeEnabled]);
 
   React.useEffect(() => {
     if (!error) return;
@@ -1404,7 +1423,7 @@ function MobileAppContent({ apis }: MobileAppProps) {
               <AppLinkConfirmDialog />
               <SharedTrustConfirmDialog />
               {isolatedSpacesEnabled ? <><SpaceAccessDialog /><SpaceActionsSheet /><SpaceApplyDialog /><SpaceDeleteDialog /><SpaceSetupOutputDialog /></> : null}
-              <Toaster position="top-center" offset="calc(var(--oc-safe-area-top, 0px) + 16px)" />
+              <MobileToaster />
             </div>
           </TooltipProvider>
         </RuntimeAPIProvider>

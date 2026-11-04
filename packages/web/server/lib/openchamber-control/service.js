@@ -5,9 +5,12 @@ import {
   OPENCHAMBER_AGENT_TOOL_ACTIONS,
   OPENCHAMBER_WEB_ACTIONS,
   OPENCHAMBER_MEMORY_ACTIONS,
+  OPENCHAMBER_KNOWLEDGE_ACTIONS,
   OPENCHAMBER_NOTIFY_ACTIONS,
 } from './actions.js';
+import { createProjectKnowledgeActions } from './project-knowledge.js';
 import { writeScreenshot } from './screenshots.js';
+import { createPageAnswers, createRenderPageAction } from './render-page.js';
 
 const DEFAULT_WAIT_TIMEOUT_SECONDS = 600;
 const MAX_WAIT_TIMEOUT_SECONDS = 86_400;
@@ -18,6 +21,7 @@ const TOOL_ACTIONS = new Map([
   ['openchamber', new Set(OPENCHAMBER_AGENT_TOOL_ACTIONS)],
   ['web', new Set(OPENCHAMBER_WEB_ACTIONS)],
   ['memory', new Set(OPENCHAMBER_MEMORY_ACTIONS)],
+  ['openchamber_knowledge', new Set(OPENCHAMBER_KNOWLEDGE_ACTIONS)],
   ['notify', new Set(OPENCHAMBER_NOTIFY_ACTIONS)],
 ]);
 const SCHEDULE_TASK_ID_ACTIONS = new Set([
@@ -247,12 +251,28 @@ export const createOpenChamberControlService = (dependencies) => {
     fileOpen = null,
     notifyUser = null,
     agentMemoryActions = null,
+    // Notes, todos and plans behind the `openchamber_knowledge` tool.
+    projectContextRuntime = null,
+    // The resolver the knowledge tool and session knowledge share, so what an
+    // agent writes is what the next session is given.
+    resolveProjectContextId = null,
+    // Every connected window hears this; the ones showing that project open
+    // the plan (openchamber:plan-open-request).
+    showPlan = null,
+    isKnowledgeToolEnabled = async () => true,
     sessionLinks = null,
+    isRenderToolEnabled = async () => true,
+    // Hears when a page an agent shows starts and stops waiting for the
+    // user's answer (render.page with awaitAnswer).
+    onPageWaitChange = () => {},
     // Delivers a dispatched session's result back to the session that asked
     // (`returnResult`); absent means the server cannot offer it.
     dispatchResults = null,
     // Archive lives in OpenChamber's own store now.
     archiveStore = null,
+    // Agent workflows (../workflows/runtime.js); absent where they are not
+    // available, which is every build without OPENCHAMBER_WORKFLOWS_ENABLE.
+    workflowRuntime = null,
     sleep = (duration) => new Promise((resolve) => setTimeout(resolve, duration)),
     now = Date.now,
   } = dependencies;
@@ -304,6 +324,26 @@ export const createOpenChamberControlService = (dependencies) => {
     if (!archiveStore) return null;
     return (await archiveStore.archivedAt(sessionID)) ?? null;
   };
+
+  // projectId and directory are two names for one scope. A project resolves
+  // to its first workspace's directory, the way session create and send do.
+  const resolveProjectDirectory = async (projectId) => {
+    const listed = await projects();
+    const project = listed.items.find((entry) => entry.projectId === projectId);
+    const workspaceId = project?.workspaceIds?.[0];
+    if (!workspaceId) throw new OpenChamberControlError('Project not found', 404);
+    return sessionService.resolveDirectory({ workspaceId });
+  };
+
+  const knowledgeActions = createProjectKnowledgeActions({
+    projectContextRuntime,
+    resolveProjectContextId,
+    isEnabled: isKnowledgeToolEnabled,
+    showPlan,
+    resolveDirectory: (input = {}) => (input.projectId
+      ? resolveProjectDirectory(input.projectId)
+      : sessionService.resolveDirectory(input)),
+  });
 
   const projects = async () => {
     const result = await listProjects();
@@ -377,6 +417,70 @@ export const createOpenChamberControlService = (dependencies) => {
     return actual;
   };
 
+  const pageAnswers = createPageAnswers({ onWaitChange: onPageWaitChange });
+  const renderPage = createRenderPageAction({ isEnabled: isRenderToolEnabled, pageAnswers });
+
+  // 2 for a favorite, 1 for a recent model, absent for the rest.
+  const PREFERENCE_BY_RANK = { 2: 'favorite', 1: 'recent' };
+  const modelRefKey = (ref) => `${ref?.providerId ?? ref?.providerID}/${ref?.modelId ?? ref?.modelID}`;
+
+  /**
+   * `models.search`: the catalog of the caller's workspace, the way the model
+   * picker sees it. Models the user hid in the picker stay out, favorites and
+   * then recent models come first, and only the newest of a family shows
+   * unless `all` asks for older versions.
+   */
+  const searchModels = async (input, contextSessionId, contextDirectory) => {
+    const scope = await resolveWorkspaceFor(input, contextSessionId, contextDirectory);
+    const workspaceId = asNonEmptyString(scope?.workspaceId);
+    if (!workspaceId) throw new OpenChamberControlError('Workspace scope is missing workspaceId', 500);
+    const [modelCatalog, providerCatalog, settings] = await Promise.all([
+      agentRequest(`/api/agent/v1/workspaces/${encodeURIComponent(workspaceId)}/models`),
+      agentRequest(`/api/agent/v1/workspaces/${encodeURIComponent(workspaceId)}/providers`),
+      readSettingsFromDiskMigrated(),
+    ]);
+    const providerNames = new Map((Array.isArray(providerCatalog?.providers) ? providerCatalog.providers : [])
+      .map((provider) => [provider.providerId, provider.name]));
+    const refs = (value) => new Set((Array.isArray(value) ? value : []).map(modelRefKey));
+    const hidden = refs(settings?.hiddenModels);
+    const rank = new Map([
+      ...[...refs(settings?.recentModels)].map((key) => [key, 1]),
+      ...[...refs(settings?.favoriteModels)].map((key) => [key, 2]),
+    ]);
+    const provider = asNonEmptyString(input.provider)?.toLowerCase();
+    const terms = (asNonEmptyString(input.query) ?? '').toLowerCase().split(/\s+/).filter(Boolean);
+    const shownFamilies = new Set();
+    const models = (Array.isArray(modelCatalog?.models) ? modelCatalog.models : [])
+      .filter((model) => !hidden.has(modelRefKey({ providerId: model.provider, modelId: model.modelId })))
+      .filter((model) => !provider
+        || model.provider.toLowerCase() === provider
+        || providerNames.get(model.provider)?.toLowerCase() === provider)
+      .filter((model) => {
+        const text = `${modelRefKey({ providerId: model.provider, modelId: model.modelId })} ${model.name}`.toLowerCase();
+        return terms.every((term) => text.includes(term));
+      })
+      .toSorted((left, right) => (rank.get(modelRefKey({ providerId: right.provider, modelId: right.modelId })) ?? 0)
+        - (rank.get(modelRefKey({ providerId: left.provider, modelId: left.modelId })) ?? 0)
+        || (providerNames.get(left.provider) ?? left.provider).localeCompare(providerNames.get(right.provider) ?? right.provider)
+        || left.name.localeCompare(right.name));
+    const offset = Number.isSafeInteger(input.offset) && input.offset > 0 ? input.offset : 0;
+    const limit = Number.isSafeInteger(input.limit) && input.limit > 0 ? Math.min(input.limit, 100) : 10;
+    const page = models.slice(offset, offset + limit);
+    return {
+      workspaceId,
+      models: page.map((model) => ({
+        id: `${model.provider}/${model.modelId}`,
+        name: model.name,
+        provider: providerNames.get(model.provider) ?? model.provider,
+        preference: PREFERENCE_BY_RANK[rank.get(modelRefKey({ providerId: model.provider, modelId: model.modelId }))],
+        status: model.status ?? null,
+        variants: model.variants.map((variant) => variant.variant),
+      })),
+      total: models.length,
+      next: offset + limit < models.length ? offset + limit : null,
+    };
+  };
+
   const models = async (input, contextSessionId, contextDirectory) => {
     const scope = await resolveWorkspaceFor(input, contextSessionId, contextDirectory);
     const workspaceId = asNonEmptyString(scope?.workspaceId);
@@ -405,23 +509,23 @@ export const createOpenChamberControlService = (dependencies) => {
     .join('')
     .trim();
 
-  const MESSAGE_PAGE_LIMIT = 200;
+  const MESSAGE_PAGE_LIMIT = 100;
   const sessionMessages = async (sessionID, role, limit) => {
     const collected = [];
     const turns = new Map();
     const seenCursors = new Set();
     let cursor;
-    for (let pageNumber = 0; pageNumber < 100; pageNumber += 1) {
+    while (true) {
       const query = new URLSearchParams({ limit: String(MESSAGE_PAGE_LIMIT), ...(cursor ? { cursor } : {}) });
       const page = await sessionService.history(sessionID, query.toString());
       for (const turn of Array.isArray(page?.turns) ? page.turns : []) turns.set(turn.turnId, turn);
       const messages = Array.isArray(page?.messages) ? page.messages : [];
       collected.push(...messages);
       const next = asNonEmptyString(page?.nextCursor);
-      if (!next || messages.length === 0 || seenCursors.has(next)) break;
+      if (!next) break;
+      if (seenCursors.has(next)) throw new OpenChamberControlError('History cursor repeated', 500);
       seenCursors.add(next);
       cursor = next;
-      if (limit !== undefined && collected.filter((message) => role === 'all' || message.role === role).length >= limit) break;
     }
     const result = collected
       .filter((message) => (message.role === 'user' || message.role === 'assistant') && (role === 'all' || message.role === role))
@@ -516,6 +620,17 @@ export const createOpenChamberControlService = (dependencies) => {
   };
 
   const executeSessionAction = async (action, input, contextDirectory, signal, contextSessionId) => {
+    // The tool path forwards raw JSON, so a boolean parameter can arrive as the
+    // string "true". Both of these are compared with `=== true` below, which
+    // would read a string as false and silently drop the behavior: a dispatch
+    // whose result is never delivered, or a call that returns before the turn
+    // it asked to wait for. Reject a non-boolean loudly instead.
+    if (input.wait !== undefined && !isBoolean(input.wait)) {
+      throw new OpenChamberControlError('wait must be a boolean', 400);
+    }
+    if (input.returnResult !== undefined && !isBoolean(input.returnResult)) {
+      throw new OpenChamberControlError('returnResult must be a boolean', 400);
+    }
     if (input.timeout !== undefined && input.wait !== true) throw new OpenChamberControlError('timeout requires wait', 400);
     if (input.lastAssistant === true && input.wait !== true) throw new OpenChamberControlError('lastAssistant requires wait', 400);
     assertSingleScope(input);
@@ -684,6 +799,19 @@ export const createOpenChamberControlService = (dependencies) => {
       parameters.submit = input.submit === true;
     }
 
+    if (action === 'browser.select') {
+      const selector = asNonEmptyString(input.selector);
+      if (!selector) throw new OpenChamberControlError('selector is required for browser.select', 400);
+      const hasLabel = typeof input.label === 'string';
+      const hasValue = typeof input.value === 'string';
+      if (hasLabel === hasValue) {
+        throw new OpenChamberControlError('browser.select requires exactly one of label or value', 400);
+      }
+      parameters.selector = selector;
+      if (hasLabel) parameters.label = input.label;
+      else parameters.value = input.value;
+    }
+
     if (action === 'browser.scroll') {
       const selector = asNonEmptyString(input.selector);
       const direction = asNonEmptyString(input.direction);
@@ -749,6 +877,9 @@ export const createOpenChamberControlService = (dependencies) => {
       if (!CONTROL_ACTIONS.has(action)) {
         throw new OpenChamberControlError(`Unsupported OpenChamber action: ${action || 'missing'}`, 400);
       }
+      if (OPENCHAMBER_KNOWLEDGE_ACTIONS.includes(action)) {
+        return await knowledgeActions.execute(action, input, contextDirectory, options.contextSessionId);
+      }
       if (action.startsWith('memory.')) {
         if (!agentMemoryActions) {
           throw new OpenChamberControlError('Agent memory is not available on this server', 503);
@@ -777,6 +908,21 @@ export const createOpenChamberControlService = (dependencies) => {
         }
         return result.body;
       }
+      if (action.startsWith('workflow.')) {
+        if (!workflowRuntime) throw new OpenChamberControlError('Workflows are not available on this server', 503);
+        return await workflowRuntime.executeAction(action, input, {
+          sessionId: asNonEmptyString(options.contextSessionId),
+          directory: asNonEmptyString(contextDirectory),
+        });
+      }
+      if (action === 'render.page') {
+        return await renderPage(input, {
+          sessionId: asNonEmptyString(options.contextSessionId),
+          callId: asNonEmptyString(options.contextCallId),
+          directory: asNonEmptyString(contextDirectory),
+          signal: options.signal,
+        });
+      }
       if (action === 'file.open') {
         if (!fileOpen) {
           throw new OpenChamberControlError('The file viewer is not available on this server', 503);
@@ -789,6 +935,7 @@ export const createOpenChamberControlService = (dependencies) => {
       }
       if (action === 'projects.list') return projects();
       if (action === 'models.list') return models(input, options.contextSessionId, contextDirectory);
+      if (action === 'models.search') return searchModels(input, options.contextSessionId, contextDirectory);
       if (action === 'schedule.status') return scheduledTaskService.status();
       if (action.startsWith('schedule.')) {
         const taskID = asNonEmptyString(input.taskId);
@@ -904,7 +1051,9 @@ export const createOpenChamberControlService = (dependencies) => {
         ? settings?.agentWebToolEnabled !== false
         : toolName === 'memory'
           ? settings?.agentMemoryToolEnabled === true
-          : settings?.agentNotifyToolEnabled === true;
+          : toolName === 'openchamber_knowledge'
+            ? settings?.agentKnowledgeToolEnabled !== false
+            : settings?.agentNotifyToolEnabled === true;
     return enabled ? null : { code: 'FEATURE_DISABLED', status: 403 };
   };
 
@@ -944,5 +1093,5 @@ export const createOpenChamberControlService = (dependencies) => {
     }
   };
 
-  return { execute, invokeHostAction, resolveSessionDirectory };
+  return { execute, invokeHostAction, resolveSessionDirectory, answerPage: pageAnswers.answer };
 };

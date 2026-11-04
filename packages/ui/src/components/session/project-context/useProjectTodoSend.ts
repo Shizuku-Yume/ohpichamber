@@ -3,7 +3,8 @@ import React from 'react';
 import { toast } from '@/components/ui';
 import { generateBranchName } from '@/lib/git/branchNameGenerator';
 import { useI18n } from '@/lib/i18n';
-import { renderMagicPrompt } from '@/lib/magicPrompts';
+import { loadMagicPrompts } from '@/lib/magicPrompts';
+import { getRuntimeKey, getRuntimeSwitchRevision } from '@/lib/runtime-switch';
 import type { ProjectRef } from '@/lib/projectContextApi';
 import { createWorktreeSessionForNewBranch } from '@/lib/worktreeSessionCreator';
 import { useUIStore } from '@/stores/useUIStore';
@@ -92,14 +93,12 @@ export const useProjectTodoSend = (options: {
       if (!projectRef || !pendingSendTarget) {
         return;
       }
+      const runtimeKey = getRuntimeKey();
+      const revision = getRuntimeSwitchRevision();
+      const assertOwner = () => {
+        if (getRuntimeKey() !== runtimeKey || getRuntimeSwitchRevision() !== revision) throw new Error('Runtime changed');
+      };
 
-      const visiblePrompt = await renderMagicPrompt('plan.todo.visible', {
-        todo_text: pendingSendTarget.todoText,
-      });
-      const instructionsText = await renderMagicPrompt('plan.todo.instructions', {
-        todo_text: pendingSendTarget.todoText,
-      });
-      const syntheticParts = [{ synthetic: true as const, text: instructionsText }];
 
       setIsSubmitting(true);
       setSendingTodoId(pendingSendTarget.todoId);
@@ -116,17 +115,19 @@ export const useProjectTodoSend = (options: {
             return;
           }
           const created = await createWorktreeSessionForNewBranch(projectRef.path, generateBranchName());
+          assertOwner();
           if (!created?.id) {
             return;
           }
           sessionId = created.id;
-          directoryHint = created.path;
+          directoryHint = created.directory;
         } else {
           const session = await createSession(undefined, projectRef.path, undefined, {
             model: { providerId: execution.providerID, modelId: execution.modelID },
             agent: execution.agent.trim() || undefined,
             variant: execution.variant || undefined,
           });
+          assertOwner();
           if (!session?.sessionId) {
             toast.error(t('rightSidebar.contextNotesTodo.toast.createSessionFailed'));
             return;
@@ -138,6 +139,12 @@ export const useProjectTodoSend = (options: {
         if (!sessionId) {
           return;
         }
+        const prompts = await loadMagicPrompts(directoryHint);
+        assertOwner();
+        const visiblePrompt = prompts.render('plan.todo.visible', { todo_text: pendingSendTarget.todoText });
+        const instructionsText = prompts.render('plan.todo.instructions', { todo_text: pendingSendTarget.todoText });
+        const syntheticParts = [{ synthetic: true as const, text: instructionsText }];
+
 
         const selectionState = useSelectionStore.getState();
         selectionState.saveSessionModelSelection(sessionId, execution.providerID, execution.modelID);
@@ -163,7 +170,10 @@ export const useProjectTodoSend = (options: {
           undefined,
           syntheticParts,
           execution.variant || undefined,
+          undefined,
+          { target: { runtimeKey, sessionId, directory: directoryHint }, runtimeRevision: revision },
         );
+        assertOwner();
 
         toast.success(
           pendingSendTarget.kind === 'worktree'
@@ -173,6 +183,7 @@ export const useProjectTodoSend = (options: {
         setPendingSendTarget(null);
         onActionComplete?.();
       } catch (error) {
+        if (getRuntimeKey() !== runtimeKey || getRuntimeSwitchRevision() !== revision) return;
         const description = error instanceof Error ? error.message : undefined;
         toast.error(t('rightSidebar.contextNotesTodo.toast.sendTodoFailed'), description ? { description } : undefined);
       } finally {

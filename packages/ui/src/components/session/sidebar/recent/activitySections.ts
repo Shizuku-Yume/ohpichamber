@@ -28,6 +28,15 @@ const matchesSidebarSessionQuery = (session: Session, query: string): boolean =>
   return title.includes(normalizedQuery);
 };
 
+export const pruneSessionTreeForSidebarQuery = (node: SessionNode, query: string): SessionNode | null => {
+  if (matchesSidebarSessionQuery(node.session, query)) return node;
+  const children = node.children.flatMap((child) => {
+    const pruned = pruneSessionTreeForSidebarQuery(child, query);
+    return pruned ? [pruned] : [];
+  });
+  return children.length > 0 ? { ...node, children } : null;
+};
+
 /**
  * Whether a session tree answers a sidebar query: its root or any session
  * below it. A zone that lists whole trees and takes them out of every other
@@ -44,6 +53,35 @@ export const countSessionTreeQueryMatches = (node: SessionNode, query: string): 
   (matchesSidebarSessionQuery(node.session, query) ? 1 : 0)
   + node.children.reduce((total, child) => total + countSessionTreeQueryMatches(child, query), 0)
 );
+
+/**
+ * The Pinned or In work sessions a search lists, with the matches each one
+ * counts. `'tree'` looks through the whole session tree, since one-line zone
+ * rows open to the match and search lists these sessions nowhere else.
+ * `'session'` matches the session itself only.
+ */
+export type MatchedZoneSessions = {
+  sessions: Session[];
+  matchCountById: Map<string, number>;
+};
+
+export const matchZoneSessionsForSidebarQuery = (
+  zone: readonly Session[],
+  getTree: (session: Session) => SessionNode,
+  query: string,
+  scope: 'tree' | 'session',
+): MatchedZoneSessions => {
+  const matchCountById = new Map<string, number>();
+  if (!query) return { sessions: [...zone], matchCountById };
+  const sessions = zone.filter((session) => {
+    const matches = scope === 'tree'
+      ? countSessionTreeQueryMatches(getTree(session), query)
+      : Number(matchesSidebarSessionQuery(session, query));
+    if (matches > 0) matchCountById.set(session.sessionId, matches);
+    return matches > 0;
+  });
+  return { sessions, matchCountById };
+};
 
 const RECENT_SESSION_MAX_AGE_MS = 48 * 60 * 60 * 1000;
 

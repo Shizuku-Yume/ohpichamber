@@ -559,17 +559,17 @@ describe('updateDesktopSettings', () => {
     getWindow();
     useSessionDisplayStore.setState({
       projectDisplayMode: 'all',
-      sidebarViewMode: 'projects',
+      sidebarGrouping: 'project',
       projectSortOrder: 'manual',
-      showRecentSection: true,
+      showChatsSection: true,
       singleProjectId: 'local-project',
     });
     registerSettingsApi(async () => ({}), async () => ({
       settings: {
         sidebarProjectDisplayMode: 'single',
-        sidebarViewMode: 'timeline',
+        sidebarGrouping: 'time',
         sidebarProjectSortOrder: 'recent',
-        sidebarShowRecentSection: false,
+        sidebarShowChatsSection: false,
         autoSaveEnabled: true,
         draftStartersCraftGoalAdded: true,
         draftStartersScheduleTaskAdded: true,
@@ -582,15 +582,15 @@ describe('updateDesktopSettings', () => {
     const state = useSessionDisplayStore.getState();
     expect({
       projectDisplayMode: state.projectDisplayMode,
-      sidebarViewMode: state.sidebarViewMode,
+      sidebarGrouping: state.sidebarGrouping,
       projectSortOrder: state.projectSortOrder,
-      showRecentSection: state.showRecentSection,
+      showChatsSection: state.showChatsSection,
       singleProjectId: state.singleProjectId,
     }).toEqual({
       projectDisplayMode: 'single',
-      sidebarViewMode: 'timeline',
+      sidebarGrouping: 'time',
       projectSortOrder: 'recent',
-      showRecentSection: false,
+      showChatsSection: false,
       singleProjectId: 'local-project',
     });
   });
@@ -600,9 +600,9 @@ describe('updateDesktopSettings', () => {
     const saves: Array<Partial<SettingsPayload>> = [];
     useSessionDisplayStore.setState({
       projectDisplayMode: 'single',
-      sidebarViewMode: 'timeline',
+      sidebarGrouping: 'time',
       projectSortOrder: 'a-z',
-      showRecentSection: false,
+      showChatsSection: false,
     });
     registerSettingsApi(async (changes) => {
       saves.push(changes);
@@ -623,14 +623,14 @@ describe('updateDesktopSettings', () => {
     const state = useSessionDisplayStore.getState();
     expect({
       projectDisplayMode: state.projectDisplayMode,
-      sidebarViewMode: state.sidebarViewMode,
+      sidebarGrouping: state.sidebarGrouping,
       projectSortOrder: state.projectSortOrder,
-      showRecentSection: state.showRecentSection,
+      showChatsSection: state.showChatsSection,
     }).toEqual({
       projectDisplayMode: 'single',
-      sidebarViewMode: 'timeline',
+      sidebarGrouping: 'time',
       projectSortOrder: 'a-z',
-      showRecentSection: false,
+      showChatsSection: false,
     });
   });
 
@@ -638,9 +638,9 @@ describe('updateDesktopSettings', () => {
     getWindow();
     useSessionDisplayStore.setState({
       projectDisplayMode: 'single',
-      sidebarViewMode: 'timeline',
+      sidebarGrouping: 'time',
       projectSortOrder: 'z-a',
-      showRecentSection: false,
+      showChatsSection: false,
     });
     registerSettingsApi(async () => ({}), async () => {
       throw new Error('offline');
@@ -651,14 +651,14 @@ describe('updateDesktopSettings', () => {
     const state = useSessionDisplayStore.getState();
     expect({
       projectDisplayMode: state.projectDisplayMode,
-      sidebarViewMode: state.sidebarViewMode,
+      sidebarGrouping: state.sidebarGrouping,
       projectSortOrder: state.projectSortOrder,
-      showRecentSection: state.showRecentSection,
+      showChatsSection: state.showChatsSection,
     }).toEqual({
       projectDisplayMode: 'single',
-      sidebarViewMode: 'timeline',
+      sidebarGrouping: 'time',
       projectSortOrder: 'z-a',
-      showRecentSection: false,
+      showChatsSection: false,
     });
   });
 

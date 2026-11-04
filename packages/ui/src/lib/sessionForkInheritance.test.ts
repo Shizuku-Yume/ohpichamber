@@ -54,6 +54,10 @@ describe('withoutSourceOwnedLinks', () => {
     expect(withoutSourceOwnedLinks(metadata)).toEqual({});
   });
 
+  test('drops the scheduled-run marker, so the fork can go into In work', () => {
+    expect(withoutSourceOwnedLinks({ other: 1, openchamber: { kind: 'scheduled' } as unknown as SessionMetadata['openchamber'] } as unknown as SessionMetadata)).toEqual({ other: 1 });
+  });
+
   test('keeps a review marker and returns the same object when nothing changes', () => {
     const metadata: SessionMetadata = { openchamber: { kind: 'review', originalSessionID: 'ses_parent', goal: goal(false) } };
     expect(withoutSourceOwnedLinks(metadata)).toBe(metadata);

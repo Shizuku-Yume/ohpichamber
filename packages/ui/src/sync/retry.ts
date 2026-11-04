@@ -25,6 +25,7 @@ export const STARTUP_RETRY: RetryOptions = {
 
 // Half-open streams and bounded read timeouts are transient during Host warmup.
 const TRANSIENT_MESSAGES = [
+  "transport failure",
   "load failed",
   "network connection was lost",
   "network request failed",
@@ -43,6 +44,8 @@ const TRANSIENT_MESSAGES = [
 function isRetryableError(error: unknown): boolean {
   if (!error) return false
   if (error instanceof CanonicalApiError) return error.problem.retryable
+  // The transport reports a caller's abort as a transport failure too.
+  if (error instanceof Error && error.cause instanceof DOMException && error.cause.name === "AbortError") return false
   const message = String(error instanceof Error ? error.message : error).toLowerCase()
   if (TRANSIENT_MESSAGES.some((m) => message.includes(m))) return true
   const status = typeof error === "object" && error !== null && "status" in error && typeof error.status === "number"

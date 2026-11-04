@@ -17,6 +17,9 @@ const createRouteRegistry = () => {
       post(routePath, handler) {
         routes.set(`POST ${routePath}`, handler);
       },
+      patch(routePath, handler) {
+        routes.set(`PATCH ${routePath}`, handler);
+      },
     },
     getRoute(method, routePath) {
       return routes.get(`${method} ${routePath}`);
@@ -72,6 +75,7 @@ const registerStore = (dataDir, options = {}) => {
   const app = {
     get(routePath, handler) { routes.set(`GET ${routePath}`, handler); },
     post(routePath, handler) { routes.set(`POST ${routePath}`, handler); },
+    patch(routePath, handler) { routes.set(`PATCH ${routePath}`, handler); },
   };
   const store = createSessionFoldersStore({ openchamberDataDir: dataDir, ...options });
   registerSessionFoldersRoutes(app, { sessionFoldersStore: store });
@@ -85,7 +89,12 @@ const registerStore = (dataDir, options = {}) => {
     await routes.get('GET /api/session-folders')({}, response);
     return response;
   };
-  return { store, post, get };
+  const patch = async (changes) => {
+    const response = createMockResponse();
+    await routes.get('PATCH /api/session-folders')({ body: { changes } }, response);
+    return response;
+  };
+  return { store, post, get, patch };
 };
 
 describe('session folders routes backed by Host SQLite', () => {
@@ -227,5 +236,74 @@ describe('session folders routes backed by Host SQLite', () => {
     expect(state.snapshot.deletedFolderIds).toEqual({ deleted: 20 });
     expect(state.errors).toEqual({});
     await reopened.store.close();
+  });
+});
+
+describe('session folders change protocol', () => {
+  it('applies changes in order and answers with the stored state', async () => {
+    const routes = registerStore(makeDataDir(), { now: () => 100 });
+    const created = await routes.patch([{
+      type: 'create', scopeKey: 'project',
+      folder: { id: 'archive', name: 'Archive', parentId: null, createdAt: 5 },
+    }]);
+    expect(created).toMatchObject({ statusCode: 200, body: { exists: true, revision: '1', foldersMap: { project: [{ id: 'archive', name: 'Archive', sessionIds: [], createdAt: 5, parentId: null }] } } });
+    const assigned = await routes.patch([
+      { type: 'assign', scopeKey: 'project', folderId: 'archive', sessionIds: ['s1', 's2'] },
+      { type: 'rename', scopeKey: 'project', folderId: 'archive', name: 'Old work' },
+    ]);
+    expect(assigned).toMatchObject({ body: { revision: '2', foldersMap: { project: [{ id: 'archive', name: 'Old work', sessionIds: ['s1', 's2'] }] } } });
+    const unassigned = await routes.patch([{ type: 'unassign', scopeKey: 'project', sessionIds: ['s1'] }]);
+    expect(unassigned).toMatchObject({ body: { revision: '3', foldersMap: { project: [{ id: 'archive', sessionIds: ['s2'] }] } } });
+    await routes.store.close();
+  });
+
+  it('keeps a deletion as a tombstone so a stale whole copy cannot bring the folder back', async () => {
+    const routes = registerStore(makeDataDir(), { now: () => 100 });
+    await routes.post({ ...folderPayload(10), foldersMap: { project: [folder('f1', 'One', ['s1']), folder('f2', 'Two', [])] } });
+    await expect(routes.patch([{ type: 'delete', scopeKey: 'project', folderIds: ['f1'] }]))
+      .resolves.toMatchObject({ body: { foldersMap: { project: [{ id: 'f2' }] } } });
+    // A client from before shared folders writes its whole stale copy.
+    await routes.post({ ...folderPayload(20), foldersMap: { project: [folder('f1', 'One', ['s1']), folder('f2', 'Two', [])] } });
+    await expect(routes.get()).resolves.toMatchObject({ body: { foldersMap: { project: [{ id: 'f2' }] } } });
+    await routes.store.close();
+  });
+
+  it('drops the folders of closed project scopes and keeps sibling scopes', async () => {
+    const routes = registerStore(makeDataDir(), { now: () => 100 });
+    await routes.post({
+      ...folderPayload(10),
+      foldersMap: { '/repo': [folder('a', 'A', ['s1'])], '/repo/wt': [folder('b', 'B', [])], '/other': [folder('c', 'C', [])] },
+    });
+    await expect(routes.patch([{ type: 'forget-scopes', scopeKeys: ['/repo', '/repo/wt'] }]))
+      .resolves.toMatchObject({ body: { foldersMap: { '/other': [{ id: 'c' }] } } });
+    await routes.store.close();
+  });
+
+  it('imports a device copy once, joining a same-name folder instead of duplicating it', async () => {
+    const routes = registerStore(makeDataDir(), { now: () => 100 });
+    await routes.patch([{ type: 'create', scopeKey: 'project', folder: { id: 'server', name: 'Work', parentId: null, createdAt: 5 } }]);
+    await routes.patch([{ type: 'assign', scopeKey: 'project', folderId: 'server', sessionIds: ['keep'] }]);
+    const imported = await routes.patch([{
+      type: 'import',
+      foldersMap: { project: [folder('device', 'Work', ['keep', 'local'])] },
+    }]);
+    expect(imported.body.foldersMap.project).toHaveLength(1);
+    expect(imported.body.foldersMap.project[0]).toMatchObject({ id: 'server', name: 'Work', sessionIds: ['keep', 'local'] });
+    await routes.store.close();
+  });
+
+  it('rejects a malformed change before touching the store', async () => {
+    const routes = registerStore(makeDataDir());
+    await expect(routes.patch([{ type: 'delete', scopeKey: 'project', folderIds: [] }])).resolves.toMatchObject({ statusCode: 400 });
+    await routes.store.close();
+  });
+
+  it('does not bump the revision for a change with no effect', async () => {
+    const routes = registerStore(makeDataDir(), { now: () => 100 });
+    const created = await routes.patch([{ type: 'create', scopeKey: 'project', folder: { id: 'f1', name: 'One', parentId: null, createdAt: 5 } }]);
+    expect(created.body.revision).toBe('1');
+    const noop = await routes.patch([{ type: 'rename', scopeKey: 'project', folderId: 'f1', name: 'One' }]);
+    expect(noop.body.revision).toBe('1');
+    await routes.store.close();
   });
 });

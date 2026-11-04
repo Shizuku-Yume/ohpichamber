@@ -45,9 +45,9 @@ interface QuotaStore extends QuotaSettingsState {
   loadSettings: () => Promise<void>;
   fetchAllQuotas: () => Promise<void>;
   /** Resolves true when at least one provider answered — see `ensureLoadedForRuntime`. */
-  fetchQuotas: (providerIds: QuotaProviderId[]) => Promise<boolean>;
+  fetchQuotas: (providerIds: QuotaProviderId[], options?: { invalidate?: boolean }) => Promise<boolean>;
   /** Resolves true when the instance answered, false on a transport failure. */
-  fetchProviderQuota: (providerId: QuotaProviderId) => Promise<boolean>;
+  fetchProviderQuota: (providerId: QuotaProviderId, invalidate?: boolean) => Promise<boolean>;
   setSelectedProvider: (providerId: QuotaProviderId | null) => void;
   setDisplayMode: (mode: 'usage' | 'remaining') => void;
   setDropdownProviderIds: (providerIds: QuotaProviderId[]) => void;
@@ -129,11 +129,11 @@ export const useQuotaStore = create<QuotaStore>()(
         }
       },
 
-      fetchQuotas: async (providerIds) => {
+      fetchQuotas: async (providerIds, { invalidate = false } = {}) => {
         const generation = quotaGeneration;
         try {
           const answered = await Promise.all(
-            providerIds.map((providerId) => get().fetchProviderQuota(providerId))
+            providerIds.map((providerId) => get().fetchProviderQuota(providerId, invalidate))
           );
           if (generation !== quotaGeneration) return false;
           return answered.some(Boolean);
@@ -149,17 +149,23 @@ export const useQuotaStore = create<QuotaStore>()(
         await get().fetchQuotas(QUOTA_PROVIDERS.map((provider) => provider.id));
       },
 
-      fetchProviderQuota: async (providerId) => {
+      fetchProviderQuota: async (providerId, invalidate = false) => {
         // Quota selection is workspace-scoped. Without a resolved workspace the
         // Host would reject the request as missing context, so wait for the
         // catalog owner to publish one instead of turning that into an error.
         const workspaceId = useConfigStore.getState().workspaceId;
         if (!workspaceId) return false;
         // Coalescing is scoped too: a request for workspace A must never be
-        // handed to a caller that is now asking for workspace B.
+        // handed to a caller that is now asking for workspace B. `invalidate` is
+        // how a provider-account switch says the shared request, and any sample
+        // it produces, describe the account being switched away from.
         const requestKey = quotaRequestKey(workspaceId, providerId);
         const existing = quotaRequests.get(requestKey);
-        if (existing) return existing.promise;
+        if (existing && !invalidate) return existing.promise;
+        if (existing) {
+          existing.controller.abort();
+          quotaRequests.delete(requestKey);
+        }
         const generation = quotaGeneration;
         const controller = new AbortController();
         const promise = Promise.resolve().then(async () => {
@@ -172,7 +178,12 @@ export const useQuotaStore = create<QuotaStore>()(
               const message = result.error || 'Failed to fetch quota';
               set(state => {
                 const previous = state.results.find(entry => entry.providerId === providerId);
-                const results = previous?.configured
+                // Preserving the last sample keeps a periodic refresh from
+                // blanking the surface on a blip. After a switch it is wrong:
+                // that sample belongs to the account just left, so keeping it
+                // shows one account's usage as if it were the new account's.
+                const keepPrevious = previous?.configured && !invalidate;
+                const results = keepPrevious
                   ? state.results
                   : [...state.results.filter(entry => entry.providerId !== providerId), result];
                 return { results, refreshErrors: { ...state.refreshErrors, [providerId]: message }, error: message };
@@ -189,14 +200,20 @@ export const useQuotaStore = create<QuotaStore>()(
             return true;
           } catch (error) {
             if (generation !== quotaGeneration) return false;
+            // An abort is this store superseding its own request, not the
+            // instance failing. Recording it would report a refresh error right
+            // after a switch, over the sample being replaced.
+            if (controller.signal.aborted) return false;
             const message = error instanceof Error ? error.message : 'Failed to fetch quota';
             set(state => ({ refreshErrors: { ...state.refreshErrors, [providerId]: message }, error: message }));
             return false;
           } finally {
             if (quotaRequests.get(requestKey)?.controller === controller) quotaRequests.delete(requestKey);
             if (generation === quotaGeneration) {
+              // A superseded request finishes while its replacement still runs;
+              // the provider stays fetching until the replacement settles too.
               set((state) => ({
-                isFetchingProvider: { ...state.isFetchingProvider, [providerId]: false },
+                isFetchingProvider: { ...state.isFetchingProvider, [providerId]: quotaRequests.has(requestKey) },
                 isLoading: quotaRequests.size > 0,
               }));
             }

@@ -9,7 +9,10 @@ export function registerQuotaRoutes(app, { getQuotaProviders, resolveQuotaSelect
       const selections = await listQuotaSelections(req);
       const { listConfiguredQuotaProviders } = await getQuotaProviders();
       return res.json({ providers: await listConfiguredQuotaProviders({ selections }) });
-    } catch { return res.status(503).json({ error: 'Quota provider catalog unavailable' }); }
+    } catch (error) {
+      console.warn('[quota] provider catalog could not be listed:', error?.message ?? error);
+      return res.status(503).json({ error: 'Quota provider catalog unavailable' });
+    }
   });
   app.get('/api/quota/:providerId', async (req, res) => {
     try {

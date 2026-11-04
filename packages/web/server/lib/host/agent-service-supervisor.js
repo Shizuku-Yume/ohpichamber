@@ -127,6 +127,10 @@ export const createAgentServiceSupervisor = ({
   let phase = 'stopped'; let child = null; let port = null; let secret = null;
   let startupPromise = null; let stopPromise = null; let lifecycle = 0; let startupController = null; let accepting = false;
   let restartAttempts = 0; let restartTimer = null; let restartStabilityTimer = null; let terminating = null;
+  // A held archive keeps its replacement generation from starting: its in-memory
+  // lease dies with a crashed service, and a new generation would admit work at
+  // the folder before the Host has removed it.
+  let restartHolds = 0;
   const diagnostics = [];
   const diagnosticLevel = DIAGNOSTIC_LEVELS[diagnosticsLevel] ?? DIAGNOSTIC_LEVELS.error;
   let diagnosticWindowStart = 0; let diagnosticWindowCount = 0; let diagnosticSuppressed = 0; let suppressionFlushTimer = null;
@@ -326,6 +330,9 @@ export const createAgentServiceSupervisor = ({
 
   const scheduleRestart = () => {
     if (phase === 'stopping' || phase === 'stopped' || restartTimer || startupPromise) return;
+    // An archive holds the service down while it removes the folder. No attempt
+    // is consumed: the single resume starts the replacement.
+    if (restartHolds > 0) return;
     // The architecture bounds recovery: 1s, doubling to 15s, at most 3 retries.
     if (restartAttempts >= restartMaxAttempts) { phase = 'failed'; return; }
     const delay = Math.min(restartBaseDelayMs * 2 ** restartAttempts, restartMaxDelayMs);
@@ -346,6 +353,7 @@ export const createAgentServiceSupervisor = ({
   const start = async (fromRestart = false) => {
     if (!fromRestart) { clearRestartTimer(); restartAttempts = 0; }
     if (fromRestart && (phase === 'stopping' || phase === 'stopped')) return state();
+    if (fromRestart && restartHolds > 0) return state();
     if (stopPromise) { await stopPromise; return fromRestart ? state() : start(); }
     if (phase === 'ready') return state();
     if (startupPromise) return startupPromise;
@@ -494,9 +502,22 @@ export const createAgentServiceSupervisor = ({
     return startupPromise;
   };
 
+  const holdRestarts = () => {
+    restartHolds += 1;
+    if (restartTimer) { clearTimeout(restartTimer); restartTimer = null; }
+  };
+  const resumeRestarts = () => {
+    if (restartHolds === 0) return;
+    restartHolds -= 1;
+    if (restartHolds > 0) return;
+    if (phase === 'stopping' || phase === 'stopped' || child || startupPromise) return;
+    void start(true).catch(() => { /* start() scheduled the next attempt */ });
+  };
+
   const stop = async () => {
     lifecycle += 1;
     clearRestartTimer();
+    restartHolds = 0;
     restartAttempts = 0;
     accepting = false;
     authorization.close();
@@ -660,5 +681,5 @@ export const createAgentServiceSupervisor = ({
       throw error;
     }
   };
-  return { start, stop, restart, request, getState: state, getDiagnostics: () => diagnostics.slice() };
+  return { start, stop, restart, request, holdRestarts, resumeRestarts, getState: state, getDiagnostics: () => diagnostics.slice() };
 };

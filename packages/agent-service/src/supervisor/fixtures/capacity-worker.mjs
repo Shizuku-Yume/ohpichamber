@@ -13,7 +13,7 @@ process.on('message', message => {
     shellJobUntil = Date.now() + Number(process.env.WORKER_SHELL_JOB_MS ?? '0');
     if (process.env.WORKER_LOG) appendFileSync(process.env.WORKER_LOG, `${message.type} ${rootSessionId}\n`);
     if (message.type === 'bootstrap') {
-      send({ type: 'opened', workerGeneration: message.workerGeneration, sessionFile: `${process.cwd()}/session.jsonl`, seed: {
+      send({ type: 'opened', workerGeneration: message.workerGeneration, sessionFile: process.env.WORKER_SESSION_FILE ?? `${process.cwd()}/session.jsonl`, seed: {
         createdAt: now, updatedAt: now,
         branch: { branchId: 'branch-fixture', branchVersion: '1', leafMessageId: null },
         turns: [],
@@ -46,3 +46,4 @@ process.on('message', message => {
   if (message.type === 'stop') process.exit(0);
 });
 process.on('disconnect', () => process.exit(0));
+process.on('SIGTERM', () => process.exit(0));

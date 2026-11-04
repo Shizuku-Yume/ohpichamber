@@ -1,6 +1,13 @@
 import { CanonicalEventSchema, SessionSchema, SessionSnapshotSchema } from '@openchamber/agent-contract';
 import { isEnterpriseMode } from '../enterprise-mode.js';
 import { redactGitText } from '../git/redaction.js';
+import { truncateNotificationText } from './message.js';
+import {
+  defaultNotificationTemplates,
+  notificationTexts,
+  renderNotificationText,
+  withTemplateDefaults,
+} from './template-locales.js';
 
 const TITLES = {
   ready: 'Agent response is ready', error: 'Agent hit an error', question: 'Agent needs your input', permission: 'Agent needs permission',
@@ -36,16 +43,37 @@ export const createNotificationTriggerRuntime = (deps) => {
       clearTimeout(entry.timer); pending.delete(key);
     }
   };
-  const fanoutPush = async (payload) => {
+  // The body a phone shows: what happened, after a word that says which kind
+  // of event it is. A finished turn needs no word, its reply says it.
+  const phoneBodyOf = (prefix, text) => {
+    const detail = truncateNotificationText((text ?? '').trim());
+    if (!detail) return '';
+    return prefix ? `${prefix}: ${detail}` : detail;
+  };
+
+  const PERMISSION_PREFIX_BY_ACTION = {
+    bash_command: 'Wants to run',
+    file_write: 'Wants to edit',
+  };
+
+  const fanoutPush = async ({ phoneBody, ...payload }) => {
     const type = payload.data.type;
     const generic = TITLES[type] ?? 'Agent update';
-    const web = isEnterpriseMode() ? { ...payload, title: generic, body: '', data: { url: payload.data.url, sessionId: payload.data.sessionId, type } } : payload;
+    const enterprise = isEnterpriseMode();
+    const web = enterprise ? { ...payload, title: generic, body: '', data: { url: payload.data.url, sessionId: payload.data.sessionId, type } } : payload;
     const visible = isAnyInteractiveClientVisible?.() === true;
     if (!visible) pendingPushTags.add(payload.tag);
+    const knownSessionName = typeof payload.data.sessionName === 'string' ? payload.data.sessionName.trim() : '';
+    // A phone with a push key opens the sealed text on the device; the relay
+    // and the push service see only the generic title. Enterprise mode keeps
+    // the generic text even sealed: the push service is outside its boundary.
+    const sealed = phoneBody && !enterprise
+      ? { title: knownSessionName || generic, body: phoneBody }
+      : undefined;
     await Promise.all([
       Promise.resolve().then(() => sendPushToAllUiSessions?.(web, { requireNoSse: true })).catch(() => console.warn('Web push delivery failed')),
       visible ? Promise.resolve() : Promise.resolve().then(() => sendApnsToAllUiSessions?.({
-        title: generic, body: isEnterpriseMode() ? '' : payload.data.sessionName || 'Session', badge: pendingPushTags.size,
+        title: generic, body: enterprise ? '' : (knownSessionName || 'Session'), sealed, badge: pendingPushTags.size,
         tag: payload.tag, data: { sessionId: payload.data.sessionId },
       }, { requireNoSse: true })).catch(() => console.warn('Native push delivery failed')),
     ]);
@@ -91,26 +119,40 @@ export const createNotificationTriggerRuntime = (deps) => {
       lastTerminalAt.delete(key); lastTerminalAt.set(key, now());
       while (lastTerminalAt.size > 500) lastTerminalAt.delete(lastTerminalAt.keys().next().value);
     }
-    let title = kind === 'permission' ? 'Permission required' : kind === 'question' ? 'Input needed' : kind === 'error' ? 'Tool error' : 'Agent is ready';
-    let body = kind === 'permission' ? 'Agent is waiting for your approval' : kind === 'question' ? 'Agent is waiting for your response'
-      : kind === 'error' ? 'An error occurred' : 'Assistant completed the task';
+    const texts = notificationTexts(settings.locale);
+    let title = kind === 'permission' ? texts.permissionTitle : kind === 'question' ? texts.questionTitle
+      : kind === 'error' ? texts.errorTitle : renderNotificationText(texts.readyTitle, { agent_name: 'Agent' });
+    let body = kind === 'permission' ? texts.permissionBody : kind === 'question' ? texts.questionBody
+      : kind === 'error' ? texts.errorBody : renderNotificationText(texts.readyMessage, { model_name: 'Assistant' });
     let sessionName = '';
+    let phoneBody = '';
     try {
       const variables = await buildTemplateVariables(event, event.sessionId, resolved);
       sessionName = safeText(variables.session_name, resolved);
       const text = kind === 'ready' ? await fetchLastAssistantMessageText(event.sessionId)
-        : kind === 'question' ? event.question.prompt : kind === 'permission' ? event.approval.commandSummary : '';
+        : kind === 'error' ? event.error
+          : kind === 'question' ? event.question.prompt : kind === 'permission' ? event.approval.commandSummary : '';
       variables.last_message = await prepareNotificationLastMessage({ message: safeText(text, resolved), settings });
       for (const key of Object.keys(variables)) variables[key] = safeText(variables[key], resolved);
       const templates = settings.notificationTemplates ?? {};
-      const template = kind === 'ready' ? (subtask ? templates.subtask ?? templates.completion : templates.completion)
-        : kind === 'error' ? templates.error : templates.question;
-      if (template) {
-        const resolvedTitle = resolveNotificationTemplate(template.title, variables);
-        const resolvedBody = resolveNotificationTemplate(template.message, variables);
-        if (resolvedTitle) title = resolvedTitle;
-        if (shouldApplyResolvedTemplateMessage(template.message, resolvedBody, variables)) body = resolvedBody;
-      } else if ((kind === 'question' || kind === 'permission') && variables.last_message) body = variables.last_message;
+      const defaults = defaultNotificationTemplates(settings.locale);
+      // A permission reuses the question template, but its empty title is the
+      // permission wording, not "Input needed".
+      const template = withTemplateDefaults(
+        kind === 'ready' ? (subtask ? templates.subtask ?? templates.completion : templates.completion)
+          : kind === 'error' ? templates.error : templates.question,
+        kind === 'ready' ? (subtask ? defaults.subtask : defaults.completion)
+          : kind === 'error' ? defaults.error
+            : kind === 'permission' ? { ...defaults.question, title: texts.permissionTitle } : defaults.question,
+      );
+      const resolvedTitle = resolveNotificationTemplate(template.title, variables);
+      const resolvedBody = resolveNotificationTemplate(template.message, variables);
+      if (resolvedTitle) title = resolvedTitle;
+      if (shouldApplyResolvedTemplateMessage(template.message, resolvedBody, variables)) body = resolvedBody;
+      phoneBody = kind === 'ready' ? phoneBodyOf('', variables.last_message)
+        : kind === 'error' ? phoneBodyOf('Error', variables.last_message)
+          : kind === 'question' ? phoneBodyOf('Question', safeText(event.question.prompt, resolved))
+            : phoneBodyOf(PERMISSION_PREFIX_BY_ACTION[event.approval.actionType] ?? 'Wants permission', safeText(event.approval.commandSummary, resolved));
     } catch { console.warn('Notification enrichment unavailable; using generic notification'); }
     if (stopped || (requestKey && !pending.has(requestKey))) return;
     title = safeText(title, resolved); body = safeText(body, resolved);
@@ -125,7 +167,7 @@ export const createNotificationTriggerRuntime = (deps) => {
       notified.add(requestKey);
       while (notified.size > 500) notified.delete(notified.values().next().value);
     }
-    await fanoutPush({ title, body, tag, data: { url: deepLink(event.sessionId), sessionId: event.sessionId, sessionName, type: kind } });
+    await fanoutPush({ title, body, phoneBody, tag, data: { url: deepLink(event.sessionId), sessionId: event.sessionId, sessionName, type: kind } });
   };
   const processCanonicalEvent = async (input, scope) => {
     if (stopped) return;
@@ -164,7 +206,8 @@ export const createNotificationTriggerRuntime = (deps) => {
       let sessionName = '';
       try { sessionName = safeText((await buildTemplateVariables(null, sessionId, scope)).session_name, scope); } catch { /* Generic push remains useful. */ }
       const type = status === 'complete' ? 'goal_complete' : status === 'budgetLimited' ? 'goal_budget' : 'goal_blocked';
-      await fanoutPush({ title: safeText(title, scope), body: safeText(body, scope), tag: `goal-${sessionId}`,
+      await fanoutPush({ title: safeText(title, scope), body: safeText(body, scope),
+        phoneBody: phoneBodyOf(safeText(title, scope), safeText(body, scope)) || safeText(title, scope), tag: `goal-${sessionId}`,
         data: { url: deepLink(sessionId), sessionId, sessionName, type } });
     },
     invalidateSession(sessionId) { clearPending(sessionId); },

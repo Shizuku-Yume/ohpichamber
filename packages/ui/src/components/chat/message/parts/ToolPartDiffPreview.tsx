@@ -3,16 +3,19 @@ import { PatchDiff } from '@pierre/diffs/react';
 
 import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 import { ensurePierreThemeRegistered } from '@/lib/shiki/appThemeRegistry';
+import { DIFFS_HIGHLIGHTER } from '@/lib/shiki/diffsHighlighter';
 import { getDefaultTheme } from '@/lib/theme/themes';
 import type { DiffViewMode } from '../DiffViewToggle';
 import { PlainDiffFallback } from './PlainDiffFallback';
+import { PIERRE_DIFF_TINT_CSS } from '@/lib/shiki/pierreDiffTint';
 
 // Loaded lazily from ToolPart: this is the only part of the tool card that
-// needs @pierre/diffs' rendering stack (Shiki core + regex engines), so the
+// needs @pierre/diffs' rendering stack (its highlighters), so the
 // eager chat graph stays free of it and the chunk downloads on the first
 // rendered tool diff.
 
 const TOOL_DIFF_UNSAFE_CSS = `
+  ${PIERRE_DIFF_TINT_CSS}
   [data-diff-header],
   [data-diff] {
     [data-separator] {
@@ -64,20 +67,14 @@ const usePierreThemeConfig = () => {
     };
 };
 
-interface DiffPreviewErrorBoundaryProps {
+class DiffPreviewErrorBoundary extends React.Component<{
     resetKey: string;
     fallback: React.ReactNode;
     children: React.ReactNode;
-}
+}, { hasError: boolean }> {
+    state = { hasError: false };
 
-interface DiffPreviewErrorState {
-    hasError: boolean;
-}
-
-class DiffPreviewErrorBoundary extends React.Component<DiffPreviewErrorBoundaryProps, DiffPreviewErrorState> {
-    state: DiffPreviewErrorState = { hasError: false };
-
-    static getDerivedStateFromError(): DiffPreviewErrorState {
+    static getDerivedStateFromError(): { hasError: boolean } {
         return { hasError: true };
     }
 
@@ -120,6 +117,7 @@ const ToolPartDiffPreview: React.FC<ToolPartDiffPreviewProps> = React.memo(({ di
             overflow: 'wrap' as const,
             theme: pierreTheme,
             themeType: pierreThemeType,
+            preferredHighlighter: DIFFS_HIGHLIGHTER,
             unsafeCSS: TOOL_DIFF_UNSAFE_CSS,
         }),
         [diffViewMode, pierreTheme, pierreThemeType]

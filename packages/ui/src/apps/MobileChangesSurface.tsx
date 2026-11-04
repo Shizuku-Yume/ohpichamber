@@ -30,6 +30,7 @@ import { remoteTraits,
   identityDisplayName,
   identityAccountConnected,
   activeIdentityFor,
+  hasSameSourceControlReadContext,
 } from '@/lib/source-control/identity';
 import { useConnectedAccountIds, useSourceControlAuthStore } from '@/stores/useSourceControlAuthStore';
 import type { GitIdentityProfile } from '@/lib/api/types';
@@ -38,6 +39,7 @@ import { hasUncommittedTrackedChanges, isConflictedStatusFile } from '@/componen
 import { PierreDiffViewer, type ContextExpansionRequest } from '@/components/views/PierreDiffViewer';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useRepositoryBinding } from '@/lib/source-control/repository-binding';
+import { commitAndSwitchDirtyBranch } from '@/lib/source-control/dirty-branch-switch';
 import { hasConfigChangedGrant } from '@/lib/source-control/types';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useNestedGitDirectory } from '@/hooks/useNestedGitDirectory';
@@ -46,6 +48,7 @@ import { useCommitComparison } from '@/hooks/useCommitComparison';
 import { usePullRequestComparison } from '@/hooks/usePullRequestComparison';
 import { PullRequestComparisonSelector } from '@/components/views/git/PullRequestComparisonSelector';
 import { useGitComparison, type GitComparisonFile, type GitComparisonSource } from '@/hooks/useGitComparison';
+import { usePullRequestSelectionStore } from '@/stores/usePullRequestSelectionStore';
 import { useGitBaseBranchStore } from '@/stores/useGitBaseBranchStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { cn } from '@/lib/utils';
@@ -157,7 +160,8 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
   // When the root is not itself a repository, changes come from the resolved
   // nested repository instead.
   const { rootIsGitRepo, gitDirectory, nestedRepos } = repository;
-  const currentDirectory = gitDirectory ?? rootDirectory;
+  const requestedRepository = usePullRequestSelectionStore((state) => state.changesRepositories.get(rootDirectory));
+  const currentDirectory = requestedRepository ?? gitDirectory ?? rootDirectory;
   const status = useGitStatus(currentDirectory || null);
   const choosesPushDestination = useIsContributorWorktree(currentDirectory);
   const branches = useGitBranches(currentDirectory || null);
@@ -238,6 +242,12 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
     setModeMenuOpen(false);
   }, [ownerKey]);
   React.useEffect(() => { if (!visible) setModeMenuOpen(false); }, [visible]);
+  const requestedPr = usePullRequestSelectionStore((state) => state.diffRequests.get(rootDirectory));
+  const requestedContext = usePullRequestSelectionStore((state) => state.diffContexts.get(rootDirectory));
+  React.useEffect(() => {
+    if (!visible || !requestedPr) return;
+    changeMode('pr');
+  }, [changeMode, requestedPr, visible]);
 
   // Allow the host (MobileApp) to push us into a specific diff when the surface
   // is reopened or when an external trigger (e.g. a changed-file tap in chat) requests
@@ -282,10 +292,19 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
   const showBranchOption = isBranchScopeAvailable(currentBranch, defaultBranch);
   const branchUnavailable = isGitRepo === false || isBranchScopeDefinitelyUnavailable(currentBranch, defaultBranch, status !== null, branches !== null);
   const setBaseOverride = useGitBaseBranchStore((state) => state.setOverride);
-  const branchComparison = useBranchComparisonBase(currentDirectory || null, currentBranch, visible && mode === 'branch' && showBranchOption);
+  const binding = useRepositoryBinding(currentDirectory || null, sourceControl);
+  const branchRemoteNames = React.useMemo(
+    () => new Set(binding.read?.repository.remotes.map((remote) => remote.name) ?? []),
+    [binding.read],
+  );
+  const branchComparison = useBranchComparisonBase(currentDirectory || null, currentBranch, visible && mode === 'branch' && showBranchOption, {
+    branches,
+    remoteNames: branchRemoteNames,
+    primaryRemote: binding.contexts[0]?.primaryRemote,
+    readContext: binding.contexts[0] ?? null,
+  });
   const commitComparison = useCommitComparison(currentDirectory || null, currentBranch, visible && mode === 'commit' && isGitRepo === true);
   const selectedCommitHash = commitComparison.selectedCommit?.hash ?? null;
-  const binding = useRepositoryBinding(currentDirectory || null, sourceControl);
   // The remote an identity is judged against and applied to: the bound
   // primary remote, resolved the way the desktop Git view resolves it.
   const bindingRemoteName = binding.read?.binding?.remotes[0]?.name
@@ -311,8 +330,20 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
       ? t('gitView.identity.configChanged')
       : t('gitView.context.needsAttention');
   }, [binding.read, binding.status, t]);
-  const prComparison = usePullRequestComparison(currentDirectory || null, currentBranch, binding.contexts[0] ?? null, visible && mode === 'pr' && isGitRepo === true);
+  const activeRequestedContext = binding.status === 'ready' && requestedContext
+    && binding.contexts.some((context) => hasSameSourceControlReadContext(context, requestedContext))
+    ? requestedContext : undefined;
+  React.useEffect(() => {
+    if (requestedContext && binding.status === 'ready' && !activeRequestedContext) {
+      usePullRequestSelectionStore.getState().clearDiffContext(rootDirectory, requestedContext);
+    }
+  }, [activeRequestedContext, binding.status, requestedContext, rootDirectory]);
+  const prComparison = usePullRequestComparison(currentDirectory || null, currentBranch, activeRequestedContext ?? (binding.status === 'ready' ? binding.contexts[0] : null) ?? null, visible && mode === 'pr' && isGitRepo === true, activeRequestedContext && requestedPr && hasSameSourceControlReadContext(activeRequestedContext, requestedPr.context) ? requestedPr.source : undefined);
   const selectedPr = prComparison.selectedSource;
+  React.useEffect(() => {
+    if (!requestedPr || !activeRequestedContext || !status || selectedPr !== requestedPr.source) return;
+    usePullRequestSelectionStore.getState().settleDiffRequest(rootDirectory, requestedPr);
+  }, [activeRequestedContext, requestedPr, rootDirectory, selectedPr, status]);
   const comparisonSource = React.useMemo<GitComparisonSource | null>(() => {
     if (mode === 'pr') return selectedPr;
     if (mode === 'branch' && currentBranch && branchComparison.base) return { kind: 'branch', baseRef: branchComparison.base, headRef: currentBranch };
@@ -933,8 +964,9 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
         {rootIsGitRepo === false && Array.isArray(nestedRepos) && nestedRepos.length > 0 ? (
           <NestedRepoPicker
             repositories={nestedRepos}
-            selectedRepository={gitDirectory ?? null}
+            selectedRepository={requestedRepository ?? gitDirectory ?? null}
             onSelectRepository={(repository) => {
+              usePullRequestSelectionStore.getState().clearChangesRepository(rootDirectory);
               if (rootDirectory) selectNestedRepo(rootDirectory, repository);
             }}
             repositoryRoot={rootDirectory ?? undefined}
@@ -1227,31 +1259,21 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
         onOpenChange={(open) => { if (!open) setPendingDirtySwitchBranch(null); }}
         targetBranch={pendingDirtySwitchBranch ?? ''}
         changedFileCount={status?.files?.length ?? 0}
-        onCommitAndSwitch={async (message, pushAfter) => {
-          const branch = pendingDirtySwitchBranch;
-          if (!branch || !currentDirectory) return;
-          const sourceBranch = status?.current ?? null;
-          await git.createGitCommit(currentDirectory, message, { addAll: true });
-          if (pushAfter) {
-            try {
-              const executePush = await publishChooser.prepare('push');
-              await executePush();
-            } catch {
-              toast.error(t('gitView.dirtySwitch.pushFailed'));
-              await refreshStatusAndBranches();
-              setPendingDirtySwitchBranch(null);
-              return;
-            }
-          }
-          toast.success(sourceBranch
-            ? pushAfter
-              ? t('gitView.publish.succeeded')
-              : t('gitView.dirtySwitch.committedNotPushed', { branch: sourceBranch })
-            : t('gitView.toast.commitCreated'));
-          await refreshStatusAndBranches();
-          setPendingDirtySwitchBranch(null);
-          await performCheckout(branch);
-        }}
+        onCommitAndSwitch={(message, pushAfter) => commitAndSwitchDirtyBranch({
+          branch: pendingDirtySwitchBranch,
+          directory: currentDirectory,
+          sourceBranch: status?.current ?? null,
+          createCommit: async (directory, message, options) => { await git.createGitCommit(directory, message, options); },
+          preparePush: async () => {
+            const executePush = await publishChooser.prepare('push');
+            return async () => { await executePush(); };
+          },
+          refresh: () => refreshStatusAndBranches(),
+          close: () => setPendingDirtySwitchBranch(null),
+          checkout: performCheckout,
+          toast,
+          t,
+        }, message, pushAfter)}
         onGenerateMessage={async () => {
           if (!currentDirectory) return '';
           const paths = (status?.files ?? []).map((file) => file.path).sort();

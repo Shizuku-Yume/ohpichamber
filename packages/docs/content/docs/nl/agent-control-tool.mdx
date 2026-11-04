@@ -1,38 +1,40 @@
 ---
 title: Besturingstool voor agents
-description: Laat een agent vanuit de chat OpenChamber-sessies, worktrees en geplande taken beheren.
+description: Laat een agent OpenChamber-sessies, worktrees en geplande taken vanuit de chat beheren.
 ---
 
 # Besturingstool voor agents
 
 Met de agenttool `openchamber` beheert u werk in de app rechtstreeks vanuit de chat. De tool staat standaard aan; u hoeft geen aparte tool te installeren of shell-opdracht uit te voeren.
 
-## Wat kunt u vragen?
+## Wat u kunt vragen
 
-Vraag het in gewone taal, bijvoorbeeld:
+Vraag het de agent in gewone taal. Bijvoorbeeld:
 
-- 'Maak een nieuwe OpenChamber-sessie in dit project, gebruik het model `openai/gpt-5.6-sol` en stuur deze prompt: beoordeel de authenticatieprocedure.'
-- 'Maak voor deze taak een nieuwe OpenChamber-sessie in een aparte worktree en vraag om tests voor het aanmelden toe te voegen.'
-- 'Toon via OpenChamber mijn tien recentste sessies met hun huidige status.'
-- 'Maak een geplande OpenChamber-taak met de naam Werkdagreview die elke werkdag om 09:00 deze prompt verstuurt: beoordeel de wijzigingen sinds de vorige uitvoering.'
-- 'Voer de geplande OpenChamber-taak Werkdagreview nu uit.'
-- 'Controleer de OpenChamber-sessie Authenticatiereview en toon het laatste antwoord van de assistent.'
+- "Maak een nieuwe OpenChamber-sessie in dit project, gebruik het model `openai/gpt-5.6-sol` en stuur deze prompt: controleer de authenticatieflow."
+- "Maak voor deze taak een nieuwe OpenChamber-sessie in een aparte worktree en vraag haar tests toe te voegen voor de loginflow."
+- "Gebruik OpenChamber om mijn 10 meest recente sessies met hun huidige status te tonen."
+- "Maak een geplande OpenChamber-taak met de naam Werkdagreview die elke werkdag om 09:00 deze prompt stuurt: bekijk de wijzigingen sinds de vorige run."
+- "Voer de geplande OpenChamber-taak Werkdagreview nu uit."
+- "Bekijk de OpenChamber-sessie met de naam Authenticatiereview en toon het laatste antwoord van de assistent."
 
-De tool kan projecten en modelvoorkeuren opvragen, sessies maken en vervolgen, sessies forken, geïsoleerde worktree-sessies starten en geplande taken beheren. Gestarte sessies verschijnen zoals andere sessies in OpenChamber. U kunt ze openen en zelf verdergaan.
+De besturingstool toont projecten en modelvoorkeuren, doorzoekt de modelcatalogus, maakt sessies en volgt ze op, forkt een sessie en maakt geïsoleerde worktree-sessies. De planningstool maakt, wijzigt, start, pauzeert en verwijdert geplande taken. Sessies die zo starten verschijnen in OpenChamber zoals elke andere sessie, dus u kunt ze openen en het werk zelf voortzetten.
 
-## Om te onthouden
+## Houd rekening met
 
-- Verzoeken om een nieuwe sessie te starten keren standaard meteen terug. Volg de sessie in OpenChamber of vraag de agent later de status te controleren.
-- Een aparte worktree wordt alleen gemaakt als u erom vraagt. Niet-gecommitte wijzigingen uit de huidige worktree worden niet meegenomen.
-- De tool kan geen sessies of worktrees verwijderen, projectpaden registreren, willekeurige shell-opdrachten uitvoeren of willekeurige URL's aanroepen.
+- Prompts naar nieuwe sessies keren standaard meteen terug. Volg de sessie in OpenChamber of vraag de agent later te kijken.
+- Een aparte worktree wordt alleen gemaakt als u erom vraagt. Niet-gecommitte wijzigingen uit uw huidige worktree worden er niet naartoe gekopieerd.
+- Als de checkout bezet lijkt, bijvoorbeeld omdat een andere sessie op dezelfde branch werkt, kan de agent aanbieden zijn eigen sessie naar een nieuwe worktree te verplaatsen. Hij verplaatst haar pas na uw akkoord en neemt alleen de bestanden mee die hij zelf heeft gewijzigd.
+- De tools kunnen geen sessies of worktrees verwijderen, geen projectpaden registreren, geen willekeurige shellopdrachten uitvoeren en geen willekeurige URL's aanroepen.
 
-## De tool in- of uitschakelen
+## De tools aan- of uitzetten
 
 Open **Instellingen → Algemeen → OpenChamber-tools** en wijzig **Besturingstool voor agents**. De instelling is direct van kracht zonder herstart. De tool werkt via de native host-actiegrens van OpenChamber om sessies, worktrees en geplande taken te beheren.
 
-## Zie ook
+## Gerelateerd
 
 - [Geplande taken](/nl/scheduled-tasks/)
 - [Worktree-sessies](/nl/worktrees/)
 - [Sessiedoelen](/nl/session-goals/)
-- [Browserpaneel](/nl/desktop-browser/) voor de OpenChamber Web-tool om pagina's te bekijken en bedienen
+- [Browserpaneel](/nl/desktop-browser/): de OpenChamber Web-tool, om een pagina te bekijken en te bedienen
+- [Projectnotities, taken en plannen](/nl/notes-todos-plans/): de projectkennistool, voor de notities, taken en plannen op het tabblad Context

@@ -24,7 +24,7 @@ const fixture = (settings = {}, overrides = {}) => {
   disposers.push(runtime.stop);
   return { runtime, sessionService, web, native, ui, desktop };
 };
-const terminal = (sequence = 1, type = 'run.completed') => event(sequence, { type, runId: 'run', finishedAt: 2, ...(type === 'run.failed' ? { error: 'secret /private/error-path' } : {}) });
+const terminal = (sequence = 1, type = 'run.completed') => event(sequence, { type, runId: 'run', finishedAt: 2, ...(type === 'run.failed' ? { error: 'Authorization: Bearer secret /private/workspace/error-path' } : {}) });
 const approval = (sequence, type = 'approval.requested') => event(sequence, { type,
   approval: { approvalId: 'approval', sessionId: 'session', turnId: 'turn', toolCallId: 'call', epoch: 'epoch', workerGeneration: 'generation',
     version: type.endsWith('resolved') ? '2' : '1', toolName: 'bash', actionType: 'bash_command', commandSummary: 'Read /private/workspace/image.png', details: {},
@@ -91,8 +91,36 @@ describe('canonical notification triggers', () => {
 
   it('keeps failed-run private error details out of generic public alerts', async () => {
     const f = fixture(); await f.runtime.processCanonicalEvent(terminal(1, 'run.failed'), scope);
-    expect(f.web[0].data.type).toBe('error'); expect(JSON.stringify(f.web)).not.toContain('/private/error-path');
+    expect(f.web[0].data.type).toBe('error');
+    expect(JSON.stringify(f.web)).not.toContain('/private/workspace/error-path');
+    expect(f.web[0].body).toContain('[redacted]/error-path');
+    expect(f.native[0].sealed.body).toContain('Error: ');
+    expect(f.native[0].sealed.body).toContain('[redacted]/error-path');
     expect(JSON.stringify(f.web)).not.toContain('secret');
+  });
+
+  it('writes localized default text and seals the detail for a phone', async () => {
+    const f = fixture({ locale: 'de' });
+    await f.runtime.processCanonicalEvent(terminal(), scope);
+    expect(f.web[0].title).toBe('Agent ist bereit');
+    expect(f.web[0].body).toBe('Assistant hat die Aufgabe abgeschlossen');
+    expect(f.native[0].sealed).toEqual({ title: 'Host session', body: 'Final answer in [redacted]; Authorization=[redacted] [redacted]' });
+    expect(f.native[0].body).toBe('Host session');
+  });
+
+  it('completes an empty custom template field with the language default', async () => {
+    const f = fixture({ locale: 'de', notificationTemplates: { completion: { title: '', message: '' } } });
+    await f.runtime.processCanonicalEvent(terminal(), scope);
+    expect(f.web[0].title).toBe('Agent ist bereit');
+    expect(f.web[0].body).toBe('Assistant hat die Aufgabe abgeschlossen');
+  });
+
+  it('prefixes what a permission wants to do, redacted, in the sealed phone text', async () => {
+    vi.useFakeTimers(); const f = fixture();
+    await f.runtime.processCanonicalEvent(approval(1), scope);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(f.native[0].sealed.body).toBe('Wants to run: Read [redacted]/image.png');
+    expect(f.native[0].sealed.body).not.toContain('/private/workspace');
   });
 
   it('strips conversation names and text at enterprise push egress while retaining local notifications', async () => {
@@ -101,6 +129,7 @@ describe('canonical notification triggers', () => {
     await f.runtime.processCanonicalEvent(terminal(), scope);
     expect(f.web[0].title).toBe('Agent response is ready'); expect(f.web[0].body).toBe('');
     expect(JSON.stringify(f.web)).not.toContain('Host session'); expect(f.native[0].body).toBe('');
+    expect(f.native[0].sealed).toBeUndefined();
     expect(f.ui[0].title).toBe('Host session');
   });
 });

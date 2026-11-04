@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { watch } from 'node:fs';
-import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -96,6 +96,52 @@ async function fixture() {
     throw error;
   }
 }
+
+test('worktree archive deletion replays the exact native family after service restart', async () => {
+  const harness = await fixture();
+  try {
+    const scope = harness.workers.authorizationScope(rootSessionId)!;
+    await harness.sessions.onSubagent(rootSessionId, scope.workerGeneration, {
+      subagentId: 'archive-child', status: 'completed', role: 'child-proof', sessionFile: harness.childFile,
+    });
+    const childId = harness.sessions.listSubagents(rootSessionId)[0]?.childSessionId;
+    if (!childId) throw new Error('Native child identity is required');
+    await harness.workers.evict(rootSessionId);
+    await rm(harness.source.cwd, { recursive: true, force: true });
+    const input = { operationId: 'archive-operation', projectId: harness.source.projectId, workspaceId: harness.source.workspaceId,
+      agentDirectoryId: harness.source.agentDirectoryId, sessionIds: [rootSessionId, childId] };
+    const first = await harness.sessions.deleteWorktreeArchiveFamily(rootSessionId, input);
+    expect(first.deletedSessionIds.sort()).toEqual([...input.sessionIds].sort());
+    await harness.restart();
+    expect(await harness.sessions.deleteWorktreeArchiveFamily(rootSessionId, input)).toEqual(first);
+    await harness.sessions.retireWorktreeArchiveDelete(rootSessionId, input);
+    expect(await readFile(harness.childFile, 'utf8').catch(() => null)).toBeNull();
+  } finally { await harness.close(); }
+}, 60000);
+
+test('pending worktree delete reconciles a transcript removed before its owned artifacts', async () => {
+  const harness = await fixture();
+  try {
+    await harness.workers.evict(rootSessionId);
+    await rm(harness.source.cwd, { recursive: true, force: true });
+    await harness.sessions.close(); await harness.workers.close();
+    const referenceFile = join(harness.root, 'service-state', 'session-references.json');
+    const state = JSON.parse(await readFile(referenceFile, 'utf8'));
+    const header = (await readFile(harness.source.sessionFile, 'utf8')).split('\n').filter(Boolean).map(line => JSON.parse(line)).find(record => record.type === 'session');
+    if (!header?.id) throw new Error('Native session header is required');
+    const stat = await lstat(harness.sourceArtifacts, { bigint: true });
+    state.worktreeDeletes = { [rootSessionId]: { operationId: 'partial-delete', nativeSessionId: header.id,
+      reference: state.references[rootSessionId], children: [], artifacts: { device: stat.dev.toString(), inode: stat.ino.toString() }, state: 'pending' } };
+    await writeFile(referenceFile, JSON.stringify(state));
+    await rm(harness.source.sessionFile);
+    await harness.restart();
+    const input = { operationId: 'partial-delete', projectId: harness.source.projectId, workspaceId: harness.source.workspaceId,
+      agentDirectoryId: harness.source.agentDirectoryId, sessionIds: [rootSessionId] };
+    expect(await harness.sessions.deleteWorktreeArchiveFamily(rootSessionId, input)).toMatchObject({ deletedSessionIds: [rootSessionId] });
+    expect(await readFile(harness.childFile, 'utf8').catch(() => null)).toBeNull();
+    await harness.sessions.retireWorktreeArchiveDelete(rootSessionId, input);
+  } finally { await harness.close(); }
+}, 60000);
 
 test('native SDK relocation replaces worker scope and preserves public identity, transcript and descendant artifacts', async () => {
   const harness = await fixture();

@@ -1,4 +1,8 @@
 {
+  "status": "historical",
+  "supersededBy": ".workflow/upstream-refresh-2026-10-27.json",
+  "supersededDate": "2026-10-27",
+  "note": "Historical record for upstream baseline 1f9320062 adopted on 2026-10-10. Authoritative baseline for upstream refresh is .workflow/upstream-refresh-2026-10-27.json (pinned at 0056bf6a9).",
   "upstream": {
     "repository": "https://github.com/openchamber/openchamber",
     "revision": "1f9320062c9a3c70925cf3243f1ee0c6e5f16765",

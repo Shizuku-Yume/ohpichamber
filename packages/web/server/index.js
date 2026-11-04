@@ -17,6 +17,7 @@ import { createManagedTunnelConfigRuntime } from './lib/tunnels/managed-config.j
 import { createTunnelProviderRegistry } from './lib/tunnels/registry.js';
 import { createCloudflareTunnelProvider } from './lib/tunnels/providers/cloudflare.js';
 import { createNgrokTunnelProvider } from './lib/tunnels/providers/ngrok.js';
+import { createTailscaleTunnelProvider } from './lib/tunnels/providers/tailscale.js';
 import { allowsLocalDevOrigins, buildFrameAncestorsPolicy, createRequestSecurityRuntime, isLocalDevClientOrigin } from './lib/security/request-security.js';
 import {
   getUnauthenticatedLanErrorMessage,
@@ -118,7 +119,7 @@ import { readIdleStopSetting, startIdleStop } from './lib/spaces/idle-stop.js';
 import { SPACE_IDLE_EXIT_CODE } from './lib/spaces/layout.js';
 import { createSwitchController, registerSpaceRoutes } from './lib/spaces/routes.js';
 import { spacesHostEnabled } from './lib/spaces/release.js';
-import { configureGitEnvironment, configureProjectWorktreeDirectory, resolvePrimaryWorktreeRoot, getWorktrees } from './lib/git/service.js';
+import { configureGitEnvironment, configureProjectWorktreeDirectory, resolvePrimaryWorktreeRoot, resolveWorktreeTopLevel, getWorktrees } from './lib/git/service.js';
 import { createEnvironmentStore } from './lib/environment/store.js';
 import { createEnvironmentRuntime } from './lib/environment/runtime.js';
 import { createWorktreeBootstrapStore } from './lib/git/worktree-bootstrap-storage.js';
@@ -143,6 +144,8 @@ import { createHostPromptDeliveryRuntime } from './lib/host/prompt-delivery-runt
 import { createSelectedCredentialResolver, createSelectedCredentialHandoff, createCatalogCredentialSelections } from './lib/host/private-credential.js';
 import { createScheduledTaskService } from './lib/scheduled-tasks/service.js';
 import { createOpenChamberControlService } from './lib/openchamber-control/service.js';
+import { createWorkflowsModule } from './lib/workflows/routes.js';
+import { isWorkflowFeatureAvailable } from './lib/workflows/feature-flag.js';
 import { createPluginNotificationEmitter } from './lib/notifications/emit-route.js';
 import { OpenChamberControlError } from './lib/openchamber-control/error.js';
 import { createSessionLinker } from './lib/openchamber-sessions/session-link.js';
@@ -565,6 +568,60 @@ const hostAgentRuntime = createHostAgentRuntime({
   getEnvironmentForDirectory: async (directory) => await environmentRuntime.forDirectory(directory) ?? {},
   invokeHostAction: (scope, request, signal) => openChamberControlService.invokeHostAction(scope, request, signal),
 });
+// The Host generates the lease id before the Agent Service sees it and releases
+// that same id on every path. Restarts stay held from just before the acquire
+// until the release, so a crashed service cannot admit a new generation while
+// the archive still removes the folder.
+const worktreeLeaseControl = {
+  async acquire(directory, leaseId) {
+    hostAgentRuntime.service.holdRestarts();
+    let response;
+    try {
+      response = await hostAgentRuntime.service.request('/internal/worktree-leases', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ leaseId, directory }),
+      });
+    } catch (error) {
+      throw Object.assign(
+        new Error(`The Agent Service cannot release the worktree's workers: ${error instanceof Error ? error.message : String(error)}`),
+        { status: 503, code: 'SERVICE_UNAVAILABLE' },
+      );
+    }
+    if (!response.ok) {
+      const problem = await response.json().catch(() => null);
+      const details = problem && typeof problem.details === 'object' ? problem.details : undefined;
+      // A duplicate lease id names a lease this archive never created;
+      // releasing it would end another archive's hold.
+      if (problem?.code === 'COMMAND_IN_FLIGHT' && details?.leaseId === leaseId) {
+        hostAgentRuntime.service.resumeRestarts();
+        throw Object.assign(
+          new Error(problem?.detail || 'The worktree lease id is already held'),
+          { status: 409, code: problem.code, details, releaseNotNeeded: true },
+        );
+      }
+      throw Object.assign(
+        new Error(problem?.detail || 'The worktree lease was refused'),
+        {
+          status: Number.isInteger(problem?.status) ? problem.status : response.status,
+          code: problem?.code,
+          details,
+        },
+      );
+    }
+    return response.json();
+  },
+  async release(leaseId) {
+    try {
+      await hostAgentRuntime.service.request(`/internal/worktree-leases/${encodeURIComponent(leaseId)}`, { method: 'DELETE' });
+    } catch {
+      // A live, hung service keeps the in-memory lease until it restarts; the
+      // folder is already gone, and the resumed supervisor still starts it.
+    } finally {
+      hostAgentRuntime.service.resumeRestarts();
+    }
+  },
+};
 const promptQueueStore = createPromptQueueStore({ dataDir: OPENCHAMBER_DATA_DIR });
 const resolveCredential = createSelectedCredentialResolver({
   service: hostAgentRuntime.service,
@@ -641,6 +698,8 @@ const updateSessionMetadataWith = async (sessionID, decide, { directory = '' } =
 const openChamberSessionService = createOpenChamberSessionService({
   service: hostAgentRuntime.service,
   resolveWorkspaceScope: hostAgentRuntime.resolveWorkspaceScope,
+  resolveWorkspaceDirectory: agentScopeRuntime.resolveWorkspaceDirectory,
+  resolveHostWorkspaceScope: agentScopeRuntime.resolveWorkspaceScope,
   resolveSessionScope: hostAgentRuntime.resolveSessionScope,
   resolveHostSessionScope: hostAgentRuntime.resolveHostSessionScope,
   resolveHostRelocationScope: hostAgentRuntime.resolveHostRelocationScope,
@@ -654,11 +713,16 @@ const openChamberSessionService = createOpenChamberSessionService({
   publishSessionEvent: (event) => {
     void globalMessageStreamHub.subscribeSession(event.properties.sessionId)
       .catch((error) => console.warn('[agent-events] session observation failed:', error.code ?? 'SERVICE_UNAVAILABLE'));
+    if (event?.type === 'openchamber:session-created' && event.properties?.sessionId) {
+      void permissionAutoAcceptRuntime?.applyDefaultMode(event.properties.sessionId)
+        .catch((error) => console.warn('[permission-auto-accept] failed to apply the default mode:', error?.message ?? error));
+    }
   },
   sessionMetadataStore,
   directCommandAdmissionStore: hostSessionState.directCommandAdmissionStore,
   archiveStore,
   persistSessionMetadata: persistSessionMetadataPatch,
+  updateSessionMetadata: updateSessionMetadataWith,
   broadcastGlobalUiEvent: broadcastOpenChamberUiEvent,
   onArchiveDeleted: async (scope, ack) => {
     await agentScopeStore.removeSessionFamily(scope.rootSessionId);
@@ -844,6 +908,17 @@ const sessionKnowledgeRuntime = createSessionKnowledgeRuntime({
     const settings = await readSettingsFromDiskMigrated();
     return settings.agentControlToolEnabled !== false;
   },
+  // Both tools are on by default; their guidance is stated only while the
+  // session's agent actually has them.
+  isPageRenderingAvailable: async () => {
+    const settings = await readSettingsFromDiskMigrated().catch(() => null);
+    return settings?.agentRenderToolEnabled !== false;
+  },
+  isWorkflowAvailable: async () => {
+    if (!isWorkflowFeatureAvailable()) return false;
+    const settings = await readSettingsFromDiskMigrated().catch(() => null);
+    return settings?.agentWorkflowToolEnabled !== false;
+  },
   readSessionMetadata: readStoredSessionMetadata,
   // Pins and the delivered-signature cursor are read from OpenChamber's own store.
   persistSessionMetadata: (sessionID, directory, patch) => persistSessionMetadataPatch(sessionID, patch, { directory }),
@@ -912,6 +987,7 @@ notificationTriggerRuntime.setGetIsSessionAutoAccepting(
 const messageQueueRuntime = createCanonicalQueueRuntime({
   store: promptQueueStore,
   service: hostAgentRuntime.service,
+  ensureSessionObserved: async (scope) => globalMessageStreamHub.subscribeSession(scope.sessionId),
   resolveAttachments,
   capturePrompt: (...args) => hostPromptDeliveryRuntime.capturePrompt(...args),
   beforeDispatch: (scope, capture) => hostPromptDeliveryRuntime.beforeDispatch(scope, capture.request),
@@ -935,6 +1011,19 @@ const dispatchResultsRuntime = createDispatchResultsRuntime({
   isSessionArchived: (sessionID) => openChamberSessionService.archiveStore.isArchived(sessionID),
 });
 dispatchResultsRuntime.start();
+
+// Agent workflows: scripts that fan a task out to many agents, run here while
+// the agent that asked stays free. Absent entirely unless OPENCHAMBER_WORKFLOWS_ENABLE
+// is set, the same gate as upstream.
+const workflowsModule = createWorkflowsModule({
+  sessionService: openChamberSessionService,
+  resolveWorkspaceScope: hostAgentRuntime.resolveWorkspaceScope,
+  listWorkspaceScopes,
+  dataDir: OPENCHAMBER_DATA_DIR,
+  fsPromises,
+  path,
+  broadcast: (event) => broadcastOpenChamberUiEvent(event),
+});
 
 // Full-text search over this server's conversations (user messages and agent
 // replies). Opt-in: off by default, and off means idle. The index is derived
@@ -1037,6 +1126,7 @@ const bootstrapRuntime = createBootstrapRuntime({
 const tunnelProviderRegistry = createTunnelProviderRegistry([
   createCloudflareTunnelProvider(),
   createNgrokTunnelProvider(),
+  createTailscaleTunnelProvider(),
 ]);
 const tunnelAuthController = createTunnelAuth();
 const tunnelWiringRuntime = createTunnelWiringRuntime({
@@ -1320,12 +1410,37 @@ const openChamberControlService = createOpenChamberControlService({
     isAgentMemoryEnabled,
     resolveProjectId: resolveMemoryProjectId,
   }),
+  projectContextRuntime,
+  // The resolver session knowledge reads pinned notes and plans through, so
+  // what an agent writes is what the next session is given.
+  resolveProjectContextId: resolveMemoryProjectId,
+  // On by default: the knowledge tool is the canonical owner of notes, todos
+  // and plans, and a client must not keep writing after it is switched off.
+  isKnowledgeToolEnabled: async () => {
+    const settings = await readSettingsFromDiskMigrated().catch(() => null);
+    return settings?.agentKnowledgeToolEnabled !== false;
+  },
+  // Like file.open: every connected window hears it, and the ones showing
+  // that project open the plan.
+  showPlan: (request) => {
+    let delivered = 0;
+    for (const client of uiOpenChamberEventClients) {
+      try {
+        writeSseEvent(client, { type: 'openchamber:plan-open-request', properties: request });
+        delivered += 1;
+      } catch {
+        uiOpenChamberEventClients.delete(client);
+      }
+    }
+    return delivered;
+  },
   sessionLinks: createSessionLinker({
     updateMetadata: updateSessionMetadataWith,
     createError: (message, status) => new OpenChamberControlError(message, status),
   }),
   dispatchResults: dispatchResultsRuntime,
   archiveStore: openChamberSessionService.archiveStore,
+  workflowRuntime: workflowsModule.workflowRuntime,
 });
 
 const ensureGlobalWatcherStarted = async () => {
@@ -1349,6 +1464,7 @@ const startAgentService = async () => {
   if (isShuttingDown) return hostAgentRuntime.service.getState();
   permissionAutoAcceptRuntime.start();
   await ensureGlobalWatcherStarted();
+  void workflowsModule.deliverPending?.();
   await convertLegacyQueue();
   await messageQueueRuntime.start();
   await scheduledTasksRuntime.start();
@@ -1959,9 +2075,12 @@ async function main(options = {}) {
     sessionFoldersStore,
     isRequestOriginAllowed,
     resolveWorkspaceScope: hostAgentRuntime.resolveWorkspaceScope,
+    resolveWorkspaceDirectory: hostAgentRuntime.resolveWorkspaceDirectory,
+    resolveRepositoryWorkspace: hostAgentRuntime.resolveRepositoryWorkspace,
     resolveSessionScope: hostAgentRuntime.resolveSessionScope,
     resolveHostSessionScope: hostAgentRuntime.resolveHostSessionScope,
     listQueueScopes,
+    workflows: workflowsModule,
     resolveQuotaSelection,
     listQuotaSelections,
     resolveCredential,
@@ -2003,6 +2122,8 @@ async function main(options = {}) {
     buildAugmentedPath: () => serverUtilsRuntime.buildAugmentedPath(),
     resolveGitBinaryForSpawn: () => (process.platform === 'win32' ? 'git.exe' : 'git'),
     projectConfigRuntime,
+    resolvePrimaryWorktreeRoot,
+    resolveWorktreeTopLevel,
     projectContextRuntime,
     agentMemoryRuntime,
     isAgentMemoryEnabled,
@@ -2016,6 +2137,8 @@ async function main(options = {}) {
     globalEventHub: globalMessageStreamHub,
     permissionAutoAcceptRuntime,
     worktreeBootstrapStore,
+    worktreeLeaseControl,
+    worktreeArchiveSessionService: openChamberSessionService,
     messageQueueRuntime,
     routingRuntime,
   });

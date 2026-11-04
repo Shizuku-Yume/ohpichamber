@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { getExtensionUISelectOptionLabel } from '@oh-my-pi/pi-coding-agent/extensibility/extensions';
 import type { ClientBridgePermissionOption, ClientBridgePermissionToolCall } from '@oh-my-pi/pi-coding-agent/session/client-bridge';
 import type {
+  ExtensionApprovalAnswer,
+  ExtensionApprovalPrompt,
   ExtensionAskDialogOption,
   ExtensionAskDialogQuestion,
   ExtensionAskDialogResult,
@@ -74,10 +76,12 @@ export class WorkerInteraction {
     const captured = this.inputs.get(toolCallId);
     const turnId = this.callbacks.currentTurn();
     if (this.closed || !turnId || !captured || JSON.stringify(captured) !== JSON.stringify(input)) return false;
-    return await this.requestApproval(turnId, toolCallId, 'bash', captured, 'Host policy requires approval for this exact command', ['Approve', 'Reject'], signal) === 'Approve';
+    const choice = await this.requestApproval(turnId, toolCallId, 'bash', captured, 'Host policy requires approval for this exact command', ['Approve', 'Reject'], signal);
+    return choice === 'Approve';
   }
 
   readonly ui: ExtensionUIContext = {
+    approve: (prompt, dialogOptions) => this.handleApprove(prompt, dialogOptions),
     select: (title, options, dialogOptions) => this.select(title, options, dialogOptions),
     confirm: async (title, message, options) => {
       const result = await this.askDialog([{ id: 'confirm', question: `${title}\n${message}`, options: [{ label: 'Yes' }, { label: 'No' }] }], options);
@@ -103,6 +107,9 @@ export class WorkerInteraction {
     editor: async () => { throw new Error('Terminal editor UI is unavailable in the Agent Service worker'); },
     addAutocompleteProvider: () => {},
     setEditorComponent: () => {},
+    getEditorComponent: () => undefined,
+    rerenderMessage: () => {},
+    getLinkClicksAvailable: () => false,
     get theme(): Theme { ensureThemeSync(); return theme; },
     getAllThemes: async () => [],
     getTheme: async () => undefined,
@@ -110,6 +117,23 @@ export class WorkerInteraction {
     getToolsExpanded: () => false,
     setToolsExpanded: () => {},
   };
+
+  private async handleApprove(prompt: ExtensionApprovalPrompt, dialogOptions?: { signal?: AbortSignal }): Promise<ExtensionApprovalAnswer> {
+    if (this.closed) return 'deny';
+    const turnId = this.callbacks.currentTurn();
+    if (!turnId) return 'deny';
+    const observer = [...this.observed.values()][0];
+    if (!observer) return 'deny';
+    this.observed.delete(observer.toolCallId);
+    const input = this.inputs.get(observer.toolCallId);
+    if (!input) throw new Error('Native approval has no captured execution input');
+    this.inputs.delete(observer.toolCallId);
+    const reason = observer.reason ?? prompt.compact ?? prompt.full;
+    const choices: [string, string] = ['Approve', 'Reject'];
+    const choice = await this.requestApproval(turnId, observer.toolCallId, observer.toolName, input, reason, choices, dialogOptions?.signal);
+    if (choice === 'Approve') return 'once';
+    return 'deny';
+  }
 
   private async select(title: string, options: ExtensionUISelectItem[], dialogOptions?: { signal?: AbortSignal }): Promise<string | undefined> {
     if (this.closed) return undefined;
@@ -129,10 +153,11 @@ export class WorkerInteraction {
     if (!input) throw new Error('Native approval has no captured execution input');
     this.inputs.delete(observer.toolCallId);
     const labels = options.map(getExtensionUISelectOptionLabel);
-    const approve = labels[0];
-    const reject = labels[1];
-    if (labels.length !== 2 || approve === undefined || reject === undefined) throw new Error('Native approval choices are invalid');
-    return this.requestApproval(turnId, observer.toolCallId, observer.toolName, input, observer.reason ?? '', [approve, reject], dialogOptions?.signal);
+    const approve = labels.find(l => l.startsWith('Approve Once') || l === 'Approve') ?? labels[0];
+    const reject = labels.find(l => l === 'Deny' || l === 'Reject') ?? labels[labels.length - 1];
+    if (approve === undefined || reject === undefined) throw new Error('Native approval choices are invalid');
+    const choices: [string, string] = [approve, reject];
+    return this.requestApproval(turnId, observer.toolCallId, observer.toolName, input, observer.reason ?? '', choices, dialogOptions?.signal);
   }
 
   private async requestApproval(turnId: string, toolCallId: string, toolName: string, input: JsonObject, reason: string, choices: [string, string], signal?: AbortSignal): Promise<string | undefined> {
@@ -142,7 +167,7 @@ export class WorkerInteraction {
     const summary = approvalInputSummary(action, input);
     const interaction: WorkerInteractionMessage = {
       kind: 'approval', approvalId, toolCallId, toolName, actionType: action,
-      commandSummary: summary, details: JsonObjectSchema.parse({ reason: oneLineApprovalText(reason), options: choices }),
+      commandSummary: summary, details: JsonObjectSchema.parse({ reason: oneLineApprovalText(reason), options: choices, input }),
       policyTarget: { toolName, pattern: JSON.stringify(input) }, turnId,
     };
     const { promise, resolve } = Promise.withResolvers<string | undefined>();
@@ -167,9 +192,10 @@ export class WorkerInteraction {
     options: ClientBridgePermissionOption[],
     sessionRuleKey: string | undefined,
     signal?: AbortSignal,
+    steeringSignal?: AbortSignal,
   ): Promise<NativePermissionChoice | undefined> {
     const turnId = this.callbacks.currentTurn();
-    if (this.closed || !turnId || signal?.aborted) return undefined;
+    if (this.closed || !turnId || signal?.aborted || steeringSignal?.aborted) return undefined;
     const approvalId = randomUUID();
     const input = this.approvalInput(toolCall);
     const action = actionType(toolCall.toolName);
@@ -182,12 +208,27 @@ export class WorkerInteraction {
     });
     const { promise, resolve } = Promise.withResolvers<NativePermissionChoice | undefined>();
     this.permissionHandles.set(approvalId, { toolCallId: toolCall.toolCallId, resolve });
-    const abort = () => { this.permissionHandles.delete(approvalId); resolve(undefined); };
+    const abort = () => {
+      if (!this.permissionHandles.has(approvalId)) return;
+      this.permissionHandles.delete(approvalId);
+      resolve(undefined);
+    };
+    const steerAbort = () => {
+      if (!this.permissionHandles.has(approvalId)) return;
+      this.permissionHandles.delete(approvalId);
+      this.callbacks.request({ kind: 'cancel', approvalId });
+      resolve(undefined);
+    };
     signal?.addEventListener('abort', abort, { once: true });
+    steeringSignal?.addEventListener('abort', steerAbort, { once: true });
     try {
-      if (signal?.aborted) abort();
+      if (steeringSignal?.aborted) steerAbort();
+      else if (signal?.aborted) abort();
       return await promise;
-    } finally { signal?.removeEventListener('abort', abort); }
+    } finally {
+      signal?.removeEventListener('abort', abort);
+      steeringSignal?.removeEventListener('abort', steerAbort);
+    }
   }
 
   /** Re-authorizes a native-approved bash call with an exact Host execution grant. */
@@ -237,15 +278,15 @@ export class WorkerInteraction {
     });
     const schema: JsonObject = JsonObjectSchema.parse({ type: 'omp.ask', questions: safeQuestions });
     if (dialogOptions?.timeout !== undefined) schema.timeout = dialogOptions.timeout;
-    return new Promise<ExtensionAskDialogResult | undefined>(resolve => {
-      this.questionHandles.set(questionId, { questions, resolve });
-      this.callbacks.request({ kind: 'question', questionId, turnId, prompt: questions.map(question => question.question).join('\n'), schema, timeout: dialogOptions?.timeout });
-      if (dialogOptions?.signal) {
-        const abort = () => { this.questionHandles.delete(questionId); resolve(undefined); };
-        if (dialogOptions.signal.aborted) abort();
-        else dialogOptions.signal.addEventListener('abort', abort, { once: true });
-      }
-    });
+    const { promise, resolve } = Promise.withResolvers<ExtensionAskDialogResult | undefined>();
+    this.questionHandles.set(questionId, { questions, resolve });
+    this.callbacks.request({ kind: 'question', questionId, turnId, prompt: questions.map(question => question.question).join('\n'), schema, timeout: dialogOptions?.timeout });
+    if (dialogOptions?.signal) {
+      const abort = () => { this.questionHandles.delete(questionId); resolve(undefined); };
+      if (dialogOptions.signal.aborted) abort();
+      else dialogOptions.signal.addEventListener('abort', abort, { once: true });
+    }
+    return promise;
   }
 
   resolveApproval(approvalId: string, decision: 'approve' | 'approve-always' | 'reject'): boolean {

@@ -70,7 +70,7 @@ test('provider catalog equals the native search-model pool and excludes chat gro
     if (state.type !== 'state') throw new Error('Expected native search state');
     const providerIds = state.state.providers.map(provider => provider.providerId);
     expect(providerIds).toEqual([
-      'web/brave', 'web/duckduckgo', 'web/ecosia', 'web/exa', 'web/firecrawl', 'web/google', 'web/hosted',
+      'web/brave', 'web/deepseek', 'web/duckduckgo', 'web/ecosia', 'web/exa', 'web/firecrawl', 'web/google', 'web/hosted',
       'web/jina', 'web/kagi', 'web/kimi', 'web/mojeek', 'web/ollama', 'web/parallel', 'web/perplexity',
       'web/public', 'web/searxng', 'web/startpage', 'web/synthetic', 'web/tavily', 'web/tinyfish', 'web/zai',
     ]);
@@ -94,9 +94,9 @@ test('provider catalog equals the native search-model pool and excludes chat gro
 test('legacy chat web-role selections survive non-selection updates and unknown replacements fail', async () => {
   const { directory, bootstrap } = await fixture();
   const runtime = await openNativeRuntime(bootstrap);
-  const primary = 'anthropic/claude-3-5-sonnet-20240620';
-  const fallback = 'anthropic/claude-3-5-sonnet-20241022';
-  const freshChat = 'anthropic/claude-3-haiku-20240307';
+  const primary = 'anthropic/claude-sonnet-4-5';
+  const fallback = 'anthropic/claude-haiku-4-5';
+  const freshChat = 'anthropic/claude-opus-4-5';
   try {
     await runtime.authStorage.credentials.set('anthropic', { type: 'api_key', key: 'fixture-credential', source: 'login' });
     runtime.settings.setModelRole('web', primary);

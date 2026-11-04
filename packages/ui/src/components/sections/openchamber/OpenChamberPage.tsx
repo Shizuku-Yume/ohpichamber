@@ -1,5 +1,6 @@
 import React from 'react';
 import { OpenChamberVisualSettings } from './OpenChamberVisualSettings';
+import { ChatSettings } from './ChatSettings';
 import { AboutSettings } from './AboutSettings';
 import { SessionRetentionSettings } from './SessionRetentionSettings';
 import { MergedWorktreeCleanupSettings } from './MergedWorktreeCleanupSettings';
@@ -189,44 +190,10 @@ const VisualSectionContent: React.FC = () => {
     ]} />;
 };
 
-// Chat section: User message rendering, Diff layout, Mobile status bar, Show reasoning traces, Follow-up behavior, Persist draft
+// Chat section: the transcript, the composer and the assistance around a session,
+// split into tabs by ChatSettings.
 const ChatSectionContent: React.FC = () => {
-    return (
-        <OpenChamberVisualSettings
-            visibleSettings={[
-                'sessionGoal',
-                'sessionAssist',
-                'chatRenderMode',
-                'activityRenderMode',
-                'userMessageRendering',
-                'mermaidRendering',
-                'reasoning',
-                'showToolFileIcons',
-                'showTurnChangedFiles',
-                'expandedTools',
-                'collapsibleUserMessages',
-                'stickyUserHeader',
-                'promptNavigatorEnabled',
-                'wideChatLayout',
-                'codeBlockLineWrap',
-                'tableCellWrap',
-                'copyMessagesAsPlainText',
-                'splitAssistantMessageActions',
-                'subagentReadOnlyBanner',
-                'diffLayout',
-                'inputHistoryScope',
-                'inputHistoryLimit',
-                'messageSearch',
-                'dotfiles',
-                'fileViewerPreview',
-                'followUpBehavior',
-                'persistDraft',
-                'inputSpellcheck',
-                'largeTextPaste',
-                'enterToSend',
-            ]}
-        />
-    );
+    return <ChatSettings />;
 };
 
 // Sessions section: Default model & agent, Session retention

@@ -216,6 +216,24 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Revisit when:** The maintainer reintroduces a supported pre-`v2` consumer, or the manifest schema changes independently of the transport.
 - **Effort:** post-m3-hardening
 
+## 2026-10-24 - Keep Capacitor mobile in the M5 release matrix
+
+- **Decided:** Keep Capacitor mobile as a supported surface in the M5 release matrix. Release stays blocked until physical-device certification passes on a Pixel 8 running Android 15/API 35 and a physical iPhone running iOS 26 through TestFlight, covering pairing, canonical chat, reconnect, approval/question recovery, push-click routing and offline queue.
+- **Instead of:** Removing mobile from the release matrix and product docs until device evidence exists.
+- **Because:** `scope.md` retains Mobile, the shell and signed iOS/Android workflows already exist, and the missing piece is device evidence rather than implementation. Keeping the row with a blocked release is more honest than hiding a retained surface.
+- **Mine:** no
+- **Revisit when:** the maintainer drops mobile from product scope or device access is unavailable for the planned release.
+- **Effort:** post-m3-hardening
+
+## 2026-10-24 - Bundle the Agent Runtime into @openchamber/web
+
+- **Decided:** Make npm standalone distribution work by bundling a per-platform Agent Runtime payload into `@openchamber/web`, using the same staged payload and identity verification the Electron build already produces. Do not publish `@openchamber/agent-service`, `@openchamber/agent-contract` or the vendored OMP closure; a packed `@openchamber/web` must contain no `workspace:*` dependency.
+- **Instead of:** Publishing the Agent Service and Contract packages with the OMP closure, or dropping npm standalone from the supported matrix and pointing Web/PWA deployment only at Docker.
+- **Because:** the maintainer chose bundling. Publishing would put third-party OMP package names and native artifacts under this project's registry ownership, while dropping npm would remove the documented Web/PWA install path. The Electron staging path already proves payload identity, so one verified runtime recipe serves both artifacts.
+- **Mine:** no
+- **Revisit when:** the bundled payload exceeds the npm package limit, a platform runtime cannot be produced from the approved native leaf, or the maintainer drops npm standalone from product scope.
+- **Effort:** post-m3-hardening
+
 ## 2026-10-25 - Drive OMP modes in-process instead of the rpc-ui subprocess
 
 - **Decided:** Keep OMP inside the Agent Service worker and reuse the pinned package's RPC-mode modules in-process (`RpcGoalController`, `RpcBtwController`, `executeAcpBuiltinSlashCommand`). Plan and vibe get a worker mode controller that follows `interactive-mode.ts` without importing it.
@@ -462,3 +480,200 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** no
 - **Revisit when:** The refresh has not landed on `main` by 2026-10-31, `upstream-refresh/31` or `32` (the one-view sidebar redesign) lands before this merge, or parity must ship a fix before the refresh gate passes.
 - **Effort:** omp-native-parity
+## 2026-10-27 - Adopt the upstream-first area refresh now
+
+- **Decided:** Answer post-M3 hardening open question 7 by adopting the upstream-first area refresh and running it now to upstream `0056bf6a9` (v2.5.2+1, 2026-10-26, 813 commits since the adopted baseline), including features rather than only security and bugfixes. For each shared area, take current upstream source as the baseline, then restore the fork's OMP customizations path by path.
+- **Instead of:** security-only synchronization, commit-level cherry-picking of the range, or leaving the fork at `1f9320062` until the OMP engine work finishes.
+- **Because:** the measured delta is 4,031 changed paths (+299,677/-82,213), 1,223 of them new, and 640 of 1,230 files changed on both sides conflict textually; one sampled cherry-pick of a five-file fix conflicted in three files. The maintainer wants current upstream features, not a permanently older fork.
+- **Mine:** no
+- **Revisit when:** upstream stops touching retained areas, an area refresh cannot preserve an OMP invariant, or the maintainer changes the sync cadence.
+- **Effort:** upstream-refresh
+
+## 2026-10-27 - Do not adopt upstream folder trust
+
+- **Decided:** Do not adopt `packages/web/server/lib/opencode-trust` or the commits `c351e16e38`, `bcf2498bbb` and `883f50e173`, and open no technical-debt item for them.
+- **Instead of:** Porting folder trust to an OMP equivalent, or tracking its absence as debt.
+- **Because:** it guards OpenCode running project code. OMP has no project-code execution hook of that kind, and the maintainer does not expect one.
+- **Mine:** no
+- **Revisit when:** OMP gains a project-code execution hook that needs user consent.
+- **Effort:** upstream-refresh
+
+## 2026-10-27 - Keep the fork version at 3.0.0
+
+- **Decided:** Keep the fork's package versions at `3.0.0` (mobile `1.13.2`) through the refresh; do not adopt upstream's `2.5.2` or any upstream version string in project documents.
+- **Instead of:** Following upstream's release number, or bumping the fork version because the source changed.
+- **Because:** the fork numbers its own releases; a source refresh is not a fork release, and the earlier rebaseline already establishes that upstream version framing is not current project state.
+- **Mine:** no
+- **Revisit when:** the maintainer schedules a fork release with its own version decision.
+- **Effort:** upstream-refresh
+
+## 2026-10-27 - Bump the toolchain before refreshing ui and web
+
+- **Decided:** Land TypeScript ~7.0.2, Bun 1.4.4, oxlint 1.88 and Electron ^44.9.3 in task 02, before any ui/web area task, with the lockfile regenerated.
+- **Instead of:** bumping the toolchain last, after the area refresh.
+- **Because:** upstream area source is authored against TypeScript 7. Refreshing it under 5.9 and migrating later would touch every refreshed file twice and review it against a compiler upstream does not use.
+- **Mine:** yes
+- **Revisit when:** the toolchain bump cannot be green before the area work, or upstream authors against the older toolchain again.
+- **Effort:** upstream-refresh
+
+## 2026-10-27 - Refresh paths three-way from the adopted baseline
+
+- **Decided:** Refresh per path with a three-way content merge based on `1f9320062` (`git merge-file` or `git show` blobs): adopt clean/new upstream files whole, merge both-changed files and resolve toward OMP invariants, keep fork-deleted paths deleted, and apply upstream deletions unless the fork changed the file.
+- **Instead of:** `git merge upstream/main`, or cherry-picking the 813 commits.
+- **Because:** the real merge base of `main` and `upstream/main` is `336e19248` (915 upstream commits older than the adopted baseline), so a plain merge reports 2,810 conflicting paths; the requested merge-base override is ignored by git 2.56. Per-path slices give every task a disjoint, measurable list and keep OMP resolution local.
+- **Mine:** yes
+- **Revisit when:** the history link lands and a normal merge becomes accurate, or a task cannot be expressed as a path slice.
+- **Effort:** upstream-refresh
+
+## 2026-10-27 - Plan the refresh on an integration branch
+
+- **Decided:** Run the effort on `upstream-refresh/integration`, cut from `main` at `dee0c88ebd`, and commit the plan there instead of on `main` as `flow-break` normally does.
+- **Instead of:** committing the plan on `main`, or stashing or committing the other session's uncommitted `.workflow` edits.
+- **Because:** `main`'s working tree holds another session's changes (`decisions.md`, `implementation-plan.md`, `post-m3-hardening.md`, tasks 26/29, the M5 spec and tasks); committing there would capture or disturb work this session does not own. The branch starts at the same commit, so the plan is identical.
+- **Mine:** yes
+- **Revisit when:** `main`'s working tree is clean and the plan changes, or the other session's work lands.
+- **Effort:** upstream-refresh
+
+## 2026-10-27 - Link upstream history with an ours merge
+
+- **Decided:** The final task creates `git merge -s ours 0056bf6a9` on the integration branch so upstream's commit becomes an ancestor without altering the refreshed tree.
+- **Instead of:** leaving history unlinked, keeping the fork's history pure and repeating the `1f9320062` base comparison on every future sync.
+- **Because:** after the content refresh the tree already contains upstream's changes; the merge records that fact so `git merge-base` returns `0056bf6a9` instead of `336e19248`, and the next sync diffs only new upstream work.
+- **Mine:** yes
+- **Revisit when:** the maintainer prefers fork-only history, or a tag/pin mechanism replaces the merge.
+- **Effort:** upstream-refresh
+
+## 2026-10-27 - Lint with oxlint only
+
+- **Decided:** The repository lints with oxlint alone: `eslint.config.js` is deleted, the ESLint and typescript-eslint devDependencies leave the root, ui and web manifests, and every workspace `lint` script runs `oxlint -c ../../oxlint.config.ts --report-unused-disable-directives`. `oxlint.config.ts` is the general config and `oxlint.anti-slop.config.ts` keeps the anti-slop backlog and ratchet, the split upstream uses.
+- **Instead of:** keeping ESLint for general lint and oxlint only for the vendored anti-slop plugin, as the fork did before this refresh.
+- **Because:** upstream 0056bf6a9 authors and checks its source with oxlint 1.88, and two linters mean the same file is judged twice with different rule sets and duplicated disable comments. The oxlint 1.88 config is ESLint's and typescript-eslint's recommended sets plus the React rules, so the migration keeps the checks the fork relied on.
+- **Mine:** yes
+- **Revisit when:** a rule the fork needs has no oxlint equivalent, or a check has to run with type information oxlint does not provide.
+- **Effort:** upstream-refresh
+
+## 2026-10-27 - Wire the RTL lint rule but leave it off until the RTL conversion
+
+- **Decided:** `tools/oxlint/openchamber` (including `no-physical-sides`) is vendored and wired in `oxlint.config.ts`, but the rule is set to `"off"` with a comment naming the RTL conversion task 20 as the owner that turns it on.
+- **Instead of:** enabling the rule now, which reports 881 physical side classes in the fork's UI, or dropping the rule and the plugin until later.
+- **Because:** the layout has not been converted to logical sides yet; that conversion is task 20's deliverable, and enabling the rule in task 02 would leave the integration branch red for every task until 20 lands. Keeping the rule wired means the conversion only flips one value.
+- **Mine:** yes
+- **Revisit when:** task 20 converts the UI, or a task needs the rule enforced over its own files sooner.
+- **Effort:** upstream-refresh
+
+## 2026-10-27 - Take upstream's bun patch set and drop the dead @ark/schema entry
+
+- **Decided:** `bun-patches/` matches upstream where the package version is the fork's: adopt `@legendapp%2Flist@3.6.0.patch` whole, replace the `@tanstack/virtual-core` 3.17.11 patch with 3.19.6, replace the `bun-pty` 0.4.8 patch with 0.5.1, and bump `@tanstack/react-virtual` to 3.14.21 and `bun-pty` to 0.5.1 so the new patches apply. Keep `happy-dom@18.0.1.patch` (unchanged upstream) and the three vendor OMP patches. Delete the `@ark/schema@0.56.2` entry from `patchedDependencies`: the package is no longer installed, so `bun install` warned that its patch does not apply, while the version override stays for a dependency that may return.
+- **Instead of:** keeping the fork's older patch set, or re-adding a package just to keep its patch alive.
+- **Because:** a patch that names a version the tree no longer installs is dead weight that makes every install warn, and upstream's patch content is the same fix carried onto the versions the refresh moves to.
+- **Mine:** yes
+- **Revisit when:** a vendor package reintroduces `@ark/schema`, or a patched dependency is removed or replaced.
+- **Effort:** upstream-refresh
+
+## 2026-10-27 - Do not track a .env file
+
+- **Decided:** Delete the tracked root `.env` (its only content was `NODE_ENV=development`). `.env` stays in `.gitignore`; local development sets variables through the shell or an untracked file.
+- **Instead of:** keeping the tracked file because it was already there.
+- **Because:** upstream deleted it, nothing in the repository reads a root `.env` outside Vite's `VITE_`-prefixed convention, and a tracked environment file ships a default that silently overrides whatever the developer configured. The fork's real provider settings already live outside the repository.
+- **Mine:** yes
+- **Revisit when:** the build needs a repository-shipped default for a non-secret variable, which belongs in the code or a documented command instead.
+- **Effort:** upstream-refresh
+
+## 2026-10-27 - Leave the source-control SDK example to task 04
+
+- **Decided:** `packages/sdk/examples/source-control-provider/package.json` is not adopted in task 02. The SDK example set stays as the fork has it; task 04 brings this manifest together with the example's `README.md`, `fake-forge.ts` and `service/main.*`, which its path list already owns.
+- **Instead of:** adopting the manifest now because the path list assigns it to 02, or teaching the fork's manifest parser the new `sourceControl` contribution from a toolchain task.
+- **Because:** the fork's current SDK manifest parser rejects the file (`invalid-service`: the `sourceControl` contribution and `provides: ["source-control"]` shape are newer than the parser), so landing it alone leaves an example the repository cannot validate; the parser and the example's sources belong to task 04.
+- **Mine:** yes
+- **Revisit when:** task 04 lands the SDK source-control contract and its examples.
+- **Effort:** upstream-refresh
+
+## 2026-10-29 - Keep project knowledge delivery in session metadata, not instruction entries
+
+- **Decided:** Adopt upstream's knowledge text, memory wording and tool guidance, but keep the fork's delivery: the block travels as a synthetic part with the prompt, `session.metadata.openchamber.knowledge_context_delivered` records what the session carries, and compaction re-sends it with the pinned messages. The knowledge actions are exposed to the OMP agent as the `openchamber_knowledge` host tool.
+- **Instead of:** Upstream's `sync`, which writes per-source OpenCode session instruction entries through `/api/experimental/session/:id/instructions/entries/:key` and keeps no OpenChamber record.
+- **Because:** Instruction entries are OpenCode surface, and the fork has no OpenCode engine: the Agent Service builds prompts and delivers synthetic parts through the canonical session service. Adopting the entries would require an OMP equivalent that does not exist, and the metadata signature is what keeps scheduled tasks and agent-dispatched sessions carrying the same context as UI sends.
+- **Mine:** yes
+- **Revisit when:** the Agent Service gains a session-scoped instruction mechanism that survives compaction without a synthetic message, or upstream changes the delivery contract again.
+- **Effort:** upstream-refresh
+
+## 2026-10-30 - Let a mounted extension tool own its xd:// device write
+
+- **Decided:** The Agent Service worker's `tool_call` authorization skips the generic path/command descriptor for a `read`/`write` whose path is an `xd://<device>` URL. The device dispatch runs the extension tool, and that tool's own Host capability call (scope match, feature policy, arguments) authorizes the real action.
+- **Instead of:** judging the virtual `xd://` path with the native file policy, which refused every mounted extension tool with "Host policy refused the tool operation".
+- **Because:** OMP mounts extension tools as `xd://` devices and delegates their policy to the device (`deviceWriteTier`; `internal-urls/types.ts` marks device dispatch as always allowed). Without the carve-out, the `openchamber`, `web`, `memory`, `openchamber_knowledge` and `notify` tools register but no real agent turn can call them; the project-knowledge real path could not be exercised.
+- **Mine:** yes
+- **Revisit when:** OMP exposes extension tools as direct model tools, or provides a dedicated device-authorization hook that the worker can consult.
+- **Effort:** upstream-refresh
+
+## 2026-10-29 - Delete upstream's per-session warming instead of rewiring it
+
+- **Decided:** Remove the per-session warming feature the upstream refresh adopted: the server modules under `packages/web/server/lib/session-warming/`, the UI store and sync subscriber, the Settings field, the per-session strings and the retired `/api/config/warming` fallback. Keep the canonical workspace control (`GET/PUT /api/agent/v1/workspaces/:workspaceId/cache-warming`) as the only warming surface.
+- **Instead of:** rewiring the adopted runtime onto the Agent Service now, or mounting it with a Host-side keep-alive ping loop over the canonical prompt endpoint.
+- **Because:** the adopted runtime and its routes call OpenCode endpoints that the fork deleted (`/api/session/active`, `/api/session/:id/generate`), nothing mounted them, and the settings field and toggle hid themselves behind a 404, so the feature was unreachable code carrying user-facing strings. The fork's warming is native and workspace-scoped (`CacheWarmingMode` off/streaming/idle, applied by the Agent Service workers); per-session warming is a different contract that needs a canonical route, per-session worker application and a revision, which is a follow-up, not a refresh task.
+- **Mine:** no (maintainer decision after the task 21 real path).
+- **Revisit when:** per-session warming is implemented on the Agent Service and a canonical session-level route exists; the settings field and session toggle can then be rebuilt against it.
+## 2026-10-30 - Solve deferred wiring in the task that still needs it, not in a follow-up nobody owns
+
+- **Decided:** Where an archived task accepted a deferral and then closed without doing it, the deferral moves to the open task whose Check needs the behavior, with the consumer files named in that task's `Files`. Task 07 therefore adopts the scoped magic-prompt page, the composer session references and message mention chips, the tracker item mount in `ContextPanel.tsx`, and the generic tracker settings card, and it retires `useLinearAuthStore` with its last callers (`App.tsx`, `apps/MobileApp.tsx`, `apps/runtimeEndpointReset.ts`, `LinearSettings.tsx`) and the `linear` runtime API itself. Task 31 loses the line that asked it to remove the store. The worktree archive that tasks 08 and 09 deferred to "Host endpoints" becomes task 35 — a Host and UI feature on paths already counted in tasks 01, 08 and 09 — and task 26's docs wait for it.
+- **Instead of:** Leaving each deferred module as a dead-code finding or a technical-debt entry, deleting the orphaned `TrackerItemView`/`ArchivedWorktreeRow`/mention-chip modules with a waiver, or opening small follow-up tasks per gap. Also rejected: making task 07 block on task 31 for the store, which would invert the dependency the plan already has (31 is blocked by 07).
+- **Because:** A preflight of integration `811ecef471` and task 07's branch `9a8f099471` found every deferral's owner closed: 13 and 15 named task 07 for the mention chips and session references, 09 dropped `ContextPanel`'s tracker branch "until 07", 11 kept `LinearSettings`' store import while transferring the deletion to 24/07, 24 closed without touching the store, and 08/09 both pointed the worktree archive at a Host endpoint no task owned. The wiring is small and sits directly on the path of 07's and 35's own Checks, so a separate task would repeat the same context with less information, and a waiver would leave adopted upstream source unreachable.
+- **Mine:** yes
+- **Revisit when:** a task's `Files` line is treated as a hard ownership boundary again (the plan needs an explicit rule for edits into closed tasks' paths), or a deferred module turns out to need a Host route rather than a wiring change — the archive being the first case, which is why it became its own task.
+- **Effort:** upstream-refresh
+
+## 2026-10-30 - Release a worktree's workers by directory inside the Agent Service, not by client-supplied ids
+
+- **Decided:** Archiving a worktree acquires a lease in the Agent Service before anything on disk changes. `POST /internal/worktree-leases { directory }` enumerates every session worker whose `WorkerBootstrap.cwd` is that directory or inside it, stops each through the existing `Workers.evict` rules (409 `RUN_ACTIVE`, 409 `COMMAND_IN_FLIGHT`) and answers the roots it released; `DELETE /internal/worktree-leases/:leaseId` ends the lease, which also expires on a timer. While the lease exists, `SupervisorService.admit` and `WorkerRegistry.start` refuse any start or reopen under that path with 409 `COMMAND_IN_FLIGHT` plus the lease id. The Host passes the canonical worktree path it is about to remove through the existing `hostAgentRuntime.service.request`, and `sessionIds` stays archive metadata only.
+- **Instead of:** Releasing the sessions the archive request lists, through `DELETE /internal/workers/:rootSessionId`, and recording that a worker of an unlisted session stays invisible as a limit. Also rejected: an upstream-style `disposeInstance` callback built from OpenCode URLs and auth headers, and leaving the release to `archiveSessionsThenRemoveWorktree` on the client.
+- **Because:** The request's id list is optional, so an empty or partial list would remove a folder a live worker still holds — the precise data-loss case this feature exists to avoid — and a recorded limit does not make an unsafe route acceptable. The Agent Service already owns the authoritative `cwd` per worker, the guarded stop and the per-root serialization, while no Host-facing route can enumerate a directory's workers (`WorkerInfo` has no `cwd`, `displayPath` is project-relative). Stopping the workers of a directory without blocking new ones leaves a start-after-release race that only a lease closes. The OpenCode disposer has no fork counterpart and cannot be reproduced without inventing an adapter.
+- **Mine:** yes
+- **Revisit when:** the Agent Service gains a general "drain a directory" primitive the Host can call directly, or sessions start sharing one worker across directories, which would make the cwd the wrong key.
+- **Superseded by:** 2026-10-30 - Fence worktree leases at the spawn point and hold Host restarts
+- **Effort:** upstream-refresh
+
+## 2026-10-30 - Fence worktree leases at the spawn point and hold Host restarts
+
+- **Decided:** Correct the worktree lease before implementation. The Host supplies the lease id before the POST, so a lost 201 is still releasable. Acquisition canonicalizes outside the lease-mutation chain, then inside that chain performs the overlap check, installs its fence and snapshots every `workerEntries` entry of every kind (session, stateless, usage) whose `cwd` is the directory or inside it in one synchronous block before the stop sweep; `admit` refuses fast and `WorkerRegistry.launch` rechecks at the last synchronous point before `spawn`, with no `await` between the check and the spawn, so all three start paths and an in-flight `prepareBootstrap` are covered. Session entries keep the idle/restart/pending/action/shell-job guards; stateless and usage entries get their own starting/pending/action guards and `stopEntry`, never `evict`. Stop success is the entry leaving `workerEntries` plus child and process-group exit, not `stopEntry`'s `exitCode === 0`. A same, ancestor or descendant canonical directory is refused with 409 `COMMAND_IN_FLIGHT` and the holder named, using segment-safe `path.relative`. There is no TTL: the Host supervisor exposes a refcounted `holdRestarts()`/`resumeRestarts()` that clears a pending restart, makes `scheduleRestart` and `start(true)` wait without consuming attempts, and resumes through the existing `start(true)`; the archive hook holds before acquire and releases in the same `finally`. `agent-service/src/index.ts` also stops on IPC disconnect after the secret handshake. The Host adopts upstream's archive block verbatim (bootstrap wait and `WORKTREE_BOOTSTRAP_FAILED` before snapshot; ref deleted only when the worktree is provably intact; `WORKTREE_ARCHIVE_PARTIAL` keeps the ref), maps `PARTIAL` explicitly, and restore takes the caller-created checkout rather than creating one at `record.path`. Session storage inside the leased directory is refused at acquire.
+- **Instead of:** The 60 s `worktreeLeaseTimeoutMs`, the session-only stop reusing `evict`, reliance on `withRoot` for directory exclusion, unconditional ref deletion after a failed removal, restore creating a checkout from `record.path`, and leaving parent/child archive overlap to the client. Also rejected: a persisted lease marker, a reconcile route, a new retry loop, a durable lease framework, PTY/editor quiescence, and a new bounded `sessionIds` validator — `sessionIds` stays metadata and the adopted id validation covers archive, restore and delete.
+- **Because:** The independent plan/security review found six blocking defects in the earlier contract: the fence was not atomic with the spawn (B1), stateless workers were left running (B2), a service restart could admit a new generation while the Host archived (B3), a failed removal could delete the only copy of uncommitted work (B4), the restore contract contradicted upstream (B5), and overlapping leases were left to the client (B6). The corrected mechanism uses existing lifecycle edges (`launch`, `withRoot`, `stopEntry`, `scheduleRestart`, `start(true)`) instead of a new timer or persisted state, and adopts upstream's data-loss checks rather than paraphrasing them.
+- **Supersedes:** 2026-10-30 - Release a worktree's workers by directory inside the Agent Service, not by client-supplied ids
+- **Mine:** yes
+- **Revisit when:** the Agent Service gains a general directory-drain primitive, sessions share one worker across directories, or the supervisor restart hold proves insufficient and a persisted lease marker becomes necessary.
+- **Effort:** upstream-refresh
+
+## 2026-10-30 - Report a rewritten branch tip to the source-control shell through a route option
+
+- **Decided:** `registerGitRoutes` takes `onBranchRewritten`, and `feature-routes-runtime.js` passes `walkthroughBindingService.invalidateBranchStatus`. After a successful Change-Id amend the route calls it with `{ directory, branch }`; the route never imports the source-control shell or its status caches.
+- **Instead of:** importing the shell (or a status cache) inside `packages/web/server/lib/git/routes.js` so the Change-Id route could call `invalidateBranchStatus` itself.
+- **Because:** `feature-routes-runtime.js` constructs the source-control shell before the Git routes and already supplies every other source-control dependency the Git routes use (`getSourceControlBinding`, `resolveChangeRequestSource`, `backfillIdentities`). A direct import would make the Git route module depend on how the provider shell and its per-provider caches are constructed, and the Git route test could not seed a cached status without also building a provider registry; the option keeps the route a thin reporter, and the test can use the real `createChangeRequestStatusCache`.
+- **Mine:** yes
+- **Revisit when:** a second Git mutation needs the same invalidation (then a shared repository-mutation seam), or the Git routes are registered somewhere that cannot receive the shell.
+- **Effort:** upstream-refresh
+
+## 2026-11-01 - Bind worktree archives to Host session authority
+
+- **Decided:** Use the bounded Host association and Git-ref listing described in task 35. Allow unbound legacy Git-only restore/delete with a prominent no-session-effects warning and explicit confirmation for unverified branch deletion. Successful restore preserves pre-existing archived sessions and timestamps. Authorize protected integration fast-forward only for task 07 and the independently reviewed plan amendment.
+- **Instead of:** Trusting Git record paths or session IDs, requiring legacy reassociation before Git-only actions, unarchiving previously archived sessions, or granting broader integration mutation.
+- **Because:** Host identity and durable scope are required to avoid acting on unrelated sessions; the user explicitly chose the legacy and restore behaviors and bounded integration authorization. Conditional technical reviews do not establish implementation or runtime acceptance.
+- **Mine:** no
+- **Revisit when:** A separately authorized legacy reassociation protocol or a different session-state policy is adopted.
+- **Effort:** upstream-refresh
+
+## 2026-11-04 - Accept official registry native leaves with SLSA provenance for non-Linux targets
+
+- **Decided:** Accept official npm registry native leaf packages (`darwin-arm64`, `darwin-x64`, `linux-arm64`, `win32-arm64`, `win32-x64`) for OMP 18.16.0 when verified by signed SLSA provenance attestation matching pinned commit `650f3a108229ee11bf68ba3377f4e8c3391cd424`, exact archive SHA-512/SHA-256 integrity, and target `os`/`cpu` match in `copy-manifest.json`. Linux x64 leaf remains built and packed from source. This unlocks the M5 non-Linux release matrix without claiming unrun target-platform runtime certification.
+- **Instead of:** Requiring hermetic cross-toolchain source builds for all six targets on a single host, or blocking the M5 release matrix indefinitely.
+- **Because:** The maintainer explicitly approved the attested registry leaves for non-Linux targets. Each artifact is individually verified against the author's signed SLSA provenance and exact archive digests. Host runtime certification on target platforms remains a distinct release gate and is not certified until real target devices/runners execute the tests.
+- **Mine:** no (maintainer decision).
+- **Revisit when:** Hermetic cross-compilation toolchains are provisioned or upstream OMP changes build/packaging infrastructure.
+- **Effort:** post-m3-hardening
+
+## 2026-11-04 - Defer M4 replanning to a dedicated milestone effort
+
+- **Decided:** Defer M4 replanning from Post-M3 Hardening to a dedicated future milestone effort. Keep task 25 paused in place to record the deferred status truthfully without falsely claiming completion.
+- **Instead of:** Marking M4 replanning completed without an approved M4 spec and tasks, or deleting the task.
+- **Because:** The maintainer explicitly decided to defer M4 replanning while closing Post-M3 Hardening's remaining gates and archiving task 26. Prerequisite `omp-opencode-comparison/01` remains unexecuted. Preserving the task as paused avoids both false completion claims and accidental loss of plan context.
+- **Mine:** no (maintainer decision).
+- **Revisit when:** The maintainer schedules the dedicated M4 milestone effort and executes the comparison audit.
+- **Effort:** post-m3-hardening

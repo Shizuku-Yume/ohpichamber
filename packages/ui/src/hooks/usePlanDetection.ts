@@ -1,25 +1,21 @@
 import React from 'react';
 import type { Message } from '@openchamber/agent-contract';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useFeatureFlagsStore } from '@/stores/useFeatureFlagsStore';
 
 /**
  * Watches session messages for plan creation and marks sessions as plan-available.
- * 
+ *
  * This is the single source of truth for plan detection. When a plan_enter tool
- * executes, it creates a synthetic message like "The plan at ${path}" or 
+ * executes, it creates a synthetic message like "The plan at ${path}" or
  * "User has requested to enter plan mode". We detect these and signal availability.
- * 
+ *
  * The Header component subscribes to sessionPlanAvailable map to show/hide the Plan tab.
  */
 export const usePlanDetection = (sessionId: string, messageRecords: Message[]) => {
-  const planModeEnabled = useFeatureFlagsStore((state) => state.planModeEnabled);
   const markSessionPlanAvailable = useSessionUIStore((state) => state.markSessionPlanAvailable);
   const isSessionPlanAvailable = useSessionUIStore((state) => state.isSessionPlanAvailable);
 
   React.useEffect(() => {
-    // Early exit if plan mode is disabled - don't parse messages
-    if (!planModeEnabled) return;
     if (!sessionId) return;
 
     // Already marked as available - no need to check again
@@ -42,5 +38,5 @@ export const usePlanDetection = (sessionId: string, messageRecords: Message[]) =
         }
       }
     }
-  }, [planModeEnabled, sessionId, messageRecords, markSessionPlanAvailable, isSessionPlanAvailable]);
+  }, [sessionId, messageRecords, markSessionPlanAvailable, isSessionPlanAvailable]);
 };

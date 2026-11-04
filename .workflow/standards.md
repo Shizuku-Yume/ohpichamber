@@ -53,4 +53,4 @@ Landing: local-merge
 
 Local Git work follows the landing mode below. GitHub commands still require explicit user instruction under the root guide. Preserve unrelated worktree changes and use focused commits.
 
-Tasks land on the main branch, or on the effort's integration branch when its spec header names one; that branch lands on main at `flow-close` (`.workflow/merge-strategy.md`). Parallel implementation needs separate worktrees under `/home/shizuku/Project/ohpichamber-worktrees/`; parallel read-only research does not.
+Tasks land on the main branch, or on the effort's integration branch when its spec header names one; that branch lands on main at `flow-close` (CONVENTIONS §7). Parallel implementation needs separate worktrees under `/home/shizuku/Project/ohpichamber-worktrees/`; parallel read-only research does not.

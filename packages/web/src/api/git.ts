@@ -99,5 +99,9 @@ export const createWebGitAPI = (): GitAPI => ({
     create: gitApiHttp.createGitWorktree,
     remove: gitApiHttp.deleteGitWorktree,
     snapshot: gitApiHttp.snapshotGitWorktree,
+    archive: gitApiHttp.archiveGitWorktree,
+    listArchives: gitApiHttp.listGitWorktreeArchives,
+    restoreArchive: gitApiHttp.restoreGitWorktreeArchive,
+    deleteArchive: gitApiHttp.deleteGitWorktreeArchive,
   },
 });

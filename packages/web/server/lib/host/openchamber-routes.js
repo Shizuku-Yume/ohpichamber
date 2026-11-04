@@ -165,14 +165,18 @@ export const registerOpenChamberRoutes = (app, dependencies) => {
           updateOwner: 'electron-updater',
         };
       } else {
-        const { checkForUpdates } = await import('../package-manager.js');
+        const { checkForUpdates, isUnmanagedInstall } = await import('../package-manager.js');
         updateInfo = await checkForUpdates(updateRequest);
         // Tell clients up front that the install route will refuse, so they
         // show the manual command instead of an Update button that fails.
         if (updateInfo?.available && updateRequest.appType === 'web') {
-          const { isForegroundService, systemdServiceUnit, isLaunchdService } = await readLaunchState();
-          if (isForegroundService && !systemdServiceUnit && !isLaunchdService) {
-            updateInfo = { ...updateInfo, installBlocked: 'service-manager' };
+          if (isUnmanagedInstall()) {
+            updateInfo = { ...updateInfo, installBlocked: 'manual-install' };
+          } else {
+            const { isForegroundService, systemdServiceUnit, isLaunchdService } = await readLaunchState();
+            if (isForegroundService && !systemdServiceUnit && !isLaunchdService) {
+              updateInfo = { ...updateInfo, installBlocked: 'service-manager' };
+            }
           }
         }
       }
@@ -200,6 +204,14 @@ export const registerOpenChamberRoutes = (app, dependencies) => {
         const updateInfo = await desktopUpdater.install();
         if (!updateInfo?.available) {
           return res.status(400).json({ error: 'No update available' });
+        }
+        // A host installed from a Linux package updates through its own screen:
+        // the web route must not stop it for an install it cannot perform.
+        if (updateInfo.installBlocked === 'desktop-host') {
+          return res.status(409).json({
+            code: 'DESKTOP_UPDATE_LOCAL_ONLY',
+            error: 'Update OpenChamber on the computer it runs on.',
+          });
         }
 
         res.json({

@@ -13,6 +13,7 @@ export type NativePermissionRequest = (
   options: ClientBridgePermissionOption[],
   sessionRuleKey: string | undefined,
   signal?: AbortSignal,
+  steeringSignal?: AbortSignal,
 ) => Promise<NativePermissionChoice | undefined>;
 
 export type NativeBashPolicy = 'allow' | 'deny' | 'prompt';
@@ -34,7 +35,8 @@ export class NativePermissionBridge {
   get clientBridge(): ClientBridge {
     return {
       capabilities: { requestPermission: true },
-      requestPermission: (toolCall, options, signal) => this.requestPermission(toolCall, options, signal),
+      requestPermission: (toolCall, options, signal, steeringSignal) =>
+        this.requestPermission(toolCall, options, signal, steeringSignal),
     };
   }
 
@@ -67,7 +69,9 @@ export class NativePermissionBridge {
     toolCall: ClientBridgePermissionToolCall,
     options: ClientBridgePermissionOption[],
     signal?: AbortSignal,
+    steeringSignal?: AbortSignal,
   ): Promise<ClientBridgePermissionOutcome> {
+    if (signal?.aborted || steeringSignal?.aborted) return { outcome: 'cancelled' };
     const option = (kind: ClientBridgePermissionOption['kind']) => options.find(candidate => candidate.kind === kind);
     const allowOnce = option('allow_once');
     const allowAlways = option('allow_always');
@@ -79,7 +83,7 @@ export class NativePermissionBridge {
     // wrapper prompt, so every other gated tool still needs one Host card
     // here. That card is one-shot: no session rule is ever cached for it.
     if (toolCall.toolName !== 'bash') {
-      const choice = await this.request(toolCall, options, undefined, signal);
+      const choice = await this.request(toolCall, options, undefined, signal, steeringSignal);
       if (choice === 'once' || choice === 'always') return { outcome: 'selected', optionId: allowOnce.optionId, kind: allowOnce.kind };
       if (choice === 'reject') return { outcome: 'selected', optionId: rejectOnce.optionId, kind: rejectOnce.kind };
       return { outcome: 'cancelled' };
@@ -97,7 +101,7 @@ export class NativePermissionBridge {
     const policy = this.nativeBashPolicy(toolCall);
     if (policy === 'allow') return { outcome: 'selected', optionId: allowOnce.optionId, kind: allowOnce.kind };
     if (policy === 'deny') return { outcome: 'selected', optionId: rejectOnce.optionId, kind: rejectOnce.kind };
-    const choice = await this.request(toolCall, options, key, signal);
+    const choice = await this.request(toolCall, options, key, signal, steeringSignal);
     if (choice === 'always' && allowAlways) {
       if (key) this.allowedKeys.add(key);
       return { outcome: 'selected', optionId: allowAlways.optionId, kind: allowAlways.kind };

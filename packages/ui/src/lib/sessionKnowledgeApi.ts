@@ -7,6 +7,7 @@
 import { runtimeFetch } from './runtime-fetch';
 import { z } from 'zod';
 
+
 export interface SessionKnowledgeSummary {
   notes: Array<{ id: string; body: string }>;
   plans: Array<{ id: string; title: string }>;
@@ -94,6 +95,7 @@ export const setSessionProjectContextPin = async (
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ directory, sessionId, kind, id, pinned }),
+      directory,
     });
     if (!response.ok) return null;
     return sessionProjectContextPinsResponseSchema.parse(await response.json()).pins;

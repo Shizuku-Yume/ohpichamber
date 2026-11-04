@@ -2,7 +2,7 @@ import { executeAcpBuiltinSlashCommand } from '@oh-my-pi/pi-coding-agent/slash-c
 import { parseSlashCommand } from '@oh-my-pi/pi-coding-agent/slash-commands/helpers/parse';
 
 export const ALLOWED_BUILTIN_COMMANDS = ['compact', 'shake', 'todo', 'jobs', 'usage', 'context', 'tools'] as const;
-export const READ_ONLY_BUILTIN_COMMANDS = {
+const READ_ONLY_BUILTIN_COMMANDS = {
   todo: true,
   jobs: true,
   usage: true,
@@ -19,4 +19,3 @@ export function isReadOnlyBuiltinCommand(name: string): boolean {
 }
 
 export { executeAcpBuiltinSlashCommand, parseSlashCommand };
-export type AllowedBuiltinCommand = typeof ALLOWED_BUILTIN_COMMANDS[number];

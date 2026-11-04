@@ -7,6 +7,7 @@ import { getWorktreeSetupWaitEnabled } from '@/lib/openchamberConfig';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { resolveWorktreeSetupCommands } from '@/lib/sharedTrustConfirmation';
 import { waitForWorktreeBootstrap } from '@/lib/worktrees/worktreeBootstrap';
+import { resolveCreatedWorktreeStartDirectory } from '@/lib/worktrees/worktreeStartDirectory';
 import { createWorktreeWithDefaults } from '@/lib/worktrees/worktreeCreate';
 import { dispatchRunPrompt, registerMultiRunSession, toGitSafeSlug, toModelSlug } from '@/stores/useMultiRunStore';
 import { resolveSendSelection, useSessionUIStore } from '@/sync/session-ui-store';
@@ -219,7 +220,8 @@ export async function addLaneToRun(input: {
       await waitForWorktreeBootstrap(worktree.path);
       assertCurrent();
     }
-    directory = worktree.path;
+    directory = await resolveCreatedWorktreeStartDirectory(location.project, worktree);
+    assertCurrent();
   }
 
   const session = await createMultiRunSession({

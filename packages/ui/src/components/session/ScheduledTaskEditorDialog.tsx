@@ -722,7 +722,7 @@ const CronScheduleSection: React.FC<{
             }));
           }}
         >
-          <SelectTrigger size="lg" className="w-fit max-w-full"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-fit max-w-full"><SelectValue /></SelectTrigger>
           <SelectContent>
             {TIMEZONE_OPTIONS.map((timezone) => (
               <SelectItem key={timezone} value={timezone}>{timezone}</SelectItem>
@@ -1165,7 +1165,7 @@ export function ScheduledTaskEditorDialog(props: {
         <Select value={draft.sessionMode} onValueChange={(value: 'new' | 'existing') => setDraft((prev) => ({
           ...prev, sessionMode: value,
         }))}>
-          <SelectTrigger size="settings"><SelectValue>{draft.sessionMode === 'existing' ? t('sessions.scheduledTasks.editor.existingSession') : t('sessions.scheduledTasks.editor.newSession')}</SelectValue></SelectTrigger>
+          <SelectTrigger><SelectValue>{draft.sessionMode === 'existing' ? t('sessions.scheduledTasks.editor.existingSession') : t('sessions.scheduledTasks.editor.newSession')}</SelectValue></SelectTrigger>
           <SelectContent>
             <SelectItem value="new">{t('sessions.scheduledTasks.editor.newSession')}</SelectItem>
             <SelectItem value="existing">{t('sessions.scheduledTasks.editor.existingSession')}</SelectItem>
@@ -1175,7 +1175,7 @@ export function ScheduledTaskEditorDialog(props: {
       {draft.sessionMode === 'existing' ? (
         <SettingsStackedField label={t('sessions.scheduledTasks.editor.targetSession')} info={t('sessions.scheduledTasks.editor.targetHint')}>
           <Select value={draft.targetSessionId} onValueChange={(targetSessionId) => setDraft((prev) => ({ ...prev, targetSessionId }))}>
-            <SelectTrigger size="settings"><SelectValue placeholder={t('sessions.scheduledTasks.editor.targetSession')}>
+            <SelectTrigger><SelectValue placeholder={t('sessions.scheduledTasks.editor.targetSession')}>
               {sessions.find((session) => session.sessionId === draft.targetSessionId)?.title || draft.targetSessionId || undefined}
             </SelectValue></SelectTrigger>
             <SelectContent>
@@ -1214,7 +1214,7 @@ export function ScheduledTaskEditorDialog(props: {
                         }));
                       }}
                     >
-                      <SelectTrigger size="lg" className="w-fit max-w-full">
+                      <SelectTrigger className="w-fit max-w-full">
                         <SelectValue>
                           {(value) => value === 'daily'
                             ? t('sessions.scheduledTasks.editor.scheduleType.daily')
@@ -1374,7 +1374,7 @@ export function ScheduledTaskEditorDialog(props: {
                       }));
                     }}
                   >
-                    <SelectTrigger size="lg" className="w-fit max-w-full"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="w-fit max-w-full"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {TIMEZONE_OPTIONS.map((timezone) => (
                         <SelectItem key={timezone} value={timezone}>{timezone}</SelectItem>
@@ -1462,7 +1462,7 @@ export function ScheduledTaskEditorDialog(props: {
                     }));
                   }}
                 >
-                  <SelectTrigger size="lg" className="w-fit max-w-full"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="w-fit max-w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {TIMEZONE_OPTIONS.map((timezone) => (
                       <SelectItem key={timezone} value={timezone}>{timezone}</SelectItem>
@@ -1524,7 +1524,7 @@ export function ScheduledTaskEditorDialog(props: {
                   }));
                 }}
               >
-                <SelectTrigger size="lg" className="w-fit max-w-full">
+                <SelectTrigger className="w-fit max-w-full">
                   <SelectValue>
                     {(value) => value === '__default'
                       ? t('sessions.scheduledTasks.editor.thinkingLevel.default')

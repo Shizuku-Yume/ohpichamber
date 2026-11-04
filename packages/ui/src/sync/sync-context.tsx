@@ -18,6 +18,10 @@ import { useGlobalSyncStore } from "./global-sync-store"
 import { applyDirectoryEvent, compareCounters, mergeHostSession } from "./event-reducer"
 import { useBtwStore } from "@/stores/useBtwStore"
 import { createEventPipeline, type EventPipeline } from "./event-pipeline"
+import { subscribeSessionFoldersSync } from "./session-folders-sync";
+import { subscribeSessionDraftsSync } from "./session-drafts-sync";
+import { subscribeMessageQueueSync } from "./message-queue-sync";
+
 import { SessionMessageLoader, getImperativeSessionMessageLoader, setImperativeSessionMessageLoader, type SessionMessageLoadState, type SessionMessageTarget } from "./session-message-loader"
 import { setSyncRefs } from "./sync-refs"
 import { setActionRefs, setOptimisticRefs } from "./session-actions"
@@ -292,7 +296,15 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
         }
         return contiguous
       },
-      recover: (target) => messageLoader.refresh(target, undefined, { recovered: true }),
+      recover: async (target) => {
+        const btw = useBtwStore.getState().byParent[target.sessionId]
+        if (btw?.ephemeralStatus === "running" && btw.ephemeralRecordId) {
+          useBtwStore.getState().completeEphemeral(target.sessionId, btw.ephemeralRecordId, "failed", btw.ephemeralText ?? "")
+        } else if (btw?.pendingSend) {
+          useBtwStore.getState().setPanelState(target.sessionId, { pendingSend: undefined, pending: true })
+        }
+        await messageLoader.refresh(target, undefined, { recovered: true })
+      },
       onDisconnect(target) {
         const store = childStores.getChild(target.directory)
         if (store && isCurrent()) {
@@ -302,6 +314,12 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
             session_status: { ...state.session_status, [target.sessionId]: "unavailable" },
           })
           applyGlobalSessionStatusSnapshot(target.directory, { [target.sessionId]: "unavailable" }, [target.sessionId])
+        }
+        const btw = useBtwStore.getState().byParent[target.sessionId]
+        if (btw?.ephemeralStatus === "running" && btw.ephemeralRecordId) {
+          useBtwStore.getState().completeEphemeral(target.sessionId, btw.ephemeralRecordId, "failed", btw.ephemeralText ?? "")
+        } else if (btw?.pendingSend) {
+          useBtwStore.getState().setPanelState(target.sessionId, { pendingSend: undefined, pending: true })
         }
       },
     })
@@ -323,6 +341,9 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     })
     setSessionParentResolver((sessionId) => findLiveSession(Array.from(childStores.children.values(), (store) => store.getState()), sessionId)?.parentSessionId)
     void bootstrapGlobal(useGlobalSyncStore.setState, useGlobalSyncStore.getState, client, isCurrent)
+    const unsubscribeFolderEvents = subscribeSessionFoldersSync(props.runtimeKey);
+    const unsubscribeDraftEvents = subscribeSessionDraftsSync(props.runtimeKey);
+    const unsubscribeMessageQueueEvents = subscribeMessageQueueSync(props.runtimeKey ?? getRuntimeKey());
     const stopBeforeSwitch = subscribeRuntimeEndpointWillChange((detail) => {
       if (detail.runtimeKey === props.runtimeKey) return
       currentRef.current = false
@@ -381,7 +402,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     document.addEventListener("visibilitychange", visible)
     return () => {
       currentRef.current = false
-      stopBeforeSwitch(); resumeAfterSwitch(); stopAuthRecovery(); stopConnectionRecovery(); unconfigure(); pipeline.cleanup(); clearInterval(discoveryTimer)
+      stopBeforeSwitch(); resumeAfterSwitch(); stopAuthRecovery(); stopConnectionRecovery(); unconfigure(); pipeline.cleanup(); clearInterval(discoveryTimer); unsubscribeFolderEvents(); unsubscribeDraftEvents(); unsubscribeMessageQueueEvents();
       window.removeEventListener("online", resume)
       window.removeEventListener("offline", offline)
       window.removeEventListener("pageshow", pageshow)

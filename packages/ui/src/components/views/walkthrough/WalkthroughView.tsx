@@ -207,8 +207,17 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
   const requestedCommitHash = requestedTarget?.source.kind === 'commit' ? requestedTarget.source.hash : undefined;
   const commitComparison = useCommitComparison(directory || null, currentBranch, visible && isCommitScope, requestedCommitHash);
   const selectedCommitHash = commitComparison.selectedCommit?.hash ?? requestedCommitHash ?? null;
+  const baseRemoteNames = useMemo(
+    () => new Set(binding.read?.repository.remotes.map((remote) => remote.name) ?? []),
+    [binding.read],
+  );
   const { base: comparisonBase, resolved: comparisonBaseResolved, revision: branchRevision } =
-    useBranchComparisonBase(directory || null, currentBranch, visible);
+    useBranchComparisonBase(directory || null, currentBranch, visible, {
+      branches,
+      remoteNames: baseRemoteNames,
+      primaryRemote: binding.contexts[0]?.primaryRemote,
+      readContext: binding.contexts[0] ?? null,
+    });
   const branchSource = useMemo<Extract<WalkthroughSource, { kind: 'branch' }> | null>(() => {
     const headRef = currentBranch;
     // A branch is never its own base, and the check belongs before the ref is
@@ -253,7 +262,7 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
       releaseActiveSourceControlContexts(capturedRuntimeKey, directory, sourceControlContextsOwnerId);
     };
   }, [beginActiveSourceControlContextsLoad, binding.contexts, binding.scope.runtimeKey, commitActiveSourceControlContexts, directory, releaseActiveSourceControlContexts, sourceControlAuthEntries, sourceControlContextsOwnerId]);
-  const readContext = binding.contexts[0] ?? null;
+  const readContext = requestedTarget && 'context' in requestedTarget ? requestedTarget.context : binding.contexts[0] ?? null;
   const readAuthEntry = readContext ? sourceControlAuthEntries[getSourceControlAuthKey(readContext)] : undefined;
   const readAuth = readContext
     ? getSourceControlReadContextAuthState(readAuthEntry, readContext)
@@ -291,8 +300,7 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
   const prComparison = usePullRequestComparison(directory || null, currentBranch, readContext, visible && isPrScope,
     requestedTarget?.source.kind === 'pr' ? requestedTarget.source : undefined);
   const selectedPr = prComparison.selectedSource;
-  // Pull requests on GitHub and merge requests on GitLab both have a published diff to walk through.
-  const readsChangeRequests = readContext?.provider === 'github' || readContext?.provider === 'gitlab';
+  const readsChangeRequests = Boolean(readContext) && !prComparison.diffUnavailable;
   const changeRequestProvider = prComparison.provider;
 
   const target = useMemo<WalkthroughTarget>(

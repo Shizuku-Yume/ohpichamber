@@ -134,6 +134,10 @@ export class InteractionManager {
     const state = this.sessions.get(sessionId);
     if (!state || state.generation !== generation) return;
     const now = Date.now();
+    if (interaction.kind === 'cancel') {
+      this.cancelPending(sessionId, interaction.approvalId);
+      return;
+    }
     if (interaction.kind === 'approval') {
       const privateTarget = interaction.policyTarget;
       if (interaction.nativeGrant) {
@@ -325,6 +329,44 @@ export class InteractionManager {
     try {
       await state.dispatch(record.kind === 'approval' ? { type: 'approval.resolve', approvalId: id, decision: 'reject' } : { type: 'question.resolve', questionId: id, action: 'cancel' });
     } catch { this.invalidate(sessionId, state.generation); }
+  }
+  cancelPending(sessionId: string, id: string): void {
+    const record = this.records.get(id);
+    const state = this.sessions.get(sessionId);
+    if (!record || !state || record.request.status !== 'pending' || record.request.epoch !== state.epoch) return;
+    clearTimeout(record.timer);
+    this.reservations.delete(id);
+    const resolvedAt = Date.now();
+    if (record.kind === 'approval') {
+      const terminal = ApprovalRequestSchema.parse({
+        ...record.request,
+        status: 'revoked' as const,
+        version: increment(record.request.version),
+        resolvedAt,
+        resolvedBy: 'agent-service',
+      });
+      this.records.set(id, { ...record, request: terminal, timer: undefined });
+      state.append(ProjectionInputSchema.parse({
+        timestamp: resolvedAt,
+        event: { type: 'approval.resolved', approval: terminal },
+      }));
+      const grant = this.executionGrants.get(id);
+      clearTimeout(grant?.timer);
+      this.executionGrants.delete(id);
+    } else {
+      const terminal = QuestionRequestSchema.parse({
+        ...record.request,
+        status: 'cancelled' as const,
+        version: increment(record.request.version),
+        resolvedAt,
+        resolvedBy: 'agent-service',
+      });
+      this.records.set(id, { ...record, request: terminal, timer: undefined });
+      state.append(ProjectionInputSchema.parse({
+        timestamp: resolvedAt,
+        event: { type: 'question.resolved', question: terminal },
+      }));
+    }
   }
 
   private expire(record: RecordState): RecordState {

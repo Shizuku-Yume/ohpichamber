@@ -176,6 +176,49 @@ Authored files use the native workspace or selected-agent roots and canonical re
 
 Templates invoke native `/name` argument rules, not legacy aliases or `#` substitution. Argument parsing and expansion are worker-owned. All retained Web/PWA, Electron, hosted-mobile and Capacitor settings surfaces use the same authenticated Canonical gateway contract.
 
+## Refreshed settings surfaces
+
+The Settings shell and its shared chrome were refreshed from the 2026-10-26 upstream
+tree and re-pointed at the fork's canonical data sources:
+
+- **Chrome and controls.** `shared/SettingsSection.tsx` carries the upstream control
+  primitives and size constants the pages now share; `shared/SettingsCards.tsx`
+  exports `SettingsCardAction` for the Extensions page cards; the sidebar item and
+  search rows take the upstream logical-direction classes. `views/SettingsWindow.tsx`
+  focuses the search field through `data-settings-search`, and `views/SettingsView.tsx`
+  resolves page titles through `lib/settings/pageTitle.ts` and opens the Chat tab
+  that holds a search result through `chatSettingsTabs.ts`.
+- **Chat.** `openchamber/ChatSettings.tsx` splits the former long Visual page into
+  Messages, Composer and Assistance tabs. Every control still writes through
+  `updateDesktopSettings` or `useUIStore`; the tab choice lives in
+  `chatSettingsTabs.ts` so a search result or a deep link can select it. The desktop
+  return-key and pasted-image preferences wait for their store and settings-registry
+  keys (task 23/25), so they are not offered yet.
+- **Session warming.** Only the workspace control remains:
+  `openchamber/SessionWarmingCheckbox.tsx` reads and writes the workspace's cache
+  warming through `CanonicalClient.readCacheWarming`/`updateCacheWarming`
+  (`GET/PUT /api/agent/v1/workspaces/:workspaceId/cache-warming`) and shows the
+  per-worker apply outcome. Upstream's per-session warming, its settings field and
+  the session-menu toggle were removed (see the decision in `.workflow/decisions.md`);
+  per-session warming returns only once the Agent Service owns it.
+- **Extensions.** `extensions/ExtensionsPage.tsx` renders installed and guest
+  extensions as cards with a detail view, install-source badges, the approval dialog
+  and the website locale links. Guest capabilities and permissions come from the
+  Host's extension records; nothing is installed from the page without an explicit
+  action.
+- **Adopted pages.** Voice, session retention, managed SSH credentials, app-link
+  security, notifications, shortcut recording, the theme catalog dialog and picker,
+  and the Extensions grid take upstream's current copy and layout.
+
+Deferred to the tasks that own their data, with the dependency named in each commit:
+the General/Chat/Appearance page split (`GeneralWorkspaceSettings`,
+`DesktopAppSettings`, `FinishedWorktreesSettings`, `MobileWorkspaceTabsSettings`),
+the settings-registry keys for helper-model thinking levels and tunnel HTTPS port,
+the tracker and source-control provider cards (`lib/trackers/registry`,
+`lib/source-control/providers/registry`), the Magic Prompts scoped-override page,
+the agent knowledge/workflow/render tool toggles, the tunnel mode rework, passkey
+rename, plugin runtime status and the skills catalog rows.
+
 ## Canonical entity ownership and shapes
 
 Entity configuration and authored resources are owned by Canonical APIs and the

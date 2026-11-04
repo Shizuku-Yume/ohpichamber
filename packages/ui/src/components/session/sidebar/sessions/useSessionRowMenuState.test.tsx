@@ -122,7 +122,7 @@ describe('session row menu state', () => {
       await act(async () => mounted.capture.menu!.handleContextMenuOpenChange(true));
       expect(mounted.capture.menu!.isContextMenuOpen).toBe(true);
 
-      await act(async () => window.dispatchEvent(new Event('blur')));
+      await act(async () => window.dispatchEvent(new window.Event('blur')));
       expect(mounted.capture.menu!.isContextMenuOpen).toBe(false);
     } finally {
       await mounted.cleanup();
@@ -135,7 +135,7 @@ describe('session row menu state', () => {
       await act(async () => mounted.capture.menu!.handleMenuOpenChange(true));
       expect(mounted.capture.menu!.isMenuOpen).toBe(true);
 
-      await act(async () => window.dispatchEvent(new Event('blur')));
+      await act(async () => window.dispatchEvent(new window.Event('blur')));
       expect(mounted.capture.menu!.isMenuOpen).toBe(false);
     } finally {
       await mounted.cleanup();

@@ -92,7 +92,7 @@ Metadata responses publish through `installSessionMetadata`; new native records
 use `installHostSession`. Their revision-aware merge and mutation revision retain
 newer runtime heads, metadata and archive state while discovery is in flight.
 
-Keeping one member snapshots each discarded worktree before archive and removal.
+Keeping one member snapshots each discarded worktree before archive and removal. A member of a project opened on a folder of its repository runs in that folder of its worktree (`<worktree>/ai`). `memberLocation.locateRunMember` finds the checkout that holds the member's directory and never answers a checkout that holds a registered project: git lists the primary checkout `repo` among the worktrees of the project `repo/ai`, and removing it would remove the project.
 Cleanup rechecks native membership, workspace mapping, runtime and the inclusive
 workspace session list. An incomplete list or another unarchived session prevents
 removal. A failed step leaves that member's worktree and does not stop siblings.

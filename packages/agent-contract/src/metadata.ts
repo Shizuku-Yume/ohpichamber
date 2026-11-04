@@ -31,7 +31,8 @@ const linkedAuthorFields = { author: z.string().optional(), authorAvatarUrl: z.s
 const linkedIssueSchema = z.discriminatedUnion('kind', [
   z.strictObject({ ...linkedItemFields, ...linkedAuthorFields, kind: z.literal('issue'), number: z.number().int().positive() }),
   z.strictObject({ ...linkedItemFields, ...linkedAuthorFields, kind: z.literal('pull'), number: z.number().int().positive() }),
-  z.strictObject({ ...linkedItemFields, ...linkedAuthorFields, kind: z.literal('linear'), identifier: EntityIdSchema }),
+  z.strictObject({ ...linkedItemFields, ...linkedAuthorFields, kind: z.literal('linear'), provider: z.literal('linear').optional(), identifier: EntityIdSchema }),
+  z.strictObject({ ...linkedItemFields, ...linkedAuthorFields, kind: z.literal('tracker'), provider: EntityIdSchema, identifier: EntityIdSchema }),
   z.strictObject({
     ...linkedItemFields, kind: z.literal('guest'), providerId: EntityIdSchema, identifier: EntityIdSchema,
     thread: z.enum(['issue', 'pull']).optional(), author: z.string().optional(), head: z.string().optional(),

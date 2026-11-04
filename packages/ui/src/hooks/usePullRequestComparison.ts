@@ -6,6 +6,7 @@ import { mergeIncompleteSourceControlPage, sourceControlReadContextParts } from 
 import type { PageResult } from '@/lib/source-control/types';
 import { useI18n } from '@/lib/i18n';
 import { changeRequestCopy } from '@/lib/source-control/changeRequestCopy';
+import { useChangeRequestDiffServing } from '@/lib/source-control/providers/registry';
 import { useRepositoryHost } from '@/components/references/referenceSources';
 import { useGitStore } from '@/stores/useGitStore';
 import { usePullRequestSelectionStore } from '@/stores/usePullRequestSelectionStore';
@@ -73,7 +74,7 @@ export const mergePullRequestPage = (
 
 /**
  * Lists and remembers the pull request a comparison reviews. Every read goes
- * through the checkout's bound GitHub or GitLab context, so the list and the branch's
+ * through the checkout's bound provider context, so the list and the branch's
  * own pull request come from the account and repository the binding grants,
  * never from whichever account happens to be active.
  */
@@ -87,8 +88,7 @@ export function usePullRequestComparison(
   const { sourceControl } = useRuntimeAPIs();
   const { t } = useI18n();
   const runtimeKey = useGitStore((state) => state.runtimeKey);
-  // The server publishes pull request diffs for GitHub and GitLab only.
-  const latestContext = readContext?.provider === 'github' || readContext?.provider === 'gitlab' ? readContext : null;
+  const latestContext = readContext;
   const contextKey = latestContext ? JSON.stringify(sourceControlReadContextParts(latestContext)) : '';
   // Callers may hand over a fresh object each render; effects and callbacks key
   // on `contextKey` and read the object through this ref.
@@ -98,8 +98,11 @@ export function usePullRequestComparison(
   // Known even with no working account, so the messages name the right host.
   const hostProvider = useRepositoryHost(directory)?.provider;
   const provider = context?.provider ?? hostProvider ?? null;
+  // A served host may list its change requests and still not serve their diff.
+  const diffServing = useChangeRequestDiffServing(provider);
+  const diffUnavailable = context !== null && diffServing === 'not-served';
   // A rebind to another repository must not carry a selection across.
-  const selectionKey = JSON.stringify([runtimeKey, directory, branch, context?.repositoryId ?? null]);
+  const selectionKey = JSON.stringify([runtimeKey, directory, branch, contextKey]);
   const selection = usePullRequestSelectionStore((state) => state.selections.get(selectionKey) ?? null);
   const selectedSource = selection?.source ?? null;
   const saveSelection = usePullRequestSelectionStore((state) => state.select);
@@ -209,6 +212,8 @@ export function usePullRequestComparison(
     readContext: context,
     /** The host the change requests come from, for wording and numbering. */
     provider,
+    /** The host lists its change requests but does not serve their diff: nothing to compare or walk through. */
+    diffUnavailable,
     selectedSource: pendingPreference ?? selectedSource,
     prs: current?.status === 'ready' ? current.prs : NO_PULL_REQUESTS,
     query, setQuery,

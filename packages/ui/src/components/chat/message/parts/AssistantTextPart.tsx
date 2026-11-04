@@ -19,6 +19,7 @@ interface AssistantTextPartProps {
 
 const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
     part,
+    sessionId,
     messageId,
     streamPhase,
     chatRenderMode = 'live',
@@ -88,9 +89,9 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
                 content={displayTextContent}
                 part={part}
                 messageId={messageId}
+                sessionId={sessionId}
                 isAnimated={false}
                 isStreaming={isStreaming}
-                disableStreamAnimation={chatRenderMode === 'sorted'}
                 variant={part.type === 'reasoning' ? 'reasoning' : 'assistant'}
                 enableFileReferences={isFinalized}
                 onShowPopup={onShowPopup}

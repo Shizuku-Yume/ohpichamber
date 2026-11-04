@@ -105,3 +105,31 @@ test('reject and cancellation never authorize', async () => {
     expect(bridge.isNativeAuthorized('bash', { command: 'printf native' }, 'call-1')).toBe(false);
   }
 });
+
+test('user steering signal aborts a pending native permission and resolves cancelled', async () => {
+  const controller = new AbortController();
+  let receivedSteeringSignal: AbortSignal | undefined;
+  const bridge = new NativePermissionBridge(async (_toolCall, _options, _key, _signal, steeringSignal) => {
+    receivedSteeringSignal = steeringSignal;
+    const { promise, resolve } = Promise.withResolvers<NativePermissionChoice | undefined>();
+    steeringSignal?.addEventListener('abort', () => resolve(undefined), { once: true });
+    return promise;
+  });
+  const outcomePromise = bridge.clientBridge.requestPermission!(toolCall, options, undefined, controller.signal);
+  expect(receivedSteeringSignal).toBe(controller.signal);
+  controller.abort();
+  const outcome = await outcomePromise;
+  expect(outcome).toEqual({ outcome: 'cancelled' });
+  expect(bridge.isNativeAuthorized('bash', { command: 'printf native' }, 'call-1')).toBe(false);
+});
+
+test('an already-aborted steering signal immediately resolves cancelled without calling request', async () => {
+  let requested = false;
+  const bridge = new NativePermissionBridge(async () => { requested = true; return 'once'; });
+  const controller = new AbortController();
+  controller.abort();
+  const outcome = await bridge.clientBridge.requestPermission!(toolCall, options, undefined, controller.signal);
+  expect(outcome).toEqual({ outcome: 'cancelled' });
+  expect(requested).toBe(false);
+  expect(bridge.isNativeAuthorized('bash', { command: 'printf native' }, 'call-1')).toBe(false);
+});

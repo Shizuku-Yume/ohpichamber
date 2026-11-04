@@ -32,10 +32,7 @@ import {
     type TimelineScrollMode,
 } from '@/components/chat/lib/scroll/timelineScrollAnchoring';
 import {
-    AUTOMATIC_MOVEMENT_MAX_MS,
-    getFollowScrollMode,
     isPositionHeldByFollow,
-    resolveFollowBurstThresholdPx,
     isFollowGlideUnderWay,
     resolveFollowGlideTarget,
     resolveViewportAtEnd,
@@ -44,6 +41,8 @@ import {
     isFollowReleaseKey,
     isMiddleButtonPan,
     nestedScrollableConsumesWheelUp,
+    onFrameScroll,
+    onRowExpand,
 } from '@/components/chat/lib/scroll/timelineScrollIntent';
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -201,16 +200,6 @@ const prefersReducedMotion = (): boolean => {
 };
 const followScrollBehavior = (): ScrollBehavior => (prefersReducedMotion() ? 'auto' : 'smooth');
 
-// Message text is set `leading-relaxed` (1.625) on the root font size; the
-// burst threshold is counted in those lines. Read once per hook, not per frame.
-const MESSAGE_TEXT_LINE_HEIGHT = 1.625;
-const readMessageLineHeightPx = (): number => {
-    const root = globalThis.document?.documentElement;
-    if (!root) return 0;
-    const rootFontSize = Number.parseFloat(getComputedStyle(root).fontSize);
-    return Number.isFinite(rootFontSize) ? rootFontSize * MESSAGE_TEXT_LINE_HEIGHT : 0;
-};
-
 const messageLinkOffsetTop = (node: HTMLElement): number => {
     const fade = Number.parseFloat(getComputedStyle(node).getPropertyValue('--scroll-shadow-size'));
     return (Number.isFinite(fade) ? fade : 0) + MESSAGE_LINK_GAP_PX;
@@ -273,11 +262,6 @@ export const useChatTimelineScroll = ({
     // Burst follow: the hidden-tail threshold (read once), and whether the
     // last follow work was for a live reply, so the first rest pin after it
     // knows the reply just ended.
-    const burstThresholdPxRef = React.useRef<number | null>(null);
-    const burstThresholdPx = () => {
-        burstThresholdPxRef.current ??= resolveFollowBurstThresholdPx(readMessageLineHeightPx());
-        return burstThresholdPxRef.current;
-    };
     const followedLiveReplyRef = React.useRef(false);
     const userOwnsScrollRef = React.useRef(userOwnsScroll);
     userOwnsScrollRef.current = userOwnsScroll;
@@ -815,24 +799,11 @@ export const useChatTimelineScroll = ({
         };
     }, [scrollNode]);
 
-    // The viewport on the end, outside a live reply: one instant write. In
-    // burst mode the first such pin after a live reply glides instead, since
-    // up to the threshold of the tail was left hidden on purpose and a snap
-    // would be the one jump of the reply; later pins leave that glide to land.
+    // The viewport on the end, outside a live reply: one instant write.
     const pinEndAtRest = React.useCallback((node: HTMLElement) => {
-        const end = node.scrollHeight - node.clientHeight;
-        const replyJustEnded = followedLiveReplyRef.current;
         followedLiveReplyRef.current = false;
+        const end = node.scrollHeight - node.clientHeight;
         if (end - node.scrollTop <= 1) return;
-        if (getFollowScrollMode() === 'burst') {
-            const glide = glideRef.current;
-            if (glide && Math.abs(glide.target - end) <= 1 && performance.now() - glide.issuedAt < AUTOMATIC_MOVEMENT_MAX_MS) return;
-            if (replyJustEnded) {
-                glideRef.current = { from: node.scrollTop, target: end, lastTop: node.scrollTop, issuedAt: performance.now(), stateEnd: end };
-                node.scrollTo({ top: end, behavior: followScrollBehavior() });
-                return;
-            }
-        }
         node.scrollTop = end;
     }, []);
 
@@ -873,10 +844,9 @@ export const useChatTimelineScroll = ({
             // to finish, decided from the list's state so these frames read no
             // layout.
             const state = listRef.current?.getState();
-            const burst = getFollowScrollMode() === 'burst';
             const glide = glideRef.current;
             const stateEnd = state ? Math.max(0, (state.contentLength ?? 0) - state.scrollLength) : null;
-            if (state && stateEnd !== null && isFollowGlideUnderWay(glide, state.scroll, stateEnd, burst, performance.now())) {
+            if (state && stateEnd !== null && isFollowGlideUnderWay(glide, state.scroll, stateEnd, performance.now())) {
                 if (glide) glide.lastTop = state.scroll;
                 return;
             }
@@ -888,13 +858,7 @@ export const useChatTimelineScroll = ({
             const viewportLength = node.clientHeight;
             const end = Math.max(0, node.scrollHeight - viewportLength);
             const scroll = node.scrollTop;
-            const target = resolveFollowGlideTarget({
-                end,
-                scroll,
-                burst,
-                thresholdPx: burstThresholdPx(),
-                afterSend: performance.now() < sendGlideUntilRef.current,
-            });
+            const target = resolveFollowGlideTarget(end, scroll);
             if (target === null) {
                 glideRef.current = null;
                 return;
@@ -1071,6 +1035,22 @@ export const useChatTimelineScroll = ({
         const handleKeyDown = (event: KeyboardEvent) => {
             if (isFollowReleaseKey(event) && canScrollUp()) gesture();
         };
+        // A wheel or swipe over a page frame keeps its own events; the frame
+        // reports the gesture direction so the timeline hears it.
+        const stopFrameScroll = onFrameScroll(scrollNode, (direction) => {
+            if ((direction === 'up' || !isAtEndRef.current) && canScrollUp()) gesture();
+        });
+        // A row the reader opens grows below its header. Kept on the end, the
+        // viewport would slide down by the whole row and carry the header they
+        // clicked off the top; let go first, as a gesture does.
+        const stopRowExpand = onRowExpand(scrollNode, () => {
+            if (modeRef.current !== 'following-end') return;
+            gesture();
+            // The list also holds the end the session opened at until the
+            // reader scrolls. Any scroll command ends that hold; this one is
+            // to where the viewport already is.
+            void listRef.current?.scrollToOffset({ offset: scrollNode.scrollTop, animated: false });
+        });
         const handleScroll = () => {
             const scrollTop = scrollNode.scrollTop;
             // The list's scroll length is the viewport height it measured,
@@ -1122,6 +1102,8 @@ export const useChatTimelineScroll = ({
             scrollNode.removeEventListener('pointerdown', handlePointerDown);
             scrollNode.removeEventListener('keydown', handleKeyDown);
             scrollNode.removeEventListener('scroll', handleScroll);
+            stopFrameScroll();
+            stopRowExpand();
         };
     }, [isLiveFollowActive, realContentOverflowsViewport, scrollNode]);
 
@@ -1350,23 +1332,6 @@ export const useChatTimelineScroll = ({
             pinnedThroughAnimationRef.current = false;
         };
     }, [scrollNode]);
-
-    // A burst reply can end with part of its tail hidden and nothing left to
-    // grow, so no pin would run: once the session stops working (and a send's
-    // glide window has run out), the end is reached with one glide.
-    React.useEffect(() => {
-        if (sessionIsWorking) return;
-        const timer = setTimeout(() => {
-            const node = scrollRef.current;
-            if (!node || isLive() || !followedLiveReplyRef.current || getFollowScrollMode() !== 'burst') return;
-            if (userOwnsScrollRef.current || !isAtEndRef.current || modeRef.current !== 'following-end' || !isLiveFollowActive()) {
-                followedLiveReplyRef.current = false;
-                return;
-            }
-            pinEndAtRest(node);
-        }, Math.max(0, sendGlideUntilRef.current - performance.now()));
-        return () => clearTimeout(timer);
-    }, [isLiveFollowActive, pinEndAtRest, sessionIsWorking]);
 
     // Suppress the overlay scrollbar thumb while automatic movement owns the
     // scroll position, so it does not jump on each correction.

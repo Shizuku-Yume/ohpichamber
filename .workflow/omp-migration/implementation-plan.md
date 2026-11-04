@@ -137,25 +137,25 @@ Migrate one feature at a time, keeping its existing product behavior where the i
 
 Each feature has a focused behavior check covering normal completion, failure, reconnect, and unsupported capability behavior. No feature reads OpenCode metadata, events, config, credentials, or route names.
 
-## M5: retained surfaces and release cutover
+## M5: release and retained surfaces
 
-**Status (2026-10-23):** blocked on prerequisites this list omits: release workflows, non-Linux native packages and process cleanup, Docker image, npm distribution and the isolated-space runtime. [Post-M3 hardening](../specs/post-m3-hardening.md) tasks 11-15 own them, and task 26 re-plans M5 by release surface.
+**Status (2026-10-24):** re-planned by [M5: Release and retained surfaces](../specs/m5-release-surfaces.md). The surface spec owns the release matrix, runner/device requirements and checks; this section keeps the milestone order and the retained boundaries. Prerequisites owned elsewhere are `post-m3-hardening/13` (non-Linux process cleanup), `29` (six native leaves) and `38` (isolated-space runtime removal).
 
 ### Work
 
-- Finish Electron Agent Service startup, shutdown, packaging, and update handling.
-- Finish Capacitor mobile reconnect, push-click session routing, approval/question recovery, and offline queue behavior.
-- Exercise Quake show/hide/close and Mini Chat shortcut conflicts on the real desktop; preserve unsaved-buffer moves and capability-granted Guest file editors. Keep current explicit unsupported Guest surfaces until their planned implementation is proven.
-- Revalidate isolated-space dispatcher, credentials, allowed-operation controls and escape attempts against the final OMP runtime on real Docker. A source/build check does not close this boundary.
-- Finish Guest tool/service integration. Treat `contributes.tools` as presentation metadata unless the Agent Service explicitly registers an executable OMP custom tool.
-- Certify that task 17's OpenCode package, environment, config/auth/importer, route, lifecycle, UI, documentation, test and workflow retirement remains complete in release artifacts; M5 is not permission to keep those owners after M3.
-- Certify absence of the VS Code extension artifacts/references retired in M1 while retaining supported external editor launching and theme import.
-- Verify the completed Host-owned metadata migration and explicit one-time credential handoff results; do not rerun a removed importer or silently import OpenCode transcripts/credentials. A desired transcript importer requires separate versioned scope.
-- Update user and developer documentation to describe OMP-only setup and the canonical service.
+- Certify the retained desktop matrix: Electron macOS arm64/x64, Windows x64/arm64 and Linux x64/arm64. Each artifact installs, launches the embedded Host and Agent Service, completes a real-provider prompt, and verifies signing/notarization or update metadata.
+- Certify Capacitor mobile on a physical Pixel 8 (Android 15/API 35, arm64-v8a) and a physical iPhone (iOS 26, TestFlight): pairing, canonical chat, reconnect, approval/question recovery, push-click routing and offline queue. Release stays blocked until both devices pass.
+- Bundle the Agent Runtime into the packed `@openchamber/web` artifact using the Electron-verified staged payload, so a clean install starts the Host and Agent Service without a repository checkout, private workspace dependency or published OMP package.
+- Keep Docker as a supported server path: the image starts the Host and Agent Service on linux/amd64 and linux/arm64 without OpenCode and the compose file mounts only retained OpenChamber paths.
+- Keep isolated spaces unreleased. The server release gate refuses create, start, repair and model/login grants; no OpenCode runtime, config, credential row, readiness check or proxy remains. Building the OMP space runtime is a separate effort.
+- Publish the Guest SDK version decided in `decisions.md: 2026-10-24 - Break the Guest SDK version for the private bootstrap transport`, and run the packaged `v2` bootstrap smoke. `contributes.tools` stays presentation metadata unless the Agent Service registers an executable OMP custom tool; no new Guest execution capability is claimed here.
+- Certify that the OpenCode package, environment, config/auth/importer, route, lifecycle, UI, documentation, test and workflow retirement remains complete in release artifacts, and that no VS Code extension artifact returns. M5 is not permission to keep those owners.
+- Verify the completed Host metadata migration and one-time credential handoff in the release candidate; do not rerun a removed importer or silently import OpenCode transcripts/credentials. A transcript importer requires separate versioned scope.
+- Update user, install and developer documentation to describe only the rows the candidate certified.
 
 ### Gate
 
-A clean build of the supported product matrix completes without OpenCode or VS Code packages. Web, Electron, mobile, Guest, authentication, Git, terminal, browser, relay, queue, approval, and session recovery smoke scenarios have evidence. The release package starts the Canonical Server and Agent Service without a compatibility process.
+The M5 spec's R1-R10 checks are the gate. A release candidate built by `.github/workflows/release.yml` from one commit must produce every retained row, every row must have real runner, device or container evidence (or an explicit maintainer waiver naming the stand-in), and no artifact may contain an OpenCode runtime, VS Code extension or compatibility process. The Canonical Server and Agent Service start from the release package without a fallback engine.
 
 ## Cross-cutting evidence checklist
 

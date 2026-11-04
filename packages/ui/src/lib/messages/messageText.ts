@@ -1,17 +1,16 @@
-import type { Part } from '@openchamber/agent-contract';
+import type { Part, TextPart } from '@openchamber/agent-contract';
 
-export const flattenAssistantTextParts = (parts: Part[]): string => {
-    const textParts = parts
-        .filter((part): part is Extract<Part, { type: 'text' }> => part.type === 'text')
-        .map((part) => part.content.trim())
-        .filter((text) => text.length > 0);
+/** The non-empty text parts of an assistant message, trimmed, in order. Tool and reasoning parts are left out. */
+export const assistantTextSegments = (parts: Part[]): string[] => parts
+    .filter((part): part is TextPart => part.type === 'text')
+    .map((part) => part.content.trim())
+    .filter((text) => text.length > 0);
 
-    return textParts.join('\n\n');
-};
+export const flattenAssistantTextParts = (parts: Part[]): string => assistantTextSegments(parts).join('\n\n');
 
 export const flattenUserTextParts = (parts: Part[]): string => {
     const plainTexts = parts
-        .filter((part): part is Extract<Part, { type: 'text' }> => part.type === 'text')
+        .filter((part): part is TextPart => part.type === 'text')
         .map((part) => part.content.trim())
         .filter((text) => text.length > 0);
     return plainTexts.join('\n\n');

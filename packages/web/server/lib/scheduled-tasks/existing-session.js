@@ -1,15 +1,21 @@
 import { randomUUID } from 'node:crypto';
+import path from 'node:path';
 import { EntityIdSchema, PromptRequestSchema, QueueAppendRequestSchema, SessionSnapshotSchema } from '@openchamber/agent-contract';
 import { OpenChamberControlError } from '../openchamber-control/error.js';
+import { asNonEmptyString } from '../shared/guards.js';
 
 export const createScheduledTaskContext = (provenance) => ({
   kind: 'context', text: '', metadata: { scheduledTask: provenance }, deliveryReceiptId: randomUUID(),
 });
 
+// The picker may offer a whole session list; the route caps its own body too.
+const TARGET_CANDIDATE_LIMIT = 500;
+
 const scheduledProvenance = (capture) => capture?.request?.input?.context?.find((entry) => entry.kind === 'context' && entry.metadata?.scheduledTask)?.metadata.scheduledTask;
 
 export const createExistingSessionTasks = ({ projectConfigRuntime, messageQueueRuntime, sessionService, resolveSessionScope, isSessionArchived, emitTaskRunEvent, expandPrompt }) => {
   const admissions = new Set();
+
   const validateTarget = async (projectId, targetSessionId) => {
     if (!EntityIdSchema.safeParse(targetSessionId).success) throw new OpenChamberControlError('targetSessionId is invalid', 400);
     if (typeof resolveSessionScope !== 'function' || typeof sessionService?.open !== 'function' || typeof isSessionArchived !== 'function') throw new OpenChamberControlError('Scheduled target service is unavailable', 503);
@@ -20,6 +26,30 @@ export const createExistingSessionTasks = ({ projectConfigRuntime, messageQueueR
     const snapshot = SessionSnapshotSchema.parse(await sessionService.open(targetSessionId));
     if (snapshot.session.sessionId !== targetSessionId || snapshot.session.projectId !== scope.projectId || snapshot.session.workspaceId !== scope.workspaceId) throw new OpenChamberControlError('Scheduled target scope mismatch', 409);
     return { session: snapshot.session, scope, directory: scope.cwd };
+  };
+
+  /**
+   * Discovery half of the same rule `validateTarget` applies: a candidate is
+   * eligible when its session resolves to an authorized scope in this project
+   * and the directory the client already knows is that scope's own path. The
+   * session's existence and scope are Host authority; the client's directory
+   * is only a hint until it matches. Archived sessions never qualify.
+   */
+  const listEligibleTargets = async (projectId, candidates) => {
+    const list = Array.isArray(candidates) ? candidates.slice(0, TARGET_CANDIDATE_LIMIT) : [];
+    const eligible = [];
+    for (const candidate of list) {
+      const sessionId = asNonEmptyString(candidate?.sessionId);
+      const directory = asNonEmptyString(candidate?.directory);
+      if (!sessionId || !directory || !EntityIdSchema.safeParse(sessionId).success) continue;
+      if (typeof resolveSessionScope !== 'function') throw new OpenChamberControlError('Scheduled target service is unavailable', 503);
+      const scope = await resolveSessionScope(sessionId).catch(() => null);
+      if (!scope || scope.sessionId !== sessionId || scope.hostProjectId !== projectId || !scope.cwd) continue;
+      if (path.resolve(scope.cwd) !== path.resolve(directory)) continue;
+      if (await isSessionArchived?.(sessionId)) continue;
+      eligible.push({ sessionId, directory });
+    }
+    return eligible;
   };
 
   const record = async (projectId, taskId, status, error, lastRunAt) => {
@@ -87,7 +117,7 @@ export const createExistingSessionTasks = ({ projectConfigRuntime, messageQueueR
   };
 
   return {
-    validateTarget, run, beforeSend,
+    validateTarget, listEligibleTargets, run, beforeSend,
     result: (provenance, status, error) => provenance.mode === 'new' ? Promise.resolve() : record(provenance.projectId, provenance.taskId, status, error),
     cancel: (projectId, taskId) => messageQueueRuntime.cancelScheduledTask(projectId, taskId),
   };

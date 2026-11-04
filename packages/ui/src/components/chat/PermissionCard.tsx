@@ -7,7 +7,6 @@ import { WorkerHighlightedCode } from '@/components/code/WorkerHighlightedCode';
 import { useI18n } from '@/lib/i18n';
 import { PermissionActions } from './PermissionActions';
 import { getApprovalPolicyTitle, getApprovalPresentation, isToolScopePolicy, truncateApprovalTarget } from './permissionPresentation';
-import { usePermissionFromSubagent, usePermissionResponse, type PermissionResponse } from './usePermissionResponse';
 
 const PERMISSION_CODE_STYLE: React.CSSProperties = {
     margin: 0,
@@ -123,52 +122,3 @@ export const PermissionRequestContent: React.FC<{ permission: ApprovalRequest }>
 /** Allow once / session allowance / deny, with the original dock and inline layouts. */
 export { PermissionActions };
 
-/** The inline card the BTW sheet shows for its child session's requests. */
-export const PermissionCard: React.FC<{
-    permission: ApprovalRequest;
-    onResponse?: (response: PermissionResponse) => void;
-}> = ({ permission, onResponse }) => {
-    const { t } = useI18n();
-    const { isResponding, hasResponded, respond } = usePermissionResponse(permission, onResponse);
-    const isFromSubagent = usePermissionFromSubagent(permission);
-    const presentation = getApprovalPresentation(permission);
-
-    if (hasResponded || permission.status !== 'pending') return null;
-
-    return (
-        <div className="group w-full pt-0 pb-2">
-            <div className="chat-column">
-                <div className="-mt-1 border border-border/30 rounded-xl bg-muted/10">
-                    <div className="px-2 py-1.5 border-b border-border/20 bg-muted/5">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                                <Icon name="question" className="h-3.5 w-3.5 text-[var(--status-warning)]" />
-                                <span className="typography-meta font-medium text-muted-foreground">
-                                    {t('chat.permissionCard.title')}
-                                </span>
-                                {isFromSubagent ? (
-                                    <span className="typography-micro text-muted-foreground px-1.5 py-0.5 rounded bg-foreground/5">
-                                        {t('chat.questionCard.fromSubagent')}
-                                    </span>
-                                ) : null}
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                                <Icon name={presentation.icon} className="h-3 w-3" />
-                                <span className="typography-meta text-muted-foreground font-medium">{permission.toolName}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <PermissionRequestContent permission={permission} />
-
-                    <PermissionActions
-                        permission={permission}
-                        isResponding={isResponding}
-                        onRespond={(response) => void respond(response)}
-                        variant="inline"
-                    />
-                </div>
-            </div>
-        </div>
-    );
-};

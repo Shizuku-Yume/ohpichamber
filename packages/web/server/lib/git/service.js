@@ -1,4 +1,5 @@
-import simpleGit from 'simple-git';
+import { z } from 'zod';
+import { simpleGit } from 'simple-git';
 import { createSerialRefresh } from './serial-refresh.js';
 import { stripAppImageLauncherEnv } from '../inherited-env.js';
 import fs from 'fs';
@@ -393,18 +394,35 @@ export const configureProjectWorktreeDirectory = (reader) => {
   projectWorktreeDirectoryReader = typeof reader === 'function' ? reader : null;
 };
 
-// Names simple-git refuses in a command's environment unless the matching
-// unsafe option is on (EDITOR, PAGER, GIT_SSH_COMMAND, GIT_ASKPASS, ...; see
-// toSimpleGitEnv). One of them from a project environment would make every
-// Git command fail, so the overlay leaves them out for Git only.
-const SIMPLE_GIT_REFUSED_ENV_NAMES = new Set([
-  'editor', 'git_askpass', 'git_config', 'git_config_global', 'git_config_system', 'git_config_count',
-  'git_editor', 'git_exec_path', 'git_external_diff', 'git_pager', 'git_proxy_command', 'git_template_dir',
-  'git_sequence_editor', 'git_ssh', 'git_ssh_command', 'pager', 'prefix', 'ssh_askpass',
-]);
+// Names simple-git refuses in a command's environment, each with the unsafe
+// category that lets it through (a copy of @simple-git/argv-parser's table;
+// see simpleGitEnvOptions). One of them from a project environment would make
+// every Git command fail, so the overlay leaves them out for Git only.
+const SIMPLE_GIT_REFUSED_ENV_CATEGORIES = {
+  editor: 'allowUnsafeEditor',
+  git_askpass: 'allowUnsafeAskPass',
+  git_config: 'allowUnsafeConfigPaths',
+  git_config_count: 'allowUnsafeConfigEnvCount',
+  git_config_global: 'allowUnsafeConfigPaths',
+  git_config_parameters: 'allowUnsafeConfigEnvCount',
+  git_config_system: 'allowUnsafeConfigPaths',
+  git_editor: 'allowUnsafeEditor',
+  git_exec_path: 'allowUnsafeExec',
+  git_external_diff: 'allowUnsafeDiffExternal',
+  git_pager: 'allowUnsafePager',
+  git_proxy_command: 'allowUnsafeGitProxy',
+  git_sequence_editor: 'allowUnsafeEditor',
+  git_ssh: 'allowUnsafeSshCommand',
+  git_ssh_command: 'allowUnsafeSshCommand',
+  git_template_dir: 'allowUnsafeTemplateDir',
+  pager: 'allowUnsafePager',
+  prefix: 'allowUnsafeConfigPaths',
+  ssh_askpass: 'allowUnsafeAskPass',
+  visual: 'allowUnsafeEditor',
+};
 const isRefusedBySimpleGit = (name) => {
   const lower = name.toLowerCase();
-  return SIMPLE_GIT_REFUSED_ENV_NAMES.has(lower) || lower.startsWith('git_config_key_') || lower.startsWith('git_config_value_');
+  return Object.hasOwn(SIMPLE_GIT_REFUSED_ENV_CATEGORIES, lower) || lower.startsWith('git_config_key_') || lower.startsWith('git_config_value_');
 };
 // OpenChamber names the repository each command works on; a project variable
 // must not quietly point Git at another one.
@@ -450,32 +468,33 @@ const buildGitEnv = async (directory) => {
   return env;
 };
 
-// simple-git refuses every command whose env holds a variable that runs a
-// program (EDITOR, PAGER, GIT_SSH_COMMAND, GIT_ASKPASS, ...) unless its unsafe
-// category is enabled, and the same categories also guard -c and other
-// arguments, so enabling them would weaken argument protection. A variable the
-// server's own environment passes through unchanged is what git would inherit
-// without an env anyway, so it goes on the prototype: simple-git's check copies
-// only own keys, while child_process.spawn passes inherited keys to the child.
-// Whatever OpenChamber sets or changes stays an own key and is still checked.
-const toSimpleGitEnv = (env) => {
-  const passedThrough = {};
-  const changed = {};
+// simple-git 4 hands git only the variables of an explicit env that it allows:
+// every GIT_* name and every name that runs a program needs allowEnvironment,
+// and a program-running name (EDITOR, PAGER, GIT_SSH_COMMAND, GIT_ASKPASS, ...)
+// also needs its unsafe category, which guards -c and other arguments too.
+// buildGitEnv already decided what git sees, so every name it holds is
+// allowed. A program-running variable the server's own environment passes
+// through unchanged is what git would inherit without an env anyway, so its
+// category is enabled; one that OpenChamber set or changed stays refused.
+const simpleGitEnvOptions = (env) => {
+  const unsafe = {};
   for (const [key, value] of Object.entries(env)) {
-    if (process.env[key] === value) {
-      passedThrough[key] = value;
-    } else {
-      changed[key] = value;
+    const category = SIMPLE_GIT_REFUSED_ENV_CATEGORIES[key.toLowerCase()];
+    if (category && process.env[key] === value) {
+      unsafe[category] = true;
     }
   }
-  return Object.assign(Object.create(passedThrough), changed);
+  return { allowEnvironment: Object.keys(env), unsafe };
 };
 
 // Transport configuration is owned by repository bindings and the credential
-// broker, so no caller needs simple-git's unsafe SSH-command or
-// credential-helper escapes any more.
-const createGit = async (directory, { stallTimeoutMs = 0, optionalLocks = true } = {}) => {
-  const env = await buildGitEnv(directory);
+// broker, so no caller asks for simple-git's unsafe SSH-command or
+// credential-helper escapes; simpleGitEnvOptions turns a category on only to
+// let an inherited variable through.
+// `extraEnv` adds variables for this instance only, such as a temporary
+// GIT_INDEX_FILE; simple-git refuses a GIT_* name added later through .env().
+const createGit = async (directory, { stallTimeoutMs = 0, optionalLocks = true, extraEnv } = {}) => {
+  const env = { ...(await buildGitEnv(directory)), ...extraEnv };
   // `git status` holds `.git/index.lock` while it refreshes the index, and a
   // `git commit` the user runs in a terminal at that moment fails with
   // "index.lock: File exists" (#2229). Read-only callers opt out of that
@@ -490,7 +509,10 @@ const createGit = async (directory, { stallTimeoutMs = 0, optionalLocks = true }
   const timeout = stallTimeoutMs > 0 ? { block: stallTimeoutMs } : undefined;
   const binary = getGitBinary();
   const hasCustomBinary = typeof binary === 'string' && binary.trim() && binary !== 'git' && binary !== 'git.exe';
-  const unsafe = hasCustomBinary ? { allowUnsafeCustomBinary: true } : undefined;
+  const { allowEnvironment, unsafe } = simpleGitEnvOptions(env);
+  if (hasCustomBinary) {
+    unsafe.allowUnsafeCustomBinary = true;
+  }
   // Always pin simple-git to an explicit working directory. Omitting baseDir
   // makes simple-git use process.cwd(), which breaks when the OpenChamber
   // server was launched from a neutral directory (e.g. $HOME) and the opened
@@ -506,8 +528,9 @@ const createGit = async (directory, { stallTimeoutMs = 0, optionalLocks = true }
     spawnOptions,
     binary,
     unsafe,
+    allowEnvironment,
     ...(timeout ? { timeout } : {}),
-  }).env(toSimpleGitEnv(env));
+  }).env(env);
 };
 
 // Global config reads do not need a repository; use the home directory as a
@@ -1218,9 +1241,9 @@ const resolveGitCommitFilePath = async (repoRoot, hash, candidates) => {
   throw new Error('Invalid file path');
 };
 
-// simple-git 3.36 refuses GIT_EDITOR unless allowUnsafeEditor is enabled, and
-// once an instance has an explicit env it also rejects inherited PAGER or
-// GIT_ASKPASS values. Run editor-free continuation commands directly instead.
+// simple-git refuses a GIT_EDITOR that OpenChamber sets unless
+// allowUnsafeEditor is enabled, which would also let -c core.editor through.
+// Run editor-free continuation commands directly instead.
 const runGitCommandWithoutEditor = async (cwd, args) => {
   const result = await runGitCommand(cwd, args, { env: { GIT_EDITOR: 'true' } });
   if (!result.success) {
@@ -1543,12 +1566,17 @@ export async function getRepositoryRemoteUrls(directory) {
 }
 
 export async function resolveWorktreeTopLevel(directory) {
-  const result = await runGitCommand(directory, ['rev-parse', '--show-toplevel']);
+  const result = await runGitCommand(directory, ['rev-parse', '--show-toplevel', '--show-prefix']);
   if (!result.success) {
+    // No `prefix`: a failed read must not look like "at the repository root".
     return { root: directory };
   }
-  const root = normalizePath(normalizeGitOutputPath(String(result.stdout || '').trim()));
-  return { root: root || directory };
+  // Two lines: the checkout root, then where `directory` sits inside it
+  // ("ai/", or an empty line at the root). Git resolves symlinks for both, so
+  // the prefix stays right for a directory reached through one.
+  const [rootLine = '', prefixLine = ''] = String(result.stdout || '').split('\n');
+  const root = normalizePath(normalizeGitOutputPath(rootLine.trim()));
+  return { root: root || directory, prefix: prefixLine.trim().replace(/\/+$/, '') };
 }
 
 /** @public */
@@ -3478,9 +3506,9 @@ async function runWorkingTreeRangeDiff(context, baseRef, headRef, args, paths = 
     await fsp.copyFile(path.resolve(repoRoot, indexPath), temporaryIndex);
     const pathspecFile = path.join(temporaryDirectory, 'paths');
     await fsp.writeFile(pathspecFile, untracked);
-    const comparisonGit = await createGit(repoRoot);
-    comparisonGit.env('GIT_INDEX_FILE', temporaryIndex);
-    comparisonGit.env('GIT_LITERAL_PATHSPECS', '1');
+    const comparisonGit = await createGit(repoRoot, {
+      extraEnv: { GIT_INDEX_FILE: temporaryIndex, GIT_LITERAL_PATHSPECS: '1' },
+    });
     await comparisonGit.raw(['add', '--intent-to-add', '--pathspec-from-file=' + pathspecFile, '--pathspec-file-nul']);
     return await readDiff(comparisonGit);
   } finally {
@@ -5999,6 +6027,106 @@ const SNAPSHOT_IDENTITY_ENV = {
   GIT_COMMITTER_EMAIL: 'snapshot@openchamber.local',
 };
 
+/** The tree of the worktree's current state (every change git does not ignore) on top of HEAD. */
+const readWorktreeStateTree = async (worktreeDirectory) => {
+  const head = (await runGitCommandOrThrow(worktreeDirectory, ['rev-parse', '--verify', 'HEAD'], 'Worktree has no HEAD commit')).stdout.trim();
+  const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'openchamber-snapshot-'));
+  const env = { ...(await buildGitEnv(worktreeDirectory)), GIT_INDEX_FILE: path.join(tempDir, 'index') };
+  try {
+    for (const args of [['read-tree', head], ['add', '-A']]) {
+      const result = await runGitCommand(worktreeDirectory, args, { env });
+      if (!result.success) throw new Error(result.message || 'Failed to read the worktree state');
+    }
+    const tree = await runGitCommand(worktreeDirectory, ['write-tree'], { env });
+    if (!tree.success) throw new Error(tree.message || 'Failed to read the worktree state');
+    return { head, tree: tree.stdout.trim() };
+  } finally {
+    await fsp.rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+  }
+};
+// Fingerprint both content and the real index: tree equality alone cannot
+// distinguish staged changes or conflict stages from a completed apply.
+const fingerprintWorktreeRestore = async (directory) => {
+  const { head, tree } = await readWorktreeStateTree(directory);
+  const env = await buildGitEnv(directory);
+  const readBytes = async (args) => {
+    const { stdout } = await execFileAsync(getGitBinary(), args, {
+      cwd: directory, env, encoding: 'buffer', windowsHide: true, maxBuffer: 20 * 1024 * 1024,
+    });
+    return stdout;
+  };
+  const [index, unmerged, status] = await Promise.all([
+    readBytes(['ls-files', '--stage', '-z']),
+    readBytes(['ls-files', '--unmerged', '-z']),
+    readBytes(['status', '--porcelain=v2', '--untracked-files=all', '-z']),
+  ]);
+  const digest = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
+  return { head, tree, index: digest(index), unmerged: digest(unmerged), status: digest(status), conflicts: unmerged.length > 0 };
+};
+const applyWorktreeArchiveSnapshot = async (directory, archive) => {
+  const trees = await runGitCommandOrThrow(directory, ['rev-parse', `${archive.commit}^{tree}`, `${archive.head}^{tree}`], 'Failed to read the worktree archive');
+  const [snapshotTree, headTree] = trees.stdout.trim().split('\n');
+  if (snapshotTree === headTree) return false;
+  const env = { ...(await buildGitEnv(directory)), ...SNAPSHOT_IDENTITY_ENV };
+  const applied = await runGitCommand(directory, ['cherry-pick', '--no-commit', archive.commit], { env });
+  if (applied.success) {
+    await runGitCommandOrThrow(directory, ['reset', '--quiet'], 'Failed to unstage the restored changes');
+    return false;
+  }
+  const unmerged = await runGitCommand(directory, ['ls-files', '--unmerged']);
+  if (!unmerged.success || !unmerged.stdout.trim())
+    throw worktreeArchiveError(`The archived changes could not be applied (${applied.message || 'git refused'}). The archive is kept.`, 'WORKTREE_ARCHIVE_NOT_APPLIED', 409);
+  return true;
+};
+
+const prospectiveWorktreeRestore = async (directory, archive, before) => {
+  const temporary = await fsp.mkdtemp(path.join(os.tmpdir(), 'openchamber-restore-'));
+  const checkout = path.join(temporary, 'checkout');
+  let linked = false;
+  try {
+    const env = await buildGitEnv(directory);
+    const flags = await execFileAsync(getGitBinary(), ['ls-files', '-v', '-z'], { cwd: directory, env, encoding: 'buffer', windowsHide: true, maxBuffer: 20 * 1024 * 1024 });
+    if (flags.stdout.toString('utf8').split('\0').some((entry) => entry && entry[0] !== 'H'))
+      throw worktreeArchiveError('The restore target has unsupported sparse or index state. The archive is kept.', 'WORKTREE_ARCHIVE_RESTORE_RECOVERY_REQUIRED', 409);
+    await runGitCommandOrThrow(directory, ['worktree', 'add', '--detach', checkout, before.head], 'Failed to create restore comparison checkout');
+    linked = true;
+    for (const entry of await fsp.readdir(checkout)) {
+      if (entry !== '.git') await fsp.rm(path.join(checkout, entry), { recursive: true, force: true });
+    }
+    for (const entry of await fsp.readdir(directory)) {
+      if (entry !== '.git') await fsp.cp(path.join(directory, entry), path.join(checkout, entry), { recursive: true, dereference: false, preserveTimestamps: true });
+    }
+    const indexPath = async (cwd) => {
+      const result = await runGitCommandOrThrow(cwd, ['rev-parse', '--git-path', 'index'], 'Failed to resolve restore index');
+      return path.resolve(cwd, result.stdout.trim());
+    };
+    await fsp.copyFile(await indexPath(directory), await indexPath(checkout));
+    const reconstructed = await fingerprintWorktreeRestore(checkout);
+    if (JSON.stringify(reconstructed) !== JSON.stringify(before))
+      throw worktreeArchiveError('The restore target could not be reproduced safely. The archive is kept.', 'WORKTREE_ARCHIVE_RESTORE_RECOVERY_REQUIRED', 409);
+    const conflicts = await applyWorktreeArchiveSnapshot(checkout, archive);
+    const expected = await fingerprintWorktreeRestore(checkout);
+    if (expected.conflicts !== conflicts) throw new Error('Restore comparison conflict state changed');
+    return expected;
+  } finally {
+    if (linked) {
+      await runGitCommand(directory, ['worktree', 'remove', '--force', checkout]).catch(() => undefined);
+      await runGitCommand(directory, ['worktree', 'prune']).catch(() => undefined);
+    }
+    await fsp.rm(temporary, { recursive: true, force: true });
+  }
+};
+
+const writeWorktreeSnapshot = async (worktreeDirectory, { ref, message, oldValue }) => {
+  const { head, tree } = await readWorktreeStateTree(worktreeDirectory);
+  const env = { ...(await buildGitEnv(worktreeDirectory)), ...SNAPSHOT_IDENTITY_ENV };
+  const commit = await runGitCommand(worktreeDirectory, ['commit-tree', tree, '-p', head, '-m', message], { env });
+  if (!commit.success) throw new Error(commit.message || 'Failed to write snapshot commit');
+  const commitSha = commit.stdout.trim();
+  await runGitCommandOrThrow(worktreeDirectory, ['update-ref', ref, commitSha, ...(oldValue === undefined ? [] : [oldValue])], 'Failed to store snapshot ref');
+  return { ref, commit: commitSha, head };
+};
+
 /**
  * Records the complete state of a worktree (committed, staged, unstaged and
  * untracked-but-not-ignored files) as a commit under `ref`. A throwaway index
@@ -6010,31 +6138,406 @@ export async function snapshotWorktree(directory, input = {}) {
     throw new Error('Worktree directory is required');
   }
   const ref = assertRunSnapshotRef(input?.ref);
-  const head = (await runGitCommandOrThrow(worktreeDirectory, ['rev-parse', '--verify', 'HEAD'], 'Worktree has no HEAD commit')).stdout.trim();
+  return writeWorktreeSnapshot(worktreeDirectory, { ref, message: 'OpenChamber run snapshot' });
+}
 
-  const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'openchamber-snapshot-'));
-  const indexEnv = { GIT_INDEX_FILE: path.join(tempDir, 'index') };
+// Archived worktrees. The archive is the ref: `refs/openchamber/archive/<id>`
+// points at a snapshot commit of the worktree (every change git does not
+// ignore), whose parent is the commit the branch stood on and whose message
+// carries what restoring needs. Nothing else records an archive, so every
+// client of the repository sees the same list, and a ref keeps the snapshot
+// safe from gc until the archive is deleted.
+const WORKTREE_ARCHIVE_REF_PREFIX = 'refs/openchamber/archive/';
+const WORKTREE_ARCHIVE_SUBJECT = 'OpenChamber worktree archive';
+const WORKTREE_ARCHIVE_ID_PATTERN = /^[A-Za-z0-9_-]{1,80}$/;
+
+const worktreeArchiveError = (message, code, status) => Object.assign(
+  new Error(message),
+  code === undefined ? {} : { code },
+  status === undefined ? {} : { status },
+);
+
+const worktreeArchiveIdSchema = z.string().trim().regex(WORKTREE_ARCHIVE_ID_PATTERN);
+
+const assertWorktreeArchiveId = (id) => {
+  const parsed = worktreeArchiveIdSchema.safeParse(id);
+  if (!parsed.success) throw worktreeArchiveError('Invalid worktree archive id', undefined, 400);
+  return parsed.data;
+};
+
+const sessionIdListSchema = z.array(z.unknown()).catch([])
+  .transform((entries) => entries.flatMap((entry) => {
+    const parsed = z.string().min(1).safeParse(entry);
+    return parsed.success ? [parsed.data] : [];
+  }));
+
+const worktreeArchiveRecordSchema = z.object({
+  path: z.string().min(1),
+  branch: z.string().catch(''),
+  title: z.string().catch(''),
+  archivedAt: z.number().finite().catch(0),
+  sessionIds: sessionIdListSchema,
+});
+
+/** The archive record in a snapshot commit's message, or null when it is not one. */
+const parseWorktreeArchiveMessage = (message) => {
+  const text = String(message || '');
+  if (!text.startsWith(WORKTREE_ARCHIVE_SUBJECT)) return null;
   try {
-    const run = async (args, message, env = indexEnv) => {
-      // `env` replaces the whole environment, so start from the Git one.
-      const result = await runGitCommand(worktreeDirectory, args, { env: { ...(await buildGitEnv(worktreeDirectory)), ...env } });
-      if (!result.success) {
-        throw new Error(result.message || message);
-      }
-      return result.stdout.trim();
-    };
-    await run(['read-tree', head], 'Failed to prepare snapshot index');
-    await run(['add', '-A'], 'Failed to collect worktree changes');
-    const tree = await run(['write-tree'], 'Failed to write snapshot tree');
-    const commit = await run(
-      ['commit-tree', tree, '-p', head, '-m', 'OpenChamber run snapshot'],
-      'Failed to write snapshot commit',
-      { ...indexEnv, ...SNAPSHOT_IDENTITY_ENV },
+    return worktreeArchiveRecordSchema.safeParse(JSON.parse(text.slice(WORKTREE_ARCHIVE_SUBJECT.length).trim())).data ?? null;
+  } catch {
+    return null;
+  }
+};
+
+const readWorktreeArchives = async (primaryWorktree) => {
+  const listing = await runGitCommandOrThrow(primaryWorktree, [
+    'for-each-ref',
+    '--format=%(refname)%00%(objectname)%00%(parent)%00%(contents)%1e',
+    WORKTREE_ARCHIVE_REF_PREFIX,
+  ], 'Failed to list worktree archives');
+  const branches = await runGitCommand(primaryWorktree, ['for-each-ref', '--format=%(refname:short)', 'refs/heads/']);
+  const localBranches = new Set(branches.success ? String(branches.stdout || '').split('\n').map((line) => line.trim()).filter(Boolean) : []);
+  return String(listing.stdout || '').split('\x1e').flatMap((chunk) => {
+    const [ref = '', commit = '', head = '', message = ''] = chunk.replace(/^\n/, '').split('\0');
+    if (!ref.startsWith(WORKTREE_ARCHIVE_REF_PREFIX)) return [];
+    const record = parseWorktreeArchiveMessage(message);
+    if (!record) return [];
+    const id = ref.slice(WORKTREE_ARCHIVE_REF_PREFIX.length);
+    if (!WORKTREE_ARCHIVE_ID_PATTERN.test(id)) return [];
+    return [{ id, ref, commit, head: head.split(' ')[0] || '', ...record, branchExists: Boolean(record.branch) && localBranches.has(record.branch) }];
+  }).sort((a, b) => b.archivedAt - a.archivedAt);
+};
+
+const readWorktreeArchive = async (primaryWorktree, id) => {
+  const archiveId = assertWorktreeArchiveId(id);
+  const archive = (await readWorktreeArchives(primaryWorktree)).find((entry) => entry.id === archiveId);
+  if (!archive) throw worktreeArchiveError('Worktree archive not found', 'WORKTREE_ARCHIVE_NOT_FOUND', 404);
+  return archive;
+};
+
+// A directory that resolves to no repository, or not to a checkout of one,
+// is a caller mistake rather than a server fault.
+const resolveWorktreeArchiveProjectContext = async (directory) => {
+  try {
+    return await resolveWorktreeProjectContext(directory, { tolerateWorktreeRootConfigError: true });
+  } catch (error) {
+    throw worktreeArchiveError(
+      error instanceof Error ? error.message : 'The directory does not resolve to a Git checkout',
+      undefined,
+      400,
     );
-    await run(['update-ref', ref, commit], 'Failed to store snapshot ref', {});
-    return { ref, commit, head };
+  }
+};
+
+/** The repository's archived worktrees, newest first. `directory` is any of its checkouts. */
+export async function listWorktreeArchives(directory) {
+  const context = await resolveWorktreeArchiveProjectContext(directory);
+  return readWorktreeArchives(context.primaryWorktree);
+}
+
+// Worktrees being archived, by canonical path: a second archive of the same
+// worktree (Done racing the merged-PR cleanup) would snapshot a folder git is
+// deleting. Overlap with another archive is refused by the Agent Service lease.
+const worktreeArchivesInFlight = new Set();
+
+const isRegisteredWorktree = async (primaryWorktree, targetCanonical) => {
+  const entries = await listWorktreeEntries(primaryWorktree);
+  const registered = await Promise.all(entries.map(async (entry) => (entry?.worktree ? canonicalPath(entry.worktree) : null)));
+  return registered.includes(targetCanonical);
+};
+
+/**
+ * Archives the linked worktree `input.directory` of the repository at
+ * `directory`: every worker the Agent Service holds at that folder is released
+ * first, then its state is recorded under `refs/openchamber/archive/<id>` with
+ * the sessions the caller archived for it, and the worktree is removed the way
+ * `removeWorktree` removes it, keeping its branch. A removal that leaves the
+ * folder whole deletes the archive again; one that leaves it partly deleted
+ * keeps the archive and reports `WORKTREE_ARCHIVE_PARTIAL`.
+ */
+export async function archiveWorktree(directory, input = {}, options = {}) {
+  const id = assertWorktreeArchiveId(input?.id);
+  const worktreeDirectory = normalizeDirectoryPath(input?.directory);
+  if (!worktreeDirectory) throw worktreeArchiveError('Worktree directory is required', undefined, 400);
+  const { bootstrapStore, worktreeWorkers, archiveSessions } = options ?? {};
+  if (!(worktreeWorkers?.acquire instanceof Function) || !(worktreeWorkers?.release instanceof Function)) {
+    throw worktreeArchiveError('Worker lifecycle control is not available', undefined, 501);
+  }
+  if (!(archiveSessions?.captureWorktreeArchive instanceof Function)
+    || !(archiveSessions?.prepareWorktreeArchiveRemoval instanceof Function)
+    || !(archiveSessions?.finishWorktreeArchive instanceof Function)
+    || !(archiveSessions?.rollbackWorktreeArchive instanceof Function)
+    || !(archiveSessions?.discardWorktreeArchive instanceof Function)) {
+    throw worktreeArchiveError('Host archive authority is not available', 'SERVICE_UNAVAILABLE', 503);
+  }
+  const context = await resolveWorktreeArchiveProjectContext(directory);
+  const targetCanonical = await canonicalPath(worktreeDirectory);
+  if (targetCanonical === await canonicalPath(context.primaryWorktree)) {
+    throw worktreeArchiveError('Cannot archive the primary workspace', undefined, 400);
+  }
+  // Only a checkout git registers here: the removal below would otherwise
+  // treat the folder as a leftover and delete it without a trace in git.
+  if (!(await isRegisteredWorktree(context.primaryWorktree, targetCanonical))) {
+    throw worktreeArchiveError('Not a worktree of this repository', undefined, 400);
+  }
+  if ((await readWorktreeArchives(context.primaryWorktree)).some((entry) => entry.id === id)) {
+    throw worktreeArchiveError('This worktree archive id already exists', undefined, 400);
+  }
+  if (worktreeArchivesInFlight.has(targetCanonical)) {
+    throw worktreeArchiveError('This worktree is already being archived', 'WORKTREE_ARCHIVE_IN_PROGRESS', 409);
+  }
+  worktreeArchivesInFlight.add(targetCanonical);
+  // The Host generates the id before the Agent Service sees it, so a lost 201
+  // still leaves the host holding the id it must release.
+  const leaseId = randomUUID();
+  let releaseLease = true;
+  try {
+    await worktreeWorkers.acquire(worktreeDirectory, leaseId);
+    // A new worktree's files land in the background: a snapshot taken before
+    // they do records every missing file as deleted.
+    await waitForActiveWorktreeBootstrap(worktreeDirectory);
+    const bootstrap = worktreeBootstrapState.get(await toCanonicalBootstrapStateKey(worktreeDirectory));
+    if (bootstrap?.status === WORKTREE_BOOTSTRAP_FAILED) {
+      throw worktreeArchiveError(
+        'The worktree did not finish setting up, so it cannot be archived. Delete it instead.',
+        'WORKTREE_BOOTSTRAP_FAILED',
+        409,
+      );
+    }
+
+    const head = await runGitCommand(worktreeDirectory, ['symbolic-ref', '--quiet', '--short', 'HEAD']);
+    const branch = head.success ? String(head.stdout || '').trim() : '';
+    const record = {
+      path: worktreeDirectory,
+      branch,
+      title: typeof input?.title === 'string' ? input.title.trim() : '',
+      archivedAt: Date.now(),
+      sessionIds: [],
+    };
+    const ref = `${WORKTREE_ARCHIVE_REF_PREFIX}${id}`;
+    const snapshot = await writeWorktreeSnapshot(worktreeDirectory, {
+      ref,
+      message: `${WORKTREE_ARCHIVE_SUBJECT}\n\n${JSON.stringify(record)}`,
+      oldValue: '',
+    });
+    let owner;
+    try {
+      const branchResult = branch ? await runGitCommand(worktreeDirectory, ['rev-parse', '--verify', `refs/heads/${branch}`]) : null;
+      if (branch && !branchResult.success) throw new Error('Could not resolve the archive branch');
+      owner = await archiveSessions.captureWorktreeArchive({
+        projectDirectory: directory, worktreeDirectory: targetCanonical, archiveId: id,
+        archiveRef: ref, snapshotCommit: snapshot.commit, claimId: leaseId,
+        branchName: branch, branchOid: branchResult?.stdout?.trim() || null, archivedAt: record.archivedAt,
+      });
+      await archiveSessions.prepareWorktreeArchiveRemoval(owner);
+      await removeWorktree(directory, { directory: worktreeDirectory, deleteLocalBranch: false }, { bootstrapStore });
+    } catch (error) {
+      owner ??= error?.worktreeArchiveOwner;
+      const snapshotTree = (await runGitCommand(context.primaryWorktree, ['rev-parse', `${snapshot.commit}^{tree}`])).stdout?.trim();
+      const intact = await checkPathExists(worktreeDirectory)
+        && await isRegisteredWorktree(context.primaryWorktree, targetCanonical)
+        && (await readWorktreeStateTree(worktreeDirectory).catch(() => null))?.tree === snapshotTree;
+      if (owner && !error?.worktreeArchiveOwner) await archiveSessions.rollbackWorktreeArchive(owner, !intact);
+      if (intact) {
+        const removed = await runGitCommand(context.primaryWorktree, ['update-ref', '-d', ref, snapshot.commit]);
+        if (removed.success && owner) await archiveSessions.discardWorktreeArchive(owner);
+        throw error;
+      }
+      throw worktreeArchiveError(
+        `The worktree folder could not be removed completely (${error instanceof Error ? error.message : String(error)}). It is archived; restore it once nothing holds the folder.`,
+        'WORKTREE_ARCHIVE_PARTIAL', 409,
+      );
+    }
+    const binding = await archiveSessions.finishWorktreeArchive(owner);
+    return { id, ref, commit: snapshot.commit, head: snapshot.head, ...record, branchExists: Boolean(branch),
+      sessionBinding: { status: binding.sessions.length ? 'bound' : 'verified-empty', phase: binding.phase } };
+  } catch (error) {
+    // A duplicate lease id names a lease this archive never created; releasing
+    // it would end someone else's hold.
+    if (error?.releaseNotNeeded === true) releaseLease = false;
+    throw error;
   } finally {
-    await fsp.rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+    if (releaseLease) await worktreeWorkers.release(leaseId).catch(() => undefined);
+    worktreeArchivesInFlight.delete(targetCanonical);
+  }
+}
+
+/**
+ * Puts an archive's changes back into the worktree at `directory`, which the
+ * caller created on the archive's branch (or, when that branch is gone, on the
+ * archive's head commit). The changes are applied on top of whatever the
+ * branch holds now and left uncommitted, then the archive is deleted. A
+ * conflict leaves git's conflict state, which holds both sides. When git
+ * refuses to apply anything, the archive is kept and the call fails.
+ */
+export async function restoreWorktreeArchive(directory, input = {}, { archiveSessions } = {}) {
+  const archiveId = assertWorktreeArchiveId(input?.id);
+  let worktreeDirectory = normalizeDirectoryPath(directory);
+  if (!worktreeDirectory) throw worktreeArchiveError('Worktree directory is required', undefined, 400);
+  const context = await resolveWorktreeArchiveProjectContext(worktreeDirectory);
+  if (!archiveSessions?.prepareWorktreeArchiveRestore) throw worktreeArchiveError('Host archive authority is unavailable', 'WORKTREE_ARCHIVE_AUTHORITY_UNAVAILABLE', 503);
+  const resume = input?.recovery?.mode === 'same_target';
+  if (resume) {
+    if (!Number.isSafeInteger(input.recovery.revision) || input.recovery.revision <= 0 || !archiveSessions.resolveWorktreeArchivePinnedTarget)
+      throw worktreeArchiveError('Restore revision is invalid', 'WORKTREE_ARCHIVE_TARGET_CHANGED', 409);
+    worktreeDirectory = await archiveSessions.resolveWorktreeArchivePinnedTarget({ projectDirectory: context.primaryWorktree, archiveId, revision: input.recovery.revision });
+  }
+  const targetDirectory = await fsp.realpath(worktreeDirectory);
+  const owner = await archiveSessions.prepareWorktreeArchiveRestore({ projectDirectory: context.primaryWorktree, targetDirectory, archiveId, recovery: resume ? undefined : input?.recovery, expectedRevision: resume ? input.recovery.revision : undefined });
+  let cleanup = false;
+  try {
+    if (owner?.binding.phase === 'finalizing') {
+      if (owner.binding.sessions.some(item => item.progress !== 'restored'))
+        throw worktreeArchiveError('Archive finalization is incomplete. The binding is kept.', 'WORKTREE_ARCHIVE_RESTORE_RECOVERY_REQUIRED', 409);
+      const current = await runGitCommand(context.primaryWorktree, ['rev-parse', '--verify', owner.binding.archiveRef]);
+      if (owner.binding.restoreCasCompleted) {
+        if (current.success) throw worktreeArchiveError('Archive finalization outcome is ambiguous. The binding is kept.', 'WORKTREE_ARCHIVE_RESTORE_RECOVERY_REQUIRED', 409);
+        cleanup = true;
+        return { id: input.id, conflicts: JSON.parse(owner.binding.expectedFingerprint).conflicts, sessionBinding: { status: 'bound', phase: 'finalizing' } };
+      }
+      if (current.success && current.stdout.trim() !== owner.binding.snapshotCommit)
+        throw worktreeArchiveError('Archive finalization outcome is ambiguous. The binding is kept.', 'WORKTREE_ARCHIVE_RESTORE_RECOVERY_REQUIRED', 409);
+      if (!current.success)
+        throw worktreeArchiveError('Archive finalization outcome is ambiguous. The binding is kept.', 'WORKTREE_ARCHIVE_RESTORE_RECOVERY_REQUIRED', 409);
+      if (current.success) {
+        owner.binding = owner.binding.restoreCasStarted
+          ? owner.binding
+          : await archiveSessions.markWorktreeArchiveRestoreCasStarted(owner, owner.binding.revision);
+        await runGitCommandOrThrow(context.primaryWorktree, ['update-ref', '-d', owner.binding.archiveRef, owner.binding.snapshotCommit], 'Failed to delete the worktree archive');
+      }
+      await archiveSessions.markWorktreeArchiveRestoreCasCompleted(owner, owner.binding.revision);
+      cleanup = true;
+      return { id: input.id, conflicts: JSON.parse(owner.binding.expectedFingerprint).conflicts, sessionBinding: { status: 'bound', phase: 'finalizing' } };
+    }
+    const archive = await readWorktreeArchive(context.primaryWorktree, archiveId);
+    if (owner && (archive.ref !== owner.binding.archiveRef || archive.commit !== owner.binding.snapshotCommit))
+      throw worktreeArchiveError('Archive ref changed', 'WORKTREE_ARCHIVE_REF_CHANGED', 409);
+    await waitForActiveWorktreeBootstrap(worktreeDirectory);
+    const bootstrap = worktreeBootstrapState.get(await toCanonicalBootstrapStateKey(worktreeDirectory));
+    if (bootstrap?.status === WORKTREE_BOOTSTRAP_FAILED)
+      throw worktreeArchiveError('The worktree did not finish setting up. The archive is kept.', 'WORKTREE_BOOTSTRAP_FAILED', 409);
+    if (!owner) {
+      const conflicts = await applyWorktreeArchiveSnapshot(worktreeDirectory, archive);
+      await runGitCommandOrThrow(context.primaryWorktree, ['update-ref', '-d', archive.ref, archive.commit], 'Failed to delete the worktree archive');
+      await publishWorktreeTopologyChange(context.primaryWorktree);
+      return { id: archive.id, conflicts, sessionBinding: { status: 'unbound' } };
+    }
+    let binding = owner.binding;
+    let current = await fingerprintWorktreeRestore(worktreeDirectory);
+    if (owner.recovering) {
+      const old = await fingerprintWorktreeRestore(owner.previousTargetDirectory);
+      const oldPreimage = JSON.parse(binding.preapplyFingerprint);
+      const oldExpected = JSON.parse(binding.expectedFingerprint);
+      const oldIsPreimage = old && JSON.stringify(old) === JSON.stringify(oldPreimage);
+      const oldIsExpected = old && JSON.stringify(old) === JSON.stringify(oldExpected);
+      if (old && ((oldIsPreimage && !binding.applyAttempted) || (oldIsExpected && !oldIsPreimage)))
+        throw worktreeArchiveError('The original restore target is not ambiguous.', 'WORKTREE_ARCHIVE_TARGET_CHANGED', 409);
+      if (JSON.stringify(current) !== JSON.stringify(oldPreimage))
+        throw worktreeArchiveError('The recovery checkout does not match the captured preimage.', 'WORKTREE_ARCHIVE_RESTORE_RECOVERY_REQUIRED', 409);
+      const expected = await prospectiveWorktreeRestore(worktreeDirectory, archive, current);
+      binding = await archiveSessions.pinWorktreeArchiveRestore(owner, { preapplyHead: current.head, preapplyFingerprint: current, expectedFingerprint: expected });
+    } else if (!binding.targetWorkspaceId) {
+      const expected = await prospectiveWorktreeRestore(worktreeDirectory, archive, current);
+      binding = await archiveSessions.pinWorktreeArchiveRestore(owner, { preapplyHead: current.head, preapplyFingerprint: current, expectedFingerprint: expected });
+    }
+    // Fingerprinting and the prospective helper run before the target is pinned.
+    // Re-read under the persisted fence before deciding whether an apply is safe.
+    current = await fingerprintWorktreeRestore(worktreeDirectory);
+    const preimage = JSON.parse(binding.preapplyFingerprint);
+    const expected = JSON.parse(binding.expectedFingerprint);
+    if (JSON.stringify(current) === JSON.stringify(preimage)) {
+      if (binding.applyAttempted)
+        throw Object.assign(worktreeArchiveError('Restore state is ambiguous. The archive is kept.', 'WORKTREE_ARCHIVE_RESTORE_RECOVERY_REQUIRED', 409), { details: { revision: binding.revision, recoveryHead: binding.preapplyHead } });
+      binding = await archiveSessions.markWorktreeArchiveRestoreAttempted(owner, binding.revision);
+      await applyWorktreeArchiveSnapshot(worktreeDirectory, archive);
+      current = await fingerprintWorktreeRestore(worktreeDirectory);
+      if (JSON.stringify(current) !== JSON.stringify(expected))
+        throw worktreeArchiveError('Restore result differs from the captured result. The archive is kept.', 'WORKTREE_ARCHIVE_RESTORE_RECOVERY_REQUIRED', 409);
+    } else if (JSON.stringify(current) !== JSON.stringify(expected)) {
+      throw Object.assign(worktreeArchiveError('Restore state is ambiguous. The archive is kept.', 'WORKTREE_ARCHIVE_RESTORE_RECOVERY_REQUIRED', 409), { details: { revision: binding.revision, recoveryHead: binding.preapplyHead } });
+    }
+    binding = await archiveSessions.finishWorktreeArchiveRestore(owner);
+    binding = await archiveSessions.finalizeWorktreeArchiveRestore(owner, binding.revision);
+    binding = await archiveSessions.markWorktreeArchiveRestoreCasStarted(owner, binding.revision);
+    await runGitCommandOrThrow(context.primaryWorktree, ['update-ref', '-d', archive.ref, archive.commit], 'Failed to delete the worktree archive');
+    binding = await archiveSessions.markWorktreeArchiveRestoreCasCompleted(owner, binding.revision);
+    cleanup = true;
+    await publishWorktreeTopologyChange(context.primaryWorktree);
+    return { id: archive.id, conflicts: expected.conflicts, sessionBinding: { status: 'bound', phase: 'finalizing' } };
+  } finally {
+    if (owner) {
+      await archiveSessions.releaseWorktreeArchiveRestore(owner);
+      if (cleanup) await archiveSessions.cleanupWorktreeArchiveRestore(owner);
+    }
+  }
+}
+
+const deleteArchiveRefs = async (directory, archiveRef, snapshotCommit, branchRef, branchOid) => {
+  const env = await buildGitEnv(directory);
+  const commands = `start\ndelete ${archiveRef} ${snapshotCommit}\n${branchRef ? `delete ${branchRef} ${branchOid}\n` : ''}prepare\ncommit\n`;
+  await new Promise((resolve, reject) => {
+    const child = spawn(getGitBinary(), ['update-ref', '--stdin'], { cwd: directory, env, stdio: ['pipe', 'ignore', 'pipe'], windowsHide: true });
+    let stderr = '';
+    child.stderr.on('data', (chunk) => { stderr += String(chunk); });
+    child.on('error', reject);
+    child.on('close', (code) => code === 0 ? resolve() : reject(worktreeArchiveError(`Archive ref transaction failed: ${stderr.trim()}`, 'WORKTREE_ARCHIVE_REF_CHANGED', 409)));
+    child.stdin.on('error', () => {});
+    child.stdin.end(commands);
+  });
+};
+
+export async function deleteWorktreeArchive(directory, input = {}, { archiveSessions } = {}) {
+  const archiveId = assertWorktreeArchiveId(input?.id);
+  const context = await resolveWorktreeArchiveProjectContext(directory);
+  if (!archiveSessions?.prepareWorktreeArchiveDelete) throw worktreeArchiveError('Host archive authority is unavailable', 'WORKTREE_ARCHIVE_AUTHORITY_UNAVAILABLE', 503);
+  let owner = await archiveSessions.prepareWorktreeArchiveDelete({ projectDirectory: context.primaryWorktree, archiveId });
+  let cleanup = false;
+  try {
+    if (owner?.binding.phase === 'finalizing') {
+      owner = await archiveSessions.claimWorktreeArchiveDelete(owner);
+      const current = await runGitCommand(context.primaryWorktree, ['rev-parse', '--verify', owner.binding.archiveRef]);
+      if (current.success || !owner.binding.deleteCasCompleted || owner.binding.sessions.some((item) => item.progress !== 'deleted'))
+        throw worktreeArchiveError('Archive deletion outcome is ambiguous. The binding is kept.', 'WORKTREE_ARCHIVE_DELETE_RECOVERY_REQUIRED', 409);
+      if (owner.binding.deleteBranchRequested) {
+        const branchRef = `refs/heads/${owner.binding.branchName}`;
+        const branch = await runGitCommand(context.primaryWorktree, ['rev-parse', '--verify', branchRef]);
+        if (branch.success) throw worktreeArchiveError('Archive deletion outcome is ambiguous. The binding is kept.', 'WORKTREE_ARCHIVE_DELETE_RECOVERY_REQUIRED', 409);
+      }
+      cleanup = true;
+      return { id: archiveId, branchDeleted: Boolean(owner.binding.deleteBranchRequested), sessionBinding: { status: 'bound' } };
+    }
+    const archive = await readWorktreeArchive(context.primaryWorktree, archiveId);
+    if (owner && (archive.ref !== owner.binding.archiveRef || archive.commit !== owner.binding.snapshotCommit))
+      throw worktreeArchiveError('Archive ref changed', 'WORKTREE_ARCHIVE_REF_CHANGED', 409);
+    const branch = owner ? owner.binding.branchName : archive.branch;
+    const branchOid = owner ? owner.binding.branchOid : null;
+    if (input.deleteBranch === true && (!branch || (owner && !branchOid)))
+      throw worktreeArchiveError('The archived branch identity is unavailable', 'WORKTREE_ARCHIVE_BRANCH_CHANGED', 409);
+    const branchRef = input.deleteBranch === true && branch ? `refs/heads/${branch}` : null;
+    const preflightBranch = async () => {
+      if (!branchRef) return;
+      const checkedOut = (await listWorktreeEntries(context.primaryWorktree)).some((entry) => cleanBranchName(String(entry.branchRef || entry.branch || '').trim()) === branch);
+      if (checkedOut) throw worktreeArchiveError('The archived branch is checked out', 'WORKTREE_ARCHIVE_BRANCH_IN_USE', 409);
+      const current = await runGitCommand(context.primaryWorktree, ['rev-parse', '--verify', branchRef]);
+      if (!current.success || (branchOid && current.stdout.trim() !== branchOid)) throw worktreeArchiveError('The archived branch changed', 'WORKTREE_ARCHIVE_BRANCH_CHANGED', 409);
+      return current.stdout.trim();
+    };
+    const exactBranchOid = await preflightBranch();
+    if (owner) owner = await archiveSessions.claimWorktreeArchiveDelete(owner);
+    let binding = owner?.binding;
+    if (owner) binding = await archiveSessions.deleteWorktreeArchiveSessions(owner);
+    await preflightBranch();
+    if (owner) binding = await archiveSessions.finalizeWorktreeArchiveDelete(owner, binding.revision, input.deleteBranch === true);
+    await deleteArchiveRefs(context.primaryWorktree, archive.ref, archive.commit, branchRef, branchOid ?? exactBranchOid);
+    if (owner) binding = await archiveSessions.markWorktreeArchiveDeleteCasCompleted(owner, binding.revision);
+    cleanup = Boolean(owner);
+    return { id: archive.id, branchDeleted: Boolean(branchRef), sessionBinding: { status: owner ? 'bound' : 'unbound' } };
+  } finally {
+    if (owner?.claimId) {
+      await archiveSessions.releaseWorktreeArchiveRestore(owner);
+      if (cleanup) await archiveSessions.cleanupWorktreeArchiveRestore(owner);
+    }
   }
 }
 

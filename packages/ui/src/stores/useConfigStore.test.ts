@@ -997,6 +997,7 @@ describe('useConfigStore provider persistence', () => {
     useConfigStore.setState({
       activeDirectoryKey: DIRECTORY,
       providers: [provider('openai', 'gpt-5.5', ['low', 'medium', 'high'])],
+      settingsDefaultModel: 'openai/gpt-5.5',
       currentProviderId: 'openai',
       currentModelId: 'gpt-5.5',
       currentVariant: undefined,
@@ -1039,6 +1040,7 @@ describe('useConfigStore provider persistence', () => {
     useConfigStore.setState({
       activeDirectoryKey: DIRECTORY,
       providers: [provider('openai', 'gpt-5.5', ['low', 'high'])],
+      settingsDefaultModel: 'openai/gpt-5.5',
       currentProviderId: 'openai',
       currentModelId: 'gpt-5.5',
       currentVariant: 'low',
@@ -1063,6 +1065,7 @@ describe('useConfigStore provider persistence', () => {
     useConfigStore.setState({
       activeDirectoryKey: DIRECTORY,
       providers: [provider('openai', 'gpt-5.5', ['low', 'high'])],
+      settingsDefaultModel: 'openai/gpt-5.5',
       currentProviderId: 'openai',
       currentModelId: 'gpt-5.5',
       currentVariant: 'low',
@@ -1076,6 +1079,7 @@ describe('useConfigStore provider persistence', () => {
     expect(state.currentVariant).toBe('high');
     expect(state.currentVariantSelection).toEqual({ override: 'high', inherited: undefined });
   });
+
 
   test('[issue-2404] setAgent keeps session model override over agent default model', () => {
     // Custom agent default is model-a; user manually overrode to model-b for this session.
@@ -2444,7 +2448,7 @@ describe('useConfigStore provider persistence', () => {
   });
   test('setAgent binds a native ID to its native provider/model pair, not its display name', () => {
     seedAgentCatalog([testAgent('profile:review', { name: 'Review', model: { providerId: 'native', modelId: 'reasoner' } })]);
-    useConfigStore.setState({ providers: [provider('native', 'reasoner', ['high'])], });
+    useConfigStore.setState({ providers: [provider('native', 'reasoner', ['high'])], settingsDefaultModel: 'native/reasoner' });
     useConfigStore.getState().setAgent('profile:review');
     expect(useConfigStore.getState()).toMatchObject({ currentAgentName: 'profile:review', currentProviderId: 'native', currentModelId: 'reasoner' });
     expect(useConfigStore.getState()).not.toHaveProperty('agents');

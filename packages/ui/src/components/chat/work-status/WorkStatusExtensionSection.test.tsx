@@ -48,6 +48,7 @@ test('a status frame keeps subscriptions and storage alive while project changes
       childServiceCalls++;
       return childServiceResponse;
     }
+    if (target.includes('/frame-grant')) return Response.json({ grant: 'grant-test', expiresAt: Date.now() + 60_000 });
     if (target.includes('/auth/url-token')) return Response.json({ token: 'scoped-test', expiresAt: Date.now() + 60_000 });
     if (target.includes('/event')) return new Response(new ReadableStream(), { headers: { 'content-type': 'text/event-stream' } });
     if (target.includes('/session/active')) return Response.json({ data: {} });
@@ -137,7 +138,7 @@ test('a status frame keeps subscriptions and storage alive while project changes
     const frame = container.querySelector<HTMLIFrameElement>('iframe');
     if (!frame) throw new Error('Status frame did not mount');
     expect(container.textContent).toContain('Recent commits');
-    expect(frame.src.includes('/api/guests/git-graph/status/index.html')).toBe(true);
+    expect(frame.src.includes('status/index.html')).toBe(true);
     expect(frame.getAttribute('sandbox')).toBe('allow-scripts');
     const box = frame.parentElement;
     if (!box) throw new Error('Frame box missing');
@@ -181,7 +182,10 @@ test('a status frame keeps subscriptions and storage alive while project changes
     spyOn(frame, 'getBoundingClientRect').mockReturnValue(new dom.DOMRect(20, 30, 300, 140));
     // Happy DOM has no hit testing. Supply the browser's owner-frame hover state.
     const matches = frame.matches.bind(frame);
-    spyOn(frame, 'matches').mockImplementation((selector) => selector === ':hover' || matches(selector));
+    Object.defineProperty(frame, 'matches', {
+      configurable: true,
+      value: (selector: string) => selector === ':hover' || matches(selector),
+    });
     await act(async () => {
       send({
         channel: 'openchamber.sdk', v: OPENCHAMBER_SDK_API_VERSION, type: 'popover-open', id: 'unfocused-request',
@@ -205,7 +209,7 @@ test('a status frame keeps subscriptions and storage alive while project changes
     const childMessages = iframeMessages.get(child);
     if (!childMessages) throw new Error('Popover message collector is missing');
     expect(childSource).not.toBe(source);
-    expect(child.src.includes('/api/guests/git-graph/status/index.html')).toBe(true);
+    expect(child.src.includes('status/index.html')).toBe(true);
     expect(child.getAttribute('sandbox')).toBe('allow-scripts');
 
     // Pointer previews do not steal the owner's focus when their child loads.

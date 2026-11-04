@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import type { Part, TextPart } from '@openchamber/agent-contract';
-import { flattenAssistantTextParts, flattenUserTextParts } from './messageText';
+import { assistantTextSegments, flattenAssistantTextParts, flattenUserTextParts } from './messageText';
 
 const textPart = (partId: string, content: string): TextPart => ({ type: 'text', partId, content });
 const makeParts = (texts: string[]): Part[] => texts.map((text, index) => textPart(`p${index}`, text));
@@ -41,6 +41,21 @@ describe('flattenAssistantTextParts', () => {
   test('non-text parts are ignored', () => {
     const partsWithReasoning: Part[] = [...makeParts(['before']), { type: 'reasoning', partId: 'r1', content: 'ignored' }, ...makeParts(['after'])];
     expect(flattenAssistantTextParts(partsWithReasoning)).toBe('before\n\nafter');
+  });
+});
+
+describe('assistantTextSegments', () => {
+  test('keeps each text part as its own trimmed segment, in order, without tools or blanks', () => {
+    const tool: Part = {
+      type: 'tool_call', partId: 't1', toolCallId: 't1', toolName: 'glob',
+      input: { pattern: '*.md' }, status: 'completed',
+    };
+    const parts: Part[] = [
+      ...makeParts(['  Looking at the files.\n']),
+      tool,
+      ...makeParts(['   ', '```ts\nconst a = 1\n```']),
+    ];
+    expect(assistantTextSegments(parts)).toEqual(['Looking at the files.', '```ts\nconst a = 1\n```']);
   });
 });
 

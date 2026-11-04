@@ -28,7 +28,7 @@ import { SessionRegistry, type NativeArchiveImported, type NativeArchiveInventor
 import type { ApprovalPolicyCommit, ApprovalPolicyLoad } from '../interaction/manager.ts';
 import { SessionReferenceError } from '../sessions/references.ts';
 import { ArchiveImportRequestSchema } from '../sessions/archive.ts';
-import { WorkerOperationError, WorkerRegistry, type RegisteredWorkerInfo, type WorkerDiagnostic, type WorkerCapacityPolicy } from './workers.ts';
+import { WorkerOperationError, WorkerRegistry, type RegisteredWorkerInfo, type WorkerDiagnostic, type WorkerCapacityPolicy, type WorktreeLeaseAcquireResult } from './workers.ts';
 import { deliverSessionStream } from './event-stream.ts';
 import { CatalogCoordinator, CatalogCoordinatorError, type CatalogAdmission, type CatalogBootstrap } from './catalog.ts';
 import { WorkspaceCatalogs } from './workspaces.ts';
@@ -63,6 +63,7 @@ const HostSkillSourcePublicationSchema = z.strictObject({
 }).refine(input => (input.scope === 'agent') === (input.agentDirectoryId !== undefined), 'Agent source publication selects its captured owner');
 const HostSkillFilesApplySchema = z.strictObject({ scope: z.enum(['workspace', 'agent']), sourceRevision: CounterSchema, agentDirectoryId: EntityIdSchema });
 const HostSkillSourceReconcileSchema = z.strictObject({ agentDirectoryId: EntityIdSchema });
+const WorktreeLeaseRequestSchema = z.strictObject({ leaseId: z.string().min(1), directory: z.string().min(1) });
 const ListeningAddressSchema = z.object({ address: z.literal('127.0.0.1'), port: z.number().int().min(1).max(65_535) });
 class RequestError extends Error {
   constructor(readonly status: number, readonly code: ProblemCode, message: string) { super(message); }
@@ -94,6 +95,7 @@ type ServiceResponse =
   | PrivateCredentialResolveResult | PrivateCredentialHandoffResult
   | CommandCatalogState | PromptTemplateCatalogState | FileResourceSkillCatalog | FileResourceExpandResult | FileResourcePromptInputResult
   | { sources: SkillSourceRevisions }
+  | WorktreeLeaseAcquireResult
   | ShellJob | ShellSnapshot | ShellOutput | ShellStopResult;
 
 function respondJson(response: ServerResponse, status: number, body: ServiceResponse): void {
@@ -145,10 +147,9 @@ export class AgentService {
   private stopping: Promise<void> | undefined;
   constructor(private readonly options: ServiceOptions) {
     this.secret = Buffer.from(InternalSecretSchema.parse(options.internalSecret), 'hex');
-    let sessions: SessionRegistry | undefined;
     this.workers = new WorkerRegistry({ workerEntrypoint: options.workerEntrypoint, workerRuntime: options.workerRuntime, onDiagnostic: options.onDiagnostic, policyCheck: options.policyCheck, invokeHostAction: options.invokeHostAction,
       capacityPolicy: options.workerCapacityPolicy,
-      isSessionIdle: rootSessionId => sessions?.isIdleForEviction(rootSessionId) ?? false,
+      isSessionIdle: rootSessionId => this.sessions?.isIdleForEviction(rootSessionId) ?? false,
       consumeApprovalGrant: (...args) => this.sessions.consumeApprovalGrant(...args),
       prepareBootstrap: async input => {
         this.sessions.assertBootstrapWritable(input);
@@ -185,7 +186,6 @@ export class AgentService {
       },
     });
     this.sessions = new SessionRegistry(options.stateDirectory, this.workers, options.approvalPolicyCommit, options.approvalPolicyLoad);
-    sessions = this.sessions;
     this.webSearch = new WebSearchCoordinator(this.workspaceCatalogs, this.workers);
     this.workspaceRoutes = new WorkspaceRoutes(this.workspaceCatalogs, this.workers, this.catalog,
       this.sessions, options.stateDirectory, this.webSearch,
@@ -220,6 +220,8 @@ export class AgentService {
   }
   private async admit<T>(input: WorkerBootstrap, launch: (bootstrap: WorkerBootstrap) => Promise<T>, capturedAdmission?: CatalogAdmission): Promise<T> {
     const captured = this.assertAdmissionScope(input);
+    // Fast refusal before any catalog work; `launch` checks again before spawn.
+    this.workers.assertWorktreeLeaseAllows(input.cwd);
     if (capturedAdmission && (!captured || input.agentDirectoryId === undefined || !this.workspaceCatalogs.matches(input)))
       throw new WorkerOperationError(403, 'UNAUTHORIZED');
     const agentDirectoryId = await this.workspaceCatalogs.registerRoot(input);
@@ -413,9 +415,27 @@ export class AgentService {
         finally { response.off('close', cancel); }
         return;
       }
+      // The Host holds its supervisor restarts before this call and releases the
+      // id it supplied afterwards; the service never mints one.
+      if (request.method === 'POST' && url.pathname === '/internal/worktree-leases') {
+        const input = await readBody(request, WorktreeLeaseRequestSchema);
+        respondJson(response, 201, await this.workers.acquireWorktreeLease(input.leaseId, input.directory));
+        return;
+      }
+      const worktreeLease = /^\/internal\/worktree-leases\/([^/]+)$/.exec(url.pathname);
+      if (worktreeLease && request.method === 'DELETE') {
+        let leaseId: string;
+        try { leaseId = decodeURIComponent(worktreeLease[1]); }
+        catch { throw new RequestError(400, 'INVALID_REQUEST', 'Lease id is invalid'); }
+        await this.workers.releaseWorktreeLease(leaseId);
+        response.writeHead(204, { 'Cache-Control': 'no-store' });
+        response.end();
+        return;
+      }
       // Admission must precede catalog, shell and direct worker paths, not merely public run routes.
       const sessionMutation = /^\/(?:api\/agent\/v1|internal)\/sessions\/([^/]+)/.exec(url.pathname);
-      if (request.method !== 'GET' && request.method !== 'DELETE' && sessionMutation) this.sessions.assertWritable(identity(sessionMutation[1]));
+      const archiveDeleteControl = request.method === 'POST' && /^\/internal\/sessions\/[^/]+\/worktree-archive-delete(?:\/retire)?$/.test(url.pathname);
+      if (request.method !== 'GET' && request.method !== 'DELETE' && sessionMutation && !archiveDeleteControl) this.sessions.assertWritable(identity(sessionMutation[1]));
       const authorization = /^\/internal\/authorizations\/([^/]+)$/.exec(url.pathname);
       if (authorization && request.method === 'GET') {
         const scope = this.authorizationScope(identity(authorization[1]));
@@ -533,6 +553,19 @@ export class AgentService {
         const sessionId = EntityIdSchema.safeParse(url.searchParams.get('sessionId'));
         if (!sessionId.success) throw new RequestError(400, 'INVALID_REQUEST', 'Session identity is required');
         respondJson(response, 200, this.sessions.listSubagents(sessionId.data)); return;
+      }
+      const privateWorktreeDelete = /^\/internal\/sessions\/([^/]+)\/worktree-archive-delete$/.exec(url.pathname);
+      if (privateWorktreeDelete && request.method === 'POST') {
+        const input = await readBody(request, z.strictObject({ operationId: EntityIdSchema, projectId: EntityIdSchema, workspaceId: EntityIdSchema,
+          agentDirectoryId: EntityIdSchema, sessionIds: z.array(EntityIdSchema).min(1) }));
+        respondJson(response, 200, await this.sessions.deleteWorktreeArchiveFamily(identity(privateWorktreeDelete[1]), input)); return;
+      }
+      const privateWorktreeDeleteRetire = /^\/internal\/sessions\/([^/]+)\/worktree-archive-delete\/retire$/.exec(url.pathname);
+      if (privateWorktreeDeleteRetire && request.method === 'POST') {
+        const input = await readBody(request, z.strictObject({ operationId: EntityIdSchema, projectId: EntityIdSchema, workspaceId: EntityIdSchema,
+          agentDirectoryId: EntityIdSchema, sessionIds: z.array(EntityIdSchema).min(1) }));
+        await this.sessions.retireWorktreeArchiveDelete(identity(privateWorktreeDeleteRetire[1]), input);
+        response.writeHead(204, { 'Cache-Control': 'no-store' }); response.end(); return;
       }
       const privateEntry = /^\/internal\/sessions\/([^/]+)\/native-entry\/([^/]+)$/.exec(url.pathname);
       if (privateEntry && request.method === 'GET') { respondJson(response, 200, await this.sessions.resolveNativeEntry(identity(privateEntry[1]), identity(privateEntry[2]))); return; }
@@ -657,7 +690,7 @@ export class AgentService {
         })); return;
       }
       const stop = /^\/internal\/workers\/([^/]+)$/.exec(url.pathname);
-      if (stop && request.method === 'DELETE') { await this.workers.stop(identity(stop[1])); response.writeHead(204, { 'Cache-Control': 'no-store' }); response.end(); return; }
+      if (stop && request.method === 'DELETE') { await this.workers.evict(identity(stop[1])); response.writeHead(204, { 'Cache-Control': 'no-store' }); response.end(); return; }
       respondProblem(response, 404, 'NOT_IMPLEMENTED', 'No matching private route');
     } catch (error) {
       if (response.destroyed || response.writableEnded) return;

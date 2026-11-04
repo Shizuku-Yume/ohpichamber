@@ -68,7 +68,7 @@ function instructionMessages(request: ProviderRequest): Array<{ role: string; co
   return request.messages.filter(message => message.role === 'system' || message.role === 'developer')
     .map(message => ({ role: message.role, content: message.content }));
 }
-const HOST_TOOL_NAMES = ['openchamber', 'web', 'memory', 'notify'] as const;
+const HOST_TOOL_NAMES = ['openchamber', 'web', 'memory', 'openchamber_knowledge', 'notify'] as const;
 const HOST_TOOL_INVENTORY_LINE = new RegExp(`^- (?:${HOST_TOOL_NAMES.join('|')})(?:: \`[^\`]+\`)?$`);
 /**
  * Callable Host tools necessarily appear in OMP's tool inventory. That listing
@@ -160,6 +160,7 @@ async function fixture({ respond, invoke, machineCommands = [], onSubagent = () 
       journal?.append(inputs);
     }, interaction => {
       interactions.onRequest(rootSessionId, generation, interaction);
+      if (interaction.kind === 'cancel') return;
       if (interaction.kind === 'question') {
         const question = interactions.questions(rootSessionId).find(record => record.questionId === interaction.questionId)!;
         if (questionWaiter) { const waiter = questionWaiter; questionWaiter = undefined; waiter(question); }
@@ -176,7 +177,7 @@ async function fixture({ respond, invoke, machineCommands = [], onSubagent = () 
         return;
       }
       if (request.type === 'tool' && request.toolName === 'web_search') throw new Error('Host policy refused the tool operation');
-      if (request.type === 'tool' && ['openchamber', 'web', 'memory', 'notify'].includes(request.toolName)) throw new Error('Host tools must use their domain capability owner, not generic tool grants');
+      if (request.type === 'tool' && (HOST_TOOL_NAMES as readonly string[]).includes(request.toolName)) throw new Error('Host tools must use their domain capability owner, not generic tool grants');
       if (request.type !== 'tool' || request.toolName !== 'bash') return;
       const command = z.string().parse(request.input.command);
       if (machineCommands.includes(command)) return;
@@ -608,7 +609,7 @@ test('actual SDK Host tool executes with Host-supplied first-use MCP storage and
   try {
     await expect(readFile(harness.mcpConfigPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
     cfgToolsApprovalMode.override(harness.worker.session.settings, 'yolo');
-    expect(harness.worker.session.getAllToolInfos().map(tool => tool.name)).toEqual(expect.arrayContaining(['openchamber', 'web', 'memory', 'notify']));
+    expect(harness.worker.session.getAllToolInfos().map(tool => tool.name)).toEqual(expect.arrayContaining([...HOST_TOOL_NAMES]));
     await harness.worker.operation({ type: 'prompt', runId: 'host-run', request: prompt('Store the marker with the memory tool.') });
     await terminal.promise;
     expect(invoked).toEqual({ sessionId: rootSessionId, toolName: 'memory', action: 'memory.save', input: { key: 'proof', content: 'HOST_MEMORY_WRITTEN' } });
@@ -688,6 +689,10 @@ test('actual SDK steer/follow-up admission retains queued identity, captured con
     if (++requestCount === 1) { firstRequest.resolve(); await release.promise; }
     return completion();
   } });
+  const directMention = { kind: 'session' as const, sessionId: 'referenced-session', title: `${harness.root}/private-title` };
+  const publicDirectMention = { ...directMention, title: '[workspace]/private-title' };
+  const queuedMention = { kind: 'session-message' as const, sessionId: 'other-session', messageId: 'other-message', sessionTitle: 'Other session', excerpt: 'Referenced message' };
+  let cold: WorkerSession | undefined;
   const followedUp = Promise.withResolvers<void>();
   const finished = Promise.withResolvers<void>();
   let followUpId: string | undefined;
@@ -702,7 +707,7 @@ test('actual SDK steer/follow-up admission retains queued identity, captured con
     expect(harness.requests).toHaveLength(0);
     await harness.worker.operation({ type: 'prompt', runId: 'streaming-run', request: {
       ...prompt('Keep this initial turn open.'), input: { text: 'Keep this initial turn open.', attachments: [], context: [
-        { kind: 'context', text: 'DIRECT_CONTEXT_ENTRY', metadata: {}, instructions: 'DIRECT_ASSOCIATED_INSTRUCTION' },
+        { kind: 'context', text: 'DIRECT_CONTEXT_ENTRY', metadata: { openchamberContext: directMention }, instructions: 'DIRECT_ASSOCIATED_INSTRUCTION' },
         { kind: 'instruction', text: 'DIRECT_LATER_INSTRUCTION' },
         { kind: 'synthetic', text: 'DIRECT_SYNTHETIC_ENTRY' },
         { kind: 'context', text: 'DIRECT_LAST_CONTEXT', metadata: {} },
@@ -722,7 +727,7 @@ test('actual SDK steer/follow-up admission retains queued identity, captured con
     expect(steered).toMatchObject({ type: 'steer', ack: { sessionId: rootSessionId, runId: 'streaming-run', acceptedAt: expect.any(Number) } });
     const queued = await harness.worker.operation({ type: 'follow-up', request: {
       ...prompt('FOLLOW_UP_MARKER'), input: { text: 'FOLLOW_UP_MARKER', attachments: [attachment], context: [
-        { kind: 'context', text: 'FOLLOW_UP_CONTEXT', metadata: { captured: true }, deliveryReceiptId: 'delivery', instructions: 'FOLLOW_UP_ASSOCIATED_INSTRUCTION' },
+        { kind: 'context', text: 'FOLLOW_UP_CONTEXT', metadata: { openchamberContext: queuedMention }, deliveryReceiptId: 'delivery', instructions: 'FOLLOW_UP_ASSOCIATED_INSTRUCTION' },
         { kind: 'instruction', text: 'FOLLOW_UP_LATER_INSTRUCTION' },
         { kind: 'synthetic', text: 'FOLLOW_UP_SYNTHETIC_ENTRY' },
         { kind: 'context', text: 'FOLLOW_UP_LAST_CONTEXT', metadata: {} },
@@ -741,6 +746,23 @@ test('actual SDK steer/follow-up admission retains queued identity, captured con
     const followUp = history.history.messages.find(message => message.messageId === followUpId);
     expect(followUp?.parts).toEqual(expect.arrayContaining([{ type: 'attachment', partId: `${followUpId}:attachment:0`, ...attachment }]));
     expect(JSON.stringify(followUp)).toContain('FOLLOW_UP_MARKER');
+    const direct = history.history.messages.find(message => message.role === 'user' && message.parts.some(part => part.type === 'text' && part.content.includes('Keep this initial turn open.')));
+    expect(direct?.parts).toContainEqual(expect.objectContaining({ type: 'text', sessionMentions: [publicDirectMention] }));
+    expect(followUp?.parts).toContainEqual(expect.objectContaining({ type: 'text', sessionMentions: [queuedMention] }));
+    const startedParts = harness.events.flatMap(({ event }) => event.type === 'part.started' ? [event.part] : []);
+    expect(startedParts).toContainEqual(expect.objectContaining({ type: 'text', sessionMentions: [publicDirectMention] }));
+    expect(startedParts).toContainEqual(expect.objectContaining({ type: 'text', sessionMentions: [queuedMention] }));
+    const snapshot = harness.journal.snapshot();
+    expect(snapshot.messages.find(message => message.messageId === followUpId)?.parts).toContainEqual(expect.objectContaining({ type: 'text', sessionMentions: [queuedMention] }));
+    await harness.worker.close();
+    cold = await WorkerSession.open({ type: 'bootstrap', rootSessionId, workerGeneration: 'cold-mention-generation', projectId: 'project',
+      workspaceId: 'workspace', agentDirectoryId: 'source', cwd: harness.root, agentDirectory: dirname(harness.mcpConfigPath),
+      sessionFile: harness.worker.sessionFile, sessionsDirectory: dirname(harness.worker.sessionFile) }, () => {},
+      () => { throw new Error('Mention recovery must not request interaction'); }, () => { throw new Error('Mention recovery must not fail'); },
+      async () => {}, async () => { throw new Error('Mention recovery must not invoke Host tools'); }, () => {});
+    const reloaded = cold.seed().messages;
+    expect(reloaded.find(message => message.messageId === direct?.messageId)?.parts).toContainEqual(expect.objectContaining({ type: 'text', sessionMentions: [publicDirectMention] }));
+    expect(reloaded.find(message => message.messageId === followUpId)?.parts).toContainEqual(expect.objectContaining({ type: 'text', sessionMentions: [queuedMention] }));
     expect(JSON.stringify(harness.requests)).toContain('STEERING_INSTRUCTION');
     expect(JSON.stringify(harness.requests)).toContain('FOLLOW_UP_CONTEXT');
     expectContextOrder(requestContaining(harness.requests, 'FOLLOW_UP_CONTEXT'), [
@@ -749,7 +771,7 @@ test('actual SDK steer/follow-up admission retains queued identity, captured con
     expect(JSON.stringify(harness.requests)).not.toContain('FOLLOW_UP_ASSOCIATED_INSTRUCTION');
     expect(JSON.stringify(harness.requests)).not.toContain('ohpichamber.context');
     expect(harness.fatal()).toBe(false);
-  } finally { release.resolve(); unsubscribe(); await harness.close(); }
+  } finally { release.resolve(); unsubscribe(); await cold?.close(); await harness.close(); }
 }, 30000);
 
 test('actual native undo/redo retains sibling transcript and cold-reopen selection without changing workspace files', async () => {
@@ -887,7 +909,7 @@ test('actual native TaskTool owns a child session and persists its history', asy
   const lifecycle: SubagentLifecyclePayload[] = [];
   const harness = await fixture({
     onSubagent: payload => lifecycle.push(payload),
-    respond: payload => {
+    respond: () => {
       requests += 1;
       if (requests === 1) return completion({ name: 'task', id: 'native-task', input: { agent: 'child', name: 'child-proof', task: 'Return the child proof marker.' } });
       return completion();
@@ -1113,6 +1135,53 @@ test('native mode changes reject while a worker run is active', async () => {
     await expect(harness.worker.operation({ type: 'mode.set', mode: 'plan' })).rejects.toMatchObject({ status: 409, code: 'RUN_ACTIVE' });
     gate.resolve(false);
     await run;
+  } finally {
+    await harness.close();
+  }
+}, 30000);
+
+test('worker rejects a binary attachment (415) and an over-5 MB text attachment (413)', async () => {
+  const harness = await fixture({ respond: () => completion() });
+  try {
+    const binaryPath = join(harness.root, 'sample.bin');
+    await writeFile(binaryPath, Buffer.from([0x00, 0x01, 0x02, 0xff]));
+    const binaryAttachment = {
+      attachmentId: 'bin-att',
+      name: 'sample.bin',
+      mediaType: 'application/octet-stream',
+      size: 4,
+      uri: 'attachment://bin-att',
+    };
+
+    await expect(harness.worker.operation({
+      type: 'prompt',
+      runId: 'bin-run',
+      request: {
+        ...prompt('Binary prompt'),
+        input: { text: 'Binary prompt', attachments: [binaryAttachment], context: [] },
+      },
+      attachments: [{ attachmentId: 'bin-att', path: binaryPath }],
+    })).rejects.toMatchObject({ status: 415, code: 'UNSUPPORTED_MEDIA_TYPE' });
+
+    const oversizedPath = join(harness.root, 'large.txt');
+    await writeFile(oversizedPath, 'x');
+    const oversizedAttachment = {
+      attachmentId: 'large-att',
+      name: 'large.txt',
+      mediaType: 'text/plain',
+      size: 6 * 1024 * 1024,
+      uri: 'attachment://large-att',
+    };
+
+    await expect(harness.worker.operation({
+      type: 'prompt',
+      runId: 'large-run',
+      request: {
+        ...prompt('Large prompt'),
+        input: { text: 'Large prompt', attachments: [oversizedAttachment], context: [] },
+      },
+      attachments: [{ attachmentId: 'large-att', path: oversizedPath }],
+    })).rejects.toMatchObject({ status: 413, code: 'PAYLOAD_TOO_LARGE' });
   } finally {
     await harness.close();
   }

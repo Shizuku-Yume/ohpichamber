@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { access, readFile, rm } from 'node:fs/promises';
+import { access, lstat, readFile, realpath, rm } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import { isEmptySession, listSessionsReadOnly } from '@oh-my-pi/pi-coding-agent/session/session-listing';
@@ -208,7 +208,7 @@ export class SessionRegistry {
       for (const { target, input } of reserved) {
         try {
           // Admission builds a strict worker bootstrap; displayPath belongs to the registry/reference only.
-          const { displayPath, ...admissionInput } = input;
+          const { displayPath: _displayPath, ...admissionInput } = input;
           await admit(admissionInput, bootstrap => this.openResolved({ ...input, ...bootstrap }, true, undefined, true, target.workerGeneration));
           const current = this.workers.info(target.rootSessionId);
           if (!current || current.state !== 'ready' || current.workerGeneration === target.workerGeneration)
@@ -439,9 +439,9 @@ export class SessionRegistry {
                 ? { childSessionId: parsed.data.id, parentSessionFile: parsed.data.parentSession }
                 : { childSessionId: parsed.data.id };
             }
-          } catch {}
+          } catch { /* an unreadable parent-session line names no parent; keep scanning */ }
         }
-      } catch {}
+      } catch { /* the session file is still being written; retry below */ }
       if (attempt < 9) await new Promise<void>(resolve => setTimeout(resolve, 10));
     }
     return undefined;
@@ -701,6 +701,104 @@ export class SessionRegistry {
       for (const child of children) this.subagents.delete(child.subagentId);
       return { sessionId, deletedSessionIds: [reference.rootSessionId, ...children.map(child => child.childSessionId)] };
     } finally { this.deleting.delete(sessionId); }
+  }
+  async deleteWorktreeArchiveFamily(sessionId: string, expected: { operationId: string; projectId: string; workspaceId: string; agentDirectoryId: string; sessionIds: string[] }) {
+    this.ensureOpen();
+    if (this.deleting.has(sessionId) || this.controls.has(sessionId) || this.openings.has(sessionId) || this.pendingRuns.has(sessionId)
+      || this.subagentLifecycleTails.has(sessionId) || this.workers.info(sessionId)) throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
+    const saved = this.references.worktreeDelete(sessionId);
+    const reference = saved?.reference ?? this.references.get(sessionId);
+    if (!reference) throw new WorkerOperationError(404, 'SESSION_NOT_FOUND');
+    const children = saved?.children ?? this.references.listSubagents(sessionId);
+    const ids = [sessionId, ...children.map(child => child.childSessionId)].sort();
+    if ((saved && saved.operationId !== expected.operationId) || reference.deletedSpace || this.references.relocation(sessionId)
+      || reference.projectId !== expected.projectId || reference.workspaceId !== expected.workspaceId
+      || reference.agentDirectoryId !== expected.agentDirectoryId || new Set(ids).size !== ids.length
+      || JSON.stringify(ids) !== JSON.stringify([...expected.sessionIds].sort())
+      || children.some(child => child.rootSessionId !== sessionId || child.projectId !== reference.projectId || child.workspaceId !== reference.workspaceId))
+      throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT');
+    if (saved?.state === 'completed') return { operationId: expected.operationId, sessionId, deletedSessionIds: ids };
+    this.deleting.add(sessionId);
+    try { return await this.workers.withStoppedRoot(sessionId, async () => {
+      try { await access(reference.cwd); throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT'); }
+      catch (error) {
+        if (error instanceof WorkerOperationError) throw error;
+        if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
+      }
+      const entry = this.entries.get(sessionId);
+      if (entry?.state !== 'unloaded' && entry?.opened?.journal.runtime().activeRunId !== null && entry?.opened) throw new WorkerOperationError(409, 'RUN_ACTIVE');
+      const rootFile = reference.sessionFile;
+      if (!isAbsolute(rootFile) || !rootFile.endsWith('.jsonl')) throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT');
+      const storage = reference.sessionsDirectory ?? SessionManager.getDefaultSessionDir(reference.cwd, reference.agentDirectory);
+      const storagePath = await realpath(storage);
+      const storageRelative = relative(storagePath, rootFile);
+      if (!storageRelative || storageRelative === '..' || storageRelative.startsWith(`..${sep}`) || isAbsolute(storageRelative))
+        throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT');
+      let rootExists = true;
+      try { await access(rootFile); } catch (error) {
+        if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
+        rootExists = false;
+      }
+      if (!rootExists && !saved) throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT');
+      if (rootExists) {
+        if (await realpath(rootFile) !== rootFile) throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT');
+        const rootIdentity = await this.readSubagentIdentity(rootFile);
+        if (!rootIdentity || (saved && rootIdentity.childSessionId !== saved.nativeSessionId)
+          || this.references.list().items.some(other => other.rootSessionId !== sessionId && other.sessionFile === rootFile))
+          throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT');
+        const paths = new Map<string, string>([[sessionId, rootFile], ...children.map(child => [child.childSessionId, child.sessionFile] as const)]);
+        const artifacts = rootFile.slice(0, -6);
+        for (const child of children) {
+          const childRelative = relative(artifacts, child.sessionFile);
+          if (!childRelative || childRelative === '..' || childRelative.startsWith(`..${sep}`) || isAbsolute(childRelative)
+            || await realpath(child.sessionFile) !== child.sessionFile) throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT');
+          const identity = await this.readSubagentIdentity(child.sessionFile);
+          if (!identity || identity.childSessionId !== child.childSessionId || identity.parentSessionFile !== paths.get(child.parentSessionId))
+            throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT');
+        }
+        if (!saved) {
+          let artifactIdentity = null;
+          try {
+            const stat = await lstat(artifacts, { bigint: true });
+            if (!stat.isDirectory() || await realpath(artifacts) !== artifacts) throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT');
+            artifactIdentity = { device: stat.dev.toString(), inode: stat.ino.toString() };
+          } catch (error) {
+            if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
+          }
+          await this.references.beginWorktreeDelete({ operationId: expected.operationId, nativeSessionId: rootIdentity.childSessionId, reference, children, artifacts: artifactIdentity, state: 'pending' });
+        }
+        const manager = SessionManager.create(reference.cwd, reference.sessionsDirectory);
+        try { await manager.dropSession(rootFile); } finally { await manager.close(); }
+      }
+      // The SDK unlinks the transcript before removing its sibling artifact tree.
+      // Resume that cleanup only for the exact directory captured before deletion.
+      try {
+        const artifactPath = rootFile.slice(0, -6);
+        const stat = await lstat(artifactPath, { bigint: true });
+        const identity = (saved ?? this.references.worktreeDelete(sessionId))?.artifacts;
+        if (!identity || !stat.isDirectory() || stat.dev.toString() !== identity.device || stat.ino.toString() !== identity.inode
+          || await realpath(artifactPath) !== artifactPath) throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT');
+        await rm(artifactPath, { recursive: true });
+      } catch (error) {
+        if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
+      }
+      await this.references.completeWorktreeDelete(sessionId, expected.operationId);
+      this.releaseColdJournals(sessionId, children);
+      if (entry?.state !== 'unloaded') entry?.opened?.journal.close();
+      this.interactions.closeSession(sessionId);
+      this.entries.delete(sessionId);
+      for (const child of children) this.subagents.delete(child.subagentId);
+      return { operationId: expected.operationId, sessionId, deletedSessionIds: ids };
+    }); } finally { this.deleting.delete(sessionId); }
+  }
+
+  retireWorktreeArchiveDelete(sessionId: string, expected: { operationId: string; projectId: string; workspaceId: string; agentDirectoryId: string; sessionIds: string[] }): Promise<void> {
+    const intent = this.references.worktreeDelete(sessionId);
+    if (intent && (intent.state !== 'completed' || intent.operationId !== expected.operationId || intent.reference.projectId !== expected.projectId
+      || intent.reference.workspaceId !== expected.workspaceId || intent.reference.agentDirectoryId !== expected.agentDirectoryId
+      || JSON.stringify([sessionId, ...intent.children.map(child => child.childSessionId)].sort()) !== JSON.stringify([...expected.sessionIds].sort())))
+      throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT');
+    return this.references.retireWorktreeDelete(sessionId, expected.operationId);
   }
   async prompt(sessionId: string, operation: PromptOperation) {
     this.ensureOpen();

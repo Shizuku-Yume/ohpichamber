@@ -43,6 +43,9 @@ const createMemoryFs = () => {
 const createMemoryRelayKeyStore = () => {
   const slots = new Map();
   return {
+    // The runtime caches its signing keypair by store generation; this fake
+    // never resets the relay identity.
+    generation: () => 0,
     getOrCreate: async (slot, generate) => {
       if (!slots.has(slot)) slots.set(slot, await generate());
       return slots.get(slot);

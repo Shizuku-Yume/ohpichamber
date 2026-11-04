@@ -4,7 +4,6 @@ import {
   OmpSettingIdSchema,
   OmpSettingSchema,
   OmpSettingsStateSchema,
-  type JsonValue,
   type OmpSetting,
   type OmpSettingsState,
   type OmpSettingsUpdateRequest,

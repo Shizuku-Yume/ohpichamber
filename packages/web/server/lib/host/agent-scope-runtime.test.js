@@ -11,6 +11,7 @@ import { createSettingsNormalizationRuntime } from './settings-normalization-run
 import { createProjectDirectoryRuntime } from './project-directory-runtime.js';
 import { getWorktrees } from '../git/service.js';
 import { registerCanonicalHostRoutes } from './canonical-routes.js';
+import { registerWalkthroughRoutes } from '../walkthrough/routes.js';
 import { SessionReferences } from '../../../../agent-service/src/sessions/references.ts';
 
 const fixtures = [];
@@ -57,6 +58,36 @@ const admittedSession = (scope, sessionId = 'native-session') => ({
 });
 
 describe('configured Host scope authority', () => {
+  it('selects the registered owner for a nested repository without admitting it or an outside path', async () => {
+    const { root, projectDirectory, runtime } = await fixture();
+    const nested = path.join(projectDirectory, 'api');
+    const outside = path.join(root, 'outside');
+    fs.mkdirSync(nested); fs.mkdirSync(outside);
+    execFileSync('git', ['init', '-q', nested]);
+    const owner = await runtime.resolveWorkspaceDirectory(projectDirectory);
+    expect(await runtime.resolveWorkspaceDirectory(nested)).toBeNull();
+    expect(await runtime.resolveRepositoryWorkspace(nested)).toEqual(owner);
+    expect(await runtime.resolveRepositoryWorkspace(outside)).toBeNull();
+    expect((await runtime.resolveWorkspaceScope(owner.workspaceId)).cwd).toBe(projectDirectory);
+  });
+
+  it('uses the owning workspace for nested bound PR walkthrough reads and generation', async () => {
+    const { root, projectDirectory, runtime } = await fixture();
+    const nested = path.join(projectDirectory, 'api'); const outside = path.join(root, 'outside');
+    fs.mkdirSync(nested); fs.mkdirSync(outside); execFileSync('git', ['init', '-q', nested]);
+    const owner = await runtime.resolveWorkspaceDirectory(projectDirectory);
+    const calls = []; const app = express(); app.use(express.json());
+    const service = { getWalkthrough: async (args) => { calls.push(args); return { ok: true }; }, generateWalkthrough: async (args) => { calls.push(args); return { ok: true }; } };
+    registerWalkthroughRoutes(app, { getWalkthroughService: async () => service, resolveWorkspaceDirectory: runtime.resolveWorkspaceDirectory, resolveRepositoryWorkspace: runtime.resolveRepositoryWorkspace, validateReadContext: async (context) => context });
+    const source = { kind: 'pr', number: 2 }; const context = { repositoryId: 'repo', provider: 'github', instance: 'github.com', accountId: 'account', bindingRevision: 1, primaryRemote: 'origin' };
+    const query = { directory: nested, source: JSON.stringify(source), ...context };
+    expect((await request(app).get('/api/walkthrough').query(query)).status).toBe(200);
+    expect((await request(app).post('/api/walkthrough/generate').send({ directory: nested, source, ...context })).status).toBe(200);
+    expect(calls).toHaveLength(2);
+    for (const call of calls) expect(call).toMatchObject({ workspaceId: owner.workspaceId, directory: nested, readContext: { directory: nested } });
+    expect((await request(app).get('/api/walkthrough').query({ ...query, directory: outside })).status).toBe(403);
+    expect(calls).toHaveLength(2);
+  });
   it('resolves SQLite-backed project, worktree and managed-chat directories through the canonical public projection', async () => {
     const { root, projectDirectory, agentDirectory, owner, runtime, managedChatsScope } = await fixture({ managedChats: true });
     execFileSync('git', ['init', '-q', projectDirectory]);

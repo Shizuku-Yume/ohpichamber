@@ -19,14 +19,13 @@ import { getLanguageFromExtension } from '@/lib/toolHelpers';
 import { useDeviceInfo } from '@/lib/device';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { createFlexokiCodeMirrorTheme } from '@/lib/codemirror/flexokiTheme';
-import { shikiHighlightExtension } from '@/lib/codemirror/shikiHighlight';
-import { getResolvedShikiTheme } from '@/lib/shiki/appThemeRegistry';
+import { codeHighlightExtension } from '@/lib/codemirror/codeHighlight';
+import { getCodeTokenTheme } from '@/lib/shiki/appThemeRegistry';
 import { languageByExtension } from '@/lib/codemirror/languageByExtension';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSessions } from '@/sync/sync-context';
 import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
-import { useFeatureFlagsStore } from '@/stores/useFeatureFlagsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSelectionStore } from '@/sync/selection-store';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -42,13 +41,13 @@ import { generateBranchName } from '@/lib/git/branchNameGenerator';
 import { fetchProjectPlan, parsePlanMarkdown, resolveProjectContextId, type SavedProjectPlanTarget } from '@/lib/projectContextApi';
 import { CHAT_DRAFT_PROJECT_ID } from '@/lib/chatDirectories';
 import { createPlanSaveQueue } from '@/lib/planSaveQueue';
-import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
+import { getRuntimeKey, getRuntimeSwitchRevision, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { useProjectContextStore } from '@/stores/useProjectContextStore';
 import { createWorktreeSessionForNewBranch } from '@/lib/worktreeSessionCreator';
 import { TodoSendDialog, type TodoSendExecution } from '@/components/session/TodoSendDialog';
 import { Icon } from "@/components/icon/Icon";
 import { useMessageTTS } from '@/hooks/useMessageTTS';
-import { renderMagicPrompt } from '@/lib/magicPrompts';
+import { loadMagicPrompts } from '@/lib/magicPrompts';
 import { useI18n } from '@/lib/i18n';
 
 type PlanViewProps = {
@@ -146,7 +145,6 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
   const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
   const sessions = useSessions();
   const homeDirectory = useDirectoryStore((state) => state.homeDirectory);
-  const planModeEnabled = useFeatureFlagsStore((state) => state.planModeEnabled);
   const projects = useProjectsStore((state) => state.projects);
   const activeProjectId = useProjectsStore((state) => state.activeProjectId);
   const gitDirectories = useGitStore((state) => state.directories);
@@ -388,10 +386,10 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
       extensions.push(language);
     }
     if (useShiki && shikiLanguage) {
-      extensions.push(shikiHighlightExtension({
+      extensions.push(codeHighlightExtension({
         language: shikiLanguage,
         themeName: currentTheme.metadata.id,
-        theme: getResolvedShikiTheme(currentTheme),
+        theme: getCodeTokenTheme(currentTheme),
       }));
     }
     extensions.push(EditorView.lineWrapping);
@@ -484,8 +482,8 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
   }, [saveQueue]);
 
   React.useEffect(() => {
-    // Saved project plans opened via context panel should work even when session plan mode is off.
-    if (!planModeEnabled && !targetPath && !savedPlanId) {
+    // A plan view with no file or saved project plan has nothing to show.
+    if (!targetPath && !savedPlanId) {
       scheduleSave();
       docRef.current = { key: null, target: null, content: '', editRevision: 0, savedRevision: 0, runtimeKey: '' };
       setResolvedPath(null);
@@ -610,7 +608,7 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
     return () => {
       cancelled = true;
     };
-  }, [activeRuntimeKey, homeDirectory, planModeEnabled, runtimeApis.files, savedPlanId, savedPlanKey, savedPlanProjectRef, saveQueue, scheduleSave, sessionDirectory, targetPath]);
+  }, [activeRuntimeKey, homeDirectory, runtimeApis.files, savedPlanId, savedPlanKey, savedPlanProjectRef, saveQueue, scheduleSave, sessionDirectory, targetPath]);
 
   // Synchronous buffer tracking: if an edit and an unmount land in the same
   // batch, the passive content effect would never run and a flush would save
@@ -669,34 +667,12 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
       if (!sendTargetProject || !pendingPlanSend || isManagedChatPlan) {
         return;
       }
+      const runtimeKey = getRuntimeKey();
+      const revision = getRuntimeSwitchRevision();
+      const assertOwner = () => {
+        if (getRuntimeKey() !== runtimeKey || getRuntimeSwitchRevision() !== revision) throw new Error('Runtime changed');
+      };
 
-      const visiblePrompt = await renderMagicPrompt(
-        pendingPlanSend.action === 'improve' ? 'plan.improve.visible' : 'plan.implement.visible',
-        {
-          plan_title: sendPromptTitle,
-        },
-      );
-      const instructionsText = await renderMagicPrompt(
-        pendingPlanSend.action === 'improve' ? 'plan.improve.instructions' : 'plan.implement.instructions',
-        {
-          plan_title: sendPromptTitle,
-          plan_path: resolvedPath ?? '',
-        },
-      );
-      // Saved project plans have no file path for the agent to read. Without
-      // this the instructions say "read that file" with an empty path and the
-      // plan contents never reach the session, so the plan substance rides
-      // along in the synthetic message instead.
-      const planSubstance = resolvedPath
-        ? instructionsText
-        : [
-            instructionsText,
-            '',
-            'The plan is not stored as a file in the repository and has no file path. Its full current contents follow below this note and are the source of truth for the plan. Where the instructions above refer to the plan file, treat the plan as stored in OpenChamber project knowledge (it is edited through the OpenChamber UI): propose plan revisions as plan text in the chat rather than editing a file.',
-            '',
-            content,
-          ].join('\n');
-      const syntheticParts = [{ synthetic: true as const, text: planSubstance }];
       setIsPlanSendSubmitting(true);
 
       try {
@@ -712,16 +688,18 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
           const created = await createWorktreeSessionForNewBranch(sendTargetProject.path, generateBranchName(), undefined, {
             providerId: execution.providerID, modelId: execution.modelID, variant: execution.variant || undefined,
           });
+          assertOwner();
           if (!created?.id) {
             return;
           }
           sessionId = created.id;
-          directoryHint = created.path;
+          directoryHint = created.directory;
         } else {
           const sessionResult = await createSession(undefined, sendTargetProject.path, undefined, {
             model: { providerId: execution.providerID, modelId: execution.modelID },
             variant: execution.variant || undefined,
           });
+          assertOwner();
           if (!sessionResult?.sessionId) {
             return;
           }
@@ -732,6 +710,27 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
         if (!sessionId) {
           return;
         }
+        const prompts = await loadMagicPrompts(directoryHint);
+        assertOwner();
+        const visiblePrompt = prompts.render(
+          pendingPlanSend.action === 'improve' ? 'plan.improve.visible' : 'plan.implement.visible',
+          { plan_title: sendPromptTitle },
+        );
+        const instructionsText = prompts.render(
+          pendingPlanSend.action === 'improve' ? 'plan.improve.instructions' : 'plan.implement.instructions',
+          { plan_title: sendPromptTitle, plan_path: resolvedPath ?? '' },
+        );
+        // Saved plans have no file path, so their content must accompany the instructions.
+        const planSubstance = resolvedPath
+          ? instructionsText
+          : [
+              instructionsText,
+              '',
+              'The plan is not stored as a file in the repository and has no file path. Its full current contents follow below this note and are the source of truth for the plan. Where the instructions above refer to the plan file, treat the plan as stored in OpenChamber project knowledge (it is edited through the OpenChamber UI): propose plan revisions as plan text in the chat rather than editing a file.',
+              '',
+              content,
+            ].join('\n');
+        const syntheticParts = [{ synthetic: true as const, text: planSubstance }];
 
         const selectionState = useSelectionStore.getState();
         selectionState.saveSessionModelSelection(sessionId, execution.providerID, execution.modelID);
@@ -761,7 +760,10 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
           undefined,
           syntheticParts,
           execution.variant || undefined,
+          undefined,
+          { target: { runtimeKey, sessionId, directory: directoryHint }, runtimeRevision: revision },
         );
+        assertOwner();
 
         setPendingPlanSend(null);
       } finally {
@@ -894,7 +896,7 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
                       }
                     }}
                   >
-                    <Icon name="volume-up" className={isTTSPlaying ? 'h-4 w-4 animate-pulse text-[var(--primary-text)]' : 'h-4 w-4'} />
+                    <Icon name="volume-up" className={isTTSPlaying ? 'h-4 w-4 text-[var(--primary-text)]' : 'h-4 w-4'} />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent sideOffset={8}>

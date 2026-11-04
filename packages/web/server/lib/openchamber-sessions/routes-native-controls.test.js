@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createHostSessionState } from '../host/session-state.js';
+import { snapshot } from '../event-stream/canonical-test-fixtures.js';
 import { createOpenChamberSessionService } from './routes.js';
 
 const fixtures = [];
@@ -41,6 +42,9 @@ const fixture = async () => {
   const request = async (pathname, init = {}) => {
     const body = init.body ? JSON.parse(init.body) : null;
     native.calls.push({ pathname, body });
+    if (native.pause?.pathname === pathname) { native.pause.entered(); await native.pause.wait; }
+    if (native.refusePath === pathname) return Response.json({ type: 'urn:ohpichamber:problem:COMMAND_IN_FLIGHT', title: 'Busy', status: 409, code: 'COMMAND_IN_FLIGHT', detail: 'Admission refused', retryable: false }, { status: 409 });
+    if (native.failPath === pathname) throw new Error('Native reply was lost');
     if (pathname.endsWith('/relocation')) return Response.json({ relocation: native.pending });
     if (pathname.endsWith('/relocation/prepare')) {
       if (native.prepareFailure) return Response.json({ type: 'urn:ohpichamber:problem:RUN_ACTIVE', title: 'Busy', status: 409, code: 'RUN_ACTIVE', detail: 'Session run is active', retryable: false }, { status: 409 });
@@ -56,6 +60,8 @@ const fixture = async () => {
       if (body.action === 'commit' && native.loseCommitResponse) { native.loseCommitResponse = false; throw new Error('Commit response was lost'); }
       return Response.json({ session: runtime() });
     }
+    if (pathname === '/internal/sessions') return Response.json({ ...runtime(body.rootSessionId), rootSessionId: body.rootSessionId });
+    if (pathname === '/api/agent/v1/sessions/public-root/snapshot') return Response.json(snapshot([], [], runtime()));
     if (pathname.endsWith('/reopen')) return Response.json(runtime());
     if (pathname === '/api/agent/v1/sessions/public-root' && init.method === 'DELETE')
       return Response.json({ sessionId: 'public-root', deletedSessionIds: ['public-root'] });
@@ -83,7 +89,7 @@ const fixture = async () => {
   const makeService = () => createOpenChamberSessionService({
     service: { request }, agentScopeStore: store, resolveHostRelocationScope: (id) => store.getSession(id),
     resolveSessionScope: (id) => store.getSession(id), resolveHostSessionScope: (id) => store.getSession(id),
-    resolveWorkspaceScope: (id) => store.getWorkspace(id), registerSessionScope: async (session) => { registrations.push(session.sessionId); return true; },
+    resolveWorkspaceScope: async (id) => { const scope = await store.getWorkspace(id); return scope && { ...scope, displayPath: '.' }; }, registerSessionScope: async (session) => { registrations.push(session.sessionId); return true; },
     resolveAttachments: async () => [], capturePrompt: async (_scope, prompt) => prompt, beforeDispatch: async () => {}, onPromptAccepted: async () => {},
     directCommandAdmissionStore: owner.directCommandAdmissionStore,
     archiveStore: owner.archiveStore, sessionMetadataStore: owner.sessionMetadataStore,
@@ -116,6 +122,66 @@ describe('Host native session control saga', () => {
     await expect(service.control('public-root', { type: 'goal', op: 'create', objective: '  ' })).rejects.toMatchObject({ statusCode: 400 });
     expect(native.calls).toHaveLength(count);
     await expect(service.control('missing-session', create)).rejects.toMatchObject({ statusCode: 404 });
+  });
+  it('releases an admission on a known pre-dispatch refusal', async () => {
+    const { store, source, native, makeService } = await fixture();
+    native.refusePath = '/internal/sessions/public-root/reopen';
+    await expect(makeService().control('public-root', { type: 'mode.set', mode: 'plan' })).rejects.toMatchObject({ statusCode: 409, code: 'COMMAND_IN_FLIGHT' });
+    const input = { hostProjectId: 'project', archiveId: 'refused-reopen', archiveRef: 'refs/openchamber/archive/refused-reopen', snapshotCommit: 'a'.repeat(40), anchorWorkspaceId: source.workspaceId, claimId: 'claim', claimGeneration: `host_${process.pid}_fixture`, branchName: 'branch', branchOid: null };
+    await expect(store.createWorktreeArchive(input)).resolves.toMatchObject({ archiveId: 'refused-reopen' });
+    expect(native.calls.filter(({ pathname }) => pathname === native.refusePath)).toHaveLength(1);
+  });
+  it('keeps a fork admission reserved through the native reply and Host registration', async () => {
+    const { store, source, native, makeService } = await fixture();
+    let entered;
+    let resume;
+    const dispatched = new Promise((resolve) => { entered = resolve; });
+    const wait = new Promise((resolve) => { resume = resolve; });
+    native.pause = { pathname: '/internal/sessions/public-root/fork', entered, wait };
+    const service = makeService();
+    const fork = service.fork('public-root', { mode: 'selected', messageId: 'message-7' });
+    await dispatched;
+    const input = { hostProjectId: 'project', archiveId: 'fork-race', archiveRef: 'refs/openchamber/archive/fork-race', snapshotCommit: 'a'.repeat(40), anchorWorkspaceId: source.workspaceId, claimId: 'claim', claimGeneration: `host_${process.pid}_fixture`, branchName: 'branch', branchOid: null };
+    await expect(store.createWorktreeArchive(input)).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });
+    resume();
+    await expect(fork).resolves.toMatchObject({ session: { sessionId: 'forked-child' } });
+    await store.createWorktreeArchive(input);
+    const before = native.calls.length;
+    await expect(service.fork('public-root', { mode: 'selected', messageId: 'message-7' })).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });
+    expect(native.calls.length).toBe(before);
+  });
+  it('retains an uncertain fork admission across Host restart', async () => {
+    const { owner, root, store, source, native, makeService } = await fixture();
+    native.failPath = '/internal/sessions/public-root/fork';
+    await expect(makeService().fork('public-root', { mode: 'selected', messageId: 'message-7' })).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT', retryable: false });
+    await expect(makeService().fork('public-root', { mode: 'selected', messageId: 'message-7' })).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });
+    await owner.close();
+    const reopened = createHostSessionState({ dataDir: path.join(root, 'host') });
+    fixtures[fixtures.length - 1].owner = reopened;
+    await expect(reopened.agentScopeStore.createWorktreeArchive({ hostProjectId: 'project', archiveId: 'uncertain-fork', archiveRef: 'refs/openchamber/archive/uncertain-fork', snapshotCommit: 'a'.repeat(40), anchorWorkspaceId: source.workspaceId, claimId: 'claim', claimGeneration: `host_${process.pid}_fixture`, branchName: 'branch', branchOid: null })).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });
+  });
+  it.each(['create', 'reopen'])('reserves %s until native admission settles', async (operation) => {
+    const { store, source, native, makeService } = await fixture();
+    let entered;
+    let resume;
+    const dispatched = new Promise((resolve) => { entered = resolve; });
+    const wait = new Promise((resolve) => { resume = resolve; });
+    native.pause = { pathname: operation === 'create' ? '/internal/sessions' : '/internal/sessions/public-root/reopen', entered, wait };
+    const service = makeService();
+    const trigger = () => (operation === 'create'
+      ? service.create({ projectId: source.projectId, workspaceId: source.workspaceId, options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null } })
+      : service.control('public-root', { type: 'mode.set', mode: 'plan' }));
+    const pending = trigger();
+    await dispatched;
+    const input = { hostProjectId: 'project', archiveId: `${operation}-race`, archiveRef: `refs/openchamber/archive/${operation}-race`, snapshotCommit: 'a'.repeat(40), anchorWorkspaceId: source.workspaceId, claimId: 'claim', claimGeneration: `host_${process.pid}_fixture`, branchName: 'branch', branchOid: null };
+    await expect(store.createWorktreeArchive(input)).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });
+    resume();
+    await pending;
+    await store.createWorktreeArchive(input);
+    const before = native.calls.length;
+    const blocked = trigger();
+    await expect(blocked).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });
+    expect(native.calls.length).toBe(before);
   });
   it('refuses native mutations for deleted-space sessions before dispatch', async () => {
     const { root, store, destination, native, makeService } = await fixture();

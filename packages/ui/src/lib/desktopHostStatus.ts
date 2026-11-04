@@ -9,7 +9,7 @@ import {
   type DesktopHost,
   type HostProbeResult,
 } from '@/lib/desktopHosts';
-import { LOCAL_HOST_ID, buildLocalDesktopHost } from '@/lib/desktopCurrentHost';
+import { LOCAL_HOST_ID, withLocalDesktopHost } from '@/lib/desktopCurrentHost';
 
 export type DesktopHostStatus = {
   status: HostProbeResult['status'];
@@ -144,10 +144,11 @@ const probeHost = async (host: DesktopHost, localClientToken: string): Promise<D
   const res = await desktopHostProbe(url, { clientToken: clientToken || null, requestHeaders: host.requestHeaders || null })
     .catch((): HostProbeResult => ({ status: 'unreachable', latencyMs: 0 }));
   // Multi-transport host away from its network: the direct leg fails but the
-  // relay may still reach it.
+  // relay may still reach it. A relay refusal over its limits says more than
+  // the failed direct leg, so it is the status shown.
   if (isBlockedProbeStatus(res.status) && host.relay) {
     const relayStatus = await probeRelayLeg();
-    if (relayStatus.status === 'ok') return relayStatus;
+    if (relayStatus.status === 'ok' || relayStatus.status === 'relay-limit') return relayStatus;
   }
   return { status: res.status, latencyMs: res.latencyMs };
 };
@@ -201,5 +202,5 @@ export const warmDesktopHostStatuses = async (): Promise<void> => {
   const config = await desktopHostsGet().catch(() => null);
   if (!config) return;
   pruneDesktopHostStatuses(config.hosts.map((host) => host.id));
-  await probeDesktopHosts([buildLocalDesktopHost(config.localOrigin), ...config.hosts]);
+  await probeDesktopHosts(withLocalDesktopHost(config.hosts, config.localOrigin));
 };

@@ -13,17 +13,29 @@
  * the browser. A signature held in a tab is lost when the tab closes, and worse,
  * it survives compaction: the tab goes on believing the agent still has context
  * that has just been summarised away.
+ *
+ * Upstream writes the same knowledge into OpenCode's session instruction
+ * entries. That mechanism does not exist in OMP: the Agent Service carries the
+ * block as part of the prompt, and OpenChamber's own metadata records what was
+ * delivered. The text and guidance below are upstream's; the delivery stays
+ * ours.
  */
 import { isRecord } from '../shared/guards.js';
 
 const KNOWLEDGE_METADATA_KEY = 'knowledge_context_delivered';
 const PINS_METADATA_KEY = 'project_context_pins';
 
-/** Total budget for the assembled block; anything past it is cut, loudly. */
+/**
+ * Budget per source: pins, memory and guidance travel together, but a huge
+ * pinned plan must not crowd out the memory index or the guidance. Anything
+ * past a source's budget is cut, loudly.
+ */
 const KNOWLEDGE_MAX_LENGTH = 8000;
 
-const truncate = (value, budget) => (
-  value.length <= budget ? value : `${value.slice(0, Math.max(0, budget - 1))}…`
+const truncate = (value) => (
+  value.length <= KNOWLEDGE_MAX_LENGTH
+    ? value
+    : `${value.slice(0, KNOWLEDGE_MAX_LENGTH - 1)}…\n\n(truncated)`
 );
 
 /**
@@ -38,6 +50,7 @@ export const buildKnowledgeSignature = ({ notes, plans }) => {
   ];
   return parts.length === 0 ? '' : parts.sort().join('|');
 };
+
 
 const buildPinnedBlock = ({ notes, plans }) => {
   const sections = [];
@@ -75,6 +88,7 @@ export const createSessionKnowledgeRuntime = (dependencies) => {
     agentMemoryRuntime,
     resolveProjectId,
     isAgentMemoryEnabled,
+
     // Pins and the delivered-signature cursor live in OpenChamber's own session
     // metadata store, which merges patches after creation.
     readSessionMetadata = null,

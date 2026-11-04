@@ -866,7 +866,8 @@ export const createUiAuth = ({
     return res.json(issueUrlAuthTokenForSession(sessionToken, scope));
   };
 
-  const handleSessionCreate = async (req, res) => {
+  // Password and passkey sign-in share one attempt budget per client.
+  const admitLoginAttempt = async (req, res) => {
     const rateLimitResult = await checkRateLimit(req);
 
     res.setHeader('X-RateLimit-Limit', rateLimitResult.limit);
@@ -875,10 +876,17 @@ export const createUiAuth = ({
 
     if (!rateLimitResult.allowed) {
       res.setHeader('Retry-After', rateLimitResult.retryAfter);
-      res.status(429).json({ 
+      res.status(429).json({
         error: 'Too many login attempts, please try again later',
-        retryAfter: rateLimitResult.retryAfter 
+        retryAfter: rateLimitResult.retryAfter,
       });
+      return false;
+    }
+    return true;
+  };
+
+  const handleSessionCreate = async (req, res) => {
+    if (!(await admitLoginAttempt(req, res))) {
       return;
     }
 
@@ -958,8 +966,22 @@ export const createUiAuth = ({
   };
 
   const handlePasskeyAuthenticationVerify = async (req, res) => {
+    if (!(await admitLoginAttempt(req, res))) {
+      return;
+    }
+
+    // Only a rejected assertion counts against the attempt budget, not a
+    // failure after the passkey was accepted.
     try {
       await passkeyController.finishAuthentication(req.body);
+    } catch (error) {
+      await recordFailedAttempt(req);
+      respondPasskeyError(res, error);
+      return;
+    }
+    await clearRateLimit(req);
+
+    try {
       const trustDevice = isTrustedDeviceRequest(req.body?.trustDevice);
       const ttlMs = resolveSessionTtlMs(trustDevice);
       await issueSession(req, res, { trustDevice });
@@ -977,6 +999,7 @@ export const createUiAuth = ({
           appVersion: req.body?.appVersion,
         });
       }
+      res.setHeader('Cache-Control', 'no-store');
       res.json({
         authenticated: true,
         ...(clientTokenResult?.token ? { clientToken: clientTokenResult.token, client: clientTokenResult.client } : {}),

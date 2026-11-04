@@ -2,18 +2,18 @@
 
 ## Purpose
 
-Keeps sessions where real work is going on in one block at the top of the
-sidebar until the user marks them done. Jev moves a session in when work
-starts in it; the user alone closes it. While a session is in work, Jev also
-says after a turn whether the work looks done. Independently of work, the
+Keeps the sessions the user is working in in one block at the top of the
+sidebar until they mark them done. Sending a message puts a session in work;
+the user alone closes it. While a session is in work, Jev says after a turn
+whether the work looks done; Jev never decides what goes in. Independently of work, the
 same call says whether the turn handed over changes worth a look (the
 composer then offers an AI review or a walkthrough). The same turn-end Jev call tells session assist whether the
 Small Model is worth waking.
 
 ## Files
 
-- `questions.js` — the Jev questions (measured wording, see "Measurement"),
-  the thresholds, and the decisions taken from the answers.
+- `questions.js` — the turn-end Jev questions (measured wording, see
+  "Measurement"), the thresholds, and the decisions taken from the answers.
 - `state.js` — `metadata.openchamber.work` and the merge patches that change
   it. Every patch is decided against the record at write time.
 - `runtime.js` — `createSessionWorkRuntime`: `processCanonicalEvent` (a sent
@@ -24,7 +24,8 @@ Small Model is worth waking.
 `metadata.openchamber.work`:
 
 - `state`: `open` | `done`
-- `openedAt`, `openedBy` (`jev` | `user`)
+- `openedAt`, `openedBy` (`auto` for a sent message, `user` for Track; `jev`
+  on records from when Jev decided)
 - `doneAt` once the user closed it
 - `suggestDoneAt` while Jev thinks the last turn closed the work out
 
@@ -54,8 +55,11 @@ is the metadata authority; execution session metadata is never a fallback.
 - A hint is current while its time `>= session.time.idle` (the assist's
   freshness rule). This runtime also deletes a hint it wrote when the next
   turn starts; the rule covers hints written by another process.
-- Only top-level, unarchived project sessions that are not review sessions
-  (`openchamber.kind === 'review'`) are asked about. Managed Chats (under the
+- Only top-level, unarchived project sessions that are not review sessions,
+  `/btw` side questions or scheduled task runs (`openchamber.kind` `review` /
+  `btw` / `scheduled`) open or are asked about. A run's marker is set when
+  the scheduled-tasks runtime creates the session; a user fork drops it
+  (`fork-inheritance.js`, `sessionForkInheritance.ts`), so the fork counts. Managed Chats (under the
   `chatRoots` the server passes in) are plain conversations and never in work.
   Review eligibility reads the injected Host `readMetadata` dependency, not the
   execution session record. An unreadable Host record keeps the gate unknown.
@@ -70,6 +74,18 @@ is the metadata authority; execution session metadata is never a fallback.
   unreadable session) leaves state unchanged and returns an unknown gate, so
   session assist runs exactly as it did without Jev.
 
+## When a session opens
+
+A user message was sent (`message.updated`, role user, from the hub's
+translation of `session.inbox.enqueued`), with the feature on: a session not
+already in work and eligible opens. A message with only files or attached
+context counts too; its text is empty. So does a shell command the user ran
+from the composer (`session.shell.started`; OpenCode records it as a shell
+message and a synthetic result, never as a user message, and only the user
+starts one). Each message id is handled once; a session
+already in work reads nothing from OpenCode. No Jev: until 2026-10, Jev judged
+whether a message started work, and every session now counts instead.
+
 ## When Jev is asked
 
 - A user message was sent (canonical `message.created`, role user): only with
@@ -78,19 +94,17 @@ is the metadata authority; execution session metadata is never a fallback.
   History is the three settled turns before it (`loadSettledTurns`). Each
   message id is asked about once.
 - A turn ended: session assist calls `evaluateTurnEnd` before it arms its quiet
-  window. One call carries only the questions that apply: the open questions
-  while not in work, `wrap_up` while in work, `review_ready` while the review offer is on, `recap` / `next_step` for the assist fields
-  the user has on. No applicable question, no call.
+  window. One call carries only the questions that apply: `wrap_up` while in
+  work, `review_ready` while the review offer is on, `recap` / `next_step` for
+  the assist fields the user has on. No applicable question, no call.
 - Jev reads the request's first 1500 characters, the answer's first and last
   500, and three earlier turns cut as routing cuts them.
 
 ## Measurement
 
 156 real sessions (93 work, 50 not, 9 housekeeping, 4 neutral) set the wording;
-190 older held-out sessions, labelled before looking at answers, checked it:
-send and turn end together missed 4/92 work sessions and opened 10/78 non-work
-ones (four of them discussions of concrete changes, which count as work). The
-misses are work that starts inside a PR-review session. `wrap_up >= 0.8`
+190 older held-out sessions, labelled before looking at answers, checked it.
+`wrap_up >= 0.8`
 reads the whole turn (a commit, push, merge, sync or release the answer
 reports done closes the work); on the held-out sessions it hinted 80 times
 across 106 work sessions, 22 of them followed by more edits, and caught 53 of
@@ -115,7 +129,11 @@ the wording or thresholds without re-running this measurement.
 - `sessionReviewOfferEnabled`: the review offer, default off (Settings → Chat → Session Assistance), and inert without a classification provider.
 - `sessionWorkKeepInGroup`: a tracked session also stays under its project group and folders, default off; Recent, Timeline, and Chats still place it once.
 
-All four are read at every use.
+Work state lives on the OpenCode record, the single authority every client
+reads. A second store for sessions OpenCode refuses would have to be merged
+into every read and cleaned up when the folder returns. Archive is already
+OpenChamber's own record, works without the folder, and takes the session out
+of In work, which is what the user wanted from Done.
 
 ## Runtime parity
 
@@ -124,10 +142,10 @@ All four are read at every use.
 ## Tests
 
 `state.test.js` (patches, reopen rule, hint lifecycle), `runtime.test.js`
-(send-time open, no repeat asks, ineligible sessions, the combined turn-end
+(open on a sent message without Jev, the reopen rule, one handling per
+message, ineligible sessions, the combined turn-end
 call, the review offer with and without In work and looks done winning over
 it, a late answer after the next turn started, never closing, failure as
 unknown), plus the gate cases in
-`../session-assist/runtime.test.js`, `loadSettledTurns` in
-`../session-assist/context.test.js`, and `updateSessionMetadata` in
+`../session-assist/runtime.test.js`, and `updateSessionMetadata` in
 `../openchamber-sessions/session-metadata-store.test.js`.

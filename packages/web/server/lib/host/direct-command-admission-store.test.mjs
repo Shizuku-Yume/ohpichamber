@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import { createHostSessionState } from './session-state.js';
 import { createOpenChamberSessionService } from '../openchamber-sessions/routes.js';
 
@@ -13,14 +13,17 @@ const options = {
   variant: 'variant',
   reasoningEffort: 'high',
 };
+const sharedRepoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-command-scope-'));
+const sharedAgentDir = path.join(sharedRepoDir, '.agents');
+fs.mkdirSync(sharedAgentDir, { recursive: true });
 const scopeFor = (sessionId) => ({
   sessionId,
   rootSessionId: sessionId,
   projectId: 'project-1',
   workspaceId: 'workspace-1',
-  cwd: '/repo/app',
+  cwd: sharedRepoDir,
   agentDirectoryId: 'agent-directory-1',
-  agentDirectory: '/repo/app/.agents',
+  agentDirectory: sharedAgentDir,
   displayPath: 'app',
 });
 const promptFor = (text = 'Ship the change') => ({
@@ -44,6 +47,15 @@ const fixtures = new Set();
 const makeHarness = async ({ dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-command-admission-')), nativeHandler } = {}) => {
   const state = createHostSessionState({ dataDir });
   await state.initialize();
+  await state.agentScopeStore.ensureWorkspace({
+    hostProjectId: 'project-1',
+    projectId: 'project-1',
+    workspaceId: 'workspace-1',
+    projectDirectory: sharedRepoDir,
+    workspaceDirectory: sharedRepoDir,
+    agentDirectory: sharedAgentDir,
+    name: 'Project',
+  });
   const nativeCalls = [];
   const captures = [];
   const receipts = [];
@@ -53,6 +65,7 @@ const makeHarness = async ({ dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'op
     return followUpAck('session-a', 'follow-up-1');
   });
   const service = createOpenChamberSessionService({
+    agentScopeStore: state.agentScopeStore,
     service: {
       request: async (pathname, init = {}) => {
         const body = init.body ? JSON.parse(init.body) : undefined;
@@ -101,6 +114,9 @@ afterEach(async () => {
   for (const fixture of fixtures) await fixture.close();
   for (const fixture of fixtures) fs.rmSync(fixture.dataDir, { recursive: true, force: true });
   fixtures.clear();
+});
+afterAll(() => {
+  fs.rmSync(sharedRepoDir, { recursive: true, force: true });
 });
 
 describe('real SQLite direct command admission', () => {

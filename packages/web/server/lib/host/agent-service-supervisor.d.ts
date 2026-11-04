@@ -50,6 +50,9 @@ export interface AgentServiceSupervisor {
   stop(): Promise<void>;
   restart(): Promise<AgentServiceSupervisorState>;
   request(path: string, init?: RequestInit): Promise<Response>;
+  /** Keep a replacement generation from starting; refcounted with resumeRestarts. */
+  holdRestarts(): void;
+  resumeRestarts(): void;
   getState(): AgentServiceSupervisorState;
   getDiagnostics(): AgentServiceDiagnostic[];
 }

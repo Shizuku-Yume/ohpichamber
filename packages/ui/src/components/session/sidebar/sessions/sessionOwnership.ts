@@ -48,10 +48,10 @@ const setOwner = (owners: Map<string, DirectoryOwner>, directory: string, candid
 };
 
 export const createSessionOwnershipIndex = (
-  sessions: Session[],
-  projects: Project[],
+  sessions: readonly Session[],
+  projects: readonly Project[],
   availableWorktreesByProject: Map<string, Worktree[]>,
-  archivedSessions: Session[] = [],
+  archivedSessions: readonly Session[] = [],
   spaces: readonly SpaceMark[] = [],
 ): SessionOwnershipIndex => {
   const ownerByDirectory = new Map<string, DirectoryOwner>();
@@ -143,7 +143,7 @@ export const createSessionOwnershipIndex = (
   };
 
   const bucket = (
-    input: Session[],
+    input: readonly Session[],
     target: Map<string, Session[]>,
     scopeTarget?: Map<string, Set<string>>,
   ): void => {
@@ -154,9 +154,9 @@ export const createSessionOwnershipIndex = (
       bySessionId.set(session.sessionId, owner);
       const projectSessions = target.get(owner.projectId);
       if (projectSessions) {
-        projectSessions.push(session);
+        projectSessions.push(session as Session);
       } else {
-        target.set(owner.projectId, [session]);
+        target.set(owner.projectId, [session as Session]);
       }
       if (!scopeTarget) continue;
       const scopeSessions = scopeTarget.get(owner.scopeDirectory);
@@ -169,8 +169,9 @@ export const createSessionOwnershipIndex = (
   };
 
   bucket(sessions, sessionsByProject, sessionsByScope);
-  // The archive lists top-level sessions only: a subsession belongs to the
-  // agent run that spawned it and is restored with its parent, never alone.
+  // The sidebar's archived buckets hold top-level sessions only: a subsession
+  // belongs to the agent run that spawned it. One archived under an active
+  // parent is listed on the Archive page instead (`isRestorableOnItsOwn`).
   bucket(archivedSessions.filter((session) => !session.parentSessionId), archivedSessionsByProject);
 
   return {

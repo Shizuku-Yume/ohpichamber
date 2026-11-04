@@ -4,6 +4,7 @@ import type { Part, Session, ToolCallPart, ToolResultPart } from '@openchamber/a
 import { isQuestionTool } from '@/lib/toolHelpers';
 
 import UserTextPart from './parts/UserTextPart';
+import { sessionMentionChipsOf } from './parts/sessionMentionChips';
 import ToolPart from './parts/ToolPart';
 import AssistantTextPart from './parts/AssistantTextPart';
 import ReasoningPart from './parts/ReasoningPart';
@@ -21,7 +22,7 @@ import { ForkSessionDialog, type ForkSessionExecution } from '@/components/sessi
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ArrowsMerge } from '@/components/icons/ArrowsMerge';
 
-import { MarkdownImageGallery, SimpleMarkdownRenderer } from '../MarkdownRenderer';
+import { SimpleMarkdownRenderer } from '../MarkdownRenderer';
 import { LongErrorText } from '../LongErrorText';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useChatSessionSelection } from '../chatColumnSession';
@@ -74,7 +75,6 @@ const CONTAIN_LAYOUT_STYLE = { contain: 'layout' as const, transform: 'translate
 const MESSAGE_FOOTER_CONTAINER_STYLE = { containerType: 'inline-size' as const, containerName: 'message-footer' };
 const INLINE_MESSAGE_ACTIONS_CLASS_NAME = 'mt-2 mb-1 flex items-center justify-start gap-1.5';
 // One shared empty list, so the gallery's props stay equal across streamed chunks.
-const NO_FINALIZED_MARKDOWN: readonly string[] = [];
 
 const getDisplayFileName = (file: string): string => {
     const normalized = file.replace(/\\/g, '/');
@@ -435,6 +435,7 @@ const UserMessageBody = React.memo(({ workspaceId, messageId, parts, messageCrea
     const attachmentFilenames = React.useMemo(() => parts.flatMap((part) => (
         part.type === 'attachment' && part.name ? [part.name] : []
     )), [parts]);
+    const sessionMentionChips = React.useMemo(() => sessionMentionChipsOf(parts), [parts]);
 
     const mentionToken = agentMention?.token;
     let mentionInjected = false;
@@ -804,6 +805,7 @@ const UserMessageBody = React.memo(({ workspaceId, messageId, parts, messageCrea
                                 partIndex={index}
                                 onTruncationChange={handlePartTruncationChange}
                                 attachmentFilenames={attachmentFilenames}
+                                sessionMentionChips={sessionMentionChips}
                             />
                         </React.Fragment>
                     );
@@ -1120,7 +1122,7 @@ const AssistantMessageActionButtons = React.memo(({
                             onPointerDown={(event) => event.stopPropagation()}
                             onClick={handleTTSClick}
                         >
-                            <Icon name="volume-up" className={cn('h-3 w-3', isTTSPlaying && 'animate-pulse')} />
+                            <Icon name="volume-up" className={cn('h-3 w-3', isTTSPlaying && 'text-[var(--primary-text)]')} />
                         </Button>
                     </TooltipTrigger>
                     <TooltipContent sideOffset={6}>{readAloudTooltip}</TooltipContent>
@@ -1295,11 +1297,6 @@ const AssistantMessageBody = React.memo(({
     const assistantTextParts = React.useMemo(() => {
         return visibleParts.filter((part) => part.type === 'text');
     }, [visibleParts]);
-    const finalizedAssistantMarkdownContents = React.useMemo(() => (
-        isMessageCompleted
-            ? assistantTextParts.map(extractTextContent).filter((text) => text.trim().length > 0)
-            : NO_FINALIZED_MARKDOWN
-    ), [assistantTextParts, isMessageCompleted]);
     const assistantPlanText = React.useMemo(() => assistantTextParts
         .map((part: Part) => extractTextContent(part).trim())
         .filter((text: string) => text.length > 0)
@@ -2218,7 +2215,7 @@ const AssistantMessageBody = React.memo(({
             actions.push({
                 id: 'tts',
                 label: isFooterTTSPlaying ? t('chat.messageBody.tts.stopSpeaking') : t('chat.messageBody.tts.readAloud'),
-                icon: <Icon name="volume-up" className={cn('h-4 w-4', isFooterTTSPlaying && 'animate-pulse text-[var(--primary-text)]')} />,
+                icon: <Icon name="volume-up" className={cn('h-4 w-4', isFooterTTSPlaying && 'text-[var(--primary-text)]')} />,
                 onSelect: () => {
                     if (isFooterTTSPlaying) {
                         stopFooterTTS();
@@ -2459,12 +2456,6 @@ const AssistantMessageBody = React.memo(({
                     )}
                 </div>
                 <MessageFilesDisplay files={parts} workspaceId={workspaceId} onShowPopup={onShowPopup} />
-                <MarkdownImageGallery
-                    sessionId={sessionId}
-                    messageId={messageId}
-                    contents={finalizedAssistantMarkdownContents}
-                    onShowPopup={onShowPopup}
-                />
                 {shouldRenderStandaloneActionsAfterContent && (
                     <div className={INLINE_MESSAGE_ACTIONS_CLASS_NAME} data-message-actions="true">
                         <div className="flex items-center gap-1.5" data-message-action-group="true">

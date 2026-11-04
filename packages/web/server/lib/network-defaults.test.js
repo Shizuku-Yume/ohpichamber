@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import net from 'node:net';
+import { mkdtempSync, rmSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 import { applyConnectAttemptTimeout, CONNECT_ATTEMPT_TIMEOUT_MS } from './network-defaults.js';
@@ -7,7 +10,11 @@ import { applyConnectAttemptTimeout, CONNECT_ATTEMPT_TIMEOUT_MS } from './networ
 describe('applyConnectAttemptTimeout', () => {
   it('initializes the server entrypoint in a fresh Node process', () => {
     const serverUrl = new URL('../index.js', import.meta.url).href;
-    const result = spawnSync('node', ['--input-type=module', '--eval', `
+    // A developer's real data directory may hold a newer schema; the spawned
+    // server must not read or migrate it.
+    const dataDir = mkdtempSync(path.join(os.tmpdir(), 'openchamber-network-defaults-'));
+    try {
+      const result = spawnSync('node', ['--input-type=module', '--eval', `
       import net from 'node:net';
       import assert from 'node:assert/strict';
       const family = net.getDefaultAutoSelectFamily();
@@ -16,8 +23,11 @@ describe('applyConnectAttemptTimeout', () => {
       assert.equal(net.getDefaultAutoSelectFamilyAttemptTimeout(), 5000);
       assert.equal(net.getDefaultAutoSelectFamily(), family);
       process.exit(0);
-    `], { encoding: 'utf8', timeout: 15_000, windowsHide: true });
-    expect(result.status, result.stderr).toBe(0);
+    `], { encoding: 'utf8', timeout: 15_000, windowsHide: true, env: { ...process.env, OPENCHAMBER_DATA_DIR: dataDir } });
+      expect(result.status, result.stderr).toBe(0);
+    } finally {
+      rmSync(dataDir, { recursive: true, force: true });
+    }
   });
 
   it('raises the per-attempt connect timeout on runtimes that expose the setter', () => {

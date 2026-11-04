@@ -92,9 +92,12 @@ export const useMcpStore = create<McpStore>()(devtools((set, get) => {
         set(state => ({ byDirectory: { ...state.byDirectory, [key]: entries },
           refreshedAtKeys: { ...state.refreshedAtKeys, [key]: Date.now() }, lastErrorKeys: { ...state.lastErrorKeys, [key]: null } }));
       } catch (error) {
-        if (owner === generation) set(state => ({ lastErrorKeys: { ...state.lastErrorKeys, [key]: error instanceof Error ? error.message : String(error) } }));
-      } finally {
-        if (owner === generation) set(state => ({ loadingKeys: { ...state.loadingKeys, [key]: false } }));
+        if (owner !== generation || revision !== operationRevision) return;
+        const message = error instanceof Error ? error.message : 'Failed to load MCP status';
+        set((state) => ({
+          loadingKeys: { ...state.loadingKeys, [key]: false },
+          lastErrorKeys: { ...state.lastErrorKeys, [key]: message },
+        }));
       }
     },
     ensureFresh: async ({ maxAgeMs, ...options }) => {

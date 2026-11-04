@@ -17,7 +17,6 @@ import {
   SETTINGS_HELPER_CLASS,
   SETTINGS_NUMBER_INPUT_CLASS,
   SETTINGS_SELECT_ROW_TRIGGER_CLASS,
-  SETTINGS_SELECT_SIZE,
 } from '@/components/sections/shared/SettingsSection';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
 import {
@@ -97,7 +96,7 @@ const Group: React.FC<{
                 onValueChange={value => { onChange(setting, value); onImmediate(); }}
                 disabled={disabled}
               >
-                <SelectTrigger size={SETTINGS_SELECT_SIZE} className={SETTINGS_SELECT_ROW_TRIGGER_CLASS} aria-label={setting.label ?? setting.id}>
+                <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS} aria-label={setting.label ?? setting.id}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

@@ -12,27 +12,27 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const contextPanelSource = readFileSync(join(__dirname, '..', 'ContextPanel.tsx'), 'utf-8');
+const surfacePanesSource = readFileSync(join(__dirname, '..', 'ContextSurfacePanes.tsx'), 'utf-8');
 
 describe('context panel terminal target wiring', () => {
   test('keeps a singleton terminal tab lookup independent of the active tab', () => {
-    expect(contextPanelSource).toContain('const terminalTab = React.useMemo(');
-    expect(contextPanelSource).toContain("tabs.find((tab) => tab.mode === 'terminal')");
-    expect(contextPanelSource).not.toContain('const hasTerminalTab = React.useMemo(');
+    expect(surfacePanesSource).toContain('const terminalTab = React.useMemo(');
+    expect(surfacePanesSource).toContain("tabs.find((tab) => tab.mode === 'terminal')");
+    expect(surfacePanesSource).not.toContain('const hasTerminalTab = React.useMemo(');
   });
 
   test('passes the stored terminal targetDirectory into the mounted TerminalView', () => {
-    const renderStart = contextPanelSource.indexOf('{terminalTab ? (');
+    const renderStart = surfacePanesSource.indexOf('{terminalTab ? (');
     expect(renderStart).toBeGreaterThan(-1);
-    const renderEnd = contextPanelSource.indexOf('{hasWalkthroughTab ? (', renderStart);
+    const renderEnd = surfacePanesSource.indexOf('{walkthroughTab ? (', renderStart);
     expect(renderEnd).toBeGreaterThan(renderStart);
-    const renderBlock = contextPanelSource.slice(renderStart, renderEnd);
+    const renderBlock = surfacePanesSource.slice(renderStart, renderEnd);
 
-    expect(renderBlock).toContain("activeTab?.mode === 'terminal' ? 'block' : 'hidden'");
+    expect(renderBlock).toContain("terminalZone.activeTab?.mode === 'terminal' ? 'block' : 'hidden'");
     expect(renderBlock).toContain('<TerminalView');
-    expect(renderBlock).toContain("visible={isOpen && activeTab?.mode === 'terminal'}");
+    expect(renderBlock).toContain("visible={terminalZone.isOpen && terminalZone.activeTab?.mode === 'terminal'}");
     expect(renderBlock).toContain('directory={terminalTab.targetDirectory}');
-    expect(renderBlock).not.toContain('directory={activeTab?.targetDirectory}');
+    expect(renderBlock).not.toContain('directory={terminalZone.activeTab?.targetDirectory}');
     expect(renderBlock).not.toContain('directory={effectiveDirectory}');
   });
 });

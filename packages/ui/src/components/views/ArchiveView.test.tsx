@@ -160,3 +160,33 @@ test('an empty archive is not reported before the session list has loaded, or af
   await act(async () => { useGlobalSessionsStore.setState({ status: 'ready' }); });
   expect(emptyText()).toBe('No archived sessions');
 });
+
+test('a subsession archived while its parent stays active is listed under the parent\'s title', async () => {
+  const boss = session('ses_boss', 'Boss');
+  const archivedParent = session('ses_old', 'Old run', 5);
+  const sub = (id: string, title: string, parentSessionId: string, archivedAt: number): Session => ({
+    ...session(id, title, archivedAt), parentSessionId, rootSessionId: parentSessionId,
+  });
+  useGlobalSessionsStore.getState().applySnapshot(
+    [boss],
+    [
+      session('ses_plain', 'Plain chat', 3),
+      sub('ses_fix', 'Fix capture', 'ses_boss', 4),
+      sub('ses_review', 'Review fix', 'ses_boss', 1),
+      archivedParent,
+      sub('ses_old_child', 'Old child', 'ses_old', 5),
+    ],
+    'ready',
+  );
+  await act(async () => root.render(<I18nProvider><ArchiveView /></I18nProvider>));
+  const list = document.querySelector('.max-w-3xl');
+  if (!list) throw new Error('Archive list missing');
+  const rows = [...list.children].map((element) => (element.tagName === 'P'
+    ? `# ${element.textContent}`
+    : element.querySelector('span')?.textContent));
+  // Both subsessions of the active parent sit together under its title, at the
+  // place of the newer one; a subsession of an archived parent stays hidden.
+  expect(rows).toEqual(['Old run', '# Boss', 'Fix capture', 'Review fix', 'Plain chat']);
+  expect(document.querySelector('[aria-label="Restore Fix capture"]')).not.toBeNull();
+  expect(document.querySelector('[aria-label="Restore Old child"]')).toBeNull();
+});

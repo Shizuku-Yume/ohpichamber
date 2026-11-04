@@ -15,7 +15,7 @@
   },
   "devDependencies": {
     "@electron/rebuild": "^4.2.0",
-    "electron": "^43.7.0",
+    "electron": "^44.9.3",
     "electron-builder": "^26.0.0",
     "node-abi": "^4.33.0"
   },
@@ -64,7 +64,8 @@
       "dist-bundle/entry.mjs",
       "dist-bundle/main.mjs",
       "dist-bundle/early-startup.mjs",
-      "preload.mjs"
+      "preload.mjs",
+      "browser-panel-preload.cjs"
     ],
     "extraResources": [
       {
@@ -126,7 +127,7 @@
         "AppImage"
       ],
       "category": "Development",
-      "icon": "resources/icons/app-icon.svg",
+      "icon": "resources/icons/app-icon.png",
       "executableName": "openchamber",
       "artifactName": "${productName}-${version}-linux-${arch}.${ext}",
       "desktop": {

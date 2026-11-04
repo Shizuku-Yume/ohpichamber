@@ -27,7 +27,7 @@ describe('session prefetch demand', () => {
         enabled: true,
         currentSessionId: current.sessionId,
         sortedSessions: [current, nearby],
-        recentSessions: [current, nearby],
+        workSessions: [current, nearby],
         prefetchSession: async ({ sessionId }) => { calls.push(sessionId); },
       });
       return null;

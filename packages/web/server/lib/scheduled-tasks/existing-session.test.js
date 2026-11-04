@@ -144,3 +144,27 @@ describe('canonical existing-session scheduling', () => {
     expect(cancelWaitingPrompt).toHaveBeenCalledWith('host-project', 'task');
   });
 });
+
+describe('eligible target discovery', () => {
+  it('accepts only candidates whose session scope is this project and that directory', async () => {
+    const scopes = {
+      ses_root: { rootSessionId: 'ses_root', sessionId: 'ses_root', projectId: 'opaque-project', workspaceId: 'opaque-workspace', hostProjectId: 'host-project', cwd: '/repo' },
+      ses_wt: { rootSessionId: 'ses_wt', sessionId: 'ses_wt', projectId: 'opaque-project', workspaceId: 'opaque-worktree', hostProjectId: 'host-project', cwd: '/repo/worktrees/feature' },
+      ses_foreign: { rootSessionId: 'ses_foreign', sessionId: 'ses_foreign', projectId: 'other-project', workspaceId: 'other-workspace', hostProjectId: 'other-host', cwd: '/other' },
+    };
+    const { runtime } = setup({ resolveSessionScope: async (sessionId) => scopes[sessionId] ?? null,
+      isSessionArchived: async (sessionId) => sessionId === 'ses_archived' });
+    const eligible = await runtime.listEligibleTargets('host-project', [
+      { sessionId: 'ses_root', directory: '/repo' },
+      { sessionId: 'ses_wt', directory: '/repo/worktrees/feature' },
+      { sessionId: 'ses_foreign', directory: '/other' },
+      { sessionId: 'ses_archived', directory: '/repo' },
+      { sessionId: 'ses_root', directory: '/repo/elsewhere' },
+      { sessionId: 'ses_nodir', directory: '' },
+    ]);
+    expect(eligible).toEqual([
+      { sessionId: 'ses_root', directory: '/repo' },
+      { sessionId: 'ses_wt', directory: '/repo/worktrees/feature' },
+    ]);
+  });
+});

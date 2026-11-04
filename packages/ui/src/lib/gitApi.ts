@@ -4,16 +4,18 @@ import type { CompletionResult } from '@openchamber/agent-contract';
 import { z } from 'zod';
 import { mapWithConcurrency } from './concurrency';
 import { SmallModelCompletionError, requestSmallModel, type SmallModelRequest } from './smallModelRequest';
-import { renderMagicPrompt } from './magicPrompts';
+import { loadMagicPrompts } from './magicPrompts';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { runtimeFetch } from '@/lib/runtime-fetch';
-import { subscribeRuntimeEndpointWillChange } from './runtime-switch';
+import { getRuntimeSwitchRevision } from './runtime-switch';
 import { notifyGitStatusInvalidated } from './gitStatusInvalidation';
-import type { SourceControlProvider } from '@/lib/source-control/types';
+export type ChangeRequestProviderWords = {
+  label: string;
+  terminology: { promptNoun: string };
+  features?: { changeRequestTemplates?: string[] };
+};
 
-let generationRuntime = 0;
-subscribeRuntimeEndpointWillChange(() => { generationRuntime += 1; });
 
 export type {
   GitRemote,
@@ -71,10 +73,19 @@ export async function resolveGitPrimaryRoot(directory: string): Promise<string> 
   return result.root;
 }
 
+/** Where `directory` sits inside its repository's checkout; `''` at the root. Rejects when unknown. */
+export async function resolveGitRepositoryPrefix(directory: string): Promise<string> {
+  const runtime = getRuntimeGit();
+  if (runtime?.resolveRepositoryPrefix) return runtime.resolveRepositoryPrefix(directory);
+  return gitHttp.resolveGitRepositoryPrefix(directory);
+}
+
 export async function resolveGitTopLevel(directory: string): Promise<string> {
   const result = await gitHttp.resolveGitTopLevel(directory);
   return result.root;
 }
+
+
 
 export async function getGitCommitSummaries(
   directory: string,
@@ -157,22 +168,26 @@ const COMMIT_DIFF_TOTAL_CHAR_LIMIT = 120_000;
 // concurrency and keeps the browser connection pool able to serve the UI.
 const COMMIT_DIFF_CONCURRENCY = 2;
 
-const collectSelectedFileDiffs = async (directory: string, files: string[]): Promise<string> => {
+const collectSelectedFileDiffs = async (directory: string, files: string[], assertCurrent: () => void): Promise<string> => {
   const limited = files.slice(0, COMMIT_DIFF_FILE_LIMIT);
   const chunks = await mapWithConcurrency(limited, COMMIT_DIFF_CONCURRENCY, async (path) => {
+    assertCurrent();
     try {
       const [staged, unstaged] = await Promise.all([
         gitHttp.getGitDiff(directory, { path, staged: true }).catch(() => null),
         gitHttp.getGitDiff(directory, { path, staged: false }).catch(() => null),
       ]);
+      assertCurrent();
       const text = [staged?.diff, unstaged?.diff]
         .filter((diff): diff is string => diff !== undefined && diff.trim().length > 0)
         .join('\n');
       return text ? text : `--- ${path} (no textual diff available)`;
     } catch {
+      assertCurrent();
       return `--- ${path} (diff unavailable)`;
     }
   });
+  assertCurrent();
 
   let total = '';
   for (const chunk of chunks) {
@@ -220,7 +235,8 @@ export async function generateCommitMessage(
   options?: { providerId?: string; modelId?: string }
 ): Promise<{ message: import('./api/types').GeneratedCommitMessage }> {
   const startedAt = Date.now();
-  const runtime = generationRuntime;
+  const runtime = getRuntimeSwitchRevision();
+  const assertCurrent = () => { if (runtime !== getRuntimeSwitchRevision()) throw new DOMException('Runtime changed', 'AbortError'); };
   const { currentProviderId, currentModelId } = useConfigStore.getState();
 
   console.info('[git-generation][browser] request', {
@@ -231,15 +247,18 @@ export async function generateCommitMessage(
   });
 
   const recentCommits = await collectRecentCommitSubjects(directory);
-  const visiblePrompt = await renderMagicPrompt('git.commit.generate.visible');
-  const hiddenPrompt = await renderMagicPrompt('git.commit.generate.instructions', {
+  assertCurrent();
+  const prompts = await loadMagicPrompts(directory);
+  assertCurrent();
+  const visiblePrompt = prompts.render('git.commit.generate.visible');
+  const hiddenPrompt = prompts.render('git.commit.generate.instructions', {
     selected_files: files.map((file) => `- ${file}`).join('\n'),
     recent_commits: recentCommits,
   });
 
   try {
-    const diffs = await collectSelectedFileDiffs(directory, files);
-    if (runtime !== generationRuntime) throw new DOMException('Runtime changed', 'AbortError');
+    const diffs = await collectSelectedFileDiffs(directory, files, assertCurrent);
+    assertCurrent();
     const request: SmallModelRequest = {
       system: visiblePrompt,
       prompt: `${hiddenPrompt}\n\nDiffs of the selected files:\n${diffs}`,
@@ -312,15 +331,15 @@ const readOptionalRepoTextFile = async (directory: string, relativePath: string)
 // A repository that ships a PR template expects descriptions in its shape, so
 // the template wins over the built-in section layout. Missing template is the
 // normal case, not a failure: probing stops at the first file that has content.
-const collectPullRequestTemplate = async (directory: string, provider: SourceControlProvider | undefined): Promise<string> => {
-  // A GitLab project's own merge request template comes before any GitHub-style one it may also carry.
-  const gitlabTemplate = '.gitlab/merge_request_templates/Default.md';
-  const paths = provider === 'gitlab'
-    ? [gitlabTemplate, ...PULL_REQUEST_TEMPLATE_PATHS.filter((candidate) => candidate !== gitlabTemplate)]
-    : PULL_REQUEST_TEMPLATE_PATHS;
-  const noun = provider === 'gitlab' ? 'merge request' : 'pull request';
+const collectPullRequestTemplate = async (directory: string, provider: ChangeRequestProviderWords | undefined, assertCurrent: () => void): Promise<string> => {
+  // A provider's own templates (GitLab's merge request template) come before any GitHub-style one the project may also carry.
+  const own = provider?.features?.changeRequestTemplates ?? [];
+  const paths = [...own, ...PULL_REQUEST_TEMPLATE_PATHS.filter((candidate) => !own.includes(candidate))];
+  const noun = provider?.terminology.promptNoun ?? 'pull request';
   for (const relativePath of paths) {
+    assertCurrent();
     const content = await readOptionalRepoTextFile(directory, relativePath);
+    assertCurrent();
     const trimmed = content?.trim();
     if (!trimmed) continue;
     console.info('[git-generation][browser] pull request template detected', {
@@ -343,12 +362,15 @@ const collectPullRequestTemplate = async (directory: string, provider: SourceCon
   return '';
 };
 
+
+
 export async function generatePullRequestDescription(
   directory: string,
-  payload: { base: string; head: string; context?: string; providerId?: string; modelId?: string; changeRequestProvider?: SourceControlProvider }
+  payload: { base: string; head: string; context?: string; providerId?: string; modelId?: string; changeRequestProvider?: ChangeRequestProviderWords }
 ): Promise<import('./api/types').GeneratedPullRequestDescription> {
   const startedAt = Date.now();
-  const runtime = generationRuntime;
+  const runtime = getRuntimeSwitchRevision();
+  const assertCurrent = () => { if (runtime !== getRuntimeSwitchRevision()) throw new DOMException('Runtime changed', 'AbortError'); };
   const { currentProviderId, currentModelId } = useConfigStore.getState();
 
   const commitLog = await getGitLog(directory, {
@@ -356,6 +378,7 @@ export async function generatePullRequestDescription(
     to: payload.head,
     maxCount: 50,
   });
+  assertCurrent();
   const COMMIT_BODY_CHAR_LIMIT = 2_000;
   const commits = commitLog.all
     .filter(entry => entry.hash.length > 0)
@@ -371,20 +394,24 @@ export async function generatePullRequestDescription(
 
   const filesSet = new Set<string>();
   await Promise.all(commits.map(async (commit) => {
+    assertCurrent();
     try {
       const response = await getCommitFiles(directory, commit.hash);
+      assertCurrent();
       for (const file of response.files) {
         if (file.path.trim().length > 0) {
           filesSet.add(file.path.trim());
         }
       }
     } catch (error) {
+      assertCurrent();
       console.warn('[git-generation][browser] failed to collect commit files', {
         hash: commit.hash,
         error: error instanceof Error ? error.message : String(error),
       });
     }
   }));
+  assertCurrent();
   const changedFiles = Array.from(filesSet).sort().slice(0, 300);
 
   console.info('[git-generation][browser] request', {
@@ -397,10 +424,14 @@ export async function generatePullRequestDescription(
     changedFiles: changedFiles.length,
   });
 
-  const visiblePrompt = await renderMagicPrompt('git.pr.generate.visible', {
-    change_request: payload.changeRequestProvider === 'gitlab' ? 'GitLab merge request' : 'GitHub pull request',
+  const prompts = await loadMagicPrompts(directory);
+  assertCurrent();
+  const visiblePrompt = prompts.render('git.pr.generate.visible', {
+    change_request: payload.changeRequestProvider
+      ? `${payload.changeRequestProvider.label} ${payload.changeRequestProvider.terminology.promptNoun}`
+      : 'pull request',
   });
-  const hiddenPrompt = await renderMagicPrompt('git.pr.generate.instructions', {
+  const hiddenPrompt = prompts.render('git.pr.generate.instructions', {
     base_branch: payload.base,
     head_branch: payload.head,
     commits: commits.map((commit) => {
@@ -411,12 +442,12 @@ export async function generatePullRequestDescription(
     }).join('\n'),
     changed_files: changedFiles.length > 0 ? changedFiles.map((file) => `- ${file}`).join('\n') : '- none detected',
     additional_context_block: payload.context?.trim() ? `\n\nAdditional context:\n${payload.context.trim()}` : '',
-    pr_template_block: await collectPullRequestTemplate(directory, payload.changeRequestProvider),
+    pr_template_block: await collectPullRequestTemplate(directory, payload.changeRequestProvider, assertCurrent),
   });
 
 
   try {
-    if (runtime !== generationRuntime) throw new DOMException('Runtime changed', 'AbortError');
+    assertCurrent();
     const request: SmallModelRequest = {
       system: visiblePrompt,
       prompt: hiddenPrompt,
@@ -512,6 +543,19 @@ async function deleteGitWorktree(
   return gitHttp.deleteGitWorktree(directory, payload);
 }
 
+/** Renames the task of the worktree at `directory`; the user's name stays over the agent's. */
+export async function setGitWorktreeTitle(
+  directory: string,
+  title: string,
+): Promise<import('./api/types').GitWorktreeTitleResult> {
+  const runtime = getRuntimeGit();
+  if (runtime?.worktree?.setTitle) {
+    return runtime.worktree.setTitle(directory, title);
+  }
+  if (runtime) throw new Error('Renaming a worktree task is not available here');
+  return gitHttp.setGitWorktreeTitle(directory, title);
+}
+
 export async function snapshotGitWorktree(
   directory: string,
   payload: import('./api/types').GitWorktreeSnapshotPayload
@@ -523,6 +567,30 @@ export async function snapshotGitWorktree(
   return gitHttp.snapshotGitWorktree(directory, payload);
 }
 
+/**
+ * Worktree archives exist where the runtime's git offers them: web and the
+ * desktop app, through the server. VS Code keeps its own list without them.
+ */
+export const canArchiveWorktrees = (): boolean => {
+  const runtime = getRuntimeGit();
+  return runtime ? Boolean(runtime.worktree?.archive && runtime.worktree.listArchives && runtime.worktree.restoreArchive && runtime.worktree.deleteArchive) : true;
+};
+
+const runtimeWorktreeArchives = () => {
+  const runtime = getRuntimeGit();
+  if (!runtime) {
+    return {
+      archive: gitHttp.archiveGitWorktree,
+      listArchives: gitHttp.listGitWorktreeArchives,
+      restoreArchive: gitHttp.restoreGitWorktreeArchive,
+      deleteArchive: gitHttp.deleteGitWorktreeArchive,
+    };
+  }
+  const { archive, listArchives, restoreArchive, deleteArchive } = runtime.worktree ?? {};
+  if (!archive || !listArchives || !restoreArchive || !deleteArchive) throw new Error('Worktree archives are not available here');
+  return { archive, listArchives, restoreArchive, deleteArchive };
+};
+
 export const git = {
   worktree: {
     list: listGitWorktrees,
@@ -530,6 +598,10 @@ export const git = {
     create: createGitWorktree,
     remove: deleteGitWorktree,
     snapshot: snapshotGitWorktree,
+    archive: (directory: string, payload: import('./api/types').ArchiveGitWorktreePayload) => runtimeWorktreeArchives().archive(directory, payload),
+    listArchives: (directory: string) => runtimeWorktreeArchives().listArchives(directory),
+    restoreArchive: (directory: string, id: string, recovery?: { mode: 'new_checkout' | 'same_target'; revision: number }) => runtimeWorktreeArchives().restoreArchive(directory, id, recovery),
+    deleteArchive: (directory: string, payload: import('./api/types').DeleteGitWorktreeArchivePayload) => runtimeWorktreeArchives().deleteArchive(directory, payload),
   },
 };
 
@@ -701,6 +773,35 @@ export async function resetToCommit(
   const runtime = getRuntimeGit();
   if (runtime) return runtimeStatusMutation(directory, runtime.resetToCommit(directory, hash, mode, force));
   return gitHttp.resetToCommit(directory, hash, mode, force);
+}
+
+/**
+ * Adds the host-computed Change-Id trailer to HEAD, after checking the tip is
+ * still `expectedHead`. The HTTP adapter clears its own cache; a runtime's
+ * rewrite is announced here, so callers never hold a status of the old tip.
+ */
+export async function addChangeIdToHead(
+  directory: string,
+  expectedHead: string
+): Promise<{ sha: string; changeId: string }> {
+  const runtime = getRuntimeGit();
+  if (runtime?.addChangeIdToHead) return runtimeStatusMutation(directory, runtime.addChangeIdToHead(directory, expectedHead));
+  return gitHttp.addChangeIdToHead(directory, expectedHead);
+}
+
+/**
+ * Whether `directory` exists inside the checkout at `worktreeRoot` once both
+ * are canonicalized, so a symlink out of the checkout reports `insideWorktreeRoot: false`.
+ */
+export async function validateWorktreeDirectory(directory: string, worktreeRoot: string): Promise<{
+  valid: boolean;
+  insideWorktreeRoot: boolean;
+  resolvedWorktreeRoot: string | null;
+  resolvedCwd: string | null;
+}> {
+  const runtime = getRuntimeGit();
+  if (runtime?.validateWorktreeDirectory) return runtime.validateWorktreeDirectory(directory, worktreeRoot);
+  return gitHttp.validateWorktreeDirectory(directory, worktreeRoot);
 }
 
 export async function getConflictDetails(directory: string): Promise<import('./api/types').MergeConflictDetails> {

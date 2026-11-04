@@ -12,7 +12,12 @@ export const TurnSchema = z.strictObject({
 export type Turn = z.infer<typeof TurnSchema>;
 export const ToolStatusSchema = z.enum(['pending_approval', 'approved', 'running', 'completed', 'failed', 'denied', 'cancelled']);
 export type ToolStatus = z.infer<typeof ToolStatusSchema>;
-export const TextPartSchema = z.strictObject({ type: z.literal('text'), partId: EntityIdSchema, content: z.string() });
+export const SessionMentionSchema = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('session'), sessionId: EntityIdSchema, title: z.string(), messageId: EntityIdSchema.optional() }),
+  z.strictObject({ kind: z.literal('session-message'), sessionId: EntityIdSchema, messageId: EntityIdSchema, sessionTitle: z.string(), excerpt: z.string() }),
+]);
+export type SessionMention = z.infer<typeof SessionMentionSchema>;
+export const TextPartSchema = z.strictObject({ type: z.literal('text'), partId: EntityIdSchema, content: z.string(), sessionMentions: z.array(SessionMentionSchema).optional() });
 export type TextPart = z.infer<typeof TextPartSchema>;
 export const ReasoningPartSchema = z.strictObject({
   type: z.literal('reasoning'), partId: EntityIdSchema, content: z.string(), signature: z.string().optional(),

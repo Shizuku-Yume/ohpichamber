@@ -59,8 +59,10 @@ export function useIpadSidebarResize(
 
   const handlePointerMove = React.useCallback((event: React.PointerEvent) => {
     if (pointerIdRef.current !== event.pointerId) return;
-    const delta = event.clientX - startXRef.current;
-    const next = clampWidth(startWidthRef.current + (side === 'left' ? delta : -delta));
+    // `side` is the panel's place in the layout; RTL mirrors it once task 20's
+    // direction helper lands, and until then every layout is LTR.
+    const sign = side === 'left' ? 1 : -1;
+    const next = clampWidth(startWidthRef.current + (event.clientX - startXRef.current) * sign);
     if (liveWidthRef.current === next) return;
     liveWidthRef.current = next;
     applyLiveWidth(next);

@@ -1,12 +1,9 @@
-import { ensureChatsRootDirectory } from '@/lib/chatDirectories';
+import { ensureChatsRootDirectory, resetChatRootsCacheForTest } from '@/lib/chatDirectories';
 import { hostFilesystem } from '@/lib/host-filesystem';
-import { registerWorkspaceDirectory, resetWorkspaceDirectories } from '@/stores/globalSessions';
-import { describe, expect, test } from 'bun:test';
+
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import type { Session } from '@openchamber/agent-contract';
-import React, { act } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
-import { deriveRecentSessions } from '../recent/activitySections';
-import { applyGlobalSessionStatusEvent, replaceGlobalSessionStatusById } from '@/sync/global-session-status';
+import { registerWorkspaceDirectory } from '@/stores/globalSessions';
 import {
   buildActiveSessionNode,
   buildSidebarSessionProjection,
@@ -14,86 +11,129 @@ import {
   partitionSidebarSessions,
   projectSidebarActiveSessions,
   projectSidebarCollection,
-  useRecentSessionCollection,
 } from './sessionCollection';
 
-const installMinimalDom = () => {
-  const descriptors = new Map<string, PropertyDescriptor | undefined>();
-  const setGlobal = (name: string, value: unknown) => {
-    descriptors.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
-    Object.defineProperty(globalThis, name, { configurable: true, writable: true, value });
-  };
-  class ElementStub {}
-  const documentStub: Record<string, unknown> = {
-    nodeType: 9, defaultView: globalThis, activeElement: null,
-    addEventListener: () => undefined, removeEventListener: () => undefined,
-  };
-  const container = {
-    nodeType: 1, tagName: 'DIV', nodeName: 'DIV', namespaceURI: 'http://www.w3.org/1999/xhtml', ownerDocument: documentStub,
-    addEventListener: () => undefined, removeEventListener: () => undefined,
-  };
-  documentStub.documentElement = container;
-  documentStub.body = container;
-  setGlobal('document', documentStub);
-  setGlobal('window', globalThis);
-  setGlobal('Element', ElementStub);
-  setGlobal('HTMLElement', ElementStub);
-  setGlobal('HTMLIFrameElement', ElementStub);
-  setGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+let originalHomeInfo: typeof hostFilesystem.getFilesystemHomeInfo;
+beforeAll(async () => {
+  originalHomeInfo = hostFilesystem.getFilesystemHomeInfo;
+  hostFilesystem.getFilesystemHomeInfo = async () => ({
+    home: '/home',
+    chatsRoot: '/home/.config/openchamber/chats',
+    canonicalChatsRoot: '/HOME/.config/openchamber/chats',
+    canonicalLegacyChatsRoot: '/HOME/.config/openchamber/chats',
+  });
+  await ensureChatsRootDirectory();
+});
+afterAll(() => {
+  hostFilesystem.getFilesystemHomeInfo = originalHomeInfo;
+  resetChatRootsCacheForTest();
+});
+const session = (sessionId: string, directory: string | null): Session => {
+  const workspaceId = directory ? `ws_${sessionId}_${directory}` : sessionId;
+  if (directory) registerWorkspaceDirectory(workspaceId, directory);
   return {
-    container: container as unknown as Element,
-    restore: () => {
-      for (const [name, descriptor] of descriptors) {
-        if (descriptor) Object.defineProperty(globalThis, name, descriptor);
-        else Reflect.deleteProperty(globalThis, name);
-      }
-    },
+    sessionId,
+    projectId: 'project_1',
+    workspaceId,
+    displayPath: directory ?? '.',
+    rootSessionId: sessionId,
+    createdAt: 1,
+    updatedAt: 1,
+    epoch: '1',
+    headSequence: '0',
+    runtimeStatus: 'idle',
+    activeRunId: null,
+    mode: { kind: 'main' },
+    metadata: null,
+    metadataRevision: '0',
+    archiveRevision: '0',
   };
 };
 
-const session = (sessionId: string, displayPath: string | null): Session => {
-  const workspaceId = `workspace:${displayPath ?? sessionId}`;
-  if (displayPath) registerWorkspaceDirectory(workspaceId, displayPath);
-  return {
-    sessionId, projectId: 'project', workspaceId, displayPath: displayPath ?? '.', rootSessionId: sessionId,
-    createdAt: 1, updatedAt: 1, epoch: 'epoch_1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
-    title: sessionId, metadata: {}, metadataRevision: '1', archiveRevision: '0',
-  };
-};
-
-resetWorkspaceDirectories();
 
 describe('projectSidebarActiveSessions', () => {
+  test('keeps case-insensitive membership local to projection without rewriting request paths', () => {
+    const knownDirectories = new Set(['/Users/Developer/Project']);
+    const input = {
+      globalActiveSessions: [session('known', '/users/developer/project'), session('unknown', '/other')],
+      liveSessions: [],
+      knownDirectories,
+      isVSCode: true,
+    };
+    expect(projectSidebarActiveSessions(input).map((entry) => entry.sessionId)).toEqual(['known']);
+    expect(buildSidebarSessionProjection({
+      ...input,
+      pinnedSessionIds: new Set(),
+      sessionOrderRanks: new Map(),
+    }).projectSessions.map((entry) => entry.sessionId)).toEqual(['known']);
+    expect([...knownDirectories]).toEqual(['/Users/Developer/Project']);
+  });
+
   test('keeps global precedence and order, then appends missing live sessions', () => {
     const global = [session('global-b', '/workspace/b'), session('global-a', '/workspace/a')];
     const live = [session('global-a', '/workspace/a'), session('live-c', '/workspace/c')];
 
-    const projected = projectSidebarActiveSessions({
+    expect(projectSidebarActiveSessions({
       globalActiveSessions: global,
       liveSessions: live,
-    });
-    expect(projected.map((entry) => entry.sessionId)).toEqual(['global-b', 'global-a', 'live-c']);
-    expect(projected[1]).toBe(global[1]);
+      knownDirectories: new Set(['/workspace/a', '/workspace/b', '/workspace/c']),
+      isVSCode: false,
+    }).map((entry) => entry.sessionId)).toEqual(['global-b', 'global-a', 'live-c']);
   });
 
-  test('retains global records with missing or unknown directories', () => {
+  test('filters unknown VS Code directories', () => {
+    const sessions = [session('known', '/workspace/known'), session('unknown', '/workspace/unknown')];
+
+    expect(projectSidebarActiveSessions({
+      globalActiveSessions: sessions,
+      liveSessions: [],
+      knownDirectories: new Set(['/workspace/known']),
+      isVSCode: true,
+    }).map((entry) => entry.sessionId)).toEqual(['known']);
+  });
+
+  test('allows missing or unknown directories for web when no directories are known', () => {
     const sessions = [session('unknown', '/workspace/unknown'), session('empty', null)];
 
     expect(projectSidebarActiveSessions({
       globalActiveSessions: sessions,
       liveSessions: [],
+      knownDirectories: new Set(),
+      isVSCode: false,
     }).map((entry) => entry.sessionId)).toEqual(['unknown', 'empty']);
   });
 
-  test('retains active global records from deleted worktrees', () => {
-    const restored = { ...session('restored', '/deleted/worktrees/feature'), updatedAt: 1 };
+  test('retains unknown active full-app records when topology directories are known', () => {
+    const restored = { ...session('restored', '/deleted/worktrees/feature'), time: { created: 1, updated: 1 } };
 
     expect(projectSidebarActiveSessions({
       globalActiveSessions: [restored],
       liveSessions: [],
+      knownDirectories: new Set(['/workspace/known']),
+      isVSCode: false,
     }).map((entry) => entry.sessionId)).toEqual(['restored']);
   });
 
+  test('keeps archived sessions despite directory filtering', () => {
+    const archived = session('archived', '/workspace/unknown');
+    archived.archivedAt = 1;
+
+    expect(projectSidebarActiveSessions({
+      globalActiveSessions: [archived],
+      liveSessions: [],
+      knownDirectories: new Set(['/workspace/known']),
+      isVSCode: true,
+    }).map((entry) => entry.sessionId)).toEqual(['archived']);
+  });
+
+  test('does not replace a filtered global record with a live duplicate', () => {
+    expect(projectSidebarActiveSessions({
+      globalActiveSessions: [session('same', '/workspace/unknown')],
+      liveSessions: [session('same', '/workspace/known')],
+      knownDirectories: new Set(['/workspace/known']),
+      isVSCode: true,
+    })).toEqual([]);
+  });
 });
 
 describe('projectSidebarCollection', () => {
@@ -102,6 +142,8 @@ describe('projectSidebarCollection', () => {
     const input = {
       globalActiveSessions,
       liveSessions: [],
+      knownDirectories: new Set(['/workspace/a', '/workspace/b']),
+      isVSCode: false,
     };
 
     const beforeSelection = projectSidebarCollection(input);
@@ -114,6 +156,8 @@ describe('projectSidebarCollection', () => {
     const input = {
       globalActiveSessions: [session('a', '/workspace/a')],
       liveSessions: [],
+      knownDirectories: new Set(['/workspace/a']),
+      isVSCode: false,
     };
 
     const before = projectSidebarCollection(input);
@@ -126,33 +170,30 @@ describe('projectSidebarCollection', () => {
     expect(after.map((entry) => entry.sessionId)).toEqual(['a', 'b']);
   });
 
-  test('keeps project membership independent from Recent active membership', () => {
-    const input = {
-      globalActiveSessions: [session('old-root', '/workspace/a')],
-      liveSessions: [],
-    };
-    const projectBefore = projectSidebarCollection(input);
-    const recentBefore = deriveRecentSessions(projectBefore, new Set(), 200_000_000);
-    const projectAfter = projectSidebarCollection(input);
-    const recentAfter = deriveRecentSessions(projectAfter, new Set(['old-root']), 200_000_000);
-
-    expect(projectAfter).toEqual(projectBefore);
-    expect(recentBefore).toEqual([]);
-    expect(recentAfter.map((entry) => entry.sessionId)).toEqual(['old-root']);
-  });
-
-  test('keeps managed Chats in a dedicated projection and out of project and Recent ownership', () => {
+  test('keeps managed Chats in a dedicated projection and out of project ownership', () => {
     const managed = session('managed', '/home/.config/openchamber/chats/2026-08-24/session-managed');
     const project = session('project', '/workspace/a');
     const projects = projectSidebarCollection({
       globalActiveSessions: [managed, project],
       liveSessions: [],
+      knownDirectories: new Set(['/workspace/a']),
+      isVSCode: false,
     });
 
     expect(projects.map((entry) => entry.sessionId)).toEqual(['project']);
-    expect(partitionSidebarSessions([managed, project]).chatSessions.map((entry) => entry.sessionId)).toEqual(['managed']);
-    expect(deriveRecentSessions(projects, new Set(['managed', 'project']), 200_000_000)
-      .map((entry) => entry.sessionId)).toEqual(['project']);
+    expect(partitionSidebarSessions([managed, project], false).chatSessions.map((entry) => entry.sessionId)).toEqual(['managed']);
+  });
+
+  test('keeps managed Chats out of the VS Code sidebar', () => {
+    const managed = session('managed', '/home/.config/openchamber/chats/2026-08-24/session-managed');
+
+    expect(partitionSidebarSessions([managed], true)).toEqual({ projectSessions: [], chatSessions: [] });
+    expect(projectSidebarCollection({
+      globalActiveSessions: [managed],
+      liveSessions: [],
+      knownDirectories: new Set(),
+      isVSCode: true,
+    })).toEqual([]);
   });
 
   test('keeps a canonical managed chat visible when the server root uses different home casing', () => {
@@ -160,6 +201,7 @@ describe('projectSidebarCollection', () => {
     const project = session('project', '/workspace/a');
     const projection = buildSidebarSessionProjection({
       globalActiveSessions: [managed, project], liveSessions: [],
+      knownDirectories: new Set(['/workspace/a']), isVSCode: false,
       pinnedSessionIds: new Set(), sessionOrderRanks: new Map(),
     });
     expect(projection.chatSessions.map(entry => entry.sessionId)).toEqual(['canonical-chat']);
@@ -169,16 +211,19 @@ describe('projectSidebarCollection', () => {
 
 
   test('keeps a ranked managed root and its active child in the Chats hierarchy', () => {
-    const managedRoot = { ...session('managed-root', '/home/.config/openchamber/chats/2026-08-24/session-root'), createdAt: 1, updatedAt: 1 };
+    const managedRoot = { ...session('managed-root', '/home/.config/openchamber/chats/2026-08-24/session-root'), time: { created: 1, updated: 1 } };
     const managedChild = {
       ...session('managed-child', '/home/.config/openchamber/chats/2026-08-24/session-root'),
-      parentSessionId: 'managed-root', createdAt: 2, updatedAt: 2,
+      parentSessionId: 'managed-root',
+      time: { created: 2, updated: 2 },
     };
-    const projectRoot = { ...session('project-root', '/workspace/a'), createdAt: 3, updatedAt: 3 };
+    const projectRoot = { ...session('project-root', '/workspace/a'), time: { created: 3, updated: 3 } };
 
     const projection = buildSidebarSessionProjection({
       globalActiveSessions: [projectRoot, managedRoot, managedChild],
       liveSessions: [],
+      knownDirectories: new Set(['/workspace/a']),
+      isVSCode: false,
       pinnedSessionIds: new Set(),
       sessionOrderRanks: new Map([['managed-root', 10]]),
     });
@@ -187,65 +232,6 @@ describe('projectSidebarCollection', () => {
     expect(projection.chatSessions.map((entry) => entry.sessionId)).toEqual(['managed-root', 'managed-child']);
     expect(projection.orderedSessions.map((entry) => entry.sessionId)).toEqual(['managed-root', 'managed-child', 'project-root']);
     expect(projection.childrenMap.get('managed-root')?.map((entry) => entry.sessionId)).toEqual(['managed-child']);
-  });
-
-});
-
-describe('useRecentSessionCollection', () => {
-  test('updates mounted Recent membership when global active status changes', async () => {
-    const dom = installMinimalDom();
-    const root: Root = createRoot(dom.container);
-    const oldSession = { ...session('old-root', '/workspace/a'), createdAt: 1, updatedAt: 1 };
-    let renderedIds: string[] = [];
-    let renderCount = 0;
-    let updatedReadCount = 0;
-    Object.defineProperty(oldSession, 'updatedAt', {
-      get: () => {
-        updatedReadCount += 1;
-        return 1;
-      },
-    });
-    updatedReadCount = 0;
-    const Harness = () => {
-      renderCount += 1;
-      const recent = useRecentSessionCollection({
-        enabled: true,
-        pinnedSessionIds: new Set(),
-        sessionOrderRanks: new Map(),
-        sessions: [oldSession],
-      });
-      renderedIds = recent.map((entry) => entry.sessionId);
-      return null;
-    };
-
-    try {
-      replaceGlobalSessionStatusById(new Map());
-      await act(async () => root.render(React.createElement(Harness)));
-      expect(renderedIds).toEqual([]);
-
-      await act(async () => {
-        applyGlobalSessionStatusEvent('/workspace/a', {
-          type: 'session.status', sessionId: 'old-root', epoch: 'epoch_1', sequence: '1', timestamp: 1,
-          runtimeStatus: 'running', activeRunId: 'run_1',
-        });
-      });
-      expect(renderedIds).toEqual(['old-root']);
-      const activeRenderCount = renderCount;
-      const activeDeriveOperationCount = updatedReadCount;
-
-      await act(async () => {
-        applyGlobalSessionStatusEvent('/other-workspace', {
-          type: 'session.status', sessionId: 'old-root', epoch: 'epoch_1', sequence: '2', timestamp: 2,
-          runtimeStatus: 'awaiting_input', activeRunId: 'run_1',
-        });
-      });
-      expect(renderCount).toBe(activeRenderCount);
-      expect(updatedReadCount).toBe(activeDeriveOperationCount);
-    } finally {
-      await act(async () => root.unmount());
-      replaceGlobalSessionStatusById(new Map());
-      dom.restore();
-    }
   });
 
 });
@@ -280,7 +266,7 @@ describe('getDescendantIds', () => {
 });
 
 describe('buildActiveSessionNode', () => {
-  const archived = (sessionId: string): Session => ({ ...session(sessionId, '/workspace'), archivedAt: 2 });
+  const archived = (id: string): Session => ({ ...session(id, '/workspace'), archivedAt: 2 });
 
   test('nests every active descendant so archive reaches grandchildren', () => {
     const child = session('child', '/workspace');
@@ -327,12 +313,3 @@ describe('buildActiveSessionNode', () => {
     expect(node.children[0]?.children).toEqual([]);
   });
 });
-
-const originalHomeInfo = hostFilesystem.getFilesystemHomeInfo;
-hostFilesystem.getFilesystemHomeInfo = async () => ({
-  home: '/home',
-  canonicalChatsRoot: '/HOME/.config/openchamber/chats',
-  canonicalLegacyChatsRoot: '/HOME/.config/openchamber/chats',
-});
-await ensureChatsRootDirectory();
-hostFilesystem.getFilesystemHomeInfo = originalHomeInfo;

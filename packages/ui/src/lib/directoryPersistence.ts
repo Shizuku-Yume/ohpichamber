@@ -1,3 +1,5 @@
+import { hostFilesystem } from '@/lib/host-filesystem';
+import { getRuntimeKey } from '@/lib/runtime-switch';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 
 export const applyPersistedDirectoryPreferences = async (): Promise<void> => {
@@ -21,6 +23,21 @@ export const applyPersistedDirectoryPreferences = async (): Promise<void> => {
   // (initializeHomeDirectory → /api/fs/home) that runs on every startup.
 
   if (savedDirectory) {
+    const runtimeKey = getRuntimeKey();
+    const currentDirectory = useDirectoryStore.getState().currentDirectory;
+    const availability = await hostFilesystem.getDirectoryAvailability(savedDirectory);
+    // A saved path is only a startup hint. A probe must not undo a newer
+    // navigation, settings snapshot, or host switch while it was in flight.
+    if (getRuntimeKey() !== runtimeKey
+      || useDirectoryStore.getState().currentDirectory !== currentDirectory
+      || window.localStorage.getItem('lastDirectory') !== savedDirectory) return;
+
+    if (availability === 'missing') {
+      await useDirectoryStore.getState().goToNoProjectDirectory();
+      return;
+    }
+    // Authentication and transport failures are unknown, so keep the saved
+    // choice until the host can confirm that the directory is gone.
     useDirectoryStore.getState().setDirectory(savedDirectory, { showOverlay: false });
   }
 };

@@ -7,12 +7,12 @@ All primitives/constants come from
 
 ## Standard Sizes And Widths
 
-Use the shared control size and class constants; their current dropdown footprint
-is `h-8` in `components/ui/dropdown-trigger.ts`:
+Use the shared control class constants; every desktop dropdown footprint is
+`h-7` in `components/ui/dropdown-trigger.ts`:
 
-- `SelectTrigger`: `size={SETTINGS_SELECT_SIZE}`.
+- `SelectTrigger`: no size prop — its chrome comes from `dropdownTriggerVariants()`.
 - Custom dropdown triggers (ModelSelector / AgentSelector): `SETTINGS_CUSTOM_TRIGGER_CLASS`.
-- Text `Input` next to dropdowns: `h-8 rounded-md px-3` (match the trigger footprint).
+- Text `Input` next to dropdowns: `size="compact"` (h-7), matching the trigger footprint.
 - Icon action next to a control: `SETTINGS_ICON_BUTTON_CLASS`.
 
 Widths are capped — never let controls span the pane:
@@ -31,7 +31,7 @@ Widths are capped — never let controls span the pane:
   settingsItem="page.some-setting"
 >
   <Select …>
-    <SelectTrigger size={SETTINGS_SELECT_SIZE} className={SETTINGS_SELECT_ROW_TRIGGER_CLASS} aria-label={t('...aria')}>…
+    <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS} aria-label={t('...aria')}>…
 ```
 
 Use `SettingsStackedField` (label above control) inside `SettingsTwoColumn`

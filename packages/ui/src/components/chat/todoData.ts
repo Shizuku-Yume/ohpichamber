@@ -1,4 +1,4 @@
-export type TodoStatus = 'pending' | 'in_progress' | 'completed' | 'abandoned' | 'blocked';
+type TodoStatus = 'pending' | 'in_progress' | 'completed' | 'abandoned' | 'blocked';
 export interface TodoItem { content: string; status: TodoStatus; blocker?: string }
 export interface TodoPhase { name: string; tasks: TodoItem[] }
 

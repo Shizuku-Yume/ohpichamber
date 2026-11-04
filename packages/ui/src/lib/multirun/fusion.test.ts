@@ -8,7 +8,6 @@ import { fusionModeFor, NoFusionOutputsError, shouldInlineDiffs, startRunFusion 
 import * as laneData from './laneData';
 import * as creation from './createSession';
 import * as observation from './observation';
-import * as prompts from '@/lib/magicPrompts';
 import * as actions from '@/sync/session-actions';
 import { registerWorkspaceDirectory } from '@/stores/globalSessions';
 import { switchRuntimeEndpoint } from '@/lib/runtime-switch';
@@ -108,7 +107,6 @@ describe('fusion native primary delivery', () => {
     spies.push(spyOn(laneData, 'loadLaneLastReply').mockResolvedValue('Source reply /literal'));
     spies.push(spyOn(laneData, 'loadLaneFirstPrompt').mockResolvedValue({ messageId: 'user', turnId: 'turn', text: '/original task', files: [] }));
     const text = mode === 'plain' ? 'Fuse the answers\n#literal' : '/fusion "two words"\n trailing  ';
-    spies.push(spyOn(prompts, 'renderMagicPrompt').mockImplementation(async (key) => key === 'session.fusion.visible' ? text : 'Generated instructions /literal'));
     const fusion = { ...sessionFixture('fusion'), metadata: null };
     spies.push(spyOn(creation, 'createMultiRunSession').mockResolvedValue(fusion));
     spies.push(spyOn(observation, 'observeLaneSession').mockResolvedValue(undefined));
@@ -116,8 +114,16 @@ describe('fusion native primary delivery', () => {
     const send = spyOn(actions, 'sendMessage').mockResolvedValue(null);
     spies.push(send);
     const requests: Request[] = [];
+    const promptReads: string[] = [];
     spies.push(spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
       const request = new Request(new URL(url instanceof Request ? url.url : String(url), 'http://test'), init);
+      if (new URL(request.url).pathname === '/api/magic-prompts') {
+        const directory = new URL(request.url).searchParams.get('sessionDirectory');
+        promptReads.push(directory ?? 'global');
+        return Response.json({ version: 1, overrides: directory === '/repo'
+          ? { 'session.fusion.visible': text, 'session.fusion.instructions': 'Generated instructions /literal' }
+          : { 'session.fusion.visible': 'Global fusion', 'session.fusion.instructions': 'Global instructions' } });
+      }
       // The runtime endpoint switch fires a swallowed auth-token mint on the
       // same global fetch; only the expansion call is this test's subject.
       if (new URL(request.url).pathname !== '/api/agent/v1/workspaces/workspace/commands/expand-text') return Response.json({});
@@ -134,12 +140,14 @@ describe('fusion native primary delivery', () => {
       return;
     }
     expect(await result).toMatchObject({ sessionId: 'fusion', directory: '/repo', mode: 'answers' });
+    expect(promptReads).toEqual(['/repo']);
     expect(requests).toHaveLength(mode === 'plain' ? 0 : 1);
     const matched = mode === 'command' || mode === 'template';
     const request = send.mock.calls[0][0].request;
     expect(request.options).toEqual({ providerId: matched ? 'bound' : 'judge', modelId: matched ? 'bound-model' : 'model', agentId: null, variant: 'high', reasoningEffort: null });
     expect(request.input.text).toBe(matched ? '/expanded once' : text);
     expect(request.input.context.some(part => part.text.includes('/original task'))).toBe(true);
+    expect(request.input.context.some(part => part.text === 'Generated instructions /literal')).toBe(true);
     expect(request.input.context.some(part => part.text.includes('Source reply /literal'))).toBe(true);
   });
 });

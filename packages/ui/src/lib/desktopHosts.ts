@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { hasDesktopInvoke, invokeDesktop } from '@/lib/desktop';
-import { createRelayTunnelClient } from '@/lib/relay/tunnel-client';
+import { createRelayTunnelClient, isRelayLimitReached } from '@/lib/relay/tunnel-client';
 import { parsePairingConnectionPayload, type PairingEndpointCandidate } from '@/lib/connectionPayload';
 
 type DesktopInvoke = (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
@@ -52,6 +52,8 @@ export type DesktopHost = {
   requestHeaders?: Record<string, string>;
   /** When set, this host is reached over the private relay tunnel. */
   relay?: DesktopHostRelay;
+  /** The native SSH manager currently forwards this host's API. Not stored. */
+  sshForwarded?: boolean;
 };
 
 /** Display-only pseudo-URL for a relay host (never fetched). */
@@ -202,7 +204,9 @@ export const importDesktopHostPairing = async (
 };
 
 export type HostProbeResult = {
-  status: 'ok' | 'auth' | 'update-recommended' | 'incompatible' | 'wrong-service' | 'unreachable';
+  /** 'relay-limit' comes only from relay probes: the relay refused the tunnel
+   * over its limits (too many devices at once, too many connects a minute). */
+  status: 'ok' | 'auth' | 'update-recommended' | 'incompatible' | 'wrong-service' | 'unreachable' | 'relay-limit';
   latencyMs: number;
 };
 
@@ -328,7 +332,7 @@ const parseHost = (value: unknown): DesktopHost | null => {
   const requestHeaders = sanitizeRequestHeaders(value.requestHeaders);
   const relay = parseHostRelay(value.relay);
   if (!id || !label || !url) return null;
-  return {
+  const host: DesktopHost = {
     id,
     label,
     url,
@@ -337,6 +341,8 @@ const parseHost = (value: unknown): DesktopHost | null => {
     ...(requestHeaders ? { requestHeaders } : {}),
     ...(relay ? { relay } : {}),
   };
+  if (value.sshForwarded === true) host.sshForwarded = true;
+  return host;
 };
 
 export const getDesktopHostApiUrl = (host: DesktopHost): string => {
@@ -397,6 +403,18 @@ export const desktopLocalClientTokenGet = async (): Promise<string> => {
   if (!invoke) return '';
   const raw = await invoke('desktop_local_client_token_get').catch(() => null);
   return typeof raw === 'string' ? raw.trim() : '';
+};
+
+/**
+ * Asks the desktop shell to load the Local UI into this window. True when it
+ * does, which happens when the page belongs to another instance and cannot
+ * switch to Local in place. False on the app's own pages and from a shell
+ * without the command.
+ */
+export const desktopSwitchToLocal = async (): Promise<boolean> => {
+  const invoke = getInvoke();
+  if (!invoke) return false;
+  return (await invoke('desktop_switch_to_local').catch(() => false)) === true;
 };
 
 /**
@@ -511,7 +529,7 @@ export const probeRelayDesktopHost = async (
     keep = options?.keepTunnel === true;
     return { status: 'ok', latencyMs: Math.max(0, Date.now() - startedAt), ...(keep ? { tunnel } : {}) };
   } catch {
-    return { status: 'unreachable', latencyMs: 0 };
+    return { status: isRelayLimitReached(tunnel.getStatus()) ? 'relay-limit' : 'unreachable', latencyMs: 0 };
   } finally {
     if (!keep) tunnel.close();
   }

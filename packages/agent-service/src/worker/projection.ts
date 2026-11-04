@@ -5,13 +5,20 @@ import { z } from 'zod';
 import type { AgentSessionEvent } from '@oh-my-pi/pi-coding-agent/session/agent-session-events';
 import type { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import type { SessionEntry } from '@oh-my-pi/pi-coding-agent/session/session-entries';
-import { CounterSchema, EntityIdSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, PromptAttachmentSchema, TokenUsageSchema } from '@openchamber/agent-contract';
-import type { HistoryPage, HistoryPageRequest, JsonObject, JsonValue, Message, Part, PromptAttachment, Run, RunOrigin, SessionMode, TokenUsage, Turn } from '@openchamber/agent-contract';
+import { CounterSchema, EntityIdSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, PromptAttachmentSchema, SessionMentionSchema, TokenUsageSchema } from '@openchamber/agent-contract';
+import type { HistoryPage, HistoryPageRequest, JsonObject, JsonValue, Message, Part, PromptAttachment, PromptContext, Run, RunOrigin, SessionMention, TokenUsage, Turn } from '@openchamber/agent-contract';
 import type { ProjectionEvent, ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
 
 type NativeMessage = Extract<AgentSessionEvent, { type: 'message_start' }>['message'];
 type VisibleMessage = Extract<NativeMessage, { role: 'user' | 'assistant' | 'toolResult' }>;
+function sessionMentions(context: readonly PromptContext[]): SessionMention[] {
+  return context.flatMap(item => {
+    if (item.kind !== 'context') return [];
+    const parsed = SessionMentionSchema.safeParse(item.metadata.openchamberContext);
+    return parsed.success ? [parsed.data] : [];
+  });
+}
 const REF_TYPE = 'ohpichamber.canonical.v1';
 const RUN_TYPE = 'ohpichamber.run.v1';
 const WORKER_RUN_TYPE = 'ohpichamber.worker-run.v1';
@@ -20,6 +27,7 @@ const ReferenceSchema = z.strictObject({
   nativeEntryId: EntityIdSchema, messageId: EntityIdSchema, turnId: EntityIdSchema,
   runId: EntityIdSchema, userMessageId: EntityIdSchema, virtualUser: z.boolean(),
   attachments: z.array(PromptAttachmentSchema),
+  sessionMentions: z.array(SessionMentionSchema).optional(),
 });
 type Reference = z.infer<typeof ReferenceSchema>;
 export const BRANCH_TYPE = 'ohpichamber.branch.v1';
@@ -30,7 +38,7 @@ const PrivateRootSchema = z.strictObject({ root: z.string().min(1).refine(isAbso
 const PrivateRootsSchema = z.array(PrivateRootSchema);
 type PrivateRoot = z.infer<typeof PrivateRootSchema>;
 const PrivateTextSchema = z.string();
-const PRIVATE_PATH_DELIMITERS = ' \t\n\r\"\'`=:,;()[]{}<>';
+const PRIVATE_PATH_DELIMITERS = ' \t\n\r"\'`=:,;()[]{}<>';
 function startsPrivatePath(text: string, index: number, context = ''): boolean {
   const previous = index > 0 ? text[index - 1] : context.at(-1);
   return previous === undefined || PRIVATE_PATH_DELIMITERS.includes(previous)
@@ -109,15 +117,38 @@ const TurnTerminalSchema = TerminalSchema.extend({ turnId: EntityIdSchema, start
 const HistoryCursorSchema = z.tuple([EntityIdSchema, CounterSchema, EntityIdSchema.nullable(), EntityIdSchema.nullable(), z.number().int().nonnegative()]);
 interface LiveMessage {
   messageId: string; turnId: string; runId: string; userMessageId: string;
-  virtualUser: boolean; nativeRole: VisibleMessage['role']; timestamp: number;
-  attachments: PromptAttachment[]; started: Set<number>; providerId?: string; modelId?: string; usage?: TokenUsage;
+  virtualUser: boolean; nativeMessage: VisibleMessage;
+  attachments: PromptAttachment[]; sessionMentions: SessionMention[]; started: Set<number>; providerId?: string; modelId?: string; usage?: TokenUsage;
+}
+
+type NativeAssistantMessage = Extract<VisibleMessage, { role: 'assistant' }>;
+
+/**
+ * The native usage carries provider-only counters (`reasoningTokens`, provider
+ * extras) that the canonical wire contract does not publish. Map the shared
+ * fields explicitly so a provider counter added by the SDK cannot fail a
+ * session restore, and parse the result to keep the canonical numbers strict.
+ */
+function canonicalUsage(usage: NonNullable<NativeAssistantMessage['usage']>): TokenUsage {
+  return TokenUsageSchema.parse({
+    input: usage.input,
+    output: usage.output,
+    cacheRead: usage.cacheRead,
+    cacheWrite: usage.cacheWrite,
+    totalTokens: usage.totalTokens,
+    cost: {
+      input: usage.cost.input,
+      output: usage.cost.output,
+      cacheRead: usage.cost.cacheRead,
+      cacheWrite: usage.cost.cacheWrite,
+      total: usage.cost.total,
+    },
+  });
 }
 
 function metadata(message: VisibleMessage): Pick<LiveMessage, 'providerId' | 'modelId' | 'usage'> {
   if (message.role !== 'assistant') return {};
-  const { input, output, cacheRead, cacheWrite, totalTokens, cost } = message.usage;
-  return { providerId: message.provider, modelId: message.model, usage: TokenUsageSchema.parse({ input, output, cacheRead, cacheWrite, totalTokens,
-    cost: { input: cost.input, output: cost.output, cacheRead: cost.cacheRead, cacheWrite: cost.cacheWrite, total: cost.total } }) };
+  return { providerId: message.provider, modelId: message.model, usage: message.usage ? canonicalUsage(message.usage) : undefined };
 }
 function visible(message: NativeMessage): message is VisibleMessage {
   return message.role === 'assistant' || message.role === 'toolResult' || (message.role === 'user' && message.synthetic !== true);
@@ -125,7 +156,7 @@ function visible(message: NativeMessage): message is VisibleMessage {
 function partId(messageId: string, index: number): string { return `${messageId}:${index}`; }
 /** SDK tool arguments can carry symbol-keyed markers; canonical records are JSON (see NativeInteraction.observeToolCall). */
 function toolInput(value: JsonValue): JsonObject { return JsonObjectSchema.parse(JSON.parse(JSON.stringify(value))); }
-function parts(message: VisibleMessage, messageId: string, attachments: PromptAttachment[], toolResults?: ReadonlyMap<string, boolean>): Part[] {
+function parts(message: VisibleMessage, messageId: string, attachments: PromptAttachment[], mentions: readonly SessionMention[], toolResults?: ReadonlyMap<string, boolean>): Part[] {
   const result: Part[] = [];
   if (message.role === 'toolResult') {
     result.push({ type: 'tool_result', partId: partId(messageId, 0), toolCallId: message.toolCallId,
@@ -147,6 +178,10 @@ function parts(message: VisibleMessage, messageId: string, attachments: PromptAt
   } else {
     result.push({ type: 'text', partId: partId(messageId, 0), content: message.content });
   }
+  if (message.role === 'user' && mentions.length > 0) {
+    const text = result.find(part => part.type === 'text');
+    if (text?.type === 'text') text.sessionMentions = mentions.map(mention => ({ ...mention }));
+  }
   for (const [index, attachment] of attachments.entries()) result.push({ type: 'attachment', partId: `${messageId}:attachment:${index}`, ...attachment });
   return result;
 }
@@ -158,7 +193,8 @@ export class WorkerProjection {
   private message: LiveMessage | undefined;
   private readonly pending: LiveMessage[] = [];
   private attachments: PromptAttachment[] = [];
-  private readonly queuedPrompts = new WeakMap<NativeMessage, { messageId: string; attachments: PromptAttachment[] }>();
+  private sessionMentions: SessionMention[] = [];
+  private readonly queuedPrompts = new WeakMap<NativeMessage, { messageId: string; attachments: PromptAttachment[]; sessionMentions: SessionMention[] }>();
   private entryOffset: number;
   private stopReason: 'error' | 'aborted' | undefined;
   private cancelRequestedRunId: string | undefined;
@@ -221,6 +257,10 @@ export class WorkerProjection {
     switch (part.type) {
       case 'text': case 'reasoning':
         part.content = this.publicText(part.content);
+        if (part.type === 'text' && part.sessionMentions) for (const mention of part.sessionMentions) {
+          if (mention.kind === 'session') mention.title = this.publicText(mention.title);
+          else { mention.sessionTitle = this.publicText(mention.sessionTitle); mention.excerpt = this.publicText(mention.excerpt); }
+        }
         if (part.type === 'reasoning' && part.signature !== undefined) part.signature = this.publicText(part.signature);
         break;
       case 'tool_call': part.toolCallId = this.publicText(part.toolCallId); part.toolName = this.publicText(part.toolName); part.input = this.publicJsonObject(part.input); break;
@@ -277,9 +317,9 @@ export class WorkerProjection {
   resetSelection(): void { this.entryOffset = this.manager.getBranch().length; }
   activeRun(): Run | null { return this.run; }
   currentTurn(): { turnId: string } | undefined { return this.turn?.open ? { turnId: this.turn.turnId } : undefined; }
-  admitQueuedPrompt(message: Extract<NativeMessage, { role: 'user' }>, attachments: PromptAttachment[]): string {
+  admitQueuedPrompt(message: Extract<NativeMessage, { role: 'user' }>, attachments: PromptAttachment[], context: readonly PromptContext[] = []): string {
     const messageId = randomUUID();
-    this.queuedPrompts.set(message, { messageId, attachments });
+    this.queuedPrompts.set(message, { messageId, attachments, sessionMentions: sessionMentions(context) });
     return messageId;
   }
 
@@ -288,14 +328,17 @@ export class WorkerProjection {
     if (this.run?.runId === runId) this.cancelRequestedRunId = runId;
   }
 
-  beginRun(runId: string, timestamp: number, attachments: PromptAttachment[] = [], origin: RunOrigin = 'host'): ProjectionInput[] {
+  beginRun(runId: string, timestamp: number, attachments: PromptAttachment[] = [], contextOrOrigin: readonly PromptContext[] | RunOrigin = [], explicitOrigin?: RunOrigin): ProjectionInput[] {
     if (this.run) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
     this.cancelRequestedRunId = undefined;
+    const context = Array.isArray(contextOrOrigin) ? contextOrOrigin : [];
+    const origin: RunOrigin = explicitOrigin ?? (typeof contextOrOrigin === 'string' ? contextOrOrigin : 'host');
     this.run = { runId, sessionId: this.sessionId, status: 'running', origin, createdAt: timestamp };
     this.turn = undefined;
     this.message = undefined;
     this.stopReason = undefined;
     this.attachments = attachments;
+    this.sessionMentions = sessionMentions(context);
     const result: ProjectionInput[] = [{ timestamp, event: { type: 'run.started', runId, origin, createdAt: timestamp } }];
     if (origin !== 'host') {
       const turnId = randomUUID(), userMessageId = randomUUID();
@@ -332,15 +375,16 @@ export class WorkerProjection {
         const nativeMetadata = metadata(native);
         const current: LiveMessage = { messageId, turnId: turn.turnId, runId: run.runId,
           userMessageId: turn.userMessageId, virtualUser: turn.virtualUser,
-          nativeRole: native.role, timestamp: native.timestamp,
+          nativeMessage: native,
           attachments: native.role === 'user' ? queued?.attachments ?? this.attachments : [], started: new Set(), ...nativeMetadata,
+          sessionMentions: native.role === 'user' ? queued?.sessionMentions ?? this.sessionMentions : [],
         };
-        if (native.role === 'user') { this.queuedPrompts.delete(native); this.attachments = []; }
+        if (native.role === 'user') { this.queuedPrompts.delete(native); this.attachments = []; this.sessionMentions = []; }
         this.message = current;
         this.pending.push(current);
         emit({ type: 'message.created', messageId, turnId: turn.turnId,
           role: native.role === 'toolResult' ? 'system' : native.role, ...nativeMetadata });
-        for (const part of parts(native, messageId, current.attachments)) {
+        for (const part of parts(native, messageId, current.attachments, current.sessionMentions)) {
           if (native.role === 'assistant' && (part.type === 'text' || part.type === 'reasoning')) {
             // A live assistant start may already carry the first streamed text. The
             // following text_delta authors that same text again, so seed an empty
@@ -356,7 +400,7 @@ export class WorkerProjection {
       }
       case 'message_update': {
         const current = this.message;
-        if (!current || current.nativeRole !== 'assistant') break;
+        if (!current || current.nativeMessage.role !== 'assistant') break;
         const update = event.assistantMessageEvent;
         switch (update.type) {
           case 'text_start': case 'thinking_start': {
@@ -391,7 +435,8 @@ export class WorkerProjection {
       case 'message_end': {
         const current = this.message;
         if (!current || !visible(event.message)) break;
-        for (const part of parts(event.message, current.messageId, current.attachments)) {
+        current.nativeMessage = event.message;
+        for (const part of parts(event.message, current.messageId, current.attachments, current.sessionMentions)) {
           const index = Number(part.partId.slice(current.messageId.length + 1));
           this.textSuffixes.delete(part.partId);
           if (!current.started.has(index) && part.type !== 'attachment') {
@@ -494,11 +539,12 @@ export class WorkerProjection {
     for (let index = this.entryOffset; index < end; index++) {
       const entry = entries[index];
       if (entry.type !== 'message' || !visible(entry.message)) continue;
-      const pendingIndex = this.pending.findIndex(item => item.nativeRole === entry.message.role && item.timestamp === entry.message.timestamp);
+      const pendingIndex = this.pending.findIndex(item => item.nativeMessage === entry.message);
       if (pendingIndex < 0) continue;
       const live = this.pending.splice(pendingIndex, 1)[0];
       const reference: Reference = { nativeEntryId: entry.id, messageId: live.messageId, turnId: live.turnId,
-        runId: live.runId, userMessageId: live.userMessageId, virtualUser: live.virtualUser, attachments: live.attachments };
+        runId: live.runId, userMessageId: live.userMessageId, virtualUser: live.virtualUser, attachments: live.attachments,
+        ...(live.sessionMentions.length ? { sessionMentions: live.sessionMentions } : {}) };
       this.manager.appendCustomEntry(REF_TYPE, reference);
     }
     this.entryOffset = end;
@@ -608,7 +654,7 @@ export class WorkerProjection {
       current = turn;
       const nativeMetadata = metadata(native);
       messages.push({ messageId, turnId, sessionId: this.sessionId, role: native.role === 'toolResult' ? 'system' : native.role,
-        createdAt: timestamp, parts: parts(native, messageId, reference?.attachments ?? [], toolResults), ...nativeMetadata,
+        createdAt: timestamp, parts: parts(native, messageId, reference?.attachments ?? [], reference?.sessionMentions ?? [], toolResults), ...nativeMetadata,
       });
       if (native.role === 'assistant') turn.assistantMessageIds.push(messageId);
       if (!turnTerminals.has(turn.turnId)) {

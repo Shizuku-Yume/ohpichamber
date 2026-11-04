@@ -30,7 +30,6 @@ import { useGitBranchLabel } from '@/stores/useGitStore';
 import { useGlobalSessionsStore, resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { archiveUndoToastOptions, collectSessionSubtreeIds } from '@/components/session/sidebar/sessions/sessionSubtreeActions';
 import { streamPerfCount } from '@/stores/utils/streamDebug';
-import { useFeatureFlagsStore } from '@/stores/useFeatureFlagsStore';
 
 import { useDesktopWindowControlsLayout } from '@/hooks/useDesktopWindowControlsLayout';
 import { ContextUsageDisplay } from '@/components/ui/ContextUsageDisplay';
@@ -71,7 +70,7 @@ import { Icon } from "@/components/icon/Icon";
 import { useI18n } from '@/lib/i18n';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { getRuntimeBearerTokenSync } from '@/lib/runtime-auth';
-import { getRuntimeApiBaseUrl, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
+import { getRuntimeApiBaseUrl, getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { useShallow } from 'zustand/react/shallow';
 import type { IconName } from "@/components/icon/icons";
 import { toast } from '@/components/ui';
@@ -755,8 +754,8 @@ export const Header: React.FC = () => {
       return activeProjectLabel ?? 'OpenChamber';
     }
     const trimmedTitle = currentSession?.title?.trim();
-    return trimmedTitle && trimmedTitle.length > 0 ? trimmedTitle : 'Untitled Session';
-  }, [activeProjectLabel, currentSession?.title, currentSessionId]);
+    return trimmedTitle && trimmedTitle.length > 0 ? trimmedTitle : t('sessions.sidebar.session.untitled');
+  }, [activeProjectLabel, currentSession?.title, currentSessionId, t]);
   const loadSessionRecords = useSessionMessageRecordsForExport();
   const updateSessionTitle = useSessionUIStore((state) => state.updateSessionTitle);
   const archiveSessions = useSessionUIStore((state) => state.archiveSessions);
@@ -1024,17 +1023,12 @@ export const Header: React.FC = () => {
   const projectActionsContext = useProjectActionsContext();
 
 
-  const planModeEnabled = useFeatureFlagsStore((state) => state.planModeEnabled);
   const isSessionPlanAvailable = useSessionUIStore((state) => state.isSessionPlanAvailable);
-  const planTabAvailable = planModeEnabled && currentSessionId ? isSessionPlanAvailable(currentSessionId) : false;
+  const planTabAvailable = currentSessionId ? isSessionPlanAvailable(currentSessionId) : false;
   const lastPlanSessionKeyRef = React.useRef<string>('');
 
   // Reset plan tab availability when session changes
   React.useEffect(() => {
-    if (!planModeEnabled) {
-      return;
-    }
-
     if (!currentSessionId) return;
 
     const sessionKey = `${currentSessionId || 'none'}:${sessionDirectory || 'none'}:${currentSession?.created || 0}:${currentSession?.slug || 'none'}`;
@@ -1042,7 +1036,6 @@ export const Header: React.FC = () => {
       lastPlanSessionKeyRef.current = sessionKey;
     }
   }, [
-    planModeEnabled,
     planTabAvailable,
     currentSession?.slug,
     currentSession?.created,
@@ -1056,6 +1049,9 @@ export const Header: React.FC = () => {
       projectId: isChatContext ? null : draftProjectId,
       apiBaseUrl: getRuntimeApiBaseUrl(),
       clientToken: getRuntimeBearerTokenSync(),
+      // The window reopens this instance; a relay-capable host has no HTTP
+      // base to inject, so the key names the host, not a URL.
+      runtimeKey: getRuntimeKey(),
     }).catch((error) => {
       console.warn('[header] failed to open draft mini chat window', error);
     });
@@ -1075,6 +1071,7 @@ export const Header: React.FC = () => {
       directory: sessionDirectory || normalize(selectedSessionDirectory || '') || worktreeDirectory,
       apiBaseUrl: getRuntimeApiBaseUrl(),
       clientToken: getRuntimeBearerTokenSync(),
+      runtimeKey: getRuntimeKey(),
     }).catch((error) => {
       console.warn('[header] failed to open session mini chat window', error);
     });

@@ -16,10 +16,13 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "type-check": "tsc --noEmit",
-    "lint": "eslint \"./src/**/*.ts\" --config ../../eslint.config.js",
+    "lint": "oxlint -c ../../oxlint.config.ts --report-unused-disable-directives src",
     "test": "bun test src"
   },
   "dependencies": {
     "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.1"
   }
 }

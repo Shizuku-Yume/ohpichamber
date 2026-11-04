@@ -76,18 +76,35 @@ describe('model-facing text', () => {
             .toBe('Comment on this fragment of `docs/CHANGELOG.md`:\n> a');
     });
 
-    test('PR comments and checks keep their attachment wording', () => {
-        expect(formatContextText(contextPayloadFromDraft(draft({ source: 'pr-comment', fileLabel: 'octo/repo#7', code: 'the comment', text: '' }))))
-            .toBe('Attached GitHub PR comment (octo/repo#7):\n\nthe comment');
-        expect(formatContextText(contextPayloadFromDraft(draft({ source: 'pr-check', fileLabel: 'CI / build', code: 'boom', text: 'why?' }))))
-            .toBe('Attached failed GitHub PR check (CI / build):\n```\nboom\n```\n\nwhy?');
-    });
+    describe('review comments and failed checks name the change request by the served provider', () => {
+        test('a GitHub pull request comment and check', () => {
+            expect(formatContextText(contextPayloadFromDraft(draft({ source: 'pr-comment', provider: 'github', fileLabel: 'octo/repo#7', code: 'the comment', text: '' }))))
+                .toBe('Attached GitHub pull request comment (octo/repo#7):\n\nthe comment');
+            expect(formatContextText(contextPayloadFromDraft(draft({ source: 'pr-check', provider: 'github', fileLabel: 'CI / build', code: 'boom', text: 'why?' }))))
+                .toBe('Attached failed GitHub pull request check (CI / build):\n```\nboom\n```\n\nwhy?');
+        });
 
-    test('a GitLab merge request comment and pipeline job say so', () => {
-        expect(formatContextText(contextPayloadFromDraft(draft({ source: 'pr-comment', provider: 'gitlab', fileLabel: '!7 @octo', code: 'the comment', text: '' }))))
-            .toBe('Attached GitLab merge request comment (!7 @octo):\n\nthe comment');
-        expect(formatContextText(contextPayloadFromDraft(draft({ source: 'pr-check', provider: 'gitlab', fileLabel: '!7 · build', code: 'boom', text: '' }))))
-            .toBe('Attached failed GitLab merge request pipeline job (!7 · build):\n```\nboom\n```');
+        test('a GitLab merge request comment and pipeline job', () => {
+            expect(formatContextText(contextPayloadFromDraft(draft({ source: 'pr-comment', provider: 'gitlab', fileLabel: '!7 @octo', code: 'the comment', text: '' }))))
+                .toBe('Attached GitLab merge request comment (!7 @octo):\n\nthe comment');
+            expect(formatContextText(contextPayloadFromDraft(draft({ source: 'pr-check', provider: 'gitlab', fileLabel: '!7 · build', code: 'boom', text: '' }))))
+                .toBe('Attached failed GitLab merge request pipeline job (!7 · build):\n```\nboom\n```');
+        });
+
+
+
+        test('a whole-file comment names the file and quotes no lines', () => {
+            expect(formatContextText(contextPayloadFromDraft(draft({
+                startLine: 0, endLine: 0, side: undefined, code: '',
+            })))).toBe('Comment on `src/app.ts` (the whole file):\n\nfix this');
+            const part = createContextPart(contextPayloadFromDraft(draft({ startLine: 0, endLine: 0, side: undefined, code: '' })));
+            expect(part.metadata.opencodeComment?.selection).toBeUndefined();
+        });
+
+        test('a part from before parts named their provider reads as a plain pull request', () => {
+            expect(formatContextText(contextPayloadFromDraft(draft({ source: 'pr-comment', fileLabel: 'octo/repo#7', code: 'the comment', text: '' }))))
+                .toBe('Attached pull request comment (octo/repo#7):\n\nthe comment');
+        });
     });
 });
 
@@ -113,11 +130,13 @@ describe('round-trip through part metadata', () => {
             })),
             contextPayloadFromDraft(draft({ source: 'file-quote', startLine: 3, endLine: 5 })),
             contextPayloadFromDraft(draft({ source: 'file-quote', startLine: 0, endLine: 0 })),
+            contextPayloadFromDraft(draft({ startLine: 0, endLine: 0, side: undefined, code: '' })),
         ];
         for (const payload of payloads) {
             expect(readContextPart(asPart(payload))).toEqual(payload);
         }
     });
+
 
     test('repository references carry picker-built text and structured identity', () => {
         const payload: ContextPartPayload = { kind: 'repository-issue', number: 3, title: 'Bug', url: 'https://x/issues/3' };
@@ -137,11 +156,35 @@ describe('round-trip through part metadata', () => {
         })).toEqual({ kind: 'change-request', provider: 'github', number: 4, title: 'Fix', url: 'https://x/pull/4' });
     });
 
-    test('linear references carry picker-built text and the identifier', () => {
-        const payload: ContextPartPayload = { kind: 'linear-issue', identifier: 'ENG-12', title: 'Login', url: 'https://linear.app/x/issue/ENG-12' };
+    test('reads both source-control provider ids and rejects unknown ones', () => {
+        for (const provider of ['github', 'gitlab'] as const) {
+            const payload: ContextPartPayload = { kind: 'change-request', provider, number: 4, title: 'Fix', url: 'https://x/pull/4' };
+            expect(readContextPart(asPart(payload, 'context'))).toEqual(payload);
+            const check: ContextPartPayload = { kind: 'pr-check', provider, label: 'build', output: 'boom', text: '' };
+            expect(readContextPart(asPart(check))).toEqual(check);
+        }
+        expect(readContextPart({
+            type: 'text',
+            metadata: { [CONTEXT_METADATA_KEY]: { kind: 'change-request', provider: 'Bad Id', number: 4, title: 'Fix', url: 'u' } },
+        })).toBeNull();
+    });
+
+    test('tracker references carry picker-built text, the tracker and the identifier', () => {
+        const payload: ContextPartPayload = { kind: 'tracker-item', provider: 'linear', identifier: 'ENG-12', title: 'Login', url: 'https://linear.app/x/issue/ENG-12' };
         const part = asPart(payload, 'Linear issue context (JSON)\n{}');
         expect(part.text).toBe('Linear issue context (JSON)\n{}');
         expect(readContextPart(part)).toEqual(payload);
+    });
+
+    test('reads a Linear reference from before trackers as a Linear tracker item', () => {
+        expect(readContextPart({
+            type: 'text',
+            metadata: { [CONTEXT_METADATA_KEY]: { kind: 'linear-issue', identifier: 'ENG-12', title: 'Login', url: 'https://linear.app/x/issue/ENG-12' } },
+        })).toEqual({ kind: 'tracker-item', provider: 'linear', identifier: 'ENG-12', title: 'Login', url: 'https://linear.app/x/issue/ENG-12' });
+        expect(readContextPart({
+            type: 'text',
+            metadata: { [CONTEXT_METADATA_KEY]: { kind: 'tracker-item', provider: 'Bad Id', identifier: 'ENG-12', title: 'Login', url: 'u' } },
+        })).toBeNull();
     });
 
     test('guest references carry picker-built text and no github number', () => {

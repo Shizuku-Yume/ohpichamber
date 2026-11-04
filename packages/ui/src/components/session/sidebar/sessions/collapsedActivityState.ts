@@ -63,7 +63,7 @@ type SessionActivityProps = {
   // Sessions not present as nodes whose pending requests still count, such as
   // the hidden subagents of timeline rows.
   blockingSessionIds?: readonly string[];
-  includeUnreadSubtasks: boolean;
+  includeUnreadSubtasks?: boolean;
 };
 
 const collectActivityIds = (nodes: readonly SessionNode[], includeUnreadSubtasks: boolean) => {
@@ -81,7 +81,7 @@ const collectActivityIds = (nodes: readonly SessionNode[], includeUnreadSubtasks
 export const useCollapsedSessionActivityState = ({
   nodes,
   blockingSessionIds,
-  includeUnreadSubtasks,
+  includeUnreadSubtasks = false,
   enabled = true,
 }: SessionActivityProps & { enabled?: boolean }): CollapsedActivityState => {
   const ids = React.useMemo(() => collectActivityIds(enabled ? nodes : [], includeUnreadSubtasks), [enabled, includeUnreadSubtasks, nodes]);

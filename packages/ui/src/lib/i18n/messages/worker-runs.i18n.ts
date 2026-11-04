@@ -3,6 +3,14 @@ export const workerRunsI18n = {
     'chat.run.origin.plan': 'Plan is running',
     'chat.run.origin.goal': 'Goal is running',
   },
+  ar: {
+    'chat.run.origin.plan': 'الخطة قيد التشغيل',
+    'chat.run.origin.goal': 'الهدف قيد التشغيل',
+  },
+  he: {
+    'chat.run.origin.plan': 'התוכנית פועלת',
+    'chat.run.origin.goal': 'המטרה פועלת',
+  },
   de: {
     'chat.run.origin.plan': 'Der Plan wird ausgeführt',
     'chat.run.origin.goal': 'Das Ziel wird verfolgt',

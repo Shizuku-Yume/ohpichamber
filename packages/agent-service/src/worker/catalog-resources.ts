@@ -1,6 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
 import { link, lstat, mkdir, open, readdir, readFile, realpath, rename, unlink } from 'node:fs/promises';
+
+import { removeTemporaryFile } from './temporary-file.ts';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { YAML } from 'bun';
 import { z } from 'zod';
@@ -196,7 +198,7 @@ export class NativeFileResources {
           catch (error) { await unlink(path); throw error; }
         }
       }
-    } finally { try { await unlink(temporary); } catch (error) { if (!(error instanceof Error && missing(error))) throw error; } }
+    } finally { await removeTemporaryFile(temporary); }
   }
   private async remove(location: ResourceLocation): Promise<void> { await this.confined(location.scope, location.path, false); await unlink(location.path); }
   private async skills() {

@@ -42,14 +42,13 @@ test('prompt admission is visible to the idle predicate before and after the wor
   const stateDirectory = join(root, 'state');
   await mkdir(stateDirectory);
   try {
-    let registry: SessionRegistry | undefined;
     const workers = new AdmissionWorkers({
-      onOpened: (...args) => registry!.onOpened(...args),
-      onEvents: (...args) => registry!.onEvents(...args),
-      onInteraction: (...args) => registry!.onInteraction(...args),
-      onExit: (...args) => registry!.onExit(...args),
+      onOpened: (...args) => registry.onOpened(...args),
+      onEvents: (...args) => registry.onEvents(...args),
+      onInteraction: (...args) => registry.onInteraction(...args),
+      onExit: (...args) => registry.onExit(...args),
     });
-    registry = new SessionRegistry(stateDirectory, workers);
+    const registry = new SessionRegistry(stateDirectory, workers);
     sessions = registry;
     await registry.initialize();
     await registry.open({ rootSessionId: 'root', projectId: 'project', workspaceId: 'workspace',

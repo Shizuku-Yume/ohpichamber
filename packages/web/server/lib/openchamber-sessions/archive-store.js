@@ -11,7 +11,7 @@ const asTimestamp = (value) => { const parsed = TimestampSchema.safeParse(value)
 const asIdList = (ids) => [...new Set((Array.isArray(ids) ? ids : []).map(asNonEmptyString).filter(Boolean))];
 
 /** Host archive/retention sidecar. `null` is an explicit unarchive tombstone. */
-export const createArchiveStore = ({ dataDir, fsPromises = fs.promises, path: nodePath = path, now = Date.now, database = null, closeDatabase = database === null } = {}) => {
+export const createArchiveStore = ({ dataDir, fsPromises = fs.promises, path: nodePath = path, now = Date.now, database = null, closeDatabase = database === null, assertSessionWritable = () => {} } = {}) => {
   const opened = database ? { db: database, filePath: nodePath.join(dataDir, 'host-metadata.sqlite') } : openHostMetadataDatabase({ dataDir, path: nodePath });
   const { db, filePath } = opened;
   if (database) ensureHostMetadataSchema(db);
@@ -92,9 +92,9 @@ export const createArchiveStore = ({ dataDir, fsPromises = fs.promises, path: no
         withTransaction(db, () => {
           const statement = db.prepare(`INSERT INTO session_archive (session_id, revision, archived_at) VALUES (?, 1, ?)
             ON CONFLICT(session_id) DO UPDATE SET revision = session_archive.revision + 1, archived_at = excluded.archived_at`);
-          for (const id of ready) { statement.run(id, value); revisions[id] = readRow(id).revision; }
+          for (const id of ready) { assertSessionWritable(id); statement.run(id, value); revisions[id] = readRow(id).revision; }
         });
-      } catch (error) { throw new MetadataWriteError('Could not write Host archive state', error); }
+      } catch (error) { if (error instanceof HostMetadataError) throw error; throw new MetadataWriteError('Could not write Host archive state', error); }
       return { applied: ready, failedIds, revisions };
     }));
   };

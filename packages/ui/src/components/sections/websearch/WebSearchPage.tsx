@@ -15,7 +15,6 @@ import {
   SETTINGS_CONTROL_CLUSTER_CLASS,
   SETTINGS_HELPER_CLASS,
   SETTINGS_SELECT_ROW_TRIGGER_CLASS,
-  SETTINGS_SELECT_SIZE,
 } from '@/components/sections/shared/SettingsSection';
 import { getWebSearchScopeKey, useWebSearchStore, type WebSearchSnapshot } from '@/stores/useWebSearchStore';
 import { useEnterpriseMode } from '@/stores/useEnterprisePolicyStore';
@@ -182,7 +181,6 @@ const SelectionSection: React.FC<{ snapshot: WebSearchSnapshot }> = ({ snapshot 
               }}
             >
               <SelectTrigger
-                size={SETTINGS_SELECT_SIZE}
                 className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
                 aria-label={t('settings.webSearch.native.addFallback')}
               >

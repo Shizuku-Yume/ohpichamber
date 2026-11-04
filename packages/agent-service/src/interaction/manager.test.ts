@@ -92,6 +92,47 @@ describe('service-owned interaction CAS', () => {
       expect(manager.approvals('session-1')[0]?.status).toBe('pending');
     } finally { manager.closeSession('session-1'); }
   });
+  test('steering cancel revokes pending approval, clears pending handles, and rejects later resolution', async () => {
+    const { manager, events, operations } = sessionHarness();
+    try {
+      manager.onRequest('session-1', 'worker-1', approval);
+      expect(manager.approvals('session-1')).toHaveLength(1);
+      expect(manager.approvals('session-1')[0]?.status).toBe('pending');
+
+      // Worker sends steering cancellation
+      manager.onRequest('session-1', 'worker-1', { kind: 'cancel', approvalId: 'approval-1' });
+
+      // Approval handle is removed from pending approvals
+      expect(manager.approvals('session-1')).toHaveLength(0);
+
+      // Event is published to the journal with revoked status
+      expect(events.at(-1)?.event).toMatchObject({
+        type: 'approval.resolved',
+        approval: { approvalId: 'approval-1', status: 'revoked', version: '2' },
+      });
+
+      // No dispatch to worker
+      expect(operations).toHaveLength(0);
+
+      // Late resolution attempts fail-closed with APPROVAL_CONFLICT and reveal the revoked record
+      const reply: ApprovalReply = { decision: 'approve', version: '1', epoch: 'epoch-1', workerGeneration: 'worker-1' };
+      await expect(manager.resolveApproval('session-1', 'approval-1', reply)).rejects.toMatchObject({
+        status: 409,
+        code: 'APPROVAL_CONFLICT',
+        details: {
+          expectedVersion: '1',
+          actualVersion: '2',
+          currentRecord: { approvalId: 'approval-1', status: 'revoked', version: '2' },
+        },
+      });
+
+      // Cannot consume execution grant
+      expect(manager.consumeApprovalGrant('session-1', 'worker-1', 'approval-1', 'call-1', 'bash', { command: 'bun test' })).toBeUndefined();
+    } finally {
+      manager.closeSession('session-1');
+    }
+  });
+
 
   test('a worker generation change expires old handles and rejects stale replies', async () => {
     const { manager, events } = sessionHarness();
@@ -397,9 +438,8 @@ describe('service-owned interaction CAS', () => {
   test('an approved native command is available during dispatch, bound to exact input, and consumed once', async () => {
     const input = { command: 'printf approved' };
     const target = { toolName: 'bash', pattern: JSON.stringify(input) };
-    let manager: InteractionManager;
     const consumed: unknown[] = [];
-    manager = new InteractionManager(60_000);
+    const manager = new InteractionManager(60_000);
     manager.openSession('session-1', 'epoch-1', 'worker-1', 'workspace-1', async operation => {
       if (operation.type !== 'approval.resolve') throw new Error('Unexpected dispatch');
       expect(manager.consumeApprovalGrant('other-session', 'worker-1', operation.approvalId, 'call-1', 'bash', input)).toBeUndefined();

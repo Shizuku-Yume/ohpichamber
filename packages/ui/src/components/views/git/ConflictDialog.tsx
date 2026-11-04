@@ -13,7 +13,8 @@ import { useInputStore } from '@/sync/input-store';
 import { toast } from '@/components/ui';
 import { Icon } from "@/components/icon/Icon";
 import { getConflictDetails, type MergeConflictDetails } from '@/lib/gitApi';
-import { renderMagicPrompt } from '@/lib/magicPrompts';
+import { loadMagicPrompts } from '@/lib/magicPrompts';
+import { getRuntimeKey, getRuntimeSwitchRevision } from '@/lib/runtime-switch';
 import { useI18n } from '@/lib/i18n';
 
 interface ConflictDialogProps {
@@ -46,26 +47,37 @@ export const ConflictDialog: React.FC<ConflictDialogProps> = ({
   const [isLoading, setIsLoading] = React.useState(false);
   const [conflictDetails, setConflictDetails] = React.useState<MergeConflictDetails | null>(null);
   const [loadError, setLoadError] = React.useState<string | null>(null);
+  const detailsOwner = React.useRef<{ runtimeKey: string; revision: number } | null>(null);
 
   // Fetch conflict details when dialog opens
   React.useEffect(() => {
     if (!open || !directory) return;
+    const runtimeKey = getRuntimeKey();
+    const revision = getRuntimeSwitchRevision();
+    let cancelled = false;
+    const isCurrent = () => !cancelled && getRuntimeKey() === runtimeKey && getRuntimeSwitchRevision() === revision;
 
     setIsLoading(true);
     setLoadError(null);
     setConflictDetails(null);
+    detailsOwner.current = null;
 
     getConflictDetails(directory)
       .then((details) => {
+        if (!isCurrent()) return;
+        detailsOwner.current = { runtimeKey, revision };
         setConflictDetails(details);
       })
       .catch((err) => {
+        if (!isCurrent()) return;
         const message = err instanceof Error ? err.message : t('gitView.conflict.loadFailed');
         setLoadError(message);
       })
       .finally(() => {
+        if (!isCurrent()) return;
         setIsLoading(false);
       });
+    return () => { cancelled = true; };
   }, [open, directory, t]);
 
   const buildConflictContext = React.useCallback(async (): Promise<{
@@ -79,12 +91,13 @@ export const ConflictDialog: React.FC<ConflictDialogProps> = ({
     const headRef = conflictDetails.headInfo || (operation === 'merge' ? 'MERGE_HEAD' : 'REBASE_HEAD');
     const continueCmd = operation === 'merge' ? 'git commit --no-edit' : 'git rebase --continue';
 
-    const visibleText = await renderMagicPrompt('git.conflict.resolve.visible', {
+    const prompts = await loadMagicPrompts(directory);
+    const visibleText = prompts.render('git.conflict.resolve.visible', {
       operation_label: operationLabel,
       head_ref: headRef,
     });
 
-    const instructionsText = await renderMagicPrompt('git.conflict.resolve.instructions', {
+    const instructionsText = prompts.render('git.conflict.resolve.instructions', {
       operation_label: operationLabel,
       directory,
       operation,
@@ -108,6 +121,17 @@ export const ConflictDialog: React.FC<ConflictDialogProps> = ({
     return { visibleText, instructionsText, payloadText };
   }, [conflictDetails, directory, operation]);
 
+  // The context, null without conflict details, or undefined when the magic
+  // prompts could not be read: that failure is shown here and the dialog stays.
+  const prepareConflictContext = async (isCurrent: () => boolean) => {
+    try {
+      return await buildConflictContext();
+    } catch (error) {
+      if (isCurrent()) toast.error(t('magicPrompts.toast.loadFailed'), { description: error instanceof Error ? error.message : undefined });
+      return undefined;
+    }
+  };
+
   const handleAbort = () => {
     onAbort();
     onOpenChange(false);
@@ -119,7 +143,12 @@ export const ConflictDialog: React.FC<ConflictDialogProps> = ({
   };
 
   const handleResolveInCurrentSession = async () => {
-    const context = await buildConflictContext();
+    const runtimeKey = getRuntimeKey();
+    const revision = getRuntimeSwitchRevision();
+    const isCurrent = () => getRuntimeKey() === runtimeKey && getRuntimeSwitchRevision() === revision;
+    if (detailsOwner.current?.runtimeKey !== runtimeKey || detailsOwner.current.revision !== revision) return;
+    const context = await prepareConflictContext(isCurrent);
+    if (!isCurrent() || context === undefined) return;
     if (!context) {
       toast.error(t('gitView.conflict.noDetailsAvailable'));
       return;
@@ -143,7 +172,12 @@ export const ConflictDialog: React.FC<ConflictDialogProps> = ({
   };
 
   const handleResolveInNewSession = async () => {
-    const context = await buildConflictContext();
+    const runtimeKey = getRuntimeKey();
+    const revision = getRuntimeSwitchRevision();
+    const isCurrent = () => getRuntimeKey() === runtimeKey && getRuntimeSwitchRevision() === revision;
+    if (detailsOwner.current?.runtimeKey !== runtimeKey || detailsOwner.current.revision !== revision) return;
+    const context = await prepareConflictContext(isCurrent);
+    if (!isCurrent() || context === undefined) return;
     if (!context) {
       toast.error(t('gitView.conflict.noDetailsAvailable'));
       return;

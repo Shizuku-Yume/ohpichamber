@@ -1,3 +1,4 @@
+import { isIMECompositionEvent } from '@/lib/ime';
 import React from 'react';
 import { createPortal } from 'react-dom';
 
@@ -183,6 +184,7 @@ export const MobileWorkspaceDrawer: React.FC<{
       // leaves INSERT mode (hardware keyboards on tablets and phones).
       if (event.key !== 'Escape' || tabRef.current === 'terminal') return;
       if (isVimEditorEventTarget(event.target)) return;
+      if (isIMECompositionEvent(event)) return;
       onCloseRef.current();
     };
     document.addEventListener('keydown', handleKeyDown);

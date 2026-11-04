@@ -1,6 +1,7 @@
 import { readFile, realpath } from 'node:fs/promises';
 import { isAbsolute, relative, sep } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { isProbablyBinary } from '@oh-my-pi/pi-utils';
 import { createAgentSession, type ExtensionFactory } from '@oh-my-pi/pi-coding-agent/sdk';
 import { EventBus } from '@oh-my-pi/pi-coding-agent/utils/event-bus';
 import { TASK_SUBAGENT_LIFECYCLE_CHANNEL, type SubagentLifecyclePayload } from '@oh-my-pi/pi-coding-agent/task';
@@ -14,7 +15,7 @@ import { initializeExtensions } from '@oh-my-pi/pi-coding-agent/modes/runtime-in
 import { executeAcpBuiltinSlashCommand, isAllowedBuiltinCommand, isReadOnlyBuiltinCommand, parseSlashCommand } from './builtin-commands.ts';
 import type { SlashCommandRuntime } from '@oh-my-pi/pi-coding-agent/slash-commands/types';
 import { RpcBtwController } from '@oh-my-pi/pi-coding-agent/modes/rpc/rpc-btw';
-import { JsonObjectSchema, MCPOAuthPublicConfigurationSchema, SessionBranchRequestSchema, type CapturedSendOptions, type JsonObject, type JsonValue, type Run, type RunOrigin, type SessionBranchRequest } from '@openchamber/agent-contract';
+import { JsonObjectSchema, MCPOAuthPublicConfigurationSchema, SessionBranchRequestSchema, type Agent, type CapturedSendOptions, type JsonObject, type Run, type RunOrigin, type SessionBranchRequest } from '@openchamber/agent-contract';
 import type { WorkerBootstrapMessage, WorkerInteraction, WorkerOperation, WorkerOperationResult } from '../protocol.ts';
 import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
@@ -30,6 +31,7 @@ import { nativeExtensionRoots, nativeModelsContext, nativeSkillOptions, openNati
 import { NativeWebSearch, installWebSearchAuthorization } from './catalog-websearch.ts';
 import type { WorkerAuthorize } from './policy.ts';
 import { createHostToolExtension } from './host-tool.ts';
+import { isSingleDevicePath } from './internal-device-path.ts';
 import type { WorkerHostInvoke } from './host-actions.ts';
 import { formatModelString } from '@oh-my-pi/pi-coding-agent/config/model-resolver';
 import { generateSelectedModelTitle } from './auto-title.ts';
@@ -39,6 +41,7 @@ import type { HostNativePolicySnapshot, NativePolicyContext } from '../native-po
 import { createNativeBashPolicyExtension } from './native-bash-policy.ts';
 import { NativePermissionBridge } from './native-permission-bridge.ts';
 import { BashTool } from '@oh-my-pi/pi-coding-agent/tools/bash';
+import { cfgTaskPerCallModel } from '@oh-my-pi/pi-coding-agent/task/settings';
 import { nativePluginExtensionPaths } from './native-plugin-loader.ts';
 import { NativeCacheWarming } from './catalog-warming.ts';
 import { InternalUrlRouter, resolveLocalRoot } from '@oh-my-pi/pi-coding-agent/internal-urls';
@@ -48,15 +51,19 @@ import planApprovedPrompt from '@oh-my-pi/pi-coding-agent/prompts/system/plan-mo
 import planCompactPrompt from '@oh-my-pi/pi-coding-agent/prompts/system/plan-mode-compact-instructions' with { type: 'text' };
 import { PlanReferenceSchema, PlanReviewSchema, type PlanReviewResponse } from '@openchamber/agent-contract';
 
+const MAX_AUTO_READ_TEXT_BYTES = 5 * 1024 * 1024;
 type PromptOperation = Extract<WorkerOperation, { type: 'prompt' | 'steer' | 'follow-up' }>;
 type PreparedPrompt = { text: string; options: PromptOptions; context: Parameters<SessionManager['appendMessage']>[0][] };
-type NativeAdmission = { skillsAvailable: boolean };
+type NativeAdmission = { skillsAvailable: boolean; profile?: Agent | null };
 
 export class WorkerSession {
   private readonly modeController: WorkerModeController;
   private readonly projection: WorkerProjection;
   private readonly unsubscribe: () => void;
   private readonly operations = new Set<Promise<WorkerOperationResult>>();
+  private readonly defaultToolNames: string[];
+  private readonly defaultMountedNames: string[];
+  private readonly defaultRegisteredNames: string[];
   private readonly queuedContext = new WeakMap<AgentMessage, PreparedPrompt['context']>();
   private readonly nativeQueuedPreparation: AgentSession['agent']['prepareQueuedMessages'];
   private readonly btw: RpcBtwController;
@@ -100,6 +107,9 @@ export class WorkerSession {
   ) {
     this.modeController = new WorkerModeController(session, title => this.proposePlan(title), start => this.startWorkerRun('goal', start), () => this.publishContinuationPending());
     this.projection = new WorkerProjection(session.sessionManager, sessionId);
+    this.defaultToolNames = session.getActiveToolNames();
+    this.defaultMountedNames = session.getMountedXdevToolNames();
+    this.defaultRegisteredNames = session.getAllToolNames();
     this.btw = new RpcBtwController(session, frame => {
       if (frame.type === 'btw_delta') this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'btw.delta', recordId: frame.recordId, delta: frame.delta } }]);
       else if (frame.type === 'btw_record') {
@@ -118,8 +128,8 @@ export class WorkerSession {
       // SAFETY: The worker publishes this channel only with SubagentLifecyclePayload.
       this.onSubagent(data as SubagentLifecyclePayload);
     });
-    session.agent.prepareQueuedMessages = async (messages, signal) => {
-      const nativePreparation = await this.nativeQueuedPreparation?.(messages, signal);
+    session.agent.prepareQueuedMessages = async (messages, signal, ...rest) => {
+      const nativePreparation = await this.nativeQueuedPreparation?.(messages, signal, ...(rest as [never]));
       return {
         commit: () => {
           const nativeContext = nativePreparation?.commit();
@@ -187,11 +197,19 @@ export class WorkerSession {
     const observer: ExtensionFactory = api => {
       api.on('tool_call', async event => {
         interaction.observeToolCall(event);
-        if (['bash', 'openchamber', 'web', 'memory', 'notify'].includes(event.toolName)) return;
+        if (admission.profile && admission.profile.allowedTools !== null && !admission.profile.allowedTools.includes(event.toolName)) return { block: true, reason: 'Selected agent profile does not permit this tool' };
+        if (['bash', 'openchamber', 'web', 'memory', 'openchamber_knowledge', 'notify'].includes(event.toolName)) return;
         // The native search tool is the SDK's egress entry point, not a generic
         // tool grant. Host authorization already owns web-search policy (including
         // enterprise refusal), so route exactly this SDK name to that capability.
         // Every other tool keeps the descriptor/approval-aware generic path.
+        // A mounted tool device (`xd://<tool>`) is a call into an extension
+        // tool, not a file read or write: the device enforces its own policy
+        // and its inner call is authorized by the capability owner, so the
+        // generic path/command descriptor would wrongly refuse it.
+        const internalDevice = (event.toolName === 'read' || event.toolName === 'write')
+          && isSingleDevicePath(event.input?.path);
+        if (internalDevice) return;
         if (event.toolName === 'web_search') {
           try { await authorize({ type: 'web-search' }); }
           catch { return { block: true, reason: 'Host policy refused the tool operation' }; }
@@ -237,7 +255,7 @@ export class WorkerSession {
       const subagentEventBus = new EventBus();
       const pluginExtensionPaths = await nativePluginExtensionPaths(input.cwd);
       const permissionBridge = new NativePermissionBridge(
-        (toolCall, options, sessionRuleKey, signal) => interaction.requestPermission(toolCall, options, sessionRuleKey, signal),
+        (toolCall, options, sessionRuleKey, signal, steeringSignal) => interaction.requestPermission(toolCall, options, sessionRuleKey, signal, steeringSignal),
         toolCall => {
           try {
             const decision = bashPolicy.approval(toolCall.rawInput);
@@ -251,6 +269,7 @@ export class WorkerSession {
       // credentials are released; OMP's autoTitle and replan title paths have
       // no such seam.
       cfgTitleRefreshOnReplan.override(settings, false);
+      cfgTaskPerCallModel.override(settings, 'on');
       const result = await createAgentSession({
         cwd: input.cwd, agentDir: input.agentDirectory, sessionManager: manager, authStorage, modelRegistry, settings,
         initialModelRefreshStrategy: 'offline',
@@ -367,6 +386,15 @@ export class WorkerSession {
       if (effort === undefined && selected.nativeModel.reasoning) throw new ProjectionError(422, 'MODEL_UNAVAILABLE', 'Selected model effort is unavailable');
       if (effort !== undefined) this.session.setThinkingLevel(effort);
     }
+    const profile = options.agentId ? await this.catalogs.agents.profile(options.agentId) : null;
+    if (profile && profile.allowedTools !== null) {
+      const available = this.session.getAllToolInfos();
+      if (profile.allowedTools.some(name => !available.some(tool => tool.name === name))) throw new ProjectionError(422, 'UNSUPPORTED_CAPABILITY', 'Selected profile tool is unavailable');
+      await this.session.setActiveToolsByName([...profile.allowedTools]);
+    } else if (this.admission.profile) {
+      await this.session.restoreNonMCPToolPresentation(this.defaultToolNames, this.defaultMountedNames, this.defaultRegisteredNames);
+    }
+    this.admission.profile = profile;
   }
 
   seed(): ProjectionSeed { return this.projection.seed(); }
@@ -419,6 +447,12 @@ export class WorkerSession {
       if (attachment.mediaType.startsWith('image/')) {
         images.push({ type: 'image', data: (await readFile(reference.path)).toString('base64'), mimeType: attachment.mediaType });
       } else {
+        if (attachment.size > MAX_AUTO_READ_TEXT_BYTES) {
+          throw new ProjectionError(413, 'PAYLOAD_TOO_LARGE', `Attachment "${attachment.name}" exceeds the maximum text size limit of 5 MB`);
+        }
+        if (await isProbablyBinary(reference.path)) {
+          throw new ProjectionError(415, 'UNSUPPORTED_MEDIA_TYPE', `Attachment "${attachment.name}" is a binary file; binary attachments are not supported`);
+        }
         const content = (await readFile(reference.path)).toString('utf8');
         contextMessages.push({ role: 'fileMention', files: [{ path: attachment.name, content }], timestamp: Date.now() });
       }
@@ -643,6 +677,20 @@ export class WorkerSession {
     return task;
   }
 
+  private async mcpResult(request: Extract<WorkerOperation, { type: 'mcp' }>['operation']): Promise<WorkerOperationResult> {
+    if (!this.mcp) throw new ProjectionError(503, 'MCP_APPLY_FAILED', 'MCP runtime ownership is unavailable');
+    switch (request.type) {
+      case 'read': return { type: 'mcp', result: { type: 'catalog', catalog: this.mcp.read(request.configuration) } };
+      case 'persist': return { type: 'mcp', result: { type: 'persisted', configuration: await this.mcp.persist(request.request, request.configuration) } };
+      case 'apply': return { type: 'mcp', result: { type: 'applied', result: await this.mcp.apply(request.request, request.configuration) } };
+      case 'reconnect': return { type: 'mcp', result: { type: 'catalog', catalog: await this.mcp.reconnect(request.serverId, request.request, request.configuration) } };
+      case 'oauth.status': return { type: 'mcp', result: { type: 'oauth', result: await this.mcp.oauthRead(request.serverId, request.configuration) } };
+      case 'oauth': return { type: 'mcp', result: { type: 'oauth', result: await this.mcp.oauthExecute(request.serverId, request.request, request.configuration) } };
+      case 'test': return { type: 'mcp', result: { type: 'tested', result: await this.mcp.test(request.serverId, request.configuration) } };
+      case 'secret.write': throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'MCP credential writes belong to the workspace owner');
+    }
+  }
+
   private async executeOperation(operation: WorkerOperation): Promise<WorkerOperationResult> {
     if (this.closed || this.failed) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Worker session is unavailable');
     if (this.controllingBranch) throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', 'Native branch selection is in progress');
@@ -735,20 +783,7 @@ export class WorkerSession {
         throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'Historical usage reads belong to the cold usage worker');
       case 'mcp.configuration.read':
         throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'Configuration hydration belongs to the workspace worker');
-      case 'mcp': {
-        if (!this.mcp) throw new ProjectionError(503, 'MCP_APPLY_FAILED', 'MCP runtime ownership is unavailable');
-        const request = operation.operation;
-        switch (request.type) {
-          case 'read': return { type: 'mcp', result: { type: 'catalog', catalog: this.mcp.read(request.configuration) } };
-          case 'persist': return { type: 'mcp', result: { type: 'persisted', configuration: await this.mcp.persist(request.request, request.configuration) } };
-          case 'apply': return { type: 'mcp', result: { type: 'applied', result: await this.mcp.apply(request.request, request.configuration) } };
-          case 'reconnect': return { type: 'mcp', result: { type: 'catalog', catalog: await this.mcp.reconnect(request.serverId, request.request, request.configuration) } };
-          case 'oauth.status': return { type: 'mcp', result: { type: 'oauth', result: await this.mcp.oauthRead(request.serverId, request.configuration) } };
-          case 'oauth': return { type: 'mcp', result: { type: 'oauth', result: await this.mcp.oauthExecute(request.serverId, request.request, request.configuration) } };
-          case 'test': return { type: 'mcp', result: { type: 'tested', result: await this.mcp.test(request.serverId, request.configuration) } };
-          case 'secret.write': throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'MCP credential writes belong to the workspace owner');
-        }
-      }
+      case 'mcp': return this.mcpResult(operation.operation);
       case 'shell':
         if (operation.operation.type === 'start') await this.authorize({ type: 'shell', request: operation.operation.request });
         return { type: 'shell', result: await this.shell.operation(operation.operation) };
@@ -780,7 +815,7 @@ export class WorkerSession {
               const queued = queue.at(-1);
               if (!queued || queued.role !== 'user') throw new ProjectionError(503, 'INTERNAL_ERROR', 'Native queued user message is unavailable');
               if (prepared.context.length > 0) this.queuedContext.set(queued, prepared.context);
-              messageId = this.projection.admitQueuedPrompt(queued, operation.request.input.attachments);
+              messageId = this.projection.admitQueuedPrompt(queued, operation.request.input.attachments, operation.request.input.context);
               acceptedAt = Date.now();
             },
           });
@@ -801,7 +836,7 @@ export class WorkerSession {
         if (this.closed || this.failed) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Worker session is unavailable');
         if (this.skillsApplying || !this.admission.skillsAvailable) throw new ProjectionError(503, 'SKILL_APPLY_FAILED', 'Native skills changed during prompt preparation');
         this.pendingTitleInput = operation.request.input.text.trim() || undefined;
-        this.emit(this.projection.beginRun(operation.runId, Date.now(), operation.request.input.attachments));
+        this.emit(this.projection.beginRun(operation.runId, Date.now(), operation.request.input.attachments, operation.request.input.context));
         const run = this.projection.activeRun();
         if (!run) throw new ProjectionError(503, 'INTERNAL_ERROR', 'Run admission failed');
         const accepted: Run = { ...run };

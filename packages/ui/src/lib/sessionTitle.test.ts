@@ -71,16 +71,17 @@ describe('native title completion', () => {
       expect(workspaceId).toBe('workspace-prepared');
       expect(input.selection).toEqual({ providerId: 'provider', modelId: 'model' });
       expect(input.prompt).toContain('Question one');
+      expect(input.prompt.startsWith('**Current title:** Keep me\n\n---\n\n')).toBe(true);
       return { completionId: input.completionId, selection: input.selection, status: 'completed', output: { kind: 'text', text: 'A useful title' }, finishReason: 'complete', usage: null };
     });
     restorers.push(() => resolve.mockRestore(), () => complete.mockRestore());
-    expect(await generateSessionTitle({ turns: [pair('one')], directory: '/repo', workspaceId: 'workspace-prepared', signal: new AbortController().signal })).toBe('A useful title');
+    expect(await generateSessionTitle({ turns: [pair('one')], currentTitle: 'Keep me', directory: '/repo', workspaceId: 'workspace-prepared', signal: new AbortController().signal })).toBe('A useful title');
     expect(resolve).not.toHaveBeenCalled();
   });
   test('provider failure cannot become a title and empty context dispatches nothing', async () => {
     const complete = spyOn(canonicalClient, 'complete').mockImplementation(async (_workspace, input) => ({ completionId: input.completionId, selection: input.selection, status: 'failed', error: { code: 'PROVIDER_FAILURE', detail: 'Provider refused', retryable: false } }));
     restorers.push(() => complete.mockRestore());
-    const input = { directory: '/repo', workspaceId: 'workspace-prepared', signal: new AbortController().signal };
+    const input = { currentTitle: 'Keep me', directory: '/repo', workspaceId: 'workspace-prepared', signal: new AbortController().signal };
     await expect(generateSessionTitle({ ...input, turns: [pair('one')] })).rejects.toThrow('Provider refused');
     await expect(generateSessionTitle({ ...input, turns: [] })).rejects.toThrow('No completed turns');
     expect(complete).toHaveBeenCalledTimes(1);
@@ -91,7 +92,7 @@ describe('native title completion', () => {
     const source = pair('one');
     delete source.assistant.providerId;
     delete source.assistant.modelId;
-    await expect(generateSessionTitle({ turns: [source], directory: '/repo', workspaceId: 'workspace-prepared', signal: new AbortController().signal })).rejects.toThrow('Completed turn model selection is unavailable');
+    await expect(generateSessionTitle({ turns: [source], currentTitle: 'Keep me', directory: '/repo', workspaceId: 'workspace-prepared', signal: new AbortController().signal })).rejects.toThrow('Completed turn model selection is unavailable');
     expect(complete).not.toHaveBeenCalled();
   });
 });

@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, test } from 'vitest';
 import { configureAgentService, resetAgentService, completeSmallModel } from './client.js';
 
 const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'canonical-small-model-'));

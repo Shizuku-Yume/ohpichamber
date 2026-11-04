@@ -1,4 +1,5 @@
 import type { JsonValue, ToolResultPart } from '@openchamber/agent-contract';
+import { z } from 'zod';
 
 import { cn } from '@/lib/utils';
 import { typography } from '@/lib/typography';
@@ -27,7 +28,10 @@ export const nativeToolResultContent = (result: ToolResultPart | undefined): {
     const output = result?.output;
     if (output === null) return { text: 'null', images: [] };
     if (!output || typeof output !== 'object' || Array.isArray(output) || !Array.isArray(output.content)) {
-        return { text: coerceToText(output), images: [] };
+        // A result made of text content blocks is one string to the reader, not
+        // JSON: joining the blocks keeps a tool card from showing raw envelopes.
+        const textBlocks = output === undefined ? null : unwrapTextBlocks(output);
+        return { text: textBlocks ?? coerceToText(output), images: [] };
     }
     const text: string[] = [];
     const images: Array<{ mediaType: string; data: string }> = [];
@@ -73,7 +77,7 @@ export const capToolOutputText = (
 };
 
 
-export const tryParseJsonOutput = (output: string): { data: unknown; isJson: boolean } => {
+export const tryParseJsonOutput = (output: string): { data: JsonValue; isJson: boolean } => {
     if (!output || typeof output !== 'string') {
         return { data: null, isJson: false };
     }
@@ -93,7 +97,7 @@ export const tryParseJsonOutput = (output: string): { data: unknown; isJson: boo
     }
 
     try {
-        const parsed = JSON.parse(trimmed);
+        const parsed: JsonValue = JSON.parse(trimmed);
         if (parsed !== null && typeof parsed === 'object') {
             return { data: parsed, isJson: true };
         }
@@ -101,6 +105,64 @@ export const tryParseJsonOutput = (output: string): { data: unknown; isJson: boo
     } catch {
         return { data: null, isJson: false };
     }
+};
+
+const TEXT_BLOCK_UNWRAP_PASSES = 4;
+const textBlockSchema = z.object({ type: z.literal('text'), text: z.string() });
+type TextBlock = z.infer<typeof textBlockSchema>;
+
+// The content-block envelope, a single block or a list of them, validated one
+// block at a time so the first non-text entry stops the parse (a whole-array
+// schema instead accumulates an error per entry, which stalls on large
+// structured results such as a serialized numeric array).
+const parseTextBlocks = (value: JsonValue): TextBlock[] | null => {
+    const blocks = Array.isArray(value) ? value : [value];
+    if (blocks.length === 0) return null;
+    const parsed: TextBlock[] = [];
+    for (const block of blocks) {
+        const result = textBlockSchema.safeParse(block);
+        if (!result.success) return null;
+        parsed.push(result.data);
+    }
+    return parsed;
+};
+
+const looksLikeJsonContainer = (text: string): boolean => {
+    const trimmed = text.trim();
+    return (trimmed.startsWith('[') && trimmed.endsWith(']')) || (trimmed.startsWith('{') && trimmed.endsWith('}'));
+};
+
+/**
+ * The text of a tool result made of text content blocks, joined on newlines.
+ * A finished tool call may carry its result as `[{type:"text",text}]`, and the
+ * transport may serialize that list once more, so the joined text is unwrapped
+ * again while it is itself such a list, four passes at most (upstream #5067).
+ * Any other result returns null.
+ */
+export const unwrapTextBlocks = (data: JsonValue): string | null => {
+    let blocks = parseTextBlocks(data);
+    if (!blocks) return null;
+
+    let text = '';
+    for (let pass = 0; pass < TEXT_BLOCK_UNWRAP_PASSES; pass += 1) {
+        let joined = '';
+        for (const block of blocks) {
+            joined += (joined ? '\n' : '') + block.text;
+        }
+        text = joined;
+
+        if (!looksLikeJsonContainer(joined)) break;
+        let parsed: JsonValue;
+        try {
+            parsed = JSON.parse(joined);
+        } catch {
+            break;
+        }
+        const inner = parseTextBlocks(parsed);
+        if (!inner) break;
+        blocks = inner;
+    }
+    return text;
 };
 
 const GREP_DOT_STYLE = { backgroundColor: 'var(--status-info)', opacity: 0.6 };

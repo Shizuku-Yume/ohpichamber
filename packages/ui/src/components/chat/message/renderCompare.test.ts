@@ -65,4 +65,14 @@ describe('message render comparison', () => {
   test('preserves an equivalent rebuilt record', () => {
     expect(areRenderRelevantMessagesEqual({ info: running, parts: running.parts }, { info: { ...running }, parts: [...running.parts] })).toBe(true);
   });
+
+  test('re-renders when captured session mention identity or label changes', () => {
+    const mention = { kind: 'session-message' as const, sessionId: 'session', messageId: 'message', sessionTitle: 'Title', excerpt: 'Excerpt' };
+    const original: Message = { ...running, role: 'user', parts: [{ type: 'text', partId: 'part_1', content: 'link', sessionMentions: [mention] }] };
+    const compare = (message: Message) => areRenderRelevantMessagesEqual({ info: original, parts: original.parts }, { info: message, parts: message.parts });
+    expect(compare({ ...original, parts: [{ type: 'text', partId: 'part_1', content: 'link', sessionMentions: [{ ...mention }] }] })).toBe(true);
+    expect(compare({ ...original, parts: [{ type: 'text', partId: 'part_1', content: 'link', sessionMentions: [{ ...mention, messageId: 'other' }] }] })).toBe(false);
+    expect(compare({ ...original, parts: [{ type: 'text', partId: 'part_1', content: 'link', sessionMentions: [{ ...mention, excerpt: 'Changed' }] }] })).toBe(false);
+    expect(compare({ ...original, parts: [{ type: 'text', partId: 'part_1', content: 'link' }] })).toBe(false);
+  });
 });

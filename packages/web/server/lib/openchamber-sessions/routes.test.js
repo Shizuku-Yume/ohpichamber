@@ -12,18 +12,45 @@ import { mergeMetadataPatch } from './session-metadata-store.js';
 
 let routeFixture;
 let routeFixtureDataDir;
+let testWorkspaceDirectory;
+let testAgentDirectory;
 
 const createMemorySessionMetadataStore = () => {
   const entries = new Map(); const revisions = new Map();
   const merge = mergeMetadataPatch;
-  return { entries, get: async id => entries.get(id) ?? null, getState: async id => entries.has(id) ? { metadata: entries.get(id), revision: String(revisions.get(id) ?? 1) } : null, setSessionMetadata: async (id, patch) => { const current = entries.get(id); const metadata = merge(current, patch); const changed = JSON.stringify(current) !== JSON.stringify(metadata); const revision = (revisions.get(id) ?? (current ? 1 : 0)) + (changed ? 1 : 0); entries.set(id, metadata); revisions.set(id, revision); return { metadata, revision: String(revision), changed }; } };
+  return { entries, get: async id => entries.get(id) ?? null, getState: async id => entries.has(id) ? { metadata: entries.get(id), revision: String(revisions.get(id) ?? 1) } : null, setSessionMetadata: async (id, patch) => { const current = entries.get(id); const metadata = merge(current, patch); const changed = JSON.stringify(current) !== JSON.stringify(metadata); const revision = (revisions.get(id) ?? (current ? 1 : 0)) + (changed ? 1 : 0); entries.set(id, metadata); revisions.set(id, revision); return { metadata, revision: String(revision), changed }; }, updateSessionMetadata: async (id, decide) => { const current = entries.get(id) ?? {}; const patch = decide(current); if (!patch) return { metadata: current, revision: String(revisions.get(id) ?? (entries.has(id) ? 1 : 0)), changed: false }; const metadata = merge(current, patch); const revision = (revisions.get(id) ?? (entries.has(id) ? 1 : 0)) + 1; entries.set(id, metadata); revisions.set(id, revision); return { metadata, revision: String(revision), changed: true }; } };
 };
 const createMemoryArchiveStore = () => { const entries = new Map(); return { entries, getState: async id => entries.has(id) ? { archivedAt: entries.get(id), revision: '1' } : null, archive: async (ids, archivedAt) => ({ archived: ids.map(id => { entries.set(id, archivedAt ?? 1); return { id, archivedAt: archivedAt ?? 1 }; }), failedIds: [] }), unarchive: async ids => ({ restored: ids.map(id => { entries.delete(id); return { id, archivedAt: null }; }), failedIds: [] }) }; };
-const validScope = (sessionId) => ({ sessionId, rootSessionId: sessionId, projectId: 'proj_1', workspaceId: 'ws_1', cwd: '/repo/app', agentDirectoryId: 'agent-dir-1', agentDirectory: '/repo/app/.agents', displayPath: 'app' });
+const validScope = (sessionId) => ({
+  sessionId,
+  rootSessionId: sessionId,
+  projectId: 'proj_1',
+  workspaceId: 'ws_1',
+  cwd: testWorkspaceDirectory ?? '/repo/app',
+  agentDirectoryId: 'agent-dir-1',
+  agentDirectory: testAgentDirectory ?? '/repo/app/.agents',
+  displayPath: 'app',
+});
 const createApp = (overrides = {}) => {
   const app = express(); const archiveStore = overrides.archiveStore ?? createMemoryArchiveStore(); const sessionMetadataStore = overrides.sessionMetadataStore ?? createMemorySessionMetadataStore();
   const { registerOpenChamberSessionRoutes } = overrides.routes;
-  registerOpenChamberSessionRoutes(app, { service: { request: vi.fn() }, resolveWorkspaceScope: async () => validScope('workspace'), resolveSessionScope: async id => validScope(id), resolveHostSessionScope: async id => id === 'ses_admitted' ? validScope(id) : null, registerSessionScope: async () => true, resolveAttachments: async () => [], capturePrompt: async (_scope, body) => body, beforeDispatch: async () => {}, onPromptAccepted: async () => {}, directCommandAdmissionStore: overrides.directCommandAdmissionStore ?? routeFixture.directCommandAdmissionStore, archiveStore, sessionMetadataStore, isRequestOriginAllowed: async () => true, ...overrides });
+  registerOpenChamberSessionRoutes(app, {
+    service: { request: vi.fn() },
+    agentScopeStore: overrides.agentScopeStore ?? routeFixture.agentScopeStore,
+    resolveWorkspaceScope: async () => validScope('workspace'),
+    resolveSessionScope: async id => validScope(id),
+    resolveHostSessionScope: async id => id === 'ses_admitted' ? validScope(id) : null,
+    registerSessionScope: async () => true,
+    resolveAttachments: async () => [],
+    capturePrompt: async (_scope, body) => body,
+    beforeDispatch: async () => {},
+    onPromptAccepted: async () => {},
+    directCommandAdmissionStore: overrides.directCommandAdmissionStore ?? routeFixture.directCommandAdmissionStore,
+    archiveStore,
+    sessionMetadataStore,
+    isRequestOriginAllowed: async () => true,
+    ...overrides,
+  });
   return { app, archiveStore, sessionMetadataStore, hostSessionState: routeFixture };
 };
 
@@ -32,8 +59,20 @@ describe('canonical session route contracts', () => {
   beforeAll(async () => {
     routes = await import('./routes.js');
     routeFixtureDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-routes-admission-'));
+    testWorkspaceDirectory = path.join(routeFixtureDataDir, 'app');
+    testAgentDirectory = path.join(testWorkspaceDirectory, '.agents');
+    fs.mkdirSync(testAgentDirectory, { recursive: true });
     routeFixture = createHostSessionState({ dataDir: routeFixtureDataDir });
     await routeFixture.initialize();
+    await routeFixture.agentScopeStore.ensureWorkspace({
+      hostProjectId: 'proj_1',
+      projectId: 'proj_1',
+      workspaceId: 'ws_1',
+      projectDirectory: testWorkspaceDirectory,
+      workspaceDirectory: testWorkspaceDirectory,
+      agentDirectory: testAgentDirectory,
+      name: 'Project',
+    });
   });
   afterAll(async () => {
     await routeFixture.close();
@@ -69,6 +108,7 @@ describe('canonical session route contracts', () => {
     } };
     const { createOpenChamberSessionService, registerCanonicalSessionRoutes } = routes;
     const sessionService = createOpenChamberSessionService({
+      agentScopeStore: routeFixture.agentScopeStore,
       service,
       resolveWorkspaceScope: async () => validScope('workspace'),
       resolveSessionScope: async id => validScope(id),
@@ -98,14 +138,208 @@ describe('canonical session route contracts', () => {
     await request(app).post('/api/agent/v1/sessions/ses_admitted/runs').send({}).expect(400);
     expect(calls).toHaveLength(afterValid);
   });
+  it('enforces Host admission invariant: rejects cold send when agentScopeStore is missing instead of bypassing admission', async () => {
+    const calls = [];
+    const service = { request: async (pathname) => {
+      calls.push(pathname);
+      return Response.json({});
+    } };
+    const { createOpenChamberSessionService, registerCanonicalSessionRoutes } = routes;
+    const sessionService = createOpenChamberSessionService({
+      service,
+      // agentScopeStore intentionally omitted to verify invariant enforcement
+      resolveWorkspaceScope: async () => validScope('workspace'),
+      resolveSessionScope: async id => validScope(id),
+      resolveHostSessionScope: async id => id === 'ses_admitted' ? validScope(id) : null,
+      registerSessionScope: async () => true,
+      resolveAttachments: async () => [],
+      capturePrompt: async (_scope, body) => body,
+      beforeDispatch: async () => {},
+      onPromptAccepted: async () => {},
+      directCommandAdmissionStore: routeFixture.directCommandAdmissionStore,
+      archiveStore: createMemoryArchiveStore(),
+      sessionMetadataStore: createMemorySessionMetadataStore(),
+    });
+    const app = express();
+    const router = express.Router();
+    registerCanonicalSessionRoutes(router, sessionService);
+    app.use('/api/agent/v1/sessions', router);
+    const prompt = { input: { text: 'Cold prompt', attachments: [], context: [] },
+      options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null } };
+    const response = await request(app).post('/api/agent/v1/sessions/ses_admitted/runs').send(prompt).expect(503);
+    expect(response.body).toMatchObject({
+      code: 'SERVICE_UNAVAILABLE',
+      detail: 'Host session admission authority is unavailable',
+    });
+    expect(calls.filter(path => path.endsWith('/reopen'))).toHaveLength(0);
+  });
+
+  describe('session links the UI owns', () => {
+    const agentEntry = {
+      id: 'acme/app#7', number: 7, title: 'Add search', url: 'https://github.com/acme/app/pull/7', kind: 'pull', linkedAt: 5,
+    };
+    const uiEntry = {
+      id: 'linear:ENG-12', identifier: 'ENG-12', title: 'Spec', url: 'https://linear.app/acme/issue/eng-12', kind: 'linear', linkedAt: 9,
+    };
+    const trackerEntry = {
+      id: 'jira:OPS-4', provider: 'jira', identifier: 'OPS-4', title: 'Outage', url: 'https://jira.example/browse/OPS-4', kind: 'tracker', linkedAt: 10,
+    };
+
+    it('persists mixed tracker operations through the Host and preserves existing links', async () => {
+      const { app } = createApp({ routes, sessionMetadataStore: routeFixture.sessionMetadataStore });
+      const sessionId = 'ses_admitted';
+      const legacyLinear = { ...uiEntry, provider: 'linear' };
+      await routeFixture.sessionMetadataStore.setSessionMetadata(sessionId, { openchamber: { linked_issues: [legacyLinear, agentEntry] } });
+      const issue = { id: 'acme/app#8', number: 8, title: 'Issue', url: 'https://github.com/acme/app/issues/8', kind: 'issue', linkedAt: 11 };
+
+      const linked = await request(app).post(`/api/openchamber/sessions/${sessionId}/links`)
+        .send({ entries: [trackerEntry, issue], linked: true }).expect(200);
+      expect(linked.body.metadata.openchamber.linked_issues).toEqual([legacyLinear, agentEntry, trackerEntry, issue]);
+      const readBack = await request(app).get(`/api/openchamber/sessions/${sessionId}/metadata`).expect(200);
+      expect(readBack.body.metadata).toEqual(linked.body.metadata);
+
+      const neutralLinear = { ...legacyLinear, kind: 'tracker' };
+      const linearRelinked = await request(app).post(`/api/openchamber/sessions/${sessionId}/links`)
+        .send({ entries: [neutralLinear], linked: true }).expect(200);
+      expect(linearRelinked.body.metadata.openchamber.linked_issues).toEqual([agentEntry, trackerEntry, issue, legacyLinear]);
+
+      const unlinked = await request(app).post(`/api/openchamber/sessions/${sessionId}/links`)
+        .send({ entries: [trackerEntry, issue], linked: false }).expect(200);
+      expect(unlinked.body.metadata.openchamber.linked_issues).toEqual([agentEntry, legacyLinear]);
+      expect((await routeFixture.sessionMetadataStore.getState(sessionId)).metadata).toEqual(unlinked.body.metadata);
+    });
+
+    it('rejects invalid tracker identities atomically and checks Host scope', async () => {
+      const { app, sessionMetadataStore } = createApp({ routes });
+      sessionMetadataStore.entries.set('ses_admitted', { openchamber: { linked_issues: [uiEntry] } });
+      for (const bad of [
+        { ...trackerEntry, provider: undefined },
+        { ...trackerEntry, provider: 'INVALID' },
+        { ...trackerEntry, identifier: '' },
+        { ...trackerEntry, identifier: '  ' },
+        { ...trackerEntry, id: 'jira:OTHER-1' },
+        { ...trackerEntry, linkedAt: undefined },
+        { ...trackerEntry, author: 42 },
+        { ...trackerEntry, unexpected: true },
+      ]) {
+        await request(app).post('/api/openchamber/sessions/ses_admitted/links')
+          .send({ entries: [agentEntry, bad], linked: true }).expect(400);
+      }
+      await request(app).post('/api/openchamber/sessions/ses_foreign/links')
+        .send({ entries: [trackerEntry], linked: true }).expect(404);
+      expect(await sessionMetadataStore.get('ses_admitted')).toEqual({ openchamber: { linked_issues: [uiEntry] } });
+    });
+
+    it('appends to the links already on the record and announces the merged metadata', async () => {
+      const { app, sessionMetadataStore } = createApp({ routes });
+      const broadcastGlobalUiEvent = vi.fn();
+      // Rebuild with the broadcast spy so the fallback writer announces.
+      const built = createApp({ routes, sessionMetadataStore, broadcastGlobalUiEvent });
+      // As if an agent's `session.link` had already written this session.
+      sessionMetadataStore.entries.set('ses_admitted', { openchamber: { linked_issues: [agentEntry] } });
+
+      const response = await request(built.app)
+        .post('/api/openchamber/sessions/ses_admitted/links')
+        .send({ entries: [uiEntry], linked: true, directory: '/repo/app' })
+        .expect(200);
+
+      expect(response.body.metadata.openchamber.linked_issues).toEqual([agentEntry, uiEntry]);
+      await expect(sessionMetadataStore.get('ses_admitted')).resolves.toEqual(response.body.metadata);
+      expect(broadcastGlobalUiEvent).toHaveBeenCalledWith({
+        type: 'openchamber:session-metadata',
+        properties: { sessionID: 'ses_admitted', metadata: response.body.metadata, revision: expect.any(String) },
+      });
+    });
+
+    it('refreshes a re-linked entry and keeps the rest of the list', async () => {
+      const { app, sessionMetadataStore } = createApp({ routes });
+      sessionMetadataStore.entries.set('ses_admitted', { openchamber: { linked_issues: [agentEntry, uiEntry] } });
+
+      const response = await request(app)
+        .post('/api/openchamber/sessions/ses_admitted/links')
+        .send({ entries: [{ ...agentEntry, title: 'Add search (renamed)' }], linked: true })
+        .expect(200);
+
+      expect(response.body.metadata.openchamber.linked_issues).toEqual([
+        uiEntry,
+        { ...agentEntry, title: 'Add search (renamed)' },
+      ]);
+    });
+
+    it('unlinks by id and leaves unrelated entries', async () => {
+      const { app, sessionMetadataStore } = createApp({ routes });
+      sessionMetadataStore.entries.set('ses_admitted', { openchamber: { linked_issues: [agentEntry, uiEntry] } });
+
+      const response = await request(app)
+        .post('/api/openchamber/sessions/ses_admitted/links')
+        .send({ entries: [{ id: 'acme/app#7', title: 'Add search', url: 'https://github.com/acme/app/pull/7', kind: 'pull' }], linked: false })
+        .expect(200);
+
+      expect(response.body.metadata.openchamber.linked_issues).toEqual([uiEntry]);
+    });
+
+    it('applies a batch in one write', async () => {
+      const { app, sessionMetadataStore } = createApp({ routes });
+      const broadcastGlobalUiEvent = vi.fn();
+      const built = createApp({ routes, sessionMetadataStore, broadcastGlobalUiEvent });
+      const second = { id: 'acme/app#8', number: 8, title: 'Second', url: 'https://github.com/acme/app/issues/8', kind: 'issue', linkedAt: 9 };
+
+      const response = await request(built.app)
+        .post('/api/openchamber/sessions/ses_admitted/links')
+        .send({ entries: [uiEntry, second], linked: true })
+        .expect(200);
+
+      expect(response.body.metadata.openchamber.linked_issues).toEqual([uiEntry, second]);
+      expect(broadcastGlobalUiEvent).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects an invalid entry with 400 and writes nothing', async () => {
+      const { app, sessionMetadataStore } = createApp({ routes });
+      const broadcastGlobalUiEvent = vi.fn();
+      const built = createApp({ routes, sessionMetadataStore, broadcastGlobalUiEvent });
+      sessionMetadataStore.entries.set('ses_admitted', { openchamber: { linked_issues: [agentEntry] } });
+
+      await request(built.app)
+        .post('/api/openchamber/sessions/ses_admitted/links')
+        .send({ entries: [{ id: 'x', title: 'No kind', url: 'https://x.dev/1' }], linked: true })
+        .expect(400);
+      await request(built.app)
+        .post('/api/openchamber/sessions/ses_admitted/links')
+        .send({ entries: [uiEntry] })
+        .expect(400);
+      await request(built.app)
+        .post('/api/openchamber/sessions/ses_admitted/links')
+        .send({ entries: 'nope', linked: true })
+        .expect(400);
+
+      await expect(sessionMetadataStore.get('ses_admitted'))
+        .resolves.toEqual({ openchamber: { linked_issues: [agentEntry] } });
+      expect(broadcastGlobalUiEvent).not.toHaveBeenCalled();
+    });
+
+    it('writes nothing when the operation changes no entry', async () => {
+      const { app, sessionMetadataStore } = createApp({ routes });
+      const broadcastGlobalUiEvent = vi.fn();
+      const built = createApp({ routes, sessionMetadataStore, broadcastGlobalUiEvent });
+      await request(built.app)
+        .post('/api/openchamber/sessions/ses_admitted/links')
+        .send({ entries: [{ id: 'acme/app#99', number: 99, title: 'T', url: 'https://github.com/acme/app/issues/99', kind: 'issue' }], linked: false })
+        .expect(200, { metadata: {} });
+
+      expect(broadcastGlobalUiEvent).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe('canonical session list persistence', () => {
   const createService = async (state, sessions) => {
     const { createOpenChamberSessionService } = await import('./routes.js');
+    const directory = path.dirname(state.databasePath);
+    const workspace = await state.agentScopeStore.ensureWorkspace({ hostProjectId: 'project', projectId: 'project', workspaceId: 'workspace', projectDirectory: directory, workspaceDirectory: directory, agentDirectory: directory, name: 'Project' });
     return createOpenChamberSessionService({
       service: { request: async () => Response.json({ items: sessions, errors: [] }) },
-      resolveWorkspaceScope: async () => ({ ...validScope('workspace'), projectId: 'project', workspaceId: 'workspace' }),
+      agentScopeStore: state.agentScopeStore,
+      resolveWorkspaceScope: async () => workspace,
       resolveSessionScope: async id => validScope(id),
       resolveHostSessionScope: async id => validScope(id),
       registerSessionScope: async () => true,

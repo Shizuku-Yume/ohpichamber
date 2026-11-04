@@ -239,8 +239,9 @@ and the send path reading the same grammar.
   (inline comments, terminal selections, browser annotations, PR context,
   linked issue/PR) retains local text and structured metadata built by
   `lib/messages/contextParts.ts`. Canonical prompt capture formats this
-  context before delivery; transcript `Part` records expose `content`, not
-  local composer metadata. PR instructions precede the PR diff.
+  context before delivery. Canonical transcript text parts carry validated
+  session mention identities, preserved by Agent Service projection across
+  streams and native history. PR instructions precede the PR diff.
   The same module's `buildComposerContext` captures that context when a message
   is **queued** instead of sent: the chips leave the composer with the message
   (as `QueuedContextPart`s on the queue item), the server delivers them through
@@ -249,6 +250,13 @@ and the send path reading the same grammar.
   mention, file mentions, and skill instruction were resolved when it was
   queued, never at delivery — and its context follows it before the next
   queued message.
+- `sessionReferences.ts` follows canonical history cursors until a linked
+  message is found or history is exhausted. Missing, unreadable, and failed
+  reads remain unresolved rather than becoming session-only references: the
+  link stays as text and the existing paste/send warning reports it. Reads
+  stop if the active runtime changes between pages.
+  Web/PWA and Electron use the shared Host gateway; hosted mobile and
+  Capacitor use the same shared UI and configured Host gateway.
 - Extension slash commands are routed first (`submit/guestCommands.ts`,
   entries from `useGuestCommands` minus every name the composer already
   knows, so an extension can never shadow a built-in, an OpenCode command, or

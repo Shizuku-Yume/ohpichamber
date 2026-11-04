@@ -260,10 +260,9 @@ export async function exportNativeArchive(reference: SessionReference, registere
   };
   const walk = async (source: string, path: string, allowMissing = false): Promise<void> => {
     assertArchiveActive(signal);
-    let entries;
     try { if (!(await lstat(source)).isDirectory()) invalid('Artifact source is not a directory'); }
     catch (error) { if (allowMissing && z.object({ code: z.literal('ENOENT') }).safeParse(error).success) return; throw error; }
-    entries = await readdir(source, { withFileTypes: true });
+    const entries = await readdir(source, { withFileTypes: true });
     for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
       assertArchiveActive(signal);
       const child = join(source, entry.name);

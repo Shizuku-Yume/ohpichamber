@@ -2,12 +2,11 @@
 
 **Effort:** omp-native-parity
 **Task type:** feature
-**Base commit:** <commit-sha>
-**Status:** blocked
+**Base commit:** 64de3c9c95b7e5a3dc8d49924d47da216b89c6c8
 
 **Delivers:** `omp-native-parity/integration` carries the refreshed `main` — the upstream area refresh landed on `main` (upstream `0056bf6a9`, ~143 commits since `dee0c88ebd`, 1958 files) — with every parity behaviour re-applied on top: OMP-native sessions and prompt, OMP defaults and settings, cold reads, the composer mode dropdown in the agent-picker slot, the named approval card, and no root agent picker. Every upstream feature that touches a shared file still works after the merge.
 
-**Blocked by:** None
+**Blocked by:** upstream-refresh/30
 
 **Dependencies:** the upstream refresh landing on `main`: `upstream-refresh/30-gate-records-history-link.md` ("Gate, records and upstream history link", the refresh effort's final gate task) archived under `.workflow/done/upstream-refresh/` and `upstream-refresh/integration` (`8ee84af280`) landed on `main`, with these verified follow-ups merged into it first: task 20's `upstream-refresh/fix-ar-he` (`76dc5b5c72` Runtime status ar/he copy, `4f8ebec202` workspace-warming ar/he copy, `8045ad1fa4` LTR diagnostics body) and task 21's `upstream-refresh/21-warming` (`883a101709` per-session warming deletion, `716182d57c` settings sanitizer for the registry's plain keys). If either branch is not in the landed `main`, stop and re-base this plan on what actually landed before merging. That task file is not in this tree until the refresh lands, so the start record changes this field to `Blocked by: upstream-refresh/30`, drops `Status: blocked` and deletes `## Blocked`.
 
@@ -39,15 +38,101 @@
 - [ ] Headless Chrome real path against the real provider (`~/.config/ohpichamber/omp-m0-provider.env`) on the merged tree: draft chat Main→Plan, Vibe, Goal; a conversation that completes; a bash approval card naming `bash` and the command; Settings' workspace warming checkbox going off→idle→off and reading back the persisted mode after a reload (the canonical `cache-warming` path, no per-session warming control anywhere); and with the UI locale set to `ar` or `he`, the Runtime status dialog opening with RTL chrome while its diagnostics body stays LTR. Screenshots and logs under `/home/shizuku/Project/ohpichamber-omp-artifacts/onp-merge-<date>/`.
 - [ ] The spec Notes and the `## Progress` record the merged `main` SHA, the parity tip before the merge, and the resolution record; no parity or refresh task is left claiming a state the merge contradicts.
 
-## Blocked
-
-Waiting on the upstream refresh landing on `main`: `upstream-refresh/30` ("Gate, records and upstream history link") archived under `.workflow/done/upstream-refresh/` and `upstream-refresh/integration` (`8ee84af280`) landed on `main`. Nothing here can start before that: the refreshed files this task resolves against do not exist on `main` yet.
-
-The refresh is not at task 30: its task 07 (review surfaces) is still open, and its real-path criteria are explicitly unmet for want of host routes and provider credentials. Those features are on this task's survival list (07's review board and file views reach the overlapping settings and session surfaces), so the merge waits for either task 07 to pass or a maintainer decision to waive named criteria — and the waiver must say which checks the survival list records as "waived at refresh, not re-run here". Do not merge on an assumed waiver, and do not close task 07 or the refresh from here.
-
-This is a waiting dependency, not a wrong plan — no `flow-break amend` is needed. `Blocked by: None` above exists only because the blocker's task file is not in this tree until then; `next` says "needs replanning" because of the `Status: blocked` that keeps a non-startable draft out of the ready list. At the start record, set `Blocked by: upstream-refresh/30`, drop `Status: blocked`, and delete this section.
-
 ## Progress
 
 - Drafted 2026-10-29 with the plan; not started. Order and reasoning: `decisions.md: 2026-10-29 - Merge the refreshed main into parity instead of landing parity first`.
 - Amended 2026-10-29 for the verified task 20/21 follow-ups that are not yet on the refresh integration tip (`8ee84af280`): `upstream-refresh/fix-ar-he` (Runtime status ar/he strings, workspace-warming ar/he copy, LTR diagnostics body under RTL chrome) and `upstream-refresh/21-warming` (per-session warming deleted, settings sanitizer accepts the registry's plain switches). Both must be in the landed `main` before this merge starts. Their merge checks are the four task-20/21 items under Done when; the workspace warming control survives only through the refreshed `DefaultsSettings.tsx`, whose test parity deletes.
+- Started 2026-11-04: Merging refreshed `main` (`577c803032fe0e5232774321ac082455c0daf506`) into `omp-native-parity/integration` (`64de3c9c95b7e5a3dc8d49924d47da216b89c6c8`), merge base `dee0c88ebd6c52810fefaa74d5848a23ecf6a0d9`.
+- Reconciled all 95 unmerged conflict entries across workflow, agent-service, web/server, and ui subsystems; 0 unmerged paths remain.
+- Kept modify/delete paths deleted: `MobileTimelineList.tsx`, `ProjectIdentityFields.tsx`, `multirun/AgentSelector.tsx`, `sections/commands/AgentSelector.tsx`, `DefaultsSettings.test.tsx`, `btw.ts`, `sessionGoalActions.ts`, `fork-inheritance.js`, `fork-inheritance.test.js`, `session-goal/DOCUMENTATION.md`.
+- Replaced deleted `DefaultsSettings.test.tsx` mount coverage with dedicated `SessionWarmingCheckbox.test.tsx` testing `readCacheWarming` / `updateCacheWarming` off<->idle round-trip and persisted mode after reload without stale root AgentSelector mocks.
+- Reconciled `agent-service`: preserved OMP 18.16 `ui.approve` bridge, `getEditorComponent`, `rerenderMessage`, `getLinkClicksAvailable` alongside parity's `requestPlanReview`, `requestPermission` (ACP 4-option cards), `requestNativeGrant`, `approvalInputSummary` redaction, and `resolveApproval('approve-always')`.
+- Reconciled `registry.ts`: preserved upstream worktree archive lease deletion methods (`deleteWorktreeArchiveFamily`, `retireWorktreeArchiveDelete`) alongside cold session listing (`SessionWorkspaceScope`) and cold reads.
+- Reconciled `workers.ts`: combined capacity serialization queue with worktree leases.
+- Reconciled `catalog-models.ts`: combined variant-as-effort mapping with OMP defaults and reasoningEffort off validation.
+- Reconciled `host-tool.ts`: registered `openchamber_knowledge` with essential load mode.
+- Reconciled `projection.ts` & `session.ts`: preserved `SessionMentionSchema` and prompt context while retaining `RunOrigin` for worker runs and OMP title handling.
+- Reconciled `web/server`: preserved worktree archive restore/delete routes, linked issues, OMP session rename, cold reads without waking workers, and prompt parity (no memory or save/link guidance copied into prompts).
+- Reconciled `ui` catalogs: preserved all 9,000+ refreshed upstream keys in all 26 catalogs, added parity keys (`chat.chatInput.mode.*`, `chat.planReview.*`, `chat.compact.instructions.*`, `chat.modelControls.off/routes/effort`, `chat.permissionCard.alwaysAllow`), added `ompSettingsI18n` and `workerRunsI18n`, and kept `ar` and `he` catalogs complete.
+- Reconciled `ui` components, stores, sync, and views: kept one-view sidebar architecture and v13 store migration; preserved ephemeral BTW panel; retained canonical OMP goal submission and mode selector; dropped root agent pickers in `ChatInput.tsx`, `ModelControls.tsx`, `CommandAutocomplete.tsx`, `DefaultsSettings.tsx`, `ScheduledTaskEditorDialog.tsx`, and `SourceBoardActions.tsx`.
+
+### 2026-11-05 Route Fix & Invariant Regression Verification
+- Replaced the permissive `reopen` fallback in `packages/web/server/lib/openchamber-sessions/routes.js` with canonical `const reopen = (scope) => withSessionAdmission(scope, 'reopen', scope.rootSessionId, () => reopenNative(scope));`.
+- Enforces the Host worktree admission authority fence on all session reopen dispatches (send, branch switch, control, deletion), preventing native workers from bypassing admission during archive capture, restore, or delete operations.
+- Preserved cold reads: `open` and `history` routes stay strictly without `reopen`.
+- Provided `agentScopeStore` in `packages/web/server/lib/openchamber-sessions/routes.test.js` and `packages/web/server/lib/host/direct-command-admission-store.test.mjs`.
+- Added invariant regression test in `routes.test.js`: `enforces Host admission invariant: rejects cold send when agentScopeStore is missing instead of bypassing admission` (asserts 503 `SERVICE_UNAVAILABLE` with `Host session admission authority is unavailable` and 0 calls to native `/reopen`).
+- Test results:
+  - `server/lib/openchamber-sessions/routes.test.js`: 20 passed (20 total) in 704ms.
+  - `server/lib/host/direct-command-admission-store.test.mjs`: 16 passed (16 total) in 717ms.
+  - Full related suite (`server/lib/openchamber-sessions/`, `worktree-archive-host.test.js`, `worktree-archive-native.test.js`, `direct-command-admission-store.test.mjs`): 14 passed (14 test files, 145 tests) in 22.24s.
+
+### 2026-11-05 Headless Chrome Real-Provider Acceptance Evidence (Item 38)
+- Executed against private provider configuration `~/.config/ohpichamber/omp-m0-provider.env` (`CLIProxyAPI/gemini-3.8-flash`, High effort; zero secrets logged):
+  - **Item 1 (Draft Mode Switcher):** Composer mode dropdown in agent-picker slot switched Main → Plan, Vibe, Goal; selecting Goal mounted dedicated `Set Session Goal` dialog. (`01-initial-draft.png` - `05-goal-mode-dialog.png`).
+  - **Item 2 (Complete One Conversation):** Sent `"Write a haiku about automated testing."`; streaming completion succeeded (`"Silent runners check, / Catching bugs before they ship, / Clean suite passes green."`), auto-titled session as `"Write haiku about automated testing"`, turn stats recorded (8.8s, 10.6K tokens up, 704 down). (`09-conversation-completed.png`).
+  - **Item 3 (Named Bash Approval Card):** Configured `tools.approval.bash: ask`. Prompt to run `echo "ONP-TASK11-BASH-APPROVAL"` triggered ACP named approval card displaying `bash`, description `"Run a command"`, command `"echo \"ONP-TASK11-BASH-APPROVAL\""`, and options (`Deny`, `Always allow bash for this session`, `Allow once`). Clicking `Allow once` executed tool command, rendered tool result, and auto-titled session as `"Run bash echo command"`. Config restored immediately. (`10-bash-approval-card.png`, `11-bash-approved-output.png`).
+  - **Item 4 (Workspace Warming Checkbox):** Settings > Sessions mounted `SessionWarmingCheckbox` at `sessions.warming`. Toggled from `idle` to `off` (written to `/api/agent/v1/workspaces/:id/cache-warming`, revision 1). Reloaded page: verified persisted `mode: "off"` loaded cleanly. Toggled back to `idle` (persisted revision 2, `mode: "idle"`). (`06-warming-checkbox-idle.png` - `08-warming-checkbox-idle-restored.png`).
+  - **Item 5 (RTL Locale Runtime Status Dialog):** Tested Arabic (`ar`) and Hebrew (`he`) with `dir="rtl"`. Runtime Status dialog opened with RTL chrome (`حالة التشغيل` / `מצב סביבת ההרצה`) while diagnostics `<pre>` retained `dir="ltr"` and `text-start`. Action buttons localized. (`12-arabic-rtl-runtime-status.png`, `13-hebrew-rtl-runtime-status.png`).
+- Evidence artifacts stored at `/home/shizuku/Project/ohpichamber-omp-artifacts/onp-merge-2026-11-05/`.
+
+### 2026-11-05 Overlapping Paths Disposition Record (191 Paths)
+Independently verified from actual diffs between merge base `dee0c88ebd`, refreshed `main` `577c803032`, parity `64de3c9c95`, and staged merge:
+
+#### 1. Modify/Delete Paths (10 paths) — All Kept Deleted
+- `packages/ui/src/apps/MobileTimelineList.tsx`: Retired upstream in refresh; parity modifications dropped; kept deleted.
+- `packages/ui/src/components/multirun/AgentSelector.tsx`: Root agent picker retired by parity; upstream trigger-size/spinner additions dropped; kept deleted.
+- `packages/ui/src/components/sections/commands/AgentSelector.tsx`: Root agent picker retired by parity; upstream trigger-size/spinner additions dropped; command bindings arrive via command resource metadata; kept deleted.
+- `packages/ui/src/components/sections/openchamber/DefaultsSettings.test.tsx`: Stale root AgentSelector test mocks deleted by parity; covered by dedicated `SessionWarmingCheckbox.test.tsx`; kept deleted.
+- `packages/ui/src/components/sections/projects/ProjectIdentityFields.tsx`: Retired upstream in refresh; parity modifications dropped; kept deleted.
+- `packages/ui/src/lib/btw.ts`: Retired by parity in favor of ephemeral text BTW records; upstream modifications dropped; kept deleted.
+- `packages/ui/src/lib/sessionGoalActions.ts`: Retired by parity in favor of canonical OMP goal submission; upstream modifications dropped; kept deleted.
+- `packages/web/server/lib/openchamber-sessions/fork-inheritance.js`: Fork inheritance retired by parity (Host rejects root/subagent inheritance); upstream modifications dropped; kept deleted.
+- `packages/web/server/lib/openchamber-sessions/fork-inheritance.test.js`: Fork inheritance tests retired by parity; kept deleted.
+- `packages/web/server/lib/session-goal/DOCUMENTATION.md`: Retired by parity; kept deleted.
+
+#### 2. Uncertain / Overridden Paths (2 paths) — Attention Required
+- `packages/ui/src/components/chat/btw/useBtwPanelState.ts` [KEPT PARITY]: Upstream refresh added `parentPromoted?: boolean` and `btwHoldsDock(panel, parentHasRequest)` to support session-fork BTW panel docking. Parity replaces session-fork BTW with ephemeral BTW text state (`ephemeralRecordId`, `ephemeralText`, `ephemeralStatus`). Staged merge keeps parity's version verbatim; upstream's `btwHoldsDock` has 0 callers across the repository.
+- `packages/web/server/lib/session-knowledge/runtime.test.js` [KEPT PARITY]: Upstream refresh added tests verifying prompt guidance injection for `render_page` and `workflow` tools. Parity Task 03 strictly forbids prompt guidance injection (memory titles, session links, tool instructions) into worker prompts. Staged merge retains parity's prompt-parity tests verbatim; upstream tool guidance tests are omitted.
+
+#### 3. Refreshed Main Clean Paths (13 paths) — Parity Changes Superseded or Relocated
+- `packages/ui/src/apps/MobileSessionsSheet.tsx` [KEPT MAIN]: Upstream Task 32 completely refactored the mobile sheet (2,974 lines of diff) and extracted session row rendering into `SessionSidebarRows`. Parity's `session.title` patch on the retired local `SessionRow` was superseded because row rendering now routes through `SessionSidebarRows` where OMP row models apply.
+- `packages/ui/src/components/onboarding/LegacyDataNotice.tsx` [KEPT MAIN]: Upstream exports retained; parity had unexported 4 helpers (`LegacyDataPresence`, `isLegacyNoticeDismissed`, `dismissLegacyNotice`, `readLegacyDataPresence`) for oxlint dead-code cleanup, which are safe to retain as exported.
+- `packages/ui/src/components/views/DiffView.tsx` [KEPT MAIN]: Upstream Task 12 diff refactor eliminated `execution.agentId`; parity's deletion of `agentId: execution.agentId` was subsumed by upstream's refactor.
+- 10 Settings Catalogs (`de.settings.ts`, `en.settings.ts`, `fr.settings.ts`, `ja.settings.ts`, `ko.settings.ts`, `nl.settings.ts`, `pl.settings.ts`, `tr.settings.ts`, `zh-CN.settings.ts`, `zh-TW.settings.ts`) [KEPT MAIN]: Upstream modularized settings dictionaries into dedicated files. Parity's OMP settings strings were consolidated into `ompSettingsI18n.ts` rather than fragmented across `*.settings.ts`.
+
+#### 4. Reconciled Paths (166 paths) — Upstream Additions Preserved + Parity Behaviors Applied
+- **Workflow & Contracts (3 paths):**
+  - `.workflow/decisions.md`: Preserved upstream union entries + parity decisions.
+  - `.workflow/development.md`: Preserved upstream refresh guidelines + parity test commands.
+  - `packages/agent-contract/src/metadata.ts`: Preserved upstream tasks 17/18 schemas + parity metadata schemas.
+- **Agent Service Subsystem (22 paths):**
+  - `DOCUMENTATION.md`, `README.md`: Combined upstream capacity docs with OMP parity architecture notes.
+  - `src/protocol.ts`, `src/native-policy-protocol.ts`: Preserved upstream workflows/worktree protocols + ACP 4-option cards & OMP request types.
+  - `src/sessions/registry.ts`, `src/sessions/registry-native.test.ts`: Preserved upstream worktree archive lease deletion (`deleteWorktreeArchiveFamily`, `retireWorktreeArchiveDelete`) + cold session listing (`SessionWorkspaceScope`) and cold reads.
+  - `src/supervisor/service.ts`, `src/supervisor/service-capacity.test.ts`, `src/supervisor/fixtures/capacity-worker.mjs`: Combined capacity serialization queue with worktree leases.
+  - `src/supervisor/workers.ts`, `src/supervisor/workers.capacity.test.ts`: Combined capacity queuing with worktree lease management.
+  - `src/worker/catalog-models.ts`, `src/worker/catalog-models.test.ts`: Combined variant-as-effort mapping with OMP defaults and reasoningEffort off validation.
+  - `src/worker/catalog-resources.ts`: Combined upstream resource caching with OMP catalog bindings.
+  - `src/worker/host-tool.ts`: Registered `openchamber_knowledge` with essential load mode.
+  - `src/worker/native-permission-bridge.ts`: Preserved OMP 18.16 `ui.approve` bridge, ACP 4-option cards, `allow_always`, and redacted approval summaries.
+  - `src/worker/projection.ts`: Preserved upstream projection envelopes + OMP session titles and cold read projection.
+  - `src/worker/prompt.ts`: Preserved upstream prompt context + strict OMP prompt contract (no prompt injection).
+  - `src/worker/questions.ts`, `src/worker/requests.ts`: Combined question schemas and request CAS with ACP cards.
+  - `src/worker/session.ts`, `src/worker/session-interaction.test.ts`, `src/interaction/manager.test.ts`, `src/worker/interaction.test.ts`: Preserved ACP permission bridge, `getEditorComponent`, `rerenderMessage`, `getLinkClicksAvailable`, `requestPlanReview` without `ohpichamber.context` or tool guidance in worker prompts.
+  - `src/worker/types.ts`: Reconciled worker types across both feature sets.
+- **Web Server Subsystem (30 paths):**
+  - `server/index.js`: Preserved worktree archive routes, agentScopeStore wiring, OMP session service.
+  - `server/lib/dev-servers/routes.js`, `server/lib/fs/routes.js`, `server/lib/git/routes.js`, `server/lib/guests/routes.js`, `server/lib/linear/routes.js`, `server/lib/magic-prompts/routes.js`, `server/lib/notifications/routes.js`, `server/lib/openchamber-control/routes.js`, `server/lib/project-context/routes.js`, `server/lib/quota/routes.js`, `server/lib/scheduled-tasks/routes.js`, `server/lib/session-folders/routes.js`, `server/lib/source-control/routes.js`, `server/lib/tunnels/routes.js`, `server/lib/walkthrough/routes.js`: Reconciled upstream route improvements while enforcing Host scope boundaries and origin gates.
+  - `server/lib/git/service.test.js`, `server/lib/git/worktree-archive-host.test.js`, `server/lib/git/worktree-archive-native.test.js`: Reconciled worktree archive host/native test suites with agentScopeStore bindings.
+  - `server/lib/host/agent-scope-runtime.js`: Reconciled worktree scope resolvers with Host session admission tracking.
+  - `server/lib/host/feature-routes-runtime.js`, `server/lib/host/openchamber-routes.js`, `server/lib/host/openchamber-routes.test.js`: Reconciled feature routes and openchamber routes.
+  - `server/lib/host/settings-helpers.js`, `server/lib/host/settings-helpers.test.js`: Preserved `PERSISTABLE_BOOLEAN_SETTINGS`, clamped `liveBrowserTabLimit`, trimmed `smallModelVariant`, and OMP defaults.
+  - `server/lib/openchamber-sessions/routes.js`: Preserved worktree archive restore/delete, linked issues, OMP session rename, cold reads without waking workers, and strictly enforced Host session admission fence.
+  - `server/lib/openchamber-sessions/routes.test.js`, `server/lib/openchamber-sessions/routes-native-controls.test.js`: Reconciled canonical session test suites with agentScopeStore and admission fence.
+  - `server/lib/openchamber-sessions/session-link.test.js`, `server/lib/openchamber-sessions/session-linked-issues.js`, `server/lib/openchamber-sessions/session-linked-issues.test.js`: Reconciled linked issues operations through Host metadata.
+  - `server/lib/host/direct-command-admission-store.test.mjs`: Reconciled direct command admission store tests with agentScopeStore workspace registration.
+- **UI Subsystem (111 paths):**
+  - Hot-spots: `ChatInput.tsx`, `ModelControls.tsx`, `ComposerFooter.tsx`, `buildOutgoingMessage.ts`, `useConfigStore.ts`, `session-ui-store.ts`, `sync-context.tsx`, `useUIStore.ts`, `messageQueueStore.ts`, `ContextPanel.tsx`, `SessionSidebarRows.tsx`, `SourceBoardActions.tsx`, `ScheduledTaskEditorDialog.tsx`, `CommandAutocomplete.tsx`, `DefaultsSettings.tsx`, `SessionWarmingCheckbox.tsx`.
+  - Catalogs: All 26 refreshed upstream catalogs preserved whole; parity keys added (`chat.chatInput.mode.*`, `chat.planReview.*`, `chat.compact.instructions.*`, `chat.modelControls.off/routes/effort`, `chat.permissionCard.alwaysAllow`); `ar` and `he` catalogs complete.
+  - Reconciled components: ContextPanel, MarkdownViewer, DiffView helpers, SessionStatusBanner, SessionDetailHeader, SettingsLayout, etc., preserving upstream design system and layout works while enforcing OMP composer mode, approval cards, and no root agent pickers.

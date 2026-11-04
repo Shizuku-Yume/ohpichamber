@@ -93,7 +93,7 @@ const withBackgroundWork = (activeSessionIds: ReadonlySet<string>): ReadonlySet<
 const hasBackgroundWork = (sessionId: string, activeSessionIds: ReadonlySet<string>): boolean => hasActiveSubagent(sessionId, activeSessionIds) || hasRunningShell(sessionId);
 type SessionTurnActivity = 'running' | 'subagent' | 'shell';
 export const useSessionTurnActivity = (sessionId: string): SessionTurnActivity | null => {
-  const status = useGlobalSessionStatusStore((state): SessionTurnActivity | null => {
+  const status = useGlobalSessionStatusStore((state): 'running' | 'subagent' | null => {
     if (state.activeSessionIds.has(sessionId)) return 'running';
     return hasActiveSubagent(sessionId, state.activeSessionIds) ? 'subagent' : null;
   });

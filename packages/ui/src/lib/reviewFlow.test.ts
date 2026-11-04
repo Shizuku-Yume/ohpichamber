@@ -13,10 +13,9 @@ import type { AutoReviewRun } from '@/stores/useAutoReviewStore';
 import type { Session, SessionSnapshot } from '@openchamber/agent-contract';
 import { canonicalClient } from '@/api/canonicalClient';
 import * as actions from '@/sync/session-actions';
-import * as prompts from '@/lib/magicPrompts';
 import { useSelectionStore } from '@/sync/selection-store';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { sendReviewFeedbackToOriginal } from './reviewFlow';
+import { sendImplementationResponseToReviewer, sendReviewFeedbackToOriginal, startReviewFlow } from './reviewFlow';
 
 describe('reviewFlow auto-review helpers', () => {
   beforeEach(() => {
@@ -79,7 +78,7 @@ describe('reviewFlow auto-review helpers', () => {
 describe('review native prompt delivery', () => {
   const spies: Array<{ mockRestore(): void }> = [];
   afterEach(() => { for (const spy of spies.splice(0).reverse()) spy.mockRestore(); });
-  test.each(['command', 'template', 'text', 'failure', 'stale', 'plain'] as const)('forwards generated primary text through native expansion: %s', async (mode) => {
+  test.each(['command', 'template', 'text', 'failure', 'stale', 'aba', 'plain'] as const)('forwards generated primary text through native expansion: %s', async (mode) => {
     switchRuntimeEndpoint({ apiBaseUrl: 'http://review.test', runtimeKey: 'review-test' });
     const session: Session = { sessionId: 'review', rootSessionId: 'review', projectId: 'project', workspaceId: 'workspace', displayPath: '.', createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' }, metadata: { openchamber: { kind: 'review', originalSessionID: 'original' } }, metadataRevision: '1', archiveRevision: '0' };
     const snapshot: SessionSnapshot = { session, cursor: 'epoch:0', activeRun: null, branch: { branchId: 'branch', branchVersion: '1', leafMessageId: null }, window: { firstTurnId: null, lastTurnId: null, firstMessageId: null, lastMessageId: null, hasEarlier: false }, turns: [], messages: [], approvals: [], questions: [], requestRecovery: { pendingSet: 'replace', priorEpochs: 'expired' } };
@@ -87,7 +86,6 @@ describe('review native prompt delivery', () => {
     spies.push(spyOn(canonicalClient, 'listSessions').mockResolvedValue({ items: [session], errors: {} }));
     spies.push(spyOn(canonicalClient, 'resolveWorkspace').mockResolvedValue({ projectId: 'project', workspaceId: 'workspace', name: 'repo' }));
     const text = mode === 'plain' ? 'Generated review feedback\n#literal' : '/review "two words"\n trailing  ';
-    spies.push(spyOn(prompts, 'renderMagicPrompt').mockResolvedValue(text));
     const selection = useSelectionStore.getState();
     selection.saveSessionModelSelection('original', 'captured', 'model');
     selection.saveSessionAgentSelection('original', 'agent');
@@ -103,6 +101,10 @@ describe('review native prompt delivery', () => {
     const requests: Request[] = [];
     spies.push(spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
       const request = new Request(new URL(url instanceof Request ? url.url : String(url), 'http://test'), init);
+      if (new URL(request.url).pathname === '/api/magic-prompts') {
+        expect(new URL(request.url).searchParams.get('sessionDirectory')).toBe('/repo');
+        return Response.json({ version: 1, overrides: { 'session.reviewFeedbackToImplementer.visible': text } });
+      }
       // The runtime endpoint switch fires a swallowed auth-token mint on the
       // same global fetch; only the expansion call is this test's subject.
       if (new URL(request.url).pathname !== '/api/agent/v1/workspaces/workspace/commands/expand-text') return Response.json({});
@@ -110,10 +112,14 @@ describe('review native prompt delivery', () => {
       expect(await request.json()).toEqual({ text });
       if (mode === 'failure') return new Response('unavailable', { status: 503 });
       if (mode === 'stale') switchRuntimeEndpoint({ apiBaseUrl: 'http://other.test', runtimeKey: 'other-review' });
+      if (mode === 'aba') {
+        switchRuntimeEndpoint({ apiBaseUrl: 'http://other.test', runtimeKey: 'other-review' });
+        switchRuntimeEndpoint({ apiBaseUrl: 'http://review.test', runtimeKey: 'review-test' });
+      }
       return Response.json(mode === 'command' || mode === 'template' ? { kind: mode, content: '/expanded once', modelSelection: { providerId: 'bound', modelId: 'bound-model' }, agentId: 'bound-agent' } : { kind: 'text', content: text });
     }));
     const result = sendReviewFeedbackToOriginal('review', '/repo', 'Feedback');
-    if (mode === 'failure' || mode === 'stale') {
+    if (mode === 'failure' || mode === 'stale' || mode === 'aba') {
       await expect(result).rejects.toThrow();
       expect(optimistic).not.toHaveBeenCalled();
       expect(send).not.toHaveBeenCalled();
@@ -124,6 +130,65 @@ describe('review native prompt delivery', () => {
     const matched = mode === 'command' || mode === 'template';
     expect(send.mock.calls[0][0].request).toMatchObject({ input: { text: matched ? '/expanded once' : text }, options: { providerId: matched ? 'bound' : 'captured', modelId: matched ? 'bound-model' : 'model', agentId: null, variant: null, reasoningEffort: null } });
   });
+});
+
+test.each(['feedback', 'response'] as const)('manual %s does not send after A-B-A during prompt loading', async (direction) => {
+  switchRuntimeEndpoint({ apiBaseUrl: 'http://review-aba.test', runtimeKey: 'review-aba' });
+  const base: Session = { sessionId: 'original', rootSessionId: 'original', projectId: 'project', workspaceId: 'workspace', displayPath: '.', createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' as const }, metadata: { openchamber: { reviewSessionID: 'review' } }, metadataRevision: '1', archiveRevision: '0' };
+  const review: Session = { ...base, sessionId: 'review', rootSessionId: 'review', metadata: { openchamber: { kind: 'review', originalSessionID: 'original' } } };
+  const snapshot = (session: Session): SessionSnapshot => ({ session, cursor: 'epoch:0', activeRun: null, branch: { branchId: 'branch', branchVersion: '1', leafMessageId: null }, window: { firstTurnId: null, lastTurnId: null, firstMessageId: null, lastMessageId: null, hasEarlier: false }, turns: [], messages: [], approvals: [], questions: [], requestRecovery: { pendingSet: 'replace', priorEpochs: 'expired' } });
+  const get = spyOn(canonicalClient, 'getSession').mockImplementation(async (id) => snapshot(id === 'original' ? base : review));
+  const list = spyOn(canonicalClient, 'listSessions').mockResolvedValue({ items: [base, review], errors: {} });
+  const send = spyOn(actions, 'optimisticSend').mockResolvedValue(undefined);
+  let release!: () => void;
+  let started!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const reached = new Promise<void>((resolve) => { started = resolve; });
+  const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+    const url = new URL(input instanceof Request ? input.url : String(input), 'http://review-aba.test');
+    if (url.pathname !== '/api/magic-prompts') return Response.json({});
+    started(); await gate;
+    return Response.json({ version: 1, overrides: {} });
+  });
+  try {
+    const pending = direction === 'feedback' ? sendReviewFeedbackToOriginal('review', '/repo', 'feedback') : sendImplementationResponseToReviewer('original', '/repo', 'response');
+    await reached;
+    switchRuntimeEndpoint({ apiBaseUrl: 'http://other.test', runtimeKey: 'review-other' });
+    switchRuntimeEndpoint({ apiBaseUrl: 'http://review-aba.test', runtimeKey: 'review-aba' });
+    release();
+    await expect(pending).rejects.toThrow('runtime changed');
+    expect(send).not.toHaveBeenCalled();
+  } finally {
+    fetchSpy.mockRestore(); send.mockRestore(); list.mockRestore(); get.mockRestore();
+  }
+});
+
+test('manual review creation does not link or send after an A-B-A runtime switch', async () => {
+  switchRuntimeEndpoint({ apiBaseUrl: 'http://review-create.test', runtimeKey: 'review-create' });
+  const original: Session = { sessionId: 'original', rootSessionId: 'original', projectId: 'project', workspaceId: 'workspace', displayPath: '.', createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' as const }, metadata: null, metadataRevision: '0', archiveRevision: '0' };
+  const snapshot: SessionSnapshot = { session: original, cursor: 'epoch:0', activeRun: null, branch: { branchId: 'branch', branchVersion: '1', leafMessageId: null }, window: { firstTurnId: null, lastTurnId: null, firstMessageId: null, lastMessageId: null, hasEarlier: false }, turns: [], messages: [], approvals: [], questions: [], requestRecovery: { pendingSet: 'replace', priorEpochs: 'expired' } };
+  let release!: () => void; let started!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const reached = new Promise<void>((resolve) => { started = resolve; });
+  const spies = [
+    spyOn(actions, 'waitForConnectionOrThrow').mockResolvedValue(undefined),
+    spyOn(canonicalClient, 'getSession').mockResolvedValue(snapshot),
+    spyOn(canonicalClient, 'listSessions').mockResolvedValue({ items: [original], errors: {} }),
+    spyOn(canonicalClient, 'createSession').mockImplementation(async () => { started(); await gate; return { session: { ...original, sessionId: 'review', rootSessionId: 'review' } }; }),
+    spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json({ version: 1, overrides: {} })),
+  ];
+  const patch = spyOn(actions, 'patchSessionMetadata').mockResolvedValue(original);
+  const send = spyOn(actions, 'optimisticSend').mockResolvedValue(undefined);
+  try {
+    const pending = startReviewFlow({ originalSessionID: 'original', directory: '/repo', providerId: 'provider', modelId: 'model', generateHandoff: false });
+    await reached;
+    switchRuntimeEndpoint({ apiBaseUrl: 'http://other.test', runtimeKey: 'review-other' });
+    switchRuntimeEndpoint({ apiBaseUrl: 'http://review-create.test', runtimeKey: 'review-create' });
+    release();
+    await expect(pending).rejects.toThrow('runtime changed');
+    expect(patch).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+  } finally { send.mockRestore(); patch.mockRestore(); for (const spy of spies.reverse()) spy.mockRestore(); }
 });
 
 describe('review native prompt optimistic boundary', () => {
@@ -142,8 +207,14 @@ describe('review native prompt optimistic boundary', () => {
     const snapshot: SessionSnapshot = { session, cursor: 'epoch:0', activeRun: null, branch: { branchId: 'branch', branchVersion: '1', leafMessageId: null }, window: { firstTurnId: null, lastTurnId: null, firstMessageId: null, lastMessageId: null, hasEarlier: false }, turns: [], messages: [], approvals: [], questions: [], requestRecovery: { pendingSet: 'replace', priorEpochs: 'expired' } };
     spies.push(spyOn(canonicalClient, 'getSession').mockResolvedValue(snapshot));
     spies.push(spyOn(canonicalClient, 'listSessions').mockResolvedValue({ items: [session], errors: {} }));
-    spies.push(spyOn(prompts, 'renderMagicPrompt').mockResolvedValue('Generated review feedback'));
-    spies.push(spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({})));
+    spies.push(spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const requestUrl = new URL(url instanceof Request ? url.url : String(url), 'http://test');
+      if (requestUrl.pathname === '/api/magic-prompts') {
+        expect(requestUrl.searchParams.get('sessionDirectory')).toBe('/repo');
+        return Response.json({ version: 1, overrides: { 'session.reviewFeedbackToImplementer.visible': 'Generated review feedback' } });
+      }
+      return Response.json({});
+    }));
     const selection = useSelectionStore.getState();
     selection.saveSessionModelSelection('original', 'captured', 'model');
 

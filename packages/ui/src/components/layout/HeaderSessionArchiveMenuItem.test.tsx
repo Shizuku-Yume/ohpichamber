@@ -147,3 +147,26 @@ test('offers no restore for an archived subsession, which comes back only with i
   ));
   expect(document.querySelector('button')).toBeNull();
 });
+
+test('offers no restore for an archived subsession whose parent is archived or unknown', async () => {
+  useGlobalSessionsStore.getState().upsertSession({ ...session('target', 2), parentSessionId: 'parent', rootSessionId: 'parent' });
+  await act(async () => root.render(
+    <I18nProvider>
+      <HeaderSessionArchiveMenuItem sessionId="target" Item={Item} onArchive={() => { archiveRequests += 1; }} />
+    </I18nProvider>,
+  ));
+  expect(document.querySelector('button')).toBeNull();
+  await act(async () => { useGlobalSessionsStore.getState().upsertSession(session('parent', 3)); });
+  expect(document.querySelector('button')).toBeNull();
+});
+
+test('offers restore for an archived subsession whose parent is active', async () => {
+  useGlobalSessionsStore.getState().upsertSession(session('parent'));
+  useGlobalSessionsStore.getState().upsertSession({ ...session('target', 2), parentSessionId: 'parent', rootSessionId: 'parent' });
+  await act(async () => root.render(
+    <I18nProvider>
+      <HeaderSessionArchiveMenuItem sessionId="target" Item={Item} onArchive={() => { archiveRequests += 1; }} />
+    </I18nProvider>,
+  ));
+  expect(document.querySelector('button')?.textContent).toBe('Restore');
+});

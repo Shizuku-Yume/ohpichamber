@@ -44,7 +44,7 @@ const loadDatabaseSync = () => {
 
 const metadataDatabasePath = (dataDir, nodePath = path) => nodePath.join(dataDir, 'host-metadata.sqlite');
 
-export const CURRENT_HOST_METADATA_VERSION = 1;
+export const CURRENT_HOST_METADATA_VERSION = 8;
 
 const HOST_METADATA_MIGRATIONS = [
   // Migration 1: baseline Host metadata tables and prompt queue tables
@@ -144,6 +144,53 @@ const HOST_METADATA_MIGRATIONS = [
         source_id TEXT PRIMARY KEY, source_hash TEXT NOT NULL, session_id TEXT
       );
     `);
+  },
+  (db) => {
+    db.exec(`
+      CREATE TABLE host_worktree_archives (
+        host_project_id TEXT NOT NULL, archive_id TEXT NOT NULL,
+        archive_ref TEXT NOT NULL, snapshot_commit TEXT NOT NULL,
+        project_id TEXT NOT NULL, anchor_workspace_id TEXT NOT NULL,
+        phase TEXT NOT NULL, revision INTEGER NOT NULL CHECK (revision > 0),
+        claim_id TEXT, claim_generation TEXT, target_workspace_id TEXT,
+        preapply_head TEXT, preapply_fingerprint TEXT, expected_fingerprint TEXT,
+        apply_attempted INTEGER NOT NULL DEFAULT 0 CHECK (apply_attempted IN (0, 1)),
+        branch_name TEXT, branch_oid TEXT,
+        PRIMARY KEY (host_project_id, archive_id)
+      );
+      CREATE TABLE host_worktree_archive_sessions (
+        host_project_id TEXT NOT NULL, archive_id TEXT NOT NULL,
+        session_id TEXT NOT NULL, root_session_id TEXT NOT NULL,
+        workspace_id TEXT NOT NULL, agent_directory_id TEXT NOT NULL,
+        original_archive_revision TEXT, original_archived_at INTEGER,
+        expected_archive_revision TEXT, target_workspace_id TEXT,
+        progress TEXT NOT NULL,
+        PRIMARY KEY (host_project_id, archive_id, session_id),
+        FOREIGN KEY (host_project_id, archive_id)
+          REFERENCES host_worktree_archives (host_project_id, archive_id) ON DELETE CASCADE
+      );
+    `);
+  },
+  (db) => {
+    db.exec('ALTER TABLE host_worktree_archive_sessions ADD COLUMN delete_operation_id TEXT');
+  },
+  (db) => {
+    db.exec(`CREATE TABLE host_session_admissions (
+      admission_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL,
+      operation TEXT NOT NULL, root_session_id TEXT NOT NULL
+    )`);
+  },
+  (db) => {
+    db.exec('ALTER TABLE host_worktree_archives ADD COLUMN delete_branch_requested INTEGER NOT NULL DEFAULT 0 CHECK (delete_branch_requested IN (0, 1))');
+  },
+  (db) => {
+    db.exec('ALTER TABLE host_worktree_archives ADD COLUMN delete_cas_completed INTEGER NOT NULL DEFAULT 0 CHECK (delete_cas_completed IN (0, 1))');
+  },
+  (db) => {
+    db.exec('ALTER TABLE host_worktree_archives ADD COLUMN restore_cas_completed INTEGER NOT NULL DEFAULT 0 CHECK (restore_cas_completed IN (0, 1))');
+  },
+  (db) => {
+    db.exec('ALTER TABLE host_worktree_archives ADD COLUMN restore_cas_started INTEGER NOT NULL DEFAULT 0 CHECK (restore_cas_started IN (0, 1))');
   },
 ];
 

@@ -151,6 +151,7 @@ tool patch is parsed while the turn streams.
   renderers. Mobile keeps file-reference annotation disabled entirely,
   including filesystem stat probes; web/PWA and Electron retain the normal
   annotation limits and directory-scoped file navigation.
+- User text parts carry typed session mention identities when captured at send. The shared plain and Markdown renderers use those identities for chips in live events and reloaded history; links without a captured identity remain ordinary links.
 - Final assistant Markdown rendering is independent from image gallery
   extraction: gallery presence never changes the chat body. Assistant image
   syntax consistently renders as a shared image icon followed by its filename,
@@ -189,8 +190,10 @@ tool patch is parsed while the turn streams.
 - JSON output switches between tree and raw display per row. Collapsed rows do not parse/highlight their output body.
 - Native edit result diffs use numbered compact lines (`+12|`, `-12|`, ` 12|`). `toolDiffUtils.getToolDiffs` converts successful reported results into unified patches and counts. Tool rows show bounded plain-text patches; separate diff popup actions retain the unified/split renderer. Native write input content does not imply added-line totals.
 - Native `bash` command input and terminal text output remain visible. Final result text normalizes ANSI terminal controls with a bounded synthetic-cell budget; there is no legacy mutable-state/metadata output fallback.
+- A tool result made of `{type:"text",text}` content blocks is shown as its joined text, not as a JSON envelope the reader has to open. `toolRenderers.unwrapTextBlocks` validates blocks one at a time and unwraps up to four nested serialized envelopes; `nativeToolResultContent` applies it before generic coercion, and the JSON summary view uses it too.
 - Thinking/Justification duration is hidden in `sorted` mode (handled in `ReasoningPart.tsx` + `JustificationBlock.tsx`).
 - Reasoning streaming presentation derives from the live stream phase (`streaming`/`cooldown`) only: canonical reasoning parts carry no persisted timing, so a cached part outside a live phase renders complete and never streams (issue #2020).
+- Streamed assistant and reasoning text is committed only up to the end of the last finished block (`lib/streamTextCommit.ts`): a paragraph, a closed fence, a list item or a heading/table row appears whole and never mutates in place. A title line waits for the block it introduces; a block that runs past the held-tail budget falls back to complete lines, then to the last sentence or word boundary. `AssistantTextPart` and `ReasoningPart` share the one function.
 - Tool result display projection and pairing: Canonical tool results arrive in `role: "system"` messages that `MessageList` skips from direct display. Display pairing (`attachToolResultsForDisplay`) joins exact `turnId + toolCallId + toolName` as a display-only copy attached to the assistant tool call, without authoritative transcript mutation. When the streaming tail entry updates with live parts (`streamingTailEntry.ts`), `mergeLiveParts` preserves previously display-paired tool results rather than overwriting them with live assistant parts. Popup inspection (`ChatMessage.handleShowPopup`) preserves non-image output content so `ToolOutputDialog` displays structured diffs and text output.
 
 ## Changing native tool descriptions

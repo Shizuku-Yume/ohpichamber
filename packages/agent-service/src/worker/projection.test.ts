@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
@@ -13,6 +13,44 @@ function assistant(content: Assistant['content'], stopReason: Assistant['stopRea
   return { role: 'assistant', content, api: 'openai-completions', provider: 'fixture', model: 'fixture', stopReason, timestamp,
     usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } };
 }
+
+test('binds queued mention provenance to its native entry even when timestamps collide', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'canonical-mention-identity-'));
+  const manager = SessionManager.create(root, root);
+  let reopened: SessionManager | undefined;
+  try {
+    await manager.ensureOnDisk();
+    const projection = new WorkerProjection(manager, 'session');
+    projection.beginRun('run', 1);
+    const first = { role: 'user' as const, content: 'first', timestamp: 7 };
+    const second = { role: 'user' as const, content: 'second', timestamp: 7 };
+    const firstMention = { kind: 'session' as const, sessionId: 'first-session', title: 'First' };
+    const secondMention = { kind: 'session' as const, sessionId: 'second-session', title: 'Second' };
+    projection.admitQueuedPrompt(first, [], [{ kind: 'context', text: 'first context', metadata: { openchamberContext: firstMention } }]);
+    projection.admitQueuedPrompt(second, [], [{ kind: 'context', text: 'second context', metadata: { openchamberContext: secondMention } }]);
+    for (const message of [first, second]) {
+      projection.consume({ type: 'message_start', message });
+      projection.consume({ type: 'message_end', message });
+    }
+    manager.appendMessage(second);
+    manager.appendMessage(first);
+    projection.bindPending();
+    await manager.flush();
+    const history = projection.history({ sessionId: 'session' });
+    const byContent = (text: string) => history.messages.find(message => message.parts.some(part => part.type === 'text' && part.content === text));
+    expect(byContent('first')?.parts).toContainEqual(expect.objectContaining({ sessionMentions: [firstMention] }));
+    expect(byContent('second')?.parts).toContainEqual(expect.objectContaining({ sessionMentions: [secondMention] }));
+    const file = manager.getSessionFile();
+    if (!file) throw new Error('Native session file is required');
+    await manager.close();
+    reopened = await SessionManager.open(file, root, undefined, { initialCwd: root, throwIfMissing: true });
+    expect(new WorkerProjection(reopened, 'session').seed().messages).toEqual(history.messages);
+  } finally {
+    await reopened?.close();
+    await manager.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 for (const outcome of ['failed', 'cancelled'] as const) {
   test(`native history retains tool terminal state and completed cycles before a ${outcome} run`, async () => {
@@ -562,6 +600,58 @@ test('projection seed and snapshot carry the persisted model and thinking level'
     manager.appendThinkingLevelChange('medium', 'auto');
     expect(projection.seed().selection?.thinkingLevel).toBe('auto');
   } finally {
+    await manager.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('reopening a native session maps reasoningTokens usage into the canonical shape', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'canonical-usage-'));
+  const manager = SessionManager.create(root, root);
+  let reopened: SessionManager | undefined;
+  try {
+    await manager.ensureOnDisk();
+    const projection = new WorkerProjection(manager, 'session');
+    const journal = new SessionJournal({ sessionId: 'session', rootSessionId: 'session', projectId: 'project', workspaceId: 'workspace', displayPath: '.' }, projection.seed());
+    journal.append(projection.beginRun('run', 1));
+    let timestamp = 2;
+    const deliver = (message: NativeMessage): void => {
+      journal.append(projection.consume({ type: 'message_start', message }));
+      manager.appendMessage(message);
+      journal.append(projection.consume({ type: 'message_end', message }));
+      projection.bindPending();
+    };
+    deliver({ role: 'user', content: 'ping', timestamp: timestamp++ });
+    const answer: Assistant = {
+      ...assistant([{ type: 'text', text: 'pong' }], 'stop', timestamp++),
+      usage: { input: 7, output: 5, cacheRead: 2, cacheWrite: 1, totalTokens: 12,
+        cost: { input: 1, output: 2, cacheRead: 3, cacheWrite: 4, total: 10 } },
+    };
+    deliver(answer);
+    journal.append(projection.completeRun(timestamp++));
+    await manager.flush();
+    const file = manager.getSessionFile();
+    if (!file) throw new Error('Native session file is required');
+    await manager.close();
+    // The SDK writes provider-only counters into native usage; the canonical
+    // wire contract publishes only the shared token fields.
+    const rewritten = (await readFile(file, 'utf8')).trimEnd().split('\n').map((line) => {
+      const entry: { type?: string; message?: { role?: string; usage?: Record<string, unknown> } } = JSON.parse(line);
+      if (entry.type === 'message' && entry.message?.role === 'assistant' && entry.message.usage) entry.message.usage.reasoningTokens = 3;
+      return JSON.stringify(entry);
+    });
+    await writeFile(file, `${rewritten.join('\n')}\n`);
+    reopened = await SessionManager.open(file, root, undefined, { initialCwd: root, throwIfMissing: true });
+    const restored = new WorkerProjection(reopened, 'session');
+    const expected = { input: 7, output: 5, cacheRead: 2, cacheWrite: 1, totalTokens: 12,
+      cost: { input: 1, output: 2, cacheRead: 3, cacheWrite: 4, total: 10 } };
+    const seeded = restored.seed().messages.find((message) => message.role === 'assistant');
+    expect(seeded?.usage).toEqual(expected);
+    const page = restored.history({ sessionId: 'session' }).messages.find((message) => message.role === 'assistant');
+    expect(page?.usage).toEqual(expected);
+    expect(seeded?.usage).not.toHaveProperty('reasoningTokens');
+  } finally {
+    await reopened?.close();
     await manager.close();
     await rm(root, { recursive: true, force: true });
   }

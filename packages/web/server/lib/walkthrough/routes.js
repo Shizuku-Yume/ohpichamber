@@ -1,5 +1,8 @@
 import { z } from 'zod';
 import { parseSource } from './sources.js';
+import { supportsChangeRequestPatch, supportsChangeRequestRevisions } from './pull-request.js';
+import { allowsTopLevelProjects } from '../source-control/project-path.js';
+import { sourceControlProviderDescriptors } from '../source-control/provider-descriptors.js';
 
 // The composer's provider, which the model stays on; anything else is no provider.
 const providerIdSchema = z.string().trim().min(1).max(200).optional().catch(undefined);
@@ -11,14 +14,7 @@ const modelIdSchema = z.string().trim().min(1).max(200).optional().catch(undefin
 // client is still there.
 const clientIsGone = (res) => res.writableEnded || res.destroyed;
 
-export function registerWalkthroughRoutes(app, { getWalkthroughService, validateReadContext, resolveWorkspaceScope }) {
-  if (typeof resolveWorkspaceScope !== 'function') throw new TypeError('Walkthrough workspace scope resolver is required');
-  const workspaceFor = async (workspaceId) => {
-    if (typeof workspaceId !== 'string' || !workspaceId.trim()) throw Object.assign(new Error('workspaceId is required'), { statusCode: 400, code: 'INVALID_REQUEST' });
-    const scope = await resolveWorkspaceScope(workspaceId);
-    if (!scope || scope.workspaceId !== workspaceId) throw Object.assign(new Error('Workspace scope was not found'), { statusCode: 404, code: 'SESSION_NOT_FOUND' });
-    return scope;
-  };
+export function registerWalkthroughRoutes(app, { getWalkthroughService, validateReadContext, resolveWorkspaceDirectory, resolveRepositoryWorkspace }) {
   const respondWithError = (res, error, fallback) => {
     let bindingStatus = 0;
     if (error?.code === 'INVALID_SOURCE_CONTROL_BINDING' || error?.code === 'INVALID_SOURCE_CONTROL_READ_CONTEXT') {
@@ -47,6 +43,12 @@ export function registerWalkthroughRoutes(app, { getWalkthroughService, validate
       return null;
     }
   };
+  const workspaceForDirectory = async (directory, readContext) => {
+    const scope = await (readContext ? resolveRepositoryWorkspace(directory) : resolveWorkspaceDirectory(directory));
+    if (!scope?.workspaceId) throw Object.assign(new Error('Workspace is unavailable'), { statusCode: 403, code: 'UNAUTHORIZED' });
+    return scope.workspaceId;
+  };
+
 
   const validatePullRequestContext = async (source, input, directory) => {
     if (source?.kind !== 'pr') return undefined;
@@ -65,10 +67,21 @@ export function registerWalkthroughRoutes(app, { getWalkthroughService, validate
       bindingRevision: Number(input?.bindingRevision),
       primaryRemote: input?.primaryRemote,
     });
-    if (readContext.provider !== 'github' && readContext.provider !== 'gitlab') {
-      throw Object.assign(new Error('Pull request walkthroughs support GitHub and GitLab only'), {
+    if (!supportsChangeRequestPatch(readContext.provider)) {
+      throw Object.assign(new Error('This source control provider does not offer change request walkthroughs'), {
         statusCode: 422,
         code: 'UNSUPPORTED_WALKTHROUGH_PROVIDER',
+      });
+    }
+    // An empty owner names a top-level project, which only a path-style provider has.
+    if (source.sourceRepo?.owner === '' && !allowsTopLevelProjects(sourceControlProviderDescriptors.get(readContext.provider))) {
+      throw Object.assign(new Error('pr sources require a valid repository'), { statusCode: 400 });
+    }
+    // A named revision only where the host keeps revisions; elsewhere it would read as the current one.
+    if (source.revision !== undefined && !supportsChangeRequestRevisions(readContext.provider)) {
+      throw Object.assign(new Error('This source control provider does not keep change request revisions'), {
+        statusCode: 400,
+        code: 'INVALID_SOURCE_CONTROL_READ_CONTEXT',
       });
     }
     return readContext;
@@ -76,16 +89,19 @@ export function registerWalkthroughRoutes(app, { getWalkthroughService, validate
 
   app.get('/api/walkthrough', async (req, res) => {
     try {
-      const workspaceId = typeof req.query.workspaceId === 'string' ? req.query.workspaceId : '';
-      const workspace = await workspaceFor(workspaceId);
-      const directory = workspace.cwd;
+      const directory = typeof req.query.directory === 'string' ? req.query.directory : '';
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
       const source = readSource(req.query.source);
       const readContext = await validatePullRequestContext(source, req.query, directory);
-      const { getWalkthrough, getPullRequestDiff } = await getWalkthroughService();
+      const workspaceId = await workspaceForDirectory(readContext?.directory ?? directory, readContext);
+      const { getWalkthrough, getPullRequestDiff, readWalkthroughInstructions } = await getWalkthroughService();
       const result = await getWalkthrough(
         {
-          workspaceId,
           directory: readContext?.directory ?? directory,
+          workspaceId,
           source,
           model: typeof req.query.model === 'string' ? req.query.model : undefined,
           providerID: providerIdSchema.parse(req.query.providerID),
@@ -93,7 +109,7 @@ export function registerWalkthroughRoutes(app, { getWalkthroughService, validate
           language: typeof req.query.language === 'string' ? req.query.language : undefined,
           readContext,
         },
-        { getPullRequestDiff },
+        { getPullRequestDiff, readWalkthroughInstructions },
       );
       res.json(result);
     } catch (error) {
@@ -106,15 +122,19 @@ export function registerWalkthroughRoutes(app, { getWalkthroughService, validate
   app.get('/api/walkthrough/pr-diff', async (req, res) => {
     try {
       const query = new URL(req.originalUrl, 'http://localhost').searchParams;
-      const workspace = await workspaceFor(query.get('workspaceId') ?? '');
-      const directory = workspace.cwd;
+      const directory = query.get('directory')?.trim() ?? '';
+      if (!directory) return res.status(400).json({ error: 'directory parameter is required' });
       const source = parseSource(readSource(query.get('source')));
       if (source.kind !== 'pr') return res.status(400).json({ error: 'A pull request source is required' });
+      // Same exact binding authority as the walkthrough routes: the repository
+      // and account come from the checkout's binding, and a named source
+      // repository is only checked against it.
       const readContext = await validatePullRequestContext(source, Object.fromEntries(query), directory);
       const { getPullRequestDiff } = await getWalkthroughService();
       const { patch } = await getPullRequestDiff(readContext?.directory ?? directory, source.number, readContext, {
         allowEmpty: true,
         sourceRepo: source.sourceRepo ?? null,
+        revision: source.revision,
       });
       res.type('text/plain').send(patch);
     } catch (error) {
@@ -122,13 +142,12 @@ export function registerWalkthroughRoutes(app, { getWalkthroughService, validate
     }
   });
 
-  // One file, both sides, straight from GitHub: the comparison view expands
-  // collapsed context on demand without touching the working tree.
+  // One file, both sides, from its provider: expand context without touching the working tree.
   app.get('/api/walkthrough/pr-file', async (req, res) => {
     try {
       const query = new URL(req.originalUrl, 'http://localhost').searchParams;
-      const workspace = await workspaceFor(query.get('workspaceId') ?? '');
-      const directory = workspace.cwd;
+      const directory = query.get('directory')?.trim() ?? '';
+      if (!directory) return res.status(400).json({ error: 'directory parameter is required' });
       const source = parseSource(readSource(query.get('source')));
       if (source.kind !== 'pr') return res.status(400).json({ error: 'A pull request source is required' });
       const path = query.get('path')?.trim() ?? '';
@@ -142,6 +161,7 @@ export function registerWalkthroughRoutes(app, { getWalkthroughService, validate
         previousPath,
         status,
         sourceRepo: source.sourceRepo ?? null,
+        revision: source.revision,
       }));
     } catch (error) {
       respondWithError(res, error, 'Failed to load pull request file');
@@ -154,16 +174,18 @@ export function registerWalkthroughRoutes(app, { getWalkthroughService, validate
   // request below.
   app.post('/api/walkthrough/generate', async (req, res) => {
     try {
-      const { workspaceId, source, force, model, providerID, modelID, language } = req.body || {};
-      const workspace = await workspaceFor(workspaceId);
-      const directory = workspace.cwd;
+      const { directory, source, force, model, providerID, modelID, language } = req.body || {};
+      if (!directory || typeof directory !== 'string') {
+        return res.status(400).json({ error: 'directory is required' });
+      }
 
       const readContext = await validatePullRequestContext(source, req.body, directory);
-      const { generateWalkthrough, getPullRequestDiff } = await getWalkthroughService();
+      const workspaceId = await workspaceForDirectory(readContext?.directory ?? directory, readContext);
+      const { generateWalkthrough, getPullRequestDiff, readWalkthroughInstructions } = await getWalkthroughService();
       const result = await generateWalkthrough(
         {
-          workspaceId,
           directory: readContext?.directory ?? directory,
+          workspaceId,
           source,
           force: force === true,
           model: typeof model === 'string' ? model : undefined,
@@ -172,7 +194,7 @@ export function registerWalkthroughRoutes(app, { getWalkthroughService, validate
           language: typeof language === 'string' ? language : undefined,
           readContext,
         },
-        { getPullRequestDiff },
+        { getPullRequestDiff, readWalkthroughInstructions },
       );
       if (clientIsGone(res)) return;
       res.json(result);
@@ -186,9 +208,11 @@ export function registerWalkthroughRoutes(app, { getWalkthroughService, validate
   // re-runs the whole git pipeline and must not be used for this.
   app.get('/api/walkthrough/progress', async (req, res) => {
     try {
-      const workspaceId = typeof req.query.workspaceId === 'string' ? req.query.workspaceId : '';
-      const workspace = await workspaceFor(workspaceId);
-      const directory = workspace.cwd;
+      const directory = typeof req.query.directory === 'string' ? req.query.directory : '';
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
       const source = readSource(req.query.source);
       const readContext = await validatePullRequestContext(source, req.query, directory);
       const { getGenerationStage, getRepositoryRootFor } = await getWalkthroughService();
@@ -203,9 +227,10 @@ export function registerWalkthroughRoutes(app, { getWalkthroughService, validate
 
   app.post('/api/walkthrough/cancel', async (req, res) => {
     try {
-      const { workspaceId, source } = req.body || {};
-      const workspace = await workspaceFor(workspaceId);
-      const directory = workspace.cwd;
+      const { directory, source } = req.body || {};
+      if (!directory || typeof directory !== 'string') {
+        return res.status(400).json({ error: 'directory is required' });
+      }
 
       const readContext = await validatePullRequestContext(source, req.body, directory);
       const { cancelWalkthroughGeneration } = await getWalkthroughService();

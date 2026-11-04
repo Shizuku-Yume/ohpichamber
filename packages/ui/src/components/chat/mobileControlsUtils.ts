@@ -49,3 +49,4 @@ export const formatEffortLabel = (variant?: string) => {
     }
     return capitalizeLabel(trimmed);
 };
+

@@ -8,10 +8,10 @@ const session = ({ sessionId, parentSessionId, rootSessionId = parentSessionId ?
 const approval = (approvalId, sessionId = 'root', overrides = {}) => ApprovalRequestSchema.parse({ ...cas, approvalId, sessionId, turnId: 'turn-1', toolCallId: `tool-${approvalId}`, toolName: 'shell', actionType: 'bash_command', commandSummary: 'echo ok', details: {}, status: 'pending', requestedAt: timestamp, ...overrides });
 const event = (type, sessionId, extra = {}) => CanonicalEventSchema.parse({ type, sessionId, epoch: 'epoch-1', sequence: '1', timestamp, ...extra });
 const snapshot = (sessionId, approvals = []) => SessionSnapshotSchema.parse({ session: session({ sessionId }), cursor: 'epoch-1:1', activeRun: { runId: 'run-1', sessionId, status: 'running', createdAt: timestamp }, branch: { branchId: 'branch-1', branchVersion: '1', leafMessageId: null }, window: { firstTurnId: null, lastTurnId: null, firstMessageId: null, lastMessageId: null, hasEarlier: false }, turns: [], messages: [], approvals, questions: [], requestRecovery: { pendingSet: 'replace', priorEpochs: 'expired' } });
-const createRuntime = ({ stored, serviceRequest, retryDelaysMs = [0], evaluatePermission, onPermissionReplied, resolveLegacyEnabledMode, broadcastGlobalUiEvent, scopes = [{ workspaceId: 'workspace-1' }] } = {}) => {
+const createRuntime = ({ stored, serviceRequest, retryDelaysMs = [0], evaluatePermission, onPermissionReplied, resolveLegacyEnabledMode, broadcastGlobalUiEvent, scopes = [{ workspaceId: 'workspace-1' }], beforePersist } = {}) => {
   let settings = stored ?? { permissionAutoAccept: { sessions: {} } }; let eventHandler; let statusHandler;
   const request = serviceRequest ?? (async (path) => Response.json(path.includes('/snapshot') ? snapshot('root') : path.includes('/sessions?') ? { items: [], errors: [] } : {}));
-  const runtime = createPermissionAutoAcceptRuntime({ service: { request }, globalEventHub: { subscribeEvent(handler) { eventHandler = handler; return () => {}; }, subscribeStatus(handler) { statusHandler = handler; return () => {}; } }, resolveSessionScope: async () => ({ cwd: '/project' }), listWorkspaceScopes: async () => ({ items: scopes, errors: {} }), readSettingsFromDiskMigrated: async () => settings, persistSettings: async (changes) => { settings = { ...settings, ...changes }; }, retryDelaysMs, evaluatePermission, onPermissionReplied, resolveLegacyEnabledMode, broadcastGlobalUiEvent });
+  const runtime = createPermissionAutoAcceptRuntime({ service: { request }, globalEventHub: { subscribeEvent(handler) { eventHandler = handler; return () => {}; }, subscribeStatus(handler) { statusHandler = handler; return () => {}; } }, resolveSessionScope: async () => ({ cwd: '/project' }), listWorkspaceScopes: async () => ({ items: scopes, errors: {} }), readSettingsFromDiskMigrated: async () => settings, persistSettings: async (changes) => { await beforePersist?.(changes); settings = { ...settings, ...changes }; }, retryDelaysMs, evaluatePermission, onPermissionReplied, resolveLegacyEnabledMode, broadcastGlobalUiEvent });
   runtime.start(); return { runtime, getSettings: () => settings, emit: (payload) => eventHandler(payload), connect: () => statusHandler({ type: 'connect' }) };
 };
 const flush = async () => { for (let index = 0; index < 20; index += 1) await Promise.resolve(); };
@@ -22,6 +22,36 @@ describe('permission auto-accept runtime', () => {
   it('converts a pre-modes policy once, as safety when the old safety net was on', async () => { const resolveLegacyEnabledMode = vi.fn(async () => 'safety'); const first = createRuntime({ stored: { permissionAutoAccept: { sessions: { root: true, child: false }, revision: 3 } }, resolveLegacyEnabledMode }); expect((await first.runtime.load()).modes).toEqual({ root: 'safety', child: 'ask' }); const restarted = createRuntime({ stored: first.getSettings(), resolveLegacyEnabledMode }); await restarted.runtime.load(); expect(resolveLegacyEnabledMode).toHaveBeenCalledTimes(1); });
   it('writes the default mode onto a new top-level session only', async () => { const { runtime, emit, getSettings } = createRuntime(); await runtime.load(); getSettings().permissionDefaultMode = 'safety'; emit(event('session.updated', 'root', { session: session({ sessionId: 'root' }) })); emit(event('session.updated', 'child', { session: session({ sessionId: 'child', parentSessionId: 'root' }) })); await flush(); await expect(runtime.resolveSessionMode('root', '/project')).resolves.toBe('safety'); expect((await runtime.load()).modes).toEqual({ root: 'safety' }); await expect(runtime.resolveSessionMode('child', '/project')).resolves.toBe('safety'); });
   it('keeps a mode the creating flow already set over the default', async () => { const { runtime, emit, getSettings } = createRuntime(); await runtime.setSessionPolicy('root', 'ask'); getSettings().permissionDefaultMode = 'auto'; emit(event('session.updated', 'root', { session: session({ sessionId: 'root' }) })); await flush(); await expect(runtime.resolveSessionMode('root', '/project')).resolves.toBe('ask'); });
+  it('does not retroactively escalate an existing session created under ask when default changes to auto', async () => {
+    const { runtime, getSettings } = createRuntime({ serviceRequest: async () => Response.json(snapshot('old-session')) });
+    getSettings().permissionDefaultMode = 'auto';
+    await expect(runtime.resolveSessionMode('old-session', '/project')).resolves.toBe('ask');
+    expect((await runtime.load()).modes).toEqual({});
+  });
+  it('applies default mode when applyDefaultMode is invoked directly on session creation', async () => {
+    const { runtime, getSettings } = createRuntime();
+    await runtime.load();
+    getSettings().permissionDefaultMode = 'auto';
+    await runtime.applyDefaultMode('new-session');
+    expect((await runtime.load()).modes).toEqual({ 'new-session': 'auto' });
+  });
+  it('saves the next mode change after one failed to persist', async () => {
+    let failNext = true;
+    const { runtime, getSettings } = createRuntime({
+      beforePersist: async () => {
+        if (!failNext) return;
+        failNext = false;
+        throw new Error('ENOSPC: no space left on device, write');
+      },
+    });
+
+    await expect(runtime.setSessionPolicy('root', 'auto')).rejects.toThrow('ENOSPC');
+    expect((await runtime.load()).modes).toEqual({});
+
+    await expect(runtime.setSessionPolicy('root', 'safety')).resolves.toMatchObject({ modes: { root: 'safety' }, revision: 1 });
+    expect(getSettings().permissionAutoAccept).toEqual({ sessions: { root: 'safety' }, revision: 1 });
+  });
+
   it('increments the authoritative policy revision', async () => { const { runtime, getSettings } = createRuntime(); await expect(runtime.setSessionPolicy('root', true)).resolves.toMatchObject({ revision: 1 }); await expect(runtime.setSessionPolicy('child', false)).resolves.toMatchObject({ revision: 2 }); expect(getSettings().permissionAutoAccept.revision).toBe(2); });
   it('uses rootSessionId and nearest explicit ancestor policy for subagents', async () => { const { runtime, emit } = createRuntime({ stored: { permissionAutoAccept: { sessions: { root: true, child: false } } } }); emit(event('session.updated', 'child', { session: session({ sessionId: 'child', parentSessionId: 'root', rootSessionId: 'root' }) })); emit(event('session.updated', 'grandchild', { session: session({ sessionId: 'grandchild', parentSessionId: 'child', rootSessionId: 'root' }) })); await expect(runtime.isSessionAutoAccepting('grandchild', '/project')).resolves.toBe(false); await runtime.setSessionPolicy('child', true); await expect(runtime.isSessionAutoAccepting('grandchild', '/project')).resolves.toBe(true); });
   it('retries a transient canonical reply and deduplicates concurrent events', async () => { let attempts = 0; const serviceRequest = vi.fn(async (path, init = {}) => { if (path.endsWith('/respond') && init.method === 'POST') { attempts += 1; if (attempts === 1) return new Response('', { status: 503 }); return Response.json({}); } if (path.includes('/snapshot')) return Response.json(snapshot('root')); return Response.json({ items: [], errors: [] }); }); const { runtime } = createRuntime({ stored: { permissionAutoAccept: { sessions: { root: true } } }, serviceRequest, retryDelaysMs: [0, 0] }); const pending = approval('perm'); const first = runtime.processPermission(pending, '/project'); const second = runtime.processPermission(pending, '/project'); await expect(Promise.all([first, second])).resolves.toEqual([true, true]); expect(attempts).toBe(2); });

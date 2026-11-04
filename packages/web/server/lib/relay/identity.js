@@ -22,6 +22,7 @@ export const createRelayIdentityRuntime = (deps) => {
   const { crypto, relayKeyStore } = deps;
 
   let cachedIdentity = null;
+  let cachedGeneration = -1;
 
   const getOrCreateEncryptionKeypair = () => relayKeyStore.getOrCreate('encryption', async () => {
     // Loud on purpose: a new encryption key invalidates the E2EE trust anchor of
@@ -41,8 +42,7 @@ export const createRelayIdentityRuntime = (deps) => {
    *   signRelayAuth: (role: string, connectionId?: string | null) => { ts: number, sig: string, pk: string },
    * }>}
    */
-  const getRelayIdentity = async () => {
-    if (cachedIdentity) return cachedIdentity;
+  const buildIdentity = async () => {
     const signing = await getOrCreateRelaySigningKeypair({ crypto, relayKeyStore });
     const serverId = deriveServerId({ crypto }, signing.publicJwk);
     const encryption = await getOrCreateEncryptionKeypair();
@@ -57,13 +57,28 @@ export const createRelayIdentityRuntime = (deps) => {
       return { ts, sig, pk };
     };
 
-    cachedIdentity = {
+    return {
       serverId,
       hostEncPubJwk: encryption.publicJwk,
       hostEncPrivateKey,
       signRelayAuth,
     };
-    return cachedIdentity;
+  };
+
+  // A reset changes the key store generation after it rewrites the file, so a
+  // build that started before the reset can hold a mix of old and new keys.
+  // Compare the generation after building: a change means rebuild, never cache.
+  const getRelayIdentity = async () => {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const generation = relayKeyStore.generation();
+      if (cachedIdentity && cachedGeneration === generation) return cachedIdentity;
+      const identity = await buildIdentity();
+      if (relayKeyStore.generation() !== generation) continue;
+      cachedIdentity = identity;
+      cachedGeneration = generation;
+      return identity;
+    }
+    throw new Error('relay identity changed repeatedly while it was being read');
   };
 
   return { getRelayIdentity };

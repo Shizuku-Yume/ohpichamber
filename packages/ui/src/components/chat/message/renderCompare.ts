@@ -1,9 +1,20 @@
-import type { Message, Part } from '@openchamber/agent-contract';
+import type { Message, Part, SessionMention } from '@openchamber/agent-contract';
 import type { TurnActivityGroup, TurnActivityRecord, TurnChangedFile, TurnDiffStats, TurnGroupingContext } from '../lib/turns/types';
 
 type MessageRecord = {
   info: Message;
   parts: Part[];
+};
+
+const mentionsEqual = (left?: SessionMention[], right?: SessionMention[]): boolean => {
+  if (left === right) return true;
+  if ((left?.length ?? 0) !== (right?.length ?? 0)) return false;
+  return (left ?? []).every((mention, index) => {
+    const other = right?.[index];
+    if (!other || mention.kind !== other.kind || mention.sessionId !== other.sessionId || mention.messageId !== other.messageId) return false;
+    return mention.kind === 'session' && other.kind === 'session' ? mention.title === other.title
+      : mention.kind === 'session-message' && other.kind === 'session-message' && mention.sessionTitle === other.sessionTitle && mention.excerpt === other.excerpt;
+  });
 };
 
 // Canonical parts intentionally have no legacy state/metadata/time fields; render comparison uses only contract fields.
@@ -24,7 +35,7 @@ export const areRenderRelevantPartsEqual = (left: Part[], right: Part[]): boolea
       if (leftPart.toolCallId !== rightPart.toolCallId || leftPart.toolName !== rightPart.toolName || leftPart.output !== rightPart.output || leftPart.error !== rightPart.error || leftPart.isError !== rightPart.isError) return false;
       continue;
     }
-    if (leftPart.type === 'text' && rightPart.type === 'text' && leftPart.content !== rightPart.content) return false;
+    if (leftPart.type === 'text' && rightPart.type === 'text' && (leftPart.content !== rightPart.content || !mentionsEqual(leftPart.sessionMentions, rightPart.sessionMentions))) return false;
     if (leftPart.type === 'reasoning' && rightPart.type === 'reasoning' && (leftPart.content !== rightPart.content || leftPart.signature !== rightPart.signature)) return false;
     if (leftPart.type === 'attachment' && rightPart.type === 'attachment' && (leftPart.attachmentId !== rightPart.attachmentId || leftPart.name !== rightPart.name || leftPart.mediaType !== rightPart.mediaType || leftPart.size !== rightPart.size || leftPart.uri !== rightPart.uri)) return false;
     if (leftPart.type === 'step_summary' && rightPart.type === 'step_summary' && (leftPart.title !== rightPart.title || leftPart.durationMs !== rightPart.durationMs)) return false;

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import React from 'react';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -45,8 +45,13 @@ mock.module('@/sync/sync-context', () => ({
   useChildStoreManager: () => childStores,
 }));
 mock.module('@/sync/sync-refs', () => ({ getAllSyncSessions: () => [] }));
+const realGlobalSessionsStore = await import('@/stores/useGlobalSessionsStore');
 mock.module('@/stores/useGlobalSessionsStore', () => ({
-  useGlobalSessionsStore: <T,>(selector: (value: GlobalSessionsState) => T): T => selector(globalSessions),
+  ...realGlobalSessionsStore,
+  useGlobalSessionsStore: Object.assign(
+    <T,>(selector: (value: GlobalSessionsState) => T): T => selector(globalSessions),
+    realGlobalSessionsStore.useGlobalSessionsStore,
+  ),
   refreshGlobalSessions: () => { state.globalRefreshes += 1; },
   refreshGlobalSessionsForDirectories: (directories: string[]) => { state.directoryRefreshes.push(directories); },
 }));
@@ -198,5 +203,7 @@ describe('useSessionListSync', () => {
     expect(state.globalRefreshes).toBe(0);
     expect(state.subscriptions).toBe(1);
   });
-
+  afterAll(() => {
+    mock.module('@/stores/useGlobalSessionsStore', () => realGlobalSessionsStore);
+  });
 });

@@ -30,7 +30,7 @@ export const DeviceFlowCode: React.FC<{
         <Button size="sm" onClick={onOpen}>{openLabel}</Button>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="typography-micro text-muted-foreground animate-pulse">
+        <span className="typography-micro text-muted-foreground">
           {t('settings.github.page.flow.waiting')}
         </span>
         <Button size="sm" variant="ghost" disabled={disabled} onClick={onCancel}>

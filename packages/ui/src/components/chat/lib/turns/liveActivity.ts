@@ -28,7 +28,8 @@ export function getLiveFinalMessage(messages: readonly ChatMessageEntry[]): Chat
 }
 
 export function hasLiveActivity(turn: TurnRecord, showReasoning: boolean): boolean {
-    return turn.activitySegments.some((segment) => segment.parts.some((activity) => (
+    if (turn.hasTools || (showReasoning && turn.hasReasoning)) return true;
+    return turn.activitySegments?.some((segment) => segment.parts.some((activity) => (
         activity.kind === 'tool' || (showReasoning && activity.kind === 'reasoning')
-    )));
+    ))) ?? false;
 }

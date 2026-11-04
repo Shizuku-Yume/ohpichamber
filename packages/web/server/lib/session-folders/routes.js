@@ -3,6 +3,7 @@ import fsDefault from 'node:fs';
 import { z } from 'zod';
 import { isRecord as isObjectRecord } from '../shared/guards.js';
 import { createLegacyMetadataConversion } from '../host/metadata-conversion.js';
+import { applyFolderChanges, folderChangesBodySchema } from './folder-changes.js';
 import {
   MetadataCorruptError,
   MetadataReadError,
@@ -175,6 +176,26 @@ export const createSessionFoldersStore = ({ openchamberDataDir, fsPromises = fsD
     if (converted.error) status.code = converted.error.code;
     return { ...state, errors, conversion: status };
   });
+  // The whole state after a write: one header row plus each scope's folders.
+  // Runs inside the caller's transaction, so a revision never lands alone.
+  const writeSnapshot = (outgoing, current, acknowledgedScopes = []) => {
+    const { foldersMap, ...header } = outgoing;
+    const revision = Number(current?.revision ?? 0) + 1;
+    if (!RevisionSchema.safeParse(revision).success) throw new MetadataWriteError('Folder revision exhausted');
+    db.prepare(`INSERT INTO session_folders (singleton, revision, payload) VALUES (1, ?, ?)
+      ON CONFLICT(singleton) DO UPDATE SET revision = excluded.revision, payload = excluded.payload`).run(revision, JSON.stringify(header));
+    const write = db.prepare('INSERT INTO session_folder_scopes (scope, payload) VALUES (?, ?) ON CONFLICT(scope) DO UPDATE SET payload = excluded.payload');
+    for (const [scope, folders] of Object.entries(foldersMap)) write.run(scope, JSON.stringify(folders));
+    for (const scope of Object.keys(current?.snapshot.foldersMap ?? {})) {
+      if (foldersMap[scope] === undefined) db.prepare('DELETE FROM session_folder_scopes WHERE scope = ?').run(scope);
+    }
+    const receipt = db.prepare('INSERT OR IGNORE INTO metadata_conversion (source, completed) VALUES (?, 1)');
+    for (const scope of acknowledgedScopes) {
+      if (current?.errors[scope] && foldersMap[scope] === undefined) continue;
+      receipt.run(JSON.stringify(['folder-scope', scope]));
+    }
+    return { snapshot: outgoing, revision: String(revision) };
+  };
   const save = (incoming) => {
     const parsed = SnapshotSchema.safeParse(incoming);
     if (!parsed.success) return Promise.reject(new MetadataWriteError('Invalid session folders payload'));
@@ -185,27 +206,34 @@ export const createSessionFoldersStore = ({ openchamberDataDir, fsPromises = fsD
           const current = readStored();
           if (!current && converted.error) throw converted.error;
           const outgoing = mergeFolderSnapshots(current?.snapshot ?? EMPTY_SNAPSHOT, parsed.data, now());
-          const { foldersMap, ...header } = outgoing;
-          const revision = Number(current?.revision ?? 0) + 1;
-          if (!RevisionSchema.safeParse(revision).success) throw new MetadataWriteError('Folder revision exhausted');
-          db.prepare(`INSERT INTO session_folders (singleton, revision, payload) VALUES (1, ?, ?)
-            ON CONFLICT(singleton) DO UPDATE SET revision = excluded.revision, payload = excluded.payload`).run(revision, JSON.stringify(header));
-          const write = db.prepare('INSERT INTO session_folder_scopes (scope, payload) VALUES (?, ?) ON CONFLICT(scope) DO UPDATE SET payload = excluded.payload');
-          for (const [scope, folders] of Object.entries(foldersMap)) write.run(scope, JSON.stringify(folders));
-          for (const scope of Object.keys(current?.snapshot.foldersMap ?? {})) {
-            if (foldersMap[scope] === undefined) db.prepare('DELETE FROM session_folder_scopes WHERE scope = ?').run(scope);
-          }
-          const receipt = db.prepare('INSERT OR IGNORE INTO metadata_conversion (source, completed) VALUES (?, 1)');
-          for (const scope of Object.keys(parsed.data.foldersMap)) {
-            if (current?.errors[scope] && foldersMap[scope] === undefined) continue;
-            receipt.run(JSON.stringify(['folder-scope', scope]));
-          }
-          return { snapshot: outgoing, revision: String(revision) };
+          return writeSnapshot(outgoing, current, Object.keys(parsed.data.foldersMap));
         });
       } catch (error) { throw classifyWrite(error, 'Could not write session folders'); }
     }));
   };
-  return { get, save, convertLegacy: () => lifecycle.run(conversion.convert), flush: lifecycle.flush, close: lifecycle.close, databasePath: filePath };
+  /**
+   * Apply one client's changes to the stored state. The client sends intent,
+   * never a copy of the map, so a stale tab cannot undo another client. The
+   * answer is the stored state after the changes, which the writer shows.
+   */
+  const applyChanges = (changes) => lifecycle.run(() => runExclusive(async () => {
+    const converted = await conversion.convert();
+    try {
+      return withTransaction(db, () => {
+        const current = readStored();
+        if (!current && converted.error) throw converted.error;
+        const { snapshot, changed } = applyFolderChanges(current?.snapshot ?? EMPTY_SNAPSHOT, changes, now());
+        if (!changed) return { snapshot: current?.snapshot ?? EMPTY_SNAPSHOT, revision: current?.revision ?? '0' };
+        if (Buffer.byteLength(JSON.stringify(snapshot), 'utf8') > MAX_BODY_BYTES) {
+          throw new MetadataWriteError('Session folders too large');
+        }
+        return writeSnapshot(snapshot, current);
+      });
+    } catch (error) { throw classifyWrite(error, 'Could not write session folders'); }
+  }));
+  return {
+    get, save, applyChanges, convertLegacy: () => lifecycle.run(conversion.convert), flush: lifecycle.flush, close: lifecycle.close, databasePath: filePath,
+  };
 };
 
 export const registerSessionFoldersRoutes = (app, dependencies) => {
@@ -217,6 +245,16 @@ export const registerSessionFoldersRoutes = (app, dependencies) => {
       if (!state) return res.json({ ...EMPTY_SNAPSHOT, exists: false });
       return res.json({ ...state.snapshot, revision: state.revision, exists: true, errors: state.errors, conversion: state.conversion });
     } catch (error) { return res.status(500).json({ error: error?.message ?? 'Failed to read session folders', code: error?.code }); }
+  });
+  app.patch('/api/session-folders', async (req, res) => {
+    const request = folderChangesBodySchema.safeParse(req.body);
+    if (!request.success) return res.status(400).json({ error: 'Invalid session folder changes' });
+    const serialized = JSON.stringify(request.data);
+    if (Buffer.byteLength(serialized, 'utf8') > MAX_BODY_BYTES) return res.status(413).json({ error: 'Payload too large' });
+    try {
+      const state = await store.applyChanges(request.data.changes);
+      return res.json({ ...state.snapshot, revision: state.revision, exists: true });
+    } catch (error) { return res.status(500).json({ error: error?.message ?? 'Failed to write session folders', code: error?.code }); }
   });
   app.post('/api/session-folders', async (req, res) => {
     const request = SnapshotRequestSchema.safeParse(req.body);

@@ -11,9 +11,9 @@ import { createDirectCommandAdmissionStore } from './direct-command-admission-st
 export const createHostSessionState = ({ dataDir, fsPromises, path, now } = {}) => {
   const { db, filePath } = openHostMetadataDatabase({ dataDir, path });
   const sessionMetadataStore = createSessionMetadataStore({ dataDir, fsPromises, path, database: db });
-  const archiveStore = createArchiveStore({ dataDir, fsPromises, path, now, database: db });
-  const sessionFoldersStore = createSessionFoldersStore({ openchamberDataDir: dataDir, fsPromises, path, now, database: db });
   const agentScopeStore = createAgentScopeStore({ database: db, fsPromises });
+  const archiveStore = createArchiveStore({ dataDir, fsPromises, path, now, database: db, assertSessionWritable: agentScopeStore.assertSessionWritable });
+  const sessionFoldersStore = createSessionFoldersStore({ openchamberDataDir: dataDir, fsPromises, path, now, database: db });
   const attachmentStore = createAttachmentStore({ database: db, storageDirectory: (path ?? nodePath).join(dataDir, 'attachments'), fsPromises, now });
   const directCommandAdmissionStore = createDirectCommandAdmissionStore({ database: db });
   let closePromise;

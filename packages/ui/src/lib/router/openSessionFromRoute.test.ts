@@ -3,18 +3,19 @@ import type { Session } from '@openchamber/agent-contract';
 
 import { registerWorkspaceDirectory, resetWorkspaceDirectories } from '@/stores/globalSessions';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
-import { useSessionUIStore } from '@/sync/session-ui-store';
+import { getRememberedSessionDirectory, useSessionUIStore } from '@/sync/session-ui-store';
 
 import { openSessionFromRoute } from './openSessionFromRoute';
 
 const SESSION_ID = 'ses_linear_open';
 const PROJECT_DIR = '/projects/linear-from-url';
 const OTHER_DIR = '/projects/linear-from-url-other';
+const WORKTREE_DIR = '/projects/linear-from-url-worktrees/feature';
 
-const buildSession = (sessionId: string, displayPath: string): Session => ({
+const buildSession = (sessionId: string, displayPath: string, workspaceId = 'workspace-linear'): Session => ({
   sessionId,
   projectId: 'project-linear',
-  workspaceId: 'workspace-linear',
+  workspaceId,
   displayPath,
   rootSessionId: sessionId,
   createdAt: 1,
@@ -58,6 +59,27 @@ describe('openSessionFromRoute', () => {
 
     expect(useSessionUIStore.getState().currentSessionId).toBe(SESSION_ID);
     expect(useSessionUIStore.getState().currentSessionDirectory).toBe(PROJECT_DIR);
+  });
+
+  // Scheduled tasks' "Open session" opens a run's session by id while the
+  // project root is active; a session in a linked worktree must open there.
+  test('opens a worktree session in its worktree while the project root is active', async () => {
+    const rootId = 'ses_linear_root';
+    const worktreeId = 'ses_linear_worktree';
+    registerWorkspaceDirectory('workspace-worktree', WORKTREE_DIR);
+    useGlobalSessionsStore.setState({
+      activeSessions: [buildSession(rootId, PROJECT_DIR), buildSession(worktreeId, WORKTREE_DIR, 'workspace-worktree')],
+      archivedSessions: [],
+      hasLoaded: true,
+      status: 'ready',
+    });
+    useSessionUIStore.getState().setCurrentSession(rootId, PROJECT_DIR);
+
+    await openSessionFromRoute(worktreeId);
+
+    expect(useSessionUIStore.getState().currentSessionId).toBe(worktreeId);
+    expect(useSessionUIStore.getState().currentSessionDirectory).toBe(WORKTREE_DIR);
+    expect(getRememberedSessionDirectory(worktreeId).runtime).toBe(WORKTREE_DIR);
   });
 
   test('replaces a guessed directory once the global list knows the owner', async () => {

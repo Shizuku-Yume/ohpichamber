@@ -9,6 +9,7 @@ const makeKeyStore = (initial = {}) => {
   const slots = { ...initial };
   return {
     getOrCreate: async (slot, generate) => (slots[slot] ??= await generate()),
+    generation: () => 0,
     peek: () => slots,
   };
 };
@@ -47,6 +48,33 @@ describe('relay identity', () => {
       .update(canonicalPublicJwkString(pair.publicKey.export({ format: 'jwk' })))
       .digest('base64url');
     expect(identity.serverId).toBe(expected);
+  });
+
+  it('rebuilds instead of caching an identity when a reset lands mid-build', async () => {
+    const slots = {};
+    let generation = 0;
+    let resetOnce = false;
+    const relayKeyStore = {
+      getOrCreate: async (slot, generate) => {
+        const value = (slots[slot] ??= await generate());
+        if (slot === 'encryption' && !resetOnce) {
+          // A reset finished after the signing key was read: rotate and bump.
+          resetOnce = true;
+          for (const key of Object.keys(slots)) delete slots[key];
+          generation += 1;
+        }
+        return value;
+      },
+      generation: () => generation,
+    };
+    const runtime = createRelayIdentityRuntime({ crypto, relayKeyStore });
+    const identity = await runtime.getRelayIdentity();
+    const finalServerId = crypto
+      .createHash('sha256')
+      .update(canonicalPublicJwkString(slots.signing.publicJwk))
+      .digest('base64url');
+    expect(identity.serverId).toBe(finalServerId);
+    expect(await runtime.getRelayIdentity()).toBe(identity);
   });
 
   it('produces a verifiable relay auth signature', async () => {

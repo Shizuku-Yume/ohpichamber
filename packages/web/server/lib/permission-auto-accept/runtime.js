@@ -100,7 +100,7 @@ export function createPermissionAutoAcceptRuntime({
   };
 
   const persistUpdate = (update) => {
-    writePromise = writePromise.then(async () => {
+    const result = writePromise.then(async () => {
       const next = update(policy);
       await persistSettings({ [SETTINGS_KEY]: next });
       policy = next;
@@ -111,7 +111,9 @@ export function createPermissionAutoAcceptRuntime({
       });
       return snapshot();
     });
-    return writePromise;
+    // Only this caller sees a failed save; the next update still writes.
+    writePromise = result.catch(() => {});
+    return result;
   };
 
   /**
@@ -372,6 +374,7 @@ export function createPermissionAutoAcceptRuntime({
   return {
     snapshot,
     load,
+    applyDefaultMode,
     setSessionPolicy,
     resolveSessionMode,
     isSessionAutoAccepting,

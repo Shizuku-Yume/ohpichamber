@@ -31,6 +31,8 @@ competing names, omit the line rather than inventing fake synonyms.
 - **Place**: container runtime where spaces run, defined in the inherited [design vocabulary](isolated-spaces/DESIGN.md#words).
 - **Gatekeeper**: a space's separate egress container, distinct from host authorization checks, defined in the inherited [design vocabulary](isolated-spaces/DESIGN.md#words).
 - **Upstream rebaseline**: adoption of one freshly pinned upstream application/runtime/dependency/build revision followed by preservation and restoration of OhPiChamber customization, as defined in the [current effort spec](specs/upstream-rebaseline.md).
+- **Upstream-first area refresh**: take a current upstream area's source at the pinned revision as the baseline, then restore OhPiChamber customizations path by path, as defined in the [refresh spec](specs/upstream-refresh.md).
+- _Avoid_: cherry-pick, merge (for this operation).
 - **Session mode**: how OMP runs a session's main conversation, one of main, plan, vibe or goal; held by OMP and projected as `SessionMode` in the session snapshot, defined in the [OMP-native chat spec](specs/omp-native-chat.md#session-mode).
 - _Avoid_: agent, persona (OMP has no root agent).
 - **Worker-originated run**: a canonical run the Agent Service worker opens for a turn OMP started without a Host prompt, marked by `origin`, defined in the [OMP-native chat spec](specs/omp-native-chat.md#worker-originated-runs).

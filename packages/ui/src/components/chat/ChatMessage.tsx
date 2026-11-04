@@ -22,8 +22,6 @@ import { isHiddenUserMessage } from './message/hiddenUserMessage';
 import { flattenAssistantTextParts, flattenUserTextParts } from '@/lib/messages/messageText';
 import { lazyWithChunkRecovery } from '@/lib/chunkLoadRecovery';
 import { copyMarkdownToClipboard, copyTextToClipboard } from '@/lib/clipboard';
-import { renderMarkdownSync } from './markdown/markdownCore';
-import { renderedMarkdownHtmlToPlainText } from './markdown/selectionMarkdown';
 import { FadeInOnReveal } from './message/FadeInOnReveal';
 import { streamPerfCount } from '@/stores/utils/streamDebug';
 import { areOptionalRenderRelevantMessagesEqual, areRenderRelevantMessagesEqual, areRelevantTurnGroupingContextsEqual } from './message/renderCompare';
@@ -355,11 +353,12 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         if (isUser) {
             result = await copyTextToClipboard(messageTextContent);
         } else {
-            const html = renderMarkdownSync(messageTextContent);
+            const { renderMarkdownForExport } = await import('./markdown/renderMarkdownForExport');
+            const root = await renderMarkdownForExport(messageTextContent, { purpose: 'copy' });
             const plainText = useUIStore.getState().copyMessagesAsPlainText
-                ? renderedMarkdownHtmlToPlainText(html, document)
+                ? (await import('./markdown/selectionMarkdown')).serializeRenderedMarkdown(root, 'plain')
                 : undefined;
-            result = await copyMarkdownToClipboard(messageTextContent, html, { plainText });
+            result = await copyMarkdownToClipboard(messageTextContent, root.innerHTML, { plainText });
         }
         if (!result.ok) {
             return false;

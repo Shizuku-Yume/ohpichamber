@@ -303,7 +303,8 @@ test('worker catalog builtins appear without disk templates and context output i
   const builtinCommands = ['compact', 'shake', 'todo', 'jobs', 'usage', 'context', 'tools'];
   useDirectoryStore.setState({ currentDirectory: '/workspace' });
   useSessionUIStore.setState({ currentSessionId: 'ses_slash', currentSessionDirectory: '/workspace', newSessionDraft: { ...useSessionUIStore.getState().newSessionDraft, open: false } });
-  useCommandsStore.setState({ catalogsByDirectory: { '/workspace': { workspaceId: 'workspace', revision: '1', commands: [], builtinCommands } }, commandsByDirectory: { '/workspace': [] } });
+  const deployCommand = { commandId: 'cmd-deploy', name: 'deploy', description: 'Deploy application', content: 'Deploy $1', scope: 'workspace' as const, source: '(project)', editable: true };
+  useCommandsStore.setState({ catalogsByDirectory: { '/workspace': { workspaceId: 'workspace', revision: '1', commands: [deployCommand], builtinCommands } }, commandsByDirectory: { '/workspace': [deployCommand] } });
   useSnippetsStore.setState({ catalogsByDirectory: new Map([['/workspace', { workspaceId: 'workspace', revision: '1', templates: [{ templateId: 'template-deploy', name: 'deploy', description: 'Deploy application', content: 'Deploy $1', scope: 'workspace', source: '(project)', editable: true }] }]]) });
   const loadTemplates = spyOn(useSnippetsStore.getState(), 'loadSnippets').mockResolvedValue(true);
   const load = spyOn(useCommandsStore.getState(), 'loadCommands').mockResolvedValue(true);
@@ -316,7 +317,7 @@ test('worker catalog builtins appear without disk templates and context output i
   const wrap = (content: ReactNode) => <RuntimeAPIContext.Provider value={runtimeAPIs}><ThemeSystemProvider><I18nProvider><SyncProvider directory="/workspace">{content}</SyncProvider></I18nProvider></ThemeSystemProvider></RuntimeAPIContext.Provider>;
   try {
     await act(async () => root.render(wrap(<CommandAutocomplete searchQuery="" onCommandSelect={() => {}} onClose={() => {}} />)));
-    const names = [...container.querySelectorAll('.typography-ui-label.font-medium')].map(item => item.textContent?.slice(1));
+    const names = [...container.querySelectorAll('.typography-ui-label .font-medium')].map(item => item.textContent?.slice(1));
     expect(names.filter(name => builtinCommands.includes(name ?? ''))).toEqual([...builtinCommands].sort());
     expect(names).not.toContain('ssh');
     expect(names).toContain('deploy');

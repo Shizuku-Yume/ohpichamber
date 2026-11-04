@@ -34,7 +34,7 @@ import { isDirectoryUnknown, useDirectoryStore } from "@/stores/useDirectoryStor
 import { hostFilesystem } from "@/lib/host-filesystem"
 import { useSessionFoldersStore } from "@/stores/useSessionFoldersStore"
 import { expandNativeFileResource } from '@/api/fileResourceExpansion'
-import { selectSkillsForDirectory, useSkillsStore } from "@/stores/useSkillsStore"
+import { selectAvailableSkillsForDirectory, useSkillsStore } from "@/stores/useSkillsStore"
 import { getDeferredSafeStorage } from "@/stores/utils/safeStorage"
 import { markPendingUserSendAnimation } from "@/lib/userSendAnimation"
 import { normalizePath } from "@/lib/pathNormalization"
@@ -87,7 +87,7 @@ import { ROOT_SELECTION_AGENT, useSelectionStore } from "./selection-store"
 import { getViewportSessionMemory, useViewportStore, viewportSessionKey } from "./viewport-store"
 import { useSessionWorktreeStore } from "./session-worktree-store"
 import { getAttachedSessionDirectory } from "./session-worktree-contract"
-import { getRuntimeKey, isTransientRuntimeKey } from "@/lib/runtime-switch"
+import { getRuntimeKey, getRuntimeSwitchRevision, isTransientRuntimeKey } from "@/lib/runtime-switch"
 import { clearLastActiveSession, persistLastActiveSession, readLastActiveSession } from "./last-session-cache"
 import { persistWorktreeTopology, readPersistedWorktreeTopology } from "./worktree-topology-cache"
 import { rememberRuntimeLiveStatus } from "./runtime-live-memory"
@@ -144,11 +144,14 @@ export const expandCanonicalSkills = async (
   sessionId: string,
   names: readonly string[],
   argumentsText = "",
+  runtimeKey = getRuntimeKey(),
+  runtimeRevision = getRuntimeSwitchRevision(),
 ): Promise<string | null> => {
   const uniqueNames = [...new Set(names)]
   if (uniqueNames.length === 0) return null
   const scope = resolveCanonicalSkillScope(sessionId)
   const catalog = await canonicalClient.getSkillsCatalog(scope)
+  assertSendRuntime(runtimeKey, runtimeRevision)
   const byName: Record<string, (typeof catalog.skills)[number]> = Object.fromEntries(
     catalog.skills.map((skill) => [skill.name, skill]),
   )
@@ -162,19 +165,21 @@ export const expandCanonicalSkills = async (
       workerGeneration: catalog.worker.workerGeneration,
       arguments: argumentsText,
     })
+    assertSendRuntime(runtimeKey, runtimeRevision)
     if (result.message.trim()) expansions.push(result.message)
   }
   return expansions.length > 0 ? expansions.join("\n\n") : null
 }
 
-const assertSendRuntime = (runtimeKey: string): void => {
-  if (runtimeKey !== getRuntimeKey()) {
+const assertSendRuntime = (runtimeKey: string, runtimeRevision = getRuntimeSwitchRevision()): void => {
+  if (runtimeKey !== getRuntimeKey() || runtimeRevision !== getRuntimeSwitchRevision()) {
     throw new Error("Message was not sent because the runtime changed.")
   }
 }
 
 export async function routeMessage(params: {
   runtimeKey?: string
+  runtimeRevision?: number
   sessionId: string
   directory?: string | null
   content: string
@@ -198,7 +203,8 @@ export async function routeMessage(params: {
   fileResourceExpansion?: FileResourceExpandResult | null
 }): Promise<'command' | 'prompt' | 'shell'> {
   const runtimeKey = params.runtimeKey ?? getRuntimeKey()
-  assertSendRuntime(runtimeKey)
+  const runtimeRevision = params.runtimeRevision ?? getRuntimeSwitchRevision()
+  assertSendRuntime(runtimeKey, runtimeRevision)
   const requestDirectory = params.directory ?? undefined
   const sendSelection = resolveSendSelection(params.sessionId, requestDirectory, {
     providerId: params.providerID,
@@ -207,15 +213,16 @@ export async function routeMessage(params: {
     agentId: params.agent,
     reasoningEffort: params.reasoningEffort,
   })
+
   const additionalContext: PromptContext[] = (params.additionalParts ?? [])
     .filter((part) => part.text.trim().length > 0)
-    .map((part) => part.synthetic
-      ? { kind: 'synthetic', text: part.text }
-      : part.metadata
-        ? { kind: 'context', text: part.text, metadata: part.metadata }
+    .map((part) => part.metadata
+      ? { kind: 'context', text: part.text, metadata: part.metadata }
+      : part.synthetic
+        ? { kind: 'synthetic', text: part.text }
         : { kind: 'instruction', text: part.text })
   const skillText = params.skills?.names.length
-    ? await expandCanonicalSkills(params.sessionId, params.skills.names)
+    ? await expandCanonicalSkills(params.sessionId, params.skills.names, '', runtimeKey, runtimeRevision)
     : null
   const context: PromptContext[] = [
     ...additionalContext,
@@ -231,22 +238,23 @@ export async function routeMessage(params: {
     options: sendSelection,
   }
   const dispatchPrompt = async (): Promise<void> => {
-    assertSendRuntime(runtimeKey)
+    assertSendRuntime(runtimeKey, runtimeRevision)
     params.appendSubmissions?.()
     await sendMessageAction({
       sessionId: params.sessionId,
       request,
       mode: params.delivery ?? 'run',
       runtimeKey,
+      runtimeRevision,
       commandId: params.commandId,
     })
-    assertSendRuntime(runtimeKey)
+    assertSendRuntime(runtimeKey, runtimeRevision)
   }
 
   if (params.inputMode === "shell") {
-    assertSendRuntime(runtimeKey)
+    assertSendRuntime(runtimeKey, runtimeRevision)
     await canonicalClient.startShell(params.sessionId, { command: params.content, background: false }, params.commandId)
-    assertSendRuntime(runtimeKey)
+    assertSendRuntime(runtimeKey, runtimeRevision)
     return 'shell'
   }
 
@@ -254,7 +262,7 @@ export async function routeMessage(params: {
     const expanded = params.fileResourceExpansion === undefined
       ? await expandNativeFileResource(params.content, requestDirectory)
       : params.fileResourceExpansion
-    assertSendRuntime(runtimeKey)
+    assertSendRuntime(runtimeKey, runtimeRevision)
     if (expanded) {
       request.input.text = expanded.content
       if (expanded.modelSelection) request.options = { ...request.options, ...expanded.modelSelection }
@@ -263,10 +271,10 @@ export async function routeMessage(params: {
       return 'command'
     }
     const invocation = /^\/([^\s]+)(?:\s([\s\S]*))?$/.exec(params.content)
-    const matchedSkill = selectSkillsForDirectory(useSkillsStore.getState(), requestDirectory)
+    const matchedSkill = selectAvailableSkillsForDirectory(useSkillsStore.getState(), requestDirectory)
       .find(skill => skill.name === invocation?.[1])
     if (matchedSkill) {
-      const expandedSkill = await expandCanonicalSkills(params.sessionId, [matchedSkill.name], invocation?.[2] ?? '')
+      const expandedSkill = await expandCanonicalSkills(params.sessionId, [matchedSkill.name], invocation?.[2] ?? '', runtimeKey, runtimeRevision)
       if (expandedSkill) request.input.context = [...request.input.context, { kind: 'instruction', text: expandedSkill }]
     }
   }
@@ -289,14 +297,15 @@ const admitPromptAttachments = async (
   attachments: readonly AttachedFile[] | undefined,
   sessionId: string,
   runtimeKey: string,
+  runtimeRevision: number,
   directory: string | null,
 ): Promise<PromptAttachment[] | undefined> => {
-  assertSendRuntime(runtimeKey)
+  assertSendRuntime(runtimeKey, runtimeRevision)
   if (!attachments?.length) return undefined
   let workspaceId: string | undefined
   const admitted: PromptAttachment[] = []
   for (const attachment of attachments) {
-    assertSendRuntime(runtimeKey)
+    assertSendRuntime(runtimeKey, runtimeRevision)
     const uri = attachment.serverPath?.startsWith('attachment://')
       ? attachment.serverPath
       : attachment.dataUrl
@@ -325,27 +334,27 @@ const admitPromptAttachments = async (
       const response = await runtimeFetch('/api/fs/raw', {
         query: { path, directory: directory ?? undefined, allowOutsideWorkspace: 'true' },
       })
-      assertSendRuntime(runtimeKey)
+      assertSendRuntime(runtimeKey, runtimeRevision)
       if (!response.ok) throw new Error("Failed to read attachment file bytes")
       file = await response.blob()
-      assertSendRuntime(runtimeKey)
+      assertSendRuntime(runtimeKey, runtimeRevision)
     }
     if (!workspaceId) {
       workspaceId = getAllSyncSessions().find((session) => session.sessionId === sessionId)?.workspaceId
       if (!workspaceId) {
         const snapshot = await canonicalClient.getSession(sessionId)
-        assertSendRuntime(runtimeKey)
+        assertSendRuntime(runtimeKey, runtimeRevision)
         workspaceId = snapshot.session.workspaceId
       }
     }
     const data = await encodeAttachmentFile(file)
-    assertSendRuntime(runtimeKey)
+    assertSendRuntime(runtimeKey, runtimeRevision)
     const uploaded = await canonicalClient.uploadAttachment(
       workspaceId,
       { name: attachment.filename, mediaType: attachment.mimeType, size: file.size },
       data,
     )
-    assertSendRuntime(runtimeKey)
+    assertSendRuntime(runtimeKey, runtimeRevision)
     admitted.push({
       attachmentId: uploaded.attachmentId,
       name: uploaded.name,
@@ -364,6 +373,7 @@ type CapturedSendTarget = {
 
 type SendMessageOptions = {
   target?: CapturedSendTarget
+  runtimeRevision?: number
   sessionId?: string
   directory?: string
   historySubmissions?: InputHistorySubmission[]
@@ -406,6 +416,7 @@ export type DraftGoalObjective = { objective: string; tokenBudget: number | null
 
 export type NewSessionDraftState = {
   draftId: number
+  workDraftId?: string | null
   open: boolean
   selectedProjectId?: string | null
   directoryOverride: string | null
@@ -462,7 +473,7 @@ export type SessionUIState = {
   prepareForRuntimeSwitch: (apiBaseUrl?: string | null) => void
   restoreForRuntimeSwitch: (apiBaseUrl?: string | null, previousRuntimeKey?: string | null) => void
   openNewSessionDraft: (options?: Partial<NewSessionDraftState> & { automatic?: boolean }) => void
-  prepareChatDraftDirectory: (draftSnapshot?: NewSessionDraftState, runtimeKey?: string) => Promise<string | null>
+  prepareChatDraftDirectory: (draftSnapshot?: NewSessionDraftState, runtimeKey?: string, runtimeRevision?: number) => Promise<string | null>
   closeNewSessionDraft: () => void
   setNewSessionDraftTarget: (target: { projectId?: string | null; selectedProjectId?: string | null; directoryOverride?: string | null }, options?: { force?: boolean }) => void
   setDraftPreserveDirectoryOverride: (value: boolean) => void
@@ -476,7 +487,7 @@ export type SessionUIState = {
   clearError: () => void
   markSessionAsOpenChamberCreated: (sessionId: string) => void
   isOpenChamberCreatedSession: (sessionId: string) => boolean
-  setWorktreeMetadata: (sessionId: string, metadata: WorktreeMetadata | null) => void
+  setWorktreeMetadata: (sessionId: string, metadata: WorktreeMetadata | null, cwd?: string) => void
   overrideNewSessionDraftTarget: (options: Record<string, unknown>) => void
   resolvePendingDraftWorktreeTarget: (requestId: string, directory: string | null, options?: Record<string, unknown>) => void
   setDraftBootstrapPendingDirectory: (directory: string | null) => void
@@ -831,15 +842,15 @@ const resolveProjectRefForWorktreeDirectory = (directory: string | null, project
   return resolved?.path ? { id: resolved.id, path: resolved.path } : null
 }
 
-const waitForWorktreeBootstrapIfConfigured = async (directory: string | null, projectId?: string | null, runtimeKey = getRuntimeKey()): Promise<void> => {
-  assertSendRuntime(runtimeKey)
+const waitForWorktreeBootstrapIfConfigured = async (directory: string | null, projectId?: string | null, runtimeKey = getRuntimeKey(), runtimeRevision = getRuntimeSwitchRevision()): Promise<void> => {
+  assertSendRuntime(runtimeKey, runtimeRevision)
   if (!directory) return
   const project = resolveProjectRefForWorktreeDirectory(directory, projectId)
   const waitEnabled = project ? await getWorktreeSetupWaitEnabled(project) : false
-  assertSendRuntime(runtimeKey)
+  assertSendRuntime(runtimeKey, runtimeRevision)
   if (waitEnabled) {
     await waitForWorktreeBootstrap(directory)
-    assertSendRuntime(runtimeKey)
+    assertSendRuntime(runtimeKey, runtimeRevision)
   }
 }
 
@@ -957,19 +968,20 @@ const createSessionWithDraftLifecycle = async (
   draftSnapshot?: NewSessionDraftState,
   runtimeKey = getRuntimeKey(),
   selectedSessionId = useSessionUIStore.getState().currentSessionId,
+  runtimeRevision = getRuntimeSwitchRevision(),
 ): Promise<Session | null> => {
-  assertSendRuntime(runtimeKey)
+  assertSendRuntime(runtimeKey, runtimeRevision)
   const store = useSessionUIStore.getState()
   const draft = draftSnapshot ?? store.newSessionDraft
   const targetFolderId = draft.targetFolderId
 
   try {
     const resolved = await resolveCreatableDraftDirectory(draft, directoryOverride, Boolean(draftSnapshot))
-    assertSendRuntime(runtimeKey)
+    assertSendRuntime(runtimeKey, runtimeRevision)
     if (resolved.status === "aborted") return null
     const directory = resolved.directory
     const session = await createSessionAction(title, directory, metadata, selectionTransition, selection, "preserve")
-    assertSendRuntime(runtimeKey)
+    assertSendRuntime(runtimeKey, runtimeRevision)
     if (!session) return null
 
     const current = useSessionUIStore.getState()
@@ -991,7 +1003,7 @@ const createSessionWithDraftLifecycle = async (
 
     return session
   } catch (error) {
-    assertSendRuntime(runtimeKey)
+    assertSendRuntime(runtimeKey, runtimeRevision)
     console.error("[session-ui-store] createSession failed", error)
     const detail = canonicalProblemDetail(error instanceof Error ? error : null)
     if (detail) toast.error(detail)
@@ -1028,8 +1040,8 @@ export async function materializeOpenDraftSession(selection: {
   agent?: string
   variant?: string
   reasoningEffort?: string
-}, draftOverride?: NewSessionDraftState, runtimeKey = getRuntimeKey()): Promise<MaterializedDraftSession | null> {
-  assertSendRuntime(runtimeKey)
+}, draftOverride?: NewSessionDraftState, runtimeKey = getRuntimeKey(), runtimeRevision = getRuntimeSwitchRevision()): Promise<MaterializedDraftSession | null> {
+  assertSendRuntime(runtimeKey, runtimeRevision)
   const store = useSessionUIStore.getState()
   const draft = draftOverride ?? cloneDraft(store.newSessionDraft)
   if (!draft?.open) return null
@@ -1048,14 +1060,14 @@ export async function materializeOpenDraftSession(selection: {
     } finally {
       noteDraftSendWaiting(requestId, false)
     }
-    assertSendRuntime(runtimeKey)
+    assertSendRuntime(runtimeKey, runtimeRevision)
     store.resolvePendingDraftWorktreeTarget(requestId, draftDirectoryOverride)
   }
 
   const isChatDraft = draft.target === "chat"
   if (isChatDraft) {
-    draftDirectoryOverride = await store.prepareChatDraftDirectory(draft, runtimeKey)
-    assertSendRuntime(runtimeKey)
+    draftDirectoryOverride = await store.prepareChatDraftDirectory(draft, runtimeKey, runtimeRevision)
+    assertSendRuntime(runtimeKey, runtimeRevision)
     if (!draftDirectoryOverride) throw new Error("Failed to prepare chat directory")
     const currentDraft = useSessionUIStore.getState().newSessionDraft
     if (currentDraft.draftId === draft.draftId) {
@@ -1065,8 +1077,8 @@ export async function materializeOpenDraftSession(selection: {
     }
   }
 
-  await waitForWorktreeBootstrapIfConfigured(draftDirectoryOverride, draftProjectId, runtimeKey)
-  assertSendRuntime(runtimeKey)
+  await waitForWorktreeBootstrapIfConfigured(draftDirectoryOverride, draftProjectId, runtimeKey, runtimeRevision)
+  assertSendRuntime(runtimeKey, runtimeRevision)
 
   const draftPins = draft.projectContextPins ?? { notes: [], plans: [] }
   // Native admission and the first prompt use the same captured selection.
@@ -1085,12 +1097,14 @@ export async function materializeOpenDraftSession(selection: {
     },
     draft,
     runtimeKey,
+    undefined,
+    runtimeRevision,
   )
-  assertSendRuntime(runtimeKey)
+  assertSendRuntime(runtimeKey, runtimeRevision)
   if (!created?.sessionId) {
     if (isChatDraft && draftDirectoryOverride) {
       await deleteChatDirectory(draftDirectoryOverride).catch(() => undefined)
-      assertSendRuntime(runtimeKey)
+      assertSendRuntime(runtimeKey, runtimeRevision)
     }
     throw new Error("Failed to create session")
   }
@@ -1134,7 +1148,7 @@ export async function materializeOpenDraftSession(selection: {
   if (draftPermissionMode) {
     void import("@/stores/permissionStore")
       .then(({ usePermissionStore }) => {
-        assertSendRuntime(runtimeKey)
+        assertSendRuntime(runtimeKey, runtimeRevision)
         return usePermissionStore.getState().setSessionMode(created.sessionId, draftPermissionMode)
       })
       .catch((error) => {
@@ -1529,18 +1543,18 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
     void recoverStaleDraftDirectory(nextDraft)
   },
 
-  prepareChatDraftDirectory: async (draftSnapshot, runtimeKey = getRuntimeKey()) => {
-    assertSendRuntime(runtimeKey)
+  prepareChatDraftDirectory: async (draftSnapshot, runtimeKey = getRuntimeKey(), runtimeRevision = getRuntimeSwitchRevision()) => {
+    assertSendRuntime(runtimeKey, runtimeRevision)
     const draft = draftSnapshot ?? get().newSessionDraft
     if (!draft.open || draft.target !== "chat") return null
     if (draft.preparedChatDirectory) return draft.preparedChatDirectory
 
-    const key = `${runtimeKey}:${draft.draftId}`
+    const key = `${runtimeKey}:${runtimeRevision}:${draft.draftId}`
     const existing = pendingChatDirectoryByDraft.get(key)
     if (existing) return existing
 
     const pending = createChatDirectory().then(async (directory) => {
-      assertSendRuntime(runtimeKey)
+      assertSendRuntime(runtimeKey, runtimeRevision)
       const current = get().newSessionDraft
       if (current.open && current.target === "chat" && current.draftId === draft.draftId) {
         set({ newSessionDraft: { ...current, preparedChatDirectory: directory } })
@@ -1548,7 +1562,7 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
       }
       if (draftSnapshot) return directory
       await deleteChatDirectory(directory).catch(() => undefined)
-      assertSendRuntime(runtimeKey)
+      assertSendRuntime(runtimeKey, runtimeRevision)
       return null
     }).finally(() => {
       pendingChatDirectoryByDraft.delete(key)
@@ -1712,12 +1726,13 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
   isOpenChamberCreatedSession: (sessionId) => get().webUICreatedSessions.has(sessionId),
 
 
-  setWorktreeMetadata: (sessionId, metadata) => {
+  setWorktreeMetadata: (sessionId, metadata, cwd) => {
     // Write to authoritative session-worktree-store
     if (metadata) {
       useSessionWorktreeStore.getState().setAttachment(sessionId, {
         worktreeRoot: metadata.worktreeRoot ?? metadata.path ?? null,
-        cwd: metadata.path ?? null,
+        // A session in a worktree may work in a folder of it (`<worktree>/ai`).
+        cwd: cwd ?? metadata.path ?? null,
         branch: metadata.branch ?? null,
         headState: metadata.headState ?? (metadata.branch ? 'branch' : 'detached'),
         worktreeStatus: metadata.worktreeStatus ?? 'ready',
@@ -1800,7 +1815,8 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
     options?: SendMessageOptions,
   ) => {
     const capturedRuntimeKey = options?.target?.runtimeKey ?? getRuntimeKey()
-    assertSendRuntime(capturedRuntimeKey)
+    const capturedRuntimeRevision = options?.runtimeRevision ?? getRuntimeSwitchRevision()
+    assertSendRuntime(capturedRuntimeKey, capturedRuntimeRevision)
     const capturedTarget = options?.target ? { ...options.target } : undefined
     const draft = cloneDraft(options?.draftSnapshot ?? get().newSessionDraft)
     const createsDraftSession = !capturedTarget && !options?.sessionId && draft.open
@@ -1832,7 +1848,7 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
     // Resolve the captured destination and selection once; canonical delivery
     // owns connection readiness and request lifecycle.
     return (async () => {
-      assertSendRuntime(capturedRuntimeKey)
+      assertSendRuntime(capturedRuntimeKey, capturedRuntimeRevision)
       let sessionId = targetSessionId
       let directory = targetDirectory
       let parts: Parameters<SessionUIState['sendMessage']>[6] = submittedParts
@@ -1843,8 +1859,8 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
           agent: effectiveAgent,
           variant,
           reasoningEffort,
-        }, draft, capturedRuntimeKey)
-        assertSendRuntime(capturedRuntimeKey)
+        }, draft, capturedRuntimeKey, capturedRuntimeRevision)
+        assertSendRuntime(capturedRuntimeKey, capturedRuntimeRevision)
         if (!created) throw new Error("Failed to create session")
         sessionId = created.sessionId
         directory = created.directory
@@ -1913,19 +1929,19 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
           fileResourceExpansion = await expandNativeFileResource(content, directory)
         }
         const objective = goalArm.objectiveOverride?.trim() || fileResourceExpansion?.content || content
-        assertSendRuntime(capturedRuntimeKey)
+        assertSendRuntime(capturedRuntimeKey, capturedRuntimeRevision)
         await canonicalClient.goal(sessionId, { op: 'create', objective, tokenBudget })
-        assertSendRuntime(capturedRuntimeKey)
+        assertSendRuntime(capturedRuntimeKey, capturedRuntimeRevision)
         goalApplied = true
       }
 
-      const files = inputMode === 'shell' ? undefined : await admitPromptAttachments(submittedAttachments, sessionId, capturedRuntimeKey, directory)
-      assertSendRuntime(capturedRuntimeKey)
+      const files = inputMode === 'shell' ? undefined : await admitPromptAttachments(submittedAttachments, sessionId, capturedRuntimeKey, capturedRuntimeRevision, directory)
+      assertSendRuntime(capturedRuntimeKey, capturedRuntimeRevision)
       const additionalContext: NonNullable<Parameters<typeof routeMessage>[0]['additionalParts']> = []
       if (inputMode !== 'shell') {
         for (const part of parts ?? []) {
-          const partFiles = await admitPromptAttachments(part.attachments, sessionId, capturedRuntimeKey, directory)
-          assertSendRuntime(capturedRuntimeKey)
+          const partFiles = await admitPromptAttachments(part.attachments, sessionId, capturedRuntimeKey, capturedRuntimeRevision, directory)
+          assertSendRuntime(capturedRuntimeKey, capturedRuntimeRevision)
           additionalContext.push({
             text: part.text,
             synthetic: part.synthetic,
@@ -1935,15 +1951,17 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
           })
         }
       }
+
       const historyIdentity = createInputHistoryIdentity(capturedRuntimeKey, directory ?? '', sessionId)
       const appendSubmissions = historyIdentity && historySubmissions?.length
         ? () => {
-          assertSendRuntime(capturedRuntimeKey)
+          assertSendRuntime(capturedRuntimeKey, capturedRuntimeRevision)
           useInputHistoryStore.getState().appendSubmissions(historyIdentity, historySubmissions)
         }
         : undefined
       await routeMessage({
         runtimeKey: capturedRuntimeKey,
+        runtimeRevision: capturedRuntimeRevision,
         sessionId,
         directory,
         content,
@@ -1963,9 +1981,9 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
         fileResourceExpansion,
         additionalParts: additionalContext,
       })
-      assertSendRuntime(capturedRuntimeKey)
+      assertSendRuntime(capturedRuntimeKey, capturedRuntimeRevision)
     })().catch((error) => {
-      if (goalArm.armed && !goalApplied && getRuntimeKey() === capturedRuntimeKey) {
+      if (goalArm.armed && !goalApplied && getRuntimeKey() === capturedRuntimeKey && getRuntimeSwitchRevision() === capturedRuntimeRevision) {
         useSessionGoalArmStore.getState().setArmed(true, goalArm.objectiveOverride, goalArm.composerGoal)
       }
       throw error

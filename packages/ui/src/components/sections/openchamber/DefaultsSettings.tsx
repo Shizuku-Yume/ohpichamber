@@ -8,6 +8,7 @@ import {
   SettingsInset,
   SettingsGroupTitle,
   SETTINGS_CUSTOM_TRIGGER_CLASS,
+
   SETTINGS_OPTION_STACK_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { SessionWarmingCheckbox } from './SessionWarmingCheckbox';
@@ -158,6 +159,7 @@ const getDisplayModel = (
     <>
       <SettingsSection title={t('settings.openchamber.defaults.title')} divider={false}>
         <div className="space-y-0">
+
           <SettingsInset className={SETTINGS_OPTION_STACK_CLASS}>
             <SettingsCheckboxRow
               settingsItem="sessions.deletion-dialog"
@@ -239,6 +241,7 @@ const getDisplayModel = (
           </div>
         </div>
       </SettingsSection>
+
     </>
   );
 };

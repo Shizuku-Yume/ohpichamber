@@ -3,13 +3,13 @@ const BUILT_IN_CONTEXT_PANEL_MODES = [
   'walkthrough',
   'file',
   'context',
-  'plan',
   'chat',
   'browser',
   'git',
   'pr',
   'notes',
   'terminal',
+  'workflows',
 ] as const;
 
 type BuiltInContextPanelMode = (typeof BUILT_IN_CONTEXT_PANEL_MODES)[number];

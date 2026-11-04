@@ -33,3 +33,16 @@ export const spaceApiPath = (path: string, directory: string | null | undefined)
   if (!path.startsWith(API_PREFIX) || isSpaceRoutePath(path)) return path;
   return `${SPACE_ROUTE_PREFIX}${spaceId}/${path.slice(API_PREFIX.length)}`;
 };
+
+/**
+ * The headers that send a request to the space owning `directory`: its directory header,
+ * URI-encoded and marked so, which every reader on the server decodes the same way. Null for a
+ * host directory.
+ */
+export const spaceDirectoryHeaders = (directory: string | null | undefined): Record<string, string> | null => {
+  if (!directory || !isSpaceDirectory(directory)) return null;
+  return { 'x-opencode-directory': encodeURIComponent(directory), 'x-opencode-directory-encoding': 'uri' };
+};
+
+/** The root of a space, `/spaces/<id>`: the directory a socket of that space names. */
+export const spaceRootDirectory = (spaceId: string): string => `/spaces/${spaceId}`;

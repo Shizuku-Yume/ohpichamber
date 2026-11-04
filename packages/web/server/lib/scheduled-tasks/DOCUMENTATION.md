@@ -31,7 +31,12 @@ scheduled like one more project, with three differences:
   already run once per project, so the chats scope never discovers loops.
 - **Directory resolution.** `resolveProjectID({ directory })` maps any
   directory inside the chats root to the chats scope, after checking registered
-  projects, so an agent working in a chat schedules into chats.
+  projects, so an agent working in a chat schedules into chats. Any directory
+  inside a registered checkout resolves to that project — a linked Git
+  worktree via `resolvePrimaryWorktreeRoot`, and a plain subdirectory because
+  git reports the checkout as its primary root — so a worktree or
+  subdirectory session schedules for the project it belongs to; anything
+  still unmatched fails as not-found.
 
 The chats root is `OPENCHAMBER_CHATS_DIR` (default `<config root>/chats`). The
 
@@ -108,6 +113,16 @@ target must be active and belong to the task project or its linked worktree.
 Another registered project owns its exact checkout. Chats targets must remain
 inside the chats scope. Missing targets return 404; archived or foreign targets
 return 409, including through Run now.
+
+Target discovery asks the same rule rather than reproducing it:
+`POST /api/projects/:projectId/scheduled-tasks/targets/eligible` takes the
+candidate sessions the editor already holds (at most 500 per request; the
+editor sends larger lists in batches), each with its directory, and returns the
+ones whose directory belongs to the task project by `validateTarget`'s rule,
+resolving worktree ownership through Git once per directory. Discovery does not
+check that a session still exists; that stays with `validateTarget`. The picker filters on that answer, so the renderer's current
+worktree topology never decides eligibility, and `validateTarget` stays the
+final authority on save, admission and send.
 
 The prompt enters the ordinary server message queue with `scheduledTask`
 provenance. One project and task can have at most one waiting prompt. Run now
@@ -315,6 +330,7 @@ project write lock on every `syncProject` when the project path is known:
 - Registers:
   - `GET /api/projects/:projectId/scheduled-tasks`
   - `PUT /api/projects/:projectId/scheduled-tasks`
+  - `POST /api/projects/:projectId/scheduled-tasks/targets/eligible`
   - `DELETE /api/projects/:projectId/scheduled-tasks/:taskId`
   - `PATCH /api/projects/:projectId/scheduled-tasks/:taskId/loop-file`
   - `DELETE /api/projects/:projectId/scheduled-tasks/:taskId/loop-file`

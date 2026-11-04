@@ -4,7 +4,6 @@ import type { JsonObject, JsonValue } from '@openchamber/agent-contract';
 /** One-line summaries are narrow enough for a card and a policy label. */
 export const APPROVAL_SUMMARY_MAX_CHARS = 200;
 const APPROVAL_REASON_MAX_CHARS = 500;
-const REDACTED = '[REDACTED]';
 
 /**
  * Remove values a command line commonly carries credentials in. The card

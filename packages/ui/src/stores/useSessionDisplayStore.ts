@@ -1,56 +1,68 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { getSettingsSurface } from '@/lib/settings/surface';
+import type { SettingsSurface } from '@/lib/settings/registry';
 
 type ProjectSortOrder = 'manual' | 'a-z' | 'z-a' | 'date-added' | 'recent';
-// Worktree groups inside a project. 'recent' floats worktrees with the latest
-// session activity to the top, so the list moves as sessions run; 'manual'
-// and 'a-z' keep positions stable.
-type WorktreeSortOrder = 'recent' | 'manual' | 'a-z';
-
-// 'projects' is the grouped sidebar: project zones with worktree sub-headers,
-// optional Recent. 'timeline' is one recency-ordered list of root sessions
-// across every project, with three-line rows carrying project and branch.
-export type SidebarViewMode = 'projects' | 'timeline';
+export type ListSessionGrouping = 'project' | 'time';
 type ProjectDisplayMode = 'all' | 'single';
-
-// The phone starts on the timeline: its sheet has no room for nested project
-// trees. Every other surface keeps the grouped sidebar people know.
-export const defaultSidebarViewMode = (): SidebarViewMode => (
-  getSettingsSurface() === 'mobile' ? 'timeline' : 'projects'
-);
 
 type SessionDisplayStore = {
   projectDisplayMode: ProjectDisplayMode;
   singleProjectId: string | null;
   setProjectDisplayMode: (mode: ProjectDisplayMode) => void;
   setSingleProjectId: (projectId: string) => void;
-  sidebarViewMode: SidebarViewMode;
-  setSidebarViewMode: (mode: SidebarViewMode) => void;
+
+  listSessionGrouping: ListSessionGrouping;
+  setListSessionGrouping: (grouping: ListSessionGrouping) => void;
+  /**
+   * The sidebar's one view, on the desktop, the web and the phone: under each
+   * project, or one list by time. Null until chosen, when it follows the
+   * List/Tree pair it replaced (`resolveSidebarGrouping`).
+   */
+  sidebarGrouping: ListSessionGrouping | null;
+  setSidebarGrouping: (grouping: ListSessionGrouping) => void;
+  /** A work in the In work block also stays in its project or folder; off by default. */
+  keepWorkInPlace: boolean;
+  setKeepWorkInPlace: (keep: boolean) => void;
   /** Local display preference; motion remains opt-in. */
   animatedActivityIndicators: boolean;
   setAnimatedActivityIndicators: (enabled: boolean) => void;
-  showRecentSection: boolean;
+
   /** The managed Chats block in the sidebar (web and desktop). */
   showChatsSection: boolean;
+  /** The In work block; hidden, its sessions stay in their projects. */
+  showWorkSection: boolean;
+  /** The Pinned block above In work; off by default. Hidden, pinned sessions stay in their projects. */
+  showPinnedSection: boolean;
+  /**
+   * Works in two lines (branch, reference, project where projects mix) rather
+   * than one. Off by default on a computer, on by default on a phone, whose
+   * full-width rows have the room.
+   */
+  detailedZoneRows: boolean;
   projectSortOrder: ProjectSortOrder;
-  worktreeSortOrder: WorktreeSortOrder;
-  setShowRecentSection: (show: boolean) => void;
+
   setShowChatsSection: (show: boolean) => void;
-  toggleRecentSection: () => void;
+  setShowWorkSection: (show: boolean) => void;
+  setShowPinnedSection: (show: boolean) => void;
+  setDetailedZoneRows: (detailed: boolean) => void;
   setProjectSortOrder: (order: ProjectSortOrder) => void;
-  setWorktreeSortOrder: (order: WorktreeSortOrder) => void;
 };
 
 export const migrateSessionDisplayState = (
   persisted: unknown,
   version: number,
+  surface: SettingsSurface = getSettingsSurface(),
 ): Partial<SessionDisplayStore> => {
   const state = (persisted ?? {}) as Partial<SessionDisplayStore> & {
     displayMode?: string;
     sessionGroupingMode?: string;
     stickyZoneHeaders?: boolean;
     showArchivedSessions?: boolean;
+    showRecentSection?: boolean;
+    sidebarViewMode?: string;
+    worktreeSortOrder?: string;
   };
   if (version < 2) {
     state.projectSortOrder = 'manual';
@@ -74,22 +86,46 @@ export const migrateSessionDisplayState = (
     delete state.stickyZoneHeaders;
   }
   if (version < 8) {
-    // v8 turns Recent off: it duplicated the project groups, and the timeline
-    // view now answers "what was I doing" across projects. An explicit server
-    // preference (sidebarShowRecentSection) still re-enables it on sync.
     state.showRecentSection = false;
   }
   if (version < 9 && !state.worktreeSortOrder) {
-    // v9 adds the worktree sort. Everyone starts on a stable manual order:
-    // an activity-sorted list moved rows under the pointer, next to
-    // destructive actions like deleting a worktree.
     state.worktreeSortOrder = 'manual';
   }
   if (version < 10) {
     delete state.showArchivedSessions;
   }
+  if (version < 11) {
+    if (state.showWorkSection === undefined) state.showWorkSection = true;
+    if (state.showPinnedSection === undefined) state.showPinnedSection = true;
+    if (state.keepWorkInPlace === undefined) state.keepWorkInPlace = false;
+    const legacyTimeline = state.sidebarViewMode === 'timeline';
+    if (state.sidebarGrouping === undefined || state.sidebarGrouping === null) {
+      state.sidebarGrouping = legacyTimeline ? 'time' : null;
+    }
+    if (state.listSessionGrouping === undefined) {
+      state.listSessionGrouping = legacyTimeline ? 'time' : 'project';
+    }
+  }
+  if (version < 12 && surface === 'mobile' && state.sidebarViewMode !== 'projects') {
+    state.detailedZoneRows = true;
+  }
+  if (version < 13) {
+    delete state.showRecentSection;
+    delete state.sidebarViewMode;
+    delete state.worktreeSortOrder;
+  }
   return state;
 };
+
+/**
+ * How the desktop and web sidebar groups works. Before the choice is made in
+ * the one view, a List sorted by time keeps its list by time; Tree and List by
+ * project both group under projects.
+ */
+export const resolveSidebarGrouping = (
+  state: Pick<SessionDisplayStore, 'sidebarGrouping' | 'listSessionGrouping'>,
+): ListSessionGrouping => state.sidebarGrouping
+  ?? (state.listSessionGrouping === 'time' ? 'time' : 'project');
 
 export const useSessionDisplayStore = create<SessionDisplayStore>()(
   persist(
@@ -100,38 +136,34 @@ export const useSessionDisplayStore = create<SessionDisplayStore>()(
       singleProjectId: null,
       setProjectDisplayMode: (mode) => set({ projectDisplayMode: mode }),
       setSingleProjectId: (projectId) => set({ singleProjectId: projectId }),
-      sidebarViewMode: defaultSidebarViewMode(),
-      setSidebarViewMode: (mode) => set({ sidebarViewMode: mode }),
-      // Off by default since the timeline view took over cross-project recency;
-      // the toggle stays for people who want it inside the grouped view.
-      showRecentSection: false,
+
+      listSessionGrouping: 'project',
+      setListSessionGrouping: (grouping) => set({ listSessionGrouping: grouping }),
+      sidebarGrouping: null,
+      setSidebarGrouping: (grouping) => set({ sidebarGrouping: grouping }),
+      keepWorkInPlace: false,
+      setKeepWorkInPlace: (keep) => set({ keepWorkInPlace: keep }),
+
       showChatsSection: true,
+      showWorkSection: true,
+      showPinnedSection: true,
+      detailedZoneRows: getSettingsSurface() === 'mobile',
       projectSortOrder: 'manual',
-      worktreeSortOrder: 'manual',
-      setShowRecentSection: (show) => set({ showRecentSection: show }),
+
       setShowChatsSection: (show) => set({ showChatsSection: show }),
-      toggleRecentSection: () => set((state) => ({ showRecentSection: !state.showRecentSection })),
+      setShowWorkSection: (show) => set({ showWorkSection: show }),
+      setShowPinnedSection: (show) => set({ showPinnedSection: show }),
+      setDetailedZoneRows: (detailed) => set({ detailedZoneRows: detailed }),
       setProjectSortOrder: (order) => set({ projectSortOrder: order }),
-      setWorktreeSortOrder: (order) => set({ worktreeSortOrder: order }),
     }),
     {
       name: 'session-display-mode',
-      version: 10,
-      // v1→v2 adds projectSortOrder using the canonical manual ordering.
-      // v2→v3 replaces the previously shipped recent default with manual.
-      // v3→v4 removes displayMode (single sidebar row layout).
-      // v4→v5 adds the independent all-projects/single-project view mode.
-      // v5→v6 drops sessionGroupingMode in favour of sidebarViewMode.
-      // v6→v7 drops stickyZoneHeaders (derived from the view mode now).
-      // v7→v8 defaults showRecentSection to false.
-      // v8→v9 adds worktreeSortOrder (manual by default).
-      // v9→v10 removes the extension-only inline archive preference.
+      version: 13,
       migrate: migrateSessionDisplayState,
     },
   ),
 );
 
 export type {
-  ProjectSortOrder,
-  WorktreeSortOrder
+  ProjectSortOrder
 };

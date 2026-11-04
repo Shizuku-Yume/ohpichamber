@@ -1,7 +1,7 @@
 /**
  * Boundary parsers for settings values. Every value that arrives from the
- * server or browser storage passes through one of these before it is trusted;
- * `undefined` means "reject", never "default".
+ * server, the VS Code bridge, or browser storage passes through one of these
+ * before it is trusted; `undefined` means "reject", never "default".
  *
  * These are the value-level rules the registry (`./registry.ts`) attaches to
  * each key. They are zod schemas wrapped into one function shape so the
@@ -394,6 +394,19 @@ export const parseFollowUpBehavior: SettingsParser<'steer' | 'queue'> = (value, 
   const legacy = z.boolean().safeParse(raw.queueModeEnabled);
   if (!legacy.success) return undefined;
   return legacy.data ? 'queue' : 'steer';
+};
+
+const activityRenderModeSchema = trimmed.pipe(z.enum(['collapsed', 'summary']));
+
+/**
+ * The removed Sorted chat mode (`chatRenderMode: 'sorted'`) showed only the
+ * answers with the work folded away; Collapsed is its closest match, so it
+ * wins over a stored mode until the user picks one (which retires the key).
+ */
+export const parseActivityRenderMode: SettingsParser<'collapsed' | 'summary'> = (value, raw) => {
+  if (raw.chatRenderMode === 'sorted') return 'collapsed';
+  const direct = activityRenderModeSchema.safeParse(value);
+  return direct.success ? direct.data : undefined;
 };
 
 /** Legacy provider names: 'server' was the OpenAI-compatible endpoint; 'browser'/'wasm' the local one. */

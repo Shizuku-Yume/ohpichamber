@@ -21,6 +21,7 @@ const PlanModeDataSchema = z.object({
   planFilePath: z.string().optional(),
   previousTools: z.array(z.string()).optional(),
   previousMounted: z.array(z.string()).optional(),
+  previousRegistered: z.array(z.string()).optional(),
   previousModel: z.object({ provider: z.string().min(1), id: z.string().min(1), thinkingLevel: ThinkingLevelSchema.optional() }).optional(),
 });
 type PlanModeData = z.infer<typeof PlanModeDataSchema>;
@@ -28,6 +29,7 @@ type VibePrevious = { tools: string[]; ownerScope: VibeOwnerScope };
 type Previous = {
   tools: string[];
   mounted: string[];
+  registered: string[];
   model?: PlanModeData['previousModel'];
 };
 function planReference(value: string | undefined): string {
@@ -101,7 +103,7 @@ export class WorkerModeController {
       ? { kind: 'plan', status: context.mode === 'plan' ? 'active' : 'paused', planReference: planReference(data?.planFilePath) }
       : context.mode === 'vibe' ? { kind: 'vibe' } : { kind: 'main' };
     if (this.current.kind === 'plan' && data?.previousTools) {
-      this.previous = { tools: data.previousTools, mounted: data.previousMounted ?? [], model: data.previousModel };
+      this.previous = { tools: data.previousTools, mounted: data.previousMounted ?? [], registered: data.previousRegistered ?? data.previousTools, model: data.previousModel };
     }
     if (this.current.kind === 'vibe') {
       const previousTools = z.array(z.string()).safeParse(context.modeData?.previousTools);
@@ -190,6 +192,7 @@ export class WorkerModeController {
     const previous: Previous = {
       tools: this.session.getEnabledToolNames().filter(name => !isMCPToolName(name)),
       mounted: this.session.getMountedXdevToolNames().filter(name => !isMCPToolName(name)),
+      registered: this.session.getAllToolNames().filter(name => !isMCPToolName(name)),
       model: this.session.model ? { provider: this.session.model.provider, id: this.session.model.id, thinkingLevel: this.session.configuredThinkingLevel() } : undefined,
     };
     const planModel = this.session.resolveRoleModelWithThinking('plan');
@@ -203,14 +206,14 @@ export class WorkerModeController {
       this.session.setPlanProposalHandler(this.propose);
       await this.session.setModelTemporary(planModel.model, planModel.thinkingLevel);
       const modeData: PlanModeData = {
-        planFilePath: reference, previousTools: previous.tools, previousMounted: previous.mounted,
+        planFilePath: reference, previousTools: previous.tools, previousMounted: previous.mounted, previousRegistered: previous.registered,
       };
       if (previous.model) modeData.previousModel = previous.model;
       this.session.sessionManager.appendModeChange('plan', modeData);
     } catch (error) {
       this.session.setPlanModeState(originalState);
       this.session.setPlanProposalHandler(null);
-      await this.session.restoreNonMCPToolPresentation(previous.tools, previous.mounted);
+      await this.session.restoreNonMCPToolPresentation(previous.tools, previous.mounted, previous.registered);
       if (previous.model) {
         const model = this.session.modelRegistry.find(previous.model.provider, previous.model.id);
         if (model) await this.session.setModelTemporary(model, previous.model.thinkingLevel);
@@ -233,7 +236,7 @@ export class WorkerModeController {
     const planThinking = this.session.configuredThinkingLevel();
     this.session.setPlanModeState(undefined);
     try {
-      if (restoreTools && previous) await this.session.restoreNonMCPToolPresentation(previous.tools, previous.mounted);
+      if (restoreTools && previous) await this.session.restoreNonMCPToolPresentation(previous.tools, previous.mounted, previous.registered);
       if (restoredModel) await this.session.setModelTemporary(restoredModel, previous?.model?.thinkingLevel);
       this.session.sessionManager.appendModeChange('none');
     } catch (error) {
@@ -253,12 +256,13 @@ export class WorkerModeController {
     const previous = this.previous ?? {
       tools: this.session.getEnabledToolNames().filter(name => !isMCPToolName(name)),
       mounted: this.session.getMountedXdevToolNames().filter(name => !isMCPToolName(name)),
+      registered: this.session.getAllToolNames().filter(name => !isMCPToolName(name)),
     };
     await this.exitPlan(false);
     try { await compact?.(); }
     finally {
       const tools = previous.tools.includes('read') ? previous.tools : [...previous.tools, 'read'];
-      await this.session.restoreNonMCPToolPresentation(tools, previous.mounted);
+      await this.session.restoreNonMCPToolPresentation(tools, previous.mounted, previous.registered);
     }
     return this.mode();
   }

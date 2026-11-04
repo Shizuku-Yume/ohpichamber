@@ -16,7 +16,6 @@ import {
   SettingsSection,
   SettingsFieldRow,
   SettingsStackedField,
-  SETTINGS_SELECT_SIZE,
   SETTINGS_CUSTOM_TRIGGER_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 
@@ -130,7 +129,7 @@ export const CommandsPage: React.FC = () => {
           <Select value={form.scope} onValueChange={scope => {
             if (scope === 'agent' || scope === 'workspace') setForm({ ...form, scope });
           }}>
-            <SelectTrigger size={SETTINGS_SELECT_SIZE} className="w-fit min-w-[100px]">
+            <SelectTrigger className="w-fit min-w-[100px]">
               <SelectValue placeholder={t('settings.agents.page.field.scopePlaceholder')} />
             </SelectTrigger>
             <SelectContent align="end">

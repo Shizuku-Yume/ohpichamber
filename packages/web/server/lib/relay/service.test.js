@@ -13,8 +13,15 @@ const makeService = (options = {}) => {
       publicJwk: publicKey.export({ format: 'jwk' }),
     },
   };
+  let keyGeneration = 0;
   const relayKeyStore = {
     getOrCreate: async (slot, generate) => (keySlots[slot] ??= await generate()),
+    reset: vi.fn(async () => {
+      delete keySlots.signing;
+      delete keySlots.encryption;
+      keyGeneration += 1;
+    }),
+    generation: () => keyGeneration,
   };
   let settings = {
     privateRelay: { enabled: true, relayUrl: 'wss://relay.example.test/ws' },
@@ -23,8 +30,7 @@ const makeService = (options = {}) => {
   const hostLock = {
     tryClaim: vi.fn(() => true),
     forceClaim: vi.fn(() => true),
-    holdsClaim: vi.fn(() => true),
-    liveClaimantPid: vi.fn(() => null),
+    otherLiveClaimant: vi.fn(() => null),
     release: vi.fn(),
   };
   const service = createRelayService({
@@ -38,8 +44,63 @@ const makeService = (options = {}) => {
     allowPassiveHost: options.allowPassiveHost,
     logger: { warn: () => {} },
   });
-  return { service, hostLock, getSettings: () => settings };
+  return { service, hostLock, relayKeyStore, getSettings: () => settings };
 };
+
+describe('relay service identity reset', () => {
+  it('serializes a reset behind an in-flight lifecycle change', async () => {
+    const demand = Promise.withResolvers();
+    const { service, relayKeyStore } = makeService({ hasRelayDemand: async () => demand.promise });
+    try {
+      const reconcile = service.reconcile();
+      const reset = service.resetIdentity();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      // The reset must not rotate keys while reconcile is still deciding.
+      expect(relayKeyStore.reset).not.toHaveBeenCalled();
+      demand.resolve(false);
+      await Promise.all([reconcile, reset]);
+      expect(relayKeyStore.reset).toHaveBeenCalledTimes(1);
+    } finally {
+      service.stop();
+    }
+  });
+
+  it('gives this copy a new server id', async () => {
+    const { service } = makeService();
+    try {
+      const before = await service.getServerId();
+      await service.resetIdentity();
+      const after = await service.getServerId();
+      expect(after).not.toBe(before);
+      expect((await service.getStatus()).serverId).toBe(after);
+    } finally {
+      service.stop();
+    }
+  });
+});
+
+describe('relay service claim watch', () => {
+  it('does not take the host over after the relay was disabled while standing by', async () => {
+    vi.useFakeTimers();
+    const { service, hostLock, getSettings } = makeService({ allowPassiveHost: true });
+    try {
+      hostLock.tryClaim.mockReturnValueOnce(false); // another process holds the claim at boot
+      await service.startIfEnabled();
+      expect((await service.getStatus()).state).toBe('standby');
+
+      await vi.advanceTimersByTimeAsync(30_000); // claim seen free; grace starts
+      getSettings().privateRelay.enabled = false; // a concurrent disable persisted
+      hostLock.tryClaim.mockClear();
+
+      await vi.advanceTimersByTimeAsync(150_000); // past the 2-minute grace
+      expect(hostLock.tryClaim).not.toHaveBeenCalled();
+      expect((await service.getStatus()).state).toBe('disabled');
+    } finally {
+      await service.stop();
+      vi.useRealTimers();
+    }
+  });
+});
 
 describe('relay service passive hosting', () => {
   it('never claims or starts the host passively when passive hosting is disabled', async () => {

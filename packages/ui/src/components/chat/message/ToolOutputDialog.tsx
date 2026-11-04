@@ -14,6 +14,7 @@ import { getDefaultTheme } from '@/lib/theme/themes';
 import { renderGlobOutput, renderGrepOutput, renderWebSearchOutput, tryParseJsonOutput } from './toolRenderers';
 import type { ToolPopupContent, DiffViewMode } from './types';
 import { DiffViewToggle } from './DiffViewToggle';
+import { useDefaultDiffViewMode } from './useDefaultDiffViewMode';
 import { JsonTreeView } from '@/components/ui/JsonTreeView';
 import { Icon } from "@/components/icon/Icon";
 import { getToolIcon } from './parts/toolPresentation';
@@ -925,7 +926,8 @@ const MermaidPreviewDialog: React.FC<{
 
 const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange, isMobile }) => {
     const { t } = useI18n();
-    const [diffViewMode, setDiffViewMode] = React.useState<DiffViewMode>('unified');
+    const defaultDiffViewMode = useDefaultDiffViewMode();
+    const [diffViewMode, setDiffViewMode] = React.useState<DiffViewMode>(defaultDiffViewMode);
     const pierreThemeConfig = usePierreThemeConfig();
     const popupToolName = popup.toolName ?? popup.toolResult?.toolName ?? null;
     const popupToolPresentation = useGuestToolPresentation(popupToolName);

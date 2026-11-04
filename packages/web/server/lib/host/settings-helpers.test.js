@@ -74,6 +74,14 @@ describe('settings helpers', () => {
     expect(helpers.sanitizeSettingsUpdate({ gitlabClientId: 42 })).toEqual({});
   });
 
+  it('persists only a valid tunnel HTTPS port', () => {
+    const helpers = createTestHelpers();
+    expect(helpers.sanitizeSettingsUpdate({ tunnelHttpsPort: 8443 })).toEqual({ tunnelHttpsPort: 8443 });
+    for (const invalid of [0, 65536, -1, 8443.5, '8443', null]) {
+      expect(helpers.sanitizeSettingsUpdate({ tunnelHttpsPort: invalid })).toEqual({});
+    }
+  });
+
   it('forgets the last directory when asked with an empty string', () => {
     // Removing the last project sends this. A kept last directory would be
     // turned back into a project on the next read and warmed at every start.
@@ -197,20 +205,32 @@ describe('settings helpers', () => {
 
     expect(helpers.sanitizeSettingsUpdate({
       sidebarProjectDisplayMode: 'single',
-      sidebarViewMode: 'timeline',
+      sidebarListSessionGrouping: 'time',
+      sidebarGrouping: 'project',
+      sidebarKeepWorkInPlace: true,
       sidebarProjectSortOrder: 'z-a',
-      sidebarShowRecentSection: false,
+      sidebarShowWorkSection: false,
+      sidebarShowPinnedSection: true,
+      sidebarDetailedZoneRows: true,
     })).toEqual({
       sidebarProjectDisplayMode: 'single',
-      sidebarViewMode: 'timeline',
+      sidebarListSessionGrouping: 'time',
+      sidebarGrouping: 'project',
+      sidebarKeepWorkInPlace: true,
       sidebarProjectSortOrder: 'z-a',
-      sidebarShowRecentSection: false,
+      sidebarShowWorkSection: false,
+      sidebarShowPinnedSection: true,
+      sidebarDetailedZoneRows: true,
     });
     expect(helpers.sanitizeSettingsUpdate({
       sidebarProjectDisplayMode: 'grid',
-      sidebarViewMode: 'grid',
+      sidebarListSessionGrouping: 'invalid',
+      sidebarGrouping: 'invalid',
+      sidebarKeepWorkInPlace: 'true',
       sidebarProjectSortOrder: 'random',
-      sidebarShowRecentSection: 'false',
+      sidebarShowWorkSection: 'false',
+      sidebarShowPinnedSection: 'true',
+      sidebarDetailedZoneRows: 'true',
     })).toEqual({});
   });
 
@@ -803,12 +823,19 @@ describe('settings registry gate', () => {
     desktopUiPassword: 'secret', githubClientId: 'client', githubScopes: 'repo', gitlabClientId: 'gitlab-client', skillCatalogs: [{ id: 'c', label: 'C', source: 'https://x' }],
     defaultGitIdentityId: 'global', permissionAutoAccept: { sessions: { s: true }, revision: 1 }, permissionDefaultMode: 'safety', messageSearchEnabled: true, messageSearchReasoningEnabled: true,
     agentControlToolEnabled: true, agentWebToolEnabled: true, browserProvider: 'builtin', agentMemoryToolEnabled: true, agentNotifyToolEnabled: true, agentToolsCodeMode: true, isolatedSpacesEnabled: true, isolatedSpacesIdleStop: { enabled: true, hours: 4 },
+    // Registry keys the settings-registry regeneration added; the gate fails
+    // without a fixture line for each, and these are their real shapes.
+    openLinksInBrowserPanel: true, liveBrowserTabLimit: 4, openTrackerLinksOnBoard: true, layoutAnimations: true,
+    worktreeArchiveOnDoneEnabled: true, showOpenCodeUpdateNotifications: false,
+    agentScheduleToolEnabled: true, agentKnowledgeToolEnabled: true, agentRenderToolEnabled: true,
+    agentWorkflowToolEnabled: true, mobileReturnKeySends: true, savePastedImagesAsFiles: true,
+    smallModelVariant: 'high',
     autoDeleteEnabled: true, autoDeleteAfterDays: 30, sessionRetentionOnlyArchived: false, sessionRetentionAction: 'archive', mergedWorktreeCleanupEnabled: true, terminalShell: 'zsh', terminalLoginShells: ['zsh'],
     openInAppId: 'vscode', dictationEnabled: true, sttProvider: 'local', sttServerUrl: 'http://localhost:8001/v1', sttModel: 'm', sttLocalModel: 'm', sttLanguage: 'en',
-    tunnelProvider: 'cloudflare', tunnelMode: 'quick', tunnelBootstrapTtlMs: 600000, tunnelSessionTtlMs: 86400000, managedLocalTunnelConfigPath: '/tmp/x',
+    tunnelProvider: 'cloudflare', tunnelMode: 'quick', tunnelHttpsPort: 8443, tunnelBootstrapTtlMs: 600000, tunnelSessionTtlMs: 86400000, managedLocalTunnelConfigPath: '/tmp/x',
     managedRemoteTunnelHostname: 'x.example', managedRemoteTunnelToken: 'token', managedRemoteTunnelPresets: [{ id: 'a', name: 'A', hostname: 'a.example' }],
     managedRemoteTunnelSelectedPresetId: 'a', managedRemoteTunnelPresetTokens: { a: 'token' },
-    sidebarProjectDisplayMode: 'all', sidebarViewMode: 'timeline', sidebarProjectSortOrder: 'manual', sidebarWorktreeSortOrder: 'recent', sidebarShowRecentSection: true,
+    sidebarProjectDisplayMode: 'all', sidebarListSessionGrouping: 'project', sidebarGrouping: 'time', sidebarKeepWorkInPlace: true, sidebarProjectSortOrder: 'manual', sidebarShowWorkSection: true, sidebarShowPinnedSection: true, sidebarDetailedZoneRows: true,
     workStatusPanelEnabled: true, workStatusHiddenSections: ['mcp'], workStatusHiddenSectionsExplicit: true, workStatusSectionOrder: ['mcp', 'session'],
     showReasoningTraces: true, streamingAutoFollowEnabled: true, collapsibleThinkingBlocks: true, expandReasoningWhileStreaming: true, showTextJustificationActivity: true,
     chatRenderMode: 'live', activityRenderMode: 'summary', mermaidRenderingMode: 'svg', userMessageRenderingMode: 'markdown', collapsibleUserMessages: true,
@@ -836,6 +863,10 @@ describe('settings registry gate', () => {
     pwaAppName: 'OpenChamber', pwaOrientation: 'portrait', mobileKeyboardMode: 'native', desktopWindowControlsPosition: 'left', desktopWindowControlsStyle: 'classic',
     inputBarOffset: 10,
     customProviderIcons: { 'campus-llm': 'cloud' },
+    layoutAnimations: true, openLinksInBrowserPanel: false, liveBrowserTabLimit: 8,
+    openTrackerLinksOnBoard: true, worktreeArchiveOnDoneEnabled: false, showOpenCodeUpdateNotifications: true,
+    agentScheduleToolEnabled: true, agentKnowledgeToolEnabled: false, agentRenderToolEnabled: false, agentWorkflowToolEnabled: false,
+    mobileReturnKeySends: true, savePastedImagesAsFiles: true, smallModelVariant: 'high',
   };
 
   it('accepts a valid value for every persistable registry key (no server-side drift)', () => {

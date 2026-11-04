@@ -2,27 +2,27 @@ import { describe, expect, test } from 'bun:test';
 
 import type { Session } from '@openchamber/agent-contract';
 import type { SessionGroup, SessionNode } from '../types';
-import { selectArchiveAllSessionIds } from './archiveAllSessions';
+import { countArchiveAllOutcome, selectArchiveAllSessionIds, withArchiveAllSubtrees } from './archiveAllSessions';
 
-const session = (sessionId: string, archivedAt?: number): Session => ({
-  sessionId,
-  rootSessionId: sessionId,
+const session = (id: string, archived?: number): Session => ({
+  sessionId: id,
   projectId: 'p',
-  workspaceId: 'workspace',
-  displayPath: '/repo',
+  workspaceId: 'w',
+  displayPath: 'repo',
+  rootSessionId: id,
   createdAt: 1,
   updatedAt: 1,
-  epoch: 'epoch',
+  epoch: '1',
   headSequence: '0',
   runtimeStatus: 'idle',
   activeRunId: null,
-  mode: { kind: 'main' },
+  mode: { kind: 'main' as const },
+  archivedAt: archived,
+  title: id,
   metadata: null,
   metadataRevision: '0',
-  archiveRevision: '0',
-  archivedAt,
+  archiveRevision: archived === undefined ? '0' : '1',
 });
- 
 
 const node = (value: Session, children: SessionNode[] = []): SessionNode => ({ session: value, children, worktree: null });
 
@@ -56,5 +56,36 @@ describe('selectArchiveAllSessionIds', () => {
     ];
 
     expect(selectArchiveAllSessionIds(groups, () => false)).toEqual(['live']);
+  });
+});
+
+describe('withArchiveAllSubtrees', () => {
+  const descendants = new Map([['a', ['a-child', 'a-grandchild']], ['b', ['b-child']], ['c', []]]);
+  const descendantIdsOf = (id: string) => descendants.get(id) ?? [];
+
+  test('takes each session with its subagents', () => {
+    expect(withArchiveAllSubtrees(['a', 'c'], descendantIdsOf, () => false)).toEqual([
+      { id: 'a', descendantIds: ['a-child', 'a-grandchild'] },
+      { id: 'c', descendantIds: [] },
+    ]);
+  });
+
+  test('keeps a session whose subagent is still running', () => {
+    expect(withArchiveAllSubtrees(['a', 'b'], descendantIdsOf, (id) => id === 'a-grandchild'))
+      .toEqual([{ id: 'b', descendantIds: ['b-child'] }]);
+  });
+});
+
+describe('countArchiveAllOutcome', () => {
+  const targets = [
+    { id: 'a', descendantIds: ['a-child'] },
+    { id: 'b', descendantIds: ['b-child'] },
+    { id: 'c', descendantIds: [] },
+  ];
+
+  test('counts top-level sessions, failing one when any of its subagents failed', () => {
+    expect(countArchiveAllOutcome(targets, [])).toEqual({ archived: 3, failed: 0 });
+    expect(countArchiveAllOutcome(targets, ['a-child'])).toEqual({ archived: 2, failed: 1 });
+    expect(countArchiveAllOutcome(targets, ['b', 'b-child', 'c'])).toEqual({ archived: 1, failed: 2 });
   });
 });

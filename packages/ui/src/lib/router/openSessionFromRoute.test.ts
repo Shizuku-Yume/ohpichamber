@@ -24,6 +24,7 @@ const buildSession = (sessionId: string, displayPath: string, workspaceId = 'wor
   headSequence: '0',
   runtimeStatus: 'idle',
   activeRunId: null,
+  mode: { kind: 'main' },
   metadata: null,
   metadataRevision: '0',
   archiveRevision: '0',

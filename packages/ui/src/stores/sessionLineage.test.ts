@@ -15,6 +15,7 @@ const linked = (sessionId: string, parentSessionId?: string | null, archivedAt?:
   headSequence: '0',
   runtimeStatus: 'idle',
   activeRunId: null,
+  mode: { kind: 'main' as const },
   metadata: null,
   metadataRevision: '0',
   archiveRevision: '0',

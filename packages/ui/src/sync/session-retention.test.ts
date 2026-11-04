@@ -15,7 +15,7 @@ const now = Date.now();
 const session = (sessionId: string, patch: Partial<Session> = {}): Session => ({
   sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: 'repo', rootSessionId: sessionId,
   createdAt: now - 60 * day, updatedAt: now - 40 * day, epoch: 'epoch', headSequence: '0',
-  runtimeStatus: 'idle', activeRunId: null, metadata: null, metadataRevision: '0', archiveRevision: '0',
+  runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' as const }, metadata: null, metadataRevision: '0', archiveRevision: '0',
   ...patch,
 });
 const recent = Array.from({ length: 5 }, (_, index) => session(`recent-${index}`, { createdAt: now - day, updatedAt: now - day }));
@@ -55,11 +55,6 @@ describe('native retention eligibility', () => {
   });
   test('archives old parents independently because archive does not cascade', () => {
     expect(candidates([session('root'), { ...recent[0], sessionId: 'child', parentSessionId: 'root' }], 'archive')).toEqual(['root']);
-  });
-  test('retains sessions with an attached side conversation', () => {
-    const parent = session('parent', { metadata: { openchamber: { btwSessionID: 'side' } }, metadataRevision: '1' });
-    expect(candidates([parent])).toEqual([]);
-    expect(candidates([parent], 'archive')).toEqual([]);
   });
   test('orders descendants before ancestors', () => {
     expect(candidates([session('root'), session('child', { parentSessionId: 'root' }), session('leaf', { parentSessionId: 'child' })]))

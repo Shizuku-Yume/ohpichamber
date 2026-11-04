@@ -17,6 +17,7 @@ const session = (sessionId: string, extra: Partial<Session> = {}): Session => ({
   headSequence: '0',
   runtimeStatus: 'idle',
   activeRunId: null,
+  mode: { kind: 'main' as const },
   metadata: null,
   metadataRevision: '0',
   archiveRevision: '0',

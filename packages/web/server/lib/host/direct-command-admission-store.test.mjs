@@ -2,25 +2,28 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import { createHostSessionState } from './session-state.js';
 import { createOpenChamberSessionService } from '../openchamber-sessions/routes.js';
 
 const options = {
   providerId: 'provider',
   modelId: 'model',
-  agentId: 'agent',
+  agentId: null,
   variant: 'variant',
   reasoningEffort: 'high',
 };
+const sharedRepoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-command-scope-'));
+const sharedAgentDir = path.join(sharedRepoDir, '.agents');
+fs.mkdirSync(sharedAgentDir, { recursive: true });
 const scopeFor = (sessionId) => ({
   sessionId,
   rootSessionId: sessionId,
   projectId: 'project-1',
   workspaceId: 'workspace-1',
-  cwd: '/repo/app',
+  cwd: sharedRepoDir,
   agentDirectoryId: 'agent-directory-1',
-  agentDirectory: '/repo/app/.agents',
+  agentDirectory: sharedAgentDir,
   displayPath: 'app',
 });
 const promptFor = (text = 'Ship the change') => ({
@@ -32,6 +35,11 @@ const promptFor = (text = 'Ship the change') => ({
   options,
 });
 const runAck = (sessionId, runId) => ({ run: { runId, sessionId, status: 'pending', createdAt: 100 } });
+const runtimeAck = (body) => ({
+  sessionId: body.rootSessionId, rootSessionId: body.rootSessionId, projectId: body.projectId, workspaceId: body.workspaceId,
+  displayPath: body.displayPath, createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0',
+  runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' }, continuationPending: false,
+});
 const steerAck = (sessionId, runId) => ({ sessionId, runId, acceptedAt: 101 });
 const followUpAck = (sessionId, followUpId) => ({ sessionId, followUpId, acceptedAt: 102 });
 
@@ -39,6 +47,15 @@ const fixtures = new Set();
 const makeHarness = async ({ dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-command-admission-')), nativeHandler } = {}) => {
   const state = createHostSessionState({ dataDir });
   await state.initialize();
+  await state.agentScopeStore.ensureWorkspace({
+    hostProjectId: 'project-1',
+    projectId: 'project-1',
+    workspaceId: 'workspace-1',
+    projectDirectory: sharedRepoDir,
+    workspaceDirectory: sharedRepoDir,
+    agentDirectory: sharedAgentDir,
+    name: 'Project',
+  });
   const nativeCalls = [];
   const captures = [];
   const receipts = [];
@@ -48,9 +65,12 @@ const makeHarness = async ({ dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'op
     return followUpAck('session-a', 'follow-up-1');
   });
   const service = createOpenChamberSessionService({
+    agentScopeStore: state.agentScopeStore,
     service: {
       request: async (pathname, init = {}) => {
         const body = init.body ? JSON.parse(init.body) : undefined;
+        // Reopen is admission plumbing, not the dispatch this suite counts.
+        if (pathname.endsWith('/reopen')) return Response.json(runtimeAck(body));
         nativeCalls.push({ pathname, body });
         const result = await handler({ pathname, body, nativeCalls });
         return Response.json(result);
@@ -94,6 +114,9 @@ afterEach(async () => {
   for (const fixture of fixtures) await fixture.close();
   for (const fixture of fixtures) fs.rmSync(fixture.dataDir, { recursive: true, force: true });
   fixtures.clear();
+});
+afterAll(() => {
+  fs.rmSync(sharedRepoDir, { recursive: true, force: true });
 });
 
 describe('real SQLite direct command admission', () => {
@@ -158,6 +181,16 @@ describe('real SQLite direct command admission', () => {
     const fixture = await makeHarness();
     await expectAdmissionError(fixture.service.send('session-a', { input: { text: 'missing options', attachments: [], context: [] } }, 'invalid-command'), 400, 'INVALID_REQUEST');
     expect(fixture.nativeCalls).toHaveLength(0);
+    expect(countAdmissionRows(fixture.state)).toBe(0);
+  });
+  it.each([
+    ['agentId', request => ({ ...request, options: { ...request.options, agentId: 'build' } })],
+    ['agentMention', request => ({ ...request, input: { ...request.input, agentMention: { agentId: 'build' } } })],
+  ])('rejects root %s before the Host claim or native dispatch', async (_field, mutate) => {
+    const fixture = await makeHarness();
+    await expectAdmissionError(fixture.service.send('session-a', mutate(promptFor()), 'rejected-root'), 400, 'INVALID_REQUEST');
+    expect(fixture.nativeCalls).toHaveLength(0);
+    expect(fixture.captures).toHaveLength(0);
     expect(countAdmissionRows(fixture.state)).toBe(0);
   });
 

@@ -648,7 +648,7 @@ Use the \`question\` tool only for clarifying decisions that have a small set of
 
 - <only assumptions that still matter, or "None">
 
-The proposed Goal should normally be one compact paragraph. Keep enough operational detail to make completion auditable, but remove conversational history, rationale, repetition, and implementation details that are not part of the completion contract.
+The proposed Goal should normally be one compact paragraph. Include clear, verifiable completion criteria, and remove conversational history, rationale, repetition, and implementation details that are not part of the completion contract.
 
 Do not activate, execute, or claim completion of the proposed Goal. End by inviting the user to revise it or use it in the Goal dialog. If the \`openchamber\` tool is available, also offer to start a new Goal session for it yourself; do so only after the user explicitly confirms.
 

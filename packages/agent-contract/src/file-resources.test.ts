@@ -19,20 +19,20 @@ describe('native file resource wire contracts', () => {
   });
   test('roundtrips Markdown, metadata and uint64 catalog revisions without private native objects', () => {
     expect(CommandEntrySchema.parse(command)).toEqual(command);
-    expect(CommandCatalogStateSchema.parse({ workspaceId: 'workspace', revision: '18446744073709551615', commands: [command] }).revision).toBe('18446744073709551615');
+    expect(CommandCatalogStateSchema.parse({ workspaceId: 'workspace', revision: '18446744073709551615', commands: [command], builtinCommands: ['context'] }).revision).toBe('18446744073709551615');
     expect(PromptTemplateEntrySchema.parse(template)).toEqual(template);
     expect(PromptTemplateCatalogStateSchema.parse({ workspaceId: 'workspace', revision: '9007199254740993', templates: [template] }).templates[0].content).toBe(template.content);
     expect(FileResourceExpandResultSchema.parse({ content: 'Native expanded body', agentId: command.agentId, modelSelection: command.modelSelection })).toMatchObject({ modelSelection: command.modelSelection });
     expect(CommandEntrySchema.safeParse({ ...command, filePath: '/private/root/review.md' }).success).toBe(false);
     expect(CommandEntrySchema.safeParse({ ...command, modelSelection: { providerId: 'provider' } }).success).toBe(false);
-    expect(CommandCatalogStateSchema.safeParse({ workspaceId: 'workspace', revision: '01', commands: [] }).success).toBe(false);
-    expect(CommandCatalogStateSchema.safeParse({ workspaceId: 'workspace', revision: '18446744073709551616', commands: [] }).success).toBe(false);
-    expect(CommandCatalogStateSchema.safeParse({ workspaceId: 'workspace', revision: '1', commands: [command, command] }).success).toBe(false);
+    expect(CommandCatalogStateSchema.safeParse({ workspaceId: 'workspace', revision: '01', commands: [], builtinCommands: [] }).success).toBe(false);
+    expect(CommandCatalogStateSchema.safeParse({ workspaceId: 'workspace', revision: '18446744073709551616', commands: [], builtinCommands: [] }).success).toBe(false);
+    expect(CommandCatalogStateSchema.safeParse({ workspaceId: 'workspace', revision: '1', commands: [command, command], builtinCommands: [] }).success).toBe(false);
   });
   test('all command/template mutation names are confined and require decimal CAS counters', () => {
     const create = { expectedRevision: '0', name: 'review', scope: 'workspace', content: 'Review $1' };
     expect(CommandCreateRequestSchema.parse(create)).toEqual(create);
-    expect(CommandUpdateRequestSchema.parse({ ...create, commandId: 'command' }).commandId).toBe('command');
+    expect(CommandUpdateRequestSchema.parse({ ...create, commandId: 'command', agentId: null }).agentId).toBeNull();
     expect(CommandDeleteRequestSchema.safeParse({ commandId: 'command' }).success).toBe(false);
     expect(PromptTemplateCreateRequestSchema.parse({ ...create, name: 'quality/review' }).name).toBe('quality/review');
     expect(PromptTemplateUpdateRequestSchema.safeParse({ ...create, templateId: 'template', scope: 'inherited' }).success).toBe(false);

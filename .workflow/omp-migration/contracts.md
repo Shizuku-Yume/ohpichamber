@@ -82,6 +82,8 @@ Clients reach this API through the Host Gateway (Node.js/Electron), which authen
 | `PUT` | `/api/agent/v1/workspaces/:workspaceId/web-search` | Persist web search configuration | Required | Yes (Revision) | JSON |
 | `PUT` | `/api/agent/v1/workspaces/:workspaceId/web-search/credentials/:providerId` | Write one write-only provider credential | Required | Yes (Revision) | JSON |
 | `DELETE` | `/api/agent/v1/workspaces/:workspaceId/web-search/credentials/:providerId` | Remove one provider credential | Required | Yes (Revision) | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/settings` | Allowlisted OMP behaviour settings with native metadata | Required | Yes | JSON |
+| `PUT` | `/api/agent/v1/workspaces/:workspaceId/settings` | Persist allowlisted OMP settings through the native Settings API | Required | Yes (Revision) | JSON |
 | `GET` | `/api/agent/v1/usage` | Authorized historical usage summary | Required | Yes | JSON |
 | `GET` | `/api/agent/v1/usage/tools` | Authorized historical tool execution report | Required | Yes | JSON |
 | `GET` | `/api/agent/v1/workspaces/:workspaceId/commands` | Workspace and selected-agent command catalog | Required | Yes | JSON |
@@ -125,12 +127,14 @@ Clients reach this API through the Host Gateway (Node.js/Electron), which authen
 | `POST` | `/api/agent/v1/sessions` | Create a new session | Required | Yes (Key) | JSON |
 | `GET` | `/api/agent/v1/sessions/:sessionId` | Get session metadata and status | Required | Yes | JSON |
 | `PATCH` | `/api/agent/v1/sessions/:sessionId/metadata` | Update Host-owned session metadata through the Host writer | Required | Yes | JSON |
+| `PATCH` | `/api/agent/v1/sessions/:sessionId/title` | Rename through OMP `setSessionName` (`SessionTitleRequest`) | Required | Yes | JSON |
 | `GET` | `/api/agent/v1/sessions/:sessionId/metadata` | Host-owned metadata and its independent revision | Required | Yes | JSON |
 | `DELETE` | `/api/agent/v1/sessions/:sessionId` | Delete session and child sessions | Required | Yes | JSON |
 | `GET` | `/api/agent/v1/sessions/:sessionId/history` | Paginated message and turn history | Required | Yes | JSON |
 | `GET` | `/api/agent/v1/sessions/:sessionId/snapshot` | Atomic runtime state snapshot and matching event cursor | Required | Yes | JSON |
 | `POST` | `/api/agent/v1/sessions/:sessionId/runs` | Start a new agent execution run | Required | Yes (Key) | JSON |
 | `POST` | `/api/agent/v1/sessions/:sessionId/runs/:runId/abort` | Abort an active run | Required | Yes | JSON |
+| `POST` | `/api/agent/v1/sessions/:sessionId/control` | Abort an active run or compact the session with optional instructions | Required | Yes | JSON |
 | `POST` | `/api/agent/v1/sessions/:sessionId/steer` | Inject prompt into running turn | Required | Yes (Key) | JSON |
 | `POST` | `/api/agent/v1/sessions/:sessionId/follow-up` | Stage prompt for next turn | Required | Yes (Key) | JSON |
 | `GET` | `/api/agent/v1/sessions/:sessionId/queue` | List durable queued prompts | Required | Yes | JSON |
@@ -285,6 +289,10 @@ The Host privately maps `projectId` and `workspaceId` to validated cwd roots and
 
 `RuntimeSession` contains `runtimeStatus` and nullable `activeRunId`, but no Host archive or metadata. Host-composed `Session` adds `archivedAt`, `archiveRevision`, nullable `metadata` and `metadataRevision`; confirmed missing metadata is exactly `null` at revision `"0"`. An operational record may omit `title`. Goals, work status, delivery receipts, context pins and multi-run membership stay under typed `openchamber` metadata, not a second scalar `goal` field. The Host projects a legacy multi-run private scope to an opaque identity before publication.
 
+`RuntimeSession.mode` is required and owned by OMP's session context. It is `{kind:'main'}` or `{kind:'plan', status:'active'|'paused', planReference:string}`; plan references are `local://` URLs, never Host filesystem paths. The worker restores native plan state on open and publishes changes through `session.updated.mode` (or the mode in a full `session.updated.session`), so snapshots and subscribed clients share the same authority. The journal supplies event epoch/sequence; the worker does not invent a full runtime record for a mode-only change. The Host does not persist mode.
+
+`POST /api/agent/v1/sessions/:sessionId/control` accepts `{type:'mode.set', mode:'main'|'plan'}` and returns `{type:'mode.set', mode:SessionMode}`. The worker owns tool/model transitions and writes OMP `appendModeChange`; a running session refuses changes with 409 `RUN_ACTIVE`. Entering Plan narrows tools to OMP's plan set and applies its plan model role; returning to Main restores the previous tools/model. Repeated selection of the current idle mode is a no-op. Other modes are added by their owning tasks.
+
 Agent profile `allowedTools` has three distinct states: `null` inherits the SDK's captured native active default set, `[]` explicitly allows no model tools, and an array is the exact restriction. Canonical profile metadata preserves this distinction and the worker captures the inherited baseline before any profile selection. This is a worker execution-profile grant, not a Host policy snapshot field: `HostNativePolicySnapshot` carries only agent/profile and permission-preset identities, and the Host still authorizes every tool call independently.
 
 Agent profile mutations replace the complete profile at an expected owning revision. Omitted `systemPromptOverride` and `permissionPresetId` use the default prompt and policy; a preset ID selects an owning policy, not an unvalidated allow-mode shortcut. Provider/model mutations likewise carry their owning revision. Credential values occur only in an authenticated `ProviderCredentialWriteRequest`; catalogs, mutation results and events expose non-secret credential presence/references, never those values. Configured presence does not prove provider reachability.
@@ -301,6 +309,7 @@ These route families are present in current source. They share Host authenticati
 | Commands, prompt templates, authored skills, skill repositories | `/workspaces/:workspaceId/{commands,prompt-templates,skills/...}` | `file-resources.ts`, `skill-repositories.ts`, `catalogs.ts` | Task 51 |
 | Plugins and local extensions | `/workspaces/:workspaceId/plugins/...` | `plugins.ts` | Task 52 |
 | Web search | `/workspaces/:workspaceId/web-search...` | `websearch.ts` | Task 53 |
+| OMP behaviour settings | `/workspaces/:workspaceId/settings` | `settings.ts` | Task 05 (W7) |
 | Historical usage | `/usage`, `/usage/tools` | `usage.ts` | Task 54 |
 
 ### Agent roster and profile controls
@@ -336,6 +345,8 @@ Authoring skills is separate from execution catalogs. `GET .../skills/catalog` r
 `PluginMutationResult` separates committed persistence from active outcomes (`applied`, `partial`, `failed`, `no-active-workers`). Ordinary mutations do not restart active sessions; a root that needs newly loaded modules reports `RELOAD_REQUIRED` rather than fake success. `PluginApplyRequest` with `strategy: "restart-idle-sessions"` reuses the committed revision without incrementing it, refuses the whole preflight if any selected root is busy or has pending control work, and reports actual new worker generations. Package install/update/uninstall and marketplace refresh are refused in enterprise mode; catalog reads, enable/disable, diagnostics, settings and confined local authoring remain available.
 
 ### Web search
+
+`GET/PUT .../settings` use `OmpSettingsState` and `OmpSettingsUpdateRequest` at the workspace's catalog revision. The id allowlist is `OMP_SETTING_IDS`; descriptor type/default/enum/UI metadata comes from OMP's `orderedSettings()`, and each PUT value is validated by the pinned `Setting.assertWritable`. GET reloads the native settings file first; PUT awaits the native flush before returning. Credential settings, raw MCP command/env/header definitions, account pools, remote URLs and configurable paths are absent; those remain on their owning provider/MCP/skill surfaces.
 
 `GET/PUT .../web-search` use `WebSearchConfigState` and `WebSearchUpdateRequest`; `PUT/DELETE .../web-search/credentials/:providerId` use `WebSearchCredentialWriteRequest` and `WebSearchCredentialDeleteRequest`. All mutations return `WebSearchMutationResult` with `WebSearchConfigState`, persistence status and `WebSearchWorkerApplyOutcome` entries. Configuration edits never carry API keys: credentials are write-only through their dedicated route and are never read back; the public provider catalog exposes configured/writable booleans, provider identity and non-secret endpoint/option fields only. Provider options are typed to the native providers that support them, and the primary provider cannot also appear in the fallback chain.
 
@@ -402,7 +413,7 @@ For example, an empty captured branch returns:
 
 ```json
 {
-  "session": {"sessionId":"sess_alpha","projectId":"project_1","workspaceId":"workspace_1","displayPath":".","rootSessionId":"sess_alpha","createdAt":1774201000000,"updatedAt":1774201000000,"epoch":"ep_2","headSequence":"0","runtimeStatus":"idle","activeRunId":null},
+  "session": {"sessionId":"sess_alpha","projectId":"project_1","workspaceId":"workspace_1","displayPath":".","rootSessionId":"sess_alpha","createdAt":1774201000000,"updatedAt":1774201000000,"epoch":"ep_2","headSequence":"0","runtimeStatus":"idle","activeRunId":null,"mode":{"kind":"main"}},
   "cursor":"ep_2:0",
   "activeRun":null,
   "branch":{"branchId":"branch_1","branchVersion":"1","leafMessageId":null},
@@ -471,6 +482,7 @@ Client UI ---> Host Gateway (Single Delivery Owner) ---> Agent Service (OMP)
 - **Mid-Turn Steer (`/steer`)**: Injects guidance into an active OMP execution step. Only valid when the session turn status is `running` or `awaiting_approval`.
 - **Follow-Up (`/follow-up`)**: Held by the Gateway and dispatched to the Agent Service immediately when the current run transitions to a terminal state.
 - **Durable Queue (`/queue`)**: Persisted by the Gateway in disk storage. Items are dequeued sequentially only when the session is completely idle and no follow-up is pending.
+Root prompts are admitted only with `options.agentId: null`; the `agentMention` field is retired for root delivery. The Host rejects either override before queue persistence or dispatch with `400 INVALID_REQUEST`, naming the offending field in `detail`. Stored queue records are rewritten to `agentId: null` at startup.
 
 Immediate runs and queue admission use the same `PromptRequest`, never a guessed SDK argument shape. Queue append accepts `{content: string, contextPreview?: string, request: PromptRequest}`. Host authorization binds the path session to its opaque workspace; the Host atomically captures and persists the entire request with provider/model/agent/variant/reasoning options, resolved text, server-backed attachment records, ordered context text/metadata/instructions and any agent mention before acknowledging. Explicit null provider/model values mean no override: the addressed session/agent/runtime owner's normal selection remains authoritative, not the currently displayed Composer selection. Null is retained as null, not a fake sentinel or a new fallback; a partially specified provider/model pair is evaluated through that same owner's existing selection rules and reports incompatibility explicitly. Other null options likewise retain their no-override meaning. Fixed captured selections remain fixed on dispatch/retry; an unavailable fixed model is an explicit send failure retaining the item. No queued send re-reads mutable UI choices or substitutes a newly selected provider/model/agent/thinking option.
 
@@ -517,10 +529,10 @@ When a tool finishes with `failed` or `denied`, the Agent Service injects a `too
 
 ### Run Terminal States
 
-A Run represents the entire multi-step conversation cycle initiated by a user prompt.
+Every `Run` represents one outer execution cycle and carries `origin` (`host`, `plan`, or `goal`), defaulting to `host`. Worker-started turns open the same canonical run, append no Host prompt to the worker queue, and remain coordinated by the Host's active-run guard, queue and abort routes.
 - Run terminal states: `completed`, `failed`, `cancelled`.
 
-The Run reaches `failed` only if the model execution itself crashes unrecoverably (e.g. context window exhaustion, provider quota error, or internal agent panic).
+The Run reaches `failed` only if the model execution itself crashes unrecoverably (e.g. context window exhaustion, provider quota error, or internal agent panic). An Agent Service restart marks an interrupted worker-originated run as failed when the native session is reopened.
 
 ### OMP turn_end semantics
 
@@ -540,9 +552,9 @@ The Agent Service owns real SDK pending handles and an atomic resolution registr
 
 Each record carries a decimal-string CAS `version`, its creation `epoch` and opaque `workerGeneration`. Request IDs are never reused. `ApprovalReply` and `QuestionReply` supply these fields to the existing `/respond` routes. The service verifies the current epoch/generation before request lookup: prior-owner replies return HTTP 410 `APPROVAL_EXPIRED` / `QUESTION_EXPIRED` even when a restart discarded the old registry. Unknown IDs in the current owner return HTTP 404. The current owner's pending status and expected version are selected atomically; exactly one responder may resolve that live handle. Competing replies return HTTP 409 with `{expectedVersion, actualVersion, currentRecord}` in sanitized Problem Details `details`.
 
-Approval decisions are the four retained values, not record statuses: `approve` and `always-allow` finish as `approved`; `reject` and `always-deny` finish as `rejected`. `always-allow` persists the request's service-derived tool/pattern target for this session; `always-deny` persists it for the authorized workspace across sessions/restarts. The client cannot invent a wider target or scope. Policy persistence belongs to the Host's retained settings/approval-policy boundary and authorization, not a new SDK policy framework. A request without a safe `policyTarget` cannot accept an always decision; it returns an explicit error and remains pending. One-shot choices persist no policy.
+Approval decisions are the four retained values, not record statuses: `approve` and `always-allow` finish as `approved`; `reject` and `always-deny` finish as `rejected`. `always-allow` resolves OMP's native `allow_always` handle in the worker's per-session ACP decision cache (bash cache key) and reports `policy: {scope:"session", persistence:"ephemeral"}`. It is not written to the Host approval-policy store or OMP config and resets with the native logical session and worker. A later cached bash call bypasses the native card but still reaches the custom Bash tool, which synthesizes an exact Host execution grant bound to that tool call and input before authorization; no public card is produced for that grant. `always-deny` persists its service-derived exact target for the authorized workspace across sessions/restarts. The client cannot invent a wider target or scope. Schema version 2 revokes legacy session allowances instead of widening them. Policy persistence belongs to the Host's retained settings/approval-policy boundary and authorization, not a new SDK policy framework. A request without a safe `policyTarget` cannot accept an always decision; it returns an explicit error and remains pending. One-shot choices persist no policy.
 
-For an always decision, the service reserves the CAS winner without invoking the SDK handle, asks the Host to atomically commit the fixed target/scope, and only then increments the request version and resolves the live handle. Host failure returns HTTP 503 `APPROVAL_POLICY_WRITE_FAILED`, with the unchanged pending record, releases the reservation and executes nothing. Committed policy may survive a crash before acknowledgement; that crash still expires the old request and never replays its action. Host policy `revision` and `persistence: "committed"` appear in `ApprovalResolution`; there is no reported committed policy on a failed write. Success returns the full resolved `ApprovalRequest` and publishes `approval.resolved` with `{approval: ApprovalRequest}`, including `resolution`. This event/response are the CAS result, not a second independently writable policy record.
+For an `always-deny` decision, the service reserves the CAS winner without invoking the SDK handle, asks the Host to atomically commit the fixed target/scope, and only then increments the request version and resolves the live handle. An `always-allow` decision resolves the native handle with OMP's `allow_always` choice and does not write Host policy. Host failure for a persisted decision returns HTTP 503 `APPROVAL_POLICY_WRITE_FAILED`, with the unchanged pending record, releases the reservation and executes nothing. Committed policy may survive a crash before acknowledgement; that crash still expires the old request and never replays its action. Host policy `revision` and `persistence: "committed"` appear in `ApprovalResolution`; there is no reported committed policy on a failed write. Success returns the full resolved `ApprovalRequest` and publishes `approval.resolved` with `{approval: ApprovalRequest}`, including `resolution`. This event/response are the CAS result, not a second independently writable policy record.
 
 ```json
 {"decision":"always-allow","policyScope":"session","version":"1","epoch":"ep_1a","workerGeneration":"worker_g1"}
@@ -578,7 +590,7 @@ The protocol treats conversation history branching and filesystem modifications 
 3. **Explicit Host Operations.** If a user wishes to restore previous file states, they must execute explicit Host Git operations (such as `git restore` or worktree branch switching) through Host APIs.
 4. **Transition rejection and state preservation.** Leaf selection requested during an active run, or with a stale selection owner or mismatched version, is rejected with an error. Failed selection attempts preserve the valid original selection state.
 5. **Privacy.** Public responses never include absolute host working-directory paths or private SDK entry identifiers.
-6. **Implementation status.** Native session control endpoints, leaf selection, and verification remain in progress and unverified.
+6. **Implementation status.** Native session controls use `POST /api/agent/v1/sessions/:sessionId/control`: `{type:"abort",runId}` preserves run-abort behavior; `{type:"compact",instructions?}` compacts the idle native session and publishes `session.compacted`. Active runs or branch controls refuse compaction with HTTP 409 `RUN_ACTIVE`.
 
 ### Execution workspace relocation
 
@@ -639,7 +651,7 @@ To preserve privacy across remote web surfaces, mobile connections, and cloud re
 
 ## Metadata sidecar and transcript ownership
 
-The Host Gateway is the sole durable writer for custom titles, goals, assist recaps/suggestions, context delivery cursors/receipts, pinned notes, pins, folders, retention and workspace associations. `SessionMetadata.title` is the only canonical title; `Session.metadata` and `metadataRevision` are Host-composed projections, not permission for the Agent Service to persist or patch them. Runtime snapshots omit them and use independent Host reads. A context delivery cursor is Host metadata, distinct from a service event cursor.
+The Host Gateway is the sole durable writer for goals, assist recaps/suggestions, context delivery cursors/receipts, pinned notes, pins, folders, retention and workspace associations. OMP owns the session title: `RuntimeSession.title` is the only canonical title, carried from OMP's JSONL and published by `session.updated`; a rename goes through `PATCH .../sessions/:sessionId/title` and OMP `setSessionName`. `Session.metadata` and `metadataRevision` are Host-composed projections, not permission for the Agent Service to persist or patch them. Runtime snapshots omit them and use independent Host reads. A context delivery cursor is Host metadata, distinct from a service event cursor.
 
 OMP alone writes messages, reasoning, tool results and compaction history. The service reads/projects OMP state and owns transient execution handles and replay state. Host metadata stores no duplicate transcript or tool-output history. Task 20 migrates applicable existing Host metadata and every accessor before removing its OpenCode source. Missing, corrupt and failed metadata reads/writes remain distinct; failure preserves valid prior data and does not clear unrelated sessions.
 
@@ -991,7 +1003,7 @@ Event from a separate active run, not the completed run above:
 ```text
 id: ep_1a:23
 event: approval.requested
-data: {"sessionId":"sess_alpha","epoch":"ep_1a","sequence":"23","timestamp":1774201002100,"approval":{"approvalId":"appr_55","sessionId":"sess_alpha","turnId":"turn_302","toolCallId":"tc_sh1","toolName":"bash","actionType":"bash_command","commandSummary":"npm test auth","details":{"command":"npm test auth"},"policyTarget":{"toolName":"bash","pattern":"npm test auth"},"version":"1","epoch":"ep_1a","workerGeneration":"worker_g1","status":"pending","requestedAt":1774201002100}}
+data: {"sessionId":"sess_alpha","epoch":"ep_1a","sequence":"23","timestamp":1774201002100,"approval":{"approvalId":"appr_55","sessionId":"sess_alpha","turnId":"turn_302","toolCallId":"tc_sh1","toolName":"bash","actionType":"bash_command","commandSummary":"npm test auth","details":{"command":"npm test auth"},"policyTarget":{"toolName":"bash","pattern":"*"},"version":"1","epoch":"ep_1a","workerGeneration":"worker_g1","status":"pending","requestedAt":1774201002100}}
 ```
 
 Resolution request:
@@ -1013,10 +1025,10 @@ Status: 200 OK
 {
   "approvalId":"appr_55","sessionId":"sess_alpha","turnId":"turn_302","toolCallId":"tc_sh1",
   "toolName":"bash","actionType":"bash_command","commandSummary":"npm test auth","details":{"command":"npm test auth"},
-  "policyTarget":{"toolName":"bash","pattern":"npm test auth"},
+  "policyTarget":{"toolName":"bash","pattern":"*"},
   "status":"approved","version":"2","epoch":"ep_1a","workerGeneration":"worker_g1",
   "requestedAt":1774201002100,"resolvedAt":1774201003500,
-  "resolution":{"decision":"always-allow","policy":{"policyId":"policy_1","scope":"session","revision":"3","persistence":"committed"}}
+  "resolution":{"decision":"always-allow","policy":{"scope":"session","persistence":"ephemeral"}}
 }
 ```
 
@@ -1049,8 +1061,8 @@ Content-Type: application/problem+json
       "status": "approved",
       "requestedAt": 1774201002100,
       "resolvedAt": 1774201003500,
-      "policyTarget": {"toolName":"bash","pattern":"npm test auth"},
-      "resolution": {"decision":"always-allow","policy":{"policyId":"policy_1","scope":"session","revision":"3","persistence":"committed"}}
+      "policyTarget": {"toolName":"bash","pattern":"*"},
+      "resolution": {"decision":"always-allow","policy":{"scope":"session","persistence":"ephemeral"}}
     }
   }
 }
@@ -1061,7 +1073,7 @@ Terminal approval event for the winning result uses the same complete record as 
 ```text
 id: ep_1a:24
 event: approval.resolved
-data: {"sessionId":"sess_alpha","epoch":"ep_1a","sequence":"24","timestamp":1774201003500,"approval":{"approvalId":"appr_55","sessionId":"sess_alpha","turnId":"turn_302","toolCallId":"tc_sh1","toolName":"bash","actionType":"bash_command","commandSummary":"npm test auth","details":{"command":"npm test auth"},"policyTarget":{"toolName":"bash","pattern":"npm test auth"},"status":"approved","version":"2","epoch":"ep_1a","workerGeneration":"worker_g1","requestedAt":1774201002100,"resolvedAt":1774201003500,"resolution":{"decision":"always-allow","policy":{"policyId":"policy_1","scope":"session","revision":"3","persistence":"committed"}}}}
+data: {"sessionId":"sess_alpha","epoch":"ep_1a","sequence":"24","timestamp":1774201003500,"approval":{"approvalId":"appr_55","sessionId":"sess_alpha","turnId":"turn_302","toolCallId":"tc_sh1","toolName":"bash","actionType":"bash_command","commandSummary":"npm test auth","details":{"command":"npm test auth"},"policyTarget":{"toolName":"bash","pattern":"*"},"status":"approved","version":"2","epoch":"ep_1a","workerGeneration":"worker_g1","requestedAt":1774201002100,"resolvedAt":1774201003500,"resolution":{"decision":"always-allow","policy":{"scope":"session","persistence":"ephemeral"}}}}
 ```
 
 Question cancellation uses the same response route and identity/version checks:

@@ -23,7 +23,7 @@ const issue = (overrides: Partial<LinkedRepositoryIssue> = {}): LinkedRepository
 const sessionWith = (linked: JsonValue | undefined): Session => Object.assign(
   {
     sessionId: 'session-1', projectId: 'project-1', workspaceId: 'workspace-1', displayPath: 'repo', rootSessionId: 'session-1',
-    createdAt: 1, updatedAt: 1, epoch: 'e', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+    createdAt: 1, updatedAt: 1, epoch: 'e', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' as const },
     metadata: {}, metadataRevision: '1', archiveRevision: '0',
   } satisfies Session,
   { metadata: { openchamber: { linked_issues: linked } } },

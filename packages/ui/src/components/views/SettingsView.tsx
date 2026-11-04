@@ -21,6 +21,7 @@ import { AgentsSidebar } from '@/components/sections/agents/AgentsSidebar';
 import { AgentsPage } from '@/components/sections/agents/AgentsPage';
 import { BehaviorPage } from '@/components/sections/behavior/BehaviorPage';
 import { WebSearchPage } from '@/components/sections/websearch/WebSearchPage';
+import { OmpSettingsPage } from '@/components/sections/openchamber/OmpSettingsPage';
 import { CommandsSidebar } from '@/components/sections/commands/CommandsSidebar';
 import { CommandsPage } from '@/components/sections/commands/CommandsPage';
 import { McpPage } from '@/components/sections/mcp/McpPage';
@@ -128,6 +129,7 @@ const pageOrder: SettingsPageSlug[] = [
   // 'opencode' group — OpenCode
   'providers',
   'web-search',
+  'omp',
   'agents',
   'behavior',
   'commands',
@@ -326,7 +328,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     'isolated-spaces': 'spaces',
   }), []);
 
-  const getPageTitle = React.useCallback((slug: SettingsPageSlug): string => t(settingsPageTitleKey(slug)), [t]);
+  const getPageTitle = React.useCallback((slug: SettingsPageSlug): string => (
+    slug === 'omp' ? t('settings.page.omp.title') : t(settingsPageTitleKey(slug))
+  ), [t]);
 
   const settingsSearchResults = React.useMemo(() => {
     return buildSettingsSearchResults({
@@ -613,6 +617,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         return <ProvidersPage />;
       case 'web-search':
         return <WebSearchPage />;
+      case 'omp':
+        return <OmpSettingsPage />;
       case 'usage':
         return <UsagePage />;
       case 'about':

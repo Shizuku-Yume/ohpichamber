@@ -26,13 +26,14 @@ const session = (sessionId: string, overrides: Partial<Session> = {}): Session =
   headSequence: '0',
   runtimeStatus: 'idle',
   activeRunId: null,
+  mode: { kind: 'main' },
   metadata: null,
   metadataRevision: '0',
   archiveRevision: '0',
   ...overrides,
 });
 const parent = session('parent', { rootSessionId: 'parent' });
-const child = session('child', { parentSessionId: parent.sessionId, createdAt: 2, updatedAt: 2, metadata: { title: 'Child' }, metadataRevision: '1' });
+const child = session('child', { parentSessionId: parent.sessionId, createdAt: 2, updatedAt: 2, title: 'Child', metadata: {}, metadataRevision: '1' });
 
 const childApproval: ApprovalRequest = {
   version: '1', epoch: 'epoch', workerGeneration: 'worker', approvalId: 'approval', sessionId: 'child', turnId: 'run', toolCallId: 'tool',
@@ -150,8 +151,8 @@ describe('subagent status rows', () => {
   });
 
   test('orders rows newest first by creation and sinks finished ones', async () => {
-    const older = session('older', { parentSessionId: parent.sessionId, createdAt: 2, updatedAt: 50, metadata: { title: 'Older' }, metadataRevision: '1' });
-    const newer = session('newer', { parentSessionId: parent.sessionId, createdAt: 3, updatedAt: 10, metadata: { title: 'Newer' }, metadataRevision: '1' });
+    const older = session('older', { parentSessionId: parent.sessionId, createdAt: 2, updatedAt: 50, title: 'Older', metadata: {}, metadataRevision: '1' });
+    const newer = session('newer', { parentSessionId: parent.sessionId, createdAt: 3, updatedAt: 10, title: 'Newer', metadata: {}, metadataRevision: '1' });
     const titles = () => Array.from(container.querySelectorAll<HTMLButtonElement>('button[aria-label]'))
       .map((button) => button.parentElement?.textContent?.replace(/\$.*$/, ''));
     await publish({

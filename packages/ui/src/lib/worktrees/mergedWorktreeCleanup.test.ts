@@ -17,7 +17,7 @@ const session = (id: string, directory = WORKTREE): Session => {
   registerWorkspaceDirectory(workspaceId, directory);
   return {
     sessionId: id, projectId: 'app', workspaceId, displayPath: directory, rootSessionId: id,
-    createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+    createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
     metadata: null, metadataRevision: '0', archiveRevision: '0',
   };
 };

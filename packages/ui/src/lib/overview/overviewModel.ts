@@ -101,8 +101,7 @@ export function classifyOverviewSession(
 ): OverviewSessionRow | null {
   const { session } = facts;
   const kind = sessionKind(session);
-  // A `/btw` side question belongs to the session it was asked in.
-  if (session.parentSessionId || session.archivedAt !== undefined || kind === 'btw') return null;
+  if (session.parentSessionId || session.archivedAt !== undefined) return null;
 
   if (facts.blocking) return { section: 'waiting', session, reason: facts.blocking, pr: null };
   if (facts.activity) return { section: 'running', session, activity: facts.activity };

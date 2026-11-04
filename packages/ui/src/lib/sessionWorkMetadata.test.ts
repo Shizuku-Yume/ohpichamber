@@ -4,7 +4,7 @@ import { getSessionWork, isDoneSuggested, isReviewSuggested, isSessionInWork, wi
 
 const session = (metadata: SessionMetadata, updatedAt = 100): Session => ({
   sessionId: 'ses_1', projectId: 'prj', workspaceId: 'ws', displayPath: 'repo', rootSessionId: 'ses_1',
-  createdAt: 1, updatedAt, epoch: 'e', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  createdAt: 1, updatedAt, epoch: 'e', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
   metadata, metadataRevision: '1', archiveRevision: '0',
 });
 

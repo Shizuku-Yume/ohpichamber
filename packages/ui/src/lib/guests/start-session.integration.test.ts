@@ -15,8 +15,8 @@ import * as sharedTrust from '@/lib/sharedTrustConfirmation';
 
 const created: Session = {
   sessionId: 'background-session', projectId: 'b', workspaceId: 'workspace-b', displayPath: '.', rootSessionId: 'background-session',
-  createdAt: 1, updatedAt: 1, epoch: '0', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
-  metadata: { title: 'Task' }, metadataRevision: '1', archiveRevision: '0',
+  createdAt: 1, updatedAt: 1, epoch: '0', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
+  title: 'Task', metadata: {}, metadataRevision: '1', archiveRevision: '0',
 };
 const originalRuntime = getRuntimeKey();
 const originalBase = getRuntimeApiBaseUrl();

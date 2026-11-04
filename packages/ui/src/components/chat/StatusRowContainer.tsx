@@ -12,7 +12,6 @@ import { StatusRow } from './StatusRow';
  */
 export const StatusRowContainer: React.FC = React.memo(() => {
     const { activeModel, working } = useAssistantStatus();
-    const currentAgentName = useConfigStore((state) => state.currentAgentName);
     const providers = useConfigStore((state) => state.providers);
 
     const modelDisplayName = React.useMemo(() => {
@@ -33,7 +32,6 @@ export const StatusRowContainer: React.FC = React.memo(() => {
             isWaitingForPermission={working.isWaitingForPermission}
             abortActive={working.abortActive}
             retryInfo={working.retryInfo}
-            agentName={currentAgentName}
             modelName={modelDisplayName}
             providerId={activeModel?.providerId ?? null}
         />

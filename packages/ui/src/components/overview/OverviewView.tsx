@@ -357,7 +357,7 @@ export function OverviewPage({ layout, onLeave }: { layout: Layout; onLeave: () 
     }
   }, []);
 
-  const titleOf = React.useCallback((session: Session) => session.metadata?.title || t('sessions.sidebar.session.untitled'), [t]);
+  const titleOf = React.useCallback((session: Session) => session.title || t('sessions.sidebar.session.untitled'), [t]);
   const recapOf = (session: Session) => getCurrentSessionAssist(session)?.recap || null;
   // The question or form a session waits on, named under its title when it has one.
   const askedOf = (session: Session): string | null => {

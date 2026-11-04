@@ -1453,7 +1453,6 @@ const AssistantMessageBody = React.memo(({
                     providerId: execution.providerID,
                     modelId: execution.modelID,
                     variant: execution.variant,
-                    agent: execution.agent,
                     instructions: execution.instructions,
                     createWorktree: execution.createWorktree,
                     runAsGoal: execution.runAsGoal,

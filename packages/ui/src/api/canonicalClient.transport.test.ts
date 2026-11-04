@@ -12,7 +12,7 @@ const generation = 'worker_expected';
 const client = new CanonicalClient();
 const runtimeSession: C.RuntimeSession = {
   sessionId, rootSessionId: 'root_expected', projectId: 'project_expected', workspaceId, displayPath: '.',
-  epoch, headSequence: '0', createdAt: 1, updatedAt: 1, runtimeStatus: 'idle', activeRunId: null,
+  epoch, headSequence: '0', createdAt: 1, updatedAt: 1, runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
 };
 const snapshot = (session = runtimeSession): C.SessionSnapshot => ({
   session, cursor: `${session.epoch}:${session.headSequence}`, activeRun: null,
@@ -145,7 +145,9 @@ describe('CanonicalClient real HTTP scope boundary', () => {
     await expect(client.getHistory(sessionId)).rejects.toThrow();
     respondWith({ sessionId: 'session_other', revision: '0', metadata: null });
     await expect(client.getSessionMetadata(sessionId)).rejects.toThrow();
-    await expect(client.patchSessionMetadata(sessionId, { changes: { title: 'Title' } })).rejects.toThrow();
+    await expect(client.patchSessionMetadata(sessionId, { changes: { notes: 'Note' } })).rejects.toThrow();
+    respondWith({ ...runtimeSession, sessionId: 'session_other' });
+    await expect(client.renameSession(sessionId, runtimeSession.workspaceId, 'Title')).rejects.toThrow();
     respondWith({ sessionId: 'session_other', revision: '0', items: [] });
     await expect(client.getQueue(sessionId)).rejects.toThrow();
     await expect(client.appendQueue(sessionId, { expectedRevision: '0', content: 'hello', request: prompt })).rejects.toThrow();
@@ -174,13 +176,34 @@ describe('CanonicalClient real HTTP scope boundary', () => {
     for (const [field, invoke] of [
       ['models', () => client.getModels(workspaceId)], ['providers', () => client.getProviders(workspaceId)], ['agents', () => client.getAgents(workspaceId)],
     ] as const) {
-      respondWith({ workspaceId: 'workspace_other', revision: '0', [field]: [] });
-      await expect(invoke()).rejects.toThrow();
-      respondWith({ workspaceId, revision: '0', [field]: [] });
+      if (field === 'models') {
+        respondWith({ workspaceId: 'workspace_other', revision: '0', models: [], defaults: { model: null, thinkingLevel: null }, planRoleAvailable: false });
+        await expect(invoke()).rejects.toThrow();
+        respondWith({ workspaceId, revision: '0', models: [], defaults: { model: null, thinkingLevel: null }, planRoleAvailable: false });
+      } else {
+        respondWith({ workspaceId: 'workspace_other', revision: '0', [field]: [] });
+        await expect(invoke()).rejects.toThrow();
+        respondWith({ workspaceId, revision: '0', [field]: [] });
+      }
       expect((await invoke()).workspaceId).toBe(workspaceId);
     }
     respondWith({ items: [], errors: {} });
     expect(await client.listSessions(workspaceId)).toEqual({ items: [], errors: {} });
+  });
+
+  test('settings reads and writes verify workspace ownership and the next revision', async () => {
+    const settingsState = { workspaceId, revision: '7', settings: [] };
+    respondWith(settingsState);
+    expect((await client.getOmpSettings(workspaceId)).revision).toBe('7');
+    expect(calls.at(-1)).toBe(`GET /api/agent/v1/workspaces/${workspaceId}/settings`);
+    respondWith({ ...settingsState, revision: '8' });
+    await expect(client.updateOmpSettings(workspaceId, { expectedRevision: '7', changes: [{ id: 'compaction.thresholdPercent', value: 60 }] })).resolves.toMatchObject({ revision: '8' });
+    expect(calls.at(-1)).toBe(`PUT /api/agent/v1/workspaces/${workspaceId}/settings`);
+    respondWith({ ...settingsState, revision: '9' });
+    await expect(client.updateOmpSettings(workspaceId, { expectedRevision: '7', changes: [{ id: 'compaction.thresholdPercent', value: 60 }] })).rejects.toThrow();
+    respondWith({ ...settingsState, workspaceId: 'workspace_other' });
+    await expect(client.getOmpSettings(workspaceId)).rejects.toThrow();
+    await expect(client.updateOmpSettings(workspaceId, { expectedRevision: '7', changes: [{ id: 'compaction.thresholdPercent', value: 60 }] })).rejects.toThrow();
   });
 
   test('rejects unrelated run, steering and follow-up receipts', async () => {
@@ -193,6 +216,31 @@ describe('CanonicalClient real HTTP scope boundary', () => {
     await expect(client.steer(sessionId, prompt)).rejects.toThrow();
     respondWith({ sessionId: 'session_other', followUpId: 'followup_expected', acceptedAt: 1 });
     await expect(client.followUp(sessionId, prompt)).rejects.toThrow();
+  });
+  test('sends compact instructions through the canonical session control contract', async () => {
+    respondWith({ type: 'compact', compactionId: 'compact_1', tokensBefore: 4096, completedAt: 1 });
+    await expect(client.compactSession(sessionId, 'Keep key details.')).resolves.toMatchObject({ type: 'compact', tokensBefore: 4096 });
+    expect(calls.at(-1)).toBe(`POST /api/agent/v1/sessions/${sessionId}/control`);
+  });
+  test('sends mode.set through canonical session control and validates the authoritative mode ack', async () => {
+    respondWith({ type: 'mode.set', mode: { kind: 'plan', status: 'active', planReference: 'local://plans/session-1.md' } });
+    await expect(client.setMode(sessionId, 'plan')).resolves.toMatchObject({ type: 'mode.set', mode: { kind: 'plan', status: 'active' } });
+    expect(calls.at(-1)).toBe(`POST /api/agent/v1/sessions/${sessionId}/control`);
+    respondWith({ type: 'mode.set', mode: { kind: 'vibe' } });
+    await expect(client.setMode(sessionId, 'vibe')).resolves.toEqual({ type: 'mode.set', mode: { kind: 'vibe' } });
+  });
+  test('sends goal controls and validates native goal state over canonical transport', async () => {
+    const mode = { kind: 'goal', status: 'active', objective: 'Finish the task', tokenBudget: 5000, tokensUsed: 42 };
+    respondWith({ type: 'goal', mode });
+    await expect(client.goal(sessionId, { op: 'create', objective: mode.objective, tokenBudget: mode.tokenBudget })).resolves.toEqual({ type: 'goal', mode });
+    expect(calls.at(-1)).toBe(`POST /api/agent/v1/sessions/${sessionId}/control`);
+    respondWith({ type: 'goal', mode: { ...mode, status: 'blocked' } });
+    await expect(client.goal(sessionId, { op: 'pause' })).rejects.toThrow();
+    respondWith({ type: 'goal', mode: { kind: 'main' } });
+    await expect(client.goal(sessionId, { op: 'drop' })).resolves.toEqual({ type: 'goal', mode: { kind: 'main' } });
+    const count = calls.length;
+    expect(() => client.goal(sessionId, { op: 'create', objective: '  ' })).toThrow();
+    expect(calls).toHaveLength(count);
   });
 
   test('rejects unrelated interaction identity or generation', async () => {

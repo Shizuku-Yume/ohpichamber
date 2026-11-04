@@ -5,7 +5,7 @@ import { INITIAL_STATE, type State } from "./types"
 
 const runtime = (overrides: Partial<RuntimeSession> = {}): RuntimeSession => ({
   sessionId: "session-1", projectId: "project-1", workspaceId: "workspace-1", displayPath: ".", rootSessionId: "session-1",
-  createdAt: 1, updatedAt: 1, epoch: "epoch-1", headSequence: "0", runtimeStatus: "idle", activeRunId: null, ...overrides,
+  createdAt: 1, updatedAt: 1, epoch: "epoch-1", headSequence: "0", runtimeStatus: "idle", activeRunId: null, mode: { kind: "main" }, ...overrides,
 })
 const session = (overrides: Partial<Session> = {}): Session => ({
   ...runtime(), metadata: null, metadataRevision: "0", archiveRevision: "0", ...overrides,
@@ -49,6 +49,14 @@ describe("native canonical event reducer", () => {
     expect(applyDirectoryEvent(base, event("2", "session.status", { runtimeStatus: "running", activeRunId: "run-1" })).kind).toBe("resnapshot")
     expect(applyDirectoryEvent(base, { ...event("1", "session.status", { runtimeStatus: "idle", activeRunId: null }), epoch: "epoch-2" }).kind).toBe("resnapshot")
   })
+  test("projects a top-level mode event to the snapshot and live session row", () => {
+    const base = state({ snapshot: { "session-1": snapshot() }, sessionCursor: { "session-1": "epoch-1:0" } })
+    const changed = applyDirectoryEvent(base, event("1", "session.updated", { mode: { kind: "plan", status: "active", planReference: "local://plans/session-1.md" } }))
+    expect(changed.kind).toBe("applied")
+    expect(changed.state.snapshot["session-1"]?.session.mode).toEqual({ kind: "plan", status: "active", planReference: "local://plans/session-1.md" })
+    expect(changed.state.session[0]?.mode).toEqual({ kind: "plan", status: "active", planReference: "local://plans/session-1.md" })
+    expect(applyDirectoryEvent(changed.state, event("1", "session.updated", { mode: { kind: "main" } })).kind).toBe("duplicate")
+  })
 
   test("applies contiguous runtime events while retaining unrelated parts", () => {
     const message: Message = { messageId: "message-1", sessionId: "session-1", turnId: "turn-1", role: "assistant", createdAt: 1, parts: [{ type: "text", partId: "part-1", content: "hello" }] }
@@ -69,18 +77,28 @@ describe("native canonical event reducer", () => {
     expect(result.state).toBe(base)
   })
 
+  test("projects live selection updates into the snapshot", () => {
+    const base = state({ snapshot: { "session-1": snapshot() }, sessionCursor: { "session-1": "epoch-1:0" } })
+    const changed = applyDirectoryEvent(base, event("1", "session.updated", { selection: { model: { providerId: "provider-1", modelId: "model-1" }, thinkingLevel: "off" } }))
+    expect(changed.kind).toBe("applied")
+    expect(changed.state.snapshot["session-1"]?.selection).toEqual({ model: { providerId: "provider-1", modelId: "model-1" }, thinkingLevel: "off" })
+    expect(changed.state.session[0]).toBe(base.session[0])
+    const cleared = applyDirectoryEvent(changed.state, event("2", "session.updated", { selection: { model: null, thinkingLevel: null } }))
+    expect(cleared.state.snapshot["session-1"]?.selection).toEqual({ model: null, thinkingLevel: null })
+  })
+
   test("preserves newer host metadata when an older update arrives", () => {
-    const current = session({ metadata: { title: "New" }, metadataRevision: "8" })
+    const current = session({ metadata: { notes: "New" }, metadataRevision: "8" })
     const prior = snapshot({ session: runtime({ headSequence: "0" }) })
     const base = state({ session: [current], snapshot: { "session-1": prior }, sessionCursor: { "session-1": "epoch-1:0" } })
-    const result = applyDirectoryEvent(base, event("1", "session.updated", { session: runtime({ headSequence: "1" }), metadata: { title: "Old" }, metadataRevision: "7" }))
+    const result = applyDirectoryEvent(base, event("1", "session.updated", { session: runtime({ headSequence: "1" }), metadata: { notes: "Old" }, metadataRevision: "7" }))
     expect(result.kind).toBe("applied")
-    expect(result.state.session[0]?.metadata).toEqual({ title: "New" })
+    expect(result.state.session[0]?.metadata).toEqual({ notes: "New" })
     expect(result.state.session[0]?.metadataRevision).toBe("8")
   })
 
   test("settles a matching cancelled run", () => {
-    const running = snapshot({ session: runtime({ headSequence: "0", runtimeStatus: "running", activeRunId: "run-1" }), activeRun: { runId: "run-1", sessionId: "session-1", status: "running", createdAt: 1 } })
+    const running = snapshot({ session: runtime({ headSequence: "0", runtimeStatus: "running", activeRunId: "run-1" }), activeRun: { runId: "run-1", sessionId: "session-1", status: "running", origin: "host", createdAt: 1 } })
     const base = state({ snapshot: { "session-1": running }, sessionCursor: { "session-1": "epoch-1:0" } })
     const settled = applyDirectoryEvent(base, event("1", "run.cancelled", { runId: "run-1", finishedAt: 2 }))
     expect(settled.kind).toBe("applied")
@@ -113,8 +131,8 @@ describe("native canonical event reducer", () => {
   })
 
   test("metadata, archive and queue revisions remain independent of runtime snapshots", () => {
-    const prior = session({ metadata: { title: "new" }, metadataRevision: "10", archiveRevision: "10", archivedAt: 20, headSequence: "4" })
-    const merged = mergeHostSession(session({ metadata: { title: "old" }, metadataRevision: "2", archiveRevision: "2", headSequence: "2" }), prior)
+    const prior = session({ title: "new", metadata: {}, metadataRevision: "10", archiveRevision: "10", archivedAt: 20, headSequence: "4" })
+    const merged = mergeHostSession(session({ title: "old", metadata: {}, metadataRevision: "2", archiveRevision: "2", headSequence: "2" }), prior)
     expect(merged.metadata).toBe(prior.metadata)
     expect(merged.archivedAt).toBe(20)
     expect(merged.headSequence).toBe("4")
@@ -184,14 +202,14 @@ describe("native canonical event reducer", () => {
     expect(next.sessionDeletedRevision?.["session-1"] ?? 0).toBeGreaterThan(0)
   })
 
-  const run = (overrides: Partial<Run> = {}): Run => ({ runId: "run-1", sessionId: "session-1", status: "running", createdAt: 5, ...overrides })
+  const run = (overrides: Partial<Run> = {}): Run => ({ runId: "run-1", sessionId: "session-1", status: "running", origin: "host", createdAt: 5, ...overrides })
 
   test("an accepted run acknowledgement binds live control state before its event arrives", () => {
     const base = installSessionSnapshot(state(), snapshot())
     const accepted = installRuntimeRun(base, run())
     expect(accepted.session_status["session-1"]).toBe("running")
     expect(accepted.snapshot["session-1"]?.session).toMatchObject({ runtimeStatus: "running", activeRunId: "run-1" })
-    expect(accepted.snapshot["session-1"]?.activeRun).toEqual({ runId: "run-1", sessionId: "session-1", status: "running", createdAt: 5 })
+    expect(accepted.snapshot["session-1"]?.activeRun).toEqual({ runId: "run-1", sessionId: "session-1", status: "running", origin: "host", createdAt: 5 })
     expect(accepted.session[0]).toMatchObject({ runtimeStatus: "running", activeRunId: "run-1" })
     // Control state only: the transcript is untouched and a repeated ack is a no-op.
     expect(accepted.message["session-1"]).toBe(base.message["session-1"])

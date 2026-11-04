@@ -52,7 +52,7 @@ const createStore = () => {
 describe("run control snapshot authority outside the in-flight window", () => {
   test("a same-epoch snapshot stays authoritative when no acknowledgement arrived after the read began", async () => {
     const store = createStore()
-    store.setState((state) => installRuntimeRun(state, { runId: "run-a", sessionId, status: "running", createdAt: 5 }))
+    store.setState((state) => installRuntimeRun(state, { runId: "run-a", sessionId, status: "running", origin: "host", createdAt: 5 }))
     const response = deferred<SessionSnapshot>()
     const requested = deferred<void>()
     const client = nativeClient({ getSnapshot: () => { requested.resolve(); return response.promise } })
@@ -78,16 +78,16 @@ describe("run control snapshot authority outside the in-flight window", () => {
 
     const pending = loader.ensure({ directory, sessionId })
     await requested.promise
-    store.setState((state) => installRuntimeRun(state, { runId: "run-a", sessionId, status: "running", createdAt: 5 }))
+    store.setState((state) => installRuntimeRun(state, { runId: "run-a", sessionId, status: "running", origin: "host", createdAt: 5 }))
     expect(store.getState().session.find((item) => item.sessionId === sessionId)?.activeRunId).toBe("run-a")
-    expect(store.getState().runControlActiveRun?.[sessionId]).toEqual({ runId: "run-a", sessionId, status: "running", createdAt: 5 })
+    expect(store.getState().runControlActiveRun?.[sessionId]).toEqual({ runId: "run-a", sessionId, status: "running", origin: "host", createdAt: 5 })
 
     response.resolve(idle)
     await pending
 
     expect(store.getState().session_status[sessionId]).toBe("running")
     expect(store.getState().snapshot[sessionId]?.session.activeRunId).toBe("run-a")
-    expect(store.getState().snapshot[sessionId]?.activeRun).toEqual({ runId: "run-a", sessionId, status: "running", createdAt: 5 })
+    expect(store.getState().snapshot[sessionId]?.activeRun).toEqual({ runId: "run-a", sessionId, status: "running", origin: "host", createdAt: 5 })
     expect(store.getState().session.find((item) => item.sessionId === sessionId)?.activeRunId).toBe("run-a")
     expect(store.getState().runControlActiveRun?.[sessionId]).toBeUndefined()
   })
@@ -101,7 +101,7 @@ describe("run control snapshot authority outside the in-flight window", () => {
 
     const pending = loader.ensure({ directory, sessionId })
     await requested.promise
-    store.setState((state) => installRuntimeRun(state, { runId: "run-a", sessionId, status: "running", createdAt: 5 }))
+    store.setState((state) => installRuntimeRun(state, { runId: "run-a", sessionId, status: "running", origin: "host", createdAt: 5 }))
     response.resolve({ ...idle, session: { ...idle.session, epoch: "epoch-b" }, cursor: "epoch-b:4" })
     await pending
 

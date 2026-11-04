@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { CanonicalEventSchema, EntityIdSchema, HistoryPageSchema, ProblemDetailsSchema, QueueStateSchema, RunSchema, RuntimeSessionSchema, SessionSnapshotSchema } from '@openchamber/agent-contract';
 import { PromptQueueError } from './sqlite-store.js';
+import { assertRootPromptAdmission } from './prompt-admission.js';
 
 const AdmissionSchema = z.strictObject({ run: RunSchema });
 const QUIET_MS = 500;
@@ -138,7 +139,7 @@ export function createCanonicalQueueRuntime({ store, service, resolveAttachments
       const before = await store.getState(queueScope(scope));
       const recovered = await store.recoverUnsentClaims(queueScope(scope));
       if (recovered.revision !== before.revision) changed(scope, recovered);
-      if (runtime.activeRunId !== null || runtime.runtimeStatus !== 'idle') {
+      if (runtime.activeRunId !== null || runtime.continuationPending === true || runtime.runtimeStatus !== 'idle') {
         if (recovered.items.length > 0) schedule(scope, RETRY_MS);
         return;
       }
@@ -209,8 +210,9 @@ export function createCanonicalQueueRuntime({ store, service, resolveAttachments
     getState: (scope) => store.getState(queueScope(scope)),
     append: async (scope, commandId, request) => {
       void ensureSessionObserved(scope).catch(() => {});
-      const captured = await capturePrompt(scope, request.request);
-      const queue = await store.append(queueScope(scope), commandId, { ...request, request: captured });
+      const admitted = { ...request, request: assertRootPromptAdmission(request.request) };
+      const captured = assertRootPromptAdmission(await capturePrompt(scope, admitted.request));
+      const queue = await store.append(queueScope(scope), commandId, { ...admitted, request: captured });
       changed(scope, queue); schedule(scope); return queue;
     },
     remove: async (scope, request) => {
@@ -250,6 +252,7 @@ export function createCanonicalQueueRuntime({ store, service, resolveAttachments
           schedule(scope);
         }
       } else if (event.type === 'session.status' && event.runtimeStatus === 'idle') schedule(scope);
+      else if (event.type === 'session.updated' && event.continuationPending === false) schedule(scope);
     },
     setHold: (scope, held, ttlMs = 300_000) => {
       queueScope(scope);

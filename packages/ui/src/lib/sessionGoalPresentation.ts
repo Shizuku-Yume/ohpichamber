@@ -6,7 +6,6 @@ import type { SessionGoalStatus } from '@/lib/sessionGoalMetadata';
 export const sessionGoalStatusColor: Record<SessionGoalStatus, string> = {
   active: 'var(--status-info)',
   paused: 'var(--surface-muted-foreground)',
-  blocked: 'var(--status-warning)',
   budgetLimited: 'var(--status-warning)',
   complete: 'var(--status-success)',
 };
@@ -14,7 +13,6 @@ export const sessionGoalStatusColor: Record<SessionGoalStatus, string> = {
 export const sessionGoalStatusLabelKey: Record<SessionGoalStatus, string> = {
   active: 'chat.goal.status.active',
   paused: 'chat.goal.status.paused',
-  blocked: 'chat.goal.status.blocked',
   budgetLimited: 'chat.goal.status.budgetLimited',
   complete: 'chat.goal.status.complete',
 };

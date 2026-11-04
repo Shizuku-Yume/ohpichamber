@@ -521,12 +521,6 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.sessionGoalEnabled === 'boolean') {
       result.sessionGoalEnabled = candidate.sessionGoalEnabled;
     }
-    if (candidate.sessionGoalChecker === 'classifier' || candidate.sessionGoalChecker === 'small-model') {
-      result.sessionGoalChecker = candidate.sessionGoalChecker;
-    }
-    if (Number.isInteger(candidate.sessionGoalMaxAutoTurns) && candidate.sessionGoalMaxAutoTurns >= 1 && candidate.sessionGoalMaxAutoTurns <= 200) {
-      result.sessionGoalMaxAutoTurns = candidate.sessionGoalMaxAutoTurns;
-    }
     if (typeof candidate.sessionGoalDefaultBudgetEnabled === 'boolean') {
       result.sessionGoalDefaultBudgetEnabled = candidate.sessionGoalDefaultBudgetEnabled;
     }
@@ -648,17 +642,9 @@ export const createSettingsHelpers = (dependencies) => {
       result.managedRemoteTunnelSelectedPresetId = id || undefined;
     }
 
-    if (typeof candidate.defaultModel === 'string') {
-      const trimmed = candidate.defaultModel.trim();
-      result.defaultModel = trimmed.length > 0 ? trimmed : undefined;
-    }
     const lastSelectedModel = lastSelectedModelSchema.safeParse(candidate.lastSelectedModel);
     if (lastSelectedModel.success) {
       result.lastSelectedModel = lastSelectedModel.data;
-    }
-    if (typeof candidate.defaultVariant === 'string') {
-      const trimmed = candidate.defaultVariant.trim();
-      result.defaultVariant = trimmed.length > 0 ? trimmed : undefined;
     }
     if (typeof candidate.defaultAgent === 'string') {
       const trimmed = candidate.defaultAgent.trim();

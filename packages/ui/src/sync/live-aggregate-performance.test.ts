@@ -2,10 +2,11 @@ import { describe, expect, test } from 'bun:test';
 import type { Session, SessionRuntimeStatus } from '@openchamber/agent-contract';
 import { aggregateLiveSessionStatuses, areSessionListsEquivalent } from './live-aggregate';
 import { getSyncPerformanceDiagnostics, resetSyncPerformanceDiagnostics, setSyncPerformanceDiagnosticsEnabled } from './performance-diagnostics';
-const session = (sessionId: string, updatedAt: number): Session => ({ sessionId, projectId: 'project_1', workspaceId: 'workspace_1', displayPath: 'session', rootSessionId: sessionId, createdAt: updatedAt, updatedAt, epoch: 'epoch_1', headSequence: '0', runtimeStatus: 'running', activeRunId: 'run_1', metadata: null, metadataRevision: '0', archiveRevision: '0' });
+const session = (sessionId: string, updatedAt: number): Session => ({ sessionId, projectId: 'project_1', workspaceId: 'workspace_1', displayPath: 'session', rootSessionId: sessionId, createdAt: updatedAt, updatedAt, epoch: 'epoch_1', headSequence: '0', runtimeStatus: 'running', activeRunId: 'run_1', mode: { kind: 'main' }, metadata: null, metadataRevision: '0', archiveRevision: '0' });
 describe('native live status aggregation', () => {
   test('indexes each session once instead of scanning per status', () => {
     const sessions = Array.from({ length: 50 }, (_, index) => session(`session-${index}`, index));
+    // SAFETY: 'running' is a valid literal member of SessionRuntimeStatus.
     const session_status = Object.fromEntries(sessions.map((item) => [item.sessionId, 'running' as SessionRuntimeStatus]));
     resetSyncPerformanceDiagnostics(); setSyncPerformanceDiagnosticsEnabled(true);
     const statuses = aggregateLiveSessionStatuses([{ session: sessions, session_status }]);
@@ -18,6 +19,7 @@ describe('native live status aggregation', () => {
     expect(areSessionListsEquivalent([original], [{ ...original }])).toBe(true);
     expect(areSessionListsEquivalent([original], [{ ...original, epoch: 'epoch_2' }])).toBe(false);
     expect(areSessionListsEquivalent([original], [{ ...original, headSequence: '1' }])).toBe(false);
-    expect(areSessionListsEquivalent([original], [{ ...original, metadata: { title: 'Renamed' }, metadataRevision: '1' }])).toBe(false);
+    expect(areSessionListsEquivalent([original], [{ ...original, title: 'Renamed' }])).toBe(false);
+    expect(areSessionListsEquivalent([original], [{ ...original, title: 'Renamed', metadata: {}, metadataRevision: '1' }])).toBe(false);
   });
 });

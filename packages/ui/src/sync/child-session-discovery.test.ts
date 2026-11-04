@@ -5,7 +5,7 @@ import { selectNewChildSessions } from './child-session-discovery';
 const session = (sessionId: string, parentSessionId?: string, archivedAt?: number): Session => ({
   sessionId, parentSessionId, projectId: 'project', workspaceId: 'workspace', displayPath: 'repo',
   rootSessionId: parentSessionId ?? sessionId, createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0',
-  runtimeStatus: 'idle', activeRunId: null, ...(archivedAt === undefined ? {} : { archivedAt }),
+  runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' }, ...(archivedAt === undefined ? {} : { archivedAt }),
   metadata: null, metadataRevision: '0', archiveRevision: '0',
 });
 

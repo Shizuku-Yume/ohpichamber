@@ -80,7 +80,7 @@ export const createExistingSessionTasks = ({ projectConfigRuntime, messageQueueR
       if (await messageQueueRuntime.hasScheduledTask(projectId, task.id)) throw new OpenChamberControlError('task is already queued', 409);
       const options = task.execution.useDefaults
         ? { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null }
-        : { providerId: task.execution.providerID ?? null, modelId: task.execution.modelID ?? null, agentId: task.execution.agent ?? null, variant: task.execution.variant ?? null, reasoningEffort: null };
+        : { providerId: task.execution.providerID ?? null, modelId: task.execution.modelID ?? null, agentId: null, variant: task.execution.variant ?? null, reasoningEffort: null };
       const scheduledTask = { projectId, taskId: task.id, sessionId: scope.sessionId, workspaceId: scope.workspaceId, mode: 'existing', triggeredAt };
       if (typeof expandPrompt !== 'function') throw new OpenChamberControlError('Native scheduled prompt capture is unavailable', 503);
       const request = PromptRequestSchema.parse(await expandPrompt(scope, PromptRequestSchema.parse({ input: { text: task.execution.prompt, attachments: [], context: [createScheduledTaskContext(scheduledTask)] }, options })));

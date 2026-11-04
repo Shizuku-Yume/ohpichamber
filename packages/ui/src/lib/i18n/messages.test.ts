@@ -161,6 +161,7 @@ describe('i18n dictionaries', () => {
     for (const [locale, dictionary] of Object.entries(localeDictionaries)) {
       if (locale === 'en') continue;
       for (const [key, value] of Object.entries(dictionary)) {
+        if (typeof value !== 'string') continue;
         if (!mentionsOpenCode.test(value)) continue;
         const enValue = englishValues[key] ?? '';
         if (!mentionsOpenCode.test(enValue)) {

@@ -4,6 +4,20 @@ import { CanonicalEventSchema, StreamInvalidatedSchema } from './events.ts';
 const envelope = { sessionId: 'session_1', epoch: 'epoch_1', sequence: '9007199254740993', timestamp: 1 };
 
 describe('canonical event boundaries', () => {
+  test('session updates preserve authoritative plan state and reject Host paths', () => {
+    const session = {
+      sessionId: envelope.sessionId, rootSessionId: envelope.sessionId, projectId: 'project_1', workspaceId: 'workspace_1',
+      displayPath: '.', createdAt: 1, updatedAt: 1, epoch: envelope.epoch, headSequence: envelope.sequence,
+      runtimeStatus: 'idle', activeRunId: null,
+      mode: { kind: 'plan', status: 'active', planReference: 'local://PLAN.md' },
+    };
+    const event = { ...envelope, type: 'session.updated', session };
+    expect(CanonicalEventSchema.parse(JSON.parse(JSON.stringify(event)))).toEqual(event);
+    expect(CanonicalEventSchema.safeParse({ ...event, session: { ...session, mode: { ...session.mode, planReference: '/host/PLAN.md' } } }).success).toBe(false);
+    const modeOnly = { ...envelope, type: 'session.updated', mode: session.mode };
+    expect(CanonicalEventSchema.parse(modeOnly)).toEqual(modeOnly);
+    expect(CanonicalEventSchema.safeParse({ ...envelope, type: 'session.updated' }).success).toBe(false);
+  });
   test('data events retain exact uint64 sequences; invalidation never advances a cursor', () => {
     const delta = { ...envelope, type: 'part.delta', partId: 'part_1', delta: 'hello' };
     expect(CanonicalEventSchema.parse(JSON.parse(JSON.stringify(delta)))).toEqual(delta);
@@ -16,14 +30,18 @@ describe('canonical event boundaries', () => {
   });
 
   test('Host metadata and archive carry separate exact revisions', () => {
-    const metadata = { ...envelope, type: 'session.updated', metadata: { title: 'Renamed' }, metadataRevision: '2' };
+    const metadata = { ...envelope, type: 'session.updated', metadata: { folder: 'Renamed' }, metadataRevision: '2' };
     expect(CanonicalEventSchema.parse(metadata)).toEqual(metadata);
-    expect(CanonicalEventSchema.safeParse({ ...envelope, type: 'session.updated', metadata: { title: 'Renamed' } }).success).toBe(false);
+    expect(CanonicalEventSchema.safeParse({ ...envelope, type: 'session.updated', metadata: { folder: 'Renamed' } }).success).toBe(false);
     expect(CanonicalEventSchema.safeParse({ ...metadata, metadataRevision: '0' }).success).toBe(false);
     expect(CanonicalEventSchema.parse({ ...envelope, type: 'session.updated', metadata: null, metadataRevision: '0' })).toEqual({ ...envelope, type: 'session.updated', metadata: null, metadataRevision: '0' });
     const archive = { ...envelope, type: 'session.updated', archivedAt: null, archiveRevision: '3' };
     expect(CanonicalEventSchema.parse(archive)).toEqual(archive);
     expect(CanonicalEventSchema.safeParse({ ...archive, archiveRevision: undefined }).success).toBe(false);
+    const selection = { ...envelope, type: 'session.updated', selection: { model: { providerId: 'provider_1', modelId: 'model_1' }, thinkingLevel: 'off' } };
+    expect(CanonicalEventSchema.parse(selection)).toEqual(selection);
+    expect(CanonicalEventSchema.safeParse({ ...selection, selection: { model: null, thinkingLevel: null } }).success).toBe(true);
+    expect(CanonicalEventSchema.safeParse({ ...selection, selection: { model: null, thinkingLevel: '' } }).success).toBe(false);
   });
 
   test('inner cycles do not imply outer completion and live status identifies the active run', () => {

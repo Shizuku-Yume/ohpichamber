@@ -25,6 +25,7 @@ export const useSidebarGroupStatus = ({
   canGrantAccess: boolean;
 }): SidebarGroupStatusResult => {
   const globalStatus = useGlobalSessionsStore((state) => state.status);
+  const globalRefreshFailed = useGlobalSessionsStore((state) => state.globalRefreshFailed);
   const hasLoadedGlobalSessions = useGlobalSessionsStore((state) => state.hasLoaded);
   const discoveryErrors = useGlobalSessionsStore((state) => state.discoveryErrors);
   const groups = React.useMemo(() => [
@@ -90,8 +91,9 @@ export const useSidebarGroupStatus = ({
           // list keeps empty groups ready during background refreshes.
           const complete = hasLoadedGlobalSessions || (!archived && groupDirectories.length > 0
             && groupDirectories.every((directory) => childStores.getBootstrapState(directory) === 'complete'));
+          const globalFailure = globalRefreshFailed && !complete;
           statuses.set(key, {
-            state: complete ? 'ready' : globalStatus === 'error' ? 'load-failed' : 'loading',
+            state: complete ? 'ready' : globalFailure ? 'load-failed' : 'loading',
             // A null directory retries the global list, without initializing a location.
             directory: complete ? groupDirectories[0] ?? null : null,
             canGrantAccess: false,
@@ -100,6 +102,6 @@ export const useSidebarGroupStatus = ({
       }
     }
     return statuses;
-  }, [bootstrapSnapshot, canGrantAccess, childStores, groups, globalStatus, hasLoadedGlobalSessions, discoveryErrors]);
+  }, [bootstrapSnapshot, canGrantAccess, childStores, groups, globalStatus, globalRefreshFailed, hasLoadedGlobalSessions, discoveryErrors]);
   return { groupStatusByKey, bootstrapSnapshot };
 };

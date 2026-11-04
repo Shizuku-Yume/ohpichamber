@@ -11,8 +11,8 @@ resetWorkspaceDirectories();
 registerWorkspaceDirectory(PREFETCH_WORKSPACE_ID, PREFETCH_DIRECTORY);
 const session = (sessionId: string): Session => ({
   sessionId, projectId: 'project', workspaceId: PREFETCH_WORKSPACE_ID, displayPath: PREFETCH_DIRECTORY, rootSessionId: sessionId,
-  createdAt: 1, updatedAt: 1, epoch: 'epoch_1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
-  metadata: { title: sessionId }, metadataRevision: '1', archiveRevision: '0',
+  createdAt: 1, updatedAt: 1, epoch: 'epoch_1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
+  title: sessionId, metadata: {}, metadataRevision: '1', archiveRevision: '0',
 });
 
 describe('session prefetch demand', () => {

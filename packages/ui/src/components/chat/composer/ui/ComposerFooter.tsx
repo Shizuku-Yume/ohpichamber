@@ -12,9 +12,9 @@
  */
 
 import type { SourceControlProvider } from '@/lib/api/types';
+import type { SessionMode } from '@openchamber/agent-contract';
 import React from 'react';
 
-import { SessionGoalButton, SessionGoalObjectiveCounter } from '@/components/chat/SessionGoalButton';
 import { ComposerDictation } from '@/components/dictation/ComposerDictation';
 import { Icon } from '@/components/icon/Icon';
 import type { GuestAttachItem } from '@/hooks/useGuestSurfaces';
@@ -26,9 +26,11 @@ import { ModelControls } from '../../ModelControls';
 import { ComposerActionButtons } from './ComposerActionButtons';
 import { ComposerAttachmentControls } from './ComposerAttachmentControls';
 import { FocusModeButton } from './FocusModeButton';
+import { ComposerModeSelector, type ComposerModeValue } from './ComposerModeSelector';
+import type { DraftGoalObjective, DraftSessionMode } from '@/sync/session-ui-store';
 import { PermissionAutoAcceptButton } from './PermissionAutoAcceptButton';
 import type { PermissionMode } from '@/stores/utils/permissionAutoAccept';
-import type { BtwSelection } from '@/stores/useBtwStore';
+import type { ComposerModelSelection } from '@/components/chat/pinnedComposerSelection';
 
 const MemoModelControls = React.memo(ModelControls);
 const MemoComposerDictation = React.memo(ComposerDictation);
@@ -38,7 +40,11 @@ interface ComposerFooterProps {
     sessionId: string | null;
     directory?: string;
     newSessionDraftOpen: boolean;
-    messageLength: number;
+    draftMode?: DraftSessionMode;
+    draftGoalObjective?: DraftGoalObjective | null;
+    planRoleAvailable: boolean | undefined;
+    sessionGoalEnabled: boolean;
+    onDraftModeChange: (mode: ComposerModeValue, goalObjective?: DraftGoalObjective | null) => void;
 
     radius: string;
     footerPaddingClass: string;
@@ -52,6 +58,8 @@ interface ComposerFooterProps {
     canAbort: boolean;
     hasContent: boolean;
     isExpandedInput: boolean;
+    mode?: SessionMode;
+    runActive: boolean;
     permissionMode: PermissionMode;
     isPermissionAutoAcceptInteractive: boolean;
     dictationActive: boolean;
@@ -80,10 +88,7 @@ interface ComposerFooterProps {
     /** Desktop only: the composer box hides its other contents while the overlay is up. */
     onDictationActiveChange?: (active: boolean) => void;
     isBtw?: boolean;
-    modelSessionId?: string | null;
-    btwSelection: BtwSelection;
-    /** A pinned column's own model, agent and effort (see pinnedComposerSelection.ts). */
-    pinnedSelection?: BtwSelection | null;
+    pinnedSelection?: ComposerModelSelection | null;
     /** Offers "Run on several models" in the model picker (desktop). */
     onRunInParallel?: () => void;
     /** Set while the composer is in "Run in parallel" mode: the primary action launches the run. */
@@ -113,7 +118,11 @@ function ComposerFooterView(props: ComposerFooterProps) {
         sessionId: currentSessionId,
         directory,
         newSessionDraftOpen,
-        messageLength,
+        draftMode,
+        draftGoalObjective,
+        planRoleAvailable,
+        sessionGoalEnabled,
+        onDraftModeChange,
         radius: chatInputRadius,
         footerPaddingClass,
         footerGapClass,
@@ -126,6 +135,8 @@ function ComposerFooterView(props: ComposerFooterProps) {
         hasContent,
         isExpandedInput,
         permissionMode,
+        mode,
+        runActive,
         isPermissionAutoAcceptInteractive,
         dictationActive,
         onOpenSettings,
@@ -150,8 +161,6 @@ function ComposerFooterView(props: ComposerFooterProps) {
         onDictationContentHeightChange,
         onDictationActiveChange,
         isBtw = false,
-        modelSessionId,
-        btwSelection,
         pinnedSelection = null,
         onRunInParallel,
         parallelRun = null,
@@ -203,14 +212,6 @@ function ComposerFooterView(props: ComposerFooterProps) {
                                 permissionMode={permissionMode}
                                 handlePermissionModeCycle={onCyclePermissionMode}
                             />
-                            {!isBtw ? <SessionGoalButton
-                                sessionId={currentSessionId}
-                                directory={directory}
-                                draftOpen={newSessionDraftOpen}
-                                footerIconButtonClass={footerIconButtonClass}
-                                iconSizeClass={iconSizeClass}
-                            /> : null}
-                            {!isBtw ? <SessionGoalObjectiveCounter length={messageLength} /> : null}
                         </div>
                         <div className="flex items-center min-w-0 gap-x-1 justify-end">
                             {waitingForAgent ? <AgentStartupNote /> : null}
@@ -283,19 +284,22 @@ function ComposerFooterView(props: ComposerFooterProps) {
                             handlePermissionModeCycle={onCyclePermissionMode}
                             withTooltip
                         />
-                        {!isBtw ? <SessionGoalButton
-                            sessionId={currentSessionId}
-                            directory={directory}
-                            draftOpen={newSessionDraftOpen}
-                            footerIconButtonClass={footerIconButtonClass}
-                            iconSizeClass={iconSizeClass}
-                            withTooltip
-                        /> : null}
-                        {!isBtw ? <SessionGoalObjectiveCounter length={messageLength} /> : null}
                     </div>
                     <div className={cn('flex items-center flex-1 justify-end', footerGapClass, 'md:gap-x-3')} data-dictation-chain="true">
                         {waitingForAgent ? <AgentStartupNote className="flex-shrink-0" /> : null}
-                        {parallelRun ? <div className="flex-1" /> : isBtw ? <ModelControls className="flex-1 min-w-0 justify-end" sessionId={modelSessionId ?? null} selection={btwSelection} /> : pinnedSelection ? <ModelControls className="flex-1 min-w-0 justify-end" sessionId={currentSessionId} selection={pinnedSelection} agentSelectable /> : <MemoModelControls className={cn('flex-1 min-w-0 justify-end')} onRunInParallel={onRunInParallel} />}
+                        {parallelRun ? <div className="flex-1" /> : pinnedSelection ? <ModelControls className="flex-1 min-w-0 justify-end" sessionId={currentSessionId} selection={pinnedSelection} agentSelectable /> : <MemoModelControls className={cn('flex-1 min-w-0 justify-end')} onRunInParallel={onRunInParallel} />}
+                        {!isBtw ? <ComposerModeSelector
+                            sessionId={currentSessionId}
+                            draftOpen={newSessionDraftOpen}
+                            mode={mode}
+                            draftMode={draftMode}
+                            draftGoalObjective={draftGoalObjective}
+                            runActive={runActive}
+                            planRoleAvailable={planRoleAvailable}
+                            sessionGoalEnabled={sessionGoalEnabled}
+                            directory={directory}
+                            onDraftModeChange={onDraftModeChange}
+                        /> : null}
                         {!isBtw ? <MemoComposerDictation
                             radius={chatInputRadius}
                             isMobile={isMobile}

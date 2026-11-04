@@ -35,7 +35,7 @@ const writeFailure = (error) => error instanceof MetadataCorruptError || error i
 const OPENCHAMBER_KEYS = new Set([
   'goal', 'assist', 'knowledge_context_delivered', 'context_obligatory_last_compaction_message_id',
   'project_context_pins', 'context_obligatory_messages', 'linked_issues', 'work', 'reviewOffer',
-  'btwSessionID', 'reviewSessionID', 'kind', 'originalSessionID', 'btwBoundaryMessageID', 'multirun',
+  'reviewSessionID', 'kind', 'originalSessionID', 'multirun',
 ]);
 
 /** Sole durable authority for operational metadata; never reads an execution endpoint. */
@@ -71,6 +71,14 @@ export const createSessionMetadataStore = ({ dataDir, fsPromises = fs.promises, 
       for (const [id, metadata] of entries) insert.run(id, JSON.stringify(metadata));
     },
   });
+  // OMP owns session titles. A title left by the old Host-owned field is not
+  // exposed through the canonical metadata contract; it is dropped on read so
+  // existing payloads keep their other operational fields.
+  const withoutLegacyTitle = (metadata) => {
+    if (!Object.hasOwn(metadata, 'title')) return metadata;
+    const { title: _title, ...rest } = metadata;
+    return rest;
+  };
   const readRow = (id) => {
     try {
       const row = db.prepare('SELECT revision, payload FROM session_metadata WHERE session_id = ?').get(id);
@@ -78,7 +86,7 @@ export const createSessionMetadataStore = ({ dataDir, fsPromises = fs.promises, 
       const metadata = MetadataSchema.safeParse(readJsonObject(row.payload, 'Session metadata'));
       if (!metadata.success) throw new MetadataCorruptError('Session operational metadata has an invalid shape');
       if (!RevisionSchema.safeParse(row.revision).success) throw new MetadataCorruptError('Session metadata revision is invalid');
-      return { metadata: metadata.data, revision: String(row.revision) };
+      return { metadata: withoutLegacyTitle(metadata.data), revision: String(row.revision) };
     } catch (error) { throw readFailure(error); }
   };
   const resolveCurrent = async (id) => {
@@ -161,10 +169,10 @@ export const createSessionMetadataStore = ({ dataDir, fsPromises = fs.promises, 
       const session = parsed.data;
       const id = session.id;
       const metadata = {};
-      for (const key of ['title', 'directory', 'projectID']) if (session[key] !== undefined) metadata[key] = session[key];
+      for (const key of ['directory', 'projectID']) if (session[key] !== undefined) metadata[key] = session[key];
       const operational = session.metadata?.openchamber;
       if (operational) metadata.openchamber = Object.fromEntries(Object.entries(operational).filter(([key]) => OPENCHAMBER_KEYS.has(key)));
-      for (const key of ['title', 'directory', 'projectID', 'folder', 'isPinned', 'color', 'icon', 'notes']) {
+      for (const key of ['directory', 'projectID', 'folder', 'isPinned', 'color', 'icon', 'notes']) {
         if (session.metadata?.[key] !== undefined) metadata[key] = session.metadata[key];
       }
       entries.push([id, metadata]);

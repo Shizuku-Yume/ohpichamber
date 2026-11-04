@@ -5,8 +5,8 @@ import { selectRunningSubagentRuns, withRunningSubagentRuns } from './runningSub
 const PARENT = 'ses_parent';
 const session = (sessionId: string, createdAt: number, parentSessionId: string | undefined = PARENT): Session => ({
     sessionId, parentSessionId, rootSessionId: parentSessionId ?? sessionId, projectId: 'proj', workspaceId: 'workspace',
-    displayPath: sessionId, createdAt, updatedAt: createdAt, epoch: '0', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
-    archivedAt: undefined, metadata: { title: `run ${sessionId}` }, metadataRevision: '1', archiveRevision: '0',
+    displayPath: sessionId, createdAt, updatedAt: createdAt, epoch: '0', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
+    archivedAt: undefined, title: `run ${sessionId}`, metadata: {}, metadataRevision: '1', archiveRevision: '0',
 });
 const state = (sessions: Session[], busy: string[], invalidated: string[] = []): Pick<State, 'session' | 'session_status' | 'sessionStatusInvalidated'> => ({
     session: sessions,

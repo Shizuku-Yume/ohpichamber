@@ -1,3 +1,4 @@
+import { readSessionMode } from './mode.ts';
 import { createHash, randomUUID } from 'node:crypto';
 import { dirname, isAbsolute } from 'node:path';
 import { z } from 'zod';
@@ -5,7 +6,7 @@ import type { AgentSessionEvent } from '@oh-my-pi/pi-coding-agent/session/agent-
 import type { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import type { SessionEntry } from '@oh-my-pi/pi-coding-agent/session/session-entries';
 import { CounterSchema, EntityIdSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, PromptAttachmentSchema, SessionMentionSchema, TokenUsageSchema } from '@openchamber/agent-contract';
-import type { HistoryPage, HistoryPageRequest, JsonObject, JsonValue, Message, Part, PromptAttachment, PromptContext, Run, SessionMention, TokenUsage, Turn } from '@openchamber/agent-contract';
+import type { HistoryPage, HistoryPageRequest, JsonObject, JsonValue, Message, Part, PromptAttachment, PromptContext, Run, RunOrigin, SessionMention, TokenUsage, Turn } from '@openchamber/agent-contract';
 import type { ProjectionEvent, ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
 
@@ -20,6 +21,7 @@ function sessionMentions(context: readonly PromptContext[]): SessionMention[] {
 }
 const REF_TYPE = 'ohpichamber.canonical.v1';
 const RUN_TYPE = 'ohpichamber.run.v1';
+const WORKER_RUN_TYPE = 'ohpichamber.worker-run.v1';
 const TURN_TYPE = 'ohpichamber.turn.v1';
 const ReferenceSchema = z.strictObject({
   nativeEntryId: EntityIdSchema, messageId: EntityIdSchema, turnId: EntityIdSchema,
@@ -106,8 +108,9 @@ export function selectedBranchRevert(branch: readonly SessionEntry[]): BranchSel
   }
   return null;
 }
+const WorkerRunSchema = z.strictObject({ runId: EntityIdSchema, origin: z.enum(['plan', 'goal']), createdAt: z.number().finite().nonnegative(), turnId: EntityIdSchema, userMessageId: EntityIdSchema });
 const TerminalSchema = z.strictObject({
-  runId: EntityIdSchema, status: z.enum(['completed', 'failed', 'cancelled']),
+  runId: EntityIdSchema, status: z.enum(['completed', 'failed', 'cancelled']), origin: z.enum(['host', 'plan', 'goal']).optional(),
   finishedAt: z.number().finite().nonnegative(), error: z.string().optional(),
 });
 const TurnTerminalSchema = TerminalSchema.extend({ turnId: EntityIdSchema, startedAt: z.number().finite().nonnegative() });
@@ -147,7 +150,6 @@ function metadata(message: VisibleMessage): Pick<LiveMessage, 'providerId' | 'mo
   if (message.role !== 'assistant') return {};
   return { providerId: message.provider, modelId: message.model, usage: message.usage ? canonicalUsage(message.usage) : undefined };
 }
-
 function visible(message: NativeMessage): message is VisibleMessage {
   return message.role === 'assistant' || message.role === 'toolResult' || (message.role === 'user' && message.synthetic !== true);
 }
@@ -326,16 +328,26 @@ export class WorkerProjection {
     if (this.run?.runId === runId) this.cancelRequestedRunId = runId;
   }
 
-  beginRun(runId: string, timestamp: number, attachments: PromptAttachment[] = [], context: readonly PromptContext[] = []): ProjectionInput[] {
+  beginRun(runId: string, timestamp: number, attachments: PromptAttachment[] = [], contextOrOrigin: readonly PromptContext[] | RunOrigin = [], explicitOrigin?: RunOrigin): ProjectionInput[] {
     if (this.run) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
     this.cancelRequestedRunId = undefined;
-    this.run = { runId, sessionId: this.sessionId, status: 'running', createdAt: timestamp };
+    const context = Array.isArray(contextOrOrigin) ? contextOrOrigin : [];
+    const origin: RunOrigin = explicitOrigin ?? (typeof contextOrOrigin === 'string' ? contextOrOrigin : 'host');
+    this.run = { runId, sessionId: this.sessionId, status: 'running', origin, createdAt: timestamp };
     this.turn = undefined;
     this.message = undefined;
     this.stopReason = undefined;
     this.attachments = attachments;
     this.sessionMentions = sessionMentions(context);
-    return [{ timestamp, event: { type: 'run.started', runId, createdAt: timestamp } }];
+    const result: ProjectionInput[] = [{ timestamp, event: { type: 'run.started', runId, origin, createdAt: timestamp } }];
+    if (origin !== 'host') {
+      const turnId = randomUUID(), userMessageId = randomUUID();
+      this.turn = { turnId, userMessageId, virtualUser: true, open: true, startedAt: timestamp };
+      this.manager.appendCustomEntry(WORKER_RUN_TYPE, { runId, origin, createdAt: timestamp, turnId, userMessageId });
+      result.push({ timestamp, event: { type: 'turn.started', turnId, runId, userMessageId } },
+        { timestamp, event: { type: 'message.created', messageId: userMessageId, turnId, role: 'user' } });
+    }
+    return result;
   }
 
   consume(event: AgentSessionEvent): ProjectionInput[] {
@@ -516,7 +528,7 @@ export class WorkerProjection {
     run.status = settled;
     run.finishedAt = timestamp;
     if (error !== undefined) run.error = error;
-    this.manager.appendCustomEntry(RUN_TYPE, { runId: run.runId, status: settled, finishedAt: timestamp, error });
+    this.manager.appendCustomEntry(RUN_TYPE, { runId: run.runId, status: settled, origin: run.origin, finishedAt: timestamp, error });
     this.run = null;
     return result;
   }
@@ -567,6 +579,7 @@ export class WorkerProjection {
   }
 
   private readHistory(): ProjectionSeed {
+    const mode = readSessionMode(this.manager);
     const entries = this.manager.getBranch();
     const references = new Map<string, Reference>();
     const terminals = new Map<string, z.infer<typeof TerminalSchema>>();
@@ -578,6 +591,7 @@ export class WorkerProjection {
     let version = 0n;
     let updatedAt = 0;
     const virtualTurns = new Set<string>();
+    const workerRuns = new Map<string, z.infer<typeof WorkerRunSchema>>();
     for (const entry of this.manager.getEntries()) {
       const timestamp = Date.parse(entry.timestamp);
       if (Number.isFinite(timestamp)) updatedAt = Math.max(updatedAt, timestamp);
@@ -591,9 +605,18 @@ export class WorkerProjection {
       } else if (entry.customType === RUN_TYPE) {
         const terminal = TerminalSchema.parse(entry.data);
         terminals.set(terminal.runId, terminal);
+      } else if (entry.customType === WORKER_RUN_TYPE) {
+        const workerRun = WorkerRunSchema.parse(entry.data);
+        workerRuns.set(workerRun.runId, workerRun);
       } else if (entry.customType === TURN_TYPE) {
         const terminal = TurnTerminalSchema.parse(entry.data);
         turnTerminals.set(terminal.turnId, terminal);
+      }
+    }
+    for (const workerRun of workerRuns.values()) {
+      if (workerRun.runId !== this.run?.runId && !terminals.has(workerRun.runId)) {
+        terminals.set(workerRun.runId, { runId: workerRun.runId, status: 'failed', origin: workerRun.origin,
+          finishedAt: workerRun.createdAt, error: 'Agent execution was interrupted' });
       }
     }
     const turns: Turn[] = [];
@@ -616,7 +639,6 @@ export class WorkerProjection {
         const userMessageId = reference?.userMessageId ?? messageId;
         const runId = reference?.runId ?? opaqueNativeId('run', this.sessionId, entry.id);
         const terminal = turnTerminals.get(turnId);
-        // Bound messages identify the run; an unbound message belongs to the open turn only after the last binding point.
         const live = activeRunId !== undefined && (reference?.runId === activeRunId
           || (this.turn?.open === true && entryIndex >= this.entryOffset));
         if (live) liveTurnIds.add(turnId);
@@ -662,15 +684,30 @@ export class WorkerProjection {
     const header = this.manager.getHeader();
     const createdAt = header ? Date.parse(header.timestamp) : Date.now();
     const selection = selectedBranchRevert(entries);
+    let nativeSelection: ProjectionSeed['selection'] = { model: null, thinkingLevel: null };
+    for (const entry of entries) {
+      if (entry.type === 'model_change') {
+        const slash = entry.model.indexOf('/');
+        if (slash > 0 && slash < entry.model.length - 1) {
+          nativeSelection = { ...nativeSelection,
+            model: { providerId: entry.model.slice(0, slash), modelId: entry.model.slice(slash + 1) } };
+        }
+      } else if (entry.type === 'thinking_level_change') {
+        nativeSelection = { ...nativeSelection, thinkingLevel: entry.configured ?? entry.thinkingLevel ?? null };
+      }
+    }
     for (const message of messages) {
       for (const part of message.parts) this.publicPart(part);
       if (message.providerId !== undefined) message.providerId = this.publicText(message.providerId);
       if (message.modelId !== undefined) message.modelId = this.publicText(message.modelId);
     }
     for (const turn of turns) if (turn.error !== undefined) turn.error = this.publicText(turn.error);
-    return { createdAt, updatedAt: Math.max(createdAt, updatedAt, messages.at(-1)?.createdAt ?? createdAt),
+    const title = this.manager.getSessionName()?.trim();
+    const seed: ProjectionSeed = { createdAt, updatedAt: Math.max(createdAt, updatedAt, messages.at(-1)?.createdAt ?? createdAt), mode, selection: nativeSelection,
       branch: { branchId: `branch:${this.sessionId}`, branchVersion: (version + BigInt(virtualTurns.size)).toString(), leafMessageId,
         ...(selection?.revertedMessageId ? { revert: { messageId: selection.revertedMessageId } } : undefined) }, turns, messages,
     };
+    if (title) seed.title = title;
+    return seed;
   }
 }

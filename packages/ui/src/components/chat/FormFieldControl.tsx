@@ -5,6 +5,7 @@ import { Icon } from '@/components/icon/Icon';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import { FORM_CUSTOM_TEXTAREA_MIN_HEIGHT, getFormCustomTextareaHeight } from './formTextareaSizing';
+import { FormMarkdown } from './FormMarkdown';
 import {
     type AskAnswerState,
     type AskQuestion,
@@ -179,6 +180,11 @@ export function FormFieldControl({
                                 {option.description ? (
                                     <div className="typography-micro break-words pl-[22px] text-muted-foreground">
                                         {option.description}
+                                    </div>
+                                ) : null}
+                                {option.preview ? (
+                                    <div className="pl-[22px] pt-0.5">
+                                        <FormMarkdown content={option.preview} size="micro" className="text-muted-foreground" />
                                     </div>
                                 ) : null}
                             </div>

@@ -1,6 +1,6 @@
 export const scope = { projectId: 'project', workspaceId: 'workspace', cwd: '/private/workspace', rootSessionId: 'session', agentDirectoryId: 'agent', agentDirectory: '/private/agent' };
 export const runtimeSession = (overrides = {}) => ({ sessionId: 'session', projectId: 'project', workspaceId: 'workspace', displayPath: '.',
-  rootSessionId: 'session', createdAt: 1, updatedAt: 2, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, ...overrides });
+  rootSessionId: 'session', createdAt: 1, updatedAt: 2, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' }, ...overrides });
 export const turn = (overrides = {}) => ({ turnId: 'turn', sessionId: 'session', runId: 'run', status: 'completed', userMessageId: 'user',
   assistantMessageIds: ['assistant'], startedAt: 1, finishedAt: 2, ...overrides });
 export const message = (overrides = {}) => ({ messageId: 'assistant', sessionId: 'session', turnId: 'turn', role: 'assistant', createdAt: 2,

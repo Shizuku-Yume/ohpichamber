@@ -13,8 +13,9 @@ const snapshot = (overrides: Partial<SessionSnapshot> = {}): SessionSnapshot => 
   session: {
     sessionId: "ses_1", projectId: "project-1", workspaceId: "workspace-1", displayPath: ".", rootSessionId: "ses_1",
     createdAt: 1, updatedAt: 2, epoch: "epoch-1", headSequence: "0", runtimeStatus: "running", activeRunId: "run_1",
+    mode: { kind: "main" },
   },
-  cursor: "epoch-1:0", activeRun: { runId: "run_1", sessionId: "ses_1", status: "running", createdAt: 1 },
+  cursor: "epoch-1:0", activeRun: { runId: "run_1", sessionId: "ses_1", status: "running", origin: "host", createdAt: 1 },
   branch: { branchId: "branch-1", branchVersion: "0", leafMessageId: "msg_a" },
   window: { firstTurnId: "turn_1", lastTurnId: "turn_1", firstMessageId: "msg_u", lastMessageId: "msg_a", hasEarlier: false },
   turns: [runningTurn], messages: [user, assistant], approvals: [], questions: [],
@@ -44,7 +45,7 @@ describe("canonical interrupted-turn recovery", () => {
   test("a completion for an older run cannot stop the current run", () => {
     const current = snapshot({
       session: { ...snapshot().session, activeRunId: "run_2" },
-      activeRun: { runId: "run_2", sessionId: "ses_1", status: "running", createdAt: 2 },
+      activeRun: { runId: "run_2", sessionId: "ses_1", status: "running", origin: "host", createdAt: 2 },
     })
     const base = installSessionSnapshot(state(), current)
     const result = applyDirectoryEvent(base, event("1", "run.completed", { runId: "run_1", finishedAt: 3 }))

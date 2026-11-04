@@ -27,6 +27,7 @@ const session = (sessionId: string, options: { parentSessionId?: string; archive
   headSequence: '0',
   runtimeStatus: 'idle',
   activeRunId: null,
+  mode: { kind: 'main' },
   metadata: null,
   metadataRevision: '0',
   archiveRevision: options.archived === undefined ? '0' : '1',
@@ -61,8 +62,8 @@ describe('deriveRecentSessions', () => {
 
 describe('deriveRecentActivitySections', () => {
   test('matches full IDs only, without falling back to titles or changing the matched subtree', () => {
-    const target = { ...session('ses_f88b1a2b3c4d'), metadata: { title: 'Release' } };
-    const other = { ...session('ses_f88b1a2b3c4e'), metadata: { title: target.sessionId } };
+    const target = { ...session('ses_f88b1a2b3c4d'), title: 'Release', metadata: {} };
+    const other = { ...session('ses_f88b1a2b3c4e'), title: target.sessionId, metadata: {} };
     const node = { session: target, worktree: null, children: [{ session: other, worktree: null, children: [] }] };
     for (const query of [target.sessionId, ` ${target.sessionId.toUpperCase()} `, 'ses_f88b', 'ses_f88b1a2b3c4f']) {
       const sections = deriveRecentActivitySections({
@@ -81,12 +82,12 @@ describe('deriveRecentActivitySections', () => {
   test('filters recent roots by search text and falls back to topology metadata', () => {
     const matching = {
       ...session('matching', { updated: RECENT }),
-      metadata: { title: 'Deploy release' },
+      title: 'Deploy release', metadata: {},
       displayPath: '/workspace/app/worktrees/release',
     };
     const excluded = {
       ...session('excluded', { updated: RECENT }),
-      metadata: { title: 'Investigate failure' },
+      title: 'Investigate failure', metadata: {},
       displayPath: '/workspace/app',
     };
 
@@ -206,9 +207,9 @@ describe('deriveRecentActivitySections', () => {
 
 describe('sessionTreeMatchesSidebarQuery', () => {
   const tree = (): SessionNode => ({
-    session: { ...session('ses_parent'), metadata: { title: 'Parent work' } },
+    session: { ...session('ses_parent'), title: 'Parent work', metadata: {} },
     children: [{
-      session: { ...session('ses_child', { parentSessionId: 'ses_parent' }), metadata: { title: 'Fix the header' } },
+      session: { ...session('ses_child', { parentSessionId: 'ses_parent' }), title: 'Fix the header', metadata: {} },
       children: [],
       worktree: null,
     }],

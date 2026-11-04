@@ -16,9 +16,11 @@ const session = (id: string, archived?: number): Session => ({
   headSequence: '0',
   runtimeStatus: 'idle',
   activeRunId: null,
+  mode: { kind: 'main' as const },
   archivedAt: archived,
-  metadata: { title: id },
-  metadataRevision: '1',
+  title: id,
+  metadata: null,
+  metadataRevision: '0',
   archiveRevision: archived === undefined ? '0' : '1',
 });
 

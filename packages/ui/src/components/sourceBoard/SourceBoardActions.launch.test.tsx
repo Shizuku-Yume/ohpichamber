@@ -80,7 +80,7 @@ const actualUIStore = await import('@/stores/useUIStore');
 mock.module('@/stores/useUIStore', () => ({ ...actualUIStore, useUIStore }));
 mock.module('@/sync/session-ui-store', () => ({ useSessionUIStore }));
 mock.module('@/sync/sync-context', () => ({
-  useSession: () => ({ metadata: { title: 'Current session' } }),
+  useSession: () => ({ title: 'Current session', metadata: { title: 'Current session' } }),
   useSessionDirectory: () => '/workspace/app',
 }));
 mock.module('@/components/chat/composer/pendingComposerReferences', () => ({ usePendingComposerReferences: { getState: () => ({ push: (references: unknown[]) => pushedReferences.push(...references) }) } }));

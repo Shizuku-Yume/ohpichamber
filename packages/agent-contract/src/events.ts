@@ -1,12 +1,13 @@
 import { z } from 'zod';
 import { CounterSchema, EntityIdSchema, EpochSchema, JsonObjectSchema, JsonValueSchema, PositiveCounterSchema, TimestampSchema } from './primitives.ts';
 import { SessionMetadataSchema } from './metadata.ts';
-import { RuntimeSessionSchema, SessionRuntimeStatusSchema } from './session.ts';
+import { RunOriginSchema, RuntimeSessionSchema, SessionModeSchema, SessionRuntimeStatusSchema } from './session.ts';
 import { PartSchema, TokenUsageSchema, ToolStatusSchema } from './messages.ts';
 import { ApprovalRequestSchema, QuestionRequestSchema } from './requests.ts';
 import { QueueStateSchema } from './queue.ts';
 import { CatalogUpdateSchema } from './catalogs.ts';
 import { ShellJobSchema } from './shell.ts';
+import { SessionSelectionSchema } from './snapshot.ts';
 
 export const DataEventEnvelopeSchema = z.strictObject({
   sessionId: EntityIdSchema,
@@ -19,6 +20,10 @@ export type DataEventEnvelope = z.infer<typeof DataEventEnvelopeSchema>;
 const sessionUpdatedSchema = DataEventEnvelopeSchema.extend({
   type: z.literal('session.updated'),
   session: RuntimeSessionSchema.optional(),
+  mode: SessionModeSchema.optional(),
+  title: z.string().min(1).optional(),
+  continuationPending: z.boolean().optional(),
+  selection: SessionSelectionSchema.optional(),
   metadata: SessionMetadataSchema.nullable().optional(),
   metadataRevision: CounterSchema.optional(),
   archivedAt: TimestampSchema.nullable().optional(),
@@ -26,7 +31,8 @@ const sessionUpdatedSchema = DataEventEnvelopeSchema.extend({
 }).refine((event) => {
   const metadataPresent = event.metadata !== undefined;
   const archivePresent = event.archivedAt !== undefined;
-  return (event.session !== undefined || metadataPresent || archivePresent)
+  return (event.session !== undefined || event.mode !== undefined || event.title !== undefined
+    || event.continuationPending !== undefined || event.selection !== undefined || metadataPresent || archivePresent)
     && metadataPresent === (event.metadataRevision !== undefined)
     && archivePresent === (event.archiveRevision !== undefined)
     && (!metadataPresent || (event.metadata === null) === (event.metadataRevision === '0'));
@@ -44,7 +50,7 @@ export const CanonicalEventSchema = z.discriminatedUnion('type', [
   sessionUpdatedSchema,
   DataEventEnvelopeSchema.extend({ type: z.literal('session.deleted'), deletedSessionIds: z.array(EntityIdSchema).min(1) }),
   sessionStatusSchema,
-  DataEventEnvelopeSchema.extend({ type: z.literal('run.started'), runId: EntityIdSchema, createdAt: TimestampSchema }),
+  DataEventEnvelopeSchema.extend({ type: z.literal('run.started'), runId: EntityIdSchema, origin: RunOriginSchema.optional(), createdAt: TimestampSchema }),
   DataEventEnvelopeSchema.extend({ type: z.literal('run.completed'), runId: EntityIdSchema, finishedAt: TimestampSchema }),
   DataEventEnvelopeSchema.extend({ type: z.literal('run.failed'), runId: EntityIdSchema, finishedAt: TimestampSchema, error: z.string() }),
   DataEventEnvelopeSchema.extend({ type: z.literal('run.cancelled'), runId: EntityIdSchema, finishedAt: TimestampSchema }),
@@ -74,6 +80,8 @@ export const CanonicalEventSchema = z.discriminatedUnion('type', [
   }),
   DataEventEnvelopeSchema.extend({ type: z.literal('queue.updated'), queue: QueueStateSchema }),
   DataEventEnvelopeSchema.extend({ type: z.literal('catalog.updated'), catalog: CatalogUpdateSchema }),
+  DataEventEnvelopeSchema.extend({ type: z.literal('btw.delta'), recordId: EntityIdSchema, delta: z.string() }),
+  DataEventEnvelopeSchema.extend({ type: z.literal('btw.completed'), recordId: EntityIdSchema, status: z.enum(['completed', 'cancelled', 'failed']), text: z.string(), error: z.string().optional() }),
   DataEventEnvelopeSchema.extend({ type: z.literal('shell.updated'), job: ShellJobSchema }),
   DataEventEnvelopeSchema.extend({ type: z.literal('session.compacted'), compactionId: EntityIdSchema, tokensBefore: z.number().int().nonnegative(), completedAt: TimestampSchema }),
   DataEventEnvelopeSchema.extend({ type: z.literal('message.updated'), messageId: EntityIdSchema, providerId: z.string().min(1).optional(), modelId: z.string().min(1).optional(), usage: TokenUsageSchema.optional() }),

@@ -10,6 +10,7 @@ import { filterAvailableModelsByEnabledPatterns } from '@oh-my-pi/pi-coding-agen
 import { Settings, resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { discoverAuthStorage } from '@oh-my-pi/pi-coding-agent/sdk';
 import { cfgExtendedContext } from '@oh-my-pi/pi-coding-agent/session/context-settings';
+import { cfgDefaultThinkingLevel } from '@oh-my-pi/pi-coding-agent/session/settings';
 import { NativeModels, credentialReference, publicModel, type NativeCatalogModel } from './catalog-models.ts';
 import { openNativeRuntime } from './native-runtime.ts';
 
@@ -104,6 +105,18 @@ test('a long-lived native settings reader cannot select a deleted bundled provid
   } finally { await fixture.close(); }
 });
 
+test('model catalog reports whether the plan role resolves to an executable model', async () => {
+  const fixture = await openCatalogFixture();
+  try {
+    await fixture.writer.models.configureProvider({ expectedRevision: '0', configuration }, '1');
+    await fixture.writer.models.configureModel({ expectedRevision: '1', model: configuredModel }, '2');
+    expect((await fixture.reader.models.readModels('workspace_1', '2')).planRoleAvailable).toBe(false);
+    fixture.reader.settings.setModelRole('plan', `${configuredModel.provider}/${configuredModel.modelId}`);
+    await fixture.reader.settings.flush();
+    expect((await fixture.reader.models.readModels('workspace_1', '3')).planRoleAvailable).toBe(true);
+  } finally { await fixture.close(); }
+});
+
 test('provider protocol changes reach the actual native model selected by a long-lived reader', async () => {
   const fixture = await openCatalogFixture();
   const selection = { providerId: configuredModel.provider, modelId: configuredModel.modelId };
@@ -115,6 +128,21 @@ test('provider protocol changes reach the actual native model selected by a long
     expect((await fixture.reader.models.selection(selection)).nativeModel.api).toBe('openai-responses');
     await fixture.writer.models.configureModel({ expectedRevision: '3', model: { ...configuredModel, name: 'Updated' } }, '4');
     expect((await fixture.reader.models.selection(selection)).nativeModel.api).toBe('openai-responses');
+  } finally { await fixture.close(); }
+});
+
+test('native model selection accepts the explicit off reasoning level', async () => {
+  const fixture = await openCatalogFixture();
+  const reasoningModel = { ...configuredModel, reasoningEffortSupported: true,
+    reasoningOptions: [{ reasoningEffort: 'high', label: 'High', budgetTokens: null }] };
+  try {
+    await fixture.writer.models.configureProvider({ expectedRevision: '0', configuration }, '1');
+    await fixture.writer.models.configureModel({ expectedRevision: '1', model: reasoningModel }, '2');
+    const selected = await fixture.reader.models.selection(
+      { providerId: reasoningModel.provider, modelId: reasoningModel.modelId },
+      { variant: null, reasoningEffort: 'off' },
+    );
+    expect(selected.reasoningEffort).toBeNull();
   } finally { await fixture.close(); }
 });
 
@@ -466,3 +494,19 @@ test('explicit empty headers replace old native provider headers and remain empt
     expect(persisted.openchamber.providerHeaders[configuration.providerId]).toEqual({});
   } finally { await fixture.close(); }
 });
+
+test('model catalog carries the model and thinking level OMP resolves for a new session', async () => {
+  const fixture = await openCatalogFixture();
+  try {
+    await fixture.writer.models.configureProvider({ expectedRevision: '0', configuration }, '1');
+    const reasoning = { ...configuredModel, reasoningEffortSupported: true,
+      reasoningOptions: ['low', 'medium', 'high'].map(reasoningEffort => ({ reasoningEffort, label: reasoningEffort, budgetTokens: null })) };
+    await fixture.writer.models.configureModel({ expectedRevision: '1', model: reasoning }, '2');
+    fixture.reader.settings.setModelRole('default', `${configuredModel.provider}/${configuredModel.modelId}`);
+    cfgDefaultThinkingLevel.override(fixture.reader.settings, 'medium');
+    const catalog = await fixture.reader.models.readModels('workspace_1', '1');
+    expect(catalog.defaults).toEqual({ model: { providerId: configuredModel.provider, modelId: configuredModel.modelId }, thinkingLevel: 'medium' });
+    fixture.reader.settings.setModelRole('default', `${configuredModel.provider}/${configuredModel.modelId}:high`);
+    expect((await fixture.reader.models.readModels('workspace_1', '1')).defaults.thinkingLevel).toBe('high');
+  } finally { await fixture.close(); }
+}, 30000);

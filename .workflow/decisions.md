@@ -270,6 +270,216 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Revisit when:** goals end too early in practice because the agent declares completion without the work being done, or OMP exposes a hook for an external completion check.
 - **Effort:** omp-native-chat
 
+## 2026-10-26 - Approval summaries are safe one-liners
+
+- **Decided:** The public approval record carries the exact tool name and a redacted, single-line, 200-character input summary (bash command or file path). Raw input and exact policy targets stay service-private; card details, pattern labels and tooltips are built only from the safe projection.
+- **Instead of:** Forwarding the captured input object/details to the browser, or keeping the generic "Native tool operation requires approval" text.
+- **Because:** The card must name the tool and command to be useful, but the same projection reaches browser events and notifications. Environment assignment values, authorization schemes, URL credentials, token arguments, API-key headers, signed-URL parameters and known credential/key shapes must be masked before that boundary.
+- **Mine:** yes
+- **Revisit when:** a tool needs a different human summary field, or the projection gains structured preview data that cannot be bounded by one line.
+- **Effort:** omp-native-parity
+
+## 2026-10-26 - Chat reference bindings require a Git repository
+
+- **Decided:** `useRepositoryHosts` ensures the owning Git store has read the directory's status, then reads a source-control binding only when that status reports a repository. Non-repository chat directories request no binding.
+- **Instead of:** Returning a synthetic empty binding from `GET /api/source-control/binding`, or letting the existing 422 stand and treating it as an empty result.
+- **Because:** `SourceControlBindingRead` requires a real repository context; a fake repository would leak into identity, mutation and worktree consumers that assume a repository. The binding route remains honest about its precondition, and a deep-linked or Source-Board directory still gets a status read before its real repository binding is skipped or loaded.
+- **Mine:** yes
+- **Revisit when:** a non-repository surface needs a first-class "no repository" binding read (for example a dedicated discriminated response).
+- **Effort:** omp-native-parity
+
+## 2026-10-26 - Refresh errors belong to the group that failed
+
+- **Decided:** A sidebar group shows "Could not refresh sessions" when its own directory bootstrap failed, or when the global session-list request itself failed (a total failure, with global retry). Partial per-scope `result.errors` do not mark untouched groups.
+- **Instead of:** Falling back to `globalStatus === 'error'` for every incomplete group, or suppressing all global failures for directory-backed groups.
+- **Because:** A partial global result can fail for one directory while other groups have not refreshed at all, while a total list failure is real for every unopened group and must keep its retry visible.
+- **Mine:** yes
+- **Revisit when:** the global store publishes per-directory failure attribution, which would let each group show its own global-scope error directly.
+- **Effort:** omp-native-parity
+
+## 2026-10-27 - Always allow uses OMP's native ACP cache with exact Host grants
+
+- **Decided:** "Always allow" resolves OMP's `allow_always` handle through the native `ClientBridge.requestPermission` seam for bash. OMP's per-session ACP decision cache owns the key (`bash`); the Agent Service keeps no policy mirror and writes nothing to Host SQLite or OMP config. A worker-local routing set only identifies a cached call so it can request the silent exact Host grant; it never authorizes execution itself. A later cached bash call bypasses the native card but still reaches the custom Bash tool, which synthesizes an exact Host execution grant bound to that tool call and input before authorization; that grant is consumed once and produces no public card. The bridge resets with the native logical session, stops with the worker, surfaces non-bash ACP-gated tools as one-shot canonical cards (never a session allowance), passes native bash pattern allow/deny to their existing Host policy, and provider-safety or Host-only prompts never receive a native allowance. Schema version 2 revokes all legacy persisted session allowances.
+- **Instead of:** The interim Agent Service session-rule Set, a wildcard Host policy row, or a second approval prompt after the native cache already authorized a call.
+- **Because:** Title-text scraping and conflating the two-option `ui.select` prompt with the four-option native gate were unsound: cached ACP calls bypass `requestPermission`, so a Host mirror could authorize the wrong tool or keep allowing after the native session reset. The native cache is the exact lifecycle owner; re-entering the custom Bash tool is the one point where every execution can still be bound to an exact Host grant.
+- **Mine:** yes
+- **Revisit when:** the SDK exposes per-tool ACP bridge scoping or a session-reset callback that lets the Host observe cache clears directly.
+- **Effort:** omp-native-parity
+## 2026-10-27 - Publish OMP's resolved defaults on the model catalog
+
+- **Decided:** Add `defaults: { model, thinkingLevel }` to the canonical `ModelCatalog`; the worker resolves them with the pinned `resolveAllowedModels`/`resolveModelRoleValue`/`pickDefaultAvailableModel` and `cfgDefaultThinkingLevel`, and the UI treats them as the untouched-draft value. `auto` is exposed but never sent as an effort.
+- **Instead of:** Keeping app-owned default model/thinking settings (desktop `defaultModel`/`defaultVariant`) and teaching the UI OMP's precedence itself.
+- **Because:** The catalog already crosses the worker boundary with the exact native workspace state; a second resolver in the UI would drift on credentials, enabled models and role aliases, and app defaults would keep overriding the TUI on the same session.
+- **Mine:** yes
+- **Revisit when:** OMP exposes a session-scoped default or the catalog read stops reflecting the live credential/role resolution.
+- **Effort:** omp-native-parity
+
+## 2026-10-27 - Keep unset effort distinct from explicit off and persist the sent level
+
+- **Decided:** `undefined`/`null` effort means "defer to OMP"; `off` is a real choice. The worker normalizes optional controls to `null` before its guard, the composer shows session effort → explicit draft effort → OMP catalog default → `off`, and the sent effort is stored per session+agent+model so a reload restores it. Route variants stay a separate picker.
+- **Instead of:** Defaulting the composer to `off` when no local choice exists, or folding `off` into the unset state.
+- **Because:** OMP resolves a missing effort to its configured level; treating that as `off` both hides the real level and forces a different request. Explicit `off` must still reach `setThinkingLevel('off')`.
+- **Mine:** yes
+- **Revisit when:** the canonical session record starts carrying the stored thinking level, which can replace the local per-session copy.
+- **Effort:** omp-native-parity
+
+## 2026-10-27 - Retire only the global default model/thinking controls, keep project and small-model choices
+
+- **Decided:** Remove the global `defaultModel`/`defaultVariant` desktop settings and the Defaults page model/thinking rows; keep the project default model/route and the small-model/walkthrough preferences that share the page.
+- **Instead of:** Deleting the whole Defaults section and every per-project or auxiliary model preference.
+- **Because:** The spec retires app-level defaults that override OMP for ordinary new chats; project identity and small-model selection are separate explicit choices, and deleting their only UI would drop unrelated capability. The main composer now follows OMP when no explicit choice exists.
+- **Mine:** yes
+- **Revisit when:** OMP role settings replace the small-model/walkthrough overrides, or the maintainer wants the remaining Defaults controls moved or removed.
+- **Effort:** omp-native-parity
+
+## 2026-10-27 - Keep the worker's OMP resolution unchanged; prove it with fixtures
+
+- **Decided:** Do not change the worker's `selectOptions` guard. The observed base behavior already defers to OMP when all client effort/variant values are `null`; the real defect was on the catalog/UI side. Keep fixture tests for no-effort → `high` and explicit `off`, and record the spec's unreproduced "worker forces off" claim in task 04 Progress instead of inventing a production change.
+- **Instead of:** Keeping a defensive normalization that made no observable difference, or editing the spec Check to hide the mismatch.
+- **Because:** A real native fixture on `cbe1f912b3` already recorded `reasoning_effort: high` with no client effort. Changing the guard would be scope without evidence; the strict contract already forbids `undefined` in those fields.
+- **Mine:** yes
+- **Revisit when:** a real caller can pass `undefined` effort/variant outside the parsed contract, or a client-visible case forces `off` again.
+- **Effort:** omp-native-parity
+
+## 2026-10-27 - Read the persisted session level from the transcript snapshot
+
+- **Decided:** Add `selection: { model, thinkingLevel }` to `SessionSnapshot`/`ProjectionSeed`, derive it from the JSONL's last `model_change` and `thinking_level_change`, and publish `session.updated.selection` when OMP reports `thinking_level_changed`. The composer reads session choice → this native level → draft choice → OMP default.
+- **Instead of:** Relying only on the browser selection store for reload, or exposing the level on every `Session` record.
+- **Because:** A page reload can hit a live worker whose in-memory level is newer than the seed; the event keeps the journal current, and the snapshot is the canonical place the UI already reads. Keeping it out of `Session` avoids changing every session list/row consumer.
+- **Mine:** yes
+- **Revisit when:** the canonical `Session` record starts carrying the native selection, making a separate snapshot field redundant.
+- **Effort:** omp-native-parity
+## 2026-10-27 - Host tools are essential callable tools, not xd:// devices
+
+- **Decided:** Register `openchamber`, `web`, `memory` and `notify` with `loadMode: 'essential'`, so OMP places them in the normal callable tool schema with only their own descriptions. Their Host actions keep the existing capability owner and approval path.
+- **Instead of:** Leaving them as default `discoverable` extension tools, which OMP mounts as `xd://` devices whose documentation the Host policy refuses, or adding app-authored prompt guidance explaining how to call them.
+- **Because:** The effort's parity rule is that the model receives what plain OMP receives plus pins, attachments and the tools' own descriptions. A discoverable extension tool reaches the model only through an `xd://` device listing, which is additional prompt text and an unreadable Host capability; an essential tool is the ordinary OMP shape for a callable extension.
+- **Mine:** yes
+- **Revisit when:** OMP changes extension-tool presentation so essential tools gain prompt text of their own, or a Host tool needs to be deferred until explicitly enabled.
+- **Effort:** omp-native-parity
+
+## 2026-10-27 - Host policy passes only allowlisted OMP internal URL reads
+
+- **Decided:** A native `read` descriptor may carry `internalReadUrls` only for the exact OMP schemes `agent`, `history`, `artifact`, `local`, `proc`, `skill`, `xd`, `mcp`, `omp`, `issue` and `pr`. The descriptor resolves them with OMP's own `InternalUrlRouter.normalize`/`canHandle` (so registered aliases and selectors keep OMP's meaning) and stores the normalized URL. Host policy admits them only for `read`, checks every local target in a mixed list as before, and keeps `write`, `edit`, `grep` and `glob` on the filesystem-only path. Unknown schemes, `file://`, `https://` and NUL bytes stay refused. Native `wait` is admitted because it only observes this session's async jobs.
+- **Instead of:** Removing the `://` refusal wholesale, resolving internal URLs in the Host, or allowing the same pass-through for every native tool.
+- **Because:** OMP owns the grammar and containment of its internal resources, while the Host must not turn an opaque URL into a machine-capability grant. The allowlist is exactly the schemes the TUI resolves; arbitrary MCP fallback schemes and remote/file URLs are not silently granted, and a mixed delimited read still authorizes each local path.
+- **Mine:** yes
+- **Revisit when:** OMP adds or removes a native internal scheme, or a read-only internal URL starts granting a capability the Host must authorize separately.
+- **Effort:** omp-native-parity
+## 2026-10-27 - Publish plan-role availability in the workspace model catalog
+
+- **Decided:** `ModelCatalog` carries `planRoleAvailable`, resolved by the Agent Service with OMP's `resolveRoleModelFull(settings, 'plan', modelRegistry.getAvailable(), undefined)` — the same resolver the worker's plan enter uses. The composer reads it from the per-directory catalog cache to disable Plan and show the reason before a session exists.
+- **Instead of:** Letting the user pick Plan and surfacing the worker's 422 `MODEL_UNAVAILABLE` after the draft session is created, or reading the OMP config from the UI.
+- **Because:** the UI must know availability in a draft, the Agent Service already owns OMP settings and the executable model list, and a second availability rule would drift from `mode.ts`. The new field is required so every catalog producer and consumer states the fact.
+- **Mine:** yes
+- **Revisit when:** OMP exposes a dedicated capability endpoint, or plan availability stops depending on `modelRoles.plan`.
+- **Effort:** omp-native-parity
+
+## 2026-10-27 - Draft mode lives in draft state and applies after session creation
+
+- **Decided:** `NewSessionDraftState.mode` (and a Goal objective) holds the composer's choice. `sendMessage` applies Plan/Vibe with `mode.set` after the session exists and before the prompt; Goal calls the native `goal create` and returns without a prompt, because the controller starts the first turn. If `mode.set` fails, the created session stays in Main, the composer text is restored, and no prompt is sent.
+- **Instead of:** Applying the mode before creation through a hidden draft session, or sending the prompt and switching afterwards.
+- **Because:** the worker mode control needs a real session id and "before the first prompt" is the acceptance condition; for Goal, also sending the typed text would duplicate the first objective turn.
+- **Mine:** yes
+- **Revisit when:** the Agent Service supports creating a session in an initial mode atomically, or a draft mode can fail without closing the draft.
+- **Effort:** omp-native-parity
+
+## 2026-10-27 - Mode picker sits beside ModelControls, not inside it
+
+- **Decided:** the desktop mode picker renders immediately after `<ModelControls>` in the composer's right-side group; mobile renders it after the model button in the same model row. It uses the retired agent picker's DropdownMenu + Input + ScrollableOverlay pattern, with a searchable bottom sheet on mobile.
+- **Instead of:** Editing `ModelControls.renderAgentSelector`'s old insertion point inside that component.
+- **Because:** the visual order is the same rightmost slot, and window C owns the model/effort region of `ModelControls.tsx`; a sibling keeps the two intents mergeable. Mobile keeps the exact vacated `MobileAgentButton` slot.
+- **Mine:** yes
+- **Revisit when:** composer layout composes model and mode into one shared control cluster.
+- **Effort:** omp-native-parity
+## 2026-10-26 - OMP owns session titles
+
+- **Decided:** `RuntimeSession.title` is the only session title, sourced from OMP's JSONL through its listing and title-change event. Rename goes through OMP `setSessionName`; Host metadata no longer has a writable title field, and legacy stored titles are ignored on read.
+- **Instead of:** Keeping `SessionMetadata.title` as the UI-facing canonical title and overlaying or mirroring OMP's title into it.
+- **Because:** two writable title stores disagree after a CLI rename or OMP auto-title, and the spec requires the sidebar and `omp --resume` to show the same title. A projection also leaves `getSessionMetadata`, list composition and patch revisions disagreeing about which title is current.
+- **Effort:** omp-native-parity
+- **Mine:** yes
+- **Revisit when:** a retained surface needs Host-owned titles that OMP cannot express, or an OMP release stops storing the title in the session JSONL.
+
+## 2026-10-26 - Cold title writes use OMP's session manager
+
+- **Decided:** A rename on a cold root opens OMP's `SessionManager` for that JSONL, calls `setSessionName(..., 'user')`, flushes and closes. A live root applies the same call through its worker.
+- **Instead of:** Requiring a worker to be started before any rename, or appending a title record by hand.
+- **Because:** OMP's own API owns the header title slot and title-change entry; starting a worker only to write a title wastes a capacity slot, and a hand-written record would diverge from OMP's format. The live branch prevents two writers to the same file.
+- **Effort:** omp-native-parity
+- **Mine:** yes
+- **Revisit when:** OMP adds a storage API that writes titles without constructing a session manager, or a live/cold race becomes observable.
+
+## 2026-10-26 - Legacy Host titles are dropped, not migrated
+
+- **Decided:** Existing `session_metadata.payload.title` values are stripped from canonical metadata reads and are not copied into OMP. OMP's JSONL titles become authoritative immediately.
+- **Instead of:** A one-time Host-to-OMP title migration during list or startup.
+- **Because:** app-created sessions already carry OMP's generated title in their JSONL, so the common case needs no migration; a list-time migration would mutate during a read and could start an unbounded cold-write pass. Manual old titles are the only loss, and no acceptance criterion requires importing them.
+- **Effort:** omp-native-parity
+- **Mine:** yes
+- **Revisit when:** a maintainer reports a manual title that must survive the cutover; then add an explicit versioned migration rather than a fallback.
+
+## 2026-10-27 - OMP behaviour settings route is a narrow registry view
+
+- **Decided:** `GET`/`PUT /api/agent/v1/workspaces/:workspaceId/settings` exposes only `OMP_SETTING_IDS` from the shared contract. Descriptor metadata comes from the pinned `orderedSettings()`, values are validated by each native `Setting.assertWritable`, and writes use the workspace catalog owner's uint64 revision CAS. The route excludes credentials and `auth.broker.*` (broker URL/token), raw MCP command/env/header definitions, account pools, appearance keys, remote URLs and configurable paths; those stay on their owning provider/MCP/skill surfaces or the OMP TUI. The four candidate pages (classification, routing, magic prompts, snippets) are retained because each still has a live Host/native consumer.
+- **Instead of:** A generic dotted-key settings API, copying OMP's schema into the app, or deleting active feature pages to make the settings list shorter.
+- **Because:** the route writes the same `config.yml` OMP reads, so a second schema or credential/path/egress field would create a second authority or bypass provider-entry policy. Keeping descriptors dynamic follows the pinned package and lets the UI see OMP's own defaults and enum values.
+- **Mine:** yes
+- **Revisit when:** OMP exports a supported settings mutation API with its own revision/lock semantics, or a candidate page loses its last runtime consumer.
+- **Effort:** omp-native-parity
+## 2026-10-27 - Worker titles use OMP's generator on the selected provider
+
+- **Decided:** The worker leaves OMP `autoTitle` off and, after an idle turn on an untitled session, calls OMP `AgentSession.generateTitle` with the `tiny`, `commit` and `smol` roles pinned to the selected session model and model fallback disabled. The worker authorizes `provider.use` through the Host before that call; a refused or unavailable provider leaves the session untitled without failing the user run.
+- **Instead of:** Enabling OMP `autoTitle`, which can run a fork turn or fall back to a role model on another connected provider, resolving credentials directly from the model registry without the Host `provider.use` gate.
+- **Because:** the title request carries the operator's first substantive message and must release credentials only for a Host-authorized provider. Pinning one candidate keeps title work on the selected provider, as the migration architecture requires, and limiting the override to the idle title window leaves user-run fallback behavior untouched.
+- **Effort:** omp-native-parity
+- **Mine:** yes
+- **Revisit when:** OMP exposes a title hook that accepts a Host-authorized model and fallback policy directly, or titles must use a configured small model on a different provider.
+
+## 2026-10-27 - Listed native sessions become references on first mutation
+
+- **Decided:** A read of an OMP-listed session builds a transient cold reference from the list result and never writes storage. The first mutating operation promotes that session into the persisted SessionReference index before its worker starts.
+- **Instead of:** Persisting every CLI/native session during list, or refusing to open a listed session that has no reference.
+- **Because:** list is a read and must not mutate the reference file, while a send needs the session file and Host scope to survive worker startup and restart. Promotion at the mutation boundary keeps reads cold and gives native sessions the same durable ownership as app-created sessions.
+- **Effort:** omp-native-parity
+- **Mine:** yes
+- **Revisit when:** OMP exposes a scoped open-by-session-file API that makes the reference index unnecessary, or a listed session must be mutated without a prior list read.
+
+## 2026-10-27 - Suppress OMP replan title refresh
+
+- **Decided:** Disable `title.refreshOnReplan` (`cfgTitleRefreshOnReplan`) in the worker's in-memory session settings. Automatic titles run only through the worker's authorized selected-model title generator after an idle turn.
+- **Instead of:** Allowing OMP's todo tool replan hook to invoke background `generateTitle()` with default candidate roles, or globally disabling titles via `PI_NO_TITLE`.
+- **Because:** OMP's replan title refresh has no provider-authorization hook and can fall back to unconfigured or unauthorized credentials, violating the enterprise boundary. The worker's own auto-title path authorizes the session's selected model before releasing credentials.
+- **Effort:** omp-native-parity
+- **Mine:** yes
+- **Revisit when:** OMP adds an authorization hook for replan title refreshes or delegates replan title generation to the host.
+
+## 2026-10-27 - Approve-and-compact proceeds when compaction is a no-op
+
+- **Decided:** Plan approval with compact treats compaction as best-effort: if OMP reports nothing to compact or compaction fails while the worker is healthy, the approved plan still starts its execution turn and no `session.compacted` event is emitted.
+- **Instead of:** Failing the worker when `session.compact` throws `ManualCompactionNoOpError` for a small or already-compacted transcript.
+- **Because:** The user approved the plan; compaction only shrinks the transcript. Upstream OMP's own plan approval documents failure as proceeding best-effort, and a short plan session must not lose its execution. OMP does not export the no-op error class, so the worker distinguishes only the unhealthy-worker case.
+- **Mine:** yes
+- **Revisit when:** OMP exports a compaction outcome or no-op error type that lets the worker distinguish cancellation from failure without catching every error.
+- **Effort:** omp-native-parity
+
+## 2026-10-27 - Slash-command agent bindings still reach the send
+
+- **Decided:** `routeMessage` applies `agentId` from a native command/template expansion to the prompt options, even though the root agent picker is retired.
+- **Instead of:** Ignoring the expanded `agentId` and sending only the composer's captured agent value.
+- **Because:** A command's agent binding is resource metadata, not the retired root agent picker; the canonical file-resource contract carries it and the existing session tests assert it. Dropping it silently changed command behavior.
+- **Mine:** yes
+- **Revisit when:** OMP command/template expansion stops exposing agent bindings, or prompt submission rejects non-null `agentId` by contract.
+- **Effort:** omp-native-parity
+
+## 2026-10-29 - Merge the refreshed main into parity instead of landing parity first
+
+- **Decided:** The upstream refresh lands on `main` first. Then `main` is merged into `omp-native-parity/integration`, the conflicts are resolved with the refreshed version of every overlapping file as the base and the parity intent re-applied on top, both efforts are gated together, and parity lands. The merge keeps the new upstream behavior; parity's work predates it and cannot be taken whole-file where the refresh also changed a file.
+- **Instead of:** Landing parity on `main` first and redoing the remaining refresh tasks against the mode-aware composer, or rebasing `omp-native-parity/integration` onto the refreshed `main`.
+- **Because:** The refresh is the newer baseline by maintainer decision (`decisions.md: 2026-10-10 - Latest upstream first then restore the fork`), and the two efforts share 148 files changed since `dee0c88ebd` (26 of them i18n catalogs, plus seven parity deletions the refresh modifies). Landing parity first would put the old upstream baseline on `main` and force the unfinished refresh tasks (review board, overview/diagnostics, RTL, composer and permissions) to be rebuilt on a composer parity has already rewritten, against the direction the maintainer set. A rebase would rewrite a branch the refresh and parity task branches build on, which `merge-strategy.md` forbids; a merge keeps both histories, and resolving toward the refreshed file is how the new upstream updates survive.
+- **Mine:** no
+- **Revisit when:** The refresh has not landed on `main` by 2026-10-31, `upstream-refresh/31` or `32` (the one-view sidebar redesign) lands before this merge, or parity must ship a fix before the refresh gate passes.
+- **Effort:** omp-native-parity
 ## 2026-10-27 - Adopt the upstream-first area refresh now
 
 - **Decided:** Answer post-M3 hardening open question 7 by adopting the upstream-first area refresh and running it now to upstream `0056bf6a9` (v2.5.2+1, 2026-10-26, 813 commits since the adopted baseline), including features rather than only security and bugfixes. For each shared area, take current upstream source as the baseline, then restore the fork's OMP customizations path by path.

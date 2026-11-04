@@ -4,7 +4,7 @@ import { isTerminalEventTarget } from '@/lib/terminalFocus';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { activateAdjacentSessionTab, activateSessionTabByIndex, closeSessionTabAndActivateNeighbour } from '@/lib/sessionTabs';
 import { navigateSessionHistory } from '@/lib/sessionNavigationHistory';
-import { useSelectionStore } from '@/sync/selection-store';
+import { ROOT_SELECTION_AGENT, useSelectionStore } from '@/sync/selection-store';
 import * as sessionActions from '@/sync/session-actions';
 import { normalizeContextPanelDirectoryKey, useUIStore } from '@/stores/useUIStore';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
@@ -283,18 +283,28 @@ export const useKeyboardShortcuts = () => {
         || state.isAboutDialogOpen;
       if (state.isSettingsDialogOpen || hasOverlay) return false;
       const config = useConfigStore.getState();
-      if (config.getCurrentModelVariants().length === 0) return false;
-      const nextVariantOverride = config.cycleCurrentVariant();
+      const model = config.getCurrentModel();
+      if (!model?.reasoningEffortSupported && !model?.reasoningOptions.length) return false;
+      const efforts = ['off', ...model.reasoningOptions.map(option => option.reasoningEffort).filter(effort => effort !== 'off')];
       const sessionId = useSessionUIStore.getState().currentSessionId;
-      const { currentAgentName, currentProviderId, currentModelId } = useConfigStore.getState();
-      if (sessionId && currentAgentName && currentProviderId && currentModelId) {
-        useSelectionStore.getState().saveAgentModelVariantForSession(
+      const { currentAgentName, currentProviderId, currentModelId } = config;
+      const savedEffort = sessionId && currentProviderId && currentModelId
+        ? useSelectionStore.getState().getAgentModelReasoningEffortForSession(sessionId, currentAgentName ?? ROOT_SELECTION_AGENT, currentProviderId, currentModelId)
+        : undefined;
+      const currentEffort = savedEffort ?? config.currentReasoningEffort ?? 'off';
+      const currentIndex = efforts.indexOf(currentEffort);
+      const nextEffort = efforts[((currentIndex < 0 ? 0 : currentIndex) + 1) % efforts.length];
+      config.setCurrentReasoningEffort(nextEffort);
+      config.setCurrentVariantOverride(null, undefined);
+      if (sessionId && currentProviderId && currentModelId) {
+        useSelectionStore.getState().saveAgentModelReasoningEffortForSession(
           sessionId,
-          currentAgentName,
+          currentAgentName ?? ROOT_SELECTION_AGENT,
           currentProviderId,
           currentModelId,
-          nextVariantOverride,
+          nextEffort,
         );
+        useSelectionStore.getState().saveAgentModelVariantForSession(sessionId, currentAgentName ?? ROOT_SELECTION_AGENT, currentProviderId, currentModelId, null);
       }
     },
     cycle_favorite_model_forward: () => cycleFavoriteModel(1),

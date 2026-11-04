@@ -9,10 +9,9 @@ const goalFields = {
   tokensUsed: countSchema.optional(), tokensBaseline: countSchema.optional(), tokensCommitted: countSchema.optional(),
   turnsUsed: countSchema.optional(), blockedStreak: countSchema.optional(), auditFailStreak: countSchema.optional(),
   note: z.string().optional(), statusReason: z.string().optional(),
-  evaluationProviderID: z.string().optional(), evaluationModelID: z.string().optional(),
   lastAccountedMessageID: z.string().optional(), createdAt: TimestampSchema.optional(), updatedAt: TimestampSchema.optional(),
 };
-const goalSchema = z.strictObject(goalFields);
+const goalSchema = z.object(goalFields);
 const assistFields = {
   recap: z.string(), suggestion: z.string(), forMessageID: EntityIdSchema, generatedAt: TimestampSchema,
 };
@@ -65,11 +64,10 @@ const operationalSchema = z.strictObject({
   knowledge_context_delivered: z.string().optional(), context_obligatory_last_compaction_message_id: EntityIdSchema.optional(),
   project_context_pins: pinsSchema.optional(), context_obligatory_messages: z.array(contextMessageSchema).optional(),
   linked_issues: z.array(linkedIssueSchema).optional(), work: workSchema.optional(), reviewOffer: reviewOfferSchema.optional(),
-  btwSessionID: EntityIdSchema.optional(), reviewSessionID: EntityIdSchema.optional(), btwPromoted: z.boolean().optional(), kind: z.enum(['btw', 'review']).optional(),
-  originalSessionID: EntityIdSchema.optional(), btwBoundaryMessageID: EntityIdSchema.optional(), multirun: multirunSchema.optional(),
+  reviewSessionID: EntityIdSchema.optional(), kind: z.literal('review').optional(), originalSessionID: EntityIdSchema.optional(), multirun: multirunSchema.optional(),
 });
 export const SessionMetadataSchema = z.strictObject({
-  title: z.string().optional(), folder: z.string().optional(), isPinned: z.boolean().optional(),
+  folder: z.string().optional(), isPinned: z.boolean().optional(),
   color: z.string().optional(), icon: z.string().optional(), notes: z.string().optional(), openchamber: operationalSchema.optional(),
 });
 export type SessionMetadata = z.infer<typeof SessionMetadataSchema>;
@@ -80,7 +78,7 @@ export const SessionMetadataStateSchema = z.strictObject({
 });
 export type SessionMetadataState = z.infer<typeof SessionMetadataStateSchema>;
 export const SessionMetadataPatchSchema = z.strictObject({ changes: z.strictObject({
-  title: z.string().nullable().optional(), folder: z.string().nullable().optional(), isPinned: z.boolean().nullable().optional(),
+  folder: z.string().nullable().optional(), isPinned: z.boolean().nullable().optional(),
   color: z.string().nullable().optional(), icon: z.string().nullable().optional(), notes: z.string().nullable().optional(),
   openchamber: z.strictObject({
     goal: z.strictObject({
@@ -90,7 +88,6 @@ export const SessionMetadataPatchSchema = z.strictObject({ changes: z.strictObje
       tokensCommitted: goalFields.tokensCommitted.nullable(), turnsUsed: goalFields.turnsUsed.nullable(),
       blockedStreak: goalFields.blockedStreak.nullable(), auditFailStreak: goalFields.auditFailStreak.nullable(),
       note: goalFields.note.nullable(), statusReason: goalFields.statusReason.nullable(),
-      evaluationProviderID: goalFields.evaluationProviderID.nullable(), evaluationModelID: goalFields.evaluationModelID.nullable(),
       lastAccountedMessageID: goalFields.lastAccountedMessageID.nullable(),
       createdAt: goalFields.createdAt.nullable(), updatedAt: goalFields.updatedAt.nullable(),
     }).nullable().optional(),
@@ -107,10 +104,8 @@ export const SessionMetadataPatchSchema = z.strictObject({ changes: z.strictObje
       state: workFields.state.nullable(), openedAt: workFields.openedAt.nullable(), openedBy: workFields.openedBy.nullable(),
     }).nullable().optional(),
     reviewOffer: z.strictObject({ at: reviewOfferFields.at.nullable().optional() }).nullable().optional(),
-    btwSessionID: EntityIdSchema.nullable().optional(),
-    reviewSessionID: EntityIdSchema.nullable().optional(), btwPromoted: z.boolean().nullable().optional(), kind: z.enum(['btw', 'review']).nullable().optional(),
-    originalSessionID: EntityIdSchema.nullable().optional(), btwBoundaryMessageID: EntityIdSchema.nullable().optional(),
-    multirun: multirunSchema.nullable().optional(),
+    reviewSessionID: EntityIdSchema.nullable().optional(), kind: z.literal('review').nullable().optional(),
+    originalSessionID: EntityIdSchema.nullable().optional(), multirun: multirunSchema.nullable().optional(),
   }).nullable().optional(),
 }) });
 export type SessionMetadataPatch = z.infer<typeof SessionMetadataPatchSchema>;

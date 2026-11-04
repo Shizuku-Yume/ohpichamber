@@ -282,7 +282,7 @@ const DebugPanel: React.FC<DebugPanelProps> = ({ onClose }) => {
       const memoryState = sessionMemoryState.get(session.sessionId);
       return {
         id: session.sessionId,
-        title: session.metadata?.title || t('memoryDebugPanel.common.untitled'),
+        title: session.title || t('memoryDebugPanel.common.untitled'),
         assistantMessageCount,
         messageCount: messages.length,
         userMessageCount,
@@ -461,7 +461,7 @@ const DebugPanel: React.FC<DebugPanelProps> = ({ onClose }) => {
                   className="typography-meta"
                   onClick={() => {
                     console.log('[DebugPanel] Session store state:', {
-                      sessions: sessions.map(s => ({ id: s.sessionId, title: s.metadata?.title })),
+                      sessions: sessions.map(s => ({ id: s.sessionId, title: s.title })),
                       currentSessionId,
                       cachedSessions: Object.keys(messageRecord),
                       messageRoleCounts,

@@ -9,6 +9,7 @@ import { useSkillsStore } from '@/stores/useSkillsStore';
 import { useCommandsStore } from '@/stores/useCommandsStore';
 import { useSessionGoalArmStore } from '@/stores/useSessionGoalArmStore';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { useUIStore } from '@/stores/useUIStore';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { registerWorkspaceDirectory, resetWorkspaceDirectories } from '@/stores/globalSessions';
 import { getDeferredSafeStorage } from '@/stores/utils/safeStorage';
@@ -17,7 +18,7 @@ import { setSyncRefs } from './sync-refs';
 import { setActionRefs } from './session-actions';
 import { useSessionWorktreeStore } from './session-worktree-store';
 import { routeMessage, useSessionUIStore } from './session-ui-store';
-import { useSelectionStore } from './selection-store';
+import { ROOT_SELECTION_AGENT, useSelectionStore } from './selection-store';
 import { buildComposerContext, buildOutgoingMessage, queuedContextToParts } from '@/components/chat/composer/submit/buildOutgoingMessage';
 import { deferred, nativeSnapshot } from './session-message-loader-test-fixtures';
 
@@ -291,15 +292,13 @@ describe('worker-owned slash expansion', () => {
     seedCanonicalSession();
     useSkillsStore.setState({ skillsByDirectory: { '/repo': [{ skillId: 'skill-next', name: 'next', description: '', content: 'New instructions', scope: 'workspace', readOnly: false, source: 'project' }] } });
     const requests = fakeFileResources({ expand: () => { throw new Error('Queued text must not be expanded twice'); } });
-    const knowledge = deferred();
     const sending = route({
-      content: '/next', fileResourcesExpanded: true, sessionKnowledge: knowledge.promise,
+      content: '/next', fileResourcesExpanded: true,
       providerID: 'captured-provider', modelID: 'captured-model', agent: 'captured-agent',
       variant: 'high', reasoningEffort: 'medium', commandId: 'queued-submit',
     });
     useConfigStore.setState({ currentProviderId: 'other-provider', currentModelId: 'other-model', currentAgentName: 'other-agent' });
     useSessionUIStore.setState({ currentSessionId: 'session-b', currentSessionDirectory: '/elsewhere' });
-    knowledge.resolve('');
     expect(await sending).toBe('prompt');
     expect(requests).toEqual([]);
     expect(runCalls).toEqual([{
@@ -1159,14 +1158,14 @@ describe('native prompt routing', () => {
     await expect(route({ content: '$review', skills: { names: ['review'] } })).rejects.toBe(failure);
     expect(runCalls).toEqual([]);
   });
-  test('keeps attachments, knowledge, quoted context and synthetic instructions on command prompts', async () => {
+  test('keeps attachments, quoted context and synthetic instructions on command prompts', async () => {
     seedCanonicalSession();
     fakeFileResources({ expand: () => Response.json({ kind: 'command', content: 'Inspect auth' }) });
     const primary = { attachmentId: 'image-a', uri: 'attachment://image-a', name: 'image.png', mediaType: 'image/png', size: 12 };
     const quoted = { attachmentId: 'quote-a', uri: 'attachment://quote-a', name: 'source.txt', mediaType: 'text/plain', size: 5 };
     const metadata = { openchamberContext: { kind: 'file-quote', fileLabel: 'source.txt', quote: 'Selected code', text: 'Review this selection' } };
     await route({
-      content: '/inspect auth', files: [primary], sessionKnowledge: Promise.resolve('Pinned knowledge'),
+      content: '/inspect auth', files: [primary],
       additionalParts: [
         { text: 'Selected code', metadata, files: [quoted] },
         { text: 'Be concise', synthetic: true }, { text: '   ' },
@@ -1175,7 +1174,7 @@ describe('native prompt routing', () => {
     });
     expect(runCalls[0].request.input).toEqual({
       text: 'Inspect auth', attachments: [primary, quoted], context: [
-        { kind: 'instruction', text: 'Pinned knowledge' }, { kind: 'context', text: 'Selected code', metadata },
+        { kind: 'context', text: 'Selected code', metadata },
         { kind: 'synthetic', text: 'Be concise' }, { kind: 'instruction', text: 'Expanded skill-review' },
       ],
     });
@@ -1194,24 +1193,6 @@ describe('native prompt routing', () => {
   });
   test('rejects a captured stale runtime before dispatch', async () => {
     await expect(route({ runtimeKey: 'different-runtime' })).rejects.toBeInstanceOf(Error);
-    expect(runCalls).toEqual([]);
-  });
-  test('does not dispatch when knowledge resolves after the runtime changes', async () => {
-    const knowledge = deferred();
-    const sending = route({ sessionKnowledge: knowledge.promise });
-    switchRuntimeEndpoint({ apiBaseUrl: 'https://other.test', runtimeKey: 'other-native' });
-    knowledge.resolve('obsolete');
-    await expect(sending).rejects.toBeInstanceOf(Error);
-    expect(runCalls).toEqual([]);
-  });
-  test('does not dispatch after A-B-A while knowledge is pending', async () => {
-    const key = getRuntimeKey(); const base = getRuntimeApiBaseUrl();
-    const knowledge = deferred();
-    const sending = route({ sessionKnowledge: knowledge.promise });
-    switchRuntimeEndpoint({ apiBaseUrl: 'https://other.test', runtimeKey: 'other-native' });
-    switchRuntimeEndpoint({ apiBaseUrl: base, runtimeKey: key });
-    knowledge.resolve('obsolete');
-    await expect(sending).rejects.toThrow('runtime changed');
     expect(runCalls).toEqual([]);
   });
   test('does not issue skill expansion after A-B-A during catalog lookup', async () => {
@@ -1241,56 +1222,6 @@ describe('native UI submit lifecycle', () => {
     expect(runCalls[0].request.input.text).toBe('captured');
     expect(useSessionUIStore.getState().currentSessionId).toBe('session-a');
   });
-  test('keeps an existing submit target while session knowledge is pending', async () => {
-    const knowledge = deferred();
-    const started = deferred();
-    const deliveredReady = deferred();
-    const delivered = [];
-    globalThis.fetch = async (input, init) => {
-      const request = new Request(input, init);
-      if (request.url.includes('/api/session-knowledge/delivered')) {
-        delivered.push(await request.json());
-        deliveredReady.resolve();
-        return Response.json({});
-      }
-      if (request.url.includes('/api/session-knowledge?')) {
-        const url = new URL(request.url);
-        expect(url.searchParams.get('sessionId')).toBe('session-a');
-        expect(url.searchParams.get('directory')).toBe('/repo');
-        started.resolve();
-        return knowledge.promise;
-      }
-      throw new Error(`Unexpected request ${request.url}`);
-    };
-    const sending = send();
-    await started.promise;
-    useSessionUIStore.setState({ currentSessionId: 'session-b', currentSessionDirectory: '/beta' });
-    expect(runCalls).toEqual([]);
-    knowledge.resolve(Response.json({ text: 'Pinned notes', signature: 'sig-a' }));
-    await sending;
-    expect(runCalls[0].sessionId).toBe('session-a');
-    expect(runCalls[0].request.input.context[0]).toEqual({ kind: 'instruction', text: 'Pinned notes' });
-    await deliveredReady.promise;
-    expect(delivered).toEqual([{ directory: '/repo', sessionId: 'session-a', signature: 'sig-a' }]);
-  });
-  test('does not report knowledge delivered after a failed native admission', async () => {
-    const delivered = [];
-    globalThis.fetch = async (input, init) => {
-      const request = new Request(input, init);
-      if (request.url.includes('/delivered')) delivered.push(await request.json());
-      return Response.json({ text: 'Pinned notes', signature: 'sig-failed' });
-    };
-    const failure = new Error('admission failed');
-    canonicalClient.createRun = async () => { throw failure; };
-    await expect(send()).rejects.toBe(failure);
-    expect(delivered).toEqual([]);
-    expect(useSessionUIStore.getState().currentSessionId).toBe('session-a');
-  });
-  test('still admits a message when knowledge fetching fails', async () => {
-    globalThis.fetch = async () => { throw new Error('knowledge unavailable'); };
-    await send();
-    expect(runCalls[0].request.input).toMatchObject({ text: 'hello', context: [] });
-  });
   test('keeps draft admission and prompt selection captured across a project switch', async () => {
     useProjectsStore.setState({ projects: [
       { id: 'project-alpha', path: '/alpha', label: 'Alpha' },
@@ -1316,6 +1247,16 @@ describe('native UI submit lifecycle', () => {
     expect(runCalls[0].sessionId).toBe('materialized-alpha');
     expect(runCalls[0].request.options).toEqual(captured.options);
     expect(useSessionUIStore.getState().currentSessionId).toBe('existing-beta');
+  });
+  test('records a root chat effort under the root key and keeps explicit off', async () => {
+    await send('root effort', { reasoningEffort: 'high' }, undefined, null);
+    expect(useSelectionStore.getState().getAgentModelReasoningEffortForSession(
+      'session-a', ROOT_SELECTION_AGENT, 'provider-a', 'model-a',
+    )).toBe('high');
+    await send('root off', { reasoningEffort: 'off' }, undefined, null);
+    expect(useSelectionStore.getState().getAgentModelReasoningEffortForSession(
+      'session-a', ROOT_SELECTION_AGENT, 'provider-a', 'model-a',
+    )).toBe('off');
   });
   test('a failed draft admission preserves the draft and never dispatches a prompt', async () => {
     const draft = { draftId: 42, open: true, target: 'project', directoryOverride: '/alpha', preserveDirectoryOverride: true };
@@ -1380,41 +1321,54 @@ describe('submit-time effort recording', () => {
   });
 });
 
-describe('goal objective native metadata', () => {
-  test('writes the goal expanded for the captured session directory before admission', async () => {
-    const session = hostSession('session-a');
-    registerWorkspaceDirectory(session.workspaceId, '/repo');
-    useGlobalSessionsStore.getState().upsertSession(session);
-    useCommandsStore.setState({ commandsByDirectory: { '/repo/worktree': [{ commandId: 'worktree-inspect', name: 'inspect', description: '', content: 'Stale $ARGUMENTS', scope: 'workspace', source: 'workspace', editable: true }] } });
-    stub(canonicalClient, 'getSessionMetadata', async sessionId => ({ sessionId, metadata: null, revision: '0' }));
-    const writes = stub(canonicalClient, 'patchSessionMetadata', async (sessionId, patch) => ({ sessionId, metadata: patch.changes, revision: '1' }));
-    const requests = fakeFileResources({
-      expand: () => Response.json({ kind: 'command', content: 'Worktree auth' }),
-      fallback: () => new Response(null, { status: 503 }),
-    });
-    useSessionGoalArmStore.getState().setArmed(true, null);
-    await send('/inspect auth', { target: { runtimeKey: getRuntimeKey(), sessionId: 'session-a', directory: '/repo/worktree' } });
-    expect(resolvedDirectories).toEqual(['/repo/worktree']);
-    expect(requests).toEqual([{
-      workspaceId: 'workspace-1', method: 'POST', body: { text: '/inspect auth' },
-    }]);
-    expect(writes.mock.calls[0][1].changes.openchamber.goal.objective).toBe('Worktree auth');
-    expect(runCalls[0].request.input.text).toBe('Worktree auth');
-    expect(runCalls[0].request.input.context.some(context => context.kind === 'synthetic')).toBe(true);
-    expect(useGlobalSessionsStore.getState().entityById.get('session-a').metadata.openchamber.goal.objective).toBe('Worktree auth');
+describe('armed canonical goal submission', () => {
+  test('creates a goal from submitted text without sending a prompt', async () => {
+    seedCanonicalSession();
+    const createGoal = stub(canonicalClient, 'goal', async (sessionId, input) => ({ type: 'goal', mode: { kind: 'goal', status: 'active', objective: input.objective, tokenBudget: input.tokenBudget, tokensUsed: 0 } }));
+    useSessionGoalArmStore.getState().setArmed(true, null, true);
+    await send('Ship the feature');
+    expect(createGoal).toHaveBeenCalledWith('session-a', { op: 'create', objective: 'Ship the feature', tokenBudget: null });
+    expect(runCalls).toEqual([]);
+  });
+  test('creates an OMP goal before sending the armed goal prompt', async () => {
+    seedCanonicalSession();
+    const createGoal = stub(canonicalClient, 'goal', async (sessionId, input) => ({ type: 'goal', mode: { kind: 'goal', status: 'active', objective: input.objective, tokenBudget: input.tokenBudget, tokensUsed: 0 } }));
+    useSessionGoalArmStore.getState().setArmed(true, 'Implement the plan');
+    await send('Implement the plan now');
+    expect(createGoal).toHaveBeenCalledWith('session-a', { op: 'create', objective: 'Implement the plan', tokenBudget: null });
+    expect(runCalls).toHaveLength(1);
+    expect(runCalls[0].request.input.context ?? []).toEqual([]);
+  });
+  test('uses the configured default token budget for an armed goal', async () => {
+    seedCanonicalSession();
+    const state = useUIStore.getState();
+    const createGoal = stub(canonicalClient, 'goal', async (sessionId, input) => ({ type: 'goal', mode: { kind: 'goal', status: 'active', objective: input.objective, tokenBudget: input.tokenBudget, tokensUsed: 0 } }));
+    useUIStore.setState({ sessionGoalDefaultBudgetEnabled: true, sessionGoalDefaultBudget: 12000 });
+    try {
+      useSessionGoalArmStore.getState().setArmed(true, 'Finish the work');
+      await send('Finish the work');
+      expect(createGoal).toHaveBeenCalledWith('session-a', { op: 'create', objective: 'Finish the work', tokenBudget: 12000 });
+    } finally {
+      useUIStore.setState({ sessionGoalDefaultBudgetEnabled: state.sessionGoalDefaultBudgetEnabled, sessionGoalDefaultBudget: state.sessionGoalDefaultBudget });
+    }
   });
 
   test('does not write goal metadata or dispatch after A-B-A during objective file write', async () => {
+    seedCanonicalSession();
     const session = hostSession('session-a'); useGlobalSessionsStore.getState().upsertSession(session);
     const gate = deferred(); const started = deferred(); const key = getRuntimeKey(); const base = getRuntimeApiBaseUrl();
     const patch = stub(canonicalClient, 'patchSessionMetadata', async () => { throw new Error('unexpected patch'); });
-    fakeFileResources({ fallback: async request => { if (new URL(request.url).pathname.startsWith('/api/goals/objective/')) { started.resolve(); return gate.promise; } return Response.json({}); } });
+    const createGoal = stub(canonicalClient, 'goal', async (sessionId, input) => {
+      started.resolve();
+      await gate.promise;
+      return { type: 'goal', mode: { kind: 'goal', status: 'active', objective: input.objective, tokenBudget: null, tokensUsed: 0 } };
+    });
     useSessionGoalArmStore.getState().setArmed(true, 'Goal objective');
     const sending = send('goal'); await started.promise;
     switchRuntimeEndpoint({ apiBaseUrl: 'https://other.test', runtimeKey: 'other-native' });
     switchRuntimeEndpoint({ apiBaseUrl: base, runtimeKey: key });
-    gate.resolve(new Response(null, { status: 200 }));
-    await expect(sending).rejects.toThrow('Runtime changed'); expect(patch).not.toHaveBeenCalled(); expect(runCalls).toEqual([]);
+    gate.resolve();
+    await expect(sending).rejects.toThrow(/runtime changed/i); expect(patch).not.toHaveBeenCalled(); expect(runCalls).toEqual([]);
   });
 });
 

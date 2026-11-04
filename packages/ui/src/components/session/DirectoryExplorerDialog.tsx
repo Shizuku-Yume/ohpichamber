@@ -205,7 +205,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
   const { isMobile } = useDeviceInfo();
   const inputRef = React.useRef<HTMLInputElement>(null);
   const addButtonRef = React.useRef<HTMLButtonElement>(null);
-  const rowRefs = React.useRef(new Map<string, HTMLButtonElement>());
+  const rowRefs = React.useRef(new Map<string, HTMLElement>());
   const [dialogHomeDirectory, setDialogHomeDirectory] = React.useState('');
   const [query, setQuery] = React.useState('~/');
   const [entries, setEntries] = React.useState<BrowseEntry[]>([]);
@@ -913,7 +913,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
             {rows.map((row, index) => {
               const isActive = index === highlightedIndex;
               return (
-                <button
+                <div
                   key={row.value}
                   ref={(node) => {
                     if (node) {
@@ -922,11 +922,16 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
                       rowRefs.current.delete(row.value);
                     }
                   }}
-                  type="button"
-
+                  role="button"
+                  tabIndex={0}
                   onMouseEnter={() => setHighlightedIndex(index)}
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => executeRow(row)}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter' && event.key !== ' ') return;
+                    event.preventDefault();
+                    executeRow(row);
+                  }}
                   className={cn(
                     'flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                     isActive && 'bg-interactive-selection text-interactive-selection-foreground',
@@ -969,7 +974,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
                       </button>
                     </>
                   ) : null}
-                </button>
+                </div>
               );
             })}
           </div>

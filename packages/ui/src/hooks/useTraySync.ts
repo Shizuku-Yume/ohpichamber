@@ -234,7 +234,7 @@ const collectLiveData = (): LiveData => {
 
     for (const session of state.session) {
       if (!session?.sessionId) continue;
-      titleById.set(session.sessionId, session.metadata?.title ?? '');
+      titleById.set(session.sessionId, session.title ?? '');
     }
 
     // Status comes from the status map itself, NOT from the session list — a
@@ -329,7 +329,7 @@ const buildSnapshot = (instanceName: string, includeTray: boolean): TraySnapshot
   const live = collectLiveData();
   const titleById = new Map<string, string>(live.titleById);
   for (const session of allSessions) {
-    if (session?.sessionId && session.metadata?.title) titleById.set(session.sessionId, session.metadata.title);
+    if (session?.sessionId && session.title) titleById.set(session.sessionId, session.title);
     const status = trayStatus(session.runtimeStatus);
     if (!live.statusById.has(session.sessionId) || live.statusById.get(session.sessionId) === 'idle') {
       live.statusById.set(session.sessionId, status);
@@ -367,7 +367,7 @@ const buildSnapshot = (instanceName: string, includeTray: boolean): TraySnapshot
       const directory = resolveGlobalSessionDirectory(session) ?? '';
       return {
         id: session.sessionId,
-        title: session.metadata?.title || 'Untitled session',
+        title: session.title || 'Untitled session',
         status: rollupStatus(family),
         // Canonical directory state has no legacy VCS branch projection.
         branch: '',

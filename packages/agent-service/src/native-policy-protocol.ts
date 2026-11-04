@@ -3,6 +3,14 @@ import { z } from 'zod';
 import { EntityIdSchema, JsonObjectSchema, JsonValueSchema, ProblemCodeSchema, MCPServerConfigSchema } from '@openchamber/agent-contract';
 
 const PrivatePathSchema = z.string().min(1).refine(isAbsolute);
+/** OMP internal URL schemes the Host passes to the SDK instead of resolving. */
+export const OMP_INTERNAL_URL_SCHEMES = ['agent', 'history', 'artifact', 'local', 'proc', 'skill', 'xd', 'mcp', 'omp', 'issue', 'pr'] as const;
+const OMP_INTERNAL_URL_SCHEME_SET: Record<string, true> = Object.fromEntries(OMP_INTERNAL_URL_SCHEMES.map(scheme => [scheme, true]));
+const OmpInternalUrlSchema = z.string().min(1).refine((value) => {
+  if (value.includes('\0')) return false;
+  const match = /^([A-Za-z][A-Za-z0-9+.-]*):\/\//.exec(value);
+  return match !== null && OMP_INTERNAL_URL_SCHEME_SET[match[1]!.toLowerCase()] === true;
+});
 export const HostNativePolicySnapshotSchema = z.strictObject({
   projectId: EntityIdSchema, workspaceId: EntityIdSchema, agentDirectoryId: EntityIdSchema,
   cwd: PrivatePathSchema, agentDirectory: PrivatePathSchema,
@@ -21,6 +29,8 @@ export type NativeApprovalGrant = z.infer<typeof NativeApprovalGrantSchema>;
 export const NativeOperationDescriptorSchema = z.strictObject({
   toolName: z.string().min(1), effectiveMode: NativeEditModeSchema.optional(),
   sourcePaths: z.array(PrivatePathSchema), destinationPaths: z.array(PrivatePathSchema),
+  /** Read targets OMP resolves itself; never filesystem paths. */
+  internalReadUrls: z.array(OmpInternalUrlSchema).optional(),
   fileOps: z.array(z.strictObject({ kind: z.string().min(1), path: PrivatePathSchema, to: PrivatePathSchema.optional() })),
   command: z.string().optional(), providerId: EntityIdSchema.optional(), modelId: EntityIdSchema.optional(), endpoint: z.string().url().optional(),
   approvalGrant: NativeApprovalGrantSchema.optional(),

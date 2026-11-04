@@ -32,6 +32,13 @@ interface SettingsSearchAvailabilityContext extends SettingsRuntimeContext {
 
 const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
   {
+    id: 'omp.behaviour',
+    page: 'omp',
+    titleKey: 'settings.page.omp.title',
+    descriptionKey: 'settings.page.omp.description',
+    keywords: ['omp', 'compaction', 'retry', 'approval', 'thinking', 'budget', 'skills', 'mcp', 'lsp', 'model roles', 'enabled models', 'plan', 'goal', 'config.yml'],
+  },
+  {
     id: 'chat.activity-default',
     page: 'chat',
     titleKey: 'settings.openchamber.visual.section.activityDefault',
@@ -258,18 +265,6 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['goal', 'objective', 'auto continue'],
   },
   {
-    id: 'chat.session-goal-checker',
-    page: 'chat',
-    titleKey: 'settings.openchamber.visual.goal.checkerLabel',
-    keywords: ['goal', 'progress', 'check', 'jev', 'classification', 'small model'],
-  },
-  {
-    id: 'chat.session-goal-max-turns',
-    page: 'chat',
-    titleKey: 'settings.openchamber.visual.goal.maxTurnsLabel',
-    keywords: ['goal', 'turns', 'limit', 'continuations', 'safety'],
-  },
-  {
     id: 'chat.session-goal-budget',
     page: 'chat',
     titleKey: 'settings.openchamber.visual.goal.budgetLabel',
@@ -477,12 +472,6 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     page: 'sessions',
     titleKey: 'settings.openchamber.defaults.field.defaultThinking',
     keywords: ['thinking', 'reasoning', 'variant'],
-  },
-  {
-    id: 'sessions.default-agent',
-    page: 'sessions',
-    titleKey: 'settings.openchamber.defaults.field.defaultAgent',
-    keywords: ['agent', 'new sessions'],
   },
   {
     id: 'sessions.deletion-dialog',
@@ -1021,12 +1010,6 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     page: 'commands',
     titleKey: 'settings.commands.page.field.commandName',
     keywords: ['slash command', 'name'],
-  },
-  {
-    id: 'commands.agent',
-    page: 'commands',
-    titleKey: 'settings.commands.page.field.overrideAgent',
-    keywords: ['agent', 'execution'],
   },
   {
     id: 'commands.model',

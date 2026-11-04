@@ -235,7 +235,7 @@ function SwitcherRow({ session, depth, variant, secondaryMeta, hasChildren, isEx
   const unseenCount = useSessionUnseenCount(session.sessionId);
 
   const isActive = currentSessionId === session.sessionId;
-  const sessionTitle = session.metadata?.title?.trim() || t('sessions.sidebar.session.untitled');
+  const sessionTitle = session.title?.trim() || t('sessions.sidebar.session.untitled');
   const isSubtask = Boolean(session.parentSessionId);
   const needsAttention = unseenCount > 0 && (!isSubtask || notifyOnSubtasks);
   const turnActivity = useSessionTurnActivity(session.sessionId);

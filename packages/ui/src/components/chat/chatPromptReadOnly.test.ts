@@ -7,7 +7,7 @@ import { withReviewSessionMarker } from '@/lib/sessionReviewMetadata';
 const session = (parentSessionId?: string): Session => ({
     sessionId: 'session', projectId: 'project', workspaceId: 'workspace', displayPath: '.',
     parentSessionId, rootSessionId: parentSessionId ?? 'session', createdAt: 1, updatedAt: 1,
-    epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+    epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
     metadata: null, metadataRevision: '0', archiveRevision: '0',
 });
 

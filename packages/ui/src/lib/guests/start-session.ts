@@ -158,15 +158,12 @@ const resolveDefaultModelSelection = (): { providerId: string; modelId: string }
 
 const resolveDefaultVariant = (providerId: string, modelId: string): string | undefined => {
   const configState = useConfigStore.getState();
-  const settingsDefaultVariant = configState.settingsDefaultVariant;
   const currentVariant = configState.currentProviderId === providerId && configState.currentModelId === modelId
     ? configState.currentVariant
     : undefined;
   const provider = configState.providers.find((entry) => entry.providerId === providerId);
   const model = provider?.models.find((entry) => entry.modelId === modelId);
   const variantNames = model?.variants.map((entry) => entry.variant) ?? [];
-  if (variantNames.length === 0) return settingsDefaultVariant || currentVariant || undefined;
-  if (settingsDefaultVariant && variantNames.includes(settingsDefaultVariant)) return settingsDefaultVariant;
   if (currentVariant && variantNames.includes(currentVariant)) return currentVariant;
   return undefined;
 };

@@ -11,8 +11,7 @@ type NativeMessage = Extract<AgentSessionEvent, { type: 'message_start' }>['mess
 type Assistant = Extract<NativeMessage, { role: 'assistant' }>;
 function assistant(content: Assistant['content'], stopReason: Assistant['stopReason'], timestamp: number): Assistant {
   return { role: 'assistant', content, api: 'openai-completions', provider: 'fixture', model: 'fixture', stopReason, timestamp,
-    usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } };
+    usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } };
 }
 
 test('binds queued mention provenance to its native entry even when timestamps collide', async () => {
@@ -580,6 +579,26 @@ test('history keeps an earlier terminal-less turn untouched when a new run opens
     const settled = projection.history({ sessionId: 'session' });
     expect(settled.turns[0]).toMatchObject({ status: 'completed' });
     expect(settled.turns[1]).toMatchObject({ runId: 'next', status: 'cancelled' });
+  } finally {
+    await manager.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('projection seed and snapshot carry the persisted model and thinking level', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'canonical-selection-'));
+  const manager = SessionManager.create(root, root);
+  try {
+    await manager.ensureOnDisk();
+    manager.appendModelChange('fixture/model');
+    manager.appendThinkingLevelChange('high', 'high');
+    const projection = new WorkerProjection(manager, 'session');
+    const seed = projection.seed();
+    expect(seed.selection).toEqual({ model: { providerId: 'fixture', modelId: 'model' }, thinkingLevel: 'high' });
+    const journal = new SessionJournal({ sessionId: 'session', rootSessionId: 'session', projectId: 'project', workspaceId: 'workspace', displayPath: '.' }, seed);
+    expect(journal.snapshot().selection).toEqual(seed.selection);
+    manager.appendThinkingLevelChange('medium', 'auto');
+    expect(projection.seed().selection?.thinkingLevel).toBe('auto');
   } finally {
     await manager.close();
     await rm(root, { recursive: true, force: true });

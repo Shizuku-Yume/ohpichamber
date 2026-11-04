@@ -240,7 +240,7 @@ test('the mounted poller recovers real store failure and starts a fresh load on 
   const subagents = spyOn(canonicalClient, 'listSubagents').mockResolvedValue([]);
   const session = (sessionId: string): SessionList => ({ items: [{
     sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '.', rootSessionId: sessionId,
-    createdAt: 1, updatedAt: 2, epoch: 'epoch_1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+    createdAt: 1, updatedAt: 2, epoch: 'epoch_1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
     metadata: null, metadataRevision: '0', archiveRevision: '0',
   }], errors: {} });
   const list = spyOn(canonicalClient, 'listSessions').mockResolvedValue(session('restored'));

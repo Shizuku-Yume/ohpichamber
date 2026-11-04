@@ -5,20 +5,20 @@ import { prepareNotificationLastMessage } from './message.js';
 import { event, message, runtimeSession, scope, snapshot, turn } from '../event-stream/canonical-test-fixtures.js';
 
 const disposers = [];
-afterEach(() => { for (const stop of disposers.splice(0)) stop(); vi.useRealTimers(); vi.unstubAllEnvs(); });
+afterEach(() => { for (const stop of disposers.splice(0)) stop(); vi.useRealTimers(); vi.unstubAllEnvs?.(); });
 const fixture = (settings = {}, overrides = {}) => {
   const web = []; const native = []; const ui = []; const desktop = [];
   const records = [message({ parts: [{ type: 'text', partId: 't', content: 'Final answer in /private/workspace; Authorization: Bearer secret' }] })];
   const sessionService = {
-    open: async () => snapshot(records, [turn()]),
+    open: async () => snapshot(records, [turn()], { title: 'Host session' }),
     history: async () => { throw new Error('not expected'); },
     list: async () => ({ items: [{ ...runtimeSession(), metadata: null, metadataRevision: '0', archiveRevision: '0' }], errors: {} }),
   };
   const readSettingsFromDisk = async () => ({ nativeNotificationsEnabled: true, notificationMode: 'always', projects: [], ...settings });
   const template = createNotificationTemplateRuntime({ sessionService, resolveSessionScope: async () => scope,
-    readSessionMetadata: async () => ({ title: 'Host session' }), readSettingsFromDisk, resolveGitBinaryForSpawn: () => 'git' });
+    readSettingsFromDisk, resolveGitBinaryForSpawn: () => 'git' });
   const runtime = createNotificationTriggerRuntime({ sessionService, resolveSessionScope: async () => scope,
-    readSettingsFromDisk, readSessionMetadata: async () => null, ...template, prepareNotificationLastMessage,
+    readSettingsFromDisk, ...template, prepareNotificationLastMessage,
     emitDesktopNotification: (payload) => { desktop.push(payload); return true; }, broadcastUiNotification: (payload) => ui.push(payload),
     sendPushToAllUiSessions: (payload) => web.push(payload), sendApnsToAllUiSessions: (payload) => native.push(payload), ...overrides });
   disposers.push(runtime.stop);
@@ -41,6 +41,39 @@ describe('canonical notification triggers', () => {
     expect(f.ui).toHaveLength(1); expect(f.web).toHaveLength(1); expect(f.native[0].badge).toBe(1);
     expect(f.ui[0]).toMatchObject({ sessionId: 'session', workspaceId: 'workspace', kind: 'ready' });
     expect(JSON.stringify([...f.ui, ...f.web])).not.toContain('/private/');
+  });
+  it('suppresses active-goal turn alerts and sends one OMP completion alert', async () => {
+    const f = fixture();
+    const snapshotWithMode = (currentMode) => snapshot([], [], { mode: currentMode });
+    let mode = { kind: 'goal', status: 'active', objective: 'Ship it', tokenBudget: null, tokensUsed: 0 };
+    f.sessionService.open = async () => snapshotWithMode(mode);
+    await f.runtime.processCanonicalEvent(terminal(), scope);
+    expect(f.web).toEqual([]);
+    mode = { ...mode, status: 'complete' };
+    await f.runtime.processCanonicalEvent({ type: 'session.updated', sessionId: 'session', epoch: 'epoch', sequence: '2', timestamp: 2, mode }, scope);
+    await f.runtime.processCanonicalEvent(terminal(3), scope);
+    expect(f.web).toHaveLength(1);
+    expect(f.web[0].data.type).toBe('goal_complete');
+    await f.runtime.processCanonicalEvent(terminal(4), scope);
+    expect(f.web).toHaveLength(2);
+    expect(f.web[1].data.type).toBe('ready');
+    expect(f.ui).toHaveLength(2);
+    expect(f.native).toHaveLength(2);
+    expect(f.desktop).toHaveLength(2);
+  });
+  it('announces a budget-limited goal once without an ordinary ready alert', async () => {
+    const f = fixture();
+    let mode = { kind: 'goal', status: 'active', objective: 'Ship it', tokenBudget: 12000, tokensUsed: 12000 };
+    f.sessionService.open = async () => snapshot([], [], { mode });
+    await f.runtime.processCanonicalEvent(terminal(), scope);
+    expect(f.web).toEqual([]);
+    mode = { ...mode, status: 'budget-limited' };
+    await f.runtime.processCanonicalEvent(terminal(2), scope);
+    expect(f.web).toHaveLength(1);
+    expect(f.web[0].data.type).toBe('goal_budget');
+    await f.runtime.processCanonicalEvent(terminal(3), scope);
+    expect(f.web).toHaveLength(2);
+    expect(f.web[1].data.type).toBe('ready');
   });
 
   it('preserves template text, redacts credentials/private cwd and suppresses repeat terminal alerts', async () => {

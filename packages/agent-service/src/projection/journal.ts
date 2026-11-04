@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { CanonicalEventSchema, CounterSchema, CursorSchema, EntityIdSchema, HistoryPageRequestSchema, HistoryPageSchema, RuntimeSessionSchema, SessionSnapshotSchema } from '@openchamber/agent-contract';
-import type { ApprovalRequest, CanonicalEvent, HistoryPage, HistoryPageRequest, JsonObject, Message, Part, ProblemCode, QuestionRequest, Run, RuntimeSession, SessionSnapshot, StreamInvalidated, Turn } from '@openchamber/agent-contract';
+import type { ApprovalRequest, CanonicalEvent, HistoryPage, HistoryPageRequest, JsonObject, Message, Part, ProblemCode, QuestionRequest, Run, RuntimeSession, SessionMode, SessionSnapshot, StreamInvalidated, Turn } from '@openchamber/agent-contract';
 import type { ProjectionInput, ProjectionSeed } from './protocol.ts';
 
 export class ProjectionError extends Error {
@@ -32,8 +32,12 @@ export class SessionJournal {
   private branch: ProjectionSeed['branch'];
   private turns: Turn[];
   private messages: Message[];
+  private mode: SessionMode;
+  private selection: ProjectionSeed['selection'];
   private activeRunId: string | null = null;
   private runtimeStatus: RuntimeSession['runtimeStatus'] = 'idle';
+  private title: string | undefined;
+  private continuationPending = false;
   private closed = false;
 
   constructor(private readonly identity: SessionIdentity, seed: ProjectionSeed) {
@@ -41,36 +45,49 @@ export class SessionJournal {
     this.updatedAt = seed.updatedAt;
     this.branch = structuredClone(seed.branch);
     this.turns = structuredClone(seed.turns);
+    this.mode = structuredClone(seed.mode);
+    this.selection = structuredClone(seed.selection ?? { model: null, thinkingLevel: null });
     this.messages = structuredClone(seed.messages);
+    this.title = seed.title;
     this.rebuildIndexes();
   }
 
   append(inputs: readonly ProjectionInput[]): CanonicalEvent[] {
     this.ensureOpen();
+    const persistent = inputs.filter(input => !input.transient);
+    const transient = inputs.filter(input => input.transient);
     let next = this.head;
     const events: CanonicalEvent[] = [];
     // Parse the batch before granting any sequence or mutating authoritative state.
-    for (const input of inputs) {
+    for (const input of persistent) {
       if (next === U64_MAX) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Event sequence is exhausted');
       events.push(CanonicalEventSchema.parse({ ...input.event, sessionId: this.identity.sessionId,
         epoch: this.epoch, sequence: (++next).toString(), timestamp: input.timestamp,
       }));
     }
+    const transientEvents = transient.map(input => {
+      if (next === U64_MAX) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Event sequence is exhausted');
+      return CanonicalEventSchema.parse({ ...input.event, sessionId: this.identity.sessionId,
+        epoch: this.epoch, sequence: (++next).toString(), timestamp: input.timestamp,
+      });
+    });
     for (const event of events) {
       this.reduce(event);
       this.head = BigInt(event.sequence);
-      this.updatedAt = event.timestamp;
       if (this.eventCount < REPLAY_LIMIT) this.events[(this.eventStart + this.eventCount++) % REPLAY_LIMIT] = event;
       else { this.events[this.eventStart] = event; this.eventStart = (this.eventStart + 1) % REPLAY_LIMIT; }
     }
-    for (const event of events) for (const listener of this.listeners) listener(structuredClone(event));
+    if (transientEvents.length > 0) this.head = BigInt(transientEvents.at(-1)!.sequence);
+    for (const event of [...events, ...transientEvents]) for (const listener of this.listeners) listener(structuredClone(event));
     return structuredClone(events);
   }
 
   runtime(): RuntimeSession {
-    return RuntimeSessionSchema.parse({ ...this.identity, createdAt: this.createdAt, updatedAt: this.updatedAt,
-      epoch: this.epoch, headSequence: this.head.toString(), runtimeStatus: this.runtimeStatus, activeRunId: this.activeRunId,
-    });
+    const runtime = { ...this.identity, createdAt: this.createdAt, updatedAt: this.updatedAt,
+      epoch: this.epoch, headSequence: this.head.toString(), runtimeStatus: this.runtimeStatus, activeRunId: this.activeRunId, mode: this.mode,
+      continuationPending: this.continuationPending,
+    };
+    return RuntimeSessionSchema.parse(this.title === undefined ? runtime : { ...runtime, title: this.title });
   }
 
   snapshot(): SessionSnapshot {
@@ -81,7 +98,7 @@ export class SessionJournal {
     }
     return SessionSnapshotSchema.parse({
       session: this.runtime(), cursor: `${this.epoch}:${this.head}`, activeRun: this.activeRunId ? this.runs.get(this.activeRunId) : null,
-      branch: this.branch,
+      branch: this.branch, selection: this.selection,
       window: { firstTurnId: turns[0]?.turnId ?? null, lastTurnId: turns.at(-1)?.turnId ?? null,
         firstMessageId: messages[0]?.messageId ?? null, lastMessageId: messages.at(-1)?.messageId ?? null,
         hasEarlier: this.turns.length > turns.length,
@@ -137,10 +154,12 @@ export class SessionJournal {
 
   replace(seed: ProjectionSeed): void {
     this.resetEpoch();
-    this.createdAt = seed.createdAt; this.updatedAt = seed.updatedAt;
+    this.createdAt = seed.createdAt; this.updatedAt = seed.updatedAt; this.mode = structuredClone(seed.mode);
     this.branch = structuredClone(seed.branch); this.turns = structuredClone(seed.turns); this.messages = structuredClone(seed.messages);
-    this.activeRunId = null; this.runtimeStatus = 'idle';
+    this.selection = structuredClone(seed.selection ?? { model: null, thinkingLevel: null });
     this.runs.clear(); this.approvals.clear(); this.questions.clear();
+    this.activeRunId = null; this.runtimeStatus = 'idle';
+    this.continuationPending = false;
     this.rebuildIndexes();
   }
 
@@ -149,6 +168,7 @@ export class SessionJournal {
     if (this.activeRunId) this.settleRun(this.activeRunId, 'failed', Date.now(), 'SDK worker is unavailable');
     this.resetEpoch();
     this.runtimeStatus = 'unavailable'; this.activeRunId = null;
+    this.continuationPending = false;
     this.approvals.clear(); this.questions.clear();
   }
 
@@ -197,10 +217,16 @@ export class SessionJournal {
   private reduce(event: CanonicalEvent): void {
     switch (event.type) {
       case 'run.started':
-        this.runs.set(event.runId, { runId: event.runId, sessionId: this.identity.sessionId, status: 'running', createdAt: event.createdAt });
+        this.runs.set(event.runId, { runId: event.runId, sessionId: this.identity.sessionId, status: 'running', origin: event.origin ?? 'host', createdAt: event.createdAt });
         this.activeRunId = event.runId; this.runtimeStatus = 'running'; return;
       case 'run.completed': case 'run.cancelled': case 'run.failed':
         this.settleRun(event.runId, event.type === 'run.completed' ? 'completed' : event.type === 'run.cancelled' ? 'cancelled' : 'failed', event.finishedAt, event.type === 'run.failed' ? event.error : undefined); return;
+      case 'session.updated':
+        if (event.mode !== undefined) this.mode = structuredClone(event.mode);
+        if (event.title !== undefined) this.title = event.title;
+        if (event.continuationPending !== undefined) this.continuationPending = event.continuationPending;
+        if (event.selection !== undefined) this.selection = structuredClone(event.selection);
+        return;
       case 'session.status': this.runtimeStatus = event.runtimeStatus; this.activeRunId = event.activeRunId; return;
       case 'turn.started': {
         const turn: Turn = { turnId: event.turnId, sessionId: this.identity.sessionId, runId: event.runId, userMessageId: event.userMessageId,

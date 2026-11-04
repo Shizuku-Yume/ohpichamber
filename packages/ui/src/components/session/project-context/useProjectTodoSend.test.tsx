@@ -54,7 +54,7 @@ afterAll(async () => {
 
 test('new-session todo sends project overrides from one snapshot, not global prompts', async () => {
   switchRuntimeEndpoint({ apiBaseUrl: 'http://runtime.test', runtimeKey: 'todo-prompt-test' });
-  const session: Session = { sessionId: 'todo-session', rootSessionId: 'todo-session', projectId: 'project', workspaceId: 'workspace', displayPath: '.', createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, metadata: null, metadataRevision: '1', archiveRevision: '0' };
+  const session: Session = { sessionId: 'todo-session', rootSessionId: 'todo-session', projectId: 'project', workspaceId: 'workspace', displayPath: '.', createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' }, metadata: null, metadataRevision: '0', archiveRevision: '0' };
   const create = async () => session;
   const sent: Array<{ visible: string; instructions: string | undefined }> = [];
   useSessionUIStore.setState({
@@ -77,7 +77,7 @@ test('new-session todo sends project overrides from one snapshot, not global pro
   root = createRoot(host);
   await act(async () => root?.render(<I18nProvider><Harness /></I18nProvider>));
   await act(async () => action.sendToNewSession('todo', 'ship'));
-  await act(async () => action.confirmSend({ providerID: 'provider', modelID: 'model', agent: '', variant: '' }));
+  await act(async () => action.confirmSend({ providerID: 'provider', modelID: 'model', variant: '' }));
   expect(promptReads).toEqual(['/repo']);
   expect(sent).toEqual([{ visible: 'Project ship', instructions: 'Project instructions ship' }]);
 });
@@ -101,7 +101,7 @@ test('worktree todo reads prompts and routes to the created nested project direc
   root = createRoot(host);
   await act(async () => root?.render(<I18nProvider><Harness /></I18nProvider>));
   await act(async () => action.sendToNewWorktreeSession('todo', 'ship'));
-  await act(async () => action.confirmSend({ providerID: 'provider', modelID: 'model', agent: '', variant: '' }));
+  await act(async () => action.confirmSend({ providerID: 'provider', modelID: 'model', variant: '' }));
   expect(reads).toEqual(['/trees/branch/subdir']);
   expect(selected).toEqual([['nested-session', '/trees/branch/subdir']]);
   expect(sent).toEqual([['Nested ship', 'Nested instructions', { runtimeKey: 'todo-nested', sessionId: 'nested-session', directory: '/trees/branch/subdir' }]]);
@@ -109,7 +109,7 @@ test('worktree todo reads prompts and routes to the created nested project direc
 
 test.each(['creation', 'prompts'])('todo send stops after an A-B-A runtime switch during %s', async (stage) => {
   switchRuntimeEndpoint({ apiBaseUrl: 'http://runtime.test', runtimeKey: 'todo-aba' });
-  const session: Session = { sessionId: 'todo-session', rootSessionId: 'todo-session', projectId: 'project', workspaceId: 'workspace', displayPath: '.', createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, metadata: null, metadataRevision: '1', archiveRevision: '0' };
+  const session: Session = { sessionId: 'todo-session', rootSessionId: 'todo-session', projectId: 'project', workspaceId: 'workspace', displayPath: '.', createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' }, metadata: null, metadataRevision: '0', archiveRevision: '0' };
   let release!: () => void;
   let started!: () => void;
   const pending = new Promise<void>((resolve) => { release = resolve; });
@@ -131,7 +131,7 @@ test.each(['creation', 'prompts'])('todo send stops after an A-B-A runtime switc
   await act(async () => root?.render(<I18nProvider><Harness /></I18nProvider>));
   await act(async () => action.sendToNewSession('todo', 'ship'));
   let operation!: Promise<void>;
-  await act(async () => { operation = action.confirmSend({ providerID: 'provider', modelID: 'model', agent: '', variant: '' }); await reached; });
+  await act(async () => { operation = action.confirmSend({ providerID: 'provider', modelID: 'model', variant: '' }); await reached; });
   switchRuntimeEndpoint({ apiBaseUrl: 'http://other.test', runtimeKey: 'todo-other' });
   switchRuntimeEndpoint({ apiBaseUrl: 'http://runtime.test', runtimeKey: 'todo-aba' });
   await act(async () => { release(); await operation; });

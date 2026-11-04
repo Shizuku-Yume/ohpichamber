@@ -114,9 +114,11 @@ cannot silently clear another's badges.
 
 The store is loaded by `useAgentMemorySync` in `App.tsx` and reloads on
 `openchamber:agent-memory-changed`, because the agent writes mid-turn through
-its own tool. It feeds this panel only — what a session is told about memory is
-decided server-side by `packages/web/server/lib/session-knowledge`, so it
-reaches sessions that have no UI at all and survives compaction.
+its own tool. It feeds this panel only. Session prompts do not copy memory
+titles or save guidance: the model reaches memory through the Host memory tool,
+and `packages/web/server/lib/session-knowledge` delivers only the user's pinned
+notes and plans (to any sender, including headless ones, and again after
+compaction).
 
 `useProjectContextOwner` is the client authority shared by this panel and the
 memory sync. It resolves managed chat directories to the Chats root and a

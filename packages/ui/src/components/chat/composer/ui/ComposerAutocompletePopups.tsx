@@ -69,7 +69,6 @@ interface ComposerAutocompletePopupsProps {
     onCommandSelect: (command: CommandInfo) => void;
     onSkillSelect: (skillName: string) => void;
     onFileSelect: (file: { name: string; path: string; relativePath?: string }) => void;
-    onAgentSelect: (agentName: string) => void;
     onEmojiSelect: (emoji: string) => void;
     onClose: () => void;
 }
@@ -122,7 +121,6 @@ function AutocompletePopup(props: ComposerAutocompletePopupsProps & { open: Auto
                     ref={props.mentionRef}
                     searchQuery={query}
                     onFileSelect={props.onFileSelect}
-                    onAgentSelect={props.onAgentSelect}
                     onClose={onClose}
                     style={style}
                 />

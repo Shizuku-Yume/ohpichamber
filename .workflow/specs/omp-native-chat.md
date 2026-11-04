@@ -1,6 +1,6 @@
 # OMP-native chat basics
 
-**Status:** proposed
+**Status:** in progress
 **Priority:** high
 **Integration branch:** omp-native-chat/integration
 
@@ -142,7 +142,7 @@ Breakage shows as a 4xx Problem Details code in the composer toast, a `mode` tha
 
 ## Open questions
 
-- **Ask timeout.** Whether OMP 18.8.9 passes `timeout` to `askDialog` for GUI hosts is unverified (`tools/ask.ts:190`). Task 13 reads it; if it does, the dialog shows a countdown, otherwise nothing changes.
+None. OMP 18.8.9 passes its optional millisecond ask timeout to rich dialogs; the worker forwards it in the existing `omp.ask` schema and the UI countdown is informational while InteractionManager CAS expiry remains authoritative.
 
 ## Notes
 

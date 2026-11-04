@@ -35,7 +35,6 @@ import { useInputHistoryStore } from '@/stores/useInputHistoryStore';
 import { useMessageQueueStore } from '@/stores/messageQueueStore';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { useUIStore, type FileEditorKeymap, type LargeTextPasteBehavior } from '@/stores/useUIStore';
-import { isSessionGoalMaxAutoTurns } from '@/lib/sessionGoalTurnLimit';
 import { z } from 'zod';
 import {
   parseActivityRenderMode,
@@ -527,8 +526,8 @@ export const SETTINGS_REGISTRY = {
   }),
 
   // ── Models and agents (profile) ──
-  defaultModel: field({ scope: 'profile', parse: parseNonEmptyString }),
-  defaultVariant: field({ scope: 'profile', parse: parseNonEmptyString }),
+  // New-session model and thinking level belong to OMP (`modelRoles.default`,
+  // `defaultThinkingLevel`); the app no longer keeps a second default.
   defaultAgent: field({ scope: 'profile', parse: parseNonEmptyString }),
   smallModelUseDefault: field({ scope: 'profile', parse: parseBoolean }),
   smallModelOverride: field({ scope: 'profile', parse: parseNonEmptyString }),
@@ -555,19 +554,6 @@ export const SETTINGS_REGISTRY = {
   sessionReviewOfferEnabled: field({ scope: 'profile', surfaces: ['web', 'desktop', 'mobile'], parse: parseBoolean, ui: uiStore('sessionReviewOfferEnabled', (v) => useUIStore.getState().setSessionReviewOfferEnabled(v)) }),
   sessionWorkKeepInGroup: field({ scope: 'profile', parse: parseBoolean, ui: uiStore('sessionWorkKeepInGroup', (v) => useUIStore.getState().setSessionWorkKeepInGroup(v)) }),
   sessionGoalEnabled: field({ scope: 'profile', parse: parseBoolean, ui: uiStore('sessionGoalEnabled', (v) => useUIStore.getState().setSessionGoalEnabled(v)) }),
-  // Who checks goal progress. The goal loop runs on the OpenChamber server,
-  sessionGoalChecker: field({
-    scope: 'profile',
-    surfaces: ['web', 'desktop', 'mobile'],
-    parse: parseOneOf(['classifier', 'small-model']),
-    ui: uiStore('sessionGoalChecker', (v) => useUIStore.getState().setSessionGoalChecker(v)),
-  }),
-  sessionGoalMaxAutoTurns: field({
-    scope: 'profile',
-    surfaces: ['web', 'desktop', 'mobile'],
-    parse: fromSchema(z.number().refine(isSessionGoalMaxAutoTurns)),
-    ui: uiStore('sessionGoalMaxAutoTurns', (v) => useUIStore.getState().setSessionGoalMaxAutoTurns(v)),
-  }),
   sessionGoalDefaultBudgetEnabled: field({ scope: 'profile', parse: parseBoolean, ui: uiStore('sessionGoalDefaultBudgetEnabled', (v) => useUIStore.getState().setSessionGoalDefaultBudgetEnabled(v)) }),
   sessionGoalDefaultBudget: field({ scope: 'profile', parse: parsePositiveInteger, ui: uiStore('sessionGoalDefaultBudget', (v) => useUIStore.getState().setSessionGoalDefaultBudget(v)) }),
   summarizeLastMessage: field({ scope: 'profile', parse: parseBoolean, ui: uiStore('summarizeLastMessage', (v) => useUIStore.getState().setSummarizeLastMessage(v)) }),

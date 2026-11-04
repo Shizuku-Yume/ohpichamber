@@ -125,20 +125,22 @@ describe('createParsedStatus', () => {
 
     const statusOf = (parts: Part[]) => createParsedStatus(parts, 'ses_1:msg_1');
 
-    test('names a tool by the kind of work it does', () => {
+    test('names OMP tools by their work and leaves other names visible', () => {
         expect(statusOf([tool('1', 'read')]).statusText).toBe('reading a file');
-        expect(statusOf([tool('1', 'patch')]).statusText).toBe('editing a file');
-        expect(statusOf([tool('1', 'shell')]).statusText).toBe('running a command');
-        expect(statusOf([tool('1', 'webfetch')]).statusText).toBe('looking things up');
-        expect(statusOf([tool('1', 'subagent')]).statusText).toBe('handing off a task');
-        expect(statusOf([tool('1', 'skill')]).statusText).toBe('picking up a skill');
+        expect(statusOf([tool('1', 'edit')]).statusText).toBe('editing a file');
+        expect(statusOf([tool('1', 'bash')]).statusText).toBe('running a command');
+        expect(statusOf([tool('1', 'web_search')]).statusText).toBe('looking things up');
+        expect(statusOf([tool('1', 'task')]).statusText).toBe('handing off a task');
+        expect(statusOf([tool('1', 'ask')]).statusText).toBe('asking a question');
+        expect(statusOf([tool('1', 'find')]).statusText).toBe('searching files');
+        expect(statusOf([tool('1', 'mcp__srv_custom')]).statusText).toBe('using mcp__srv_custom');
     });
 
-    test('counts parallel calls of the same kind', () => {
-        expect(statusOf([tool('1', 'read'), tool('2', 'read'), tool('3', 'file-diff')]).statusText).toBe('reading 3 files');
-        expect(statusOf([tool('1', 'write'), tool('2', 'patch')]).statusText).toBe('editing 2 files');
-        expect(statusOf([tool('1', 'shell'), tool('2', 'execute')]).statusText).toBe('running 2 commands');
-        expect(statusOf([tool('1', 'subagent'), tool('2', 'subagent')]).statusText).toBe('handing off 2 tasks');
+    test('counts parallel calls in the same native category', () => {
+        expect(statusOf([tool('1', 'read'), tool('2', 'read'), tool('3', 'read')]).statusText).toBe('reading 3 files');
+        expect(statusOf([tool('1', 'write'), tool('2', 'edit')]).statusText).toBe('editing 2 files');
+        expect(statusOf([tool('1', 'bash'), tool('2', 'bash')]).statusText).toBe('running 2 commands');
+        expect(statusOf([tool('1', 'task'), tool('2', 'task')]).statusText).toBe('handing off 2 tasks');
     });
 
     test('does not count searches, since one call spans many files', () => {
@@ -150,7 +152,7 @@ describe('createParsedStatus', () => {
     });
     test('failed and completed calls are not active', () => {
         expect(statusOf([tool('1', 'read', 'completed')]).activePartType).toBeUndefined();
-        expect(statusOf([tool('2', 'shell', 'failed')]).activePartType).toBeUndefined();
+        expect(statusOf([tool('2', 'bash', 'failed')]).activePartType).toBeUndefined();
     });
 
     test('canonical text and reasoning parts remain neutral without completion data', () => {
@@ -159,7 +161,7 @@ describe('createParsedStatus', () => {
     });
 
     test('shows the newest kind when different tools run together', () => {
-        expect(statusOf([tool('1', 'read'), tool('2', 'shell')]).statusText).toBe('running a command');
-        expect(statusOf([tool('1', 'shell'), tool('2', 'read')]).statusText).toBe('reading a file');
+        expect(statusOf([tool('1', 'read'), tool('2', 'bash')]).statusText).toBe('running a command');
+        expect(statusOf([tool('1', 'bash'), tool('2', 'read')]).statusText).toBe('reading a file');
     });
 });

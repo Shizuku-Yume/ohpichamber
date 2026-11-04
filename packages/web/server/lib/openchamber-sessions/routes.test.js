@@ -7,11 +7,13 @@ import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createProjectDirectoryRuntime } from '../host/project-directory-runtime.js';
 import { createHostSessionState } from '../host/session-state.js';
-import { runtimeSession } from '../event-stream/canonical-test-fixtures.js';
+import { history as historyFixture, runtimeSession, snapshot as snapshotFixture } from '../event-stream/canonical-test-fixtures.js';
 import { mergeMetadataPatch } from './session-metadata-store.js';
 
 let routeFixture;
 let routeFixtureDataDir;
+let testWorkspaceDirectory;
+let testAgentDirectory;
 
 const createMemorySessionMetadataStore = () => {
   const entries = new Map(); const revisions = new Map();
@@ -19,11 +21,36 @@ const createMemorySessionMetadataStore = () => {
   return { entries, get: async id => entries.get(id) ?? null, getState: async id => entries.has(id) ? { metadata: entries.get(id), revision: String(revisions.get(id) ?? 1) } : null, setSessionMetadata: async (id, patch) => { const current = entries.get(id); const metadata = merge(current, patch); const changed = JSON.stringify(current) !== JSON.stringify(metadata); const revision = (revisions.get(id) ?? (current ? 1 : 0)) + (changed ? 1 : 0); entries.set(id, metadata); revisions.set(id, revision); return { metadata, revision: String(revision), changed }; }, updateSessionMetadata: async (id, decide) => { const current = entries.get(id) ?? {}; const patch = decide(current); if (!patch) return { metadata: current, revision: String(revisions.get(id) ?? (entries.has(id) ? 1 : 0)), changed: false }; const metadata = merge(current, patch); const revision = (revisions.get(id) ?? (entries.has(id) ? 1 : 0)) + 1; entries.set(id, metadata); revisions.set(id, revision); return { metadata, revision: String(revision), changed: true }; } };
 };
 const createMemoryArchiveStore = () => { const entries = new Map(); return { entries, getState: async id => entries.has(id) ? { archivedAt: entries.get(id), revision: '1' } : null, archive: async (ids, archivedAt) => ({ archived: ids.map(id => { entries.set(id, archivedAt ?? 1); return { id, archivedAt: archivedAt ?? 1 }; }), failedIds: [] }), unarchive: async ids => ({ restored: ids.map(id => { entries.delete(id); return { id, archivedAt: null }; }), failedIds: [] }) }; };
-const validScope = (sessionId) => ({ sessionId, rootSessionId: sessionId, projectId: 'proj_1', workspaceId: 'ws_1', cwd: '/repo/app', agentDirectoryId: 'agent-dir-1', agentDirectory: '/repo/app/.agents', displayPath: 'app' });
+const validScope = (sessionId) => ({
+  sessionId,
+  rootSessionId: sessionId,
+  projectId: 'proj_1',
+  workspaceId: 'ws_1',
+  cwd: testWorkspaceDirectory ?? '/repo/app',
+  agentDirectoryId: 'agent-dir-1',
+  agentDirectory: testAgentDirectory ?? '/repo/app/.agents',
+  displayPath: 'app',
+});
 const createApp = (overrides = {}) => {
   const app = express(); const archiveStore = overrides.archiveStore ?? createMemoryArchiveStore(); const sessionMetadataStore = overrides.sessionMetadataStore ?? createMemorySessionMetadataStore();
   const { registerOpenChamberSessionRoutes } = overrides.routes;
-  registerOpenChamberSessionRoutes(app, { service: { request: vi.fn() }, resolveWorkspaceScope: async () => validScope('workspace'), resolveSessionScope: async id => validScope(id), resolveHostSessionScope: async id => id === 'ses_admitted' ? validScope(id) : null, registerSessionScope: async () => true, resolveAttachments: async () => [], capturePrompt: async (_scope, body) => body, beforeDispatch: async () => {}, onPromptAccepted: async () => {}, directCommandAdmissionStore: overrides.directCommandAdmissionStore ?? routeFixture.directCommandAdmissionStore, archiveStore, sessionMetadataStore, isRequestOriginAllowed: async () => true, ...overrides });
+  registerOpenChamberSessionRoutes(app, {
+    service: { request: vi.fn() },
+    agentScopeStore: overrides.agentScopeStore ?? routeFixture.agentScopeStore,
+    resolveWorkspaceScope: async () => validScope('workspace'),
+    resolveSessionScope: async id => validScope(id),
+    resolveHostSessionScope: async id => id === 'ses_admitted' ? validScope(id) : null,
+    registerSessionScope: async () => true,
+    resolveAttachments: async () => [],
+    capturePrompt: async (_scope, body) => body,
+    beforeDispatch: async () => {},
+    onPromptAccepted: async () => {},
+    directCommandAdmissionStore: overrides.directCommandAdmissionStore ?? routeFixture.directCommandAdmissionStore,
+    archiveStore,
+    sessionMetadataStore,
+    isRequestOriginAllowed: async () => true,
+    ...overrides,
+  });
   return { app, archiveStore, sessionMetadataStore, hostSessionState: routeFixture };
 };
 
@@ -32,8 +59,20 @@ describe('canonical session route contracts', () => {
   beforeAll(async () => {
     routes = await import('./routes.js');
     routeFixtureDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-routes-admission-'));
+    testWorkspaceDirectory = path.join(routeFixtureDataDir, 'app');
+    testAgentDirectory = path.join(testWorkspaceDirectory, '.agents');
+    fs.mkdirSync(testAgentDirectory, { recursive: true });
     routeFixture = createHostSessionState({ dataDir: routeFixtureDataDir });
     await routeFixture.initialize();
+    await routeFixture.agentScopeStore.ensureWorkspace({
+      hostProjectId: 'proj_1',
+      projectId: 'proj_1',
+      workspaceId: 'ws_1',
+      projectDirectory: testWorkspaceDirectory,
+      workspaceDirectory: testWorkspaceDirectory,
+      agentDirectory: testAgentDirectory,
+      name: 'Project',
+    });
   });
   afterAll(async () => {
     await routeFixture.close();
@@ -49,6 +88,91 @@ describe('canonical session route contracts', () => {
   it('rejects metadata and archive operations for an unauthorized Host session', async () => { const { app } = createApp({ routes }); await request(app).get('/api/openchamber/sessions/ses_foreign/metadata').expect(404); await request(app).post('/api/openchamber/sessions/archive').send({ ids: ['ses_foreign'] }).expect(404); });
   it('keeps admitted Host metadata and archive operations available when native service is unavailable', async () => { const archiveStore = createMemoryArchiveStore(); const sessionMetadataStore = createMemorySessionMetadataStore(); const { app } = createApp({ routes, archiveStore, sessionMetadataStore }); await request(app).patch('/api/openchamber/sessions/ses_admitted/metadata').send({ changes: { notes: 'host-owned' } }).expect(200); await request(app).get('/api/openchamber/sessions/ses_admitted/metadata').expect(200); await request(app).post('/api/openchamber/sessions/archive').send({ ids: ['ses_admitted'], archivedAt: 1700 }).expect(200); await request(app).post('/api/openchamber/sessions/unarchive').send({ ids: ['ses_admitted'] }).expect(200); });
   it('rejects malformed archive batches', async () => { const { app } = createApp({ routes }); await request(app).post('/api/openchamber/sessions/archive').send({ ids: [] }).expect(400); await request(app).post('/api/openchamber/sessions/archive').send({ ids: ['ses_admitted'], archivedAt: -1 }).expect(400); });
+  it('reopens a cold session before a run, starts one worker, and keeps the second send live', async () => {
+    const live = new Set(); const calls = []; let workerStarts = 0;
+    const runtime = id => ({ sessionId: id, rootSessionId: id, projectId: 'proj_1', workspaceId: 'ws_1', displayPath: 'app',
+      createdAt: 1, updatedAt: 2, epoch: `epoch-${id}`, headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' } });
+    const service = { request: async (pathname, init = {}) => {
+      calls.push(pathname);
+      const id = decodeURIComponent(pathname.split('/').at(-2));
+      if (pathname.endsWith('/reopen')) {
+        if (!live.has(id)) { live.add(id); workerStarts += 1; }
+        return Response.json(runtime(id));
+      }
+      if (pathname.endsWith('/runs')) {
+        if (!live.has(id)) return Response.json({ type: 'urn:ohpichamber:problem:SERVICE_UNAVAILABLE', title: 'Unavailable', status: 503, code: 'SERVICE_UNAVAILABLE', detail: 'Cold session has no worker', retryable: true }, { status: 503 });
+        const body = JSON.parse(init.body);
+        return Response.json({ run: { runId: body.runId, sessionId: id, status: 'running', origin: 'host', createdAt: 1 } });
+      }
+      throw new Error(`Unexpected service request ${pathname}`);
+    } };
+    const { createOpenChamberSessionService, registerCanonicalSessionRoutes } = routes;
+    const sessionService = createOpenChamberSessionService({
+      agentScopeStore: routeFixture.agentScopeStore,
+      service,
+      resolveWorkspaceScope: async () => validScope('workspace'),
+      resolveSessionScope: async id => validScope(id),
+      resolveHostSessionScope: async id => id === 'ses_admitted' ? validScope(id) : null,
+      registerSessionScope: async () => true,
+      resolveAttachments: async () => [],
+      capturePrompt: async (_scope, body) => body,
+      beforeDispatch: async () => {},
+      onPromptAccepted: async () => {},
+      directCommandAdmissionStore: routeFixture.directCommandAdmissionStore,
+      archiveStore: createMemoryArchiveStore(),
+      sessionMetadataStore: createMemorySessionMetadataStore(),
+    });
+    const app = express();
+    const router = express.Router();
+    registerCanonicalSessionRoutes(router, sessionService);
+    app.use('/api/agent/v1/sessions', router);
+    const prompt = { input: { text: 'Cold prompt', attachments: [], context: [] },
+      options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null } };
+    const first = await request(app).post('/api/agent/v1/sessions/ses_admitted/runs').send(prompt).expect(200);
+    expect(first.body.run).toMatchObject({ sessionId: 'ses_admitted', status: 'running' });
+    const second = await request(app).post('/api/agent/v1/sessions/ses_admitted/runs').send(prompt).expect(200);
+    expect(second.body.run).toMatchObject({ sessionId: 'ses_admitted', status: 'running' });
+    expect(workerStarts).toBe(1);
+    expect(calls.filter(path => path.endsWith('/reopen'))).toHaveLength(2);
+    const afterValid = calls.length;
+    await request(app).post('/api/agent/v1/sessions/ses_admitted/runs').send({}).expect(400);
+    expect(calls).toHaveLength(afterValid);
+  });
+  it('enforces Host admission invariant: rejects cold send when agentScopeStore is missing instead of bypassing admission', async () => {
+    const calls = [];
+    const service = { request: async (pathname) => {
+      calls.push(pathname);
+      return Response.json({});
+    } };
+    const { createOpenChamberSessionService, registerCanonicalSessionRoutes } = routes;
+    const sessionService = createOpenChamberSessionService({
+      service,
+      // agentScopeStore intentionally omitted to verify invariant enforcement
+      resolveWorkspaceScope: async () => validScope('workspace'),
+      resolveSessionScope: async id => validScope(id),
+      resolveHostSessionScope: async id => id === 'ses_admitted' ? validScope(id) : null,
+      registerSessionScope: async () => true,
+      resolveAttachments: async () => [],
+      capturePrompt: async (_scope, body) => body,
+      beforeDispatch: async () => {},
+      onPromptAccepted: async () => {},
+      directCommandAdmissionStore: routeFixture.directCommandAdmissionStore,
+      archiveStore: createMemoryArchiveStore(),
+      sessionMetadataStore: createMemorySessionMetadataStore(),
+    });
+    const app = express();
+    const router = express.Router();
+    registerCanonicalSessionRoutes(router, sessionService);
+    app.use('/api/agent/v1/sessions', router);
+    const prompt = { input: { text: 'Cold prompt', attachments: [], context: [] },
+      options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null } };
+    const response = await request(app).post('/api/agent/v1/sessions/ses_admitted/runs').send(prompt).expect(503);
+    expect(response.body).toMatchObject({
+      code: 'SERVICE_UNAVAILABLE',
+      detail: 'Host session admission authority is unavailable',
+    });
+    expect(calls.filter(path => path.endsWith('/reopen'))).toHaveLength(0);
+  });
 
   describe('session links the UI owns', () => {
     const agentEntry = {
@@ -209,11 +333,9 @@ describe('canonical session route contracts', () => {
   describe('session create with parent link', () => {
     it('authorizes parent session in the same workspace and sets parentSessionId', async () => {
       const capturedBootstrap = [];
-      const dir = path.join(routeFixtureDataDir, 'ws_1');
-      fs.mkdirSync(dir, { recursive: true });
       await routeFixture.agentScopeStore.ensureWorkspace({
         hostProjectId: 'proj_1', projectId: 'proj_1', workspaceId: 'ws_1',
-        projectDirectory: dir, workspaceDirectory: dir, agentDirectory: dir, name: 'Project',
+        projectDirectory: testWorkspaceDirectory, workspaceDirectory: testWorkspaceDirectory, agentDirectory: testAgentDirectory, name: 'Project',
       });
       const service = {
         request: vi.fn(async (path, init) => {
@@ -286,6 +408,74 @@ describe('canonical session list persistence', () => {
     });
   };
 
+  it('renames through the canonical title route and returns the composed session', async () => {
+    const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'session-title-'));
+    const state = createHostSessionState({ dataDir });
+    const calls = [];
+    try {
+      await state.initialize();
+      const { createOpenChamberSessionService } = await import('./routes.js');
+      const service = createOpenChamberSessionService({
+        service: { request: async (pathname, init) => {
+          calls.push({ pathname, body: init?.body });
+          return Response.json(runtimeSession({ title: 'Renamed' }));
+        } },
+        resolveWorkspaceScope: async () => ({ ...validScope('workspace'), projectId: 'project', workspaceId: 'workspace' }),
+        resolveSessionScope: async id => validScope(id),
+        resolveHostSessionScope: async id => ({ ...validScope(id), projectId: 'project', workspaceId: 'workspace' }),
+        registerSessionScope: async () => true,
+        resolveAttachments: async () => [],
+        capturePrompt: async (_scope, body) => body,
+        beforeDispatch: async () => {},
+        onPromptAccepted: async () => {},
+        sessionMetadataStore: state.sessionMetadataStore,
+        archiveStore: state.archiveStore,
+        directCommandAdmissionStore: state.directCommandAdmissionStore,
+      });
+      const renamed = await service.rename('session', { workspaceId: 'workspace', title: '  Renamed  ' });
+      expect(calls).toEqual([{ pathname: '/api/agent/v1/sessions/session/title', body: JSON.stringify({ workspaceId: 'workspace', title: 'Renamed' }) }]);
+      expect(renamed).toMatchObject({ sessionId: 'session', title: 'Renamed', metadata: null, metadataRevision: '0' });
+    } finally {
+      await state.close();
+      fs.rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
+
+  it('reads a snapshot and history without reopening a worker', async () => {
+    const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'session-cold-read-'));
+    const state = createHostSessionState({ dataDir });
+    const calls = [];
+    try {
+      await state.initialize();
+      const { createOpenChamberSessionService } = await import('./routes.js');
+      const service = createOpenChamberSessionService({
+        service: { request: async (pathname) => {
+          calls.push(pathname);
+          if (pathname.endsWith('/snapshot')) return Response.json(snapshotFixture());
+          return Response.json(historyFixture());
+        } },
+        resolveWorkspaceScope: async () => ({ ...validScope('workspace'), projectId: 'project', workspaceId: 'workspace' }),
+        resolveSessionScope: async id => ({ ...validScope(id), projectId: 'project', workspaceId: 'workspace' }),
+        resolveHostSessionScope: async id => ({ ...validScope(id), projectId: 'project', workspaceId: 'workspace' }),
+        registerSessionScope: async () => true,
+        resolveAttachments: async () => [],
+        capturePrompt: async (_scope, body) => body,
+        beforeDispatch: async () => {},
+        onPromptAccepted: async () => {},
+        sessionMetadataStore: state.sessionMetadataStore,
+        archiveStore: state.archiveStore,
+        directCommandAdmissionStore: state.directCommandAdmissionStore,
+      });
+      expect((await service.open('session')).session.sessionId).toBe('session');
+      expect((await service.history('session')).messages).toHaveLength(1);
+      expect(calls).toEqual(['/api/agent/v1/sessions/session/snapshot', '/api/agent/v1/sessions/session/history']);
+      expect(calls.some(path => path.endsWith('/reopen'))).toBe(false);
+    } finally {
+      await state.close();
+      fs.rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
+
   it('lists an unarchived session without losing its committed archive revision', async () => {
     const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'session-unarchive-'));
     const state = createHostSessionState({ dataDir });
@@ -312,12 +502,12 @@ describe('canonical session list persistence', () => {
     const connection = new DatabaseSync(state.databasePath);
     try {
       await state.initialize();
-      await state.sessionMetadataStore.setSessionMetadata('healthy', { title: 'Preserved session' });
+      await state.sessionMetadataStore.setSessionMetadata('healthy', { notes: 'Preserved session' });
       connection.prepare('INSERT INTO session_metadata (session_id, revision, payload) VALUES (?, ?, ?)').run('corrupt', 1, '{');
       const service = await createService(state, [runtimeSession({ sessionId: 'corrupt', rootSessionId: 'corrupt' }), runtimeSession({ sessionId: 'healthy', rootSessionId: 'healthy' })]);
       const listed = await service.list('workspace');
       expect(listed.items.map(session => session.sessionId)).toEqual(['healthy']);
-      expect(listed.items[0].metadata.title).toBe('Preserved session');
+      expect(listed.items[0].metadata.notes).toBe('Preserved session');
       expect(listed.errors).toEqual({ corrupt: 'METADATA_CORRUPT' });
     } finally {
       connection.close();
@@ -340,7 +530,7 @@ describe('canonical session list persistence', () => {
         sessionId: 'ses_archived', rootSessionId: 'ses_archived', workspaceId: anchor.workspaceId, agentDirectoryId: anchor.agentDirectoryId,
       });
       await state.archiveStore.archive(['ses_archived'], 1700);
-      await state.sessionMetadataStore.setSessionMetadata('ses_archived', { title: 'Archived worktree task' });
+      await state.sessionMetadataStore.setSessionMetadata('ses_archived', { notes: 'Archived worktree task' });
       const binding = await state.agentScopeStore.createWorktreeArchive({
         hostProjectId: 'project', archiveId: 'arc_1', archiveRef: 'refs/openchamber/archive/arc_1',
         snapshotCommit: 'a'.repeat(40), anchorWorkspaceId: anchor.workspaceId, claimId: 'claim_1',
@@ -372,7 +562,7 @@ describe('canonical session list persistence', () => {
       expect(result.sessions).toHaveLength(1);
       expect(result.sessions[0]).toMatchObject({
         sessionId: 'ses_archived',
-        metadata: { title: 'Archived worktree task' },
+        metadata: { notes: 'Archived worktree task' },
         archivedAt: 1700,
       });
     } finally {

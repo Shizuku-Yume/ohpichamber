@@ -14,6 +14,7 @@ const runtimeSession = (sessionId, rootSessionId = sessionId) => ({
   headSequence: '0',
   runtimeStatus: 'idle',
   activeRunId: null,
+  mode: { kind: 'main' },
 });
 
 const updated = (session) => ({

@@ -3,7 +3,6 @@ import { registerFsRoutes } from '../fs/routes.js';
 import { registerEnvironmentRoutes } from '../environment/routes.js';
 import { registerQuotaRoutes } from '../quota/routes.js';
 import { registerWalkthroughRoutes } from '../walkthrough/routes.js';
-import { registerSessionGoalRoutes } from '../session-goal/routes.js';
 import { registerSourceControlRoutes } from '../source-control/routes.js';
 import { registerLinearRoutes } from '../linear/routes.js';
 import { registerGuestRoutes, settleGuestDeactivationListeners } from '../guests/routes.js';
@@ -254,7 +253,6 @@ export const createFeatureRoutesRuntime = () => {
     const { getProfile, getGlobalIdentity, resolveRepositoryGitPaths } = await import('../git/index.js');
 
     registerQuotaRoutes(app, { getQuotaProviders, resolveQuotaSelection, listQuotaSelections, resolveCredential });
-    registerSessionGoalRoutes(app);
     const gitBinary = resolveGitBinaryForSpawn();
     // One server token store for every provider. OAuth tokens that expire
     // (GitLab's live two hours) are renewed before they lapse, through the

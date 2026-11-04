@@ -43,11 +43,13 @@ const session = (sessionId: string, directory: string | null): Session => {
     headSequence: '0',
     runtimeStatus: 'idle',
     activeRunId: null,
+    mode: { kind: 'main' },
     metadata: null,
     metadataRevision: '0',
     archiveRevision: '0',
   };
 };
+
 
 describe('projectSidebarActiveSessions', () => {
   test('keeps case-insensitive membership local to projection without rewriting request paths', () => {
@@ -207,27 +209,6 @@ describe('projectSidebarCollection', () => {
     expect(projection.orderedSessions.map(entry => entry.sessionId)).toContain('canonical-chat');
   });
 
-  test('excludes a /btw fork before project ownership and restores it when the marker is removed', () => {
-    const fork = {
-      ...session('fork', '/home/.config/openchamber/chats/2026-08-24/session-fork'),
-      metadata: { openchamber: { kind: 'btw' as const, originalSessionID: 'parent' } },
-    };
-    const project = session('project', '/workspace/a');
-    const input = {
-      liveSessions: [],
-      knownDirectories: new Set(['/workspace/a']),
-      isVSCode: false,
-    };
-
-    expect(projectSidebarCollection({ ...input, globalActiveSessions: [fork, project] }).map((entry) => entry.sessionId)).toEqual(['project']);
-    expect(partitionSidebarSessions([fork], false).chatSessions).toEqual([]);
-
-    const promoted = {
-      ...fork,
-      metadata: { openchamber: {} },
-    };
-    expect(partitionSidebarSessions([promoted], false).chatSessions.map((entry) => entry.sessionId)).toEqual(['fork']);
-  });
 
   test('keeps a ranked managed root and its active child in the Chats hierarchy', () => {
     const managedRoot = { ...session('managed-root', '/home/.config/openchamber/chats/2026-08-24/session-root'), time: { created: 1, updated: 1 } };

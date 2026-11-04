@@ -8,7 +8,7 @@ import { deliverSessionStream, EVENT_STREAM_QUEUE_LIMIT, type EventStreamRespons
 
 const ListeningPortSchema = z.object({ port: z.number().int().positive() });
 const session = { sessionId: 's', projectId: 'p', workspaceId: 'w', displayPath: '.', rootSessionId: 's' };
-const seed: ProjectionSeed = { createdAt: 1, updatedAt: 1, branch: { branchId: 'branch:opaque', branchVersion: '1', leafMessageId: null }, turns: [], messages: [] };
+const seed: ProjectionSeed = { createdAt: 1, updatedAt: 1, mode: { kind: 'main' }, branch: { branchId: 'branch:opaque', branchVersion: '1', leafMessageId: null }, turns: [], messages: [] };
 const input = (event: ProjectionEvent, timestamp = 2): ProjectionInput => ({ timestamp, event });
 const largeInput = (index: number) => input({ type: 'tool.started', toolCallId: `tool${index}`, toolName: 'bash', input: { arguments: ['x'.repeat(1024)] } });
 

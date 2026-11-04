@@ -4,6 +4,7 @@ import { HistoryPageRequestSchema, HistoryPageSchema, ModelsPageSchema, Paginati
 const session = {
   sessionId: 'session_1', projectId: 'project_1', workspaceId: 'workspace_1', displayPath: '.', rootSessionId: 'session_1',
   createdAt: 1, updatedAt: 2, epoch: 'epoch_1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  mode: { kind: 'main' },
   metadata: null, metadataRevision: '0', archiveRevision: '0',
 };
 const model = {

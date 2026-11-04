@@ -32,8 +32,8 @@ test('a collapsed virtual folder shows live and unread descendants without mount
     registerWorkspaceDirectory(workspaceId, '/repo');
     return {
       sessionId, parentSessionId, rootSessionId: parentSessionId ?? sessionId, projectId: 'project', workspaceId, displayPath: '/repo',
-      createdAt: 1, updatedAt: 1, epoch: 'epoch_1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
-      metadata: { title: sessionId }, metadataRevision: '1', archiveRevision: '0',
+      createdAt: 1, updatedAt: 1, epoch: 'epoch_1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
+      title: sessionId, metadata: {}, metadataRevision: '1', archiveRevision: '0',
     };
   };
   const sessions = [{ session: session('parent'), worktree: null, children: [{ session: session('child', 'parent'), worktree: null, children: [] }] }];

@@ -83,7 +83,7 @@ export const useSessionGrouping = (args: Args): SessionGrouping => {
 
   const buildSessionSearchText = React.useCallback((session: Session): string => {
     const sessionDirectory = resolveGlobalSessionDirectory(session) ?? '';
-    const sessionTitle = (session.metadata?.title || t('sessions.sidebar.session.untitled')).trim();
+    const sessionTitle = (session.title || t('sessions.sidebar.session.untitled')).trim();
     return `${sessionTitle} ${sessionDirectory}`.toLowerCase();
   }, [t]);
 

@@ -6,7 +6,7 @@ import { collectComposerForms } from "./sync-context"
 const session = (sessionId: string, parentSessionId?: string): Session => ({
   sessionId, projectId: "project-1", workspaceId: "workspace-1", displayPath: ".", rootSessionId: "ses_root",
   ...(parentSessionId ? { parentSessionId } : {}), createdAt: 1, updatedAt: 1, epoch: "epoch-1", headSequence: "0",
-  runtimeStatus: "awaiting_input", activeRunId: "run-1", metadata: null, metadataRevision: "0", archiveRevision: "0",
+  runtimeStatus: "awaiting_input", activeRunId: "run-1", mode: { kind: "main" }, metadata: null, metadataRevision: "0", archiveRevision: "0",
 })
 const question = (questionId: string, sessionId: string): QuestionRequest => ({
   questionId, sessionId, turnId: "turn-1", prompt: questionId, status: "pending", requestedAt: 1,

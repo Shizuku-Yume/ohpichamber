@@ -21,8 +21,7 @@ import {
   type SessionMetadataRecord,
 } from "@/lib/sessionReviewMetadata"
 import { withContextObligatoryMessage, type ContextObligatoryMessage } from "@/lib/contextObligatoryMessages"
-import { withoutBtwSessionLink } from "@/lib/sessionBtwMetadata"
-import { type LinkedIssue } from "@/lib/linkedIssues"
+import type { LinkedIssue } from "@/lib/linkedIssues"
 import { withSessionWorkState, type SessionWork } from "@/lib/sessionWorkMetadata"
 import { getImperativeSessionMessageLoader } from "./session-message-loader"
 import { clearSessionPrefetch } from "./session-prefetch-cache"
@@ -39,10 +38,9 @@ import { deleteChatDirectory } from "@/lib/chatDirectories"
 import { cancelSessionTitleGeneration } from "./session-title-generation"
 import { recordSessionActionFailure } from "./session-action-failures"
 import { withoutSourceOwnedLinks } from "@/lib/sessionForkInheritance"
-import { fetchGoalObjectiveContent, writeGoalObjectiveFile } from "@/lib/goalObjectiveFiles"
 import { canonicalClient, CanonicalApiError } from "@/api/canonicalClient"
 import { SessionMetadataSchema, SessionMetadataPatchSchema, PromptRequestSchema } from "@openchamber/agent-contract"
-import type { Session as CanonicalSession, Message as CanonicalMessage, SessionSnapshot, SessionBranchResult, SessionMetadataState, PromptRequest, ApprovalRequest as PermissionRequest, QuestionRequest as FormRequest, ApprovalReply, QuestionReply, JsonValue, JsonObject as Metadata, SessionMetadata, Run } from "@openchamber/agent-contract"
+import type { Session as CanonicalSession, Message as CanonicalMessage, SessionSnapshot, SessionBranchResult, SessionMetadataState, PromptRequest, ApprovalRequest as PermissionRequest, QuestionRequest as FormRequest, ApprovalReply, QuestionReply, JsonValue, JsonObject as Metadata, SessionMetadata, SessionCreateRequest, Run } from "@openchamber/agent-contract"
 import { installHostSession, installRuntimeRun, installSessionMetadata, installSessionSnapshot, type RunControlBaseline } from "./event-reducer"
 import { registerWorkspaceDirectory, resolveWorkspaceDirectory } from "@/stores/globalSessions"
 import type { State } from "./types"
@@ -717,7 +715,7 @@ async function submitQuestion(request: FormRequest, action: { action: "answer"; 
 /** Capture the existing composer selection in native session admission options. */
 export type SessionCreateSelection = {
   model?: { providerId: string; modelId: string }
-  agent?: string
+  agent?: string | null
   variant?: string
   reasoningEffort?: string
 }
@@ -738,8 +736,7 @@ export async function createSession(
     const workspace = await canonicalClient.resolveWorkspace(effectiveDirectory)
     if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) return null
     const admittedMetadata = { ...metadata }
-    if (title !== undefined) admittedMetadata.title = title
-    const { session } = await canonicalClient.createSession({
+    const createRequest: SessionCreateRequest = {
       projectId: workspace.projectId,
       workspaceId: workspace.workspaceId,
       options: {
@@ -750,7 +747,9 @@ export async function createSession(
         reasoningEffort: selection?.reasoningEffort ?? null,
       },
       metadata: SessionMetadataSchema.parse(admittedMetadata),
-    })
+    }
+    if (title !== undefined) createRequest.title = title
+    const { session } = await canonicalClient.createSession(createRequest)
     if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) return null
     registerWorkspaceDirectory(workspace.workspaceId, effectiveDirectory)
     _childStores?.ensureChild(effectiveDirectory, { bootstrap: false })
@@ -969,25 +968,6 @@ async function cleanupReviewMetadataBeforeDelete(
     return
   }
 
-  if (metadata?.openchamber?.kind === "btw") {
-    const originalSessionID = metadata.openchamber.originalSessionID
-    if (originalSessionID) await unlinkParent(originalSessionID, (current) => withoutBtwSessionLink(current, sessionId))
-    return
-  }
-
-  // Deleting or archiving a session that has an active btw fork also removes
-  // the fork: it is a temporary session that only exists for its parent's
-  // panel. Best-effort — a failed fork delete must not block the parent's
-  // operation; the orphaned fork stays visible in the sidebar.
-  const btwSessionID = metadata?.openchamber?.btwSessionID
-  if (btwSessionID) {
-    try {
-      if (isStaleRuntime(expectedRuntimeKey)) return
-      await deleteSession(btwSessionID, { expectedRuntimeKey })
-    } catch (error) {
-      console.warn("[session-actions] failed to delete btw fork before parent delete", error)
-    }
-  }
 }
 
 /** Remove a server-confirmed session from every live child store that has it. */
@@ -1416,7 +1396,7 @@ export async function archiveSessions(
  */
 function hasLinkedSessionCleanup(session: CanonicalSession): boolean {
   const links = session.metadata?.openchamber
-  return links?.kind === "review" || links?.kind === "btw" || Boolean(links?.btwSessionID)
+  return links?.kind === "review"
 }
 
 /**
@@ -1677,11 +1657,11 @@ export async function updateSessionTitle(
   const current = getGlobalSessionSnapshot(sessionId) ?? await readCanonicalSession(sessionId, runtimeKey)
   if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
   options?.signal?.throwIfAborted()
-  const result = await canonicalClient.patchSessionMetadata(sessionId, { changes: { title } })
+  const result = await canonicalClient.renameSession(sessionId, current.workspaceId, title)
   if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
   options?.signal?.throwIfAborted()
-  if (result.sessionId !== sessionId) throw new Error("Title response identified another session")
-  publishCanonicalMetadata(current, result)
+  if (result.sessionId !== sessionId || !result.title) throw new Error("Title response identified another session")
+  publishCanonicalSession(result, options?.directory ?? undefined)
 }
 
 // ---------------------------------------------------------------------------
@@ -1884,6 +1864,19 @@ export async function abortCurrentOperation(sessionId: string): Promise<void> {
   // the stop control clears without waiting for the event stream to recover.
   publishRuntimeRun(result.run)
 }
+export async function compactSession(sessionId: string, instructions?: string): Promise<void> {
+  const runtimeKey = getRuntimeKey()
+  const result = await canonicalClient.compactSession(sessionId, instructions)
+  if (isStaleRuntime(runtimeKey)) throw new Error('runtime changed')
+  if (result.type !== 'compact') throw new Error('Compact response identified another control')
+}
+export async function runBuiltinCommand(sessionId: string, text: string): Promise<string> {
+  const runtimeKey = getRuntimeKey()
+  const result = await canonicalClient.runBuiltinCommand(sessionId, text)
+  if (isStaleRuntime(runtimeKey)) throw new Error('runtime changed')
+  if (result.type !== 'command') throw new Error('Command response identified another control')
+  return result.output
+}
 
 // ---------------------------------------------------------------------------
 // Permissions
@@ -2048,21 +2041,6 @@ async function inheritForkMetadata(sourceSessionId: string, forkedSession: Canon
     if (isStaleRuntime(expectedRuntimeKey)) return
     const inherited = SessionMetadataSchema.parse(withoutSourceOwnedLinks(source.metadata ?? {}))
     await patchSessionMetadata(forkedSession.sessionId, directory, (current) => Object.keys(current).length ? current : inherited, expectedRuntimeKey)
-    const goal = inherited.openchamber?.goal
-    if (!goal?.id || !goal.objectiveFile) return
-    const objective = await fetchGoalObjectiveContent(sourceSessionId)
-    if (isStaleRuntime(expectedRuntimeKey) || objective === null) return
-    const current = await canonicalClient.getSessionMetadata(forkedSession.sessionId)
-    if (isStaleRuntime(expectedRuntimeKey) || current.metadata?.openchamber?.goal?.id !== goal.id) return
-    const written = await writeGoalObjectiveFile(forkedSession.sessionId, objective)
-    if (isStaleRuntime(expectedRuntimeKey)) return
-    if (!written) await patchSessionMetadata(forkedSession.sessionId, directory, (metadata) => {
-      const native = SessionMetadataSchema.parse(metadata)
-      const openchamber = native.openchamber
-      const nativeGoal = openchamber?.goal
-      if (!openchamber || !nativeGoal || nativeGoal.id !== goal.id) return metadata
-      return { ...native, openchamber: { ...openchamber, goal: { ...nativeGoal, objective, objectiveFile: false } } }
-    }, expectedRuntimeKey)
   } catch (error) {
     if (!isStaleRuntime(expectedRuntimeKey)) console.warn("[session-actions] fork metadata inheritance failed", error)
   }

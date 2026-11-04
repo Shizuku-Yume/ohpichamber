@@ -34,6 +34,7 @@ const session = (index: number, updatedAt = index): Session => ({
   epoch: "epoch",
   headSequence: "0",
   runtimeStatus: "idle",
+  mode: { kind: 'main' },
   activeRunId: null,
   metadata: null,
   metadataRevision: "0",

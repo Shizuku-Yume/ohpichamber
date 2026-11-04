@@ -39,7 +39,7 @@ const themeContext: ThemeContextValue = {
 };
 const parent: Session = {
   sessionId: 'parent', rootSessionId: 'parent', projectId: 'project', workspaceId: 'workspace', displayPath: 'workspace',
-  createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
   archivedAt: undefined, metadata: null, metadataRevision: '0', archiveRevision: '0',
 };
 const call: ToolCallPart = {

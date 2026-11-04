@@ -3,6 +3,7 @@ import { JsonObjectSchema, type JsonObject } from '@openchamber/agent-contract';
 import {
   askSchemaSignature,
   buildAskAnswer,
+  buildPlanReviewAnswer,
   cardQuestionTextIntent,
   deliverQuestionAnswer,
   dockQuestionTextIntent,
@@ -10,6 +11,8 @@ import {
   isAskQuestionAnswered,
   missingAskQuestionIndexes,
   parseAskQuestions,
+  parseAskTimeout,
+  parsePlanReview,
   setAskCustom,
   setAskText,
   toggleAskOption,
@@ -17,6 +20,7 @@ import {
 
 const schema = JsonObjectSchema.parse({
   type: 'omp.ask',
+  timeout: 45_000,
   questions: [
     {
       id: 'colors',
@@ -25,8 +29,8 @@ const schema = JsonObjectSchema.parse({
       multi: true,
       recommended: 1,
       options: [
-        { label: 'red', description: 'Warm' },
-        { label: 'blue' },
+        { label: 'red', description: 'Warm', preview: '**Rose** red' },
+        { label: 'blue', preview: '- ocean\n- sky' },
       ],
     },
     {
@@ -38,7 +42,11 @@ const schema = JsonObjectSchema.parse({
 });
 
 describe('parseAskQuestions', () => {
-  test('reads the exact omp.ask question shape', () => {
+  test('reads the optional native timeout', () => {
+    expect(parseAskTimeout(schema)).toBe(45_000);
+  });
+
+  test('reads options previews and recommended choice from the native question shape', () => {
     expect(parseAskQuestions(schema)).toEqual([
       {
         id: 'colors',
@@ -46,7 +54,7 @@ describe('parseAskQuestions', () => {
         question: 'Which colors should I use?',
         multi: true,
         recommended: 1,
-        options: [{ label: 'red', description: 'Warm' }, { label: 'blue' }],
+        options: [{ label: 'red', description: 'Warm', preview: '**Rose** red' }, { label: 'blue', preview: '- ocean\n- sky' }],
       },
       { id: 'note', question: 'Anything else?', multi: false, options: [{ label: 'Other' }] },
     ]);
@@ -60,13 +68,26 @@ describe('parseAskQuestions', () => {
   });
 });
 
+test('preselects the recommended option in single and multi questions', () => {
+  const questions = parseAskQuestions({
+    type: 'omp.ask',
+    questions: [
+      { id: 'single', options: [{ label: 'no' }, { label: 'yes' }], recommended: 1 },
+      { id: 'multi', options: [{ label: 'first' }, { label: 'second' }], multi: true, recommended: 0 },
+      { id: 'unrecommended', options: [{ label: 'left' }, { label: 'right' }] },
+      { id: 'invalid', options: [{ label: 'only' }], recommended: 3 },
+    ],
+  });
+  expect(initialAskAnswers(questions).map((answer) => answer.selected)).toEqual([['yes'], ['first'], [], []]);
+});
+
+
 describe('native question answers', () => {
   const questions = parseAskQuestions(schema);
 
   test('keeps result order and request ids, with selections in option order', () => {
     const answers = initialAskAnswers(questions);
-    const colors = toggleAskOption(questions[0], answers[0], 'blue');
-    const withRed = toggleAskOption(questions[0], colors, 'red');
+    const withRed = toggleAskOption(questions[0], answers[0], 'red');
     const note = setAskCustom(questions[1], answers[1], true);
 
     expect(buildAskAnswer(questions, [withRed, setAskText(note, '  a free answer  ')])).toEqual({
@@ -82,7 +103,7 @@ describe('native question answers', () => {
     const custom = setAskText(setAskCustom(questions[0], selected, true), 'also lime');
 
     expect(buildAskAnswer([questions[0]], [custom])).toEqual({
-      results: [{ id: 'colors', selectedOptions: ['red'], customInput: 'also lime' }],
+      results: [{ id: 'colors', selectedOptions: ['red', 'blue'], customInput: 'also lime' }],
     });
   });
 
@@ -168,5 +189,54 @@ describe('question answer delivery', () => {
 
     expect(accepted).toBe(true);
     expect(calls).toEqual(['reply']);
+  });
+});
+
+describe('plan review questions', () => {
+  const review = {
+    type: 'plan-review', title: 'Improve the composer',
+    planReference: 'local://plans/composer.md', planText: '## Plan\n\nKeep the existing ask flow.',
+  };
+
+  test('parses a plan review without treating it as omp.ask', () => {
+    expect(parsePlanReview(review)).toEqual(review);
+    expect(parseAskQuestions(review)).toEqual([]);
+    expect(parsePlanReview(schema)).toBeNull();
+  });
+
+  test('rejects malformed reviews and nonlocal references', () => {
+    expect(parsePlanReview({ ...review, planText: 42 })).toBeNull();
+    expect(parsePlanReview({ ...review, planReference: '/home/private/plan.md' })).toBeNull();
+    expect(parsePlanReview({ ...review, planReference: 'https://example.com/plan.md' })).toBeNull();
+    expect(parsePlanReview({ ...review, planReference: 'local://../plan.md' })).toBeNull();
+  });
+
+  test('builds each decision and trims feedback without sending blanks', () => {
+    for (const action of ['approve', 'approve-compact', 'reject'] as const) {
+      expect(buildPlanReviewAnswer(action)).toEqual({ action });
+    }
+    expect(buildPlanReviewAnswer('feedback', '  Keep keyboard navigation.\n')).toEqual({
+      action: 'feedback', feedback: 'Keep keyboard navigation.',
+    });
+    expect(buildPlanReviewAnswer('feedback', ' \n\t ')).toBeNull();
+  });
+
+  test('delivers Reject as an answer and preserves failed feedback for retry', async () => {
+    const rejected = { action: 'reject' } as const;
+    expect(await deliverQuestionAnswer({
+      reply: async (payload) => { expect(payload).toEqual(rejected); },
+      recover: () => { throw new Error('Unexpected recovery'); },
+      failed: () => { throw new Error('Unexpected failure'); },
+    }, rejected)).toBe(true);
+
+    const payload = { action: 'feedback', feedback: 'Revise the plan' } as const;
+    const calls: string[] = [];
+    expect(await deliverQuestionAnswer({
+      reply: async (delivered) => { expect(delivered).toEqual(payload); throw new Error('QUESTION_CONFLICT'); },
+      failed: () => { calls.push('failed'); },
+      recover: () => { calls.push('recover'); },
+    }, payload)).toBe(false);
+    expect(payload.feedback).toBe('Revise the plan');
+    expect(calls).toEqual(['failed', 'recover']);
   });
 });

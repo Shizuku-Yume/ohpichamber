@@ -1,6 +1,6 @@
 import React from 'react';
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
-import { AgentSelector } from '@/components/sections/commands/AgentSelector';
+import { AgentSelector } from '@/components/sections/agents/AgentSelector';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -150,7 +150,7 @@ const CategoryRow: React.FC<{
             </SettingsStackedField>
             <SettingsStackedField label={t('settings.routing.category.agent')} info={t('settings.routing.category.agentInfo')} controlClassName="max-w-none">
               <AgentSelector
-                agentName={category.agent ?? ''}
+                agentId={category.agent ?? ''}
                 onChange={(agentName) => onChange({ agent: agentName || null })}
                 className={cn(SETTINGS_CUSTOM_TRIGGER_CLASS, 'w-full')}
               />
@@ -269,7 +269,6 @@ export const RoutingPage: React.FC = () => {
   // A first visit starts from the session defaults: the model the user already
   // chose for new sessions is the natural fallback, and it saves a required step.
   const settingsDefaultModel = useConfigStore((state) => state.settingsDefaultModel);
-  const settingsDefaultVariant = useConfigStore((state) => state.settingsDefaultVariant);
   const prefilledRef = React.useRef(false);
   React.useEffect(() => {
     if (prefilledRef.current || !loaded || !serverConfig || serverConfig.fallback) return;
@@ -279,11 +278,11 @@ export const RoutingPage: React.FC = () => {
     prefilledRef.current = true;
     update((config) => (config.fallback ? config : {
       ...config,
-      fallback: { model: { providerID: parsed.providerId, modelID: parsed.modelId }, variant: settingsDefaultVariant ?? null },
+      fallback: { model: { providerID: parsed.providerId, modelID: parsed.modelId }, variant: null },
     }));
   // `update` is stable; the effect keys on what decides whether to prefill.
   // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, serverConfig, settingsDefaultModel, settingsDefaultVariant]);
+  }, [loaded, serverConfig, settingsDefaultModel]);
 
   const update = React.useCallback((mutate: (config: RoutingConfig) => RoutingConfig) => {
     setDraft((current) => {

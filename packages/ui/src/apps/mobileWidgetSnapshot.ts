@@ -99,7 +99,7 @@ const buildMobileWidgetSnapshot = (): MobileWidgetSnapshot => {
   topLevel.sort((a, b) => compareSessionsByLifecycleOrder(a.session, b.session, pinnedSessionIds, sessionOrderRanks));
   const recentSessions = topLevel
     .slice(0, RECENT_LIMIT)
-    .map(({ session, unread, project }) => ({ id: session.sessionId, title: session.metadata?.title ?? '', unread, project }));
+    .map(({ session, unread, project }) => ({ id: session.sessionId, title: session.title ?? '', unread, project }));
 
   return { runtimeKey: getRuntimeKey(), attentionCount, recentSessions };
 };

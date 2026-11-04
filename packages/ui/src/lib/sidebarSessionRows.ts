@@ -1,5 +1,4 @@
 import type { Session } from '@openchamber/agent-contract';
-import { isBtwSession } from '@/lib/sessionBtwMetadata';
 import { isSessionInWork } from '@/lib/sessionWorkMetadata';
 
 /**
@@ -14,6 +13,6 @@ export const sessionHasSidebarRow = (
   session: Session,
   { isPlaced, isPinned }: { isPlaced: boolean; isPinned: boolean },
 ): boolean => {
-  if (session.parentSessionId || session.archivedAt || isBtwSession(session)) return false;
+  if (session.parentSessionId || session.archivedAt) return false;
   return isPlaced || isPinned || isSessionInWork(session);
 };

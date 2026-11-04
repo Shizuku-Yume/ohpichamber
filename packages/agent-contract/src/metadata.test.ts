@@ -8,8 +8,7 @@ import {
 const goal = {
   id: 'goal_1', objective: 'Ship it', objectiveFile: true, status: 'active', tokenBudget: 100,
   tokensUsed: 1, tokensBaseline: 2, tokensCommitted: 3, turnsUsed: 4, blockedStreak: 5,
-  auditFailStreak: 6, note: 'note', statusReason: 'reason', evaluationProviderID: 'provider_1',
-  evaluationModelID: 'model_1', lastAccountedMessageID: 'message_1', createdAt: 1, updatedAt: 2,
+  auditFailStreak: 6, note: 'note', statusReason: 'reason',
 };
 const links = [
   { kind: 'issue', id: 'link_1', title: 'Issue', url: 'https://example.test/i', linkedAt: 1, number: 1, author: 'A', authorAvatarUrl: 'avatar' },
@@ -24,14 +23,13 @@ const multirun = {
   role: 'run', title: 'Run', autoFusion: { providerID: 'provider_1', modelID: 'model_1', variant: 'v1', agent: 'agent_1', launcherId: 'launcher_1' },
 };
 const metadata = {
-  title: 'Title', folder: 'folder_1', isPinned: true, color: 'blue', icon: 'star', notes: 'Notes',
+  folder: 'folder_1', isPinned: true, color: 'blue', icon: 'star', notes: 'Notes',
   openchamber: {
     knowledge_context_delivered: 'cursor', context_obligatory_last_compaction_message_id: 'message_1',
     project_context_pins: { notes: ['note_1'], plans: ['plan_1'] },
     context_obligatory_messages: [{ id: 'message_1', createdAt: 1, role: 'user' }], linked_issues: links,
     work: { state: 'done', openedAt: 1, openedBy: 'user', doneAt: 2, suggestDoneAt: null },
-    reviewOffer: { at: 3 }, btwSessionID: 'session_2', reviewSessionID: 'session_3', btwPromoted: true, kind: 'review',
-    originalSessionID: 'session_1', btwBoundaryMessageID: 'message_2', multirun,
+    reviewOffer: { at: 3 }, reviewSessionID: 'session_3', kind: 'review', originalSessionID: 'session_1', multirun,
   },
 };
 
@@ -73,20 +71,18 @@ test('metadata state distinguishes missing null revision zero from present empty
 
 test('metadata patches support typed null deletion and reject malformed patch values', () => {
   const cleared = { changes: {
-    title: null, folder: null, isPinned: null, color: null, icon: null, notes: null, openchamber: {
+    folder: null, isPinned: null, color: null, icon: null, notes: null, openchamber: {
       goal: null, assist: null, knowledge_context_delivered: null, context_obligatory_last_compaction_message_id: null,
       project_context_pins: null, context_obligatory_messages: null, linked_issues: null, work: null, reviewOffer: null,
-      btwSessionID: null, reviewSessionID: null, btwPromoted: null, kind: null, originalSessionID: null, btwBoundaryMessageID: null, multirun: null,
+      reviewSessionID: null, kind: null, originalSessionID: null, multirun: null,
     },
   } };
   expect(SessionMetadataPatchSchema.parse(cleared)).toEqual(cleared);
-  expect(SessionMetadataPatchSchema.parse({ changes: { openchamber: { btwPromoted: true } } })).toEqual({ changes: { openchamber: { btwPromoted: true } } });
   for (const invalid of [
-    { changes: { title: 1 } }, { changes: { openchamber: { goal: 'bad' } } },
+    { changes: { folder: 1 } }, { changes: { openchamber: { goal: 'bad' } } },
     { changes: { openchamber: { assist: { suggestion: 1 } } } },
     { changes: { openchamber: { reviewOffer: { at: 'bad' } } } },
     { changes: { openchamber: { knowledge_context_delivered: 1 } } },
-    { changes: { openchamber: { btwPromoted: 'yes' } } },
     { changes: { openchamber: { unknown: null } } },
   ]) expect(SessionMetadataPatchSchema.safeParse(invalid).success).toBe(false);
   const nestedDeletion = { changes: { openchamber: {

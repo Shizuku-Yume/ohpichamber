@@ -55,7 +55,7 @@ export const MobileSessionRow: React.FC<{
   const session = node.session;
   const directory = getSessionDirectory(session);
   const { revealed, armed, renaming } = useMobileRowSwipe(row.key);
-  const title = session.metadata?.title?.trim() || t('mobile.sessions.untitled');
+  const title = session.title?.trim() || t('mobile.sessions.untitled');
   const aiRename = useSessionAiRenameAction(session.sessionId, directory, revealed || renaming);
   const isCurrent = useSessionUIStore((state) => state.currentSessionId === session.sessionId);
   // A run's overview covers the session, and then the run's row is the selected one.

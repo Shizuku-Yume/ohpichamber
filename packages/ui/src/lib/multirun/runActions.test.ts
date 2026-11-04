@@ -20,8 +20,8 @@ function fixture() {
   registerWorkspaceDirectory('workspace', '/repo');
   const sessions = ['a', 'b'].map((sessionId): Session => {
     const session: Session = { sessionId, rootSessionId: sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '.',
-      createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
-      metadata: { title: 'lane', notes: 'preserve', openchamber: { goal: { status: 'active' } } }, metadataRevision: '1', archiveRevision: '0' };
+      createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
+      title: 'lane', metadata: {notes: 'preserve', openchamber: { goal: { status: 'active' } }}, metadataRevision: '1', archiveRevision: '0' };
     session.metadata = withMultiRunMembership(session, { version: 1, sessionID: sessionId, group, groupSlug: 'run', role: 'run', providerID: 'provider', modelID: 'model', runGroup: 'g1', index: 2 });
     return session;
   });
@@ -62,13 +62,17 @@ describe('canonical multi-run metadata actions', () => {
     expect(api.published.map((session) => session.sessionId)).toEqual(['b']);
     expect(getMultiRunMembership(api.published[0])).toMatchObject({ sessionID: 'b', runGroup: 'g1', index: 2, title: 'Renamed' });
   });
-  test('detach atomically clears marker and changes native title', async () => {
+  test('detach clears the marker and changes the OMP title', async () => {
     const api = fixture();
-    const write = spyOn(canonicalClient, 'patchSessionMetadata').mockResolvedValue({ sessionId: 'a', metadata: { title: 'Run', notes: 'preserve' }, revision: '2' });
+    const write = spyOn(canonicalClient, 'patchSessionMetadata').mockResolvedValue({ sessionId: 'a', metadata: {notes: 'preserve'}, revision: '2' });
     spies.push(write);
+    const rename = spyOn(canonicalClient, 'renameSession').mockResolvedValue({ ...api.sessions[0], title: 'Run', metadata: {notes: 'preserve'}, metadataRevision: '2' });
+    spies.push(rename);
     await detachFromRun(api.sessions[0], 'Run');
-    expect(write.mock.calls[0]).toEqual(['a', { changes: { title: 'Run', openchamber: { multirun: null } } }]);
-    expect(api.published[0].metadata).toEqual({ title: 'Run', notes: 'preserve' });
+    expect(write.mock.calls[0]).toEqual(['a', { changes: { openchamber: { multirun: null } } }]);
+    expect(rename.mock.calls[0]).toEqual(['a', 'workspace', 'Run']);
+    expect(api.published[0].metadata).toEqual({ notes: 'preserve' });
+    expect(api.published[0].title).toBe('Run');
   });
   test('runtime switch after metadata read prevents writes and publication', async () => {
     const api = fixture();
@@ -81,20 +85,17 @@ describe('canonical multi-run metadata actions', () => {
     expect(write.mock.calls.length).toBe(0);
     expect(api.published).toEqual([]);
   });
-  test('new model lanes retain the source profile captured before history awaits', async () => {
+  test('added lanes do not inherit root agent selections', async () => {
     const api = fixture();
-    useSelectionStore.getState().saveSessionAgentSelection('a', 'source-agent');
-    spies.push(spyOn(laneData, 'loadLaneFirstPrompt').mockImplementation(async () => {
-      useSelectionStore.getState().saveSessionAgentSelection('a', 'later-agent');
-      return { messageId: 'prompt', turnId: 'turn', text: 'question', files: [] };
-    }));
+    useSelectionStore.getState().saveSessionAgentSelection('a', 'legacy-root-agent');
+    spies.push(spyOn(laneData, 'loadLaneFirstPrompt').mockResolvedValue({ messageId: 'prompt', turnId: 'turn', text: 'question', files: [] }));
     spies.push(spyOn(location, 'resolveRunMemberLocation').mockResolvedValue(null));
     const create = spyOn(creation, 'createMultiRunSession').mockResolvedValue({ ...api.sessions[0], sessionId: 'added', rootSessionId: 'added' });
     const dispatch = spyOn(multiRunStore, 'dispatchRunPrompt').mockResolvedValue(undefined);
     spies.push(create, dispatch);
     await addLaneToRun({ run: api.run, runGroup: 'g1', model: { providerId: 'replacement', modelId: 'model' }, sessionById: api.sessionById });
-    expect(create.mock.calls[0][0].selection.agentId).toBe('source-agent');
-    expect(dispatch.mock.calls[0][0]).toMatchObject({ agentId: 'source-agent', workspaceId: 'workspace', attachmentWorkspaceId: 'workspace' });
+    expect(create.mock.calls[0][0].selection.agentId).toBeNull();
+    expect(dispatch.mock.calls[0][0]).toMatchObject({ workspaceId: 'workspace', attachmentWorkspaceId: 'workspace' });
     useSelectionStore.getState().clearSessionSelections('a');
   });
 });

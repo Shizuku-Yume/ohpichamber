@@ -221,6 +221,7 @@ describe('a source-control provider no UI code names', () => {
     const session: Session = {
       sessionId: 'session-1', projectId: 'project-1', workspaceId: 'workspace-1', displayPath: 'tool', rootSessionId: 'session-1',
       createdAt: 1, updatedAt: 1, epoch: 'epoch-1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+      mode: { kind: 'main' as const },
       metadata: withLinkedIssue(withLinkedIssue({}, pull, true), issue, true),
       metadataRevision: '1', archiveRevision: '0',
     };

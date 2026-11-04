@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { getExtensionUISelectOptionLabel } from '@oh-my-pi/pi-coding-agent/extensibility/extensions';
+import type { ClientBridgePermissionOption, ClientBridgePermissionToolCall } from '@oh-my-pi/pi-coding-agent/session/client-bridge';
 import type {
   ExtensionApprovalAnswer,
   ExtensionApprovalPrompt,
@@ -14,11 +15,14 @@ import type {
   ToolCallEvent,
 } from '@oh-my-pi/pi-coding-agent/sdk';
 import { ensureThemeSync, theme, type Theme } from '@oh-my-pi/pi-tui/theme';
-import { JsonObjectSchema } from '@openchamber/agent-contract';
+import { JsonObjectSchema, PlanReviewSchema, PlanReviewResponseSchema, type PlanReview, type PlanReviewResponse } from '@openchamber/agent-contract';
 import type { JsonObject, JsonValue } from '@openchamber/agent-contract';
 import type { WorkerInteraction as WorkerInteractionMessage } from '../protocol.ts';
+import { approvalInputSummary, oneLineApprovalText } from '../interaction/approval-summary.ts';
 
 type PendingApproval = { toolCallId: string; resolve: (choice: string | undefined) => void; approve: string; reject: string };
+export type NativePermissionChoice = 'once' | 'always' | 'reject';
+type PendingPermission = { toolCallId: string; resolve: (choice: NativePermissionChoice | undefined) => void };
 type PendingQuestion = { questions: ExtensionAskDialogQuestion[]; resolve: (result: ExtensionAskDialogResult | undefined) => void };
 
 export interface WorkerInteractionCallbacks {
@@ -41,8 +45,10 @@ export class WorkerInteraction {
   private readonly observed = new Map<string, ToolApprovalRequestedEvent>();
   private readonly inputs = new Map<string, JsonObject>();
   private readonly approvalHandles = new Map<string, PendingApproval>();
+  private readonly permissionHandles = new Map<string, PendingPermission>();
   private readonly executionReceipts = new Map<string, string>();
   private readonly questionHandles = new Map<string, PendingQuestion>();
+  private readonly planHandles = new Map<string, (response: PlanReviewResponse | undefined) => void>();
   private closed = false;
 
   constructor(private readonly callbacks: WorkerInteractionCallbacks) {
@@ -154,15 +160,14 @@ export class WorkerInteraction {
     return this.requestApproval(turnId, observer.toolCallId, observer.toolName, input, observer.reason ?? '', choices, dialogOptions?.signal);
   }
 
-  private async requestApproval(
-    turnId: string, toolCallId: string, toolName: string, input: JsonObject, reason: string,
-    choices: [string, string], signal?: AbortSignal,
-  ): Promise<string | undefined> {
+  private async requestApproval(turnId: string, toolCallId: string, toolName: string, input: JsonObject, reason: string, choices: [string, string], signal?: AbortSignal): Promise<string | undefined> {
     const approvalId = randomUUID();
     const [approve, reject] = choices;
+    const action = actionType(toolName);
+    const summary = approvalInputSummary(action, input);
     const interaction: WorkerInteractionMessage = {
-      kind: 'approval', approvalId, toolCallId, toolName, actionType: actionType(toolName),
-      commandSummary: 'Native tool operation requires approval', details: JsonObjectSchema.parse({ reason, options: choices, input }),
+      kind: 'approval', approvalId, toolCallId, toolName, actionType: action,
+      commandSummary: summary, details: JsonObjectSchema.parse({ reason: oneLineApprovalText(reason), options: choices, input }),
       policyTarget: { toolName, pattern: JSON.stringify(input) }, turnId,
     };
     const { promise, resolve } = Promise.withResolvers<string | undefined>();
@@ -176,7 +181,80 @@ export class WorkerInteraction {
     } finally { signal?.removeEventListener('abort', abort); }
   }
 
-  private async askDialog(questions: ExtensionAskDialogQuestion[], dialogOptions?: { signal?: AbortSignal }): Promise<ExtensionAskDialogResult | undefined> {
+  private approvalInput(toolCall: ClientBridgePermissionToolCall): JsonObject {
+    const parsed = JsonObjectSchema.safeParse(JSON.parse(JSON.stringify(toolCall.rawInput ?? {})));
+    return parsed.success ? parsed.data : {};
+  }
+
+  /** The native ACP permission gate's four-option prompt, surfaced as a canonical approval. */
+  async requestPermission(
+    toolCall: ClientBridgePermissionToolCall,
+    options: ClientBridgePermissionOption[],
+    sessionRuleKey: string | undefined,
+    signal?: AbortSignal,
+    steeringSignal?: AbortSignal,
+  ): Promise<NativePermissionChoice | undefined> {
+    const turnId = this.callbacks.currentTurn();
+    if (this.closed || !turnId || signal?.aborted || steeringSignal?.aborted) return undefined;
+    const approvalId = randomUUID();
+    const input = this.approvalInput(toolCall);
+    const action = actionType(toolCall.toolName);
+    const names = options.map(option => option.name);
+    this.callbacks.request({
+      kind: 'approval', approvalId, toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, actionType: action,
+      commandSummary: approvalInputSummary(action, input),
+      details: JsonObjectSchema.parse({ options: names }),
+      policyTarget: { toolName: toolCall.toolName, pattern: JSON.stringify(input) }, turnId, sessionRuleKey,
+    });
+    const { promise, resolve } = Promise.withResolvers<NativePermissionChoice | undefined>();
+    this.permissionHandles.set(approvalId, { toolCallId: toolCall.toolCallId, resolve });
+    const abort = () => {
+      if (!this.permissionHandles.has(approvalId)) return;
+      this.permissionHandles.delete(approvalId);
+      resolve(undefined);
+    };
+    const steerAbort = () => {
+      if (!this.permissionHandles.has(approvalId)) return;
+      this.permissionHandles.delete(approvalId);
+      this.callbacks.request({ kind: 'cancel', approvalId });
+      resolve(undefined);
+    };
+    signal?.addEventListener('abort', abort, { once: true });
+    steeringSignal?.addEventListener('abort', steerAbort, { once: true });
+    try {
+      if (steeringSignal?.aborted) steerAbort();
+      else if (signal?.aborted) abort();
+      return await promise;
+    } finally {
+      signal?.removeEventListener('abort', abort);
+      steeringSignal?.removeEventListener('abort', steerAbort);
+    }
+  }
+
+  /** Re-authorizes a native-approved bash call with an exact Host execution grant. */
+  async requestNativeGrant(toolCallId: string, input: JsonObject, signal?: AbortSignal): Promise<boolean> {
+    const turnId = this.callbacks.currentTurn();
+    if (this.closed || !turnId || signal?.aborted) return false;
+    const approvalId = randomUUID();
+    const action = actionType('bash');
+    const { promise, resolve } = Promise.withResolvers<string | undefined>();
+    // The manager can dispatch the exact grant before this method resumes; the
+    // handle must exist first or the resolution is lost.
+    this.approvalHandles.set(approvalId, { toolCallId, resolve, approve: 'Approve', reject: 'Deny' });
+    this.callbacks.request({
+      kind: 'approval', approvalId, toolCallId, toolName: 'bash', actionType: action,
+      commandSummary: approvalInputSummary(action, input), details: {},
+      policyTarget: { toolName: 'bash', pattern: JSON.stringify(input) }, turnId, nativeGrant: true,
+    });
+    const abort = () => { this.approvalHandles.delete(approvalId); resolve(undefined); };
+    signal?.addEventListener('abort', abort, { once: true });
+    try {
+      if (signal?.aborted) abort();
+      return await promise === 'Approve';
+    } finally { signal?.removeEventListener('abort', abort); }
+  }
+
+  private async askDialog(questions: ExtensionAskDialogQuestion[], dialogOptions?: { signal?: AbortSignal; timeout?: number }): Promise<ExtensionAskDialogResult | undefined> {
     if (this.closed) return undefined;
     const turnId = this.callbacks.currentTurn();
     if (!turnId || questions.length === 0) return undefined;
@@ -198,28 +276,59 @@ export class WorkerInteraction {
       if (question.recommended !== undefined) safeQuestion.recommended = question.recommended;
       return safeQuestion;
     });
-    const schema = JsonObjectSchema.parse({ type: 'omp.ask', questions: safeQuestions });
-    return new Promise<ExtensionAskDialogResult | undefined>(resolve => {
-      this.questionHandles.set(questionId, { questions, resolve });
-      this.callbacks.request({ kind: 'question', questionId, turnId, prompt: questions.map(question => question.question).join('\n'), schema });
-      if (dialogOptions?.signal) {
-        const abort = () => { this.questionHandles.delete(questionId); resolve(undefined); };
-        if (dialogOptions.signal.aborted) abort();
-        else dialogOptions.signal.addEventListener('abort', abort, { once: true });
-      }
-    });
+    const schema: JsonObject = JsonObjectSchema.parse({ type: 'omp.ask', questions: safeQuestions });
+    if (dialogOptions?.timeout !== undefined) schema.timeout = dialogOptions.timeout;
+    const { promise, resolve } = Promise.withResolvers<ExtensionAskDialogResult | undefined>();
+    this.questionHandles.set(questionId, { questions, resolve });
+    this.callbacks.request({ kind: 'question', questionId, turnId, prompt: questions.map(question => question.question).join('\n'), schema, timeout: dialogOptions?.timeout });
+    if (dialogOptions?.signal) {
+      const abort = () => { this.questionHandles.delete(questionId); resolve(undefined); };
+      if (dialogOptions.signal.aborted) abort();
+      else dialogOptions.signal.addEventListener('abort', abort, { once: true });
+    }
+    return promise;
   }
 
-  resolveApproval(approvalId: string, decision: 'approve' | 'reject'): boolean {
+  resolveApproval(approvalId: string, decision: 'approve' | 'approve-always' | 'reject'): boolean {
+    const permission = this.permissionHandles.get(approvalId);
+    if (permission) {
+      this.permissionHandles.delete(approvalId);
+      if (decision === 'approve' || decision === 'approve-always') this.executionReceipts.set(permission.toolCallId, approvalId);
+      permission.resolve(decision === 'approve-always' ? 'always' : decision === 'approve' ? 'once' : 'reject');
+      return true;
+    }
     const pending = this.approvalHandles.get(approvalId);
     if (!pending) return false;
     this.approvalHandles.delete(approvalId);
-    if (decision === 'approve') this.executionReceipts.set(pending.toolCallId, approvalId);
-    pending.resolve(decision === 'approve' ? pending.approve : pending.reject);
+    if (decision === 'approve' || decision === 'approve-always') this.executionReceipts.set(pending.toolCallId, approvalId);
+    pending.resolve(decision === 'reject' ? pending.reject : pending.approve);
     return true;
   }
 
+  requestPlanReview(review: PlanReview, resolved: (response: PlanReviewResponse | undefined) => void): void {
+    const turnId = this.callbacks.currentTurn();
+    if (this.closed || !turnId) throw new Error('Plan review requires an active worker turn');
+    if (this.planHandles.size > 0) throw new Error('A plan is already awaiting review');
+    const schema = PlanReviewSchema.parse(review);
+    const questionId = randomUUID();
+    this.planHandles.set(questionId, resolved);
+    try {
+      this.callbacks.request({ kind: 'question', questionId, turnId, prompt: schema.title, schema });
+    } catch (error) {
+      this.planHandles.delete(questionId);
+      throw error;
+    }
+  }
+
   resolveQuestion(questionId: string, action: 'answer' | 'cancel', response?: JsonValue): boolean {
+    const plan = this.planHandles.get(questionId);
+    if (plan) {
+      const parsed = action === 'answer' ? PlanReviewResponseSchema.safeParse(response) : undefined;
+      if (parsed && !parsed.success) return false;
+      this.planHandles.delete(questionId);
+      plan(parsed?.success ? parsed.data : undefined);
+      return true;
+    }
     const pending = this.questionHandles.get(questionId);
     if (!pending) return false;
     if (action === 'cancel') {
@@ -258,8 +367,12 @@ export class WorkerInteraction {
 
   cancelAll(): void {
     for (const pending of this.approvalHandles.values()) pending.resolve(undefined);
+    for (const pending of this.permissionHandles.values()) pending.resolve(undefined);
     for (const pending of this.questionHandles.values()) pending.resolve(undefined);
+    for (const resolve of this.planHandles.values()) resolve(undefined);
+    this.planHandles.clear();
     this.approvalHandles.clear();
+    this.permissionHandles.clear();
     this.questionHandles.clear();
     this.observed.clear();
     this.inputs.clear();

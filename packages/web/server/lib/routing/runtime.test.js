@@ -75,7 +75,7 @@ const makeRuntime = async ({
       }
       if (url.pathname === '/api/agent/v1/workspaces/workspace_a/models') {
         if (state.catalog instanceof Error) return Response.json({ detail: state.catalog.message, code: 'SERVICE_UNAVAILABLE' }, { status: 503 });
-        return Response.json({ workspaceId: SCOPE.workspaceId, revision: '1', models: state.catalog });
+        return Response.json({ workspaceId: SCOPE.workspaceId, revision: '1', models: state.catalog, defaults: { model: null, thinkingLevel: null }, planRoleAvailable: true });
       }
       if (url.pathname === '/api/agent/v1/workspaces/workspace_a/providers') {
         if (state.providerError) return Response.json({ detail: state.providerError.message, code: 'SERVICE_UNAVAILABLE' }, { status: 503 });

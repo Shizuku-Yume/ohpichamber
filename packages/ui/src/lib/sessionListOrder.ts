@@ -1,5 +1,4 @@
 import type { Session } from '@openchamber/agent-contract';
-import { isBtwSession } from '@/lib/sessionBtwMetadata';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
 import { EMPTY_SESSION_ORDER_RANKS, orderSessionsByLifecycleScopes, useSessionOrderingStore } from '@/sync/session-ordering';
@@ -14,7 +13,7 @@ export const orderVisibleRootSessions = (
   pinnedIds: Set<string>,
   ranks: ReadonlyMap<string, number>,
 ): Session[] => orderSessionsByLifecycleScopes(
-  activeSessions.filter((session) => !isBtwSession(session) && !session.parentSessionId),
+  activeSessions.filter((session) => !session.parentSessionId),
   pinnedIds,
   ranks,
 );

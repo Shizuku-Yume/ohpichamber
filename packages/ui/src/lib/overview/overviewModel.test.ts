@@ -22,7 +22,7 @@ const HOUR = 60 * 60 * 1000;
 const session = (sessionId: string, time: { created?: number; updated?: number } = {}, extra: Partial<Session> = {}): Session => ({
   sessionId, projectId: 'project', workspaceId: 'ws', displayPath: 'repo', rootSessionId: sessionId,
   createdAt: time.created ?? NOW - HOUR, updatedAt: time.updated ?? NOW - HOUR, epoch: '1', headSequence: '1',
-  runtimeStatus: 'idle', activeRunId: null, metadata: { title: sessionId },
+  runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' as const }, title: sessionId, metadata: null,
   metadataRevision: '0', archiveRevision: '0',
   ...extra,
 });
@@ -66,10 +66,9 @@ describe('classifyOverviewSession', () => {
       .toMatchObject({ section: 'running', activity: 'subagent' });
   });
 
-  test('subagents, archived sessions and side questions have no row', () => {
+  test('subagents and archived sessions have no row', () => {
     expect(classifyOverviewSession(facts(session('a', {}, { parentSessionId: 'p' }), { blocking: 'permission' }), on)).toBeNull();
     expect(classifyOverviewSession(facts(session('a', {}, { archivedAt: 1 }), { activity: 'running' }), on)).toBeNull();
-    expect(classifyOverviewSession(facts(session('a', {}, { metadata: { openchamber: { kind: 'btw' } } }), { activity: 'running' }), on)).toBeNull();
   });
 
   test('with In work on, an unread end counts only for sessions in work', () => {

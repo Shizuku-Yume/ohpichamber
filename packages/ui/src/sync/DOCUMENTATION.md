@@ -34,7 +34,7 @@ Use the directory sync stores for live session, message, approval, and question 
 
 ## Host operational metadata authority
 
-The Host owns session operational metadata, custom titles, workspace associations, archive state, and folder membership. Execution session records and persisted UI caches are not metadata fallbacks. Metadata responses and change events carry decimal-string revisions; the metadata patch route (`PATCH /api/agent/v1/sessions/:sessionId/metadata`) requires a `{ changes: { ... } }` wrapper and returns `SessionMetadataState` (`{ sessionId, revision, metadata }`).
+The Host owns session operational metadata (pins, color, icon, notes), workspace associations, archive state, and folder membership; OMP owns session titles directly in session storage. Execution session records and persisted UI caches are not metadata fallbacks. Metadata responses and change events carry decimal-string revisions; the metadata patch route (`PATCH /api/agent/v1/sessions/:sessionId/metadata`) requires a `{ changes: { ... } }` wrapper and returns `SessionMetadataState` (`{ sessionId, revision, metadata }`).
 
 Host metadata revisions stay attached to projected sessions, HTTP write responses, and committed events. Revisions are non-negative integer decimal strings compared with uint64 numeric ordering via `compareCounters(left, right)` (length check first, then lexical). The session merger `mergeHostSession` in `event-reducer.ts` enforces monotonic revision progression:
 
@@ -194,7 +194,7 @@ Native `bash`, `edit`, and `write` completion hints invalidate Host Git status w
 ## Independent Host metadata and durable queue
 
 The canonical snapshot (`SessionSnapshot`) contains:
-- `session: RuntimeSession`: execution fields only (`sessionId`, `projectId`, `workspaceId`, `displayPath`, `parentSessionId`, `rootSessionId`, `createdAt`, `updatedAt`, `epoch`, `headSequence`, `runtimeStatus`, `activeRunId`)
+- `session: RuntimeSession`: execution fields only (`sessionId`, `projectId`, `workspaceId`, `displayPath`, `parentSessionId`, `rootSessionId`, `createdAt`, `updatedAt`, `epoch`, `headSequence`, `runtimeStatus`, `activeRunId`, `mode`)
 - `cursor: Cursor`: an opaque Host-issued stream recovery token
 - `activeRun: Run | null`
 - `branch: { branchId, branchVersion, leafMessageId }`
@@ -217,7 +217,7 @@ Run control is the snapshot's `session.runtimeStatus`, `session.activeRunId`, an
 Host metadata (`SessionMetadataState`) and durable queue (`QueueState`) are stored separately from runtime snapshots:
 
 - Host metadata is fetched via `GET /api/agent/v1/sessions/:sessionId/metadata` and patched via `PATCH /api/agent/v1/sessions/:sessionId/metadata`.
-- `SessionMetadataPatch` requires a `{ changes: { title?, folder?, isPinned?, color?, icon?, notes?, openchamber? } }` structure.
+- `SessionMetadataPatch` requires a `{ changes: { folder?, isPinned?, color?, icon?, notes?, openchamber? } }` structure.
 - Durable queue items (`QueueItem`) are discriminated on `status: 'queued' | 'leased'`. Each item includes `context: ContextDescriptor[]` and `createdAt: number`.
 - `installQueue` in `event-reducer.ts` verifies `queue.revision` monotonically before updating `state.queue`.
 - Failed metadata or queue reads preserve prior authoritative data.
@@ -400,7 +400,7 @@ Live activity across directories is coordinated through specialized helpers:
   - Caches recent non-idle `SessionRuntimeStatus` seeds per runtime key and directory with a 15-second TTL (`LIVE_STATUS_TTL_MS`); idle transitions are ignored and do not seed memory.
 - `session-title-context.ts` and `session-title-generation.ts`:
   - `collectNativeTitleTurns` uses native messages plus authoritative `Turn[]` and selects each completed turn's final assistant response. Attachment-only user prompts remain eligible; title readers supply `getTurns()` rather than infer completion from historical message anomalies.
-  - Title generation validates current `Session.headSequence`, `updatedAt`, `archivedAt`, and `SessionMetadataState.revision` before committing generated titles to Host metadata.
+  - Title generation validates current `Session.headSequence`, `updatedAt`, `archivedAt`, and `Session.title` before committing generated titles; the save goes through the OMP title route and the returned title is published. Automatic titles for new chats are OMP's; the small-model generator is only the manual AI-rename action.
 - `session-error-log.ts`:
   - Retains the last 20 diagnostic error summaries in memory. Native run failures supply error strings; independently supplied structured transport detail is diagnostics-only. Sequence/epoch gating replaces the obsolete legacy wire freshness/router implementation.
 
@@ -468,7 +468,7 @@ const questions = useSessionForms(sessionId, directory);
 const partsByMessageId = useSessionPartsForMessages(sessionId, messageIds, directory);
 
 // Select exact session with equality comparison preserved
-const sessionTitle = useSessionSelector(sessionId, directory, (session) => session?.metadata?.title);
+const sessionTitle = useSessionSelector(sessionId, directory, (session) => session?.title);
 ```
 
 ### Targeted subscriber optimizations

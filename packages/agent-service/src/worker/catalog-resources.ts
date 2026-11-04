@@ -22,6 +22,7 @@ import {
 import type { FileResourceOperation, FileResourceResult } from '../catalogs/file-resources-protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
 import { buildPublicSkillPrompt, sanitizeSkillRoots } from './catalog-skills.ts';
+import { ALLOWED_BUILTIN_COMMANDS, isAllowedBuiltinCommand } from './builtin-commands.ts';
 
 export interface NativeFileResourcesContext {
   cwd: string;
@@ -162,7 +163,7 @@ export class NativeFileResources {
     result.sort((a, b) => (ranks.get(`${a.entry.source}\0${a.entry.name}`) ?? native.length) - (ranks.get(`${b.entry.source}\0${b.entry.name}`) ?? native.length));
     return { entries: result, native };
   }
-  private async write(kind: 'commands' | 'prompts', request: { name: string; scope: FileResourceScope; content: string; description?: string; argumentHint?: string; modelSelection?: z.infer<typeof ModelSelectionSchema>; agentId?: string; group?: string }, current?: ResourceLocation): Promise<void> {
+  private async write(kind: 'commands' | 'prompts', request: { name: string; scope: FileResourceScope; content: string; description?: string; argumentHint?: string; modelSelection?: z.infer<typeof ModelSelectionSchema>; agentId?: string | null; group?: string }, current?: ResourceLocation): Promise<void> {
     const name = FileResourceNameSchema.parse(request.name);
     const directory = current && current.scope === request.scope && !name.includes('/') ? dirname(current.path) : this.root(request.scope, kind);
     const path = join(directory, `${name}.md`);
@@ -263,7 +264,7 @@ export class NativeFileResources {
         else await this.remove(location);
       }
       commands = (await this.commands()).entries;
-      return { kind: 'commands', catalog: { workspaceId, revision, commands: commands.map(item => item.entry) } };
+      return { kind: 'commands', catalog: { workspaceId, revision, commands: commands.filter(item => item.entry.source !== 'builtin' || isAllowedBuiltinCommand(item.entry.name)).map(item => item.entry), builtinCommands: [...ALLOWED_BUILTIN_COMMANDS] } };
     }
     let { entries: templates } = await this.templates();
     if (operation.action === 'templates.expand') {

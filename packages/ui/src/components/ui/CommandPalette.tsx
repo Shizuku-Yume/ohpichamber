@@ -699,7 +699,7 @@ export const CommandPalette: React.FC = () => {
 
   const scoredSessions = React.useMemo(() => {
     if (!hasQuery) return orderedActiveSessions.slice(0, 5).map((item) => ({ item, score: 0, ranges: NO_RANGES }));
-    return rankBySubsequence(orderedActiveSessions, liveTrimmed, (s) => s.metadata?.title || '', { limit: 7 });
+    return rankBySubsequence(orderedActiveSessions, liveTrimmed, (s) => s.title || '', { limit: 7 });
   }, [orderedActiveSessions, liveTrimmed, hasQuery]);
 
   const scoredFiles = React.useMemo(() => {
@@ -979,7 +979,7 @@ export const CommandPalette: React.FC = () => {
                   <CommandGroup key="sessions" heading={t('commandPalette.group.sessions')}>
                     {scoredSessions.map(({ item: session, ranges }) => {
                       // Untitled sessions never match, so their ranges are empty.
-                      const title = session.metadata?.title || t('commandPalette.session.untitled');
+                      const title = session.title || t('commandPalette.session.untitled');
                       const dir = resolveGlobalSessionDirectory(session);
                       const branch = branchForSession(session.sessionId, dir);
                       const projectLabel = projectLabelForDirectory(dir);

@@ -353,6 +353,37 @@ describe("server-owned message queue", () => {
     expect(taken?.text).toBe("with context")
   })
 
+  test("captured reasoning effort survives queue acceptance, reload and take", async () => {
+    const sendConfig = { providerID: "p", modelID: "m", reasoningEffort: "high" }
+    const item = serverItem("effort-1", "think carefully", {
+      options: { providerId: "p", modelId: "m", agentId: null, variant: null, reasoningEffort: "high" },
+    })
+    respond = () => json(queueState([item], "6"))
+    await useMessageQueueStore.getState().addToQueue(target, { content: item.content, sendConfig })
+    const callBody = calls[0]?.body as { request?: { options?: { reasoningEffort?: string } } }
+    expect(callBody?.request?.options?.reasoningEffort).toEqual("high")
+    expect(useMessageQueueStore.getState().queuedMessages[key]?.[0]?.sendConfig).toEqual(sendConfig)
+
+    respond = () => json(snapshot([queueState([item], "7")]))
+    await useMessageQueueStore.getState().resync()
+    expect(useMessageQueueStore.getState().queuedMessages[key]?.[0]?.sendConfig).toEqual(sendConfig)
+
+    respond = () => json(queueState([], "8"))
+    const [taken] = await useMessageQueueStore.getState().takeForSend(target, item.queueItemId)
+    expect(taken?.sendConfig).toEqual(sendConfig)
+    expect(taken?.sendConfig?.variant).toBeUndefined()
+  })
+
+  test("a server item with malformed context is rejected at the boundary", async () => {
+    respond = () => json(snapshot([{
+      ...queueState([]),
+      items: [{
+        ...serverItem("srv-1", "x"),
+        context: [{ index: 0, kind: "invalid-kind" as unknown as "context", hasInstructions: false }],
+      }],
+    }]))
+    await expect(useMessageQueueStore.getState().resync()).rejects.toThrow()
+  })
   test("addToQueue rolls the optimistic entry back when the server refuses", async () => {
     respond = () => new Response("nope", { status: 500 })
     await expect(useMessageQueueStore.getState().addToQueue(target, {

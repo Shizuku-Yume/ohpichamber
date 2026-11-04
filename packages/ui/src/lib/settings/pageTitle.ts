@@ -13,6 +13,7 @@ const SETTINGS_PAGE_TITLE_KEYS = {
   'remote-instances': 'settings.page.remoteInstances.title',
   providers: 'settings.page.providers.title',
   'web-search': 'settings.page.webSearch.title',
+  omp: 'settings.page.omp.title',
   usage: 'settings.page.usage.title',
   agents: 'settings.page.agents.title',
   behavior: 'settings.page.behavior.title',

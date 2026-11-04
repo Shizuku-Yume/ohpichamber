@@ -56,7 +56,7 @@ const spies: Array<{ mockRestore(): void }> = [];
 afterEach(() => { for (const spy of spies.splice(0)) spy.mockRestore(); });
 function sessionFixture(sessionId: string): Session {
   const session: Session = { sessionId, rootSessionId: sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '.', createdAt: 1, updatedAt: 1,
-    epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, metadata: {}, metadataRevision: '1', archiveRevision: '0' };
+    epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' }, metadata: {}, metadataRevision: '1', archiveRevision: '0' };
   session.metadata = withMultiRunMembership(session, { version: 1, sessionID: sessionId, group: { kind: 'id', id: '9f512893-6e63-4e49-a534-5de733ca103e' }, groupSlug: 'run', role: 'run', providerID: 'provider', modelID: 'model' });
   return session;
 }
@@ -133,7 +133,7 @@ describe('fusion native primary delivery', () => {
       if (mode === 'stale') registerWorkspaceDirectory('workspace', '/moved');
       return Response.json(mode === 'command' || mode === 'template' ? { kind: mode, content: '/expanded once', modelSelection: { providerId: 'bound', modelId: 'bound-model' }, agentId: 'bound-agent' } : { kind: 'text', content: text });
     }));
-    const result = startRunFusion({ ...api.input, judge: { ...api.input.judge, variant: 'high', agent: 'judge-agent' } });
+    const result = startRunFusion({ ...api.input, judge: { ...api.input.judge, variant: 'high' } });
     if (mode === 'failure' || mode === 'stale') {
       await expect(result).rejects.toThrow();
       expect(send).not.toHaveBeenCalled();
@@ -144,7 +144,7 @@ describe('fusion native primary delivery', () => {
     expect(requests).toHaveLength(mode === 'plain' ? 0 : 1);
     const matched = mode === 'command' || mode === 'template';
     const request = send.mock.calls[0][0].request;
-    expect(request.options).toEqual({ providerId: matched ? 'bound' : 'judge', modelId: matched ? 'bound-model' : 'model', agentId: matched ? 'bound-agent' : 'judge-agent', variant: 'high', reasoningEffort: null });
+    expect(request.options).toEqual({ providerId: matched ? 'bound' : 'judge', modelId: matched ? 'bound-model' : 'model', agentId: null, variant: 'high', reasoningEffort: null });
     expect(request.input.text).toBe(matched ? '/expanded once' : text);
     expect(request.input.context.some(part => part.text.includes('/original task'))).toBe(true);
     expect(request.input.context.some(part => part.text === 'Generated instructions /literal')).toBe(true);

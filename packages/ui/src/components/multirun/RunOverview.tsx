@@ -24,7 +24,6 @@ import { fusionModeFor, NoFusionOutputsError, startRunFusion } from '@/lib/multi
 import { resolveFusionJudge } from '@/lib/multirun/autoFusion';
 import { RUN_LAUNCHER_ID } from '@/lib/multirun/launcher';
 import { addLaneToRun, archiveRun, detachFromRun, renameRun } from '@/lib/multirun/runActions';
-import { AgentSelector } from './AgentSelector';
 import { ModelMultiSelect, generateInstanceId, type ModelSelectionWithId } from './ModelMultiSelect';
 import { RunLaneCard } from './RunLaneCard';
 import { ModelEffortMenu } from './ModelEffortMenu';
@@ -121,7 +120,6 @@ function RunOverviewContent({ runKey }: { runKey: string }): React.ReactNode {
   const providers = useConfigStore((state) => state.providers);
   const currentProviderId = useConfigStore((state) => state.currentProviderId);
   const currentModelId = useConfigStore((state) => state.currentModelId);
-  const currentAgentName = useConfigStore((state) => state.currentAgentName);
   const projects = useProjectsStore((state) => state.projects);
   const activeSessionIds = useGlobalSessionStatusStore((state) => state.activeSessionIds);
   const blockingBySession = useGlobalBlockingRequestsStore((state) => state.bySession);
@@ -131,7 +129,6 @@ function RunOverviewContent({ runKey }: { runKey: string }): React.ReactNode {
   const [bar, setBar] = React.useState<BarMode>({ kind: 'idle' });
   const [busyAction, setBusyAction] = React.useState<'keep' | 'fuse' | 'ask' | 'archive' | 'member' | null>(null);
   const [judge, setJudge] = React.useState<ModelSelectionWithId[]>([]);
-  const [judgeAgent, setJudgeAgent] = React.useState(currentAgentName ?? '');
   const [renaming, setRenaming] = React.useState<string | null>(null);
   const [expandedPrompts, setExpandedPrompts] = React.useState<ReadonlySet<string>>(() => new Set());
   const [pendingModel, setPendingModel] = React.useState<{ runGroup: string | undefined; model: ModelSelectionWithId } | null>(null);
@@ -273,7 +270,7 @@ function RunOverviewContent({ runKey }: { runKey: string }): React.ReactNode {
       await startRunFusion({
         run,
         sourceIds: fuseSources,
-        judge: resolveFusionJudge({ providerId: selection.providerId, modelId: selection.modelId, variant: selection.variant, agent: judgeAgent || undefined }),
+        judge: resolveFusionJudge({ providerId: selection.providerId, modelId: selection.modelId, variant: selection.variant }),
         sessionById,
       });
       setBar({ kind: 'idle' });
@@ -605,7 +602,6 @@ function RunOverviewContent({ runKey }: { runKey: string }): React.ReactNode {
                   onChange={(variant) => setJudge((current) => current.map((entry) => ({ ...entry, variant })))}
                 />
               ) : null}
-              <AgentSelector value={judgeAgent} onChange={setJudgeAgent} className="w-fit" />
               <span className="typography-micro text-muted-foreground">
                 {fuseMode === 'code' ? t('multirun.overview.fuse.modeCode') : t('multirun.overview.fuse.modeAnswers')}
               </span>

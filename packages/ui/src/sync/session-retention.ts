@@ -55,7 +55,7 @@ export function buildSessionRetentionCandidates({
     .sort((a, b) => retentionTimestamp(b, onlyArchived) - retentionTimestamp(a, onlyArchived));
   const protectedIds = new Set(sorted.slice(0, RETENTION_KEEP_RECENT).map((session) => session.sessionId));
   for (const session of sessions) {
-    if (isArchived(session) !== onlyArchived || session.metadata?.openchamber?.btwSessionID || session.sessionId === currentSessionId
+    if (isArchived(session) !== onlyArchived || session.sessionId === currentSessionId
       || activeSessionIds.has(session.sessionId) || session.runtimeStatus === 'running' || session.runtimeStatus === 'awaiting_approval' || session.runtimeStatus === 'awaiting_input'
       || isKept?.(session) || !isOlderThanCutoff(session, cutoff, onlyArchived)) {
       protectedIds.add(session.sessionId);
@@ -144,7 +144,7 @@ export async function runSessionRetentionCleanup({ force = false } = {}): Promis
       const state = useGlobalSessionsStore.getState();
       const session = state.entityById.get(id);
       if (!session) continue;
-      if (isArchived(session) !== onlyArchived || session.metadata?.openchamber?.btwSessionID || session.sessionId === useSessionUIStore.getState().currentSessionId
+      if (isArchived(session) !== onlyArchived || session.sessionId === useSessionUIStore.getState().currentSessionId
         || useGlobalSessionStatusStore.getState().activeSessionIds.has(id)
         || session.runtimeStatus === 'running' || session.runtimeStatus === 'awaiting_approval' || session.runtimeStatus === 'awaiting_input'
         || isSessionKeptByUser(session)

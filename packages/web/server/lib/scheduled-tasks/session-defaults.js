@@ -8,16 +8,20 @@ const splitModel = (value) => {
 
 const text = (value) => (typeof value === 'string' && value.trim() ? value.trim() : null);
 
-export const resolveSessionDefaults = ({ settings, project }) => {
-  const projectModel = splitModel(project?.defaultModel);
-  const globalModel = splitModel(settings?.defaultModel);
-  const model = projectModel ?? globalModel;
-  const variant = projectModel ? text(project?.defaultVariant) : globalModel ? text(settings?.defaultVariant) : null;
+export const resolveScheduledTaskOptions = (execution) => ({
+  providerId: execution.useDefaults ? null : execution.providerID ?? null,
+  modelId: execution.useDefaults ? null : execution.modelID ?? null,
+  agentId: null,
+  variant: execution.useDefaults ? null : execution.variant ?? null,
+  reasoningEffort: null,
+});
+export const resolveSessionDefaults = ({ project }) => {
+  const model = splitModel(project?.defaultModel);
   return {
     providerId: model?.providerId ?? null,
     modelId: model?.modelId ?? null,
-    variant,
-    agentId: text(project?.defaultAgent) ?? text(settings?.defaultAgent),
+    variant: model ? text(project?.defaultVariant) : null,
+    agentId: null,
     reasoningEffort: null,
   };
 };

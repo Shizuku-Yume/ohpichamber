@@ -5,6 +5,7 @@ const session = {
   sessionId: 'session_1', projectId: 'project_1', workspaceId: 'workspace_1', displayPath: '.',
   rootSessionId: 'session_1', createdAt: 1, updatedAt: 2, epoch: 'epoch_1', headSequence: '9007199254740993',
   runtimeStatus: 'idle', activeRunId: null,
+  mode: { kind: 'main' },
 };
 const empty = {
   session, cursor: 'epoch_1:9007199254740993', activeRun: null,
@@ -30,11 +31,25 @@ const message = { messageId: 'message_1', sessionId: 'session_1', turnId: 'turn_
 const active = {
   ...empty,
   session: { ...session, runtimeStatus: 'running', activeRunId: 'run_1' },
-  activeRun: { runId: 'run_1', sessionId: 'session_1', status: 'running', createdAt: 1 },
+  activeRun: { runId: 'run_1', sessionId: 'session_1', origin: 'host', status: 'running', createdAt: 1 },
   branch: { ...empty.branch, leafMessageId: 'message_1' },
   window: { firstTurnId: 'turn_1', lastTurnId: 'turn_1', firstMessageId: 'message_1', lastMessageId: 'message_1', hasEarlier: true },
   turns: [turn], messages: [message], approvals: [approval], questions: [question],
 };
+
+test('plan mode survives a serialized recovery snapshot', () => {
+  for (const status of ['active', 'paused']) {
+    const snapshot = { ...empty, session: { ...session, mode: { kind: 'plan', status, planReference: 'local://PLAN.md' } } };
+    expect(SessionSnapshotSchema.parse(JSON.parse(JSON.stringify(snapshot)))).toEqual(snapshot);
+  }
+});
+
+test('snapshot carries the persisted native selection when present', () => {
+  const selected = { ...empty, selection: { model: { providerId: 'provider_1', modelId: 'model_1' }, thinkingLevel: 'off' } };
+  expect(SessionSnapshotSchema.parse(JSON.parse(JSON.stringify(selected)))).toEqual(selected);
+  expect(SessionSnapshotSchema.parse({ ...selected, selection: { model: null, thinkingLevel: null } })).toEqual({ ...selected, selection: { model: null, thinkingLevel: null } });
+  expect(SessionSnapshotSchema.safeParse({ ...selected, selection: { model: null, thinkingLevel: '' } }).success).toBe(false);
+});
 
 test('snapshot captures exact uint64 cursor, empty bounds and no independent Host state', () => {
   expect(SessionSnapshotSchema.parse(empty)).toEqual(empty);

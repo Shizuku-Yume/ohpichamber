@@ -10,7 +10,7 @@ import { useNotificationStore } from '@/sync/notification-store';
 
 const session = (sessionId: string, parentSessionId?: string): Session => ({
   sessionId, parentSessionId, rootSessionId: parentSessionId ?? sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '/project',
-  createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
   metadata: null, metadataRevision: '0', archiveRevision: '0',
 });
 

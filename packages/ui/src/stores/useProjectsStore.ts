@@ -457,6 +457,7 @@ export const useProjectsStore = create<ProjectsStore>()(
 
       get().setActiveProject(entry.id);
       void get().discoverProjectIcon(entry.id);
+      void import('@/stores/useGlobalSessionsStore').then(({ useGlobalSessionsStore }) => useGlobalSessionsStore.getState().refreshSessionsForDirectories([normalizedPath]));
       return entry;
     },
 
@@ -503,6 +504,7 @@ export const useProjectsStore = create<ProjectsStore>()(
       for (const entry of entries) {
         void get().discoverProjectIcon(entry.id);
       }
+      void import('@/stores/useGlobalSessionsStore').then(({ useGlobalSessionsStore }) => useGlobalSessionsStore.getState().refreshSessionsForDirectories(entries.map((entry) => entry.path)));
       return entries;
     },
 

@@ -18,7 +18,7 @@ const branchRequest: SessionBranchRequest = { action: 'revert', messageId: 'publ
 const branchResult = () => ({ sessionId: 'public-session', branch: { branchId: 'public-branch', branchVersion: '9007199254740994', leafMessageId: null, revert: { messageId: 'public-message' } }, draft: null });
 const session = (sessionId: string, parentSessionId?: string): Session => ({
   sessionId, rootSessionId: 'public-session', parentSessionId, projectId: 'public-project', workspaceId: 'destination-workspace',
-  displayPath: '.', createdAt: 1, updatedAt: 2, epoch: 'new-epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  displayPath: '.', createdAt: 1, updatedAt: 2, epoch: 'new-epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
   metadata: null, metadataRevision: '0', archiveRevision: '0',
 });
 

@@ -22,7 +22,7 @@ const createNativeClient = (): CanonicalClient => {
   client.listWorkspaces = async () => ({ items: [], errors: {} })
   client.resolveWorkspace = async (directory: string) => workspace(directory)
   client.listSessions = async () => ({ items: [], errors: {} })
-  client.getModels = async (workspaceId: string) => ({ workspaceId, revision: '0', models: [] })
+  client.getModels = async (workspaceId: string) => ({ workspaceId, revision: '0', models: [], defaults: { model: null, thinkingLevel: null }, planRoleAvailable: false })
   client.getProviders = async (workspaceId: string) => ({ workspaceId, revision: '0', providers: [] })
   client.getAgents = async (workspaceId: string) => ({ workspaceId, revision: '0', agents: [] })
   client.getShellSnapshot = async (scope) => { if (scope.kind !== 'workspace') throw new Error('Selection fixture only uses workspace shell scope'); return shellSnapshot(scope.workspaceId) }
@@ -30,7 +30,7 @@ const createNativeClient = (): CanonicalClient => {
   return client
 }
 const session = (sessionId: string, workspaceId: string): Session => ({
-  sessionId, projectId: 'project-1', workspaceId, displayPath: '.', rootSessionId: sessionId, createdAt: 1, updatedAt: 1, epoch: 'epoch-1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  sessionId, projectId: 'project-1', workspaceId, displayPath: '.', rootSessionId: sessionId, createdAt: 1, updatedAt: 1, epoch: 'epoch-1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
   metadata: null, metadataRevision: '0', archiveRevision: '0',
 })
 
@@ -97,7 +97,7 @@ describe("SyncProvider native scope and selection boundaries", () => {
       if (!manager) throw new Error("Directory manager was not mounted")
       const store = manager.ensureChild(directory, { bootstrap: false })
       const stale = session("mutated-session", resolved.workspaceId)
-      const current = { ...stale, metadata: { title: "Local mutation" }, metadataRevision: "2" }
+      const current = { ...stale, title: "Local mutation", metadata: {}, metadataRevision: "2" }
       store.setState({ session: [current], sessionRevision: 1, sessionEventRevision: { [current.sessionId]: 1 } })
       await act(async () => { pending.resolve({ items: [stale], errors: {} }); await Promise.resolve() })
       expect(store.getState().session[0]).toBe(current)
@@ -133,7 +133,7 @@ describe("SyncProvider native scope and selection boundaries", () => {
         pending.resolve({ items: [listed, sibling], errors: {} })
         await materializationStarted.promise
         expect(handleEvents({ directory, sessionId: listed.sessionId }, [{ type: "run.started", sessionId: listed.sessionId, epoch: listed.epoch, sequence: "1", timestamp: 2, runId: "live-run", createdAt: 2 }], manager!)).toBe(true)
-        materializing.resolve({ ...nativeSnapshot(sibling.sessionId), session: sibling, cursor: `${sibling.epoch}:0`, activeRun: { runId: "sibling-run", sessionId: sibling.sessionId, status: "running", createdAt: 1 } })
+        materializing.resolve({ ...nativeSnapshot(sibling.sessionId), session: sibling, cursor: `${sibling.epoch}:0`, activeRun: { runId: "sibling-run", sessionId: sibling.sessionId, status: "running", origin: "host", createdAt: 1 } })
         await Promise.resolve()
         await Promise.resolve()
       })

@@ -563,7 +563,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
       </span>
     </RowMarkTooltip>
   ) : null;
-  const sessionTitle = resolvedSession.metadata?.title || t('sessions.sidebar.session.untitled');
+  const sessionTitle = resolvedSession.title || t('sessions.sidebar.session.untitled');
   // Every row opens to its subsessions, Chats, Pinned and In work rows
   // included, detailed or not.
   const hasChildren = node.children.length > 0;
@@ -626,7 +626,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
         if (!sessionDirectory) throw new Error('Session directory is required for export');
         const childRecords = await loadExportRecords({ directory: sessionDirectory, sessionId: child.session.sessionId });
         if (!childRecords) throw new Error('Session runtime changed during export');
-        const childTitle = child.session.metadata?.title || t('sessions.sidebar.session.export.untitledSubagent');
+        const childTitle = child.session.title || t('sessions.sidebar.session.export.untitledSubagent');
         // SAFETY: OpenCode session payloads may carry the optional agent label used by exports.
         const childAgent = (child.session as Session & { agent?: string }).agent;
         const grandChildren = await collectChildExports(child.children);
@@ -675,8 +675,8 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
       skippedSubtaskCount = collected.skipped;
     }
 
-    const markdown = formatSessionAsMarkdown(records, resolvedSession.metadata?.title ?? null, childExports);
-    const filename = buildExportFilename(resolvedSession.metadata?.title ?? null);
+    const markdown = formatSessionAsMarkdown(records, resolvedSession.title ?? null, childExports);
+    const filename = buildExportFilename(resolvedSession.title ?? null);
     const savedPath = await saveAsMarkdownDesktop(markdown, filename);
 
     if (savedPath) {
@@ -699,20 +699,20 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
     downloadAsMarkdown(markdown, filename);
     toast.success(t('sessions.sidebar.session.export.success'));
     showSkippedSubtasksWarning(skippedSubtaskCount);
-  }, [collectChildExports, loadExportRecords, resolvedSession.metadata?.title, session.sessionId, sessionDirectory, showSkippedSubtasksWarning, t]);
+  }, [collectChildExports, loadExportRecords, node.children, resolvedSession.title, session.sessionId, sessionDirectory, showSkippedSubtasksWarning, t]);
   const guestActionEntries = useGuestActions();
   const guestSessionActionEntries = React.useMemo(() => guestSessionActions(guestActionEntries), [guestActionEntries]);
   const handleGuestSessionAction = React.useCallback((entry: GuestActionEntry) => {
     void runGuestSessionAction({
       entry,
       t,
-      session: { id: session.sessionId, title: resolvedSession.metadata?.title, directory: sessionDirectory },
+      session: { id: session.sessionId, title: resolvedSession.title, directory: sessionDirectory },
       loadRecords: () => (sessionDirectory
         ? loadExportRecords({ directory: sessionDirectory, sessionId: session.sessionId }).catch(() => null)
         : Promise.resolve(null)),
       onLoadFailed: () => toast.error(t('sessions.sidebar.session.export.failedLoadHistory')),
     });
-  }, [loadExportRecords, resolvedSession.metadata?.title, session.sessionId, sessionDirectory, t]);
+  }, [loadExportRecords, resolvedSession.title, session.sessionId, sessionDirectory, t]);
   const handleExportSession = React.useCallback(async () => {
     const tree = node.children.length > 0 ? node : buildActiveSessionTreeFromCache(resolvedSession);
     if (tree.children.length > 0) {
@@ -2077,7 +2077,10 @@ const areSessionRenderSemanticsEqual = (prev: Session, next: Session): boolean =
   && prev.createdAt === next.createdAt
   && prev.updatedAt === next.updatedAt
   && prev.archivedAt === next.archivedAt
+  && prev.title === next.title
+  && prev.runtimeStatus === next.runtimeStatus
   && resolveGlobalSessionDirectory(prev) === resolveGlobalSessionDirectory(next)
+  && prev.metadata === next.metadata
   && sameMultiRunIdentity(prev, next)
 );
 

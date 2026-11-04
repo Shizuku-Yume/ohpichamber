@@ -53,6 +53,8 @@ type GlobalSessionsState = {
   hasLoaded: boolean;
   managedChatsHydrated: boolean;
   status: GlobalSessionsStatus;
+  /** The global list request itself failed; partial per-scope errors do not set this. */
+  globalRefreshFailed: boolean;
   discoveryErrors: ReadonlyMap<string, string>;
   /** Re-read the persisted managed-chats snapshot after the chats root is
       warm; retain newer mutations and stop after an authoritative load. */
@@ -104,9 +106,10 @@ const childSessionRecord = (parent: Session, child: Subagent): Session => {
     sessionId: child.childSessionId, parentSessionId: parent.sessionId, rootSessionId: parent.rootSessionId,
     projectId: parent.projectId, workspaceId: parent.workspaceId, displayPath: parent.displayPath,
     createdAt: parent.createdAt, updatedAt: parent.updatedAt, epoch: parent.epoch, headSequence: parent.headSequence,
+    mode: { kind: 'main' },
     runtimeStatus, activeRunId: runtimeStatus === 'idle' || runtimeStatus === 'unavailable' ? null : parent.activeRunId,
-    metadata: { title: child.role }, metadataRevision: parent.metadataRevision === '0' ? '1' : parent.metadataRevision,
-    archiveRevision: parent.archiveRevision,
+    title: child.role,
+    metadata: null, metadataRevision: '0', archiveRevision: parent.archiveRevision,
   });
 };
 
@@ -244,11 +247,11 @@ const sameSessionList = (prev: Session[], next: Session[]): boolean => {
 
 const getSessionUpdatedAt = (session: Session): number => {
   const updatedAt = session.updatedAt;
-  if (typeof updatedAt === 'number' && Number.isFinite(updatedAt)) {
+  if (Number.isFinite(updatedAt)) {
     return updatedAt;
   }
   const createdAt = session.createdAt;
-  return typeof createdAt === 'number' && Number.isFinite(createdAt) ? createdAt : 0;
+  return Number.isFinite(createdAt) ? createdAt : 0;
 };
 
 const sortSessionsByUpdated = (sessions: Session[]): Session[] => {
@@ -667,6 +670,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
   hasLoaded: false,
   managedChatsHydrated: false,
   status: 'idle',
+  globalRefreshFailed: false,
   discoveryErrors: new Map(),
 
   applySnapshot: (activeSessions, archivedSessions, status = 'ready') => {
@@ -674,7 +678,10 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
     // whose active→settled cycle this client slept through — raise their
     // ordering baselines so recent lists re-sort (see session-ordering).
     raiseSessionOrderingBaselines(activeSessions);
-    set((state) => applySnapshot(state, activeSessions, archivedSessions, status));
+    set((state) => {
+      const next = applySnapshot(state, activeSessions, archivedSessions, status);
+      return status === 'error' ? next : { ...next, globalRefreshFailed: false };
+    });
   },
 
   applySessionMutations: (mutations) => {
@@ -707,6 +714,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
       hasLoaded: false,
       managedChatsHydrated: false,
       status: 'idle',
+      globalRefreshFailed: false,
       discoveryErrors: new Map(),
     });
   },
@@ -752,7 +760,10 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
           // Scoped discovery errors degrade only the specific failing workspace(s) via discoveryErrors,
           // rather than poisoning the entire global store status to 'error'. Global status stays 'ready'
           // and markLoaded is true so healthy workspaces remain ready.
-          return applySnapshot(state, reconciled.activeSessions, reconciled.archivedSessions, 'ready', true, newErrors);
+          return {
+            ...applySnapshot(state, reconciled.activeSessions, reconciled.archivedSessions, 'ready', true, newErrors),
+            globalRefreshFailed: false,
+          };
         });
         const committed = get();
         raiseSessionOrderingBaselines(committed.activeSessions);
@@ -764,7 +775,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
         if (!rootsReady) {
           // No classification authority arrived. Preserve both memory and the
           // persisted snapshot so a retry can hydrate it after root recovery.
-          set({ status: 'error' });
+          set({ status: 'error', globalRefreshFailed: true });
           const state = get();
           return { activeSessions: state.activeSessions, archivedSessions: state.archivedSessions };
         }
@@ -776,7 +787,10 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
             state.archivedSessions,
             baselineRevision,
           );
-          return applySnapshot(state, reconciled.activeSessions, reconciled.archivedSessions, 'error');
+          return {
+            ...applySnapshot(state, reconciled.activeSessions, reconciled.archivedSessions, 'error'),
+            globalRefreshFailed: true,
+          };
         });
         const committed = get();
         return { activeSessions: committed.activeSessions, archivedSessions: committed.archivedSessions };

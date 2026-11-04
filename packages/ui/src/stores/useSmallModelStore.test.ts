@@ -19,7 +19,7 @@ beforeEach(() => {
   const scope = spyOn(canonicalClient, 'resolveWorkspace').mockImplementation(async directory => ({ workspaceId: directory, projectId: 'p', name: directory }));
   const catalog = spyOn(canonicalClient, 'getModels').mockImplementation(async (workspaceId): Promise<ModelCatalog> => {
     if (fail) throw new Error('offline');
-    return { workspaceId, revision: '0', models };
+    return { workspaceId, revision: '0', models, defaults: { model: null, thinkingLevel: null }, planRoleAvailable: false };
   });
   const fetcher = spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json({}));
   restorers = [() => scope.mockRestore(), () => catalog.mockRestore(), () => fetcher.mockRestore()];
@@ -50,7 +50,7 @@ describe('canonical small model availability', () => {
     expect(selectSmallModelAvailability(useSmallModelStore.getState(), '/a')).toBe('available');
   });
   test('invalidation rejects an old response and permits independent fresh discovery', async () => {
-    const delayed = Promise.withResolvers<{ workspaceId: string; revision: string; models: Model[] }>();
+    const delayed = Promise.withResolvers<ModelCatalog>();
     const entered = Promise.withResolvers<void>();
     const catalog = spyOn(canonicalClient, 'getModels').mockImplementationOnce(async () => { entered.resolve(); return delayed.promise; });
     restorers.push(() => catalog.mockRestore());
@@ -59,7 +59,7 @@ describe('canonical small model availability', () => {
     useSmallModelStore.getState().invalidate();
     models = [];
     await useSmallModelStore.getState().ensureFresh('/a');
-    delayed.resolve({ workspaceId: '/a', revision: '0', models: [model] });
+    delayed.resolve({ workspaceId: '/a', revision: '0', models: [model], defaults: { model: null, thinkingLevel: null }, planRoleAvailable: false });
     await first;
     expect(selectSmallModelAvailability(useSmallModelStore.getState(), '/a')).toBe('unavailable');
   });

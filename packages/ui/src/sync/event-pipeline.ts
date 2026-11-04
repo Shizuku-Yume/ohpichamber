@@ -103,6 +103,9 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
 
   const attach = (target: SessionMessageTarget, snapshot: SessionSnapshot) => {
     if (disposed || !input.isCurrent() || target.sessionId !== snapshot.session.sessionId) return
+    // A cold snapshot has no worker-owned stream; subscribing would 404 and
+    // start no worker. The next snapshot after a mutation re-attaches.
+    if (snapshot.session.runtimeStatus === 'unavailable') return
     for (const existing of streams.values()) {
       if (existing.target.sessionId === target.sessionId && existing.target.directory !== target.directory) remove(existing)
     }

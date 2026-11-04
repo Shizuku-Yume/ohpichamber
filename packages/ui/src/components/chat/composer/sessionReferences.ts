@@ -68,7 +68,7 @@ export const loadSessionLinkReference = async (target: SessionLinkTarget): Promi
     if (getRuntimeKey() !== runtimeKey) return null;
     const session = [...snapshot.activeSessions, ...snapshot.archivedSessions].find((entry) => entry.sessionId === target.sessionId);
     if (!session) return null;
-    const sessionTitle = session.metadata?.title || session.sessionId;
+    const sessionTitle = session.title || session.sessionId;
     if (!target.messageId) return sessionReference({ id: session.sessionId, title: sessionTitle });
     try {
         let cursor: string | undefined;

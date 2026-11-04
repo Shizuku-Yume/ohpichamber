@@ -614,7 +614,7 @@ export const SessionDialogs: React.FC = () => {
                                     •
                                 </span>
                                 <span dir="auto" className="truncate">
-                                    {session.metadata?.title || t('sessions.sidebar.session.untitled')}
+                                    {session.title || t('sessions.sidebar.session.untitled')}
                                 </span>
                             </li>
                         ))}

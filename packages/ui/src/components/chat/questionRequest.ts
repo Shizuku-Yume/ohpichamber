@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { QuestionRequest } from '@openchamber/agent-contract';
+import { PlanReviewSchema, PlanReviewResponseSchema, type PlanReview, type PlanReviewResponse, type QuestionRequest } from '@openchamber/agent-contract';
 
 /**
  * Native `omp.ask` questions, shaped exactly like the request boundary:
@@ -17,6 +17,7 @@ import type { QuestionRequest } from '@openchamber/agent-contract';
 const AskQuestionOptionSchema = z.object({
   label: z.string(),
   description: z.string().optional(),
+  preview: z.string().optional(),
 });
 const AskQuestionSchema = z.object({
   id: z.string().min(1),
@@ -29,6 +30,7 @@ const AskQuestionSchema = z.object({
 const AskRequestSchema = z.object({
   type: z.literal('omp.ask'),
   questions: z.array(AskQuestionSchema),
+  timeout: z.number().int().positive().optional(),
 });
 
 export type AskQuestion = {
@@ -57,6 +59,29 @@ type AskAnswerResult = {
 
 export type AskAnswerPayload = { results: AskAnswerResult[] };
 
+/** The OMP dialog timeout in milliseconds, when the native host supplied one. */
+export function parseAskTimeout(schema: QuestionRequest['schema']): number | undefined {
+  const parsed = AskRequestSchema.safeParse(schema);
+  return parsed.success ? parsed.data.timeout : undefined;
+}
+
+export type QuestionAnswerPayload = AskAnswerPayload | PlanReviewResponse;
+
+/** Plan reviews use the same pending question and CAS reply boundary as omp.ask. */
+export function parsePlanReview(schema: QuestionRequest['schema']): PlanReview | null {
+  const parsed = PlanReviewSchema.safeParse(schema);
+  return parsed.success ? parsed.data : null;
+}
+
+/** Blank feedback is never sent; the contract trims accepted feedback. */
+export function buildPlanReviewAnswer(
+  action: PlanReviewResponse['action'],
+  feedback = '',
+): PlanReviewResponse | null {
+  const parsed = PlanReviewResponseSchema.safeParse(action === 'feedback' ? { action, feedback } : { action });
+  return parsed.success ? parsed.data : null;
+}
+
 /** Questions from the native schema, in request order. */
 export function parseAskQuestions(schema: QuestionRequest['schema']): AskQuestion[] {
   const parsed = AskRequestSchema.safeParse(schema);
@@ -82,7 +107,11 @@ export const askSchemaSignature = (schema: QuestionRequest['schema']): string =>
 const emptyState = (): AskAnswerState => ({ selected: [], custom: false, text: '' });
 
 export const initialAskAnswers = (questions: readonly AskQuestion[]): AskAnswerState[] =>
-  questions.map(emptyState);
+  questions.map((question) => {
+    const recommended = question.recommended;
+    const option = recommended === undefined ? undefined : question.options[recommended];
+    return option ? { selected: [option.label], custom: false, text: '' } : emptyState();
+  });
 
 export const answerAt = (answers: readonly AskAnswerState[], index: number): AskAnswerState =>
   answers[index] ?? emptyState();
@@ -202,7 +231,7 @@ export function serializeAskQuestionsMarkdown(prompt: string, questions: readonl
 }
 
 type QuestionAnswerDelivery = {
-  reply: (payload: AskAnswerPayload) => Promise<void>;
+  reply: (payload: QuestionAnswerPayload) => Promise<void>;
   recover: () => void;
   failed: () => void;
 };
@@ -214,7 +243,7 @@ type QuestionAnswerDelivery = {
  */
 export async function deliverQuestionAnswer(
   delivery: QuestionAnswerDelivery,
-  payload: AskAnswerPayload,
+  payload: QuestionAnswerPayload,
 ): Promise<boolean> {
   try {
     await delivery.reply(payload);

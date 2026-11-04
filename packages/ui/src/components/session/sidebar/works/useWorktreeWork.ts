@@ -100,7 +100,7 @@ export function useWorktreeWork({ group, projectId, collapsed, onNavigate }: Arg
   // Until the task is named, the row reads as the session a click opens:
   // the task in the user's words. The branch is the last resort.
   const sessionToOpen = React.useMemo(() => pickWorkSessionToOpen(group.sessions), [group.sessions]);
-  const label = title ?? (sessionToOpen?.metadata?.title?.trim() || null) ?? branch ?? group.label;
+  const label = title ?? (sessionToOpen?.title?.trim() || null) ?? branch ?? group.label;
 
   const prepare = (): void => {
     // Leaves a full-page surface (a run's overview, Archive), as selecting a

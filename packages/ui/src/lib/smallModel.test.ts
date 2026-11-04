@@ -5,7 +5,7 @@ import { registerSessionDirectory, setSyncRefs } from '@/sync/sync-refs';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { invalidateSettingsCache } from './persistence';
 import { switchRuntimeEndpoint } from './runtime-switch';
-import { distillGoalObjective, summarizeSelectionForNotes } from './smallModel';
+import { summarizeSelectionForNotes } from './smallModel';
 
 let stores: ChildStoreManager;
 let restorers: Array<() => void>;
@@ -22,7 +22,7 @@ beforeEach(() => {
     expect(directory).toBe('/source');
     return { workspaceId: 'workspace-source', projectId: 'project-source', name: 'Source' };
   });
-  const models = spyOn(canonicalClient, 'getModels').mockImplementation(async workspaceId => ({ workspaceId, revision: '0', models: [{ provider: 'source', modelId: 'source-model', name: 'Source', modalities: ['text'], contextWindow: 8000, maxOutputTokens: 2000, reasoningEffortSupported: false, reasoningOptions: [], variants: [], pricing: null }] }));
+  const models = spyOn(canonicalClient, 'getModels').mockImplementation(async workspaceId => ({ workspaceId, revision: '0', models: [{ provider: 'source', modelId: 'source-model', name: 'Source', modalities: ['text'], contextWindow: 8000, maxOutputTokens: 2000, reasoningEffortSupported: false, reasoningOptions: [], variants: [], pricing: null }], defaults: { model: null, thinkingLevel: null }, planRoleAvailable: false }));
   const fetcher = spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json({}));
   restorers = [() => workspace.mockRestore(), () => models.mockRestore(), () => fetcher.mockRestore()];
 });
@@ -50,23 +50,6 @@ describe('canonical note summaries', () => {
     const complete = spyOn(canonicalClient, 'complete');
     restorers.push(() => complete.mockRestore());
     expect(await summarizeSelectionForNotes(' Exact identifiers ', 'source-session')).toBe('Exact identifiers');
-    expect(complete).not.toHaveBeenCalled();
-  });
-  test('goal distillation honors the target scope instead of the current composer workspace', async () => {
-    const complete = spyOn(canonicalClient, 'complete').mockImplementation(async (workspaceId, input) => {
-      expect(workspaceId).toBe('workspace-source');
-      expect(input.selection).toEqual({ providerId: 'source', modelId: 'source-model' });
-      return { completionId: input.completionId, selection: input.selection, status: 'completed', output: { kind: 'text', text: 'Verified completion criteria' }, finishReason: 'complete', usage: null };
-    });
-    restorers.push(() => complete.mockRestore());
-    expect(await distillGoalObjective(selectedText, { directory: '/source', sessionId: 'source-session', preferred: { providerId: 'source', modelId: 'source-model' } })).toBe('Verified completion criteria');
-  });
-  test('cancelled goal distillation cannot return a fallback objective', async () => {
-    const controller = new AbortController();
-    controller.abort();
-    const complete = spyOn(canonicalClient, 'complete');
-    restorers.push(() => complete.mockRestore());
-    await expect(distillGoalObjective(selectedText, { directory: '/source', signal: controller.signal })).rejects.toThrow();
     expect(complete).not.toHaveBeenCalled();
   });
 });

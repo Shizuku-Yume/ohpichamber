@@ -30,10 +30,11 @@ const fixture = async () => {
   const source = await store.ensureWorkspace({ hostProjectId: 'project', projectDirectory: cwd, workspaceDirectory: cwd, agentDirectory, name: 'Project' });
   const destination = await store.ensureWorkspace({ hostProjectId: 'project', projectDirectory: cwd, workspaceDirectory: destinationCwd, agentDirectory, name: 'Project' });
   for (const sessionId of ['public-root', 'public-child']) await store.bindSession({ sessionId, rootSessionId: 'public-root', workspaceId: source.workspaceId });
-  const native = { workspaceId: source.workspaceId, pending: null, commitFailure: false, loseCommitResponse: false, prepareFailure: false, abortFailure: false, active: false, calls: [] };
+  const native = { workspaceId: source.workspaceId, pending: null, commitFailure: false, loseCommitResponse: false, prepareFailure: false, abortFailure: false, active: false, calls: [], compactResult: { type: 'compact', compactionId: 'compact-id', tokensBefore: 9000, completedAt: 1700000000002 } };
   const runtime = (sessionId = 'public-root') => {
     const session = { sessionId, rootSessionId: 'public-root',
       projectId: source.projectId, workspaceId: native.workspaceId, displayPath: '.', createdAt: 1700000000000, updatedAt: 1700000000001,
+      mode: { kind: 'main' },
       epoch: 'epoch-native', headSequence: '0', runtimeStatus: native.active ? 'running' : 'idle', activeRunId: native.active ? 'active-run' : null };
     if (sessionId === 'public-child') session.parentSessionId = 'public-root';
     return session;
@@ -62,6 +63,8 @@ const fixture = async () => {
     if (pathname === '/internal/sessions') return Response.json({ ...runtime(body.rootSessionId), rootSessionId: body.rootSessionId });
     if (pathname === '/api/agent/v1/sessions/public-root/snapshot') return Response.json(snapshot([], [], runtime()));
     if (pathname.endsWith('/reopen')) return Response.json(runtime());
+    if (pathname === '/api/agent/v1/sessions/public-root' && init.method === 'DELETE')
+      return Response.json({ sessionId: 'public-root', deletedSessionIds: ['public-root'] });
     if (pathname.includes('/native-entry/')) return Response.json({ entryId: decodeURIComponent(pathname.split('/').at(-1)) });
     if (pathname.endsWith('/fork')) return Response.json({ sessionId: 'forked-child', rootSessionId: 'forked-child', sessionFile: '/tmp/forked-child.jsonl', sourceSessionId: 'public-root', entryId: 'message-7', mode: 'selected' }, { status: 201 });
     if (pathname.endsWith('/branch')) {
@@ -72,6 +75,11 @@ const fixture = async () => {
     if (pathname.endsWith('/abort')) {
       if (native.abortFailure) return Response.json({ type: 'urn:ohpichamber:problem:RUN_NOT_FOUND', title: 'Run not found', status: 404, code: 'RUN_NOT_FOUND', detail: 'Run not found', retryable: false }, { status: 404 });
       return Response.json({ run: { runId: decodeURIComponent(pathname.split('/').at(-2)), sessionId: 'public-root', status: 'cancelled', createdAt: 1700000000000, finishedAt: 1700000000002 } });
+    }
+    if (pathname.endsWith('/control')) {
+      if (body.type === 'mode.set') return Response.json({ type: 'mode.set', mode: body.mode === 'main' ? { kind: 'main' } : body.mode === 'vibe' ? { kind: 'vibe' } : { kind: 'plan', status: 'active', planReference: 'local://PLAN.md' } });
+      if (body.type === 'goal') return Response.json({ type: 'goal', mode: body.op === 'drop' ? { kind: 'main' } : { kind: 'goal', status: body.op === 'pause' ? 'paused' : 'active', objective: body.objective || 'Finish the task', tokenBudget: body.tokenBudget ?? null, tokensUsed: 0 } });
+      return Response.json(native.compactResult);
     }
     if (pathname === '/api/agent/v1/sessions/forked-child') return Response.json({ ...runtime('forked-child'), rootSessionId: 'forked-child' });
     if (pathname.startsWith('/api/agent/v1/sessions/')) return Response.json(runtime(decodeURIComponent(pathname.split('/').at(-1))));
@@ -90,10 +98,35 @@ const fixture = async () => {
 };
 
 describe('Host native session control saga', () => {
+  it('forwards authorized mode transitions without storing mode in the Host', async () => {
+    const { native, makeService } = await fixture();
+    const service = makeService();
+    expect(await service.control('public-root', { type: 'mode.set', mode: 'plan' })).toEqual({
+      type: 'mode.set', mode: { kind: 'plan', status: 'active', planReference: 'local://PLAN.md' },
+    });
+    expect(native.calls).toContainEqual({ pathname: '/api/agent/v1/sessions/public-root/control', body: { type: 'mode.set', mode: 'plan' } });
+    expect(await service.control('public-root', { type: 'mode.set', mode: 'main' })).toEqual({ type: 'mode.set', mode: { kind: 'main' } });
+    expect(await service.control('public-root', { type: 'mode.set', mode: 'vibe' })).toEqual({ type: 'mode.set', mode: { kind: 'vibe' } });
+    expect(native.calls).toContainEqual({ pathname: '/api/agent/v1/sessions/public-root/control', body: { type: 'mode.set', mode: 'vibe' } });
+  });
+  it('forwards authorized goal lifecycle commands and rejects empty objectives before native dispatch', async () => {
+    const { native, makeService } = await fixture();
+    const service = makeService();
+    const create = { type: 'goal', op: 'create', objective: 'Finish the task', tokenBudget: 5000 };
+    await expect(service.control('public-root', create)).resolves.toMatchObject({ type: 'goal', mode: { kind: 'goal', objective: create.objective, tokenBudget: 5000 } });
+    expect(native.calls.at(-1)).toEqual({ pathname: '/api/agent/v1/sessions/public-root/control', body: create });
+    await expect(service.control('public-root', { type: 'goal', op: 'pause' })).resolves.toMatchObject({ mode: { kind: 'goal', status: 'paused' } });
+    await expect(service.control('public-root', { type: 'goal', op: 'resume' })).resolves.toMatchObject({ mode: { kind: 'goal', status: 'active' } });
+    await expect(service.control('public-root', { type: 'goal', op: 'drop' })).resolves.toEqual({ type: 'goal', mode: { kind: 'main' } });
+    const count = native.calls.length;
+    await expect(service.control('public-root', { type: 'goal', op: 'create', objective: '  ' })).rejects.toMatchObject({ statusCode: 400 });
+    expect(native.calls).toHaveLength(count);
+    await expect(service.control('missing-session', create)).rejects.toMatchObject({ statusCode: 404 });
+  });
   it('releases an admission on a known pre-dispatch refusal', async () => {
     const { store, source, native, makeService } = await fixture();
     native.refusePath = '/internal/sessions/public-root/reopen';
-    await expect(makeService().open('public-root')).rejects.toMatchObject({ statusCode: 409, code: 'COMMAND_IN_FLIGHT' });
+    await expect(makeService().control('public-root', { type: 'mode.set', mode: 'plan' })).rejects.toMatchObject({ statusCode: 409, code: 'COMMAND_IN_FLIGHT' });
     const input = { hostProjectId: 'project', archiveId: 'refused-reopen', archiveRef: 'refs/openchamber/archive/refused-reopen', snapshotCommit: 'a'.repeat(40), anchorWorkspaceId: source.workspaceId, claimId: 'claim', claimGeneration: `host_${process.pid}_fixture`, branchName: 'branch', branchOid: null };
     await expect(store.createWorktreeArchive(input)).resolves.toMatchObject({ archiveId: 'refused-reopen' });
     expect(native.calls.filter(({ pathname }) => pathname === native.refusePath)).toHaveLength(1);
@@ -135,9 +168,10 @@ describe('Host native session control saga', () => {
     const wait = new Promise((resolve) => { resume = resolve; });
     native.pause = { pathname: operation === 'create' ? '/internal/sessions' : '/internal/sessions/public-root/reopen', entered, wait };
     const service = makeService();
-    const pending = operation === 'create'
+    const trigger = () => (operation === 'create'
       ? service.create({ projectId: source.projectId, workspaceId: source.workspaceId, options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null } })
-      : service.open('public-root');
+      : service.control('public-root', { type: 'mode.set', mode: 'plan' }));
+    const pending = trigger();
     await dispatched;
     const input = { hostProjectId: 'project', archiveId: `${operation}-race`, archiveRef: `refs/openchamber/archive/${operation}-race`, snapshotCommit: 'a'.repeat(40), anchorWorkspaceId: source.workspaceId, claimId: 'claim', claimGeneration: `host_${process.pid}_fixture`, branchName: 'branch', branchOid: null };
     await expect(store.createWorktreeArchive(input)).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });
@@ -145,9 +179,7 @@ describe('Host native session control saga', () => {
     await pending;
     await store.createWorktreeArchive(input);
     const before = native.calls.length;
-    const blocked = operation === 'create'
-      ? service.create({ projectId: source.projectId, workspaceId: source.workspaceId, options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null } })
-      : service.open('public-root');
+    const blocked = trigger();
     await expect(blocked).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });
     expect(native.calls.length).toBe(before);
   });
@@ -176,12 +208,21 @@ describe('Host native session control saga', () => {
       () => service.selectBranch(sessionId, { action: 'restore', branchId: 'branch-owner', branchVersion: '3' }),
       () => service.relocate(sessionId, { workspaceId: destination.workspaceId }),
       () => service.control(sessionId, { type: 'abort', runId: 'run-1' }),
+      () => service.control(sessionId, { type: 'mode.set', mode: 'plan' }),
+      () => service.control(sessionId, { type: 'goal', op: 'create', objective: 'Not writable' }),
     ];
 
     for (const mutate of mutations) {
       await expect(mutate()).rejects.toMatchObject({ statusCode: 409, code: 'SESSION_READ_ONLY' });
     }
     expect(native.calls).toEqual([]);
+  });
+  it('forwards compact through the authorized session control endpoint and preserves optional instructions', async () => {
+    const { native, makeService } = await fixture();
+    const service = makeService();
+    await expect(service.control('public-root', { type: 'compact', instructions: 'Keep the decisions.' })).resolves.toEqual(native.compactResult);
+    expect(native.calls.at(-1)).toMatchObject({ pathname: '/api/agent/v1/sessions/public-root/control', body: { type: 'compact', instructions: 'Keep the decisions.' } });
+    await expect(service.control('missing-session', { type: 'compact' })).rejects.toMatchObject({ statusCode: 404 });
   });
   it('returns the settled abort run unchanged and preserves native run-not-found and non-abort refusal', async () => {
     const { native, makeService } = await fixture();
@@ -197,7 +238,7 @@ describe('Host native session control saga', () => {
   });
   it('publishes all admitted family identities at the destination and retains Host metadata and archive revisions', async () => {
     const { owner, store, destination, makeService } = await fixture();
-    await owner.sessionMetadataStore.setSessionMetadata('public-child', { title: 'Retained child' });
+    await owner.sessionMetadataStore.setSessionMetadata('public-child', { notes: 'Retained child' });
     await owner.archiveStore.archive(['public-child'], 1700000000000);
     const metadata = await owner.sessionMetadataStore.getState('public-child');
     const archive = await owner.archiveStore.getState('public-child');
@@ -247,6 +288,26 @@ describe('Host native session control saga', () => {
     await expect(makeService().selectBranch('public-root', { action: 'restore', branchId: 'branch-owner', branchVersion: '3' })).resolves.toMatchObject({ branch: { branchVersion: '4' } });
     expect(native.calls.findIndex((call) => call.pathname.endsWith('/relocation/finalize'))).toBeLessThan(native.calls.findIndex((call) => call.pathname.endsWith('/branch')));
     await expect(store.getRelocation('public-root')).resolves.toBeNull();
+  });
+  it('reopens a cold root before non-abort control and delete, but not before abort', async () => {
+    const { native, makeService } = await fixture();
+    const service = makeService();
+    await service.control('public-root', { type: 'mode.set', mode: 'plan' });
+    expect(native.calls.map(call => call.pathname)).toEqual([
+      '/internal/sessions/public-root/reopen',
+      '/api/agent/v1/sessions/public-root/control',
+    ]);
+    native.calls.length = 0;
+    await service.control('public-root', { type: 'abort', runId: 'active-run' });
+    expect(native.calls.map(call => call.pathname)).toEqual([
+      '/api/agent/v1/sessions/public-root/runs/active-run/abort',
+    ]);
+    native.calls.length = 0;
+    expect(await service.delete('public-root')).toEqual({ sessionId: 'public-root', deletedSessionIds: ['public-root'] });
+    expect(native.calls.map(call => call.pathname)).toEqual([
+      '/internal/sessions/public-root/reopen',
+      '/api/agent/v1/sessions/public-root',
+    ]);
   });
   it('reopens the authorized source, forks the selected message, and registers the returned child scope', async () => {
     const { native, makeService, registrations, source } = await fixture();

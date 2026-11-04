@@ -138,7 +138,7 @@ export interface ParsedSlashCommand {
 
 export type LocalSlashCommandPlan = {
     command: ParsedSlashCommand;
-    kind: 'action' | 'prompt';
+    kind: 'builtin' | 'action' | 'prompt';
     attachedContext: 'none' | 'retain' | 'send';
 };
 
@@ -172,13 +172,14 @@ export function parseSlashCommand(text: string): ParsedSlashCommand | null {
 /**
  * Plan commands owned by the composer before attached context is consumed.
  * Action commands leave that context in the composer; prompt commands send it.
- * Unknown commands return null so the OpenCode command router remains authoritative.
+ * Unknown commands return null so native file-resource expansion remains authoritative.
  */
 export function planLocalSlashCommand(
     text: string,
     inputMode: 'normal' | 'shell' | undefined,
     hasAttachedContext: boolean,
     hasSession: boolean,
+    builtinCommandNames: readonly string[],
 ): LocalSlashCommandPlan | null {
     if (inputMode !== 'normal') return null;
     const command = parseSlashCommand(text);
@@ -192,6 +193,10 @@ export function planLocalSlashCommand(
             kind: 'action',
             attachedContext: hasAttachedContext ? 'retain' : 'none',
         };
+    }
+    if (builtinCommandNames.includes(command.name)) {
+        if (!hasSession) return null;
+        return { command, kind: 'builtin', attachedContext: hasAttachedContext ? 'retain' : 'none' };
     }
 
     if (command.name === 'btw' || findMagicPromptCommand(command.name)) {

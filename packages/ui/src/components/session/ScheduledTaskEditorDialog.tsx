@@ -12,13 +12,11 @@ import { Button } from '@/components/ui/button';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { toast } from '@/components/ui';
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
-import { AgentSelector } from '@/components/sections/commands/AgentSelector';
 import { CommandAutocomplete, type CommandAutocompleteHandle, type CommandInfo } from '@/components/chat/CommandAutocomplete';
 import { FileMentionAutocomplete, type FileMentionHandle } from '@/components/chat/FileMentionAutocomplete';
 import { Icon } from "@/components/icon/Icon";
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { useAgentsStore } from '@/stores/useAgentsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import type { ScheduledTask } from '@/lib/scheduledTasksApi';
@@ -33,8 +31,8 @@ import { SettingsStackedField } from '@/components/sections/shared/SettingsSecti
 
 const WEEKDAY_INDEXES = [0, 1, 2, 3, 4, 5, 6] as const;
 
-// Mirrors the composer's footer icon toggles (PermissionAutoAcceptButton /
-// SessionGoalButton) so the state reads the same in both places.
+// Mirrors the composer's footer icon toggles (PermissionAutoAcceptButton and
+// the permission controls) so the state reads the same in both places.
 const EDITOR_TOGGLE_BUTTON_CLASS = 'flex h-6 w-6 cursor-pointer items-center justify-center text-foreground transition-none outline-none focus:outline-none flex-shrink-0';
 
 const TIMEZONE_OPTIONS = (() => {
@@ -480,8 +478,6 @@ type ScheduledTaskDraft = {
     providerID: string;
     modelID: string;
     variant: string;
-    agent: string;
-    /** Model, thinking level and agent follow the session defaults at run time. */
     useDefaults: boolean;
     goalEnabled: boolean;
     goalTokenBudget: number | null;
@@ -512,7 +508,6 @@ const toDraft = (
     providerID: string;
     modelID: string;
     variant: string;
-    agent: string;
   },
 ): ScheduledTaskDraft => {
   const timezoneFallback = canonicalizeTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
@@ -536,7 +531,6 @@ const toDraft = (
         providerID: defaults.providerID,
         modelID: defaults.modelID,
         variant: defaults.variant,
-        agent: defaults.agent,
         useDefaults: false,
         goalEnabled: false,
         goalTokenBudget: null,
@@ -577,7 +571,6 @@ const toDraft = (
       providerID: task.execution.providerID || defaults.providerID,
       modelID: task.execution.modelID || defaults.modelID,
       variant: task.execution.variant || '',
-      agent: task.execution.agent || '',
       useDefaults: task.execution.useDefaults === true,
       goalEnabled: task.execution.goalEnabled === true,
       goalTokenBudget: typeof task.execution.goalTokenBudget === 'number' && task.execution.goalTokenBudget > 0
@@ -769,13 +762,11 @@ export function ScheduledTaskEditorDialog(props: {
     if (open) void refreshGlobalSessions().catch(() => undefined);
   }, [open]);
   const loadProviders = useConfigStore((state) => state.loadProviders);
-  const loadAgents = useAgentsStore((state) => state.loadAgents);
   const projectDirectory = projects.find((project) => project.id === props.projectId)?.path ?? null;
   const providers = useConfigStore((state) => state.providers);
   const currentProviderID = useConfigStore((state) => state.currentProviderId);
   const currentModelID = useConfigStore((state) => state.currentModelId);
   const currentVariant = useConfigStore((state) => state.currentVariant || '');
-  const currentAgentName = useConfigStore((state) => state.currentAgentName || '');
   const timeFormatPreference = useUIStore((state) => state.timeFormatPreference);
   const weekStartPreference = useUIStore((state) => state.weekStartPreference);
   const isMobile = useUIStore((state) => state.isMobile);
@@ -785,7 +776,6 @@ export function ScheduledTaskEditorDialog(props: {
       providerID: currentProviderID,
       modelID: currentModelID,
       variant: currentVariant,
-      agent: currentAgentName,
     })
   );
   const [saving, setSaving] = React.useState(false);
@@ -835,8 +825,7 @@ export function ScheduledTaskEditorDialog(props: {
       return;
     }
     void loadProviders({ source: 'scheduledTaskEditor' });
-    void loadAgents(projectDirectory);
-  }, [open, loadProviders, loadAgents, projectDirectory]);
+  }, [open, loadProviders, projectDirectory]);
 
   React.useEffect(() => {
     if (!open) {
@@ -847,7 +836,6 @@ export function ScheduledTaskEditorDialog(props: {
         providerID: currentProviderID,
         modelID: currentModelID,
         variant: currentVariant,
-        agent: currentAgentName,
       })
     );
     const sourceDate = parseISODateToLocal(task?.schedule?.date || '') || new Date();
@@ -857,8 +845,8 @@ export function ScheduledTaskEditorDialog(props: {
     setShowFileMention(false);
     setCommandQuery('');
     setMentionQuery('');
-  }, [open, task, currentProviderID, currentModelID, currentVariant, currentAgentName]);
 
+  }, [open, task, currentProviderID, currentModelID, currentVariant]);
   React.useEffect(() => {
     if (!isDatePickerOpen) {
       return;
@@ -1068,30 +1056,6 @@ export function ScheduledTaskEditorDialog(props: {
     });
   }, [draft.execution.prompt, setPromptValue, updateAutocompleteState]);
 
-  const handleAgentSelect = React.useCallback((agentName: string) => {
-    const promptValue = draft.execution.prompt;
-    const textarea = promptTextareaRef.current;
-    const cursorPosition = textarea?.selectionStart ?? promptValue.length;
-    const textBeforeCursor = promptValue.substring(0, cursorPosition);
-    const lastAtSymbol = textBeforeCursor.lastIndexOf('@');
-    const startIndex = lastAtSymbol !== -1 ? lastAtSymbol : cursorPosition;
-    const nextPrompt = `${promptValue.substring(0, startIndex)}@${agentName} ${promptValue.substring(cursorPosition)}`;
-    const nextCursor = startIndex + agentName.length + 2;
-
-    setPromptValue(nextPrompt);
-    setShowFileMention(false);
-    setMentionQuery('');
-
-    requestAnimationFrame(() => {
-      const currentTextarea = promptTextareaRef.current;
-      if (currentTextarea) {
-        currentTextarea.selectionStart = nextCursor;
-        currentTextarea.selectionEnd = nextCursor;
-        currentTextarea.focus();
-      }
-      updateAutocompleteState(nextPrompt, nextCursor);
-    });
-  }, [draft.execution.prompt, setPromptValue, updateAutocompleteState]);
 
   const handleCommandSelect = React.useCallback((command: CommandInfo) => {
     const nextPrompt = `/${command.name} `;
@@ -1162,7 +1126,6 @@ export function ScheduledTaskEditorDialog(props: {
         providerID: draft.execution.providerID,
         modelID: draft.execution.modelID,
         ...(draft.execution.variant.trim() ? { variant: draft.execution.variant.trim() } : {}),
-        ...(draft.execution.agent.trim() ? { agent: draft.execution.agent.trim() } : {}),
         ...(draft.execution.permissionAutoAccept ? { permissionAutoAccept: true } : {}),
         ...(draft.execution.goalEnabled ? { goalEnabled: true } : {}),
         ...(draft.execution.goalEnabled && draft.execution.goalTokenBudget
@@ -1213,10 +1176,10 @@ export function ScheduledTaskEditorDialog(props: {
         <SettingsStackedField label={t('sessions.scheduledTasks.editor.targetSession')} info={t('sessions.scheduledTasks.editor.targetHint')}>
           <Select value={draft.targetSessionId} onValueChange={(targetSessionId) => setDraft((prev) => ({ ...prev, targetSessionId }))}>
             <SelectTrigger><SelectValue placeholder={t('sessions.scheduledTasks.editor.targetSession')}>
-              {sessions.find((session) => session.sessionId === draft.targetSessionId)?.metadata?.title || draft.targetSessionId || undefined}
+              {sessions.find((session) => session.sessionId === draft.targetSessionId)?.title || draft.targetSessionId || undefined}
             </SelectValue></SelectTrigger>
             <SelectContent>
-              {sessions.map((session) => <SelectItem key={session.sessionId} value={session.sessionId}>{session.metadata?.title || session.sessionId}</SelectItem>)}
+              {sessions.map((session) => <SelectItem key={session.sessionId} value={session.sessionId}>{session.title || session.sessionId}</SelectItem>)}
             </SelectContent>
           </Select>
         </SettingsStackedField>
@@ -1578,20 +1541,6 @@ export function ScheduledTaskEditorDialog(props: {
             </div>
           </div>
 
-          <div className="flex min-w-0 flex-col gap-1">
-            <FieldLabel>{t('sessions.scheduledTasks.editor.agent.label')}</FieldLabel>
-            <AgentSelector
-              agentId={draft.execution.agent}
-              directory={projectDirectory ?? undefined}
-              onChange={(agent) => setDraft((prev) => ({
-                ...prev,
-                execution: {
-                  ...prev.execution,
-                  agent,
-                },
-              }))}
-            />
-          </div>
           </>
           )}
 
@@ -1635,7 +1584,6 @@ export function ScheduledTaskEditorDialog(props: {
                   ref={mentionRef}
                   searchQuery={mentionQuery}
                   onFileSelect={handleFileSelect}
-                  onAgentSelect={handleAgentSelect}
                   onClose={() => setShowFileMention(false)}
                   style={{
                     left: 0,

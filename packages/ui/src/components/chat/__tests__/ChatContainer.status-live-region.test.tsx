@@ -101,14 +101,14 @@ const SESSION_ID = 'session-accepted-run';
 
 const hostSession = (): Session => ({
   ...nativeSnapshot(SESSION_ID, []).session,
-  metadata: { title: 'Fresh session' }, metadataRevision: '1', archiveRevision: '0',
+  title: 'Fresh session', metadata: {}, metadataRevision: '1', archiveRevision: '0',
   runtimeStatus: 'running', activeRunId: 'run-accepted',
 });
 /** What the column holds right after the Host accepted a run: no message yet. */
 const acceptedRunSnapshot = (sessionId: string) => {
   const snapshot = nativeSnapshot(sessionId, []);
   snapshot.session = { ...snapshot.session, runtimeStatus: 'running', activeRunId: 'run-accepted' };
-  snapshot.activeRun = { runId: 'run-accepted', sessionId, status: 'running', createdAt: 3 };
+  snapshot.activeRun = { runId: 'run-accepted', sessionId, status: 'running', origin: 'host', createdAt: 3 };
   return snapshot;
 };
 const client = nativeClient({

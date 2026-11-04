@@ -42,6 +42,7 @@ const session = (sessionId: string, parentSessionId?: string, overrides: Partial
     headSequence: '0',
     runtimeStatus: 'idle',
     activeRunId: null,
+    mode: { kind: 'main' as const },
     metadata: null,
     metadataRevision: '0',
     archiveRevision: '0',
@@ -241,7 +242,11 @@ describe('buildSessionSidebarRowModel', () => {
   });
 
   test('search counts every matching subsession of a session in work', () => {
-    const titled = (id: string, title: string, children: SessionNode[] = []): SessionNode => ({ session: session(id, undefined, { metadata: { title } as unknown as Session['metadata'] }), children, worktree: null });
+    const titled = (id: string, title: string, children: SessionNode[] = []): SessionNode => ({
+      session: session(id, undefined, { title, metadata: { title } as unknown as Session['metadata'] }),
+      children,
+      worktree: null,
+    });
     const parent = titled('ses_parent', 'Parent', [titled('ses_a', 'fix header'), titled('ses_b', 'header spacing'), titled('ses_c', 'footer')]);
     const input = args([]);
     input.mode = 'search';

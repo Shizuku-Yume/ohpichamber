@@ -5,7 +5,6 @@ import { sendMessage } from '@/sync/session-actions';
 import { devtools } from 'zustand/middleware';
 import type { CreateMultiRunParams, CreateMultiRunResult } from '@/types/multirun';
 import { resolveWorkspaceDirectory } from '@/stores/globalSessions';
-import { fetchSessionKnowledge, reportSessionKnowledgeDelivered } from '@/lib/sessionKnowledgeApi';
 import { getWorktreeSetupWaitEnabled, saveWorktreeSetupCommands } from '@/lib/openchamberConfig';
 import type { ProjectRef } from '@/lib/worktrees/worktreeManager';
 import { createWorktreeWithDefaults, resolveRootTrackingRemote } from '@/lib/worktrees/worktreeCreate';
@@ -97,7 +96,6 @@ export async function dispatchRunPrompt(input: {
   modelId: string;
   variant?: string;
   reasoningEffort?: string;
-  agentId?: string;
   files?: PromptAttachment[];
 }): Promise<void> {
   const directoryOwner = resolveWorkspaceDirectory(input.workspaceId);
@@ -115,27 +113,20 @@ export async function dispatchRunPrompt(input: {
     files: input.files, sourceWorkspaceId: input.attachmentWorkspaceId!, destinationWorkspaceId: input.workspaceId, assertCurrent,
   }) : [];
   assertCurrent();
-  const [expanded, knowledge] = await Promise.all([
-    expandNativeFileResource(input.prompt, input.directory),
-    fetchSessionKnowledge(input.directory, input.sessionId),
-  ]);
+  const expanded = await expandNativeFileResource(input.prompt, input.directory);
   assertCurrent();
   const model = expanded?.modelSelection ?? { providerId: input.providerId, modelId: input.modelId };
-  const agentId = expanded?.agentId ?? input.agentId;
   useSelectionStore.getState().saveSessionModelSelection(input.sessionId, model.providerId, model.modelId);
-  useSelectionStore.getState().saveSessionAgentSelection(input.sessionId, agentId ?? '');
+  useSelectionStore.getState().saveSessionAgentSelection(input.sessionId, '');
   await sendMessage({
     runtimeKey: input.runtimeKey,
     sessionId: input.sessionId,
     request: {
-      options: { ...model, variant: input.variant ?? null, agentId: agentId ?? null, reasoningEffort: input.reasoningEffort ?? null },
-      input: { text: expanded?.content ?? input.prompt, attachments, context: knowledge.text ? [{ kind: 'instruction', text: knowledge.text }] : [] },
+      options: { ...model, variant: input.variant ?? null, agentId: null, reasoningEffort: input.reasoningEffort ?? null },
+      input: { text: expanded?.content ?? input.prompt, attachments, context: [] },
     },
   });
   assertCurrent();
-  if (knowledge.text) {
-    void reportSessionKnowledgeDelivered(input.directory, input.sessionId, knowledge.signature);
-  }
 }
 
 const resolveActiveProject = (): ProjectRef | null => {
@@ -181,7 +172,7 @@ export const useMultiRunStore = create<MultiRunStore>()(
         };
         const groupName = params.name.trim();
         const runTitle = (params.title ?? params.name).trim().slice(0, 200);
-        const { groups, agent, files, setupCommands } = params;
+        const { groups, files, setupCommands } = params;
 
         if (!groupName) {
           set({ error: 'Group name is required' });
@@ -237,7 +228,7 @@ export const useMultiRunStore = create<MultiRunStore>()(
             prompt: string;
             files?: CreateMultiRunParams['files'];
           }> = [];
-          const autoFusion = params.autoFusion ? { providerID: params.autoFusion.providerId, modelID: params.autoFusion.modelId, variant: params.autoFusion.variant, agent: params.autoFusion.agentId, launcherId: RUN_LAUNCHER_ID } : undefined;
+          const autoFusion = params.autoFusion ? { providerID: params.autoFusion.providerId, modelID: params.autoFusion.modelId, variant: params.autoFusion.variant, launcherId: RUN_LAUNCHER_ID } : undefined;
 
           const commandsToRun = setupCommands?.filter((cmd) => cmd.trim().length > 0) ?? [];
 
@@ -281,7 +272,7 @@ export const useMultiRunStore = create<MultiRunStore>()(
                   title: sessionTitle, directory: runDirectory,
                   identity: { group: membershipGroup, groupSlug, runGroup, providerID: model.providerId,
                     modelID: model.modelId, index: count > 1 ? index : undefined, role: 'run', title: runTitle, autoFusion },
-                  selection: { providerId: model.providerId, modelId: model.modelId, variant: model.variant ?? null, agentId: agent ?? null, reasoningEffort: model.reasoningEffort ?? null },
+                  selection: { providerId: model.providerId, modelId: model.modelId, variant: model.variant ?? null, agentId: null, reasoningEffort: model.reasoningEffort ?? null },
                 }, assertCurrent);
                 if (!shouldIsolateRuns) {
                   const session = await createRun(directory);
@@ -386,7 +377,6 @@ export const useMultiRunStore = create<MultiRunStore>()(
                 modelId: run.modelID,
                 variant: run.variant,
                 reasoningEffort: run.reasoningEffort,
-                agentId: agent,
                 files: [...(filesForMessage ?? []), ...(run.files ?? [])],
               });
             } catch (err) {

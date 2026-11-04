@@ -31,7 +31,6 @@ import { selectSafetyNetAvailable, useRoutingStore } from '@/stores/useRoutingSt
 import { useUIStore, type LargeTextPasteBehavior } from '@/stores/useUIStore';
 
 import { MessageSearchSettings } from './MessageSearchSettings';
-import { SessionGoalCheckerField, SessionGoalMaxTurnsField } from './SessionGoalCheckerField';
 import { useChatSettingsTabStore, type ChatSettingsTab } from './chatSettingsTabs';
 
 type ChipOption<T extends string> = { id: T; labelKey: I18nKey };
@@ -565,8 +564,6 @@ const AssistanceTab: React.FC = () => {
             settingsItem="chat.session-goal"
           />
           <div>
-            <SessionGoalCheckerField disabled={!sessionGoalEnabled} />
-            <SessionGoalMaxTurnsField disabled={!sessionGoalEnabled} />
             <SettingsFieldRow
               label={(
                 <SettingsCheckboxRow

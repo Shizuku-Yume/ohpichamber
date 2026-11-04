@@ -64,6 +64,19 @@ and the scroll hook's pinned-end observer keeps a reader on the end. The
 mobile keyboard choreography is unchanged: the form inside the slot is still
 the keyboard mover and the column shrinks around it at settle.
 
+### Session mode selector
+
+The composer presents a single searchable mode dropdown (Main, Plan, Vibe, Goal) with Radix tooltips and keyboard filtering:
+- On desktop, the mode trigger sits immediately after `ModelControls` in the footer's right-aligned action group, occupying the visual layout slot vacated by the retired agent picker (rather than nesting inside `ModelControls`).
+- On mobile, it mounts to the right of `MobileModelButton` inside `mobileModelRow`.
+
+In draft sessions, transient mode selection and any typed objective are held in `NewSessionDraftState`. When submitting a draft with Plan or Vibe selected, the composer applies `mode.set` through `canonicalClient` immediately after `materializeOpenDraftSession` creates the session, before dispatching the initial prompt. Submitting with Goal selected invokes native goal creation directly via canonical session control, initiating the goal run without dispatching a redundant prompt turn.
+
+For established sessions, the dropdown selection reflects the authoritative `RuntimeSession.mode` snapshot and subsequent `session.updated` events; local selection state is never maintained independently. Selecting Main, Plan, or Vibe while idle issues `mode.set`, whereas selecting Goal opens the native objective dialog. Mode controls remain disabled while a provider run is active. Plan mode availability is governed by workspace `ModelCatalog.planRoleAvailable` from the OMP resolver; when unavailable, Plan is disabled with a tooltip directing the user to OMP settings.
+
+Active goal display and lifecycle management are retained by `SessionGoalRow` and `SessionGoalDialog` (objective, status, token budget, pause, resume, and drop). The standalone `SessionGoalButton` and inline objective counter are retired in favor of the unified mode dropdown.
+
+
 Glass does not nest: a `backdrop-filter` element is a backdrop root, so a
 glass child only blurs its parent's content. Popups therefore anchor to the
 wrapper outside the box, and the dictation overlay (`.oc-dictation-overlay`)
@@ -256,6 +269,14 @@ and the send path reading the same grammar.
   shows an error toast. Queueing runs it instead of queueing, like a local
   command. `CommandAutocomplete` lists the same entries with the extension's
   name as their badge, and the language highlights them as known `/tokens`.
+- OMP slash builtins come only from the workspace command catalog's
+  `builtinCommands`. The composer loads that catalog for typed commands as well
+  as the palette, which synthesizes builtin rows independently of disk templates.
+  Send and queue planning preserve builtin identity; dispatch uses the session
+  `command` control and displays returned output as a notice, without consuming
+  attached context or submitting a prompt. Local actions keep precedence:
+  `/compact` uses the dedicated compact control and compaction projection.
+  File commands and prompt templates keep their native expansion path.
 - Local slash commands are planned by `submit/slashCommands.ts` before any
   attached context is consumed. Commands that act on session or UI state
   (`/undo`, `/redo`, `/compact`, `/timeline`, `/handoff-review`) take only
@@ -337,35 +358,18 @@ scope reads the persisted runtime bucket only.
 
 ## BTW composer
 
-An empty `/btw` opens an unsent draft. `/btw <question>` opens BTW and sends
-that question immediately after its own draft and model selection are active.
-**By the way…** opens an unsent draft with Quote-formatted selection text.
-The first send creates the fork; Enter follows the user's preference. Pending text and references then
-move to the fork's draft identity. Normal and BTW drafts remain independent,
-including in memory when persistence is disabled.
+`/btw` opens an in-memory side panel beside the composer. An empty command
+opens the question draft; `/btw <question>` asks immediately. **By the way…**
+opens the draft with selected text formatted as a quote. Answers stream into the
+panel, and cancelling stops the active question. These questions create no
+session and never enter the main conversation's transcript or history.
 
-Both modes reuse `ComposerEditor` and `ModelControls`; BTW transitions put the
-caret at the end. BTW copies the main model/effort once, including explicit
-Default, and uses `plan` or the first selectable agent. Its controlled model
-path only writes BTW selections. Files attach as in the normal composer
-(picker, paste, drop) and live in the BTW draft identity's attachment slot,
-so they never mix with the main draft's files; the attach control offers
-only local files. Goals, expansion, shell, linked context (issues, PRs,
-guests), agent selection and file/agent mention autocomplete are
-unavailable. Auto-accept is applied before the first send.
-On mobile, model and effort controls sit in the input's upper-left row; the
-footer only contains auto-accept and send/stop controls.
-
-Escape closes menus first. Otherwise it returns to normal: an unsent BTW is
-discarded with its text, references, selections and panel; a creating or real
-fork is only collapsed. Neither exit sends, aborts, or deletes a server session,
-nor consumes the main draft's files, queue, or linked context. Pending snippet
-expansion belongs to the unsent panel. Discarding that panel invalidates the
-send, and a runtime change prevents fork creation and stale UI recovery.
-
-The unsent panel shows "Ask your question" until fork creation starts.
-Existing panels hide titles. Promotion retains the existing internal title, without
-transcript fetching or Small Model generation.
+The panel has transient per-parent UI state only. Its draft uses the same
+composer, but does not inherit a session model, agent, permission mode, history,
+files or references. Escape discards an unsent draft or collapses a panel with
+an answer; it does not send a question or affect the main run. A runtime change
+invalidates a pending send. The stream and cancel controls use the active
+session's existing canonical event/control transport; no session is created.
 
 ## Mobile
 

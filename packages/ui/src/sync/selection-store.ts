@@ -9,9 +9,13 @@ import { z } from "zod"
 import { createDeferredSafeJSONStorage } from "@/stores/utils/safeStorage"
 import { getRuntimeKey } from "@/lib/runtime-switch"
 
+/** Root chats have no agent, so their per-session choices use this stable key. */
+export const ROOT_SELECTION_AGENT = ''
+
 type ModelSelection = { providerId: string; modelId: string }
 type LastUsedProvider = { providerID: string; modelID: string }
 type VariantSelections = Map<string, Map<string, Map<string, string | null>>>
+type ReasoningEffortSelections = Map<string, Map<string, Map<string, string | null>>>
 const variantEntriesSchema = z.array(z.tuple([
   z.string(), z.array(z.tuple([
     z.string(), z.array(z.tuple([z.string(), z.string().nullable()])),
@@ -27,6 +31,7 @@ const persistedSelectionSchema = z.object({
     z.string(), z.array(z.tuple([z.string(), modelSelectionSchema])),
   ])).optional().catch(undefined),
   agentModelVariantSelections: variantEntriesSchema.optional().catch(undefined),
+  agentModelReasoningEffortSelections: variantEntriesSchema.optional().catch(undefined),
   lastUsedProvider: z.object({ providerID: z.string(), modelID: z.string() }).nullable().optional().catch(undefined),
 })
 
@@ -39,6 +44,7 @@ type SelectionState = {
   sessionFollowedModels: Map<string, string>
   sessionAgentModelSelections: Map<string, Map<string, ModelSelection>>
   agentModelVariantSelections: VariantSelections
+  agentModelReasoningEffortSelections: ReasoningEffortSelections
   lastUsedProvider: LastUsedProvider | null
 
   saveSessionModelSelection: (sessionId: string, providerId: string, modelId: string) => void
@@ -65,13 +71,12 @@ type SelectionState = {
   saveAgentModelForSession: (sessionId: string, agentName: string, providerId: string, modelId: string) => void
   getAgentModelForSession: (sessionId: string, agentName: string) => { providerId: string; modelId: string } | null
   clearSessionSelections: (sessionId: string) => void
-  /**
-   * `variant` is the effort chosen for this agent/model in this session:
-   * a name, `null` for an explicit "Default" (send no effort), or `undefined`
-   * to forget the choice so the inherited default applies again.
-   */
+  /** The selected native route for this agent/model; null explicitly selects no route. */
   saveAgentModelVariantForSession: (sessionId: string, agentName: string, providerId: string, modelId: string, variant: string | null | undefined) => void
   getAgentModelVariantForSession: (sessionId: string, agentName: string, providerId: string, modelId: string) => string | null | undefined
+  /** `off`, a catalog effort, or undefined when no session-specific effort was chosen. */
+  saveAgentModelReasoningEffortForSession: (sessionId: string, agentName: string, providerId: string, modelId: string, effort: string | undefined) => void
+  getAgentModelReasoningEffortForSession: (sessionId: string, agentName: string, providerId: string, modelId: string) => string | undefined
 }
 
 // Maximum number of sessions to persist to local storage to prevent unbounded growth
@@ -87,6 +92,7 @@ export const useSelectionStore = create<SelectionState>()(
       sessionFollowedModels: new Map(),
       sessionAgentModelSelections: new Map(),
       agentModelVariantSelections: new Map(),
+      agentModelReasoningEffortSelections: new Map(),
       lastUsedProvider: null,
 
       saveSessionModelSelection: (sessionId, providerId, modelId) =>
@@ -157,7 +163,8 @@ export const useSelectionStore = create<SelectionState>()(
       clearSessionSelections: (sessionId) => set((state) => {
         const variantKey = variantSessionKey(sessionId)
         const hadVariant = state.agentModelVariantSelections.has(variantKey)
-        if (!hadVariant && !state.sessionModelSelections.has(sessionId)
+        const hadReasoningEffort = state.agentModelReasoningEffortSelections.has(variantKey)
+        if (!hadVariant && !hadReasoningEffort && !state.sessionModelSelections.has(sessionId)
           && !state.sessionAgentSelections.has(sessionId)
           && !state.sessionFollowedAgents.has(sessionId)
           && !state.sessionFollowedModels.has(sessionId)
@@ -168,13 +175,15 @@ export const useSelectionStore = create<SelectionState>()(
         const sessionFollowedModels = new Map(state.sessionFollowedModels)
         const sessionAgentModelSelections = new Map(state.sessionAgentModelSelections)
         const agentModelVariantSelections = new Map(state.agentModelVariantSelections)
+        const agentModelReasoningEffortSelections = new Map(state.agentModelReasoningEffortSelections)
         sessionModelSelections.delete(sessionId)
         sessionAgentSelections.delete(sessionId)
         sessionFollowedAgents.delete(sessionId)
         sessionFollowedModels.delete(sessionId)
         sessionAgentModelSelections.delete(sessionId)
         agentModelVariantSelections.delete(variantKey)
-        return { sessionModelSelections, sessionAgentSelections, sessionFollowedAgents, sessionFollowedModels, sessionAgentModelSelections, agentModelVariantSelections }
+        agentModelReasoningEffortSelections.delete(variantKey)
+        return { sessionModelSelections, sessionAgentSelections, sessionFollowedAgents, sessionFollowedModels, sessionAgentModelSelections, agentModelVariantSelections, agentModelReasoningEffortSelections }
       }),
 
       saveAgentModelVariantForSession: (sessionId, agentName, providerId, modelId, variant) => set((state) => {
@@ -200,6 +209,25 @@ export const useSelectionStore = create<SelectionState>()(
         const key = `${providerId}/${modelId}`
         return get().agentModelVariantSelections.get(variantSessionKey(sessionId))?.get(agentName)?.get(key)
       },
+      saveAgentModelReasoningEffortForSession: (sessionId, agentName, providerId, modelId, effort) => set((state) => {
+        const key = `${providerId}/${modelId}`
+        const sessionKey = variantSessionKey(sessionId)
+        if (state.agentModelReasoningEffortSelections.get(sessionKey)?.get(agentName)?.get(key) === effort) return state
+        const selections = new Map(state.agentModelReasoningEffortSelections)
+        const agentMap = new Map(selections.get(sessionKey))
+        const modelMap = new Map(agentMap.get(agentName))
+        if (effort === undefined) modelMap.delete(key)
+        else modelMap.set(key, effort)
+        if (modelMap.size) agentMap.set(agentName, modelMap)
+        else agentMap.delete(agentName)
+        selections.delete(sessionKey)
+        if (agentMap.size) selections.set(sessionKey, agentMap)
+        return { agentModelReasoningEffortSelections: selections }
+      }),
+      getAgentModelReasoningEffortForSession: (sessionId, agentName, providerId, modelId) => {
+        const key = `${providerId}/${modelId}`
+        return get().agentModelReasoningEffortSelections.get(variantSessionKey(sessionId))?.get(agentName)?.get(key) ?? undefined
+      },
     }),
     {
       name: "selection-store",
@@ -224,6 +252,9 @@ export const useSelectionStore = create<SelectionState>()(
           agentModelVariantSelections: Array.from(state.agentModelVariantSelections)
             .slice(-MAX_PERSISTED_SESSIONS)
             .map(([sessionId, agents]) => [sessionId, Array.from(agents, ([agent, models]) => [agent, Array.from(models)])]),
+          agentModelReasoningEffortSelections: Array.from(state.agentModelReasoningEffortSelections)
+            .slice(-MAX_PERSISTED_SESSIONS)
+            .map(([sessionId, agents]) => [sessionId, Array.from(agents, ([agent, models]) => [agent, Array.from(models)])]),
           lastUsedProvider: state.lastUsedProvider,
         }
       },
@@ -239,6 +270,11 @@ export const useSelectionStore = create<SelectionState>()(
             new Map(agents.map(([agent, models]) => [agent, new Map(models)])),
           ]))
           : currentState.agentModelVariantSelections
+        const agentModelReasoningEffortSelections: ReasoningEffortSelections = persisted.agentModelReasoningEffortSelections
+          ? new Map(persisted.agentModelReasoningEffortSelections.map(([sessionId, agents]) => [sessionId,
+            new Map(agents.map(([agent, models]) => [agent, new Map(models)])),
+          ]))
+          : currentState.agentModelReasoningEffortSelections
         if (Array.isArray(persisted?.sessionAgentModelSelections)) {
           persisted.sessionAgentModelSelections.forEach(([sessionId, agentArray]) => {
             agentModelSelections.set(sessionId, new Map(agentArray))
@@ -254,6 +290,7 @@ export const useSelectionStore = create<SelectionState>()(
           sessionFollowedModels: persisted.sessionFollowedModels ? new Map(persisted.sessionFollowedModels) : currentState.sessionFollowedModels,
           sessionAgentModelSelections: agentModelSelections,
           agentModelVariantSelections,
+          agentModelReasoningEffortSelections,
         }
       },
       migrate: (persistedState) => {

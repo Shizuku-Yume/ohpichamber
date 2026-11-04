@@ -114,6 +114,7 @@ export interface QueuedMessageSendConfig {
     modelID: string;
     agent?: string;
     variant?: string;
+    reasoningEffort?: string;
 }
 
 /**
@@ -222,6 +223,7 @@ export const parseMessageQueueKey = (key: string): MessageQueueTarget | null => 
 // Server contract (packages/web/server/lib/message-queue)
 // ---------------------------------------------------------------------------
 
+
 const serverSnapshotSchema = z.object({
     revision: z.union([z.number(), z.string()]).optional(),
     items: z.array(QueueStateSchema).optional(),
@@ -241,6 +243,7 @@ const toQueuedMessage = (item: QueueItem): QueuedMessage => {
             modelID: item.options.modelId,
             agent: item.options.agentId ?? undefined,
             variant: item.options.variant ?? undefined,
+            reasoningEffort: item.options.reasoningEffort ?? undefined,
         };
     }
     if (item.agentMention?.agentId) {
@@ -702,7 +705,7 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
                                     modelId: message.sendConfig.modelID,
                                     agentId: message.sendConfig.agent ?? null,
                                     variant: message.sendConfig.variant ?? null,
-                                    reasoningEffort: null,
+                                    reasoningEffort: message.sendConfig.reasoningEffort ?? null,
                                 },
                             },
                         });

@@ -12,6 +12,7 @@ import {
   CacheWarmingUpdateRequestSchema,
   UsageQuerySchema, UsageStatsSchema, UsageToolsResponseSchema,
   WebSearchUpdateRequestSchema, WebSearchCredentialWriteRequestSchema, WebSearchCredentialDeleteRequestSchema,
+  OmpSettingsUpdateRequestSchema,
 } from '@openchamber/agent-contract';
 import type { WorkspaceCatalogs } from './workspaces.ts';
 import type { WorkerRegistry } from './workers.ts';
@@ -153,6 +154,24 @@ export class WorkspaceRoutes {
       this.catalogs.get(workspaceId);
       if (request.method === 'GET') return { status: 200, body: await this.catalogs.readCacheWarming(workspaceId) };
       if (request.method === 'PUT') return { status: 200, body: await this.catalogs.updateCacheWarming(workspaceId, await readBody(request, CacheWarmingUpdateRequestSchema)) };
+      return null;
+    }
+    const settingsRoute = /^\/api\/agent\/v1\/workspaces\/([^/]+)\/settings$/.exec(url.pathname);
+    if (settingsRoute) {
+      const workspaceId = id(settingsRoute[1]);
+      this.catalogs.get(workspaceId);
+      if (request.method === 'GET') {
+        const result = await this.catalogs.operation(workspaceId, { type: 'catalog.settings.read' });
+        if (result.type !== 'catalog.settings') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+        return { status: 200, body: result.state };
+      }
+      if (request.method === 'PUT') {
+        const result = await this.catalogs.operation(workspaceId, {
+          type: 'catalog.settings.write', request: await readBody(request, OmpSettingsUpdateRequestSchema),
+        });
+        if (result.type !== 'catalog.settings.mutated') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+        return { status: 200, body: result.state };
+      }
       return null;
     }
     const mcpRoute = /^\/api\/agent\/v1\/workspaces\/([^/]+)\/mcp\/(config|apply|servers\/([^/]+)\/(test|reconnect|oauth|credentials))$/.exec(url.pathname);

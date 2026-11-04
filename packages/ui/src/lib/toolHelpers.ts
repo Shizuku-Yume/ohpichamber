@@ -1,19 +1,15 @@
 import type { ToolCallPart, ToolResultPart } from '@openchamber/agent-contract';
 
-/** Native SDK tool names; custom tools retain their complete identity. */
+/** OMP's builtin tool registry; extension and MCP names remain opaque. */
 export const NATIVE_TOOLS = {
-  bash: 'bash',
-  edit: 'edit',
-  write: 'write',
-  read: 'read',
-  grep: 'grep',
-  glob: 'glob',
-  find: 'find',
-  task: 'task',
-  ask: 'ask',
-  webSearch: 'web_search',
-  fetch: 'fetch',
+  read: 'read', bash: 'bash', edit: 'edit', ast_grep: 'ast_grep', ast_edit: 'ast_edit', ask: 'ask',
+  debug: 'debug', ida: 'ida', eval: 'eval', github: 'github', glob: 'glob', grep: 'grep', find: 'find', lsp: 'lsp',
+  checkpoint: 'checkpoint', rewind: 'rewind', context_notes: 'context_notes', new_context: 'new_context',
+  security_scan: 'security_scan', task: 'task', wait: 'wait', todo: 'todo', web_search: 'web_search', write: 'write',
+  memory_edit: 'memory_edit', retain: 'retain', recall: 'recall', reflect: 'reflect', learn: 'learn', manage_skill: 'manage_skill',
 } as const;
+
+export const NATIVE_TOOL_NAMES = Object.values(NATIVE_TOOLS);
 
 export type ToolName = string | undefined;
 export function normalizeToolName(toolName: ToolName): string {
@@ -27,7 +23,7 @@ export const isEditTool = (name: ToolName): boolean => name === NATIVE_TOOLS.edi
 export const isWriteTool = (name: ToolName): boolean => name === NATIVE_TOOLS.write;
 export const isFileChangeTool = (name: ToolName): boolean => isEditTool(name) || isWriteTool(name);
 export const isExplorationTool = (name: ToolName): boolean => name === NATIVE_TOOLS.read || name === NATIVE_TOOLS.grep || name === NATIVE_TOOLS.glob || name === NATIVE_TOOLS.find;
-export const isWebTool = (name: ToolName): boolean => name === NATIVE_TOOLS.fetch || name === NATIVE_TOOLS.webSearch;
+export const isWebTool = (name: ToolName): boolean => name === NATIVE_TOOLS.web_search || name === 'fetch';
 
 export function toolInputPath(input: ToolCallPart['input'] | undefined): string | null {
   return typeof input?.path === 'string' && input.path.trim() ? input.path : null;
@@ -68,7 +64,7 @@ export function getToolMetadata(toolName: string): ToolMetadata {
     : isExplorationTool(toolName) ? 'search' : 'system';
   const outputLanguage = isEditTool(toolName) ? 'diff'
     : toolName === NATIVE_TOOLS.read || isWriteTool(toolName) ? 'auto' : 'text';
-  return { displayName: toolName, category, outputLanguage };
+  return { displayName: toolName || 'tool', category, outputLanguage };
 }
 
 export type ToolDescription =
@@ -95,8 +91,8 @@ export function toolDescription(part: ToolCallPart | ToolResultPart, pairedCall?
     : call.toolName === NATIVE_TOOLS.grep ? input.pattern
     : call.toolName === NATIVE_TOOLS.glob ? input.path
     : call.toolName === NATIVE_TOOLS.find ? input.query
-    : call.toolName === NATIVE_TOOLS.webSearch ? input.query
-    : call.toolName === NATIVE_TOOLS.fetch ? input.url
+    : call.toolName === NATIVE_TOOLS.web_search ? input.query
+    : call.toolName === 'fetch' ? input.url
     : isSubagentTool(call.toolName) ? input.name ?? input.task : undefined;
   return typeof value === 'string' && value ? { kind: 'text', value: value.split('\n')[0].slice(0, 160) } : null;
 }

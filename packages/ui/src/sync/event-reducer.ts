@@ -130,7 +130,7 @@ export function installRuntimeRun(state: State, run: Run, requestBaseline: RunCo
   }
 
   const status = terminal ? "idle" : "running"
-  const activeRun = terminal ? null : { runId: run.runId, sessionId: id, status: run.status, createdAt: run.createdAt }
+  const activeRun = terminal ? null : { runId: run.runId, sessionId: id, status: run.status, origin: run.origin, createdAt: run.createdAt }
   // A repeated live ack never downgrades the run record an event may already
   // have advanced; it only fills a binding that is missing.
   const settledLive = !terminal && snapshot?.session.activeRunId === run.runId && snapshot.activeRun !== null && snapshot.session.runtimeStatus === "running"
@@ -180,6 +180,7 @@ export function installRuntimeRun(state: State, run: Run, requestBaseline: RunCo
 
 /** Every canonical variant shares the same sequence gate. Never apply across a gap. */
 export function applyDirectoryEvent(state: State, event: CanonicalEvent): DirectoryEventResult {
+  if (event.type === 'btw.delta' || event.type === 'btw.completed') return { kind: 'applied', state };
   const id = event.sessionId
   const snapshot = state.snapshot[id]
   if (!snapshot || event.epoch !== snapshot.session.epoch) return { kind: "resnapshot", state }
@@ -230,11 +231,16 @@ export function applyDirectoryEvent(state: State, event: CanonicalEvent): Direct
     case "session.updated": {
       if (event.session) {
         if (event.session.sessionId !== id || event.session.epoch !== event.epoch || event.session.workspaceId !== snapshot.session.workspaceId || compareCounters(event.session.headSequence, event.sequence) > 0) { recover = true; break }
-        updated = { ...updated, session: event.session }
-      }
+        updated = { ...updated, session: { ...event.session, ...(event.mode ? { mode: event.mode } : {}) } }
+      } else if (event.mode) {
+        updated = { ...updated, session: { ...updated.session, mode: event.mode } }
+       }
+      if (event.continuationPending !== undefined) updated = { ...updated, session: { ...updated.session, continuationPending: event.continuationPending } }
+      if (event.title !== undefined) updated = { ...updated, session: { ...updated.session, title: event.title } }
+      if (event.selection !== undefined) updated = { ...updated, selection: event.selection }
       const current = next.session.find((session) => session.sessionId === id)
       if (current) {
-        let session: Session = { ...current, ...(event.session ?? {}) }
+        let session: Session = { ...current, ...(event.session ?? {}), ...(event.mode ? { mode: event.mode } : {}), ...(event.continuationPending === undefined ? {} : { continuationPending: event.continuationPending }), ...(event.title === undefined ? {} : { title: event.title }) }
         if (event.metadataRevision !== undefined && compareCounters(event.metadataRevision, current.metadataRevision) >= 0) {
           session = { ...session, metadata: event.metadata ?? null, metadataRevision: event.metadataRevision }
         }
@@ -273,7 +279,7 @@ export function applyDirectoryEvent(state: State, event: CanonicalEvent): Direct
       if (event.activeRunId === null) updated = { ...updated, activeRun: null }
       break
     case "run.started":
-      updated = { ...updated, activeRun: { runId: event.runId, sessionId: id, status: "running", createdAt: event.createdAt }, session: { ...updated.session, runtimeStatus: "running", activeRunId: event.runId } }
+      updated = { ...updated, activeRun: { runId: event.runId, sessionId: id, status: "running", origin: event.origin ?? "host", createdAt: event.createdAt }, session: { ...updated.session, runtimeStatus: "running", activeRunId: event.runId } }
       break
     case "run.completed":
     case "run.failed":

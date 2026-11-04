@@ -22,7 +22,7 @@ const workspace = { projectId: 'canonical-project', workspaceId: 'canonical-work
 const installSessionService = (gate = null) => { dispatchGate = gate; };
 const sessionRecord = (sessionId) => ({ sessionId, projectId: workspace.projectId, workspaceId: workspace.workspaceId,
   rootSessionId: sessionId, displayPath: '.', createdAt: Date.now(), updatedAt: Date.now(), epoch: 'epoch', headSequence: '0',
-  runtimeStatus: 'idle', activeRunId: null, metadata: null, metadataRevision: '0', archiveRevision: '0' });
+  runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' }, metadata: null, metadataRevision: '0', archiveRevision: '0' });
 
 const UTC = (y, mo, d, h, mi, s = 0) => Date.UTC(y, mo, d, h, mi, s);
 const MINUTE = 60_000;
@@ -86,12 +86,14 @@ const createSharedProjectConfigRuntime = (initialTask) => {
 
 const createRuntimeDeps = (projectConfigRuntime) => ({
   projectConfigRuntime,
+  messageQueueRuntime: { hasScheduledTask: async () => false, getState: async () => ({ revision: '0', items: [] }), append: async () => {}, cancelScheduledTask: async () => {} },
   listProjects: vi.fn(async () => [{ id: 'p1', path: '/repo' }]),
   listWorkspaceScopes: async () => ({ items: [{ workspaceId: workspace.workspaceId }], errors: {} }),
   resolveWorkspaceScope: async () => workspace,
   sessionService: {
     create: async () => { dispatches.sessionCreates.push(Date.now()); return { session: sessionRecord(`sess-${dispatches.sessionCreates.length}`) }; },
     send: async (sessionId) => { if (dispatchGate) await dispatchGate; return { run: { sessionId, runId: 'run', status: 'running', createdAt: Date.now() } }; },
+    control: async (_sessionId, operation) => ({ type: 'goal', mode: { kind: 'goal', status: 'active', objective: operation.objective, tokenBudget: operation.tokenBudget, tokensUsed: 0 } }),
   },
   emitTaskRunEvent: vi.fn(),
   setSessionAutoAccept: async () => {},

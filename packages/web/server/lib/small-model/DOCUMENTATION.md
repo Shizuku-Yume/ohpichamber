@@ -27,8 +27,7 @@ ID, not an engine-specific directory header.
   failures and cancellations are distinct errors, not empty text.
 
 The public `/api/small-model` preview and `/api/small-model/generate` routes are
-retired; UI utilities use the canonical client, while Guest/session-assist/
-session-goal retain injected access to this service.
+retired; UI utilities use the canonical client, while Guest and session-assist retain injected access to this service.
 
 ## Selection and scope
 

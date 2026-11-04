@@ -5,7 +5,7 @@ import {
   RunAbortAckSchema, RunAbortRequestSchema, RunCreateRequestSchema, RunSchema,
   RunStatusSchema, RuntimeSessionSchema, SessionCreateAckSchema, SessionCreateRequestSchema,
   SessionDeleteAckSchema, SessionDeleteRequestSchema, SessionRuntimeStatusSchema, SessionSchema,
-  SteerAckSchema, SteerRequestSchema, SubagentSchema,
+  SteerAckSchema, SteerRequestSchema, SubagentSchema, SessionControlRequestSchema, SessionControlAckSchema, SessionModeSchema,
 } from './session.ts';
 
 const id = 'ses_01';
@@ -16,14 +16,60 @@ const runtime = {
   sessionId: id, projectId: 'pro_01', workspaceId: 'ws_01', displayPath: 'src', rootSessionId: id,
   createdAt: timestamp, updatedAt: timestamp, epoch: '0', headSequence: '0',
   runtimeStatus: 'idle', activeRunId: null,
+  mode: { kind: 'main' },
 };
-const metadata = { title: 'A' };
+const metadata = { folder: 'A' };
 const session = { ...runtime, archivedAt: timestamp, metadata, metadataRevision: '1', archiveRevision: '2' };
 const pendingRun = { runId: 'run_01', sessionId: id, status: 'pending', createdAt: timestamp };
 const run = { ...pendingRun, status: 'completed', finishedAt: timestamp + 1000 };
 const agent = { agentId: 'agt_01', name: 'Agent', description: '', model: null, allowedTools: ['read'] };
 
 describe('session schemas', () => {
+  test('session modes carry only canonical plan references and mode controls are explicit', () => {
+    const mode = { kind: 'plan', status: 'active', planReference: 'local://PLAN.md' } as const;
+    expect(SessionModeSchema.parse({ kind: 'main' })).toEqual({ kind: 'main' });
+    expect(SessionModeSchema.parse(mode)).toEqual(mode);
+    expect(SessionModeSchema.parse({ ...mode, status: 'paused' })).toEqual({ ...mode, status: 'paused' });
+    for (const planReference of ['/host/PLAN.md', 'file:///host/PLAN.md', 'local://', 'local://bad path']) {
+      expect(SessionModeSchema.safeParse({ ...mode, planReference }).success).toBe(false);
+    }
+    expect(SessionModeSchema.safeParse({ ...mode, status: 'complete' }).success).toBe(false);
+    expect(SessionModeSchema.safeParse({ kind: 'main', planReference: mode.planReference }).success).toBe(false);
+    expect(RuntimeSessionSchema.safeParse({ ...runtime, mode: undefined }).success).toBe(false);
+    for (const selected of ['main', 'plan', 'vibe']) {
+      const control = { type: 'mode.set', mode: selected };
+      expect(SessionControlRequestSchema.parse(control)).toEqual(control);
+    }
+    expect(SessionModeSchema.parse({ kind: 'vibe' })).toEqual({ kind: 'vibe' });
+    expect(SessionControlAckSchema.parse({ type: 'mode.set', mode })).toEqual({ type: 'mode.set', mode });
+  });
+  test('goal mode and controls expose native state and reject invalid objectives and budgets', () => {
+    const mode = { kind: 'goal', status: 'active', objective: 'Ship the task', tokenBudget: null, tokensUsed: 0 };
+    for (const status of ['active', 'paused', 'budget-limited', 'complete']) {
+      expect(SessionModeSchema.parse({ ...mode, status })).toEqual({ ...mode, status });
+    }
+    expect(SessionModeSchema.safeParse({ ...mode, status: 'blocked' }).success).toBe(false);
+    const control = { type: 'goal', op: 'create', objective: 'Ship the task', tokenBudget: 1000 };
+    expect(SessionControlRequestSchema.parse(control)).toEqual(control);
+    expect(SessionControlAckSchema.parse({ type: 'goal', mode })).toEqual({ type: 'goal', mode });
+    for (const op of ['pause', 'resume', 'drop']) expect(SessionControlRequestSchema.parse({ type: 'goal', op })).toEqual({ type: 'goal', op });
+    for (const objective of ['', '  ', undefined]) expect(SessionControlRequestSchema.safeParse({ ...control, objective }).success).toBe(false);
+    for (const tokenBudget of [0, -1, 1.5]) expect(SessionControlRequestSchema.safeParse({ ...control, tokenBudget }).success).toBe(false);
+    expect(SessionControlRequestSchema.safeParse({ ...control, tokenBudget: null }).success).toBe(true);
+  });
+  test('session controls discriminate abort compact and builtin command', () => {
+    const abort = { type: 'abort', runId: 'run_01' } as const;
+    const compact = { type: 'compact', instructions: 'Keep the decisions and unresolved questions.' } as const;
+    const command = { type: 'command', text: '/context' } as const;
+    const ack = { type: 'compact', compactionId: 'compact_01', tokensBefore: 4096, completedAt: timestamp } as const;
+    expect(SessionControlRequestSchema.parse(abort)).toEqual(abort);
+    expect(SessionControlRequestSchema.parse(compact)).toEqual(compact);
+    expect(SessionControlRequestSchema.parse(command)).toEqual(command);
+    expect(SessionControlRequestSchema.safeParse({ type: 'command', text: '' }).success).toBe(false);
+    expect(SessionControlRequestSchema.safeParse({ type: 'compact', instructions: 2 }).success).toBe(false);
+    expect(SessionControlAckSchema.parse(ack)).toEqual(ack);
+    expect(SessionControlAckSchema.parse({ type: 'command', output: 'Context: 42%' })).toEqual({ type: 'command', output: 'Context: 42%' });
+  });
   test('preserves opaque project identity and agent selection without inherited aliases', () => {
     const project = { projectId: 'pro_01', name: 'P', workspaceIds: ['ws_01'], displayPath: 'src' };
     expect(ProjectSchema.parse(project)).toEqual(project);
@@ -78,11 +124,17 @@ describe('session schemas', () => {
     expect(SessionSchema.safeParse({ ...session, archiveRevision: '02' }).success).toBe(false);
   });
 
+  test('run origin defaults to Host and accepts worker origins', () => {
+    expect(RunSchema.parse(pendingRun).origin).toBe('host');
+    expect(RunSchema.parse({ ...pendingRun, origin: 'goal' }).origin).toBe('goal');
+    expect(RunSchema.safeParse({ ...pendingRun, origin: 'invalid' }).success).toBe(false);
+  });
+
   test('outer run terminal status does not represent tool denial or an inner approval wait', () => {
-    expect(RunSchema.parse(pendingRun)).toEqual(pendingRun);
-    expect(RunSchema.parse(run)).toEqual(run);
+    expect(RunSchema.parse(pendingRun)).toMatchObject({ ...pendingRun, origin: 'host' });
+    expect(RunSchema.parse(run)).toMatchObject({ ...run, origin: 'host' });
     const running = { ...pendingRun, status: 'running' };
-    expect(RunSchema.parse(running)).toEqual(running);
+    expect(RunSchema.parse(running)).toMatchObject({ ...running, origin: 'host' });
     for (const status of ['pending', 'running', 'completed', 'failed', 'cancelled']) expect(RunStatusSchema.parse(status)).toBe(status);
     expect(RunStatusSchema.safeParse('awaiting_approval').success).toBe(false);
     expect(RunStatusSchema.safeParse('denied').success).toBe(false);
@@ -118,9 +170,9 @@ describe('session schemas', () => {
     const followUp = { sessionId: id, request: prompt };
     const followedUp = { sessionId: id, followUpId: 'fu_01', acceptedAt: timestamp };
     expect(RunCreateRequestSchema.parse(prompt)).toEqual(prompt);
-    expect(RunSchema.parse(pendingRun)).toEqual(pendingRun);
+    expect(RunSchema.parse(pendingRun)).toMatchObject({ ...pendingRun, origin: 'host' });
     expect(RunAbortRequestSchema.parse(abort)).toEqual(abort);
-    expect(RunAbortAckSchema.parse(aborted)).toEqual(aborted);
+    expect(RunAbortAckSchema.parse(aborted)).toMatchObject({ run: { ...run, status: 'cancelled', origin: 'host' } });
     expect(SteerRequestSchema.parse(steer)).toEqual(steer);
     expect(SteerAckSchema.parse(steered)).toEqual(steered);
     expect(FollowUpRequestSchema.parse(followUp)).toEqual(followUp);

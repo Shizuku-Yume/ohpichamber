@@ -11,12 +11,12 @@ import {
 
 const TITLES = {
   ready: 'Agent response is ready', error: 'Agent hit an error', question: 'Agent needs your input', permission: 'Agent needs permission',
-  goal_complete: 'Goal complete', goal_blocked: 'Goal blocked', goal_budget: 'Goal reached its token budget',
+  goal_complete: 'Goal complete', goal_budget: 'Goal reached its token budget',
 };
 
 export const createNotificationTriggerRuntime = (deps) => {
   const {
-    sessionService, resolveSessionScope, readSettingsFromDisk, readSessionMetadata,
+    sessionService, resolveSessionScope, readSettingsFromDisk,
     prepareNotificationLastMessage, buildTemplateVariables, fetchLastAssistantMessageText,
     resolveNotificationTemplate, shouldApplyResolvedTemplateMessage,
     emitDesktopNotification, broadcastUiNotification, sendPushToAllUiSessions, sendApnsToAllUiSessions,
@@ -33,6 +33,7 @@ export const createNotificationTriggerRuntime = (deps) => {
   const pending = new Map();
   const notified = new Set();
   const lastTerminalAt = new Map();
+  const goalNotified = new Set();
   const deepLink = (id) => `/?session=${encodeURIComponent(id)}`;
   const safeText = (text, scope) => redactGitText(text, {
     secrets: [scope.cwd, scope.agentDirectory, ...Object.values(scope.env ?? {})].filter(Boolean), maxChars: 1000,
@@ -95,7 +96,7 @@ export const createNotificationTriggerRuntime = (deps) => {
     const resolved = await resolveSessionScope(event.sessionId);
     if (resolved.workspaceId !== scope.workspaceId || resolved.rootSessionId !== scope.rootSessionId || resolved.cwd !== scope.cwd) return;
     const settings = await readSettingsFromDisk();
-    if ((kind === 'ready' && settings.notifyOnCompletion === false) || (kind === 'error' && settings.notifyOnError === false)
+    if ((['ready', 'goal_complete', 'goal_budget'].includes(kind) && settings.notifyOnCompletion === false) || (kind === 'error' && settings.notifyOnError === false)
       || ((kind === 'question' || kind === 'permission') && settings.notifyOnQuestion === false)) return;
     if (settings.notificationMode !== 'always' && getIsWindowFocused?.()) return;
     if (kind === 'permission' && await autoAccepts(event.sessionId, resolved, event.approval.approvalId)) return;
@@ -109,10 +110,8 @@ export const createNotificationTriggerRuntime = (deps) => {
       if (Object.keys(page.errors).length > 0) return;
       if (sessions.some((session) => session.rootSessionId === resolved.rootSessionId && session.sessionId !== event.sessionId
         && ['running', 'awaiting_approval', 'awaiting_input'].includes(session.runtimeStatus))) return;
-      const metadata = await readSessionMetadata(event.sessionId);
-      if (metadata?.openchamber?.goal?.status === 'active') return;
     }
-    if (kind === 'ready' || kind === 'error') {
+    if (['ready', 'error'].includes(kind)) {
       const key = `${kind}:${event.sessionId}`;
       const previous = lastTerminalAt.get(key);
       if (previous !== undefined && now() - previous < 5000) return;
@@ -121,15 +120,20 @@ export const createNotificationTriggerRuntime = (deps) => {
     }
     const texts = notificationTexts(settings.locale);
     let title = kind === 'permission' ? texts.permissionTitle : kind === 'question' ? texts.questionTitle
-      : kind === 'error' ? texts.errorTitle : renderNotificationText(texts.readyTitle, { agent_name: 'Agent' });
+      : kind === 'error' ? texts.errorTitle
+      : kind === 'goal_complete' ? TITLES.goal_complete : kind === 'goal_budget' ? TITLES.goal_budget
+      : renderNotificationText(texts.readyTitle, { agent_name: 'Agent' });
     let body = kind === 'permission' ? texts.permissionBody : kind === 'question' ? texts.questionBody
-      : kind === 'error' ? texts.errorBody : renderNotificationText(texts.readyMessage, { model_name: 'Assistant' });
+      : kind === 'error' ? texts.errorBody
+      : kind === 'goal_complete' ? 'The goal is complete'
+      : kind === 'goal_budget' ? 'The goal reached its token budget'
+      : renderNotificationText(texts.readyMessage, { model_name: 'Assistant' });
     let sessionName = '';
     let phoneBody = '';
     try {
       const variables = await buildTemplateVariables(event, event.sessionId, resolved);
       sessionName = safeText(variables.session_name, resolved);
-      const text = kind === 'ready' ? await fetchLastAssistantMessageText(event.sessionId)
+      const text = kind === 'ready' || kind === 'goal_complete' || kind === 'goal_budget' ? await fetchLastAssistantMessageText(event.sessionId)
         : kind === 'error' ? event.error
           : kind === 'question' ? event.question.prompt : kind === 'permission' ? event.approval.commandSummary : '';
       variables.last_message = await prepareNotificationLastMessage({ message: safeText(text, resolved), settings });
@@ -140,6 +144,8 @@ export const createNotificationTriggerRuntime = (deps) => {
       // permission wording, not "Input needed".
       const template = withTemplateDefaults(
         kind === 'ready' ? (subtask ? templates.subtask ?? templates.completion : templates.completion)
+          : kind === 'goal_complete' ? templates.goalComplete
+          : kind === 'goal_budget' ? templates.goalBudget
           : kind === 'error' ? templates.error : templates.question,
         kind === 'ready' ? (subtask ? defaults.subtask : defaults.completion)
           : kind === 'error' ? defaults.error
@@ -173,9 +179,22 @@ export const createNotificationTriggerRuntime = (deps) => {
     if (stopped) return;
     const event = CanonicalEventSchema.parse(input);
     if (!scope?.workspaceId || !scope?.rootSessionId) throw new Error('Host event scope is required');
+    if (event.type === 'session.updated' && event.mode?.kind === 'goal' && event.mode.status === 'active') goalNotified.delete(event.sessionId);
     if (event.type === 'session.deleted') { for (const id of event.deletedSessionIds) clearPending(id); return; }
     if (event.type === 'run.cancelled') { clearPending(event.sessionId); return; }
     if (event.type === 'run.completed' || event.type === 'run.failed') {
+      if (event.type === 'run.completed') {
+        let mode;
+        try { mode = SessionSnapshotSchema.parse(await sessionService.open(event.sessionId)).session.mode; }
+        catch { return; }
+        if (mode.kind === 'goal' && mode.status === 'active') return;
+        if (mode.kind === 'goal' && (mode.status === 'complete' || mode.status === 'budget-limited')) {
+          if (goalNotified.has(event.sessionId)) return send(event, scope, 'ready');
+          goalNotified.add(event.sessionId);
+          while (goalNotified.size > 500) goalNotified.delete(goalNotified.values().next().value);
+          return send(event, scope, mode.status === 'complete' ? 'goal_complete' : 'goal_budget');
+        }
+      }
       return send(event, scope, event.type === 'run.completed' ? 'ready' : 'error');
     }
     const permission = event.type.startsWith('approval.');
@@ -210,7 +229,7 @@ export const createNotificationTriggerRuntime = (deps) => {
         phoneBody: phoneBodyOf(safeText(title, scope), safeText(body, scope)) || safeText(title, scope), tag: `goal-${sessionId}`,
         data: { url: deepLink(sessionId), sessionId, sessionName, type } });
     },
-    invalidateSession(sessionId) { clearPending(sessionId); },
+    invalidateSession(sessionId) { clearPending(sessionId); goalNotified.delete(sessionId); },
     stop() { stopped = true; for (const entry of pending.values()) clearTimeout(entry.timer); pending.clear(); },
   };
 };

@@ -14,6 +14,15 @@ const MediaTypeSchema = z.string().min(1).max(255).regex(/^[!#$%&'*+.^_`|~0-9A-Z
 const UploadMetadataSchema = z.strictObject({ name: AttachmentNameSchema, mediaType: MediaTypeSchema, size: z.number().int().nonnegative() });
 const isScope = (row, scope) => row.project_id === scope.projectId && row.workspace_id === scope.workspaceId && row.agent_directory_id === scope.agentDirectoryId;
 const requireBytes = (bytes) => { if (!(Buffer.isBuffer(bytes) || bytes instanceof Uint8Array)) throw new MetadataWriteError('Attachment bytes are required'); return Buffer.from(bytes); };
+const MAX_TEXT_ATTACHMENT_CHARS = 500_000;
+const MAX_PROMPT_TEXT_CHARS = 1_000_000;
+const isTextMediaType = (mediaType) => mediaType.startsWith('text/') || /(?:json|xml|yaml|javascript|typescript|ecmascript|x-sh|x-python|x-ruby|x-c|x-cpp|sql|graphql|toml|csv)$/.test(mediaType.split(';', 1)[0].toLowerCase());
+const textError = (code, message, status) => Object.assign(new Error(message), { code, statusCode: status });
+const decodeText = (bytes) => {
+  if (bytes.includes(0)) return null;
+  const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  return text;
+};
 export function createAttachmentStore({ database, storageDirectory, fsPromises = fs, now = () => Date.now() }) {
   if (!database || !storageDirectory) throw new TypeError('database and storageDirectory are required');
   const lifecycle = createMetadataLifecycle(database, false);
@@ -46,6 +55,22 @@ export function createAttachmentStore({ database, storageDirectory, fsPromises =
     if (submitted !== undefined) { const parsed = PromptAttachmentSchema.safeParse(submitted); if (!parsed.success || parsed.data.attachmentId !== row.attachment_id || parsed.data.name !== row.name || parsed.data.mediaType !== row.media_type || parsed.data.size !== row.size || parsed.data.uri !== `attachment://${row.attachment_id}`) throw Object.assign(new Error('Attachment metadata mismatch'), { code: 'ATTACHMENT_METADATA_MISMATCH' }); }
     try { const stat = await fsPromises.stat(filePath(row.storage_name)); if (!stat.isFile() || stat.size !== row.size) throw new Error('Attachment file is invalid'); return { attachment: toPublic(row), path: filePath(row.storage_name), size: row.size }; } catch (error) { throw Object.assign(new Error('Attachment content could not be read', { cause: error }), { code: 'ATTACHMENT_IO_FAILED' }); }
   });
-  const resolveAttachments = async (scope, attachments) => { if (attachments === undefined || attachments === null) return []; if (!Array.isArray(attachments)) throw new MetadataReadError('Attachment list is invalid'); return Promise.all(attachments.map(async (attachment) => { const result = await read(scope, attachment?.attachmentId, attachment); return { attachmentId: result.attachment.attachmentId, path: result.path }; })); };
+  const resolveAttachments = async (scope, attachments) => {
+    if (attachments === undefined || attachments === null) return [];
+    if (!Array.isArray(attachments)) throw new MetadataReadError('Attachment list is invalid');
+    let textCharacters = 0;
+    return Promise.all(attachments.map(async (attachment) => {
+      const result = await read(scope, attachment?.attachmentId, attachment);
+      if (result.attachment.mediaType.startsWith('image/')) return { attachmentId: result.attachment.attachmentId, path: result.path };
+      if (!isTextMediaType(result.attachment.mediaType)) throw textError('INVALID_REQUEST', `Attachment is not text or image: ${result.attachment.name}`, 400);
+      let content;
+      try { content = decodeText(await fsPromises.readFile(result.path)); } catch { throw textError('INVALID_REQUEST', `Attachment is not valid UTF-8 text: ${result.attachment.name}`, 400); }
+      if (content === null) throw textError('INVALID_REQUEST', `Attachment is not valid UTF-8 text: ${result.attachment.name}`, 400);
+      if (content.length > MAX_TEXT_ATTACHMENT_CHARS) throw textError('PAYLOAD_TOO_LARGE', `Attachment exceeds 500,000 characters: ${result.attachment.name}`, 413);
+      textCharacters += content.length;
+      if (textCharacters > MAX_PROMPT_TEXT_CHARS) throw textError('PAYLOAD_TOO_LARGE', 'Text attachments exceed 1,000,000 characters', 413);
+      return { attachmentId: result.attachment.attachmentId, path: result.path };
+    }));
+  };
   return { upload, read, resolveAttachments, close: lifecycle.close, flush: lifecycle.flush };
 }

@@ -15,8 +15,8 @@ import { buildLinkedGuestIssue, buildLinkedIssue, buildLinkedTrackerItem } from 
 
 const session = (sessionId: string, displayPath: string, projectId: string, workspaceId: string): Session => ({
   sessionId, projectId, workspaceId, displayPath, rootSessionId: sessionId,
-  createdAt: 1, updatedAt: 1, epoch: 'epoch-1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
-  metadata: { title: sessionId }, metadataRevision: '1', archiveRevision: '0',
+  createdAt: 1, updatedAt: 1, epoch: 'epoch-1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
+  title: sessionId, metadata: {}, metadataRevision: '1', archiveRevision: '0',
 });
 let manager: ChildStoreManager;
 let bSession: Session;
@@ -114,7 +114,7 @@ describe('extension workspace projection', () => {
       buildLinkedTrackerItem({ provider: 'linear', identifier: 'ENG-1', title: 'Linear', url: 'https://linear.app/acme/ENG-1', linkedAt: 5 }),
       buildLinkedGuestIssue({ providerId: 'board', identifier: 'ITEM-3', title: 'No data', url: 'https://guest.example/3', linkedAt: 6 }),
     ];
-    const linkedSession = { ...bSession, metadata: { title: 'b-session', openchamber: { linked_issues: linkedIssues } } };
+    const linkedSession = { ...bSession, title: 'b-session', metadata: {openchamber: { linked_issues: linkedIssues }} };
     manager.ensureChild('/b-tree', { bootstrap: false }).setState({ session: [linkedSession] });
 
     const own = readB().sessions[0].items;

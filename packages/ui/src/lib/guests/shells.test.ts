@@ -12,8 +12,8 @@ import { observeGuestShells, readGuestShellOutput, readGuestShells } from './she
 const session = (sessionId: string, displayPath: string, projectId: string, workspaceId: string, parentSessionId?: string): Session => {
   const value: Session = {
     sessionId, projectId, workspaceId, displayPath, rootSessionId: parentSessionId ? 'root' : sessionId,
-    createdAt: 1, updatedAt: 1, epoch: 'epoch-1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
-    metadata: { title: sessionId }, metadataRevision: '1', archiveRevision: '0',
+    createdAt: 1, updatedAt: 1, epoch: 'epoch-1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
+    title: sessionId, metadata: {}, metadataRevision: '1', archiveRevision: '0',
   };
   return parentSessionId ? { ...value, parentSessionId } : value;
 };

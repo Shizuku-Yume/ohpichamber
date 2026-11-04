@@ -7,10 +7,10 @@ import { runForkCommand, type ForkCommandDeps } from '../forkCommand';
 
 const forked: Session = {
     sessionId: 'session-fork', projectId: 'project-a', workspaceId: 'workspace-a', displayPath: '.', rootSessionId: 'session-fork',
-    createdAt: 1, updatedAt: 1, epoch: 'epoch-1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
-    metadata: { title: 'Fork' }, metadataRevision: '1', archiveRevision: '0',
+    createdAt: 1, updatedAt: 1, epoch: 'epoch-1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
+    title: 'Fork', metadata: {}, metadataRevision: '1', archiveRevision: '0',
 };
-const selection = { providerID: 'p', modelID: 'm', agent: 'build' };
+const selection = { providerID: 'p', modelID: 'm', agent: 'build', variant: 'route-a', reasoningEffort: 'high' };
 
 function createDeps(overrides: Partial<ForkCommandDeps> = {}) {
     const sends: Array<{ text: string; sessionId: string; directory?: string }> = [];
@@ -31,10 +31,11 @@ function createDeps(overrides: Partial<ForkCommandDeps> = {}) {
 }
 
 describe('runForkCommand', () => {
-    test('sends the text into the fork, not the source session', async () => {
-        const { deps, sends } = createDeps();
-        expect(await runForkCommand('session-a', '  try again  ', selection, deps)).toBe('sent');
-        expect(sends).toEqual([{ text: 'try again', sessionId: 'session-fork', directory: '/repo' }]);
+    test('sends captured route and effort with the fork prompt', async () => {
+        let captured: unknown;
+        const { deps } = createDeps({ send: async (_text, selection) => { captured = selection; } });
+        await runForkCommand('session-a', 'retry', selection, deps);
+        expect(captured).toEqual(selection);
     });
 
     test('a bare /fork only opens the fork', async () => {

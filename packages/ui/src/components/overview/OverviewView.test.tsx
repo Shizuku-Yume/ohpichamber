@@ -7,10 +7,11 @@ import { useNotificationStore } from '@/sync/notification-store';
 const NOW = Date.now();
 const HOUR = 60 * 60 * 1000;
 
-const session = (sessionId: string, title: string, time: { created?: number; updated?: number } = {}, metadata?: SessionMetadata): Session => ({
+const session = (sessionId: string, title: string, time: { created?: number; updated?: number } = {}, metadata?: SessionMetadata | null): Session => ({
   sessionId, projectId: 'project', workspaceId: 'ws', displayPath: 'repo', rootSessionId: sessionId,
   createdAt: time.created ?? NOW - HOUR, updatedAt: time.updated ?? NOW - HOUR, epoch: '1', headSequence: '1',
-  runtimeStatus: 'idle', activeRunId: null, metadata: metadata ? { ...metadata, title } : { title },
+  runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' }, title,
+  metadata: metadata ?? null,
   metadataRevision: metadata ? '1' : '0', archiveRevision: '0',
 });
 

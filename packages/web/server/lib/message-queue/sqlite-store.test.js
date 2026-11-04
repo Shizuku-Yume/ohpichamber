@@ -12,8 +12,8 @@ const stores = [];
 const directory = () => { const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ohpi-queue-')); roots.push(root); return root; };
 const open = (options) => { const store = createPromptQueueStore(options); stores.push(store); return store; };
 const scope = { sessionId: 'session-one', projectId: 'project-one', workspaceId: 'workspace-one' };
-const options = { providerId: 'provider', modelId: 'model', agentId: 'agent', variant: 'variant', reasoningEffort: 'high' };
-const request = (text) => ({ input: { text, attachments: [{ attachmentId: 'upload-one', name: 'file.txt', mediaType: 'text/plain', size: 3, uri: 'attachment://upload-one' }], context: [{ kind: 'context', text: 'captured diff', metadata: { issue: 5 }, instructions: 'review first', deliveryReceiptId: 'knowledge-one' }, { kind: 'synthetic', text: 'second context' }], agentMention: { agentId: 'reviewer' } }, options });
+const options = { providerId: 'provider', modelId: 'model', agentId: null, variant: 'variant', reasoningEffort: 'high' };
+const request = (text) => ({ input: { text, attachments: [{ attachmentId: 'upload-one', name: 'file.txt', mediaType: 'text/plain', size: 3, uri: 'attachment://upload-one' }], context: [{ kind: 'context', text: 'captured diff', metadata: { issue: 5 }, instructions: 'review first', deliveryReceiptId: 'knowledge-one' }, { kind: 'synthetic', text: 'second context' }] }, options });
 const append = (store, revision, text, command = randomUUID()) => store.append(scope, command, { expectedRevision: revision, content: text, request: request(text) });
 afterEach(async () => { for (const store of stores.splice(0)) await store.close(); for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
 

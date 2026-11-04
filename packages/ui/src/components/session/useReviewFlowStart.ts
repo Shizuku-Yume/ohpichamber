@@ -34,7 +34,6 @@ export function useReviewFlowStart(
         directory,
         providerId: execution.providerId,
         modelId: execution.modelId,
-        agentId: execution.agentId || undefined,
         variant: execution.variant || undefined,
         generateHandoff: execution.generateHandoff,
         returnAfterHandoffRequest: execution.generateHandoff,

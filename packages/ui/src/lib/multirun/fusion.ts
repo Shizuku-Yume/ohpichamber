@@ -25,7 +25,6 @@ import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 
 export type FusionJudge = ModelSelection & {
   variant?: string;
-  agent?: string;
   /** Display name for the fusion session title. */
   modelName?: string;
   /** Context window of the judge model, when the provider reports it. */
@@ -254,7 +253,7 @@ export async function startRunFusion(input: {
       role: 'fusion',
       title: run.title,
     },
-    selection: { providerId: judge.providerId, modelId: judge.modelId, variant: judge.variant ?? null, agentId: judge.agent ?? null, reasoningEffort: null },
+    selection: { providerId: judge.providerId, modelId: judge.modelId, variant: judge.variant ?? null, agentId: null, reasoningEffort: null },
   }, assertCurrent);
   registerMultiRunSession(fusionSession, directory);
   if (createdWorktree && project) {
@@ -275,7 +274,7 @@ export async function startRunFusion(input: {
     runtimeRevision,
     sessionId: fusionSession.sessionId,
     request: {
-      options: { ...(expanded?.modelSelection ?? { providerId: judge.providerId, modelId: judge.modelId }), variant: judge.variant ?? null, agentId: expanded?.agentId ?? judge.agent ?? null, reasoningEffort: null },
+      options: { ...(expanded?.modelSelection ?? { providerId: judge.providerId, modelId: judge.modelId }), variant: judge.variant ?? null, agentId: null, reasoningEffort: null },
       input: { text: expanded?.content ?? visiblePrompt, attachments: [], context: context.map((part) => ({ kind: 'instruction', text: part.text })) },
     },
   });

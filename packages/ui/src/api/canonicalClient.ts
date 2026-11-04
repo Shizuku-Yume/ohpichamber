@@ -12,6 +12,7 @@ import type {
   SkillsCatalogState, SkillExpandRequest, SkillExpandResult, CompletionRequest, CompletionResult, CompletionCancelRequest, CompletionCancelResult,
   MCPCatalogRead, MCPConfigureRequest, MCPApplyRequest, MCPApplyResult, MCPReconnectRequest, MCPOAuthRequest, MCPOAuthResult, SteerAck, SteerRequest, Workspace,
   WorkspaceList, ProjectList, QueueAppendRequest, QueueDeleteRequest, QueueReorderRequest, QueueState, Subagent,
+  OmpSettingsState, OmpSettingsUpdateRequest,
 } from '@openchamber/agent-contract';
 
 export class CanonicalApiError extends Error {
@@ -229,6 +230,12 @@ export class CanonicalClient {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.SessionMetadataPatchSchema, patch),
     });
   }
+  renameSession(sessionId: string, workspaceId: string, title: string): Promise<Session> {
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/title`, scoped(C.SessionSchema, result => result.sessionId === sessionId), {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: bodyFor(C.SessionTitleRequestSchema, { workspaceId, title }),
+    });
+  }
   selectSessionBranch(sessionId: string, input: SessionBranchRequest): Promise<SessionBranchResult> {
     const parsed = C.SessionBranchRequestSchema.parse(input);
     return request(`/api/agent/v1/sessions/${id(sessionId)}/branch`, C.SessionBranchResultSchema, {
@@ -270,8 +277,53 @@ export class CanonicalClient {
     const { sessionId, workspaceId, projectId } = scope;
     return request(`/api/agent/v1/sessions/${id(sessionId)}/fork`, scoped(C.SessionCreateAckSchema, result => result.session.projectId === projectId && result.session.workspaceId === workspaceId && result.session.sessionId !== sessionId), { method: 'POST', headers: { 'Content-Type': 'application/json', ...headersFor(commandId) }, body: JSON.stringify(input) });
   }
+  setMode(sessionId: string, mode: 'main' | 'plan' | 'vibe'): Promise<Extract<C.SessionControlAck, { type: 'mode.set' }>> {
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/control`, scoped(C.SessionControlAckSchema, result => result.type === 'mode.set'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: bodyFor(C.SessionControlRequestSchema, { type: 'mode.set', mode }),
+    }).then((result) => {
+      if (result.type !== 'mode.set') throw new Error('Mode response identified another control');
+      return result;
+    });
+  }
+  goal(sessionId: string, input: Omit<C.GoalControlRequest, 'type'>): Promise<Extract<C.SessionControlAck, { type: 'goal' }>> {
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/control`, scoped(C.SessionControlAckSchema, result => result.type === 'goal'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: bodyFor(C.SessionControlRequestSchema, { type: 'goal', ...input }),
+    }).then(result => {
+      if (result.type !== 'goal') throw new Error('Goal response identified another control');
+      return result;
+    });
+  }
   abortSession(sessionId: string, runId: string): Promise<RunAbortAck> {
-    return request(`/api/agent/v1/sessions/${id(sessionId)}/control`, scoped(C.RunAbortAckSchema, result => result.run.sessionId === sessionId && result.run.runId === runId), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'abort', runId }) });
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/control`, scoped(C.RunAbortAckSchema, result => result.run.sessionId === sessionId && result.run.runId === runId), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.SessionControlRequestSchema, { type: 'abort', runId }) });
+  }
+  compactSession(sessionId: string, instructions?: string): Promise<C.SessionControlAck> {
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/control`, scoped(C.SessionControlAckSchema, result => result.type === 'compact'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: bodyFor(C.SessionControlRequestSchema, { type: 'compact', ...(instructions === undefined ? {} : { instructions }) }),
+    });
+  }
+  runBuiltinCommand(sessionId: string, text: string): Promise<Extract<C.SessionControlAck, { type: 'command' }>> {
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/control`, scoped(C.SessionControlAckSchema, result => result.type === 'command'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: bodyFor(C.SessionControlRequestSchema, { type: 'command', text }),
+    }).then(result => {
+      if (result.type !== 'command') throw new Error('Command response identified another control');
+      return result;
+    });
+  }
+  askBtw(sessionId: string, question: string): Promise<{ recordId: string }> {
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/control`, scoped(z.strictObject({ type: z.literal('btw.ask'), recordId: C.EntityIdSchema }), result => result.type === 'btw.ask'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: bodyFor(C.SessionControlRequestSchema, { type: 'btw.ask', question }),
+    });
+  }
+  cancelBtw(sessionId: string): Promise<{ cancelled: boolean }> {
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/control`, scoped(z.strictObject({ type: z.literal('btw.cancel'), cancelled: z.boolean() }), result => result.type === 'btw.cancel'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: bodyFor(C.SessionControlRequestSchema, { type: 'btw.cancel' }),
+    });
   }
   createRun(sessionId: string, input: RunCreateRequest, commandId?: string): Promise<RunCreateAck> {
     return request(`/api/agent/v1/sessions/${id(sessionId)}/runs`, scoped(z.strictObject({ run: C.RunSchema }), result => result.run.sessionId === sessionId), { method: 'POST', headers: { 'Content-Type': 'application/json', ...headersFor(commandId) }, body: bodyFor(C.RunCreateRequestSchema, input) });
@@ -300,6 +352,17 @@ export class CanonicalClient {
   deleteQueueItem(sessionId: string, queueItemId: string, input: QueueDeleteRequest): Promise<QueueState> { return request(`/api/agent/v1/sessions/${id(sessionId)}/queue/${id(queueItemId)}`, scoped(C.QueueStateSchema, result => result.sessionId === sessionId), { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.QueueDeleteRequestSchema, input, body => body.queueItemId === queueItemId) }); }
 
   getModels(workspaceId: string): Promise<ModelCatalog> { return request(`/api/agent/v1/workspaces/${id(workspaceId)}/models`, scoped(C.ModelCatalogSchema, result => result.workspaceId === workspaceId)); }
+
+  getOmpSettings(workspaceId: string, signal?: AbortSignal): Promise<OmpSettingsState> {
+    return request(`/api/agent/v1/workspaces/${id(workspaceId)}/settings`, scoped(C.OmpSettingsStateSchema, result => result.workspaceId === workspaceId), { signal });
+  }
+  updateOmpSettings(workspaceId: string, input: OmpSettingsUpdateRequest, signal?: AbortSignal): Promise<OmpSettingsState> {
+    const parsed = C.OmpSettingsUpdateRequestSchema.parse(input);
+    return request(`/api/agent/v1/workspaces/${id(workspaceId)}/settings`, scoped(C.OmpSettingsStateSchema,
+      result => result.workspaceId === workspaceId && BigInt(result.revision) === BigInt(parsed.expectedRevision) + 1n), {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(parsed), signal,
+    });
+  }
 
   readCacheWarming(workspaceId: string, signal?: AbortSignal): Promise<C.CacheWarmingState> {
     return request(`/api/agent/v1/workspaces/${id(workspaceId)}/cache-warming`, scoped(C.CacheWarmingStateSchema, result => result.workspaceId === workspaceId), { signal });

@@ -218,6 +218,7 @@ export class WorkerRegistry {
   private readonly actions = new Map<string, ActionHandle>();
   private readonly restartReservations = new Map<string, string>();
   private readonly pendingRootAdmissions = new Set<string>();
+  private capacityQueue: Promise<void> = Promise.resolve();
   // Pending ids exist only for the lifetime of their acquire promise. A release
   // cancels a canonicalization still in flight without leaving a tombstone.
   private readonly pendingWorktreeLeaseAcquires = new Map<string, PendingWorktreeLeaseAcquire>();
@@ -544,26 +545,48 @@ export class WorkerRegistry {
     return result;
   }
 
+  /** Serialize capacity decisions so two roots cannot both claim the same free slot or evict past the cap. */
+  private withCapacity<T>(operation: () => Promise<T>): Promise<T> {
+    const run = this.capacityQueue.then(operation, operation);
+    this.capacityQueue = run.then(() => {}, () => {});
+    return run;
+  }
+
   /**
    * A root may start only when fewer than the measured cap of session workers
-   * are live. The synchronous reservation closes the gap between this check and
-   * the asynchronous launch, so simultaneous opens cannot oversubscribe it.
-   * Stateless catalog workers are per-workspace overhead and never count.
+   * are live. At the cap, the least recently active idle worker is evicted; a
+   * busy-only cap still fails with the capacity outcome. The pending set closes
+   * the gap between this check and the asynchronous launch. Stateless catalog
+   * workers are per-workspace overhead and never count.
    */
-  private reserveSessionCapacity(rootSessionId: string): void {
-    const active = new Set<string>();
-    for (const entry of this.workerEntries.values()) {
-      if (entry.kind === 'session' && entry.info.rootSessionId !== rootSessionId
-        && entry.child.exitCode === null && entry.child.signalCode === null) active.add(entry.info.rootSessionId);
-    }
-    for (const pending of this.pendingRootAdmissions) if (pending !== rootSessionId) active.add(pending);
+  private async reserveSessionCapacity(rootSessionId: string): Promise<void> {
     const maxActiveRootWorkers = this.capacityPolicy.maxActiveRootWorkers;
-    if (active.size >= maxActiveRootWorkers) {
+    for (;;) {
+      const active = new Set<string>();
+      for (const entry of this.workerEntries.values()) {
+        if (entry.kind === 'session' && entry.info.rootSessionId !== rootSessionId
+          && entry.child.exitCode === null && entry.child.signalCode === null) active.add(entry.info.rootSessionId);
+      }
+      for (const pending of this.pendingRootAdmissions) if (pending !== rootSessionId) active.add(pending);
+      if (active.size < maxActiveRootWorkers) {
+        this.pendingRootAdmissions.add(rootSessionId);
+        return;
+      }
+      const candidates = [...this.workerEntries.values()]
+        .filter(entry => entry.kind === 'session' && entry.info.rootSessionId !== rootSessionId
+          && active.has(entry.info.rootSessionId) && entry.info.state === 'ready' && entry.child.connected
+          && !this.restartReservations.has(entry.info.rootSessionId) && entry.pending.size === 0
+          && ![...this.actions.values()].some(action => action.entry === entry))
+        .sort((left, right) => left.lastActivityAt - right.lastActivityAt);
+      let evicted = false;
+      for (const candidate of candidates) {
+        if (await this.evictCandidate(candidate, false)) { evicted = true; break; }
+      }
+      if (evicted) continue;
       throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', {
         reason: 'worker_capacity', activeRootWorkers: active.size, maxActiveRootWorkers,
-      }, `Session capacity is full (${active.size} of ${maxActiveRootWorkers} active). Close another session or try again later.`);
+      }, `Session capacity is full (${active.size} of ${maxActiveRootWorkers} active). Every worker is busy; finish or close one before sending another message.`);
     }
-    this.pendingRootAdmissions.add(rootSessionId);
   }
 
   private async reapIdleWorkers(): Promise<void> {
@@ -582,22 +605,34 @@ export class WorkerRegistry {
 
   private async evictIfIdle(candidate: WorkerEntry): Promise<void> {
     if (candidate.kind !== 'session' || this.closing || !this.sessionIsIdle(candidate.info.rootSessionId)) return;
-    await this.withRoot(candidate.info.rootSessionId, async () => {
+    if (Date.now() - candidate.lastActivityAt < this.capacityPolicy.idleEvictionTimeoutMs) return;
+    await this.evictCandidate(candidate, true);
+  }
+
+  /**
+   * Evict one idle worker under its root lock. Admission eviction skips the
+   * idle timeout but keeps every safety gate: a busy root, pending operation,
+   * restart reservation, action or running shell job is never evicted.
+   */
+  private async evictCandidate(candidate: WorkerEntry, enforceIdleTimeout: boolean): Promise<boolean> {
+    if (candidate.kind !== 'session' || this.closing || !this.sessionIsIdle(candidate.info.rootSessionId)) return false;
+    return this.withRoot(candidate.info.rootSessionId, async () => {
       const entry = this.workerEntries.get(candidate.info.rootSessionId);
-      if (entry !== candidate || entry.kind !== 'session' || this.closing || entry.info.state !== 'ready' || !entry.child.connected) return;
-      if (Date.now() - entry.lastActivityAt < this.capacityPolicy.idleEvictionTimeoutMs) return;
+      if (entry !== candidate || entry.kind !== 'session' || this.closing || entry.info.state !== 'ready' || !entry.child.connected) return false;
+      if (enforceIdleTimeout && Date.now() - entry.lastActivityAt < this.capacityPolicy.idleEvictionTimeoutMs) return false;
       if (this.restartReservations.has(entry.info.rootSessionId) || entry.pending.size > 0
-        || [...this.actions.values()].some(action => action.entry === entry)) return;
-      if (!this.sessionIsIdle(entry.info.rootSessionId)) return;
+        || [...this.actions.values()].some(action => action.entry === entry)) return false;
+      if (!this.sessionIsIdle(entry.info.rootSessionId)) return false;
       // A background shell job outlives its start operation, so it is invisible
       // to the pending/action checks above. The worker's own snapshot is the
       // authority; a missing or failed snapshot means "not proven idle".
-      if (!(await this.hasNoRunningShellJobs(entry))) return;
+      if (!(await this.hasNoRunningShellJobs(entry))) return false;
       if (this.workerEntries.get(entry.info.rootSessionId) !== entry || entry.info.state !== 'ready' || this.closing
         || this.restartReservations.has(entry.info.rootSessionId) || entry.pending.size > 0
         || [...this.actions.values()].some(action => action.entry === entry)
-        || !this.sessionIsIdle(entry.info.rootSessionId)) return;
-      await this.stopEntry(entry);
+        || !this.sessionIsIdle(entry.info.rootSessionId)) return false;
+      const stopped = await this.stopEntry(entry);
+      return stopped || this.workerEntries.get(entry.info.rootSessionId) !== entry;
     });
   }
 
@@ -650,7 +685,7 @@ export class WorkerRegistry {
         throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
       if (previous && previous.kind !== 'session') throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
       if (previous?.info.state === 'ready' && !replace) return { ...previous.info };
-      this.reserveSessionCapacity(input.rootSessionId);
+      await this.withCapacity(() => this.reserveSessionCapacity(input.rootSessionId));
       try {
         if (previous) {
           const clean = await this.stopEntry(previous);

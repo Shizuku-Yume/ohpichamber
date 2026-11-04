@@ -104,7 +104,7 @@ describe('native Git refresh hints', () => {
     const snapshot = nativeSnapshot('session', [message]);
     snapshot.session.runtimeStatus = 'running';
     snapshot.session.activeRunId = 'run';
-    snapshot.activeRun = { runId: 'run', sessionId: 'session', status: 'running', createdAt: 1 };
+    snapshot.activeRun = { runId: 'run', sessionId: 'session', status: 'running', origin: 'host', createdAt: 1 };
     store.setState((state) => installSessionSnapshot(state, snapshot));
     const changes: Array<{ directory: string; paths?: string[] }> = [];
     const stop = subscribeFileTreeChanges((change) => changes.push(change));

@@ -1,4 +1,6 @@
 import React from 'react';
+import { useDirectorySync, useSessionActiveRun } from '@/sync/sync-context';
+import { ComposerStatusStrip } from './ComposerStatusStrip';
 import { formatChangeRequestReference } from '@/lib/source-control/identity';
 import type { RepositoryReferenceKind } from '@/lib/api/types';
 import { trackerReferenceSource, type TrackerReferenceSource } from '@/components/references/referencePickerItems';
@@ -9,9 +11,9 @@ import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStor
 import { useUIStore } from '@/stores/useUIStore';
 import { createMessageQueueTarget, getMessageQueueKey, useMessageQueueStore, type QueuedContextPart, type QueuedMessage } from '@/stores/messageQueueStore';
 import { useAutoReviewStore } from '@/stores/useAutoReviewStore';
-import { useSessionGoalArmStore } from '@/stores/useSessionGoalArmStore';
-import { useSessionUIStore, type CanonicalSkillMentions } from '@/sync/session-ui-store';
-import { useSelectionStore } from '@/sync/selection-store';
+import { useBtwStore } from '@/stores/useBtwStore';
+import { useSessionUIStore, type CanonicalSkillMentions, type DraftGoalObjective } from '@/sync/session-ui-store';
+import { ROOT_SELECTION_AGENT, useSelectionStore } from '@/sync/selection-store';
 import { prepareLocalAttachments, useDraftAttachedFiles, useInputStore, type SyntheticContextPart } from '@/sync/input-store';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { openParallelComposer } from '@/lib/multirun/openParallelComposer';
@@ -41,7 +43,6 @@ import { runtimeFetch } from '@/lib/runtime-fetch';
 import {
     createChatDraftIdentity,
     getChatDraftIdentityKey,
-    clearChatDraft,
     readChatDraft,
     type ChatDraftIdentity,
     type ChatDraftSnapshot,
@@ -50,27 +51,26 @@ import { CHAT_DRAFT_PROJECT_ID } from '@/lib/chatDirectories';
 import { ReviewFlowDialog, type ReviewFlowExecution } from '@/components/session/ReviewFlowDialog';
 import { BtwPanel } from './btw/BtwPanel';
 import { useBtwPanelState } from './btw/useBtwPanelState';
-import { btwModelAvailability, resolveBtwSelection, useBtwStore } from '@/stores/useBtwStore';
-import { buildBtwSyntheticTexts, preparePendingBtwSend, startBtwSession } from '@/lib/btw';
+import { canonicalClient } from '@/api/canonicalClient';
 import { AttachedFilesList } from './FileAttachment';
 import { lazyWithChunkRecovery } from '@/lib/chunkLoadRecovery';
 import type { ToolPopupContent } from './message/types';
 import { QueuedMessagesStrip } from './QueuedMessagesStrip';
 import { AutoReviewStrip } from './AutoReviewStrip';
+import { TodoTray } from './TodoTray';
 import type { FileMentionHandle } from './FileMentionAutocomplete';
 import type { CommandAutocompleteHandle, CommandInfo } from './CommandAutocomplete';
 import type { SkillAutocompleteHandle } from './SkillAutocomplete';
 import type { EmojiAutocompleteHandle } from '@/components/emoji/EmojiAutocomplete';
 import { cn } from "@/lib/utils";
 import { ModelControls } from './ModelControls';
-import { parseAgentMentions } from '@/lib/messages/agentMentions';
 import { CONTEXT_METADATA_KEY, draftFromContextPayload } from '@/lib/messages/contextParts';
 import { shouldSubmitEnter } from './composer/keyboardPolicy';
 import { getDropdownNavigationKey } from '@/components/ui/dropdown-navigation';
 import { useChatColumnActions, useChatColumnExpandedInput, useChatColumnSession, type ChatColumnSession } from './chatColumnSession';
 import { usePinnedComposerSelection } from './pinnedComposerSelection';
+import { resolveReasoningEffortToSend } from './composer/submit/resolveReasoningEffort';
 import { useChatSurfaceMode } from './useChatSurfaceMode';
-import { MobileAgentButton } from './MobileAgentButton';
 import { MobileModelButton } from './MobileModelButton';
 import { useSessionActivity } from '@/hooks/useSessionActivity';
 import { toast } from '@/components/ui';
@@ -80,8 +80,7 @@ import { useHardwareKeyboard } from '@/lib/hardwareKeyboard';
 import { isCapacitorApp } from '@/lib/platform';
 import { isIMECompositionEvent } from '@/lib/ime';
 import { setNativeImagePasteEnabled, subscribeToNativeImagePastes } from '@/lib/nativeImagePaste';
-import { getCycledAgentId, type MobileControlsPanel } from './mobileControlsUtils';
-import { isAutoModel } from '@/lib/routing/autoModel';
+import { type MobileControlsPanel } from './mobileControlsUtils';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { ReferencePickerDialog } from '@/components/references/ReferencePickerDialog';
@@ -121,15 +120,15 @@ import { routeGuestSlashCommand } from './composer/submit/guestCommands';
 import { pluginModeFromId } from '@/lib/surfaces/modes';
 import { expandCanonicalSkills } from '@/sync/session-ui-store';
 import { selectAvailableSkillsForDirectory, useSkillsStore } from '@/stores/useSkillsStore';
-import { selectCommandsForDirectory, useCommandsStore } from '@/stores/useCommandsStore';
+import { selectBuiltinCommandsForDirectory, selectCommandsForDirectory, useCommandsStore } from '@/stores/useCommandsStore';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useGitStore } from '@/stores/useGitStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { usePermissionStore } from '@/stores/permissionStore';
 import { cyclePermissionMode } from './permissionAutoAccept';
-import { displayedPermissionMode, nextPermissionMode } from '@/stores/utils/permissionAutoAccept';
-import { selectAutoReady, selectSafetyNetAvailable, useRoutingStore } from '@/stores/useRoutingStore';
+import { displayedPermissionMode } from '@/stores/utils/permissionAutoAccept';
+import { selectSafetyNetAvailable, useRoutingStore } from '@/stores/useRoutingStore';
 import { useKeybind } from '@/hooks/useKeybind';
 import { hasOpenDropdown } from '@/hooks/keyboard-shortcut-dom';
 import { useAuthSessionStore } from '@/lib/runtime-auth-expiry';
@@ -138,7 +137,6 @@ import { sessionEvents } from '@/lib/sessionEvents';
 import { fetchResponseStyleInstruction } from '@/lib/responseStyle';
 import { wrapSystemReminder } from '@/lib/systemReminder';
 import { getSyncMessages } from '@/sync/sync-refs';
-import { eventMatchesShortcut, getEffectiveShortcutCombo, normalizeCombo } from '@/lib/shortcuts';
 import {
     assignImageAttachmentFilenames,
     buildAttachmentCitationText,
@@ -225,6 +223,7 @@ import { useSpacesStore } from '@/lib/spaces/spaces-store';
 import { isDraftSendWaiting, subscribeDraftSendWaiting } from '@/lib/worktrees/pendingDraftWorktree';
 import { ComposerAutocompletePopups } from './composer/ui/ComposerAutocompletePopups';
 import { ComposerFooter } from './composer/ui/ComposerFooter';
+import { ComposerModeSelector, type ComposerModeValue } from './composer/ui/ComposerModeSelector';
 import { MobilePillComposer } from './composer/ui/MobilePillComposer';
 import { ComposerContextChips } from './composer/ui/ComposerContextChips';
 import { LargeTextPasteChoice, type LargeTextPasteChoiceAction } from './composer/ui/LargeTextPasteChoice';
@@ -234,7 +233,6 @@ import { SessionSuggestionChip } from '@/components/chat/SessionSuggestionChip';
 import { SessionDoneHintRow } from '@/components/chat/SessionDoneHintRow';
 import { SessionReviewHintRow } from '@/components/chat/SessionReviewHintRow';
 import { BackgroundShellsStrip } from '@/components/chat/BackgroundShellsStrip';
-import { ComposerStatusStrip } from '@/components/chat/ComposerStatusStrip';
 import { useWorktreeBootstrapPending } from '@/hooks/useWorktreeBootstrapPending';
 import { FormDock } from '@/components/chat/FormDock';
 import { PermissionDock } from '@/components/chat/PermissionDock';
@@ -348,7 +346,6 @@ function useStableHandler<Args extends readonly unknown[], Result>(
 
 const MemoModelControls = React.memo(ModelControls);
 const MemoComposerDictation = React.memo(ComposerDictation);
-const MemoMobileAgentButton = React.memo(MobileAgentButton);
 
 const MemoMobileModelButton = React.memo(MobileModelButton);
 
@@ -501,23 +498,15 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const currentSessionDirectoryForSync = useSessionUIStore(
         React.useCallback((s) => currentSessionId ? s.getDirectoryForSession(currentSessionId) : null, [currentSessionId]),
     );
-    // btw mode: the CURRENT session's metadata links an active btw fork and
-    // the panel is expanded, so this composer's sends route to the fork
-    // instead of the main session. Collapsed keeps the fork alive (chip stays
-    // visible) while the composer talks to the main session again.
-    const btwPanel = useBtwPanelState(currentSessionId, currentSessionDirectoryForSync ?? currentDirectory ?? undefined);
+    // `/btw` shares only transient composer state with the active chat.
+    const btwPanel = useBtwPanelState(currentSessionId);
     const pendingForms = useScopedBlockingForms(currentSessionId, currentSessionDirectoryForSync ?? currentDirectory ?? undefined);
     const pendingPermissions = useScopedBlockingPermissions(currentSessionId, currentSessionDirectoryForSync ?? currentDirectory ?? undefined);
     const hasPendingPermission = pendingPermissions.length > 0;
     // A pending permission or form owns the dock; the composer is not for sending then.
     const hasPendingForm = pendingForms.length > 0 || hasPendingPermission;
-    const btwSessionId = btwPanel.btwSessionId;
-    const btwDirectory = btwPanel.btwDirectory;
-    const btwComposerSessionId = btwPanel.pending && currentSessionId
-        ? `btw-pending:${currentSessionId}`
-        : btwSessionId;
-    const isBtwActive = Boolean(btwComposerSessionId) && !btwPanel.collapsed;
-    const isBtwPanelVisible = Boolean((btwPanel.btwSessionId && btwPanel.btwDirectory) || btwPanel.creating || btwPanel.pending);
+    const isBtwActive = Boolean(currentSessionId) && Boolean(btwPanel.pending || btwPanel.ephemeralRecordId) && !btwPanel.collapsed;
+    const isBtwPanelVisible = Boolean(btwPanel.pending || btwPanel.ephemeralRecordId);
     const immediateBtwSubmitRef = React.useRef<{ identity: ChatDraftIdentity; text: string } | null>(null);
     const draftCaretModeRef = React.useRef({ btw: isBtwActive, atEnd: isBtwActive });
     const inputMode = isBtwActive ? 'normal' : storedInputMode;
@@ -529,9 +518,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         () => createChatDraftIdentity(
             activeRuntimeKey,
             isNewChatDraft ? NEW_CHAT_DRAFT_DIRECTORY : currentSessionDirectoryForSync ?? currentDirectory,
-            isBtwActive ? btwComposerSessionId : currentSessionId,
+            currentSessionId,
         ),
-        [activeRuntimeKey, btwComposerSessionId, currentDirectory, currentSessionDirectoryForSync, currentSessionId, isBtwActive, isNewChatDraft],
+        [activeRuntimeKey, currentDirectory, currentSessionDirectoryForSync, currentSessionId, isNewChatDraft],
     );
     const claimAttachmentSlot = React.useCallback(() => {
         useInputStore.getState().selectAttachmentDraft(chatDraftIdentity);
@@ -550,15 +539,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const attachedFiles = useDraftAttachedFiles(chatDraftIdentity);
     const addAttachedFile = useInputStore((s) => s.addAttachedFile);
     const clearAttachedFiles = useInputStore((s) => s.clearAttachedFiles);
-    const saveSessionAgentSelection = useSelectionStore((s) => s.saveSessionAgentSelection);
-    const btwModelSelection = useSelectionStore(React.useCallback(
-        (s) => btwComposerSessionId ? s.sessionModelSelections.get(btwComposerSessionId) ?? null : null,
-        [btwComposerSessionId],
-    ));
-    const btwAgentSelection = useSelectionStore(React.useCallback(
-        (s) => btwComposerSessionId ? s.sessionAgentSelections.get(btwComposerSessionId) ?? null : null,
-        [btwComposerSessionId],
-    ));
+    const agents = useAgentsStore((state) => selectAgentsForDirectory(state, currentDirectory));
     const consumePendingBtwComposerRequest = useInputStore((s) => s.consumePendingBtwComposerRequest);
     const pendingBtwComposerRequest = useInputStore((s) => s.pendingBtwComposerRequest);
     const pendingPresetSubmit = useInputStore((s) => s.pendingPresetSubmit);
@@ -602,53 +583,33 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const getModelMetadata = useConfigStore((state) => state.getModelMetadata);
     // Subscribe to both sources read by getModelMetadata so async metadata and provider updates are observed.
     useConfigStore((state) => state.modelsMetadata);
-    const providerCatalog = useConfigStore((state) => state.providers);
-    const autoReady = useRoutingStore(selectAutoReady);
     const currentModelMetadata = currentProviderId && currentModelId
         ? getModelMetadata(currentProviderId, currentModelId)
         : undefined;
     const configVariant = useConfigStore((state) => state.currentVariant);
     const currentVariant = pinnedComposerSelection ? pinnedComposerSelection.variant ?? undefined : configVariant;
-    const currentVariantSelection = useConfigStore((state) => state.currentVariantSelection);
-    const configAgentName = useConfigStore((state) => state.currentAgentName);
-    const currentAgentName = pinnedComposerSelection?.agent ?? configAgentName;
-    const setAgent = useConfigStore((state) => state.setAgent);
-    // Preserve the directory roster reference while typing so the editor's
-    // language context does not rebuild on every keystroke.
-    const agents = useAgentsStore((state) => selectAgentsForDirectory(state, currentDirectory));
-    const btwSavedVariant = useSelectionStore(React.useCallback(
-        (state) => btwComposerSessionId && btwAgentSelection && btwModelSelection
-            ? state.getAgentModelVariantForSession(
-                btwComposerSessionId,
-                btwAgentSelection,
-                btwModelSelection.providerId,
-                btwModelSelection.modelId,
-            )
-            : undefined,
-        [btwAgentSelection, btwComposerSessionId, btwModelSelection],
-    ));
-    const btwComposerVariant = currentVariantSelection.override === null ? null : currentVariantSelection.override ?? configVariant;
-    // Memoized: the footer and its model controls compare this selection by
-    // identity, and nothing in it changes while the user types.
-    const effectiveBtwSelection = React.useMemo(() => resolveBtwSelection({
-        agents,
-        savedAgent: btwAgentSelection,
-        isModelAvailable: btwModelAvailability(providerCatalog, autoReady),
-        savedModel: btwModelSelection,
-        savedVariant: btwSavedVariant,
-        composerModel: currentProviderId && currentModelId ? { providerId: currentProviderId, modelId: currentModelId } : null,
-        composerVariant: btwComposerVariant,
-    }), [agents, autoReady, btwAgentSelection, btwComposerVariant, btwModelSelection, btwSavedVariant, currentModelId, currentProviderId, providerCatalog]);
-    React.useEffect(() => {
-        const { model, agent, variant } = effectiveBtwSelection;
-        if (!isBtwActive || !btwComposerSessionId || !model || !agent) return;
-        const selections = useSelectionStore.getState();
-        if (selections.getSessionModelSelection(btwComposerSessionId)) return;
-        selections.saveSessionAgentSelection(btwComposerSessionId, agent);
-        selections.saveSessionModelSelection(btwComposerSessionId, model.providerId, model.modelId);
-        selections.saveAgentModelForSession(btwComposerSessionId, agent, model.providerId, model.modelId);
-        selections.saveAgentModelVariantForSession(btwComposerSessionId, agent, model.providerId, model.modelId, variant);
-    }, [btwComposerSessionId, effectiveBtwSelection, isBtwActive]);
+    const configReasoningEffort = useConfigStore((state) => state.currentReasoningEffort);
+    const settingsDefaultReasoningEffort = useConfigStore((state) => state.settingsDefaultReasoningEffort);
+    const configuredReasoningEffort = pinnedComposerSelection ? pinnedComposerSelection.reasoningEffort : configReasoningEffort;
+    const persistedThinkingLevel = useDirectorySync(
+        React.useCallback((state) => (
+            currentSessionId ? state.snapshot[currentSessionId]?.selection?.thinkingLevel : undefined
+        ), [currentSessionId]),
+        currentSessionDirectoryForSync ?? currentDirectory ?? undefined,
+    );
+    // The picker's fallback is OMP's configured level. `auto` is a resolution
+    // mode, not an effort, so it stays off the wire and OMP decides per turn.
+    const reasoningEffortForModel = React.useCallback((
+        providerId: string | undefined,
+        modelId: string | undefined,
+        input: { captured?: { reasoningEffort?: string | null } | undefined; session?: string | null | undefined; native?: string | null | undefined; draft?: string | null | undefined },
+    ): string | undefined => {
+        if (!providerId || !modelId) return undefined;
+        const model = useConfigStore.getState().providers
+            .find((provider) => provider.providerId === providerId)?.models
+            .find((candidate) => candidate.modelId === modelId);
+        return resolveReasoningEffortToSend({ model, ompDefault: settingsDefaultReasoningEffort, ...input });
+    }, [settingsDefaultReasoningEffort]);
     const isMobile = useUIStore((state) => state.isMobile);
     const hasHardwareKeyboard = useHardwareKeyboard();
     const enterToSend = useUIStore((state) => state.enterToSend);
@@ -690,20 +651,12 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const { expanded: persistedExpandedInput, setExpanded: setExpandedInput } = useChatColumnExpandedInput();
     const isExpandedInput = !isBtwActive && persistedExpandedInput;
     const { files: runtimeFiles, git: runtimeGit, linear: runtimeLinear } = useRuntimeAPIs();
-    const cycleAgentShortcutOverride = useUIStore((state) => state.shortcutOverrides.cycle_agent);
-    const cycleAgentShortcut = React.useMemo(() => (
-        getEffectiveShortcutCombo('cycle_agent', cycleAgentShortcutOverride ? { cycle_agent: cycleAgentShortcutOverride } : undefined)
-    ), [cycleAgentShortcutOverride]);
     const { currentTheme } = useThemeSystem();
     const chatSearchDirectory = useChatSearchDirectory();
     const ensureGitStatus = useGitStore((state) => state.ensureStatus);
     const fetchGitStatus = useGitStore((state) => state.fetchStatus);
     const clearGitDiffCache = useGitStore((state) => state.clearDiffCache);
     const setSessionMode = usePermissionStore((state) => state.setSessionMode);
-    const pendingBtwPermissionMode = useBtwStore(React.useCallback(
-        (state) => currentSessionId ? state.byParent[currentSessionId]?.pendingPermissionMode : undefined,
-        [currentSessionId],
-    ));
     const [isNarrowComposer, setIsNarrowComposer] = React.useState(false);
     const [attachmentPreview, setAttachmentPreview] = React.useState<ToolPopupContent>({
         open: false,
@@ -809,7 +762,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                 directory,
                 providerId: execution.providerId,
                 modelId: execution.modelId,
-                agentId: execution.agentId || undefined,
                 variant: execution.variant || undefined,
                 generateHandoff: execution.generateHandoff,
                 returnAfterHandoffRequest: execution.generateHandoff,
@@ -856,27 +808,28 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         return () => observer.disconnect();
     }, []);
 
-    const knownAgentNames = React.useMemo(
-        () => new Set(agents.map((agent) => agent.name.toLowerCase())),
-        [agents]
-    );
+    const knownAgentNames = React.useMemo(() => new Set<string>(), []);
     const knownAgentNamesRef = React.useRef(knownAgentNames);
     knownAgentNamesRef.current = knownAgentNames;
 
     // Known slash-invocations (commands + built-ins) and `$` skills, used to
     // highlight matching tokens in the composer, the same way confirmed
     // @files are.
+    const builtinCommandNames = useCommandsStore((s) => selectBuiltinCommandsForDirectory(s, currentDirectory));
     const availableCommands = useCommandsStore((s) => selectCommandsForDirectory(s, currentDirectory));
+    const loadCommands = useCommandsStore((s) => s.loadCommands);
+    React.useEffect(() => { void loadCommands(currentDirectory); }, [currentDirectory, loadCommands]);
     const availableSkills = useSkillsStore((s) => selectAvailableSkillsForDirectory(s, currentDirectory));
     const availableSnippets = useSnippetsStore(state => selectSnippetsForDirectory(state, currentDirectory));
     const knownSlashNames = React.useMemo(() => {
         const names = new Set<string>([
+            ...builtinCommandNames,
             'init', 'review', 'undo', 'redo', 'timeline', 'compact', 'fork', 'btw', 'summary', 'workspace-review', 'plan-feature', 'craft-goal', 'schedule-task', 'catch-up', 'debug', 'weigh', 'explore',
         ]);
         if (!isMobile) names.add('handoff-review');
         for (const command of availableCommands) names.add(command.name.toLowerCase());
         return names;
-    }, [availableCommands, isMobile]);
+    }, [availableCommands, builtinCommandNames, isMobile]);
     const knownSkillNames = React.useMemo(
         () => new Set(availableSkills.map((skill) => skill.name.toLowerCase())),
         [availableSkills],
@@ -1162,8 +1115,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const takeForSend = useMessageQueueStore((state) => state.takeForSend);
 
     // Inline comment drafts
-    const inlineDraftSessionKey = isBtwActive ? btwComposerSessionId ?? '' : currentSessionId ?? (newSessionDraftOpen ? 'draft' : '');
     const inlineDraftDirectory = currentSessionDirectoryForSync ?? currentDirectory;
+    const inlineDraftSessionKey = currentSessionId ?? (newSessionDraftOpen ? 'draft' : '');
     const inlineDraftTarget = React.useMemo<InlineCommentDraftTarget | null>(
         () => inlineDraftSessionKey && inlineDraftDirectory
             ? { directory: inlineDraftDirectory, sessionKey: inlineDraftSessionKey }
@@ -1207,7 +1160,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     ));
     // Session scope also reads the visible transcript, so sessions older than
     // the persisted history still recall their prompts.
-    const transcriptPrompts = useUserMessageHistory((isBtwActive ? btwSessionId : currentSessionId) ?? '');
+    const transcriptPrompts = useUserMessageHistory(currentSessionId ?? '');
     const historyValues = React.useMemo(
         () => (inputHistoryScope === 'session'
             ? mergeSessionInputHistory(transcriptPrompts, inputHistoryEntries)
@@ -1235,7 +1188,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         persistNow: persistDraftImmediately,
         handoffDraft,
         restoreDraft,
-        migrateDraft,
     } = useComposerDraft({
         message,
         messageRef,
@@ -1268,31 +1220,16 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const handleExitBtw = React.useCallback(() => {
         if (!currentSessionId) return;
         immediateBtwSubmitRef.current = null;
-        const panels = useBtwStore.getState();
-        const pending = panels.byParent[currentSessionId];
-        if (pending?.pending && !pending.creating && !btwSessionId) {
-            const pendingSessionId = `btw-pending:${currentSessionId}`;
-            const identity = createChatDraftIdentity(activeRuntimeKey, currentSessionDirectoryForSync ?? currentDirectory, pendingSessionId);
-            if (identity) {
-                clearChatDraft(identity, true);
-                useInlineCommentDraftStore.getState().clearDrafts({ directory: identity.directory, sessionKey: pendingSessionId });
-            }
-            useSelectionStore.getState().clearSessionSelections(pendingSessionId);
-            useInputStore.getState().consumePendingBtwComposerRequest(currentSessionId);
-            panels.clearPanelState(currentSessionId);
-            return;
-        }
-        panels.setPanelState(currentSessionId, { collapsed: true });
-    }, [activeRuntimeKey, btwSessionId, currentDirectory, currentSessionDirectoryForSync, currentSessionId]);
+        const pending = useBtwStore.getState().byParent[currentSessionId];
+        if (pending?.pending) useBtwStore.getState().clearPanelState(currentSessionId);
+        else useBtwStore.getState().setPanelState(currentSessionId, { collapsed: true });
+    }, [currentSessionId]);
 
     React.useEffect(() => {
         const request = pendingBtwComposerRequest;
         if (!request || request.parentSessionId !== currentSessionId) return;
         if (!isBtwActive) {
-            useBtwStore.getState().setPanelState(
-                request.parentSessionId,
-                btwSessionId ? { collapsed: false } : { pending: true, collapsed: false },
-            );
+            useBtwStore.getState().setPanelState(request.parentSessionId, { pending: true, collapsed: false });
             return;
         }
         if (!chatDraftIdentity) return;
@@ -1300,7 +1237,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         if (!consumed) return;
         restoreDraft(chatDraftIdentity, consumed.text, new Set());
         queueMicrotask(() => focusColumnInput());
-    }, [btwSessionId, chatDraftIdentity, consumePendingBtwComposerRequest, currentSessionId, focusColumnInput, isBtwActive, pendingBtwComposerRequest, restoreDraft]);
+    }, [chatDraftIdentity, consumePendingBtwComposerRequest, currentSessionId, focusColumnInput, isBtwActive, pendingBtwComposerRequest, restoreDraft]);
 
     // Focus textarea when new session draft is opened
     const prevNewSessionDraftOpenRef = React.useRef(newSessionDraftOpen);
@@ -1320,15 +1257,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         prevNewSessionDraftOpenRef.current = newSessionDraftOpen;
     }, [columnPinned, newSessionDraftOpen, isMobile]);
 
-    // Session activity for queue availability and controls. In btw mode the
-    // composer controls the temporary fork, so the stop button and send-button
-    // state follow the FORK's activity; the queue affordance stays tied to the
-    // main session (queued messages always belong to the main chat).
-    // The column's session: a chat pinned in the side panel shows its own
-    // send/stop state, not the main chat's.
+    // A BTW draft is not a session; its stop action must never target the main run.
     const { phase: currentSessionPhase } = useSessionActivity(currentSessionId, currentSessionDirectoryForSync ?? currentDirectory ?? undefined);
-    const { phase: btwSessionPhase } = useSessionActivity(btwSessionId, btwDirectory ?? undefined);
-    const sessionPhase = isBtwActive ? btwSessionPhase : currentSessionPhase;
+    const sessionPhase = isBtwActive ? 'idle' : currentSessionPhase;
     const autoReviewRunning = useAutoReviewStore(React.useCallback((state) => {
         if (!currentSessionId) return false;
         const run = state.runsByOriginalSessionID[currentSessionId];
@@ -1395,7 +1326,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const composerQueuedMessages = selectComposerQueue(queuedMessages);
     const hasQueuedMessages = !isBtwActive && composerQueuedMessages.length > 0;
     const preparingBtwSend = useBtwStore((state) => Boolean(currentSessionId && state.byParent[currentSessionId]?.pendingSend));
-    const canSend = (hasContent || hasQueuedMessages) && !(isBtwActive && (btwPanel.creating || preparingBtwSend));
+    const canSend = (hasContent || hasQueuedMessages) && !(isBtwActive && preparingBtwSend);
 
     const canAbort = sessionPhase !== 'idle';
 
@@ -1459,15 +1390,23 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         if (isMobileCommentOpen()) return;
         const inputSnapshot = getCurrentInputSnapshot();
         if (!inputSnapshot.hasContent || !currentSessionId || !messageQueueTarget) return;
+        const queueRuntimeKey = getRuntimeKey();
+        if (inputMode === 'normal' && inputSnapshot.message.trimStart().startsWith('/')
+            && !planLocalSlashCommand(inputSnapshot.message, inputMode, hasDrafts, true, [])) {
+            if (!await loadCommands(currentDirectory)) {
+                toast.error(t('chat.chatInput.toast.messageSendFailed'));
+                return;
+            }
+            if (queueRuntimeKey !== getRuntimeKey()) return;
+        }
 
         // A local or extension command is run, not queued: the queue delivers
         // text to the model, and `/compact`, `/btw`, or `/task` mean nothing there.
-        if (planLocalSlashCommand(inputSnapshot.message, inputMode, hasDrafts, true)
+        if (planLocalSlashCommand(inputSnapshot.message, inputMode, hasDrafts, true, selectBuiltinCommandsForDirectory(useCommandsStore.getState(), currentDirectory))
             || routeGuestSlashCommand(inputSnapshot.message, inputMode, guestCommands)) {
             void handleSubmitRef.current();
             return;
         }
-        const queueRuntimeKey = getRuntimeKey();
         const queueTarget = messageQueueTarget;
         const queueSessionId = currentSessionId;
         const messageToQueue = inputSnapshot.message.replace(/^\n+|\n+$/g, '');
@@ -1488,7 +1427,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             toast.error(t('chat.chatInput.toast.attachNamedFailed', { name: documentMentions.filename }));
             return;
         }
-        const { sanitizedText, mention } = parseAgentMentions(messageToQueue, agents);
+        const sanitizedText = messageToQueue;
         const { attachments: extractedMentionAttachments } = extractInlineFileMentions(sanitizedText, documentMentions.prepared);
         // #3898: a queued message is delivered later without the composer, so
         // a phantom mention (`@masha.conner`) must be dropped now or the
@@ -1565,18 +1504,31 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
 
         const queuedProviderId = expandedResource?.modelSelection?.providerId ?? currentProviderId;
         const queuedModelId = expandedResource?.modelSelection?.modelId ?? currentModelId;
+        const queuedAgent = queueSessionId
+            ? useSelectionStore.getState().getSessionAgentSelection(queueSessionId)
+                ?? useConfigStore.getState().currentAgentName
+                ?? ROOT_SELECTION_AGENT
+            : undefined;
+        const queuedSessionEffort = queueSessionId && queuedAgent !== undefined
+            ? useSelectionStore.getState().getAgentModelReasoningEffortForSession(
+                queueSessionId, queuedAgent, queuedProviderId ?? '', queuedModelId ?? '',
+            )
+            : undefined;
         try {
             await addToQueue(queueTarget, {
                 content: messageToQueue,
                 text: textToQueue,
-                agentMention: mention?.name,
                 attachments: attachmentsToQueue.length > 0 ? attachmentsToQueue : undefined,
                 context: context.length > 0 ? context : undefined,
                 sendConfig: queuedProviderId && queuedModelId ? {
                     providerID: queuedProviderId,
                     modelID: queuedModelId,
-                    agent: expandedResource?.agentId ?? currentAgentName ?? undefined,
                     variant: currentVariant ?? undefined,
+                    reasoningEffort: reasoningEffortForModel(queuedProviderId, queuedModelId, {
+                        session: queuedSessionEffort,
+                        native: queueSessionId ? persistedThinkingLevel : undefined,
+                        draft: configuredReasoningEffort,
+                    }),
                 } : undefined,
             });
         } catch (error) {
@@ -1604,7 +1556,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             return;
         }
         recordLinkedReferences(queueSessionId, queueTarget.directory, linked);
-    }, [getCurrentInputSnapshot, getSubmitErrorMessage, currentSessionId, messageQueueTarget, inputMode, hasDrafts, guestCommands, attachedFiles, sanitizeAttachmentsForSend, prepareDocumentMentions, extractInlineFileMentions, runtimeFiles, agents, consumePendingSyntheticParts, mailboxTarget, inlineDraftTarget, consumeDrafts, linkedReferences, scrollToLatest, clearAttachedFiles, chatDraftIdentity, isMobile, isMobileCommentOpen, addToQueue, currentProviderId, currentModelId, currentAgentName, currentVariant, t, readSessionMentionsBeforeSend, sessionMentionsIn]);
+    }, [getCurrentInputSnapshot, getSubmitErrorMessage, currentSessionId, currentDirectory, messageQueueTarget, inputMode, hasDrafts, loadCommands, guestCommands, attachedFiles, sanitizeAttachmentsForSend, prepareDocumentMentions, extractInlineFileMentions, runtimeFiles, agents, consumePendingSyntheticParts, mailboxTarget, inlineDraftTarget, consumeDrafts, linkedReferences, scrollToLatest, clearAttachedFiles, chatDraftIdentity, isMobile, isMobileCommentOpen, addToQueue, currentProviderId, currentModelId, currentVariant, configuredReasoningEffort, persistedThinkingLevel, reasoningEffortForModel, t, readSessionMentionsBeforeSend, sessionMentionsIn]);
 
     /** Put the context a queued message was captured with back on the composer chips. */
     const restoreQueuedContext = React.useCallback((context: readonly QueuedContextPart[]) => {
@@ -1685,9 +1637,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         void handleSubmitRef.current({ queuedOnly: true, queuedMessageId: messageId, delivery: 'steer' });
     }, []);
 
-    const handleOpenAgentPanel = React.useCallback(() => {
-        setMobileControlsPanel('agent');
-    }, []);
 
     const handleToggleExpandedInput = React.useCallback(() => {
         if (isBtwActive) return;
@@ -1712,7 +1661,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         // Comment mode's only submit is attach; every other send path must be
         // inert while it is open.
         if (isMobileCommentOpen()) return;
-        if (isBtwActive && currentSessionId && (btwPanel.creating || useBtwStore.getState().byParent[currentSessionId]?.pendingSend)) return;
         // "Run in parallel" launches the run instead of sending a message.
         if (parallel.isActive && !options?.queuedOnly) {
             if (parallel.runCount >= 2) void parallel.launch();
@@ -1746,13 +1694,22 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             return;
         }
 
+        if (!queuedOnly && inputMode === 'normal' && inputSnapshot.message.trimStart().startsWith('/')
+            && !planLocalSlashCommand(inputSnapshot.message, inputMode, hasDrafts, Boolean(currentSessionId), [])) {
+            if (!await loadCommands(currentDirectory)) {
+                toast.error(t('chat.chatInput.toast.messageSendFailed'));
+                return;
+            }
+            if (submitRuntimeKey !== getRuntimeKey()) return;
+        }
+
         // Local slash commands are planned before anything is taken or
         // consumed. An action command must leave the queue and the attached
         // context where they are; a prompt command must send that context with
         // the prompt it produces. A command the composer cannot run here is not
         // a local command at all and goes out as typed.
         let commandPlan = !queuedOnly && inputSnapshot.hasContent
-            ? planLocalSlashCommand(inputSnapshot.message, inputMode, hasDrafts, Boolean(currentSessionId))
+            ? planLocalSlashCommand(inputSnapshot.message, inputMode, hasDrafts, Boolean(currentSessionId), selectBuiltinCommandsForDirectory(useCommandsStore.getState(), currentDirectory))
             : null;
         if (commandPlan?.kind === 'prompt') {
             const magicCommand = findMagicPromptCommand(commandPlan.command.name);
@@ -1766,23 +1723,13 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         }
         if (commandPlan?.command.name === 'handoff-review' && isMobile) commandPlan = null;
 
-        // Enter BTW before sending so the question uses its isolated selections.
+        // Enter BTW before sending so the question stays separate from the main draft.
         // A bare command waits for input; an argument requests one immediate send.
         if (commandPlan?.kind === 'prompt' && commandPlan.command.name === 'btw' && currentSessionId) {
-            const targetComposerId = btwSessionId ?? `btw-pending:${currentSessionId}`;
-            const targetIdentity = createChatDraftIdentity(
-                activeRuntimeKey,
-                btwDirectory ?? currentSessionDirectoryForSync ?? currentDirectory,
-                targetComposerId,
-            );
+            const targetIdentity = createChatDraftIdentity(activeRuntimeKey, currentSessionDirectoryForSync ?? currentDirectory, `btw-pending:${currentSessionId}`);
             const argument = commandPlan.command.argument.trim();
             handoffDraft(targetIdentity, isBtwActive ? argument : argument || null);
             if (argument && targetIdentity) immediateBtwSubmitRef.current = { identity: targetIdentity, text: argument };
-            if (btwSessionId) {
-                useBtwStore.getState().setPanelState(currentSessionId, { collapsed: false });
-                return;
-            }
-            useBtwStore.getState().setPanelState(currentSessionId, { pending: true, creating: false, collapsed: false });
             return;
         }
 
@@ -1838,10 +1785,29 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             ? composerQueuedMessages.filter((message) => message.id === queuedMessageId)
             : composerQueuedMessages;
         const capturedSendConfig = queuedProjection[0]?.sendConfig;
-        const providerIdToSend = capturedSendConfig?.providerID ?? (isBtwActive ? effectiveBtwSelection.model?.providerId : currentProviderId);
-        const modelIdToSend = capturedSendConfig?.modelID ?? (isBtwActive ? effectiveBtwSelection.model?.modelId : currentModelId);
-        const agentNameToSend = capturedSendConfig ? capturedSendConfig.agent : (isBtwActive ? effectiveBtwSelection.agent : currentAgentName);
-        const variantToSend = capturedSendConfig ? capturedSendConfig.variant : (isBtwActive ? effectiveBtwSelection.variant : currentVariant);
+        const providerIdToSend = capturedSendConfig?.providerID ?? currentProviderId;
+        const modelIdToSend = capturedSendConfig?.modelID ?? currentModelId;
+        const variantToSend = capturedSendConfig ? capturedSendConfig.variant : currentVariant;
+        const sessionEffortAgent = currentSessionId
+            ? useSelectionStore.getState().getSessionAgentSelection(currentSessionId)
+                ?? useConfigStore.getState().currentAgentName
+                ?? ROOT_SELECTION_AGENT
+            : undefined;
+        const sessionReasoningEffort = currentSessionId && sessionEffortAgent !== undefined
+            ? useSelectionStore.getState().getAgentModelReasoningEffortForSession(
+                currentSessionId, sessionEffortAgent, providerIdToSend, modelIdToSend,
+            )
+            : undefined;
+        // A queued item owns the effort it captured: its explicit value (or
+        // unset/auto) is delivered as captured, never re-resolved against a
+        // later session or preference change.
+        const reasoningEffortToSend = reasoningEffortForModel(providerIdToSend, modelIdToSend, capturedSendConfig
+            ? { captured: capturedSendConfig }
+            : {
+                session: sessionReasoningEffort,
+                native: currentSessionId ? persistedThinkingLevel : undefined,
+                draft: configuredReasoningEffort,
+            });
 
         // The isolated space the message targets, if any: a session by its directory, a draft by
         // the creation request it still waits on or by its directory.
@@ -1894,9 +1860,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             return;
         }
 
-        // btw mode: the child fork's blocking prompts are answered inside the
-        // panel; the composer send goes straight to the fork (routeMessage
-        // queues if the fork's own turn is busy).
+        // Side questions never send or queue messages into the active session transcript.
         if (currentSessionId && !queuedOnly && !isBtwActive && !commandPlan) {
             // Sending is authoritative for blocking prompts: deny pending
             // permissions and dismiss open forms for the session subtree. The
@@ -1919,7 +1883,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         // Action commands change session or UI state and send nothing. The
         // command text goes; the queue and whatever the composer had attached
         // stay exactly where they are.
-        if (commandPlan?.kind === 'action' && currentSessionId) {
+        if ((commandPlan?.kind === 'builtin' || commandPlan?.kind === 'action') && currentSessionId) {
             const actionName = commandPlan.command.name;
             setMessage('');
             confirmedMentionsRef.current.clear();
@@ -1928,7 +1892,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             if (!isBtwActive) setExpandedInput(false);
             if (isMobile) composerRef.current?.blur();
             try {
-                if (actionName === 'undo') {
+                if (commandPlan.kind === 'builtin') {
+                    const output = await sessionActions.runBuiltinCommand(currentSessionId, inputSnapshot.message);
+                    if (output) toast.info(output);
+                } else if (actionName === 'undo') {
                     await useSessionUIStore.getState().handleSlashUndo(currentSessionId);
                     scrollToBottom?.();
                 } else if (actionName === 'redo') {
@@ -1944,7 +1911,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                         // selection even while the btw panel owns the composer.
                         providerID: capturedSendConfig?.providerID ?? currentProviderId,
                         modelID: capturedSendConfig?.modelID ?? currentModelId,
-                        agent: capturedSendConfig?.agent ?? currentAgentName,
+                        agent: undefined,
                         variant: capturedSendConfig?.variant ?? currentVariant ?? undefined,
                     }, {
                         fork: sessionActions.forkFromLastCompletedTurn,
@@ -1953,7 +1920,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                             text,
                             selection.providerID,
                             selection.modelID,
-                            selection.agent,
+                            null,
                             undefined,
                             undefined,
                             undefined,
@@ -1966,10 +1933,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                     });
                     if (forkOutcome === 'send-failed') toast.error(t('chat.chatInput.toast.forkSendFailed'));
                 } else if (actionName === 'compact') {
-                    await sendMessage('/compact', currentProviderId, currentModelId, currentAgentName, undefined, undefined, undefined, variantToSend, 'normal', {
-                        sessionId: currentSessionId,
-                        directory: currentDirectory ?? undefined,
-                    });
+                    const instructions = commandPlan.command.argument.trim();
+                    await sessionActions.compactSession(currentSessionId, instructions || undefined);
                 }
             } catch (error) {
                 restoreComposerText();
@@ -1977,6 +1942,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                     toast.error(error instanceof sessionActions.NothingToForkError
                         ? t('chat.chatInput.toast.forkNothingToFork')
                         : getSubmitErrorMessage(error, t('chat.chatInput.toast.forkFailed')));
+                    return;
+                }
+                if (commandPlan.kind === 'builtin') {
+                    toast.error(getSubmitErrorMessage(error, t('chat.chatInput.toast.messageSendFailed')));
                     return;
                 }
                 if (actionName !== 'compact') throw error;
@@ -1994,18 +1963,15 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             delivery?: 'steer';
             skills?: CanonicalSkillMentions;
             fileResourcesExpanded?: boolean;
+            reasoningEffort?: string;
         } | undefined;
-        if (isBtwActive && btwSessionId && btwDirectory) {
-            sendMessageOptions = {
-                sessionId: btwSessionId,
-                directory: btwDirectory,
-            };
-        } else if (capturedTarget || capturedDraftSnapshot || delivery) {
+        if (capturedTarget || capturedDraftSnapshot || delivery || reasoningEffortToSend) {
             sendMessageOptions = {};
             if (capturedTarget) sendMessageOptions.target = capturedTarget;
             if (capturedDraftSnapshot) sendMessageOptions.draftSnapshot = capturedDraftSnapshot;
         }
         if (delivery && sendMessageOptions) sendMessageOptions.delivery = delivery;
+        if (reasoningEffortToSend) sendMessageOptions = { ...(sendMessageOptions ?? {}), reasoningEffort: reasoningEffortToSend };
 
         // Queued messages resolved their mentions when they were queued; only
         // the composer's own text can still name a document.
@@ -2100,18 +2066,12 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             composerAttachments: attachedFiles,
             inlineComments: expandedDrafts,
             syntheticTexts: [
-                ...buildBtwSyntheticTexts({ isBtwActive }),
                 ...(syntheticParts?.map((part) => part.text) ?? []),
             ],
             references: isBtwActive ? [] : linkedReferences.map(toContextReference).concat(
                 !queuedOnly && inputSnapshot.hasContent ? sessionMentionsIn(inputSnapshot.message) : [],
             ),
         }, {
-            parseAgentMention: (text) => {
-                if (isBtwActive) return { text };
-                const { sanitizedText, mention } = parseAgentMentions(text, agents);
-                return { text: sanitizedText, agentName: mention?.name };
-            },
             extractFileMentions: (text) => {
                 if (isBtwActive) return { text, attachments: [] };
                 const { sanitizedText, attachments } = extractInlineFileMentions(text, preparedDocumentMentions);
@@ -2122,7 +2082,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         });
 
         const primaryText = outgoing.primaryText;
-        const { primaryAttachments, additionalParts, agentMentionName, skillNames } = outgoing;
+        const { primaryAttachments, additionalParts, skillNames } = outgoing;
         if (outgoing.primaryFileResourcesExpanded) sendMessageOptions = { ...sendMessageOptions, fileResourcesExpanded: true };
 
         if (outgoing.isEmpty) return;
@@ -2202,9 +2162,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                         visibleText,
                         providerIdToSend,
                         modelIdToSend,
-                        agentNameToSend,
+                        null,
                         sendableAttachments,
-                        agentMentionName,
+                        undefined,
                         [...additionalParts, { text: instructionsText, synthetic: true }],
                         variantToSend,
                         inputMode,
@@ -2222,8 +2182,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         }
 
         const currentSessionDirectory = capturedTarget?.directory ?? currentDirectory;
-        // btw mode: the fork already carries the question plus full history,
-        // so the response-style instruction never applies there.
+        // Side questions use the active session's transient composer panel, never a fork.
         const shouldAddResponseStyle = !isBtwActive && (newSessionDraftOpen || (currentSessionId ? !hasUserMessages(currentSessionId, currentSessionDirectory) : false));
         if (shouldAddResponseStyle) {
             const responseStyleInstruction = await fetchResponseStyleInstruction().catch(() => null);
@@ -2244,9 +2203,14 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         let pendingBtwSend: symbol | null = null;
         try {
             if (isBtwActive && btwPanel.pending && currentSessionId) {
-                pendingBtwSend = await preparePendingBtwSend(currentSessionId, submitRuntimeKey, expandOutgoingSnippets);
-                if (!pendingBtwSend) {
-                    if (getRuntimeKey() !== submitRuntimeKey) restoreComposerText();
+                const panelStore = useBtwStore.getState();
+                if (panelStore.byParent[currentSessionId]?.pendingSend) return;
+                pendingBtwSend = Symbol('btw-send');
+                panelStore.setPanelState(currentSessionId, { pendingSend: pendingBtwSend });
+                await expandOutgoingSnippets();
+                if (getRuntimeKey() !== submitRuntimeKey) {
+                    useBtwStore.getState().setPanelState(currentSessionId, { pendingSend: undefined });
+                    restoreComposerText();
                     return;
                 }
             } else {
@@ -2257,8 +2221,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             toast.error(getSubmitErrorMessage(error, t('chat.chatInput.toast.messageSendFailed')));
             return;
         }
-        const ownsPendingBtwSend = () => Boolean(pendingBtwSend && currentSessionId
-            && useBtwStore.getState().byParent[currentSessionId]?.pendingSend === pendingBtwSend);
 
         // Collect all attachments for error recovery
         const allAttachments = [
@@ -2271,54 +2233,15 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         // never claims the new message.
         scrollToBottom?.();
 
-        if (isBtwActive && btwPanel.pending && currentSessionId && btwComposerSessionId) {
-            const targetDirectory = useSessionUIStore.getState().getDirectoryForSession(currentSessionId)
-                || currentDirectory
-                || null;
-            if (!targetDirectory) {
-                useBtwStore.getState().setPanelState(currentSessionId, { pendingSend: undefined });
-                restoreConsumedInput();
-                toast.error(t('chat.btw.toast.createFailed'));
-                return;
-            }
+        if (isBtwActive && btwPanel.pending && currentSessionId) {
             try {
-                const fork = await startBtwSession({
-                    parentSessionId: currentSessionId,
-                    expectedRuntimeKey: submitRuntimeKey,
-                    question: primaryText,
-                    directory: targetDirectory,
-                    providerId: providerIdToSend,
-                    modelId: modelIdToSend,
-                    agentId: agentNameToSend,
-                    fileResourcesExpanded: outgoing.primaryFileResourcesExpanded,
-                    attachments: sendableAttachments,
-                    additionalParts,
-                    skills: sendMessageOptions?.skills,
-                    permissionMode: pendingBtwPermissionMode,
-                });
-                if (!ownsPendingBtwSend()) return;
-                if (getRuntimeKey() !== submitRuntimeKey) {
-                    useBtwStore.getState().clearPanelState(currentSessionId);
-                    return;
-                }
-                const forkDirectory = targetDirectory;
-                migrateDraft(chatDraftIdentity, createChatDraftIdentity(activeRuntimeKey, forkDirectory, fork.sessionId));
-                if (inlineDraftTarget) {
-                    const drafts = useInlineCommentDraftStore.getState();
-                    drafts.restoreDrafts({ directory: forkDirectory, sessionKey: fork.sessionId }, drafts.consumeDrafts(inlineDraftTarget));
-                }
-                useBtwStore.getState().setPanelState(currentSessionId, { pending: false, creating: false, pendingSend: undefined });
+                const result = await canonicalClient.askBtw(currentSessionId, primaryText);
+                if (useBtwStore.getState().byParent[currentSessionId]?.pendingSend !== pendingBtwSend) return;
+                useBtwStore.getState().setPanelState(currentSessionId, { pending: false, pendingSend: undefined, ephemeralRecordId: result.recordId, ephemeralText: '', ephemeralStatus: 'running', collapsed: false });
                 scrollToBottom?.();
             } catch (error) {
-                if (!ownsPendingBtwSend()) return;
-                if (getRuntimeKey() !== submitRuntimeKey) {
-                    useBtwStore.getState().clearPanelState(currentSessionId);
-                    restoreComposerText();
-                    return;
-                }
-                // Preserve the pending owner before restoring text so a failed
-                // first send never drops back into the parent draft.
-                useBtwStore.getState().setPanelState(currentSessionId, { pending: true, creating: false, collapsed: false, pendingSend: undefined });
+                if (useBtwStore.getState().byParent[currentSessionId]?.pendingSend !== pendingBtwSend) return;
+                useBtwStore.getState().setPanelState(currentSessionId, { pending: true, collapsed: false, pendingSend: undefined });
                 restoreConsumedInput();
                 toast.error(getSubmitErrorMessage(error, t('chat.btw.toast.createFailed')));
             }
@@ -2329,9 +2252,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             primaryText,
             providerIdToSend,
             modelIdToSend,
-            agentNameToSend,
+            null,
             sendableAttachments,
-            agentMentionName,
+            undefined,
             additionalParts.length > 0 ? additionalParts : undefined,
             variantToSend,
             inputMode,
@@ -2597,21 +2520,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             return;
         }
 
-        const cycleAgentBackwardShortcut = cycleAgentShortcut && !cycleAgentShortcut.includes('shift')
-            ? normalizeCombo(`shift+${cycleAgentShortcut}`)
-            : '';
-        const cycleAgentDirection = cycleAgentBackwardShortcut && eventMatchesShortcut(e, cycleAgentBackwardShortcut)
-            ? -1
-            : eventMatchesShortcut(e, cycleAgentShortcut)
-                ? 1
-                : 0;
-
-        if (!isBtwActive && cycleAgentDirection !== 0 && openAutocomplete === null) {
-            e.preventDefault();
-            e.stopPropagation();
-            handleCycleAgent(cycleAgentDirection);
-            return;
-        }
 
         // Handle ArrowUp/ArrowDown for message history navigation
         // ArrowUp: only when cursor at start (position 0) or input is empty
@@ -2719,28 +2627,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
 
     const handleAbort = React.useCallback(() => {
         clearAbortPrompt();
-
-        // btw mode: the stop button stops the fork's turn, not the main
-        // session's.
-        const abortTarget = isBtwActive && btwSessionId ? btwSessionId : currentSessionId;
-        void abortCurrentOperation(abortTarget || undefined);
-    }, [abortCurrentOperation, btwSessionId, clearAbortPrompt, currentSessionId, isBtwActive]);
-
-    const handleCycleAgent = React.useCallback((direction: 1 | -1 = 1) => {
-        // Auto hides the agent control, so the shortcut must not change a
-        // choice the user cannot see.
-        if (isAutoModel(currentProviderId, currentModelId)) return;
-        const nextAgentName = getCycledAgentId(agents, currentAgentName, direction, useUIStore.getState().favoriteAgents);
-        if (!nextAgentName) return;
-
-        // A pinned column's agent is its own session's choice only.
-        if (!columnPinned) setAgent(nextAgentName);
-
-        if (currentSessionId) {
-            saveSessionAgentSelection(currentSessionId, nextAgentName);
-        }
-    }, [agents, columnPinned, currentAgentName, currentModelId, currentProviderId, currentSessionId, setAgent, saveSessionAgentSelection]);
-
+        void abortCurrentOperation(currentSessionId ?? undefined);
+    }, [abortCurrentOperation, clearAbortPrompt, currentSessionId]);
     // Height the failed-dictation salvage text needs. Its overlay sits
     // absolutely over the composer, so the composer must be able to grow for
     // it. Apply the editor's line and screen bounds before using that height as
@@ -3254,46 +3142,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         composerRef.current?.focus();
     });
 
-    const handleAgentSelect = useStableHandler((agentName: string) => {
-        const textarea = composerRef.current;
-        const cursorPosition = textarea?.getSelection().start ?? message.length;
-        const textBeforeCursor = message.substring(0, cursorPosition);
-        const lastAtSymbol = textBeforeCursor.lastIndexOf('@');
-
-        if (lastAtSymbol !== -1) {
-            const newMessage =
-                message.substring(0, lastAtSymbol) +
-                `@${agentName} ` +
-                message.substring(cursorPosition);
-            setMessage(newMessage);
-
-            const nextCursor = lastAtSymbol + agentName.length + 2;
-            requestAnimationFrame(() => {
-                if (composerRef.current) {
-                    composerRef.current.setSelection(nextCursor);
-                }
-                updateAutocompleteState(newMessage, nextCursor);
-            });
-        } else if (composerRef.current) {
-            const newMessage =
-                message.substring(0, cursorPosition) +
-                `@${agentName} ` +
-                message.substring(cursorPosition);
-            setMessage(newMessage);
-
-            const nextCursor = cursorPosition + agentName.length + 2;
-            requestAnimationFrame(() => {
-                if (composerRef.current) {
-                    composerRef.current.setSelection(nextCursor);
-                }
-                updateAutocompleteState(newMessage, nextCursor);
-            });
-        }
-
-        closeAutocomplete();
-
-        composerRef.current?.focus();
-    });
 
     const handleSkillSelect = useStableHandler((skillName: string) => {
         const textarea = composerRef.current;
@@ -3929,7 +3777,25 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const spaceWaitRow = showDraftTargetSelectors && messageWaitsForSpace
         ? <ComposerStatusStrip icon="time" text={t('spaces.draft.queued')} />
         : null;
+    const todoRow = !isBtwActive && !newSessionDraftOpen ? (
+        <TodoTray
+            sessionId={currentSessionId}
+            directory={currentSessionDirectoryForSync ?? currentDirectory}
+        />
+    ) : null;
     const autoReviewRow = !isBtwActive && !newSessionDraftOpen ? <AutoReviewStrip /> : null;
+    const sessionMode = useDirectorySync(React.useCallback((state) => currentSessionId ? state.snapshot[currentSessionId]?.session.mode : undefined, [currentSessionId]), currentSessionDirectoryForSync ?? currentDirectory ?? undefined);
+    // The workspace model catalog is the authoritative source for whether OMP
+    // can resolve the project/global `plan` role.
+    const planRoleAvailable = useDirectorySync(React.useCallback((state) => state.models?.planRoleAvailable, []), currentSessionDirectoryForSync ?? currentDirectory ?? undefined);
+    const sessionGoalEnabled = useUIStore((state) => state.sessionGoalEnabled);
+    const handleDraftModeChange = React.useCallback((next: ComposerModeValue, goal?: DraftGoalObjective | null) => {
+        useSessionUIStore.getState().setDraftMode(next, goal ?? null);
+    }, []);
+    const workerRun = useSessionActiveRun(currentSessionId ?? '', currentSessionDirectoryForSync ?? currentDirectory ?? undefined);
+    const workerRunRow = !isBtwActive && !newSessionDraftOpen && (workerRun?.origin === 'plan' || workerRun?.origin === 'goal')
+        ? <ComposerStatusStrip icon="loader-4" spin text={t(workerRun.origin === 'plan' ? 'chat.run.origin.plan' : 'chat.run.origin.goal')} />
+        : null;
     // The session's goal, then what is still running, then what waits for it.
     const goalRow = !isBtwActive ? (
         <SessionGoalRow
@@ -3952,11 +3818,13 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     ) : null;
     // Null exactly when the suggestion row alone would have been: the mobile
     // pill picks its shape from whether a top row exists.
-    const composerTopRows = worktreeSetupRow || spaceWaitRow || goalRow || autoReviewRow || backgroundShellsRow || revertRow || queueRow || doneHintRow || reviewHintRow || suggestionRow ? (
+    const composerTopRows = worktreeSetupRow || spaceWaitRow || todoRow || goalRow || workerRunRow || autoReviewRow || backgroundShellsRow || revertRow || queueRow || doneHintRow || reviewHintRow || suggestionRow ? (
         <>
             {worktreeSetupRow}
             {spaceWaitRow}
+            {todoRow}
             {goalRow}
+            {workerRunRow}
             {autoReviewRow}
             {backgroundShellsRow}
             {revertRow}
@@ -3966,16 +3834,22 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             {suggestionRow}
         </>
     ) : null;
-    const mobileModelAgentRow = isMobile && !isBtwActive ? (
-        // px-3.5 lines the model logo and the agent label up with the attach
-        // and mic icons above them; the buttons drop their own padding so the
-        // row alone owns the inset.
+    const mobileModelRow = isMobile && !isBtwActive ? (
+        // Keep the mobile model control aligned with the attachment and dictation rows.
         <div className="flex items-center justify-between gap-x-2 px-3.5 pb-2 pt-0.5">
             <MemoMobileModelButton onOpenModel={() => handleOpenMobilePanel('model')} className="min-w-0 px-0" />
-            <MemoMobileAgentButton
-                onOpenAgentPanel={handleOpenAgentPanel}
-                onCycleAgent={handleCycleAgent}
-                className="flex-shrink-0 px-0"
+            <ComposerModeSelector
+                sessionId={currentSessionId}
+                draftOpen={newSessionDraftOpen}
+                mode={sessionMode}
+                draftMode={newSessionDraft.mode}
+                draftGoalObjective={newSessionDraft.goalObjective ?? null}
+                runActive={Boolean(workerRun)}
+                planRoleAvailable={planRoleAvailable}
+                sessionGoalEnabled={sessionGoalEnabled}
+                directory={currentSessionDirectoryForSync ?? currentDirectory}
+                isMobile
+                onDraftModeChange={handleDraftModeChange}
             />
         </div>
     ) : null;
@@ -4006,12 +3880,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         editorRef: composerRef,
     });
 
-    // The footer's objective counter shows only while a goal is armed; passing
-    // the length otherwise would re-render the whole footer on every keystroke.
-    const goalArmed = useSessionGoalArmStore((state) => state.armed);
     // Set by the footer's desktop dictation; the mobile overlay lives outside the box.
     const [desktopDictating, setDesktopDictating] = React.useState(false);
-    const goalObjectiveLength = goalArmed ? message.length : 0;
     const waitingForAgent = false;
 
     const footerPaddingClass = isMobile ? 'px-1.5 py-1.5' : 'px-2.5 py-1.5';
@@ -4022,28 +3892,16 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
 
     const iconButtonBaseClass = 'flex cursor-pointer items-center justify-center text-foreground transition-none outline-none focus:outline-none flex-shrink-0 disabled:cursor-not-allowed';
     const footerIconButtonClass = cn(iconButtonBaseClass, buttonSizeClass);
-    const permissionScopeSessionId = isBtwActive ? btwSessionId : currentSessionId ?? currentManagementSessionId;
+    const permissionScopeSessionId = currentSessionId ?? currentManagementSessionId;
     const safetyNetAvailable = useRoutingStore(selectSafetyNetAvailable);
-    // A session not created yet (a draft, an unsent btw fork) shows its own
-    // choice, else the mode the server will give it: the Settings default.
     const defaultPermissionMode = useUIStore((state) => state.permissionDefaultMode);
-    const permissionMode = usePermissionStore((state) => {
-        if (isBtwActive && !btwSessionId) return pendingBtwPermissionMode ?? defaultPermissionMode;
-        if (!permissionScopeSessionId) {
-            return draftPermissionMode ?? defaultPermissionMode;
-        }
-        return state.getSessionMode(permissionScopeSessionId);
-    });
+    const permissionMode = usePermissionStore((state) => permissionScopeSessionId
+        ? state.getSessionMode(permissionScopeSessionId)
+        : draftPermissionMode ?? defaultPermissionMode);
     const shownPermissionMode = displayedPermissionMode(permissionMode, safetyNetAvailable);
     const isPermissionAutoAcceptInteractive = Boolean(permissionScopeSessionId || newSessionDraftOpen);
 
     const handlePermissionModeCycle = React.useCallback(() => {
-        if (isBtwActive && !btwSessionId && currentSessionId) {
-            useBtwStore.getState().setPanelState(currentSessionId, {
-                pendingPermissionMode: nextPermissionMode(permissionMode, safetyNetAvailable),
-            });
-            return;
-        }
         cyclePermissionMode({
             permissionScopeSessionId,
             newSessionDraftOpen,
@@ -4054,18 +3912,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             onOpenSessionFirst: () => toast.error(t('chat.chatInput.toast.openSessionFirst')),
             onToggleFailed: () => toast.error(t('chat.chatInput.toast.togglePermissionAutoAcceptFailed')),
         });
-    }, [
-        newSessionDraftOpen,
-        permissionMode,
-        permissionScopeSessionId,
-        safetyNetAvailable,
-        isBtwActive,
-        btwSessionId,
-        currentSessionId,
-        setDraftPermissionMode,
-        setSessionMode,
-        t,
-    ]);
+    }, [newSessionDraftOpen, permissionMode, permissionScopeSessionId, safetyNetAvailable, setDraftPermissionMode, setSessionMode, t]);
 
     useKeybind('toggle_permission_auto_accept', () => {
         if (!isPermissionAutoAcceptInteractive) return false;
@@ -4212,7 +4059,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                                 {contextChips}
                             </div>
                         )}
-                        bottomRow={mobileModelAgentRow}
+                        bottomRow={mobileModelRow}
                         onExpand={mobileShell.expand}
                         onPrimaryAction={handlePrimaryAction}
                         onQueueMessage={() => { void handleQueueMessage(); }}
@@ -4254,7 +4101,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                         onCommandSelect={handleCommandSelect}
                         onSkillSelect={handleSkillSelect}
                         onFileSelect={handleFileSelect}
-                        onAgentSelect={handleAgentSelect}
                         onEmojiSelect={handleEmojiSelect}
                         onClose={closeAutocomplete}
                     />
@@ -4320,15 +4166,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                     <div className={cn("overflow-hidden", isComposerExpanded && 'flex flex-1 min-h-0 flex-col')}>
                         {parallel.isActive ? <ParallelComposerStrip parallel={parallel} project={parallelProjectRef} /> : null}
                         {composerTopRows}
-                        {isMobile && isBtwActive ? (
-                            <div className="scrollbar-none relative z-10 flex items-center gap-x-2 overflow-x-auto px-3 pb-0.5 pt-1.5">
-                                <ModelControls
-                                    className="flex-1 min-w-0"
-                                    sessionId={btwComposerSessionId}
-                                    selection={effectiveBtwSelection}
-                                />
-                            </div>
-                        ) : null}
                         <div className="flex items-center gap-1 px-3 pt-1 flex-wrap relative z-10">
                             <AttachedFilesList draftIdentity={chatDraftIdentity} onShowPopup={handleShowAttachmentPreview} className="pt-2" />
                             {!isBtwActive ? linkedReferenceChips : null}
@@ -4381,7 +4218,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                                     mobileShell.onEditorBlur();
                                 }}
                                 placeholder={isBtwActive
-                                    ? t('chat.btw.mainComposerPlaceholder')
+                                    ? t('chat.btw.draftHint')
                                     : currentSessionId || newSessionDraftOpen
                                         ? inputMode === 'shell'
                                             ? t('chat.chatInput.placeholder.shell')
@@ -4411,9 +4248,15 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                     <ComposerFooter
                         isMobile={isMobile}
                         sessionId={currentSessionId}
+                        mode={sessionMode}
+                        runActive={Boolean(workerRun)}
                         directory={currentSessionDirectoryForSync ?? currentDirectory}
                         newSessionDraftOpen={newSessionDraftOpen}
-                        messageLength={goalObjectiveLength}
+                        draftMode={newSessionDraft.mode}
+                        draftGoalObjective={newSessionDraft.goalObjective ?? null}
+                        planRoleAvailable={planRoleAvailable}
+                        sessionGoalEnabled={sessionGoalEnabled}
+                        onDraftModeChange={handleDraftModeChange}
                         radius={chatInputRadius}
                         footerPaddingClass={footerPaddingClass}
                         footerGapClass={footerGapClass}
@@ -4450,14 +4293,12 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                         onDictationContentHeightChange={handleDictationContentHeightChange}
                         onDictationActiveChange={setDesktopDictating}
                         isBtw={isBtwActive}
-                        modelSessionId={btwComposerSessionId}
-                        btwSelection={effectiveBtwSelection}
                         pinnedSelection={pinnedComposerSelection}
                         onRunInParallel={!isMobile && !isBtwActive && !columnPinned ? handleRunInParallel : undefined}
                         parallelRun={parallelRun}
                         waitingForAgent={waitingForAgent}
                     />
-                    {mobileModelAgentRow}
+                    {mobileModelRow}
                     </div>
 
                 </div>

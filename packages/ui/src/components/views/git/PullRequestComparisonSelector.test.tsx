@@ -54,6 +54,17 @@ const checkPullRequestSelection = async (mobile: boolean, tablet = false) => {
   let failNextPage = true;
   globalThis.fetch = Object.assign(async (input: RequestInfo | URL) => {
     const url = new URL(input instanceof Request ? input.url : String(input), 'http://localhost');
+    if (url.pathname === '/api/git/projects') {
+      const body = (input instanceof Request ? await input.clone().json().catch(() => ({})) : {}) as { directories?: string[] };
+      const dirs = body.directories ?? [url.searchParams.get('directory') ?? '/repo'];
+      return Response.json({
+        projects: dirs.map((d) => ({
+          directory: d,
+          isGitRepository: true,
+          status: { current: 'main', tracking: null, ahead: 0, behind: 0, files: [], isClean: true },
+        })),
+      });
+    }
     if (url.pathname === '/api/fs/home' || url.pathname === '/api/session-folders') return new Promise<Response>(() => {});
     // The bound status contract echoes the branch it answered for.
     if (url.pathname === '/api/source-control/github/pr/status') {
@@ -102,9 +113,21 @@ const checkPullRequestSelection = async (mobile: boolean, tablet = false) => {
   const container = document.createElement('div');
   document.body.append(container);
   const root = createRoot(container);
-  const render = () => act(async () => { root.render(<I18nProvider><RuntimeAPIContext.Provider value={apis}>
-    <Harness name="changes" /><Harness key={walkthroughMount} name="walkthrough" />
-  </RuntimeAPIContext.Provider></I18nProvider>); });
+  const render = async () => {
+    await act(async () => {
+      root.render(<I18nProvider><RuntimeAPIContext.Provider value={apis}>
+        <Harness name="changes" /><Harness key={walkthroughMount} name="walkthrough" />
+      </RuntimeAPIContext.Provider></I18nProvider>);
+    });
+    for (let round = 0; round < 25; round += 1) {
+      if (container.querySelector('[data-picker="changes"] output')?.textContent) break;
+      await act(async () => {
+        const { promise, resolve } = Promise.withResolvers<void>();
+        setTimeout(resolve, 20);
+        await promise;
+      });
+    }
+  };
   const trigger = (name: string) => {
     const button = container.querySelector<HTMLButtonElement>(`[data-picker="${name}"] button`);
     if (!button) throw new Error('Missing PR picker');

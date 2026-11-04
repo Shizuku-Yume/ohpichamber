@@ -201,7 +201,7 @@ type SessionTitles = { get: (sessionId: string) => string | undefined };
  */
 const useSessionTitles = (): SessionTitles => {
   const sessions = useGlobalSessionsStore((state) => state.entityById);
-  return React.useMemo(() => ({ get: (sessionId) => sessions.get(sessionId)?.metadata?.title }), [sessions]);
+  return React.useMemo(() => ({ get: (sessionId) => sessions.get(sessionId)?.title }), [sessions]);
 };
 
 const RunItem: React.FC<{ run: WorkflowRun; selected: boolean; caption?: string; onSelect: () => void }> = ({ run, selected, caption, onSelect }) => {

@@ -129,7 +129,7 @@ export const WorkStatusSubagentsSection: React.FC<Props> = ({ sessionId, directo
     >
       <div className="max-h-56 overflow-y-auto">
         {rows.map(({ child, blocked, asked, busy, failed, done }) => {
-          const label = child.metadata?.title?.trim() || t('chat.workStatus.subagent.untitled');
+          const label = child.title?.trim() || t('chat.workStatus.subagent.untitled');
           let icon: IconName = 'time';
           let iconColor: string | undefined;
           let statusLabel = '';

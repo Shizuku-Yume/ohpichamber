@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import {
   ApprovalReplySchema, ApprovalRequestSchema, EntityIdSchema, JsonObjectSchema, JsonValueSchema,
-  QuestionReplySchema, QuestionRequestSchema,
+  QuestionReplySchema, QuestionRequestSchema, PlanReviewResponseSchema,
 } from '@openchamber/agent-contract';
 import type {
   ApprovalReply, ApprovalRequest, ApprovalResolution, JsonObject, JsonValue, QuestionReply, QuestionRequest,
@@ -12,11 +12,16 @@ import type { WorkerInteraction, WorkerOperation } from '../protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
 import type { NativeApprovalGrant } from '../native-policy-protocol.ts';
 import type { HostApprovalPolicyListRequestSchema } from '../supervisor/host-authorization-protocol.ts';
+import { oneLineApprovalText, publicApprovalDetails } from './approval-summary.ts';
 
 type RequestKind = 'approval' | 'question';
-type ApprovalRecordState = { kind: 'approval'; request: ApprovalRequest; target: ApprovalPolicyWrite['target']; timer?: NodeJS.Timeout };
-type RecordState = ApprovalRecordState | { kind: 'question'; request: QuestionRequest; timer?: NodeJS.Timeout };
-type SessionState = { epoch: string; generation: string; workspaceId: string; dispatch: (operation: WorkerOperation) => Promise<void>; append: (input: ProjectionInput) => void };
+type ApprovalRequestInput = z.input<typeof ApprovalRequestSchema>;
+type ApprovalRecordState = { kind: 'approval'; request: ApprovalRequest; target: ApprovalPolicyWrite['target']; sessionRuleKey?: string; timer?: NodeJS.Timeout };
+type RecordState = ApprovalRecordState | { kind: 'question'; request: QuestionRequest; timer?: NodeJS.Timeout; timeoutMs: number };
+type SessionState = {
+  epoch: string; generation: string; workspaceId: string;
+  dispatch: (operation: WorkerOperation) => Promise<void>; append: (input: ProjectionInput) => void;
+};
 
 export interface ApprovalPolicyWrite {
   sessionId: string;
@@ -61,6 +66,7 @@ const QuestionItemSchema = z.object({
 function increment(version: string): string { return (BigInt(version) + 1n).toString(); }
 function terminalResolution(decision: ApprovalReply['decision'], policy: { policyId: string; revision: string } | undefined): ApprovalResolution {
   if (decision === 'approve' || decision === 'reject') return { decision };
+  if (decision === 'always-allow' && policy === undefined) return { decision, policy: { scope: 'session', persistence: 'ephemeral' } };
   if (!policy) throw new ProjectionError(503, 'APPROVAL_POLICY_WRITE_FAILED', 'Approval policy persistence did not return a committed revision');
   return decision === 'always-allow'
     ? { decision, policy: { policyId: policy.policyId, revision: policy.revision, scope: 'session', persistence: 'committed' } }
@@ -71,7 +77,10 @@ export class InteractionManager {
   private readonly sessions = new Map<string, SessionState>();
   private readonly records = new Map<string, RecordState>();
   private readonly reservations = new Set<string>();
-  private readonly executionGrants = new Map<string, { request: ApprovalRequest; target: ApprovalPolicyWrite['target']; expiresAt: number; timer: NodeJS.Timeout }>();
+  private readonly executionGrants = new Map<string, {
+    sessionId: string; workerGeneration: string; epoch: string; toolCallId: string;
+    target: ApprovalPolicyWrite['target']; expiresAt: number; timer: NodeJS.Timeout;
+  }>();
   private readonly policies = new Map<string, ApprovalPolicyRecord>();
 
   constructor(private readonly timeoutMs = 300_000, private readonly policyCommit?: ApprovalPolicyCommit) {}
@@ -90,7 +99,8 @@ export class InteractionManager {
   }
 
   private matchingPolicy(sessionId: string, workspaceId: string, target: ApprovalPolicyWrite['target']): ApprovalPolicyRecord | undefined {
-    return this.policies.get(this.policyKey(sessionId, workspaceId, 'workspace', target)) ?? this.policies.get(this.policyKey(sessionId, workspaceId, 'session', target));
+    return this.policies.get(this.policyKey(sessionId, workspaceId, 'workspace', target))
+      ?? this.policies.get(this.policyKey(sessionId, workspaceId, 'session', target));
   }
 
   closeSession(sessionId: string): void {
@@ -102,7 +112,7 @@ export class InteractionManager {
     const state = this.sessions.get(sessionId);
     if (!state || (generation !== undefined && state.generation !== generation)) return;
     for (const [id, grant] of this.executionGrants) {
-      if (grant.request.sessionId !== sessionId) continue;
+      if (grant.sessionId !== sessionId) continue;
       clearTimeout(grant.timer);
       this.executionGrants.delete(id);
     }
@@ -124,25 +134,46 @@ export class InteractionManager {
     const state = this.sessions.get(sessionId);
     if (!state || state.generation !== generation) return;
     const now = Date.now();
+    if (interaction.kind === 'cancel') {
+      this.cancelPending(sessionId, interaction.approvalId);
+      return;
+    }
     if (interaction.kind === 'approval') {
       const privateTarget = interaction.policyTarget;
-      const request: ApprovalRequest = ApprovalRequestSchema.parse({
+      if (interaction.nativeGrant) {
+        if (interaction.toolName !== 'bash') return;
+        const timer = setTimeout(() => this.executionGrants.delete(interaction.approvalId), this.timeoutMs);
+        this.executionGrants.set(interaction.approvalId, {
+          sessionId, workerGeneration: state.generation, epoch: state.epoch,
+          toolCallId: interaction.toolCallId, target: privateTarget, expiresAt: now + this.timeoutMs, timer,
+        });
+        void state.dispatch({ type: 'approval.resolve', approvalId: interaction.approvalId, decision: 'approve' }).catch(() => {});
+        return;
+      }
+      const sessionRuleKey = interaction.sessionRuleKey;
+      const summary = oneLineApprovalText(interaction.commandSummary);
+      const reason = z.string().safeParse(interaction.details.reason).data;
+      const approvalDraft: ApprovalRequestInput = {
         approvalId: interaction.approvalId, sessionId, turnId: interaction.turnId, toolCallId: interaction.toolCallId,
         toolName: interaction.toolName, actionType: interaction.actionType,
-        commandSummary: 'Native tool operation requires approval',
-        details: { reason: 'The native tool operation requires approval.', options: ['Approve', 'Reject'] },
-        policyTarget: { toolName: interaction.toolName, pattern: 'native-input' }, status: 'pending', version: '1', epoch: state.epoch,
+        commandSummary: summary,
+        details: publicApprovalDetails(interaction.actionType, summary, reason),
+        status: 'pending', version: '1', epoch: state.epoch,
         workerGeneration: state.generation, requestedAt: now,
-      });
+      };
+      if (sessionRuleKey) approvalDraft.policyTarget = { toolName: interaction.toolName, pattern: '*' };
+      const request: ApprovalRequest = ApprovalRequestSchema.parse(approvalDraft);
       const timer = setTimeout(() => { void this.expirePending(sessionId, request.approvalId); }, this.timeoutMs);
-      this.records.set(request.approvalId, { kind: 'approval', request, target: privateTarget, timer });
+      this.records.set(request.approvalId, { kind: 'approval', request, target: privateTarget, sessionRuleKey, timer });
       state.append({ timestamp: now, event: { type: 'approval.requested', approval: request } });
       const policy = this.matchingPolicy(sessionId, state.workspaceId, privateTarget);
-      if (policy) {
-        const reply: ApprovalReply = policy.decision === 'allow'
-          ? { decision: 'always-allow', policyScope: 'session', version: request.version, epoch: request.epoch, workerGeneration: generation }
-          : { decision: 'always-deny', policyScope: 'workspace', version: request.version, epoch: request.epoch, workerGeneration: generation };
-        void this.resolveApproval(sessionId, request.approvalId, reply).catch(() => {});
+      if (policy?.decision === 'deny') {
+        // The workspace deny already exists; a one-shot reject closes the card
+        // without requiring a public policyTarget that ordinary approvals omit.
+        void this.resolveApproval(sessionId, request.approvalId, {
+          decision: 'reject', version: request.version,
+          epoch: request.epoch, workerGeneration: generation,
+        }).catch(() => {});
       }
       return;
     }
@@ -150,8 +181,9 @@ export class InteractionManager {
       questionId: interaction.questionId, sessionId, turnId: interaction.turnId, prompt: interaction.prompt, schema: interaction.schema,
       status: 'pending', version: '1', epoch: state.epoch, workerGeneration: state.generation, requestedAt: now,
     });
-    const timer = setTimeout(() => { void this.expirePending(sessionId, request.questionId); }, this.timeoutMs);
-    this.records.set(request.questionId, { kind: 'question', request, timer });
+    const timeoutMs = Math.min(this.timeoutMs, interaction.timeout ?? this.timeoutMs);
+    const timer = setTimeout(() => { void this.expirePending(sessionId, request.questionId); }, timeoutMs);
+    this.records.set(request.questionId, { kind: 'question', request, timer, timeoutMs });
     state.append({ timestamp: now, event: { type: 'question.requested', question: request } });
   }
 
@@ -167,8 +199,8 @@ export class InteractionManager {
     const state = this.sessions.get(sessionId);
     const command = z.string().safeParse(input.command);
     if (!grant || !state || !command.success || grant.expiresAt <= Date.now() || state.generation !== generation
-      || grant.request.sessionId !== sessionId || grant.request.workerGeneration !== generation || grant.request.epoch !== state.epoch
-      || grant.request.toolCallId !== toolCallId || toolName !== 'bash' || grant.target.toolName !== toolName
+      || grant.sessionId !== sessionId || grant.workerGeneration !== generation || grant.epoch !== state.epoch
+      || grant.toolCallId !== toolCallId || toolName !== 'bash' || grant.target.toolName !== toolName
       || grant.target.pattern !== JSON.stringify(input)
       || this.matchingPolicy(sessionId, state.workspaceId, grant.target)?.decision === 'deny') return undefined;
     clearTimeout(grant.timer);
@@ -188,17 +220,18 @@ export class InteractionManager {
     clearTimeout(record.timer);
     try {
       let policy: { policyId: string; revision: string } | undefined;
-      if (reply.decision === 'always-allow' || reply.decision === 'always-deny') {
+      if (reply.decision === 'always-allow') {
+        if (!record.sessionRuleKey) throw new ProjectionError(400, 'INVALID_REQUEST', 'This approval has no session allowance');
+      } else if (reply.decision === 'always-deny') {
         const target = record.target;
         const key = this.policyKey(sessionId, state.workspaceId, reply.policyScope, target);
         const existing = this.policies.get(key);
-        const decision = reply.decision === 'always-allow' ? 'allow' : 'deny';
-        if (existing?.decision === decision) policy = existing;
+        if (existing?.decision === 'deny') policy = existing;
         else {
           if (!this.policyCommit) throw new ProjectionError(503, 'APPROVAL_POLICY_WRITE_FAILED', 'Approval policy persistence is unavailable');
           try {
-            policy = await this.policyCommit({ sessionId, workspaceId: state.workspaceId, scope: reply.policyScope, decision, target });
-            this.policies.set(key, { ...policy, scope: reply.policyScope, decision, target });
+            policy = await this.policyCommit({ sessionId, workspaceId: state.workspaceId, scope: reply.policyScope, decision: 'deny', target });
+            this.policies.set(key, { ...policy, scope: reply.policyScope, decision: 'deny', target });
           } catch { throw new ProjectionError(503, 'APPROVAL_POLICY_WRITE_FAILED', 'Approval policy persistence failed'); }
         }
       }
@@ -207,15 +240,30 @@ export class InteractionManager {
       if ((reply.decision === 'approve' || reply.decision === 'always-allow') && record.target.toolName === 'bash'
         && this.matchingPolicy(sessionId, state.workspaceId, record.target)?.decision !== 'deny') {
         const expiresAt = Date.now() + this.timeoutMs;
-        this.executionGrants.set(approvalId, { request, target: record.target, expiresAt, timer: setTimeout(() => this.executionGrants.delete(approvalId), this.timeoutMs) });
+        this.executionGrants.set(approvalId, {
+          sessionId, workerGeneration: state.generation, epoch: state.epoch, toolCallId: request.toolCallId,
+          target: record.target, expiresAt, timer: setTimeout(() => this.executionGrants.delete(approvalId), this.timeoutMs),
+        });
       }
-      await state.dispatch({ type: 'approval.resolve', approvalId, decision: reply.decision === 'reject' || reply.decision === 'always-deny' ? 'reject' : 'approve' });
+      await state.dispatch({
+        type: 'approval.resolve', approvalId,
+        decision: reply.decision === 'reject' || reply.decision === 'always-deny' ? 'reject' : reply.decision === 'always-allow' ? 'approve-always' : 'approve',
+      });
       this.assertOwner(sessionId, reply.epoch, reply.workerGeneration, this.records.get(approvalId), 'approval');
       this.assertCas(this.records.get(approvalId)!.request, reply.version, 'approval');
       clearTimeout(record.timer);
       const resolvedAt = Date.now();
-      const terminal = ApprovalRequestSchema.parse({ ...request, status: reply.decision === 'approve' || reply.decision === 'always-allow' ? 'approved' : 'rejected', version: increment(request.version), resolvedAt, resolvedBy: EntityIdSchema.parse(resolvedBy), resolution: terminalResolution(reply.decision, policy) });
-      this.records.set(approvalId, { kind: 'approval', request: terminal, target: record.target, timer: undefined });
+      const terminalPolicyTarget = request.policyTarget ?? (reply.decision === 'always-deny'
+        ? { toolName: record.target.toolName, pattern: request.commandSummary } : undefined);
+      const terminalDraft = {
+        ...request,
+        status: reply.decision === 'approve' || reply.decision === 'always-allow' ? 'approved' as const : 'rejected' as const,
+        version: increment(request.version), resolvedAt, resolvedBy: EntityIdSchema.parse(resolvedBy),
+        resolution: terminalResolution(reply.decision, policy),
+      };
+      if (terminalPolicyTarget) terminalDraft.policyTarget = terminalPolicyTarget;
+      const terminal = ApprovalRequestSchema.parse(terminalDraft);
+      this.records.set(approvalId, { kind: 'approval', request: terminal, target: record.target, sessionRuleKey: record.sessionRuleKey, timer: undefined });
       state.append({ timestamp: resolvedAt, event: { type: 'approval.resolved', approval: terminal } });
       return terminal;
     } finally {
@@ -256,12 +304,12 @@ export class InteractionManager {
           ? { ...request, status: 'answered', version: increment(request.version), response: answered.response, answeredAt: resolvedAt, resolvedAt, resolvedBy: resolvedById }
           : { ...request, status: 'cancelled', version: increment(request.version), resolvedAt, resolvedBy: resolvedById },
       );
-      this.records.set(questionId, { kind: 'question', request: terminal, timer: undefined });
+      this.records.set(questionId, { kind: 'question', request: terminal, timer: undefined, timeoutMs: record.timeoutMs });
       state.append({ timestamp: resolvedAt, event: { type: 'question.resolved', question: terminal } });
       return terminal;
     } finally {
       this.reservations.delete(questionId);
-      if (this.records.get(questionId) === record) record.timer = setTimeout(() => { void this.expirePending(sessionId, questionId); }, Math.max(0, request.requestedAt + this.timeoutMs - Date.now()));
+      if (this.records.get(questionId) === record) record.timer = setTimeout(() => { void this.expirePending(sessionId, questionId); }, Math.max(0, request.requestedAt + record.timeoutMs - Date.now()));
     }
   }
 
@@ -282,12 +330,50 @@ export class InteractionManager {
       await state.dispatch(record.kind === 'approval' ? { type: 'approval.resolve', approvalId: id, decision: 'reject' } : { type: 'question.resolve', questionId: id, action: 'cancel' });
     } catch { this.invalidate(sessionId, state.generation); }
   }
+  cancelPending(sessionId: string, id: string): void {
+    const record = this.records.get(id);
+    const state = this.sessions.get(sessionId);
+    if (!record || !state || record.request.status !== 'pending' || record.request.epoch !== state.epoch) return;
+    clearTimeout(record.timer);
+    this.reservations.delete(id);
+    const resolvedAt = Date.now();
+    if (record.kind === 'approval') {
+      const terminal = ApprovalRequestSchema.parse({
+        ...record.request,
+        status: 'revoked' as const,
+        version: increment(record.request.version),
+        resolvedAt,
+        resolvedBy: 'agent-service',
+      });
+      this.records.set(id, { ...record, request: terminal, timer: undefined });
+      state.append(ProjectionInputSchema.parse({
+        timestamp: resolvedAt,
+        event: { type: 'approval.resolved', approval: terminal },
+      }));
+      const grant = this.executionGrants.get(id);
+      clearTimeout(grant?.timer);
+      this.executionGrants.delete(id);
+    } else {
+      const terminal = QuestionRequestSchema.parse({
+        ...record.request,
+        status: 'cancelled' as const,
+        version: increment(record.request.version),
+        resolvedAt,
+        resolvedBy: 'agent-service',
+      });
+      this.records.set(id, { ...record, request: terminal, timer: undefined });
+      state.append(ProjectionInputSchema.parse({
+        timestamp: resolvedAt,
+        event: { type: 'question.resolved', question: terminal },
+      }));
+    }
+  }
 
   private expire(record: RecordState): RecordState {
     const terminal = { ...record.request, status: 'expired' as const, version: increment(record.request.version), resolvedAt: Date.now(), resolvedBy: 'agent-service' };
     return record.kind === 'approval'
       ? { kind: 'approval', request: ApprovalRequestSchema.parse(terminal), target: record.target, timer: undefined }
-      : { kind: 'question', request: QuestionRequestSchema.parse(terminal), timer: undefined };
+      : { kind: 'question', request: QuestionRequestSchema.parse(terminal), timer: undefined, timeoutMs: record.timeoutMs };
   }
 
   private assertOwner(sessionId: string, epoch: string, generation: string, record: RecordState | undefined, kind: RequestKind): SessionState {
@@ -310,6 +396,11 @@ export class InteractionManager {
   }
 
   private validateAnswer(request: QuestionRequest, response: JsonValue): JsonValue {
+    if (request.schema?.type === 'plan-review') {
+      const parsed = PlanReviewResponseSchema.safeParse(response);
+      if (!parsed.success) throw new ProjectionError(400, 'INVALID_REQUEST', 'Plan review response is invalid');
+      return parsed.data;
+    }
     const parsed = QuestionAnswerSchema.safeParse(response);
     if (!parsed.success) throw new ProjectionError(400, 'INVALID_REQUEST', 'Question response does not match the requested result shape');
     const schema = request.schema;

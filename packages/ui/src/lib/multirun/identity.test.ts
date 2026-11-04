@@ -11,8 +11,8 @@ const membership = (id: string): MultiRunMembership => ({
 });
 const session = (id: string, marker: MultiRunMembership | null = membership(id)): Session => {
   const result: Session = { sessionId: id, projectId: 'project', workspaceId: 'workspace', displayPath: '.', rootSessionId: id,
-    createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
-    metadata: { title: 'bench/openrouter/vendor/model' }, metadataRevision: '1', archiveRevision: '0' };
+    createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
+    title: 'bench/openrouter/vendor/model', metadata: {}, metadataRevision: '1', archiveRevision: '0' };
   if (marker) result.metadata = withMultiRunMembership(result, marker);
   return result;
 };
@@ -20,7 +20,7 @@ const session = (id: string, marker: MultiRunMembership | null = membership(id))
 describe('multi-run identity', () => {
   test('renaming, archiving, serialization and model slashes do not change membership', () => {
     const original = session('s1');
-    const renamed = { ...original, metadata: { ...original.metadata, title: 'any title' }, archivedAt: 5 };
+    const renamed = { ...original, title: 'any title', metadata: {...original.metadata}, archivedAt: 5 };
     expect(getMultiRunIdentity(renamed)).toEqual(getMultiRunIdentity(original));
     expect(getMultiRunIdentity(SessionSchema.parse(JSON.parse(JSON.stringify(renamed))))).toEqual(getMultiRunIdentity(original));
     for (const modelID of ['vendor/2', 'vendor/fusion', 'a/b/c', 'vendor/model%2Fname']) {
@@ -83,9 +83,7 @@ describe('multi-run identity', () => {
     expect(getMultiRunIdentity(fusion)!.key).toBe(anchor.key);
     expect(getMultiRunIdentity(old, 'different-project')!.key).not.toBe(anchor.key);
     expect(old.metadata?.openchamber?.multirun).toBeUndefined();
-    for (const kind of ['btw', 'review'] as const) {
-      expect(getMultiRunIdentity({ ...old, metadata: { openchamber: { kind } } })).toBeNull();
-    }
+    expect(getMultiRunIdentity({ ...old, metadata: { openchamber: { kind: 'review' } } })).toBeNull();
   });
 
   test('title and auto-fusion round-trip; markers without them stay valid', () => {

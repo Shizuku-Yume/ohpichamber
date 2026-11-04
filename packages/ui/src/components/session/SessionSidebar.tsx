@@ -18,6 +18,7 @@ import { useSessionSearchEffects } from './sidebar/shell/useSessionSearchEffects
 import { useSessionProjectViewState } from './sidebar/projects/useSessionProjectViewState';
 import { useProjectRepoStatus } from './sidebar/projects/useProjectRepoStatus';
 import { ProjectEditDialog } from '@/components/layout/ProjectEditDialog';
+import type { ProjectIdentitySaveData } from '@/components/sections/projects/useProjectIdentityForm';
 import { UpdateDialog } from '@/components/ui/UpdateDialog';
 import { SidebarHeader } from './sidebar/shell/SidebarHeader';
 import { SidebarFooter } from './sidebar/shell/SidebarFooter';
@@ -368,15 +369,7 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
     [projects, editingProjectDialogId],
   );
 
-  const handleSaveProjectEdit = React.useCallback((data: {
-    label: string;
-    icon: string | null;
-    color: string | null;
-    iconBackground: string | null;
-    defaultAgent: string | null;
-    defaultModel: string | null;
-    defaultVariant: string | null;
-  }) => {
+  const handleSaveProjectEdit = React.useCallback((data: ProjectIdentitySaveData) => {
     if (!editingProjectDialogId) {
       return;
     }
@@ -385,7 +378,6 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
       icon: data.icon,
       color: data.color,
       iconBackground: data.iconBackground,
-      defaultAgent: data.defaultAgent ?? null,
       defaultModel: data.defaultModel ?? null,
       defaultVariant: data.defaultVariant ?? null,
     });

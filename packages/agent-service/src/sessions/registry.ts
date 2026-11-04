@@ -1,7 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { access, lstat, readFile, realpath, rm } from 'node:fs/promises';
-import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
+import { isEmptySession, listSessionsReadOnly } from '@oh-my-pi/pi-coding-agent/session/session-listing';
+import type { SessionInfo } from '@oh-my-pi/pi-coding-agent/session/session-listing';
+import { FileSessionStorage } from '@oh-my-pi/pi-coding-agent/session/session-storage';
 import { z } from 'zod';
 import { ApprovalReplySchema, QuestionReplySchema, RuntimeSessionSchema, SessionBranchRequestSchema, SubagentSchema } from '@openchamber/agent-contract';
 import type { ApprovalReply, HistoryPageRequest, ProblemCode, QuestionReply, RuntimeSession, SessionBranchRequest, SessionSnapshot, Subagent, UsageQueryResult } from '@openchamber/agent-contract';
@@ -23,8 +26,10 @@ type ChildRecord = Subagent & { rootSessionId: string; workspaceId: string; proj
 type RelocationAdmission = (input: WorkerBootstrap, launch: (bootstrap: WorkerBootstrap) => Promise<RuntimeSession>) => Promise<RuntimeSession>;
 type SessionBootstrap = z.infer<typeof HostSessionBootstrapSchema>;
 type ColdRoot = { reference: SessionReference; child?: ChildRecord };
+type NativeCold = { workspace: SessionWorkspaceScope; info: SessionInfo; identity: NativeSessionIdentity };
 type ArchiveChat = NativeArchiveInventory['chats'][number];
 export interface SessionList { items: RuntimeSession[]; errors: { sessionId: string; code: ProblemCode }[]; }
+export type SessionWorkspaceScope = Readonly<{ workspaceId: string; projectId: string; cwd: string; agentDirectory: string; agentDirectoryId?: string }>;
 type PromptOperation = Extract<WorkerOperation, { type: 'prompt' }>;
 type Opened = { generation: string; sessionFile: string; journal: SessionJournal };
 export interface SessionForkResult { sessionId: string; rootSessionId: string; sessionFile: string; sourceSessionId: string; entryId: string | null; mode: 'selected' | 'full' }
@@ -40,6 +45,19 @@ type Entry =
   | { state: 'opening'; input: SessionBootstrap; opened?: Opened }
   | { state: 'live'; input: SessionBootstrap; opened: Opened };
 
+type NativeSessionIdentity = { rootSessionId: string; parentSessionId?: string };
+const nativeTitle = (info: SessionInfo): string | undefined => {
+  const title = info.title?.trim();
+  return title ? title : undefined;
+};
+const nativeTime = (value: Date, fallback: number): number => {
+  const time = value.getTime();
+  return Number.isFinite(time) && time >= 0 ? Math.trunc(time) : fallback;
+};
+const sameScope = (scope: Pick<SessionReference, 'workspaceId' | 'projectId' | 'cwd' | 'agentDirectory'>, workspace: SessionWorkspaceScope): boolean =>
+  scope.workspaceId === workspace.workspaceId && scope.projectId === workspace.projectId
+  && resolve(scope.cwd) === resolve(workspace.cwd) && resolve(scope.agentDirectory) === resolve(workspace.agentDirectory);
+
 export class SessionRegistry {
   private readonly references: SessionReferences;
   private readonly interactions: InteractionManager;
@@ -53,6 +71,7 @@ export class SessionRegistry {
   // Deleted-space sessions are never opened, so the journal that produced their
   // snapshot has to outlive that request for the stream that follows it.
   private readonly coldJournals = new Map<string, SessionJournal>();
+  private readonly nativeCold = new Map<string, NativeCold>();
   private readonly coldSnapshotOpenings = new Map<string, Promise<SessionSnapshot>>();
   private closing = false;
 
@@ -69,7 +88,7 @@ export class SessionRegistry {
         sessionId: reference.rootSessionId, rootSessionId: reference.rootSessionId,
         projectId: reference.projectId, workspaceId: reference.workspaceId, displayPath: reference.displayPath,
         createdAt: reference.createdAt, updatedAt: reference.updatedAt,
-        epoch: randomUUID(), headSequence: '0', runtimeStatus: 'unavailable', activeRunId: null,
+        epoch: randomUUID(), headSequence: '0', runtimeStatus: 'unavailable', activeRunId: null, mode: { kind: 'main' },
       });
       if (reference.parentSessionId) runtime.parentSessionId = reference.parentSessionId;
       this.entries.set(reference.rootSessionId, { state: 'unloaded', reference, runtime });
@@ -98,16 +117,19 @@ export class SessionRegistry {
   async reopen(input: SessionBootstrap): Promise<RuntimeSession> {
     this.ensureOpen();
     const parsed = HostSessionBootstrapSchema.parse(input);
-    this.assertReopenable(parsed.rootSessionId);
+    await this.assertReopenable(parsed.rootSessionId);
+    await this.ensureNativeReference(parsed.rootSessionId, parsed);
     return this.open(parsed);
   }
   /** Returns the live runtime for an already-open healthy root; callers keep admission for anything else. */
   async liveReopenRuntime(input: SessionBootstrap): Promise<RuntimeSession | undefined> {
     this.ensureOpen();
     const parsed = HostSessionBootstrapSchema.parse(input);
-    this.assertReopenable(parsed.rootSessionId);
-    const entry = this.get(parsed.rootSessionId);
-    if (entry.state !== 'live' || !this.liveRuntime(entry)) return undefined;
+    await this.assertReopenable(parsed.rootSessionId);
+    // Native-only sessions have no entry until promotion; a live check must not
+    // turn that expected cold state into SESSION_NOT_FOUND before admission.
+    const entry = this.entries.get(parsed.rootSessionId);
+    if (entry?.state !== 'live' || !this.liveRuntime(entry)) return undefined;
     // A stopping, disconnected or replaced worker still has a live entry until exit; its captured generation is gone.
     if (this.workers.authorizationScope(parsed.rootSessionId)?.workerGeneration !== entry.opened.generation) return undefined;
     // `open` keeps the existing captured-scope comparison and returns the live runtime without restarting it.
@@ -118,9 +140,33 @@ export class SessionRegistry {
     const runtime = entry.opened.journal.runtime();
     return runtime.runtimeStatus === 'unavailable' ? undefined : runtime;
   }
-  private assertReopenable(sessionId: string): void {
+  private async assertReopenable(sessionId: string): Promise<void> {
     this.assertWritable(sessionId);
-    if (!this.references.get(sessionId)) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
+    if (!this.references.get(sessionId) && !this.nativeCold.has(sessionId)) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
+  }
+
+  /** Promote a listed native session into a persisted reference before its first worker starts. */
+  private async ensureNativeReference(sessionId: string, requested: SessionBootstrap): Promise<void> {
+    if (this.references.get(sessionId)) return;
+    const native = this.nativeCold.get(sessionId);
+    if (!native) return;
+    // A child's list identity points at its root; promoting the child under its
+    // own id would write an ancestor reference to the child file. The Host
+    // reopens a child through its root, so refuse this shape rather than guess.
+    if (native.identity.rootSessionId !== sessionId || native.info.parentSessionPath !== undefined)
+      throw new WorkerOperationError(409, 'INVALID_REQUEST', undefined, 'Native child sessions must reopen through their root');
+    if (!sameScope(native.workspace, requested)
+      || (requested.agentDirectoryId !== undefined && native.workspace.agentDirectoryId !== undefined
+        && requested.agentDirectoryId !== native.workspace.agentDirectoryId))
+      throw new WorkerOperationError(403, 'UNAUTHORIZED', undefined, 'Native session scope does not match its listed workspace');
+    const createdAt = nativeTime(native.info.created, nativeTime(native.info.modified, 0));
+    const reference = {
+      rootSessionId: native.identity.rootSessionId, projectId: native.workspace.projectId, workspaceId: native.workspace.workspaceId,
+      cwd: native.workspace.cwd, agentDirectory: native.workspace.agentDirectory, agentDirectoryId: native.workspace.agentDirectoryId,
+      displayPath: 'workspace', sessionFile: native.info.path, sessionsDirectory: dirname(native.info.path), createdAt,
+      updatedAt: Math.max(createdAt, nativeTime(native.info.modified, createdAt)),
+    } satisfies SessionReference;
+    await this.references.put(native.identity.parentSessionId === undefined ? reference : { ...reference, parentSessionId: native.identity.parentSessionId });
   }
   async restart(input: z.infer<typeof WorkerBootstrapSchema>): Promise<boolean> {
     this.assertWritable(input.rootSessionId);
@@ -209,19 +255,137 @@ export class SessionRegistry {
     if (!entry.opened) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
     return entry.opened.journal.runtime();
   }
-  list(workspaceId: string): SessionList {
-    const references = this.references.list(workspaceId);
-    const items: RuntimeSession[] = [];
+  async list(workspace: SessionWorkspaceScope): Promise<SessionList> {
+    const inventory = this.references.list();
+    const errors = inventory.errors;
+    const items = new Map<string, RuntimeSession>();
     for (const [id, entry] of this.entries) {
       const scope = entry.state === 'unloaded' ? entry.reference : entry.input;
-      if (scope.workspaceId !== workspaceId || entry.state === 'opening') continue;
-      if (this.controls.has(id) || this.references.relocation(id)) { references.errors.push({ sessionId: id, code: 'COMMAND_IN_FLIGHT' }); continue; }
-      items.push(this.runtime(id));
+      if (scope.workspaceId !== workspace.workspaceId || entry.state === 'opening') continue;
+      if (this.controls.has(id) || this.references.relocation(id)) { errors.push({ sessionId: id, code: 'COMMAND_IN_FLIGHT' }); continue; }
+      items.set(id, this.runtime(id));
       if (entry.state === 'unloaded' && entry.reference.deletedSpace) {
-        for (const child of this.subagents.values()) if (child.rootSessionId === id) items.push(this.runtime(child.childSessionId));
+        for (const child of this.subagents.values()) if (child.rootSessionId === id) items.set(child.childSessionId, this.runtime(child.childSessionId));
       }
     }
-    return { items, errors: references.errors };
+    const native = await this.readNativeSessions(workspace);
+    const nativeByPath = new Map(native.map(info => [resolve(info.path), info]));
+    const ownerByFile = new Map<string, { id: string; child: boolean }>();
+    for (const reference of inventory.items) ownerByFile.set(resolve(reference.sessionFile), { id: reference.rootSessionId, child: false });
+    for (const child of this.subagents.values()) ownerByFile.set(resolve(child.sessionFile), { id: child.rootSessionId, child: true });
+    for (const info of native) {
+      const owner = ownerByFile.get(resolve(info.path));
+      if (owner?.child) continue;
+      if (owner) {
+        const current = items.get(owner.id);
+        if (current) items.set(owner.id, this.withNativeFacts(current, info));
+        continue;
+      }
+      if (items.has(info.id)) continue;
+      const identity = this.nativeIdentity(info, nativeByPath, ownerByFile);
+      this.nativeCold.set(info.id, { workspace, info, identity });
+      items.set(info.id, this.nativeRuntime(workspace, info, identity));
+    }
+    const values = [...items.values()];
+    return { items: [...values.filter(session => !session.parentSessionId), ...values.filter(session => session.parentSessionId)], errors };
+  }
+
+  async rename(sessionId: string, workspace: SessionWorkspaceScope, title: string): Promise<RuntimeSession> {
+    this.ensureOpen();
+    const entry = this.entries.get(sessionId);
+    if (entry?.state === 'opening' || this.controls.has(sessionId) || this.references.relocation(sessionId))
+      throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
+    const scope = entry?.state === 'unloaded' ? entry.reference : entry?.input;
+    if (scope && !sameScope(scope, workspace)) throw new WorkerOperationError(403, 'UNAUTHORIZED');
+    const reference = this.references.get(sessionId);
+    if (reference) this.assertWritable(sessionId);
+    if (entry?.state === 'live') {
+      const result = await this.workers.request(sessionId, { type: 'session.rename', title });
+      if (result.type !== 'session.rename') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+      return RuntimeSessionSchema.parse({ ...entry.opened.journal.runtime(), title: result.title });
+    }
+    if (reference) {
+      const applied = await this.writeNativeTitle(reference.sessionFile, reference.sessionsDirectory, reference.cwd, title);
+      const base = entry?.state === 'unloaded' ? structuredClone(entry.runtime) : this.runtime(sessionId);
+      return RuntimeSessionSchema.parse({ ...base, title: applied });
+    }
+    const native = await this.readNativeSessions(workspace);
+    const info = native.find(candidate => candidate.id === sessionId);
+    if (!info) throw new WorkerOperationError(404, 'SESSION_NOT_FOUND');
+    const nativeByPath = new Map(native.map(candidate => [resolve(candidate.path), candidate]));
+    const ownerByFile = new Map<string, { id: string; child: boolean }>();
+    for (const candidate of this.references.list().items) ownerByFile.set(resolve(candidate.sessionFile), { id: candidate.rootSessionId, child: false });
+    for (const child of this.subagents.values()) ownerByFile.set(resolve(child.sessionFile), { id: child.rootSessionId, child: true });
+    const applied = await this.writeNativeTitle(info.path, dirname(info.path), info.cwd || workspace.cwd, title);
+    return this.nativeRuntime(workspace, info, this.nativeIdentity(info, nativeByPath, ownerByFile), applied);
+  }
+
+  private async readNativeSessions(workspace: SessionWorkspaceScope): Promise<SessionInfo[]> {
+    const directory = SessionManager.getDefaultSessionDir(workspace.cwd, workspace.agentDirectory);
+    try {
+      await access(directory);
+    } catch (error: unknown) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return [];
+      throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', undefined, 'OMP session storage is unavailable');
+    }
+    try {
+      return (await listSessionsReadOnly(directory, new FileSessionStorage())).filter(info => !isEmptySession(info));
+    } catch (error: unknown) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return [];
+      throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', undefined, 'OMP session storage is unavailable');
+    }
+  }
+
+  private withNativeFacts(current: RuntimeSession, info: SessionInfo): RuntimeSession {
+    const createdAt = nativeTime(info.created, current.createdAt);
+    const runtime: RuntimeSession = { ...current, createdAt,
+      updatedAt: Math.max(createdAt, nativeTime(info.modified, current.updatedAt)),
+    };
+    const title = nativeTitle(info);
+    if (title !== undefined) runtime.title = title;
+    return RuntimeSessionSchema.parse(runtime);
+  }
+
+  private nativeRuntime(workspace: SessionWorkspaceScope, info: SessionInfo, identity: NativeSessionIdentity, title = nativeTitle(info)): RuntimeSession {
+    const createdAt = nativeTime(info.created, nativeTime(info.modified, 0));
+    const runtime: RuntimeSession = {
+      sessionId: info.id, rootSessionId: identity.rootSessionId, projectId: workspace.projectId, workspaceId: workspace.workspaceId,
+      displayPath: 'workspace', createdAt, updatedAt: Math.max(createdAt, nativeTime(info.modified, createdAt)),
+      epoch: randomUUID(), headSequence: '0', runtimeStatus: 'unavailable', activeRunId: null, mode: { kind: 'main' },
+    };
+    if (identity.parentSessionId !== undefined) runtime.parentSessionId = identity.parentSessionId;
+    if (title !== undefined) runtime.title = title;
+    return RuntimeSessionSchema.parse(runtime);
+  }
+
+  private nativeIdentity(info: SessionInfo, nativeByPath: ReadonlyMap<string, SessionInfo>, ownerByFile: ReadonlyMap<string, { id: string; child: boolean }>, seen = new Set<string>()): NativeSessionIdentity {
+    if (seen.has(info.id)) return { rootSessionId: info.id };
+    seen.add(info.id);
+    const parentPath = info.parentSessionPath === undefined ? undefined : resolve(info.parentSessionPath);
+    if (parentPath === undefined) return { rootSessionId: info.id };
+    const owner = ownerByFile.get(parentPath);
+    if (owner && !owner.child) {
+      const root = this.entries.get(owner.id);
+      const rootSessionId = root?.state === 'unloaded' ? root.runtime.rootSessionId
+        : root?.state === 'live' ? root.opened.journal.runtime().rootSessionId : owner.id;
+      return { rootSessionId, parentSessionId: owner.id };
+    }
+    const parent = nativeByPath.get(parentPath);
+    if (!parent || parent.id === info.id) return { rootSessionId: info.id };
+    const ancestry = this.nativeIdentity(parent, nativeByPath, ownerByFile, seen);
+    return { rootSessionId: ancestry.rootSessionId, parentSessionId: parent.id };
+  }
+
+  private async writeNativeTitle(sessionFile: string, sessionsDirectory: string | undefined, cwd: string, title: string): Promise<string> {
+    const manager = await SessionManager.open(sessionFile, sessionsDirectory, undefined,
+      { initialCwd: cwd, throwIfMissing: true, suppressBreadcrumb: true });
+    try {
+      if (!await manager.setSessionName(title, 'user')) throw new WorkerOperationError(400, 'INVALID_REQUEST', undefined, 'Session title is empty');
+      await manager.flush();
+      const applied = manager.getSessionName();
+      if (!applied) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', undefined, 'Session title was not persisted');
+      return applied;
+    } finally { await manager.close(); }
   }
 
   usageReferences(authorized: readonly { workspaceId: string; projectId: string }[], query: UsageQueryResult): UsageSessionReference[] {
@@ -311,6 +475,8 @@ export class SessionRegistry {
 
   listSubagents(sessionId: string): Subagent[] {
     const root = this.entries.has(sessionId) ? sessionId : [...this.subagents.values()].find(record => record.childSessionId === sessionId)?.rootSessionId;
+    // A listed native session has no live worker and no persisted child index yet.
+    if (!root && this.nativeCold.has(sessionId)) return [];
     if (!root) throw new WorkerOperationError(404, 'SESSION_NOT_FOUND');
     this.get(root);
     return [...this.subagents.values()].filter(record => record.rootSessionId === root && record.parentSessionId === sessionId).map(({ rootSessionId: _root, workspaceId: _workspace, projectId: _project, sessionFile: _file, ...publicRecord }) => SubagentSchema.parse(publicRecord));
@@ -348,8 +514,19 @@ export class SessionRegistry {
     const child = [...this.subagents.values()].find(record => record.childSessionId === sessionId);
     const rootId = child?.rootSessionId ?? sessionId;
     const entry = this.entries.get(rootId);
-    if (!entry || entry.state !== 'unloaded') throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
-    return { reference: entry.reference, child };
+    if (entry?.state === 'unloaded') return { reference: entry.reference, child };
+    const native = this.nativeCold.get(sessionId);
+    if (native) {
+      const reference = {
+        rootSessionId: native.identity.rootSessionId, projectId: native.workspace.projectId, workspaceId: native.workspace.workspaceId,
+        cwd: native.workspace.cwd, agentDirectory: native.workspace.agentDirectory, displayPath: 'workspace',
+        sessionFile: native.info.path, sessionsDirectory: dirname(native.info.path),
+        createdAt: nativeTime(native.info.created, nativeTime(native.info.modified, 0)),
+        updatedAt: Math.max(nativeTime(native.info.created, 0), nativeTime(native.info.modified, 0)),
+      } satisfies SessionReference;
+      return { reference: native.identity.parentSessionId === undefined ? reference : { ...reference, parentSessionId: native.identity.parentSessionId } };
+    }
+    throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
   }
 
   private async coldProjection(sessionId: string): Promise<{ manager: SessionManager; projection: WorkerProjection }> {
@@ -445,15 +622,46 @@ export class SessionRegistry {
     const child = [...this.subagents.values()].find(record => record.childSessionId === sessionId);
     const rootSessionId = child?.rootSessionId ?? sessionId;
     const entry = this.entries.get(rootSessionId);
-    if (entry?.state !== 'unloaded' || !entry.reference.deletedSpace) return this.journal(sessionId).snapshot();
-    const existing = this.coldJournals.get(sessionId);
-    if (existing) return existing.snapshot();
-    const opening = this.coldSnapshotOpenings.get(sessionId);
-    if (opening) return opening;
-    const operation = this.openColdSnapshot(sessionId, rootSessionId, entry, child);
-    this.coldSnapshotOpenings.set(sessionId, operation);
-    void operation.finally(() => { this.coldSnapshotOpenings.delete(sessionId); }).catch(() => {});
-    return operation;
+    if (!entry && this.nativeCold.has(sessionId)) return this.openNativeColdSnapshot(sessionId, rootSessionId, child);
+    if (entry?.state !== 'unloaded') return this.journal(sessionId).snapshot();
+    // Deleted-space journals outlive this request because the stream that follows must replay from the same epoch.
+    if (entry.reference.deletedSpace) {
+      const existing = this.coldJournals.get(sessionId);
+      if (existing) return existing.snapshot();
+      const opening = this.coldSnapshotOpenings.get(sessionId);
+      if (opening) return opening;
+      const operation = this.openColdSnapshot(sessionId, rootSessionId, entry, child);
+      this.coldSnapshotOpenings.set(sessionId, operation);
+      void operation.finally(() => { this.coldSnapshotOpenings.delete(sessionId); }).catch(() => {});
+      return operation;
+    }
+    return this.openColdReadSnapshot(sessionId, rootSessionId, entry, child);
+  }
+
+  /** Snapshot an unloaded session from its JSONL without starting a worker or retaining a journal. */
+  private async openColdReadSnapshot(sessionId: string, rootSessionId: string, entry: Extract<Entry, { state: 'unloaded' }>, child: ChildRecord | undefined) {
+    const { projection, manager } = await this.coldProjection(sessionId);
+    try {
+      if (this.closing || this.deleting.has(rootSessionId) || this.entries.get(rootSessionId) !== entry) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
+      const journal = new SessionJournal({ sessionId, rootSessionId: entry.reference.rootSessionId,
+        parentSessionId: child?.parentSessionId ?? entry.reference.parentSessionId, projectId: entry.reference.projectId, workspaceId: entry.reference.workspaceId, displayPath: entry.reference.displayPath }, projection.seed());
+      journal.unavailable();
+      return journal.snapshot();
+    } finally { await manager.close(); }
+  }
+
+  private async openNativeColdSnapshot(sessionId: string, rootSessionId: string, child: ChildRecord | undefined) {
+    const native = this.nativeCold.get(sessionId);
+    if (!native) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
+    const { projection, manager } = await this.coldProjection(sessionId);
+    try {
+      if (this.closing || this.deleting.has(rootSessionId) || this.nativeCold.get(sessionId) !== native) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
+      const journal = new SessionJournal({ sessionId, rootSessionId: native.identity.rootSessionId,
+        parentSessionId: child?.parentSessionId ?? native.identity.parentSessionId, projectId: native.workspace.projectId,
+        workspaceId: native.workspace.workspaceId, displayPath: 'workspace' }, projection.seed());
+      journal.unavailable();
+      return journal.snapshot();
+    } finally { await manager.close(); }
   }
 
   private async openColdSnapshot(sessionId: string, rootSessionId: string, entry: Extract<Entry, { state: 'unloaded' }>, child: ChildRecord | undefined) {
@@ -595,11 +803,18 @@ export class SessionRegistry {
   async prompt(sessionId: string, operation: PromptOperation) {
     this.ensureOpen();
     this.assertWritable(sessionId);
-    const runtime = this.runtime(sessionId);
-    if (runtime.runtimeStatus === 'unavailable') throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
-    if (runtime.activeRunId !== null || this.pendingRuns.has(sessionId)) throw new WorkerOperationError(409, 'RUN_ACTIVE');
+    this.assertControlAvailable(sessionId);
+    // Reserve admission before any runtime check or await. The idle predicate
+    // reads this set, so a prompt that starts between an eviction probe and its
+    // root-locked recheck is still observable as busy. Once the worker admits
+    // the run it emits run.started before the prompt reply, so releasing this
+    // reservation exposes the active run to the same predicate.
+    if (this.pendingRuns.has(sessionId)) throw new WorkerOperationError(409, 'RUN_ACTIVE');
     this.pendingRuns.add(sessionId);
     try {
+      const runtime = this.runtime(sessionId);
+      if (runtime.runtimeStatus === 'unavailable') throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+      if (runtime.activeRunId !== null || runtime.continuationPending === true) throw new WorkerOperationError(409, 'RUN_ACTIVE');
       const result = await this.workers.request(sessionId, operation);
       if (result.type !== 'prompt') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
       return result.run;
@@ -670,8 +885,37 @@ export class SessionRegistry {
     if (result.type === 'steer' && result.ack.runId !== runtime.activeRunId) throw new WorkerOperationError(503, 'INTERNAL_ERROR');
     return result.ack;
   }
+  async setMode(sessionId: string, mode: 'main' | 'plan' | 'vibe') {
+    this.ensureOpen();
+    this.assertWritable(sessionId);
+    this.assertControlAvailable(sessionId);
+    const runtime = this.runtime(sessionId);
+    if (runtime.activeRunId !== null || runtime.continuationPending === true || this.pendingRuns.has(sessionId)) throw new WorkerOperationError(409, 'RUN_ACTIVE');
+    this.controls.add(sessionId);
+    try {
+      const result = await this.workers.request(sessionId, { type: 'mode.set', mode });
+      if (result.type !== 'mode.set') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+      return result.mode;
+    } finally { this.controls.delete(sessionId); }
+  }
+  async goal(sessionId: string, operation: Extract<WorkerOperation, { type: 'goal' }>) {
+    this.ensureOpen();
+    this.assertWritable(sessionId);
+    this.assertControlAvailable(sessionId);
+    const runtime = this.runtime(sessionId);
+    if ((operation.op === 'create' || operation.op === 'resume') && (runtime.activeRunId !== null || runtime.continuationPending === true || this.pendingRuns.has(sessionId))) {
+      throw new WorkerOperationError(409, 'RUN_ACTIVE');
+    }
+    this.controls.add(sessionId);
+    try {
+      const result = await this.workers.request(sessionId, operation);
+      if (result.type !== 'goal') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+      return result;
+    } finally { this.controls.delete(sessionId); }
+  }
   async branch(sessionId: string, input: SessionBranchRequest) {
     this.assertWritable(sessionId);
+    this.assertControlAvailable(sessionId);
     const request = SessionBranchRequestSchema.parse(input);
     const entry = this.get(sessionId);
     if (entry.state === 'unloaded' || !entry.opened) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
@@ -848,7 +1092,7 @@ export class SessionRegistry {
     const runtime = RuntimeSessionSchema.parse({
       sessionId: reference.rootSessionId, rootSessionId: reference.rootSessionId, projectId: reference.projectId,
       workspaceId: reference.workspaceId, displayPath: reference.displayPath, createdAt: reference.createdAt, updatedAt: reference.updatedAt,
-      epoch: randomUUID(), headSequence: '0', runtimeStatus: 'unavailable', activeRunId: null,
+      epoch: randomUUID(), headSequence: '0', runtimeStatus: 'unavailable', activeRunId: null, mode: { kind: 'main' },
     });
     if (reference.parentSessionId) runtime.parentSessionId = reference.parentSessionId;
     this.entries.set(reference.rootSessionId, { state: 'unloaded', reference, runtime });
@@ -871,12 +1115,48 @@ export class SessionRegistry {
     if (result.type !== 'abort') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
     return result.run;
   }
+  async compact(sessionId: string, instructions?: string) {
+    this.ensureOpen();
+    this.assertWritable(sessionId);
+    this.assertControlAvailable(sessionId);
+    const runtime = this.runtime(sessionId);
+    if (runtime.activeRunId !== null || this.pendingRuns.has(sessionId)) throw new WorkerOperationError(409, 'RUN_ACTIVE');
+    this.controls.add(sessionId);
+    try {
+      const result = await this.workers.request(sessionId, instructions === undefined ? { type: 'compact' } : { type: 'compact', instructions });
+      if (result.type !== 'compact') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+      return result;
+    } finally { this.controls.delete(sessionId); }
+  }
+  async command(sessionId: string, text: string) {
+    this.ensureOpen();
+    this.assertWritable(sessionId);
+    this.assertControlAvailable(sessionId);
+    this.controls.add(sessionId);
+    try {
+      const result = await this.workers.request(sessionId, { type: 'command', text });
+      if (result.type !== 'command') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+      return result;
+    } finally { this.controls.delete(sessionId); }
+  }
 
+  async btwAsk(sessionId: string, question: string, recordId?: string) {
+    this.ensureOpen(); this.assertWritable(sessionId);
+    const result = await this.workers.request(sessionId, recordId === undefined ? { type: 'btw.ask', question } : { type: 'btw.ask', question, recordId });
+    if (result.type !== 'btw.ask') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+    return result;
+  }
+  async btwCancel(sessionId: string, recordId?: string) {
+    this.ensureOpen(); this.assertWritable(sessionId);
+    const result = await this.workers.request(sessionId, recordId === undefined ? { type: 'btw.cancel' } : { type: 'btw.cancel', recordId });
+    if (result.type !== 'btw.cancel') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+    return result;
+  }
   async history(request: HistoryPageRequest) {
     this.ensureOpen();
     const child = [...this.subagents.values()].find(record => record.childSessionId === request.sessionId);
     const rootEntry = this.entries.get(child?.rootSessionId ?? request.sessionId);
-    if (rootEntry?.state === 'unloaded' && rootEntry.reference.deletedSpace) return this.coldHistory(request);
+    if (rootEntry?.state === 'unloaded' || (!rootEntry && this.nativeCold.has(request.sessionId))) return this.coldHistory(request);
     if (child) {
       const rootEntry = this.get(child.rootSessionId);
       const manager = await SessionManager.open(child.sessionFile, undefined, undefined, { initialCwd: rootEntry.state === 'unloaded' ? rootEntry.reference.cwd : rootEntry.input.cwd, throwIfMissing: true });
@@ -942,6 +1222,9 @@ export class SessionRegistry {
       journal.close();
       await this.workers.stop(sessionId);
       for (const id of result.deletedSessionIds) await this.references.remove(id);
+      // A listed native record must not outlive its deleted transcript and
+      // resurrect a reference on the next reopen.
+      for (const id of result.deletedSessionIds) this.nativeCold.delete(id);
       return { sessionId, deletedSessionIds: result.deletedSessionIds };
     } finally { this.deleting.delete(sessionId); }
   }

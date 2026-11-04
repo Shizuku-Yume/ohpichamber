@@ -6,8 +6,7 @@ import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { WorkerHighlightedCode } from '@/components/code/WorkerHighlightedCode';
 import { useI18n } from '@/lib/i18n';
 import { PermissionActions } from './PermissionActions';
-import { getApprovalPresentation } from './permissionPresentation';
-import { usePermissionFromSubagent, usePermissionResponse, type PermissionResponse } from './usePermissionResponse';
+import { getApprovalPolicyTitle, getApprovalPresentation, isToolScopePolicy, truncateApprovalTarget } from './permissionPresentation';
 
 const PERMISSION_CODE_STYLE: React.CSSProperties = {
     margin: 0,
@@ -28,38 +27,39 @@ const CODE_TAG_STYLE: React.CSSProperties = {
     overflowWrap: 'break-word',
 };
 
-// The native approval request owns `details` as a JSON object. Parse the two
-// fields the card renders instead of inspecting JSON values by hand.
+// The native approval request owns `details` as a JSON object. Project the
+// fields the card renders instead of inspecting JSON values by hand; a raw
+// input is never rendered, even if an older event carried one.
 const ApprovalDetailsSchema = z.object({
     reason: z.string().optional(),
-    input: z.json().optional(),
+    command: z.string().optional(),
+    path: z.string().optional(),
 });
-const ApprovalInputSchema = z.object({ command: z.string().optional() });
-const StringValueSchema = z.string();
 
-/** Summary, native command, parameter preview and the full details disclosure. */
+/** Summary, safe input preview and the reduced details disclosure. */
 export const PermissionRequestContent: React.FC<{ permission: ApprovalRequest }> = ({ permission }) => {
     const { t } = useI18n();
     const presentation = getApprovalPresentation(permission);
     const details = ApprovalDetailsSchema.safeParse(permission.details);
     const reason = details.success ? details.data.reason : undefined;
-    const rawInput = details.success ? details.data.input : undefined;
-    const input = ApprovalInputSchema.safeParse(rawInput);
-    const command = input.success ? input.data.command : undefined;
-    const stringInput = StringValueSchema.safeParse(rawInput);
-    const preview = command ?? (stringInput.success
-        ? stringInput.data
-        : rawInput === undefined
-            ? undefined
-            : JSON.stringify(rawInput, null, 2));
+    const command = details.success ? details.data.command : undefined;
+    const path = details.success ? details.data.path : undefined;
+    const preview = command ?? path;
     const summaryTitle = presentation.titleKey === 'chat.permissionCard.summary.tool'
         ? t(presentation.titleKey, { tool: permission.toolName })
         : t(presentation.titleKey);
-    const hasDetails = Object.keys(permission.details).length > 0;
+    const safeDetails: Record<string, string> = {};
+    if (reason) safeDetails.reason = reason;
+    if (command) safeDetails.command = command;
+    if (path) safeDetails.path = path;
+    const hasDetails = Object.keys(safeDetails).length > 0;
     const policyPattern = permission.policyTarget?.pattern;
-    const shownPolicyPattern = policyPattern && policyPattern.length > 160
-        ? `${policyPattern.slice(0, 157)}...`
-        : policyPattern;
+    const toolScopePolicy = isToolScopePolicy(permission);
+    const shownPolicyPattern = policyPattern === undefined || toolScopePolicy
+        ? undefined
+        : truncateApprovalTarget(policyPattern);
+    const alwaysAllowLabel = t('chat.permissionCard.alwaysAllow', { tool: permission.toolName });
+    const policyTitle = getApprovalPolicyTitle(permission);
 
     return (
         <div className="px-2 py-2">
@@ -81,8 +81,10 @@ export const PermissionRequestContent: React.FC<{ permission: ApprovalRequest }>
 
             {permission.policyTarget ? (
                 <div className="typography-meta text-muted-foreground mb-2">
-                    <span className="font-semibold">{t('chat.permissionCard.alwaysAllow')}</span>{' '}
-                    <code className="px-1 py-0.5 bg-muted/30 rounded break-all" title={policyPattern}>{shownPolicyPattern}</code>
+                    <span className="font-semibold">{alwaysAllowLabel}</span>{' '}
+                    {shownPolicyPattern ? (
+                        <code className="px-1 py-0.5 bg-muted/30 rounded break-all" title={policyTitle}>{shownPolicyPattern}</code>
+                    ) : null}
                 </div>
             ) : null}
 
@@ -108,7 +110,7 @@ export const PermissionRequestContent: React.FC<{ permission: ApprovalRequest }>
                     </summary>
                     <ScrollableOverlay outerClassName="mt-1 max-h-48" className="p-0">
                         <pre className="typography-meta font-mono px-2 py-1 bg-muted/30 rounded whitespace-pre-wrap break-all">
-                            {JSON.stringify(permission.details, null, 2)}
+                            {JSON.stringify(safeDetails, null, 2)}
                         </pre>
                     </ScrollableOverlay>
                 </details>
@@ -120,52 +122,3 @@ export const PermissionRequestContent: React.FC<{ permission: ApprovalRequest }>
 /** Allow once / session allowance / deny, with the original dock and inline layouts. */
 export { PermissionActions };
 
-/** The inline card the BTW sheet shows for its child session's requests. */
-export const PermissionCard: React.FC<{
-    permission: ApprovalRequest;
-    onResponse?: (response: PermissionResponse) => void;
-}> = ({ permission, onResponse }) => {
-    const { t } = useI18n();
-    const { isResponding, hasResponded, respond } = usePermissionResponse(permission, onResponse);
-    const isFromSubagent = usePermissionFromSubagent(permission);
-    const presentation = getApprovalPresentation(permission);
-
-    if (hasResponded || permission.status !== 'pending') return null;
-
-    return (
-        <div className="group w-full pt-0 pb-2">
-            <div className="chat-column">
-                <div className="-mt-1 border border-border/30 rounded-xl bg-muted/10">
-                    <div className="px-2 py-1.5 border-b border-border/20 bg-muted/5">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                                <Icon name="question" className="h-3.5 w-3.5 text-[var(--status-warning)]" />
-                                <span className="typography-meta font-medium text-muted-foreground">
-                                    {t('chat.permissionCard.title')}
-                                </span>
-                                {isFromSubagent ? (
-                                    <span className="typography-micro text-muted-foreground px-1.5 py-0.5 rounded bg-foreground/5">
-                                        {t('chat.questionCard.fromSubagent')}
-                                    </span>
-                                ) : null}
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                                <Icon name={presentation.icon} className="h-3 w-3" />
-                                <span className="typography-meta text-muted-foreground font-medium">{permission.toolName}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <PermissionRequestContent permission={permission} />
-
-                    <PermissionActions
-                        permission={permission}
-                        isResponding={isResponding}
-                        onRespond={(response) => void respond(response)}
-                        variant="inline"
-                    />
-                </div>
-            </div>
-        </div>
-    );
-};

@@ -40,7 +40,7 @@ let loader: SessionMessageLoader | null
 let currentDirectory: string
 
 function session(sessionId = "session-a", changes: Partial<Session> = {}): Session {
-  return { ...nativeSnapshot(sessionId, []).session, metadata: { title: "Before" }, metadataRevision: "1", archiveRevision: "0", ...changes }
+  return { ...nativeSnapshot(sessionId, []).session, title: "Before", metadata: {}, metadataRevision: "1", archiveRevision: "0", ...changes }
 }
 
 function seed(sessions = [session()], ownedDirectory = directory) {
@@ -405,7 +405,7 @@ describe("Host archive transitions over native records", () => {
     const store = seed([session("session-a", { archivedAt: 3 })])
     store.setState({ session: [], sessionStatusReady: true, sessionStatusInvalidated: { "session-a": true } })
     const snapshot = nativeSnapshot("session-a", [])
-    const run: Run = { runId: "run-live", sessionId: "session-a", status: "running", createdAt: 4 }
+    const run: Run = { runId: "run-live", sessionId: "session-a", status: "running", origin: "host", createdAt: 4 }
     snapshot.session = { ...snapshot.session, runtimeStatus: "running", activeRunId: run.runId }
     snapshot.activeRun = run
     spyOn(globalThis, "fetch").mockResolvedValue(restoreResponse(["session-a"]))
@@ -465,7 +465,7 @@ describe("native delivery and execution controls", () => {
     input: { text: "Hello", attachments: [{ attachmentId: "attachment-a", name: "notes.txt", mediaType: "text/plain", size: 4, uri: "attachment://attachment-a" }], context: [{ kind: "synthetic", text: "Context" }] },
     options: { providerId: "provider-a", modelId: "model-a", agentId: "agent-a", variant: null, reasoningEffort: null },
   }
-  const run: Run = { runId: "run-a", sessionId: "session-a", status: "running", createdAt: 1 }
+  const run: Run = { runId: "run-a", sessionId: "session-a", status: "running", origin: "host", createdAt: 1 }
 
   test("submits a native prompt and command identity without inventing transcript records", async () => {
     const store = seed()
@@ -827,27 +827,27 @@ describe("native approval and question CAS", () => {
 })
 
 describe("native metadata publication", () => {
-  test("title updates publish Host metadata into global and directory records", async () => {
+  test("title updates go through OMP and publish the returned title", async () => {
     const store = seed()
-    const write = spyOn(canonicalClient, "patchSessionMetadata").mockResolvedValue({ sessionId: "session-a", revision: "2", metadata: { title: "Renamed" } })
+    const rename = spyOn(canonicalClient, "renameSession").mockResolvedValue({ ...session(), title: "Renamed" })
     await updateSessionTitle("session-a", "Renamed")
-    expect(write).toHaveBeenCalledWith("session-a", { changes: { title: "Renamed" } })
-    expect(store.getState().session[0].metadata).toEqual({ title: "Renamed" })
-    expect(useGlobalSessionsStore.getState().entityById.get("session-a")?.metadataRevision).toBe("2")
+    expect(rename).toHaveBeenCalledWith("session-a", "workspace-a", "Renamed")
+    expect(store.getState().session[0].title).toBe("Renamed")
+    expect(useGlobalSessionsStore.getState().entityById.get("session-a")?.title).toBe("Renamed")
   })
 
   test("native metadata patches preserve siblings and encode removals as merge-patch null", async () => {
-    const original = session("session-a", { metadata: { title: "Before", notes: "remove", openchamber: { work: { state: "open" }, linked_issues: [] } } })
+    const original = session("session-a", { title: "Before", metadata: {notes: "remove", openchamber: { work: { state: "open" }, linked_issues: [] }} })
     const store = seed([original])
     spyOn(canonicalClient, "getSessionMetadata").mockResolvedValue({ sessionId: "session-a", revision: "1", metadata: original.metadata })
-    const write = spyOn(canonicalClient, "patchSessionMetadata").mockResolvedValue({ sessionId: "session-a", revision: "2", metadata: { title: "Before", openchamber: { work: { state: "done" }, linked_issues: [] } } })
+    const write = spyOn(canonicalClient, "patchSessionMetadata").mockResolvedValue({ sessionId: "session-a", revision: "2", metadata: {openchamber: { work: { state: "done" }, linked_issues: [] }} })
     await patchSessionMetadata("session-a", directory, metadata => {
       const next = SessionMetadataSchema.parse(metadata)
       delete next.notes
       return { ...next, openchamber: { ...next.openchamber, work: { state: "done" } } }
     })
     expect(write).toHaveBeenCalledWith("session-a", { changes: { notes: null, openchamber: { work: { state: "done" } } } })
-    expect(store.getState().session[0].metadata?.title).toBe("Before")
+    expect(store.getState().session[0].title).toBe("Before")
   })
 
   test("work state writes use the native metadata contract", async () => {
@@ -876,14 +876,17 @@ describe("native metadata publication", () => {
     pending.resolve({ sessionId: "session-a", revision: "1", metadata: null })
     await expect(operation).rejects.toThrow("runtime changed")
     expect(write).not.toHaveBeenCalled()
-    expect(store.getState().session[0].metadata?.title).toBe("Before")
+    expect(store.getState().session[0].title).toBe("Before")
   })
 
-  test("an obsolete title response cannot overwrite live metadata", async () => {
+  test("an obsolete title response cannot overwrite live state", async () => {
     const store = seed()
-    spyOn(canonicalClient, "patchSessionMetadata").mockImplementation(async sessionId => { changeRuntime(); return { sessionId, revision: "2", metadata: { title: "Old runtime" } } })
+    spyOn(canonicalClient, "renameSession").mockImplementation(async () => {
+      changeRuntime()
+      return { ...session(), title: "Old runtime" }
+    })
     await expect(updateSessionTitle("session-a", "Old runtime")).rejects.toThrow("runtime changed")
-    expect(store.getState().session[0].metadata?.title).toBe("Before")
+    expect(store.getState().session[0].title).toBe("Before")
   })
 })
 
@@ -941,7 +944,7 @@ describe("native selected-branch forks", () => {
       { turnId: runningUser.turnId, sessionId: "session-a", runId: "run-b", status: "running", userMessageId: runningUser.messageId, assistantMessageIds: [running.messageId], startedAt: 3 },
     ]
     snapshot.session = { ...snapshot.session, runtimeStatus: "running", activeRunId: "run-b" }
-    snapshot.activeRun = { sessionId: "session-a", runId: "run-b", status: "running", createdAt: 3 }
+    snapshot.activeRun = { sessionId: "session-a", runId: "run-b", status: "running", origin: "host", createdAt: 3 }
     spyOn(canonicalClient, "getSnapshot").mockResolvedValue(snapshot)
     const result = await forkFromLastCompletedTurn("session-a")
     expect(result?.sessionId).toBe(fork.sessionId)
@@ -953,7 +956,7 @@ describe("native selected-branch forks", () => {
     const current = nativeMessage("session-a", "current-user", 3)
     const snapshot = nativeSnapshot("session-a", [current])
     snapshot.session = { ...snapshot.session, runtimeStatus: "running", activeRunId: "run-b" }
-    snapshot.activeRun = { sessionId: "session-a", runId: "run-b", status: "running", createdAt: 3 }
+    snapshot.activeRun = { sessionId: "session-a", runId: "run-b", status: "running", origin: "host", createdAt: 3 }
     snapshot.turns = [{ turnId: current.turnId, sessionId: "session-a", runId: "run-b", status: "running", userMessageId: current.messageId, assistantMessageIds: [], startedAt: 3 }]
     snapshot.window.hasEarlier = true
     const user = nativeMessage("session-a", "older-user", 1)
@@ -985,7 +988,7 @@ describe("review-flow optimistic send", () => {
   }
 
   function reviewRun(runId = "run-review"): Run {
-    return { runId, sessionId: "session-a", status: "running", createdAt: 2 }
+    return { runId, sessionId: "session-a", status: "running", origin: "host", createdAt: 2 }
   }
 
   function runTurn(run: Run, userMessage: Message): Turn {

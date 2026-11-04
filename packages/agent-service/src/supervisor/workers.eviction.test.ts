@@ -101,6 +101,11 @@ test('an idle root is evicted and reopens cold with native history; a turn and a
     await Bun.sleep(400);
     expect(workers.info(source.rootSessionId)?.state).toBe('ready');
     expect(registry.approvals(source.rootSessionId)).toHaveLength(1);
+    registry.onInteraction(source.rootSessionId, approvalGeneration, {
+      kind: 'cancel', approvalId: 'approval-pending',
+    });
+    expect(registry.approvals(source.rootSessionId)).toHaveLength(0);
+    expect(registry.isIdleForEviction(source.rootSessionId)).toBe(true);
   } finally {
     try { await registry.close(); } finally {
       try { await workers.close(); } finally {

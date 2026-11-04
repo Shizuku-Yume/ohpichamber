@@ -11,7 +11,9 @@ import type { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { ModelsConfigFile, validateProviderConfiguration } from '@oh-my-pi/pi-coding-agent/config/models-config';
 import { ModelsConfigSchema, type ModelsConfig } from '@oh-my-pi/pi-coding-agent/config/models-config-schema';
 import { cfgDisabledProviders, cfgEnabledModels } from '@oh-my-pi/pi-coding-agent/config/model-settings';
-import { filterAvailableModelsByEnabledPatterns } from '@oh-my-pi/pi-coding-agent/config/model-resolver';
+import { filterAvailableModelsByEnabledPatterns, getModelMatchPreferences, pickDefaultAvailableModel, resolveAllowedModels, resolveModelRoleValue } from '@oh-my-pi/pi-coding-agent/config/model-resolver';
+import { cfgDefaultThinkingLevel } from '@oh-my-pi/pi-coding-agent/session/settings';
+import { resolveRoleModelFull } from '@oh-my-pi/pi-coding-agent/session/role-models';
 import { invalidateCommandConfig, resolveConfigHeaders, resolveConfigValue } from '@oh-my-pi/pi-coding-agent/config/resolve-config-value';
 import type { AuthStorage } from '@oh-my-pi/pi-coding-agent/session/auth-storage';
 import { replaceFileAtomically } from '@oh-my-pi/pi-coding-agent/utils/atomic-file';
@@ -199,8 +201,13 @@ function resolveModelSelection(registry: ModelRegistry, input: ModelSelection, c
     throw new ProjectionError(422, 'UNSUPPORTED_CAPABILITY', 'Selected model variant conflicts with the reasoning effort');
   }
   const requestedEffort = controls?.reasoningEffort ?? variant?.reasoningEffort ?? effortNamedByVariant ?? null;
-  const reasoningEffort = requestedEffort === null ? null : nativeModel.thinking?.efforts.find(effort => effort === requestedEffort);
-  if (requestedEffort !== null && (reasoningEffort === undefined || !projected.reasoningOptions.some(option => option.reasoningEffort === requestedEffort))) {
+  const reasoningEffort = requestedEffort === 'off' ? null
+    : requestedEffort === null ? null : nativeModel.thinking?.efforts.find(effort => effort === requestedEffort);
+  if (requestedEffort === 'off' && !projected.reasoningEffortSupported) {
+    throw new ProjectionError(422, 'UNSUPPORTED_CAPABILITY', 'Selected reasoning effort is unavailable');
+  }
+  if (requestedEffort !== null && requestedEffort !== 'off'
+    && (reasoningEffort === undefined || !projected.reasoningOptions.some(option => option.reasoningEffort === requestedEffort))) {
     throw new ProjectionError(422, 'UNSUPPORTED_CAPABILITY', 'Selected reasoning effort is unavailable');
   }
   if (variant) {
@@ -256,7 +263,32 @@ export class NativeModels {
         const key = modelKey({ providerId: model.provider, modelId: model.id });
         return publicModel(model, this.metadata.models[key], !disabledProviders.has(model.provider) && allowed.has(key) && this.metadata.models[key]?.enabled !== false);
       });
-    return ModelCatalogSchema.parse({ workspaceId, revision, models });
+    // Plan mode needs the `plan` role; resolve it exactly as the mode
+    // controller does so the composer can disable Plan before a session exists.
+    const planRole = resolveRoleModelFull(this.context.settings, 'plan', this.context.modelRegistry.getAvailable(), undefined);
+    return ModelCatalogSchema.parse({ workspaceId, revision, models,
+      defaults: await this.readDefaults(), planRoleAvailable: planRole.model !== undefined });
+  }
+
+  /**
+   * The model and thinking level a new OMP session resolves from `modelRoles.default`
+   * and `defaultThinkingLevel`, using the same allowed set and credential pick as
+   * native session startup. The composer shows these only while no explicit choice exists.
+   */
+  private async readDefaults(): Promise<ModelCatalog['defaults']> {
+    const settings = this.context.settings;
+    const matchPreferences = getModelMatchPreferences(settings);
+    const allowed = await resolveAllowedModels(this.context.modelRegistry, settings, matchPreferences);
+    const role = resolveModelRoleValue(settings.getModelRole('default'), allowed, { settings, matchPreferences });
+    const model = role.model ?? pickDefaultAvailableModel(
+      allowed.filter(candidate => this.context.modelRegistry.hasConfiguredAuth(candidate)),
+      provider => this.context.modelRegistry.hasConcreteAuth(provider),
+    );
+    if (!model) return { model: null, thinkingLevel: null };
+    const thinkingLevel = role.explicitThinkingLevel
+      ? role.thinkingLevel ?? null
+      : model.thinking?.defaultLevel ?? cfgDefaultThinkingLevel.get(settings);
+    return { model: { providerId: model.provider, modelId: model.id }, thinkingLevel };
   }
 
   async readProviders(workspaceId: string, revision: string): Promise<ProviderCatalog> {

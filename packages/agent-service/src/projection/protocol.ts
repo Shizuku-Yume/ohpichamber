@@ -1,4 +1,4 @@
-import { CanonicalEventSchema, MessageSchema, SessionSnapshotSchema, TimestampSchema, TurnSchema } from '@openchamber/agent-contract';
+import { CanonicalEventSchema, MessageSchema, SessionModeSchema, SessionSnapshotSchema, TimestampSchema, TurnSchema } from '@openchamber/agent-contract';
 import { z } from 'zod';
 
 // Preserve each tuple member's payload type; Array.map widens away its fields.
@@ -30,18 +30,23 @@ const ProjectionEventSchema = z.union([
   CanonicalEventSchema.options[21].omit(envelope),
   CanonicalEventSchema.options[22].omit(envelope),
   CanonicalEventSchema.options[23].omit(envelope),
+  CanonicalEventSchema.options[24].omit(envelope),
+  CanonicalEventSchema.options[25].omit(envelope),
 ]);
 export type ProjectionEvent = z.infer<typeof ProjectionEventSchema>;
 export const ProjectionInputSchema = z.strictObject({
   timestamp: TimestampSchema,
   event: ProjectionEventSchema,
+  transient: z.boolean().optional(),
 });
 export type ProjectionInput = z.infer<typeof ProjectionInputSchema>;
 
-export const ProjectionSeedSchema = payloadFields.merge(SessionSnapshotSchema).pick({ branch: true }).extend({
+export const ProjectionSeedSchema = payloadFields.merge(SessionSnapshotSchema).pick({ branch: true, selection: true }).extend({
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
   turns: z.array(TurnSchema),
   messages: z.array(MessageSchema),
+  mode: SessionModeSchema,
+  title: z.string().min(1).optional(),
 });
 export type ProjectionSeed = z.infer<typeof ProjectionSeedSchema>;

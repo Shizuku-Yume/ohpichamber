@@ -74,7 +74,7 @@ const planAgent: Agent = { ...agent, agentId: 'profile-plan-29', name: 'Plan' };
 const reviewAgent: Agent = { ...agent, agentId: 'profile-review-31', name: 'Review' };
 const session: Session = {
   sessionId: SESSION_ID, projectId: 'project', workspaceId: 'workspace', displayPath: '.', rootSessionId: SESSION_ID,
-  createdAt: 0, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  createdAt: 0, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
   metadata: null, metadataRevision: '0', archiveRevision: '0',
 };
 const reply = (messageId: string): Message => ({
@@ -138,7 +138,7 @@ describe('ModelControls native selection and effort restore', () => {
       </SyncProvider>,
     ));
   };
-  const label = (kind: 'agent' | 'variant') => dom.container.querySelector(`.model-controls__${kind}-label`)?.textContent?.trim();
+  const label = (kind: 'agent' | 'variant' | 'effort') => dom.container.querySelector(`.model-controls__${kind}-label`)?.textContent?.trim();
   const trigger = (kind: 'agent' | 'model' | 'variant') => {
     const entry = dom.container.querySelector<HTMLElement>(`.model-controls__${kind}-trigger`);
     if (!entry) throw new Error(`Missing ${kind} trigger`);
@@ -176,7 +176,7 @@ describe('ModelControls native selection and effort restore', () => {
       providers: [provider], providersLoaded: true, currentProviderId: PROVIDER_ID, currentModelId: MODEL_ID,
       directoryScoped: { [DIRECTORY]: { providers: [provider], providersLoaded: true, currentProviderId: PROVIDER_ID, currentModelId: MODEL_ID, currentVariant: undefined, currentVariantSelection: { override: undefined, inherited: undefined }, currentAgentName: AGENT_ID, selectedProviderId: PROVIDER_ID, agentModelSelections: {}, defaultProviders: {}, selectionSource: 'auto', agentSelectionSource: 'auto' } },
       currentAgentName: AGENT_ID, currentVariant: undefined,
-      currentVariantSelection: { override: undefined, inherited: undefined }, settingsDefaultVariant: undefined,
+      currentVariantSelection: { override: undefined, inherited: undefined },
       settingsDefaultAgent: undefined, settingsDefaultModel: undefined, agentModelSelections: {}, defaultProviders: {},
       selectionSource: 'auto', agentSelectionSource: 'auto', lastDisconnectReason: null,
     });
@@ -201,102 +201,19 @@ describe('ModelControls native selection and effort restore', () => {
     dom.restore();
   });
 
-  test('native identity selects by ID while the roster and current selection display names', async () => {
-    useUIStore.setState({ isMobile: true });
+  test('does not render root-agent controls when an unavailable profile is present', async () => {
+    const unavailableProfile = { ...agent, allowedTools: ['missing_tool'] };
+    setRoster([unavailableProfile]);
     await render();
-    expect(label('agent')).toBe('Build');
-    await act(async () => trigger('agent').click());
-    await act(async () => button('Plan').click());
-    expect(useConfigStore.getState().currentAgentName).toBe(planAgent.agentId);
-    expect(useSelectionStore.getState().getSessionAgentSelection(SESSION_ID)).toBe(planAgent.agentId);
-    expect(label('agent')).toBe('Plan');
+    expect(dom.container.querySelector('.model-controls__agent-trigger')).toBeNull();
+    expect(dom.container.textContent).not.toContain('Build');
   });
-
-  test('favoriting a native profile stores its ID rather than its display name', async () => {
-    useUIStore.setState({ isMobile: true });
-    await render();
-    await act(async () => trigger('agent').click());
-    const favorite = document.querySelector<HTMLButtonElement>('button[aria-pressed="false"]');
-    if (!favorite) throw new Error('Expected native agent favorite toggle');
-    await act(async () => favorite.click());
-    expect(useUIStore.getState().favoriteAgents).toEqual([AGENT_ID]);
-    expect(useConfigStore.getState().currentAgentName).toBe(AGENT_ID);
-  });
-
-  test('native details show complete tool availability and preset without permission allow/deny claims', async () => {
-    useUIStore.setState({ isMobile: true });
-    await render();
-    await act(async () => {
-      const agentTrigger = trigger('agent');
-      const touchStart = agentTrigger.ownerDocument.createEvent('Event');
-      touchStart.initEvent('touchstart', true, false);
-      agentTrigger.dispatchEvent(touchStart);
-      const delay = Promise.withResolvers<void>();
-      setTimeout(delay.resolve, 550);
-      await delay.promise;
-    });
-    const text = document.body.textContent ?? '';
-    expect(text).toContain('read, custom-native-tool');
-    expect(text).toContain('workspace-review');
-    expect(text).toContain('Build native projects');
-    expect(text).not.toContain('Allow');
-    expect(text).not.toContain('Deny');
-  });
-
-  for (const mobile of [false, true]) {
-    test(`successful empty native roster is not permanent Loading (${mobile ? 'mobile' : 'desktop'})`, async () => {
-      useUIStore.setState({ isMobile: mobile });
-      useSessionUIStore.setState({ currentSessionId: null });
-      useConfigStore.setState({ currentAgentName: undefined });
-      useAgentsStore.setState({ agentsByDirectory: {}, revisionsByDirectory: {}, errorsByDirectory: {} });
-      await render();
-      expect(label('agent')).toContain('Loading');
-      await act(async () => setRoster([], 'empty-revision'));
-      expect(label('agent')?.toLowerCase()).toContain('select agent');
-      expect(label('agent')).not.toContain('Loading');
-    });
-
-    test(`failed native roster shows Unavailable instead of successful empty (${mobile ? 'mobile' : 'desktop'})`, async () => {
-      useUIStore.setState({ isMobile: mobile });
-      useSessionUIStore.setState({ currentSessionId: null });
-      useConfigStore.setState({ currentAgentName: undefined });
-      useAgentsStore.setState({ agentsByDirectory: {}, revisionsByDirectory: {}, errorsByDirectory: { [DIRECTORY]: 'SERVICE_UNAVAILABLE' } });
-      await render();
-      expect(label('agent')).toContain('Unavailable');
-      expect(label('agent')?.toLowerCase()).not.toContain('select agent');
-      await act(async () => setRoster([agent]));
-      await act(async () => useConfigStore.setState({ currentAgentName: AGENT_ID }));
-      expect(label('agent')).toBe('Build');
-    });
-  }
-
-  test('agents are usable while model discovery is still loading', async () => {
-    useUIStore.setState({ isMobile: true });
+  test('a draft shows OMP\'s configured thinking level instead of Off', async () => {
     useSessionUIStore.setState({ currentSessionId: null });
-    useConfigStore.setState({ providers: [], providersLoaded: false, currentProviderId: '', currentModelId: '' });
-    await render();
-    expect(trigger('agent').hasAttribute('disabled')).toBe(false);
-    expect(trigger('model').hasAttribute('disabled')).toBe(true);
-    expect(trigger('model').textContent).toContain('Loading');
-    expect(label('agent')).toBe('Build');
-  });
-
-  test('a roster from another directory cannot resolve this directory agent', async () => {
-    useSessionUIStore.setState({ currentSessionId: null });
-    useAgentsStore.setState({ agentsByDirectory: { '/other': [agent] }, revisionsByDirectory: { '/other': '1' }, errorsByDirectory: {} });
-    await render();
-    expect(label('agent')).toBe(AGENT_ID);
-    await act(async () => setRoster([{ ...agent, name: 'Project builder' }]));
-    expect(label('agent')).toBe('Project builder');
-  });
-
-  test('a draft inherits its settings effort, not a retired agent sampling field', async () => {
-    useSessionUIStore.setState({ currentSessionId: null });
-    useConfigStore.setState({ currentVariant: 'high', settingsDefaultVariant: 'high', currentVariantSelection: { override: undefined, inherited: 'high' } });
-    useConfigStore.getState().setCurrentVariantOverride(undefined, 'high');
+    useConfigStore.setState({ currentVariant: undefined, settingsDefaultReasoningEffort: 'high', currentReasoningEffort: undefined });
     setRoster([{ ...agent, model: { providerId: PROVIDER_ID, modelId: MODEL_ID } }]);
     await render();
-    expect(label('variant')).toBe('high');
+    expect(label('effort')).toBe('High');
   });
 
   test('native pinned provider/model binding preserves a valid manual effort', async () => {
@@ -311,24 +228,10 @@ describe('ModelControls native selection and effort restore', () => {
     expect(state.currentVariant).toBe('high');
   });
 
-  test('picking a native profile applies its pinned provider/model rather than its label', async () => {
-    useSessionUIStore.setState({ currentSessionId: null });
-    const pinnedModel = { ...model, modelId: 'pinned-model' };
-    const pinnedProvider = { ...provider, providerId: 'pinned-provider', models: [{ ...pinnedModel, provider: 'pinned-provider' }] };
-    useConfigStore.setState({ providers: [provider, pinnedProvider] });
-    setRoster([agent, { ...planAgent, model: { providerId: 'pinned-provider', modelId: 'pinned-model' } }]);
-    useUIStore.setState({ isMobile: true });
-    await render();
-    await act(async () => trigger('agent').click());
-    await act(async () => button('Plan').click());
-    const state = useConfigStore.getState();
-    expect(state.currentAgentName).toBe(planAgent.agentId);
-    expect([state.currentProviderId, state.currentModelId]).toEqual(['pinned-provider', 'pinned-model']);
-  });
 
   test('a draft keeps its chosen effort through a provider discovery gap', async () => {
     useSessionUIStore.setState({ currentSessionId: null });
-    useConfigStore.setState({ providers: [], providersLoaded: false, currentVariant: 'high', settingsDefaultVariant: 'low', currentVariantSelection: { override: 'high', inherited: 'low' } });
+    useConfigStore.setState({ providers: [], providersLoaded: false, currentVariant: 'high', currentVariantSelection: { override: 'high', inherited: 'low' } });
     await render();
     expect(useConfigStore.getState().currentVariant).toBe('high');
     await act(async () => useConfigStore.setState({ providers: [provider], providersLoaded: true }));
@@ -347,7 +250,7 @@ describe('ModelControls native selection and effort restore', () => {
 
   test('a project draft inherits its own effort instead of the global default', async () => {
     useSessionUIStore.setState({ currentSessionId: null });
-    useConfigStore.setState({ currentVariant: 'high', settingsDefaultVariant: 'low', currentVariantSelection: { override: undefined, inherited: 'high' } });
+    useConfigStore.setState({ currentVariant: 'high', currentVariantSelection: { override: undefined, inherited: 'high' } });
     await render();
     expect(useConfigStore.getState().currentVariant).toBe('high');
     expect(useConfigStore.getState().currentVariantSelection.override).toBeUndefined();
@@ -363,7 +266,7 @@ describe('ModelControls native selection and effort restore', () => {
   for (const variant of [null, 'high'] as const) {
     test(`history echo preserves remembered manual effort ${variant ?? 'Default'}`, async () => {
       saveVariant(variant);
-      useConfigStore.setState({ selectionSource: 'manual', settingsDefaultVariant: 'low', currentVariant: variant ?? undefined, currentVariantSelection: { override: variant, inherited: 'low' } });
+      useConfigStore.setState({ selectionSource: 'manual', currentVariant: variant ?? undefined, currentVariantSelection: { override: variant, inherited: 'low' } });
       await render();
       await stage([reply('msg-echo')]);
       expect(savedVariant()).toBe(variant);
@@ -385,17 +288,6 @@ describe('ModelControls native selection and effort restore', () => {
     });
   }
 
-  test('live agent change does not reapply persisted session model hydration', async () => {
-    const getModel = spyOn(useSelectionStore.getState(), 'getSessionModelSelection');
-    try {
-      await render();
-      await stage([]);
-      const hydratedCalls = getModel.mock.calls.length;
-      await act(async () => useConfigStore.setState({ currentAgentName: planAgent.agentId }));
-      expect(getModel.mock.calls.length).toBe(hydratedCalls);
-      expect(useConfigStore.getState().currentAgentName).toBe(planAgent.agentId);
-    } finally { getModel.mockRestore(); }
-  });
 
   for (const [mobile, variant] of [[false, 'low'], [true, null]] as const) {
     test(`controlled selection remains independent (${mobile ? 'mobile' : 'desktop'}, ${variant ?? 'Default'})`, async () => {
@@ -425,7 +317,7 @@ describe('ModelControls native selection and effort restore', () => {
         expect([useConfigStore.getState().activeDirectoryKey, useConfigStore.getState().providersLoaded, useConfigStore.getState().providers.map((item) => item.providerId)]).toEqual([DIRECTORY, true, [PROVIDER_ID]]);
         expect(selectCatalogLoadedForDirectory(useConfigStore.getState(), 'models', DIRECTORY)).toBe(true);
         expect(dom.container.querySelector('.model-controls__agent-label')).toBeNull();
-        expect(label('variant')).toBe(variant ?? 'Default');
+        expect(label('variant')).toBe(variant ? variant.charAt(0).toUpperCase() + variant.slice(1) : 'Default');
         expect(saveModel.mock.calls).toEqual([]);
         expect(saveEffort.mock.calls).toEqual([]);
         await openTrigger('model');

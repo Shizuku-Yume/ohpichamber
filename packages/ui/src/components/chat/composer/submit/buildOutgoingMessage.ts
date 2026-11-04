@@ -36,8 +36,6 @@ export interface OutgoingMessage {
     primaryFileResourcesExpanded: boolean;
     primaryAttachments: AttachedFile[];
     additionalParts: OutgoingPart[];
-    /** The agent the first `@agent` mention routed to, if any. */
-    agentMentionName?: string;
     /**
      * Skills the composer text names inline, deduped in order of appearance.
      * The send attaches them to the prompt (see `SkillMentions`); queued
@@ -49,13 +47,12 @@ export interface OutgoingMessage {
 }
 
 /**
- * A queued message is already resolved: its agent mention was stripped, its
- * file mentions became attachments, and the context the composer had attached
- * travels with it. Assembly only places it.
+ * A queued message is already resolved: its file mentions became attachments,
+ * and the context the composer had attached travels with it.
+ * Assembly only places it.
  */
 export interface QueuedInput {
     text: string;
-    agentMention?: string;
     attachments?: AttachedFile[];
     context?: readonly QueuedContextPart[];
 }
@@ -109,8 +106,6 @@ export interface OutgoingMessageInput extends ComposerContextInput {
  * assembly itself stays pure.
  */
 export interface OutgoingMessageDeps {
-    /** Strip a leading `@agent` mention and report which agent it named. */
-    parseAgentMention: (text: string) => { text: string; agentName?: string };
     /** Resolve `@path` references into server-side attachments. */
     extractFileMentions: (text: string) => { text: string; attachments: AttachedFile[] };
     /** Normalize attachments for transport (server paths become file URLs). */
@@ -125,7 +120,6 @@ export function buildOutgoingMessage(
 ): OutgoingMessage {
     let primaryText = '';
     let primaryAttachments: AttachedFile[] = [];
-    let agentMentionName: string | undefined;
     const additionalParts: OutgoingPart[] = [];
 
     const skillNames: string[] = [];
@@ -135,16 +129,9 @@ export function buildOutgoingMessage(
         }
     };
 
-    /** The first agent mention encountered wins; later ones are ignored. */
-    const noteAgent = (name?: string) => {
-        if (!agentMentionName && name) agentMentionName = name;
-    };
-
     /** Run a body through mention parsing, collecting its side effects. */
     const resolve = (raw: string) => {
-        const agent = deps.parseAgentMention(raw);
-        noteAgent(agent.agentName);
-        const mentions = deps.extractFileMentions(agent.text);
+        const mentions = deps.extractFileMentions(raw);
         noteSkills(mentions.text);
         return mentions;
     };
@@ -153,7 +140,6 @@ export function buildOutgoingMessage(
     // becomes the primary message so the turn reads chronologically. Each one
     // is followed by the context it was queued with.
     input.queued.forEach((queued, index) => {
-        noteAgent(queued.agentMention);
         const attachments = deps.sanitizeAttachments(queued.attachments);
 
         if (index === 0) {
@@ -192,7 +178,6 @@ export function buildOutgoingMessage(
         primaryFileResourcesExpanded: input.queued.length > 0,
         primaryAttachments,
         additionalParts,
-        agentMentionName,
         skillNames,
         isEmpty: !primaryText && primaryAttachments.length === 0 && additionalParts.length === 0,
     };

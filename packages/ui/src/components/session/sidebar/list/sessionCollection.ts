@@ -13,7 +13,6 @@ import { deriveRecentSessions } from '../recent/activitySections';
 import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { normalizePath } from '../utils';
 import { isChatDirectoryPath } from '@/lib/chatDirectories';
-import { isBtwSession } from '@/lib/sessionBtwMetadata';
 import { resolveSessionNestingParentId } from '@/lib/sessionWorkLineage';
 import type { GlobalSessionStructure } from '@/stores/globalSessionStructure';
 import { countSyncPerformance } from '@/sync/performance-diagnostics';
@@ -37,8 +36,6 @@ const nestingParentResolver = (sessionById: ReadonlyMap<string, Session>) => (
   (session: Session): string | null => resolveSessionNestingParentId(session, (id) => sessionById.get(id))
 );
 
-// This boundary owns session visibility before Recent or projects take
-// ownership. Temporary /btw forks never leak into any sidebar projection.
 export const partitionSidebarSessions = (
   sessions: readonly Session[],
   isVSCode: boolean = false,
@@ -46,7 +43,6 @@ export const partitionSidebarSessions = (
   const projectSessions: Session[] = [];
   const chatSessions: Session[] = [];
   for (const session of sessions) {
-    if (isBtwSession(session)) continue;
     const directory = resolveGlobalSessionDirectory(session) ?? session.displayPath;
     if (isChatDirectoryPath(directory)) {
       if (isVSCode) continue;

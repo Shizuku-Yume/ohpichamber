@@ -6,7 +6,7 @@ import { applyGlobalSessionStructureMutations, buildGlobalSessionStructure, reso
 const session = (sessionId: string, extra: Partial<Session> = {}): Session => ({
   sessionId, projectId: 'pro_one', workspaceId: 'wsp_one', displayPath: 'repo',
   rootSessionId: sessionId, createdAt: 1, updatedAt: 2, epoch: 'epoch', headSequence: '0',
-  runtimeStatus: 'idle', activeRunId: null, metadata: null, metadataRevision: '0', archiveRevision: '0', ...extra,
+  runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' as const }, metadata: null, metadataRevision: '0', archiveRevision: '0', ...extra,
 });
 
 beforeEach(() => {
@@ -29,7 +29,7 @@ test('indexes native parents, roots and authorized directories', () => {
 test('metadata-only changes preserve structural references', () => {
   const record = session('ses_one');
   const structure = buildGlobalSessionStructure([record]);
-  expect(applyGlobalSessionStructureMutations(structure, [{ sessionId: 'ses_one', previous: record, next: { ...record, metadata: { title: 'New' }, metadataRevision: '1' } }])).toBe(structure);
+  expect(applyGlobalSessionStructureMutations(structure, [{ sessionId: 'ses_one', previous: record, next: { ...record, title: 'New', metadata: {}, metadataRevision: '1' } }])).toBe(structure);
 });
 
 test('a workspace move changes only addressed directory buckets', () => {

@@ -17,6 +17,7 @@ const session = (idle: number | undefined, metadata?: SessionMetadata): Session 
     headSequence: '1',
     runtimeStatus: 'idle',
     activeRunId: null,
+    mode: { kind: 'main' as const },
     metadataRevision: metadata ? '1' : '0',
     archiveRevision: '0',
     time: idle !== undefined ? { idle } : undefined,

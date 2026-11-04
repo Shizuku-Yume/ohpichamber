@@ -7,7 +7,6 @@ import * as worktreeCreate from '@/lib/worktrees/worktreeCreate';
 import * as worktreeBootstrap from '@/lib/worktrees/worktreeBootstrap';
 import * as worktreeStatus from '@/lib/worktrees/worktreeStatus';
 import * as config from '@/lib/openchamberConfig';
-import * as knowledge from '@/lib/sessionKnowledgeApi';
 import * as sessionActions from '@/sync/session-actions';
 import { useProjectsStore } from './useProjectsStore';
 import { useGlobalSessionsStore } from './useGlobalSessionsStore';
@@ -59,7 +58,6 @@ function fixture(input: { rejectFirst?: boolean; isolate?: boolean; wait?: boole
     return { name: args.preferredName ?? 'lane', path: `/worktrees/${worktrees.length}`, branch: 'lane', label: 'lane', projectDirectory: '/repo' };
   }));
   spies.push(spyOn(useGlobalSessionsStore.getState(), 'upsertSession').mockImplementation((session) => { published.push(session); }));
-  spies.push(spyOn(knowledge, 'fetchSessionKnowledge').mockResolvedValue({ text: '', signature: '' }));
   spies.push(spyOn(sessionActions, 'sendMessage').mockImplementation(async (request) => {
     expect(observed).toContain(request.sessionId);
     dispatched.push(request);
@@ -76,7 +74,7 @@ function fixture(input: { rejectFirst?: boolean; isolate?: boolean; wait?: boole
     metadata.set(sessionId, request.metadata ?? {});
     const session: Session = {
       sessionId, rootSessionId: sessionId, projectId: request.projectId, workspaceId: request.workspaceId, displayPath: '.',
-      createdAt: count, updatedAt: count, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+      createdAt: count, updatedAt: count, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
       metadata: request.metadata ?? null, metadataRevision: request.metadata ? '1' : '0', archiveRevision: '0',
     };
     expect(getMultiRunMembership(session)).toBeNull();
@@ -102,7 +100,7 @@ function fixture(input: { rejectFirst?: boolean; isolate?: boolean; wait?: boole
   return { deleted, published, dispatched, order, worktrees, waitForDispatch, observed, manager, loader };
 }
 
-const laneInput = () => ({ runtimeKey: runtime.getRuntimeKey(), assertCurrent: () => {}, sessionId: 'lane', workspaceId: 'workspace', directory: '/repo', prompt: '/review "two words"\n tail  ', providerId: 'captured', modelId: 'model', agentId: 'agent', variant: 'high', reasoningEffort: 'medium' });
+const laneInput = () => ({ runtimeKey: runtime.getRuntimeKey(), assertCurrent: () => {}, sessionId: 'lane', workspaceId: 'workspace', directory: '/repo', prompt: '/review "two words"\n tail  ', providerId: 'captured', modelId: 'model', variant: 'high', reasoningEffort: 'medium' });
 
 describe('lane native expansion delivery', () => {
   for (const kind of ['command', 'template', 'text'] as const) test(`uses one authoritative ${kind} expansion`, async () => {
@@ -118,7 +116,7 @@ describe('lane native expansion delivery', () => {
     }));
     await dispatchRunPrompt(input);
     expect(requests).toHaveLength(1);
-    expect(api.dispatched[0].request).toMatchObject({ input: { text: kind === 'text' ? input.prompt : '/already expanded\n' }, options: { providerId: kind === 'text' ? 'captured' : 'bound', modelId: kind === 'text' ? 'model' : 'bound-model', agentId: kind === 'text' ? 'agent' : 'bound-agent', variant: 'high', reasoningEffort: 'medium' } });
+    expect(api.dispatched[0].request).toMatchObject({ input: { text: kind === 'text' ? input.prompt : '/already expanded\n' }, options: { providerId: kind === 'text' ? 'captured' : 'bound', modelId: kind === 'text' ? 'model' : 'bound-model', agentId: null, variant: 'high', reasoningEffort: 'medium' } });
   });
   test('expansion failure never dispatches original text', async () => {
     const api = fixture();
@@ -143,14 +141,14 @@ const models = [
 describe('canonical multi-run store', () => {
   test('publishes only ID-bound native records and keeps each captured selection', async () => {
     const api = fixture();
-    const result = await useMultiRunStore.getState().createMultiRun({ name: 'run', isolateRuns: false, agent: 'agent', groups: [{ prompt: 'question', models }] });
+    const result = await useMultiRunStore.getState().createMultiRun({ name: 'run', isolateRuns: false, groups: [{ prompt: 'question', models }] });
     await api.waitForDispatch(result?.sessionIds.length ?? 0);
     expect(result?.sessionIds).toEqual(['lane_1', 'lane_2']);
     expect(api.published.map((session) => getMultiRunMembership(session)?.sessionID)).toEqual(['lane_1', 'lane_2']);
     expect(resolveWorkspaceDirectory(api.published[0].workspaceId)).toBe('/repo');
     expect(api.dispatched.map(({ request }) => request.options)).toEqual([
-      { providerId: 'provider-a', modelId: 'vendor/a', variant: 'high', reasoningEffort: 'high', agentId: 'agent' },
-      { providerId: 'provider-b', modelId: 'vendor/b', variant: null, reasoningEffort: null, agentId: 'agent' },
+      { providerId: 'provider-a', modelId: 'vendor/a', variant: 'high', reasoningEffort: 'high', agentId: null },
+      { providerId: 'provider-b', modelId: 'vendor/b', variant: null, reasoningEffort: null, agentId: null },
     ]);
     expect(api.observed).toEqual(['lane_1', 'lane_2']);
   });
@@ -203,7 +201,7 @@ describe('canonical multi-run store', () => {
   });
   test('registration rejects a mismatched workspace directory', () => {
     const api = fixture();
-    const unowned: Session = { sessionId: 'unowned', rootSessionId: 'unowned', projectId: 'project', workspaceId: 'unknown', displayPath: '.', createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, metadata: null, metadataRevision: '0', archiveRevision: '0' };
+    const unowned: Session = { sessionId: 'unowned', rootSessionId: 'unowned', projectId: 'project', workspaceId: 'unknown', displayPath: '.', createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' }, metadata: null, metadataRevision: '0', archiveRevision: '0' };
     expect(() => registerMultiRunSession(unowned, '/other')).toThrow('directory changed');
     expect(api.published).toEqual([]);
   });

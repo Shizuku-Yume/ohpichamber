@@ -15,7 +15,7 @@ const approval = (): ApprovalRequest => ({
 const snapshot = (overrides: Partial<SessionSnapshot> = {}): SessionSnapshot => ({
   session: {
     sessionId: "session-1", projectId: "project-1", workspaceId: "workspace-1", displayPath: ".", rootSessionId: "session-1",
-    createdAt: 1, updatedAt: 1, epoch: "epoch-1", headSequence: "0", runtimeStatus: "idle", activeRunId: null,
+    createdAt: 1, updatedAt: 1, epoch: "epoch-1", headSequence: "0", runtimeStatus: "idle", activeRunId: null, mode: { kind: "main" },
   },
   cursor: "epoch-1:0", activeRun: null,
   branch: { branchId: "branch-1", branchVersion: "0", leafMessageId: null },

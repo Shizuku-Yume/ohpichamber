@@ -85,7 +85,7 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
     .filter((session) => isRestorableOnItsOwn(session, state.entityById))));
   const parentTitlePairs = useGlobalSessionsStore(useShallow((state) => state.archivedSessions.flatMap((session) => {
     const parent = session.parentSessionId ? state.entityById.get(session.parentSessionId) : undefined;
-    return parent ? [parent.sessionId, parent.metadata?.title ?? ''] : [];
+    return parent ? [parent.sessionId, parent.title ?? ''] : [];
   })));
   const sessionsStatus = useGlobalSessionsStore((state) => state.status);
   const discoveryErrors = useGlobalSessionsStore((state) => state.discoveryErrors);
@@ -190,7 +190,7 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
       if (normalizedQuery.startsWith('ses_')) {
         return sortedSessions.filter((session) => session.sessionId.toLowerCase() === normalizedQuery);
       }
-      return groupByParent(rankByQuery(sortedSessions, normalizedQuery, (session) => [session.metadata?.title ?? '']));
+      return groupByParent(rankByQuery(sortedSessions, normalizedQuery, (session) => [session.title ?? '']));
     }
     if (selectedWorkspaceId === null) return groupByParent(sortedSessions);
     return groupByParent(buckets.find((bucket) => bucket.workspaceId === selectedWorkspaceId)?.sessions ?? []);
@@ -332,7 +332,7 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
           {visibleSessions.length === 0 && allWorktreeArchives.length === 0 ? emptyState : visibleSessions.map((session, index) => {
             const workspaceId = session.workspaceId;
             const sessionDirectory = normalizePath(resolveGlobalSessionDirectory(session)) ?? '';
-            const title = session.metadata?.title || t('sessions.sidebar.session.untitled');
+            const title = session.title || t('sessions.sidebar.session.untitled');
             // A deleted space's chat has nowhere to be restored to.
             const restorable = !(spaceArchives?.has(workspaceId) ?? false);
             const parentTitle = parentTitleAbove(visibleSessions, index);
@@ -481,7 +481,7 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
                 const workspaceId = session.workspaceId;
                 const sessionDirectory = normalizePath(resolveGlobalSessionDirectory(session)) ?? '';
                 const directoryLabel = labelOf(workspaceId, sessionDirectory);
-                const title = session.metadata?.title || t('sessions.sidebar.session.untitled');
+                const title = session.title || t('sessions.sidebar.session.untitled');
                 // A deleted space's chat has nowhere to be restored to.
                 const restorable = !(spaceArchives?.has(workspaceId) ?? false);
                 const parentTitle = parentTitleAbove(visibleSessions, index);

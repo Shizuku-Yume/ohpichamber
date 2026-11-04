@@ -24,7 +24,7 @@ const freePort = () => new Promise<number>((resolve, reject) => {
   });
 });
 
-test('a root past the cap receives the capacity Problem Details and existing workers stay untouched', async () => {
+test('a root at the cap evicts the least recently active idle worker and opens', async () => {
   const root = await mkdtemp(join(tmpdir(), 'service-capacity-'));
   const previousHome = process.env.HOME;
   process.env.HOME = root;
@@ -65,17 +65,11 @@ test('a root past the cap receives the capacity Problem Details and existing wor
     expect((await open('root-one')).status).toBe(201);
     expect((await open('root-two')).status).toBe(201);
 
-    const refused = await open('root-three');
-    expect(refused.status).toBe(503);
-    expect(refused.body).toMatchObject({
-      type: 'urn:ohpichamber:problem:SERVICE_UNAVAILABLE', status: 503, code: 'SERVICE_UNAVAILABLE',
-      detail: 'Session capacity is full (2 of 2 active). Close another session or try again later.',
-      details: { reason: 'worker_capacity', activeRootWorkers: 2, maxActiveRootWorkers: 2 },
-    });
+    expect((await open('root-three')).status).toBe(201);
     const workers = await request('/internal/workers');
     expect(workers.body.workers.filter((worker: { kind: string }) => worker.kind === 'session')
       .map((worker: { rootSessionId: string; state: string }) => [worker.rootSessionId, worker.state]).sort())
-      .toEqual([['root-one', 'ready'], ['root-two', 'ready']]);
+      .toEqual([['root-three', 'ready'], ['root-two', 'ready']]);
   } finally {
     await service.stop();
     if (previousHome === undefined) delete process.env.HOME; else process.env.HOME = previousHome;

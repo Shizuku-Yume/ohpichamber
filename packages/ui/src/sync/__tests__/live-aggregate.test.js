@@ -32,6 +32,7 @@ describe("native live aggregate", () => {
     const original = session("session-1", "workspace-a", 10, { metadata: { title: "A" } })
     expect(areSessionListsEquivalent([original], [{ ...original, metadata: { title: "A" } }])).toBe(true)
     expect(areSessionListsEquivalent([original], [{ ...original, metadata: { title: "B" } }])).toBe(false)
+    expect(areSessionListsEquivalent([original], [{ ...original, title: "Renamed" }])).toBe(false)
     expect(areSessionListsEquivalent([original], [{ ...original, parentSessionId: "parent-1" }])).toBe(false)
     expect(areSessionListsEquivalent([original], [{ ...original, runtimeStatus: "running", activeRunId: "run-1" }])).toBe(false)
     expect(areSessionListsEquivalent([original], [{ ...original, workspaceId: "workspace-b" }])).toBe(false)

@@ -1,0 +1,93 @@
+import { afterEach, describe, expect, test } from 'bun:test';
+import React, { act } from 'react';
+import { Window } from 'happy-dom';
+import { createRoot, type Root } from 'react-dom/client';
+import { I18nProvider } from '@/lib/i18n';
+import { ComposerModeSelector } from './ComposerModeSelector';
+
+type RenderProps = React.ComponentProps<typeof ComposerModeSelector>;
+
+let win: Window;
+let container: HTMLDivElement;
+let root: Root;
+
+const render = async (props: Partial<RenderProps>) => {
+    await act(async () => root.render(
+        <I18nProvider>
+            <ComposerModeSelector
+                sessionId={null}
+                draftOpen
+                runActive={false}
+                planRoleAvailable
+                sessionGoalEnabled
+                onDraftModeChange={() => undefined}
+                {...props}
+            />
+        </I18nProvider>,
+    ));
+};
+
+const trigger = () => container.querySelector<HTMLButtonElement>('button[aria-label="Session mode"]');
+
+afterEach(async () => {
+    await act(async () => root.unmount());
+    await win.happyDOM.close();
+    for (const key of ['window', 'document', 'navigator', 'IS_REACT_ACT_ENVIRONMENT', 'ResizeObserver', 'DOMRect', 'HTMLElement', 'Element', 'Node', 'Event', 'MouseEvent', 'KeyboardEvent', 'PointerEvent', 'getComputedStyle', 'requestAnimationFrame', 'cancelAnimationFrame']) Reflect.deleteProperty(globalThis, key);
+});
+
+const setup = () => {
+    win = new Window({ url: 'http://localhost' });
+    class ResizeObserverStub {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+    }
+    Object.defineProperties(globalThis, {
+        window: { configurable: true, value: win },
+        document: { configurable: true, value: win.document },
+        navigator: { configurable: true, value: win.navigator },
+        ResizeObserver: { configurable: true, value: ResizeObserverStub },
+        HTMLElement: { configurable: true, value: win.HTMLElement },
+        Element: { configurable: true, value: win.Element },
+        Node: { configurable: true, value: win.Node },
+        Event: { configurable: true, value: win.Event },
+        MouseEvent: { configurable: true, value: win.MouseEvent },
+        KeyboardEvent: { configurable: true, value: win.KeyboardEvent },
+        PointerEvent: { configurable: true, value: win.PointerEvent },
+        getComputedStyle: { configurable: true, value: win.getComputedStyle.bind(win) },
+        requestAnimationFrame: { configurable: true, value: win.requestAnimationFrame.bind(win) },
+        cancelAnimationFrame: { configurable: true, value: win.cancelAnimationFrame.bind(win) },
+        IS_REACT_ACT_ENVIRONMENT: { configurable: true, value: true },
+    });
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+};
+
+describe('ComposerModeSelector', () => {
+    test('is disabled without a session or an open draft', async () => {
+        setup();
+        await render({ sessionId: null, draftOpen: false });
+        expect(trigger()?.disabled).toBe(true);
+    });
+
+    test('shows the draft-held mode until the session exists', async () => {
+        setup();
+        await render({ draftMode: 'plan' });
+        expect(trigger()?.textContent).toContain('Plan');
+        expect(trigger()?.disabled).toBe(false);
+    });
+
+    test('shows the authoritative session mode and disables changes during a run', async () => {
+        setup();
+        await render({ sessionId: 'session-1', draftOpen: false, mode: { kind: 'vibe' }, runActive: true });
+        expect(trigger()?.textContent).toContain('Vibe');
+        expect(trigger()?.disabled).toBe(true);
+    });
+
+    test('labels Goal in a draft while the goal feature is enabled', async () => {
+        setup();
+        await render({ draftMode: 'goal' });
+        expect(trigger()?.textContent).toContain('Goal');
+    });
+});

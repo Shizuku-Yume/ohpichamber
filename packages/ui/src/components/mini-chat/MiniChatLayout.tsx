@@ -94,7 +94,7 @@ const MiniChatHeader: React.FC<{ mode: MiniChatMode }> = ({ mode }) => {
     });
   }, []);
 
-  const title = session?.metadata?.title?.trim()
+  const title = session?.title?.trim()
     || (draftOpen || mode === 'draft' ? t('miniChat.header.newSession') : t('miniChat.header.session'));
   const sessionDirectory = normalizePath(session ? resolveGlobalSessionDirectory(session) : null);
   const worktreeDirectory = normalizePath(worktreePath || worktreeAttachment?.cwd || worktreeAttachment?.worktreeRoot || '');

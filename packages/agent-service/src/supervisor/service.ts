@@ -5,8 +5,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { z } from 'zod';
-import { AgentServiceReadySchema, ApprovalReplySchema, CounterSchema, EntityIdSchema, HistoryPageRequestSchema, JsonObjectSchema, ProblemDetailsSchema, PromptRequestSchema, QuestionReplySchema, SessionBranchRequestSchema, MCPConfigureRequestSchema, MCPApplyRequestSchema, MCPReconnectRequestSchema, MCPOAuthRequestSchema, SkillsApplyRequestSchema, SkillExpandRequestSchema } from '@openchamber/agent-contract';
+import { AgentServiceReadySchema, ApprovalReplySchema, CounterSchema, EntityIdSchema, HistoryPageRequestSchema, JsonObjectSchema, ProblemDetailsSchema, PromptRequestSchema, QuestionReplySchema, SessionBranchRequestSchema, SessionTitleRequestSchema, MCPConfigureRequestSchema, MCPApplyRequestSchema, MCPReconnectRequestSchema, MCPOAuthRequestSchema, SkillsApplyRequestSchema, SkillExpandRequestSchema, SessionControlRequestSchema, SessionControlAckSchema } from '@openchamber/agent-contract';
 import type {
+  SessionControlAck,
   AgentCatalog, AgentMutationResult, AgentServiceReady, ApprovalRequest,
   CompletionCancelResult, CompletionResult, HistoryPage, JsonObject, MCPCatalogRead,
   MCPConfigurationState, MCPConnectionTestResult, MCPWorkspaceReconnectResult, MCPSecretWriteResult,
@@ -15,7 +16,7 @@ import type {
   QuestionRequest, Run, RuntimeSession, SessionBranchResult, SessionDeleteAck, SessionSnapshot, SteerAck, FollowUpAck, Subagent,
   ShellJob, ShellSnapshot, ShellOutput, ShellStopResult, SkillsCatalogState, SkillsApplyResult, SkillExpandResult, SkillInstallResult,
   ProviderAccounts, ProviderOAuthMethods, ProviderOAuthResult, ProviderModelDiscoveryResult, ProviderConfigurationRead,
-  CacheWarmingState, CacheWarmingApplyResult,
+  CacheWarmingState, CacheWarmingApplyResult, OmpSettingsState,
   UsageStats, UsageToolsResponse,
   WebSearchConfigState, WebSearchMutationResult,
   PluginCatalogState, PluginMutationResult, PluginDoctorResult, PluginMarketplaceState,
@@ -78,7 +79,7 @@ type ServiceResponse =
   | WorkerInfo | { workers: RegisteredWorkerInfo[] }
   | SessionList | RuntimeSession | HistoryPage | SessionSnapshot | SessionDeleteAck | SessionForkResult | NativeEntryResult | Subagent[]
   | NativeArchiveInventory | NativeArchiveImported
-  | ApprovalRequest | ApprovalRequest[] | QuestionRequest | QuestionRequest[] | { run: Run }
+  | ApprovalRequest | ApprovalRequest[] | QuestionRequest | QuestionRequest[] | { run: Run } | SessionControlAck
   | SteerAck | FollowUpAck
   | SessionBranchResult
   | MCPCatalogRead | MCPApplyResult | MCPOAuthResult
@@ -88,7 +89,7 @@ type ServiceResponse =
   | ModelCatalog | ProviderCatalog | AgentCatalog
   | ProviderMutationResult | ModelMutationResult | ProviderCredentialMutationResult | AgentMutationResult
   | ProviderAccounts | ProviderOAuthMethods | ProviderOAuthResult | ProviderModelDiscoveryResult | ProviderConfigurationRead
-  | CacheWarmingState | CacheWarmingApplyResult
+  | CacheWarmingState | CacheWarmingApplyResult | OmpSettingsState
   | WebSearchConfigState | WebSearchMutationResult
   | CompletionResult | CompletionCancelResult | UsageStats | UsageToolsResponse
   | PrivateCredentialResolveResult | PrivateCredentialHandoffResult
@@ -539,7 +540,13 @@ export class AgentService {
       if (request.method === 'GET' && url.pathname === '/api/agent/v1/sessions') {
         const workspaceId = EntityIdSchema.safeParse(url.searchParams.get('workspaceId'));
         if (!workspaceId.success) throw new RequestError(400, 'INVALID_REQUEST', 'Workspace identity is required');
-        respondJson(response, 200, this.sessions.list(workspaceId.data)); return;
+        respondJson(response, 200, await this.sessions.list(this.workspaceCatalogs.get(workspaceId.data))); return;
+      }
+      const sessionTitle = /^\/api\/agent\/v1\/sessions\/([^/]+)\/title$/.exec(url.pathname);
+      if (sessionTitle && request.method === 'PATCH') {
+        const sessionId = identity(sessionTitle[1]);
+        const input = await readBody(request, SessionTitleRequestSchema);
+        respondJson(response, 200, await this.sessions.rename(sessionId, this.workspaceCatalogs.get(input.workspaceId), input.title)); return;
       }
       const subagents = /^\/api\/agent\/v1\/subagents$/.exec(url.pathname);
       if (subagents && request.method === 'GET') {
@@ -594,6 +601,28 @@ export class AgentService {
       if (questionRespond && request.method === 'POST') {
         const sessionId = identity(questionRespond[1]);
         respondJson(response, 200, await this.sessions.resolveQuestion(sessionId, identity(questionRespond[2]), await readBody(request, QuestionReplySchema))); return;
+      }
+      const controlRoute = /^\/api\/agent\/v1\/sessions\/([^/]+)\/control$/.exec(url.pathname);
+      if (controlRoute && request.method === 'POST') {
+        const sessionId = identity(controlRoute[1]);
+        const control = SessionControlRequestSchema.parse(await readBody(request, SessionControlRequestSchema));
+        if (control.type === 'abort') {
+          respondJson(response, 200, { run: await this.sessions.abort(sessionId, control.runId) }); return;
+        }
+        if (control.type === 'mode.set') {
+          respondJson(response, 200, SessionControlAckSchema.parse({ type: 'mode.set', mode: await this.sessions.setMode(sessionId, control.mode) })); return;
+        }
+        if (control.type === 'goal') {
+          respondJson(response, 200, SessionControlAckSchema.parse(await this.sessions.goal(sessionId, control))); return;
+        }
+        if (control.type === 'compact') {
+          respondJson(response, 200, SessionControlAckSchema.parse(await this.sessions.compact(sessionId, control.instructions))); return;
+        }
+        if (control.type === 'command') {
+          respondJson(response, 200, SessionControlAckSchema.parse(await this.sessions.command(sessionId, control.text))); return;
+        }
+        if (control.type === 'btw.ask') { respondJson(response, 202, SessionControlAckSchema.parse(await this.sessions.btwAsk(sessionId, control.question, control.recordId))); return; }
+        respondJson(response, 200, SessionControlAckSchema.parse(await this.sessions.btwCancel(sessionId, control.recordId))); return;
       }
       const sessionRoute = /^\/api\/agent\/v1\/sessions\/([^/]+)(?:\/(snapshot|history|events)|\/(runs)(?:\/([^/]+)\/abort)?)?$/.exec(url.pathname);
       if (sessionRoute) {

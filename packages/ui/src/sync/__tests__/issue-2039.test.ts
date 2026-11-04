@@ -551,7 +551,6 @@ describe("assistant answer worktree routing", () => {
       providerId: "provider",
       modelId: "model",
       variant: "",
-      agent: "build",
       instructions: "Follow the answer",
     })).rejects.toThrow("Failed to create session")
     expect(useSessionUIStore.getState().currentSessionId).toBeNull()
@@ -573,16 +572,36 @@ describe("assistant answer worktree routing", () => {
     await useSessionUIStore.getState().createSessionFromAssistantMessage({
       sessionId: "source-session", directory: "/worktrees/source", text: "Implement the plan",
     }, {
-      providerId: "provider", modelId: "model", variant: "", agent: "build",
+      providerId: "provider", modelId: "model", variant: "",
       instructions: "Follow the answer", createWorktree: true,
     })
     expect(createdWorktreeProjects).toEqual([{ id: "project", path: "/repo" }])
     expect(createSessionCalls[0]?.directory).toBe("/worktrees/generated-branch")
-    expect(createSessionCalls[0]?.options).toMatchObject({ providerId: "provider", modelId: "model", agentId: "build" })
+    expect(createSessionCalls[0]?.options).toMatchObject({ providerId: "provider", modelId: "model", agentId: null })
     expect(useSessionUIStore.getState().getDirectoryForSession("ses_issue_2039")).toBe("/worktrees/generated-branch")
     expect(send).toHaveBeenCalledTimes(1)
     expect(send.mock.calls[0]?.[9]?.target).toEqual({
       runtimeKey: getRuntimeKey(), sessionId: "ses_issue_2039", directory: "/worktrees/generated-branch",
     })
+  })
+  test("starts an OMP goal before the fork answer prompt", async () => {
+    const order: string[] = []
+    const goal = spyOn(canonicalClient, "goal").mockImplementation(async (sessionId, input) => {
+      order.push("goal")
+      return { type: "goal", mode: { kind: "goal", status: "active", objective: input.objective ?? "", tokenBudget: input.tokenBudget ?? null, tokensUsed: 0 } }
+    })
+    spyOn(canonicalClient, "createRun").mockImplementation(async sessionId => {
+      order.push("prompt")
+      return { run: { runId: "goal-run", sessionId, status: "running" as const, origin: "host" as const, createdAt: 1 } }
+    })
+    await useSessionUIStore.getState().createSessionFromAssistantMessage({
+      sessionId: "source-session", directory: "/repo", text: "Implement the requested feature",
+    }, {
+      providerId: "provider", modelId: "model", variant: "", instructions: "Use the answer as the assignment", runAsGoal: true,
+    })
+    expect(goal).toHaveBeenCalledTimes(1)
+    expect(goal.mock.calls[0]?.[1].objective).toContain("Implement the requested feature")
+    expect(order).toEqual(["goal"])
+    expect(canonicalClient.createRun).not.toHaveBeenCalled()
   })
 })

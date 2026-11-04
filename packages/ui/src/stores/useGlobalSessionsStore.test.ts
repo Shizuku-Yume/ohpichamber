@@ -6,7 +6,7 @@ import { isGlobalSessionRecencyOnlyUpdate, resolveGlobalSessionDirectory, useGlo
 const session = (sessionId: string, extra: Partial<Session> = {}): Session => ({
   sessionId, projectId: 'pro_project', workspaceId: 'wsp_repo', displayPath: 'repo',
   rootSessionId: sessionId, createdAt: 1, updatedAt: 2, epoch: 'epoch', headSequence: '0',
-  runtimeStatus: 'idle', activeRunId: null, metadata: { title: sessionId },
+  runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' as const }, title: sessionId, metadata: {},
   metadataRevision: '1', archiveRevision: '0', ...extra,
 });
 
@@ -18,10 +18,10 @@ beforeEach(() => {
 });
 
 describe('native global session mutations', () => {
-  test('keeps Host titles in metadata and updates the native entity', () => {
+  test('keeps OMP titles in the runtime record and updates the native entity', () => {
     useGlobalSessionsStore.getState().upsertSession(session('ses_one'));
-    useGlobalSessionsStore.getState().upsertSession(session('ses_one', { metadata: { title: 'Renamed' }, metadataRevision: '2' }));
-    expect(useGlobalSessionsStore.getState().entityById.get('ses_one')?.metadata?.title).toBe('Renamed');
+    useGlobalSessionsStore.getState().upsertSession(session('ses_one', { title: 'Renamed' }));
+    expect(useGlobalSessionsStore.getState().entityById.get('ses_one')?.title).toBe('Renamed');
   });
 
   test('resolves directories only from authorized workspace bindings', () => {
@@ -64,7 +64,7 @@ describe('native global session mutations', () => {
     const archived = session('ses_archived', { archivedAt: 3, archiveRevision: '1' });
     useGlobalSessionsStore.getState().applySnapshot([active], [archived]);
     const before = useGlobalSessionsStore.getState();
-    useGlobalSessionsStore.getState().upsertSession({ ...active, metadata: { title: 'New' }, metadataRevision: '2' });
+    useGlobalSessionsStore.getState().upsertSession({ ...active, title: 'New', metadata: {}, metadataRevision: '2' });
     const after = useGlobalSessionsStore.getState();
     expect(after.archivedSessions).toBe(before.archivedSessions);
     expect(after.structure).toBe(before.structure);
@@ -140,7 +140,7 @@ describe('native recency-only detection', () => {
   test('accepts only an updated timestamp change', () => {
     const record = session('ses_one');
     expect(isGlobalSessionRecencyOnlyUpdate(record, { ...record, updatedAt: 3 })).toBe(true);
-    expect(isGlobalSessionRecencyOnlyUpdate(record, { ...record, updatedAt: 3, metadata: { title: 'New' } })).toBe(false);
+    expect(isGlobalSessionRecencyOnlyUpdate(record, { ...record, updatedAt: 3, title: 'New', metadata: {} })).toBe(false);
     expect(isGlobalSessionRecencyOnlyUpdate(record, { ...record, updatedAt: 3, archivedAt: 4 })).toBe(false);
     expect(isGlobalSessionRecencyOnlyUpdate(record, { ...record, updatedAt: 3, parentSessionId: 'ses_parent' })).toBe(false);
   });

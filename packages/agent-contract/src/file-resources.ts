@@ -20,13 +20,13 @@ export const CommandEntrySchema = z.strictObject({ commandId: EntityIdSchema, ..
 export type CommandEntry = z.infer<typeof CommandEntrySchema>;
 export const PromptTemplateEntrySchema = z.strictObject({ templateId: EntityIdSchema, ...entry });
 export type PromptTemplateEntry = z.infer<typeof PromptTemplateEntrySchema>;
-export const CommandCatalogStateSchema = z.strictObject({ workspaceId: EntityIdSchema, revision: CounterSchema, commands: z.array(CommandEntrySchema).refine(items => new Set(items.map(item => item.commandId)).size === items.length) });
+export const CommandCatalogStateSchema = z.strictObject({ workspaceId: EntityIdSchema, revision: CounterSchema, commands: z.array(CommandEntrySchema).refine(items => new Set(items.map(item => item.commandId)).size === items.length), builtinCommands: z.array(z.string().min(1)) });
 export type CommandCatalogState = z.infer<typeof CommandCatalogStateSchema>;
 export const PromptTemplateCatalogStateSchema = z.strictObject({ workspaceId: EntityIdSchema, revision: CounterSchema, templates: z.array(PromptTemplateEntrySchema).refine(items => new Set(items.map(item => item.templateId)).size === items.length) });
 export type PromptTemplateCatalogState = z.infer<typeof PromptTemplateCatalogStateSchema>;
 export const CommandCreateRequestSchema = z.strictObject({ expectedRevision: CounterSchema, ...authored, argumentHint: z.string().optional() });
 export type CommandCreateRequest = z.infer<typeof CommandCreateRequestSchema>;
-export const CommandUpdateRequestSchema = CommandCreateRequestSchema.extend({ commandId: EntityIdSchema });
+export const CommandUpdateRequestSchema = CommandCreateRequestSchema.extend({ commandId: EntityIdSchema, agentId: EntityIdSchema.nullable().optional() });
 export type CommandUpdateRequest = z.infer<typeof CommandUpdateRequestSchema>;
 export const CommandDeleteRequestSchema = z.strictObject({ expectedRevision: CounterSchema, commandId: EntityIdSchema });
 export type CommandDeleteRequest = z.infer<typeof CommandDeleteRequestSchema>;

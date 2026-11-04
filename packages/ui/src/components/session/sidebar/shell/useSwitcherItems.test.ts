@@ -15,7 +15,7 @@ const session = (sessionId: string, options: { parentSessionId?: string; archive
   projectId: options.projectId ?? 'project-a',
   workspaceId: 'workspace-a', displayPath: '.',
   createdAt: 1, updatedAt: 1, epoch: '1', headSequence: '0',
-  runtimeStatus: 'idle', activeRunId: null,
+  runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
   metadata: null, metadataRevision: '0', archiveRevision: '0',
 });
 

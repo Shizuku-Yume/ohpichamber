@@ -1,4 +1,5 @@
-import { CapturedSendOptionsSchema, CounterSchema, EntityIdSchema, EpochSchema, FollowUpAckSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, MCPConfigurationStateSchema, MCPServerConfigSchema, ProblemCodeSchema, PromptRequestSchema, RunSchema, SessionBranchRequestSchema, SessionBranchResultSchema, ShellStartRequestSchema, SkillSourceRevisionsSchema, SteerAckSchema } from '@openchamber/agent-contract';
+import { CapturedSendOptionsSchema, CounterSchema, EntityIdSchema, EpochSchema, FollowUpAckSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, MCPConfigurationStateSchema, MCPServerConfigSchema, ProblemCodeSchema, PromptRequestSchema, RunSchema, SessionBranchRequestSchema, SessionBranchResultSchema, SessionModeSchema, ShellStartRequestSchema, SkillSourceRevisionsSchema, SteerAckSchema, TimestampSchema, type JsonValue } from '@openchamber/agent-contract';
+import { GoalControlRequestSchema } from '@openchamber/agent-contract';
 import { isAbsolute } from 'node:path';
 import { z } from 'zod';
 import { ProjectionInputSchema, ProjectionSeedSchema } from './projection/protocol.ts';
@@ -75,8 +76,15 @@ export const WorkerOperationSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('prompt'), runId: EntityIdSchema, request: PromptRequestSchema, attachments: z.array(AttachmentReferenceSchema).optional() }),
   HostStreamingPromptRequestSchema.extend({ type: z.literal('steer') }),
   HostStreamingPromptRequestSchema.extend({ type: z.literal('follow-up') }),
+  z.strictObject({ type: z.literal('btw.ask'), question: z.string().min(1), recordId: EntityIdSchema.optional() }),
+  z.strictObject({ type: z.literal('btw.cancel'), recordId: EntityIdSchema.optional() }),
+  z.strictObject({ type: z.literal('mode.set'), mode: z.enum(['main', 'plan', 'vibe']) }),
+  z.strictObject({ type: z.literal('session.rename'), title: z.string().trim().min(1) }),
+  GoalControlRequestSchema,
   z.strictObject({ type: z.literal('abort'), runId: EntityIdSchema }),
-  z.strictObject({ type: z.literal('approval.resolve'), approvalId: EntityIdSchema, decision: z.enum(['approve', 'reject']), policy: WorkerApprovalPolicySchema.optional() }),
+  z.strictObject({ type: z.literal('compact'), instructions: z.string().optional() }),
+  z.strictObject({ type: z.literal('command'), text: z.string().min(1) }),
+  z.strictObject({ type: z.literal('approval.resolve'), approvalId: EntityIdSchema, decision: z.enum(['approve', 'approve-always', 'reject']), policy: WorkerApprovalPolicySchema.optional() }),
   z.strictObject({ type: z.literal('question.resolve'), questionId: EntityIdSchema, action: z.enum(['answer', 'cancel']), response: JsonValueSchema.optional() }),
   z.strictObject({ type: z.literal('history'), request: HistoryPageRequestSchema }),
   z.strictObject({ type: z.literal('branch'), request: SessionBranchRequestSchema }),
@@ -90,23 +98,34 @@ export const WorkerOperationSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('usage.tools'), query: UsageQuerySchema, references: z.array(UsageSessionReferenceSchema) }),
   z.strictObject({ type: z.literal('mcp.configuration.read') }),
 ]);
-export type WorkerOperation = z.infer<typeof WorkerOperationSchema>;
+export type WorkerOperation = z.infer<typeof WorkerOperationSchema> | { type: 'question.resolve'; questionId: string; action: 'answer' | 'cancel'; response?: JsonValue };
 const WorkerApprovalInteractionSchema = z.strictObject({
   kind: z.literal('approval'), approvalId: EntityIdSchema, toolCallId: EntityIdSchema, toolName: z.string().min(1),
   actionType: z.enum(['bash_command', 'file_write', 'network_request', 'custom_tool']), commandSummary: z.string(),
   details: JsonObjectSchema, policyTarget: z.strictObject({ toolName: z.string().min(1), pattern: z.string() }), turnId: EntityIdSchema,
+  sessionRuleKey: z.string().min(1).optional(), nativeGrant: z.literal(true).optional(),
 });
 const WorkerQuestionInteractionSchema = z.strictObject({
   kind: z.literal('question'), questionId: EntityIdSchema, turnId: EntityIdSchema, prompt: z.string(),
-  schema: JsonObjectSchema,
+  schema: JsonObjectSchema, timeout: z.number().int().positive().optional(),
 });
-const WorkerInteractionSchema = z.discriminatedUnion('kind', [WorkerApprovalInteractionSchema, WorkerQuestionInteractionSchema]);
+const WorkerCancelInteractionSchema = z.strictObject({
+  kind: z.literal('cancel'), approvalId: EntityIdSchema,
+});
+const WorkerInteractionSchema = z.discriminatedUnion('kind', [WorkerApprovalInteractionSchema, WorkerQuestionInteractionSchema, WorkerCancelInteractionSchema]);
 export type WorkerInteraction = z.infer<typeof WorkerInteractionSchema>;
 const WorkerOperationResultSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('prompt'), run: RunSchema }),
   z.strictObject({ type: z.literal('steer'), ack: SteerAckSchema }),
   z.strictObject({ type: z.literal('follow-up'), ack: FollowUpAckSchema }),
   z.strictObject({ type: z.literal('abort'), run: RunSchema }),
+  z.strictObject({ type: z.literal('compact'), compactionId: EntityIdSchema, tokensBefore: z.number().int().nonnegative(), completedAt: TimestampSchema }),
+  z.strictObject({ type: z.literal('command'), output: z.string() }),
+  z.strictObject({ type: z.literal('mode.set'), mode: SessionModeSchema }),
+  z.strictObject({ type: z.literal('session.rename'), title: z.string().min(1) }),
+  z.strictObject({ type: z.literal('goal'), mode: SessionModeSchema }),
+  z.strictObject({ type: z.literal('btw.ask'), recordId: EntityIdSchema }),
+  z.strictObject({ type: z.literal('btw.cancel'), cancelled: z.boolean() }),
   z.strictObject({ type: z.literal('approval.resolve'), resolved: z.literal(true) }),
   z.strictObject({ type: z.literal('question.resolve'), resolved: z.literal(true) }),
   z.strictObject({ type: z.literal('history'), history: HistoryPageSchema }),

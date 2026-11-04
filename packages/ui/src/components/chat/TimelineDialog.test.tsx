@@ -30,7 +30,7 @@ const sessionId = 'session-1';
 const column = { sessionId, directory };
 const session: Session = {
   sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '.', rootSessionId: sessionId,
-  createdAt: 0, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  createdAt: 0, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
   metadata: null, metadataRevision: '0', archiveRevision: '0',
 };
 const user = (messageId: string, createdAt: number, parts: Part[] = []): Message => ({

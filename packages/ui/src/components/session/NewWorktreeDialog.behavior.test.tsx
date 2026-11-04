@@ -24,7 +24,10 @@ let confirmReference: ReferenceConfirm | null = null;
 const projectStoreState = { getActiveProject: () => project };
 const githubAuthState = { status: { connected: true }, hasChecked: true };
 const uiState = { isMobile: false };
-const gitState = { fetchBranches: async () => undefined };
+const gitState = {
+  fetchBranches: async () => undefined,
+  directories: new Map([[project.path, { isGitRepo: true }]]),
+};
 let worktreeCreations = 0;
 let lastSetupCommands: string[] | undefined;
 let lastCreateNames: { branchName?: string; worktreeName?: string } | undefined;

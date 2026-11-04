@@ -32,10 +32,7 @@ import {
 import { ScheduledTaskEditorDialog } from './ScheduledTaskEditorDialog';
 import { canonicalizeTimezone } from '@/lib/timezones';
 import { getModelDisplayName } from '@/lib/modelDisplay';
-import { agentLabel } from '@/lib/agentLabel';
-import { useAgentColors } from '@/hooks/useAgentColors';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
-import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
 import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
 import { CHAT_DRAFT_PROJECT_ID } from '@/lib/chatDirectories';
 
@@ -47,37 +44,19 @@ const scheduleTimes = (task: ScheduledTask): string[] => {
   return Array.from(new Set(valid)).sort((a, b) => a.localeCompare(b));
 };
 
-/**
- * What a task runs with, drawn the way the composer shows it: the provider's
- * logo before the model name, then the variant, then the agent with the
- * composer's agent icon in that agent's colour. Tasks that follow the session
- * defaults say so instead.
- */
-const TaskModelLine: React.FC<{ task: ScheduledTask; directory: string | null }> = ({ task, directory }) => {
+/** Show the captured model selection, or explain that the task follows defaults. */
+const TaskModelLine: React.FC<{ task: ScheduledTask }> = ({ task }) => {
   const { t } = useI18n();
-  const getAgentColor = useAgentColors(directory);
-  const agents = useAgentsStore((state) => selectAgentsForDirectory(state, directory));
-  const { providerID, modelID, variant, agent, useDefaults } = task.execution;
+  const { providerID, modelID, variant, useDefaults } = task.execution;
   if (useDefaults || !providerID || !modelID) {
     return <span className="truncate">{t('sessions.scheduledTasks.dialog.usesDefaults')}</span>;
   }
-  const agentName = agent?.trim();
-  const knownAgent = agentName ? agents.find((entry) => entry.agentId === agentName) : undefined;
   return (
     <>
       <ProviderLogo providerId={providerID} alt={providerID} className="h-3 w-3 shrink-0" />
       <span className="min-w-0 truncate">
         {[getModelDisplayName(null, modelID), variant?.trim()].filter(Boolean).join(' · ')}
       </span>
-      {agentName ? (
-        <>
-          <span aria-hidden="true">·</span>
-          <Icon name="ai-agent" className="h-3 w-3 shrink-0" style={{ color: getAgentColor(agentName).color }} />
-          <span className="shrink-0 truncate" style={{ color: getAgentColor(agentName).color }}>
-            {agentLabel(knownAgent ?? { name: agentName })}
-          </span>
-        </>
-      ) : null}
     </>
   );
 };
@@ -201,7 +180,7 @@ const STATUS_META = {
 const TaskTargetLine: React.FC<{ sessionId: string }> = ({ sessionId }) => {
   const { t } = useI18n();
   const session = useGlobalSessionsStore((state) => state.entityById.get(sessionId));
-  return <p className="truncate typography-meta text-muted-foreground">{t('sessions.scheduledTasks.editor.targetSession')}: {session?.metadata?.title || sessionId}</p>
+  return <p className="truncate typography-meta text-muted-foreground">{t('sessions.scheduledTasks.editor.targetSession')}: {session?.title || sessionId}</p>
 };
 
 // Next to "Paused" on a repository loop that waits for the user: the icon
@@ -601,7 +580,7 @@ export function ScheduledTasksView({ layout, onLeave }: {
                     {formatSchedule(task, t)}
                   </div>
                   <div className="typography-micro flex min-w-0 items-center gap-1 text-muted-foreground/70" title={task.execution.useDefaults ? undefined : `${task.execution.providerID ?? ''}/${task.execution.modelID ?? ''}`}>
-                    <TaskModelLine task={task} directory={selectedProject?.path ?? null} />
+                    <TaskModelLine task={task} />
                   </div>
                   {task.targetSessionId ? <TaskTargetLine sessionId={task.targetSessionId} /> : null}
                   {task.loopFile ? (

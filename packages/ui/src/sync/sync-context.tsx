@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components -- SyncProvider, its contexts, hooks, and runtime helpers are one contract module. */
 import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from "react"
 import { useStore, type StoreApi } from "zustand"
-import type { ApprovalRequest, CanonicalEvent, Message, Part, QuestionRequest, Session, SessionRuntimeStatus, SessionSnapshot } from "@openchamber/agent-contract"
+import type { ApprovalRequest, CanonicalEvent, Message, Part, QuestionRequest, Run, Session, SessionRuntimeStatus, SessionSnapshot } from "@openchamber/agent-contract"
 import { canonicalClient, type CanonicalClient } from "@/api/canonicalClient"
 import { getRuntimeKey, subscribeRuntimeEndpointChanged, subscribeRuntimeEndpointWillChange } from "@/lib/runtime-switch"
 import { normalizePath } from "@/lib/pathNormalization"
@@ -16,6 +16,7 @@ import { BootstrapFailureError } from "./retry"
 import { notifyFirstCanonicalBootstrap } from "./first-server-connect"
 import { useGlobalSyncStore } from "./global-sync-store"
 import { applyDirectoryEvent, compareCounters, mergeHostSession } from "./event-reducer"
+import { useBtwStore } from "@/stores/useBtwStore"
 import { createEventPipeline, type EventPipeline } from "./event-pipeline"
 import { subscribeSessionFoldersSync } from "./session-folders-sync";
 import { subscribeSessionDraftsSync } from "./session-drafts-sync";
@@ -91,6 +92,12 @@ export function handleEvents(target: SessionMessageTarget, events: readonly Cano
   let contiguous = true
   for (const event of events) {
     if (event.sessionId !== target.sessionId) { contiguous = false; break }
+    if ((event.type === "btw.delta" || event.type === "btw.completed") && next.snapshot[target.sessionId]?.session.epoch === event.epoch) {
+      if (event.type === "btw.delta") useBtwStore.getState().applyEphemeralDelta(target.sessionId, event.recordId, event.delta)
+      else useBtwStore.getState().completeEphemeral(target.sessionId, event.recordId, event.status === 'completed' ? 'completed' : event.status === 'cancelled' ? 'cancelled' : 'failed', event.text)
+      continue
+    }
+    if (event.type === "btw.delta" || event.type === "btw.completed") continue
     const result = applyDirectoryEvent(next, event)
     if (result.kind === "resnapshot") { contiguous = false; break }
     if (result.kind === "duplicate") continue
@@ -289,7 +296,15 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
         }
         return contiguous
       },
-      recover: (target) => messageLoader.refresh(target, undefined, { recovered: true }),
+      recover: async (target) => {
+        const btw = useBtwStore.getState().byParent[target.sessionId]
+        if (btw?.ephemeralStatus === "running" && btw.ephemeralRecordId) {
+          useBtwStore.getState().completeEphemeral(target.sessionId, btw.ephemeralRecordId, "failed", btw.ephemeralText ?? "")
+        } else if (btw?.pendingSend) {
+          useBtwStore.getState().setPanelState(target.sessionId, { pendingSend: undefined, pending: true })
+        }
+        await messageLoader.refresh(target, undefined, { recovered: true })
+      },
       onDisconnect(target) {
         const store = childStores.getChild(target.directory)
         if (store && isCurrent()) {
@@ -299,6 +314,12 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
             session_status: { ...state.session_status, [target.sessionId]: "unavailable" },
           })
           applyGlobalSessionStatusSnapshot(target.directory, { [target.sessionId]: "unavailable" }, [target.sessionId])
+        }
+        const btw = useBtwStore.getState().byParent[target.sessionId]
+        if (btw?.ephemeralStatus === "running" && btw.ephemeralRecordId) {
+          useBtwStore.getState().completeEphemeral(target.sessionId, btw.ephemeralRecordId, "failed", btw.ephemeralText ?? "")
+        } else if (btw?.pendingSend) {
+          useBtwStore.getState().setPanelState(target.sessionId, { pendingSend: undefined, pending: true })
         }
       },
     })
@@ -460,6 +481,9 @@ export function useSessionMessagesSelector<T>(sessionId: string, directory: stri
 export function useSessionMessagesResolved(sessionId: string, directory?: string): boolean { return useSessionMessagesSelector(sessionId, directory, (_messages, state) => Object.hasOwn(state.message, sessionId)) }
 export function useSessionRenderable(sessionId: string, directory?: string): boolean { return useSessionMessagesSelector(sessionId, directory, (_messages, state) => getSessionMaterializationStatus(state, sessionId).renderable) }
 export function useSessionStatus(sessionId: string, directory?: string): SessionRuntimeStatus | undefined { return useDirectorySync(useCallback((state) => state.sessionStatusInvalidated?.[sessionId] ? "unavailable" : state.session_status[sessionId], [sessionId]), directory) }
+export function useSessionActiveRun(sessionId: string, directory?: string): Run | null {
+  return useDirectorySync(useCallback((state) => state.snapshot[sessionId]?.activeRun ?? null, [sessionId]), directory)
+}
 export function useSessionStatusSnapshotReady(directory?: string, sessionId?: string): boolean { return useDirectorySync(useCallback((state) => sessionId ? Boolean(state.snapshot[sessionId]) && !state.sessionStatusInvalidated?.[sessionId] : Boolean(state.sessionStatusReady), [sessionId]), directory) }
 export function useGlobalSessionStatus(sessionId: string): SessionRuntimeStatus | undefined { return useGlobalSessionStatusStore(useCallback((state) => state.statusById.get(sessionId)?.status, [sessionId])) }
 export function useSessionPermissions(sessionId: string, directory?: string, options?: { bootstrap?: boolean }): ApprovalRequest[] {

@@ -1,16 +1,5 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import type { Model, Provider } from '@openchamber/agent-contract';
-import { btwModelAvailability, resolveBtwSelection, useBtwStore } from './useBtwStore';
-import { useSelectionStore } from '@/sync/selection-store';
-
-const composerModel = { providerId: 'openai', modelId: 'gpt-5.6-terra' };
-const input = {
-  agents: [{ agentId: 'build', name: 'build' }, { agentId: 'plan', name: 'plan' }],
-  savedAgent: null,
-  savedModel: null,
-  composerModel,
-  composerVariant: 'medium',
-};
+import { useBtwStore } from './useBtwStore';
 
 describe('useBtwStore', () => {
   beforeEach(() => {
@@ -21,197 +10,32 @@ describe('useBtwStore', () => {
     expect(useBtwStore.getState().byParent).toEqual({});
   });
 
-  test('setPanelState merges patches per parent', () => {
-    useBtwStore.getState().setPanelState('parent-1', { creating: true });
-    useBtwStore.getState().setPanelState('parent-1', { collapsed: true });
-    expect(useBtwStore.getState().byParent['parent-1']).toEqual({ creating: true, collapsed: true });
-  });
-
-  test('parents are independent', () => {
-    useBtwStore.getState().setPanelState('parent-1', { collapsed: true });
-    useBtwStore.getState().setPanelState('parent-2', { destroying: true });
-    expect(useBtwStore.getState().byParent['parent-1']).toEqual({ collapsed: true });
-    expect(useBtwStore.getState().byParent['parent-2']).toEqual({ destroying: true });
-  });
-
-  test('clearPanelState removes only its parent entry', () => {
-    useBtwStore.getState().setPanelState('parent-1', { collapsed: true });
+  test('keeps transient panel state independent per parent', () => {
+    useBtwStore.getState().setPanelState('parent-1', { pending: true });
     useBtwStore.getState().setPanelState('parent-2', { collapsed: true });
-    useBtwStore.getState().clearPanelState('parent-1');
-    expect(useBtwStore.getState().byParent).toEqual({ 'parent-2': { collapsed: true } });
+    expect(useBtwStore.getState().byParent).toEqual({
+      'parent-1': { pending: true },
+      'parent-2': { collapsed: true },
+    });
   });
 
-  test('clearPanelState on an unknown parent is a no-op', () => {
+  test('applies stream deltas and completion to the active record', () => {
+    useBtwStore.getState().applyEphemeralDelta('parent-1', 'record-1', 'first');
+    useBtwStore.getState().applyEphemeralDelta('parent-1', 'record-1', ' second');
+    expect(useBtwStore.getState().byParent['parent-1']).toMatchObject({
+      ephemeralRecordId: 'record-1', ephemeralText: 'first second', ephemeralStatus: 'running',
+    });
+    useBtwStore.getState().completeEphemeral('parent-1', 'record-1', 'completed', 'first second');
+    expect(useBtwStore.getState().byParent['parent-1']).toMatchObject({ ephemeralStatus: 'completed', ephemeralText: 'first second' });
+  });
+
+  test('clearPanelState removes only its parent entry and is a no-op when missing', () => {
+    useBtwStore.getState().setPanelState('parent-1', { collapsed: true });
+    useBtwStore.getState().setPanelState('parent-2', { pending: true });
+    useBtwStore.getState().clearPanelState('parent-1');
+    expect(useBtwStore.getState().byParent).toEqual({ 'parent-2': { pending: true } });
     const before = useBtwStore.getState().byParent;
     useBtwStore.getState().clearPanelState('missing');
     expect(useBtwStore.getState().byParent).toBe(before);
-  });
-
-  test('inherits model and effort from the main composer, not from the plan agent', () => {
-    expect(resolveBtwSelection(input)).toEqual({ agent: 'plan', model: composerModel, variant: 'medium' });
-    expect(resolveBtwSelection({ ...input, composerVariant: null }).variant).toBeNull();
-    expect(resolveBtwSelection({ ...input, composerModel: null }).model).toBeNull();
-    expect(resolveBtwSelection({ ...input, agents: [
-      { agentId: 'custom-id', name: 'custom' },
-      { agentId: 'helper-id', name: 'helper' },
-    ] })).toEqual({ agent: 'custom-id', model: composerModel, variant: 'medium' });
-  });
-
-  test('preserves a saved native ID across label changes and duplicate names', () => {
-    const agents = [
-      { agentId: 'review-one', name: 'reviewer' },
-      { agentId: 'review-two', name: 'reviewer' },
-      { agentId: 'planning-profile', name: 'plan' },
-    ];
-    expect(resolveBtwSelection({ ...input, agents, savedAgent: 'review-two' }).agent).toBe('review-two');
-    expect(resolveBtwSelection({ ...input, agents: agents.map((agent) => ({ ...agent, name: 'Renamed' })), savedAgent: 'review-two' }).agent).toBe('review-two');
-    expect(resolveBtwSelection({ ...input, agents }).agent).toBe('planning-profile');
-    expect(resolveBtwSelection({ ...input, agents, savedAgent: 'reviewer' }).agent).toBe('planning-profile');
-    expect(resolveBtwSelection({ ...input, agents: [] }).agent).toBeUndefined();
-  });
-
-  test('prefers the saved BTW selection over the current composer', () => {
-    const savedModel = { providerId: 'one', modelId: 'selected' };
-    expect(resolveBtwSelection({ ...input, savedModel, savedVariant: null }))
-      .toEqual({ agent: 'plan', model: savedModel, variant: null });
-    expect(resolveBtwSelection({ ...input, savedModel }).variant).toBe(undefined);
-  });
-
-  test('publishes BTW effort edits and cancellation without changing the parent', () => {
-    const store = useSelectionStore.getState();
-    const parent = 'selection-cleanup-parent';
-    const pending = `btw-pending:${parent}`;
-    for (const session of [parent, pending]) {
-      store.saveSessionModelSelection(session, 'one', 'model');
-      store.saveSessionAgentSelection(session, 'plan');
-      store.saveAgentModelForSession(session, 'plan', 'one', 'model');
-      store.saveAgentModelVariantForSession(session, 'plan', 'one', 'model', 'high');
-    }
-    const observed: Array<string | null | undefined> = [];
-    const unsubscribe = useSelectionStore.subscribe((state) => {
-      observed.push(state.getAgentModelVariantForSession(pending, 'plan', 'one', 'model'));
-    });
-    try {
-      store.saveAgentModelVariantForSession(pending, 'plan', 'one', 'model', null);
-      store.clearSessionSelections(pending);
-    } finally {
-      unsubscribe();
-    }
-    expect(observed).toEqual([null, undefined]);
-    expect(store.getSessionModelSelection(pending)).toBeNull();
-    expect(store.getSessionAgentSelection(pending)).toBeNull();
-    expect(store.getAgentModelForSession(pending, 'plan')).toBeNull();
-    expect(store.getAgentModelVariantForSession(pending, 'plan', 'one', 'model')).toBe(undefined);
-    expect(store.getSessionModelSelection(parent)).toEqual({ providerId: 'one', modelId: 'model' });
-    expect(store.getSessionAgentSelection(parent)).toBe('plan');
-    expect(store.getAgentModelForSession(parent, 'plan')).toEqual({ providerId: 'one', modelId: 'model' });
-    expect(store.getAgentModelVariantForSession(parent, 'plan', 'one', 'model')).toBe('high');
-  });
-});
-
-const AGENTS = [
-  { agentId: 'build', name: 'build' },
-  { agentId: 'plan', name: 'plan' },
-];
-const COMPOSER = { providerId: 'omniroute', modelId: 'orchestrator' };
-const SAVED_DEAD = { providerId: 'opencode-omniroute-live', modelId: 'orchestrator' };
-
-describe('resolveBtwSelection with a live-catalog check', () => {
-  test('falls back to the composer model when the saved model is not in the live catalog', () => {
-    const selection = resolveBtwSelection({
-      agents: AGENTS,
-      savedAgent: 'plan',
-      savedModel: SAVED_DEAD,
-      savedVariant: 'high',
-      composerModel: COMPOSER,
-      composerVariant: 'high',
-      isModelAvailable: (model) => model.providerId === 'omniroute',
-    });
-    expect(selection.model).toEqual(COMPOSER);
-    expect(selection.variant).toBe('high');
-  });
-
-  test('keeps a saved model the live catalog still offers', () => {
-    const selection = resolveBtwSelection({
-      agents: AGENTS,
-      savedAgent: 'plan',
-      savedModel: COMPOSER,
-      savedVariant: 'high',
-      composerModel: COMPOSER,
-      composerVariant: 'low',
-      isModelAvailable: () => true,
-    });
-    expect(selection.model).toEqual(COMPOSER);
-    expect(selection.variant).toBe('high');
-  });
-
-  test('keeps the saved model when no availability check is provided', () => {
-    const selection = resolveBtwSelection({
-      agents: AGENTS,
-      savedAgent: 'plan',
-      savedModel: SAVED_DEAD,
-      savedVariant: 'high',
-      composerModel: COMPOSER,
-      composerVariant: 'high',
-    });
-    expect(selection.model).toEqual(SAVED_DEAD);
-    expect(selection.variant).toBe('high');
-  });
-
-  test('a dead saved model keeps the saved agent and takes the composer variant', () => {
-    const selection = resolveBtwSelection({
-      agents: AGENTS,
-      savedAgent: 'plan',
-      savedModel: SAVED_DEAD,
-      savedVariant: 'high',
-      composerModel: COMPOSER,
-      composerVariant: null,
-      isModelAvailable: () => false,
-    });
-    expect(selection.agent).toBe('plan');
-    expect(selection.model).toEqual(COMPOSER);
-    expect(selection.variant).toBe(null);
-  });
-});
-
-describe('btwModelAvailability', () => {
-  const catalogModel: Model = {
-    modelId: 'orchestrator', provider: 'omniroute', name: 'Orchestrator', modalities: ['text'],
-    contextWindow: 128_000, maxOutputTokens: 8_192, reasoningEffortSupported: false,
-    reasoningOptions: [], variants: [], pricing: null,
-  };
-  const catalogProvider: Provider & { models: Model[] } = {
-    providerId: 'omniroute', name: 'OmniRoute', endpoint: null, protocol: null,
-    authMethods: [], auth: { status: 'missing' }, models: [catalogModel],
-  };
-  const catalog = [catalogProvider];
-  const AUTO = { providerId: 'openchamber', modelId: 'auto' };
-
-  test('offers no check while the catalog is empty, so the saved model wins', () => {
-    expect(btwModelAvailability([], true)).toBeUndefined();
-  });
-
-  test('accepts catalog models and rejects models the catalog no longer has', () => {
-    const isAvailable = btwModelAvailability(catalog, false);
-    expect(isAvailable?.(COMPOSER)).toBe(true);
-    expect(isAvailable?.(SAVED_DEAD)).toBe(false);
-  });
-
-  test('keeps a saved Auto while routing is ready, though Auto is never in the catalog', () => {
-    const selection = resolveBtwSelection({
-      agents: AGENTS,
-      savedAgent: 'plan',
-      savedModel: AUTO,
-      savedVariant: null,
-      composerModel: COMPOSER,
-      composerVariant: 'high',
-      isModelAvailable: btwModelAvailability(catalog, true),
-    });
-    expect(selection.model).toEqual(AUTO);
-    expect(selection.variant).toBe(null);
-  });
-
-  test('drops a saved Auto when routing cannot honour it', () => {
-    expect(btwModelAvailability(catalog, false)?.(AUTO)).toBe(false);
   });
 });

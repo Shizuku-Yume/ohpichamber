@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { ToolCallPartSchema, ToolResultPartSchema } from '@openchamber/agent-contract';
 import {
-  detectToolOutputLanguage, formatToolInput, getToolMetadata,
+  detectToolOutputLanguage, formatToolInput, getToolMetadata, NATIVE_TOOL_NAMES,
   isFileChangeTool, isQuestionTool, isShellTool, isSubagentTool, normalizeToolName,
   parseNativeReadPath, toolDescription, toolInputPath, toolInputPaths,
 } from './toolHelpers';
@@ -16,6 +16,22 @@ const result = ToolResultPartSchema.parse({
 });
 
 describe('native tool helpers', () => {
+  test('classifies every builtin in the pinned OMP registry and keeps extension names intact', () => {
+    expect(NATIVE_TOOL_NAMES).toEqual([
+      'read', 'bash', 'edit', 'ast_grep', 'ast_edit', 'ask', 'debug', 'ida', 'eval', 'github', 'glob', 'grep',
+      'find', 'lsp', 'checkpoint', 'rewind', 'context_notes', 'new_context', 'security_scan', 'task', 'wait',
+      'todo', 'web_search', 'write', 'memory_edit', 'retain', 'recall', 'reflect', 'learn', 'manage_skill',
+    ]);
+    for (const name of NATIVE_TOOL_NAMES) {
+      expect(getToolMetadata(name).displayName).toBe(name);
+      expect(['file', 'search', 'code', 'system', 'ai', 'web'].includes(getToolMetadata(name).category)).toBe(true);
+    }
+    expect(getToolMetadata('mcp__server_custom').displayName).toBe('mcp__server_custom');
+    expect(NATIVE_TOOL_NAMES).not.toContain('shell');
+    expect(NATIVE_TOOL_NAMES).not.toContain('subagent');
+    expect(NATIVE_TOOL_NAMES).not.toContain('question');
+    expect(NATIVE_TOOL_NAMES).not.toContain('codesearch');
+  });
   test('recognizes actual native identities without legacy aliases or namespace collisions', () => {
     expect(isShellTool('bash')).toBe(true);
     expect(isShellTool('shell')).toBe(false);

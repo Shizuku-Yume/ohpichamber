@@ -15,6 +15,7 @@ import { WorkerSkills, type WorkerSkillsContext } from './catalog-skills.ts';
 import { NativePlugins } from './catalog-plugins.ts';
 import { NativePluginOperationSchema } from '../catalogs/plugins.ts';
 import type { NativeCacheWarming } from './catalog-warming.ts';
+import { NativeSettings } from './catalog-settings.ts';
 export type CatalogNativeContext = NativeModelsContext & NativeAgentsContext & WorkerSkillsContext & {
   readonly models: NativeModels;
   readonly warming: NativeCacheWarming;
@@ -26,12 +27,14 @@ export class WorkerCatalogs {
   readonly models: NativeModels;
   readonly agents: NativeAgents;
   readonly skills: WorkerSkills;
+  readonly settingsStore: NativeSettings;
   private readonly credentials: NativeCredentials;
   private readonly oauth: NativeProviderOAuth;
   constructor(private readonly context: CatalogNativeContext) {
     this.models = context.models;
     this.agents = new NativeAgents(context);
     this.skills = new WorkerSkills(context);
+    this.settingsStore = new NativeSettings(context.settings);
     this.credentials = new NativeCredentials(context.authStorage, this.models, context.worker.workspaceId, context.agentDirectoryId,
       join(dirname(context.modelsPath), 'provider-account-labels.json'));
     this.oauth = new NativeProviderOAuth(context.authStorage, context.worker.workerGeneration);
@@ -67,6 +70,10 @@ export class WorkerCatalogs {
         return { type: 'catalog.agents', catalog: await this.agents.read(workspaceId, revision) };
       case 'catalog.warming.read':
         return { type: 'catalog.warming', state: await this.context.warming.read(workspaceId, revision) };
+      case 'catalog.settings.read':
+        return { type: 'catalog.settings', state: await this.settingsStore.read(workspaceId, revision) };
+      case 'catalog.settings.write':
+        return { type: 'catalog.settings.mutated', state: await this.settingsStore.write(workspaceId, revision, operation.request) };
       case 'catalog.warming.apply':
         return { type: 'catalog.warming.applied', mode: this.context.warming.apply(operation.mode) };
       case 'catalog.warming.persist':

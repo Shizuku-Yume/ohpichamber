@@ -1,110 +1,12 @@
 /**
- * Project knowledge a session still owes, as decided by the server.
- *
- * The client neither assembles this text nor tracks what it has sent. It used
- * to do both, which meant a session started without a UI got nothing, and a
- * conversation that was compacted kept a tab-local belief that the agent still
- * had context the summary had just removed.
- *
- * Ordinary fetch failures leave the message deliverable without the block.
- * A runtime switch instead rejects the obsolete operation before another Host
- * can receive its directory or session identity.
+ * Project knowledge for the UI: what the session carries for display, and the
+ * pin switches. Prompt delivery belongs to the Host, which attaches the user's
+ * pins itself, so the client never assembles or reports prompt text.
  */
 
 import { runtimeFetch } from './runtime-fetch';
 import { z } from 'zod';
-import { getRuntimeKey, getRuntimeSwitchRevision } from './runtime-switch';
 
-interface SessionKnowledge {
-  /** Empty when the session already carries what it needs. */
-  text: string;
-  /** Reported back once the message carrying the text has actually gone out. */
-  signature: string;
-}
-
-const EMPTY: SessionKnowledge = { text: '', signature: '' };
-
-/**
- * Delivery reports still on their way to the server, by session. Until one
- * lands the server still says the session owes the block, so a send right
- * behind the one that carried it would carry it a second time.
- */
-const deliveryReports = new Map<string, Promise<void>>();
-
-export const fetchSessionKnowledge = async (
-  directory: string | null,
-  sessionId: string | null,
-  owner = { runtimeKey: getRuntimeKey(), revision: getRuntimeSwitchRevision() },
-): Promise<SessionKnowledge> => {
-  const assertCurrent = () => {
-    if (owner.runtimeKey !== getRuntimeKey() || owner.revision !== getRuntimeSwitchRevision()) throw new Error('runtime changed');
-  };
-  assertCurrent();
-  if (!directory) {
-    return EMPTY;
-  }
-
-  if (sessionId) {
-    await deliveryReports.get(sessionId);
-  }
-  assertCurrent();
-
-  try {
-    const params = new URLSearchParams({ directory });
-    if (sessionId) {
-      params.set('sessionId', sessionId);
-    }
-    const response = await runtimeFetch(`/api/session-knowledge?${params.toString()}`, {
-      cache: 'no-store',
-    });
-    assertCurrent();
-    if (!response.ok) {
-      return EMPTY;
-    }
-    const payload = await response.json() as Partial<SessionKnowledge> | null;
-    assertCurrent();
-    return {
-      text: typeof payload?.text === 'string' ? payload.text : '',
-      signature: typeof payload?.signature === 'string' ? payload.signature : '',
-    };
-  } catch {
-    assertCurrent();
-    return EMPTY;
-  }
-};
-
-/**
- * Recorded after the send resolves, never before: a failed send must carry the
- * block again rather than assume the agent already saw it.
- */
-export const reportSessionKnowledgeDelivered = async (
-  directory: string | null,
-  sessionId: string | null,
-  signature: string,
-): Promise<void> => {
-  if (!directory || !sessionId || !signature) {
-    return;
-  }
-
-  invalidateSummary(directory, sessionId);
-  const report = (async () => {
-    try {
-      await runtimeFetch('/api/session-knowledge/delivered', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ directory, sessionId, signature }),
-        // The directory travels only in the body here, so name it for space
-        // routing too: the session lives in that space's server, not the host.
-        directory,
-      });
-    } catch {
-      // Only means the block may be sent once more.
-    }
-  })();
-  deliveryReports.set(sessionId, report);
-  await report;
-  if (deliveryReports.get(sessionId) === report) deliveryReports.delete(sessionId);
-};
 
 export interface SessionKnowledgeSummary {
   notes: Array<{ id: string; body: string }>;

@@ -12,7 +12,7 @@ This module provides notification message preparation utilities for the web serv
 - `packages/web/server/lib/notifications/push-seal.js`: end-to-end sealing of native push text. A phone that registers with a `pushKey` (32 bytes, base64; made by the iOS shell in the App Group, by Android's `PushSealKey`) gets each notification as the generic scenario title, an empty body and `data.enc` = `v1.` + base64(nonce || AES-256-GCM ciphertext || tag) of `{ title, body }`. Each such device is its own relay send. The iOS Notification Service Extension and Android's `SealedPushMessagingService` open it; the relay sends a sealed push to Android as a data message (openchamber-website `apps/api/src/lib/fcm.ts`) so that service runs in the background. The sealed text is richer than the clear one: `runtime.js` passes `sealed` = the session name as title and what happened as body (the agent's reply; `Question:`, `Wants to run:` / `Wants to edit:` / `Wants permission:`, `Error:` or the goal title before the detail). The detail goes through the 250-character message cap before the prefix is added. When there is no such text, the phone opens the generic text. Phones without a key keep getting the generic text in the clear. Enterprise mode sends no `sealed` text and strips the session name, so the phone shows only the scenario title.
 - `packages/web/server/lib/notifications/session-key.js`: the key both push stores group registrations under, a `sha256:` hash of the UI session token, never the token. Files written before the hashing are rewritten with hashed keys on first read. Both stores are written `0600`.
 - `packages/web/server/lib/notifications/emitter-runtime.js`: desktop/stdout + UI SSE notification emission runtime.
-- `packages/web/server/lib/notifications/runtime.js`: trigger runtime for canonical Agent Service events (run completion/failure, approvals, questions) with debouncing, subtask/goal suppression and push fanout.
+- `packages/web/server/lib/notifications/runtime.js`: trigger runtime for canonical OMP session events (run completion/failure, approvals, questions) with debouncing, subtask/goal suppression and push fanout.
 - `packages/web/server/lib/notifications/template-runtime.js`: notification template variables and session text/title enrichment over the canonical session service, including the session's project, worktree, branch and Host title.
 - `packages/web/server/lib/notifications/template-locales.js`: the notification text OpenChamber writes itself, per interface language. An empty template field means "no custom text", so the notification uses these defaults. The server keeps its own list because it cannot import `packages/ui`; an unknown tag falls back to English.
 - `packages/web/server/lib/notifications/message.js`: helper implementation module.
@@ -48,10 +48,11 @@ delivery path.
   - `POST /api/sessions/:id/view` and `POST /api/sessions/:id/message-sent`: only reset the native push badge. Whether a session is unread is OpenCode's own `time.viewed`.
 
 ### Trigger runtime API (runtime.js)
-- `createNotificationTriggerRuntime(dependencies)`: creates runtime-owned debounced trigger handling for canonical Agent Service events.
+- `createNotificationTriggerRuntime(dependencies)`: creates runtime-owned debounced trigger handling for canonical session events.
 - Returned API: `processCanonicalEvent(event, scope)`, `setAutoAcceptSession`, `setGetIsWindowFocused`, `setGetIsSessionAutoAccepting`, `clearPendingPushBadge`, `sendGoalSettlePush`, `invalidateSession`, `stop`.
 - Owns:
   - run completion/failure, approval and question trigger routing with a 500 ms debounce and a resolution cancel; permission requests already auto-accepted by the session or an ancestor are suppressed
+  - authoritative OMP `SessionMode` lookup on terminal runs; active goal turns suppress ordinary ready notices, and complete/budget-limited goals emit one final goal notification
   - subtask suppression (`notifyOnSubtasks`) and a live-child check, plus goal-driven completion suppression
   - template resolution and fallback: an empty field in `settings.notificationTemplates` resolves to the language default from `template-locales.js`, so notification text follows `settings.locale` unless the user wrote their own
   - native notification fanout and web push payload fanout
@@ -90,7 +91,7 @@ delivery path.
 
 ### Template runtime API (template-runtime.js)
 - `createNotificationTemplateRuntime(dependencies)`: creates shared notification/template runtime. Model-backed summarization was retired after the Zen provider became unavailable.
-- Requires `readSessionMetadata(sessionId) -> Promise<metadata|null>`, bound to the Host SQLite metadata store. Each template build reads the current Host custom title before considering a payload or execution-native default title. A strict Host read failure propagates to the trigger runtime's existing generic notification fallback; it must not substitute an execution title for an unreadable Host override. The title-ownership regressions use real SQLite, including renames and corrupt rows; this task has not executed them.
+- Requires `sessionService` (with `open` and `history` methods) and `resolveSessionScope(sessionId)`. OMP owns the session title, and each template build reads the canonical title from the session snapshot. A strict read failure propagates to the trigger runtime's existing generic notification fallback.
 - Returned API:
   - `resolveNotificationTemplate(template, variables)`
   - `shouldApplyResolvedTemplateMessage(template, resolved, variables)`

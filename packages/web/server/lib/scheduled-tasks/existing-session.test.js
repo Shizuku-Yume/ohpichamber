@@ -8,7 +8,7 @@ const task = { id: 'task', name: 'Follow up', enabled: true, targetSessionId: 't
   execution: { prompt: 'Continue', useDefaults: true }, state: {} };
 const scope = { sessionId: 'target', rootSessionId: 'target', projectId: 'opaque-project', workspaceId: 'opaque-workspace', hostProjectId: 'host-project', cwd: '/worktree' };
 const snapshot = (sessionId = 'target') => ({ session: { sessionId, rootSessionId: sessionId, projectId: scope.projectId, workspaceId: scope.workspaceId, displayPath: '.',
-  createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null }, cursor: 'epoch:0', activeRun: null,
+  createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' } }, cursor: 'epoch:0', activeRun: null,
   branch: { branchId: 'branch', branchVersion: '1', leafMessageId: null }, window: { firstTurnId: null, lastTurnId: null, firstMessageId: null, lastMessageId: null, hasEarlier: false },
   turns: [], messages: [], approvals: [], questions: [], requestRecovery: { pendingSet: 'replace', priorEpochs: 'expired' } });
 const setup = (extra = {}) => {
@@ -50,7 +50,7 @@ describe('canonical existing-session scheduling', () => {
   it('captures pinned model, agent and variant at admission', async () => {
     const h = setup();
     await h.runtime.run('host-project', { ...task, execution: { prompt: 'Pinned', providerID: 'provider', modelID: 'model', agent: 'agent', variant: 'high' } }, 'manual');
-    expect(h.appended[0].request.request.options).toEqual({ providerId: 'provider', modelId: 'model', agentId: 'agent', variant: 'high', reasoningEffort: null });
+    expect(h.appended[0].request.request.options).toEqual({ providerId: 'provider', modelId: 'model', agentId: null, variant: 'high', reasoningEffort: null });
   });
 
   it('captures worker expansion once before queue persistence while keeping raw task display', async () => {
@@ -65,7 +65,7 @@ describe('canonical existing-session scheduling', () => {
     const queued = h.appended[0].request;
     expect(queued.content).toBe(prompt);
     expect(queued.request.input.text).toBe('# Native\n\n  raw body\n');
-    expect(queued.request.options).toEqual({ providerId: 'bound-provider', modelId: 'bound-model', agentId: 'bound-agent', variant: 'high', reasoningEffort: null });
+    expect(queued.request.options).toEqual({ providerId: 'bound-provider', modelId: 'bound-model', agentId: null, variant: 'high', reasoningEffort: null });
     await h.runtime.beforeSend(scope, { request: queued.request });
     expect(h.dependencies.service.request).toHaveBeenCalledTimes(1);
     expect(scheduled.execution.prompt).toBe(prompt);

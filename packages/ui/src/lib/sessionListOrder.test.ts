@@ -17,6 +17,7 @@ const session = (sessionId: string, updated: number, extras: Partial<Session> = 
   headSequence: '0',
   runtimeStatus: 'idle',
   activeRunId: null,
+  mode: { kind: 'main' as const },
   metadata: null,
   metadataRevision: '0',
   archiveRevision: '0',
@@ -49,14 +50,11 @@ describe('session list stepping', () => {
     expect(stepSession([], null, -1)).toBeUndefined();
   });
 
-  test('reads globally visible sessions, excluding btw forks and subagents', () => {
+  test('reads globally visible sessions, excluding subagents', () => {
     const visible = session('visible', 30);
     const elsewhere = session('elsewhere', 20);
-    const btw = session('btw', 40, {
-      metadata: { openchamber: { kind: 'btw', originalSessionID: 'visible' } },
-    });
     const subagent = session('child', 50, { parentSessionId: 'visible' });
-    useGlobalSessionsStore.getState().applySnapshot([visible, elsewhere, btw, subagent], []);
+    useGlobalSessionsStore.getState().applySnapshot([visible, elsewhere, subagent], []);
 
     expect(readOrderedActiveSessions().map(({ sessionId }) => sessionId)).toEqual(['visible', 'elsewhere']);
   });

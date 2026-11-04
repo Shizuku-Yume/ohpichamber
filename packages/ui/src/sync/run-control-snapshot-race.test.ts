@@ -66,7 +66,7 @@ describe("run control survives an in-flight snapshot read", () => {
 
     const pending = loader.ensure({ directory, sessionId })
     await requested.promise
-    store.setState((state) => installRuntimeRun(state, { runId: "run-a", sessionId, status: "running", createdAt: 5 }))
+    store.setState((state) => installRuntimeRun(state, { runId: "run-a", sessionId, status: "running", origin: "host", createdAt: 5 }))
     expect(store.getState().session_status[sessionId]).toBe("running")
 
     response.resolve(idle)
@@ -88,7 +88,7 @@ describe("run control survives an in-flight snapshot read", () => {
 
     const pending = loader.ensure({ directory, sessionId })
     await requested.promise
-    store.setState((state) => installRuntimeRun(state, { runId: "run-a", sessionId, status: "running", createdAt: 5 }))
+    store.setState((state) => installRuntimeRun(state, { runId: "run-a", sessionId, status: "running", origin: "host", createdAt: 5 }))
 
     response.resolve(newer("5"))
     await pending

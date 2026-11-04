@@ -6,7 +6,7 @@ import type { SessionMessageTarget } from "./session-message-loader"
 
 const target: SessionMessageTarget = { directory: "/repo", sessionId: "session-1" }
 const snapshot: SessionSnapshot = {
-  session: { sessionId: "session-1", projectId: "project-1", workspaceId: "workspace-1", displayPath: ".", rootSessionId: "session-1", createdAt: 1, updatedAt: 1, epoch: "epoch-1", headSequence: "4", runtimeStatus: "idle", activeRunId: null },
+  session: { sessionId: "session-1", projectId: "project-1", workspaceId: "workspace-1", displayPath: ".", rootSessionId: "session-1", createdAt: 1, updatedAt: 1, epoch: "epoch-1", headSequence: "4", runtimeStatus: "idle", activeRunId: null, mode: { kind: "main" } },
   cursor: "epoch-1:4", activeRun: null,
   branch: { branchId: "branch-1", branchVersion: "0", leafMessageId: null },
   window: { firstTurnId: null, lastTurnId: null, firstMessageId: null, lastMessageId: null, hasEarlier: false },
@@ -17,6 +17,7 @@ const nativeEvent: CanonicalEvent = { sessionId: "session-1", epoch: "epoch-1", 
 const canonicalNotFound = { problem: { status: 404, code: "SESSION_NOT_FOUND" } }
 function fakeClient() {
   let cleanupCount = 0
+  let subscriptions = 0
   let cursor = ""
   let callback: ((event: CanonicalEvent) => void) | undefined
   let invalidated: (() => void) | undefined
@@ -24,12 +25,13 @@ function fakeClient() {
   const callbacks: ((event: CanonicalEvent) => void)[] = []
   const client = {
     subscribeSessionEvents(sessionId: string, eventCursor: string, onEvent: (event: CanonicalEvent) => void, onInvalidated: () => void, onError: (error: unknown) => void) {
+      subscriptions += 1
       expect(sessionId).toBe(target.sessionId)
       cursor = eventCursor; callback = onEvent; invalidated = onInvalidated; failed = onError; callbacks.push(onEvent)
       return () => { cleanupCount += 1; callback = undefined }
     },
   } as unknown as CanonicalClient
-  return { client, callbacks, fail: (error: unknown) => failed?.(error), emit: (event: CanonicalEvent) => callback?.(event), invalidate: () => invalidated?.(), counts: () => ({ cleanupCount, cursor }) }
+  return { client, callbacks, fail: (error: unknown) => failed?.(error), emit: (event: CanonicalEvent) => callback?.(event), invalidate: () => invalidated?.(), counts: () => ({ cleanupCount, cursor, subscriptions }) }
 }
 
 function clock() {
@@ -57,6 +59,16 @@ describe("native canonical event pipeline", () => {
     expect(batches.flat()).toEqual([nativeEvent])
     pipeline.cleanup()
     expect(fake.counts().cleanupCount).toBe(1)
+  })
+
+  test("a cold snapshot without a worker does not request an event stream", () => {
+    const fake = fakeClient()
+    const pipeline = createEventPipeline({ client: fake.client, isCurrent: () => true, onEvents: () => true, recover: async () => {} })
+    const cold = { ...snapshot, session: { ...snapshot.session, runtimeStatus: "unavailable" as const, activeRunId: null } }
+    pipeline.attach(target, cold)
+    expect(fake.counts().subscriptions).toBe(0)
+    pipeline.cleanup()
+    expect(fake.counts().cleanupCount).toBe(0)
   })
 
   test("destination attachment retires the source stream and rejects its late callbacks", () => {

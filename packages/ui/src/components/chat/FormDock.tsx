@@ -14,7 +14,9 @@ import { useScopedBlockingForms, useSessions } from '@/sync/sync-context';
 import { useRequestReveal } from '@/sync/request-reveal';
 import { useChatSessionSelection } from './chatColumnSession';
 import { useMobileAutocompleteMaxHeight } from './useMobileAutocompleteMaxHeight';
+import { AskCountdown } from './AskCountdown';
 import { FormFieldControl } from './FormFieldControl';
+import { PlanReviewCard } from './PlanReviewCard';
 import {
     type AskAnswerState,
     type AskQuestion,
@@ -26,6 +28,8 @@ import {
     isAskQuestionAnswered,
     missingAskQuestionIndexes,
     parseAskQuestions,
+    parseAskTimeout,
+    parsePlanReview,
     serializeAskQuestionsMarkdown,
 } from './questionRequest';
 import { useQuestionResponse } from './useQuestionResponse';
@@ -53,7 +57,9 @@ const FormDockView: React.FC<FormDockProps> = ({ sessionId, directory, hidden })
     // panels cross-fade instead of swapping content in place.
     return (
         <AnimatePresence>
-            {hidden || !form ? null : <FormDockPanel key={form.questionId} form={form} forms={forms} />}
+            {hidden || !form ? null : parsePlanReview(form.schema) ? (
+                <PlanReviewCard key={form.questionId} form={form} docked forms={forms} />
+            ) : <FormDockPanel key={form.questionId} form={form} forms={forms} />}
         </AnimatePresence>
     );
 };
@@ -85,6 +91,7 @@ const FormDockPanel: React.FC<{ form: QuestionRequest; forms: QuestionRequest[] 
     const bodyRef = React.useRef<HTMLDivElement | null>(null);
 
     const questions = React.useMemo(() => parseAskQuestions(form.schema), [form.schema]);
+    const timeoutMs = React.useMemo(() => parseAskTimeout(form.schema), [form.schema]);
     const signature = React.useMemo(() => askSchemaSignature(form.schema), [form.schema]);
     const [restored] = React.useState(() => {
         const draft = formDrafts.get(form.questionId);
@@ -227,6 +234,9 @@ const FormDockPanel: React.FC<{ form: QuestionRequest; forms: QuestionRequest[] 
                             {t('chat.formDock.progress', { current: String(currentStep + 1), total: String(questions.length) })}
                         </span>
                     ) : null}
+                    <span className="typography-micro shrink-0 tabular-nums text-muted-foreground">
+                        <AskCountdown timeoutMs={timeoutMs} requestedAt={form.requestedAt} />
+                    </span>
                 </button>
                 {/* One dot per question: filled when answered, the current one solid. */}
                 {!collapsed && questions.length > 1 ? (

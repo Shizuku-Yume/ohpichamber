@@ -18,7 +18,7 @@ function fixture(options: { fail?: boolean; omitMarker?: boolean; switchAfterCre
   let metadata: SessionMetadata = {};
   const session: Session = {
     sessionId: 'new', projectId: 'project', workspaceId: 'workspace', displayPath: '.', rootSessionId: 'new',
-    createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+    createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
     metadata: {}, metadataRevision: '1', archiveRevision: '0',
   };
   spies.push(spyOn(canonicalClient, 'resolveWorkspace').mockImplementation(async (directory) => {

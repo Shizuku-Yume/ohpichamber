@@ -11,7 +11,7 @@ export function nativeTurn(message: Message): Turn {
 
 export function nativeSnapshot(sessionId = "session-a", messages: Message[] = [nativeMessage(sessionId)]): SessionSnapshot {
   return {
-    session: { sessionId, projectId: "project-a", workspaceId: "workspace-a", displayPath: "repo", rootSessionId: sessionId, createdAt: 1, updatedAt: 2, epoch: "epoch-a", headSequence: "4", runtimeStatus: "idle", activeRunId: null },
+    session: { sessionId, projectId: "project-a", workspaceId: "workspace-a", displayPath: "repo", rootSessionId: sessionId, createdAt: 1, updatedAt: 2, epoch: "epoch-a", headSequence: "4", runtimeStatus: "idle", activeRunId: null, mode: { kind: "main" } },
     cursor: "epoch-a:4", activeRun: null,
     branch: { branchId: "branch-a", branchVersion: "1", leafMessageId: messages.at(-1)?.messageId ?? null },
     window: { firstTurnId: messages[0]?.turnId ?? null, lastTurnId: messages.at(-1)?.turnId ?? null, firstMessageId: messages[0]?.messageId ?? null, lastMessageId: messages.at(-1)?.messageId ?? null, hasEarlier: false },
@@ -20,7 +20,7 @@ export function nativeSnapshot(sessionId = "session-a", messages: Message[] = [n
 }
 
 export function nativeHostSession(snapshot: SessionSnapshot = nativeSnapshot()): Session {
-  return { ...snapshot.session, metadata: { title: "Saved title" }, metadataRevision: "5", archiveRevision: "8", archivedAt: 3 }
+  return { ...snapshot.session, title: "Saved title", metadata: {}, metadataRevision: "5", archiveRevision: "8", archivedAt: 3 }
 }
 
 export function nativeHistory(messages: Message[], nextCursor: string | null = null, snapshot: SessionSnapshot = nativeSnapshot(messages[0]?.sessionId)): HistoryPage {

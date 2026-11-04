@@ -6,7 +6,7 @@ import { basename, dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import { JsonValueSchema, RuntimeSessionSchema, SubagentSchema, type RuntimeSession } from '@openchamber/agent-contract';
-import type { WorkerBootstrap } from '../protocol.ts';
+import type { WorkerBootstrap, WorkerOperationResult } from '../protocol.ts';
 import { z } from 'zod';
 import { WorkerRegistry } from '../supervisor/workers.ts';
 import { SessionRegistry } from './registry.ts';
@@ -607,6 +607,34 @@ test('fork loads the child policy scope from the captured source before starting
   } finally { await harness.close(); }
 }, 60000);
 
+test('registry prompt blocks idle sessions during a pending continuation and admits after projected clear', async () => {
+  const harness = await fixture();
+  try {
+    const generation = harness.workers.authorizationScope(rootSessionId)?.workerGeneration;
+    if (!generation) throw new Error('Live root worker generation is required');
+    const operation = { type: 'prompt' as const, runId: 'continuation-prompt', request: {
+      input: { text: 'after continuation', context: [], attachments: [] },
+      options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null },
+    } };
+    await harness.sessions.onEvents(rootSessionId, generation, [{ timestamp: Date.now(), event: { type: 'session.updated', continuationPending: true } }]);
+    expect(harness.sessions.runtime(rootSessionId)).toMatchObject({ runtimeStatus: 'idle', activeRunId: null, continuationPending: true });
+
+    let requests = 0;
+    const originalRequest = harness.workers.request;
+    harness.workers.request = async (): Promise<WorkerOperationResult> => {
+      requests += 1;
+      return { type: 'prompt', run: { runId: 'continuation-prompt', sessionId: rootSessionId, status: 'pending', createdAt: Date.now() } };
+    };
+    try {
+      await expect(harness.sessions.prompt(rootSessionId, operation)).rejects.toMatchObject({ code: 'RUN_ACTIVE' });
+      expect(requests).toBe(0);
+      await harness.sessions.onEvents(rootSessionId, generation, [{ timestamp: Date.now(), event: { type: 'session.updated', continuationPending: false } }]);
+      expect(harness.sessions.runtime(rootSessionId)).toMatchObject({ runtimeStatus: 'idle', activeRunId: null, continuationPending: false });
+      await expect(harness.sessions.prompt(rootSessionId, operation)).resolves.toMatchObject({ runId: 'continuation-prompt' });
+      expect(requests).toBe(1);
+    } finally { harness.workers.request = originalRequest; }
+  } finally { await harness.close(); }
+}, 60000);
 test('prepareRelocation is refused before moving session files when destination worktree is leased', async () => {
   const harness = await fixture();
   try {
@@ -650,7 +678,11 @@ test('worktree archive lease cannot acquire destination or source while relocati
     try {
       await harness.workers.acquireWorktreeLease('lease-racing', harness.destination.cwd);
     } catch (error) {
-      leaseError = error as Error;
+      if (error instanceof Error) {
+        leaseError = error;
+      } else {
+        throw error;
+      }
     }
     expect(leaseError).toMatchObject({ status: 409, code: 'COMMAND_IN_FLIGHT' });
 
@@ -694,14 +726,14 @@ test('creates and persists child session with parentSessionId linkage across res
     expect(harness.sessions.runtime(childSessionId).parentSessionId).toBe(rootSessionId);
     expect(harness.sessions.journal(childSessionId).snapshot().session.parentSessionId).toBe(rootSessionId);
 
-    const listed = harness.sessions.list(harness.source.workspaceId);
+    const listed = await harness.sessions.list(harness.source);
     const childInList = listed.items.find(s => s.sessionId === childSessionId);
     expect(childInList?.parentSessionId).toBe(rootSessionId);
 
     await harness.restart();
     const restored = harness.sessions.runtime(childSessionId);
     expect(restored.parentSessionId).toBe(rootSessionId);
-    const restoredList = harness.sessions.list(harness.source.workspaceId);
+    const restoredList = await harness.sessions.list(harness.source);
     expect(restoredList.items.find(s => s.sessionId === childSessionId)?.parentSessionId).toBe(rootSessionId);
 
     const inventory = await harness.sessions.archiveManifest();
@@ -711,5 +743,44 @@ test('creates and persists child session with parentSessionId linkage across res
     const reopened = await harness.sessions.reopen({ ...childInput, parentSessionId: undefined });
     expect(reopened.parentSessionId).toBe(rootSessionId);
     expect(harness.sessions.runtime(childSessionId).parentSessionId).toBe(rootSessionId);
+  } finally { await harness.close(); }
+}, 60000);
+
+test('cold snapshot of unloaded root session preserves parentSessionId without starting worker', async () => {
+  const harness = await fixture();
+  try {
+    const linkedRootId = 'cold-linked-root';
+    const manager = SessionManager.create(harness.source.cwd, harness.source.sessionsDirectory);
+    manager.appendMessage({ role: 'user', content: 'Cold linked prompt', timestamp: Date.now() });
+    await manager.ensureOnDisk();
+    await manager.flush();
+    const sessionFile = manager.getSessionFile()!;
+    await manager.close();
+
+    const input: WorkerBootstrap & { displayPath: string } = {
+      rootSessionId: linkedRootId,
+      projectId: harness.source.projectId,
+      workspaceId: harness.source.workspaceId,
+      cwd: harness.source.cwd,
+      agentDirectory: harness.source.agentDirectory,
+      agentDirectoryId: harness.source.agentDirectoryId,
+      displayPath: 'source',
+      sessionFile,
+      sessionsDirectory: harness.source.sessionsDirectory,
+      parentSessionId: rootSessionId,
+      env: harness.source.env,
+    };
+    await harness.sessions.open(input);
+    await harness.restart();
+
+    // Verify session is unloaded and no worker is live
+    expect(harness.sessions.runtime(linkedRootId).runtimeStatus).toBe('unavailable');
+    expect(harness.workers.authorizationScope(linkedRootId)).toBeUndefined();
+
+    // Cold read snapshot must preserve parentSessionId from reference without starting worker
+    const snapshot = await harness.sessions.snapshot(linkedRootId);
+    expect(snapshot.session.parentSessionId).toBe(rootSessionId);
+    expect(snapshot.session.sessionId).toBe(linkedRootId);
+    expect(harness.workers.authorizationScope(linkedRootId)).toBeUndefined();
   } finally { await harness.close(); }
 }, 60000);

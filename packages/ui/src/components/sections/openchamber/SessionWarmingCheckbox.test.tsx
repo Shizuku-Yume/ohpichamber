@@ -125,8 +125,9 @@ describe('SessionWarmingCheckbox', () => {
       await Promise.resolve();
     });
 
-    const checkbox = host.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    const checkbox = host.querySelector<HTMLInputElement>('input[type="checkbox"]');
     expect(checkbox).not.toBeNull();
+    if (!checkbox) throw new Error('Checkbox not found');
     expect(checkbox.checked).toBe(false);
 
     // Toggle to idle
@@ -151,7 +152,9 @@ describe('SessionWarmingCheckbox', () => {
       await Promise.resolve();
     });
 
-    const reloadedCheckbox = host.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    const reloadedCheckbox = host.querySelector<HTMLInputElement>('input[type="checkbox"]');
+    expect(reloadedCheckbox).not.toBeNull();
+    if (!reloadedCheckbox) throw new Error('Reloaded checkbox not found');
     expect(reloadedCheckbox.checked).toBe(true);
   });
 });

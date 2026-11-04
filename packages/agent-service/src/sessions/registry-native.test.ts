@@ -678,7 +678,11 @@ test('worktree archive lease cannot acquire destination or source while relocati
     try {
       await harness.workers.acquireWorktreeLease('lease-racing', harness.destination.cwd);
     } catch (error) {
-      leaseError = error as Error;
+      if (error instanceof Error) {
+        leaseError = error;
+      } else {
+        throw error;
+      }
     }
     expect(leaseError).toMatchObject({ status: 409, code: 'COMMAND_IN_FLIGHT' });
 
@@ -739,5 +743,44 @@ test('creates and persists child session with parentSessionId linkage across res
     const reopened = await harness.sessions.reopen({ ...childInput, parentSessionId: undefined });
     expect(reopened.parentSessionId).toBe(rootSessionId);
     expect(harness.sessions.runtime(childSessionId).parentSessionId).toBe(rootSessionId);
+  } finally { await harness.close(); }
+}, 60000);
+
+test('cold snapshot of unloaded root session preserves parentSessionId without starting worker', async () => {
+  const harness = await fixture();
+  try {
+    const linkedRootId = 'cold-linked-root';
+    const manager = SessionManager.create(harness.source.cwd, harness.source.sessionsDirectory);
+    manager.appendMessage({ role: 'user', content: 'Cold linked prompt', timestamp: Date.now() });
+    await manager.ensureOnDisk();
+    await manager.flush();
+    const sessionFile = manager.getSessionFile()!;
+    await manager.close();
+
+    const input: WorkerBootstrap & { displayPath: string } = {
+      rootSessionId: linkedRootId,
+      projectId: harness.source.projectId,
+      workspaceId: harness.source.workspaceId,
+      cwd: harness.source.cwd,
+      agentDirectory: harness.source.agentDirectory,
+      agentDirectoryId: harness.source.agentDirectoryId,
+      displayPath: 'source',
+      sessionFile,
+      sessionsDirectory: harness.source.sessionsDirectory,
+      parentSessionId: rootSessionId,
+      env: harness.source.env,
+    };
+    await harness.sessions.open(input);
+    await harness.restart();
+
+    // Verify session is unloaded and no worker is live
+    expect(harness.sessions.runtime(linkedRootId).runtimeStatus).toBe('unavailable');
+    expect(harness.workers.authorizationScope(linkedRootId)).toBeUndefined();
+
+    // Cold read snapshot must preserve parentSessionId from reference without starting worker
+    const snapshot = await harness.sessions.snapshot(linkedRootId);
+    expect(snapshot.session.parentSessionId).toBe(rootSessionId);
+    expect(snapshot.session.sessionId).toBe(linkedRootId);
+    expect(harness.workers.authorizationScope(linkedRootId)).toBeUndefined();
   } finally { await harness.close(); }
 }, 60000);

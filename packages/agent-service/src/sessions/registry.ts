@@ -644,7 +644,7 @@ export class SessionRegistry {
     try {
       if (this.closing || this.deleting.has(rootSessionId) || this.entries.get(rootSessionId) !== entry) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
       const journal = new SessionJournal({ sessionId, rootSessionId: entry.reference.rootSessionId,
-        parentSessionId: child?.parentSessionId, projectId: entry.reference.projectId, workspaceId: entry.reference.workspaceId, displayPath: entry.reference.displayPath }, projection.seed());
+        parentSessionId: child?.parentSessionId ?? entry.reference.parentSessionId, projectId: entry.reference.projectId, workspaceId: entry.reference.workspaceId, displayPath: entry.reference.displayPath }, projection.seed());
       journal.unavailable();
       return journal.snapshot();
     } finally { await manager.close(); }

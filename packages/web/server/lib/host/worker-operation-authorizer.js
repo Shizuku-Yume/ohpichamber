@@ -116,6 +116,9 @@ export const createWorkerOperationAuthorizer = ({
       // Native goal operations only read or change this session's OMP goal state.
       // Provider turns and machine tools still require their own authorization.
       if (request.toolName === 'goal') return allowed;
+      // Native todo operations only read or update this session's OMP task/todo state.
+      // Provider turns and machine tools still require their own authorization.
+      if (request.toolName === 'todo') return allowed;
       // Native wait only observes this session's async jobs; it opens no machine
       // capability and OMP resolves its own job identifiers.
       if (request.toolName === 'wait') return allowed;

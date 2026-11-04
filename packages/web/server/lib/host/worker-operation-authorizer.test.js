@@ -231,6 +231,29 @@ describe('Host-owned native descriptor authority', () => {
     } finally { await denied.close(); }
   });
 
+  it('admits session-local todo operations without granting machine capabilities', async () => {
+    const harness = await nativeHarness();
+    try {
+      for (const op of ['init', 'view']) {
+        const input = op === 'init'
+          ? { op, list: [{ phase: 'Phase 1', items: ['Task 1'] }] }
+          : { op };
+        const request = { type: 'tool', toolName: 'todo', input };
+        expect(await harness.authorize(harness.scope, request)).toEqual({ allowed: true });
+        for (const mismatch of [{ workspaceId: 'foreign' }, { agentDirectoryId: 'foreign' }, { cwd: harness.outside }]) {
+          expect(await harness.authorize({ ...harness.scope, ...mismatch }, request)).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+        }
+      }
+      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'todo', input: { op: 'init' }, agentId: 'foreign' })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'todo', input: { op: 'init' }, permissionPresetId: 'foreign' })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+    } finally { await harness.close(); }
+    const input = { op: 'init' };
+    const denied = await nativeHarness([{ scope: 'workspace', decision: 'deny', target: { toolName: 'todo', pattern: JSON.stringify(input) } }]);
+    try {
+      expect(await denied.authorize(denied.scope, { type: 'tool', toolName: 'todo', input })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+    } finally { await denied.close(); }
+  });
+
   it('admits profile-gated native task delegation without granting arbitrary tools', async () => {
     const input = { agent: 'child', name: 'child-proof', task: 'Return the child proof marker.' };
     const request = { type: 'tool', toolName: 'task', input };
@@ -241,7 +264,7 @@ describe('Host-owned native descriptor authority', () => {
       expect(await harness.authorize({ ...harness.scope, workspaceId: 'foreign' }, request)).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
       expect(await harness.authorize(harness.scope, { ...request, agentId: 'foreign' })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
       expect(await harness.authorize(harness.scope, { ...request, permissionPresetId: 'foreign' })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
-      expect(await harness.authorize(harness.scope, { ...request, toolName: 'todo' })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, { ...request, toolName: 'arbitrary-tool' })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
       expect(await harness.authorize(harness.scope, { ...request, input: { ...input, isolated: true } })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
       expect(await harness.authorize(harness.scope, { ...request, input: { tasks: [{ ...input, isolated: true }] } })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
       expect(await harness.authorize(harness.scope, { ...request, input: { ...input, name: '../escape' } })).toEqual({ allowed: false, code: 'INVALID_REQUEST', status: 400 });

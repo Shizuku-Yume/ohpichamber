@@ -35,8 +35,9 @@
   - Real-path service smoke: started dev server on ports 5205 and 3935; verified `/health` returned HTTP 200 with `runtime: web` and `agentService: { phase: ready }`.
 
 - **Check after:**
+  - `bun test packages/agent-service/src/worker/session-native.test.ts packages/ui/src/components/chat/`: exact declared task command output: 1516 pass, 123 fail across 1639 tests across 199 files (129.76s), where chat failures in single-process batch execution stem from pre-existing mock.module and store singleton leakage across un-isolated UI tests documented in development.md.
+  - `node scripts/run-isolated-tests.mjs packages/ui/src/components/chat/`: 192/192 test files passed (covering every UI chat test file in isolated processes per repository isolated-runner contract).
   - `bun test packages/agent-service/src/worker/session-native.test.ts`: 49 pass, 0 fail, 309 expect() calls (including autonomous commands /loop, /omfg, /cleanse, /tan, /seance, /advisor, and loop.stop).
-  - `node scripts/run-isolated-tests.mjs packages/ui/src/components/chat/`: 192/192 test files passed (covering all chat components including AdvisorMessage, CleanseStatusBoard, SubagentHudTray, ChatInput, and work-status per isolated runner contract).
-  - `bun run type-check`: 0 type errors across 3,208 files across 5 projects (1.78s).
+  - `bun run type-check`: 0 type errors across 3,215 files across 5 projects (1.92s).
   - `bunx oxlint`: 0 errors across all changed TS files.
   - Real-path feature entrypoint smoke on ports UI 5205 and API 3935 in browser context `m4-e`: session created, `/loop` lifecycle executed with 3 iterations completed on Gemini 3.8 Flash, and POST `/control` `loop.stop` verified returning `{ type: 'loop.stop', stopped: true }`.

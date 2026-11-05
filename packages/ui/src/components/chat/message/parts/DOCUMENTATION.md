@@ -30,7 +30,12 @@ Use this doc when you ask an agent to change tool/header/description behavior.
   - Failed child queries preserve known rows and expose retry.
   - `TurnActivity` and `ProgressiveGroup` thread addressed session/directory through `MemoExpandableToolRow`, whose comparator includes both.
   - Calls and results keep separate `partId` keys and toggle identities. Results borrow input only from the same turn's exact `toolCallId` and tool name; complete turn context survives segmented Activity rendering.
-  - `toolHelpers.toolDescription(part, pairedCall?)` owns native descriptions. `toolDiffUtils` owns native result paths and numbered edit-diff conversion; input text never proves a performed change.
+  - `toolHelpers.toolDescription(part, pairedCall?)` owns native descriptions (`ast_edit`, `ast_grep`, `eval`, `lsp`, `checkpoint`, `rewind`, `find`). `toolDiffUtils` owns native result paths and numbered edit/ast_edit diff conversion; input text never proves a performed change.
+  - `isReplyWrite` detects `write` targeting `out://` and renders it as borderless assistant prose (`ReplyWrite`), omitting tool cards and diff chrome.
+- `ReadToolGroup.tsx`
+  - Groups consecutive `read` calls within a turn into a collapsible tree row with `├── / └──` guides, line ranges, and status icons.
+  - Internal URIs (`proc://`, `agent://`) are rendered as clean non-interactive labels to prevent dead clicks.
+  - Preserves error outputs on failed reads when expanded.
 - `toolPresentation.tsx`
   - Shared icon mapping for tool names (`getToolIcon`).
   - Used by `ProgressiveGroup.tsx` and `ToolPart.tsx`.

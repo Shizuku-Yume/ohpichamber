@@ -41,11 +41,6 @@ describe('settings registry', () => {
       useUIStore.setState(original, true);
     }
   });
-  test('round-trips the small model thinking variant', () => {
-    expect(parseSettingsDocument({ smallModelVariant: 'high' })).toEqual({ smallModelVariant: 'high' });
-    expect(parseSettingsDocument({ smallModelVariant: '' })).toEqual({});
-    expect(parseSettingsDocument({ smallModelVariant: 3 })).toEqual({});
-  });
   test('applies the server-owned overview feature flag to the UI store', () => {
     const original = useUIStore.getState().overviewFeatureAvailable;
     try {

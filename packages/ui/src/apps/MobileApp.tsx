@@ -104,7 +104,6 @@ const MOBILE_SETTINGS_PAGES = [
   'git',
   'magic-prompts',
   'snippets',
-  'behavior',
   'agents',
   'commands',
   'mcp',

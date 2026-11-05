@@ -11,9 +11,23 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { useUIStore } from '@/stores/useUIStore';
+import { useConfigStore } from '@/stores/useConfigStore';
 import { useI18n } from '@/lib/i18n';
 import { useMarkdownPresentation } from './MarkdownPresentationContext';
 import { cn } from '@/lib/utils';
+import { TableAutoChart } from './TableAutoChart';
+
+function extractTextFromHast(node: Element): string {
+  let text = '';
+  for (const child of node.children) {
+    if (child.type === 'text') {
+      text += child.value;
+    } else if (child.type === 'element') {
+      text += extractTextFromHast(child);
+    }
+  }
+  return text.trim();
+}
 
 type TableFormat = 'csv' | 'tsv' | 'md';
 const copyFormats = ['csv', 'tsv', 'md'] as const;
@@ -85,6 +99,13 @@ function serializeMarkdownTable(table: HTMLTableElement, format: TableFormat): s
 export function MarkdownTable({ node, className, children, ...props }: React.ComponentProps<'table'> & ExtraProps) {
   const { purpose, settled } = useMarkdownPresentation();
   const wrap = useUIStore((state) => state.tableCellWrap);
+  const isAutoGraphEnabled = useConfigStore((state) => {
+    const setting = state.ompSettings?.settings?.find((s) => s.id === 'tui.autoGraph');
+    if (!setting || setting.value === null || setting.value === undefined) {
+      return true;
+    }
+    return setting.value !== false && setting.value !== 'off';
+  });
   const ref = React.useRef<HTMLTableElement>(null);
   const wrapper = React.useRef<HTMLDivElement>(null);
   const [measurement, setMeasurement] = React.useState<{ node: typeof node; natural: number[]; available: number; font: string } | null>(null);
@@ -146,6 +167,29 @@ export function MarkdownTable({ node, className, children, ...props }: React.Com
     }
     return result;
   }, [node, widths, measured]);
+
+  const tableData = React.useMemo(() => {
+    if (!isAutoGraphEnabled || !node?.children) return null;
+    const headerRow: string[] = [];
+    const bodyRows: string[][] = [];
+    for (const section of node.children) {
+      if (section.type !== 'element') continue;
+      for (const row of section.children) {
+        if (row.type !== 'element' || row.tagName !== 'tr') continue;
+        const cells: string[] = [];
+        for (const cell of row.children) {
+          if (cell.type !== 'element') continue;
+          cells.push(extractTextFromHast(cell));
+        }
+        if (section.tagName === 'thead') {
+          headerRow.push(...cells);
+        } else if (section.tagName === 'tbody') {
+          bodyRows.push(cells);
+        }
+      }
+    }
+    return { headers: headerRow, rows: bodyRows };
+  }, [node, isAutoGraphEnabled]);
   const [copied, setCopied] = React.useState(false);
   const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const { t } = useI18n();
@@ -225,6 +269,9 @@ export function MarkdownTable({ node, className, children, ...props }: React.Com
           <TableColumns.Provider value={cellWrap}>{children}</TableColumns.Provider>
         </table>
       </div>
+      {isAutoGraphEnabled && tableData && tableData.rows.length >= 2 && !purpose && (
+        <TableAutoChart headers={tableData.headers} rows={tableData.rows} />
+      )}
     </div>
   );
 }

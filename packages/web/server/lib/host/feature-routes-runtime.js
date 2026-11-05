@@ -18,7 +18,6 @@ import { registerProjectDirectoryRoutes, registerProjectSetupRoutes } from '../p
 import { registerAgentMemoryRoutes } from '../agent-memory/routes.js';
 import { registerSessionKnowledgeRoutes } from '../session-knowledge/routes.js';
 import { registerMessageSearchRoutes } from '../message-search/routes.js';
-import { registerPermissionAutoAcceptRoutes } from '../permission-auto-accept/runtime.js';
 import { registerMessageQueueRoutes } from '../message-queue/runtime.js';
 import { registerRoutingRoutes } from '../routing/routes.js';
 import { registerSettingsUtilityRoutes } from './core-routes.js';
@@ -176,7 +175,6 @@ export const createFeatureRoutesRuntime = () => {
       openChamberControlService,
       getOpenChamberEventClients,
       writeSseEvent,
-      permissionAutoAcceptRuntime,
       worktreeBootstrapStore,
       messageQueueRuntime,
       routingRuntime,
@@ -201,7 +199,6 @@ export const createFeatureRoutesRuntime = () => {
       deleteImportedTheme,
     });
 
-    registerPermissionAutoAcceptRoutes(app, permissionAutoAcceptRuntime);
     registerMessageQueueRoutes(app, messageQueueRuntime, { resolveSessionScope: resolveHostSessionScope, listQueueScopes });
     registerRoutingRoutes(app, routingRuntime);
 

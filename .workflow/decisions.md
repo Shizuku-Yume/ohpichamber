@@ -224,6 +224,7 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** no
 - **Revisit when:** the maintainer drops mobile from product scope or device access is unavailable for the planned release.
 - **Effort:** post-m3-hardening
+- **Superseded by:** 2026-11-06 - Split post-M4 roadmap into M5 packaging cleanup, M6 full audit and polish, and M7 pragmatic release
 
 ## 2026-10-24 - Bundle the Agent Runtime into @openchamber/web
 
@@ -743,3 +744,22 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Supersedes:** 2026-11-04 - Defer M4 replanning to a dedicated milestone effort
 - **Revisit when:** All 14 M4 tasks pass verification and close out before M5 release certification.
 - **Effort:** m4-orchestration
+
+## 2026-11-06 - Split post-M4 roadmap into M5 packaging cleanup, M6 full audit and polish, and M7 pragmatic release
+
+- **Decided:** Reshape the post-M4 roadmap into three sequential milestones: (1) **M5 (`m5-release-surfaces`)** focuses strictly on build/packaging adaptation, OpenCode/VSCode CI removal, unsigned cross-platform build readiness, `@openchamber/web` Agent Runtime bundling, Linux x64 Electron AppImage local smoke, `Dockerfile`/`docker-compose.yml` OMP rewrite, and Isolated Spaces fail-closed verification; (2) **M6 (`m6-audit-and-polish`)** conducts a full-codebase three-pillar audit, restores mistakenly deleted OpenChamber frontend UX, wires remaining OMP capabilities, overhauls non-compliant Settings UIs, and resolves maintainer hands-on feedback; (3) **M7 (`m7-release-verification`)** runs real-world release testing on **Linux, Windows, Android, and local Docker**, while Apple targets (macOS Electron and iOS Mobile) produce unsigned installable build artifacts only, with no Apple Developer ID signing, notarization, or TestFlight certification gates blocking release.
+- **Instead of:** Keeping the old monolithic M5 spec that blocked release on paid Apple Developer ID notarization, Authenticode EV signing, `blacksmith` runner lock-in, a physical Pixel 8, and a physical iPhone running iOS 26 via TestFlight before user feedback polish.
+- **Because:** The maintainer can directly test Linux, Windows, Android, and local Docker, has no reason to gate open builds on Apple signing/notarization ceremonies (macOS/iOS users handle unsigned installation themselves), and expects a substantial UX/feature polish round (M6) after packaging cleanup (M5) and before final release verification (M7).
+- **Supersedes:** 2026-10-24 - Keep Capacitor mobile in the M5 release matrix
+- **Mine:** no
+- **Revisit when:** The maintainer acquires Apple signing credentials and explicitly asks to add notarized Apple distribution, or changes the target platform set.
+- **Effort:** m5-release-surfaces
+
+## 2026-11-06 - Preserve OpenChamber frontend capabilities alongside full OMP engine parity
+
+- **Decided:** Establish the two-sided product rule for OhPiChamber and enforce it in M6 (`m6-audit-and-polish`): (1) OMP is the sole agent engine, and capabilities present in OMP or its TUI (including `Recap`, `Agent Hub`, and `Marketplace`) should be surfaced in the GUI; (2) OpenChamber's strengths as an agent GUI workbench are retained whenever they are genuine frontend/Host UX rather than OpenCode-specific workarounds or adapters. Specifically restore Host-persisted cross-client session pins (`session-pins`), Host-persisted session unread watermarks and turn duration badges (`session-unread` + `session-turn-duration`), optional GUI response-style presets (`BehaviorPage.tsx`, zero injection on `default`), mistakenly deleted OpenChamber General/Desktop settings controls, and strict adherence to `PATTERNS.md` and `STYLING.md` on Settings pages (`ProvidersPage`, `WebSearch`, `OmpSettingsPage`). Leave per-session cache warming and bundled `ripgrep` cut as previously decided.
+- **Instead of:** Rejecting or deleting useful OpenChamber GUI features merely because the standalone OMP CLI lacks a matching field, or accepting ad-hoc test-passing settings layouts that ignore OpenChamber's design system.
+- **Because:** OhPiChamber forks OpenChamber specifically for its superior GUI workbench UX on top of OMP's agent runtime; throwing away Host/UI features that do not depend on OpenCode degrades the frontend unnecessarily, and custom OMP/Provider settings must match the visual quality of the rest of the application.
+- **Mine:** no
+- **Revisit when:** An individual restored frontend control conflicts directly with an authoritative OMP runtime state owner.
+- **Effort:** m6-audit-and-polish

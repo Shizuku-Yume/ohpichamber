@@ -140,25 +140,33 @@ Web and Electron can create, stream, abort, reload, and reopen a session through
 
 The M4 spec's W1–W18 checks are the gate. Every retained orchestration and OMP TUI parity feature has focused automated and real-provider verification evidence under `/home/shizuku/Project/ohpichamber-omp-artifacts/m4-verification-<date>/`, no feature uses root `agentId` or reads OpenCode metadata/routes/configs, and the unverified M4 banners are removed from product documentation across all locales.
 
-## M5: release and retained surfaces
+## M5: packaging adaptation, OpenCode build removal, and runtime bundling
 
-**Status (2026-11-04):** re-planned and approved by [M5: Release and retained surfaces](../specs/m5-release-surfaces.md) and tasks `.workflow/tasks/m5-release-surfaces/01`-`09`. Task 26 is archived; the native leaf gate was resolved by task 29 accepting official registry leaves with SLSA provenance, unlocking the non-Linux release matrix while preserving unrun target runtime certification. Prerequisites `post-m3-hardening/13` and `38` are archived; surfaces can proceed as runner/device prerequisites resolve.
-
-### Work
-
-- Certify the retained desktop matrix: Electron macOS arm64/x64, Windows x64/arm64 and Linux x64/arm64. Each artifact installs, launches the embedded Host and Agent Service, completes a real-provider prompt, and verifies signing/notarization or update metadata.
-- Certify Capacitor mobile on a physical Pixel 8 (Android 15/API 35, arm64-v8a) and a physical iPhone (iOS 26, TestFlight): pairing, canonical chat, reconnect, approval/question recovery, push-click routing and offline queue. Release stays blocked until both devices pass.
-- Bundle the Agent Runtime into the packed `@openchamber/web` artifact using the Electron-verified staged payload, so a clean install starts the Host and Agent Service without a repository checkout, private workspace dependency or published OMP package.
-- Keep Docker as a supported server path: the image starts the Host and Agent Service on linux/amd64 and linux/arm64 without OpenCode and the compose file mounts only retained OpenChamber paths.
-- Keep isolated spaces unreleased. The server release gate refuses create, start, repair and model/login grants; no OpenCode runtime, config, credential row, readiness check or proxy remains. Building the OMP space runtime is a separate effort.
-- Publish the Guest SDK version decided in `decisions.md: 2026-10-24 - Break the Guest SDK version for the private bootstrap transport`, and run the packaged `v2` bootstrap smoke. `contributes.tools` stays presentation metadata unless the Agent Service registers an executable OMP custom tool; no new Guest execution capability is claimed here.
-- Certify that the OpenCode package, environment, config/auth/importer, route, lifecycle, UI, documentation, test and workflow retirement remains complete in release artifacts, and that no VS Code extension artifact returns. M5 is not permission to keep those owners.
-- Verify the completed Host metadata migration and one-time credential handoff in the release candidate; do not rerun a removed importer or silently import OpenCode transcripts/credentials. A transcript importer requires separate versioned scope.
-- Update user, install and developer documentation to describe only the rows the candidate certified.
+**Status (2026-11-06):** reshaped per maintainer directive into [M5: Packaging adaptation, OpenCode build removal, and runtime bundling](../specs/m5-release-surfaces.md) (`tasks/m5-release-surfaces/{01,04,06,07,08}`). Focuses on CI workflow cleanup, `bun@1.4.4` and `vendor/omp/650f3a10` alignment, unsigned cross-platform build readiness (no Apple signing/notarization or commercial Authenticode blockers), bundling the Agent Runtime into `@openchamber/web`, local Linux x64 Electron AppImage + Guest SDK `v2` smoke, rewriting `Dockerfile` and `docker-compose.yml` for OMP, and Isolated Spaces fail-closed + repository hygiene.
 
 ### Gate
 
-The M5 spec's R1-R10 checks are the gate. A release candidate built by `.github/workflows/release.yml` from one commit must produce every retained row, every row must have real runner, device or container evidence (or an explicit maintainer waiver naming the stand-in), and no artifact may contain an OpenCode runtime, VS Code extension or compatibility process. The Canonical Server and Agent Service start from the release package without a fallback engine.
+The M5 spec's W1–W5 checks pass locally on `main`: all CI workflows parse cleanly without OpenCode/VS Code steps or signing secret lock-in, `@openchamber/web` packs and runs standalone from a clean prefix, Linux x64 AppImage launches and loads Guest SDK `v2`, `Dockerfile`/`docker-compose.yml` carry zero OpenCode mounts or stale vendor paths, Isolated Spaces fail closed, and root gates exit 0.
+
+## M6: full-codebase audit, OpenChamber UX restoration, missing OMP capabilities, and UI compliance
+
+**Status (2026-11-06):** proposed in [M6: Full-codebase audit, OpenChamber UX restoration, missing OMP capabilities, and UI compliance](../specs/m6-audit-and-polish.md). Executes a three-pillar audit across the codebase followed by implementation alongside the maintainer's hands-on trial feedback:
+
+1. **Restore mistakenly cut/deferred OpenChamber UX:** cross-client `session-pins` (`#1`), persistent `session-unread` watermarks + turn duration badges (`#2`), opt-in `BehaviorPage` response-style presets (`#4`, zero injection on `default`), and OpenChamber General/Desktop settings controls deleted during earlier migrations.
+2. **Wire missing OMP 18.16.0 capabilities:** `Recap` (`archive/archive.ts` + `SessionRecapSpacer`), `Agent Hub` (`modes/agent-hub-runtime.ts`), `Marketplace` (`extensibility/plugins/marketplace/*`), and other unwired OMP capabilities discovered in the audit.
+3. **Enforce OpenChamber UI design standards (`PATTERNS.md` & `STYLING.md`):** rebuild non-compliant settings and UI surfaces (`ProvidersPage`, `WebSearch`, `OmpSettingsPage`, etc.) to match upstream OpenChamber visual craftsmanship.
+
+### Gate
+
+The M6 spec's W1–W4 checks pass and the maintainer signs off on the live application UX.
+
+## M7: pragmatic platform verification and release distribution
+
+**Status (2026-11-06):** proposed in [M7: Pragmatic platform verification and release distribution](../specs/m7-release-verification.md). Final post-M6 release build and real-world verification on **Linux, Windows, Android, and local Docker**, with **Apple targets (macOS Electron and iOS Mobile)** producing unsigned/ad-hoc installable artifacts only (no Apple Developer ID signing, notarization, or TestFlight gates).
+
+### Gate
+
+The M7 spec's W1–W3 checks pass across Linux, Windows, Android, and local Docker, unsigned Apple packages build cleanly, and install documentation matches actual verified targets.
 
 ## Cross-cutting evidence checklist
 

@@ -1,23 +1,13 @@
-# 01: Encode the retained release matrix
+# 01: Clean CI workflows, align bun@1.4.4, and enable unsigned cross-platform builds
 
 **Effort:** m5-release-surfaces
-**Task type:** feature
-**Base commit:** <commit-sha>
+**Blocked by:** None
+**Files:** `.github/workflows/release.yml`, `.github/workflows/release-desktop-smoke.yml`, `.github/workflows/build-macos-arm64-dmg.yml`, `.github/workflows/mobile-release.yml`, `.github/workflows/mobile-ci.yml`, `packages/electron/package.json`, `packages/electron/scripts/package.mjs`, `packages/electron/README.md`, `packages/mobile/README.md`, `packages/web/README.md`
+**Read first:** `.workflow/specs/m5-release-surfaces.md` (W1); `.workflow/decisions.md` (`2026-11-06 - Split post-M4 roadmap into M5 packaging cleanup, M6 full audit and polish, and M7 pragmatic release`)
+**Covers:** W1
+**Check:** Bun parses all `.github/workflows/*.yml` files cleanly; `grep -nE 'opencodeCli|prepare:opencode-cli|verify:opencode-cli|vscode' .github/workflows/*.yml` prints no release target or invocation; all workflows pin `bun@1.4.4` and Node 24; `.workflow/bin/workflow validate` passes.
 
-**Delivers:** One retained release matrix encoded in the release workflows and install docs: Electron macOS arm64/x64, Windows x64/arm64, Linux x64/arm64; mobile on iOS and Android; Docker linux/amd64 and linux/arm64; npm standalone on Linux x64 with further rows only after their own runner evidence. Inherited VS Code and OpenCode targets, and architectures with no approved native leaf, are removed or explicitly disabled.
-
-**Blocked by:** post-m3-hardening/29
-**Files:** `.github/workflows/release.yml` (macOS matrix 133-145, Windows 274-284, Linux 363-374); `.github/workflows/release-desktop-smoke.yml`; `.github/workflows/build-macos-arm64-dmg.yml`; `.github/workflows/mobile-release.yml`; `packages/electron/README.md`; `packages/mobile/README.md`; `packages/web/README.md`; the M5 spec matrix.
-
-**Read first:** `.workflow/specs/m5-release-surfaces.md` "How it is built" and R1; `post-m3-hardening/29`; archived task 14's Windows signing decision; task 24's docs labels; current `release.yml`.
-**Covers:** R1
-
-**Check:** Bun parses `.github/workflows/release.yml` and prints exactly the six Electron matrix entries with their runners; `.github/workflows/mobile-release.yml` names the signed Android and iOS build jobs. `grep -nE 'opencodeCli|prepare:opencode-cli|verify:opencode-cli|vscode' .github/workflows/release.yml .github/workflows/release-desktop-smoke.yml .github/workflows/build-macos-arm64-dmg.yml .github/workflows/mobile-release.yml` prints no release target or invocation. `.workflow/bin/workflow validate` passes. The same matrix table appears in the spec and the install docs, and the Docker/npm rows name the tasks that add their workflow jobs.
-
-**Done when**
-
-- [ ] The macOS, Windows and Linux matrices name the exact runners and signing/toolchain inputs from the spec, and no job targets an architecture absent from the six approved native leaves.
-- [ ] Every inheriting release or smoke workflow is either updated to the retained matrix or explicitly limited to a named non-release purpose.
-- [ ] Mobile, Docker and npm rows match the settled decisions: mobile iOS/Android is supported and blocked only on device certification; Docker covers both Linux architectures; npm starts with Linux x64. No row is listed as supported before its evidence.
-- [ ] `packages/electron/README.md`, `packages/mobile/README.md`, `packages/web/README.md` and the install docs state the retained rows and label unverified rows.
-- [ ] `workflow validate`, the matrix inventory and the inherited-reference sweep pass, and the receipt records each command and its output.
+- [ ] Remove all `opencodeCli`, `prepare:opencode-cli`, `verify:opencode-cli`, and `vscode` steps/targets from `.github/workflows/release.yml`, `release-desktop-smoke.yml`, `build-macos-arm64-dmg.yml`, `mobile-release.yml`, and `mobile-ci.yml`.
+- [ ] Align all workflow Bun pins to `1.4.4` (matching `package.json#packageManager` and `prepare-agent-runtime.mjs`) and Node to `24`, staging and verifying the OMP `18.16.0` (`vendor/omp/650f3a10`) Agent Runtime across the six native Electron targets (`darwin-arm64`, `darwin-x64`, `win32-x64`, `win32-arm64`, `linux-x64`, `linux-arm64`).
+- [ ] Configure macOS, Windows, Android, and iOS build jobs so commercial signing/notarization secrets are strictly optional: when Apple Developer ID / notarization / TestFlight or Windows Authenticode secrets are absent, builds succeed and emit unsigned/ad-hoc artifacts (`CSC_IDENTITY_AUTO_DISCOVERY=false`, `verifyUpdateCodeSignature` disabled when unsigned) instead of failing.
+- [ ] Update `packages/electron/README.md`, `packages/mobile/README.md`, and `packages/web/README.md` with accurate build targets and unsigned macOS/iOS self-installation instructions (`xattr -cr` / sideloading).

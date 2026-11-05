@@ -122,12 +122,12 @@ export function tokenizeComposer(
             const word = magicMatch[0].toLowerCase();
             const className =
                 word === 'ultrathink'
-                    ? 'bg-gradient-to-r from-red-500 via-pink-500 to-purple-500 bg-clip-text text-transparent font-semibold animate-pulse'
+                    ? 'bg-gradient-to-r from-red-500 via-pink-500 to-purple-500 bg-clip-text text-transparent font-semibold'
                     : word === 'orchestrate'
-                    ? 'bg-gradient-to-r from-emerald-500 via-teal-500 to-indigo-500 bg-clip-text text-transparent font-semibold animate-pulse'
+                    ? 'bg-gradient-to-r from-emerald-500 via-teal-500 to-indigo-500 bg-clip-text text-transparent font-semibold'
                     : word === 'workflowz'
-                    ? 'bg-gradient-to-r from-amber-500 via-lime-500 to-emerald-500 bg-clip-text text-transparent font-semibold animate-pulse'
-                    : 'bg-gradient-to-r from-fuchsia-500 via-purple-500 to-amber-500 bg-clip-text text-transparent font-semibold animate-pulse';
+                    ? 'bg-gradient-to-r from-amber-500 via-lime-500 to-emerald-500 bg-clip-text text-transparent font-semibold'
+                    : 'bg-gradient-to-r from-fuchsia-500 via-purple-500 to-amber-500 bg-clip-text text-transparent font-semibold';
             ranges.push({ start, end, style: 'attention', className, priority: 100 });
         }
     }

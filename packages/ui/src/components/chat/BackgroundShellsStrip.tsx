@@ -92,7 +92,7 @@ const ShellRow: React.FC<{
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onSelect?.(shell); }}
       className="flex h-10 items-center gap-2 pl-3 pr-1.5 hover:bg-surface-2/60 transition-colors cursor-pointer select-none"
     >
-      <span className="size-2 rounded-full bg-emerald-500 animate-pulse shrink-0" title={t('chat.backgroundShells.running')} />
+      <span className="size-2 rounded-full bg-emerald-500 shrink-0" title={t('chat.backgroundShells.running')} />
       <Icon name="terminal-box" className="size-3.5 shrink-0 text-muted-foreground" />
       <Tooltip delayDuration={COMMAND_TOOLTIP_DELAY_MS}>
         <TooltipTrigger asChild>

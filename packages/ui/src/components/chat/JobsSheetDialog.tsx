@@ -441,7 +441,7 @@ export const JobsSheetDialog: React.FC<JobsSheetDialogProps> = ({
             <div className="flex items-center gap-2">
               {isRunning ? (
                 <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold border text-emerald-500 border-emerald-500/30 bg-emerald-500/10 gap-1">
-                  <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="size-1.5 rounded-full bg-emerald-500" />
                   {t('chat.backgroundShells.running')}
                 </span>
               ) : (

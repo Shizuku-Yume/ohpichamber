@@ -1,3 +1,4 @@
+import { m4LaneDI18n } from './m4-lane-d.i18n';
 import { subagentHudI18n } from './subagent-hud.i18n';
 import { settingsDict } from './ko.settings';
 import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
@@ -9155,4 +9156,6 @@ export const dict = {
   'chat.planReview.sendFeedback': "피드백 보내기",
   'chat.planReview.reject': "거부",
   ...workerRunsI18n.ko,
+
+  ...m4LaneDI18n.ko,
 };

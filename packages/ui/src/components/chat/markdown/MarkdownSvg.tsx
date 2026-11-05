@@ -14,7 +14,7 @@ export function MarkdownSvg({ code, isIncomplete }: CustomRendererProps) {
 
   if (isIncomplete) {
     return (
-      <div className="my-2 p-3 rounded-lg border border-border/40 bg-muted/10 text-muted-foreground text-xs font-mono animate-pulse">
+      <div className="my-2 p-3 rounded-lg border border-border/40 bg-muted/10 text-muted-foreground text-xs font-mono">
         Rendering SVG figure…
       </div>
     );

@@ -1,3 +1,4 @@
+import { m4LaneDI18n } from './m4-lane-d.i18n';
 import { subagentHudI18n } from './subagent-hud.i18n';
 import { settingsDict } from './pt-BR.settings';
 import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
@@ -9155,4 +9156,6 @@ export const dict = {
   'chat.planReview.sendFeedback': "Enviar comentários",
   'chat.planReview.reject': "Rejeitar",
   ...workerRunsI18n['pt-BR'],
+
+  ...m4LaneDI18n['pt-BR'],
 };

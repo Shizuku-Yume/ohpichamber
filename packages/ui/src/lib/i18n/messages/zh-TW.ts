@@ -1,3 +1,4 @@
+import { m4LaneDI18n } from './m4-lane-d.i18n';
 import { subagentHudI18n } from './subagent-hud.i18n';
 import { settingsDict } from './zh-TW.settings';
 import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
@@ -9155,4 +9156,6 @@ export const dict = {
   'chat.planReview.sendFeedback': "傳送回饋",
   'chat.planReview.reject': "拒絕",
   ...workerRunsI18n['zh-TW'],
+
+  ...m4LaneDI18n['zh-TW'],
 };

@@ -1460,3 +1460,13 @@ test('an explicit off effort reaches the native agent while an omitted effort ke
     expect(harness.requests[0]?.reasoning_effort).not.toBe('high');
   } finally { unsubscribe(); await harness.close(); }
 }, 30000);
+test('subagent cancel and steer operations resolve through worker operations', async () => {
+  const harness = await fixture({ respond: () => completion() });
+  try {
+    const cancelRes = await harness.worker.operation({ type: 'subagent.cancel', subagentId: 'non-existent' });
+    expect(cancelRes).toEqual({ type: 'subagent.cancel', subagentId: 'non-existent', cancelled: false });
+    await expect(harness.worker.operation({ type: 'subagent.steer', subagentId: 'non-existent', message: 'hello' })).rejects.toThrow();
+  } finally {
+    await harness.close();
+  }
+});

@@ -38,4 +38,12 @@ test('the allowlist is unique and excludes credential, path, command and egress 
     'task.agentAccountPools', 'task.showResolvedModelBadge', 'goal.statusInFooter',
   ]) expect(OmpSettingIdSchema.safeParse(excluded).success).toBe(false);
   expect(OmpSettingIdSchema.safeParse('compaction.thresholdPercent').success).toBe(true);
+  for (const exposed of [
+    'cycleOrder', 'modelPresets', 'modelRoleStorage', 'tier.openai', 'tier.anthropic',
+    'tier.google', 'tier.subagent', 'tier.advisor', 'out.enabled', 'tui.renderMermaid',
+    'tui.renderSvg', 'tui.autoGraph', 'steeringMode', 'followUpMode', 'interruptMode',
+    'composer.predictions', 'composer.predictionAlternatives',
+    'tools.artifactSpillThreshold', 'tools.artifactTailBytes', 'tools.artifactHeadBytes',
+    'tools.outputMaxColumns', 'tools.artifactTailLines', 'tools.artifactMaxBytes',
+  ]) expect(OmpSettingIdSchema.safeParse(exposed).success).toBe(true);
 });

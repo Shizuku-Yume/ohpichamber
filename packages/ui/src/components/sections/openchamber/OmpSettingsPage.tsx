@@ -1,9 +1,9 @@
 import React from 'react';
-import { JsonObjectSchema, JsonValueSchema, type OmpSetting, type OmpSettingValue, type OmpSettingsChange, type OmpSettingsState } from '@openchamber/agent-contract';
+import { JsonObjectSchema, JsonValueSchema, type Model, type OmpSetting, type OmpSettingValue, type OmpSettingsChange, type OmpSettingsState } from '@openchamber/agent-contract';
 import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
 import { z } from 'zod';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, type I18nKey } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { NumberInput } from '@/components/ui/number-input';
@@ -26,6 +26,12 @@ import {
   useAutosave,
   type AutosaveResult,
 } from '@/components/sections/shared/SettingsAutosave';
+import {
+  OMP_MODEL_ROLES,
+  formatRoleSelector,
+  parseRoleSelector,
+  resolveRoleFallback,
+} from './ompModelRoles';
 
 type Values = Record<string, OmpSettingValue>;
 type Drafts = Record<string, string>;
@@ -56,6 +62,190 @@ const parseDraft = (setting: OmpSetting, text: string): { value: OmpSettingValue
   const decoded = setting.type === 'array' ? ArrayDraftSchema.safeParse(parsed) : JsonObjectSchema.safeParse(parsed);
   return decoded.success ? { value: decoded.data, error: null } : { value: null, error: 'invalid-json' };
 };
+const ROLE_I18N: Record<string, { label: I18nKey; desc: I18nKey }> = {
+  default: { label: 'settings.omp.modelRoles.role.default.label', desc: 'settings.omp.modelRoles.role.default.desc' },
+  smol: { label: 'settings.omp.modelRoles.role.smol.label', desc: 'settings.omp.modelRoles.role.smol.desc' },
+  slow: { label: 'settings.omp.modelRoles.role.slow.label', desc: 'settings.omp.modelRoles.role.slow.desc' },
+  vision: { label: 'settings.omp.modelRoles.role.vision.label', desc: 'settings.omp.modelRoles.role.vision.desc' },
+  plan: { label: 'settings.omp.modelRoles.role.plan.label', desc: 'settings.omp.modelRoles.role.plan.desc' },
+  commit: { label: 'settings.omp.modelRoles.role.commit.label', desc: 'settings.omp.modelRoles.role.commit.desc' },
+  tiny: { label: 'settings.omp.modelRoles.role.tiny.label', desc: 'settings.omp.modelRoles.role.tiny.desc' },
+  memory: { label: 'settings.omp.modelRoles.role.memory.label', desc: 'settings.omp.modelRoles.role.memory.desc' },
+  task: { label: 'settings.omp.modelRoles.role.task.label', desc: 'settings.omp.modelRoles.role.task.desc' },
+  advisor: { label: 'settings.omp.modelRoles.role.advisor.label', desc: 'settings.omp.modelRoles.role.advisor.desc' },
+  widget: { label: 'settings.omp.modelRoles.role.widget.label', desc: 'settings.omp.modelRoles.role.widget.desc' },
+  image: { label: 'settings.omp.modelRoles.role.image.label', desc: 'settings.omp.modelRoles.role.image.desc' },
+  web: { label: 'settings.omp.modelRoles.role.web.label', desc: 'settings.omp.modelRoles.role.web.desc' },
+  speech: { label: 'settings.omp.modelRoles.role.speech.label', desc: 'settings.omp.modelRoles.role.speech.desc' },
+  dictation: { label: 'settings.omp.modelRoles.role.dictation.label', desc: 'settings.omp.modelRoles.role.dictation.desc' },
+  judge: { label: 'settings.omp.modelRoles.role.judge.label', desc: 'settings.omp.modelRoles.role.judge.desc' },
+};
+
+const ModelRolesSection: React.FC<{
+  setting: OmpSetting;
+  form: Values;
+  models: Model[];
+  disabled: boolean;
+  onChange: (setting: OmpSetting, value: OmpSettingValue) => void;
+  onImmediate: () => void;
+}> = ({ setting, form, models, disabled, onChange, onImmediate }) => {
+  const { t } = useI18n();
+  const rawRoles = form[setting.id];
+  const rolesMap: Record<string, string> =
+    rawRoles && typeof rawRoles === 'object' && !Array.isArray(rawRoles)
+      ? (rawRoles as Record<string, string>)
+      : {};
+
+  return (
+    <SettingsSection
+      title={t('settings.omp.modelRoles.title')}
+      divider={false}
+      settingsItem="omp.modelRoles"
+    >
+      <p className="text-sm text-muted-foreground mb-4">
+        {t('settings.omp.modelRoles.description')}
+      </p>
+      <div className="space-y-4">
+        {OMP_MODEL_ROLES.map(role => {
+          const parsed = parseRoleSelector(rolesMap[role.id]);
+          const selectedModelId = parsed.model;
+          const selectedEffort = parsed.effort;
+          const fallback = resolveRoleFallback(role.id, rolesMap);
+          const matchedModel = models.find(m => `${m.provider}/${m.modelId}` === selectedModelId);
+          const supportsReasoning =
+            matchedModel?.reasoningEffortSupported ||
+            (matchedModel?.reasoningOptions && matchedModel.reasoningOptions.length > 0);
+          const roleMeta = ROLE_I18N[role.id];
+          const roleLabel = roleMeta ? t(roleMeta.label) : role.id;
+          const roleDesc = roleMeta ? t(roleMeta.desc) : '';
+
+          const label = (
+            <div className="flex items-center gap-2">
+              <span className="font-medium text-sm">{roleLabel}</span>
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-mono uppercase bg-muted text-muted-foreground border">
+                {role.tag}
+              </span>
+            </div>
+          );
+
+          const description = (
+            <span className="block">
+              {roleDesc ? <span className="block">{roleDesc}</span> : null}
+              {!selectedModelId && fallback && (
+                <span className="block text-xs text-muted-foreground font-mono mt-1" data-testid={`fallback-${role.id}`}>
+                  {fallback.model
+                    ? t('settings.omp.modelRoles.fallbackToWithModel', { role: fallback.role, model: fallback.model })
+                    : t('settings.omp.modelRoles.fallbackTo', { role: fallback.role })}
+                </span>
+              )}
+            </span>
+          );
+
+          return (
+            <SettingsFieldRow
+              key={role.id}
+              label={label}
+              description={description}
+              settingsItem={`omp.modelRoles.${role.id}`}
+            >
+
+              <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+                <Select
+                  value={selectedModelId || '__inherit__'}
+                  onValueChange={val => {
+                    const nextRoles = { ...rolesMap };
+                    if (val === '__inherit__') {
+                      delete nextRoles[role.id];
+                    } else {
+                      const nextModel = models.find(m => `${m.provider}/${m.modelId}` === val);
+                      const nextSupportsReasoning =
+                        nextModel?.reasoningEffortSupported ||
+                        (nextModel?.reasoningOptions && nextModel.reasoningOptions.length > 0);
+                      const effortToKeep = nextSupportsReasoning ? selectedEffort : '';
+                      nextRoles[role.id] = formatRoleSelector(val, effortToKeep);
+                    }
+                    onChange(setting, nextRoles);
+                    onImmediate();
+                  }}
+                  disabled={disabled}
+                >
+                  <SelectTrigger
+                    className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
+                    aria-label={`${roleLabel} model`}
+                  >
+                    <SelectValue placeholder={t('settings.omp.modelRoles.inheritFallback')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__inherit__">
+                      {t('settings.omp.modelRoles.inheritFallback')}
+                    </SelectItem>
+                    {models.map(m => {
+                      const key = `${m.provider}/${m.modelId}`;
+                      return (
+                        <SelectItem key={key} value={key}>
+                          {m.provider} / {m.name}
+                        </SelectItem>
+                      );
+                    })}
+                    {selectedModelId && !models.some(m => `${m.provider}/${m.modelId}` === selectedModelId) && (
+                      <SelectItem value={selectedModelId}>
+                        {selectedModelId} ({t('settings.omp.modelRoles.customModel')})
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+
+                {supportsReasoning && (
+                  <Select
+                    value={selectedEffort || '__default__'}
+                    onValueChange={val => {
+                      const nextRoles = { ...rolesMap };
+                      const effort = val === '__default__' ? '' : val;
+                      nextRoles[role.id] = formatRoleSelector(selectedModelId, effort);
+                      onChange(setting, nextRoles);
+                      onImmediate();
+                    }}
+                    disabled={disabled}
+                  >
+                    <SelectTrigger
+                      className="w-[140px]"
+                      aria-label={`${roleLabel} ${t('settings.omp.modelRoles.thinkingEffort')}`}
+                    >
+                      <SelectValue placeholder={t('settings.omp.modelRoles.thinkingDefault')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__default__">
+                        {t('settings.omp.modelRoles.thinkingDefault')}
+                      </SelectItem>
+                      {(matchedModel?.reasoningOptions && matchedModel.reasoningOptions.length > 0
+                        ? matchedModel.reasoningOptions.map(opt => ({
+                            value: opt.reasoningEffort,
+                            label: opt.label,
+                          }))
+                        : [
+                            { value: 'minimal', label: 'Minimal' },
+                            { value: 'low', label: 'Low' },
+                            { value: 'medium', label: 'Medium' },
+                            { value: 'high', label: 'High' },
+                            { value: 'max', label: 'Max' },
+                          ]
+                      ).map(opt => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            </SettingsFieldRow>
+          );
+        })}
+      </div>
+    </SettingsSection>
+  );
+};
+
 
 const Group: React.FC<{
   title: string;
@@ -131,6 +321,23 @@ const Group: React.FC<{
             </SettingsFieldRow>
           );
         }
+        if (setting.id === 'cycleOrder') {
+          const currentList = Array.isArray(form[setting.id]) ? (form[setting.id] as string[]) : [];
+          return (
+            <SettingsFieldRow key={setting.id} label={label} info={info} settingsItem={`omp.${setting.id}`}>
+              <Input
+                value={currentList.join(', ')}
+                onChange={event => {
+                  const items = event.target.value.split(',').map(s => s.trim()).filter(Boolean);
+                  onChange(setting, items);
+                }}
+                disabled={disabled}
+                placeholder="smol, default, slow"
+                aria-label={setting.label ?? setting.id}
+              />
+            </SettingsFieldRow>
+          );
+        }
         const error = errors[setting.id];
         return (
           <SettingsStackedField
@@ -172,6 +379,7 @@ export const OmpSettingsPage: React.FC = () => {
   const [loading, setLoading] = React.useState(true);
   const [loadFailed, setLoadFailed] = React.useState(false);
   const [reload, setReload] = React.useState(0);
+  const [models, setModels] = React.useState<Model[]>([]);
   const savedRef = React.useRef<OmpSettingsState | null>(null);
   const scopeGeneration = React.useRef(0);
 
@@ -190,10 +398,14 @@ export const OmpSettingsPage: React.FC = () => {
       try {
         const workspace = await canonicalClient.resolveWorkspace(directory);
         if (abort.signal.aborted || generation !== scopeGeneration.current) return;
-        const snapshot = await canonicalClient.getOmpSettings(workspace.workspaceId, abort.signal);
+        const [snapshot, modelCatalog] = await Promise.all([
+          canonicalClient.getOmpSettings(workspace.workspaceId, abort.signal),
+          canonicalClient.getModels(workspace.workspaceId).catch(() => null),
+        ]);
         if (abort.signal.aborted || generation !== scopeGeneration.current) return;
         savedRef.current = snapshot;
         setState(snapshot);
+        if (modelCatalog?.models) setModels(modelCatalog.models);
         const projected = projectSettings(snapshot.settings);
         setForm(projected.values);
         setDrafts(projected.drafts);
@@ -292,6 +504,7 @@ export const OmpSettingsPage: React.FC = () => {
     const map = new Map<string, OmpSetting[]>();
     const advanced: OmpSetting[] = [];
     for (const setting of state.settings) {
+      if (setting.id === 'modelRoles') continue;
       if (setting.group === undefined) { advanced.push(setting); continue; }
       const list = map.get(setting.group);
       if (list) list.push(setting);
@@ -322,12 +535,23 @@ export const OmpSettingsPage: React.FC = () => {
     );
   }
 
+  const modelRolesSetting = state.settings.find(s => s.id === 'modelRoles');
   return (
     <SettingsPageLayout
       title={t('settings.page.omp.title')}
       description={t('settings.page.omp.description')}
       onBlurCapture={autosave.onBlurCapture}
     >
+      {modelRolesSetting && (
+        <ModelRolesSection
+          setting={modelRolesSetting}
+          form={form}
+          models={models}
+          disabled={loading}
+          onChange={onChange}
+          onImmediate={autosave.requestSave}
+        />
+      )}
       {groups.map(([title, settings], index) => (
         <Group
           key={title}
@@ -337,7 +561,7 @@ export const OmpSettingsPage: React.FC = () => {
           drafts={drafts}
           errors={errors}
           disabled={loading}
-          first={index === 0}
+          first={!modelRolesSetting && index === 0}
           onChange={onChange}
           onDraft={onDraft}
           onImmediate={autosave.requestSave}

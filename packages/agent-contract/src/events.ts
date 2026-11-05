@@ -58,6 +58,7 @@ export const CanonicalEventSchema = z.discriminatedUnion('type', [
   DataEventEnvelopeSchema.extend({ type: z.literal('turn.completed'), turnId: EntityIdSchema, runId: EntityIdSchema }),
   DataEventEnvelopeSchema.extend({ type: z.literal('message.created'), messageId: EntityIdSchema, turnId: EntityIdSchema, role: z.enum(['user', 'assistant', 'system']), providerId: z.string().min(1).optional(), modelId: z.string().min(1).optional(), usage: TokenUsageSchema.optional() }),
   DataEventEnvelopeSchema.extend({ type: z.literal('part.started'), messageId: EntityIdSchema, part: PartSchema }),
+  DataEventEnvelopeSchema.extend({ type: z.literal('part.updated'), part: PartSchema }),
   DataEventEnvelopeSchema.extend({ type: z.literal('part.delta'), partId: EntityIdSchema, delta: z.string() }),
   DataEventEnvelopeSchema.extend({ type: z.literal('part.completed'), part: PartSchema }),
   DataEventEnvelopeSchema.extend({ type: z.literal('tool.started'), toolCallId: EntityIdSchema, toolName: z.string().min(1), input: JsonObjectSchema }),

@@ -129,10 +129,10 @@ export function MarkdownCode({ children, className, node, ...props }: React.Comp
   const copySource = code.replace(/\n$/, '');
   const { purpose, onExportCode } = presentation;
   React.useLayoutEffect(() => {
-    if (purpose && language !== 'mermaid') onExportCode?.(code, language);
+    if (purpose && language !== 'mermaid' && language !== 'svg') onExportCode?.(code, language);
   }, [purpose, onExportCode, code, language]);
 
-  if (language === 'mermaid') {
+  if (language === 'mermaid' || language === 'svg') {
     return (
       <defaultComponents.code {...props} node={node} className={className}>
         {children}

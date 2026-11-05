@@ -106,6 +106,7 @@ export const OMP_SETTING_IDS = [
   'mcp.renderMarkdownResults',
   'mcp.notifications',
   'mcp.notificationDebounceMs',
+  'tui.autoGraph',
 ] as const;
 export const OmpSettingIdSchema = z.enum(OMP_SETTING_IDS);
 export type OmpSettingId = z.infer<typeof OmpSettingIdSchema>;

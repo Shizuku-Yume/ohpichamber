@@ -318,6 +318,7 @@ export function applyDirectoryEvent(state: State, event: CanonicalEvent): Direct
       })
       break
     case "part.started": upsertPart(event.messageId, event.part); break
+    case "part.updated":
     case "part.completed": {
       const messageId = owners[event.part.partId]
       if (!messageId) recover = true

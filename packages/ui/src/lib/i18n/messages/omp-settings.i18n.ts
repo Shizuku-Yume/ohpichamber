@@ -8,6 +8,8 @@ export const ompSettingsI18n = {
     'settings.omp.loadFailed': 'Could not read OMP settings. Check that the Agent Service is running.',
     'settings.omp.retry': 'Retry',
     'settings.omp.saveFailed': 'OMP settings could not be saved.',
+    'markdownRenderer.svg.invalid': 'Invalid or disallowed SVG figure',
+    'markdownRenderer.table.chartTitle': 'Table Chart',
   },
   ar: {
     'settings.page.omp.title': 'OMP',
@@ -17,6 +19,8 @@ export const ompSettingsI18n = {
     'settings.omp.loadFailed': 'تعذّرت قراءة إعدادات OMP. تحقق من تشغيل Agent Service.',
     'settings.omp.retry': 'إعادة المحاولة',
     'settings.omp.saveFailed': 'تعذّر حفظ إعدادات OMP.',
+    'markdownRenderer.svg.invalid': 'رسم SVG غير صالح أو محظور',
+    'markdownRenderer.table.chartTitle': 'مخطط الجدول',
   },
   he: {
     'settings.page.omp.title': 'OMP',
@@ -26,6 +30,8 @@ export const ompSettingsI18n = {
     'settings.omp.loadFailed': 'לא ניתן היה לקרוא את הגדרות OMP. יש לבדוק ש-Agent Service פועל.',
     'settings.omp.retry': 'נסה שוב',
     'settings.omp.saveFailed': 'לא ניתן היה לשמור את הגדרות OMP.',
+    'markdownRenderer.svg.invalid': 'איור SVG לא תקין או אסור',
+    'markdownRenderer.table.chartTitle': 'תרשים טבלה',
   },
   de: {
     'settings.page.omp.title': 'OMP',
@@ -35,6 +41,8 @@ export const ompSettingsI18n = {
     'settings.omp.loadFailed': 'OMP-Einstellungen konnten nicht gelesen werden. Prüfen Sie, ob der Agentendienst läuft.',
     'settings.omp.retry': 'Erneut versuchen',
     'settings.omp.saveFailed': 'OMP-Einstellungen konnten nicht gespeichert werden.',
+    'markdownRenderer.svg.invalid': 'Ungültige oder unzulässige SVG-Grafik',
+    'markdownRenderer.table.chartTitle': 'Tabellendiagramm',
   },
   es: {
     'settings.page.omp.title': 'OMP',
@@ -44,6 +52,8 @@ export const ompSettingsI18n = {
     'settings.omp.loadFailed': 'No se pudieron leer los ajustes de OMP. Comprueba que el servicio de agentes esté en ejecución.',
     'settings.omp.retry': 'Reintentar',
     'settings.omp.saveFailed': 'No se pudieron guardar los ajustes de OMP.',
+    'markdownRenderer.svg.invalid': 'Figura SVG no válida o no permitida',
+    'markdownRenderer.table.chartTitle': 'Gráfico de tabla',
   },
   fr: {
     'settings.page.omp.title': 'OMP',
@@ -53,6 +63,8 @@ export const ompSettingsI18n = {
     'settings.omp.loadFailed': "Impossible de lire les réglages OMP. Vérifiez que le service d'agents est en cours d'exécution.",
     'settings.omp.retry': 'Réessayer',
     'settings.omp.saveFailed': "Impossible d'enregistrer les réglages OMP.",
+    'markdownRenderer.svg.invalid': 'Figure SVG non valide ou non autorisée',
+    'markdownRenderer.table.chartTitle': 'Graphique de tableau',
   },
   ja: {
     'settings.page.omp.title': 'OMP',
@@ -62,6 +74,8 @@ export const ompSettingsI18n = {
     'settings.omp.loadFailed': 'OMP 設定を読み取れませんでした。エージェントサービスが実行中か確認してください。',
     'settings.omp.retry': '再試行',
     'settings.omp.saveFailed': 'OMP 設定を保存できませんでした。',
+    'markdownRenderer.svg.invalid': '無効または許可されていないSVG図形',
+    'markdownRenderer.table.chartTitle': 'テーブルグラフ',
   },
   ko: {
     'settings.page.omp.title': 'OMP',
@@ -71,6 +85,8 @@ export const ompSettingsI18n = {
     'settings.omp.loadFailed': 'OMP 설정을 읽을 수 없습니다. 에이전트 서비스가 실행 중인지 확인하세요.',
     'settings.omp.retry': '다시 시도',
     'settings.omp.saveFailed': 'OMP 설정을 저장할 수 없습니다.',
+    'markdownRenderer.svg.invalid': '유효하지 않거나 허용되지 않은 SVG 그림',
+    'markdownRenderer.table.chartTitle': '테이블 차트',
   },
   nl: {
     'settings.page.omp.title': 'OMP',
@@ -80,6 +96,8 @@ export const ompSettingsI18n = {
     'settings.omp.loadFailed': 'OMP-instellingen konden niet worden gelezen. Controleer of de Agent Service draait.',
     'settings.omp.retry': 'Opnieuw proberen',
     'settings.omp.saveFailed': 'OMP-instellingen konden niet worden opgeslagen.',
+    'markdownRenderer.svg.invalid': 'Ongeldige of niet-toegestane SVG-afbeelding',
+    'markdownRenderer.table.chartTitle': 'Tabelgrafiek',
   },
   pl: {
     'settings.page.omp.title': 'OMP',
@@ -89,6 +107,8 @@ export const ompSettingsI18n = {
     'settings.omp.loadFailed': 'Nie można odczytać ustawień OMP. Sprawdź, czy usługa agenta działa.',
     'settings.omp.retry': 'Ponów',
     'settings.omp.saveFailed': 'Nie można zapisać ustawień OMP.',
+    'markdownRenderer.svg.invalid': 'Nieprawidłowa lub niedozwolona figura SVG',
+    'markdownRenderer.table.chartTitle': 'Wykres tabeli',
   },
   'pt-BR': {
     'settings.page.omp.title': 'OMP',
@@ -98,6 +118,8 @@ export const ompSettingsI18n = {
     'settings.omp.loadFailed': 'Não foi possível ler as configurações do OMP. Verifique se o Agent Service está em execução.',
     'settings.omp.retry': 'Tentar novamente',
     'settings.omp.saveFailed': 'Não foi possível salvar as configurações do OMP.',
+    'markdownRenderer.svg.invalid': 'Figura SVG inválida ou não permitida',
+    'markdownRenderer.table.chartTitle': 'Gráfico de tabela',
   },
   tr: {
     'settings.page.omp.title': 'OMP',
@@ -107,6 +129,8 @@ export const ompSettingsI18n = {
     'settings.omp.loadFailed': "OMP ayarları okunamadı. Agent Service'in çalıştığını kontrol edin.",
     'settings.omp.retry': 'Yeniden dene',
     'settings.omp.saveFailed': 'OMP ayarları kaydedilemedi.',
+    'markdownRenderer.svg.invalid': 'Geçersiz veya izin verilmeyen SVG görseli',
+    'markdownRenderer.table.chartTitle': 'Tablo Grafiği',
   },
   uk: {
     'settings.page.omp.title': 'OMP',
@@ -116,6 +140,8 @@ export const ompSettingsI18n = {
     'settings.omp.loadFailed': 'Не вдалося прочитати налаштування OMP. Перевірте, чи запущено Agent Service.',
     'settings.omp.retry': 'Повторити',
     'settings.omp.saveFailed': 'Не вдалося зберегти налаштування OMP.',
+    'markdownRenderer.svg.invalid': 'Недійсна або заборонена фігура SVG',
+    'markdownRenderer.table.chartTitle': 'Діаграма таблиці',
   },
   'zh-CN': {
     'settings.page.omp.title': 'OMP',
@@ -125,6 +151,8 @@ export const ompSettingsI18n = {
     'settings.omp.loadFailed': '无法读取 OMP 设置。请检查 Agent Service 是否正在运行。',
     'settings.omp.retry': '重试',
     'settings.omp.saveFailed': '无法保存 OMP 设置。',
+    'markdownRenderer.svg.invalid': '无效或不允许的 SVG 图形',
+    'markdownRenderer.table.chartTitle': '表格图表',
   },
   'zh-TW': {
     'settings.page.omp.title': 'OMP',
@@ -134,5 +162,7 @@ export const ompSettingsI18n = {
     'settings.omp.loadFailed': '無法讀取 OMP 設定。請檢查 Agent Service 是否正在執行。',
     'settings.omp.retry': '重試',
     'settings.omp.saveFailed': '無法儲存 OMP 設定。',
+    'markdownRenderer.svg.invalid': '無效或不允許的 SVG 圖形',
+    'markdownRenderer.table.chartTitle': '表格圖表',
   },
 } as const;

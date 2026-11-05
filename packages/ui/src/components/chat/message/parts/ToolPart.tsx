@@ -22,6 +22,7 @@ import {
     isShellTool,
     isSubagentTool,
     isWriteTool,
+    isReplyWrite,
     NATIVE_TOOLS,
     normalizeToolName,
     parseNativeReadPath,
@@ -899,6 +900,43 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
         if (webSearchOutput) {
             return renderScrollableBlock(webSearchOutput, { className: 'p-1', maxHeightClass: 'max-h-[50vh]' });
         }
+        if (toolName === NATIVE_TOOLS.find && hasStringOutput && outputString.trim()) {
+            const lines = outputString.split('\n');
+            const findOutput = (
+                <div className="space-y-1 font-mono text-xs">
+                    {lines.map((line, idx) => {
+                        const match = /^([^\s:]+):(\d+)(?:-(\d+))?\s+(.*)$/.exec(line);
+                        if (match) {
+                            const filePath = match[1]!;
+                            const startLine = parseInt(match[2]!, 10);
+                            const rest = match[4]!;
+                            return (
+                                <div key={idx} className="flex items-start gap-1.5 py-0.5">
+                                    <button
+                                        type="button"
+                                        className="text-primary hover:underline font-medium shrink-0 cursor-pointer"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            const abs = toAbsoluteFilePath(currentDirectory, filePath);
+                                            if (runtime?.editor) {
+                                                void runtime.editor.openFile(abs, startLine);
+                                            } else {
+                                                useUIStore.getState().openContextFileAtLine(currentDirectory, abs, startLine, 1);
+                                            }
+                                        }}
+                                    >
+                                        {filePath}:{match[2]}{match[3] ? `-${match[3]}` : ''}
+                                    </button>
+                                    <span className="text-muted-foreground truncate">{rest}</span>
+                                </div>
+                            );
+                        }
+                        return <div key={idx} className="text-muted-foreground whitespace-pre-wrap">{line}</div>;
+                    })}
+                </div>
+            );
+            return renderScrollableBlock(findOutput, { className: 'p-1', maxHeightClass: 'max-h-[50vh]' });
+        }
 
         if (hasStringOutput && outputString.trim()) {
             const output = (
@@ -1229,6 +1267,27 @@ const ToolPart: React.FC<ToolPartProps> = ({
     }, [call?.input, result, resultContent.details, resultContent.text, toolName]);
     const popupLanguage = isShellTool(toolName) ? 'bash'
         : detectToolOutputLanguage(toolName, popupContent, call?.input);
+
+    const toolCallInput = call?.input;
+    if (isReplyWrite(toolName, toolCallInput)) {
+        const replyContent = typeof toolCallInput?.content === 'string'
+            ? toolCallInput.content
+            : '';
+        return (
+            <div className="group/reply-write relative break-words my-1" data-tool-part-id={part.partId}>
+                <SimpleMarkdownRenderer
+                    content={replyContent}
+                    variant="assistant"
+                    onShowPopup={onShowPopup}
+                />
+                {part.type === 'tool_result' && part.isError ? (
+                    <div className="mt-1 px-3 py-1.5 rounded-lg border border-status-error/30 bg-status-error/10 text-status-error text-xs">
+                        {part.error || t('chat.toolPart.error')}
+                    </div>
+                ) : null}
+            </div>
+        );
+    }
 
     return (
         <ToolPartErrorBoundary

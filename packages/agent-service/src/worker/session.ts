@@ -275,6 +275,7 @@ export class WorkerSession {
         initialModelRefreshStrategy: 'offline',
         autoTitle: false,
         enableMCP: mcp !== undefined, mcpManager: mcp, enableLsp: false, disableExtensionDiscovery: true,
+        tuiTranscript: true,
         hasUI: true, interactivePrompts: true, subagentEventBus, extensions: [observer, createNativeBashPolicyExtension({ interaction, approval: bashPolicy.approval,
           authorize: (toolCallId, toolInput, approvalId) => authorizeTool('bash', toolInput, { toolCallId, approvalId }),
           nativeAuthorized: (toolCallId, toolInput) => permissionBridge.isNativeAuthorized('bash', toolInput, toolCallId),

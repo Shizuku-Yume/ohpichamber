@@ -45,6 +45,7 @@ import { MarkdownLink, MarkdownInlineCode } from './markdown/MarkdownLink';
 import { MarkdownCode } from './markdown/MarkdownCode';
 import { MarkdownTable, MarkdownTableCell } from './markdown/MarkdownTable';
 import { MarkdownMermaid } from './markdown/MarkdownMermaid';
+import { MarkdownSvg } from './markdown/MarkdownSvg';
 import { MarkdownBlockquote } from './markdown/MarkdownBlockquote';
 import { createMarkdownCodePlugin } from './markdown/streamdownCode';
 import { confirmCodePaths, confirmMarkdownFile, resolveMarkdownFile } from './markdown/markdownFileReferences';
@@ -153,7 +154,10 @@ const components: Components = {
     </summary>
   ),
 };
-const renderers = [{ language: 'mermaid', component: MarkdownMermaid }];
+const renderers = [
+  { language: 'mermaid', component: MarkdownMermaid },
+  { language: 'svg', component: MarkdownSvg },
+];
 const linkSafety = { enabled: false };
 const remend: StreamdownProps['remend'] = { linkMode: 'text-only', singleTilde: false };
 // Static mode renders the document whole and never reads the block split, but

@@ -1,0 +1,220 @@
+import { describe, expect, test } from 'bun:test';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import {
+  readNativeMcpConfigurationIfPresent,
+  writeNativeMcpConfiguration,
+  NativeMcpError,
+} from './mcp.ts';
+import type { MCPConfigurationState } from '@openchamber/agent-contract';
+
+describe('MCP configuration management and unmanaged projection', () => {
+  test('returns null when configuration file is absent', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'mcp-test-'));
+    try {
+      const configPath = join(dir, 'mcp.json');
+      const result = await readNativeMcpConfigurationIfPresent(configPath, 'workspace-1');
+      expect(result).toBeNull();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('projects hand-written unmanaged mcp.json read-only with redacted secrets and sanitized paths/urls', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'mcp-test-'));
+    try {
+      const configPath = join(dir, 'mcp.json');
+      const unmanagedContent = JSON.stringify({
+        mcpServers: {
+          'local-tool': {
+            type: 'stdio',
+            command: '/usr/local/bin/custom-mcp',
+            args: ['--debug', '--port', '8080'],
+            env: {
+              API_KEY: 'super-secret-key-123',
+              TOKEN: 'bearer-secret',
+            },
+          },
+          'remote-tool': {
+            type: 'sse',
+            url: 'https://admin:secret123@mcp.example.com/events?token=sensitive-query#frag',
+            headers: {
+              Authorization: 'Bearer top-secret-token',
+              'X-Custom-Secret': 'confidential',
+            },
+          },
+        },
+        disabledServers: ['remote-tool'],
+      }, null, 2);
+
+      await writeFile(configPath, unmanagedContent, 'utf8');
+
+      const projected = await readNativeMcpConfigurationIfPresent(configPath, 'workspace-1');
+      expect(projected).not.toBeNull();
+      expect(projected?.workspaceId).toBe('workspace-1');
+      expect(projected?.persistedRevision).toBe('0');
+
+      const servers = projected!.config.servers;
+      expect(servers).toHaveLength(2);
+
+      const local = servers.find(s => s.serverId === 'local-tool');
+      expect(local).toBeDefined();
+      expect(local?.managed).toBe(false);
+      expect(local?.enabled).toBe(true);
+      expect(local?.label).toBe('local-tool');
+      expect(local?.transport.type).toBe('stdio');
+      if (local?.transport.type === 'stdio') {
+        expect(local.transport.command).toBe('custom-mcp');
+        expect(local.transport.args).toEqual(['--debug', '--port', '8080']);
+        expect(local.transport.envCredentialRefs).toBeUndefined();
+      }
+
+      const remote = servers.find(s => s.serverId === 'remote-tool');
+      expect(remote).toBeDefined();
+      expect(remote?.managed).toBe(false);
+      expect(remote?.enabled).toBe(false);
+      expect(remote?.transport.type).toBe('sse');
+      if (remote?.transport.type === 'sse') {
+        expect(remote.transport.url).toBe('https://mcp.example.com/events');
+        expect(remote.transport.credentialRef).toBeUndefined();
+        expect(remote.transport.headerCredentialRefs).toBeUndefined();
+      }
+
+      // Assert no secret substrings leaked in serialized projection
+      const serialized = JSON.stringify(projected);
+      expect(serialized).not.toContain('super-secret-key-123');
+      expect(serialized).not.toContain('bearer-secret');
+      expect(serialized).not.toContain('secret123');
+      expect(serialized).not.toContain('sensitive-query');
+      expect(serialized).not.toContain('top-secret-token');
+      expect(serialized).not.toContain('confidential');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('refuses in-place mutation of unmanaged file, preserving exact bytes on disk', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'mcp-test-'));
+    try {
+      const configPath = join(dir, 'mcp.json');
+      const unmanagedRaw = JSON.stringify({
+        mcpServers: {
+          sqlite: {
+            command: 'uvx',
+            args: ['mcp-server-sqlite'],
+            env: { DB_PASS: 'raw-secret' },
+          },
+        },
+      }, null, 2);
+
+      await writeFile(configPath, unmanagedRaw, 'utf8');
+
+      const mutationAttempt: MCPConfigurationState = {
+        workspaceId: 'workspace-1',
+        persistedRevision: '1',
+        config: {
+          servers: [
+            {
+              serverId: 'sqlite',
+              label: 'sqlite',
+              enabled: true,
+              transport: {
+                type: 'stdio',
+                command: 'uvx',
+                args: ['mcp-server-sqlite'],
+              },
+            },
+          ],
+        },
+      };
+
+      await expect(writeNativeMcpConfiguration(configPath, mutationAttempt))
+        .rejects
+        .toThrow(NativeMcpError);
+
+      try {
+        await writeNativeMcpConfiguration(configPath, mutationAttempt);
+      } catch (error) {
+        expect(error).toBeInstanceOf(NativeMcpError);
+        expect((error as NativeMcpError).code).toBe('CATALOG_CONFLICT');
+      }
+
+      // File on disk must be identical byte-for-byte
+      const preservedBytes = await readFile(configPath, 'utf8');
+      expect(preservedBytes).toBe(unmanagedRaw);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('writes and reads managed configuration correctly', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'mcp-test-'));
+    try {
+      const configPath = join(dir, 'mcp.json');
+      const managedState: MCPConfigurationState = {
+        workspaceId: 'workspace-1',
+        persistedRevision: '1',
+        config: {
+          servers: [
+            {
+              serverId: 'server-one',
+              label: 'Server One',
+              enabled: true,
+              transport: {
+                type: 'stdio',
+                command: 'node',
+                args: ['server.js'],
+              },
+            },
+          ],
+        },
+      };
+
+      const committed = await writeNativeMcpConfiguration(configPath, managedState);
+      expect(committed).toEqual(managedState);
+
+      const readBack = await readNativeMcpConfigurationIfPresent(configPath, 'workspace-1');
+      expect(readBack).toEqual(managedState);
+
+      // Mutating managed state succeeds
+      const updatedState: MCPConfigurationState = {
+        ...managedState,
+        persistedRevision: '2',
+        config: {
+          servers: [
+            {
+              ...managedState.config.servers[0]!,
+              label: 'Updated Label',
+            },
+          ],
+        },
+      };
+      const updated = await writeNativeMcpConfiguration(configPath, updatedState);
+      expect(updated).toEqual(updatedState);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('fails closed with MCP_CONFIG_READ_FAILED on malformed JSON or unreadable file', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'mcp-test-'));
+    try {
+      const configPath = join(dir, 'mcp.json');
+      await writeFile(configPath, '{ not valid json', 'utf8');
+
+      await expect(readNativeMcpConfigurationIfPresent(configPath, 'workspace-1'))
+        .rejects
+        .toThrow(NativeMcpError);
+
+      try {
+        await readNativeMcpConfigurationIfPresent(configPath, 'workspace-1');
+      } catch (error) {
+        expect(error).toBeInstanceOf(NativeMcpError);
+        expect((error as NativeMcpError).code).toBe('MCP_CONFIG_READ_FAILED');
+      }
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});

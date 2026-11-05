@@ -302,7 +302,7 @@ export class WorkerSession {
         cwd: input.cwd, agentDir: input.agentDirectory, sessionManager: manager, authStorage, modelRegistry, settings,
         initialModelRefreshStrategy: 'offline',
         autoTitle: false,
-        enableMCP: mcp !== undefined, mcpManager: mcp, enableLsp: false, disableExtensionDiscovery: true,
+        enableMCP: mcp !== undefined, mcpManager: mcp, disableExtensionDiscovery: true,
         hasUI: true, interactivePrompts: true, subagentEventBus, extensions: [observer, createNativeBashPolicyExtension({ interaction, approval: bashPolicy.approval,
           authorize: (toolCallId, toolInput, approvalId) => authorizeTool('bash', toolInput, { toolCallId, approvalId }),
           nativeAuthorized: (toolCallId, toolInput) => permissionBridge.isNativeAuthorized('bash', toolInput, toolCallId),
@@ -661,14 +661,22 @@ export class WorkerSession {
       }
       previousLeaf = manager.getLeafId();
       previousRevert = selectedBranchRevert(manager.getBranch());
+      if (request.action === 'revert' && previousRevert?.revertedMessageId === request.messageId) {
+        throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', 'Native tree navigation was not committed');
+      }
       const targetId = request.action === 'revert'
         ? resolveCanonicalMessage(manager, this.sessionId, request.messageId, true) : previousRevert?.restoreLeafId;
-      if (!targetId) throw new ProjectionError(409, 'SESSION_BRANCH_CONFLICT', 'The requested branch selection is unavailable');
+      if (!targetId || targetId === previousLeaf) {
+        throw new ProjectionError(409, !targetId ? 'SESSION_BRANCH_CONFLICT' : 'COMMAND_IN_FLIGHT',
+          !targetId ? 'The requested branch selection is unavailable' : 'Native tree navigation was not committed');
+      }
       const targetMessage = request.action === 'revert' ? before.messages.find(message => message.messageId === request.messageId) : undefined;
       navigationStarted = true;
       const navigation = await this.session.navigateTree(targetId, { summarize: false, allowAskReopen: false });
       navigated = manager.getLeafId() !== previousLeaf;
-      if (navigation.cancelled || navigation.aborted || navigation.reopenAsk) throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', 'Native tree navigation was not committed');
+      if (navigation.cancelled || navigation.aborted || navigation.reopenAsk || !navigated) {
+        throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', 'Native tree navigation was not committed');
+      }
       await manager.appendEntriesAtomically(() => manager.appendCustomEntry(BRANCH_TYPE, {
         restoreLeafId: request.action === 'revert' ? previousRevert?.restoreLeafId ?? previousLeaf : null,
         revertedMessageId: request.action === 'revert' ? request.messageId : null,
@@ -684,17 +692,22 @@ export class WorkerSession {
       } };
     } catch (error) {
       if (navigationStarted && (navigated || manager.getLeafId() !== previousLeaf)) {
-        // The native context may already have switched. Retire it rather than
-        // allowing a prompt against a failed selection or stale agent context.
         this.permissionBridge?.reset();
+        this.interaction.cancelAll();
         try {
           if (previousLeaf === null) manager.resetLeaf(); else manager.branch(previousLeaf);
           await manager.appendEntriesAtomically(() => manager.appendCustomEntry(BRANCH_TYPE, previousRevert ?? { restoreLeafId: null, revertedMessageId: null }));
+          this.session.agent.replaceMessages(this.session.buildDisplaySessionContext().messages);
+          this.projection.resetSelection();
+          await this.modeController.restore();
+          await this.modeController.goal.reconcile();
         } catch {
+          this.fail();
           throw new ProjectionError(503, 'SESSION_RESTORE_FAILED', 'The prior native branch selection could not be persisted');
-        } finally { this.fail(); }
+        }
       }
-      throw error;
+      if (error instanceof ProjectionError) throw error;
+      throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', error instanceof Error ? error.message : 'Native tree navigation was not committed');
     } finally { this.controllingBranch = false; }
   }
 

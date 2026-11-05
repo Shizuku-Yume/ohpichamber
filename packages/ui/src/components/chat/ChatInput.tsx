@@ -440,6 +440,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const [mobileAttachMenuOpen, setMobileAttachMenuOpen] = React.useState(false);
     const [mobileDraftPicker, setMobileDraftPicker] = React.useState<'project' | 'branch' | null>(null);
     // Message history navigation state (up/down arrow to recall previous messages)
+    const [ghostPrediction, setGhostPrediction] = React.useState<string | null>(null);
     const composerRef = React.useRef<ComposerEditorHandle>(null);
     // The mobile composer swaps between the collapsed pill and the full
     // composer, which unmounts the editor. Building a CodeMirror view is far
@@ -510,6 +511,18 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const isBtwPanelVisible = Boolean(btwPanel.pending || btwPanel.ephemeralRecordId);
     const immediateBtwSubmitRef = React.useRef<{ identity: ChatDraftIdentity; text: string } | null>(null);
     const draftCaretModeRef = React.useRef({ btw: isBtwActive, atEnd: isBtwActive });
+    React.useEffect(() => {
+        if (!currentSessionId || isBtwActive || message.length > 0) {
+            setGhostPrediction(null);
+            return;
+        }
+        const timer = setTimeout(() => {
+            if (messageRef.current.length === 0) {
+                setGhostPrediction('What should we do next?');
+            }
+        }, 800);
+        return () => clearTimeout(timer);
+    }, [currentSessionId, isBtwActive, message.length]);
     const inputMode = isBtwActive ? 'normal' : storedInputMode;
     const activeRuntimeKey = getRuntimeKey();
     const isNewChatDraft = useSessionUIStore((s) => (
@@ -2508,6 +2521,16 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             return;
         }
 
+        if (e.key === 'Tab' && ghostPrediction && message === '') {
+            e.preventDefault();
+            setMessage(ghostPrediction);
+            setGhostPrediction(null);
+            composerRef.current?.focus();
+            return;
+        }
+        if (e.key === 'Escape' && ghostPrediction) {
+            setGhostPrediction(null);
+        }
         if (isBtwActive && currentSessionId && e.key === 'Escape') {
             e.preventDefault();
             e.stopPropagation();
@@ -3104,19 +3127,23 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         const textBeforeCursor = message.substring(0, cursorPosition);
         const lastAtSymbol = textBeforeCursor.lastIndexOf('@');
 
-        const mentionPath = (file.relativePath && file.relativePath.trim().length > 0)
-            ? file.relativePath.trim()
-            : (toMentionPath(file.path) || file.name);
+        const isInternalUrl = file.path.includes('://');
+        const mentionPath = isInternalUrl
+            ? file.path
+            : ((file.relativePath && file.relativePath.trim().length > 0)
+                ? file.relativePath.trim()
+                : (toMentionPath(file.path) || file.name));
 
         confirmedMentionsRef.current.add(mentionPath);
+        const insertText = isInternalUrl ? `${mentionPath} ` : `@${mentionPath} `;
 
         if (lastAtSymbol !== -1) {
             const newMessage =
                 message.substring(0, lastAtSymbol) +
-                `@${mentionPath} ` +
+                insertText +
                 message.substring(cursorPosition);
             setMessage(newMessage);
-            const nextCursor = lastAtSymbol + mentionPath.length + 2;
+            const nextCursor = lastAtSymbol + insertText.length;
             requestAnimationFrame(() => {
                 if (composerRef.current) {
                     composerRef.current.setSelection(nextCursor);
@@ -3126,10 +3153,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         } else if (composerRef.current) {
             const newMessage =
                 message.substring(0, cursorPosition) +
-                `@${mentionPath} ` +
+                insertText +
                 message.substring(cursorPosition);
             setMessage(newMessage);
-            const nextCursor = cursorPosition + mentionPath.length + 2;
+            const nextCursor = cursorPosition + insertText.length;
             requestAnimationFrame(() => {
                 if (composerRef.current) {
                     composerRef.current.setSelection(nextCursor);
@@ -4199,6 +4226,11 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                                 }
                                 : undefined}
                         >
+                            {ghostPrediction && message === '' && (
+                                <div className="pointer-events-none absolute left-3 top-3 text-xs text-muted-foreground/50 font-mono italic select-none" data-testid="ghost-prediction">
+                                    {ghostPrediction} <kbd className="text-[10px] uppercase font-sans border rounded px-1 ml-1 opacity-70">Tab</kbd>
+                                </div>
+                            )}
                             <ComposerEditor
                                 ref={composerRef}
                                 viewStore={composerViewStore}

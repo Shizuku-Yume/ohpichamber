@@ -8,7 +8,6 @@
 **Covers:** W13
 **Check:** `bun test packages/agent-service/src/worker/session-native.test.ts packages/ui/src/components/chat/` and `bun run type-check` exit 0.
 - **Base commit:** 6bae5ac7d0131932de77e8e797d52e6eb3d3e4d0
-- **Status:** active
 
 - [x] Expand `ALLOWED_BUILTIN_COMMANDS` in `packages/agent-service/src/worker/builtin-commands.ts` and the UI slash palette to support headless OMP commands (`/handoff`, `/retry`, `/rename`, `/effort`, `/model`, `/switch`, `/fast`, `/slow`, `/prewalk`, `/force`, `/pin`, `/fresh`, `/clear`, `/dirs`, `/session`, `/memory`).
 - [x] Detect standalone magic keywords (`ultrathink`, `orchestrate`, `workflowz`, `jevify`) and per-turn token budget tokens (`+<number>[k|m][!]`) in `ChatInput.tsx` and `worker/session.ts`, applying composer gradient shimmer and OMP's built-in magic-keyword notices and turn ceilings.

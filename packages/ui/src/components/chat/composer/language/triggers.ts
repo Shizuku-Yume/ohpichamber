@@ -81,6 +81,30 @@ function matchInlineToken(
     return { kind, query };
 }
 
+const INTERNAL_SCHEMES = ['skill://', 'local://', 'proc://', 'agent://', 'history://'] as const;
+
+/** Match OMP internal URL schemes typed at a word boundary (e.g. `skill://`). */
+function matchInternalScheme(
+    value: string,
+    cursorPosition: number,
+    context: TriggerContext,
+): AutocompleteTrigger | null {
+    if (context.mentionsEnabled === false) return null;
+    const textBeforeCursor = value.substring(0, cursorPosition);
+    const lastWhitespace = Math.max(
+        textBeforeCursor.lastIndexOf(' '),
+        textBeforeCursor.lastIndexOf('\n'),
+        textBeforeCursor.lastIndexOf('\t')
+    );
+    const token = textBeforeCursor.substring(lastWhitespace + 1);
+    for (const scheme of INTERNAL_SCHEMES) {
+        if (token.startsWith(scheme)) {
+            return { kind: 'mention', query: token };
+        }
+    }
+    return null;
+}
+
 /** Only typing opens it: pasted text that ends in `:word` is not asking for an emoji. */
 function matchEmoji(value: string, cursorPosition: number, context: TriggerContext): AutocompleteTrigger | null {
     if (context.inputSource === 'paste') return null;
@@ -111,6 +135,7 @@ export function resolveAutocompleteTrigger(
     return matchCommandPalette(value, cursorPosition)
         ?? matchInlineToken(value, cursorPosition, '$', 'skill')
         ?? matchMention(value, cursorPosition, context)
+        ?? matchInternalScheme(value, cursorPosition, context)
         ?? matchEmoji(value, cursorPosition, context);
 }
 

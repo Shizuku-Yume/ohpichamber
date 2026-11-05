@@ -609,9 +609,7 @@ export class WorkerSession {
     let text = input.text;
     const contextMessages: PreparedPrompt['context'] = [];
     const turnBudget = parseTurnBudget(text);
-    if (turnBudget) {
-      this.session.sessionManager.beginTurnBudget(turnBudget.total, turnBudget.hard);
-    }
+    this.session.sessionManager.beginTurnBudget(turnBudget?.total ?? null, turnBudget?.hard ?? false);
     for (const keyword of MAGIC_KEYWORDS) {
       if (!containsMagicKeyword(text, keyword.word)) continue;
       if (keyword.id === 'ultrathink') {
@@ -1145,9 +1143,10 @@ export class WorkerSession {
         }
         await this.binding;
         if (parsed.name === 'clear') {
-          await this.session.resetSessionContext();
+          const result = await this.session.resetSessionContext();
           this.session.sessionManager.beginTurnBudget(null, false);
-          return { type: 'command', output: 'Conversation context cleared in place.' };
+          const dropped = result ? result.droppedCount : 0;
+          return { type: 'command', output: `Context reset — ${dropped} ${dropped === 1 ? 'message' : 'messages'} dropped; session continues.` };
         }
         const output: string[] = [];
         const runtime: SlashCommandRuntime = {

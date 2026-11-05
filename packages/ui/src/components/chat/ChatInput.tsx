@@ -136,7 +136,7 @@ import { useI18n } from '@/lib/i18n';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { fetchResponseStyleInstruction } from '@/lib/responseStyle';
 import { wrapSystemReminder } from '@/lib/systemReminder';
-import { getSyncMessages } from '@/sync/sync-refs';
+import { getSyncMessages, getSyncSessionDirectory } from '@/sync/sync-refs';
 import {
     assignImageAttachmentFilenames,
     buildAttachmentCitationText,
@@ -516,12 +516,28 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             setGhostPrediction(null);
             return;
         }
-        const timer = setTimeout(() => {
-            if (messageRef.current.length === 0) {
-                setGhostPrediction('What should we do next?');
+        let cancelled = false;
+        const timer = setTimeout(async () => {
+            if (messageRef.current.length !== 0 || cancelled) return;
+            try {
+                const dir = getSyncSessionDirectory(currentSessionId);
+                if (!dir) return;
+                const ws = await canonicalClient.resolveWorkspace(dir);
+                if (cancelled) return;
+                const settings = await canonicalClient.getOmpSettings(ws.workspaceId);
+                if (cancelled) return;
+                const enabled = settings.settings.find(s => s.id === 'composer.predictions')?.value === true;
+                if (enabled && messageRef.current.length === 0) {
+                    setGhostPrediction('What should we do next?');
+                }
+            } catch {
+                // Prediction unavailable or error
             }
         }, 800);
-        return () => clearTimeout(timer);
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
     }, [currentSessionId, isBtwActive, message.length]);
     const inputMode = isBtwActive ? 'normal' : storedInputMode;
     const activeRuntimeKey = getRuntimeKey();
@@ -3137,13 +3153,25 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         confirmedMentionsRef.current.add(mentionPath);
         const insertText = isInternalUrl ? `${mentionPath} ` : `@${mentionPath} `;
 
-        if (lastAtSymbol !== -1) {
+        let replaceStart = lastAtSymbol;
+        if (replaceStart === -1 && isInternalUrl) {
+            const schemes = ['skill://', 'local://', 'proc://', 'agent://', 'history://'];
+            for (const scheme of schemes) {
+                const idx = textBeforeCursor.lastIndexOf(scheme);
+                if (idx !== -1 && (idx === 0 || /\s/.test(textBeforeCursor[idx - 1]))) {
+                    replaceStart = idx;
+                    break;
+                }
+            }
+        }
+
+        if (replaceStart !== -1) {
             const newMessage =
-                message.substring(0, lastAtSymbol) +
+                message.substring(0, replaceStart) +
                 insertText +
                 message.substring(cursorPosition);
             setMessage(newMessage);
-            const nextCursor = lastAtSymbol + insertText.length;
+            const nextCursor = replaceStart + insertText.length;
             requestAnimationFrame(() => {
                 if (composerRef.current) {
                     composerRef.current.setSelection(nextCursor);

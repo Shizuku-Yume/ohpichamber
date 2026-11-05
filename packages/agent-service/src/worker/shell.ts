@@ -228,12 +228,14 @@ export class WorkerShell {
       const offset = buffer.length - MAX_OUTPUT_BYTES;
       let safeStart = offset;
       while (safeStart < buffer.length && (buffer[safeStart]! & 0xc0) === 0x80) safeStart++;
-      text = decoder.decode(buffer.subarray(safeStart));
+      let safeEnd = buffer.length;
+      while (safeEnd > safeStart && (buffer[safeEnd - 1]! & 0xc0) === 0x80) safeEnd--;
+      text = decoder.decode(buffer.subarray(safeStart, safeEnd));
       start += safeStart;
     } else {
       let safeEnd = buffer.length;
       while (safeEnd > 0 && (buffer[safeEnd - 1]! & 0xc0) === 0x80) safeEnd--;
-      text = decoder.decode(buffer);
+      text = decoder.decode(buffer.subarray(0, safeEnd));
     }
     return {
       job: request.job,

@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
@@ -35,6 +35,17 @@ function applyGlobals() {
   });
 }
 applyGlobals();
+
+// Mock the dialog shell: Base UI dialog portals to body which can detach in multi-file headless test runners.
+mock.module('@/components/ui/dialog', () => ({
+  Dialog: ({ children, open }: { children?: React.ReactNode; open?: boolean }) => open ? <div data-slot="dialog-root">{children}</div> : null,
+  DialogContent: ({ children, className }: { children?: React.ReactNode; className?: string }) => <div data-slot="dialog-content" className={className}>{children}</div>,
+  DialogHeader: ({ children, className }: { children?: React.ReactNode; className?: string }) => <div className={className}>{children}</div>,
+  DialogTitle: ({ children, className }: { children?: React.ReactNode; className?: string }) => <h2 className={className}>{children}</h2>,
+  DialogDescription: ({ children, className }: { children?: React.ReactNode; className?: string }) => <p className={className}>{children}</p>,
+  DialogFooter: ({ children, className }: { children?: React.ReactNode; className?: string }) => <div className={className}>{children}</div>,
+}));
+
 const { I18nProvider } = await import('@/lib/i18n');
 const { canonicalClient } = await import('@/api/canonicalClient');
 const { JobsSheetDialog, JobWidgetViewRenderer } = await import('./JobsSheetDialog');
@@ -247,5 +258,64 @@ describe('JobsSheetDialog & JobWidgetViewRenderer', () => {
       });
       expect(stopCalledWith).toBeDefined();
     }
+  });
+
+  test('distinctly exposes output error alert while preserving terminal container and previous output', async () => {
+    let callCount = 0;
+    canonicalClient.getShellOutput = async () => {
+      callCount += 1;
+      if (callCount === 1) {
+        return {
+          job: mockRunningShell,
+          requestedCursor: '0',
+          startCursor: '0',
+          cursor: '28',
+          skippedBytes: '0',
+          output: 'initial retained stdout log\n',
+          ended: false,
+        };
+      }
+      throw new Error('Transient connection drop');
+    };
+
+    await act(async () => {
+      root.render(
+        <I18nProvider>
+          <JobsSheetDialog
+            open={true}
+            onOpenChange={() => {}}
+            shell={mockRunningShell}
+            rootSessionId="session-1"
+          />
+        </I18nProvider>,
+      );
+      const { promise, resolve } = Promise.withResolvers<void>();
+      setTimeout(resolve, 50);
+      await promise;
+    });
+
+    // First poll succeeded: initial output is present
+    const initialText = (globalThis.document?.body?.textContent ?? '') || (browser.document?.body?.textContent ?? '');
+    expect(initialText).toContain('initial retained stdout log');
+    expect(browser.document.body.querySelector('[role="alert"]')).toBeNull();
+
+    // Wait for the 2s poll timer to fire the error
+    await act(async () => {
+      const { promise, resolve } = Promise.withResolvers<void>();
+      setTimeout(resolve, 2150);
+      await promise;
+    });
+
+    const updatedText = (globalThis.document?.body?.textContent ?? '') || (browser.document?.body?.textContent ?? '');
+    // CRITICAL INVARIANT: Prior valid output is preserved in the container
+    expect(updatedText).toContain('initial retained stdout log');
+    // AND the transient error is distinctly exposed as role="alert"
+    const alertEl = browser.document.body.querySelector('[role="alert"]');
+    expect(alertEl).not.toBeNull();
+    expect(alertEl?.textContent).toContain('Transient connection drop');
+    // The pre element remains intact and mounted
+    const preEl = browser.document.body.querySelector('pre');
+    expect(preEl).not.toBeNull();
+    expect(preEl?.textContent).toContain('initial retained stdout log');
   });
 });

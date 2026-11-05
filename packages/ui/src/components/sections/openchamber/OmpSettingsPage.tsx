@@ -26,12 +26,81 @@ import {
   useAutosave,
   type AutosaveResult,
 } from '@/components/sections/shared/SettingsAutosave';
-import {
-  OMP_MODEL_ROLES,
-  formatRoleSelector,
-  parseRoleSelector,
-  resolveRoleFallback,
-} from './ompModelRoles';
+interface RoleDefinition {
+  id: string;
+  tag: string;
+  fallbackRole?: string;
+}
+
+const OMP_MODEL_ROLES: readonly RoleDefinition[] = [
+  { id: 'default', tag: 'DEFAULT' },
+  { id: 'smol', tag: 'SMOL', fallbackRole: 'default' },
+  { id: 'slow', tag: 'SLOW', fallbackRole: 'default' },
+  { id: 'vision', tag: 'VISION', fallbackRole: 'default' },
+  { id: 'plan', tag: 'PLAN', fallbackRole: 'default' },
+  { id: 'commit', tag: 'COMMIT', fallbackRole: 'smol' },
+  { id: 'tiny', tag: 'TINY', fallbackRole: 'smol' },
+  { id: 'memory', tag: 'MEMORY', fallbackRole: 'tiny' },
+  { id: 'task', tag: 'TASK', fallbackRole: 'default' },
+  { id: 'advisor', tag: 'ADVISOR', fallbackRole: 'slow' },
+  { id: 'widget', tag: 'WIDGET', fallbackRole: 'smol' },
+  { id: 'image', tag: 'IMAGE' },
+  { id: 'web', tag: 'WEB', fallbackRole: 'default' },
+  { id: 'speech', tag: 'SPEECH' },
+  { id: 'dictation', tag: 'DICTATION' },
+  { id: 'judge', tag: 'JUDGE', fallbackRole: 'default' },
+] as const;
+
+interface ParsedRoleSelector {
+  model: string;
+  effort: string;
+}
+
+function parseRoleSelector(selector: unknown): ParsedRoleSelector {
+  if (typeof selector !== 'string') return { model: '', effort: '' };
+  const trimmed = selector.trim();
+  if (!trimmed) return { model: '', effort: '' };
+  const colonIndex = trimmed.lastIndexOf(':');
+  if (colonIndex > 0) {
+    const base = trimmed.slice(0, colonIndex);
+    const suffix = trimmed.slice(colonIndex + 1);
+    const knownEfforts = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'auto'];
+    if (knownEfforts.includes(suffix.toLowerCase())) {
+      return { model: base, effort: suffix };
+    }
+  }
+  return { model: trimmed, effort: '' };
+}
+
+function formatRoleSelector(model: string, effort: string): string {
+  const trimmedModel = model.trim();
+  if (!trimmedModel) return '';
+  const trimmedEffort = effort.trim();
+  if (!trimmedEffort || trimmedEffort === 'default' || trimmedEffort === '__default__') return trimmedModel;
+  return `${trimmedModel}:${trimmedEffort}`;
+}
+
+function resolveRoleFallback(
+  roleId: string,
+  modelRoles: Record<string, string> = {}
+): { role: string; model?: string } | null {
+  const def = OMP_MODEL_ROLES.find(r => r.id === roleId);
+  if (!def || !def.fallbackRole) return null;
+  let curr: string | undefined = def.fallbackRole;
+  const visited = new Set<string>([roleId]);
+  while (curr && !visited.has(curr)) {
+    visited.add(curr);
+    const configured = modelRoles[curr];
+    if (typeof configured === 'string' && configured.trim()) {
+      return { role: curr, model: configured.trim() };
+    }
+    const nextDef = OMP_MODEL_ROLES.find(r => r.id === curr);
+    curr = nextDef?.fallbackRole;
+  }
+  return { role: def.fallbackRole };
+}
+
+const ModelRolesRecordSchema = z.record(z.string(), z.string());
 
 type Values = Record<string, OmpSettingValue>;
 type Drafts = Record<string, string>;
@@ -91,10 +160,8 @@ const ModelRolesSection: React.FC<{
 }> = ({ setting, form, models, disabled, onChange, onImmediate }) => {
   const { t } = useI18n();
   const rawRoles = form[setting.id];
-  const rolesMap: Record<string, string> =
-    rawRoles && typeof rawRoles === 'object' && !Array.isArray(rawRoles)
-      ? (rawRoles as Record<string, string>)
-      : {};
+  const parsedRoles = ModelRolesRecordSchema.safeParse(rawRoles);
+  const rolesMap: Record<string, string> = parsedRoles.success ? parsedRoles.data : {};
 
   return (
     <SettingsSection
@@ -223,11 +290,11 @@ const ModelRolesSection: React.FC<{
                             label: opt.label,
                           }))
                         : [
-                            { value: 'minimal', label: 'Minimal' },
-                            { value: 'low', label: 'Low' },
-                            { value: 'medium', label: 'Medium' },
-                            { value: 'high', label: 'High' },
-                            { value: 'max', label: 'Max' },
+                            { value: 'minimal', label: t('settings.omp.modelRoles.effort.minimal') },
+                            { value: 'low', label: t('settings.omp.modelRoles.effort.low') },
+                            { value: 'medium', label: t('settings.omp.modelRoles.effort.medium') },
+                            { value: 'high', label: t('settings.omp.modelRoles.effort.high') },
+                            { value: 'max', label: t('settings.omp.modelRoles.effort.max') },
                           ]
                       ).map(opt => (
                         <SelectItem key={opt.value} value={opt.value}>

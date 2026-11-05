@@ -13,7 +13,13 @@ import type { AnySetting } from '@oh-my-pi/pi-coding-agent/config/registry';
 import { ProjectionError } from '../projection/journal.ts';
 import type { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
 
-const allowlist = new Set<string>(OMP_SETTING_IDS);
+/**
+ * Contract-driven allowlist of OMP settings exposed through the API.
+ * All setting definitions come from the pinned @oh-my-pi/pi-coding-agent package
+ * and are constrained by OMP_SETTING_IDS in @openchamber/agent-contract.
+ */
+export const OMP_CATALOG_SETTING_IDS = OMP_SETTING_IDS;
+const allowlist = new Set<string>(OMP_CATALOG_SETTING_IDS);
 const byId = new Map<string, AnySetting>();
 
 /**

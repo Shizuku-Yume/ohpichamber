@@ -88,7 +88,12 @@ describe('planLocalSlashCommand', () => {
         });
     });
     test('catalog builtins become session actions without a local duplicate list', () => {
-        for (const name of ['compact', 'shake', 'todo', 'jobs', 'usage', 'context', 'tools']) {
+        const headless = [
+            'compact', 'shake', 'todo', 'jobs', 'usage', 'context', 'tools',
+            'handoff', 'retry', 'rename', 'effort', 'model', 'switch', 'fast', 'slow',
+            'prewalk', 'force', 'pin', 'fresh', 'clear', 'dirs', 'session', 'memory',
+        ];
+        for (const name of headless) {
             expect(planLocalSlashCommand(`/${name}`, 'normal', false, true, [name])).toMatchObject({ command: { name }, kind: name === 'compact' ? 'action' : 'builtin' });
         }
         expect(planLocalSlashCommand('/ssh', 'normal', false, true, ['context'])).toBeNull();

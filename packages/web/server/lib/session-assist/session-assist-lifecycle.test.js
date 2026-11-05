@@ -148,6 +148,108 @@ describe('session-assist production lifecycle integration', () => {
     assistRuntime.stop();
     await hub.stop();
   });
+  it('runs prompt acceptance -> run.completed event -> duplicate idle status -> assist generation -> metadata broadcast -> lifecycle teardown', async () => {
+    const boundary = streamBoundary();
+    const hub = createGlobalMessageStreamHub({
+      service: boundary.service,
+      resolveSessionScope: async () => scope,
+    });
+
+    const persisted = [];
+    const broadcastEvents = [];
+    const settled = deferred();
+
+    const sessionService = {
+      open: async () => ({ session: rootSession }),
+      history: async () => ({
+        sessionId: 'session',
+        branch: { branchId: 'b-1', branchVersion: '1', leafMessageId: 'assistant-1' },
+        turns: [turn],
+        messages,
+        nextCursor: null,
+      }),
+    };
+
+    const assistRuntime = createSessionAssistRuntime({
+      sessionService,
+      resolveSessionScope: async () => scope,
+      getSmallModelService: async () => ({
+        describeSmallModel: async () => ({ inputCharBudget: 20_000, providerID: 'provider-1', modelID: 'model-1' }),
+        generateSmallModelText: async () => ({
+          text: JSON.stringify({
+            recap: 'Deployed feature to production.',
+            suggestion: 'Check the error logs next?',
+          }),
+        }),
+      }),
+      getTargets: () => ({ recap: true, suggestion: true }),
+      persistSessionAssist: async (sessionId, directory, assist) => {
+        persisted.push({ sessionId, directory, assist });
+        broadcastEvents.push({
+          type: 'openchamber:session-metadata',
+          properties: {
+            sessionId,
+            sessionID: sessionId,
+            metadata: { openchamber: { assist } },
+            revision: '1',
+          },
+        });
+      },
+      quietMs: 10,
+      onTurnSettled: async (sessionId) => {
+        await hub.releaseSession(sessionId, 'run');
+        settled.resolve();
+      },
+    });
+
+    hub.subscribeEvent((evt, scp) => {
+      assistRuntime.processCanonicalEvent(evt, scp);
+    });
+
+    // 1. Prompt acceptance retains session on global hub
+    await hub.retainSession('session', 'run');
+    expect(hub.isSessionConnected('session')).toBe(true);
+    expect(hub.hasLeases('session')).toBe(true);
+
+    // 2. Agent service emits run.completed event
+    const runCompletedEvent = event(1, { type: 'run.completed', runId: 'run_1', finishedAt: 3 });
+    boundary.push(encodeEvent(runCompletedEvent));
+
+    // 3. Duplicate session.status idle arrives once
+    const idleEvent = event(2, { type: 'session.status', runtimeStatus: 'idle', activeRunId: null });
+    boundary.push(encodeEvent(idleEvent));
+
+    // 4. Wait for assist generation, metadata persist, and turn settlement
+    await settled.promise;
+
+    // 5. Assert assist was persisted exactly once (no duplicate generation)
+    expect(persisted).toHaveLength(1);
+    expect(persisted[0].sessionId).toBe('session');
+    expect(persisted[0].assist).toMatchObject({
+      recap: 'Deployed feature to production.',
+      suggestion: 'Check the error logs next?',
+      forMessageID: 'assistant-1',
+    });
+
+    // 6. Assert metadata event was broadcast exactly once
+    expect(broadcastEvents).toHaveLength(1);
+    expect(broadcastEvents[0]).toMatchObject({
+      type: 'openchamber:session-metadata',
+      properties: {
+        sessionId: 'session',
+        sessionID: 'session',
+        revision: '1',
+      },
+    });
+
+    // 7. Assert lifecycle teardown: run lease released and session unsubscribed cleanly
+    expect(hub.hasLeases('session')).toBe(false);
+    expect(hub.isSessionConnected('session')).toBe(false);
+
+    assistRuntime.stop();
+    await hub.stop();
+  });
+
 
   it('observes initial session snapshot on session-created lease and releases without stream leak', async () => {
     const boundary = streamBoundary();

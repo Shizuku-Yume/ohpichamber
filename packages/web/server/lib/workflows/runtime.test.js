@@ -3,7 +3,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { WorkflowAgentStopped } from './agent-session.js';
+import { SessionCreateRequestSchema } from '@openchamber/agent-contract';
+import { WorkflowAgentStopped, createWorkflowAgentSessions } from './agent-session.js';
+import { assertRootPromptAdmission } from '../message-queue/prompt-admission.js';
 import { createWorkflowRuntime } from './runtime.js';
 import { createWorkflowRunStore } from './store.js';
 
@@ -443,5 +445,139 @@ describe('workflow runtime', () => {
     first.runtime.shutdown();
     await waitFor(() => agents.reports.filter((report) => report.body.metadata.runId === runId).length === 2);
     await first.store.flush();
+  });
+
+  it('nests workflow branch under parentSessionId, forces agentId null, passes prompt admission, validates schema and delivers report', async () => {
+    const parentPage = {
+      sessionId: 'ses_parent',
+      turns: [],
+      messages: [
+        {
+          messageId: 'm_p',
+          sessionId: 'ses_parent',
+          turnId: 'turn_p',
+          role: 'assistant',
+          createdAt: 1,
+          providerId: 'anthropic',
+          modelId: 'claude-3-7-sonnet',
+          parts: [{ type: 'text', partId: 'pt_1', content: 'parent context' }],
+        },
+      ],
+    };
+    const childTurn = {
+      turnId: 'turn_c1',
+      sessionId: 'ses_child',
+      runId: 'run_c1',
+      status: 'completed',
+      userMessageId: 'u_1',
+      assistantMessageIds: ['m_c1'],
+      startedAt: 1,
+      finishedAt: 2,
+    };
+    const childPage = {
+      sessionId: 'ses_child',
+      turns: [childTurn],
+      messages: [
+        {
+          messageId: 'm_c1',
+          sessionId: 'ses_child',
+          turnId: 'turn_c1',
+          role: 'assistant',
+          createdAt: 1,
+          providerId: 'anthropic',
+          modelId: 'claude-3-7-sonnet',
+          parts: [{ type: 'text', partId: 'pt_c', content: '{"passed":true}' }],
+          usage: {
+            input: 50,
+            output: 20,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 70,
+            cost: { total: 0.005 },
+          },
+        },
+      ],
+    };
+
+    const sessionCalls = { created: [], sent: [] };
+    const sessionService = {
+      create: async (payload) => {
+        SessionCreateRequestSchema.parse(payload);
+        sessionCalls.created.push(payload);
+        return { session: { sessionId: 'ses_child' } };
+      },
+      send: async (sessionId, payload) => {
+        assertRootPromptAdmission(payload);
+        sessionCalls.sent.push({ sessionId, payload });
+        return { run: { runId: 'run_c1', sessionId, status: 'running', createdAt: 1 } };
+      },
+      history: async (id) => (id === 'ses_parent' ? parentPage : childPage),
+      open: async () => ({ session: { runtimeStatus: 'idle' }, activeRun: null }),
+      control: async () => ({ run: { runId: 'run_c1' } }),
+      unloadWorker: async () => {},
+    };
+
+    const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'openchamber-workflows-'));
+    directories.push(dataDir);
+    const store = createWorkflowRunStore({ fsPromises: fs, path, dataDir });
+    const reports = [];
+    const agentSessions = createWorkflowAgentSessions({
+      sessionService,
+      resolveWorkspace: async () => ({ projectId: 'proj_w1', workspaceId: 'ws_w1', cwd: dataDir }),
+      sleep: async () => {},
+    });
+
+    const runtime = createWorkflowRuntime({
+      store,
+      agentSessions,
+      postSynthetic: async (sessionId, body) => {
+        reports.push({ sessionId, body });
+      },
+      broadcast: () => {},
+      fsPromises: fs,
+      path,
+      sleep: async () => {},
+    });
+
+    const scope = { sessionId: 'ses_parent', directory: dataDir };
+    const schema = "{ type: 'object', properties: { passed: { type: 'boolean' } }, required: ['passed'] }";
+    const body = `return agent('review the code', { agent: 'reviewer', label: 'review', schema: ${schema} })`;
+    const proposed = await runtime.executeAction('workflow.run', { script: script(body) }, scope);
+
+    await runtime.approve({ runId: proposed.runId });
+    const status = await waitFor(async () => {
+      const current = await runtime.executeAction('workflow.status', { runId: proposed.runId }, scope);
+      return current.state === 'completed' && reports.length > 0 ? current : null;
+    });
+
+    expect(status.state).toBe('completed');
+    expect(status.agents).toHaveLength(1);
+    expect(status.agents[0].label).toBe('review');
+    expect(status.agents[0].sessionId).toBe('ses_child');
+
+    expect(sessionCalls.created[0]).toMatchObject({
+      projectId: 'proj_w1',
+      workspaceId: 'ws_w1',
+      parentSessionId: 'ses_parent',
+      title: 'review',
+      options: {
+        providerId: 'anthropic',
+        modelId: 'claude-3-7-sonnet',
+        agentId: null,
+      },
+    });
+
+    expect(sessionCalls.sent[0].payload.options.agentId).toBeNull();
+    expect(() => assertRootPromptAdmission(sessionCalls.sent[0].payload)).not.toThrow();
+
+    const result = await runtime.executeAction('workflow.result', { runId: proposed.runId }, scope);
+    expect(result.result).toEqual({ passed: true });
+    expect(reports).toHaveLength(1);
+    expect(reports[0].sessionId).toBe('ses_parent');
+    expect(reports[0].body.metadata).toMatchObject({
+      source: 'openchamber-workflow',
+      runId: proposed.runId,
+      state: 'completed',
+    });
   });
 });

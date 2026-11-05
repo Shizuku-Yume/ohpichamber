@@ -185,23 +185,25 @@ export function applyDirectoryEvent(state: State, event: CanonicalEvent): Direct
   const id = event.sessionId;
   const existing = state.cleanse?.[id];
   if (existing) {
-   const epochComp = compareCounters(event.epoch, existing.epoch);
-   if (epochComp < 0) return { kind: 'applied', state };
-   if (epochComp === 0 && compareCounters(event.sequence, existing.sequence) < 0) {
-    return { kind: 'applied', state };
+   if (event.epoch && existing.epoch) {
+    const epochComp = compareCounters(event.epoch, existing.epoch);
+    if (epochComp < 0) return { kind: 'applied', state };
+    if (epochComp === 0 && event.sequence && existing.sequence && compareCounters(event.sequence, existing.sequence) < 0) {
+     return { kind: 'applied', state };
+    }
    }
   }
   const nextCleanseState: CleanseProgressState = {
    sessionId: id,
-   epoch: event.epoch,
-   sequence: event.sequence,
+   epoch: event.epoch ?? '0',
+   sequence: event.sequence ?? '0',
    status: event.status,
    activeCheckers: [...event.activeCheckers],
    completedCheckers: [...event.completedCheckers],
    repairedFiles: [...event.repairedFiles],
    diagnosticsCount: event.diagnosticsCount,
    summary: event.summary,
-   updatedAt: event.timestamp,
+   updatedAt: event.timestamp ?? Date.now(),
   };
   return {
    kind: 'applied',

@@ -503,21 +503,22 @@ export const JobsSheetDialog: React.FC<JobsSheetDialogProps> = ({
         {/* Active tab content */}
         <div className="flex-1 min-h-[160px] max-h-[300px] flex flex-col rounded-lg border border-border bg-surface-2 overflow-hidden">
           {activeTab === 'output' ? (
-            outputError ? (
-              <div className="p-4 text-xs font-mono text-status-error">
-                {outputError}
-              </div>
-            ) : (
+            <div className="flex-1 flex flex-col overflow-hidden">
+              {outputError ? (
+                <div role="alert" className="px-3 py-1.5 text-xs font-mono text-status-error bg-status-error/10 border-b border-status-error/20 flex items-center justify-between shrink-0">
+                  <span>{outputError}</span>
+                </div>
+              ) : null}
               <pre
                 ref={logsContainerRef}
                 className="flex-1 p-3 font-mono text-xs text-foreground overflow-y-auto whitespace-pre-wrap break-all select-text"
               >
                 {outputLogs || t('chat.backgroundShells.noOutput')}
               </pre>
-            )
+            </div>
           ) : (
             <div className="flex-1 flex flex-col overflow-hidden">
-              <div className="flex items-center gap-1.5 p-2 border-b border-border/60 bg-surface-1 overflow-x-auto">
+              <div className="flex items-center gap-1.5 p-2 border-b border-border/60 bg-surface-1 overflow-x-auto shrink-0">
                 {shell.streams?.map((s) => (
                   <button
                     key={s.id}
@@ -534,17 +535,16 @@ export const JobsSheetDialog: React.FC<JobsSheetDialogProps> = ({
                 ))}
               </div>
               {streamError ? (
-                <div className="p-4 text-xs font-mono text-status-error">
-                  {streamError}
+                <div role="alert" className="px-3 py-1.5 text-xs font-mono text-status-error bg-status-error/10 border-b border-status-error/20 flex items-center justify-between shrink-0">
+                  <span>{streamError}</span>
                 </div>
-              ) : (
-                <pre
-                  ref={logsContainerRef}
-                  className="flex-1 p-3 font-mono text-xs text-foreground overflow-y-auto whitespace-pre-wrap break-all select-text"
-                >
-                  {streamLogs || t('chat.backgroundShells.selectStream')}
-                </pre>
-              )}
+              ) : null}
+              <pre
+                ref={logsContainerRef}
+                className="flex-1 p-3 font-mono text-xs text-foreground overflow-y-auto whitespace-pre-wrap break-all select-text"
+              >
+                {streamLogs || t('chat.backgroundShells.selectStream')}
+              </pre>
             </div>
           )}
         </div>

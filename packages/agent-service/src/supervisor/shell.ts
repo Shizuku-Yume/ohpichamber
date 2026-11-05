@@ -96,7 +96,7 @@ export class ShellCoordinator {
       const result = await this.operation(root, { type: 'output', request: nativeRequest });
       if (result.type !== 'output' || !this.sameJob(result.output.job, nativeRequest.job)
         || result.output.requestedCursor !== input.cursor) throw unavailable();
-      return { status: 200, body: result.output };
+      return { status: 200, body: sessionId === root.rootSessionId ? result.output : { ...result.output, job: { ...result.output.job, sessionId } } };
     }
     if (action === 'stream') {
       if (request.method !== 'GET') return null;
@@ -106,7 +106,7 @@ export class ShellCoordinator {
       const nativeRequest = { ...input, job: { ...input.job, sessionId: root.rootSessionId } };
       const result = await this.operation(root, { type: 'stream', request: nativeRequest });
       if (result.type !== 'stream' || !this.sameJob(result.stream.job, nativeRequest.job)) throw unavailable();
-      return { status: 200, body: result.stream };
+      return { status: 200, body: sessionId === root.rootSessionId ? result.stream : { ...result.stream, job: { ...result.stream.job, sessionId } } };
     }
     if (action === 'stdin') {
       if (request.method !== 'POST') return null;
@@ -120,7 +120,7 @@ export class ShellCoordinator {
       const nativeRequest = { ...input, job: { ...input.job, sessionId: root.rootSessionId } };
       const result = await this.operation(root, { type: 'stdin', request: nativeRequest });
       if (result.type !== 'stdin' || !this.sameJob(result.result.job, nativeRequest.job)) throw unavailable();
-      return { status: 200, body: result.result };
+      return { status: 200, body: sessionId === root.rootSessionId ? result.result : { ...result.result, job: { ...result.result.job, sessionId } } };
     }
     if (action === 'stop') {
       if (request.method !== 'POST') return null;
@@ -136,7 +136,7 @@ export class ShellCoordinator {
       const result = await this.operation(root, { type: 'stop', request: nativeRequest });
       if (result.type !== 'stop' || !this.sameJob(result.result.job, nativeRequest.job)) throw unavailable();
       this.assertJobOwner(root, result.result.job);
-      return { status: 200, body: result.result };
+      return { status: 200, body: sessionId === root.rootSessionId ? result.result : { ...result.result, job: { ...result.result.job, sessionId } } };
     }
     return null;
   }
@@ -225,7 +225,7 @@ export class ShellCoordinator {
   }
 
   private async operation(root: RegisteredWorkerInfo, operation: ShellOperation): Promise<ShellResult> {
-    const identitySensitive = operation.type === 'output' || operation.type === 'stop';
+    const identitySensitive = operation.type === 'output' || operation.type === 'stop' || operation.type === 'stream' || operation.type === 'stdin';
     const scope = this.workers.authorizationScope(root.rootSessionId);
     if (!this.isAuthorizedRoot(root.rootSessionId) || !scope || root.state !== 'ready') throw unavailable();
     if (scope.workerGeneration !== root.workerGeneration) {

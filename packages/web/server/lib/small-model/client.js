@@ -66,6 +66,17 @@ export async function listProviderInfos(_service, workspaceId) {
   return body.providers;
 }
 
+export async function getModelRoles(_service, workspaceId) {
+  await workspace(workspaceId);
+  try {
+    const data = await request(`/api/agent/v1/workspaces/${encodeURIComponent(workspaceId)}/settings`);
+    const setting = Array.isArray(data?.settings) ? data.settings.find((s) => s?.id === 'modelRoles') : null;
+    return setting && typeof setting.value === 'object' && setting.value !== null ? setting.value : {};
+  } catch {
+    return {};
+  }
+}
+
 export async function completeSmallModel(input, { signal } = {}) {
   const parsed = CompletionRequestSchema.parse(input);
   await workspace(parsed.workspaceId);

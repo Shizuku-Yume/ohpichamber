@@ -19,7 +19,6 @@ import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { AgentsSidebar } from '@/components/sections/agents/AgentsSidebar';
 import { AgentsPage } from '@/components/sections/agents/AgentsPage';
-import { BehaviorPage } from '@/components/sections/behavior/BehaviorPage';
 import { WebSearchPage } from '@/components/sections/websearch/WebSearchPage';
 import { OmpSettingsPage } from '@/components/sections/openchamber/OmpSettingsPage';
 import { CommandsSidebar } from '@/components/sections/commands/CommandsSidebar';
@@ -126,12 +125,11 @@ const pageOrder: SettingsPageSlug[] = [
   'tunnel',
   'git',
   'isolated-spaces',
-  // 'opencode' group — OpenCode
+  // 'agent' group
   'providers',
   'web-search',
   'omp',
   'agents',
-  'behavior',
   'commands',
   'mcp',
   'plugins',
@@ -142,7 +140,7 @@ const pageOrder: SettingsPageSlug[] = [
   'skills.catalog',
 ];
 
-const NAV_GROUP_ORDER = ['general', 'projects', 'opencode', 'content'] as const;
+const NAV_GROUP_ORDER = ['general', 'projects', 'agent', 'content'] as const;
 
 function buildRuntimeContext(isDesktop: boolean, isMobile: boolean, routingAvailable: boolean, enterpriseMode: boolean, jevBlockedByEnterprise: boolean): SettingsRuntimeContext {
   const isWeb = !isDesktop && isWebRuntime();
@@ -601,8 +599,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         return <RemoteInstancesPage />;
       case 'agents':
         return <AgentsPage />;
-      case 'behavior':
-        return <BehaviorPage />;
       case 'commands':
         return <CommandsPage />;
       case 'mcp':

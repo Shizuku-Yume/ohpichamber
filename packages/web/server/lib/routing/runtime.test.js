@@ -44,7 +44,9 @@ const settledHistory = (model, finishedAt = NOW - 60_000) => historyPage([
 const catalogModel = (model, variants) => ({
   provider: model.providerID, modelId: model.modelID, name: model.modelID,
   modalities: ['text'], contextWindow: 128_000, maxOutputTokens: 8_000,
-  reasoningEffortSupported: false, reasoningOptions: [], pricing: null,
+  reasoningEffortSupported: variants.length > 0,
+  reasoningOptions: variants.map((effort) => ({ reasoningEffort: effort, label: effort, budgetTokens: null })),
+  pricing: null,
   variants: variants.map((variant) => ({ variant, label: variant, reasoningEffort: null })),
 });
 
@@ -175,10 +177,10 @@ describe('native Auto selection', () => {
     expect(service.request).not.toHaveBeenCalled();
     expect(jev.ask).not.toHaveBeenCalled();
   });
-  it('selects the category model, its own variant and agent, using canonical history', async () => {
+  it('selects the category model, its own variant and null agent, using canonical history', async () => {
     const { runtime, jev, events } = await makeRuntime({ history: settledHistory(FALLBACK.model) });
     const resolved = await runtime.resolveAutoSelection(send({ agent: 'build' }));
-    expect(resolved).toMatchObject({ model: { providerId: HARD.providerID, modelId: HARD.modelID, variant: 'high' }, agent: 'plan' });
+    expect(resolved).toMatchObject({ model: { providerId: HARD.providerID, modelId: HARD.modelID, reasoningEffort: 'high' }, agent: null });
     expect(jev.ask.mock.calls[0][0].state.history).toEqual([
       { role: 'user', text: 'Investigate the regression.' },
       { role: 'assistant', text: 'The bounded fix is ready.' },
@@ -186,10 +188,10 @@ describe('native Auto selection', () => {
     expect(JSON.stringify(jev.ask.mock.calls[0][0])).not.toContain('private tool output');
     expect(events.at(-1)).toMatchObject({ type: 'openchamber:routing.decision', properties: { sessionId: 's1', category: 'hard', reason: 'routed', confidence: 0.97 } });
   });
-  it('uses the fallback model and variant for an unbound category, keeping the composer agent', async () => {
+  it('uses the fallback model and variant for an unbound category, with null agent', async () => {
     const { runtime } = await makeRuntime({ answers: { category: { choice: 'trivial', confidence: 0.99 } } });
     const resolved = await runtime.resolveAutoSelection(send({ requestText: 'fix typo', agent: 'build' }));
-    expect(resolved).toMatchObject({ model: { providerId: FALLBACK.model.providerID, modelId: FALLBACK.model.modelID, variant: 'medium' }, agent: 'build' });
+    expect(resolved).toMatchObject({ model: { providerId: FALLBACK.model.providerID, modelId: FALLBACK.model.modelID, reasoningEffort: 'medium' }, agent: null });
   });
   it.each([
     ['low-confidence', { category: { choice: 'hard', confidence: 0.3 } }],
@@ -200,7 +202,7 @@ describe('native Auto selection', () => {
     config.categories = config.categories.map((category) => category.id === 'research' ? { ...category, enabled: false } : { ...category, agent: null });
     const { runtime } = await makeRuntime({ config, answers, history: settledHistory(HARD) });
     const resolved = await runtime.resolveAutoSelection(send());
-    expect(resolved.model).toEqual({ providerId: FALLBACK.model.providerID, modelId: FALLBACK.model.modelID, variant: 'medium' });
+    expect(resolved.model).toMatchObject({ providerId: FALLBACK.model.providerID, modelId: FALLBACK.model.modelID, reasoningEffort: 'medium' });
     expect(resolved.decision).toMatchObject({ reason, category: null });
     expect(resolved.decision.cacheHold).toBeUndefined();
   });
@@ -243,12 +245,12 @@ describe('native Auto selection', () => {
       catalog: [catalogModel(HARD, ['low'])],
     });
     const resolved = await made.runtime.resolveAutoSelection(send());
-    expect(resolved.model).toEqual({ providerId: HARD.providerID, modelId: HARD.modelID });
+    expect(resolved.model).toMatchObject({ providerId: HARD.providerID, modelId: HARD.modelID, reasoningEffort: null });
     expect(resolved.decision.variant).toBeNull();
     const known = await makeRuntime({ catalog: [catalogModel(HARD, ['high'])] });
-    expect((await known.runtime.resolveAutoSelection(send())).model.variant).toBe('high');
+    expect((await known.runtime.resolveAutoSelection(send())).model.reasoningEffort).toBe('high');
     const unavailable = await makeRuntime({ catalog: new Error('catalog unavailable') });
-    expect((await unavailable.runtime.resolveAutoSelection(send())).model.variant).toBe('high');
+    expect((await unavailable.runtime.resolveAutoSelection(send())).model.reasoningEffort).toBe('high');
   });
 });
 
@@ -264,8 +266,8 @@ describe('prompt-cache hysteresis from settled native history', () => {
   };
   it('holds a downward move on the warm model and reports the requested lower category', async () => {
     const resolved = await route();
-    expect(resolved.model).toEqual({ providerId: HARD.providerID, modelId: HARD.modelID, variant: 'high' });
-    expect(resolved.agent).toBe('build');
+    expect(resolved.model).toMatchObject({ providerId: HARD.providerID, modelId: HARD.modelID, reasoningEffort: 'high' });
+    expect(resolved.agent).toBeNull();
     expect(resolved.decision).toMatchObject({ category: 'hard', cacheHold: { requested: 'trivial' } });
   });
   it('lets upward moves through immediately and releases downward moves at cache expiry', async () => {

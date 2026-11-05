@@ -118,7 +118,7 @@ const HistoryCursorSchema = z.tuple([EntityIdSchema, CounterSchema, EntityIdSche
 interface LiveMessage {
   messageId: string; turnId: string; runId: string; userMessageId: string;
   virtualUser: boolean; nativeMessage: VisibleMessage;
-  attachments: PromptAttachment[]; sessionMentions: SessionMention[]; started: Set<number>; providerId?: string; modelId?: string; usage?: TokenUsage;
+  attachments: PromptAttachment[]; sessionMentions: SessionMention[]; started: Set<number>; toolCallIndexById: Map<string, number>; providerId?: string; modelId?: string; usage?: TokenUsage;
 }
 
 type NativeAssistantMessage = Extract<VisibleMessage, { role: 'assistant' }>;
@@ -278,7 +278,7 @@ export class WorkerProjection {
   private publicEvents(inputs: ProjectionInput[]): ProjectionInput[] {
     for (const { event } of inputs) {
       switch (event.type) {
-        case 'part.started': case 'part.completed': this.publicPart(event.part); break;
+        case 'part.started': case 'part.updated': case 'part.completed': this.publicPart(event.part); break;
         case 'tool.started': event.toolCallId = this.publicText(event.toolCallId); event.toolName = this.publicText(event.toolName); event.input = this.publicJsonObject(event.input); break;
         case 'tool.completed':
           event.toolCallId = this.publicText(event.toolCallId);
@@ -378,6 +378,7 @@ export class WorkerProjection {
           nativeMessage: native,
           attachments: native.role === 'user' ? queued?.attachments ?? this.attachments : [], started: new Set(), ...nativeMetadata,
           sessionMentions: native.role === 'user' ? queued?.sessionMentions ?? this.sessionMentions : [],
+          toolCallIndexById: new Map(),
         };
         if (native.role === 'user') { this.queuedPrompts.delete(native); this.attachments = []; this.sessionMentions = []; }
         this.message = current;
@@ -400,7 +401,8 @@ export class WorkerProjection {
       }
       case 'message_update': {
         const current = this.message;
-        if (!current || current.nativeMessage.role !== 'assistant') break;
+        if (!current || current.nativeMessage.role !== 'assistant' || event.message.role !== 'assistant') break;
+        current.nativeMessage = event.message;
         const update = event.assistantMessageEvent;
         switch (update.type) {
           case 'text_start': case 'thinking_start': {
@@ -418,13 +420,62 @@ export class WorkerProjection {
             if (delta) emit({ type: 'part.delta', partId: id, delta });
             break;
           }
-          case 'toolcall_end': {
-            const call = update.toolCall;
-            const part: Part = { type: 'tool_call', partId: partId(current.messageId, update.contentIndex),
-              toolCallId: call.id, toolName: call.name, input: toolInput(JSON.parse(JSON.stringify(call.arguments))), status: 'running' };
+          case 'toolcall_start': {
+            if (current.started.has(update.contentIndex)) break;
+            const src = update.partial.content[update.contentIndex];
+            if (src?.type !== 'toolCall' || !src.id || !src.name) break;
+            const id = partId(current.messageId, update.contentIndex);
+            const part: Part = {
+              type: 'tool_call',
+              partId: id,
+              toolCallId: this.publicText(src.id),
+              toolName: this.publicText(src.name),
+              input: this.publicJsonObject(toolInput(JSON.parse(JSON.stringify(src.arguments)))),
+              status: 'running',
+            };
+            current.toolCallIndexById.set(src.id, update.contentIndex);
+            current.started.add(update.contentIndex);
+            emit({ type: 'part.started', messageId: current.messageId, part });
+            break;
+          }
+          case 'toolcall_delta': {
+            const src = update.partial.content[update.contentIndex];
+            if (src?.type !== 'toolCall' || !src.id || !src.name) break;
+            const id = partId(current.messageId, update.contentIndex);
+            const part: Part = {
+              type: 'tool_call',
+              partId: id,
+              toolCallId: this.publicText(src.id),
+              toolName: this.publicText(src.name),
+              input: this.publicJsonObject(toolInput(JSON.parse(JSON.stringify(src.arguments)))),
+              status: 'running',
+            };
             if (!current.started.has(update.contentIndex)) {
               current.started.add(update.contentIndex);
               emit({ type: 'part.started', messageId: current.messageId, part });
+            } else {
+              emit({ type: 'part.updated', part });
+            }
+            break;
+          }
+          case 'toolcall_end': {
+            const call = update.toolCall;
+            if (!call.id || !call.name) break;
+            const id = partId(current.messageId, update.contentIndex);
+            const part: Part = {
+              type: 'tool_call',
+              partId: id,
+              toolCallId: this.publicText(call.id),
+              toolName: this.publicText(call.name),
+              input: this.publicJsonObject(toolInput(JSON.parse(JSON.stringify(call.arguments)))),
+              status: 'running',
+            };
+            current.toolCallIndexById.set(call.id, update.contentIndex);
+            if (!current.started.has(update.contentIndex)) {
+              current.started.add(update.contentIndex);
+              emit({ type: 'part.started', messageId: current.messageId, part });
+            } else {
+              emit({ type: 'part.completed', part });
             }
             break;
           }
@@ -470,6 +521,26 @@ export class WorkerProjection {
           error: event.isError ? 'Tool execution failed' : undefined,
         });
         break;
+      case 'tool_stream_update': {
+        const current = this.message;
+        if (!current || !event.toolCallId || !event.toolName) break;
+        const contentIndex = current.toolCallIndexById.get(event.toolCallId);
+        if (contentIndex === undefined) break;
+        const src = current.nativeMessage.role === 'assistant' && Array.isArray(current.nativeMessage.content)
+          ? current.nativeMessage.content[contentIndex] : undefined;
+        const rawArgs = src && src.type === 'toolCall' ? src.arguments : {};
+        const id = partId(current.messageId, contentIndex);
+        const part: Part = {
+          type: 'tool_call',
+          partId: id,
+          toolCallId: this.publicText(event.toolCallId),
+          toolName: this.publicText(event.toolName),
+          input: this.publicJsonObject(toolInput(JSON.parse(JSON.stringify(rawArgs)))),
+          status: 'running',
+        };
+        emit({ type: 'part.updated', part });
+        break;
+      }
       case 'auto_compaction_end':
         if (event.result === undefined || event.aborted || event.willRetry || event.skipped === true) break;
         emit({ type: 'session.compacted', compactionId: randomUUID(), tokensBefore: event.result.tokensBefore, completedAt: timestamp });

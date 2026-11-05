@@ -31,10 +31,9 @@ mock.module('@/hooks/useSettingsDirectory', () => ({ useSettingsDirectory: () =>
 // React DOM must initialize after happy-dom is installed; a static import would evaluate before this setup.
 const { act } = await import('react');
 const { createRoot } = await import('react-dom/client');
-const { I18nProvider } = await import('@/lib/i18n');
+const { I18nProvider, useI18nStore } = await import('@/lib/i18n');
 const { CanonicalApiError, canonicalClient } = await import('@/api/canonicalClient');
 import type { ModelCatalog } from '@openchamber/agent-contract';
-import { OMP_MODEL_ROLES, parseRoleSelector, formatRoleSelector, resolveRoleFallback } from './ompModelRoles';
 import { ompSettingsI18n } from '@/lib/i18n/messages/ompSettingsI18n';
 const { OmpSettingsPage } = await import('./OmpSettingsPage');
 
@@ -80,6 +79,18 @@ const mockModelCatalog = {
       variants: [],
       pricing: null,
     },
+    {
+      modelId: 'o3-mini',
+      provider: 'openai',
+      name: 'o3-mini',
+      modalities: ['text'] as const,
+      contextWindow: 200000,
+      maxOutputTokens: 100000,
+      reasoningEffortSupported: true,
+      reasoningOptions: [],
+      variants: [],
+      pricing: null,
+    },
   ],
 };
 
@@ -91,7 +102,7 @@ const stateWithRoles = {
     {
       id: 'modelRoles' as const,
       type: 'record' as const,
-      value: { default: 'anthropic/claude-3-7-sonnet', smol: 'openai/gpt-4o-mini' },
+      value: { default: 'anthropic/claude-3-7-sonnet', smol: 'openai/gpt-4o-mini', slow: 'openai/o3-mini' },
       default: {},
       configured: true,
     },
@@ -196,42 +207,30 @@ test('retries once at the refreshed revision when another mutation wins', async 
     changes: [{ id: 'compaction.enabled', value: false }],
   });
 });
-
-test('role fallback and selector helpers handle all 16 roles and format correctly', () => {
-  expect(OMP_MODEL_ROLES.length).toBe(16);
-  expect(ompSettingsI18n.en['settings.omp.modelRoles.title']).toBe('Model Roles');
-  const roleIds = OMP_MODEL_ROLES.map(r => r.id);
-  expect(roleIds).toEqual([
-    'default', 'smol', 'slow', 'vision', 'plan', 'commit', 'tiny', 'memory',
-    'task', 'advisor', 'widget', 'image', 'web', 'speech', 'dictation', 'judge',
-  ]);
-
-  // Fallback chaining
-  expect(resolveRoleFallback('commit', { smol: 'openai/gpt-4o-mini' })).toEqual({ role: 'smol', model: 'openai/gpt-4o-mini' });
-  expect(resolveRoleFallback('commit', { default: 'anthropic/claude-3-7-sonnet' })).toEqual({ role: 'default', model: 'anthropic/claude-3-7-sonnet' });
-  expect(resolveRoleFallback('memory', { smol: 'openai/gpt-4o-mini' })).toEqual({ role: 'smol', model: 'openai/gpt-4o-mini' });
-  expect(resolveRoleFallback('advisor', { slow: 'anthropic/claude-3-7-sonnet:high' })).toEqual({ role: 'slow', model: 'anthropic/claude-3-7-sonnet:high' });
-  expect(resolveRoleFallback('default', {})).toBeNull();
-
-  // Parsing & formatting
-  expect(parseRoleSelector('anthropic/claude-3-7-sonnet:high')).toEqual({ model: 'anthropic/claude-3-7-sonnet', effort: 'high' });
-  expect(parseRoleSelector('openai/gpt-4o-mini')).toEqual({ model: 'openai/gpt-4o-mini', effort: '' });
-  expect(formatRoleSelector('anthropic/claude-3-7-sonnet', 'high')).toBe('anthropic/claude-3-7-sonnet:high');
-  expect(formatRoleSelector('openai/gpt-4o-mini', '')).toBe('openai/gpt-4o-mini');
-  expect(formatRoleSelector('openai/gpt-4o-mini', 'default')).toBe('openai/gpt-4o-mini');
-});
+const EXPECTED_ROLES: Array<{ id: string; tag: string }> = [
+  { id: 'default', tag: 'DEFAULT' }, { id: 'smol', tag: 'SMOL' },
+  { id: 'slow', tag: 'SLOW' }, { id: 'vision', tag: 'VISION' },
+  { id: 'plan', tag: 'PLAN' }, { id: 'commit', tag: 'COMMIT' },
+  { id: 'tiny', tag: 'TINY' }, { id: 'memory', tag: 'MEMORY' },
+  { id: 'task', tag: 'TASK' }, { id: 'advisor', tag: 'ADVISOR' },
+  { id: 'widget', tag: 'WIDGET' }, { id: 'image', tag: 'IMAGE' },
+  { id: 'web', tag: 'WEB' }, { id: 'speech', tag: 'SPEECH' },
+  { id: 'dictation', tag: 'DICTATION' }, { id: 'judge', tag: 'JUDGE' },
+];
 
 test('renders visual selectors and fallback indicators for all 16 OMP model roles', async () => {
   getSettings.mockResolvedValue(stateWithRoles);
   await act(async () => { root.render(<I18nProvider><OmpSettingsPage /></I18nProvider>); });
   await settle();
+  expect(ompSettingsI18n.en['settings.omp.modelRoles.title']).toBe('Model Roles');
+  expect(ompSettingsI18n.en['settings.omp.modelRoles.effort.minimal']).toBe('Minimal');
 
   // Verify modelRoles is NOT rendered as a raw textarea
   const textarea = container.querySelector('[data-settings-item="omp.modelRoles"] textarea');
   expect(textarea).toBeNull();
 
   // Verify all 16 roles are rendered with their badges
-  for (const role of OMP_MODEL_ROLES) {
+  for (const role of EXPECTED_ROLES) {
     const roleRow = container.querySelector(`[data-settings-item="omp.modelRoles.${role.id}"]`);
     expect(roleRow).not.toBeNull();
     expect(roleRow?.textContent).toContain(role.tag);
@@ -259,4 +258,44 @@ test('renders visual selectors and fallback indicators for all 16 OMP model role
   // Verify steeringMode renders in the Input group
   const steeringRow = container.querySelector('[data-settings-item="omp.steeringMode"]');
   expect(steeringRow).not.toBeNull();
+});
+
+test('translates default effort options when model.reasoningOptions are absent', async () => {
+  await act(async () => { useI18nStore.getState().setLocale('de'); });
+  try {
+    getSettings.mockResolvedValue(stateWithRoles);
+    await act(async () => { root.render(<I18nProvider><OmpSettingsPage /></I18nProvider>); });
+    await settle();
+
+    // slow is configured with o3-mini (reasoningEffortSupported: true, reasoningOptions: [])
+    const slowRow = container.querySelector('[data-settings-item="omp.modelRoles.slow"]');
+    expect(slowRow).not.toBeNull();
+    const slowTriggers = slowRow?.querySelectorAll('button[role="combobox"]');
+    expect(slowTriggers?.length).toBe(2); // Model picker + thinking effort picker
+
+    // Verify translated German effort labels exist in i18n dictionary for OMP settings
+    expect(ompSettingsI18n.de['settings.omp.modelRoles.effort.low']).toBe('Niedrig');
+    expect(ompSettingsI18n.de['settings.omp.modelRoles.effort.medium']).toBe('Mittel');
+    expect(ompSettingsI18n.de['settings.omp.modelRoles.effort.high']).toBe('Hoch');
+    expect(ompSettingsI18n.de['settings.omp.modelRoles.effort.max']).toBe('Maximal');
+  } finally {
+    await act(async () => { useI18nStore.getState().setLocale('en'); });
+  }
+});
+
+test('safely parses roles record with malformed or non-string fields without throwing', async () => {
+  const malformed = {
+    ...stateWithRoles,
+    settings: stateWithRoles.settings.map(s => s.id === 'modelRoles' ? {
+      ...s,
+      value: { default: 'anthropic/claude-3-7-sonnet', count: 123, invalid: null },
+    } : s),
+  };
+  getSettings.mockResolvedValue(malformed);
+  await act(async () => { root.render(<I18nProvider><OmpSettingsPage /></I18nProvider>); });
+  await settle();
+
+  // Verify default role was still safely extracted
+  const defaultRow = container.querySelector('[data-settings-item="omp.modelRoles.default"]');
+  expect(defaultRow?.textContent).toContain('anthropic/claude-3-7-sonnet');
 });

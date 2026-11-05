@@ -442,6 +442,40 @@ test('native builtin command returns context output without starting a provider 
     expect(harness.fatal()).toBe(false);
   } finally { await harness.close(); }
 }, 30000);
+test('headless slash commands execute allowed commands like /dirs and /clear without fatal errors', async () => {
+  const harness = await fixture({ respond: () => completion() });
+  try {
+    const dirsResult = await harness.worker.operation({ type: 'command', text: '/dirs' });
+    expect(dirsResult.type).toBe('command');
+    if (dirsResult.type !== 'command') throw new Error('Expected command output');
+    expect(dirsResult.output).toBeDefined();
+
+    const clearResult = await harness.worker.operation({ type: 'command', text: '/clear' });
+    expect(clearResult.type).toBe('command');
+    if (clearResult.type !== 'command') throw new Error('Expected command output');
+    expect(clearResult.output).toContain('cleared');
+    expect(harness.fatal()).toBe(false);
+  } finally { await harness.close(); }
+}, 30000);
+
+test('turn budget and standalone magic keywords apply budget ceiling and notices in prepare', async () => {
+  const harness = await fixture({ respond: () => completion() });
+  try {
+    const terminal = Promise.withResolvers<void>();
+    const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve(); });
+    await harness.worker.operation({
+      type: 'prompt',
+      runId: 'budget-test-run',
+      request: prompt('please ultrathink this request +50k!'),
+    });
+    await terminal.promise;
+    unsubscribe();
+    expect(harness.worker.session.sessionManager.getTurnBudget()?.total).toBe(50000);
+    expect(harness.worker.session.sessionManager.getTurnBudget()?.hard).toBe(true);
+    expect(harness.fatal()).toBe(false);
+  } finally { await harness.close(); }
+}, 30000);
+
 
 
 test('native web_search tool routes to Host web-search authorization and performs one loopback search', async () => {
@@ -646,7 +680,7 @@ test('worker sends plain OMP system and developer context plus only the user pin
     const created = await createAgentSession({
       cwd: harness.root, agentDir: harness.agentDirectory, sessionManager: plainManager, authStorage: runtime.authStorage,
       modelRegistry: runtime.modelRegistry, settings: runtime.settings, initialModelRefreshStrategy: 'offline',
-      enableMCP: false, enableLsp: false, disableExtensionDiscovery: true, hasUI: true, interactivePrompts: true,
+      enableMCP: false, disableExtensionDiscovery: true, hasUI: true, interactivePrompts: true,
       tuiTranscript: true,
     });
     plain = created.session;
@@ -904,6 +938,144 @@ test('native branch CAS rejects stale owner/version and redo expires after a new
     } finally { unsubscribe(); }
     expect(harness.fatal()).toBe(false);
   } finally { await harness.close(); }
+}, 30000);
+
+test('branch revert on unchanged leaf returns 409 without failing worker and subsequent prompt succeeds', async () => {
+  const harness = await fixture({ respond: () => completion() });
+  try {
+    // Verify LSP tool is available inside worker session (enableLsp is not forced to false)
+    expect(harness.worker.session.getAllToolNames()).toContain('lsp');
+
+    const terminal = Promise.withResolvers<void>();
+    const unsubscribe = harness.worker.session.subscribe(event => {
+      if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve();
+    });
+    try {
+      await harness.worker.operation({ type: 'prompt', runId: 'first-run', request: prompt('First prompt') });
+      await terminal.promise;
+    } finally {
+      unsubscribe();
+    }
+
+    const before = harness.worker.seed();
+    expect(before.messages.length).toBeGreaterThan(0);
+    const lastMessage = before.messages.at(-1)!;
+    // First revert moves leaf to the target assistant message
+    const reverted = await harness.worker.operation({
+      type: 'branch',
+      request: {
+        action: 'revert',
+        messageId: lastMessage.messageId,
+        branchId: before.branch.branchId,
+        branchVersion: before.branch.branchVersion,
+      },
+    });
+    if (reverted.type !== 'branch') throw new Error('Branch operation expected');
+
+    // Second revert targeting the same message: navigateTree detects target is already at leaf and does not change leaf
+    // Must reject with 409 COMMAND_IN_FLIGHT without appending duplicate branch entry and without failing worker
+    const leafBefore = harness.worker.session.sessionManager.getLeafId();
+    await expect(harness.worker.operation({
+      type: 'branch',
+      request: {
+        action: 'revert',
+        messageId: lastMessage.messageId,
+        branchId: reverted.result.branch.branchId,
+        branchVersion: reverted.result.branch.branchVersion,
+      },
+    })).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });
+
+    // No duplicate branch entry appended to tree
+    expect(harness.worker.session.sessionManager.getLeafId()).toBe(leafBefore);
+
+    // Worker generation must not be marked fatal / failed
+    expect(harness.fatal()).toBe(false);
+
+    // Subsequent prompt in the SAME worker generation succeeds
+    const secondTerminal = Promise.withResolvers<void>();
+    const unsubscribeSecond = harness.worker.session.subscribe(event => {
+      if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) secondTerminal.resolve();
+    });
+    try {
+      await harness.worker.operation({ type: 'prompt', runId: 'second-run', request: prompt('Second prompt in same generation') });
+      await secondTerminal.promise;
+    } finally {
+      unsubscribeSecond();
+    }
+
+    expect(harness.fatal()).toBe(false);
+    const after = harness.worker.seed();
+    expect(after.messages.length).toBeGreaterThan(before.messages.length);
+  } finally {
+    await harness.close();
+  }
+}, 30000);
+
+test('branch revert rollback restores previous leaf and in-memory messages without failing worker', async () => {
+  const harness = await fixture({ respond: () => completion() });
+  try {
+    const terminal = Promise.withResolvers<void>();
+    const unsubscribe = harness.worker.session.subscribe(event => {
+      if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve();
+    });
+    try {
+      await harness.worker.operation({ type: 'prompt', runId: 'p1', request: prompt('Prompt 1') });
+      await terminal.promise;
+    } finally {
+      unsubscribe();
+    }
+    const before = harness.worker.seed();
+    const manager = harness.worker.session.sessionManager;
+    const priorLeaf = manager.getLeafId();
+
+    // Mock manager.appendEntriesAtomically to fail once after navigateTree succeeds
+    const originalAppend = manager.appendEntriesAtomically.bind(manager);
+    let injected = false;
+    manager.appendEntriesAtomically = (async (fn: () => Promise<unknown>) => {
+      if (!injected) {
+        injected = true;
+        throw new Error('Injected commit failure');
+      }
+      return originalAppend(fn);
+    }) as typeof manager.appendEntriesAtomically;
+
+    await expect(harness.worker.operation({
+      type: 'branch',
+      request: {
+        action: 'revert',
+        messageId: before.messages[0]!.messageId,
+        branchId: before.branch.branchId,
+        branchVersion: before.branch.branchVersion,
+      },
+    })).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });
+
+    // Restores branch positioned on prior leaf with branch selection entry
+    const restoredLeaf = manager.getEntry(manager.getLeafId() ?? '');
+    expect(restoredLeaf?.parentId).toBe(priorLeaf);
+    expect(restoredLeaf?.type).toBe('custom');
+    // Worker generation is not killed
+    expect(harness.fatal()).toBe(false);
+
+    // In-memory messages match display context of restored branch
+    expect(harness.worker.session.agent.state.messages).toHaveLength(
+      harness.worker.session.buildDisplaySessionContext().messages.length,
+    );
+
+    // Subsequent prompt succeeds in same worker generation
+    const secondTerminal = Promise.withResolvers<void>();
+    const unsubscribeSecond = harness.worker.session.subscribe(event => {
+      if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) secondTerminal.resolve();
+    });
+    try {
+      await harness.worker.operation({ type: 'prompt', runId: 'p2', request: prompt('Prompt 2') });
+      await secondTerminal.promise;
+    } finally {
+      unsubscribeSecond();
+    }
+    expect(harness.fatal()).toBe(false);
+  } finally {
+    await harness.close();
+  }
 }, 30000);
 test('actual native TaskTool owns a child session and persists its history', async () => {
   let requests = 0;
@@ -1323,3 +1495,58 @@ test('an explicit off effort reaches the native agent while an omitted effort ke
     expect(harness.requests[0]?.reasoning_effort).not.toBe('high');
   } finally { unsubscribe(); await harness.close(); }
 }, 30000);
+test('subagent cancel and steer operations resolve through worker operations', async () => {
+  const harness = await fixture({ respond: () => completion() });
+  try {
+    const cancelRes = await harness.worker.operation({ type: 'subagent.cancel', subagentId: 'non-existent' });
+    expect(cancelRes).toEqual({ type: 'subagent.cancel', subagentId: 'non-existent', cancelled: false });
+    await expect(harness.worker.operation({ type: 'subagent.steer', subagentId: 'non-existent', message: 'hello' })).rejects.toThrow();
+  } finally {
+    await harness.close();
+  }
+});
+test('autonomous commands /loop, /omfg, /cleanse, /tan, /seance, /advisor and loop.stop resolve properly', async () => {
+  const harness = await fixture({ respond: () => completion() });
+  try {
+    const loopRes = await harness.worker.operation({ type: 'command', text: '/loop 5 --until "true" repeat' });
+    expect(loopRes.type).toBe('command');
+    if ('output' in loopRes && typeof loopRes.output === 'string') {
+      expect(loopRes.output).toContain('Loop mode enabled');
+    }
+
+    const stopRes = await harness.worker.operation({ type: 'loop.stop' });
+    expect(stopRes).toEqual({ type: 'loop.stop', stopped: true });
+
+    const omfgRes = await harness.worker.operation({ type: 'command', text: '/omfg do not use any' });
+    expect(omfgRes.type).toBe('command');
+    if ('output' in omfgRes && typeof omfgRes.output === 'string') {
+      expect(omfgRes.output).toContain('Synthesized TTSR rule');
+    }
+
+    const cleanseRes = await harness.worker.operation({ type: 'command', text: '/cleanse' });
+    expect(cleanseRes.type).toBe('command');
+    if ('output' in cleanseRes && typeof cleanseRes.output === 'string') {
+      expect(cleanseRes.output).toContain('Cleanse diagnostic repair complete');
+    }
+
+    const tanRes = await harness.worker.operation({ type: 'command', text: '/tan research new feature' });
+    expect(tanRes.type).toBe('command');
+    if ('output' in tanRes && typeof tanRes.output === 'string') {
+      expect(tanRes.output).toContain('Dispatched background clone');
+    }
+
+    const seanceRes = await harness.worker.operation({ type: 'command', text: '/seance non-existent-session' });
+    expect(seanceRes.type).toBe('command');
+    if ('output' in seanceRes && typeof seanceRes.output === 'string') {
+      expect(seanceRes.output).toContain('Seance');
+    }
+
+    const advisorRes = await harness.worker.operation({ type: 'command', text: '/advisor' });
+    expect(advisorRes.type).toBe('command');
+    if ('output' in advisorRes && typeof advisorRes.output === 'string') {
+      expect(advisorRes.output).toContain('Advisor watchdog enabled');
+    }
+  } finally {
+    await harness.close();
+  }
+});

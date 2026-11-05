@@ -1,0 +1,110 @@
+import { afterEach, beforeEach, describe, expect, test, spyOn } from 'bun:test';
+import { Window } from 'happy-dom';
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { I18nProvider } from '@/lib/i18n';
+import { canonicalClient } from '@/api/canonicalClient';
+import { useSubagentsStore } from '@/stores/useSubagentsStore';
+import { SubagentHudTray } from './SubagentHudTray';
+import type { Subagent } from '@openchamber/agent-contract';
+
+describe('SubagentHudTray', () => {
+  let windowInstance: Window;
+  let host: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(async () => {
+    windowInstance = new Window();
+    Object.assign(globalThis, {
+      window: windowInstance,
+      document: windowInstance.document,
+      HTMLElement: windowInstance.HTMLElement,
+      Element: windowInstance.Element,
+      Node: windowInstance.Node,
+      IS_REACT_ACT_ENVIRONMENT: true,
+    });
+    useSubagentsStore.setState({ byParent: {} });
+    host = document.createElement('div');
+    document.body.append(host);
+    root = createRoot(host);
+  });
+
+  afterEach(async () => {
+    await act(async () => root.unmount());
+    host.remove();
+    useSubagentsStore.setState({ byParent: {} });
+  });
+
+  test('renders null when there are no subagents', async () => {
+    await act(async () => {
+      root.render(
+        <I18nProvider>
+          <SubagentHudTray sessionId="ses_root" />
+        </I18nProvider>,
+      );
+    });
+    expect(host.querySelector('[data-testid="subagent-hud-tray"]')).toBeNull();
+  });
+
+  test('renders live subagent details, tokens, cost, active tool and handles steer/cancel', async () => {
+    const subagent: Subagent = {
+      subagentId: 'sub_worker_1',
+      parentSessionId: 'ses_root',
+      childSessionId: 'ses_child_1',
+      role: 'task-runner',
+      status: 'running',
+      activeTool: 'bash',
+      tokens: 4200,
+      cost: 0.084,
+      depth: 1,
+      retryCountdown: 10,
+      description: 'Running test pipeline',
+    };
+
+    useSubagentsStore.getState().applySubagentUpdate('ses_root', subagent);
+
+    await act(async () => {
+      root.render(
+        <I18nProvider>
+          <SubagentHudTray sessionId="ses_root" />
+        </I18nProvider>,
+      );
+    });
+
+    const tray = host.querySelector('[data-testid="subagent-hud-tray"]');
+    expect(tray).not.toBeNull();
+    expect(tray?.textContent).toContain('task-runner');
+    expect(tray?.textContent).toContain('bash');
+    expect(tray?.textContent).toContain('4200');
+    expect(tray?.textContent).toContain('$0.084');
+
+    const steerSpy = spyOn(canonicalClient, 'steerSubagent').mockResolvedValue({
+      type: 'subagent.steer' as const,
+      subagentId: 'sub_worker_1',
+      accepted: true,
+    });
+    const cancelSpy = spyOn(canonicalClient, 'cancelSubagent').mockResolvedValue({
+      type: 'subagent.cancel' as const,
+      subagentId: 'sub_worker_1',
+      cancelled: true,
+    });
+
+    // Test cancel button
+    const row = host.querySelector('[data-testid="subagent-hud-row-sub_worker_1"]');
+    expect(row).not.toBeNull();
+    const buttons = row?.querySelectorAll('button');
+    expect(buttons?.length).toBeGreaterThanOrEqual(2);
+
+    // Cancel button is the second button
+    const cancelButton = buttons?.[1];
+    await act(async () => {
+      cancelButton?.click();
+    });
+
+    expect(cancelSpy).toHaveBeenCalledTimes(1);
+    expect(cancelSpy).toHaveBeenCalledWith('ses_root', 'sub_worker_1');
+
+    cancelSpy.mockRestore();
+    steerSpy.mockRestore();
+  });
+});

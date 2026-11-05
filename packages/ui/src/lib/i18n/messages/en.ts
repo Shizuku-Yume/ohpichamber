@@ -38,6 +38,7 @@ import { sessionReferencesI18n } from './session-references.i18n';
 import { guestStatusViewI18n } from './guest-status-view.i18n';
 import { ompSettingsI18n } from './omp-settings.i18n';
 import { workerRunsI18n } from './worker-runs.i18n';
+import { subagentHudI18n } from './subagent-hud.i18n';
 export const dict = {
   ...ompSettingsI18n.en,
   ...settingsDict,
@@ -78,6 +79,7 @@ export const dict = {
   ...workflowsI18n['en'],
   ...sessionReferencesI18n['en'],
   ...guestStatusViewI18n['en'],
+  ...subagentHudI18n['en'],
   "sessions.aiRename.action": "Rename with AI",
   "sessions.aiRename.generating": "Generating session title...",
   "sessions.aiRename.checking": "Checking completed turns...",

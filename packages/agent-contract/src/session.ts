@@ -64,6 +64,14 @@ export const SessionModeSchema = z.discriminatedUnion('kind', [
   }),
 ]);
 export type SessionMode = z.infer<typeof SessionModeSchema>;
+export const LoopStateSchema = z.strictObject({
+  active: z.boolean(),
+  iteration: z.number().int().nonnegative(),
+  maxIterations: z.number().int().positive().optional(),
+  condition: z.string().optional(),
+  prompt: z.string().optional(),
+});
+export type LoopState = z.infer<typeof LoopStateSchema>;
 export const RuntimeSessionSchema = z.strictObject({
   sessionId: EntityIdSchema, projectId: EntityIdSchema, workspaceId: EntityIdSchema, displayPath: DisplayPathSchema,
   parentSessionId: EntityIdSchema.optional(), rootSessionId: EntityIdSchema,
@@ -73,6 +81,7 @@ export const RuntimeSessionSchema = z.strictObject({
   /** OMP's session title; absent until OMP names the session. */
   title: z.string().min(1).optional(),
   continuationPending: z.boolean().optional(),
+  loop: LoopStateSchema.optional(),
 }).refine((session) => (session.runtimeStatus === 'idle' || session.runtimeStatus === 'unavailable') === (session.activeRunId === null), {
   message: 'Runtime activity must identify its outer run', path: ['activeRunId'],
 });
@@ -99,7 +108,18 @@ export type Run = z.infer<typeof RunSchema>;
 export const SubagentSchema = z.strictObject({
   subagentId: EntityIdSchema, parentSessionId: EntityIdSchema, childSessionId: EntityIdSchema,
   toolCallId: EntityIdSchema.optional(),
-  role: z.string(), solutionSpace: z.string().optional(), status: z.enum(['idle', 'running', 'completed', 'failed']),
+  role: z.string(), solutionSpace: z.string().optional(), status: z.enum(['idle', 'running', 'completed', 'failed', 'cancelled']),
+  activeTool: z.string().optional(),
+  tokens: z.number().int().nonnegative().optional(),
+  cost: z.number().nonnegative().optional(),
+  turnCount: z.number().int().nonnegative().optional(),
+  retryCountdown: z.number().nonnegative().optional(),
+  depth: z.number().int().min(0).max(8).optional(),
+  parentSubagentId: EntityIdSchema.optional(),
+  description: z.string().optional(),
+  task: z.string().optional(),
+  lastIntent: z.string().optional(),
+  durationMs: z.number().nonnegative().optional(),
 });
 export type Subagent = z.infer<typeof SubagentSchema>;
 export const SessionCreateRequestSchema = z.strictObject({
@@ -141,6 +161,9 @@ export const SessionControlRequestSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('command'), text: z.string().min(1) }),
   z.strictObject({ type: z.literal('btw.ask'), question: z.string().min(1), recordId: EntityIdSchema.optional() }),
   z.strictObject({ type: z.literal('btw.cancel'), recordId: EntityIdSchema.optional() }),
+  z.strictObject({ type: z.literal('subagent.steer'), subagentId: EntityIdSchema, message: z.string().min(1) }),
+  z.strictObject({ type: z.literal('subagent.cancel'), subagentId: EntityIdSchema }),
+  z.strictObject({ type: z.literal('loop.stop') }),
 ]);
 export type SessionControlRequest = z.infer<typeof SessionControlRequestSchema>;
 export const SessionControlAckSchema = z.discriminatedUnion('type', [
@@ -150,6 +173,9 @@ export const SessionControlAckSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('command'), output: z.string() }),
   z.strictObject({ type: z.literal('btw.ask'), recordId: EntityIdSchema }),
   z.strictObject({ type: z.literal('btw.cancel'), cancelled: z.boolean() }),
+  z.strictObject({ type: z.literal('subagent.steer'), subagentId: EntityIdSchema, accepted: z.boolean() }),
+  z.strictObject({ type: z.literal('subagent.cancel'), subagentId: EntityIdSchema, cancelled: z.boolean() }),
+  z.strictObject({ type: z.literal('loop.stop'), stopped: z.boolean() }),
 ]);
 export type SessionControlAck = z.infer<typeof SessionControlAckSchema>;
 export const RunAbortAckSchema = z.strictObject({ run: RunSchema });

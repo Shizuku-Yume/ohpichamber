@@ -81,6 +81,26 @@ test('writes through OMP Settings, flushes the atomic config file and reloads ex
     expect((await f.native.read('workspace_1', '1')).settings.find(setting => setting.id === 'compaction.thresholdPercent')?.value).toBe(65);
   } finally { await f.close(); }
 });
+test('writes expanded settings: execution flow modes, tui render toggles and tool buffer caps', async () => {
+  const f = await fixture();
+  try {
+    const read = await f.native.read('workspace_1', '0');
+    const written = await f.native.write('workspace_1', '1', {
+      expectedRevision: read.revision,
+      changes: [
+        { id: 'steeringMode', value: 'all' },
+        { id: 'tui.renderSvg', value: false },
+        { id: 'tools.artifactSpillThreshold', value: 80 },
+        { id: 'composer.predictions', value: true },
+      ],
+    });
+    expect(written.settings.find(s => s.id === 'steeringMode')).toMatchObject({ value: 'all', configured: true });
+    expect(written.settings.find(s => s.id === 'tui.renderSvg')).toMatchObject({ value: false, configured: true });
+    expect(written.settings.find(s => s.id === 'tools.artifactSpillThreshold')).toMatchObject({ value: 80, configured: true });
+    expect(written.settings.find(s => s.id === 'composer.predictions')).toMatchObject({ value: true, configured: true });
+  } finally { await f.close(); }
+});
+
 
 test('rejects a malformed value before touching the config file', async () => {
   const f = await fixture();

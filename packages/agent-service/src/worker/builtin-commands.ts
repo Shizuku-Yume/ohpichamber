@@ -1,13 +1,46 @@
 import { executeAcpBuiltinSlashCommand } from '@oh-my-pi/pi-coding-agent/slash-commands/acp-builtins';
 import { parseSlashCommand } from '@oh-my-pi/pi-coding-agent/slash-commands/helpers/parse';
 
-export const ALLOWED_BUILTIN_COMMANDS = ['compact', 'shake', 'todo', 'jobs', 'usage', 'context', 'tools'] as const;
+export const ALLOWED_BUILTIN_COMMANDS = [
+  'compact',
+  'shake',
+  'todo',
+  'jobs',
+  'usage',
+  'context',
+  'tools',
+  'handoff',
+  'retry',
+  'rename',
+  'effort',
+  'model',
+  'switch',
+  'fast',
+  'slow',
+  'prewalk',
+  'force',
+  'pin',
+  'fresh',
+  'clear',
+  'dirs',
+  'session',
+  'memory',
+  'loop',
+  'omfg',
+  'cleanse',
+  'tan',
+  'seance',
+  'advisor',
+] as const;
 const READ_ONLY_BUILTIN_COMMANDS = {
   todo: true,
   jobs: true,
   usage: true,
   context: true,
   tools: true,
+  dirs: true,
+  session: true,
+  seance: true,
 } satisfies Partial<Record<typeof ALLOWED_BUILTIN_COMMANDS[number], true>>;
 
 export function isAllowedBuiltinCommand(name: string): boolean {

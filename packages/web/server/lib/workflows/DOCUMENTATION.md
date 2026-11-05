@@ -21,12 +21,11 @@ the tool is on unless the user switches it off (`agentWorkflowToolEnabled`).
   agent that wrote the script.
 - `sandbox.js`: runs a body in a worker thread, inside a vm context that sees
   only `agent()`, `parallel()`, `pipeline()`, `phase()`, `log()` and `args`.
-- `agent-session.js`: one workflow agent is one OpenCode child session of the
-  proposing session (`parentID`), prompted once and awaited until its turn
-  ends; a schema correction is a follow-up prompt in the same session. An
-  agent asked for a schema answer gets its parent's permission rules plus an
-  allow for `openchamber_workflow_answer`. Also posts the report as a synthetic
-  message.
+- `agent-session.js`: one workflow agent is a child session of the proposing
+  session (`parentSessionId`), prompted once and awaited until its turn
+  ends; a schema correction is a follow-up prompt in the same session. All
+  workflow branch sessions enforce `agentId: null` at Host admission. Also posts
+  the report as a synthetic message.
 - `json-schema.js`: the small part of JSON Schema `agent({ schema })` checks.
 - `store.js`: run files under `<data-dir>/workflow-runs/`, one per run.
 - `runtime.js`: the run lifecycle, the limits, replay, the report, and the
@@ -223,18 +222,14 @@ no routes, no actions, no settings state; the settings payload reports
 `agentWorkflowFeatureAvailable: false` and the UI's Workflows surface stays absent. There is
 no per-user tool switch yet (upstream's `agentWorkflowToolEnabled`); the flag alone decides.
 
-- **Agents are root sessions.** Upstream creates each workflow agent as an OpenCode child
-  session of the proposing session. The canonical create contract carries no parent:
-  `SessionCreateRequestSchema` is `{ projectId, workspaceId, options, metadata }`
-  (`packages/agent-contract/src/session.ts:86`) and the Host bootstrap behind
-  `POST /internal/sessions` is `WorkerBootstrapSchema` with no `parentSessionId`
-  (`packages/agent-service/src/supervisor/host-authorization-protocol.ts:17`). The Agent
-  Service writes `parentSessionId` only for sessions its own subagent tool opens
-  (`packages/agent-service/src/sessions/registry.ts:290-303`), and archive restore reads it
-  from the archive manifest. So an agent's session is created in the run's workspace as a
-  root session titled from the `agent()` label; the run record links every agent's session
-  (`agents[].sessionId`) and the chat/panel can hide or group them from that list. The exact
-  missing field and route are recorded in `.workflow/technical-debt.md`.
+- **Agents are child sessions with null root agentId.** Upstream creates each workflow agent
+  as an OpenCode child session of the proposing session. In this fork, `sessionService.create`
+  receives `parentSessionId: run.parentSessionId` (landed in `p1-debts/03`), nesting the workflow
+  branch session under the proposing session in the session hierarchy and sidebar. Root
+  `agentId: null` is strictly enforced when creating and prompting workflow sessions (ignoring
+  any `agent` persona specified in workflow script options while retaining `model`, `label`,
+  and `schema`), satisfying Host admission (`assertRootPromptAdmission`) because OMP agent
+  profiles are subagent definitions for the `task` tool rather than root session personas.
 - **Prompts and turns.** `agent-session.js` creates the session with the canonical
   `sessionService.create`, prompts once with `send`, and waits for the prompt's turn by
   `runId` (`TurnSchema.runId`) in `sessionService.history`; a schema correction is

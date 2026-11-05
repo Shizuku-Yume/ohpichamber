@@ -1,36 +1,16 @@
 import { randomUUID } from 'node:crypto';
-import fs from 'node:fs';
-import os from 'os';
-import path from 'path';
 import { z } from 'zod';
-import { readMergedSettingsSync } from '../host/settings-files.js';
 import {
   completeSmallModel,
   findModelInfo,
   getAgentService,
+  getModelRoles,
   listModelInfos,
   listProviderInfos,
 } from './client.js';
 
-
-const OPENCHAMBER_SETTINGS_FILE = path.join(
-  process.env.OPENCHAMBER_DATA_DIR
-    ? path.resolve(process.env.OPENCHAMBER_DATA_DIR)
-    : path.join(os.homedir(), '.config', 'openchamber'),
-  'settings.json',
-);
-
 const modelRefSchema = z.string();
-const nonEmptyTextSchema = z.string().refine(value => value.trim().length > 0);
-
-// The scoped OpenChamber profile override outranks provider-local discovery.
-const readSmallModelSettingsOverride = () => {
-  const settings = readMergedSettingsSync({ fs, path, settingsFilePath: OPENCHAMBER_SETTINGS_FILE });
-  if (settings.smallModelUseDefault !== false) return null;
-  const parsed = modelRefSchema.safeParse(settings.smallModelOverride);
-  const override = parsed.success ? parsed.data.trim() : '';
-  return override || null;
-};
+const nonEmptyTextSchema = z.string().refine((value) => value.trim().length > 0);
 
 function parseModelRef(value) {
   const parsed = modelRefSchema.safeParse(value);
@@ -122,18 +102,20 @@ const pickSmallModel = (models, accept) => {
 
 const usableModel = (model) => Boolean(model && model.enabled !== false && model.status !== 'deprecated' && model.modalities.includes('text'));
 /** Resolve only from explicit intent and the authorized workspace catalog. */
-const resolveSmallModel = async ({ client, workspaceId, model, preferredProviderID, preferredModelID }) => {
+const resolveSmallModel = async ({ client, workspaceId, model, preferredProviderID, preferredModelID, role = 'smol' }) => {
   const models = await listModelInfos(client, workspaceId);
   const explicit = parseModelRef(model);
   if (nonEmptyTextSchema.safeParse(model).success && !explicit) throw Object.assign(new Error('Invalid background model selection'), { statusCode: 400, code: 'INVALID_REQUEST' });
   if (explicit) return usableModel(findModelInfo(models, explicit.providerID, explicit.modelID)) ? { ...explicit, source: 'request' } : null;
 
-  const override = readSmallModelSettingsOverride();
-  const fromSettings = parseModelRef(override);
-  if (override && !fromSettings) return null;
-  if (fromSettings) {
-    const info = findModelInfo(models, fromSettings.providerID, fromSettings.modelID);
-    return usableModel(info) ? { ...fromSettings, source: 'settings' } : null;
+  const modelRoles = await getModelRoles(client, workspaceId).catch(() => ({}));
+  const targetRole = role || 'smol';
+  const roleOverride = modelRoles?.[targetRole] || modelRoles?.default;
+  const fromRoles = parseModelRef(roleOverride);
+  if (roleOverride && !fromRoles) return null;
+  if (fromRoles) {
+    const info = findModelInfo(models, fromRoles.providerID, fromRoles.modelID);
+    return usableModel(info) ? { ...fromRoles, source: 'modelRoles' } : null;
   }
 
   if (preferredProviderID) {
@@ -165,13 +147,13 @@ const completionError = (result, resolved) => {
 };
 
 /** Generate through the canonical stateless completion route. */
-export async function generateSmallModelText({ prompt, system, maxOutputTokens, model, workspaceId, preferredProviderID, preferredModelID, responseSchema, timeoutMs, signal, onOverflow = 'truncate' }) {
+export async function generateSmallModelText({ prompt, system, maxOutputTokens, model, workspaceId, preferredProviderID, preferredModelID, responseSchema, timeoutMs, signal, onOverflow = 'truncate', role = 'smol' }) {
   if (!nonEmptyTextSchema.safeParse(prompt).success) throw Object.assign(new Error('prompt is required'), { statusCode: 400 });
   if (!nonEmptyTextSchema.safeParse(workspaceId).success) throw Object.assign(new Error('workspaceId is required'), { statusCode: 400 });
   const client = getAgentService();
   if (!client) throw Object.assign(new Error('Agent service is unavailable'), { statusCode: 503, code: 'SERVICE_UNAVAILABLE' });
 
-  const resolved = await resolveSmallModel({ client, workspaceId, model, preferredProviderID, preferredModelID });
+  const resolved = await resolveSmallModel({ client, workspaceId, model, preferredProviderID, preferredModelID, role });
   if (!resolved) throw Object.assign(new Error(preferredProviderID ? 'No small model available within the session provider' : 'No small model is available in the workspace catalog'), { statusCode: 404, code: 'MODEL_UNAVAILABLE' });
 
   const models = await listModelInfos(client, workspaceId);
@@ -225,10 +207,10 @@ const resolveReserveTokens = (outputReserveTokens, limits) => (
  * Reports which model would be used, without calling it.
  *
  */
-export async function describeSmallModel({ workspaceId, preferredProviderID, preferredModelID, outputReserveTokens, overrideModel } = {}) {
+export async function describeSmallModel({ workspaceId, preferredProviderID, preferredModelID, outputReserveTokens, overrideModel, role = 'smol' } = {}) {
   const client = getAgentService();
   if (!client) throw Object.assign(new Error('Agent service is unavailable'), { statusCode: 503, code: 'SERVICE_UNAVAILABLE' });
-  const resolved = await resolveSmallModel({ client, workspaceId, model: overrideModel, preferredProviderID, preferredModelID });
+  const resolved = await resolveSmallModel({ client, workspaceId, model: overrideModel, preferredProviderID, preferredModelID, role });
   if (!resolved) return null;
   const models = await listModelInfos(client, workspaceId);
   const modelInfo = findModelInfo(models, resolved.providerID, resolved.modelID);

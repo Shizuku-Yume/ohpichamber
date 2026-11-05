@@ -159,7 +159,28 @@ describe('session schemas', () => {
     expect(SessionCreateAckSchema.safeParse({ session: { ...session, metadataRevision: '0' } }).success).toBe(false);
     expect(SessionDeleteRequestSchema.safeParse({ ...remove, force: 'true' }).success).toBe(false);
     expect(SessionDeleteAckSchema.safeParse({ ...removed, deletedSessionIds: ['ses_02'] }).success).toBe(false);
-    expect(SubagentSchema.safeParse({ ...subagent, status: 'cancelled' }).success).toBe(false);
+    expect(SubagentSchema.safeParse({ ...subagent, status: 'cancelled' }).success).toBe(true);
+    const liveSubagent = {
+      ...subagent,
+      status: 'running' as const,
+      activeTool: 'bash',
+      tokens: 1200,
+      cost: 0.045,
+      turnCount: 3,
+      retryCountdown: 15,
+      depth: 2,
+      parentSubagentId: 'sub_00',
+      description: 'Running tests',
+      task: 'Test execution',
+      lastIntent: 'Running bun test',
+      durationMs: 4500,
+    };
+    expect(SubagentSchema.parse(liveSubagent)).toEqual(liveSubagent);
+    expect(SubagentSchema.safeParse({ ...liveSubagent, depth: 9 }).success).toBe(false);
+    expect(SessionControlRequestSchema.parse({ type: 'subagent.steer', subagentId: 'sub_01', message: 'focus on tests' })).toEqual({ type: 'subagent.steer', subagentId: 'sub_01', message: 'focus on tests' });
+    expect(SessionControlRequestSchema.parse({ type: 'subagent.cancel', subagentId: 'sub_01' })).toEqual({ type: 'subagent.cancel', subagentId: 'sub_01' });
+    expect(SessionControlAckSchema.parse({ type: 'subagent.steer', subagentId: 'sub_01', accepted: true })).toEqual({ type: 'subagent.steer', subagentId: 'sub_01', accepted: true });
+    expect(SessionControlAckSchema.parse({ type: 'subagent.cancel', subagentId: 'sub_01', cancelled: true })).toEqual({ type: 'subagent.cancel', subagentId: 'sub_01', cancelled: true });
   });
 
   test('run, abort, steer and follow-up preserve captured prompt and acknowledgement shapes', () => {

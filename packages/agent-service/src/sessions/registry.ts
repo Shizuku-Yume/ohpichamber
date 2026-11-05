@@ -463,7 +463,7 @@ export class SessionRegistry {
         parentSessionId = parent.childSessionId;
       }
     }
-    const status: Subagent['status'] = input.status === 'started' ? 'running' : input.status === 'aborted' ? 'failed' : input.status;
+    const status: Subagent['status'] = input.status === 'started' ? 'running' : input.status === 'aborted' ? 'cancelled' : input.status;
     const record: ChildRecord = { subagentId: input.subagentId, parentSessionId, childSessionId: identity.childSessionId, role: input.role, status, rootSessionId, workspaceId: entry.input.workspaceId, projectId: entry.input.projectId, sessionFile: input.sessionFile };
     const toolCallId = input.toolCallId ?? existing?.toolCallId;
     if (toolCallId) record.toolCallId = toolCallId;
@@ -1150,6 +1150,32 @@ export class SessionRegistry {
     this.ensureOpen(); this.assertWritable(sessionId);
     const result = await this.workers.request(sessionId, recordId === undefined ? { type: 'btw.cancel' } : { type: 'btw.cancel', recordId });
     if (result.type !== 'btw.cancel') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+    return result;
+  }
+  async steerSubagent(sessionId: string, subagentId: string, message: string) {
+    this.ensureOpen(); this.assertWritable(sessionId);
+    const subagent = this.subagents.get(subagentId);
+    if (subagent && subagent.rootSessionId !== sessionId && subagent.parentSessionId !== sessionId) {
+      throw new WorkerOperationError(404, 'SESSION_NOT_FOUND');
+    }
+    const result = await this.workers.request(sessionId, { type: 'subagent.steer', subagentId, message });
+    if (result.type !== 'subagent.steer') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+    return result;
+  }
+  async cancelSubagent(sessionId: string, subagentId: string) {
+    this.ensureOpen(); this.assertWritable(sessionId);
+    const subagent = this.subagents.get(subagentId);
+    if (subagent && subagent.rootSessionId !== sessionId && subagent.parentSessionId !== sessionId) {
+      return { type: 'subagent.cancel' as const, subagentId, cancelled: false };
+    }
+    const result = await this.workers.request(sessionId, { type: 'subagent.cancel', subagentId });
+    if (result.type !== 'subagent.cancel') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+    return result;
+  }
+  async stopLoop(sessionId: string) {
+    this.ensureOpen(); this.assertWritable(sessionId);
+    const result = await this.workers.request(sessionId, { type: 'loop.stop' });
+    if (result.type !== 'loop.stop') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
     return result;
   }
   async history(request: HistoryPageRequest) {

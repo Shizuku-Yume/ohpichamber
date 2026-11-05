@@ -106,6 +106,43 @@ export function tokenizeComposer(
             ranges.push({ ...range, style: 'mentionFile' });
         }
     }
+    const nonProseRanges = [...highlightFencedCode(text), ...tokenizeMarkdown(text).filter(r => r.style === 'code' || r.style === 'codeFence')];
+
+    const magicKeywordRegex = /\b(ultrathink|orchestrate|workflowz|jevify)\b/gi;
+    let magicMatch: RegExpExecArray | null;
+    while ((magicMatch = magicKeywordRegex.exec(text)) !== null) {
+        const start = magicMatch.index;
+        const end = start + magicMatch[0].length;
+        if (!nonProseRanges.some(r => start >= r.start && end <= r.end)) {
+            const word = magicMatch[0].toLowerCase();
+            const className =
+                word === 'ultrathink'
+                    ? 'bg-gradient-to-r from-red-500 via-pink-500 to-purple-500 bg-clip-text text-transparent font-semibold animate-pulse'
+                    : word === 'orchestrate'
+                    ? 'bg-gradient-to-r from-emerald-500 via-teal-500 to-indigo-500 bg-clip-text text-transparent font-semibold animate-pulse'
+                    : word === 'workflowz'
+                    ? 'bg-gradient-to-r from-amber-500 via-lime-500 to-emerald-500 bg-clip-text text-transparent font-semibold animate-pulse'
+                    : 'bg-gradient-to-r from-fuchsia-500 via-purple-500 to-amber-500 bg-clip-text text-transparent font-semibold animate-pulse';
+            ranges.push({ start, end, style: 'attention', className, priority: 100 });
+        }
+    }
+
+    const turnBudgetRegex = /(?:^|\s)(\+\d+(?:\.\d+)?(?:[km])?(!)?)(?=\s|$)/gi;
+    let budgetMatch: RegExpExecArray | null;
+    while ((budgetMatch = turnBudgetRegex.exec(text)) !== null) {
+        const token = budgetMatch[1];
+        const start = budgetMatch.index + (budgetMatch[0].length - token.length);
+        const end = start + token.length;
+        if (!nonProseRanges.some(r => start >= r.start && end <= r.end)) {
+            ranges.push({
+                start,
+                end,
+                style: 'attention',
+                className: 'px-1 py-0.5 rounded text-xs font-mono font-medium bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30',
+                priority: 95,
+            });
+        }
+    }
 
     return ranges;
 }

@@ -650,17 +650,6 @@ export const createSettingsHelpers = (dependencies) => {
       const trimmed = candidate.defaultAgent.trim();
       result.defaultAgent = trimmed.length > 0 ? trimmed : undefined;
     }
-    if (typeof candidate.smallModelUseDefault === 'boolean') {
-      result.smallModelUseDefault = candidate.smallModelUseDefault;
-    }
-    if (typeof candidate.smallModelOverride === 'string') {
-      const trimmed = candidate.smallModelOverride.trim();
-      result.smallModelOverride = trimmed.length > 0 ? trimmed : undefined;
-    }
-    if (typeof candidate.walkthroughModelOverride === 'string') {
-      const trimmed = candidate.walkthroughModelOverride.trim();
-      result.walkthroughModelOverride = trimmed.length > 0 ? trimmed : undefined;
-    }
     if (typeof candidate.defaultGitIdentityId === 'string') {
       const trimmed = candidate.defaultGitIdentityId.trim();
       result.defaultGitIdentityId = trimmed.length > 0 ? trimmed : undefined;

@@ -2,6 +2,10 @@ import React from 'react';
 import { useSessionWorkflowRuns } from '@/lib/workflows/store';
 import { useGlobalSessionStatusStore } from '@/sync/global-session-status';
 import { Icon } from '@/components/icon/Icon';
+import { Button } from '@/components/ui/button';
+import { toast } from '@/components/ui';
+import { canonicalClient } from '@/api/canonicalClient';
+import { useSubagentsStore } from '@/stores/useSubagentsStore';
 import type { IconName } from '@/components/icon/icons';
 import { SessionActivityDuration } from '@/components/session/SessionActivityDuration';
 import { useHasSessionActivityDuration } from '@/sync/session-activity-timing';
@@ -19,6 +23,9 @@ type Props = {
 };
 
 const SECTION_ID = 'subagents';
+import type { Subagent } from '@openchamber/agent-contract';
+
+const EMPTY_SUBAGENTS: Subagent[] = [];
 
 const SubagentDuration: React.FC<{ sessionId: string }> = ({ sessionId }) => {
   const hasDuration = useHasSessionActivityDuration(sessionId, true);
@@ -47,6 +54,47 @@ export const WorkStatusSubagentsSection: React.FC<Props> = ({ sessionId, directo
     () => (sessionId ? liveSessions.filter((candidate) => candidate.parentSessionId === sessionId && !workflowAgentIds.has(candidate.sessionId)) : []),
     [liveSessions, sessionId, workflowAgentIds],
   );
+  const liveSubagents = useSubagentsStore(
+    React.useCallback((state) => (sessionId && state.byParent[sessionId]) ? state.byParent[sessionId] : EMPTY_SUBAGENTS, [sessionId]),
+  );
+  const [activeSteerId, setActiveSteerId] = React.useState<string | null>(null);
+  const [steerInput, setSteerInput] = React.useState('');
+  const [isSteering, setIsSteering] = React.useState(false);
+  const [cancellingId, setCancellingId] = React.useState<string | null>(null);
+
+  const handleSteerSubmit = async (e: React.FormEvent, subagentId: string) => {
+    e.preventDefault();
+    if (!sessionId || !steerInput.trim() || isSteering) return;
+    setIsSteering(true);
+    try {
+      await canonicalClient.steerSubagent(sessionId, subagentId, steerInput.trim());
+      setSteerInput('');
+      setActiveSteerId(null);
+      toast.success(t('chat.subagentHud.steer'));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to steer subagent');
+    } finally {
+      setIsSteering(false);
+    }
+  };
+
+  const handleSubagentCancel = async (e: React.MouseEvent, subagentId: string) => {
+    e.stopPropagation();
+    if (!sessionId || cancellingId) return;
+    setCancellingId(subagentId);
+    try {
+      await canonicalClient.cancelSubagent(sessionId, subagentId);
+      const existing = useSubagentsStore.getState().byParent[sessionId]?.find(s => s.subagentId === subagentId);
+      if (existing) {
+        useSubagentsStore.getState().applySubagentUpdate(sessionId, { ...existing, status: 'cancelled' });
+      }
+      toast.info(t('chat.subagentHud.cancelled'));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to cancel subagent');
+    } finally {
+      setCancellingId(null);
+    }
+  };
 
   // Canonical sessions do not carry legacy model/cost summaries; omit them.
   // One subscription covers every child: per-session hooks would multiply
@@ -130,6 +178,10 @@ export const WorkStatusSubagentsSection: React.FC<Props> = ({ sessionId, directo
       <div className="max-h-56 overflow-y-auto">
         {rows.map(({ child, blocked, asked, busy, failed, done }) => {
           const label = child.title?.trim() || t('chat.workStatus.subagent.untitled');
+          const live = liveSubagents.find(
+            (s) => s.childSessionId === child.sessionId || s.subagentId === child.sessionId,
+          );
+          const subagentId = live?.subagentId ?? child.sessionId;
           let icon: IconName = 'time';
           let iconColor: string | undefined;
           let statusLabel = '';
@@ -151,29 +203,93 @@ export const WorkStatusSubagentsSection: React.FC<Props> = ({ sessionId, directo
             statusLabel = t('chat.workStatus.subagent.done');
           }
           return (
-            <WorkStatusRow
-              key={child.sessionId}
-              onClick={directory ? () => openChildSession(child.sessionId, label) : undefined}
-              ariaLabel={[t('chat.workStatus.action.openSubagent', { name: label }), statusLabel].filter(Boolean).join('. ')}
-              // The smaller status glyph sits centred in the panel's 16px icon
-              // slot, so it lines up under the section icon and the label
-              // starts where every other row's does.
-              leading={(
-                <span className="flex size-4 shrink-0 items-center justify-center">
-                  <Icon name={icon} className="size-3.5" style={iconColor ? { color: iconColor } : undefined} />
-                </span>
+            <div key={child.sessionId} className="flex flex-col">
+              <WorkStatusRow
+                onClick={directory ? () => openChildSession(child.sessionId, label) : undefined}
+                ariaLabel={[t('chat.workStatus.action.openSubagent', { name: label }), statusLabel].filter(Boolean).join('. ')}
+                leading={(
+                  <span className="flex size-4 shrink-0 items-center justify-center">
+                    <Icon name={icon} className="size-3.5" style={iconColor ? { color: iconColor } : undefined} />
+                  </span>
+                )}
+                label={label}
+                value={(
+                  <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                    {live?.activeTool && (
+                      <span className="text-[10px] font-mono text-muted-foreground px-1 py-0.5 rounded bg-muted/50">
+                        {live.activeTool}
+                      </span>
+                    )}
+                    {live?.tokens !== undefined && live.tokens > 0 && (
+                      <span className="text-[10px] text-muted-foreground tabular-nums">
+                        {live.tokens}t
+                      </span>
+                    )}
+                    {live?.cost !== undefined && live.cost > 0 && (
+                      <span className="text-[10px] text-muted-foreground tabular-nums">
+                        ${live.cost.toFixed(3)}
+                      </span>
+                    )}
+                    {blocked ? (
+                      <WorkStatusValue tone="warning">{t('chat.workStatus.subagent.needsPermission')}</WorkStatusValue>
+                    ) : asked ? (
+                      <WorkStatusValue tone="warning">{t('chat.workStatus.subagent.askedQuestion')}</WorkStatusValue>
+                    ) : busy ? <SubagentDuration sessionId={child.sessionId} /> : null}
+                    {busy && (
+                      <div className="flex items-center gap-0.5 ml-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-5 px-1 text-[10px] text-muted-foreground hover:text-foreground"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveSteerId(activeSteerId === subagentId ? null : subagentId);
+                          }}
+                          title={t('chat.subagentHud.steer')}
+                        >
+                          <Icon name="edit" className="size-2.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-5 px-1 text-[10px] text-destructive hover:bg-destructive/10"
+                          onClick={(e) => handleSubagentCancel(e, subagentId)}
+                          disabled={cancellingId === subagentId}
+                          title={t('chat.subagentHud.cancel')}
+                        >
+                          <Icon name="close" className="size-2.5" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              />
+              {activeSteerId === subagentId && (
+                <form
+                  onSubmit={(e) => handleSteerSubmit(e, subagentId)}
+                  className="flex items-center gap-1.5 px-6 py-1 bg-muted/30"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <input
+                    type="text"
+                    className="flex-1 h-5 px-1.5 text-xs rounded border border-border bg-background focus:outline-none"
+                    placeholder={t('chat.subagentHud.steerPlaceholder')}
+                    value={steerInput}
+                    onChange={(e) => setSteerInput(e.target.value)}
+                    disabled={isSteering}
+                    autoFocus
+                  />
+                  <Button
+                    type="submit"
+                    size="sm"
+                    className="h-5 px-1.5 text-xs"
+                    disabled={!steerInput.trim() || isSteering}
+                  >
+                    {t('chat.subagentHud.steerSend')}
+                  </Button>
+                </form>
               )}
-              label={label}
-              value={(
-                <>
-                  {blocked ? (
-                    <WorkStatusValue tone="warning">{t('chat.workStatus.subagent.needsPermission')}</WorkStatusValue>
-                  ) : asked ? (
-                    <WorkStatusValue tone="warning">{t('chat.workStatus.subagent.askedQuestion')}</WorkStatusValue>
-                  ) : busy ? <SubagentDuration sessionId={child.sessionId} /> : null}
-                </>
-              )}
-            />
+            </div>
           );
         })}
       </div>

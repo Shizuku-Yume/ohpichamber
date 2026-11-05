@@ -17,6 +17,7 @@ import { notifyFirstCanonicalBootstrap } from "./first-server-connect"
 import { useGlobalSyncStore } from "./global-sync-store"
 import { applyDirectoryEvent, compareCounters, mergeHostSession } from "./event-reducer"
 import { useBtwStore } from "@/stores/useBtwStore"
+import { useSubagentsStore } from "@/stores/useSubagentsStore"
 import { createEventPipeline, type EventPipeline } from "./event-pipeline"
 import { subscribeSessionFoldersSync } from "./session-folders-sync";
 import { subscribeSessionDraftsSync } from "./session-drafts-sync";
@@ -98,6 +99,10 @@ export function handleEvents(target: SessionMessageTarget, events: readonly Cano
       continue
     }
     if (event.type === "btw.delta" || event.type === "btw.completed") continue
+    if (event.type === "subagent.updated") {
+      useSubagentsStore.getState().applySubagentUpdate(target.sessionId, event.subagent);
+      continue;
+    }
     const result = applyDirectoryEvent(next, event)
     if (result.kind === "resnapshot") { contiguous = false; break }
     if (result.kind === "duplicate") continue

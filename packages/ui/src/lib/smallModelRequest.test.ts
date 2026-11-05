@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import type { CompletionRequest, CompletionResult, Model } from '@openchamber/agent-contract';
-import type { DesktopSettings } from '@/lib/desktop';
 import { canonicalClient } from '@/api/canonicalClient';
 import { invalidateSettingsCache } from './persistence';
 import { getRuntimeKey, switchRuntimeEndpoint } from './runtime-switch';
@@ -12,19 +11,23 @@ const model = (provider: string, modelId: string): Model => ({
   reasoningEffortSupported: false, reasoningOptions: [], variants: [], pricing: null,
 });
 let models: Model[];
-let settings: Partial<DesktopSettings>;
+let ompSettingsRoles: Record<string, string>;
 let restorers: Array<() => void>;
 
 beforeEach(() => {
   switchRuntimeEndpoint({ apiBaseUrl: 'https://utility.test', runtimeKey: `utility-${crypto.randomUUID()}` });
   invalidateSettingsCache();
-  settings = {};
+  ompSettingsRoles = {};
   models = [model('chosen', 'large'), model('other', 'haiku')];
   useConfigStore.setState({ currentProviderId: 'chosen', currentModelId: 'large' });
   const scope = spyOn(canonicalClient, 'resolveWorkspace').mockResolvedValue({ workspaceId: 'workspace-a', projectId: 'project-a', name: 'A' });
-  const catalog = spyOn(canonicalClient, 'getModels').mockImplementation(async workspaceId => ({ workspaceId, revision: '0', models, defaults: { model: null, thinkingLevel: null }, planRoleAvailable: false }));
-  const fetcher = spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json(settings));
-  restorers = [() => scope.mockRestore(), () => catalog.mockRestore(), () => fetcher.mockRestore()];
+  const catalog = spyOn(canonicalClient, 'getModels').mockImplementation(async (workspaceId) => ({ workspaceId, revision: '0', models, defaults: { model: null, thinkingLevel: null }, planRoleAvailable: false }));
+  const settingsMock = spyOn(canonicalClient, 'getOmpSettings').mockImplementation(async (workspaceId) => ({
+    workspaceId,
+    revision: '0',
+    settings: [{ id: 'modelRoles', type: 'record', value: ompSettingsRoles, default: null, configured: true }],
+  }));
+  restorers = [() => scope.mockRestore(), () => catalog.mockRestore(), () => settingsMock.mockRestore()];
 });
 afterEach(() => { for (const restore of restorers.reverse()) restore(); invalidateSettingsCache(); });
 
@@ -35,17 +38,19 @@ describe('canonical utility generation', () => {
     expect((await resolveSmallModel({ directory: '/repo' })).selection).toBeNull();
   });
 
-  test('scoped profile override is deliberate cross-provider intent', async () => {
-    settings = { smallModelUseDefault: false, smallModelOverride: 'other/haiku' };
+  test('resolves utility completions via OMP modelRoles smol and commit', async () => {
+    ompSettingsRoles = { smol: 'other/haiku', commit: 'chosen/large' };
     expect((await resolveSmallModel({ directory: '/repo' })).selection).toEqual({ providerId: 'other', modelId: 'haiku' });
+    expect((await resolveSmallModel({ directory: '/repo', role: 'commit' })).selection).toEqual({ providerId: 'chosen', modelId: 'large' });
+    ompSettingsRoles = { default: 'other/haiku' };
+    expect((await resolveSmallModel({ directory: '/repo', role: 'commit' })).selection).toEqual({ providerId: 'other', modelId: 'haiku' });
   });
 
-  test('unavailable or malformed profile intent never silently redirects to the composer model', async () => {
+  test('unavailable or malformed role intent never silently redirects to the composer model', async () => {
     const complete = spyOn(canonicalClient, 'complete');
     restorers.push(() => complete.mockRestore());
     for (const override of ['other/missing', 'invalid-model-reference']) {
-      settings = { smallModelUseDefault: false, smallModelOverride: override };
-      invalidateSettingsCache();
+      ompSettingsRoles = { smol: override };
       await expect(requestSmallModel({ directory: '/repo', prompt: 'hello' }, { notifyOnError: false })).rejects.toThrow();
     }
     expect(complete).not.toHaveBeenCalled();

@@ -67,6 +67,8 @@ interface CommandTextareaProps {
   onChange: (value: string[]) => void;
   preview: (count: number) => string;
   onDetectUrl?: (url: string) => void;
+  disabled?: boolean;
+  readOnly?: boolean;
 }
 
 /** Splits a simple shell-like command into argv tokens, honouring quotes. */
@@ -90,7 +92,7 @@ function parseShellCommand(raw: string): string[] {
   return args;
 }
 
-const CommandTextarea: React.FC<CommandTextareaProps> = ({ value, onChange, preview, onDetectUrl }) => {
+const CommandTextarea: React.FC<CommandTextareaProps> = ({ value, onChange, preview, onDetectUrl, disabled, readOnly }) => {
   const [text, setText] = React.useState(() => value.join('\n'));
   const previousValue = React.useRef(value);
 
@@ -112,6 +114,7 @@ const CommandTextarea: React.FC<CommandTextareaProps> = ({ value, onChange, prev
   };
 
   const handlePaste = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (disabled || readOnly) return;
     const raw = event.clipboardData.getData('text');
     const trimmed = raw.trim();
     // Only take over a paste that replaces the whole field with one command line.
@@ -129,11 +132,15 @@ const CommandTextarea: React.FC<CommandTextareaProps> = ({ value, onChange, prev
       <Textarea
         onPaste={handlePaste}
         value={text}
+        disabled={disabled}
+        readOnly={readOnly}
         onChange={(event) => {
+          if (disabled || readOnly) return;
           setText(event.target.value);
           commit(event.target.value);
         }}
         onBlur={() => {
+          if (disabled || readOnly) return;
           const cleaned = text.split('\n').map((line) => line.trimEnd()).join('\n');
           setText(cleaned);
           commit(cleaned);
@@ -426,6 +433,7 @@ const statusDescription = (status: McpRuntimeStatus, error: string | undefined, 
 
 const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; isNew: boolean }> = ({ initial, directory, isNew }) => {
   const { t } = useI18n();
+  const isReadOnly = initial.managed === false;
   const [draft, setDraft] = React.useState(initial);
   const [created, setCreated] = React.useState(!isNew);
   const createdRef = React.useRef(!isNew);
@@ -458,7 +466,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
   const save = async () => {
     const captured = draft;
     const write = saveTail.current.then(async () => {
-      if (!mounted.current) return AUTOSAVE_UNCHANGED;
+      if (!mounted.current || isReadOnly) return AUTOSAVE_UNCHANGED;
       // A new server is an in-memory draft until Create writes it once.
       if (!createdRef.current) return AUTOSAVE_UNCHANGED;
       const serialized = JSON.stringify(captured);
@@ -477,7 +485,10 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
     return write;
   };
   const autosave = useAutosave(save);
-  const { requestSave } = autosave;
+  const requestSave = () => {
+    if (isReadOnly) return;
+    autosave.requestSave();
+  };
 
   const run = async (operation: () => Promise<void>) => {
     setBusy(true);
@@ -492,11 +503,13 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
   };
 
   const updateTransport = (transport: MCPServerConfig['transport'], write = true) => {
+    if (isReadOnly) return;
     setDraft(value => ({ ...value, transport }));
     if (write) requestSave();
   };
 
   const switchKind = (kind: 'local' | 'remote') => {
+    if (isReadOnly) return;
     if (kind === 'local') {
       updateTransport(lastStdio.current ?? { type: 'stdio', command: '', args: [] });
       return;
@@ -505,18 +518,19 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
   };
 
   const changeRemoteTransport = (type: RemoteTransportType) => {
-    if (draft.transport.type === 'stdio') return;
+    if (isReadOnly || draft.transport.type === 'stdio') return;
     updateTransport(type === 'sse'
       ? { type: 'sse', url: draft.transport.url }
       : { type: 'http', url: draft.transport.url });
   };
 
   const handleUrlChange = (url: string) => {
-    if (draft.transport.type === 'stdio') return;
+    if (isReadOnly || draft.transport.type === 'stdio') return;
     setDraft(value => value.transport.type === 'stdio' ? value : { ...value, transport: { ...value.transport, url } });
   };
 
   const handleDetectedUrl = (url: string) => {
+    if (isReadOnly) return;
     lastRemote.current = { type: 'http', url };
     updateTransport({ type: 'http', url });
   };
@@ -777,7 +791,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
         )}
         titleAccessory={created ? <StatusBadge status={status} enabled={draft.enabled} /> : undefined}
         description={isNew ? t('settings.mcp.page.header.configureNewServer') : t('settings.mcp.page.header.transport', { type: transportLabel })}
-        headerEnd={!isNew ? (
+        headerEnd={!isNew && initial.managed !== false ? (
           <div className="flex flex-wrap items-center gap-2">
             <Button
               variant={connected ? 'outline' : 'default'}
@@ -867,7 +881,11 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
             </div>
           </SettingsSection>
         ) : null}
-
+        {isReadOnly ? (
+          <div className="mb-4 rounded-md border border-border/40 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+            {t('settings.mcp.page.unmanagedNotice')}
+          </div>
+        ) : null}
         <SettingsSection
           title={t('settings.mcp.page.server.title')}
           divider={false}
@@ -910,7 +928,9 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
               <>
                 <Input
                   value={draft.label}
-                  onChange={(event) => setDraft(value => ({ ...value, label: event.target.value }))}
+                  onChange={(event) => { if (!isReadOnly) setDraft(value => ({ ...value, label: event.target.value })); }}
+                  disabled={busy || isReadOnly}
+                  readOnly={isReadOnly}
                   placeholder={t('settings.mcp.page.server.namePlaceholder')}
                   className="h-7 w-48 px-2"
                   aria-label={t('settings.mcp.page.server.name')}
@@ -922,10 +942,10 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
 
           <SettingsCheckboxRow
             checked={draft.enabled}
-            onChange={(enabled) => { setDraft(value => ({ ...value, enabled })); requestSave(); }}
+            onChange={(enabled) => { if (!isReadOnly) { setDraft(value => ({ ...value, enabled })); requestSave(); } }}
             label={t('settings.mcp.page.server.enable')}
             ariaLabel={t('settings.mcp.page.server.enableAria')}
-            disabled={busy}
+            disabled={busy || isReadOnly}
           />
         </SettingsSection>
 
@@ -938,17 +958,20 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
           <SortableTabsStrip
             items={connectionTabs}
             activeId={connectionKind}
-            onSelect={(id) => switchKind(id === 'remote' ? 'remote' : 'local')}
+            onSelect={(id) => { if (!isReadOnly) switchKind(id === 'remote' ? 'remote' : 'local'); }}
             layoutMode="fit"
             variant="active-pill"
             activePillLowercase={false}
-            className="h-10"
+            className={cn('h-10', isReadOnly && 'pointer-events-none opacity-60')}
           />
 
           {draft.transport.type === 'stdio' ? (
             <CommandTextarea
               value={draft.transport.command ? [draft.transport.command, ...draft.transport.args] : draft.transport.args}
+              disabled={isReadOnly}
+              readOnly={isReadOnly}
               onChange={(commandLine) => {
+                if (isReadOnly) return;
                 const [command = '', ...args] = commandLine;
                 lastStdio.current = { type: 'stdio', command, args };
                 setDraft(value => value.transport.type === 'stdio' ? { ...value, transport: { ...value.transport, command, args } } : value);
@@ -961,6 +984,8 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
               <Input
                 value={draft.transport.url}
                 onChange={(event) => handleUrlChange(event.target.value)}
+                disabled={busy || isReadOnly}
+                readOnly={isReadOnly}
                 placeholder={t('settings.mcp.page.connection.serverUrlPlaceholder')}
                 className="font-mono typography-meta"
                 aria-label={t('settings.mcp.page.connection.serverUrl')}
@@ -968,7 +993,9 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
               <SettingsFieldRow label={t('settings.mcp.page.server.transportMode')}>
                 <Select<RemoteTransportType>
                   value={draft.transport.type}
+                  disabled={busy || isReadOnly}
                   onValueChange={(type) => {
+                    if (isReadOnly) return;
                     const currentTransport = draft.transport;
                     if (currentTransport.type === 'stdio') return;
                     lastRemote.current = type === 'sse'
@@ -977,7 +1004,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
                     changeRemoteTransport(type);
                   }}
                 >
-                  <SelectTrigger className="w-fit min-w-[100px]">
+                  <SelectTrigger className="w-fit min-w-[100px]" disabled={busy || isReadOnly}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent align="end">
@@ -996,29 +1023,31 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
           </p>
         </SettingsSection>
 
-        <SettingsSection
-          title={draft.transport.type === 'stdio' ? t('settings.mcp.page.env.title') : t('settings.mcp.page.advanced.requestHeaders')}
-          description={draft.transport.type === 'stdio' ? t('settings.mcp.page.env.description') : undefined}
-          settingsItem={draft.transport.type === 'stdio' ? 'mcp.environment' : 'mcp.headers'}
-          titleAccessory={Object.keys(credentials).length > 0 ? (
-            <span className="typography-micro font-normal text-muted-foreground">({Object.keys(credentials).length})</span>
-          ) : null}
-        >
-          <CredentialEditor
-            kind={draft.transport.type === 'stdio' ? 'environment' : 'headers'}
-            references={credentials}
-            bearerReference={draft.transport.type === 'stdio' ? undefined : draft.transport.credentialRef}
-            rows={credentialRows}
-            bearerDraft={draft.transport.type === 'stdio' ? '' : bearerDraft}
-            onRowsChange={setCredentialRows}
-            onBearerDraftChange={setBearerDraft}
-            onRemoveReference={removeCredentialReference}
-            onRemoveBearer={removeBearerReference}
-            onSave={() => void saveCredentials()}
-            saving={savingCredentials}
-            disabled={!created || savingCredentials}
-          />
-        </SettingsSection>
+        {initial.managed === false ? null : (
+          <SettingsSection
+            title={draft.transport.type === 'stdio' ? t('settings.mcp.page.env.title') : t('settings.mcp.page.advanced.requestHeaders')}
+            description={draft.transport.type === 'stdio' ? t('settings.mcp.page.env.description') : undefined}
+            settingsItem={draft.transport.type === 'stdio' ? 'mcp.environment' : 'mcp.headers'}
+            titleAccessory={Object.keys(credentials).length > 0 ? (
+              <span className="typography-micro font-normal text-muted-foreground">({Object.keys(credentials).length})</span>
+            ) : null}
+          >
+            <CredentialEditor
+              kind={draft.transport.type === 'stdio' ? 'environment' : 'headers'}
+              references={credentials}
+              bearerReference={draft.transport.type === 'stdio' ? undefined : draft.transport.credentialRef}
+              rows={credentialRows}
+              bearerDraft={draft.transport.type === 'stdio' ? '' : bearerDraft}
+              onRowsChange={setCredentialRows}
+              onBearerDraftChange={setBearerDraft}
+              onRemoveReference={removeCredentialReference}
+              onRemoveBearer={removeBearerReference}
+              onSave={() => void saveCredentials()}
+              saving={savingCredentials}
+              disabled={!created || savingCredentials}
+            />
+          </SettingsSection>
+        )}
 
         {created && draft.transport.type !== 'stdio' ? (
           <SettingsSection title={t('settings.mcp.page.advanced.oauth')}>
@@ -1041,7 +1070,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
               </Button>
             </>
           ) : null}
-          {isNew ? null : (
+          {isNew || initial.managed === false ? null : (
             <Button variant="ghost" size="xs" className="!font-normal text-[var(--status-error)] hover:text-[var(--status-error)]" onClick={() => setDeleteOpen(true)} disabled={busy}>
               <Icon name="delete-bin" className="size-3.5" />
               {t('settings.common.actions.delete')}

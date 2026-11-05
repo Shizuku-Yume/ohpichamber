@@ -33,6 +33,8 @@ const { act } = await import('react');
 const { createRoot } = await import('react-dom/client');
 const { I18nProvider } = await import('@/lib/i18n');
 const { CanonicalApiError, canonicalClient } = await import('@/api/canonicalClient');
+import type { ModelCatalog } from '@openchamber/agent-contract';
+import { ompSettingsI18n } from '@/lib/i18n/messages/ompSettingsI18n';
 const { OmpSettingsPage } = await import('./OmpSettingsPage');
 
 const state = {
@@ -43,10 +45,80 @@ const state = {
     { id: 'compaction.thresholdPercent' as const, type: 'number' as const, value: 50, default: -1, configured: true, label: 'Compaction Threshold', group: 'Compaction', tab: 'context' },
   ],
 };
+const mockModelCatalog = {
+  workspaceId: 'workspace_1',
+  revision: '1',
+  planRoleAvailable: true,
+  defaults: { model: { providerId: 'anthropic', modelId: 'claude-3-7-sonnet' }, thinkingLevel: 'auto' },
+  models: [
+    {
+      modelId: 'claude-3-7-sonnet',
+      provider: 'anthropic',
+      name: 'Claude 3.7 Sonnet',
+      modalities: ['text', 'image'] as const,
+      contextWindow: 200000,
+      maxOutputTokens: 64000,
+      reasoningEffortSupported: true,
+      reasoningOptions: [
+        { reasoningEffort: 'low', label: 'Low', budgetTokens: 2048 },
+        { reasoningEffort: 'medium', label: 'Medium', budgetTokens: 8192 },
+        { reasoningEffort: 'high', label: 'High', budgetTokens: 32000 },
+      ],
+      variants: [],
+      pricing: null,
+    },
+    {
+      modelId: 'gpt-4o-mini',
+      provider: 'openai',
+      name: 'GPT-4o mini',
+      modalities: ['text', 'image'] as const,
+      contextWindow: 128000,
+      maxOutputTokens: 16000,
+      reasoningEffortSupported: false,
+      reasoningOptions: [],
+      variants: [],
+      pricing: null,
+    },
+  ],
+};
+
+const stateWithRoles = {
+  workspaceId: 'workspace_1',
+  revision: '7',
+  settings: [
+    ...state.settings,
+    {
+      id: 'modelRoles' as const,
+      type: 'record' as const,
+      value: { default: 'anthropic/claude-3-7-sonnet', smol: 'openai/gpt-4o-mini' },
+      default: {},
+      configured: true,
+    },
+    {
+      id: 'cycleOrder' as const,
+      type: 'array' as const,
+      value: ['smol', 'default', 'slow'],
+      default: ['smol', 'default', 'slow'],
+      configured: true,
+    },
+    {
+      id: 'steeringMode' as const,
+      type: 'enum' as const,
+      value: 'one-at-a-time',
+      default: 'one-at-a-time',
+      configured: true,
+      enumValues: ['all', 'one-at-a-time'],
+      label: 'Steering Mode',
+      group: 'Input',
+      tab: 'interaction',
+    },
+  ],
+};
 
 let resolveWorkspace: Mock<CanonicalClient['resolveWorkspace']>;
 let getSettings: Mock<CanonicalClient['getOmpSettings']>;
 let updateSettings: Mock<CanonicalClient['updateOmpSettings']>;
+let getModels: Mock<CanonicalClient['getModels']>;
 let container: HTMLDivElement;
 let root: Root;
 
@@ -60,6 +132,7 @@ beforeEach(async () => {
   root = createRoot(container);
   resolveWorkspace = spyOn(canonicalClient, 'resolveWorkspace').mockResolvedValue({ workspaceId: 'workspace_1', projectId: 'project_1', name: 'repo' });
   getSettings = spyOn(canonicalClient, 'getOmpSettings').mockResolvedValue(state);
+  getModels = spyOn(canonicalClient, 'getModels').mockResolvedValue(mockModelCatalog as unknown as ModelCatalog);
   updateSettings = spyOn(canonicalClient, 'updateOmpSettings').mockImplementation(async (_workspaceId, request) => ({
     ...state,
     revision: String(Number(request.expectedRevision) + 1),
@@ -75,6 +148,7 @@ afterEach(async () => {
   resolveWorkspace.mockRestore();
   getSettings.mockRestore();
   updateSettings.mockRestore();
+  getModels.mockRestore();
   container.remove();
   browser.close();
 });
@@ -120,4 +194,56 @@ test('retries once at the refreshed revision when another mutation wins', async 
     expectedRevision: '8',
     changes: [{ id: 'compaction.enabled', value: false }],
   });
+});
+const EXPECTED_ROLES: Array<{ id: string; tag: string }> = [
+  { id: 'default', tag: 'DEFAULT' }, { id: 'smol', tag: 'SMOL' },
+  { id: 'slow', tag: 'SLOW' }, { id: 'vision', tag: 'VISION' },
+  { id: 'plan', tag: 'PLAN' }, { id: 'commit', tag: 'COMMIT' },
+  { id: 'tiny', tag: 'TINY' }, { id: 'memory', tag: 'MEMORY' },
+  { id: 'task', tag: 'TASK' }, { id: 'advisor', tag: 'ADVISOR' },
+  { id: 'widget', tag: 'WIDGET' }, { id: 'image', tag: 'IMAGE' },
+  { id: 'web', tag: 'WEB' }, { id: 'speech', tag: 'SPEECH' },
+  { id: 'dictation', tag: 'DICTATION' }, { id: 'judge', tag: 'JUDGE' },
+];
+
+test('renders visual selectors and fallback indicators for all 16 OMP model roles', async () => {
+  getSettings.mockResolvedValue(stateWithRoles);
+  await act(async () => { root.render(<I18nProvider><OmpSettingsPage /></I18nProvider>); });
+  await settle();
+  expect(ompSettingsI18n.en['settings.omp.modelRoles.title']).toBe('Model Roles');
+  expect(ompSettingsI18n.en['settings.omp.modelRoles.effort.minimal']).toBe('Minimal');
+
+  // Verify modelRoles is NOT rendered as a raw textarea
+  const textarea = container.querySelector('[data-settings-item="omp.modelRoles"] textarea');
+  expect(textarea).toBeNull();
+
+  // Verify all 16 roles are rendered with their badges
+  for (const role of EXPECTED_ROLES) {
+    const roleRow = container.querySelector(`[data-settings-item="omp.modelRoles.${role.id}"]`);
+    expect(roleRow).not.toBeNull();
+    expect(roleRow?.textContent).toContain(role.tag);
+  }
+
+  // Verify fallback indicator for commit (which inherits from smol = openai/gpt-4o-mini)
+  const commitFallback = container.querySelector('[data-testid="fallback-commit"]');
+  expect(commitFallback?.textContent).toContain('@smol (openai/gpt-4o-mini)');
+
+  // Verify thinking effort selector exists for default (which has claude-3-7-sonnet, a reasoning model)
+  const defaultRow = container.querySelector('[data-settings-item="omp.modelRoles.default"]');
+  const triggers = defaultRow?.querySelectorAll('button[role="combobox"]');
+  expect(triggers?.length).toBe(2); // Model picker + thinking effort picker
+
+  // Verify smol (gpt-4o-mini, non-reasoning) only has 1 picker (no thinking effort picker)
+  const smolRow = container.querySelector('[data-settings-item="omp.modelRoles.smol"]');
+  const smolTriggers = smolRow?.querySelectorAll('button[role="combobox"]');
+  expect(smolTriggers?.length).toBe(1);
+
+  // Verify cycleOrder renders as an input instead of a textarea
+  const cycleOrderInput = container.querySelector('[data-settings-item="omp.cycleOrder"] input');
+  expect(cycleOrderInput).not.toBeNull();
+  expect((cycleOrderInput as HTMLInputElement)?.value).toBe('smol, default, slow');
+
+  // Verify steeringMode renders in the Input group
+  const steeringRow = container.querySelector('[data-settings-item="omp.steeringMode"]');
+  expect(steeringRow).not.toBeNull();
 });

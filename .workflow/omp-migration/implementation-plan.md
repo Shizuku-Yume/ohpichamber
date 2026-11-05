@@ -113,29 +113,32 @@ Web and Electron can create, stream, abort, reload, and reopen a session through
 
 **Current status (2026-10-22):** The M3 Canonical Client cutover, task 17 lifecycle retirement, PWA manifest fix, native child `yield` authorization, paired-result child link, and W8 projection fix (`f4e609dc1`) are integrated at source `8d179c4e2`. The a92 matrix on artifact `a92fbb36…` passes W7 visual sanity, W8, W9 packaged child/Board/Guest, W10 and PWA (`.workflow/omp-migration/m3/task57-a92-matrix-2026-10-22/`); W1-W6 reuse archived gates. Limits: packaged live-region at 400 ms is inconclusive while the Web announcement was observed; PWA auth proof is the Web Host with existing packaged state, not packaged Electron password auth; child snapshot 404 is the intentional history-only contract. The final root gate passed at `8d179c4e2` on 2026-10-22 (all seven phases exit 0; `.workflow/omp-migration/m3/task18-gate-final-2026-10-22.json`), and Task18/Task57 technical work is archived. The earlier `b9fbb4bb0` gate and `068a` artifacts are historical. The technical W1-W10 gate is complete and final maintainer acceptance is pending; the spec remains in progress. M4 orchestration and M5 release certification remain open, and this closure does not select or claim an M4 implementation.
 
-## M4: OpenChamber orchestration features
+## M4: OpenChamber orchestration features and OMP TUI parity
 
-**Status (2026-11-04):** do not execute this list directly. M4 replanning is explicitly deferred per maintainer decision on 2026-11-04 (task 25 paused). Features already wired to the canonical service remain in place and will be re-planned into verification tasks in a dedicated milestone effort following the comparison audit.
+**Status (2026-11-05):** re-planned into [M4: Orchestration adaptation, OMP TUI parity, and feature verification](../specs/m4-orchestration.md) and tasks `.workflow/tasks/m4-orchestration/01`-`14` following the completed comparison audits (`.workflow/research/omp-opencode-openchamber-audit.md`, `crude-port-ledger.md`, and `.workflow/research/omp-tui-parity-audit.md`). Session Goals (`SCOPE-10.2`), Durable Message Queue (`SCOPE-10.4`), and Agent Todo (`SCOPE-11.4`) are already implemented and verified on `main`; M4 fixes the remaining adaptation defects in Workflows, Auto Routing, Small-Model role resolution, B3 settings/runtime truth, and `CP-09` branch revert, delivers full OMP 18.16.0 built-in TUI feature and display parity (`Tasks 06–13`), then executes end-to-end verification and removes the unverified M4 documentation banners (`Task 14`).
 
 ### Work
 
-Migrate one feature at a time, keeping its existing product behavior where the inventory says retain:
-
-- Session Goals: use canonical turn completion and continuation commands.
-- Session Assist: read canonical history and call the OMP-backed small-model service.
-- Message Queue: keep server ownership, leases, captured attachments, idempotency, and ordered delivery.
-- Routing: keep policy ownership in OpenChamber; send the selected OMP model/agent/thinking options through Canonical API.
-- Project Context, Session Knowledge, and Agent Memory: inject through canonical prompt/message parts without duplicating the OMP transcript.
-- Agent Todo: use the canonical todo contract and OMP task state where supported.
-- Scheduled Tasks: reuse the scheduler and replace only the execution owner.
-- Multi-run and Fusion: create canonical sessions and dispatch prompts through the service.
-- Walkthrough and AI Git/PR generation: replace small-model calls with the OMP-backed completion function.
-- Notifications and Linear progress: consume canonical lifecycle events.
-- Guest `generate`: consume the canonical model service. Keep guest capabilities and filesystem/network/service grants unchanged.
+- **Agent Workflows (`SCOPE-12.4`, Task 01):** nest workflow branch sessions under the proposing session via `parentSessionId` and force `options.agentId: null` so workflow sends pass Host root-prompt admission.
+- **Model and Intent Routing (`SCOPE-10.5`, Task 02):** keep policy ownership in OpenChamber; remove root `AgentSelector` / `agentId` overrides, drive category thinking controls from `model.reasoningOptions`, and write `options.reasoningEffort`.
+- **Small-Model, Walkthrough, AI Git/PR, and Guest `generate` (`SCOPE-8.2`, `SCOPE-10.1`, `SCOPE-10.6`, Task 02):** resolve utility completions through OMP's `modelRoles` (`commit` for Git commit/PR generation, `smol` for Session Assist, Walkthrough, and auto-titling, falling back to `default`), and remove duplicate Host `smallModelOverride` / `walkthroughModelOverride` settings.
+- **Prompt purity and single permission authority (Task 03):** remove first-message `<system-reminder>` response-style injection (`BehaviorPage.tsx`), remove the dead `agentToolsCodeMode` toggle, and retire Host `permissionDefaultMode` / `permission-auto-accept` in favor of OMP `tools.approvalMode`, ACP session permissions, and the Host Gatekeeper.
+- **Worker LSP, unmanaged MCP configs, and branch revert (`CP-09`, Task 04):** remove the hardcoded `enableLsp: false` worker override so OMP `lsp.*` settings apply; project hand-written/unmanaged `.omp/mcp.json` files read-only without 500 `MCP_CONFIG_READ_FAILED`; and return non-fatal 409 errors on cancelled or cleanly rolled-back `selectBranch` operations without killing the worker.
+- **Settings navigation and terminology (Task 05):** rename the `'opencode'` nav group key to `'agent'`, distinguish `Guest Extensions` from `OMP Plugins`, and label prompt templates `Prompt Templates`.
+- **OMP 18.16.0 Built-in TUI Feature & Display Parity (Tasks 06–13):**
+  - **Tool & Markdown Visuals (Task 06):** enable `out://` mid-turn replies (`ReplyWrite`); render inline ````svg```` figures and numeric Markdown table auto-charts; add `ast_edit` multi-file diffs and `ast_grep`/`eval`/`lsp`/`checkpoint`/`rewind` cards; group consecutive `read` calls (`ReadToolGroup`); and stream incremental tool arguments (`tool_stream_update`).
+  - **Subagent Live HUD, Steer & Cancel (Task 07):** project `TASK_SUBAGENT_PROGRESS_CHANNEL` and `TASK_SUBAGENT_EVENT_CHANNEL` (live tool, tokens, cost, turn count, nested tree) and add `subagent.steer` and `subagent.cancel` controls.
+  - **Timeline Notices, Compaction Divider & Context Gauge (Task 08):** project and render `todo_reminder`, `ttsr_triggered`, `auto_retry_start` / `retry_fallback_applied`, `served_model_mismatch`, and `cache_invalidation`; upgrade `session.compacted` with method, `tokensBefore → tokensAfter`, and summary; and add compaction/speculation threshold tick marks to `ContextUsageDisplay`.
+  - **16 Model Roles, Presets & Settings (Task 09):** replace the raw JSON `modelRoles` textarea in `OmpSettingsPage.tsx` with visual model/effort selectors for all 16 OMP roles and expose `cycleOrder`, `modelPresets`, `modelRoleStorage`, `tier.*`, `out.enabled`, `tui.render*`, and tool/buffer settings.
+  - **Slash Commands, Magic Keywords, Turn Budgets, URL Autocomplete & Prediction (Task 10):** allowlist headless OMP commands (`/handoff`, `/retry`, `/rename`, `/effort`, `/model`, `/switch`, `/fast`, `/slow`, `/prewalk`, `/force`, `/pin`, `/fresh`, `/clear`, `/dirs`, `/session`, `/memory`), support `ultrathink`/`orchestrate`/`workflowz`/`jevify` shimmer + notices and `+Nk!` turn budgets, add internal URL autocomplete, and wire optional idle ghost-text prompt prediction.
+  - **Checkpoints/Rewind, `/btw` Branch Promotion & Plan Enhancements (Task 11):** wire `checkpoint`/`rewind` (`branchWithSummary`), add `branchFromBtw` and `<inject>` to `BtwPanel.tsx`, and support deferred mid-run Plan mode entry, `plan.autosave`, and execution model selection in `PlanReviewCard.tsx`.
+  - **Background Jobs Sheet, `proc://` & Job Widgets (Task 12):** add `JobsSheetDialog.tsx` with full stdout/stderr, `proc://` pipe streams, stdin for named services, `JobCaptionWriter` summaries, and `JobWidgetRegistry` live metrics.
+  - **Autonomous Loops, `/omfg`, `/cleanse`, `/tan`, `/seance` & Advisor Watchdog (Task 13):** wire `/loop` (`--until`/`--while`), `/omfg` TTSR rule synthesis, `/cleanse` parallel diagnostic repair board, `/tan` background session clone, `/seance` historical session consult, and Advisor watchdog (`AdvisorMessage` timeline cards).
+- **End-to-end verification and documentation truth (Task 14):** verify all orchestration and OMP TUI parity features on the integrated runtime (including Session Goals `SCOPE-10.2`, SQLite Message Queue `SCOPE-10.4`, Project Context/Knowledge/Memory `SCOPE-11.1–11.3`, Agent Todo `SCOPE-11.4`, Session Assist `SCOPE-10.3`, Scheduled Tasks `SCOPE-12.1`, Multi-run/Fusion `SCOPE-12.2–12.3`, Notifications/Linear `SCOPE-14.2/14.4`, Browser Control `SCOPE-9.2/18.4`, and Quota/Usage `SCOPE-14.3`) and remove the unverified M4 banners from product docs across all 12 locales.
 
 ### Gate
 
-Each feature has a focused behavior check covering normal completion, failure, reconnect, and unsupported capability behavior. No feature reads OpenCode metadata, events, config, credentials, or route names.
+The M4 spec's W1–W18 checks are the gate. Every retained orchestration and OMP TUI parity feature has focused automated and real-provider verification evidence under `/home/shizuku/Project/ohpichamber-omp-artifacts/m4-verification-<date>/`, no feature uses root `agentId` or reads OpenCode metadata/routes/configs, and the unverified M4 banners are removed from product documentation across all locales.
 
 ## M5: release and retained surfaces
 

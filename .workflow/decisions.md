@@ -697,3 +697,49 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** no
 - **Revisit when:** A future upstream refresh introduces real callers or features that consume `btwHoldsDock` or `parentPromoted`.
 - **Effort:** omp-native-parity
+
+## 2026-11-05 - Nest workflow agent sessions under parentSessionId and ignore workflow agent personas
+
+- **Decided:** Pass `parentSessionId` to `sessionService.create` in `packages/web/server/lib/workflows/agent-session.js` so workflow branch sessions nest under the proposing session, and force `options.agentId: null` when creating and prompting workflow sessions (ignoring any `agent` field in workflow script options while retaining `model`, `label`, and `schema`).
+- **Instead of:** Passing `options.agentId: agent || null` on root workflow sessions (which fails `assertRootPromptAdmission` with HTTP 400), prepending a synthetic prompt wrapper to invoke the `task` tool, or rejecting workflow scripts that still pass an `agent` field.
+- **Because:** Workflow branches are independent `AgentSession` instances, and OMP agent profiles are subagent definitions for the `task` tool rather than root session personas. Nesting via `parentSessionId` (landed in `p1-debts/03`) preserves session hierarchy in the sidebar, and forcing `agentId: null` eliminates the HTTP 400 admission failure without breaking existing workflow scripts.
+- **Decided by:** user
+- **Revisit when:** OMP introduces root-session persona profiles distinct from `task` subagents.
+- **Effort:** m4-orchestration
+
+## 2026-11-05 - Fix auto routing effort mapping and unify small-model resolution on OMP modelRoles
+
+- **Decided:** Remove `AgentSelector` and `agentId` assignment from `RoutingPage.tsx` and `prompt-delivery-runtime.js`, switch routing category thinking controls from `model.variants` to `model.reasoningOptions` (`options.reasoningEffort`), and resolve small-model completions (`small-model`, `smallModelRequest.ts`) through OMP's `modelRoles` (`commit` for Git commit/PR generation, `smol` for Session Assist, Walkthrough, and titles, falling back to `default`), retiring the duplicate `smallModelOverride` and `walkthroughModelOverride` fields in `DefaultsSettings.tsx`.
+- **Instead of:** Keeping `smallModelOverride` and `walkthroughModelOverride` in Host `settings.json` alongside OMP's `modelRoles` in `config.yml`, or leaving routing categories bound to `model.variants` and root `agentId`.
+- **Because:** Root `agentId` causes `openchamber/auto` prompts to fail Host admission with HTTP 400, `variants` no longer represent thinking levels after `omp-native-chat/10`, and maintaining two separate UIs and config stores for small/utility models splits configuration between Host settings and OMP's `config.yml`.
+- **Decided by:** user
+- **Revisit when:** A caller needs a per-surface model override that has no corresponding OMP model role.
+- **Effort:** m4-orchestration
+
+## 2026-11-05 - Retire BehaviorPage response-style injection, dead Code Mode toggle, and Host permission auto-accept
+
+- **Decided:** Remove first-message `<system-reminder>` response-style injection from `ChatInput.tsx` together with `BehaviorPage.tsx` (`SET-03`), delete the unused `agentToolsCodeMode` setting (`SET-09`), and retire the Host `permissionDefaultMode` (`ask/safety/auto`) and `permission-auto-accept` runtime/UI (`SET-02`) so tool approval is governed solely by OMP's `tools.approvalMode`, per-session ACP `allow_always`, and the Host Gatekeeper.
+- **Instead of:** Retaining synthetic `<system-reminder>` prompt injection on the first turn and keeping a parallel Host permission-mode state machine alongside OMP's native approval settings.
+- **Because:** Injecting hidden `<system-reminder>` style instructions violates the `omp-native-parity` prompt-purity rule, `agentToolsCodeMode` has no runtime consumer, and running two competing permission mode systems (`ask/safety/auto` in Host settings vs `always-ask/write/yolo` in OMP `config.yml`) obscures who authorizes tool execution.
+- **Decided by:** user
+- **Revisit when:** OMP adds a native personality or response-style setting in `config.yml` that the OMP settings page should expose.
+- **Effort:** m4-orchestration
+
+## 2026-11-05 - Enable OMP LSP settings in workers, project unmanaged MCP configs read-only, and clean up settings naming
+
+- **Decided:** Remove the hardcoded `enableLsp: false` override in `packages/agent-service/src/worker/session.ts` so OMP's `lsp.*` settings take effect (`SET-05`), allow `packages/agent-service/src/worker/mcp.ts` to project hand-written/unmanaged `.omp/mcp.json` files as redacted read-only entries instead of throwing 500 `MCP_CONFIG_READ_FAILED` (`SET-06`), rename the `'opencode'` settings nav group key (`SET-11`), and clarify `Guest Extensions`, `OMP Plugins`, and `Prompt Templates` naming (`SET-07`, `SET-10`).
+- **Instead of:** Leaving `enableLsp: false` hardcoded while exposing dead `lsp.*` toggles in Settings, failing closed with HTTP 500 on user-authored `.omp/mcp.json` files, or keeping legacy `'opencode'`/ambiguous section labels.
+- **Because:** Settings exposed in `OmpSettingsPage` must work in the worker runtime, CLI users with existing `.omp/mcp.json` files must not hit 500 errors in the GUI, and settings navigation should reflect OMP and Guest SDK terminology accurately.
+- **Decided by:** user
+- **Revisit when:** Full GUI editing of arbitrary env/header secrets in unmanaged `.omp/mcp.json` files is designed with write-only secret handling.
+- **Effort:** m4-orchestration
+
+## 2026-11-05 - Scope M4 to full OMP 18.16.0 TUI feature/display parity, B3 adaptation fixes, and orchestration verification
+
+- **Decided:** Re-plan M4 into `.workflow/specs/m4-orchestration.md` and tasks `m4-orchestration/01`–`14`, covering: (1) Workflows, Auto Routing, Small-Model `modelRoles`, and Batch B3/`CP-09` adaptation fixes; (2) full OMP 18.16.0 built-in TUI feature and display parity as audited in `.workflow/research/omp-tui-parity-audit.md` (`out://` mid-turn replies, inline ` ```svg ` & table auto-charts, `ast_edit` diffs & specialized tool cards, consecutive `read` grouping, `tool_stream_update` live argument streaming, live subagent HUD + per-subagent steer/cancel, timeline notices `todo_reminder`/`ttsr_triggered`/`retry_fallback_applied`/`served_model_mismatch`, rich compaction divider & annotated context gauge, visual selectors for all 16 `modelRoles` + `modelPresets` + `tier.*`, extended headless slash commands, magic keywords `ultrathink`/`orchestrate`/`workflowz`/`jevify` + `+Nk!` turn budgets + internal URL autocomplete + composer ghost-text prediction, `checkpoint`/`rewind` tools + `branchFromBtw` + mid-run Plan mode & execution model selection, interactive Jobs Sheet + `proc://` controls + `job-widgets/`, and `/loop`, `/omfg`, `/cleanse`, `/tan`, `/seance`, and Advisor watchdog); and (3) end-to-end verification and removal of the unverified M4 documentation banners.
+- **Instead of:** Limiting M4 to only OMP-vs-OpenCode differences or deferring OMP 18.16.0 built-in TUI features and displays beyond M4.
+- **Because:** The maintainer explicitly directed that M4 must audit and include all missing OMP built-in TUI features and displays alongside the OMP-vs-OpenCode adaptation fixes ("不光要记录omp与OpenCode的功能差异 还有omp自带的tui里的各项功能与显示 也要调查清楚 最好如果没有的要安排上"), and selected Option A across all eight TUI parity clusters (`TUI-Q1` through `TUI-Q8`).
+- **Decided by:** user
+- **Supersedes:** 2026-11-04 - Defer M4 replanning to a dedicated milestone effort
+- **Revisit when:** All 14 M4 tasks pass verification and close out before M5 release certification.
+- **Effort:** m4-orchestration

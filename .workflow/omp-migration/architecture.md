@@ -91,7 +91,6 @@ flowchart TD
         HostGit[Git & Worktree Service]
         HostPTY[PTY Terminal Manager]
         DurableQueue[SQLite Durable Prompt Queue]
-        GoalsSupervisor[Session Goals Supervisor]
         HostSettings[Multi-tier Settings Registry]
         GuestHost[Guest Extension Host]
         GuestServices[Guest Child Services]
@@ -127,7 +126,6 @@ flowchart TD
     Gatekeeper --> HostGit
     Gatekeeper --> HostPTY
     AuthRouter --> DurableQueue
-    AuthRouter --> GoalsSupervisor
     AuthRouter --> HostSettings
 
     AuthRouter -->|Loopback HTTP / SSE + Secret| LoopbackAuth
@@ -156,7 +154,7 @@ flowchart TD
 | - External Authentication: Passkey (WebAuthn), Session Cookie, Pairing v2 Handshake   |
 | - Host Gatekeeper: Realpath canonicalization, command injection protection            |
 | - Host Services: File system, Git, Worktree lifecycle, PTY terminal streaming         |
-| - Autonomous Engines: Durable Prompt Queue (SQLite), Goals Supervisor, Task Loops    |
+| - Autonomous Engines: Durable Prompt Queue (SQLite), Task Loops, Agent Workflows      |
 | - Extension Host: Iframe envelope manager, Guest child service process runner         |
 | - Canonical Dispatch: Local Host writers first; remaining Agent operations to Bun      |
 +---------------------------------------------------------------------------------------+
@@ -205,9 +203,9 @@ The table below defines ownership, runtime environments, source code locations, 
 | Filesystem Service | Host Gateway | Node.js / Electron Main | `packages/web/server/lib/host/fs*` | Directory trees, file read and write, partial content streaming (HTTP 206). | Resolves paths via realpath; rejects escapes outside workspace root. |
 | Git and Worktree Service | Host Gateway | Node.js / Electron Main | `packages/web/server/lib/host/git*` | Status, diff, commit, push, pull, worktree creation and cleanup. | Sets `GIT_TERMINAL_PROMPT=0`; blocks root directories (`/`, `$HOME`). |
 | PTY Terminal Service | Host Gateway | Node.js / Electron Main | `packages/web/server/lib/host/pty*` | Manages `node-pty` processes, circular scrollback buffer, WebSocket streaming. | Strips dangerous environment variables; 20-second SIGKILL cleanup. |
-| Durable Prompt Queue | Host Gateway | Node.js / Electron Main | `packages/web/server/lib/host/queue*` | SQLite persistence for user prompts queued while session is busy or offline. | Strict FIFO dispatch on session idle; survives client disconnects. |
-| Goals Supervisor | Host Gateway | Node.js / Electron Main | `packages/web/server/lib/host/goals*` | Goal persistence, post-turn verification loop, automated next-step prompt. | Circuit breaker trips after three failed cycles without progress. |
-| Scheduled Task Engine | Host Gateway | Node.js / Electron Main | `packages/web/server/lib/host/scheduler*` | CRON and interval task execution, distributed claim locking. | Stored in `.agents/loops/`; claims lock to prevent duplicate runs. |
+| Durable Prompt Queue | Host Gateway | Node.js / Electron Main | `packages/web/server/lib/message-queue*` | SQLite persistence for user prompts queued while session is busy or offline. | Strict FIFO dispatch on session idle; survives client disconnects. |
+| Session Goals (`RpcGoalController`) | Agent Worker | Bun Child Process | `packages/agent-service/src/worker/mode.ts` | OMP goal mode loop, token budget tracking, continuation runs (`origin: 'goal'`). | Owned by OMP session state (`SessionMode`); Host supervisor retired (`omp-native-chat/16`). |
+| Scheduled Task Engine | Host Gateway | Node.js / Electron Main | `packages/web/server/lib/scheduled-tasks*` | CRON and interval task execution, distributed claim locking. | Stored in `.agents/loops/`; claims lock to prevent duplicate runs. |
 | Multi-tier Settings | Host Gateway | Node.js / Electron Main | `packages/web/server/lib/host/settings*` | Four-tier hierarchy: Instance, Profile, Device, Surface. | Preserved from `lib/opencode`; stored in `~/.config/ohpichamber/`. |
 | Themes and Unpacker | Host Gateway | Node.js / Electron Main | `packages/web/server/lib/host/themes*` | Theme catalog, VS Code `.vsix` archive unpacker, token persistence. | Preserved from `lib/opencode`; imports VS Code themes cleanly. |
 | Guest Extension Host | Host Gateway | Node.js / Electron Main | `packages/web/server/lib/guests*` | Manifest validation, sandbox iframe envelope, capability granting. | Enforces manifest permissions; passes whitelisted environment only. |
@@ -453,9 +451,9 @@ OhPiChamber enforces clear ownership boundaries between OMP and OpenChamber data
 | 2. Durable Prompt Queue:           |      |    - Step & turn indices           |
 |    - Pending prompt text & parts   |      |    - Stop reasons & error states   |
 |    - Enqueued timestamp & status   |      | 3. Subagent Transcript:            |
-| 3. Session Goals Checklist:        |      |    - Task delegation outputs       |
-|    - Goal criteria & status        |      |    - Inter-agent messages          |
-| 4. Scheduled Loops & Multi-run     |      +------------------------------------+
+| 3. Session Assist & Pin Receipts:  |      |    - Task delegation outputs       |
+|    - Recap metadata & pin cursors  |      |    - Inter-agent messages          |
+| 4. Scheduled Loops & Workflows     |      +------------------------------------+
 +------------------------------------+                        |
                   |                                           |
                   +---------------------+---------------------+

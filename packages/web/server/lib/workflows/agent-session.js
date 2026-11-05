@@ -74,13 +74,13 @@ export const createWorkflowAgentSessions = ({
     return scope;
   };
 
-  const optionsFor = (model, agent) => {
+  const optionsFor = (model, _agent) => {
     const ref = model ? parseModelRef(model) : null;
     if (model && !ref) throw new Error(`model must be provider/model or provider/model#variant, got ${model}`);
     return {
       providerId: ref?.providerId ?? null,
       modelId: ref?.modelId ?? null,
-      agentId: agent || null,
+      agentId: null,
       variant: ref?.variant ?? null,
       reasoningEffort: null,
     };
@@ -151,17 +151,18 @@ export const createWorkflowAgentSessions = ({
    * `onSession(sessionId)` hears the id as soon as the session exists, so a
    * stop can interrupt it. Resolves to `{ sessionId, outcome }`.
    */
-  const start = async ({ directory, parentSessionId, title, agent, model, text, signal, onSession }) => {
+  const start = async ({ directory, parentSessionId, title, agent: _agent, model, text, signal, onSession }) => {
     const workspace = await workspaceFor(directory);
-    const options = model ? optionsFor(model, agent) : {
+    const options = model ? optionsFor(model, null) : {
       ...await inheritedOptions(parentSessionId),
-      agentId: agent || null,
+      agentId: null,
     };
     const created = await sessionService.create({
       projectId: workspace.projectId,
       workspaceId: workspace.workspaceId,
+      ...(parentSessionId ? { parentSessionId } : {}),
       options,
-      ...(title ? { metadata: { title } } : {}),
+      ...(title ? { title } : {}),
     });
     const sessionId = created?.session?.sessionId;
     if (!sessionId) throw new Error('The Agent Service returned no session id');
@@ -183,7 +184,7 @@ export const createWorkflowAgentSessions = ({
       projectId: workspace.projectId,
       workspaceId: workspace.workspaceId,
       options: optionsFor(null, null),
-      ...(title ? { metadata: { title } } : {}),
+      ...(title ? { title } : {}),
     });
     const sessionId = created?.session?.sessionId;
     if (!sessionId) throw new Error('The Agent Service returned no session id');

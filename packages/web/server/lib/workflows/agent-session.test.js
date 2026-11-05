@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import { SessionCreateRequestSchema } from '@openchamber/agent-contract';
+import { assertRootPromptAdmission } from '../message-queue/prompt-admission.js';
 import { WorkflowAgentStopped, createWorkflowAgentSessions } from './agent-session.js';
-
 const assistant = (messageId, turnId, text, extra = {}) => ({
   messageId, sessionId: 'ses_agent', turnId, role: 'assistant', createdAt: 1, parts: [{ type: 'text', partId: `p_${messageId}`, content: text }], ...extra,
 });
@@ -21,10 +22,12 @@ const fakeSessionService = ({ pages = [], snapshot = { session: { runtimeStatus:
   return {
     calls,
     create: async (payload) => {
+      SessionCreateRequestSchema.parse(payload);
       calls.created.push(payload);
       return { session: { sessionId: 'ses_agent' } };
     },
     send: async (sessionId, payload) => {
+      assertRootPromptAdmission(payload);
       calls.sent.push({ sessionId, payload });
       return { run: { runId: 'run_1', sessionId, status: 'running', createdAt: 1 } };
     },
@@ -71,7 +74,12 @@ describe('workflow agent sessions', () => {
       directory: '/repo', parentSessionId: 'ses_parent', title: 'agent', model: 'openai/gpt-6-luna',
       text: 'work', signal: new AbortController().signal, onSession: (id) => seen.push(id),
     });
-    expect(service.calls.created[0]).toMatchObject({ projectId: 'proj_1', workspaceId: 'ws_repo', metadata: { title: 'agent' } });
+    expect(service.calls.created[0]).toMatchObject({
+      projectId: 'proj_1',
+      workspaceId: 'ws_repo',
+      parentSessionId: 'ses_parent',
+      title: 'agent',
+    });
     expect(service.calls.created[0].options).toMatchObject({ providerId: 'openai', modelId: 'gpt-6-luna', agentId: null });
     expect(service.calls.sent[0].payload.input.text).toBe('work');
     expect(seen).toEqual(['ses_agent']);
@@ -195,5 +203,39 @@ describe('workflow agent sessions', () => {
       onSession: () => {},
     })).rejects.toThrow('Session capacity is full (5 of 5 active). Close another session or try again later.');
     expect(attempts).toBe(1);
+  });
+
+  it('nests workflow branch session under parentSessionId and forces null agentId even when agent persona is specified', async () => {
+    const page = {
+      sessionId: 'ses_agent',
+      turns: [turn('turn_1', 'run_1', 'completed', ['m_a'])],
+      messages: [user('m_u', 'turn_1'), assistant('m_a', 'turn_1', 'review complete')],
+    };
+    const service = fakeSessionService({ pages: [emptyPage, page] });
+    const result = await sessionsFor(service).start({
+      directory: '/repo',
+      parentSessionId: 'ses_parent_123',
+      title: 'review',
+      agent: 'reviewer',
+      model: 'anthropic/claude-3-7-sonnet',
+      text: 'review this diff',
+      signal: new AbortController().signal,
+      onSession: () => {},
+    });
+
+    expect(service.calls.created[0]).toMatchObject({
+      projectId: 'proj_1',
+      workspaceId: 'ws_repo',
+      parentSessionId: 'ses_parent_123',
+      title: 'review',
+      options: {
+        providerId: 'anthropic',
+        modelId: 'claude-3-7-sonnet',
+        agentId: null,
+      },
+    });
+    expect(service.calls.sent[0].payload.options.agentId).toBeNull();
+    expect(() => assertRootPromptAdmission(service.calls.sent[0].payload)).not.toThrow();
+    expect(result.outcome.text).toBe('review complete');
   });
 });

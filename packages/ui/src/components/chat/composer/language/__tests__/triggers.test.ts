@@ -118,6 +118,14 @@ describe('mention picker', () => {
             insertedText: 'src',
         })).toEqual({ kind: 'mention', query: 'src' });
     });
+
+    test('internal URL schemes at word boundary open the mention picker without @', () => {
+        expect(at('check skill://flo|')).toEqual({ kind: 'mention', query: 'skill://flo' });
+        expect(at('local://file|')).toEqual({ kind: 'mention', query: 'local://file' });
+        expect(at('proc://12|')).toEqual({ kind: 'mention', query: 'proc://12' });
+        expect(at('agent://mai|')).toEqual({ kind: 'mention', query: 'agent://mai' });
+        expect(at('history://ses|')).toEqual({ kind: 'mention', query: 'history://ses' });
+    });
 });
 
 describe('precedence and disabling', () => {

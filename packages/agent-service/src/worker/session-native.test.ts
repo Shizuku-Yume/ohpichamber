@@ -442,6 +442,52 @@ test('native builtin command returns context output without starting a provider 
     expect(harness.fatal()).toBe(false);
   } finally { await harness.close(); }
 }, 30000);
+test('headless slash commands execute allowed commands like /dirs and /clear without fatal errors', async () => {
+  const harness = await fixture({ respond: () => completion() });
+  try {
+    const dirsResult = await harness.worker.operation({ type: 'command', text: '/dirs' });
+    expect(dirsResult.type).toBe('command');
+    if (dirsResult.type !== 'command') throw new Error('Expected command output');
+    expect(dirsResult.output).toBeDefined();
+
+    const clearResult = await harness.worker.operation({ type: 'command', text: '/clear' });
+    expect(clearResult.type).toBe('command');
+    if (clearResult.type !== 'command') throw new Error('Expected command output');
+    expect(clearResult.output).toContain('Context reset');
+    expect(harness.worker.session.sessionManager.getTurnBudget()?.total ?? null).toBeNull();
+    expect(harness.fatal()).toBe(false);
+  } finally { await harness.close(); }
+}, 30000);
+
+test('turn budget and standalone magic keywords apply budget ceiling and notices in prepare', async () => {
+  const harness = await fixture({ respond: () => completion() });
+  try {
+    const terminal = Promise.withResolvers<void>();
+    const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve(); });
+    await harness.worker.operation({
+      type: 'prompt',
+      runId: 'budget-test-run',
+      request: prompt('please ultrathink this request +50k!'),
+    });
+    await terminal.promise;
+    unsubscribe();
+    expect(harness.worker.session.sessionManager.getTurnBudget()?.total).toBe(50000);
+    expect(harness.worker.session.sessionManager.getTurnBudget()?.hard).toBe(true);
+
+    const terminal2 = Promise.withResolvers<void>();
+    const unsubscribe2 = harness.worker.session.subscribe(event => { if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal2.resolve(); });
+    await harness.worker.operation({
+      type: 'prompt',
+      runId: 'budget-test-run-2',
+      request: prompt('normal follow-up without budget'),
+    });
+    await terminal2.promise;
+    unsubscribe2();
+    expect(harness.worker.session.sessionManager.getTurnBudget()?.total ?? null).toBeNull();
+    expect(harness.fatal()).toBe(false);
+  } finally { await harness.close(); }
+}, 30000);
+
 
 
 test('native web_search tool routes to Host web-search authorization and performs one loopback search', async () => {

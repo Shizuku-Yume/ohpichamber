@@ -17,6 +17,10 @@ import { initializeExtensions } from '@oh-my-pi/pi-coding-agent/modes/runtime-in
 import { executeAcpBuiltinSlashCommand, isAllowedBuiltinCommand, isReadOnlyBuiltinCommand, parseSlashCommand } from './builtin-commands.ts';
 import type { SlashCommandRuntime } from '@oh-my-pi/pi-coding-agent/slash-commands/types';
 import { RpcBtwController } from '@oh-my-pi/pi-coding-agent/modes/rpc/rpc-btw';
+import { MAGIC_KEYWORDS, type MagicKeywordContext } from '@oh-my-pi/pi-coding-agent/modes/magic-keywords';
+import { containsMagicKeyword } from '@oh-my-pi/pi-tui/prompt/magic-keywords';
+import { parseTurnBudget } from '@oh-my-pi/pi-coding-agent/modes/turn-budget';
+import { parseConfiguredThinkingLevel } from '@oh-my-pi/pi-tui/thinking';
 import { JsonObjectSchema, MCPOAuthPublicConfigurationSchema, SessionBranchRequestSchema, type AdvisorNote, type Agent, type CapturedSendOptions, type JsonObject, type LoopState, type Run, type RunOrigin, type SessionBranchRequest, type Subagent } from '@openchamber/agent-contract';
 import { parseLoopArgs } from '@oh-my-pi/pi-coding-agent/modes/loop-limit';
 import { evaluateLoopCondition, describeLoopCondition } from '@oh-my-pi/pi-coding-agent/modes/loop-condition';
@@ -604,6 +608,35 @@ export class WorkerSession {
     await this.selectOptions(options);
     let text = input.text;
     const contextMessages: PreparedPrompt['context'] = [];
+    const turnBudget = parseTurnBudget(text);
+    this.session.sessionManager.beginTurnBudget(turnBudget?.total ?? null, turnBudget?.hard ?? false);
+    for (const keyword of MAGIC_KEYWORDS) {
+      if (!containsMagicKeyword(text, keyword.word)) continue;
+      if (keyword.id === 'ultrathink') {
+        const targetLevel = parseConfiguredThinkingLevel('xhigh');
+        if (targetLevel) await this.session.setThinkingLevel(targetLevel);
+      }
+      const magicContext: MagicKeywordContext = {
+        tools: this.session.getEnabledToolNames(),
+        taskBatch: true,
+        scoutAvailable: true,
+        evalTools: true,
+        py: true,
+        js: true,
+        freshAgents: false,
+        perCallModel: false,
+      };
+      if (keyword.requires.every(tool => magicContext.tools.includes(tool))) {
+        contextMessages.push({
+          role: 'custom',
+          customType: `${keyword.id}-notice`,
+          content: keyword.notice(magicContext),
+          display: false,
+          attribution: 'user',
+          timestamp: Date.now(),
+        });
+      }
+    }
     const invocation = /^\/skill:([^\s]+)(?:\s+([\s\S]*))?$/.exec(text);
     if (invocation) text = await this.catalogs.skills.preparePrompt(invocation[1]!, invocation[2] ?? '');
     for (const context of input.context) {
@@ -1109,6 +1142,12 @@ export class WorkerSession {
           return { type: 'command', output: `Advisor watchdog ${this.advisorActive ? 'enabled' : 'disabled'}.` };
         }
         await this.binding;
+        if (parsed.name === 'clear') {
+          const result = await this.session.resetSessionContext();
+          this.session.sessionManager.beginTurnBudget(null, false);
+          const dropped = result ? result.droppedCount : 0;
+          return { type: 'command', output: `Context reset — ${dropped} ${dropped === 1 ? 'message' : 'messages'} dropped; session continues.` };
+        }
         const output: string[] = [];
         const runtime: SlashCommandRuntime = {
           session: this.session,

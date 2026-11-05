@@ -81,14 +81,127 @@ function managedFile(configuration: MCPConfigurationState): ManagedFile {
 }
 
 /** The workspace owner supplies the durable revision; a worker never mints it. */
+function projectUnmanagedMcpConfiguration(raw: unknown, workspaceId: string): MCPConfigurationState {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new NativeMcpError('MCP_CONFIG_READ_FAILED', 'MCP configuration is absent, invalid or unreadable.', true);
+  }
+  const rawObj = raw as Record<string, unknown>;
+  const mcpServers = rawObj.mcpServers;
+  if (mcpServers !== undefined && (typeof mcpServers !== 'object' || mcpServers === null || Array.isArray(mcpServers))) {
+    throw new NativeMcpError('MCP_CONFIG_READ_FAILED', 'MCP configuration is absent, invalid or unreadable.', true);
+  }
+  const disabledList = Array.isArray(rawObj.disabledServers)
+    ? rawObj.disabledServers.filter((item): item is string => typeof item === 'string')
+    : [];
+  const servers: MCPServerConfig[] = [];
+  const seenIds = new Set<string>();
+
+  for (const [key, value] of Object.entries((mcpServers as Record<string, unknown> | undefined) ?? {})) {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) continue;
+    const cfg = value as Record<string, unknown>;
+    const serverId = EntityIdSchema.safeParse(key).success
+      ? key
+      : key.replace(/[^0-9A-Za-z._~-]/g, '-').slice(0, 256) || 'server';
+    if (seenIds.has(serverId)) continue;
+    seenIds.add(serverId);
+
+    const enabled = cfg.enabled !== false && !disabledList.includes(key) && !disabledList.includes(serverId);
+    const label = (typeof cfg.name === 'string' && cfg.name.trim()) || key.trim() || serverId || 'server';
+
+    let transport: MCPServerConfig['transport'];
+    if (cfg.type === 'http' || cfg.type === 'sse' || typeof cfg.url === 'string') {
+      const rawType = cfg.type === 'http' ? 'http' : 'sse';
+      let cleanUrl = 'http://localhost';
+      if (typeof cfg.url === 'string') {
+        try {
+          const parsedUrl = new URL(cfg.url);
+          if (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:') {
+            parsedUrl.username = '';
+            parsedUrl.password = '';
+            parsedUrl.search = '';
+            parsedUrl.hash = '';
+            cleanUrl = parsedUrl.toString();
+          } else {
+            cleanUrl = 'http://localhost';
+          }
+        } catch {
+          cleanUrl = 'http://localhost';
+        }
+      }
+      transport = { type: rawType, url: cleanUrl };
+    } else {
+      let command = typeof cfg.command === 'string' && cfg.command.trim() ? cfg.command.trim() : 'stdio-server';
+      if (command.startsWith('/') || command.startsWith('\\') || /^[A-Za-z]:[\\/]/.test(command)) {
+        const parts = command.split(/[/\\]/);
+        command = parts.filter(Boolean).pop() || 'stdio-server';
+      }
+      const args = Array.isArray(cfg.args)
+        ? cfg.args.filter((item): item is string => typeof item === 'string')
+        : [];
+      transport = { type: 'stdio', command, args };
+    }
+
+    servers.push({
+      serverId,
+      label,
+      enabled,
+      managed: false,
+      transport,
+    });
+  }
+
+  return {
+    workspaceId,
+    persistedRevision: '0',
+    config: { servers },
+  };
+}
+
+/** The workspace owner supplies the durable revision; a worker never mints it. */
 export async function writeNativeMcpConfiguration(configPath: string, captured: MCPConfigurationState): Promise<MCPConfigurationState> {
   const configuration = MCPConfigurationStateSchema.parse(captured);
+  let fileExists = false;
   try {
-    await writeMCPConfigFile(configPath, managedFile(configuration));
+    await lstat(configPath);
+    fileExists = true;
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+      fileExists = false;
+    } else {
+      throw new NativeMcpError('MCP_CONFIG_WRITE_FAILED', 'MCP configuration could not be checked.', true);
+    }
+  }
+
+  if (fileExists) {
+    try {
+      const raw = await readMCPConfigFile(configPath);
+      const managedResult = ManagedFileSchema.safeParse(raw);
+      if (!managedResult.success || managedResult.data.openchamber.workspaceId !== configuration.workspaceId) {
+        throw new NativeMcpError('CATALOG_CONFLICT', 'Hand-written or unmanaged MCP configuration cannot be mutated in place.', false);
+      }
+    } catch (error) {
+      if (error instanceof NativeMcpError) throw error;
+      throw new NativeMcpError('CATALOG_CONFLICT', 'Hand-written or unmanaged MCP configuration cannot be mutated in place.', false);
+    }
+  }
+
+  const sanitizedConfiguration: MCPConfigurationState = {
+    ...configuration,
+    config: {
+      servers: configuration.config.servers.map(s => {
+        const copy = { ...s };
+        delete copy.managed;
+        return copy;
+      }),
+    },
+  };
+
+  try {
+    await writeMCPConfigFile(configPath, managedFile(sanitizedConfiguration));
   } catch {
     throw new NativeMcpError('MCP_CONFIG_WRITE_FAILED', 'MCP configuration could not be committed.', true);
   }
-  return configuration;
+  return sanitizedConfiguration;
 }
 
 /** First-use storage may be absent; malformed or unreadable configured files still fail closed. */
@@ -102,18 +215,22 @@ export async function readNativeMcpConfigurationIfPresent(configPath: string, wo
 }
 
 async function readNativeMcpConfiguration(configPath: string, workspaceId: string): Promise<MCPConfigurationState> {
+  let raw: unknown;
   try {
-    const file = ManagedFileSchema.parse(await readMCPConfigFile(configPath));
-    if (file.openchamber.workspaceId !== workspaceId) throw new Error('Workspace mismatch');
-    const expected = managedFile(file.openchamber);
-    if (JSON.stringify(file.mcpServers) !== JSON.stringify(expected.mcpServers)
-      || JSON.stringify(file.disabledServers) !== JSON.stringify(expected.disabledServers)) {
-      throw new Error('Native definitions and captured state disagree');
-    }
-    return file.openchamber;
+    raw = await readMCPConfigFile(configPath);
   } catch {
     throw new NativeMcpError('MCP_CONFIG_READ_FAILED', 'MCP configuration is absent, invalid or unreadable.', true);
   }
+  const managedResult = ManagedFileSchema.safeParse(raw);
+  if (managedResult.success && managedResult.data.openchamber.workspaceId === workspaceId) {
+    const file = managedResult.data;
+    const expected = managedFile(file.openchamber);
+    if (JSON.stringify(file.mcpServers) === JSON.stringify(expected.mcpServers)
+      && JSON.stringify(file.disabledServers) === JSON.stringify(expected.disabledServers)) {
+      return file.openchamber;
+    }
+  }
+  return projectUnmanagedMcpConfiguration(raw, workspaceId);
 }
 
 export class NativeMcpError extends Error {
@@ -220,6 +337,9 @@ export class WorkerMcp extends MCPManager {
       const request = MCPConfigureRequestSchema.parse(raw);
       const configuration = this.#capture(next);
       const current = await readNativeMcpConfiguration(this.deps.configPath, this.deps.worker.workspaceId);
+      if (current.config.servers.some(s => s.managed === false)) {
+        throw new NativeMcpError('CATALOG_CONFLICT', 'Hand-written or unmanaged MCP configuration cannot be mutated in place.', false);
+      }
       if (request.expectedPersistedRevision !== current.persistedRevision
         || BigInt(configuration.persistedRevision) <= BigInt(current.persistedRevision)
         || JSON.stringify(configuration.config) !== JSON.stringify(request.config)) {

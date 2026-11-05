@@ -1270,16 +1270,16 @@ describe('updateDesktopSettings', () => {
 
   test('a delayed read retains an edit whose write finishes before the read', async () => {
     const readResult = deferred<{ settings: SettingsPayload; source: 'web' }>();
-    const newDefaults = { defaultAgent: 'review', smallModelOverride: 'provider/new' };
+    const newDefaults = { defaultAgent: 'review', zenModel: 'provider/new' };
     const writes: Array<Partial<SettingsPayload>> = [];
     registerSettingsApi(async (changes) => { writes.push(changes); return { ...changes }; }, () => readResult.promise);
     const update = updateDesktopSettings(newDefaults);
     const read = loadDesktopSettings();
     await update;
-    readResult.resolve({ settings: { defaultAgent: 'build', smallModelOverride: 'provider/old' }, source: 'web' });
+    readResult.resolve({ settings: { defaultAgent: 'build', zenModel: 'provider/old' }, source: 'web' });
     expect(await read).toMatchObject(newDefaults);
     expect(await loadDesktopSettings()).toMatchObject(newDefaults);
-    await updateDesktopSettings({ smallModelOverride: 'provider/old' });
+    await updateDesktopSettings({ zenModel: 'provider/old' });
     expect(writes).toHaveLength(2);
   });
 

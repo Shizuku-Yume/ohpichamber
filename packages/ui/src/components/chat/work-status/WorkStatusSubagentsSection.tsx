@@ -84,7 +84,10 @@ export const WorkStatusSubagentsSection: React.FC<Props> = ({ sessionId, directo
     setCancellingId(subagentId);
     try {
       await canonicalClient.cancelSubagent(sessionId, subagentId);
-      useSubagentsStore.getState().removeSubagent(sessionId, subagentId);
+      const existing = useSubagentsStore.getState().byParent[sessionId]?.find(s => s.subagentId === subagentId);
+      if (existing) {
+        useSubagentsStore.getState().applySubagentUpdate(sessionId, { ...existing, status: 'cancelled' });
+      }
       toast.info(t('chat.subagentHud.cancelled'));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to cancel subagent');

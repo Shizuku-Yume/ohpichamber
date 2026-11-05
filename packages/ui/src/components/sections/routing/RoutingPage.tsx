@@ -1,6 +1,5 @@
 import React from 'react';
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
-import { AgentSelector } from '@/components/sections/agents/AgentSelector';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -50,15 +49,15 @@ const isStoredFormOf = (server: RoutingConfig, draft: RoutingConfig): boolean =>
 };
 
 const slugify = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 64);
-
-/** The thinking levels OpenCode reports for one model; empty when the model has none. */
-const useModelVariants = (providerID: string | null | undefined, modelID: string | null | undefined): string[] => {
+/** The thinking efforts OMP reports for one model; 'off' plus reasoningOptions. Empty when the model has none. */
+const useModelReasoningEfforts = (providerID: string | null | undefined, modelID: string | null | undefined): string[] => {
   const providers = useConfigStore((state) => state.providers);
   return React.useMemo(() => {
     if (!providerID || !modelID) return [];
     const provider = providers.find((entry) => entry.providerId === providerID);
     const model = provider?.models.find((entry) => entry.modelId === modelID);
-    return model?.variants.map((variant) => variant.variant) ?? [];
+    if (!model?.reasoningEffortSupported && !model?.reasoningOptions?.length) return [];
+    return ['off', ...model.reasoningOptions.map((option) => option.reasoningEffort).filter((effort) => effort !== 'off')];
   }, [modelID, providerID, providers]);
 };
 
@@ -80,20 +79,22 @@ const VariantSelect: React.FC<{
   className?: string;
 }> = ({ providerID, modelID, value, onChange, ariaLabel, className }) => {
   const { t } = useI18n();
-  const variants = useModelVariants(providerID, modelID);
-  const selected = knownVariant(value, variants) ?? DEFAULT_VARIANT_VALUE;
-  const label = (variant: string) => (variant === DEFAULT_VARIANT_VALUE
-    ? t('settings.routing.thinking.default')
-    : variant.charAt(0).toUpperCase() + variant.slice(1));
+  const efforts = useModelReasoningEfforts(providerID, modelID);
+  const selected = knownVariant(value, efforts) ?? DEFAULT_VARIANT_VALUE;
+  const label = (variant: string) => {
+    if (variant === DEFAULT_VARIANT_VALUE) return t('settings.routing.thinking.default');
+    if (variant === 'off') return t('chat.modelControls.off') || 'Off';
+    return variant.charAt(0).toUpperCase() + variant.slice(1);
+  };
   return (
-    <Select value={selected} onValueChange={(next) => onChange(next === DEFAULT_VARIANT_VALUE ? null : next)} disabled={variants.length === 0}>
+    <Select value={selected} onValueChange={(next) => onChange(next === DEFAULT_VARIANT_VALUE ? null : next)} disabled={efforts.length === 0}>
       <SelectTrigger className={cn(SETTINGS_SELECT_ROW_TRIGGER_CLASS, className)} aria-label={ariaLabel}>
         <SelectValue>{label(selected)}</SelectValue>
       </SelectTrigger>
       <SelectContent>
         <SelectItem value={DEFAULT_VARIANT_VALUE}>{label(DEFAULT_VARIANT_VALUE)}</SelectItem>
-        {variants.map((variant) => (
-          <SelectItem key={variant} value={variant}>{label(variant)}</SelectItem>
+        {efforts.map((effort) => (
+          <SelectItem key={effort} value={effort}>{label(effort)}</SelectItem>
         ))}
       </SelectContent>
     </Select>
@@ -111,12 +112,12 @@ const CategoryRow: React.FC<{
   onRemove: () => void;
 }> = ({ category, expanded, onToggle, onChange, onReset, onRemove }) => {
   const { t } = useI18n();
-  const variants = useModelVariants(category.model?.providerID, category.model?.modelID);
-  const shownVariant = knownVariant(category.variant, variants);
+  const efforts = useModelReasoningEfforts(category.model?.providerID, category.model?.modelID);
+  const shownVariant = knownVariant(category.variant, efforts);
   const modelLabel = category.model
     ? `${category.model.modelID}${shownVariant ? ` / ${shownVariant}` : ''}`
     : t('settings.routing.model.useFallback');
-  const summary = [modelLabel, category.agent].filter(Boolean).join(' · ');
+  const summary = modelLabel;
   return (
     <div className={cn('py-1', !category.enabled && 'opacity-60')}>
       <div className="flex items-center gap-2">
@@ -146,13 +147,6 @@ const CategoryRow: React.FC<{
                 aria-label={t('settings.routing.category.name')}
                 className="h-8 w-full rounded-md px-3"
                 maxLength={60}
-              />
-            </SettingsStackedField>
-            <SettingsStackedField label={t('settings.routing.category.agent')} info={t('settings.routing.category.agentInfo')} controlClassName="max-w-none">
-              <AgentSelector
-                agentId={category.agent ?? ''}
-                onChange={(agentName) => onChange({ agent: agentName || null })}
-                className={cn(SETTINGS_CUSTOM_TRIGGER_CLASS, 'w-full')}
               />
             </SettingsStackedField>
             <SettingsStackedField label={t('settings.routing.category.model')} info={t('settings.routing.category.modelInfo')} controlClassName="max-w-none">

@@ -101,4 +101,41 @@ test('worker apply failures remain visible even though persistence succeeded', a
   expect(container.querySelector('[role="status"]')?.textContent).toContain('The worker could not connect.');
 });
 
+test('unmanaged servers render read-only indicator and all fields are disabled/noninteractive without mutation controls', async () => {
+  const unmanagedServer: MCPServerConfig = {
+    serverId: 'unmanaged-tool',
+    label: 'Unmanaged Tool',
+    enabled: true,
+    managed: false,
+    transport: { type: 'stdio', command: 'unmanaged-binary', args: ['--serve'] },
+  };
+  useMcpConfigStore.setState({
+    selectedMcpName: 'unmanaged-tool',
+    serversByDirectory: { '/repo': [unmanagedServer] },
+    configurationsByDirectory: { '/repo': applyResult([unmanagedServer]).configuration },
+  });
+
+  await act(async () => { root.render(<I18nProvider><McpPage /></I18nProvider>); });
+
+  // Notice banner is rendered
+  expect(container.textContent).toContain('unmanaged native MCP configuration file and is read-only');
+
+  // Input for label is disabled and readOnly
+  const labelInput = container.querySelector<HTMLInputElement>('input[aria-label="Server name"]');
+  expect(labelInput?.disabled).toBe(true);
+  expect(labelInput?.readOnly).toBe(true);
+
+  // Checkbox row for enabled is disabled
+  const checkboxRow = container.querySelector('[aria-disabled="true"]');
+  expect(checkboxRow).not.toBeNull();
+
+  // Command textarea is disabled and readOnly
+  const textarea = container.querySelector<HTMLTextAreaElement>('textarea');
+  expect(textarea?.disabled).toBe(true);
+  expect(textarea?.readOnly).toBe(true);
+
+  // Delete button is not present
+  expect(container.querySelector('button[aria-label="Delete"]')).toBeNull();
+});
+
 afterAll(() => { fetchSpy.mockRestore(); browser.close(); });

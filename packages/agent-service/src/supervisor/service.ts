@@ -625,6 +625,7 @@ export class AgentService {
         if (control.type === 'btw.cancel') { respondJson(response, 200, SessionControlAckSchema.parse(await this.sessions.btwCancel(sessionId, control.recordId))); return; }
         if (control.type === 'subagent.steer') { respondJson(response, 200, SessionControlAckSchema.parse(await this.sessions.steerSubagent(sessionId, control.subagentId, control.message))); return; }
         if (control.type === 'subagent.cancel') { respondJson(response, 200, SessionControlAckSchema.parse(await this.sessions.cancelSubagent(sessionId, control.subagentId))); return; }
+        if (control.type === 'loop.stop') { respondJson(response, 200, SessionControlAckSchema.parse(await this.sessions.stopLoop(sessionId))); return; }
       }
       const sessionRoute = /^\/api\/agent\/v1\/sessions\/([^/]+)(?:\/(snapshot|history|events)|\/(runs)(?:\/([^/]+)\/abort)?)?$/.exec(url.pathname);
       if (sessionRoute) {

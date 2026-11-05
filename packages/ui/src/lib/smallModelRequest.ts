@@ -2,25 +2,23 @@ import type { CompletionRequest, CompletionResult, Model, ModelSelection } from 
 import { toast } from 'sonner';
 import { canonicalClient } from '@/api/canonicalClient';
 import { formatMessage, useI18nStore } from '@/lib/i18n';
-import { loadDesktopSettings } from '@/lib/persistence';
 import { getRuntimeKey, subscribeRuntimeEndpointWillChange } from '@/lib/runtime-switch';
 import { getDirectoryState, getSyncSessionDirectory } from '@/sync/sync-refs';
 import { useConfigStore } from '@/stores/useConfigStore';
-
 export type SmallModelRequest = Pick<CompletionRequest, 'prompt'> & Partial<Pick<CompletionRequest, 'system' | 'format' | 'maxOutputTokens' | 'timeoutMs' | 'overflow'>> & {
   directory?: string | null;
   workspaceId?: string;
   sessionId?: string | null;
   selection?: ModelSelection;
   preferred?: ModelSelection;
+  role?: 'commit' | 'smol' | 'default' | string;
   signal?: AbortSignal;
 };
 
 const families = ['luna', 'flash-lite', 'flash', 'haiku'];
 const usable = (model: Model): boolean => model.enabled !== false && model.status !== 'deprecated' && model.modalities.includes('text');
 
-/** Explicit selections and profile overrides are intent; provider-local discovery never crosses subscriptions. */
-export async function resolveSmallModel(input: Pick<SmallModelRequest, 'directory' | 'workspaceId' | 'sessionId' | 'selection' | 'preferred'> = {}): Promise<{ workspaceId: string; selection: ModelSelection | null }> {
+export async function resolveSmallModel(input: Pick<SmallModelRequest, 'directory' | 'workspaceId' | 'sessionId' | 'selection' | 'preferred' | 'role'> = {}): Promise<{ workspaceId: string; selection: ModelSelection | null }> {
   const config = useConfigStore.getState();
   const preferred = input.preferred ?? (config.currentProviderId && config.currentModelId ? { providerId: config.currentProviderId, modelId: config.currentModelId } : null);
   const runtimeKey = getRuntimeKey();
@@ -33,15 +31,20 @@ export async function resolveSmallModel(input: Pick<SmallModelRequest, 'director
     const workspace = input.workspaceId ? { workspaceId: input.workspaceId } : await canonicalClient.resolveWorkspace(directory!);
     check();
     if (input.selection) return { workspaceId: workspace.workspaceId, selection: input.selection };
-    const [catalog, settings] = await Promise.all([canonicalClient.getModels(workspace.workspaceId), loadDesktopSettings()]);
+    const targetRole = input.role ?? 'smol';
+    const [catalog, ompSettings] = await Promise.all([
+      canonicalClient.getModels(workspace.workspaceId),
+      canonicalClient.getOmpSettings(workspace.workspaceId).catch(() => null),
+    ]);
     check();
-    if (!settings) throw new Error('Background model settings are unavailable');
-    const override = settings.smallModelUseDefault === false ? settings.smallModelOverride?.trim() : undefined;
-    const slash = override?.indexOf('/') ?? -1;
-    if (override && (slash <= 0 || slash === override.length - 1)) return { workspaceId: workspace.workspaceId, selection: null };
-    if (override && slash > 0 && slash < override.length - 1) {
-      const selection = { providerId: override.slice(0, slash), modelId: override.slice(slash + 1) };
-      const available = catalog.models.some(model => usable(model) && model.provider === selection.providerId && model.modelId === selection.modelId);
+    const rolesValue = ompSettings?.settings.find((s) => s.id === 'modelRoles')?.value;
+    const modelRoles = rolesValue && typeof rolesValue === 'object' ? (rolesValue as Record<string, string>) : null;
+    const roleOverride = modelRoles?.[targetRole] || modelRoles?.default;
+    if (roleOverride && typeof roleOverride === 'string') {
+      const slash = roleOverride.indexOf('/');
+      if (slash <= 0 || slash === roleOverride.length - 1) return { workspaceId: workspace.workspaceId, selection: null };
+      const selection = { providerId: roleOverride.slice(0, slash), modelId: roleOverride.slice(slash + 1) };
+      const available = catalog.models.some((model) => usable(model) && model.provider === selection.providerId && model.modelId === selection.modelId);
       return { workspaceId: workspace.workspaceId, selection: available ? selection : null };
     }
     const models = catalog.models.filter(model => usable(model) && (!preferred || model.provider === preferred.providerId));

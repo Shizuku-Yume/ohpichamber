@@ -570,18 +570,6 @@
     "defaultAgent": {
       "scope": "profile"
     },
-    "smallModelUseDefault": {
-      "scope": "profile"
-    },
-    "smallModelOverride": {
-      "scope": "profile"
-    },
-    "smallModelVariant": {
-      "scope": "profile"
-    },
-    "walkthroughModelOverride": {
-      "scope": "profile"
-    },
     "zenModel": {
       "scope": "profile"
     },

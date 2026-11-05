@@ -64,6 +64,14 @@ export const SessionModeSchema = z.discriminatedUnion('kind', [
   }),
 ]);
 export type SessionMode = z.infer<typeof SessionModeSchema>;
+export const LoopStateSchema = z.strictObject({
+  active: z.boolean(),
+  iteration: z.number().int().nonnegative(),
+  maxIterations: z.number().int().positive().optional(),
+  condition: z.string().optional(),
+  prompt: z.string().optional(),
+});
+export type LoopState = z.infer<typeof LoopStateSchema>;
 export const RuntimeSessionSchema = z.strictObject({
   sessionId: EntityIdSchema, projectId: EntityIdSchema, workspaceId: EntityIdSchema, displayPath: DisplayPathSchema,
   parentSessionId: EntityIdSchema.optional(), rootSessionId: EntityIdSchema,
@@ -73,6 +81,7 @@ export const RuntimeSessionSchema = z.strictObject({
   /** OMP's session title; absent until OMP names the session. */
   title: z.string().min(1).optional(),
   continuationPending: z.boolean().optional(),
+  loop: LoopStateSchema.optional(),
 }).refine((session) => (session.runtimeStatus === 'idle' || session.runtimeStatus === 'unavailable') === (session.activeRunId === null), {
   message: 'Runtime activity must identify its outer run', path: ['activeRunId'],
 });
@@ -154,6 +163,7 @@ export const SessionControlRequestSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('btw.cancel'), recordId: EntityIdSchema.optional() }),
   z.strictObject({ type: z.literal('subagent.steer'), subagentId: EntityIdSchema, message: z.string().min(1) }),
   z.strictObject({ type: z.literal('subagent.cancel'), subagentId: EntityIdSchema }),
+  z.strictObject({ type: z.literal('loop.stop') }),
 ]);
 export type SessionControlRequest = z.infer<typeof SessionControlRequestSchema>;
 export const SessionControlAckSchema = z.discriminatedUnion('type', [
@@ -165,6 +175,7 @@ export const SessionControlAckSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('btw.cancel'), cancelled: z.boolean() }),
   z.strictObject({ type: z.literal('subagent.steer'), subagentId: EntityIdSchema, accepted: z.boolean() }),
   z.strictObject({ type: z.literal('subagent.cancel'), subagentId: EntityIdSchema, cancelled: z.boolean() }),
+  z.strictObject({ type: z.literal('loop.stop'), stopped: z.boolean() }),
 ]);
 export type SessionControlAck = z.infer<typeof SessionControlAckSchema>;
 export const RunAbortAckSchema = z.strictObject({ run: RunSchema });

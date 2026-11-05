@@ -543,18 +543,6 @@ export class WorkerSession {
         updated.activeTool = undefined;
         changed = true;
       }
-    } else if (event.type === 'message_end') {
-      const msgEvent = event as { message?: { usage?: { totalTokens?: number; cost?: number } } };
-      if (msgEvent.message?.usage) {
-        if (typeof msgEvent.message.usage.totalTokens === 'number') {
-          updated.tokens = (updated.tokens ?? 0) + msgEvent.message.usage.totalTokens;
-          changed = true;
-        }
-        if (typeof msgEvent.message.usage.cost === 'number') {
-          updated.cost = (updated.cost ?? 0) + msgEvent.message.usage.cost;
-          changed = true;
-        }
-      }
     }
     if (changed) {
       this.liveSubagents.set(id, updated);

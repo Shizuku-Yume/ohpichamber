@@ -2,7 +2,7 @@
 
 This directory contains product documentation for OpenChamber powered by the Oh My Pi (OMP) agent runtime.
 
-OhPiChamber uses Oh My Pi (OMP) as its production agent runtime, supporting Web/PWA, Electron desktop, Mobile, and the Guest SDK. The Node.js Host Gateway supervises the Bun Agent Service and serves the Canonical `/api/agent/v1` API. M4 orchestration and OMP TUI parity features are verified on the OMP runtime. Mobile device certification and the standalone npm runtime are not yet verified.
+OhPiChamber uses Oh My Pi (OMP) as its production agent runtime, supporting Web/PWA, Electron desktop, Mobile, and the Guest SDK. The Node.js Host Gateway supervises the Bun Agent Service and serves the Canonical `/api/agent/v1` API. M4 core orchestration adaptations (workflows, auto model routing, permissions, MCP, settings, and TUI parity) are verified on the OMP runtime; scheduled tasks, multi-run, notifications, and sessions-in-work retain unverified notes until end-to-end live runs are complete. Mobile device certification and the standalone npm runtime are not yet verified.
 
 ## Layout
 

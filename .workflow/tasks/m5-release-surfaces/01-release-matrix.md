@@ -2,7 +2,7 @@
 
 **Effort:** m5-release-surfaces
 **Blocked by:** None
-**Files:** `.github/workflows/release.yml`, `.github/workflows/release-desktop-smoke.yml`, `.github/workflows/build-macos-arm64-dmg.yml`, `.github/workflows/mobile-release.yml`, `.github/workflows/mobile-ci.yml`, `packages/electron/package.json`, `packages/electron/scripts/package.mjs`, `packages/electron/README.md`, `packages/mobile/README.md`, `packages/web/README.md`
+**Files:** `.github/workflows/release.yml`, `.github/workflows/release-desktop-smoke.yml`, `.github/workflows/build-macos-arm64-dmg.yml`, `.github/workflows/mobile-release.yml`, `.github/workflows/mobile-ci.yml`, `packages/electron/README.md`, `packages/mobile/README.md`, `packages/web/README.md`
 **Read first:** `.workflow/specs/m5-release-surfaces.md` (W1); `.workflow/decisions.md` (`2026-11-06 - Split post-M4 roadmap into M5 packaging cleanup, M6 full audit and polish, and M7 pragmatic release`)
 **Covers:** W1
 **Check:** Bun parses all `.github/workflows/*.yml` files cleanly; `grep -nE 'opencodeCli|prepare:opencode-cli|verify:opencode-cli|vscode' .github/workflows/*.yml` prints no release target or invocation; all workflows pin `bun@1.4.4` and Node 24; `.workflow/bin/workflow validate` passes.

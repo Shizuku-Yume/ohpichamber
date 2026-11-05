@@ -2,6 +2,20 @@
 
 **Status:** in progress
 **Priority:** high
+**Integration branch:** m5-release-surfaces/integration
+
+## Parallel lanes
+
+Work runs across four disjoint parallel lanes in `/home/shizuku/Project/ohpichamber-worktrees/m5-{a..d}`, merging into `/home/shizuku/Project/ohpichamber-worktrees/m5-integration` (`m5-release-surfaces/integration`):
+
+| Lane | Worktree | Tasks | Owned files |
+|---|---|---|---|
+| **Lane A** | `m5-a` | `01` → `06` | `.github/workflows/*.yml`, `Dockerfile`, `docker-compose.yml`, `scripts/docker-entrypoint.sh`, `packages/{electron,mobile,web}/README.md` |
+| **Lane B** | `m5-b` | `07` | `packages/web/package.json`, `packages/web/bin/cli.js`, `packages/web/server/lib/host/agent-runtime.js`, `packages/web/scripts/` |
+| **Lane C** | `m5-c` | `04` | `packages/electron/package.json`, `packages/electron/scripts/{prepare-agent-runtime,verify-agent-runtime,verify-linux-appimage,package}.mjs`, `packages/electron/main.mjs` |
+| **Lane D** | `m5-d` | `08` | `packages/web/server/lib/spaces/`, `packages/ui/src/lib/spaces/release.ts`, `packages/web/server/lib/terminal/shutdown.test.js`, `.workflow/technical-debt.md`, `package.json`, `packages/ui/package.json` |
+
+Task `10` (`10-m5-integration-gate.md`) is claimed by whichever lane finishes last after `01`, `04`, `06`, `07`, and `08` are all archived on `m5-release-surfaces/integration`.
 
 ## What this is for
 

@@ -12,6 +12,7 @@ const model = (provider, modelId) => ({ provider, modelId, name: modelId, modali
 let models;
 let calls;
 let completion;
+let settingsModelRoles = {};
 const install = (request) => configureAgentService({ request }, { resolveWorkspaceScope: async workspaceId => ({ workspaceId, cwd: '/authorized' }) });
 const transport = async (pathname, init = {}) => {
   calls.push({ pathname, body: init.body ? JSON.parse(init.body) : null });
@@ -21,12 +22,22 @@ const transport = async (pathname, init = {}) => {
     const input = JSON.parse(init.body);
     return Response.json({ completionId: input.completionId, selection: input.selection, ...completion });
   }
+  if (pathname.endsWith('/settings')) {
+    return Response.json({
+      workspaceId: 'workspace-a',
+      revision: '0',
+      settings: [
+        { id: 'modelRoles', value: settingsModelRoles }
+      ]
+    });
+  }
   throw new Error(`Unexpected route ${pathname}`);
 };
 beforeEach(() => {
   models = [model('selected', 'large'), model('other', 'haiku')];
   calls = [];
   completion = { status: 'completed', output: { kind: 'text', text: ' generated ' }, finishReason: 'complete', usage: null };
+  settingsModelRoles = {};
   fs.writeFileSync(path.join(directory, 'settings.json'), '{}');
   const preferences = path.join(directory, 'preferences.json');
   if (fs.existsSync(preferences)) fs.unlinkSync(preferences);
@@ -52,15 +63,18 @@ describe('Host canonical utility completion owner', () => {
     await expect(generateSmallModelText({ workspaceId: 'workspace-a', prompt: 'hello', preferredProviderID: 'absent', preferredModelID: 'absent' })).rejects.toMatchObject({ statusCode: 404 });
     expect(calls.some(call => call.pathname.endsWith('/completions'))).toBe(false);
   });
-  test('explicit unavailable models and invalid profile overrides do not fall through to another model', async () => {
+  test('explicit unavailable models and invalid role overrides do not fall through to another model', async () => {
     await expect(generateSmallModelText({ workspaceId: 'workspace-a', prompt: 'hello', model: 'other/missing', preferredProviderID: 'selected', preferredModelID: 'large' })).rejects.toMatchObject({ statusCode: 404 });
-    fs.writeFileSync(path.join(directory, 'settings.json'), JSON.stringify({ smallModelUseDefault: false, smallModelOverride: 'invalid-model-reference' }));
+    settingsModelRoles = { smol: 'invalid-model-reference' };
     expect(await describeSmallModel({ workspaceId: 'workspace-a', preferredProviderID: 'selected', preferredModelID: 'large' })).toBeNull();
     expect(calls.some(call => call.pathname.endsWith('/completions'))).toBe(false);
   });
-  test('profile settings override resolves through the scoped profile reader', async () => {
-    fs.writeFileSync(path.join(directory, 'settings.json'), JSON.stringify({ smallModelUseDefault: false, smallModelOverride: 'other/haiku' }));
-    expect(await describeSmallModel({ workspaceId: 'workspace-a', preferredProviderID: 'selected', preferredModelID: 'large' })).toMatchObject({ providerID: 'other', modelID: 'haiku', source: 'settings' });
+  test('OMP modelRoles resolve smol, commit, and default roles without cross-provider fallback', async () => {
+    settingsModelRoles = { smol: 'other/haiku', commit: 'selected/large' };
+    expect(await describeSmallModel({ workspaceId: 'workspace-a', role: 'smol' })).toMatchObject({ providerID: 'other', modelID: 'haiku', source: 'modelRoles' });
+    expect(await describeSmallModel({ workspaceId: 'workspace-a', role: 'commit' })).toMatchObject({ providerID: 'selected', modelID: 'large', source: 'modelRoles' });
+    settingsModelRoles = { default: 'other/haiku' };
+    expect(await describeSmallModel({ workspaceId: 'workspace-a', role: 'commit' })).toMatchObject({ providerID: 'other', modelID: 'haiku', source: 'modelRoles' });
   });
   test('structured errors preserve the provider failure instead of valid empty output', async () => {
     completion = { status: 'failed', error: { code: 'STRUCTURED_OUTPUT_INVALID', detail: 'Invalid provider output', retryable: false } };

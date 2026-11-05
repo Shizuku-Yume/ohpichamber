@@ -76,7 +76,10 @@ const customEndpointInputSchema = z.object({
 /** Project the persisted routing binding into captured native send options. */
 const toModelRef = (model, variant) => {
   const ref = { providerId: model.providerID, modelId: model.modelID };
-  if (variant) ref.variant = variant;
+  if (variant) {
+    ref.reasoningEffort = variant;
+    ref.variant = variant;
+  }
   return ref;
 };
 
@@ -259,15 +262,14 @@ export function createRoutingRuntime({
 
   // A category without a model of its own means "the fallback pair"; a variant
   // only travels with the model it was chosen for.
-  const chooseSelection = (config, choice, composerAgent) => {
+  const chooseSelection = (config, choice, _composerAgent) => {
     const own = Boolean(choice?.model);
     const model = own ? choice.model : config.fallback.model;
     const variant = own ? choice.variant : config.fallback.variant;
     return {
       model: toModelRef(model, variant),
-      // A category agent replaces the composer's; an empty one keeps it.
-      agent: choice?.agent || composerAgent || null,
-      decision: { providerID: model.providerID, modelID: model.modelID, variant: variant ?? null, agent: choice?.agent ?? null },
+      agent: null,
+      decision: { providerID: model.providerID, modelID: model.modelID, variant: variant ?? null, reasoningEffort: variant ?? null, agent: null },
     };
   };
 
@@ -283,19 +285,36 @@ export function createRoutingRuntime({
    * catalog or a model not present in it cannot invalidate a saved variant.
    */
   const withKnownVariant = async (selection, workspaceId) => {
-    const variant = selection.model.variant;
-    if (!variant) return selection;
+    const effort = selection.model.reasoningEffort ?? selection.model.variant;
+    if (!effort) return selection;
     let models;
     try { models = await readCatalog(workspaceId); }
     catch (error) {
-      console.warn('[routing] model catalog unavailable, keeping the saved variant:', errorMessage(error));
+      console.warn('[routing] model catalog unavailable, keeping the saved thinking effort:', errorMessage(error));
       return selection;
     }
     const { providerId, modelId } = selection.model;
     const entry = models.find((model) => model.provider === providerId && model.modelId === modelId);
-    if (!entry || entry.variants.some((known) => known.variant === variant)) return selection;
-    console.warn(`[routing] ${providerId}/${modelId} has no "${variant}" thinking level; using its default`);
-    return { ...selection, model: { providerId, modelId }, decision: { ...selection.decision, variant: null } };
+    if (!entry) return selection;
+    const knownEfforts = Array.isArray(entry.reasoningOptions)
+      ? entry.reasoningOptions.map((option) => option.reasoningEffort)
+      : [];
+    const knownVariants = Array.isArray(entry.variants)
+      ? entry.variants.map((v) => v.variant)
+      : [];
+    if (effort === 'off' || knownEfforts.includes(effort) || knownVariants.includes(effort)) {
+      return {
+        ...selection,
+        model: { ...selection.model, reasoningEffort: effort },
+        decision: { ...selection.decision, reasoningEffort: effort },
+      };
+    }
+    console.warn(`[routing] ${providerId}/${modelId} has no "${effort}" thinking level; using its default`);
+    return {
+      ...selection,
+      model: { providerId, modelId, reasoningEffort: null, variant: null },
+      decision: { ...selection.decision, variant: null, reasoningEffort: null },
+    };
   };
 
   /**
@@ -305,7 +324,7 @@ export function createRoutingRuntime({
    * The caller captures the resolved model and agent for native delivery.
    * Without a configured fallback the request fails before any execution.
    */
-  const resolveAutoSelection = async ({ sessionId, directory, workspaceId: requestedWorkspaceId, model, agent, requestText }) => {
+  const resolveAutoSelection = async ({ sessionId, directory, workspaceId: requestedWorkspaceId, model, agent: _agent, requestText }) => {
     if (model?.providerId !== 'openchamber' || model?.modelId !== 'auto') return null;
     const sessionScope = await scopeForSession(sessionId);
     const workspaceId = requestedWorkspaceId ?? sessionScope.workspaceId;
@@ -336,26 +355,26 @@ export function createRoutingRuntime({
         decision.confidence = result.confidence;
         decision.reason = result.reason;
         decision.ms = ms;
-        const held = await cacheHold({ config, chosen: result.category, composerAgent: agent, lastAnswer });
+        const held = await cacheHold({ config, chosen: result.category, composerAgent: null, lastAnswer });
         if (held) {
           // The send runs as the category the session is already on;
           // `cacheHold.requested` keeps what Jev asked for.
           decision.category = held.id;
           decision.cacheHold = { requested: result.category.id };
         }
-        selection = chooseSelection(config, held ?? result.category, agent);
+        selection = chooseSelection(config, held ?? result.category);
       } catch (error) {
         decision.reason = 'error';
         decision.error = errorMessage(error);
-        selection = chooseSelection(config, null, agent);
+        selection = chooseSelection(config, null);
       }
     } else {
-      selection = chooseSelection(config, null, agent);
+      selection = chooseSelection(config, null);
     }
     selection = await withKnownVariant(selection, workspaceId);
     Object.assign(decision, selection.decision);
     broadcast('openchamber:routing.decision', decision);
-    return { model: selection.model, agent: selection.agent, decision };
+    return { model: selection.model, agent: null, decision };
   };
 
 

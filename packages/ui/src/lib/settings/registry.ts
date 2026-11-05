@@ -529,10 +529,6 @@ export const SETTINGS_REGISTRY = {
   // New-session model and thinking level belong to OMP (`modelRoles.default`,
   // `defaultThinkingLevel`); the app no longer keeps a second default.
   defaultAgent: field({ scope: 'profile', parse: parseNonEmptyString }),
-  smallModelUseDefault: field({ scope: 'profile', parse: parseBoolean }),
-  smallModelOverride: field({ scope: 'profile', parse: parseNonEmptyString }),
-  smallModelVariant: field({ scope: 'profile', parse: parseNonEmptyString }),
-  walkthroughModelOverride: field({ scope: 'profile', parse: parseNonEmptyString }),
   zenModel: field({ scope: 'profile', parse: parseNonEmptyTrimmedString }),
   // The model-prefs auto-save owns these six with its own debounce.
   favoriteModels: field<ModelRef[]>({ scope: 'profile', parse: parseModelRefs(64), ui: uiStore('favoriteModels', setUi('favoriteModels'), { autoSave: false }) }),

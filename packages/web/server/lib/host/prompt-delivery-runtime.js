@@ -54,12 +54,13 @@ export function createHostPromptDeliveryRuntime({
     const fresh = await requireScope(scope);
     const parsed = PromptRequestSchema.parse(request);
     const options = parsed.options;
-    const routing = await routingRuntime.resolveAutoSelection({ sessionId: fresh.sessionId, directory: fresh.cwd, workspaceId: fresh.workspaceId, model: options.modelId ? { providerId: options.providerId, modelId: options.modelId } : null, agent: options.agentId, requestText: routingRequestTextOf(parsed.input) });
+    const routing = await routingRuntime.resolveAutoSelection({ sessionId: fresh.sessionId, directory: fresh.cwd, workspaceId: fresh.workspaceId, model: options.modelId ? { providerId: options.providerId, modelId: options.modelId } : null, agent: null, requestText: routingRequestTextOf(parsed.input) });
     if (routing) {
       options.providerId = routing.model.providerId;
       options.modelId = routing.model.modelId;
-      options.agentId = routing.agent ?? options.agentId;
-      options.variant = routing.model.variant ?? options.variant;
+      options.agentId = null;
+      options.reasoningEffort = routing.model.reasoningEffort ?? null;
+      options.variant = null;
     }
     const knowledge = await sessionKnowledgeRuntime.resolvePendingForSession(fresh.sessionId, fresh.cwd);
     const context = [...(parsed.input.context ?? [])];

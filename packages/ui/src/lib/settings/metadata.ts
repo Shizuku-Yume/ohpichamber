@@ -12,7 +12,6 @@ export type SettingsPageSlug =
   | 'omp'
   | 'usage'
   | 'agents'
-  | 'behavior'
   | 'commands'
   | 'mcp'
   | 'plugins'
@@ -127,13 +126,6 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
     group: 'opencode',
     kind: 'split',
     keywords: ['agent', 'agents', 'prompts', 'tools', 'permissions'],
-  },
-  {
-    slug: 'behavior',
-    title: 'Behavior',
-    group: 'opencode',
-    kind: 'single',
-    keywords: ['behavior', 'response style', 'tone', 'instructions', 'custom instructions'],
   },
   {
     slug: 'commands',
@@ -325,8 +317,6 @@ export function getSettingsNavIcon(slug: SettingsPageSlug): IconName | null {
       return 'equalizer-2';
     case 'agents':
       return 'ai-agent';
-    case 'behavior':
-      return 'brain';
     case 'commands':
       return 'slash-commands-2';
     case 'mcp':

@@ -92,7 +92,6 @@ import { createNotificationTriggerRuntime } from './lib/notifications/runtime.js
 import { createPushRuntime } from './lib/notifications/push-runtime.js';
 import { createApnsRuntime } from './lib/notifications/apns-runtime.js';
 import { createNotificationTemplateRuntime } from './lib/notifications/template-runtime.js';
-import { createPermissionAutoAcceptRuntime } from './lib/permission-auto-accept/runtime.js';
 import { createCanonicalQueueRuntime, createPromptQueueStore, registerCanonicalQueueRoutes } from './lib/message-queue/runtime.js';
 import { createDispatchResultsRuntime } from './lib/dispatch-results/runtime.js';
 import { createRoutingRuntime } from './lib/routing/runtime.js';
@@ -705,10 +704,6 @@ const openChamberSessionService = createOpenChamberSessionService({
   publishSessionEvent: (event) => {
     void globalMessageStreamHub.subscribeSession(event.properties.sessionId)
       .catch((error) => console.warn('[agent-events] session observation failed:', error.code ?? 'SERVICE_UNAVAILABLE'));
-    if (event?.type === 'openchamber:session-created' && event.properties?.sessionId) {
-      void permissionAutoAcceptRuntime?.applyDefaultMode(event.properties.sessionId)
-        .catch((error) => console.warn('[permission-auto-accept] failed to apply the default mode:', error?.message ?? error));
-    }
   },
   sessionMetadataStore,
   directCommandAdmissionStore: hostSessionState.directCommandAdmissionStore,
@@ -825,7 +820,6 @@ const notificationTriggerRuntime = createNotificationTriggerRuntime({
   resolveSessionScope: hostAgentRuntime.resolveSessionScope,
 });
 
-const setAutoAcceptSession = (sessionId, enabled) => permissionAutoAcceptRuntime.setSessionPolicy(sessionId, enabled);
 clearPendingPushBadge = () => notificationTriggerRuntime.clearPendingPushBadge();
 
 // Which sessions are subsessions: per-turn work skips them without reading.
@@ -910,23 +904,6 @@ const sessionWorkRuntime = createSessionWorkRuntime({
   lineage: sessionLineage,
 });
 
-const permissionAutoAcceptRuntime = createPermissionAutoAcceptRuntime({
-  service: hostAgentRuntime.service,
-  globalEventHub: globalMessageStreamHub,
-  listWorkspaceScopes,
-  resolveSessionScope: hostAgentRuntime.resolveSessionScope,
-  readSettingsFromDiskMigrated,
-  persistSettings,
-  broadcastGlobalUiEvent,
-  evaluatePermission: (permission, directory) => routingRuntime.evaluatePermission(permission, directory),
-  onPermissionReplied: (permissionId) => routingRuntime.forgetPermission(permissionId),
-  resolveLegacyEnabledMode: async () => ((await routingRuntime.legacySafetyNetEnabled()) ? 'safety' : 'auto'),
-});
-// A request the safety net held still needs the user, so only one that was
-// actually answered automatically skips the notification.
-notificationTriggerRuntime.setGetIsSessionAutoAccepting(
-  (sessionId, scope, approvalId) => permissionAutoAcceptRuntime.isPermissionAutoAnswered(sessionId, scope.cwd, approvalId),
-);
 
 // Queued follow-up messages are delivered by the server so a closed tab or a
 // dropped connection no longer strands them.
@@ -1139,7 +1116,6 @@ const scheduledTasksRuntime = createScheduledTasksRuntime({
     const settings = await readSettingsFromDiskMigrated();
     return sanitizeProjects(settings?.projects || []);
   },
-  setSessionAutoAccept: (sessionId, enabled, directory) => permissionAutoAcceptRuntime.setSessionPolicy(sessionId, enabled, directory),
   emitTaskRunEvent: (event) => {
     for (const client of uiOpenChamberEventClients) {
       try {
@@ -1400,7 +1376,6 @@ const ensureGlobalWatcherStarted = async () => {
 const startAgentService = async () => {
   await hostAgentRuntime.start();
   if (isShuttingDown) return hostAgentRuntime.service.getState();
-  permissionAutoAcceptRuntime.start();
   await ensureGlobalWatcherStarted();
   void workflowsModule.deliverPending?.();
   await convertLegacyQueue();
@@ -1418,7 +1393,6 @@ const gracefulShutdownRuntime = createGracefulShutdownRuntime({
   },
   syncToHmrState: () => {},
   hostAgentRuntime,
-  permissionAutoAcceptRuntime,
   sessionAssistRuntime,
   sessionWorkRuntime,
   contextObligatoryRuntime,
@@ -1872,7 +1846,6 @@ async function main(options = {}) {
     openchamberDataDir: OPENCHAMBER_DATA_DIR,
     modelsDevApiUrl: MODELS_DEV_API_URL,
     modelsMetadataCacheTtl: MODELS_METADATA_CACHE_TTL,
-    setAutoAcceptSession,
     desktopUpdater,
     skipBodyParsing: (req) => spacesHost?.skipsBodyParsing(req) === true,
     isRequestOriginAllowed,
@@ -2072,7 +2045,6 @@ async function main(options = {}) {
     getOpenChamberEventClients: () => uiOpenChamberEventClients,
     writeSseEvent,
     globalEventHub: globalMessageStreamHub,
-    permissionAutoAcceptRuntime,
     worktreeBootstrapStore,
     worktreeLeaseControl,
     worktreeArchiveSessionService: openChamberSessionService,
@@ -2182,7 +2154,6 @@ async function main(options = {}) {
     getPort: () => tunnelRuntimeContext.getActivePort(),
     startAgentService,
     stopAgentService: async () => {
-      permissionAutoAcceptRuntime.stop();
       await scheduledTasksRuntime.stop();
       await messageQueueRuntime.stop();
       await globalMessageStreamHub.stop();

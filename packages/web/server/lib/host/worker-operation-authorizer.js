@@ -7,7 +7,9 @@ import { HostAuthorizationScopeSchema, HostWorkspacePolicySchema, WorkerPolicyRe
 import { resolveGuestFilePath } from '../guests/files.js';
 import { unsupportedRepositoryRootReason } from '../git/repository-root.js';
 import { isEnterpriseMode } from '../enterprise-mode.js';
-import { isPermissionMode } from '../permission-auto-accept/modes.js';
+
+export const PERMISSION_PRESET_IDS = Object.freeze(['ask', 'safety', 'auto']);
+export const isPermissionPresetId = (value) => typeof value === 'string' && PERMISSION_PRESET_IDS.includes(value);
 
 const denied = (code = 'UNAUTHORIZED', status = 403) => ({ allowed: false, code, status });
 const allowed = { allowed: true };
@@ -98,14 +100,14 @@ export const createWorkerOperationAuthorizer = ({
       if (request.type === 'shell') return descriptor?.command !== undefined && commandGranted(descriptor.command) ? allowed : denied();
       if (request.type !== 'tool') return denied();
       if (request.agentId !== undefined && !policy.agentIds.includes(request.agentId)) return denied();
-      if (request.permissionPresetId !== undefined && (!isPermissionMode(request.permissionPresetId)
+      if (request.permissionPresetId !== undefined && (!isPermissionPresetId(request.permissionPresetId)
         || !policy.permissionPresetIds.includes(request.permissionPresetId))) return denied();
       if (request.toolName === 'provider.use') {
         return descriptor !== null && policy.providers.some(provider => provider.providerId === descriptor.providerId
           && provider.modelId === descriptor.modelId && provider.endpoint === descriptor.endpoint) ? allowed : denied();
       }
       if (request.toolName === 'permission.preset') {
-        return request.input.presetId === request.permissionPresetId && isPermissionMode(request.input.presetId)
+        return request.input.presetId === request.permissionPresetId && isPermissionPresetId(request.input.presetId)
           && policy.permissionPresetIds.includes(request.input.presetId) ? allowed : denied();
       }
       // Native ask only opens a scoped, CAS-protected interaction; it grants no machine capability.

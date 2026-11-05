@@ -178,7 +178,6 @@ const sessionDisplayField = <K extends keyof SessionDisplayState>(
   autoSave: false,
 });
 
-const RESPONSE_STYLE_PRESETS = ['concise', 'detailed', 'mentor', 'pushback', 'noFiller', 'matchEnergy', 'warmPeer', 'custom'] as const;
 
 const parseTerminalShell: SettingsParser<TerminalShell> = parseGuarded(isTerminalShell);
 const parseUiFont: SettingsParser<UiFontOption> = parseGuarded(isUiFontOption);
@@ -268,22 +267,6 @@ export const SETTINGS_REGISTRY = {
   gitlabClientId: field({ scope: 'instance', parse: parseNonEmptyTrimmedString }),
   skillCatalogs: field<SkillCatalogConfig[]>({ scope: 'instance', parse: parseSkillCatalogs }),
   defaultGitIdentityId: field({ scope: 'instance', parse: parseTrimmedString }),
-  // Per-session permission modes; booleans are policies from before the modes,
-  // which the server converts on its first read.
-  permissionAutoAccept: field({
-    scope: 'instance',
-    parse: fromSchema(z.object({
-      sessions: z.record(z.string().min(1), z.union([z.boolean(), z.enum(['ask', 'safety', 'auto'])])).catch({}),
-      revision: z.number().int().nonnegative().catch(0),
-    })),
-  }),
-  // The mode the server writes onto each new top-level session.
-  permissionDefaultMode: field({
-    scope: 'instance',
-    surfaces: ['web', 'desktop', 'mobile'],
-    parse: fromSchema(z.enum(['ask', 'safety', 'auto'])),
-    ui: uiStore('permissionDefaultMode', (v) => useUIStore.getState().setPermissionDefaultMode(v)),
-  }),
   // The server keeps the message search index only while this is on.
   messageSearchEnabled: field({
     scope: 'instance',
@@ -303,7 +286,6 @@ export const SETTINGS_REGISTRY = {
   // `builtin` or an installed extension id; the server falls back to `builtin` when that extension cannot serve.
   browserProvider: field({ scope: 'instance', parse: parseNonEmptyString, ui: uiStore('browserProvider', (v) => useUIStore.getState().setBrowserProvider(v)) }),
   agentNotifyToolEnabled: field({ scope: 'instance', parse: parseBoolean, ui: uiStore('agentNotifyToolEnabled', (v) => useUIStore.getState().setAgentNotifyToolEnabled(v)) }),
-  agentToolsCodeMode: field({ scope: 'instance', parse: parseBoolean, ui: uiStore('agentToolsCodeMode', (v) => useUIStore.getState().setAgentToolsCodeMode(v)) }),
   agentMemoryToolEnabled: field({ scope: 'instance', parse: parseBoolean, ui: uiStore('agentMemoryToolEnabled', (v) => useUIStore.getState().setAgentMemoryToolEnabled(v)) }),
   // The isolated-spaces switch. The server reads it once at start; a change takes effect at the
   // next start, which the settings row says.
@@ -580,10 +562,6 @@ export const SETTINGS_REGISTRY = {
   usageExpandedFamilies: field({ scope: 'profile', parse: parseStringRecordOfStringLists }),
   usageModelGroups: field<UsageModelGroups>({ scope: 'profile', parse: parseUsageModelGroups }),
 
-  // ── Behavior (profile) ──
-  responseStyleEnabled: field({ scope: 'profile', parse: parseBoolean }),
-  responseStylePreset: field({ scope: 'profile', parse: parseOneOf(RESPONSE_STYLE_PRESETS) }),
-  responseStyleCustomInstructions: field({ scope: 'profile', parse: parseTextUpTo(50_000) }),
 
   // The server serves the PWA manifest from these, so they are facts about
   // the instance even though only the installed web app shows them.

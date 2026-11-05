@@ -1,0 +1,77 @@
+import React, { act } from 'react';
+import { afterEach, beforeEach, expect, mock, test } from 'bun:test';
+mock.module('@/components/chat/markdown/markdown-shiki.worker.ts?worker&url', () => ({ default: 'blob:test-shiki-worker' }));
+mock.module('../chat/markdown/markdown-shiki.worker.ts?worker&url', () => ({ default: 'blob:test-shiki-worker' }));
+import type { Root } from 'react-dom/client';
+import { HTMLDivElement as HappyDivElement, Window } from 'happy-dom';
+
+const browser = new Window({ url: 'http://localhost' });
+let root: Root;
+const descriptors = new Map<string, PropertyDescriptor | undefined>();
+
+for (const [key, value] of Object.entries({
+  window: browser,
+  document: browser.document,
+  navigator: browser.navigator,
+  localStorage: browser.localStorage,
+  Element: browser.Element,
+  HTMLElement: browser.HTMLElement,
+  IS_REACT_ACT_ENVIRONMENT: true,
+  customElements: browser.customElements,
+  requestAnimationFrame: (callback: FrameRequestCallback) => setTimeout(() => callback(0), 0),
+  cancelAnimationFrame: (handle: number) => clearTimeout(handle),
+  getComputedStyle: browser.getComputedStyle.bind(browser),
+})) {
+  descriptors.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
+  Object.defineProperty(globalThis, key, { value, configurable: true });
+}
+
+const { createRoot } = await import('react-dom/client');
+const { I18nProvider } = await import('@/lib/i18n');
+const { useUIStore } = await import('@/stores/useUIStore');
+const { RuntimeAPIContext } = await import('@/contexts/runtimeAPIContext');
+const { SettingsView } = await import('./SettingsView');
+
+let container: HappyDivElement;
+
+beforeEach(() => {
+  container = browser.document.createElement('div');
+  browser.document.body.appendChild(container);
+  const rootTarget = container as unknown as Element;
+  root = createRoot(rootTarget);
+  useUIStore.setState({
+    settingsPage: 'general',
+    isSettingsDialogOpen: true,
+  });
+});
+
+afterEach(async () => {
+  await act(async () => {
+    root.unmount();
+  });
+  container.remove();
+});
+
+test('SettingsView does not render behavior navigation item and excludes retired BehaviorPage', async () => {
+  await act(async () => {
+    root.render(
+      <RuntimeAPIContext.Provider value={{} as import('@/lib/api/types').RuntimeAPIs}>
+        <I18nProvider>
+          <SettingsView onClose={() => {}} />
+        </I18nProvider>
+      </RuntimeAPIContext.Provider>
+    );
+  });
+  // Verify navigation buttons do not contain Behavior
+  const buttonElements = Array.from(container.querySelectorAll('button'));
+  const navTexts = buttonElements.map((b) => b.textContent?.trim() || '');
+
+  expect(navTexts.some((text) => text.toLowerCase() === 'behavior')).toBe(false);
+  expect(container.querySelector('[data-page="behavior"]')).toBeNull();
+
+  // Verify OMP, Agents, Commands, MCP are present in navigation
+  expect(navTexts.some((text) => text === 'OMP')).toBe(true);
+  expect(navTexts.some((text) => text === 'Agents')).toBe(true);
+  expect(navTexts.some((text) => text === 'Commands')).toBe(true);
+  expect(navTexts.some((text) => text === 'MCP')).toBe(true);
+});

@@ -173,7 +173,6 @@ describe('an archived chat is read-only', () => {
       ['POST', `/api/openchamber/sessions/${PARENT}/fork`],
       ['POST', `/api/message-queue/sessions/${PARENT}/items`],
       ['PUT', `/api/goals/objective/${PARENT}`],
-      ['PUT', `/api/permission-auto-accept/sessions/${PARENT}`],
       ['DELETE', `/api/session/${PARENT}/revert`],
     ]) {
       expect(through(archive, method, requestPath)).toEqual({ code: 409, body: expect.objectContaining({ code: 'archived_chat_read_only' }) });

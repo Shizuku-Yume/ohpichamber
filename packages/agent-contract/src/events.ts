@@ -64,6 +64,7 @@ export const AdvisorYieldedEventSchema = DataEventEnvelopeSchema.extend({
   type: z.literal('advisor_yielded'),
   notes: z.array(AdvisorNoteSchema),
 });
+export type AdvisorYieldedEvent = z.infer<typeof AdvisorYieldedEventSchema>;
 export const CleanseProgressEventSchema = DataEventEnvelopeSchema.extend({
   type: z.literal('cleanse.progress'),
   activeCheckers: z.array(z.string()),

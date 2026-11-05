@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { CanonicalEvent, Message, Run, RuntimeSession, Session, SessionSnapshot } from "@openchamber/agent-contract"
-import { applyDirectoryEvent, compareCounters, installQueue, installRuntimeRun, installSessionMetadata, installSessionSnapshot, mergeHostSession } from "./event-reducer"
+import { applyDirectoryEvent, clearSessionAdvisor, compareCounters, installQueue, installRuntimeRun, installSessionMetadata, installSessionSnapshot, mergeHostSession } from "./event-reducer"
 import { INITIAL_STATE, type State } from "./types"
 
 const runtime = (overrides: Partial<RuntimeSession> = {}): RuntimeSession => ({
@@ -360,5 +360,150 @@ describe("native canonical event reducer", () => {
     expect(current.cleanse?.["session-1"]?.status).toBe("discovering");
     expect(current.cleanse?.["session-2"]?.status).toBe("completed");
     expect(current.cleanse?.["session-2"]?.repairedFiles).toEqual(["fix.ts"]);
+  });
+
+  test("cleanse.progress: rejects sequence earlier in epoch A, accepts low sequence in new epoch B with opaque UUID, rejects historical stale", () => {
+    const epochA = "ffffffff-1111-4111-8111-111111111111";
+    const epochB = "00000000-2222-4222-8222-222222222222"; // Lexicographically earlier!
+    let current = installSessionSnapshot(state(), snapshot());
+
+    const makeCleanse = (epoch: string, seq: string, timestamp: number, status: 'discovering' | 'completed' = 'discovering'): CanonicalEvent => ({
+      sessionId: "session-1",
+      epoch,
+      sequence: seq,
+      timestamp,
+      type: "cleanse.progress",
+      status,
+      activeCheckers: ["ts"],
+      completedCheckers: [],
+      repairedFiles: [],
+    });
+
+    // Epoch A at sequence 10
+    current = applyDirectoryEvent(current, makeCleanse(epochA, "10", 1000)).state;
+    expect(current.cleanse?.["session-1"]?.epoch).toBe(epochA);
+    expect(current.cleanse?.["session-1"]?.sequence).toBe("10");
+
+    // Sequence earlier in epoch A (sequence 5 < 10) is rejected
+    const staleSeqResult = applyDirectoryEvent(current, makeCleanse(epochA, "5", 1050, "completed"));
+    expect(staleSeqResult.state.cleanse?.["session-1"]?.sequence).toBe("10");
+    expect(staleSeqResult.state.cleanse?.["session-1"]?.status).toBe("discovering");
+
+    // New epoch B (opaque UUID sorting earlier): sequence 1 is accepted!
+    const newEpochResult = applyDirectoryEvent(current, makeCleanse(epochB, "1", 2000, "completed"));
+    current = newEpochResult.state;
+    expect(current.cleanse?.["session-1"]?.epoch).toBe(epochB);
+    expect(current.cleanse?.["session-1"]?.sequence).toBe("1");
+    expect(current.cleanse?.["session-1"]?.status).toBe("completed");
+
+    // Historical stale event from older epoch A arriving late (timestamp 1100 < 2000) is rejected
+    const histStaleResult = applyDirectoryEvent(current, makeCleanse(epochA, "99", 1100, "discovering"));
+    expect(histStaleResult.state.cleanse?.["session-1"]?.epoch).toBe(epochB);
+    expect(histStaleResult.state.cleanse?.["session-1"]?.sequence).toBe("1");
+    expect(histStaleResult.state.cleanse?.["session-1"]?.status).toBe("completed");
+  });
+
+  test("advisor_yielded: reduces notes, rejects earlier sequence in epoch A, accepts low sequence in new epoch B, merges notes deduplicated", () => {
+    const epochA = "ffffffff-1111-4111-8111-111111111111";
+    const epochB = "00000000-2222-4222-8222-222222222222";
+    let current = installSessionSnapshot(state(), snapshot());
+
+    const advisorEvent = (epoch: string, seq: string, timestamp: number, notes: Array<{ noteId: string; severity: 'blocker' | 'concern' | 'nit'; text: string; timestamp: number }>): CanonicalEvent => ({
+      sessionId: "session-1",
+      epoch,
+      sequence: seq,
+      timestamp,
+      type: "advisor_yielded",
+      notes,
+    });
+
+    // First event in epoch A
+    current = applyDirectoryEvent(current, advisorEvent(epochA, "10", 1000, [
+      { noteId: "note-1", severity: "blocker", text: "Missing return", timestamp: 1000 },
+    ])).state;
+
+    expect(current.advisor?.["session-1"]).toBeDefined();
+    expect(current.advisor?.["session-1"]?.epoch).toBe(epochA);
+    expect(current.advisor?.["session-1"]?.sequence).toBe("10");
+    expect(current.advisor?.["session-1"]?.notes).toHaveLength(1);
+    expect(current.advisor?.["session-1"]?.notes[0]?.text).toBe("Missing return");
+
+    // Stale sequence in epoch A is rejected
+    const staleResult = applyDirectoryEvent(current, advisorEvent(epochA, "5", 1050, [
+      { noteId: "note-stale", severity: "nit", text: "Stale note", timestamp: 1050 },
+    ]));
+    expect(staleResult.state.advisor?.["session-1"]?.sequence).toBe("10");
+    expect(staleResult.state.advisor?.["session-1"]?.notes).toHaveLength(1);
+
+    // Subsequent sequence in epoch A merges notes deduplicated by noteId and ordered by timestamp
+    current = applyDirectoryEvent(current, advisorEvent(epochA, "11", 1100, [
+      { noteId: "note-1", severity: "blocker", text: "Missing return updated", timestamp: 1000 },
+      { noteId: "note-2", severity: "concern", text: "Add timeout", timestamp: 1050 },
+    ])).state;
+    expect(current.advisor?.["session-1"]?.sequence).toBe("11");
+    expect(current.advisor?.["session-1"]?.notes).toHaveLength(2);
+    expect(current.advisor?.["session-1"]?.notes[0]?.noteId).toBe("note-1");
+    expect(current.advisor?.["session-1"]?.notes[1]?.noteId).toBe("note-2");
+
+    // New epoch B (opaque UUID): low sequence "1" is accepted
+    current = applyDirectoryEvent(current, advisorEvent(epochB, "1", 2000, [
+      { noteId: "note-b-1", severity: "concern", text: "New epoch note", timestamp: 2000 },
+    ])).state;
+    expect(current.advisor?.["session-1"]?.epoch).toBe(epochB);
+    expect(current.advisor?.["session-1"]?.sequence).toBe("1");
+    expect(current.advisor?.["session-1"]?.notes).toHaveLength(1);
+    expect(current.advisor?.["session-1"]?.notes[0]?.noteId).toBe("note-b-1");
+
+    // Historical stale event from epoch A (timestamp 1200 < 2000) is rejected
+    const histStale = applyDirectoryEvent(current, advisorEvent(epochA, "99", 1200, [
+      { noteId: "note-old", severity: "nit", text: "Historical note", timestamp: 1200 },
+    ]));
+    expect(histStale.state.advisor?.["session-1"]?.epoch).toBe(epochB);
+    expect(histStale.state.advisor?.["session-1"]?.sequence).toBe("1");
+    expect(histStale.state.advisor?.["session-1"]?.notes[0]?.noteId).toBe("note-b-1");
+
+    // clearSessionAdvisor removes advisor notes for that session
+    current = clearSessionAdvisor(current, "session-1");
+    expect(current.advisor?.["session-1"]).toBeUndefined();
+  });
+
+  test("session.deleted cleans up cleanse and advisor state for deleted sessions", () => {
+    let current = installSessionSnapshot(state(), snapshot());
+    current = {
+      ...current,
+      cleanse: {
+        "session-1": {
+          sessionId: "session-1",
+          epoch: "epoch-1",
+          sequence: "1",
+          status: "completed",
+          activeCheckers: [],
+          completedCheckers: [],
+          repairedFiles: [],
+          updatedAt: 1000,
+        },
+      },
+      advisor: {
+        "session-1": {
+          sessionId: "session-1",
+          epoch: "epoch-1",
+          sequence: "1",
+          notes: [{ noteId: "n1", severity: "nit", text: "test", timestamp: 1000 }],
+          updatedAt: 1000,
+        },
+      },
+    };
+
+    const deleted = applyDirectoryEvent(current, {
+      sessionId: "session-1",
+      epoch: "epoch-1",
+      sequence: "1",
+      timestamp: 2000,
+      type: "session.deleted",
+      deletedSessionIds: ["session-1"],
+    });
+
+    expect(deleted.state.cleanse?.["session-1"]).toBeUndefined();
+    expect(deleted.state.advisor?.["session-1"]).toBeUndefined();
   });
 })

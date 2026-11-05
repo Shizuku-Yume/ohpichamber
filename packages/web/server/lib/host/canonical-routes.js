@@ -99,6 +99,8 @@ const AGENT_ROUTES = [
   { method: 'GET', pattern: /^\/shell\/jobs$/, response: C.ShellSnapshotSchema, shellObservation: true },
   { method: 'GET', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/shell\/jobs\/[^/]+\/output$/, response: C.ShellOutputSchema, query: ['epoch', 'workerGeneration', 'cursor', 'tailBytes'], shellObservation: true },
   { method: 'POST', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/shell\/jobs\/[^/]+\/stop$/, request: C.ShellStopRequestSchema, response: C.ShellStopResultSchema, shellObservation: true },
+  { method: 'GET', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/shell\/jobs\/[^/]+\/stream$/, response: C.ShellStreamResponseSchema, query: ['epoch', 'workerGeneration', 'streamId', 'from'], shellObservation: true },
+  { method: 'POST', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/shell\/jobs\/[^/]+\/stdin$/, request: C.ShellStdinRequestSchema, response: C.ShellStdinResultSchema, shellObservation: true },
 ];
 
 function problem(res, status, code, detail) {

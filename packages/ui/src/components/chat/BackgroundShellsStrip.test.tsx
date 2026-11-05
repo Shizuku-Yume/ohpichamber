@@ -39,16 +39,22 @@ describe('BackgroundShellsStrip', () => {
   let host: HTMLDivElement;
   let root: Root;
 
+  const descriptors = new Map<string, PropertyDescriptor | undefined>();
+
   beforeEach(async () => {
     windowInstance = new Window();
-    Object.assign(globalThis, {
+    const globals = {
       window: windowInstance,
       document: windowInstance.document,
       HTMLElement: windowInstance.HTMLElement,
       Element: windowInstance.Element,
       Node: windowInstance.Node,
       IS_REACT_ACT_ENVIRONMENT: true,
-    });
+    };
+    for (const [key, value] of Object.entries(globals)) {
+      descriptors.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
+      Object.defineProperty(globalThis, key, { value, configurable: true, writable: true });
+    }
     resetBackgroundShells();
     useGlobalSessionsStore.setState({
       entityById: new Map([
@@ -71,7 +77,11 @@ describe('BackgroundShellsStrip', () => {
 
   afterEach(async () => {
     await act(async () => root.unmount());
-    await windowInstance.happyDOM.close();
+    host.remove();
+    for (const [key, descriptor] of descriptors) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else Reflect.deleteProperty(globalThis, key);
+    }
     resetBackgroundShells();
   });
 

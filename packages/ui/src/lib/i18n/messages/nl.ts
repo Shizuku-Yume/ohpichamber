@@ -1,3 +1,5 @@
+import { m4LaneDI18n } from './m4-lane-d.i18n';
+import { subagentHudI18n } from './subagent-hud.i18n';
 import { settingsDict } from './nl.settings';
 import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { referencePickerI18n } from './reference-picker.i18n';
@@ -38,7 +40,10 @@ import { sessionReferencesI18n } from './session-references.i18n';
 import { guestStatusViewI18n } from './guest-status-view.i18n';
 import { ompSettingsI18n } from './omp-settings.i18n';
 import { workerRunsI18n } from './worker-runs.i18n';
+import { btwI18n } from './btw.i18n';
 export const dict = {
+  ...btwI18n.nl,
+  ...subagentHudI18n['nl'],
   ...ompSettingsI18n.nl,
   ...settingsDict,
   ...linearIssuePickerI18n.nl,
@@ -275,6 +280,7 @@ export const dict = {
   "settings.view.nav.group.general": "OpenChamber",
   "settings.view.nav.group.projects": "Werkruimte",
   "settings.view.nav.group.opencode": "OMP",
+  "settings.view.nav.group.agent": "OMP",
   "settings.view.nav.group.content": "Bibliotheek",
   "settings.page.projects.title": "Projecten",
   "settings.page.remoteInstances.title": "Remote-instanties",
@@ -283,7 +289,7 @@ export const dict = {
   "settings.page.agents.title": "Agents",
   "settings.page.commands.title": "Opdrachten",
   "settings.page.mcp.title": "MCP",
-  "settings.page.plugins.title": "Plugins",
+  "settings.page.plugins.title": "OMP-plugins",
   "settings.page.skills.title": "Skills",
   "settings.page.skillsCatalog.title": "Skillscatalogus",
   "settings.page.git.title": "Git",
@@ -305,8 +311,8 @@ export const dict = {
   "settings.page.tunnel.title": "Externe tunnel",
   "settings.page.tunnel.description": "Stel deze instantie beschikbaar via een remote tunnel.",
   "settings.page.about.title": "Over",
-  "settings.page.snippets.title": "Fragmenten",
-  "settings.snippets.sidebar.title": "Fragmenten",
+  "settings.page.snippets.title": "Prompt-sjablonen",
+  "settings.snippets.sidebar.title": "Prompt-sjablonen",
   "settings.snippets.sidebar.total": "Totaal: {count}",
   "settings.snippets.sidebar.actions.create": "Fragment maken",
   "settings.snippets.sidebar.actions.more": "Meer acties voor {name}",
@@ -2877,7 +2883,7 @@ export const dict = {
   "settings.extensions.identity.loadFailed": "Kan Git-identiteiten van deze instantie niet laden. De globale identiteit is nog beschikbaar.",
   "settings.extensions.request.noResponse": "Er is geen HTTP-antwoord ontvangen. Controleer de verbinding met deze instantie.",
   "settings.extensions.request.invalidResponse": "Onverwacht serverantwoord (HTTP {status}).",
-  "settings.page.extensions.title": "Extensies",
+  "settings.page.extensions.title": "Gast-extensies",
   "settings.page.extensions.description": "Extensies uit een map, ZIP of git-URL — panelen, toevoegmenu’s, integraties en lokale diensten. Geen OpenCode-plugins.",
   "settings.extensions.section.installed": "Geïnstalleerd",
   "settings.extensions.empty": "Geen extensies geladen.",
@@ -9150,4 +9156,6 @@ export const dict = {
   'chat.planReview.sendFeedback': "Feedback verzenden",
   'chat.planReview.reject': "Afwijzen",
   ...workerRunsI18n.nl,
+
+  ...m4LaneDI18n.nl,
 };

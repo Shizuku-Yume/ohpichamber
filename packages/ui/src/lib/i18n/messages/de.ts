@@ -1,3 +1,5 @@
+import { m4LaneDI18n } from './m4-lane-d.i18n';
+import { subagentHudI18n } from './subagent-hud.i18n';
 import { settingsDict } from './de.settings';
 import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { referencePickerI18n } from './reference-picker.i18n';
@@ -38,7 +40,10 @@ import { sessionReferencesI18n } from './session-references.i18n';
 import { guestStatusViewI18n } from './guest-status-view.i18n';
 import { ompSettingsI18n } from './omp-settings.i18n';
 import { workerRunsI18n } from './worker-runs.i18n';
+import { btwI18n } from './btw.i18n';
 export const dict = {
+  ...btwI18n.de,
+  ...subagentHudI18n['de'],
   ...ompSettingsI18n.de,
   ...settingsDict,
   ...linearIssuePickerI18n.de,
@@ -209,7 +214,7 @@ export const dict = {
   "settings.page.agents.title": "Agenten",
   "settings.page.commands.title": "Befehle",
   "settings.page.mcp.title": "MCP",
-  "settings.page.plugins.title": "Plugins",
+  "settings.page.plugins.title": "OMP-Plugins",
   "settings.page.skills.title": "Skills",
   "settings.page.skillsCatalog.title": "Skills Catalog",
   "settings.page.git.title": "Git",
@@ -222,8 +227,8 @@ export const dict = {
   "settings.page.voice.title": "Sprache",
   "settings.page.tunnel.title": "Remote-Tunnel",
   "settings.page.about.title": "Über",
-  "settings.page.snippets.title": "Snippets",
-  "settings.snippets.sidebar.title": "Snippets",
+  "settings.page.snippets.title": "Prompt-Vorlagen",
+  "settings.snippets.sidebar.title": "Prompt-Vorlagen",
   "settings.snippets.sidebar.total": "Gesamt: {count}",
   "settings.snippets.sidebar.actions.create": "Snippet erstellen",
   "settings.snippets.sidebar.actions.more": "Weitere Aktionen für {name}",
@@ -2564,6 +2569,7 @@ export const dict = {
   "settings.view.nav.group.general": "OpenChamber",
   "settings.view.nav.group.projects": "Arbeitsbereich",
   "settings.view.nav.group.opencode": "OMP",
+  "settings.view.nav.group.agent": "OMP",
   "settings.view.nav.group.content": "Bibliothek",
   "settings.page.appearance.description": "Passe an, wie OpenChamber aussieht und sich anfühlt.",
   "settings.page.chat.description": "Konfiguriere, wie Nachrichten und Werkzeuge angezeigt werden.",
@@ -2814,7 +2820,7 @@ export const dict = {
   "settings.extensions.identity.loadFailed": "Git-Identitäten dieser Instanz konnten nicht geladen werden. Die globale Identität ist weiterhin verfügbar.",
   "settings.extensions.request.noResponse": "Keine HTTP-Antwort erhalten. Prüfe die Verbindung zu dieser Instanz.",
   "settings.extensions.request.invalidResponse": "Unerwartete Serverantwort (HTTP {status}).",
-  "settings.page.extensions.title": "Erweiterungen",
+  "settings.page.extensions.title": "Gast-Erweiterungen",
   "settings.page.extensions.description": "Erweiterungen aus Ordner, ZIP oder Git-URL — Panels, Anheften-Menüs, Integrationen und lokale Dienste. Keine OpenCode-Plugins.",
   "settings.extensions.section.installed": "Installiert",
   "settings.extensions.empty": "Keine Erweiterungen geladen.",
@@ -9150,4 +9156,6 @@ export const dict = {
   'chat.planReview.sendFeedback': "Feedback senden",
   'chat.planReview.reject': "Ablehnen",
   ...workerRunsI18n.de,
+
+  ...m4LaneDI18n.de,
 };

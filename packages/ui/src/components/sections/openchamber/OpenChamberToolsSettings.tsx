@@ -4,7 +4,6 @@ import { Icon } from '@/components/icon/Icon';
 import type { IconName } from '@/components/icon/icons';
 import {
   SettingsSection,
-  SettingsCheckboxRow,
 } from '@/components/sections/shared/SettingsSection';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
 import { Switch } from '@/components/ui/switch';
@@ -88,8 +87,6 @@ export const OpenChamberToolsSettings: React.FC = () => {
   const setAgentMemoryToolEnabled = useUIStore((state) => state.setAgentMemoryToolEnabled);
   const agentNotifyToolEnabled = useUIStore((state) => state.agentNotifyToolEnabled);
   const setAgentNotifyToolEnabled = useUIStore((state) => state.setAgentNotifyToolEnabled);
-  const agentToolsCodeMode = useUIStore((state) => state.agentToolsCodeMode);
-  const setAgentToolsCodeMode = useUIStore((state) => state.setAgentToolsCodeMode);
 
   const handleAgentControlToolChange = React.useCallback((enabled: boolean) => {
     setAgentControlToolEnabled(enabled);
@@ -106,10 +103,6 @@ export const OpenChamberToolsSettings: React.FC = () => {
     void updateDesktopSettings({ agentNotifyToolEnabled: enabled });
   }, [setAgentNotifyToolEnabled]);
 
-  const handleAgentToolsCodeModeChange = React.useCallback((enabled: boolean) => {
-    setAgentToolsCodeMode(enabled);
-    void updateDesktopSettings({ agentToolsCodeMode: enabled });
-  }, [setAgentToolsCodeMode]);
 
   // The dropdown lists installed extensions, so the catalog has to be loaded
   // here too: this page can be the first thing opened after a fresh start.
@@ -237,15 +230,6 @@ export const OpenChamberToolsSettings: React.FC = () => {
         ) : null}
       </div>
 
-      <SettingsCheckboxRow
-        className="mt-4"
-        settingsItem="sessions.agent-tools-code-mode"
-        checked={agentToolsCodeMode}
-        onChange={handleAgentToolsCodeModeChange}
-        label={t('settings.openchamber.tools.field.agentToolsCodeMode')}
-        ariaLabel={t('settings.openchamber.tools.field.agentToolsCodeModeAria')}
-        info={t('settings.openchamber.tools.field.agentToolsCodeModeInfo')}
-      />
     </SettingsSection>
   );
 };

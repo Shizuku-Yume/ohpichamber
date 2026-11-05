@@ -763,3 +763,11 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** no
 - **Revisit when:** An individual restored frontend control conflicts directly with an authoritative OMP runtime state owner.
 - **Effort:** m6-audit-and-polish
+## 2026-11-06 - Waive residual environmental limitations and close M4 orchestration effort
+
+- **Decided:** Accept maintainer directive to close the M4 orchestration effort and merge `m4-orchestration/integration` into `main`, waiving the three uncertified environmental limitations as accepted technical debt: (1) Linear OAuth external account configuration unavailable, (2) live worktree sessions unsupported/uncertified on the OMP runtime, and (3) Electron Linux compositor `capturePage` / snapshot timeout under virtual display while Browser Control lease, webview mounting, and direct DOM JavaScript execution are fully verified. Retain warning banners in product documentation for notifications and sessions-in-work, and track follow-ups in `technical-debt.md` without fabricating runtime passes.
+- **Instead of:** Blocking M4 milestone closeout and `main` merge indefinitely until external Linear OAuth credentials, worktree session architectural support, and Linux GPU compositor capture pipelines are provisioned or refactored.
+- **Because:** The maintainer explicitly reviewed the comprehensive verification evidence (root test gate passing 7/7 suites, full unit/integration test coverage, real-provider smoke verification across all 13 reachable M4 feature areas, and documentation truth alignment) and directed flow-close and merge to `main` with explicit waiver of these three external/environmental gaps as residual technical debt.
+- **Decided by:** user
+- **Revisit when:** External Linear OAuth credentials are provisioned, worktree session isolation is designed and implemented in a subsequent milestone, or Electron Linux headless compositor capture is resolved.
+- **Effort:** m4-orchestration

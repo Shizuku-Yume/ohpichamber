@@ -37,7 +37,6 @@ const CHAT_ROUTES = [
   /^\/api\/openchamber\/sessions\/([^/]+)\/.+$/i,
   /^\/api\/message-queue\/sessions\/([^/]+)(\/.*)?$/i,
   /^\/api\/goals\/objective\/([^/]+)$/i,
-  /^\/api\/permission-auto-accept\/sessions\/([^/]+)$/i,
 ];
 const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const SESSION_DELETE = /^\/api\/(?:agent\/v1\/sessions|session)\/[^/]+$/i;

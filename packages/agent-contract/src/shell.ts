@@ -27,6 +27,118 @@ export const ShellTerminationSchema = z.discriminatedUnion('reason', [
 ]);
 export type ShellTermination = z.infer<typeof ShellTerminationSchema>;
 
+export const PipeStreamSummarySchema = z.strictObject({
+  id: z.number().int().positive(),
+  producer: z.string(),
+  consumer: z.string(),
+  total: z.number().int().nonnegative(),
+  open: z.boolean(),
+});
+export type PipeStreamSummary = z.infer<typeof PipeStreamSummarySchema>;
+
+export const JobWidgetToneSchema = z.enum(['success', 'error', 'warning', 'info', 'muted', 'accent']);
+export type JobWidgetTone = z.infer<typeof JobWidgetToneSchema>;
+
+export const JobWidgetTrendSchema = z.strictObject({
+  text: z.string(),
+  tone: z.enum(['success', 'error', 'muted']),
+});
+export type JobWidgetTrend = z.infer<typeof JobWidgetTrendSchema>;
+
+export const JobWidgetHeadlineSchema = z.strictObject({
+  text: z.string(),
+  label: z.string().optional(),
+  trend: JobWidgetTrendSchema.optional(),
+});
+export type JobWidgetHeadline = z.infer<typeof JobWidgetHeadlineSchema>;
+
+export const JobWidgetSparkBlockSchema = z.strictObject({
+  kind: z.literal('spark'),
+  label: z.string(),
+  values: z.array(z.number()),
+  min: z.number(),
+  max: z.number(),
+  marks: z.array(z.strictObject({
+    value: z.number(),
+    label: z.string(),
+    tone: JobWidgetToneSchema.optional(),
+  })).optional(),
+  last: z.string(),
+  tips: z.array(z.string()).optional(),
+  tone: JobWidgetToneSchema.optional(),
+});
+export type JobWidgetSparkBlock = z.infer<typeof JobWidgetSparkBlockSchema>;
+
+export const JobWidgetBarsBlockSchema = z.strictObject({
+  kind: z.literal('bars'),
+  label: z.string(),
+  items: z.array(z.strictObject({
+    label: z.string(),
+    value: z.number(),
+    text: z.string(),
+    tone: JobWidgetToneSchema.optional(),
+  })),
+  max: z.number(),
+});
+export type JobWidgetBarsBlock = z.infer<typeof JobWidgetBarsBlockSchema>;
+
+export const JobWidgetMeterBlockSchema = z.strictObject({
+  kind: z.literal('meter'),
+  label: z.string(),
+  value: z.number(),
+  text: z.string(),
+  tone: JobWidgetToneSchema.optional(),
+});
+export type JobWidgetMeterBlock = z.infer<typeof JobWidgetMeterBlockSchema>;
+
+export const JobWidgetStatBlockSchema = z.strictObject({
+  kind: z.literal('stat'),
+  items: z.array(z.strictObject({
+    label: z.string(),
+    text: z.string(),
+    tone: JobWidgetToneSchema.optional(),
+    trend: JobWidgetTrendSchema.optional(),
+  })),
+});
+export type JobWidgetStatBlock = z.infer<typeof JobWidgetStatBlockSchema>;
+
+export const JobWidgetGridBlockSchema = z.strictObject({
+  kind: z.literal('grid'),
+  label: z.string(),
+  items: z.array(z.strictObject({
+    label: z.string(),
+    text: z.string(),
+    tone: JobWidgetToneSchema,
+  })),
+});
+export type JobWidgetGridBlock = z.infer<typeof JobWidgetGridBlockSchema>;
+
+export const JobWidgetTextBlockSchema = z.strictObject({
+  kind: z.literal('text'),
+  text: z.string(),
+});
+export type JobWidgetTextBlock = z.infer<typeof JobWidgetTextBlockSchema>;
+
+export const JobWidgetBlockSchema = z.discriminatedUnion('kind', [
+  JobWidgetSparkBlockSchema,
+  JobWidgetBarsBlockSchema,
+  JobWidgetMeterBlockSchema,
+  JobWidgetStatBlockSchema,
+  JobWidgetGridBlockSchema,
+  JobWidgetTextBlockSchema,
+]);
+export type JobWidgetBlock = z.infer<typeof JobWidgetBlockSchema>;
+
+export const JobWidgetViewSchema = z.strictObject({
+  title: z.string(),
+  headline: JobWidgetHeadlineSchema.optional(),
+  stage: z.string().optional(),
+  blocks: z.array(JobWidgetBlockSchema),
+  state: z.enum(['authoring', 'live', 'fallback']),
+  updatedAt: TimestampSchema,
+});
+export type JobWidgetView = z.infer<typeof JobWidgetViewSchema>;
+
 const ShellObservationFields = {
   ...ShellJobIdentityFields,
   workspaceId: EntityIdSchema,
@@ -35,14 +147,24 @@ const ShellObservationFields = {
   background: z.boolean(),
   startedAt: TimestampSchema,
   outputCursor: CounterSchema,
+  intent: z.string().optional(),
+  caption: z.string().optional(),
+  pids: z.array(z.number().int()).optional(),
+  streams: z.array(PipeStreamSummarySchema).optional(),
+  widget: JobWidgetViewSchema.optional(),
+  serviceName: z.string().optional(),
+  serviceMode: z.enum(['persist', 'session', 'detached']).optional(),
+  canReceiveStdin: z.boolean().optional(),
 };
 export const RunningShellSchema = z.strictObject({ ...ShellObservationFields, status: z.literal('running') });
+export type RunningShell = z.infer<typeof RunningShellSchema>;
 const EndedShellSchema = z.strictObject({
   ...ShellObservationFields,
   status: z.literal('ended'),
   endedAt: TimestampSchema,
   termination: ShellTerminationSchema,
 }).refine((job) => job.endedAt >= job.startedAt, 'Shell termination follows its start');
+export type EndedShell = z.infer<typeof EndedShellSchema>;
 
 export const ShellJobSchema = z.discriminatedUnion('status', [RunningShellSchema, EndedShellSchema]);
 export type ShellJob = z.infer<typeof ShellJobSchema>;
@@ -113,3 +235,32 @@ export const ShellStopResultSchema = z.strictObject({ job: EndedShellSchema }).r
   (result) => result.job.termination.reason === 'stopped', 'A successful stop acknowledges actual terminal cancellation',
 );
 export type ShellStopResult = z.infer<typeof ShellStopResultSchema>;
+
+export const ShellStreamRequestSchema = z.strictObject({
+  job: ShellJobIdentitySchema,
+  streamId: z.number().int().positive(),
+  from: z.number().int().nonnegative().optional(),
+});
+export type ShellStreamRequest = z.infer<typeof ShellStreamRequestSchema>;
+
+export const ShellStreamResponseSchema = z.strictObject({
+  job: ShellJobIdentitySchema,
+  streamId: z.number().int().positive(),
+  start: z.number().int().nonnegative(),
+  end: z.number().int().nonnegative(),
+  chunk: z.string(),
+  open: z.boolean(),
+});
+export type ShellStreamResponse = z.infer<typeof ShellStreamResponseSchema>;
+
+export const ShellStdinRequestSchema = z.strictObject({
+  job: ShellJobIdentitySchema,
+  input: z.string(),
+});
+export type ShellStdinRequest = z.infer<typeof ShellStdinRequestSchema>;
+
+export const ShellStdinResultSchema = z.strictObject({
+  job: ShellJobIdentitySchema,
+  writtenBytes: z.number().int().nonnegative(),
+});
+export type ShellStdinResult = z.infer<typeof ShellStdinResultSchema>;

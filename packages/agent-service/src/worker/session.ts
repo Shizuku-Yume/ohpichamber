@@ -1,27 +1,47 @@
-import { readFile, realpath } from 'node:fs/promises';
-import { isAbsolute, relative, sep } from 'node:path';
+import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
+import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { isProbablyBinary } from '@oh-my-pi/pi-utils';
 import { createAgentSession, type ExtensionFactory } from '@oh-my-pi/pi-coding-agent/sdk';
 import { EventBus } from '@oh-my-pi/pi-coding-agent/utils/event-bus';
-import { TASK_SUBAGENT_LIFECYCLE_CHANNEL, type SubagentLifecyclePayload } from '@oh-my-pi/pi-coding-agent/task';
+import { TASK_SUBAGENT_LIFECYCLE_CHANNEL, TASK_SUBAGENT_PROGRESS_CHANNEL, TASK_SUBAGENT_EVENT_CHANNEL, type SubagentLifecyclePayload, type SubagentProgressPayload, type SubagentEventPayload } from '@oh-my-pi/pi-coding-agent/task';
+import type { CompletedRewindState } from '@oh-my-pi/pi-coding-agent/tools/checkpoint';
+import { autosaveApprovedPlan, isPlanAutosaveEnabled } from '@oh-my-pi/pi-coding-agent/plan-mode/plan-autosave';
+import type { AssistantMessage, Model } from '@oh-my-pi/pi-ai';
+import { AgentLifecycleManager } from '@oh-my-pi/pi-coding-agent/registry/agent-lifecycle';
+import { USER_INTERRUPT_LABEL } from '@oh-my-pi/pi-coding-agent/session/messages';
 import type { AgentMessage } from '@oh-my-pi/pi-agent-core';
 import type { AgentSession } from '@oh-my-pi/pi-coding-agent/session/agent-session';
 import type { PromptOptions } from '@oh-my-pi/pi-coding-agent/session/agent-session-types';
 import type { AuthStorage } from '@oh-my-pi/pi-coding-agent/session/auth-storage';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import { AgentRegistry } from '@oh-my-pi/pi-coding-agent/registry/agent-registry';
+import { JobWidgets } from '@oh-my-pi/pi-coding-agent/job-widgets/registry';
+import { createModelJobCaptionWriter } from '@oh-my-pi/pi-coding-agent/job-widgets/caption';
+import { listServicesTolerant, sendService, serviceLogs, stopService } from '@oh-my-pi/pi-coding-agent/launch/services';
+import { cfgAsyncWidgets } from '@oh-my-pi/pi-coding-agent/tools/settings';
+import type { ToolSession } from '@oh-my-pi/pi-coding-agent/tools';
 import { initializeExtensions } from '@oh-my-pi/pi-coding-agent/modes/runtime-init';
 import { executeAcpBuiltinSlashCommand, isAllowedBuiltinCommand, isReadOnlyBuiltinCommand, parseSlashCommand } from './builtin-commands.ts';
 import type { SlashCommandRuntime } from '@oh-my-pi/pi-coding-agent/slash-commands/types';
 import { RpcBtwController } from '@oh-my-pi/pi-coding-agent/modes/rpc/rpc-btw';
-import { JsonObjectSchema, MCPOAuthPublicConfigurationSchema, SessionBranchRequestSchema, type Agent, type CapturedSendOptions, type JsonObject, type Run, type RunOrigin, type SessionBranchRequest } from '@openchamber/agent-contract';
+import { MAGIC_KEYWORDS, type MagicKeywordContext } from '@oh-my-pi/pi-coding-agent/modes/magic-keywords';
+import { containsMagicKeyword } from '@oh-my-pi/pi-tui/prompt/magic-keywords';
+import { parseTurnBudget } from '@oh-my-pi/pi-coding-agent/modes/turn-budget';
+import { parseConfiguredThinkingLevel } from '@oh-my-pi/pi-tui/thinking';
+import { JsonObjectSchema, MCPOAuthPublicConfigurationSchema, SessionBranchRequestSchema, type AdvisorNote, type Agent, type CapturedSendOptions, type JsonObject, type LoopState, type Run, type RunOrigin, type SessionBranchRequest, type Subagent } from '@openchamber/agent-contract';
+import { parseLoopArgs } from '@oh-my-pi/pi-coding-agent/modes/loop-limit';
+import { evaluateLoopCondition, describeLoopCondition } from '@oh-my-pi/pi-coding-agent/modes/loop-condition';
+type LoopConditionConfig = { command: string; until: boolean };
+import { parseGeneratedRule, sanitizeRuleName } from '@oh-my-pi/pi-coding-agent/modes/controllers/omfg-rule';
+import { runCleanse, type CleanseRunUi } from '@oh-my-pi/pi-coding-agent/cleanse/index';
+import { resolveSeanceSource } from '@oh-my-pi/pi-coding-agent/task/seance';
 import type { WorkerBootstrapMessage, WorkerInteraction, WorkerOperation, WorkerOperationResult } from '../protocol.ts';
 import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
 import { WorkerInteraction as NativeInteraction } from './interaction.ts';
 import { WorkerModeController } from './mode.ts';
-import { BRANCH_TYPE, rememberPrivateRoots, resolveCanonicalMessage, selectedBranchRevert, WorkerProjection, type BranchSelection } from './projection.ts';
+import { BRANCH_TYPE, nativePrivateRootContext, rememberPrivateRoots, resolveCanonicalMessage, selectedBranchRevert, WorkerProjection, type BranchSelection } from './projection.ts';
 import { WorkerCatalogs } from './catalogs.ts';
 import { WorkerMcp, readNativeMcpConfigurationIfPresent } from './mcp.ts';
 import { NativeMcpCredentials } from './mcp-credentials.ts';
@@ -56,9 +76,10 @@ type PromptOperation = Extract<WorkerOperation, { type: 'prompt' | 'steer' | 'fo
 type PreparedPrompt = { text: string; options: PromptOptions; context: Parameters<SessionManager['appendMessage']>[0][] };
 type NativeAdmission = { skillsAvailable: boolean; profile?: Agent | null };
 
+
 export class WorkerSession {
   private readonly modeController: WorkerModeController;
-  private readonly projection: WorkerProjection;
+  private projection: WorkerProjection;
   private readonly unsubscribe: () => void;
   private readonly operations = new Set<Promise<WorkerOperationResult>>();
   private readonly defaultToolNames: string[];
@@ -66,7 +87,7 @@ export class WorkerSession {
   private readonly defaultRegisteredNames: string[];
   private readonly queuedContext = new WeakMap<AgentMessage, PreparedPrompt['context']>();
   private readonly nativeQueuedPreparation: AgentSession['agent']['prepareQueuedMessages'];
-  private readonly btw: RpcBtwController;
+  readonly btw: RpcBtwController;
   private binding: Promise<void> = Promise.resolve();
   private readonly titleUnsubscribe: () => void;
   private pendingTitleInput: string | undefined;
@@ -84,12 +105,26 @@ export class WorkerSession {
   private planRevision = 0;
   private planReviewTask: Promise<void> | undefined;
   private publishedContinuationPending = false;
+  private readonly liveSubagents = new Map<string, Subagent>();
+  private readonly toolCallToSubagentId = new Map<string, string>();
+  get sessionId(): string { return this._sessionId; }
+  get sessionFile(): string { return this._sessionFile; }
+  get completedRewindState(): CompletedRewindState | undefined {
+    return this.session.getLastCompletedRewind();
+  }
+  private loopState: LoopState = { active: false, iteration: 0 };
+  private loopCondition?: LoopConditionConfig;
+  private loopDurationMs?: number;
+  private loopStartedAtMs?: number;
+  private advisorActive = false;
+  private pendingAdvisorNotes: AdvisorNote[] = [];
+  private readonly activeTanSessions = new Map<string, { session: AgentSession; abort: () => Promise<void>; dispose: () => Promise<void> }>();
   private constructor(
     readonly session: AgentSession,
     private readonly authStorage: AuthStorage,
-    readonly sessionFile: string,
+    private _sessionFile: string,
     private readonly publish: (inputs: ProjectionInput[]) => void,
-    private readonly sessionId: string,
+    private _sessionId: string,
     private readonly cwd: string,
     private readonly onFatal: () => void,
     private readonly interaction: NativeInteraction,
@@ -105,8 +140,14 @@ export class WorkerSession {
     private readonly webSearch: NativeWebSearch,
     private readonly permissionBridge: NativePermissionBridge,
   ) {
-    this.modeController = new WorkerModeController(session, title => this.proposePlan(title), start => this.startWorkerRun('goal', start), () => this.publishContinuationPending());
-    this.projection = new WorkerProjection(session.sessionManager, sessionId);
+    this.modeController = new WorkerModeController(
+      session,
+      title => this.proposePlan(title),
+      start => this.startWorkerRun('goal', start),
+      () => this.publishContinuationPending(),
+      mode => this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', mode } }]),
+    );
+    this.projection = new WorkerProjection(session.sessionManager, this._sessionId);
     this.defaultToolNames = session.getActiveToolNames();
     this.defaultMountedNames = session.getMountedXdevToolNames();
     this.defaultRegisteredNames = session.getAllToolNames();
@@ -125,8 +166,15 @@ export class WorkerSession {
       if (title) this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', title } }]);
     });
     this.subagentEventBus.on(TASK_SUBAGENT_LIFECYCLE_CHANNEL, data => {
-      // SAFETY: The worker publishes this channel only with SubagentLifecyclePayload.
-      this.onSubagent(data as SubagentLifecyclePayload);
+      const payload = data as SubagentLifecyclePayload;
+      this.onSubagent(payload);
+      this.handleSubagentLifecycle(payload);
+    });
+    this.subagentEventBus.on(TASK_SUBAGENT_PROGRESS_CHANNEL, data => {
+      this.handleSubagentProgress(data as SubagentProgressPayload);
+    });
+    this.subagentEventBus.on(TASK_SUBAGENT_EVENT_CHANNEL, data => {
+      this.handleSubagentEvent(data as SubagentEventPayload);
     });
     session.agent.prepareQueuedMessages = async (messages, signal, ...rest) => {
       const nativePreparation = await this.nativeQueuedPreparation?.(messages, signal, ...(rest as [never]));
@@ -146,23 +194,106 @@ export class WorkerSession {
         },
       };
     };
-    this.unsubscribe = session.subscribe(event => {
-      try {
-        this.modeController.observe(event);
-        this.publishContinuationPending();
-        this.emit(this.projection.consume(event));
-        if (event.type === 'goal_updated' || event.type === 'agent_end') this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', mode: this.modeController.mode() } }]);
-        if (event.type === 'thinking_level_changed') {
-          const model = session.model;
-          this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', selection: {
-            model: model ? { providerId: model.provider, modelId: model.id } : null,
-            thinkingLevel: event.configured ?? event.thinkingLevel ?? null,
-          } } }]);
+    this.unsubscribe = session.subscribe(event => this.handleSessionEvent(event));
+  }
+
+  handleSessionEvent(event: Parameters<Parameters<AgentSession['subscribe']>[0]>[0]): void {
+    try {
+      this.modeController.observe(event);
+      this.publishContinuationPending();
+      this.emit(this.projection.consume(event));
+      if (event.type === 'goal_updated' || (event.type === 'agent_end' && !this.modeController.isTransitioning())) {
+        this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', mode: this.modeController.mode() } }]);
+      }
+      if (event.type === 'thinking_level_changed') {
+        const model = this.session.model;
+        this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', selection: {
+          model: model ? { providerId: model.provider, modelId: model.id } : null,
+          thinkingLevel: event.configured ?? event.thinkingLevel ?? null,
+        } } }]);
+      }
+      if (event.type === 'message_end' || event.type === 'turn_end' || event.type === 'agent_end') void this.bind().catch(() => this.fail());
+      if (event.type === 'agent_end') {
+        this.scheduleAutoTitle();
+        if (this.loopState.active) void this.handleLoopTurnEnd();
+      }
+      if (
+        (event.type === 'message_start' || event.type === 'message_end') &&
+        event.message.role === 'custom' &&
+        (event.message as { customType?: string }).customType === 'advisor'
+      ) {
+        const detailsNotes = (event.message as { details?: { notes?: Array<{ note?: string; text?: string; severity?: string; advisor?: string }> } }).details?.notes;
+        if (Array.isArray(detailsNotes)) {
+          for (const item of detailsNotes) {
+            const text = item.note ?? item.text ?? '';
+            if (text && !this.pendingAdvisorNotes.some(p => p.text === text)) {
+              this.pendingAdvisorNotes.push({
+                noteId: randomUUID(),
+                severity: ['blocker', 'concern', 'nit'].includes(item.severity ?? '') ? (item.severity as 'blocker' | 'concern' | 'nit') : 'concern',
+                text,
+                timestamp: Date.now(),
+                advisorName: item.advisor ?? 'advisor',
+              });
+            }
+          }
         }
-        if (event.type === 'message_end' || event.type === 'turn_end' || event.type === 'agent_end') void this.bind().catch(() => this.fail());
-        if (event.type === 'agent_end') this.scheduleAutoTitle();
-      } catch { this.fail(); }
-    });
+      }
+      if ((event as { type: string }).type === 'advisor_yielded') {
+        const incomingNotes: AdvisorNote[] = [];
+        const eventNotes = (event as { notes?: unknown }).notes;
+        if (Array.isArray(eventNotes)) {
+          for (const item of eventNotes) {
+            if (typeof item === 'object' && item !== null) {
+              const cast = item as { noteId?: string; severity?: string; text?: string; note?: string; timestamp?: number; advisorName?: string; advisor?: string };
+              incomingNotes.push({
+                noteId: cast.noteId ?? randomUUID(),
+                severity: ['blocker', 'concern', 'nit'].includes(cast.severity ?? '') ? (cast.severity as 'blocker' | 'concern' | 'nit') : 'concern',
+                text: cast.text ?? cast.note ?? '',
+                timestamp: cast.timestamp ?? Date.now(),
+                advisorName: cast.advisorName ?? cast.advisor ?? 'advisor',
+              });
+            }
+          }
+        }
+        const queued = [
+          ...this.session.agent.peekSteeringQueue(),
+          ...this.session.agent.peekFollowUpQueue(),
+        ];
+        for (const msg of queued) {
+          if (msg.role === 'custom' && (msg as { customType?: string }).customType === 'advisor') {
+            const detailsNotes = (msg as { details?: { notes?: Array<{ note?: string; text?: string; severity?: string; advisor?: string }> } }).details?.notes;
+            if (Array.isArray(detailsNotes)) {
+              for (const item of detailsNotes) {
+                incomingNotes.push({
+                  noteId: randomUUID(),
+                  severity: ['blocker', 'concern', 'nit'].includes(item.severity ?? '') ? (item.severity as 'blocker' | 'concern' | 'nit') : 'concern',
+                  text: item.note ?? item.text ?? '',
+                  timestamp: Date.now(),
+                  advisorName: item.advisor ?? 'advisor',
+                });
+              }
+            }
+          }
+        }
+        for (const n of incomingNotes) {
+          if (n.text && !this.pendingAdvisorNotes.some(p => p.text === n.text)) {
+            this.pendingAdvisorNotes.push(n);
+          }
+        }
+        if (this.pendingAdvisorNotes.length > 0) {
+          const notesToEmit = [...this.pendingAdvisorNotes];
+          this.pendingAdvisorNotes = [];
+          this.emit([{
+            timestamp: Date.now(),
+            transient: true,
+            event: {
+              type: 'advisor_yielded',
+              notes: notesToEmit,
+            },
+          }]);
+        }
+      }
+    } catch { this.fail(); }
   }
 
   static async open(input: WorkerBootstrapMessage, publish: (inputs: ProjectionInput[]) => void, onInteraction: (interaction: WorkerInteraction) => void, onFatal: () => void, hostAuthorize: WorkerAuthorize, invokeHostAction: WorkerHostInvoke, publishPolicy: (snapshot: HostNativePolicySnapshot) => void, onSubagent: (payload: SubagentLifecyclePayload) => void): Promise<WorkerSession> {
@@ -274,7 +405,8 @@ export class WorkerSession {
         cwd: input.cwd, agentDir: input.agentDirectory, sessionManager: manager, authStorage, modelRegistry, settings,
         initialModelRefreshStrategy: 'offline',
         autoTitle: false,
-        enableMCP: mcp !== undefined, mcpManager: mcp, enableLsp: false, disableExtensionDiscovery: true,
+        enableMCP: mcp !== undefined, mcpManager: mcp, disableExtensionDiscovery: true,
+        tuiTranscript: true,
         hasUI: true, interactivePrompts: true, subagentEventBus, extensions: [observer, createNativeBashPolicyExtension({ interaction, approval: bashPolicy.approval,
           authorize: (toolCallId, toolInput, approvalId) => authorizeTool('bash', toolInput, { toolCallId, approvalId }),
           nativeAuthorized: (toolCallId, toolInput) => permissionBridge.isNativeAuthorized('bash', toolInput, toolCallId),
@@ -316,11 +448,46 @@ export class WorkerSession {
       });
       const nativeOwnerId = nativeSession.getAgentId();
       if (!nativeSession.asyncJobManager || nativeOwnerId === undefined) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Native shell ownership is unavailable');
+      const captioner = createModelJobCaptionWriter({
+        sessionId: () => input.rootSessionId,
+        settings: nativeSession.settings,
+        modelRegistry,
+      });
+      const widgets = new JobWidgets({
+        captioner,
+        enabled: () => cfgAsyncWidgets.get(nativeSession.settings),
+      });
+      const toolSession: ToolSession = Object.assign(Object.create(nativeSession), {
+        cwd: input.cwd,
+        hasUI: true,
+        getSessionId: () => input.rootSessionId,
+        getAgentId: () => nativeOwnerId,
+        getSessionFile: () => manager?.getSessionFile() ?? undefined,
+        getSessionSpawns: () => { const file = manager?.getSessionFile(); return file ? file.replace(/\.jsonl$/, '') : null; },
+      });
       // Subscribe before readiness and prompt admission; factory creation starts no Bash jobs.
       shell = new WorkerShell({
         manager: nativeSession.asyncJobManager, nativeOwner: { agentId: nativeOwnerId, registry: AgentRegistry.global() },
         workspaceId: input.workspaceId, projectId: input.projectId, sessionId: input.rootSessionId,
         workerGeneration: input.workerGeneration, epoch: input.observationEpoch ?? randomUUID(), cwd: input.cwd,
+        widgets,
+        listServices: async () => {
+          const res = await listServicesTolerant(toolSession);
+          if (res.error) {
+            throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', `Daemon broker list failed: ${res.error}`);
+          }
+          return res.services.filter(d => d.owner === input.rootSessionId);
+        },
+        serviceLogs: async (name: string) => {
+          return serviceLogs(toolSession, name);
+        },
+        sendServiceInput: async (serviceName: string, inputData: string) => {
+          await sendService(toolSession, serviceName, inputData);
+        },
+        stopService: async (name: string) => {
+          await stopService(toolSession, name);
+        },
+        privateRoots: nativePrivateRootContext(manager),
       });
       const completion = new WorkerCompletion(modelRegistry, input.workspaceId, async (selection, controls) => {
         const selected = await catalogs.resolveSelection(selection, controls);
@@ -408,7 +575,7 @@ export class WorkerSession {
     this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', continuationPending: pending } }]);
   }
 
-  private emit(inputs: ProjectionInput[]): void { if (inputs.length !== 0) this.publish(inputs); }
+  private emit(inputs: ProjectionInput[]): void { if (!this.closed && inputs.length !== 0) this.publish(inputs); }
 
   private fail(): void {
     if (this.failed) return;
@@ -425,12 +592,186 @@ export class WorkerSession {
     });
     return this.binding;
   }
+  private handleSubagentLifecycle(payload: SubagentLifecyclePayload): void {
+    const existing = this.liveSubagents.get(payload.id);
+    const status: Subagent['status'] = payload.status === 'started' ? 'running'
+      : payload.status === 'completed' ? 'completed'
+      : payload.status === 'aborted' ? 'cancelled'
+      : 'failed';
+    let parentSubagentId: string | undefined = existing?.parentSubagentId;
+    let depth = existing?.depth ?? 0;
+    if (!parentSubagentId && payload.parentToolCallId) {
+      const parentId = this.toolCallToSubagentId.get(payload.parentToolCallId);
+      if (parentId && parentId !== payload.id) {
+        parentSubagentId = parentId;
+        const parent = this.liveSubagents.get(parentId);
+        depth = Math.min(8, (parent?.depth ?? 0) + 1);
+      }
+    }
+    const subagent: Subagent = {
+      subagentId: payload.id,
+      parentSessionId: this.sessionId,
+      childSessionId: payload.id,
+      toolCallId: payload.parentToolCallId ?? existing?.toolCallId,
+      role: payload.agent,
+      solutionSpace: existing?.solutionSpace,
+      status,
+      activeTool: existing?.activeTool,
+      tokens: existing?.tokens,
+      cost: existing?.cost,
+      turnCount: existing?.turnCount,
+      retryCountdown: existing?.retryCountdown,
+      depth,
+      parentSubagentId,
+      description: payload.description ?? existing?.description,
+      task: existing?.task,
+      lastIntent: existing?.lastIntent,
+      durationMs: existing?.durationMs,
+    };
+    this.liveSubagents.set(payload.id, subagent);
+    this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent: { ...subagent } } }]);
+  }
+
+  private handleSubagentProgress(payload: SubagentProgressPayload): void {
+    const p = payload.progress;
+    if (!p) return;
+    const existing = this.liveSubagents.get(p.id);
+    let parentSubagentId = existing?.parentSubagentId;
+    let depth = existing?.depth ?? 0;
+    if (!parentSubagentId && payload.parentToolCallId) {
+      const parentId = this.toolCallToSubagentId.get(payload.parentToolCallId);
+      if (parentId && parentId !== p.id) {
+        parentSubagentId = parentId;
+        const parent = this.liveSubagents.get(parentId);
+        depth = Math.min(8, (parent?.depth ?? 0) + 1);
+      }
+    }
+    let retryCountdown: number | undefined;
+    if (p.retryState) {
+      const remainingMs = Math.max(0, p.retryState.delayMs - (Date.now() - p.retryState.startedAtMs));
+      retryCountdown = Math.ceil(remainingMs / 1000);
+    }
+    const status: Subagent['status'] = p.status === 'completed' ? 'completed'
+      : p.status === 'aborted' ? 'cancelled'
+      : p.status === 'failed' ? 'failed'
+      : 'running';
+    const subagent: Subagent = {
+      subagentId: p.id,
+      parentSessionId: this.sessionId,
+      childSessionId: p.id,
+      toolCallId: payload.parentToolCallId ?? existing?.toolCallId,
+      role: p.agent || payload.agent,
+      solutionSpace: existing?.solutionSpace,
+      status,
+      activeTool: p.currentTool ?? existing?.activeTool,
+      tokens: p.tokens !== undefined && p.tokens >= 0 ? p.tokens : existing?.tokens,
+      cost: p.cost !== undefined && p.cost >= 0 ? p.cost : existing?.cost,
+      turnCount: p.toolCount ?? p.requests ?? existing?.turnCount,
+      retryCountdown,
+      depth,
+      parentSubagentId,
+      description: p.description ?? existing?.description,
+      task: p.task ?? payload.task ?? existing?.task,
+      lastIntent: p.lastIntent ?? existing?.lastIntent,
+      durationMs: p.durationMs ?? existing?.durationMs,
+    };
+    this.liveSubagents.set(p.id, subagent);
+    this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent: { ...subagent } } }]);
+  }
+
+  private handleSubagentEvent(payload: SubagentEventPayload): void {
+    const { id, event } = payload;
+    const existing = this.liveSubagents.get(id);
+    if (!existing) return;
+    let changed = false;
+    const updated: Subagent = { ...existing };
+    if (event.type === 'tool_execution_start') {
+      const toolEvent = event as { toolName?: string; toolCallId?: string };
+      if (toolEvent.toolName) {
+        updated.activeTool = toolEvent.toolName;
+        changed = true;
+      }
+      if (toolEvent.toolCallId) {
+        this.toolCallToSubagentId.set(toolEvent.toolCallId, id);
+      }
+    } else if (event.type === 'tool_execution_end') {
+      if (updated.activeTool) {
+        updated.activeTool = undefined;
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.liveSubagents.set(id, updated);
+      this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent: { ...updated } } }]);
+    }
+  }
+  private async handleLoopTurnEnd(): Promise<void> {
+    if (!this.loopState.active) return;
+    if (this.loopState.maxIterations && this.loopState.iteration >= this.loopState.maxIterations) {
+      this.loopState = { ...this.loopState, active: false };
+      this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', loop: this.loopState } }]);
+      return;
+    }
+    if (this.loopDurationMs && this.loopStartedAtMs && (Date.now() - this.loopStartedAtMs >= this.loopDurationMs)) {
+      this.loopState = { ...this.loopState, active: false };
+      this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', loop: this.loopState } }]);
+      return;
+    }
+    if (this.loopCondition) {
+      const verdict = await evaluateLoopCondition(this.loopCondition, {
+        cwd: this.cwd,
+        timeoutMs: 30000,
+        sessionId: this.sessionId,
+      });
+      if (verdict.kind === 'halt' || verdict.kind === 'error') {
+        this.loopState = { ...this.loopState, active: false };
+        this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', loop: this.loopState } }]);
+        return;
+      }
+    }
+    this.loopState = { ...this.loopState, iteration: this.loopState.iteration + 1 };
+    this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', loop: this.loopState } }]);
+    if (this.loopState.prompt) {
+      setTimeout(() => {
+        void this.session.prompt(this.loopState.prompt!).catch(() => {});
+      }, 50);
+    }
+  }
 
   private async prepare(operation: PromptOperation): Promise<PreparedPrompt> {
     const { input, options } = operation.request;
     await this.selectOptions(options);
     let text = input.text;
     const contextMessages: PreparedPrompt['context'] = [];
+    const turnBudget = parseTurnBudget(text);
+    this.session.sessionManager.beginTurnBudget(turnBudget?.total ?? null, turnBudget?.hard ?? false);
+    for (const keyword of MAGIC_KEYWORDS) {
+      if (!containsMagicKeyword(text, keyword.word)) continue;
+      if (keyword.id === 'ultrathink') {
+        const targetLevel = parseConfiguredThinkingLevel('xhigh');
+        if (targetLevel) await this.session.setThinkingLevel(targetLevel);
+      }
+      const magicContext: MagicKeywordContext = {
+        tools: this.session.getEnabledToolNames(),
+        taskBatch: true,
+        scoutAvailable: true,
+        evalTools: true,
+        py: true,
+        js: true,
+        freshAgents: false,
+        perCallModel: false,
+      };
+      if (keyword.requires.every(tool => magicContext.tools.includes(tool))) {
+        contextMessages.push({
+          role: 'custom',
+          customType: `${keyword.id}-notice`,
+          content: keyword.notice(magicContext),
+          display: false,
+          attribution: 'user',
+          timestamp: Date.now(),
+        });
+      }
+    }
     const invocation = /^\/skill:([^\s]+)(?:\s+([\s\S]*))?$/.exec(text);
     if (invocation) text = await this.catalogs.skills.preparePrompt(invocation[1]!, invocation[2] ?? '');
     for (const context of input.context) {
@@ -488,14 +829,22 @@ export class WorkerSession {
       }
       previousLeaf = manager.getLeafId();
       previousRevert = selectedBranchRevert(manager.getBranch());
+      if (request.action === 'revert' && previousRevert?.revertedMessageId === request.messageId) {
+        throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', 'Native tree navigation was not committed');
+      }
       const targetId = request.action === 'revert'
         ? resolveCanonicalMessage(manager, this.sessionId, request.messageId, true) : previousRevert?.restoreLeafId;
-      if (!targetId) throw new ProjectionError(409, 'SESSION_BRANCH_CONFLICT', 'The requested branch selection is unavailable');
+      if (!targetId || targetId === previousLeaf) {
+        throw new ProjectionError(409, !targetId ? 'SESSION_BRANCH_CONFLICT' : 'COMMAND_IN_FLIGHT',
+          !targetId ? 'The requested branch selection is unavailable' : 'Native tree navigation was not committed');
+      }
       const targetMessage = request.action === 'revert' ? before.messages.find(message => message.messageId === request.messageId) : undefined;
       navigationStarted = true;
       const navigation = await this.session.navigateTree(targetId, { summarize: false, allowAskReopen: false });
       navigated = manager.getLeafId() !== previousLeaf;
-      if (navigation.cancelled || navigation.aborted || navigation.reopenAsk) throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', 'Native tree navigation was not committed');
+      if (navigation.cancelled || navigation.aborted || navigation.reopenAsk || !navigated) {
+        throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', 'Native tree navigation was not committed');
+      }
       await manager.appendEntriesAtomically(() => manager.appendCustomEntry(BRANCH_TYPE, {
         restoreLeafId: request.action === 'revert' ? previousRevert?.restoreLeafId ?? previousLeaf : null,
         revertedMessageId: request.action === 'revert' ? request.messageId : null,
@@ -511,17 +860,21 @@ export class WorkerSession {
       } };
     } catch (error) {
       if (navigationStarted && (navigated || manager.getLeafId() !== previousLeaf)) {
-        // The native context may already have switched. Retire it rather than
-        // allowing a prompt against a failed selection or stale agent context.
         this.permissionBridge?.reset();
+        this.interaction.cancelAll();
         try {
-          if (previousLeaf === null) manager.resetLeaf(); else manager.branch(previousLeaf);
+          if (previousLeaf === null) manager.resetLeaf(); else await this.session.navigateTree(previousLeaf, { summarize: false, allowAskReopen: false });
           await manager.appendEntriesAtomically(() => manager.appendCustomEntry(BRANCH_TYPE, previousRevert ?? { restoreLeafId: null, revertedMessageId: null }));
+          this.projection.resetSelection();
+          await this.modeController.restore();
+          await this.modeController.goal.reconcile();
         } catch {
+          this.fail();
           throw new ProjectionError(503, 'SESSION_RESTORE_FAILED', 'The prior native branch selection could not be persisted');
-        } finally { this.fail(); }
+        }
       }
-      throw error;
+      if (error instanceof ProjectionError) throw error;
+      throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', error instanceof Error ? error.message : 'Native tree navigation was not committed');
     } finally { this.controllingBranch = false; }
   }
 
@@ -559,7 +912,7 @@ export class WorkerSession {
     return result;
   }
 
-  private async continuePlanReview(response: PlanReviewResponse, review: { planReference: string; planText: string }, revision: number): Promise<void> {
+  private async continuePlanReview(response: PlanReviewResponse, review: { title: string; planReference: string; planText: string }, revision: number): Promise<void> {
     await this.promptTask;
     await this.binding;
     if (this.closed || this.failed || revision !== this.planRevision || this.modeController.mode().kind !== 'plan') return;
@@ -568,6 +921,24 @@ export class WorkerSession {
       this.reviewingPlan = false;
       void this.startWorkerRun('plan', async () => { await this.session.prompt(response.feedback); return true; }).catch(() => this.fail());
       return;
+    }
+    let targetExecutionModel: Model | undefined;
+    if (response.executionModel) {
+      targetExecutionModel = this.session.modelRegistry.find(response.executionModel.providerId, response.executionModel.modelId);
+      if (!targetExecutionModel) {
+        // Validation error: resolve failed review without crashing the worker session
+        this.reviewingPlan = false;
+        this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', mode: this.modeController.mode() } }]);
+        return;
+      }
+    }
+    if (isPlanAutosaveEnabled(this.session.settings)) {
+      await autosaveApprovedPlan({
+        settings: this.session.settings,
+        cwd: this.cwd,
+        title: review.title,
+        planContent: review.planText,
+      }).catch(() => {});
     }
     const compact = response.action === 'approve-compact';
     if (compact) this.session.markPlanInternalAbortPending();
@@ -585,7 +956,16 @@ export class WorkerSession {
         }
       } : undefined);
     } finally { this.session.clearPlanInternalAbortPending(); }
-    this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', mode: this.modeController.mode() } }]);
+    if (targetExecutionModel) {
+      const thinkingLevel = this.session.resolveTemporaryModelThinkingLevel(targetExecutionModel);
+      await this.session.setModelTemporary(targetExecutionModel, thinkingLevel);
+      this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', mode: this.modeController.mode(), selection: {
+        model: { providerId: targetExecutionModel.provider, modelId: targetExecutionModel.id },
+        thinkingLevel: this.session.configuredThinkingLevel() ?? null,
+      } } }]);
+    } else {
+      this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', mode: this.modeController.mode() } }]);
+    }
     if (this.closed || this.failed || revision !== this.planRevision) return;
     this.session.setPlanReferencePath(review.planReference);
     const text = nativePrompt.render(planApprovedPrompt, { planFilePath: review.planReference, planContent: review.planText, contextPreserved: true });
@@ -608,6 +988,7 @@ export class WorkerSession {
         await this.session.sessionManager.flush();
         const dispatched = await start();
         await this.bind();
+        await this.modeController.settleTransition();
         if (!dispatched && this.projection.activeRun()?.runId === runId) {
           this.emit(this.projection.completeRun(Date.now()));
           await this.session.sessionManager.flush();
@@ -720,7 +1101,12 @@ export class WorkerSession {
         return { type: 'goal', mode };
       }
       case 'mode.set': {
-        if (this.preparation || this.projection.activeRun() || this.session.isStreaming || this.continuationPending) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
+        const currentMode = this.modeController.mode();
+        const isDisarming = operation.mode === 'main' && currentMode.kind === 'plan' && currentMode.status === 'armed';
+        const isDeferredPlan = operation.mode === 'plan' && this.session.isStreaming;
+        if (!isDeferredPlan && !isDisarming && (this.preparation || this.projection.activeRun() || this.session.isStreaming || this.continuationPending)) {
+          throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
+        }
         const mode = await this.modeController.set(operation.mode);
         this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', mode } }]);
         return { type: 'mode.set', mode };
@@ -755,6 +1141,101 @@ export class WorkerSession {
       }
       case 'btw.cancel':
         return { type: 'btw.cancel', cancelled: this.btw.cancel(operation.recordId) };
+      case 'btw.branch': {
+        if (this.controllingBranch) throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', 'Native branch selection is in progress');
+        if (this.preparation || this.projection.activeRun() || this.session.isStreaming) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
+        const history = await this.btw.history();
+        const record = history.find(r => r.id === operation.recordId);
+        if (!record) throw new ProjectionError(404, 'SESSION_NOT_FOUND', `BTW record not found: ${operation.recordId}`);
+        const currentLeafId = this.session.sessionManager.getLeafId() ?? '';
+        if (record.status !== 'complete') {
+          throw new ProjectionError(400, 'INVALID_REQUEST', 'Cannot branch from an incomplete /btw question');
+        }
+        if (!record.leafId || record.leafId !== currentLeafId) {
+          throw new ProjectionError(409, 'SESSION_BRANCH_CONFLICT', 'Session branch changed since /btw started');
+        }
+        const assistantMessage: AssistantMessage = {
+          role: 'assistant',
+          content: [{ type: 'text', text: record.answer }],
+          api: 'chat',
+          provider: this.session.model?.provider ?? 'native',
+          model: this.session.model?.id ?? 'native',
+          usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+          stopReason: 'stop',
+          timestamp: Date.now(),
+        };
+        const branchRes = await this.session.branchFromBtw(record.question, assistantMessage, record.leafId, this.session.sessionManager.getSessionId());
+        if (branchRes.cancelled) throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', 'Branching from /btw was cancelled');
+        if (branchRes.sessionFile) this._sessionFile = branchRes.sessionFile;
+        const newSessionId = this.session.sessionManager.getSessionId();
+        this._sessionId = newSessionId;
+        this.projection = new WorkerProjection(this.session.sessionManager, newSessionId);
+        this.projection.resetSelection();
+        await this.session.sessionManager.flush();
+        const seed = this.projection.seed();
+        return {
+          type: 'btw.branch',
+          sessionFile: branchRes.sessionFile,
+          sessionId: newSessionId,
+          rootSessionId: newSessionId,
+          branch: seed.branch,
+          seed,
+        };
+      }
+      case 'subagent.steer': {
+        const owned = this.liveSubagents.get(operation.subagentId);
+        if (!owned || owned.parentSessionId !== this.sessionId) {
+          throw new ProjectionError(404, 'SESSION_NOT_FOUND', `Subagent not found in this session: ${operation.subagentId}`);
+        }
+        const notRunning = `Subagent not running: ${operation.subagentId}`;
+        try {
+          const session = await AgentLifecycleManager.global().ensureLive(operation.subagentId);
+          const accepted = Promise.withResolvers<void>();
+          const unsubscribe = session.subscribe(event => {
+            if (event.type === 'agent_start') accepted.resolve();
+          });
+          session.prompt(operation.message, { streamingBehavior: 'steer', throwOnDrop: true }).then(
+            () => accepted.resolve(),
+            err => accepted.reject(err),
+          );
+          try {
+            await accepted.promise;
+          } finally {
+            unsubscribe();
+          }
+          return { type: 'subagent.steer', subagentId: operation.subagentId, accepted: true };
+        } catch (error) {
+          throw new ProjectionError(404, 'SESSION_NOT_FOUND', error instanceof Error ? error.message : notRunning);
+        }
+      }
+      case 'subagent.cancel': {
+        const owned = this.liveSubagents.get(operation.subagentId);
+        if (!owned || owned.parentSessionId !== this.sessionId) {
+          return { type: 'subagent.cancel', subagentId: operation.subagentId, cancelled: false };
+        }
+        const tan = this.activeTanSessions.get(operation.subagentId);
+        if (tan) {
+          await tan.abort();
+          return { type: 'subagent.cancel', subagentId: operation.subagentId, cancelled: true };
+        }
+        const ref = AgentRegistry.global().get(operation.subagentId);
+        if (!ref) {
+          return { type: 'subagent.cancel', subagentId: operation.subagentId, cancelled: false };
+        }
+        await Promise.allSettled([
+          AgentLifecycleManager.global().release(operation.subagentId, ref, { tombstone: true }),
+          ref.session ? ref.session.abort({ reason: USER_INTERRUPT_LABEL }) : Promise.resolve(),
+        ]);
+        owned.status = 'cancelled';
+        this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent: { ...owned } } }]);
+        return { type: 'subagent.cancel', subagentId: operation.subagentId, cancelled: true };
+      }
+      case 'loop.stop': {
+        this.loopState = { active: false, iteration: 0 };
+        this.loopCondition = undefined;
+        this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', loop: this.loopState } }]);
+        return { type: 'loop.stop', stopped: true };
+      }
       case 'command': {
         const parsed = parseSlashCommand(operation.text);
         if (!parsed || !isAllowedBuiltinCommand(parsed.name)) throw new ProjectionError(400, 'INVALID_REQUEST', 'Slash command is not allowed');
@@ -763,7 +1244,335 @@ export class WorkerSession {
         if (active && parsed.name === 'jobs' && parsed.args.startsWith('kill')) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
         if (active && parsed.name === 'usage' && parsed.args.startsWith('reset')) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
         if (active && parsed.name === 'todo' && parsed.args) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
+        if (parsed.name === 'loop') {
+          if (this.loopState.active && !parsed.args.trim()) {
+            this.loopState = { active: false, iteration: 0 };
+            this.loopCondition = undefined;
+            this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', loop: this.loopState } }]);
+            return { type: 'command', output: 'Loop mode disabled.' };
+          }
+          const loopArgs = parseLoopArgs(parsed.args);
+          if (typeof loopArgs === 'string') {
+            throw new ProjectionError(400, 'INVALID_REQUEST', loopArgs);
+          }
+          const maxIterations = loopArgs.limit?.kind === 'iterations' ? loopArgs.limit.iterations : undefined;
+          const durationMs = loopArgs.limit?.kind === 'duration' ? loopArgs.limit.durationMs : undefined;
+          this.loopCondition = loopArgs.condition;
+          this.loopDurationMs = durationMs;
+          this.loopStartedAtMs = Date.now();
+          const conditionDesc = loopArgs.condition ? describeLoopCondition(loopArgs.condition) : undefined;
+          this.loopState = {
+            active: true,
+            iteration: 1,
+            maxIterations,
+            condition: conditionDesc,
+            prompt: loopArgs.prompt,
+          };
+          this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', loop: this.loopState } }]);
+          if (loopArgs.prompt) {
+            setTimeout(() => {
+              void this.session.prompt(loopArgs.prompt!).catch(() => {});
+            }, 10);
+          }
+          const desc = [
+            loopArgs.limit ? (loopArgs.limit.kind === 'iterations' ? `${loopArgs.limit.iterations} iterations` : `${loopArgs.limit.durationMs / 1000}s`) : undefined,
+            conditionDesc,
+          ].filter(Boolean).join(', ');
+          return { type: 'command', output: `Loop mode enabled${desc ? ` (${desc})` : ''}.` };
+        }
+        if (parsed.name === 'omfg') {
+          const complaint = parsed.args.trim();
+          if (!complaint) throw new ProjectionError(400, 'INVALID_REQUEST', 'Usage: /omfg <complaint>');
+          const promptText = `The user is frustrated about recurring agent behavior:\n"${complaint}"\nAuthor ONE Time Traveling Stream Rule (TTSR) in JSON format with fields: name, description, scope, condition, body.`;
+          let replyText = '';
+          try {
+            const result = await this.session.runEphemeralTurn({ promptText });
+            replyText = result.replyText;
+          } catch (error) {
+            throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', `TTSR rule synthesis model turn failed: ${error instanceof Error ? error.message : String(error)}`);
+          }
+          const parsedRule = parseGeneratedRule(replyText);
+          if ('error' in parsedRule) {
+            throw new ProjectionError(400, 'INVALID_REQUEST', `Model did not return a valid TTSR rule: ${parsedRule.error}`);
+          }
+          const ruleName = sanitizeRuleName(parsedRule.rule.name);
+          if (!ruleName) {
+            throw new ProjectionError(400, 'INVALID_REQUEST', 'Synthesized TTSR rule has an invalid name');
+          }
+          const rulePath = join(this.cwd, '.omp', 'rules', `${ruleName}.md`);
+          await mkdir(dirname(rulePath), { recursive: true });
+          await writeFile(rulePath, parsedRule.fileContent, 'utf8');
+          await this.session.refreshSkillsAndCommands();
+          return { type: 'command', output: `Synthesized TTSR rule "${ruleName}" in .omp/rules/${ruleName}.md` };
+        }
+        if (parsed.name === 'cleanse') {
+          const activeCheckers: string[] = [];
+          const completedCheckers: string[] = [];
+          const repairedFiles: string[] = [];
+          let diagnosticsCount = 0;
+
+          const emitCleanse = (status: 'discovering' | 'repairing' | 'verifying' | 'completed' | 'failed' | 'cancelled') => {
+            this.emit([{
+              timestamp: Date.now(),
+              transient: true,
+              event: {
+                type: 'cleanse.progress',
+                status,
+                activeCheckers: [...activeCheckers],
+                completedCheckers: [...completedCheckers],
+                repairedFiles: [...repairedFiles],
+                diagnosticsCount,
+              },
+            }]);
+          };
+
+          emitCleanse('discovering');
+
+          const ui: CleanseRunUi = {
+            board: {
+              interactive: false,
+              log: () => {},
+              phase: () => {},
+              checkerStarted: checker => {
+                if (!activeCheckers.includes(checker.label)) activeCheckers.push(checker.label);
+                emitCleanse('discovering');
+              },
+              checkerFinished: check => {
+                const idx = activeCheckers.indexOf(check.label);
+                if (idx !== -1) activeCheckers.splice(idx, 1);
+                if (!completedCheckers.includes(check.label)) completedCheckers.push(check.label);
+                diagnosticsCount += check.diagnostics?.length ?? 0;
+                emitCleanse('discovering');
+              },
+              repairFinished: () => {
+                emitCleanse('verifying');
+              },
+              agentStarted: (name, assignment) => {
+                const files = assignment.groups.map(g => g.file).filter((f): f is string => Boolean(f));
+                for (const f of files) {
+                  if (!repairedFiles.includes(f)) repairedFiles.push(f);
+                }
+                const subagentId = `Cleanse-${name}`;
+                const subagent: Subagent = {
+                  subagentId,
+                  parentSessionId: this.sessionId,
+                  childSessionId: subagentId,
+                  role: 'cleanse-repair',
+                  status: 'running',
+                };
+                this.liveSubagents.set(subagentId, subagent);
+                this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent } }]);
+                emitCleanse('repairing');
+              },
+              agentProgress: (name, progress) => {
+                const subagentId = `Cleanse-${name}`;
+                const existing = this.liveSubagents.get(subagentId);
+                if (existing) {
+                  const updated: Subagent = {
+                    ...existing,
+                    tokens: (progress as { tokens?: number })?.tokens ?? existing.tokens,
+                    activeTool: (progress as { activeTool?: string })?.activeTool ?? existing.activeTool,
+                  };
+                  this.liveSubagents.set(subagentId, updated);
+                  this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent: updated } }]);
+                }
+              },
+              agentFinished: (outcome, _assignment) => {
+                const subagentId = `Cleanse-${outcome.name}`;
+                const existing = this.liveSubagents.get(subagentId);
+                if (existing) {
+                  const finalized: Subagent = {
+                    ...existing,
+                    status: outcome.success ? 'completed' : 'failed',
+                  };
+                  this.liveSubagents.set(subagentId, finalized);
+                  this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent: finalized } }]);
+                }
+                emitCleanse('repairing');
+              },
+              close: () => {},
+            },
+            print: () => {},
+            printError: () => {},
+          };
+
+          const abortController = new AbortController();
+          const modelSelector = this.session.model ? formatModelString(this.session.model) : undefined;
+          try {
+            const result = await runCleanse({ all: true, maxAgents: 4, model: modelSelector }, ui, abortController.signal);
+            const finalStatus = result.status === 'cancelled' ? 'cancelled' : 'completed';
+            emitCleanse(finalStatus);
+            return {
+              type: 'command',
+              output: `Cleanse diagnostics: ${result.report.checks.length} check(s) executed, ${result.report.diagnostics.length} diagnostic(s) detected across ${repairedFiles.length} file(s).`,
+            };
+          } catch (error) {
+            emitCleanse('failed');
+            throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', `Cleanse execution failed: ${error instanceof Error ? error.message : String(error)}`);
+          }
+        }
+        if (parsed.name === 'tan') {
+          const work = parsed.args.trim();
+          if (!work) throw new ProjectionError(400, 'INVALID_REQUEST', 'Usage: /tan <work>');
+          const sessionDir = this.sessionFile.slice(0, -6);
+          const cloneId = `Tan-${randomUUID().slice(0, 8)}`;
+          const cloneFile = join(sessionDir, `${cloneId}.jsonl`);
+          try {
+            const cloneManager = await SessionManager.forkFrom(this.sessionFile, this.cwd, sessionDir, undefined, {
+              copyArtifacts: false,
+              suppressBreadcrumb: true,
+              sessionFile: cloneFile,
+              resetInheritedCost: true,
+              repairInterruptedTail: true,
+            });
+            const cloneSessionId = cloneManager.getSessionId() ?? cloneId;
+            const created = await createAgentSession({
+              cwd: this.cwd,
+              sessionManager: cloneManager,
+              model: this.session.model,
+              systemPrompt: [...this.session.systemPrompt],
+              toolNames: this.session.getEnabledToolNames(),
+              mountedToolNames: this.session.getMountedXdevToolNames(),
+              modelRegistry: this.session.modelRegistry,
+              authStorage: this.authStorage,
+              settings: this.session.settings,
+              hasUI: false,
+              enableMCP: false,
+              agentId: cloneId,
+              agentDisplayName: 'tan',
+            });
+            const subagent: Subagent = {
+              subagentId: cloneId,
+              parentSessionId: this.sessionId,
+              childSessionId: cloneSessionId,
+              role: 'tan-worker',
+              status: 'running',
+              description: work,
+            };
+            this.liveSubagents.set(cloneId, subagent);
+            this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent } }]);
+
+            let finalized = false;
+            let unsubscribeTan: (() => void) | undefined;
+            const finalize = async (finalStatus: 'completed' | 'failed' | 'cancelled') => {
+              if (finalized) return;
+              finalized = true;
+              if (unsubscribeTan) {
+                unsubscribeTan();
+                unsubscribeTan = undefined;
+              }
+              this.activeTanSessions.delete(cloneId);
+              const current = this.liveSubagents.get(cloneId);
+              if (current && current.status === 'running') {
+                const updated: Subagent = {
+                  ...current,
+                  status: finalStatus,
+                };
+                this.liveSubagents.set(cloneId, updated);
+                this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent: updated } }]);
+              }
+              try {
+                await created.session.dispose();
+              } catch {
+                // Best-effort session disposal on finalization
+              }
+            };
+
+            this.activeTanSessions.set(cloneId, {
+              session: created.session,
+              abort: async () => {
+                try { await created.session.abort(); } catch {
+                  // Suppress abort rejection on cancel
+                }
+                await finalize('cancelled');
+              },
+              dispose: async () => {
+                await finalize('cancelled');
+              },
+            });
+
+            unsubscribeTan = created.session.subscribe(event => {
+              const current = this.liveSubagents.get(cloneId);
+              if (!current || current.status !== 'running') return;
+              if (event.type === 'tool_execution_start') {
+                const updated: Subagent = {
+                  ...current,
+                  activeTool: event.toolName,
+                  turnCount: (current.turnCount ?? 0) + 1,
+                };
+                this.liveSubagents.set(cloneId, updated);
+                this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent: updated } }]);
+              } else if (event.type === 'message_end' && event.message.role === 'assistant') {
+                const usage = (event.message as { usage?: { total_tokens?: number } }).usage;
+                if (usage?.total_tokens) {
+                  const updated: Subagent = {
+                    ...current,
+                    tokens: (current.tokens ?? 0) + usage.total_tokens,
+                  };
+                  this.liveSubagents.set(cloneId, updated);
+                  this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent: updated } }]);
+                }
+              } else if (event.type === 'agent_end') {
+                void finalize('completed');
+              }
+            });
+
+            void created.session.prompt(work, { streamingBehavior: 'followUp' })
+              .then(() => finalize('completed'))
+              .catch(() => finalize('failed'));
+
+            return { type: 'command', output: `Dispatched background clone for tangential work: "${work}" (cloneId: ${cloneId})` };
+          } catch (error) {
+            throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', `Background session clone dispatch failed: ${error instanceof Error ? error.message : String(error)}`);
+          }
+        }
+        if (parsed.name === 'seance') {
+          const target = parsed.args.trim();
+          if (!target) throw new ProjectionError(400, 'INVALID_REQUEST', 'Usage: /seance <sessionId>');
+          const resolved = await resolveSeanceSource(target, { cwd: this.cwd });
+          const taskTool = this.session.agent.state.tools.find(t => t.name === 'task');
+          if (!taskTool) {
+            throw new ProjectionError(503, 'UNSUPPORTED_CAPABILITY', 'The task tool is required for /seance consultation');
+          }
+          const seanceResult = await taskTool.execute(`seance-${randomUUID().slice(0, 8)}`, {
+            agent: 'seance',
+            sourceSession: resolved.id,
+            task: 'Read historical session transcript and provide summary analysis.',
+            solutionSpace: 'Historical consult only; read-only.',
+          });
+          const text = seanceResult.content
+            .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
+            .map(p => p.text)
+            .join('\n')
+            .trim();
+          return { type: 'command', output: `Seance (${resolved.id}): ${text || 'Consultation complete.'}` };
+        }
+        if (parsed.name === 'advisor') {
+          const args = parsed.args.trim();
+          if (args === 'on') {
+            const active = this.session.setAdvisorEnabled(true);
+            this.advisorActive = active;
+            return { type: 'command', output: active ? 'Advisor enabled.' : "Advisor setting enabled, but no model is assigned to the 'advisor' role." };
+          }
+          if (args === 'off') {
+            this.session.setAdvisorEnabled(false);
+            this.advisorActive = false;
+            return { type: 'command', output: 'Advisor disabled.' };
+          }
+          if (args === 'status') {
+            return { type: 'command', output: this.session.formatAdvisorStatus() };
+          }
+          const active = this.session.toggleAdvisorEnabled();
+          this.advisorActive = active;
+          return { type: 'command', output: active ? 'Advisor enabled.' : 'Advisor disabled.' };
+        }
         await this.binding;
+        if (parsed.name === 'clear') {
+          const result = await this.session.resetSessionContext();
+          this.session.sessionManager.beginTurnBudget(null, false);
+          const dropped = result ? result.droppedCount : 0;
+          return { type: 'command', output: `Context reset — ${dropped} ${dropped === 1 ? 'message' : 'messages'} dropped; session continues.` };
+        }
         const output: string[] = [];
         const runtime: SlashCommandRuntime = {
           session: this.session,
@@ -857,7 +1666,7 @@ export class WorkerSession {
       case 'abort': {
         const run = this.projection.activeRun();
         if (!run || run.runId !== operation.runId) throw new ProjectionError(404, 'RUN_NOT_FOUND', 'Run not found');
-        if (run.origin === 'goal') this.modeController.stopForHostAbort();
+        this.modeController.stopForHostAbort();
         this.planRevision++;
         this.cancellingRunId = operation.runId;
         this.pendingTitleInput = undefined;
@@ -925,6 +1734,12 @@ export class WorkerSession {
       await this.promptTask;
       await this.planReviewTask;
       await this.bind();
+      for (const tan of this.activeTanSessions.values()) {
+        try { await tan.dispose(); } catch {
+          // Suppress disposal errors during worker teardown
+        }
+      }
+      this.activeTanSessions.clear();
     } finally {
       this.unsubscribe();
       this.titleUnsubscribe();

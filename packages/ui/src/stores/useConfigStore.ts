@@ -3,7 +3,7 @@ import { AUTO_MODEL_ID, AUTO_PROVIDER_ID, isAutoModel } from '@/lib/routing/auto
 import { selectAutoReady, useRoutingStore } from '@/stores/useRoutingStore';
 import type { StoreApi, UseBoundStore } from "zustand";
 import { devtools, persist } from "zustand/middleware";
-import type { Model, ModelCatalog, Provider, ProviderAuthState, ProviderCatalog } from '@openchamber/agent-contract';
+import type { Model, ModelCatalog, OmpSettingsState, Provider, ProviderAuthState, ProviderCatalog } from '@openchamber/agent-contract';
 import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
 import { notifyAgentReadiness, registerAgentSelectionReader } from '@/stores/agentConfigBridge';
 import { canonicalClient } from '@/api/canonicalClient';
@@ -1278,7 +1278,8 @@ interface ConfigStore {
     setSummarizeVoiceConversation: (enabled: boolean) => void;
     setSummarizeCharacterThreshold: (threshold: number) => void;
     setSummarizeMaxLength: (maxLength: number) => void;
-
+    ompSettings: OmpSettingsState | null;
+    loadOmpSettings: (workspaceId?: string) => Promise<OmpSettingsState | null>;
     activateDirectory: (directory: string | null | undefined, options?: { preserveManualModel?: boolean }) => Promise<void>;
 
     /** `fresh`: a request already in flight started before the caller's reason to reload, so it cannot answer it. */
@@ -2058,6 +2059,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                                     nextState.providers = nextProviders;
                                     nextState.providersLoaded = true;
                                     nextState.workspaceId = workspace.workspaceId;
+                                    void get().loadOmpSettings(workspace.workspaceId);
                                     nextState.defaultProviders = nextDefaults;
                                     nextState.currentProviderId = nextSnapshot.currentProviderId;
                                     nextState.currentModelId = nextSnapshot.currentModelId;
@@ -3043,7 +3045,18 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                     }
                     updateDesktopSettings({ sttLocalModel: model }).catch(() => {});
                 },
-
+                ompSettings: null,
+                loadOmpSettings: async (targetWorkspaceId?: string) => {
+                    const wid = targetWorkspaceId || get().workspaceId;
+                    if (!wid) return null;
+                    try {
+                        const settings = await canonicalClient.getOmpSettings(wid);
+                        set({ ompSettings: settings });
+                        return settings;
+                    } catch {
+                        return null;
+                    }
+                },
                 setSttLanguage: (lang: string) => {
                     set({ sttLanguage: lang });
                     if (typeof window !== 'undefined') {

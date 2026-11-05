@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 
 import { dict as enDict, type I18nKey } from './messages/en';
+import { subagentHudI18n } from './messages/subagent-hud.i18n';
+import { timelineNoticesI18n } from './messages/timeline-notices.i18n';
 import { DEFAULT_LOCALE, detectInitialLocale, type Locale, writeStoredLocale } from './runtime';
 
 export type I18nParams = Record<string, string | number | boolean | null | undefined>;
@@ -55,8 +57,11 @@ async function loadDictionary(locale: Locale): Promise<I18nDictionary> {
                         : locale === 'he'
                           ? await import('./messages/he') as { dict: I18nDictionary }
                           : { dict: enDict };
-  dictionaries.set(locale, mod.dict);
-  return mod.dict;
+  const subagentDict = subagentHudI18n[locale] ?? subagentHudI18n.en;
+  const noticeDict = (timelineNoticesI18n as Record<string, Record<string, string>>)[locale] ?? timelineNoticesI18n.en;
+  const fullDict = { ...mod.dict, ...subagentDict, ...noticeDict } as I18nDictionary;
+  dictionaries.set(locale, fullDict);
+  return fullDict;
 }
 
 export const useI18nStore = create<I18nState>()((set, get) => ({

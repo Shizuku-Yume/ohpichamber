@@ -5,12 +5,12 @@ import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
 import { isIMECompositionEvent } from '@/lib/ime';
 import { useRequestReveal } from '@/sync/request-reveal';
+import { useConfigStore } from '@/stores/useConfigStore';
 import { ComposerFloatingPanel } from './composer/ui/ComposerFloatingPanel';
 import { FormMarkdown } from './FormMarkdown';
 import { buildPlanReviewAnswer, parsePlanReview } from './questionRequest';
 import { useQuestionResponse } from './useQuestionResponse';
 import { useMobileAutocompleteMaxHeight } from './useMobileAutocompleteMaxHeight';
-
 interface PlanReviewCardProps {
     form: QuestionRequest;
     docked?: boolean;
@@ -22,8 +22,10 @@ export function PlanReviewCard({ form, docked = false, forms }: PlanReviewCardPr
     const { t } = useI18n();
     const review = React.useMemo(() => parsePlanReview(form.schema), [form.schema]);
     const [feedback, setFeedback] = React.useState('');
+    const [executionModel, setExecutionModel] = React.useState<{ providerId: string; modelId: string } | null>(null);
     const [collapsed, setCollapsed] = React.useState(false);
     const feedbackId = React.useId();
+    const providers = useConfigStore((state) => state.providers);
     const bodyRef = React.useRef<HTMLDivElement | null>(null);
     const { isResponding, hasResponded, answer } = useQuestionResponse(form);
     const availableMaxHeight = useMobileAutocompleteMaxHeight(bodyRef, docked && !collapsed, 400);
@@ -36,9 +38,9 @@ export function PlanReviewCard({ form, docked = false, forms }: PlanReviewCardPr
     }, [form.questionId, review?.title, review?.planReference, review?.planText]);
 
     const submit = React.useCallback(async (action: PlanReviewResponse['action']) => {
-        const payload = buildPlanReviewAnswer(action, feedback);
+        const payload = buildPlanReviewAnswer(action, feedback, executionModel);
         if (payload) await answer(payload);
-    }, [answer, feedback]);
+    }, [answer, executionModel, feedback]);
 
     const handleFeedbackKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (isIMECompositionEvent(event) || event.key !== 'Enter' || event.shiftKey || !(event.ctrlKey || event.metaKey)) return;
@@ -75,6 +77,35 @@ export function PlanReviewCard({ form, docked = false, forms }: PlanReviewCardPr
                 rows={3}
                 className="mt-1 w-full resize-y rounded-md border border-border bg-background px-2 py-1.5 typography-meta text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary disabled:opacity-50"
             />
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+                <label htmlFor="plan-execution-model" className="typography-micro text-muted-foreground">
+                    {t('chat.planReview.executionModel')}:
+                </label>
+                <select
+                    id="plan-execution-model"
+                    aria-label={t('chat.planReview.executionModel')}
+                    value={executionModel ? `${executionModel.providerId}:${executionModel.modelId}` : ''}
+                    onChange={(event) => {
+                        const val = event.target.value;
+                        if (!val) {
+                            setExecutionModel(null);
+                            return;
+                        }
+                        const [pId, ...mParts] = val.split(':');
+                        const mId = mParts.join(':');
+                        setExecutionModel({ providerId: pId, modelId: mId });
+                    }}
+                    disabled={isResponding}
+                    className="h-6 rounded border border-border bg-background px-2 typography-micro text-foreground"
+                >
+                    <option value="">{t('chat.planReview.defaultModel')}</option>
+                    {providers.flatMap((p) => p.models.map((m) => (
+                        <option key={`${p.providerId}:${m.modelId}`} value={`${p.providerId}:${m.modelId}`}>
+                            {p.name} - {m.name || m.modelId}
+                        </option>
+                    )))}
+                </select>
+            </div>
             <div className="mt-2 flex flex-wrap items-center gap-2">
                 <Button size="xs" disabled={isResponding} onClick={() => void submit('approve')}>
                     <Icon name={isResponding ? 'loader-4' : 'check'} className={isResponding ? 'size-3.5 animate-spin' : 'size-3.5'} />

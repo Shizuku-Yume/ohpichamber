@@ -12,7 +12,7 @@ const selection: CapturedSendOptions = { providerId: 'provider', modelId: 'vendo
 const spies: Array<{ mockRestore(): void }> = [];
 afterEach(() => { for (const spy of spies.splice(0)) spy.mockRestore(); });
 
-function fixture(options: { fail?: boolean; omitMarker?: boolean; switchAfterCreate?: boolean } = {}) {
+function fixture(options: { fail?: boolean; omitMarker?: boolean; switchAfterCreate?: boolean; serverDeletesSessionID?: boolean } = {}) {
   const calls: string[] = [];
   let current = true;
   let metadata: SessionMetadata = {};
@@ -29,7 +29,11 @@ function fixture(options: { fail?: boolean; omitMarker?: boolean; switchAfterCre
     calls.push('create');
     expect(input.options).toEqual(selection);
     expect(input.workspaceId).toBe('workspace');
-    metadata = { ...input.metadata, openchamber: { ...input.metadata?.openchamber, goal: { status: 'active' } } };
+    const initialMultirun = input.metadata?.openchamber?.multirun;
+    const multirun = options.serverDeletesSessionID && initialMultirun
+      ? { ...initialMultirun, sessionID: undefined }
+      : initialMultirun;
+    metadata = { ...input.metadata, openchamber: { ...input.metadata?.openchamber, multirun, goal: { status: 'active' } } };
     const created = { ...session, metadata };
     expect(getMultiRunIdentity(created)).toBeNull();
     if (options.switchAfterCreate) current = false;
@@ -57,6 +61,14 @@ describe('canonical multi-run creation', () => {
     expect(result.metadata?.openchamber?.goal?.status).toBe('active');
     expect(result.metadataRevision).toBe('2');
     expect(getMultiRunIdentity({ ...result, sessionId: 'fork' })).toBeNull();
+    expect(api.calls).toEqual(['resolve', 'create', 'metadata']);
+  });
+  test('binds multi-run session when server deletes null sessionID in initial response', async () => {
+    const api = fixture({ serverDeletesSessionID: true });
+    const result = await createMultiRunSession({ title: 'title', directory: '/repo', identity, selection }, api.assertCurrent);
+    expect(getMultiRunIdentity(result)).toMatchObject({ role: 'run', modelID: 'vendor/model' });
+    expect(result.metadata?.openchamber?.multirun?.sessionID).toBe('new');
+    expect(result.metadataRevision).toBe('2');
     expect(api.calls).toEqual(['resolve', 'create', 'metadata']);
   });
   for (const failure of [{ fail: true }, { omitMarker: true }]) test(`cleans only the unbound session: ${JSON.stringify(failure)}`, async () => {

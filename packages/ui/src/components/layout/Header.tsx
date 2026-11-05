@@ -21,6 +21,7 @@ import { useSessionWorktreeStore } from '@/sync/session-worktree-store';
 import { formatSessionWorktreeBadge } from '@/sync/session-worktree-contract';
 import { useGlobalSessionStatus, useSessionMessagesResolved, useSessionMessagesSelector } from '@/sync/sync-context';
 import type { Message } from '@openchamber/agent-contract';
+import { useConfigStore } from '@/stores/useConfigStore';
 import { useDirectoryStore as useAppDirectoryStore } from '@/stores/useDirectoryStore';
 import { isChatDirectoryForHome } from '@/lib/chatDirectories';
 import { useSessionMessageRecordsForExport } from '@/sync/use-sync';
@@ -452,9 +453,24 @@ export const Header: React.FC = () => {
     }
     setWorkStatusPanelEnabled(!workStatusPanelEnabled);
   }, [setWorkStatusOverlayOpen, setWorkStatusPanelEnabled, workStatusOverlayOpen, workStatusPanelEnabled, workStatusPanelFits]);
-  const showDesktopHeaderContextUsage = !workStatusPanelVisible
-    && !!stableDesktopContextUsage;
-
+  const showDesktopHeaderContextUsage = !workStatusPanelVisible && !!stableDesktopContextUsage;
+  const compactionThresholdPercent = useConfigStore((state) => {
+    const val = state.ompSettings?.settings?.find((s) => s.id === 'compaction.thresholdPercent')?.value;
+    return typeof val === 'number' && val > 0 ? val : null;
+  });
+  const compactionAsyncEnabled = useConfigStore((state) => {
+    const asyncSetting = state.ompSettings?.settings?.find((s) => s.id === 'compaction.asyncEnabled')?.value;
+    return asyncSetting !== false;
+  });
+  const compactionSpeculationPercent = React.useMemo(() => {
+    if (!compactionAsyncEnabled || compactionThresholdPercent === null || typeof contextLimit !== 'number' || contextLimit <= 0) {
+      return null;
+    }
+    const thresholdTokens = (compactionThresholdPercent / 100) * contextLimit;
+    const leadTokens = Math.min(32000, Math.max(8192, Math.floor(thresholdTokens * 0.125)));
+    const speculationTokens = thresholdTokens - leadTokens;
+    return Math.max(0, Math.round((speculationTokens / contextLimit) * 100));
+  }, [compactionAsyncEnabled, compactionThresholdPercent, contextLimit]);
   const refreshCurrentInstanceLabel = React.useCallback(async () => {
     if (typeof window === 'undefined' || !isDesktopApp) {
       return;
@@ -1727,6 +1743,8 @@ export const Header: React.FC = () => {
               size="compact"
               hideIcon
               showPercentIcon
+              thresholdPercent={compactionThresholdPercent}
+              speculationPercent={compactionSpeculationPercent}
               onClick={handleOpenContextPanel}
               pressed={isContextPanelActive}
               className={!showMiniChatHeaderAction ? 'mr-3.5' : ''}

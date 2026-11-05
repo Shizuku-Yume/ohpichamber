@@ -43,6 +43,10 @@ test('metadata preserves presentation and all operational shapes', () => {
   expect(SessionMetadataSchema.parse(pausedGoal)).toEqual(pausedGoal);
   const legacyFusion = { openchamber: { multirun: { ...multirun, group: { kind: 'legacy', scope: 'opaque_scope' }, role: 'fusion' } } };
   expect(SessionMetadataSchema.parse(legacyFusion)).toEqual(legacyFusion);
+  const multirunInitialNull = { openchamber: { multirun: { ...multirun, sessionID: null } } };
+  expect(SessionMetadataSchema.parse(multirunInitialNull)).toEqual(multirunInitialNull);
+  const multirunInitialOmitted = { openchamber: { multirun: { ...multirun, sessionID: undefined } } };
+  expect(SessionMetadataSchema.parse(multirunInitialOmitted)).toEqual({ openchamber: { multirun: { ...multirun, sessionID: undefined } } });
 });
 
 test('metadata rejects host-owned and malformed values', () => {
@@ -59,6 +63,8 @@ test('metadata rejects host-owned and malformed values', () => {
     { ...metadata, openchamber: { ...metadata.openchamber, work: { state: 'bad' } } },
     { ...metadata, openchamber: { ...metadata.openchamber, multirun: { ...multirun, group: { kind: 'legacy', scope: '/absolute' }, role: 'fusion' } } },
     { ...metadata, openchamber: { ...metadata.openchamber, multirun: { ...multirun, group: { kind: 'legacy', scope: 'opaque' }, role: 'run' } } },
+    { ...metadata, openchamber: { ...metadata.openchamber, multirun: { ...multirun, sessionID: '' } } },
+    { ...metadata, openchamber: { ...metadata.openchamber, multirun: { ...multirun, sessionID: 123 } } },
   ]) expect(SessionMetadataSchema.safeParse(invalid).success).toBe(false);
 });
 
@@ -70,13 +76,15 @@ test('metadata state distinguishes missing null revision zero from present empty
 });
 
 test('metadata patches support typed null deletion and reject malformed patch values', () => {
-  const cleared = { changes: {
-    folder: null, isPinned: null, color: null, icon: null, notes: null, openchamber: {
-      goal: null, assist: null, knowledge_context_delivered: null, context_obligatory_last_compaction_message_id: null,
-      project_context_pins: null, context_obligatory_messages: null, linked_issues: null, work: null, reviewOffer: null,
-      reviewSessionID: null, kind: null, originalSessionID: null, multirun: null,
-    },
-  } };
+  const cleared = {
+    changes: {
+      folder: null, isPinned: null, color: null, icon: null, notes: null, openchamber: {
+        goal: null, assist: null, knowledge_context_delivered: null, context_obligatory_last_compaction_message_id: null,
+        project_context_pins: null, context_obligatory_messages: null, linked_issues: null, work: null, reviewOffer: null,
+        reviewSessionID: null, kind: null, originalSessionID: null, multirun: null,
+      },
+    }
+  };
   expect(SessionMetadataPatchSchema.parse(cleared)).toEqual(cleared);
   for (const invalid of [
     { changes: { folder: 1 } }, { changes: { openchamber: { goal: 'bad' } } },
@@ -85,13 +93,19 @@ test('metadata patches support typed null deletion and reject malformed patch va
     { changes: { openchamber: { knowledge_context_delivered: 1 } } },
     { changes: { openchamber: { unknown: null } } },
   ]) expect(SessionMetadataPatchSchema.safeParse(invalid).success).toBe(false);
-  const nestedDeletion = { changes: { openchamber: {
-    goal: { objective: null, note: null }, assist: { suggestion: null },
-    project_context_pins: { notes: null }, work: { openedAt: null }, reviewOffer: { at: null },
-  } } };
+  const nestedDeletion = {
+    changes: {
+      openchamber: {
+        goal: { objective: null, note: null }, assist: { suggestion: null },
+        project_context_pins: { notes: null }, work: { openedAt: null }, reviewOffer: { at: null },
+      }
+    }
+  };
   expect(SessionMetadataPatchSchema.parse(nestedDeletion)).toEqual(nestedDeletion);
-  expect(SessionMetadataSchema.safeParse({ openchamber: {
-    goal: { objective: null }, assist: { suggestion: null }, project_context_pins: { notes: null },
-    work: { openedAt: null }, reviewOffer: { at: null },
-  } }).success).toBe(false);
+  expect(SessionMetadataSchema.safeParse({
+    openchamber: {
+      goal: { objective: null }, assist: { suggestion: null }, project_context_pins: { notes: null },
+      work: { openedAt: null }, reviewOffer: { at: null },
+    }
+  }).success).toBe(false);
 });

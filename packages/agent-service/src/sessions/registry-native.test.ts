@@ -784,3 +784,44 @@ test('cold snapshot of unloaded root session preserves parentSessionId without s
     expect(harness.workers.authorizationScope(linkedRootId)).toBeUndefined();
   } finally { await harness.close(); }
 }, 60000);
+
+test('btwBranch rekeys live session entry, worker, journal and reference to new minted session ID', async () => {
+  const harness = await fixture();
+  try {
+    const originalRuntime = harness.sessions.runtime(rootSessionId);
+    expect(originalRuntime.sessionId).toBe(rootSessionId);
+
+    const newSessionId = 'minted-btw-session-id';
+    const newFile = join(harness.source.sessionsDirectory, `2026-11-05_${newSessionId}.jsonl`);
+    const origRequest = harness.workers.request.bind(harness.workers);
+    harness.workers.request = async (sessionId, op) => {
+      if (op.type === 'btw.branch') {
+        return {
+          type: 'btw.branch',
+          sessionId: newSessionId,
+          rootSessionId: newSessionId,
+          sessionFile: newFile,
+          branch: { branchId: 'b-1', branchVersion: 1, leafTurnId: null },
+        };
+      }
+      return origRequest(sessionId, op);
+    };
+
+    const branchRes = await harness.sessions.btwBranch(rootSessionId, 'rec-1');
+    expect(branchRes.sessionId).toBe(newSessionId);
+    expect(branchRes.sessionFile).toBe(newFile);
+
+    expect(harness.sessions['entries'].get(rootSessionId)).toBeUndefined();
+    const newEntry = harness.sessions['entries'].get(newSessionId);
+    expect(newEntry?.state).toBe('live');
+    if (newEntry?.state === 'live') {
+      expect(newEntry.opened.sessionFile).toBe(newFile);
+      expect(newEntry.opened.journal.runtime().sessionId).toBe(newSessionId);
+    }
+    expect(harness.workers.info(newSessionId)).toBeDefined();
+    const newRef = harness.sessions['references'].get(newSessionId);
+    expect(newRef?.sessionFile).toBe(newFile);
+  } finally {
+    await harness.close();
+  }
+}, 60000);

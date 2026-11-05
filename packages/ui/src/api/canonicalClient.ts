@@ -8,7 +8,7 @@ import type {
   ProviderCredentialDeleteRequest, ProviderCredentialMutationResult, ProviderCredentialWriteRequest, ProviderDeleteRequest,
   ProviderMutationResult, QuestionReply, QuestionRequest, RunAbortAck, RunCreateRequest, Session, SessionCreateAck,
   SessionCreateRequest, SessionDeleteAck, SessionMetadataPatch, SessionMetadataState, SessionSnapshot, SessionBranchRequest, SessionBranchResult, SessionRelocateResult, ShellJob,
-  ShellOutput, ShellSnapshot, ShellStartRequest, ShellStopRequest, SkillsApplyRequest, SkillsApplyResult,
+  ShellOutput, ShellSnapshot, ShellStartRequest, ShellStdinRequest, ShellStdinResult, ShellStopRequest, ShellStreamResponse, SkillsApplyRequest, SkillsApplyResult,
   SkillsCatalogState, SkillExpandRequest, SkillExpandResult, CompletionRequest, CompletionResult, CompletionCancelRequest, CompletionCancelResult,
   MCPCatalogRead, MCPConfigureRequest, MCPApplyRequest, MCPApplyResult, MCPReconnectRequest, MCPOAuthRequest, MCPOAuthResult, SteerAck, SteerRequest, Workspace,
   WorkspaceList, ProjectList, QueueAppendRequest, QueueDeleteRequest, QueueReorderRequest, QueueState, Subagent,
@@ -325,6 +325,42 @@ export class CanonicalClient {
       body: bodyFor(C.SessionControlRequestSchema, { type: 'btw.cancel' }),
     });
   }
+  branchFromBtw(sessionId: string, recordId: string): Promise<Extract<C.SessionControlAck, { type: 'btw.branch' }>> {
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/control`, scoped(C.SessionControlAckSchema, result => result.type === 'btw.branch'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: bodyFor(C.SessionControlRequestSchema, { type: 'btw.branch', recordId }),
+    }).then(result => {
+      if (result.type !== 'btw.branch') throw new Error('BTW branch response identified another control');
+      return result;
+    });
+  }
+  steerSubagent(sessionId: string, subagentId: string, message: string): Promise<Extract<C.SessionControlAck, { type: 'subagent.steer' }>> {
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/control`, scoped(C.SessionControlAckSchema, result => result.type === 'subagent.steer'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: bodyFor(C.SessionControlRequestSchema, { type: 'subagent.steer', subagentId, message }),
+    }).then(result => {
+      if (result.type !== 'subagent.steer') throw new Error('Subagent steer response identified another control');
+      return result;
+    });
+  }
+  cancelSubagent(sessionId: string, subagentId: string): Promise<Extract<C.SessionControlAck, { type: 'subagent.cancel' }>> {
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/control`, scoped(C.SessionControlAckSchema, result => result.type === 'subagent.cancel'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: bodyFor(C.SessionControlRequestSchema, { type: 'subagent.cancel', subagentId }),
+    }).then(result => {
+      if (result.type !== 'subagent.cancel') throw new Error('Subagent cancel response identified another control');
+      return result;
+    });
+  }
+  stopLoop(sessionId: string): Promise<Extract<C.SessionControlAck, { type: 'loop.stop' }>> {
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/control`, scoped(C.SessionControlAckSchema, result => result.type === 'loop.stop'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: bodyFor(C.SessionControlRequestSchema, { type: 'loop.stop' }),
+    }).then(result => {
+      if (result.type !== 'loop.stop') throw new Error('Loop stop response identified another control');
+      return result;
+    });
+  }
   createRun(sessionId: string, input: RunCreateRequest, commandId?: string): Promise<RunCreateAck> {
     return request(`/api/agent/v1/sessions/${id(sessionId)}/runs`, scoped(z.strictObject({ run: C.RunSchema }), result => result.run.sessionId === sessionId), { method: 'POST', headers: { 'Content-Type': 'application/json', ...headersFor(commandId) }, body: bodyFor(C.RunCreateRequestSchema, input) });
   }
@@ -440,6 +476,14 @@ export class CanonicalClient {
   stopShell(sessionId: string, job: ShellStopRequest, signal?: AbortSignal): Promise<ShellJob> {
     const expected = { ...job.job };
     return request(`/api/agent/v1/sessions/${id(sessionId)}/shell/jobs/${id(expected.jobId)}/stop`, scoped(C.ShellStopResultSchema, result => sameJob(result.job, expected)), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.ShellStopRequestSchema, job, body => body.job.sessionId === sessionId), signal }).then((result) => result.job);
+  }
+  getShellStream(sessionId: string, job: { jobId: string; epoch: string; workerGeneration: string }, streamId: number, from?: number, signal?: AbortSignal): Promise<ShellStreamResponse> {
+    const expected = { ...job, sessionId };
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/shell/jobs/${id(job.jobId)}/stream${query({ epoch: job.epoch, workerGeneration: job.workerGeneration, streamId, from })}`, scoped(C.ShellStreamResponseSchema, result => sameJob(result.job, expected) && result.streamId === streamId), { signal });
+  }
+  writeShellStdin(sessionId: string, input: ShellStdinRequest, signal?: AbortSignal): Promise<ShellStdinResult> {
+    const expected = { ...input.job };
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/shell/jobs/${id(expected.jobId)}/stdin`, scoped(C.ShellStdinResultSchema, result => sameJob(result.job, expected)), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.ShellStdinRequestSchema, input, body => body.job.sessionId === sessionId), signal });
   }
   getWorkspaceMcpConfig(workspaceId: string): Promise<C.MCPConfigurationState> {
     return request(`/api/agent/v1/workspaces/${id(workspaceId)}/mcp/config`, scoped(C.MCPConfigurationStateSchema, result => result.workspaceId === workspaceId));

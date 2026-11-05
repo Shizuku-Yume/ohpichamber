@@ -4,7 +4,8 @@ import { ModelSelector } from '@/components/sections/agents/ModelSelector';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/lib/i18n';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { updateDesktopSettings } from '@/lib/persistence';
+import { canonicalClient } from '@/api/canonicalClient';
+import { getDirectoryState } from '@/sync/sync-refs';
 import type { WalkthroughBlockedState, WalkthroughModel } from '@/lib/walkthrough/types';
 
 interface WalkthroughBlockerProps {
@@ -53,12 +54,18 @@ export const WalkthroughBlocker = ({
       const value = `${providerId}/${modelId}`;
       setSaving(true);
       try {
-        // Scoped to this feature: fixing the walkthrough must not quietly
-        // change the model used for commit messages and recaps.
-        await updateDesktopSettings({ walkthroughModelOverride: value });
+        const workspaceId = getDirectoryState()?.workspace?.workspaceId;
+        if (workspaceId) {
+          const state = await canonicalClient.getOmpSettings(workspaceId);
+          const currentRoles = (state.settings.find((s) => s.id === 'modelRoles')?.value as Record<string, string> | null) || {};
+          await canonicalClient.updateOmpSettings(workspaceId, {
+            expectedRevision: state.revision,
+            changes: [{ id: 'modelRoles', value: { ...currentRoles, smol: value } }],
+          });
+        }
         onRetry();
       } catch (error) {
-        console.warn('Failed to save small model override:', error);
+        console.warn('Failed to save small model role:', error);
       } finally {
         setSaving(false);
       }

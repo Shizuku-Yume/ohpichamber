@@ -77,8 +77,15 @@ export function parsePlanReview(schema: QuestionRequest['schema']): PlanReview |
 export function buildPlanReviewAnswer(
   action: PlanReviewResponse['action'],
   feedback = '',
+  executionModel?: { providerId: string; modelId: string } | null,
 ): PlanReviewResponse | null {
-  const parsed = PlanReviewResponseSchema.safeParse(action === 'feedback' ? { action, feedback } : { action });
+  const model = executionModel ? { providerId: executionModel.providerId, modelId: executionModel.modelId } : undefined;
+  const raw = action === 'feedback'
+    ? { action, feedback }
+    : (action === 'approve' || action === 'approve-compact') && model
+      ? { action, executionModel: model }
+      : { action };
+  const parsed = PlanReviewResponseSchema.safeParse(raw);
   return parsed.success ? parsed.data : null;
 }
 

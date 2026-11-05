@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components -- SyncProvider, its contexts, hooks, and runtime helpers are one contract module. */
 import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from "react"
 import { useStore, type StoreApi } from "zustand"
-import type { ApprovalRequest, CanonicalEvent, Message, Part, QuestionRequest, Run, Session, SessionRuntimeStatus, SessionSnapshot } from "@openchamber/agent-contract"
+import type { AdvisorNote, ApprovalRequest, CanonicalEvent, Message, Part, QuestionRequest, Run, Session, SessionRuntimeStatus, SessionSnapshot } from "@openchamber/agent-contract"
 import { canonicalClient, type CanonicalClient } from "@/api/canonicalClient"
 import { getRuntimeKey, subscribeRuntimeEndpointChanged, subscribeRuntimeEndpointWillChange } from "@/lib/runtime-switch"
 import { normalizePath } from "@/lib/pathNormalization"
@@ -17,10 +17,14 @@ import { notifyFirstCanonicalBootstrap } from "./first-server-connect"
 import { useGlobalSyncStore } from "./global-sync-store"
 import { applyDirectoryEvent, compareCounters, mergeHostSession } from "./event-reducer"
 import { useBtwStore } from "@/stores/useBtwStore"
+import { useSubagentsStore } from "@/stores/useSubagentsStore"
+import { useCleanseStore } from "@/stores/useCleanseStore"
+import { useAdvisorStore } from "@/stores/useAdvisorStore"
 import { createEventPipeline, type EventPipeline } from "./event-pipeline"
 import { subscribeSessionFoldersSync } from "./session-folders-sync";
 import { subscribeSessionDraftsSync } from "./session-drafts-sync";
 import { subscribeMessageQueueSync } from "./message-queue-sync";
+import { subscribeSessionMetadataSync } from "./session-metadata-sync";
 
 import { SessionMessageLoader, getImperativeSessionMessageLoader, setImperativeSessionMessageLoader, type SessionMessageLoadState, type SessionMessageTarget } from "./session-message-loader"
 import { setSyncRefs } from "./sync-refs"
@@ -98,6 +102,16 @@ export function handleEvents(target: SessionMessageTarget, events: readonly Cano
       continue
     }
     if (event.type === "btw.delta" || event.type === "btw.completed") continue
+    if (event.type === "subagent.updated") {
+      useSubagentsStore.getState().applySubagentUpdate(target.sessionId, event.subagent);
+      continue;
+    }
+    if (event.type === "cleanse.progress") {
+      useCleanseStore.getState().applyCleanseProgress(target.sessionId, event);
+    }
+    if (event.type === "advisor_yielded") {
+      useAdvisorStore.getState().applyAdvisorYielded(target.sessionId, event);
+    }
     const result = applyDirectoryEvent(next, event)
     if (result.kind === "resnapshot") { contiguous = false; break }
     if (result.kind === "duplicate") continue
@@ -280,7 +294,8 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     disposalRef.current = undefined
     messageLoader.activate()
     messageLoader.configure({ client, runtimeKey: props.runtimeKey, isCurrent, onSnapshot })
-    const pipeline = createEventPipeline({ client, isCurrent,
+    const pipeline = createEventPipeline({
+      client, isCurrent,
       onEvents(target, events) {
         const previous = childStores.getChild(target.directory)?.getState().sessionDeletedRevision
         const contiguous = handleEvents(target, events, childStores)
@@ -324,7 +339,8 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
       },
     })
     pipelineRef.current = pipeline
-    const unconfigure = childStores.configure({ isCurrentScope: isCurrent,
+    const unconfigure = childStores.configure({
+      isCurrentScope: isCurrent,
       onBootstrap(context) {
         const store = childStores.getChild(context.directory)
         if (!store) return
@@ -344,6 +360,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     const unsubscribeFolderEvents = subscribeSessionFoldersSync(props.runtimeKey);
     const unsubscribeDraftEvents = subscribeSessionDraftsSync(props.runtimeKey);
     const unsubscribeMessageQueueEvents = subscribeMessageQueueSync(props.runtimeKey ?? getRuntimeKey());
+    const unsubscribeMetadataEvents = subscribeSessionMetadataSync(props.runtimeKey ?? getRuntimeKey());
     const stopBeforeSwitch = subscribeRuntimeEndpointWillChange((detail) => {
       if (detail.runtimeKey === props.runtimeKey) return
       currentRef.current = false
@@ -366,7 +383,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
       if (!isCurrent()) return
       for (const [directory, store] of childStores.children) {
         if (!store.getState().workspace || !childStores.pinned(directory)) continue
-        void loadSessions(directory).catch(() => {})
+        void loadSessions(directory).catch(() => { })
       }
     }, 15_000)
     const resume = () => {
@@ -402,7 +419,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     document.addEventListener("visibilitychange", visible)
     return () => {
       currentRef.current = false
-      stopBeforeSwitch(); resumeAfterSwitch(); stopAuthRecovery(); stopConnectionRecovery(); unconfigure(); pipeline.cleanup(); clearInterval(discoveryTimer); unsubscribeFolderEvents(); unsubscribeDraftEvents(); unsubscribeMessageQueueEvents();
+      stopBeforeSwitch(); resumeAfterSwitch(); stopAuthRecovery(); stopConnectionRecovery(); unconfigure(); pipeline.cleanup(); clearInterval(discoveryTimer); unsubscribeFolderEvents(); unsubscribeDraftEvents(); unsubscribeMessageQueueEvents(); unsubscribeMetadataEvents();
       window.removeEventListener("online", resume)
       window.removeEventListener("offline", offline)
       window.removeEventListener("pageshow", pageshow)
@@ -418,7 +435,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     if (directory) childStores.ensureChild(directory, { priority: "selected", reason: "current-directory" })
     setSyncRefs(childStores, directory)
     setActionRefs(childStores, () => currentDirectoryRef.current, (targetDirectory, sessionId) => {
-      if (isCurrent()) void messageLoader.refresh({ directory: targetDirectory, sessionId }).catch(() => {})
+      if (isCurrent()) void messageLoader.refresh({ directory: targetDirectory, sessionId }).catch(() => { })
     })
     setOptimisticRefs(
       (input) => { if (isCurrent()) messageLoader.optimisticAdd({ ...input, directory: input.directory || currentDirectoryRef.current }) },
@@ -429,7 +446,8 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     return () => { if (getImperativeSessionMessageLoader() === messageLoader) setImperativeSessionMessageLoader(null) }
   }, [childStores, isCurrent, messageLoader, props.directory])
 
-  useEffect(() => messageLoader.startCacheRetention({ isCurrent,
+  useEffect(() => messageLoader.startCacheRetention({
+    isCurrent,
     isViewed: (target) => activeTarget?.directory === target.directory && activeTarget.sessionId === target.sessionId || (externallyViewedSessions.get(`${target.directory}\n${target.sessionId}`) ?? 0) > Date.now(),
     isActive: (target) => { const status = childStores.getChild(target.directory)?.getState().session_status[target.sessionId]; return status === "running" || status === "awaiting_approval" || status === "awaiting_input" },
     releaseDerivedCache: (target) => { pipelineRef.current?.detach(target) },
@@ -458,7 +476,7 @@ export function useSessionMessageLoadState(sessionId: string, directory?: string
     return resolved && sessionId ? { directory: resolved, sessionId } : null
   }, [current, directory, sessionId])
   return useSyncExternalStore(
-    useCallback((notify) => target ? runtime.messageLoader.subscribe(target, notify) : () => {}, [runtime.messageLoader, target]),
+    useCallback((notify) => target ? runtime.messageLoader.subscribe(target, notify) : () => { }, [runtime.messageLoader, target]),
     useCallback(() => target ? runtime.messageLoader.getSnapshot(target) : EMPTY_LOAD, [runtime.messageLoader, target]),
     () => EMPTY_LOAD,
   )
@@ -495,6 +513,18 @@ export function useSessionForms(sessionId: string, directory?: string): Question
   return useSyncExternalStore(useCallback((notify) => subscribeDirectoryForm(store, sessionId, notify), [store, sessionId]), useCallback(() => store.getState().form[sessionId] ?? EMPTY_QUESTIONS, [store, sessionId]), () => EMPTY_QUESTIONS)
 }
 export function useSessions(directory?: string): Session[] { return useDirectorySync(useCallback((state) => state.session, []), directory) }
+
+const EMPTY_ADVISOR_NOTES: AdvisorNote[] = [];
+export function useSessionAdvisorNotes(sessionId: string | null | undefined, directory?: string): AdvisorNote[] {
+  const storeNotes = useAdvisorStore(
+    useCallback((state) => (sessionId ? state.bySession[sessionId]?.notes : undefined), [sessionId]),
+  );
+  const dirNotes = useDirectorySync(
+    useCallback((state) => (sessionId ? state.advisor?.[sessionId]?.notes : undefined), [sessionId]),
+    directory,
+  );
+  return storeNotes ?? dirNotes ?? EMPTY_ADVISOR_NOTES;
+}
 
 function useLiveSelector<T>(selector: (states: State[]) => T, isEqual: (left: T, right: T) => boolean, slice: "session" | "session_status"): T {
   const { childStores } = useSyncRuntime()
@@ -567,7 +597,7 @@ export function useSessionMessageRecords(sessionId: string, directory?: string, 
   const store = useDirectoryStore(directory)
   const cache = useRef<SessionMessageRecordsSnapshot>({ sessionId, list: EMPTY_MESSAGES, byId: new Map() })
   const get = useCallback(() => { if (options?.enabled === false) return cache.current.sessionId === sessionId ? cache.current.list : EMPTY_MESSAGES; cache.current = buildSessionMessageRecordsSnapshot(store.getState(), sessionId, cache.current); return cache.current.list }, [store, sessionId, options?.enabled])
-  return useSyncExternalStore(useCallback((notify) => options?.enabled === false ? () => {} : subscribeDirectorySessionMessages(store, sessionId, (change) => { if (options?.suspendPartUpdates && !change.messagesChanged && !change.reset && change.partMessageIds.length && change.partMessageIds.every((id) => !options.suspendPartUpdatesForMessageId || id === options.suspendPartUpdatesForMessageId)) return; notify() }), [store, sessionId, options?.enabled, options?.suspendPartUpdates, options?.suspendPartUpdatesForMessageId]), get, get)
+  return useSyncExternalStore(useCallback((notify) => options?.enabled === false ? () => { } : subscribeDirectorySessionMessages(store, sessionId, (change) => { if (options?.suspendPartUpdates && !change.messagesChanged && !change.reset && change.partMessageIds.length && change.partMessageIds.every((id) => !options.suspendPartUpdatesForMessageId || id === options.suspendPartUpdatesForMessageId)) return; notify() }), [store, sessionId, options?.enabled, options?.suspendPartUpdates, options?.suspendPartUpdatesForMessageId]), get, get)
 }
 export function useUserMessageHistory(sessionId: string, directory?: string): TranscriptPrompt[] {
   const store = useDirectoryStore(directory)

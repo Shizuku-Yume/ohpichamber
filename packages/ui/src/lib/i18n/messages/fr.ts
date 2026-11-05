@@ -1,3 +1,5 @@
+import { m4LaneDI18n } from './m4-lane-d.i18n';
+import { subagentHudI18n } from './subagent-hud.i18n';
 import { settingsDict } from './fr.settings';
 import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { referencePickerI18n } from './reference-picker.i18n';
@@ -38,7 +40,10 @@ import { sessionReferencesI18n } from './session-references.i18n';
 import { guestStatusViewI18n } from './guest-status-view.i18n';
 import { ompSettingsI18n } from './omp-settings.i18n';
 import { workerRunsI18n } from './worker-runs.i18n';
+import { btwI18n } from './btw.i18n';
 export const dict = {
+  ...btwI18n.fr,
+  ...subagentHudI18n['fr'],
   ...ompSettingsI18n.fr,
   ...settingsDict,
   ...linearIssuePickerI18n.fr,
@@ -212,7 +217,7 @@ export const dict = {
   "settings.page.agents.title": "Agents",
   "settings.page.commands.title": "Commandes",
   "settings.page.mcp.title": "MCP",
-  "settings.page.plugins.title": "Plugins",
+  "settings.page.plugins.title": "Plugins OMP",
   "settings.page.skills.title": "Skills",
   "settings.page.skillsCatalog.title": "Catalogue de skills",
   "settings.page.git.title": "Git",
@@ -233,8 +238,8 @@ export const dict = {
   "settings.page.voice.description": "Configurez la synthèse vocale et la dictée.",
   "settings.page.tunnel.title": "Tunnel externe",
   "settings.page.tunnel.description": "Exposez cette instance via un tunnel distant.",
-  "settings.page.snippets.title": "Extraits",
-  "settings.snippets.sidebar.title": "Extraits",
+  "settings.page.snippets.title": "Modèles de prompt",
+  "settings.snippets.sidebar.title": "Modèles de prompt",
   "settings.snippets.sidebar.total": "Total : {count}",
   "settings.snippets.sidebar.actions.create": "Créer un extrait",
   "settings.snippets.sidebar.actions.more": "Plus d’actions pour {name}",
@@ -2444,6 +2449,7 @@ export const dict = {
   "settings.view.nav.group.general": "OpenChamber",
   "settings.view.nav.group.projects": "Espace de travail",
   "settings.view.nav.group.opencode": "OMP",
+  "settings.view.nav.group.agent": "OMP",
   "settings.view.nav.group.content": "Bibliothèque",
   "settings.page.about.title": "À propos",
   "settings.openchamber.tunnel.notAvailable.dependencyNotFound": "{dependency} est introuvable.",
@@ -2814,7 +2820,7 @@ export const dict = {
   "settings.extensions.identity.loadFailed": "Impossible de charger les identités Git de cette instance. L'identité globale reste disponible.",
   "settings.extensions.request.noResponse": "Aucune réponse HTTP reçue. Vérifiez la connexion à cette instance.",
   "settings.extensions.request.invalidResponse": "Réponse inattendue du serveur (HTTP {status}).",
-  "settings.page.extensions.title": "Extensions",
+  "settings.page.extensions.title": "Extensions invitées",
   "settings.page.extensions.description": "Extensions depuis un dossier, une archive ZIP ou une URL git — panneaux, menus d’attache, intégrations et services locaux. Ce ne sont pas des plugins OpenCode.",
   "settings.extensions.section.installed": "Installées",
   "settings.extensions.empty": "Aucune extension chargée.",
@@ -9150,4 +9156,6 @@ export const dict = {
   'chat.planReview.sendFeedback': "Envoyer les commentaires",
   'chat.planReview.reject': "Rejeter",
   ...workerRunsI18n.fr,
+
+  ...m4LaneDI18n.fr,
 };

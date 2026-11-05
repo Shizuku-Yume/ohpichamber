@@ -251,6 +251,18 @@ export class WorkerRegistry {
     const entry = this.workerEntries.get(rootSessionId);
     return entry?.kind === 'session' ? structuredClone(entry.input) : undefined;
   }
+  rekey(oldRootSessionId: string, newRootSessionId: string): void {
+    if (oldRootSessionId === newRootSessionId) return;
+    const entry = this.workerEntries.get(oldRootSessionId);
+    if (!entry) return;
+    this.workerEntries.delete(oldRootSessionId);
+    entry.info.rootSessionId = newRootSessionId;
+    if (entry.kind === 'session') {
+      entry.input.rootSessionId = newRootSessionId;
+    }
+    this.workerEntries.set(newRootSessionId, entry);
+  }
+
   authorizationPolicy(workspaceId: string, agentDirectoryId: string, rootSessionId?: string): HostNativePolicySnapshot {
     const candidates = rootSessionId === undefined ? [...this.workerEntries.values()] : [this.workerEntries.get(rootSessionId)];
     const entry = candidates.find(candidate => candidate?.kind !== 'usage' && candidate?.input.workspaceId === workspaceId && candidate.input.agentDirectoryId === agentDirectoryId && candidate.child.connected && (candidate.info.state === 'starting' || candidate.info.state === 'ready') && candidate.policySnapshot !== undefined);
@@ -892,7 +904,7 @@ export class WorkerRegistry {
     child.on('message', raw => {
       const reply = WorkerReplySchema.safeParse(raw);
       if (!reply.success || reply.data.workerGeneration !== workerGeneration) return;
-      if (this.workerEntries.get(input.rootSessionId) !== entry) return;
+      if (this.workerEntries.get(entry.info.rootSessionId) !== entry) return;
       if (entry.info.state !== 'starting' && entry.info.state !== 'ready') return;
       entry.lastActivityAt = Date.now();
       if (reply.data.type === 'ready') {
@@ -908,14 +920,14 @@ export class WorkerRegistry {
       } else if (reply.data.type === 'opened') {
         if (entry.kind === 'session') {
           entry.input.sessionFile = reply.data.sessionFile;
-          this.options.callbacks?.onOpened?.(input.rootSessionId, workerGeneration, reply.data.sessionFile, reply.data.seed);
+          this.options.callbacks?.onOpened?.(entry.info.rootSessionId, workerGeneration, reply.data.sessionFile, reply.data.seed);
         }
       } else if (reply.data.type === 'subagent') {
-        if (entry.kind === 'session') this.options.callbacks?.onSubagent?.(input.rootSessionId, workerGeneration, reply.data);
+        if (entry.kind === 'session') this.options.callbacks?.onSubagent?.(entry.info.rootSessionId, workerGeneration, reply.data);
       } else if (reply.data.type === 'events') {
-        if (entry.kind === 'session') this.options.callbacks?.onEvents?.(input.rootSessionId, workerGeneration, reply.data.inputs);
+        if (entry.kind === 'session') this.options.callbacks?.onEvents?.(entry.info.rootSessionId, workerGeneration, reply.data.inputs);
       } else if (reply.data.type === 'interaction') {
-        if (entry.kind === 'session') this.options.callbacks?.onInteraction?.(input.rootSessionId, workerGeneration, reply.data.request);
+        if (entry.kind === 'session') this.options.callbacks?.onInteraction?.(entry.info.rootSessionId, workerGeneration, reply.data.request);
       } else if (reply.data.type === 'policy.snapshot') {
         const snapshot = reply.data.snapshot;
         if (snapshot.projectId !== input.projectId || snapshot.workspaceId !== input.workspaceId || snapshot.cwd !== input.cwd || snapshot.agentDirectory !== input.agentDirectory || (input.agentDirectoryId !== undefined && snapshot.agentDirectoryId !== input.agentDirectoryId)) return;
@@ -926,30 +938,30 @@ export class WorkerRegistry {
         const request = reply.data.request;
         void (async () => {
           const descriptor = await describeNativeOperation(input.cwd, request, reply.data.type === 'policy.request' ? reply.data.nativeContext : undefined);
-          if (this.workerEntries.get(input.rootSessionId) !== entry || entry.info.workerGeneration !== workerGeneration) return { allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 } as const;
+          if (this.workerEntries.get(entry.info.rootSessionId) !== entry || entry.info.workerGeneration !== workerGeneration) return { allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 } as const;
           if (descriptor && request.type === 'tool' && request.toolName === 'bash' && request.approvalId && request.toolCallId) {
-            descriptor.approvalGrant = this.options.consumeApprovalGrant?.(input.rootSessionId, workerGeneration, request);
+            descriptor.approvalGrant = this.options.consumeApprovalGrant?.(entry.info.rootSessionId, workerGeneration, request);
           }
-          return check ? check(input.rootSessionId, request, descriptor) : { allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 } as const;
+          return check ? check(entry.info.rootSessionId, request, descriptor) : { allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 } as const;
         })().then(result => {
-          if (this.workerEntries.get(input.rootSessionId) === entry && entry.info.workerGeneration === workerGeneration && (entry.info.state === 'starting' || entry.info.state === 'ready') && entry.child.connected) entry.child.send({ type: 'policy.result', workerGeneration, requestId, result: WorkerPolicyResultSchema.parse(result) });
+          if (this.workerEntries.get(entry.info.rootSessionId) === entry && entry.info.workerGeneration === workerGeneration && (entry.info.state === 'starting' || entry.info.state === 'ready') && entry.child.connected) entry.child.send({ type: 'policy.result', workerGeneration, requestId, result: WorkerPolicyResultSchema.parse(result) });
         }).catch(() => {
-          if (this.workerEntries.get(input.rootSessionId) === entry && entry.info.workerGeneration === workerGeneration && (entry.info.state === 'starting' || entry.info.state === 'ready') && entry.child.connected) entry.child.send({ type: 'policy.result', workerGeneration, requestId, result: { allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 } });
+          if (this.workerEntries.get(entry.info.rootSessionId) === entry && entry.info.workerGeneration === workerGeneration && (entry.info.state === 'starting' || entry.info.state === 'ready') && entry.child.connected) entry.child.send({ type: 'policy.result', workerGeneration, requestId, result: { allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 } });
         });
       } else if (reply.data.type === 'action.cancel') {
         const handle = this.actions.get(reply.data.requestId);
         if (handle?.entry === entry) { this.actions.delete(reply.data.requestId); handle.controller.abort(); }
       } else if (reply.data.type === 'action.request') {
         const { requestId, request } = reply.data;
-        if (this.actions.has(requestId) || request.sessionId !== input.rootSessionId) return;
+        if (this.actions.has(requestId) || request.sessionId !== entry.info.rootSessionId) return;
         const handle = { entry, controller: new AbortController() };
         this.actions.set(requestId, handle);
         const invoke = this.options.invokeHostAction;
-        void (invoke ? invoke(input.rootSessionId, request, handle.controller.signal) : Promise.resolve({ ok: false, code: 'SERVICE_UNAVAILABLE', status: 503 } as const)).then(result => {
+        void (invoke ? invoke(entry.info.rootSessionId, request, handle.controller.signal) : Promise.resolve({ ok: false, code: 'SERVICE_UNAVAILABLE', status: 503 } as const)).then(result => {
           if (this.actions.get(requestId) !== handle || handle.controller.signal.aborted) return;
-          if (this.workerEntries.get(input.rootSessionId) === entry && entry.child.connected && entry.info.state === 'ready') entry.child.send({ type: 'action.result', workerGeneration, requestId, result });
+          if (this.workerEntries.get(entry.info.rootSessionId) === entry && entry.child.connected && entry.info.state === 'ready') entry.child.send({ type: 'action.result', workerGeneration, requestId, result });
         }).catch(() => {
-          if (this.actions.get(requestId) === handle && this.workerEntries.get(input.rootSessionId) === entry && entry.child.connected) entry.child.send({ type: 'action.result', workerGeneration, requestId, result: { ok: false, code: 'SERVICE_UNAVAILABLE', status: 503 } });
+          if (this.actions.get(requestId) === handle && this.workerEntries.get(entry.info.rootSessionId) === entry && entry.child.connected) entry.child.send({ type: 'action.result', workerGeneration, requestId, result: { ok: false, code: 'SERVICE_UNAVAILABLE', status: 503 } });
         }).finally(() => { if (this.actions.get(requestId) === handle) this.actions.delete(requestId); });
       } else if (reply.data.type === 'result') {
         const pending = entry.pending.get(reply.data.commandId);
@@ -966,14 +978,14 @@ export class WorkerRegistry {
       if (wasStarting) ready.reject(new Error('SDK worker exited before initialization'));
       for (const pending of entry.pending.values()) pending.reject(new WorkerOperationError(503, 'SERVICE_UNAVAILABLE'));
       entry.pending.clear();
-      this.options.callbacks?.onExit?.(input.rootSessionId, workerGeneration);
+      this.options.callbacks?.onExit?.(entry.info.rootSessionId, workerGeneration);
       exited.resolve();
     });
     try {
       if (!child.connected) ready.reject(new WorkerOperationError(503, 'SERVICE_UNAVAILABLE'));
       else child.send(command, error => { if (error) ready.reject(error); });
       await waitWithin(entry.ready, this.options.startupTimeoutMs ?? 15_000);
-      if (this.closing || this.workerEntries.get(input.rootSessionId) !== entry || entry.info.state !== 'ready' || !child.connected) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+      if (this.closing || this.workerEntries.get(entry.info.rootSessionId) !== entry || entry.info.state !== 'ready' || !child.connected) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
       return { ...entry.info };
     } catch (error) {
       const code = error instanceof WorkerOperationError ? error.code : 'WORKER_INIT_FAILED';

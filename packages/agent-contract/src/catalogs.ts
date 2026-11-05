@@ -239,6 +239,7 @@ export const MCPServerConfigSchema = z.strictObject({
   serverId: EntityIdSchema,
   label: z.string().min(1),
   enabled: z.boolean(),
+  managed: z.boolean().optional(),
   transport: MCPTransportSchema,
 });
 export type MCPServerConfig = z.infer<typeof MCPServerConfigSchema>;

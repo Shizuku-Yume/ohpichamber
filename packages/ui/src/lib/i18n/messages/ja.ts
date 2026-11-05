@@ -1,3 +1,5 @@
+import { m4LaneDI18n } from './m4-lane-d.i18n';
+import { subagentHudI18n } from './subagent-hud.i18n';
 import { settingsDict } from './ja.settings';
 import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { referencePickerI18n } from './reference-picker.i18n';
@@ -38,7 +40,10 @@ import { sessionReferencesI18n } from './session-references.i18n';
 import { guestStatusViewI18n } from './guest-status-view.i18n';
 import { ompSettingsI18n } from './omp-settings.i18n';
 import { workerRunsI18n } from './worker-runs.i18n';
+import { btwI18n } from './btw.i18n';
 export const dict = {
+  ...btwI18n.ja,
+  ...subagentHudI18n['ja'],
   ...ompSettingsI18n.ja,
   ...settingsDict,
   ...linearIssuePickerI18n.ja,
@@ -212,6 +217,7 @@ export const dict = {
   "settings.view.nav.group.general": "OpenChamber",
   "settings.view.nav.group.projects": "ワークスペース",
   "settings.view.nav.group.opencode": "OMP",
+  "settings.view.nav.group.agent": "OMP",
   "settings.view.nav.group.content": "ライブラリ",
   "settings.page.projects.title": "プロジェクト",
   "settings.page.remoteInstances.title": "リモートインスタンス",
@@ -220,7 +226,7 @@ export const dict = {
   "settings.page.agents.title": "エージェント",
   "settings.page.commands.title": "コマンド",
   "settings.page.mcp.title": "MCP",
-  "settings.page.plugins.title": "プラグイン",
+  "settings.page.plugins.title": "OMP プラグイン",
   "settings.page.skills.title": "スキル",
   "settings.page.skillsCatalog.title": "スキルカタログ",
   "settings.page.git.title": "Git",
@@ -242,8 +248,8 @@ export const dict = {
   "settings.page.tunnel.title": "外部トンネル",
   "settings.page.tunnel.description": "このインスタンスをリモートトンネルで公開します。",
   "settings.page.about.title": "概要",
-  "settings.page.snippets.title": "スニペット",
-  "settings.snippets.sidebar.title": "スニペット",
+  "settings.page.snippets.title": "プロンプトテンプレート",
+  "settings.snippets.sidebar.title": "プロンプトテンプレート",
   "settings.snippets.sidebar.total": "合計: {count}",
   "settings.snippets.sidebar.actions.create": "Snippet を作成",
   "settings.snippets.sidebar.actions.more": "{name} のその他の操作",
@@ -2814,7 +2820,7 @@ export const dict = {
   "settings.extensions.identity.loadFailed": "このインスタンスの Git ID を読み込めませんでした。グローバル ID は引き続き使用できます。",
   "settings.extensions.request.noResponse": "HTTP 応答を受信できませんでした。このインスタンスへの接続を確認してください。",
   "settings.extensions.request.invalidResponse": "予期しないサーバー応答です (HTTP {status})。",
-  "settings.page.extensions.title": "拡張機能",
+  "settings.page.extensions.title": "ゲスト拡張機能",
   "settings.page.extensions.description": "フォルダ、ZIP、git URL から入れる拡張機能です。パネル、アタッチメニュー、連携、ローカルサービス。OpenCode のプラグインとは別物です。",
   "settings.extensions.section.installed": "インストール済み",
   "settings.extensions.empty": "拡張機能は読み込まれていません。",
@@ -9150,4 +9156,6 @@ export const dict = {
   'chat.planReview.sendFeedback': "フィードバックを送信",
   'chat.planReview.reject': "却下",
   ...workerRunsI18n.ja,
+
+  ...m4LaneDI18n.ja,
 };

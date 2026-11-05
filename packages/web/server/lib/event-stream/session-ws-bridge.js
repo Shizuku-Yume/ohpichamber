@@ -1,4 +1,5 @@
 import { sendMessageStreamWsFrame, sendSerializedMessageStreamWsFrame } from './protocol.js';
+import { randomUUID } from 'node:crypto';
 import { EntityIdSchema } from '@openchamber/agent-contract';
 
 export function acceptSessionMessageStreamWsConnection({ socket, sessionId, requestedLastEventId, globalHub, wsClients, heartbeatIntervalMs }) {
@@ -32,9 +33,18 @@ export function acceptSessionMessageStreamWsConnection({ socket, sessionId, requ
     if (status.type === 'error' || status.type === 'initial-error') sendMessageStreamWsFrame(socket, { type: 'error', code: status.error.code, sessionId });
   });
   const heartbeat = setInterval(() => { if (socket.readyState === 1) { try { socket.ping(); } catch { socket.close(); } } }, heartbeatIntervalMs);
-  socket.on('close', () => { closed = true; clearInterval(heartbeat); unsubscribeFrame(); unsubscribeStatus(); wsClients.delete(socket); });
+  const leaseKey = `ws-${randomUUID()}`;
+  socket.on('close', () => {
+    closed = true;
+    clearInterval(heartbeat);
+    unsubscribeFrame();
+    unsubscribeStatus();
+    wsClients.delete(socket);
+    void globalHub.releaseSession?.(sessionId, leaseKey);
+  });
   if (globalHub.isSessionConnected(sessionId)) markReady();
-  void globalHub.subscribeSession(sessionId).then(markReady).catch(() => {
+  const subscribePromise = globalHub.retainSession ? globalHub.retainSession(sessionId, leaseKey) : globalHub.subscribeSession(sessionId);
+  void Promise.resolve(subscribePromise).then(markReady).catch(() => {
     if (!closed) { sendMessageStreamWsFrame(socket, { type: 'error', code: 'STREAM_UNAVAILABLE', sessionId }); socket.close(1011, 'Agent Service unavailable'); }
   });
 }

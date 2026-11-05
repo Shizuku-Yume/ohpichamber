@@ -1,4 +1,4 @@
-import { CapturedSendOptionsSchema, CounterSchema, EntityIdSchema, EpochSchema, FollowUpAckSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, MCPConfigurationStateSchema, MCPServerConfigSchema, ProblemCodeSchema, PromptRequestSchema, RunSchema, SessionBranchRequestSchema, SessionBranchResultSchema, SessionModeSchema, ShellStartRequestSchema, SkillSourceRevisionsSchema, SteerAckSchema, TimestampSchema, type JsonValue } from '@openchamber/agent-contract';
+import { CapturedSendOptionsSchema, CounterSchema, EntityIdSchema, EpochSchema, FollowUpAckSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, MCPConfigurationStateSchema, MCPServerConfigSchema, ProblemCodeSchema, PromptRequestSchema, RunSchema, SessionBranchRequestSchema, SessionBranchResultSchema, SessionBranchStateSchema, SessionModeSchema, ShellStartRequestSchema, SkillSourceRevisionsSchema, SteerAckSchema, TimestampSchema, type JsonValue } from '@openchamber/agent-contract';
 import { GoalControlRequestSchema } from '@openchamber/agent-contract';
 import { isAbsolute } from 'node:path';
 import { z } from 'zod';
@@ -78,6 +78,10 @@ export const WorkerOperationSchema = z.discriminatedUnion('type', [
   HostStreamingPromptRequestSchema.extend({ type: z.literal('follow-up') }),
   z.strictObject({ type: z.literal('btw.ask'), question: z.string().min(1), recordId: EntityIdSchema.optional() }),
   z.strictObject({ type: z.literal('btw.cancel'), recordId: EntityIdSchema.optional() }),
+  z.strictObject({ type: z.literal('btw.branch'), recordId: EntityIdSchema }),
+  z.strictObject({ type: z.literal('subagent.steer'), subagentId: EntityIdSchema, message: z.string().min(1) }),
+  z.strictObject({ type: z.literal('subagent.cancel'), subagentId: EntityIdSchema }),
+  z.strictObject({ type: z.literal('loop.stop') }),
   z.strictObject({ type: z.literal('mode.set'), mode: z.enum(['main', 'plan', 'vibe']) }),
   z.strictObject({ type: z.literal('session.rename'), title: z.string().trim().min(1) }),
   GoalControlRequestSchema,
@@ -126,6 +130,10 @@ const WorkerOperationResultSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('goal'), mode: SessionModeSchema }),
   z.strictObject({ type: z.literal('btw.ask'), recordId: EntityIdSchema }),
   z.strictObject({ type: z.literal('btw.cancel'), cancelled: z.boolean() }),
+  z.strictObject({ type: z.literal('btw.branch'), sessionFile: z.string().optional(), sessionId: EntityIdSchema.optional(), rootSessionId: EntityIdSchema.optional(), branch: SessionBranchStateSchema, seed: ProjectionSeedSchema.optional() }),
+  z.strictObject({ type: z.literal('subagent.steer'), subagentId: EntityIdSchema, accepted: z.boolean() }),
+  z.strictObject({ type: z.literal('subagent.cancel'), subagentId: EntityIdSchema, cancelled: z.boolean() }),
+  z.strictObject({ type: z.literal('loop.stop'), stopped: z.boolean() }),
   z.strictObject({ type: z.literal('approval.resolve'), resolved: z.literal(true) }),
   z.strictObject({ type: z.literal('question.resolve'), resolved: z.literal(true) }),
   z.strictObject({ type: z.literal('history'), history: HistoryPageSchema }),

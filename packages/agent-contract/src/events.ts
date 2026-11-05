@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { CounterSchema, EntityIdSchema, EpochSchema, JsonObjectSchema, JsonValueSchema, PositiveCounterSchema, TimestampSchema } from './primitives.ts';
 import { SessionMetadataSchema } from './metadata.ts';
-import { RunOriginSchema, RuntimeSessionSchema, SessionModeSchema, SessionRuntimeStatusSchema } from './session.ts';
+import { LoopStateSchema, RunOriginSchema, RuntimeSessionSchema, SessionModeSchema, SessionRuntimeStatusSchema, SubagentSchema } from './session.ts';
 import { PartSchema, TokenUsageSchema, ToolStatusSchema } from './messages.ts';
 import { ApprovalRequestSchema, QuestionRequestSchema } from './requests.ts';
 import { QueueStateSchema } from './queue.ts';
@@ -23,6 +23,7 @@ const sessionUpdatedSchema = DataEventEnvelopeSchema.extend({
   mode: SessionModeSchema.optional(),
   title: z.string().min(1).optional(),
   continuationPending: z.boolean().optional(),
+  loop: LoopStateSchema.optional(),
   selection: SessionSelectionSchema.optional(),
   metadata: SessionMetadataSchema.nullable().optional(),
   metadataRevision: CounterSchema.optional(),
@@ -32,7 +33,7 @@ const sessionUpdatedSchema = DataEventEnvelopeSchema.extend({
   const metadataPresent = event.metadata !== undefined;
   const archivePresent = event.archivedAt !== undefined;
   return (event.session !== undefined || event.mode !== undefined || event.title !== undefined
-    || event.continuationPending !== undefined || event.selection !== undefined || metadataPresent || archivePresent)
+    || event.continuationPending !== undefined || event.loop !== undefined || event.selection !== undefined || metadataPresent || archivePresent)
     && metadataPresent === (event.metadataRevision !== undefined)
     && archivePresent === (event.archiveRevision !== undefined)
     && (!metadataPresent || (event.metadata === null) === (event.metadataRevision === '0'));
@@ -46,6 +47,35 @@ const sessionStatusSchema = DataEventEnvelopeSchema.extend({
   message: 'Runtime status must identify its live outer run',
 });
 
+export const SubagentUpdatedEventSchema = DataEventEnvelopeSchema.extend({
+  type: z.literal('subagent.updated'),
+  subagent: SubagentSchema,
+});
+export const AdvisorNoteSchema = z.strictObject({
+  noteId: EntityIdSchema,
+  severity: z.enum(['nit', 'concern', 'blocker']),
+  text: z.string().min(1),
+  turnId: EntityIdSchema.optional(),
+  advisorName: z.string().optional(),
+  timestamp: TimestampSchema,
+});
+export type AdvisorNote = z.infer<typeof AdvisorNoteSchema>;
+export const AdvisorYieldedEventSchema = DataEventEnvelopeSchema.extend({
+  type: z.literal('advisor_yielded'),
+  notes: z.array(AdvisorNoteSchema),
+});
+export type AdvisorYieldedEvent = z.infer<typeof AdvisorYieldedEventSchema>;
+export const CleanseProgressEventSchema = DataEventEnvelopeSchema.extend({
+  type: z.literal('cleanse.progress'),
+  activeCheckers: z.array(z.string()),
+  completedCheckers: z.array(z.string()),
+  repairedFiles: z.array(z.string()),
+  diagnosticsCount: z.number().int().nonnegative().optional(),
+  status: z.enum(['discovering', 'repairing', 'verifying', 'completed', 'failed', 'cancelled']),
+  summary: z.string().optional(),
+});
+export type CleanseProgressEvent = z.infer<typeof CleanseProgressEventSchema>;
+export type CleanseProgressStatus = CleanseProgressEvent['status'];
 export const CanonicalEventSchema = z.discriminatedUnion('type', [
   sessionUpdatedSchema,
   DataEventEnvelopeSchema.extend({ type: z.literal('session.deleted'), deletedSessionIds: z.array(EntityIdSchema).min(1) }),
@@ -58,6 +88,7 @@ export const CanonicalEventSchema = z.discriminatedUnion('type', [
   DataEventEnvelopeSchema.extend({ type: z.literal('turn.completed'), turnId: EntityIdSchema, runId: EntityIdSchema }),
   DataEventEnvelopeSchema.extend({ type: z.literal('message.created'), messageId: EntityIdSchema, turnId: EntityIdSchema, role: z.enum(['user', 'assistant', 'system']), providerId: z.string().min(1).optional(), modelId: z.string().min(1).optional(), usage: TokenUsageSchema.optional() }),
   DataEventEnvelopeSchema.extend({ type: z.literal('part.started'), messageId: EntityIdSchema, part: PartSchema }),
+  DataEventEnvelopeSchema.extend({ type: z.literal('part.updated'), part: PartSchema }),
   DataEventEnvelopeSchema.extend({ type: z.literal('part.delta'), partId: EntityIdSchema, delta: z.string() }),
   DataEventEnvelopeSchema.extend({ type: z.literal('part.completed'), part: PartSchema }),
   DataEventEnvelopeSchema.extend({ type: z.literal('tool.started'), toolCallId: EntityIdSchema, toolName: z.string().min(1), input: JsonObjectSchema }),
@@ -83,8 +114,20 @@ export const CanonicalEventSchema = z.discriminatedUnion('type', [
   DataEventEnvelopeSchema.extend({ type: z.literal('btw.delta'), recordId: EntityIdSchema, delta: z.string() }),
   DataEventEnvelopeSchema.extend({ type: z.literal('btw.completed'), recordId: EntityIdSchema, status: z.enum(['completed', 'cancelled', 'failed']), text: z.string(), error: z.string().optional() }),
   DataEventEnvelopeSchema.extend({ type: z.literal('shell.updated'), job: ShellJobSchema }),
-  DataEventEnvelopeSchema.extend({ type: z.literal('session.compacted'), compactionId: EntityIdSchema, tokensBefore: z.number().int().nonnegative(), completedAt: TimestampSchema }),
+  DataEventEnvelopeSchema.extend({
+    type: z.literal('session.compacted'),
+    compactionId: EntityIdSchema,
+    method: z.enum(['soft-compacted', 'snap-compacted', 'shaken', 'remote-compacted', 'handed-off', 'compacted']).optional(),
+    tokensBefore: z.number().int().nonnegative(),
+    tokensAfter: z.number().int().nonnegative().optional(),
+    summary: z.string().optional(),
+    warning: z.string().optional(),
+    completedAt: TimestampSchema,
+  }),
   DataEventEnvelopeSchema.extend({ type: z.literal('message.updated'), messageId: EntityIdSchema, providerId: z.string().min(1).optional(), modelId: z.string().min(1).optional(), usage: TokenUsageSchema.optional() }),
+  SubagentUpdatedEventSchema,
+  AdvisorYieldedEventSchema,
+  CleanseProgressEventSchema,
 ]);
 export type CanonicalEvent = z.infer<typeof CanonicalEventSchema>;
 

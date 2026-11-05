@@ -2,17 +2,19 @@ import type { IncomingMessage } from 'node:http';
 import type { z } from 'zod';
 import {
   EntityIdSchema, EpochSchema, ShellOutputRequestSchema, ShellSnapshotSchema,
-  ShellStartRequestSchema, ShellStopRequestSchema,
+  ShellStartRequestSchema, ShellStopRequestSchema, ShellStreamRequestSchema,
+  ShellStdinRequestSchema,
 } from '@openchamber/agent-contract';
 import type {
   ShellJob, ShellJobIdentity, ShellOutput, ShellScope, ShellSnapshot, ShellStopResult,
+  ShellStreamRequest, ShellStreamResponse, ShellStdinResult,
 } from '@openchamber/agent-contract';
 import { ProjectionError } from '../projection/journal.ts';
 import type { SessionRegistry } from '../sessions/registry.ts';
 import { ShellResultSchema, type ShellOperation, type ShellResult } from '../shell/protocol.ts';
 import { WorkerOperationError, type RegisteredWorkerInfo, type WorkerRegistry } from './workers.ts';
 
-type ShellResponse = { status: number; body: ShellJob | ShellSnapshot | ShellOutput | ShellStopResult };
+type ShellResponse = { status: number; body: ShellJob | ShellSnapshot | ShellOutput | ShellStopResult | ShellStreamResponse | ShellStdinResult };
 type BodyReader = <T>(request: IncomingMessage, schema: z.ZodType<T>) => Promise<T>;
 type ScopeRevision = { members: string; membershipRevision: bigint; revision: bigint };
 
@@ -80,11 +82,13 @@ export class ShellCoordinator {
       return { status: 200, body: await this.snapshot({ kind: 'global' }) };
     }
 
-    const jobRoute = /^\/sessions\/([^/]+)\/shell\/jobs\/([^/]+)\/(output|stop)$/.exec(pathname);
-    if (!jobRoute || (jobRoute[3] === 'output' ? request.method !== 'GET' : request.method !== 'POST')) return null;
+    const jobRoute = /^\/sessions\/([^/]+)\/shell\/jobs\/([^/]+)\/(output|stop|stream|stdin)$/.exec(pathname);
+    if (!jobRoute) return null;
     const sessionId = identity(jobRoute[1]!);
     const jobId = identity(jobRoute[2]!);
-    if (jobRoute[3] === 'output') {
+    const action = jobRoute[3]!;
+    if (action === 'output') {
+      if (request.method !== 'GET') return null;
       const input = this.outputRequest(url, sessionId, jobId);
       const root = this.root(sessionId);
       this.assertCurrent(root, input.job);
@@ -92,22 +96,49 @@ export class ShellCoordinator {
       const result = await this.operation(root, { type: 'output', request: nativeRequest });
       if (result.type !== 'output' || !this.sameJob(result.output.job, nativeRequest.job)
         || result.output.requestedCursor !== input.cursor) throw unavailable();
-      return { status: 200, body: result.output };
+      return { status: 200, body: sessionId === root.rootSessionId ? result.output : { ...result.output, job: { ...result.output.job, sessionId } } };
     }
-
-    this.noQuery(url);
-    const input = await readBody(request, ShellStopRequestSchema);
-    const root = this.root(sessionId);
-    // The path can address a subagent, while canonical jobs retain their root owner.
-    if (input.job.jobId !== jobId || (input.job.sessionId !== sessionId && input.job.sessionId !== root.rootSessionId)) {
-      throw new ProjectionError(400, 'INVALID_REQUEST', 'Shell job identity does not match its route');
+    if (action === 'stream') {
+      if (request.method !== 'GET') return null;
+      const input = this.streamRequest(url, sessionId, jobId);
+      const root = this.root(sessionId);
+      this.assertCurrent(root, input.job);
+      const nativeRequest = { ...input, job: { ...input.job, sessionId: root.rootSessionId } };
+      const result = await this.operation(root, { type: 'stream', request: nativeRequest });
+      if (result.type !== 'stream' || !this.sameJob(result.stream.job, nativeRequest.job)) throw unavailable();
+      return { status: 200, body: sessionId === root.rootSessionId ? result.stream : { ...result.stream, job: { ...result.stream.job, sessionId } } };
     }
-    this.assertCurrent(root, input.job);
-    const nativeRequest = { job: { ...input.job, sessionId: root.rootSessionId } };
-    const result = await this.operation(root, { type: 'stop', request: nativeRequest });
-    if (result.type !== 'stop' || !this.sameJob(result.result.job, nativeRequest.job)) throw unavailable();
-    this.assertJobOwner(root, result.result.job);
-    return { status: 200, body: result.result };
+    if (action === 'stdin') {
+      if (request.method !== 'POST') return null;
+      this.noQuery(url);
+      const input = await readBody(request, ShellStdinRequestSchema);
+      const root = this.root(sessionId);
+      if (input.job.jobId !== jobId || (input.job.sessionId !== sessionId && input.job.sessionId !== root.rootSessionId)) {
+        throw new ProjectionError(400, 'INVALID_REQUEST', 'Shell job identity does not match its route');
+      }
+      this.assertCurrent(root, input.job);
+      const nativeRequest = { ...input, job: { ...input.job, sessionId: root.rootSessionId } };
+      const result = await this.operation(root, { type: 'stdin', request: nativeRequest });
+      if (result.type !== 'stdin' || !this.sameJob(result.result.job, nativeRequest.job)) throw unavailable();
+      return { status: 200, body: sessionId === root.rootSessionId ? result.result : { ...result.result, job: { ...result.result.job, sessionId } } };
+    }
+    if (action === 'stop') {
+      if (request.method !== 'POST') return null;
+      this.noQuery(url);
+      const input = await readBody(request, ShellStopRequestSchema);
+      const root = this.root(sessionId);
+      // The path can address a subagent, while canonical jobs retain their root owner.
+      if (input.job.jobId !== jobId || (input.job.sessionId !== sessionId && input.job.sessionId !== root.rootSessionId)) {
+        throw new ProjectionError(400, 'INVALID_REQUEST', 'Shell job identity does not match its route');
+      }
+      this.assertCurrent(root, input.job);
+      const nativeRequest = { job: { ...input.job, sessionId: root.rootSessionId } };
+      const result = await this.operation(root, { type: 'stop', request: nativeRequest });
+      if (result.type !== 'stop' || !this.sameJob(result.result.job, nativeRequest.job)) throw unavailable();
+      this.assertJobOwner(root, result.result.job);
+      return { status: 200, body: sessionId === root.rootSessionId ? result.result : { ...result.result, job: { ...result.result.job, sessionId } } };
+    }
+    return null;
   }
 
   private noQuery(url: URL): void {
@@ -125,6 +156,22 @@ export class ShellCoordinator {
       cursor: url.searchParams.get('cursor'), tailBytes: Number(url.searchParams.get('tailBytes')),
     });
     if (!parsed.success) throw new ProjectionError(400, 'INVALID_REQUEST', 'Shell output query is invalid');
+    return parsed.data;
+  }
+
+  private streamRequest(url: URL, sessionId: string, jobId: string): ShellStreamRequest {
+    const epoch = url.searchParams.get('epoch') ?? '';
+    const workerGeneration = url.searchParams.get('workerGeneration') ?? '';
+    const streamIdRaw = url.searchParams.get('streamId') ?? '';
+    const fromRaw = url.searchParams.get('from');
+    const streamId = Number(streamIdRaw);
+    const from = fromRaw !== null && fromRaw !== undefined && fromRaw !== '' ? Number(fromRaw) : undefined;
+    const parsed = ShellStreamRequestSchema.safeParse({
+      job: { jobId, sessionId, epoch, workerGeneration },
+      streamId,
+      from,
+    });
+    if (!parsed.success) throw new ProjectionError(400, 'INVALID_REQUEST', 'Shell stream query is invalid');
     return parsed.data;
   }
 
@@ -178,7 +225,7 @@ export class ShellCoordinator {
   }
 
   private async operation(root: RegisteredWorkerInfo, operation: ShellOperation): Promise<ShellResult> {
-    const identitySensitive = operation.type === 'output' || operation.type === 'stop';
+    const identitySensitive = operation.type === 'output' || operation.type === 'stop' || operation.type === 'stream' || operation.type === 'stdin';
     const scope = this.workers.authorizationScope(root.rootSessionId);
     if (!this.isAuthorizedRoot(root.rootSessionId) || !scope || root.state !== 'ready') throw unavailable();
     if (scope.workerGeneration !== root.workerGeneration) {

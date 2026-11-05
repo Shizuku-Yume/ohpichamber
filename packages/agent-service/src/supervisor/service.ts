@@ -14,7 +14,7 @@ import type {
   MCPApplyResult, MCPOAuthResult, ModelCatalog, ModelMutationResult, ProblemCode,
   ProblemDetails, ProviderCatalog, ProviderCredentialMutationResult, ProviderMutationResult,
   QuestionRequest, Run, RuntimeSession, SessionBranchResult, SessionDeleteAck, SessionSnapshot, SteerAck, FollowUpAck, Subagent,
-  ShellJob, ShellSnapshot, ShellOutput, ShellStopResult, SkillsCatalogState, SkillsApplyResult, SkillExpandResult, SkillInstallResult,
+  ShellJob, ShellSnapshot, ShellOutput, ShellStopResult, ShellStreamResponse, ShellStdinResult, SkillsCatalogState, SkillsApplyResult, SkillExpandResult, SkillInstallResult,
   ProviderAccounts, ProviderOAuthMethods, ProviderOAuthResult, ProviderModelDiscoveryResult, ProviderConfigurationRead,
   CacheWarmingState, CacheWarmingApplyResult, OmpSettingsState,
   UsageStats, UsageToolsResponse,
@@ -96,7 +96,7 @@ type ServiceResponse =
   | CommandCatalogState | PromptTemplateCatalogState | FileResourceSkillCatalog | FileResourceExpandResult | FileResourcePromptInputResult
   | { sources: SkillSourceRevisions }
   | WorktreeLeaseAcquireResult
-  | ShellJob | ShellSnapshot | ShellOutput | ShellStopResult;
+  | ShellJob | ShellSnapshot | ShellOutput | ShellStopResult | ShellStreamResponse | ShellStdinResult;
 
 function respondJson(response: ServerResponse, status: number, body: ServiceResponse): void {
   response.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
@@ -622,7 +622,11 @@ export class AgentService {
           respondJson(response, 200, SessionControlAckSchema.parse(await this.sessions.command(sessionId, control.text))); return;
         }
         if (control.type === 'btw.ask') { respondJson(response, 202, SessionControlAckSchema.parse(await this.sessions.btwAsk(sessionId, control.question, control.recordId))); return; }
-        respondJson(response, 200, SessionControlAckSchema.parse(await this.sessions.btwCancel(sessionId, control.recordId))); return;
+        if (control.type === 'btw.cancel') { respondJson(response, 200, SessionControlAckSchema.parse(await this.sessions.btwCancel(sessionId, control.recordId))); return; }
+        if (control.type === 'btw.branch') { respondJson(response, 200, SessionControlAckSchema.parse(await this.sessions.btwBranch(sessionId, control.recordId))); return; }
+        if (control.type === 'subagent.steer') { respondJson(response, 200, SessionControlAckSchema.parse(await this.sessions.steerSubagent(sessionId, control.subagentId, control.message))); return; }
+        if (control.type === 'subagent.cancel') { respondJson(response, 200, SessionControlAckSchema.parse(await this.sessions.cancelSubagent(sessionId, control.subagentId))); return; }
+        if (control.type === 'loop.stop') { respondJson(response, 200, SessionControlAckSchema.parse(await this.sessions.stopLoop(sessionId))); return; }
       }
       const sessionRoute = /^\/api\/agent\/v1\/sessions\/([^/]+)(?:\/(snapshot|history|events)|\/(runs)(?:\/([^/]+)\/abort)?)?$/.exec(url.pathname);
       if (sessionRoute) {

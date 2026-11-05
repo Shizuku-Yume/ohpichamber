@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createGlobalMessageStreamHub } from './global-hub.js';
-import { deferred, encodeEvent, event, scope, streamBoundary } from './canonical-test-fixtures.js';
+import { deferred, encodeEvent, event, scope, snapshot, streamBoundary } from './canonical-test-fixtures.js';
 
 const fixture = (options = {}) => {
   const boundary = streamBoundary();
@@ -37,11 +37,18 @@ describe('canonical global event hub', () => {
   it('delivers parsed events and private scopes in order even while a consumer awaits', async () => {
     const { hub, push } = fixture(); const gate = deferred(); const seen = [];
     const complete = deferred();
-    hub.subscribeEvent(async (record, resolved) => { seen.push([record.sequence, resolved.cwd]); if (record.sequence === '1') await gate.promise; });
+    const seenFirst = deferred();
+    hub.subscribeEvent(async (record, resolved) => {
+      seen.push([record.sequence, resolved.cwd]);
+      if (record.sequence === '1') {
+        seenFirst.resolve();
+        await gate.promise;
+      }
+    });
     hub.subscribeEvent((record) => { if (record.sequence === '2') complete.resolve(); });
     await hub.start(['session']);
     const frame = encodeEvent(event(1)); push(frame.slice(0, 9)); push(frame.slice(9) + encodeEvent(event(2)));
-    await expect.poll(() => seen.length).toBe(1);
+    await seenFirst.promise;
     expect(seen).toEqual([['1', scope.cwd]]);
     gate.resolve(); await complete.promise;
     expect(seen).toEqual([['1', scope.cwd], ['2', scope.cwd]]);
@@ -120,6 +127,175 @@ describe('canonical global event hub', () => {
     await expect(hub.subscribeSession('session', { cursor: 'epoch:0' })).rejects.toThrow('unavailable');
     expect(statuses).toMatchObject([{ type: 'initial-error', error: { code: 'RESYNC_REQUIRED', status: 410 } }]);
     expect(JSON.stringify(statuses)).not.toContain('credential');
+    await hub.stop();
+  });
+
+  it('tracks session leases, shares the active stream, and tears down only when the last lease is released', async () => {
+    const { hub, calls, cancelled } = fixture();
+    const firstLease = await hub.retainSession('session', 'lease-1');
+    expect(hub.isSessionConnected('session')).toBe(true);
+    expect(hub.hasLeases('session')).toBe(true);
+    expect(hub.getSessionLeases('session')).toEqual(['lease-1']);
+    expect(calls).toHaveLength(2); // snapshot + events
+
+    // Second lease shares the active stream without duplicate connection calls
+    const secondLease = await hub.retainSession('session', 'lease-2');
+    expect(hub.getSessionLeases('session')).toEqual(['lease-1', 'lease-2']);
+    expect(calls).toHaveLength(2);
+
+    // Releasing first lease keeps stream connected
+    await firstLease.release();
+    expect(hub.isSessionConnected('session')).toBe(true);
+    expect(hub.getSessionLeases('session')).toEqual(['lease-2']);
+    expect(cancelled()).toBe(false);
+
+    // Releasing final lease triggers teardown
+    await secondLease.release();
+    expect(hub.isSessionConnected('session')).toBe(false);
+    expect(hub.hasLeases('session')).toBe(false);
+    expect(cancelled()).toBe(true);
+
+    await hub.stop();
+  });
+
+  it('ref-counts multiple retains of the same lease key and unsubscribes only when all instances are released', async () => {
+    const { hub, calls, cancelled } = fixture();
+    const run1 = await hub.retainSession('session', 'run');
+    expect(hub.isSessionConnected('session')).toBe(true);
+    expect(hub.hasLeases('session')).toBe(true);
+    expect(hub.getSessionLeases('session')).toEqual(['run']);
+
+    // Second retain with the same lease key (repeat subscribe / concurrent run)
+    const run2 = await hub.retainSession('session', 'run');
+    expect(hub.getSessionLeases('session')).toEqual(['run']);
+    expect(calls).toHaveLength(2); // shared connection, no duplicate network calls
+
+    // Retain a different lease key as well
+    const wsClient = await hub.retainSession('session', 'ws-client');
+    expect(hub.getSessionLeases('session')).toEqual(['run', 'ws-client']);
+
+    // First run releases: stream remains active because second 'run' and 'ws-client' are active
+    await run1.release();
+    expect(hub.isSessionConnected('session')).toBe(true);
+    expect(hub.hasLeases('session')).toBe(true);
+    expect(hub.getSessionLeases('session')).toEqual(['run', 'ws-client']);
+    expect(cancelled()).toBe(false);
+
+    // wsClient releases: stream remains active because second 'run' is still active
+    await wsClient.release();
+    expect(hub.isSessionConnected('session')).toBe(true);
+    expect(hub.hasLeases('session')).toBe(true);
+    expect(hub.getSessionLeases('session')).toEqual(['run']);
+    expect(cancelled()).toBe(false);
+
+    // Final run releases: triggers teardown and unsubscription
+    await run2.release();
+    expect(hub.isSessionConnected('session')).toBe(false);
+    expect(hub.hasLeases('session')).toBe(false);
+    expect(hub.getSessionLeases('session')).toEqual([]);
+    expect(cancelled()).toBe(true);
+
+    await hub.stop();
+  });
+
+  it('guards against underflow and premature teardown on duplicate or unacquired releaseSession calls', async () => {
+    const { hub, cancelled } = fixture();
+
+    // Releasing an unacquired lease is a safe no-op with no underflow
+    await hub.releaseSession('session', 'nonexistent');
+    expect(hub.hasLeases('session')).toBe(false);
+
+    const lease = await hub.retainSession('session', 'active-lease');
+    expect(hub.hasLeases('session')).toBe(true);
+
+    // Releasing a different nonexistent lease does not affect active leases
+    await hub.releaseSession('session', 'other');
+    expect(hub.hasLeases('session')).toBe(true);
+    expect(hub.isSessionConnected('session')).toBe(true);
+    expect(hub.getSessionLeases('session')).toEqual(['active-lease']);
+
+    // Releasing the active lease triggers teardown
+    await lease.release();
+    expect(hub.hasLeases('session')).toBe(false);
+    expect(hub.isSessionConnected('session')).toBe(false);
+    expect(cancelled()).toBe(true);
+
+    // Calling releaseSession again on already-released lease does not throw or underflow
+    await hub.releaseSession('session', 'active-lease');
+    expect(hub.hasLeases('session')).toBe(false);
+    expect(hub.getSessionLeases('session')).toEqual([]);
+
+    await hub.stop();
+  });
+
+  it('cleans up leases without leak when retainSession fails', async () => {
+    const boundary = streamBoundary();
+    boundary.service.request = async () => new Response('Unavailable', { status: 503 });
+    const hub = createGlobalMessageStreamHub({ service: boundary.service, resolveSessionScope: async () => scope });
+
+    await expect(hub.retainSession('session', 'lease-failing')).rejects.toThrow();
+    expect(hub.hasLeases('session')).toBe(false);
+    expect(hub.getSessionLeases('session')).toEqual([]);
+    expect(hub.isSessionConnected('session')).toBe(false);
+
+    await hub.stop();
+  });
+
+  it('preserves active leases across connection drops and reconnects', async () => {
+    let controller;
+    const service = {
+      async request(path) {
+        if (path.endsWith('/snapshot')) return Response.json(snapshot());
+        const body = new ReadableStream({ start(c) { controller = c; } });
+        return new Response(body, { headers: { 'content-type': 'text/event-stream' } });
+      },
+    };
+    const hub = createGlobalMessageStreamHub({ service, resolveSessionScope: async () => scope });
+    const lease = await hub.retainSession('session', 'lease-reconnect');
+    expect(hub.hasLeases('session')).toBe(true);
+    expect(hub.isSessionConnected('session')).toBe(true);
+
+    // Terminate stream
+    const disconnected = deferred();
+    hub.subscribeStatus((status) => {
+      if (status.type === 'disconnect') disconnected.resolve();
+    });
+    controller.close();
+    await disconnected.promise;
+
+    expect(hub.isSessionConnected('session')).toBe(false);
+    // Active lease is still tracked while disconnected
+    expect(hub.hasLeases('session')).toBe(true);
+    expect(hub.getSessionLeases('session')).toEqual(['lease-reconnect']);
+
+    // Reconnect: subscribeSession reconnects while preserving existing leases
+    await hub.subscribeSession('session');
+    expect(hub.isSessionConnected('session')).toBe(true);
+    expect(hub.hasLeases('session')).toBe(true);
+    expect(hub.getSessionLeases('session')).toEqual(['lease-reconnect']);
+
+    // Releasing lease after reconnect properly tears down the stream
+    await lease.release();
+    expect(hub.isSessionConnected('session')).toBe(false);
+    expect(hub.hasLeases('session')).toBe(false);
+
+    await hub.stop();
+  });
+
+  it('cleans up all leases and tears down stream when unsubscribeSession is called directly on deletion/archive', async () => {
+    const { hub, cancelled } = fixture();
+    await hub.retainSession('session', 'lease-1');
+    await hub.retainSession('session', 'lease-2');
+    expect(hub.hasLeases('session')).toBe(true);
+    expect(hub.getSessionLeases('session')).toEqual(['lease-1', 'lease-2']);
+
+    // Simulating session.deleted or archive deletion
+    await hub.unsubscribeSession('session');
+    expect(hub.hasLeases('session')).toBe(false);
+    expect(hub.getSessionLeases('session')).toEqual([]);
+    expect(hub.isSessionConnected('session')).toBe(false);
+    expect(cancelled()).toBe(true);
+
     await hub.stop();
   });
 });

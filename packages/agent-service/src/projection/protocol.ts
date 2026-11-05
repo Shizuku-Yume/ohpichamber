@@ -32,6 +32,7 @@ const ProjectionEventSchema = z.union([
   CanonicalEventSchema.options[23].omit(envelope),
   CanonicalEventSchema.options[24].omit(envelope),
   CanonicalEventSchema.options[25].omit(envelope),
+  CanonicalEventSchema.options[26].omit(envelope),
 ]);
 export type ProjectionEvent = z.infer<typeof ProjectionEventSchema>;
 export const ProjectionInputSchema = z.strictObject({

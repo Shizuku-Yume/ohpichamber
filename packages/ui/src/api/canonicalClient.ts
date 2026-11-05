@@ -343,6 +343,15 @@ export class CanonicalClient {
       return result;
     });
   }
+  stopLoop(sessionId: string): Promise<Extract<C.SessionControlAck, { type: 'loop.stop' }>> {
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/control`, scoped(C.SessionControlAckSchema, result => result.type === 'loop.stop'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: bodyFor(C.SessionControlRequestSchema, { type: 'loop.stop' }),
+    }).then(result => {
+      if (result.type !== 'loop.stop') throw new Error('Loop stop response identified another control');
+      return result;
+    });
+  }
   createRun(sessionId: string, input: RunCreateRequest, commandId?: string): Promise<RunCreateAck> {
     return request(`/api/agent/v1/sessions/${id(sessionId)}/runs`, scoped(z.strictObject({ run: C.RunSchema }), result => result.run.sessionId === sessionId), { method: 'POST', headers: { 'Content-Type': 'application/json', ...headersFor(commandId) }, body: bodyFor(C.RunCreateRequestSchema, input) });
   }

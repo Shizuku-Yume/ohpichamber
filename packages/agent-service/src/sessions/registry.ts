@@ -1172,6 +1172,12 @@ export class SessionRegistry {
     if (result.type !== 'subagent.cancel') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
     return result;
   }
+  async stopLoop(sessionId: string) {
+    this.ensureOpen(); this.assertWritable(sessionId);
+    const result = await this.workers.request(sessionId, { type: 'loop.stop' });
+    if (result.type !== 'loop.stop') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+    return result;
+  }
   async history(request: HistoryPageRequest) {
     this.ensureOpen();
     const child = [...this.subagents.values()].find(record => record.childSessionId === request.sessionId);

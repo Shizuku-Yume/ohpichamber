@@ -80,6 +80,7 @@ Always-allow resolves OMP's native `allow_always` handle in the worker's per-ses
 - `read` and `write`: resolve file targets against `cwd`, including archive candidates, SQLite targets, JSON query paths, video, and PDF paths.
 - `grep` and `glob`: extract search path entries and base directory paths.
 - `bash` and `shell`: inspect commands and execution targets.
+- `lsp`: inspects actions and methods, resolves workspace-contained file targets and file:// URIs, distinguishes read-only operations (`hover`, `definition`, `type_definition`, `implementation`, `references`, `symbols`, `diagnostics`, `status`, `capabilities`, `code_actions` without apply) from mutations (`rename`, `rename_file`, `code_actions` with `apply: true`, `format`), and derives exact destination paths and file operations.
 
 `WorkerPolicy` intercepts operations in the worker and sends a `policy.request` over child IPC to the supervisor. The supervisor delegates to the Host's `WorkerOperationAuthorizer`, which verifies the request against `HostWorkspacePolicy` (`fileTools`, `shellCommands`, `toolRequests`, `providerEntry`) and persistent approval policies. If policy requires interactive confirmation, the worker raises `NativeApprovalRequired`, prompting an allowlisted public approval request.
 

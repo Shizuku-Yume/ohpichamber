@@ -26,6 +26,24 @@ export const NativePolicyContextSchema = z.strictObject({
 export type NativePolicyContext = z.infer<typeof NativePolicyContextSchema>;
 const NativeApprovalGrantSchema = z.strictObject({ approvalId: EntityIdSchema, toolCallId: EntityIdSchema, rootSessionId: EntityIdSchema, workerGeneration: EntityIdSchema, epoch: EntityIdSchema, command: z.string().min(1) });
 export type NativeApprovalGrant = z.infer<typeof NativeApprovalGrantSchema>;
+export const NativeLspActionSchema = z.enum([
+  'diagnostics',
+  'definition',
+  'type_definition',
+  'implementation',
+  'references',
+  'hover',
+  'symbols',
+  'status',
+  'capabilities',
+  'code_actions',
+  'rename',
+  'rename_file',
+  'reload',
+  'request',
+  'format',
+]);
+export type NativeLspAction = z.infer<typeof NativeLspActionSchema>;
 export const NativeOperationDescriptorSchema = z.strictObject({
   toolName: z.string().min(1), effectiveMode: NativeEditModeSchema.optional(),
   sourcePaths: z.array(PrivatePathSchema), destinationPaths: z.array(PrivatePathSchema),
@@ -34,6 +52,8 @@ export const NativeOperationDescriptorSchema = z.strictObject({
   fileOps: z.array(z.strictObject({ kind: z.string().min(1), path: PrivatePathSchema, to: PrivatePathSchema.optional() })),
   command: z.string().optional(), providerId: EntityIdSchema.optional(), modelId: EntityIdSchema.optional(), endpoint: z.string().url().optional(),
   approvalGrant: NativeApprovalGrantSchema.optional(),
+  lspAction: z.string().min(1).optional(),
+  lspMethod: z.string().min(1).optional(),
 });
 export type NativeOperationDescriptor = z.infer<typeof NativeOperationDescriptorSchema>;
 const HostToolActions = {

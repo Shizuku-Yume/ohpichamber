@@ -1,3 +1,4 @@
+import { subagentHudI18n } from './subagent-hud.i18n';
 import { settingsDict } from './pl.settings';
 import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { referencePickerI18n } from './reference-picker.i18n';
@@ -39,6 +40,7 @@ import { guestStatusViewI18n } from './guest-status-view.i18n';
 import { ompSettingsI18n } from './omp-settings.i18n';
 import { workerRunsI18n } from './worker-runs.i18n';
 export const dict = {
+  ...subagentHudI18n['pl'],
   ...ompSettingsI18n.pl,
   ...settingsDict,
   ...linearIssuePickerI18n.pl,
@@ -1560,7 +1562,7 @@ export const dict = {
   "settings.page.git.title": "Git",
   "settings.page.magicPrompts.title": "Magiczne Prompty",
   "settings.page.mcp.title": "MCP",
-  "settings.page.plugins.title": "Plugins",
+  "settings.page.plugins.title": "Wtyczki OMP",
   "settings.page.notifications.title": "Powiadomienia",
   "settings.page.notifications.description": "Wybierz, kiedy i jak otrzymywać powiadomienia.",
   "settings.page.projects.title": "Projekty",
@@ -1577,8 +1579,8 @@ export const dict = {
   "settings.page.tunnel.title": "Tunel zewnętrzny",
   "settings.page.tunnel.description": "Udostępnij tę instancję przez zdalny tunel.",
   "settings.page.about.title": "O aplikacji",
-  "settings.page.snippets.title": "Fragmenty",
-  "settings.snippets.sidebar.title": "Fragmenty",
+  "settings.page.snippets.title": "Szablony promptów",
+  "settings.snippets.sidebar.title": "Szablony promptów",
   "settings.snippets.sidebar.total": "Suma: {count}",
   "settings.snippets.sidebar.actions.create": "Utwórz fragment",
   "settings.snippets.sidebar.actions.more": "Więcej akcji dla {name}",
@@ -2500,6 +2502,7 @@ export const dict = {
   "settings.view.nav.group.general": "OpenChamber",
   "settings.view.nav.group.projects": "Przestrzeń robocza",
   "settings.view.nav.group.opencode": "OMP",
+  "settings.view.nav.group.agent": "OMP",
   "settings.view.nav.group.content": "Biblioteka",
   "settings.view.badge.beta": "beta",
   "settings.view.home.cards.agents.description": "Prompty, narzędzia, uprawnienia",
@@ -2806,7 +2809,7 @@ export const dict = {
   "settings.extensions.identity.loadFailed": "Nie udało się wczytać tożsamości Git tej instancji. Tożsamość globalna jest nadal dostępna.",
   "settings.extensions.request.noResponse": "Nie otrzymano odpowiedzi HTTP. Sprawdź połączenie z tą instancją.",
   "settings.extensions.request.invalidResponse": "Nieoczekiwana odpowiedź serwera (HTTP {status}).",
-  "settings.page.extensions.title": "Rozszerzenia",
+  "settings.page.extensions.title": "Rozszerzenia gościa",
   "settings.page.extensions.description": "Rozszerzenia z folderu, pliku ZIP albo adresu git — panele, menu dołączania, integracje i lokalne usługi. To nie są wtyczki OpenCode.",
   "settings.extensions.section.installed": "Zainstalowane",
   "settings.extensions.empty": "Nie wczytano żadnych rozszerzeń.",

@@ -105,7 +105,7 @@ export function ReadToolGroup({ items, directory, className, initialExpanded = f
         {/* Status badges */}
         <div className="ml-auto flex items-center gap-1 shrink-0 text-xs">
           {isAnyRunning && (
-            <span className="text-muted-foreground animate-pulse text-[11px]">
+            <span className="text-muted-foreground text-[11px]">
               running…
             </span>
           )}

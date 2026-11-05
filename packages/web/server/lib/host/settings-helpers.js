@@ -4,7 +4,6 @@ import { createRequire } from 'node:module';
 import { isAgentMemoryFeatureAvailable } from '../agent-memory/feature-flag.js';
 import { isOverviewFeatureAvailable } from '../overview/feature-flag.js';
 import { isWorkflowFeatureAvailable } from '../workflows/feature-flag.js';
-import { isPermissionMode } from '../permission-auto-accept/modes.js';
 import { idleStopSchema } from '../spaces/idle-stop.js';
 
 // Generated from packages/ui/src/lib/settings/registry.ts by
@@ -305,27 +304,6 @@ export const createSettingsHelpers = (dependencies) => {
       if (style === 'classic' || style === 'traffic-lights') {
         result.desktopWindowControlsStyle = style;
       }
-    }
-    if (candidate.permissionAutoAccept && typeof candidate.permissionAutoAccept === 'object' && !Array.isArray(candidate.permissionAutoAccept)) {
-      const sessions = {};
-      const sourceSessions = candidate.permissionAutoAccept.sessions;
-      if (sourceSessions && typeof sourceSessions === 'object' && !Array.isArray(sourceSessions)) {
-        // A mode, or a boolean from a policy written before the modes existed;
-        // the permission runtime converts those on its first read.
-        for (const [sessionId, mode] of Object.entries(sourceSessions)) {
-          if (sessionId && (typeof mode === 'boolean' || isPermissionMode(mode))) sessions[sessionId] = mode;
-        }
-      }
-      result.permissionAutoAccept = {
-        sessions,
-        revision: Number.isSafeInteger(candidate.permissionAutoAccept.revision)
-          && candidate.permissionAutoAccept.revision >= 0
-          ? candidate.permissionAutoAccept.revision
-          : 0,
-      };
-    }
-    if (isPermissionMode(candidate.permissionDefaultMode)) {
-      result.permissionDefaultMode = candidate.permissionDefaultMode;
     }
     if (typeof candidate.messageSearchEnabled === 'boolean') {
       result.messageSearchEnabled = candidate.messageSearchEnabled;
@@ -708,9 +686,6 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.agentNotifyToolEnabled === 'boolean') {
       result.agentNotifyToolEnabled = candidate.agentNotifyToolEnabled;
     }
-    if (typeof candidate.agentToolsCodeMode === 'boolean') {
-      result.agentToolsCodeMode = candidate.agentToolsCodeMode;
-    }
     // Settings the client registry persists; each was missing here, so the
     // registry and this sanitizer disagreed and the value never reached disk.
     for (const key of [
@@ -1040,23 +1015,6 @@ export const createSettingsHelpers = (dependencies) => {
       result.reportUsage = candidate.reportUsage;
     }
 
-    if (typeof candidate.responseStyleEnabled === 'boolean') {
-      result.responseStyleEnabled = candidate.responseStyleEnabled;
-    }
-
-    if (
-      typeof candidate.responseStylePreset === 'string' &&
-      ['concise', 'detailed', 'mentor', 'pushback', 'noFiller', 'matchEnergy', 'warmPeer', 'custom'].includes(candidate.responseStylePreset)
-    ) {
-      result.responseStylePreset = candidate.responseStylePreset;
-    }
-
-    if (typeof candidate.responseStyleCustomInstructions === 'string') {
-      const value = candidate.responseStyleCustomInstructions;
-      if (value.length <= 50_000) {
-        result.responseStyleCustomInstructions = value;
-      }
-    }
 
     if (typeof candidate.dictationEnabled === 'boolean') {
       result.dictationEnabled = candidate.dictationEnabled;

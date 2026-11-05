@@ -171,17 +171,6 @@
     "defaultGitIdentityId": {
       "scope": "instance"
     },
-    "permissionAutoAccept": {
-      "scope": "instance"
-    },
-    "permissionDefaultMode": {
-      "scope": "instance",
-      "surfaces": [
-        "web",
-        "desktop",
-        "mobile"
-      ]
-    },
     "messageSearchEnabled": {
       "scope": "instance",
       "surfaces": [
@@ -208,9 +197,6 @@
       "scope": "instance"
     },
     "agentNotifyToolEnabled": {
-      "scope": "instance"
-    },
-    "agentToolsCodeMode": {
       "scope": "instance"
     },
     "agentMemoryToolEnabled": {
@@ -695,15 +681,6 @@
       "scope": "profile"
     },
     "usageModelGroups": {
-      "scope": "profile"
-    },
-    "responseStyleEnabled": {
-      "scope": "profile"
-    },
-    "responseStylePreset": {
-      "scope": "profile"
-    },
-    "responseStyleCustomInstructions": {
       "scope": "profile"
     },
     "pwaAppName": {

@@ -134,9 +134,7 @@ import { hasOpenDropdown } from '@/hooks/keyboard-shortcut-dom';
 import { useAuthSessionStore } from '@/lib/runtime-auth-expiry';
 import { useI18n } from '@/lib/i18n';
 import { sessionEvents } from '@/lib/sessionEvents';
-import { fetchResponseStyleInstruction } from '@/lib/responseStyle';
-import { wrapSystemReminder } from '@/lib/systemReminder';
-import { getSyncMessages, getSyncSessionDirectory } from '@/sync/sync-refs';
+import { getSyncSessionDirectory } from '@/sync/sync-refs';
 import {
     assignImageAttachmentFilenames,
     buildAttachmentCitationText,
@@ -311,9 +309,6 @@ const recordLinkedReferences = async (
     );
 };
 
-const hasUserMessages = (sessionId: string, directory?: string) => {
-    return getSyncMessages(sessionId, directory).some((message) => message.role === 'user');
-};
 
 const renderDraftTitle = (title: string, projectLabel: string | null): React.ReactNode => {
     if (!projectLabel) return title;
@@ -2211,18 +2206,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             }
         }
 
-        const currentSessionDirectory = capturedTarget?.directory ?? currentDirectory;
-        // Side questions use the active session's transient composer panel, never a fork.
-        const shouldAddResponseStyle = !isBtwActive && (newSessionDraftOpen || (currentSessionId ? !hasUserMessages(currentSessionId, currentSessionDirectory) : false));
-        if (shouldAddResponseStyle) {
-            const responseStyleInstruction = await fetchResponseStyleInstruction().catch(() => null);
-            if (responseStyleInstruction) {
-                additionalParts.push({
-                    text: wrapSystemReminder(responseStyleInstruction),
-                    synthetic: true,
-                });
-            }
-        }
 
         const expandOutgoingSnippets = async () => {
             const expandText = useSnippetsStore.getState().expandText;
@@ -3990,10 +3973,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const footerIconButtonClass = cn(iconButtonBaseClass, buttonSizeClass);
     const permissionScopeSessionId = currentSessionId ?? currentManagementSessionId;
     const safetyNetAvailable = useRoutingStore(selectSafetyNetAvailable);
-    const defaultPermissionMode = useUIStore((state) => state.permissionDefaultMode);
     const permissionMode = usePermissionStore((state) => permissionScopeSessionId
         ? state.getSessionMode(permissionScopeSessionId)
-        : draftPermissionMode ?? defaultPermissionMode);
+        : draftPermissionMode ?? 'ask');
     const shownPermissionMode = displayedPermissionMode(permissionMode, safetyNetAvailable);
     const isPermissionAutoAcceptInteractive = Boolean(permissionScopeSessionId || newSessionDraftOpen);
 

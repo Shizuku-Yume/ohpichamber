@@ -1129,7 +1129,6 @@ export const registerCommonRequestMiddleware = (app, dependencies) => {
       req.path === '/api/openchamber/directory' ||
       req.path.startsWith('/api/push') ||
       req.path.startsWith('/api/notifications') ||
-      req.path.startsWith('/api/permission-auto-accept') ||
       req.path.startsWith('/api/message-queue') ||
       req.path.startsWith('/api/provider') ||
       req.path.startsWith('/api/session-folders') ||

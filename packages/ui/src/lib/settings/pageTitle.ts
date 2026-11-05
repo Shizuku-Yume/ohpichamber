@@ -16,7 +16,6 @@ const SETTINGS_PAGE_TITLE_KEYS = {
   omp: 'settings.page.omp.title',
   usage: 'settings.page.usage.title',
   agents: 'settings.page.agents.title',
-  behavior: 'settings.page.behavior.title',
   commands: 'settings.page.commands.title',
   mcp: 'settings.page.mcp.title',
   plugins: 'settings.page.plugins.title',

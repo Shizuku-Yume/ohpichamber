@@ -487,13 +487,6 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['warming', 'warm', 'cache', 'prompt cache', 'keep-alive', 'idle'],
   },
   {
-    id: 'sessions.permission-default',
-    page: 'sessions',
-    titleKey: 'settings.sessions.permissions.defaultMode',
-    descriptionKey: 'settings.sessions.permissions.defaultModeInfo',
-    keywords: ['permissions', 'auto-accept', 'accept', 'safety net', 'ask', 'shield', 'approval', 'new session'],
-  },
-  {
     id: 'sessions.show-chats',
     page: 'sessions',
     titleKey: 'settings.openchamber.defaults.field.showChats',
@@ -747,13 +740,6 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     isAvailable: (ctx) => ctx.routingAvailable,
   },
   {
-    id: 'sessions.agent-tools-code-mode',
-    page: 'general',
-    titleKey: 'settings.openchamber.tools.field.agentToolsCodeMode',
-    descriptionKey: 'settings.openchamber.tools.field.agentToolsCodeModeInfo',
-    keywords: ['agent', 'tool', 'code mode', 'codemode', 'execute', 'openchamber'],
-  },
-  {
     id: 'routing.enabled',
     page: 'routing',
     titleKey: 'settings.routing.auto.enable',
@@ -919,13 +905,6 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     descriptionKey: 'settings.remoteInstances.direct.description',
     keywords: ['server url', 'connection token', 'import link', 'host switcher', 'additional headers', 'request headers', 'cloudflare access', 'service token'],
     isAvailable: (ctx) => ctx.isDesktop,
-  },
-  {
-    id: 'behavior.response-style',
-    page: 'behavior',
-    titleKey: 'settings.behavior.page.section.responseStyle',
-    descriptionKey: 'settings.behavior.page.responseStyle.tooltip',
-    keywords: ['tone', 'concise', 'detailed', 'custom instructions'],
   },
   {
     id: 'agents.create',

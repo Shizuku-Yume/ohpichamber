@@ -693,6 +693,7 @@ test('worker sends plain OMP system and developer context plus only the user pin
       cwd: harness.root, agentDir: harness.agentDirectory, sessionManager: plainManager, authStorage: runtime.authStorage,
       modelRegistry: runtime.modelRegistry, settings: runtime.settings, initialModelRefreshStrategy: 'offline',
       enableMCP: false, disableExtensionDiscovery: true, hasUI: true, interactivePrompts: true,
+      tuiTranscript: true,
     });
     plain = created.session;
     const model = runtime.modelRegistry.find('native-fixture', 'native-model');

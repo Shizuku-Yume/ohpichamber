@@ -233,6 +233,7 @@ import { SessionSuggestionChip } from '@/components/chat/SessionSuggestionChip';
 import { SessionDoneHintRow } from '@/components/chat/SessionDoneHintRow';
 import { SessionReviewHintRow } from '@/components/chat/SessionReviewHintRow';
 import { BackgroundShellsStrip } from '@/components/chat/BackgroundShellsStrip';
+import { SubagentHudTray } from '@/components/chat/SubagentHudTray';
 import { useWorktreeBootstrapPending } from '@/hooks/useWorktreeBootstrapPending';
 import { FormDock } from '@/components/chat/FormDock';
 import { PermissionDock } from '@/components/chat/PermissionDock';
@@ -3765,6 +3766,44 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             sessionId={currentSessionId}
         />
     ) : null;
+    const subagentHudRow = !isBtwActive && !newSessionDraftOpen ? (
+        <SubagentHudTray
+            key={`subagent-hud-${currentSessionId ?? ''}`}
+            sessionId={currentSessionId}
+        />
+    ) : null;
+    const loopState = useDirectorySync(
+        React.useCallback((state) => currentSessionId ? state.snapshot[currentSessionId]?.session.loop : undefined, [currentSessionId]),
+        currentSessionDirectoryForSync ?? currentDirectory ?? undefined,
+    );
+    const handleStopLoop = React.useCallback(async () => {
+        if (!currentSessionId) return;
+        try {
+            await canonicalClient.stopLoop(currentSessionId);
+        } catch {
+            // Ignored: best-effort loop stop
+        }
+    }, [currentSessionId]);
+    const loopRow = loopState?.active ? (
+        <div className="flex items-center justify-between px-3 py-1 bg-primary/10 border border-primary/20 rounded-md text-xs my-1 text-primary">
+            <div className="flex items-center gap-1.5 font-medium">
+                <Icon name="refresh" className="size-3.5 animate-spin" />
+                <span>
+                    Loop iteration {loopState.iteration}
+                    {loopState.maxIterations ? `/${loopState.maxIterations}` : ''}
+                    {loopState.condition ? ` (${loopState.condition})` : ''}
+                </span>
+            </div>
+            <button
+                type="button"
+                onClick={handleStopLoop}
+                className="px-2 py-0.5 rounded text-[11px] font-medium bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                data-testid="composer-stop-loop-button"
+            >
+                Stop Loop
+            </button>
+        </div>
+    ) : null;
     // A new worktree still running its setup commands, first of all: until it
     // ends, a first prompt can wait with nothing else saying why.
     const worktreeSetupDirectory = currentSessionDirectoryForSync ?? currentDirectory ?? null;
@@ -3818,7 +3857,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     ) : null;
     // Null exactly when the suggestion row alone would have been: the mobile
     // pill picks its shape from whether a top row exists.
-    const composerTopRows = worktreeSetupRow || spaceWaitRow || todoRow || goalRow || workerRunRow || autoReviewRow || backgroundShellsRow || revertRow || queueRow || doneHintRow || reviewHintRow || suggestionRow ? (
+    const composerTopRows = worktreeSetupRow || spaceWaitRow || todoRow || goalRow || workerRunRow || autoReviewRow || loopRow || subagentHudRow || backgroundShellsRow || revertRow || queueRow || doneHintRow || reviewHintRow || suggestionRow ? (
         <>
             {worktreeSetupRow}
             {spaceWaitRow}
@@ -3826,6 +3865,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             {goalRow}
             {workerRunRow}
             {autoReviewRow}
+            {loopRow}
+            {subagentHudRow}
             {backgroundShellsRow}
             {revertRow}
             {queueRow}

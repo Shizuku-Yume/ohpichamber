@@ -54,7 +54,7 @@ export type SessionRuntimeStatus = z.infer<typeof SessionRuntimeStatusSchema>;
 export const SessionModeSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('main') }),
   z.strictObject({
-    kind: z.literal('plan'), status: z.enum(['active', 'paused']),
+    kind: z.literal('plan'), status: z.enum(['active', 'paused', 'armed']),
     planReference: z.string().regex(/^local:\/\/[^\s]+$/, 'Plan references must use local:// URLs'),
   }),
   z.strictObject({ kind: z.literal('vibe') }),
@@ -144,6 +144,11 @@ export const GoalControlRequestSchema = z.strictObject({
   message: 'Goal creation requires an objective', path: ['objective'],
 });
 export type GoalControlRequest = z.infer<typeof GoalControlRequestSchema>;
+export const SessionBranchStateSchema = z.strictObject({
+  branchId: EntityIdSchema, branchVersion: CounterSchema, leafMessageId: EntityIdSchema.nullable(),
+  revert: z.strictObject({ messageId: EntityIdSchema }).optional(),
+});
+export type SessionBranchState = z.infer<typeof SessionBranchStateSchema>;
 export const SessionControlRequestSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('abort'), runId: EntityIdSchema }),
   z.strictObject({ type: z.literal('mode.set'), mode: z.enum(['main', 'plan', 'vibe']) }),
@@ -152,6 +157,7 @@ export const SessionControlRequestSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('command'), text: z.string().min(1) }),
   z.strictObject({ type: z.literal('btw.ask'), question: z.string().min(1), recordId: EntityIdSchema.optional() }),
   z.strictObject({ type: z.literal('btw.cancel'), recordId: EntityIdSchema.optional() }),
+  z.strictObject({ type: z.literal('btw.branch'), recordId: EntityIdSchema }),
   z.strictObject({ type: z.literal('subagent.steer'), subagentId: EntityIdSchema, message: z.string().min(1) }),
   z.strictObject({ type: z.literal('subagent.cancel'), subagentId: EntityIdSchema }),
 ]);
@@ -163,6 +169,7 @@ export const SessionControlAckSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('command'), output: z.string() }),
   z.strictObject({ type: z.literal('btw.ask'), recordId: EntityIdSchema }),
   z.strictObject({ type: z.literal('btw.cancel'), cancelled: z.boolean() }),
+  z.strictObject({ type: z.literal('btw.branch'), sessionFile: z.string().optional(), sessionId: EntityIdSchema.optional(), rootSessionId: EntityIdSchema.optional(), branch: SessionBranchStateSchema }),
   z.strictObject({ type: z.literal('subagent.steer'), subagentId: EntityIdSchema, accepted: z.boolean() }),
   z.strictObject({ type: z.literal('subagent.cancel'), subagentId: EntityIdSchema, cancelled: z.boolean() }),
 ]);
@@ -178,11 +185,6 @@ export type FollowUpRequest = z.infer<typeof FollowUpRequestSchema>;
 export const FollowUpAckSchema = z.strictObject({ sessionId: EntityIdSchema, followUpId: EntityIdSchema, acceptedAt: TimestampSchema });
 export type FollowUpAck = z.infer<typeof FollowUpAckSchema>;
 
-export const SessionBranchStateSchema = z.strictObject({
-  branchId: EntityIdSchema, branchVersion: CounterSchema, leafMessageId: EntityIdSchema.nullable(),
-  revert: z.strictObject({ messageId: EntityIdSchema }).optional(),
-});
-export type SessionBranchState = z.infer<typeof SessionBranchStateSchema>;
 const BranchOwnerSchema = z.strictObject({ branchId: EntityIdSchema, branchVersion: CounterSchema });
 export const SessionBranchRequestSchema = z.discriminatedUnion('action', [
   BranchOwnerSchema.extend({ action: z.literal('revert'), messageId: EntityIdSchema }),

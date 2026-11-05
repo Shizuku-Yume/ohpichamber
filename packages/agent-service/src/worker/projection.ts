@@ -91,6 +91,9 @@ function nativeReferences(manager: SessionManager): Map<string, Reference> {
 export function resolveCanonicalMessage(manager: SessionManager, sessionId: string, messageId: string, selectedOnly = false): string | null {
   const references = nativeReferences(manager);
   for (const entry of selectedOnly ? manager.getBranch() : manager.getEntries()) {
+    if (entry.type === 'custom_message' && entry.customType === 'rewind-report') {
+      if (opaqueNativeId('message', sessionId, entry.id) === messageId) return entry.id;
+    }
     if (entry.type !== 'message' || !visible(entry.message)) continue;
     if ((references.get(entry.id)?.messageId ?? opaqueNativeId('message', sessionId, entry.id)) === messageId) return entry.id;
   }
@@ -595,7 +598,7 @@ export class WorkerProjection {
     for (const entry of this.manager.getEntries()) {
       const timestamp = Date.parse(entry.timestamp);
       if (Number.isFinite(timestamp)) updatedAt = Math.max(updatedAt, timestamp);
-      if (entry.type === 'message' && visible(entry.message)) version++;
+      if ((entry.type === 'message' && visible(entry.message)) || (entry.type === 'custom_message' && entry.customType === 'rewind-report')) version++;
       if (entry.type !== 'custom') continue;
       if (entry.customType === BRANCH_TYPE) version++;
       if (entry.customType === REF_TYPE) {
@@ -627,6 +630,25 @@ export class WorkerProjection {
     let current: Turn | undefined;
     let leafMessageId: string | null = null;
     for (const [entryIndex, entry] of entries.entries()) {
+      if (entry.type === 'custom_message' && entry.customType === 'rewind-report') {
+        const details = entry.details;
+        let report = '';
+        if (details && typeof details === 'object' && 'report' in details && typeof details.report === 'string') {
+          report = details.report.trim();
+        } else if (typeof entry.content === 'string') {
+          report = entry.content.trim();
+        }
+        const messageId = opaqueNativeId('message', this.sessionId, entry.id);
+        const turnId = current?.turnId ?? opaqueNativeId('turn', this.sessionId, entry.id);
+        const timestamp = new Date(entry.timestamp).getTime();
+        messages.push({
+          messageId, turnId, sessionId: this.sessionId, role: 'system',
+          createdAt: timestamp,
+          parts: [{ type: 'step_summary', partId: partId(messageId, 0), title: report ? `Rewind: ${report}` : 'Rewound to checkpoint' }],
+        });
+        leafMessageId = messageId;
+        continue;
+      }
       if (entry.type !== 'message' || !visible(entry.message)) continue;
       const native = entry.message;
       const reference = references.get(entry.id);

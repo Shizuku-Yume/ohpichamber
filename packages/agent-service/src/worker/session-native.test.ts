@@ -21,6 +21,8 @@ import { SessionJournal } from '../projection/journal.ts';
 import type { ProjectionInput } from '../projection/protocol.ts';
 import type { HostActionRequest } from '../native-policy-protocol.ts';
 import { NativeApprovalRequired } from './policy.ts';
+import { isSuccessfulCheckpointEntry } from '@oh-my-pi/pi-coding-agent/session/checkpoint-entries';
+import { RewindTool } from '@oh-my-pi/pi-coding-agent/tools/checkpoint';
 import { WorkerSession } from './session.ts';
 import { WorkerModeController } from './mode.ts';
 import { openNativeRuntime, type NativeWorkerRuntime } from './native-runtime.ts';
@@ -1470,3 +1472,227 @@ test('subagent cancel and steer operations resolve through worker operations', a
     await harness.close();
   }
 });
+
+test('deferred mid-run Plan mode entry arms during active stream and enters plan at terminal turn', async () => {
+  const firstRequest = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  const harness = await fixture({ planModel: true, async respond() {
+    firstRequest.resolve();
+    await release.promise;
+    return completion();
+  } });
+  const terminal = Promise.withResolvers<void>();
+  const unsubscribe = harness.worker.session.subscribe(event => {
+    if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve();
+  });
+  try {
+    // Start prompt
+    const promptOp = harness.worker.operation({ type: 'prompt', runId: 'stream-run', request: prompt('Active run prompt') });
+    await firstRequest.promise;
+
+    // While streaming, setting plan mode must NOT throw 409 RUN_ACTIVE; it arms plan mode
+    const armedResult = await harness.worker.operation({ type: 'mode.set', mode: 'plan' });
+    if (armedResult.type !== 'mode.set') throw new Error('Expected mode.set result');
+    expect(armedResult.mode).toMatchObject({ kind: 'plan', status: 'armed' });
+    expect(harness.worker.mode()).toMatchObject({ kind: 'plan', status: 'armed' });
+
+    // Finish run and wait for transition
+    release.resolve();
+    await terminal.promise;
+    await promptOp;
+    expect(harness.worker.mode().kind).toBe('plan');
+    expect(harness.fatal()).toBe(false);
+  } finally {
+    unsubscribe();
+    await harness.close();
+  }
+}, 30000);
+
+test('host abort disarms deferred Plan mode', async () => {
+  const firstRequest = Promise.withResolvers<void>();
+  const harness = await fixture({ planModel: true, async respond() {
+    firstRequest.resolve();
+    return new Response(new ReadableStream({}), { headers: { 'content-type': 'text/event-stream' } });
+  } });
+  try {
+    const promptOp = harness.worker.operation({ type: 'prompt', runId: 'abort-run', request: prompt('Abort prompt') });
+    await firstRequest.promise;
+
+    await harness.worker.operation({ type: 'mode.set', mode: 'plan' });
+    expect(harness.worker.mode()).toMatchObject({ kind: 'plan', status: 'armed' });
+
+    await harness.worker.operation({ type: 'abort', runId: 'abort-run' });
+    expect(harness.worker.mode().kind).not.toBe('plan');
+    await promptOp;
+  } finally {
+    await harness.close();
+  }
+}, 30000);
+
+test('btw.branch validates leafId and status, forks session, and rehydrates state', async () => {
+  const harness = await fixture({ respond: () => completion() });
+  try {
+    // First run to have a valid leaf
+    const terminal = Promise.withResolvers<void>();
+    const unsubscribe = harness.worker.session.subscribe(event => {
+      if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve();
+    });
+    try {
+      await harness.worker.operation({ type: 'prompt', runId: 'base-run', request: prompt('Initial turn') });
+      await terminal.promise;
+    } finally {
+      unsubscribe();
+    }
+
+    // Start a BTW side question
+    const askRes = await harness.worker.operation({ type: 'btw.ask', question: 'How does caching work?' });
+    if (askRes.type !== 'btw.ask') throw new Error('Expected btw.ask result');
+    // Wait for BTW question to complete
+    const completed = Promise.withResolvers<void>();
+    const originalPublish = harness.worker['publish'];
+    harness.worker['publish'] = (inputs: ProjectionInput[]) => {
+      originalPublish(inputs);
+      if (inputs.some(i => i.event.type === 'btw.completed')) completed.resolve();
+    };
+    await completed.promise;
+    const history = await harness.worker.btw.history();
+    const record = history.find(r => r.id === askRes.recordId);
+    expect(record).toBeDefined();
+    expect(record?.status).toBe('complete');
+
+    // Attempting to branch an incomplete record throws 400 INVALID_REQUEST
+    const fakeIncomplete = { ...record!, id: 'incomplete-id', status: 'running' as const };
+    (harness.worker.btw as unknown as { history: () => Promise<typeof history> }).history = async () => [...history, fakeIncomplete];
+    await expect(harness.worker.operation({ type: 'btw.branch', recordId: 'incomplete-id' }))
+      .rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+
+    // Attempting to branch when branch moved throws 409 SESSION_BRANCH_CONFLICT
+    const fakeStale = { ...record!, id: 'stale-id', leafId: 'old-leaf-id' };
+    (harness.worker.btw as unknown as { history: () => Promise<typeof history> }).history = async () => [...history, fakeStale];
+    await expect(harness.worker.operation({ type: 'btw.branch', recordId: 'stale-id' }))
+      .rejects.toMatchObject({ status: 409, code: 'SESSION_BRANCH_CONFLICT' });
+
+    // Promote valid completed record
+    (harness.worker.btw as unknown as { history: () => Promise<typeof history> }).history = async () => history;
+    const branchRes = await harness.worker.operation({ type: 'btw.branch', recordId: askRes.recordId });
+    if (branchRes.type !== 'btw.branch') throw new Error('Expected btw.branch result');
+    expect(branchRes.branch).toBeDefined();
+    expect(branchRes.sessionFile).toBeDefined();
+    expect(branchRes.sessionId).toBeDefined();
+    expect(harness.worker.sessionFile).toBe(branchRes.sessionFile);
+    expect(harness.worker.sessionId).toBe(branchRes.sessionId);
+    expect(harness.fatal()).toBe(false);
+  } finally {
+    await harness.close();
+  }
+}, 30000);
+
+test('completed rewind rehydrates natively and second rewind refuses correctly, and projection projects step_summary', async () => {
+  const harness = await fixture({ respond: () => completion() });
+  try {
+    const session = harness.worker.session;
+    // Append simulated checkpoint
+    session.sessionManager.appendMessage({ role: 'user', content: 'checkpoint turn', timestamp: Date.now() });
+    const ckptId = session.sessionManager.appendMessage({
+      role: 'toolResult', toolCallId: 'ckpt-call', toolName: 'checkpoint', isError: false,
+      content: [{ type: 'text', text: 'Checkpoint created' }], details: { startedAt: '2026-11-05T00:00:00.000Z' },
+    });
+    const otherId = session.sessionManager.appendMessage({ role: 'user', content: 'exploration turn', timestamp: Date.now() });
+    await session.navigateTree(ckptId, { summarize: false, allowAskReopen: false });
+    const ckptEntry = session.sessionManager.getEntries().find(isSuccessfulCheckpointEntry);
+    expect(session.getCheckpointState()).toMatchObject({
+      checkpointEntryId: ckptEntry?.id,
+      checkpointMessageCount: 2,
+    });
+
+    // Append rewind-report
+    session.sessionManager.appendCustomMessageEntry(
+      'rewind-report', 'Rewound to checkpoint', false,
+      { report: 'reverted file edits', startedAt: '2026-11-05T00:00:00.000Z', rewoundAt: '2026-11-05T00:01:00.000Z' },
+      'agent',
+    );
+    const resumeId = session.sessionManager.appendMessage({ role: 'user', content: 'resume after rewind', timestamp: Date.now() });
+    await session.navigateTree(otherId, { summarize: false, allowAskReopen: false });
+    await session.navigateTree(resumeId, { summarize: false, allowAskReopen: false });
+    expect(session.getCheckpointState()).toBeUndefined();
+    expect(harness.worker.completedRewindState).toMatchObject({
+      report: 'reverted file edits',
+    });
+
+    // Regression: Second rewind tool call on a session with a completed rewind refuses correctly
+    const rewindTool = new RewindTool(session);
+    await expect(rewindTool.execute('call-repeat', { report: 'second rewind attempt' }))
+      .rejects.toThrow('Checkpoint already completed; continue from the retained rewind report instead of calling rewind again.');
+
+    // Projection projects rewind-report as step_summary
+    const seed = harness.worker['projection'].seed();
+    const rewindMsg = seed.messages.find(m => m.parts.some(p => p.type === 'step_summary' && p.title.includes('reverted file edits')));
+    expect(rewindMsg).toBeDefined();
+    expect(rewindMsg?.role).toBe('system');
+  } finally {
+    await harness.close();
+  }
+}, 30000);
+
+test('execution model validation error resolves failed plan review without worker death', async () => {
+  let stage = 0;
+  const planText = '# Test plan\nVerify execution model.';
+  const harness = await fixture({ planModel: true, respond: async () => {
+    stage++;
+    if (stage === 1) return completion({ name: 'write', id: 'write-plan', input: { path: 'local://PLAN.md', content: planText } });
+    if (stage === 2) return completion({ name: 'write', id: 'propose-plan', input: { path: 'xd://propose', content: 'review' } });
+    return completion();
+  } });
+  try {
+    await harness.worker.operation({ type: 'mode.set', mode: 'plan' });
+    await harness.worker.operation({ type: 'prompt', runId: 'plan-run', request: prompt('Prepare plan') });
+    const question = await harness.waitQuestion();
+
+    // Invalid execution model does NOT kill the worker
+    const invalidReply = {
+      action: 'answer' as const,
+      response: { action: 'approve' as const, executionModel: { providerId: 'non-existent', modelId: 'non-existent' } },
+      version: question.version,
+      epoch: question.epoch,
+      workerGeneration: question.workerGeneration,
+    };
+    await harness.interactions.resolveQuestion(rootSessionId, question.questionId, invalidReply);
+    expect(harness.fatal()).toBe(false);
+    expect(harness.worker.mode().kind).toBe('plan');
+  } finally {
+    await harness.close();
+  }
+}, 30000);
+
+test('valid execution model with thinking level applies to session execution', async () => {
+  let stage = 0;
+  const planText = '# Test plan\nVerify valid execution model.';
+  const execution = Promise.withResolvers<void>();
+  const harness = await fixture({ planModel: true, respond: async () => {
+    stage++;
+    if (stage === 1) return completion({ name: 'write', id: 'write-plan', input: { path: 'local://PLAN.md', content: planText } });
+    if (stage === 2) return completion({ name: 'write', id: 'propose-plan', input: { path: 'xd://propose', content: 'review' } });
+    if (stage >= 4) execution.resolve();
+    return completion();
+  } });
+  try {
+    await harness.worker.operation({ type: 'mode.set', mode: 'plan' });
+    await harness.worker.operation({ type: 'prompt', runId: 'plan-run', request: prompt('Prepare plan') });
+    const question = await harness.waitQuestion();
+
+    const validReply = {
+      action: 'answer' as const,
+      response: { action: 'approve' as const, executionModel: { providerId: 'native-fixture', modelId: 'native-model' } },
+      version: question.version,
+      epoch: question.epoch,
+      workerGeneration: question.workerGeneration,
+    };
+    await harness.interactions.resolveQuestion(rootSessionId, question.questionId, validReply);
+    await harness.worker['planReviewTask'];
+    await execution.promise;
+    expect(harness.fatal()).toBe(false);
+    expect(harness.worker.session.model?.id).toBe('native-model');
+  } finally {
+    await harness.close();
+  }
+}, 30000);

@@ -38,7 +38,9 @@ import { sessionReferencesI18n } from './session-references.i18n';
 import { guestStatusViewI18n } from './guest-status-view.i18n';
 import { ompSettingsI18n } from './omp-settings.i18n';
 import { workerRunsI18n } from './worker-runs.i18n';
+import { btwI18n } from './btw.i18n';
 export const dict = {
+  ...btwI18n.he,
   ...ompSettingsI18n.he,
   ...settingsDict,
   ...linearIssuePickerI18n.he,

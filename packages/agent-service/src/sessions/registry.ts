@@ -890,7 +890,11 @@ export class SessionRegistry {
     this.assertWritable(sessionId);
     this.assertControlAvailable(sessionId);
     const runtime = this.runtime(sessionId);
-    if (runtime.activeRunId !== null || runtime.continuationPending === true || this.pendingRuns.has(sessionId)) throw new WorkerOperationError(409, 'RUN_ACTIVE');
+    const isDeferredPlan = mode === 'plan' && runtime.activeRunId !== null;
+    const isDisarming = mode === 'main' && runtime.mode?.kind === 'plan' && runtime.mode.status === 'armed';
+    if (!isDeferredPlan && !isDisarming && (runtime.activeRunId !== null || runtime.continuationPending === true || this.pendingRuns.has(sessionId))) {
+      throw new WorkerOperationError(409, 'RUN_ACTIVE');
+    }
     this.controls.add(sessionId);
     try {
       const result = await this.workers.request(sessionId, { type: 'mode.set', mode });
@@ -1151,6 +1155,44 @@ export class SessionRegistry {
     const result = await this.workers.request(sessionId, recordId === undefined ? { type: 'btw.cancel' } : { type: 'btw.cancel', recordId });
     if (result.type !== 'btw.cancel') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
     return result;
+  }
+  async btwBranch(sessionId: string, recordId: string) {
+    this.ensureOpen(); this.assertWritable(sessionId);
+    this.assertControlAvailable(sessionId);
+    this.controls.add(sessionId);
+    let targetSessionId = sessionId;
+    try {
+      const result = await this.workers.request(sessionId, { type: 'btw.branch', recordId });
+      if (result.type !== 'btw.branch') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+      targetSessionId = result.sessionId ?? sessionId;
+      const entry = this.entries.get(sessionId);
+      if (entry?.state === 'live' && result.sessionFile) {
+        entry.opened.sessionFile = result.sessionFile;
+        if (targetSessionId !== sessionId) {
+          this.entries.delete(sessionId);
+          entry.input.rootSessionId = targetSessionId;
+          this.entries.set(targetSessionId, entry);
+          this.workers.rekey(sessionId, targetSessionId);
+          entry.opened.journal.rekey(targetSessionId);
+        }
+        if (result.seed) {
+          entry.opened.journal.replace(result.seed);
+        }
+        const reference = this.references.get(sessionId);
+        if (reference) {
+          await this.references.put({
+            ...reference,
+            rootSessionId: targetSessionId,
+            sessionFile: result.sessionFile,
+            parentSessionId: reference.parentSessionId ?? sessionId,
+          });
+        }
+      }
+      return result;
+    } finally {
+      this.controls.delete(sessionId);
+      this.controls.delete(targetSessionId);
+    }
   }
   async steerSubagent(sessionId: string, subagentId: string, message: string) {
     this.ensureOpen(); this.assertWritable(sessionId);

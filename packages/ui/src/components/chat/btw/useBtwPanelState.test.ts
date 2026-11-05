@@ -3,7 +3,7 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
 import { useBtwStore } from '@/stores/useBtwStore';
-import { useBtwPanelState, type BtwPanelState } from './useBtwPanelState';
+import { extractBtwInject, useBtwPanelState, type BtwPanelState } from './useBtwPanelState';
 
 const browser = new Window({ url: 'http://runtime.test' });
 const descriptors = new Map<string, PropertyDescriptor | undefined>();
@@ -106,5 +106,15 @@ describe('useBtwPanelState', () => {
       ephemeralText: 'Partial output',
       ephemeralStatus: 'failed',
     });
+  });
+});
+
+describe('extractBtwInject', () => {
+  test('extracts trimmed text inside <inject> tags', () => {
+    expect(extractBtwInject('Here is advice: <inject>Please check the logs</inject>')).toBe('Please check the logs');
+  });
+  test('returns null when no <inject> tag exists or content is empty', () => {
+    expect(extractBtwInject('No tags here')).toBeNull();
+    expect(extractBtwInject('<inject>  </inject>')).toBeNull();
   });
 });

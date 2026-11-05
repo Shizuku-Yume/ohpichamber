@@ -5,6 +5,9 @@ import { isProbablyBinary } from '@oh-my-pi/pi-utils';
 import { createAgentSession, type ExtensionFactory } from '@oh-my-pi/pi-coding-agent/sdk';
 import { EventBus } from '@oh-my-pi/pi-coding-agent/utils/event-bus';
 import { TASK_SUBAGENT_LIFECYCLE_CHANNEL, TASK_SUBAGENT_PROGRESS_CHANNEL, TASK_SUBAGENT_EVENT_CHANNEL, type SubagentLifecyclePayload, type SubagentProgressPayload, type SubagentEventPayload } from '@oh-my-pi/pi-coding-agent/task';
+import type { CompletedRewindState } from '@oh-my-pi/pi-coding-agent/tools/checkpoint';
+import { autosaveApprovedPlan, isPlanAutosaveEnabled } from '@oh-my-pi/pi-coding-agent/plan-mode/plan-autosave';
+import type { AssistantMessage, Model } from '@oh-my-pi/pi-ai';
 import { AgentLifecycleManager } from '@oh-my-pi/pi-coding-agent/registry/agent-lifecycle';
 import { USER_INTERRUPT_LABEL } from '@oh-my-pi/pi-coding-agent/session/messages';
 import type { AgentMessage } from '@oh-my-pi/pi-agent-core';
@@ -58,9 +61,10 @@ type PromptOperation = Extract<WorkerOperation, { type: 'prompt' | 'steer' | 'fo
 type PreparedPrompt = { text: string; options: PromptOptions; context: Parameters<SessionManager['appendMessage']>[0][] };
 type NativeAdmission = { skillsAvailable: boolean; profile?: Agent | null };
 
+
 export class WorkerSession {
   private readonly modeController: WorkerModeController;
-  private readonly projection: WorkerProjection;
+  private projection: WorkerProjection;
   private readonly unsubscribe: () => void;
   private readonly operations = new Set<Promise<WorkerOperationResult>>();
   private readonly defaultToolNames: string[];
@@ -68,7 +72,7 @@ export class WorkerSession {
   private readonly defaultRegisteredNames: string[];
   private readonly queuedContext = new WeakMap<AgentMessage, PreparedPrompt['context']>();
   private readonly nativeQueuedPreparation: AgentSession['agent']['prepareQueuedMessages'];
-  private readonly btw: RpcBtwController;
+  readonly btw: RpcBtwController;
   private binding: Promise<void> = Promise.resolve();
   private readonly titleUnsubscribe: () => void;
   private pendingTitleInput: string | undefined;
@@ -88,12 +92,17 @@ export class WorkerSession {
   private publishedContinuationPending = false;
   private readonly liveSubagents = new Map<string, Subagent>();
   private readonly toolCallToSubagentId = new Map<string, string>();
+  get sessionId(): string { return this._sessionId; }
+  get sessionFile(): string { return this._sessionFile; }
+  get completedRewindState(): CompletedRewindState | undefined {
+    return this.session.getLastCompletedRewind();
+  }
   private constructor(
     readonly session: AgentSession,
     private readonly authStorage: AuthStorage,
-    readonly sessionFile: string,
+    private _sessionFile: string,
     private readonly publish: (inputs: ProjectionInput[]) => void,
-    private readonly sessionId: string,
+    private _sessionId: string,
     private readonly cwd: string,
     private readonly onFatal: () => void,
     private readonly interaction: NativeInteraction,
@@ -109,8 +118,14 @@ export class WorkerSession {
     private readonly webSearch: NativeWebSearch,
     private readonly permissionBridge: NativePermissionBridge,
   ) {
-    this.modeController = new WorkerModeController(session, title => this.proposePlan(title), start => this.startWorkerRun('goal', start), () => this.publishContinuationPending());
-    this.projection = new WorkerProjection(session.sessionManager, sessionId);
+    this.modeController = new WorkerModeController(
+      session,
+      title => this.proposePlan(title),
+      start => this.startWorkerRun('goal', start),
+      () => this.publishContinuationPending(),
+      mode => this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', mode } }]),
+    );
+    this.projection = new WorkerProjection(session.sessionManager, this._sessionId);
     this.defaultToolNames = session.getActiveToolNames();
     this.defaultMountedNames = session.getMountedXdevToolNames();
     this.defaultRegisteredNames = session.getAllToolNames();
@@ -162,7 +177,9 @@ export class WorkerSession {
         this.modeController.observe(event);
         this.publishContinuationPending();
         this.emit(this.projection.consume(event));
-        if (event.type === 'goal_updated' || event.type === 'agent_end') this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', mode: this.modeController.mode() } }]);
+        if (event.type === 'goal_updated' || (event.type === 'agent_end' && !this.modeController.isTransitioning())) {
+          this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', mode: this.modeController.mode() } }]);
+        }
         if (event.type === 'thinking_level_changed') {
           const model = session.model;
           this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', selection: {
@@ -419,7 +436,7 @@ export class WorkerSession {
     this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', continuationPending: pending } }]);
   }
 
-  private emit(inputs: ProjectionInput[]): void { if (inputs.length !== 0) this.publish(inputs); }
+  private emit(inputs: ProjectionInput[]): void { if (!this.closed && inputs.length !== 0) this.publish(inputs); }
 
   private fail(): void {
     if (this.failed) return;
@@ -646,9 +663,8 @@ export class WorkerSession {
         this.permissionBridge?.reset();
         this.interaction.cancelAll();
         try {
-          if (previousLeaf === null) manager.resetLeaf(); else manager.branch(previousLeaf);
+          if (previousLeaf === null) manager.resetLeaf(); else await this.session.navigateTree(previousLeaf, { summarize: false, allowAskReopen: false });
           await manager.appendEntriesAtomically(() => manager.appendCustomEntry(BRANCH_TYPE, previousRevert ?? { restoreLeafId: null, revertedMessageId: null }));
-          this.session.agent.replaceMessages(this.session.buildDisplaySessionContext().messages);
           this.projection.resetSelection();
           await this.modeController.restore();
           await this.modeController.goal.reconcile();
@@ -696,7 +712,7 @@ export class WorkerSession {
     return result;
   }
 
-  private async continuePlanReview(response: PlanReviewResponse, review: { planReference: string; planText: string }, revision: number): Promise<void> {
+  private async continuePlanReview(response: PlanReviewResponse, review: { title: string; planReference: string; planText: string }, revision: number): Promise<void> {
     await this.promptTask;
     await this.binding;
     if (this.closed || this.failed || revision !== this.planRevision || this.modeController.mode().kind !== 'plan') return;
@@ -705,6 +721,24 @@ export class WorkerSession {
       this.reviewingPlan = false;
       void this.startWorkerRun('plan', async () => { await this.session.prompt(response.feedback); return true; }).catch(() => this.fail());
       return;
+    }
+    let targetExecutionModel: Model | undefined;
+    if (response.executionModel) {
+      targetExecutionModel = this.session.modelRegistry.find(response.executionModel.providerId, response.executionModel.modelId);
+      if (!targetExecutionModel) {
+        // Validation error: resolve failed review without crashing the worker session
+        this.reviewingPlan = false;
+        this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', mode: this.modeController.mode() } }]);
+        return;
+      }
+    }
+    if (isPlanAutosaveEnabled(this.session.settings)) {
+      await autosaveApprovedPlan({
+        settings: this.session.settings,
+        cwd: this.cwd,
+        title: review.title,
+        planContent: review.planText,
+      }).catch(() => {});
     }
     const compact = response.action === 'approve-compact';
     if (compact) this.session.markPlanInternalAbortPending();
@@ -722,7 +756,16 @@ export class WorkerSession {
         }
       } : undefined);
     } finally { this.session.clearPlanInternalAbortPending(); }
-    this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', mode: this.modeController.mode() } }]);
+    if (targetExecutionModel) {
+      const thinkingLevel = this.session.resolveTemporaryModelThinkingLevel(targetExecutionModel);
+      await this.session.setModelTemporary(targetExecutionModel, thinkingLevel);
+      this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', mode: this.modeController.mode(), selection: {
+        model: { providerId: targetExecutionModel.provider, modelId: targetExecutionModel.id },
+        thinkingLevel: this.session.configuredThinkingLevel() ?? null,
+      } } }]);
+    } else {
+      this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', mode: this.modeController.mode() } }]);
+    }
     if (this.closed || this.failed || revision !== this.planRevision) return;
     this.session.setPlanReferencePath(review.planReference);
     const text = nativePrompt.render(planApprovedPrompt, { planFilePath: review.planReference, planContent: review.planText, contextPreserved: true });
@@ -745,6 +788,7 @@ export class WorkerSession {
         await this.session.sessionManager.flush();
         const dispatched = await start();
         await this.bind();
+        await this.modeController.settleTransition();
         if (!dispatched && this.projection.activeRun()?.runId === runId) {
           this.emit(this.projection.completeRun(Date.now()));
           await this.session.sessionManager.flush();
@@ -857,7 +901,12 @@ export class WorkerSession {
         return { type: 'goal', mode };
       }
       case 'mode.set': {
-        if (this.preparation || this.projection.activeRun() || this.session.isStreaming || this.continuationPending) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
+        const currentMode = this.modeController.mode();
+        const isDisarming = operation.mode === 'main' && currentMode.kind === 'plan' && currentMode.status === 'armed';
+        const isDeferredPlan = operation.mode === 'plan' && this.session.isStreaming;
+        if (!isDeferredPlan && !isDisarming && (this.preparation || this.projection.activeRun() || this.session.isStreaming || this.continuationPending)) {
+          throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
+        }
         const mode = await this.modeController.set(operation.mode);
         this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', mode } }]);
         return { type: 'mode.set', mode };
@@ -892,6 +941,47 @@ export class WorkerSession {
       }
       case 'btw.cancel':
         return { type: 'btw.cancel', cancelled: this.btw.cancel(operation.recordId) };
+      case 'btw.branch': {
+        if (this.controllingBranch) throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', 'Native branch selection is in progress');
+        if (this.preparation || this.projection.activeRun() || this.session.isStreaming) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
+        const history = await this.btw.history();
+        const record = history.find(r => r.id === operation.recordId);
+        if (!record) throw new ProjectionError(404, 'SESSION_NOT_FOUND', `BTW record not found: ${operation.recordId}`);
+        const currentLeafId = this.session.sessionManager.getLeafId() ?? '';
+        if (record.status !== 'complete') {
+          throw new ProjectionError(400, 'INVALID_REQUEST', 'Cannot branch from an incomplete /btw question');
+        }
+        if (!record.leafId || record.leafId !== currentLeafId) {
+          throw new ProjectionError(409, 'SESSION_BRANCH_CONFLICT', 'Session branch changed since /btw started');
+        }
+        const assistantMessage: AssistantMessage = {
+          role: 'assistant',
+          content: [{ type: 'text', text: record.answer }],
+          api: 'chat',
+          provider: this.session.model?.provider ?? 'native',
+          model: this.session.model?.id ?? 'native',
+          usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+          stopReason: 'stop',
+          timestamp: Date.now(),
+        };
+        const branchRes = await this.session.branchFromBtw(record.question, assistantMessage, record.leafId, this.session.sessionManager.getSessionId());
+        if (branchRes.cancelled) throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', 'Branching from /btw was cancelled');
+        if (branchRes.sessionFile) this._sessionFile = branchRes.sessionFile;
+        const newSessionId = this.session.sessionManager.getSessionId();
+        this._sessionId = newSessionId;
+        this.projection = new WorkerProjection(this.session.sessionManager, newSessionId);
+        this.projection.resetSelection();
+        await this.session.sessionManager.flush();
+        const seed = this.projection.seed();
+        return {
+          type: 'btw.branch',
+          sessionFile: branchRes.sessionFile,
+          sessionId: newSessionId,
+          rootSessionId: newSessionId,
+          branch: seed.branch,
+          seed,
+        };
+      }
       case 'subagent.steer': {
         const owned = this.liveSubagents.get(operation.subagentId);
         if (!owned || owned.parentSessionId !== this.sessionId) {
@@ -1037,7 +1127,7 @@ export class WorkerSession {
       case 'abort': {
         const run = this.projection.activeRun();
         if (!run || run.runId !== operation.runId) throw new ProjectionError(404, 'RUN_NOT_FOUND', 'Run not found');
-        if (run.origin === 'goal') this.modeController.stopForHostAbort();
+        this.modeController.stopForHostAbort();
         this.planRevision++;
         this.cancellingRunId = operation.runId;
         this.pendingTitleInput = undefined;

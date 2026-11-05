@@ -623,6 +623,7 @@ export class AgentService {
         }
         if (control.type === 'btw.ask') { respondJson(response, 202, SessionControlAckSchema.parse(await this.sessions.btwAsk(sessionId, control.question, control.recordId))); return; }
         if (control.type === 'btw.cancel') { respondJson(response, 200, SessionControlAckSchema.parse(await this.sessions.btwCancel(sessionId, control.recordId))); return; }
+        if (control.type === 'btw.branch') { respondJson(response, 200, SessionControlAckSchema.parse(await this.sessions.btwBranch(sessionId, control.recordId))); return; }
         if (control.type === 'subagent.steer') { respondJson(response, 200, SessionControlAckSchema.parse(await this.sessions.steerSubagent(sessionId, control.subagentId, control.message))); return; }
         if (control.type === 'subagent.cancel') { respondJson(response, 200, SessionControlAckSchema.parse(await this.sessions.cancelSubagent(sessionId, control.subagentId))); return; }
       }

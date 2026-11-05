@@ -935,6 +935,8 @@ export class WorkerProjection {
           parts: [{ type: 'step_summary', partId: partId(messageId, 0), title: report ? `Rewind: ${report}` : 'Rewound to checkpoint' }],
         });
         leafMessageId = messageId;
+        continue;
+      }
       if (entry.type === 'compaction') {
         const rawMethod = entry.method;
         const method: 'soft-compacted' | 'snap-compacted' | 'shaken' | 'remote-compacted' | 'handed-off' | 'compacted' =

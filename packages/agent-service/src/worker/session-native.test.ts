@@ -1741,6 +1741,11 @@ test('valid execution model with thinking level applies to session execution', a
     await execution.promise;
     expect(harness.fatal()).toBe(false);
     expect(harness.worker.session.model?.id).toBe('native-model');
+  } finally {
+    await harness.close();
+  }
+}, 30000);
+
 test('autonomous commands /loop, /omfg, /cleanse, /tan, /seance, /advisor and loop.stop resolve properly', async () => {
   const ttsrJson = JSON.stringify({
     name: 'no-any',

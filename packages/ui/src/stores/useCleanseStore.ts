@@ -30,23 +30,25 @@ export const useCleanseStore = create<CleanseStore>()((set) => ({
     set((state) => {
       const existing = state.bySession[sessionId];
       if (existing) {
-        const epochComparison = compareCounters(event.epoch, existing.epoch);
-        if (epochComparison < 0) return state;
-        if (epochComparison === 0 && compareCounters(event.sequence, existing.sequence) < 0) {
-          return state;
+        if (event.epoch && existing.epoch) {
+          const epochComparison = compareCounters(event.epoch, existing.epoch);
+          if (epochComparison < 0) return state;
+          if (epochComparison === 0 && event.sequence && existing.sequence && compareCounters(event.sequence, existing.sequence) < 0) {
+            return state;
+          }
         }
       }
       const updated: CleanseState = {
         sessionId,
-        epoch: event.epoch,
-        sequence: event.sequence,
+        epoch: event.epoch ?? '0',
+        sequence: event.sequence ?? '0',
         status: event.status,
         activeCheckers: [...event.activeCheckers],
         completedCheckers: [...event.completedCheckers],
         repairedFiles: [...event.repairedFiles],
         diagnosticsCount: event.diagnosticsCount,
         summary: event.summary,
-        updatedAt: event.timestamp,
+        updatedAt: event.timestamp ?? Date.now(),
       };
       return {
         bySession: {

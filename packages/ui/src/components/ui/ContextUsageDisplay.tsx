@@ -22,6 +22,8 @@ interface ContextUsageDisplayProps {
   percentIconClassName?: string;
   onClick?: () => void;
   pressed?: boolean;
+  thresholdPercent?: number | null;
+  speculationPercent?: number | null;
 }
 
 const UNKNOWN_VALUE = '\u2014';
@@ -40,6 +42,8 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
   percentIconClassName,
   onClick,
   pressed = false,
+  thresholdPercent,
+  speculationPercent,
 }) => {
   const { t } = useI18n();
   const [mobileTooltipOpen, setMobileTooltipOpen] = React.useState(false);
@@ -87,6 +91,8 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
     t('contextUsage.tooltip.contextLimit', { tokens: formatTokens(contextLimit) }),
     t('contextUsage.tooltip.outputLimit', { tokens: formatTokens(safeOutputLimit) }),
     ...(hasCost ? [t('contextUsage.tooltip.cost', { cost: formatMoney(normalizedCost) })] : []),
+    ...(thresholdPercent ? [t('contextUsage.tooltip.threshold', { percent: thresholdPercent })] : []),
+    ...(speculationPercent ? [t('contextUsage.tooltip.speculation', { percent: speculationPercent })] : []),
   ];
 
   const isInteractive = !isMobile && typeof onClick === 'function';
@@ -127,6 +133,28 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
                   className="transition-[stroke-dashoffset,stroke] duration-300"
                 />
               ) : null}
+              {thresholdPercent !== undefined && thresholdPercent !== null && thresholdPercent > 0 && thresholdPercent <= 100 && (
+                <line
+                  x1={circularProgressSize / 2 + (circularProgressRadius - circularProgressStroke / 2 - 0.5) * Math.cos((thresholdPercent / 100) * 2 * Math.PI)}
+                  y1={circularProgressSize / 2 + (circularProgressRadius - circularProgressStroke / 2 - 0.5) * Math.sin((thresholdPercent / 100) * 2 * Math.PI)}
+                  x2={circularProgressSize / 2 + (circularProgressRadius + circularProgressStroke / 2 + 0.5) * Math.cos((thresholdPercent / 100) * 2 * Math.PI)}
+                  y2={circularProgressSize / 2 + (circularProgressRadius + circularProgressStroke / 2 + 0.5) * Math.sin((thresholdPercent / 100) * 2 * Math.PI)}
+                  stroke="var(--status-warning, #f59e0b)"
+                  strokeWidth={1.5}
+                  data-testid="compaction-threshold-tick"
+                />
+              )}
+              {speculationPercent !== undefined && speculationPercent !== null && speculationPercent > 0 && speculationPercent <= 100 && (
+                <line
+                  x1={circularProgressSize / 2 + (circularProgressRadius - circularProgressStroke / 2 - 0.5) * Math.cos((speculationPercent / 100) * 2 * Math.PI)}
+                  y1={circularProgressSize / 2 + (circularProgressRadius - circularProgressStroke / 2 - 0.5) * Math.sin((speculationPercent / 100) * 2 * Math.PI)}
+                  x2={circularProgressSize / 2 + (circularProgressRadius + circularProgressStroke / 2 + 0.5) * Math.cos((speculationPercent / 100) * 2 * Math.PI)}
+                  y2={circularProgressSize / 2 + (circularProgressRadius + circularProgressStroke / 2 + 0.5) * Math.sin((speculationPercent / 100) * 2 * Math.PI)}
+                  stroke="var(--accent, #0ea5e9)"
+                  strokeWidth={1.5}
+                  data-testid="speculation-threshold-tick"
+                />
+              )}
             </svg>
             <span className="text-foreground">{percentLabel}</span>
           </>

@@ -22,6 +22,18 @@ Top-level worker sessions are initialized with `tuiTranscript: true`, which info
 
 `WorkerProjection` handles `toolcall_start`, `toolcall_delta`, and `tool_stream_update` events to project progressive tool arguments (`write.content`, `edit.input`, `eval.code`) live into `part.started` and `part.updated` canonical events, keeping `status: 'running'` and redacting private paths via `publicJsonObject(...)` before arguments are emitted over the canonical event stream.
 
+## OMP TUI timeline notices and compaction projection
+
+`WorkerProjection` projects OMP timeline notices into canonical `NoticePart` items via `persistAndPublishNotice()`:
+- `todo_reminder`: emitted when the model finishes with incomplete todos, detailing pending/in-progress items.
+- `ttsr_triggered`: emitted when Time Traveling Stream Rules rewind a stream violation.
+- `auto_retry_start` and `retry_fallback_applied`: emitted on model retry attempts and fallback transitions.
+- `served_model_mismatch`: emitted when `upstreamModel` differs from served `model`.
+- `cache_invalidation`: emitted when prompt cache reads drop to zero and cache write occurs.
+
+Notices are persisted as native custom entries (`ohpichamber.notice.v1`) on the session branch and restored on cold history reload.
+
+`session.compacted` projects authoritative compaction metadata (`method`: `soft-compacted`, `remote-compacted`, `shaken`, `snap-compacted`, `handed-off`), `tokensBefore`, `tokensAfter`, and markdown summaries.
 ## Native session archives
 
 `SessionRegistry.archiveManifest()` is the host-authorized, read-only inventory of native chats. `exportArchive()` emits a bounded uncompressed ustar bundle containing the selected transcript, descendants, tool artifacts, subagent outputs, and referenced blobs; it never parses transcripts in Node. `importArchive()` validates the complete manifest before staging and installs immutable deleted-space references. Imported roots and descendants remain cold until explicitly reopened, and deleted-space mutations return `SESSION_READ_ONLY` (HTTP 409). Archive transfers are bounded to 256 MiB and five minutes per operation; save/restore uses a thirty-minute host window.

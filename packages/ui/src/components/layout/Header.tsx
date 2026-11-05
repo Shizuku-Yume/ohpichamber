@@ -21,6 +21,7 @@ import { useSessionWorktreeStore } from '@/sync/session-worktree-store';
 import { formatSessionWorktreeBadge } from '@/sync/session-worktree-contract';
 import { useGlobalSessionStatus, useSessionMessagesResolved, useSessionMessagesSelector } from '@/sync/sync-context';
 import type { Message } from '@openchamber/agent-contract';
+import { useConfigStore } from '@/stores/useConfigStore';
 import { useDirectoryStore as useAppDirectoryStore } from '@/stores/useDirectoryStore';
 import { isChatDirectoryForHome } from '@/lib/chatDirectories';
 import { useSessionMessageRecordsForExport } from '@/sync/use-sync';
@@ -452,9 +453,17 @@ export const Header: React.FC = () => {
     }
     setWorkStatusPanelEnabled(!workStatusPanelEnabled);
   }, [setWorkStatusOverlayOpen, setWorkStatusPanelEnabled, workStatusOverlayOpen, workStatusPanelEnabled, workStatusPanelFits]);
-  const showDesktopHeaderContextUsage = !workStatusPanelVisible
-    && !!stableDesktopContextUsage;
-
+  const showDesktopHeaderContextUsage = !workStatusPanelVisible && !!stableDesktopContextUsage;
+  const compactionThresholdPercent = useConfigStore((state) => {
+    const val = state.ompSettings?.settings?.find((s) => s.id === 'compaction.thresholdPercent')?.value;
+    return typeof val === 'number' && val > 0 ? val : null;
+  });
+  const compactionSpeculationPercent = useConfigStore((state) => {
+    const val = state.ompSettings?.settings?.find((s) => s.id === 'compaction.thresholdPercent')?.value;
+    const asyncSetting = state.ompSettings?.settings?.find((s) => s.id === 'compaction.asyncEnabled')?.value;
+    const asyncEnabled = asyncSetting !== false;
+    return typeof val === 'number' && val > 0 && asyncEnabled ? Math.max(10, val - 10) : null;
+  });
   const refreshCurrentInstanceLabel = React.useCallback(async () => {
     if (typeof window === 'undefined' || !isDesktopApp) {
       return;
@@ -1727,6 +1736,8 @@ export const Header: React.FC = () => {
               size="compact"
               hideIcon
               showPercentIcon
+              thresholdPercent={compactionThresholdPercent}
+              speculationPercent={compactionSpeculationPercent}
               onClick={handleOpenContextPanel}
               pressed={isContextPanelActive}
               className={!showMiniChatHeaderAction ? 'mr-3.5' : ''}

@@ -48,6 +48,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Icon } from "@/components/icon/Icon";
 import { formatTimestampForDisplay } from './timeFormat';
 import { ToolRevealOnMount } from './parts/ToolRevealOnMount';
+import { TimelineNoticeCard } from './parts/TimelineNoticeCard';
+import { CompactionDivider } from '../SessionRecapSpacer';
 import { StaticToolRow } from './parts/ProgressiveGroup';
 import { isExpandableTool, isStandaloneTool } from './parts/toolRenderUtils';
 import TurnActivity from '../components/TurnActivity';
@@ -2129,6 +2131,29 @@ const AssistantMessageBody = React.memo(({
                     </FadeInOnReveal>
                 );
                 flushSegmentsAfterTool(toolPartId);
+                i++;
+                continue;
+            }
+            if (part.type === 'notice') {
+                if (part.noticeType === 'compaction') {
+                    rendered.push(
+                        <FadeInOnReveal key={`compaction-${part.partId}`}>
+                            <CompactionDivider
+                                method={part.details.method}
+                                tokensBefore={part.details.tokensBefore}
+                                tokensAfter={part.details.tokensAfter}
+                                summary={part.details.summary}
+                                warning={part.details.warning}
+                            />
+                        </FadeInOnReveal>
+                    );
+                } else {
+                    rendered.push(
+                        <FadeInOnReveal key={`notice-${part.partId}`}>
+                            <TimelineNoticeCard notice={part} />
+                        </FadeInOnReveal>
+                    );
+                }
                 i++;
                 continue;
             }

@@ -5,10 +5,12 @@ import { z } from 'zod';
 import type { AgentSessionEvent } from '@oh-my-pi/pi-coding-agent/session/agent-session-events';
 import type { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import type { SessionEntry } from '@oh-my-pi/pi-coding-agent/session/session-entries';
-import { CounterSchema, EntityIdSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, PromptAttachmentSchema, SessionMentionSchema, TokenUsageSchema } from '@openchamber/agent-contract';
-import type { HistoryPage, HistoryPageRequest, JsonObject, JsonValue, Message, Part, PromptAttachment, PromptContext, Run, RunOrigin, SessionMention, TokenUsage, Turn } from '@openchamber/agent-contract';
+import { CounterSchema, EntityIdSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, NoticePartSchema, PromptAttachmentSchema, SessionMentionSchema, TokenUsageSchema } from '@openchamber/agent-contract';
+import type { HistoryPage, HistoryPageRequest, JsonObject, JsonValue, Message, NoticePart, Part, PromptAttachment, PromptContext, Run, RunOrigin, SessionMention, TokenUsage, Turn } from '@openchamber/agent-contract';
 import type { ProjectionEvent, ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
+type NoticePartInput = DistributiveOmit<NoticePart, 'partId'>;
 
 type NativeMessage = Extract<AgentSessionEvent, { type: 'message_start' }>['message'];
 type VisibleMessage = Extract<NativeMessage, { role: 'user' | 'assistant' | 'toolResult' }>;
@@ -178,6 +180,23 @@ function parts(message: VisibleMessage, messageId: string, attachments: PromptAt
   } else {
     result.push({ type: 'text', partId: partId(messageId, 0), content: message.content });
   }
+  if (message.role === 'assistant') {
+    const nativeAny = message as unknown as Record<string, unknown>;
+    if (typeof nativeAny.upstreamModel === 'string' && typeof nativeAny.model === 'string' && nativeAny.upstreamModel && nativeAny.upstreamModel !== nativeAny.model) {
+      result.push({
+        type: 'notice',
+        partId: `${messageId}:notice:model_mismatch`,
+        noticeType: 'served_model_mismatch',
+        level: 'warning',
+        details: {
+          requested: nativeAny.upstreamModel,
+          served: nativeAny.model,
+          provider: typeof nativeAny.provider === 'string' ? nativeAny.provider : '',
+          upstreamProvider: typeof nativeAny.upstreamProvider === 'string' ? nativeAny.upstreamProvider : undefined,
+        },
+      });
+    }
+  }
   if (message.role === 'user' && mentions.length > 0) {
     const text = result.find(part => part.type === 'text');
     if (text?.type === 'text') text.sessionMentions = mentions.map(mention => ({ ...mention }));
@@ -200,7 +219,46 @@ export class WorkerProjection {
   private cancelRequestedRunId: string | undefined;
   private readonly privateRoots: PrivateRoot[];
   private readonly textSuffixes = new Map<string, { suffix: string; context: string }>();
+  private lastCacheRead = 0;
+  private manualCompactionMode: string | undefined;
+  private readonly deferredNotices: NoticePart[] = [];
 
+  private persistAndPublishNotice(
+    notice: NoticePartInput,
+    timestamp: number,
+    emit: (event: ProjectionEvent) => void,
+  ): void {
+    const lastEntry = this.manager.getBranch().findLast((e) => e.type === 'message' && visible(e.message));
+    const branchMessageId = lastEntry
+      ? (nativeReferences(this.manager).get(lastEntry.id)?.messageId ?? opaqueNativeId('message', this.sessionId, lastEntry.id))
+      : null;
+    const targetMessageId = this.message?.messageId
+      ?? this.pending.at(-1)?.messageId
+      ?? branchMessageId;
+
+    const noticePartId = targetMessageId
+      ? `${targetMessageId}:notice:${randomUUID()}`
+      : `${this.sessionId}:notice:${randomUUID()}`;
+
+    const noticePart = NoticePartSchema.parse({
+      ...notice,
+      partId: noticePartId,
+    });
+
+    this.manager.appendCustomEntry('ohpichamber.notice.v1', {
+      messageId: targetMessageId,
+      turnId: this.turn?.turnId ?? null,
+      part: noticePart,
+      timestamp,
+    });
+
+    if (targetMessageId) {
+      emit({ type: 'part.started', messageId: targetMessageId, part: noticePart });
+      emit({ type: 'part.completed', part: noticePart });
+    } else {
+      this.deferredNotices.push(noticePart);
+    }
+  }
   constructor(private readonly manager: SessionManager, private readonly sessionId: string, privateRoots: readonly PrivateRoot[] = []) {
     this.entryOffset = manager.getBranch().length;
     const roots = new Map(nativePrivateRootContext(manager).map((value) => [value.root, value]));
@@ -272,6 +330,13 @@ export class WorkerProjection {
         break;
       case 'attachment': part.name = this.publicText(part.name); part.mediaType = this.publicText(part.mediaType); break;
       case 'step_summary': part.title = this.publicText(part.title); break;
+      case 'notice':
+        if (part.title !== undefined) part.title = this.publicText(part.title);
+        if (part.message !== undefined) part.message = this.publicText(part.message);
+        if (part.details !== undefined) {
+          part.details = this.publicJson(part.details as unknown as JsonValue) as unknown as typeof part.details;
+        }
+        break;
     }
   }
 
@@ -354,9 +419,112 @@ export class WorkerProjection {
     const queued = event.type === 'message_start' && event.message.role === 'user' ? this.queuedPrompts.get(event.message) : undefined;
     const timestamp = Date.now();
     const result: ProjectionInput[] = !this.run && queued ? this.beginRun(randomUUID(), timestamp) : [];
+    const emit = (payload: ProjectionEvent): void => { result.push({ timestamp, event: payload }); };
+
+    switch (event.type) {
+      case 'manual_compaction_start':
+        this.manualCompactionMode = event.mode;
+        return result;
+      case 'auto_compaction_end': {
+        if (event.result === undefined || event.aborted || event.willRetry || event.skipped === true) return result;
+        const methodMap: Record<string, 'soft-compacted' | 'remote-compacted' | 'shaken' | 'snap-compacted' | 'handed-off'> = {
+          'context-full': 'soft-compacted',
+          'remote': 'remote-compacted',
+          'shake': 'shaken',
+          'snapcompact': 'snap-compacted',
+          'handoff': 'handed-off',
+        };
+        const method = methodMap[event.action] ?? 'compacted';
+        const tokensAfter = event.result && 'tokensAfter' in event.result && typeof (event.result as { tokensAfter?: unknown }).tokensAfter === 'number'
+          ? (event.result as { tokensAfter: number }).tokensAfter
+          : undefined;
+        emit({
+          type: 'session.compacted',
+          compactionId: randomUUID(),
+          method,
+          tokensBefore: event.result.tokensBefore,
+          tokensAfter,
+          summary: event.result.summary ? this.publicText(event.result.summary) : undefined,
+          completedAt: timestamp,
+        });
+        return this.publicEvents(result);
+      }
+      case 'manual_compaction_end': {
+        if (event.result === undefined || event.aborted || event.skipped === true) return result;
+        const mode = this.manualCompactionMode;
+        const method = mode === 'shake' ? 'shaken'
+          : mode === 'snapcompact' ? 'snap-compacted'
+          : mode === 'remote' ? 'remote-compacted'
+          : 'soft-compacted';
+        const tokensAfter = event.result && 'tokensAfter' in event.result && typeof (event.result as { tokensAfter?: unknown }).tokensAfter === 'number'
+          ? (event.result as { tokensAfter: number }).tokensAfter
+          : undefined;
+        emit({
+          type: 'session.compacted',
+          compactionId: randomUUID(),
+          method,
+          tokensBefore: event.result.tokensBefore,
+          tokensAfter,
+          summary: event.result.summary ? this.publicText(event.result.summary) : undefined,
+          completedAt: timestamp,
+        });
+        return this.publicEvents(result);
+      }
+      case 'todo_reminder': {
+        this.persistAndPublishNotice({
+          type: 'notice',
+          noticeType: 'todo_reminder',
+          level: 'warning',
+          details: {
+            attempt: event.attempt,
+            maxAttempts: event.maxAttempts,
+            todos: (event.todos ?? []).map(t => ({ content: t.content, status: t.status })),
+          },
+        }, timestamp, emit);
+        return this.publicEvents(result);
+      }
+      case 'ttsr_triggered': {
+        const rules = event.rules ?? [];
+        this.persistAndPublishNotice({
+          type: 'notice',
+          noticeType: 'ttsr_triggered',
+          level: 'warning',
+          details: { rules: rules.map(r => ({ name: r.name, description: r.description })) },
+        }, timestamp, emit);
+        return this.publicEvents(result);
+      }
+      case 'auto_retry_start': {
+        this.persistAndPublishNotice({
+          type: 'notice',
+          noticeType: 'auto_retry_start',
+          level: 'warning',
+          details: {
+            attempt: event.attempt,
+            maxAttempts: event.maxAttempts,
+            delayMs: event.delayMs,
+            errorMessage: this.publicText(event.errorMessage ?? ''),
+          },
+        }, timestamp, emit);
+        return this.publicEvents(result);
+      }
+      case 'retry_fallback_applied': {
+        this.persistAndPublishNotice({
+          type: 'notice',
+          noticeType: 'retry_fallback_applied',
+          level: 'warning',
+          details: {
+            from: event.from,
+            to: event.to,
+            role: event.role,
+            reason: event.reason ? this.publicText(event.reason) : undefined,
+          },
+        }, timestamp, emit);
+        return this.publicEvents(result);
+      }
+    }
+
     const run = this.run;
     if (!run) return result;
-    const emit = (payload: ProjectionEvent): void => { result.push({ timestamp, event: payload }); };
     switch (event.type) {
       case 'message_start': {
         if (!visible(event.message)) break;
@@ -396,6 +564,13 @@ export class WorkerProjection {
           const index = native.role === 'toolResult' ? 0 : native.content instanceof Array
             ? native.content.findIndex((item, index) => part.partId === partId(messageId, index)) : 0;
           if (index >= 0) current.started.add(index);
+        }
+        if (this.deferredNotices.length > 0) {
+          const deferred = this.deferredNotices.splice(0, this.deferredNotices.length);
+          for (const notice of deferred) {
+            emit({ type: 'part.started', messageId, part: notice });
+            emit({ type: 'part.completed', part: notice });
+          }
         }
         break;
       }
@@ -499,6 +674,37 @@ export class WorkerProjection {
           const finalMetadata = metadata(event.message);
           Object.assign(current, finalMetadata);
           emit({ type: 'message.updated', messageId: current.messageId, ...finalMetadata });
+
+          const nativeAny = event.message as unknown as Record<string, unknown>;
+          if (typeof nativeAny.upstreamModel === 'string' && typeof nativeAny.model === 'string' && nativeAny.upstreamModel && nativeAny.upstreamModel !== nativeAny.model) {
+            this.persistAndPublishNotice({
+              type: 'notice',
+              noticeType: 'served_model_mismatch',
+              level: 'warning',
+              details: {
+                requested: nativeAny.upstreamModel,
+                served: nativeAny.model,
+                provider: typeof nativeAny.provider === 'string' ? nativeAny.provider : undefined,
+                upstreamProvider: typeof nativeAny.upstreamProvider === 'string' ? nativeAny.upstreamProvider : undefined,
+              },
+            }, timestamp, emit);
+          }
+
+          const usage = current.usage;
+          if (usage) {
+            if (this.lastCacheRead >= 2048 && usage.cacheRead === 0 && usage.cacheWrite > 0) {
+              const reprocessedTokens = usage.cacheWrite + usage.input;
+              if (reprocessedTokens > 0) {
+                this.persistAndPublishNotice({
+                  type: 'notice',
+                  noticeType: 'cache_invalidation',
+                  level: 'info',
+                  details: { reprocessedTokens },
+                }, timestamp, emit);
+              }
+            }
+            this.lastCacheRead = usage.cacheRead;
+          }
         }
         if (event.message.role === 'assistant') {
           // The last assistant message decides the run outcome. A recovered
@@ -541,10 +747,6 @@ export class WorkerProjection {
         emit({ type: 'part.updated', part });
         break;
       }
-      case 'auto_compaction_end':
-        if (event.result === undefined || event.aborted || event.willRetry || event.skipped === true) break;
-        emit({ type: 'session.compacted', compactionId: randomUUID(), tokensBefore: event.result.tokensBefore, completedAt: timestamp });
-        break;
       case 'turn_end':
         if (!this.turn?.open) break;
         if (this.cancelRequestedRunId === run.runId) { this.recordTurn('cancelled', timestamp); break; }
@@ -663,7 +865,22 @@ export class WorkerProjection {
     let updatedAt = 0;
     const virtualTurns = new Set<string>();
     const workerRuns = new Map<string, z.infer<typeof WorkerRunSchema>>();
+    const noticesByMessageId = new Map<string, NoticePart[]>();
+    const unassociatedNotices: NoticePart[] = [];
     for (const entry of this.manager.getEntries()) {
+      if (entry.type === 'custom' && entry.customType === 'ohpichamber.notice.v1') {
+        const payload = entry.data as { messageId?: string | null; part?: unknown };
+        const parsed = NoticePartSchema.safeParse(payload?.part ?? entry.data);
+        if (parsed.success) {
+          if (payload?.messageId) {
+            const list = noticesByMessageId.get(payload.messageId) ?? [];
+            list.push(parsed.data);
+            noticesByMessageId.set(payload.messageId, list);
+          } else {
+            unassociatedNotices.push(parsed.data);
+          }
+        }
+      }
       const timestamp = Date.parse(entry.timestamp);
       if (Number.isFinite(timestamp)) updatedAt = Math.max(updatedAt, timestamp);
       if (entry.type === 'message' && visible(entry.message)) version++;
@@ -698,6 +915,50 @@ export class WorkerProjection {
     let current: Turn | undefined;
     let leafMessageId: string | null = null;
     for (const [entryIndex, entry] of entries.entries()) {
+      if (entry.type === 'compaction') {
+        const compactionEntry = entry as unknown as {
+          id: string;
+          tokensBefore: number;
+          tokensAfter?: number;
+          method?: string;
+          summary?: string;
+          warning?: string;
+          timestamp: string;
+        };
+        const rawMethod = compactionEntry.method;
+        const method: 'soft-compacted' | 'snap-compacted' | 'shaken' | 'remote-compacted' | 'handed-off' | 'compacted' =
+          rawMethod === 'soft' || rawMethod === 'context-full' || rawMethod === 'soft-compacted' ? 'soft-compacted'
+          : rawMethod === 'remote' || rawMethod === 'remote-compacted' ? 'remote-compacted'
+          : rawMethod === 'shake' || rawMethod === 'shaken' ? 'shaken'
+          : rawMethod === 'snapcompact' || rawMethod === 'snap-compacted' ? 'snap-compacted'
+          : rawMethod === 'handoff' || rawMethod === 'handed-off' ? 'handed-off'
+          : 'compacted';
+        const compactionPart: NoticePart = {
+          type: 'notice',
+          partId: `${entry.id}:compaction`,
+          noticeType: 'compaction',
+          level: 'info',
+          details: {
+            method,
+            tokensBefore: compactionEntry.tokensBefore ?? 0,
+            tokensAfter: compactionEntry.tokensAfter,
+            summary: compactionEntry.summary,
+            warning: compactionEntry.warning,
+          },
+        };
+        const messageId = opaqueNativeId('message', this.sessionId, entry.id);
+        const turnId = current?.turnId ?? opaqueNativeId('turn', this.sessionId, entry.id);
+        const createdAt = Date.parse(entry.timestamp) || Date.now();
+        messages.push({
+          messageId,
+          turnId,
+          sessionId: this.sessionId,
+          role: 'assistant',
+          createdAt,
+          parts: [compactionPart],
+        });
+        continue;
+      }
       if (entry.type !== 'message' || !visible(entry.message)) continue;
       const native = entry.message;
       const reference = references.get(entry.id);
@@ -742,6 +1003,23 @@ export class WorkerProjection {
         }
       }
       leafMessageId = messageId;
+    }
+    const firstVisibleMessage = messages.find((m) => m.role === 'user' || m.role === 'assistant');
+    if (firstVisibleMessage && unassociatedNotices.length > 0) {
+      firstVisibleMessage.parts.unshift(...unassociatedNotices);
+    }
+    for (const message of messages) {
+      const persistedNotices = noticesByMessageId.get(message.messageId);
+      if (persistedNotices) {
+        for (const notice of persistedNotices) {
+          const alreadyPresent = message.parts.some(
+            (p) => p.type === 'notice' && p.noticeType === notice.noticeType,
+          );
+          if (!alreadyPresent) {
+            message.parts.push(notice);
+          }
+        }
+      }
     }
     const lastByRun = new Map<string, Turn>();
     for (const turn of turns) lastByRun.set(turn.runId, turn);

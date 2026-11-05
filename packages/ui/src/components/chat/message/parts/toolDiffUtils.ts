@@ -121,6 +121,108 @@ function parseNativeDiff(path: string, text: string): Omit<ToolDiff, 'path'> | u
     return { diff: `--- a/${path}\n+++ b/${path}\n${hunks.join('\n')}\n`, additions, deletions };
 }
 
+const AST_EDIT_CHANGE_LINE_RE = /^([+\- ])\s*(\d+)\s*(?:│|[:|])\s*(.*)$/;
+
+function parseAstEditOutput(output: unknown): ToolFileChange[] {
+    if (!output || typeof output !== 'object') return [];
+    if ('details' in output && output.details && typeof output.details === 'object') {
+        const details = output.details;
+        if ('perFileResults' in details && Array.isArray(details.perFileResults)) {
+            return details.perFileResults.flatMap((file: unknown): ToolFileChange[] => {
+                if (!file || typeof file !== 'object' || !('path' in file) || typeof file.path !== 'string') return [];
+                const diffText = 'diff' in file && typeof file.diff === 'string' ? file.diff : '';
+                const parsed = parseNativeDiff(file.path, diffText);
+                return [{
+                    path: normalizeWorkspaceToolPath(file.path),
+                    op: 'update',
+                    ...parsed,
+                }];
+            });
+        }
+    }
+    let text = '';
+    if ('details' in output && output.details && typeof output.details === 'object' && 'displayContent' in output.details && typeof output.details.displayContent === 'string') {
+        text = output.details.displayContent;
+    } else if ('content' in output && Array.isArray(output.content)) {
+        text = output.content
+            .filter((block: unknown) => Boolean(block && typeof block === 'object' && 'type' in block && block.type === 'text' && 'text' in block && typeof block.text === 'string'))
+            .map((block: { text: string }) => block.text)
+            .join('\n');
+    }
+    if (text) {
+        const files: ToolFileChange[] = [];
+        let currentDir = '';
+        let currentPath: string | null = null;
+        let hunks: string[] = [];
+        let additions = 0;
+        let deletions = 0;
+        let lastOld: number | undefined;
+
+        const flushCurrent = () => {
+            if (currentPath && hunks.length > 0) {
+                files.push({
+                    path: normalizeWorkspaceToolPath(currentPath),
+                    op: 'update',
+                    diff: `--- a/${currentPath}\n+++ b/${currentPath}\n${hunks.join('\n')}\n`,
+                    additions,
+                    deletions,
+                });
+            }
+            hunks = [];
+            additions = 0;
+            deletions = 0;
+            lastOld = undefined;
+        };
+
+        for (const rawLine of text.split('\n')) {
+            const dirMatch = /^#+\s+([^\s].*\/)$/.exec(rawLine);
+            if (dirMatch) {
+                currentDir = dirMatch[1]!;
+                continue;
+            }
+            const fileMatch = /^#+\s+([^\s()]+)(?:\s+\([^)]*\))?/.exec(rawLine)
+                || /^\[([^#\]]+)(?:#[a-zA-Z0-9]+)?\]/.exec(rawLine);
+            if (fileMatch) {
+                flushCurrent();
+                const matched = fileMatch[1]!;
+                currentPath = currentDir && !matched.startsWith(currentDir) ? `${currentDir}${matched}` : matched;
+                continue;
+            }
+            if (!currentPath) continue;
+            const change = AST_EDIT_CHANGE_LINE_RE.exec(rawLine);
+            if (!change) continue;
+            const marker = change[1]!;
+            const lineNumber = parseInt(change[2]!, 10);
+            if (lastOld === undefined || lineNumber > lastOld + 1 || lineNumber < lastOld) {
+                hunks.push(`@@ -${lineNumber} +${lineNumber} @@`);
+            }
+            lastOld = lineNumber;
+            if (marker === '+') additions++;
+            else if (marker === '-') deletions++;
+            hunks.push(`${marker}${change[3]}`);
+        }
+        flushCurrent();
+        if (files.length > 0) return files;
+    }
+    if ('details' in output && output.details && typeof output.details === 'object') {
+        const details = output.details;
+        if ('fileReplacements' in details && Array.isArray(details.fileReplacements)) {
+            return details.fileReplacements.flatMap((item: unknown): ToolFileChange[] => {
+                if (item && typeof item === 'object' && 'path' in item && typeof item.path === 'string') {
+                    const count = 'count' in item && typeof item.count === 'number' ? item.count : 0;
+                    return [{
+                        path: normalizeWorkspaceToolPath(item.path),
+                        op: 'update',
+                        additions: count,
+                        deletions: count,
+                    }];
+                }
+                return [];
+            });
+        }
+    }
+    return [];
+}
 /** Successful native mutations only; call inputs are never evidence of a diff. */
 export function getToolFileChanges(part: ToolPart, pairedCall?: ToolCallPart): ToolFileChange[] {
     if (part.type !== 'tool_result' || part.isError) return [];
@@ -131,6 +233,9 @@ export function getToolFileChanges(part: ToolPart, pairedCall?: ToolCallPart): T
         // Writes to tool devices/coordination URLs do not mutate project files.
         const path = resolved ?? (inputPath && !/^[a-z][a-z0-9+.-]*:\/\//i.test(inputPath) ? inputPath : undefined);
         return path && workspaceRelativePath(path) !== null ? [{ path: normalizeWorkspaceToolPath(path) }] : [];
+    }
+    if (part.toolName === 'ast_edit') {
+        return parseAstEditOutput(part.output);
     }
     if (part.toolName !== 'edit') return [];
     const details = editResultSchema.safeParse(part.output).data?.details;
@@ -160,9 +265,15 @@ export function getToolDiffs(part: ToolPart, pairedCall?: ToolCallPart): ToolDif
 export function getPrimaryToolPath(part: ToolPart, pairedCall?: ToolCallPart): string | null {
     if (part.type === 'tool_result') return getToolFileChanges(part, pairedCall).find((file) => file.op !== 'delete')?.path ?? null;
     const path = pathValueSchema.safeParse(part.input.path).data;
-    return (part.toolName === 'edit' || part.toolName === 'write') && path && workspaceRelativePath(path) !== null
-        ? normalizeWorkspaceToolPath(path)
-        : null;
+    if ((part.toolName === 'edit' || part.toolName === 'write') && path && workspaceRelativePath(path) !== null)
+        return normalizeWorkspaceToolPath(path);
+    if (part.toolName === 'ast_edit') {
+        if (path && workspaceRelativePath(path) !== null) return normalizeWorkspaceToolPath(path);
+        const paths = Array.isArray(part.input.paths) && typeof part.input.paths[0] === 'string'
+            ? part.input.paths[0] : null;
+        if (paths && workspaceRelativePath(paths) !== null) return normalizeWorkspaceToolPath(paths);
+    }
+    return null;
 }
 
 export function extractFirstChangedLineFromDiff(diff: string): number | undefined {

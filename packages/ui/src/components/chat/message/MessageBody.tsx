@@ -1,7 +1,9 @@
 import React from 'react';
 import { useMobileAppActions } from '@/apps/mobileAppContext';
 import type { Part, Session, ToolCallPart, ToolResultPart } from '@openchamber/agent-contract';
-import { isQuestionTool } from '@/lib/toolHelpers';
+import { isQuestionTool, normalizeToolName, parseNativeReadPath } from '@/lib/toolHelpers';
+import { ReadToolGroup, type ReadToolGroupItem } from './parts/ReadToolGroup';
+import { normalizeWorkspaceToolPath } from './parts/toolDiffUtils';
 
 import UserTextPart from './parts/UserTextPart';
 import { sessionMentionChipsOf } from './parts/sessionMentionChips';
@@ -2016,6 +2018,65 @@ const AssistantMessageBody = React.memo(({
                     flushSegmentsAfterTool(toolPartId);
                     i++;
                     continue;
+                }
+                // Group consecutive read tool calls into ReadToolGroup
+                if (normalizeToolName(toolName) === 'read') {
+                    const readItemsByCallId = new Map<string, ReadToolGroupItem>();
+                    let j = i;
+                    while (j < visibleParts.length) {
+                        const candidate = visibleParts[j]!;
+                        if (candidate.type !== 'tool_call' && candidate.type !== 'tool_result') break;
+                        const cTool = candidate;
+                        const cName = normalizeToolName(cTool.toolName);
+                        if (cName !== 'read') break;
+                        const cPaired = cTool.type === 'tool_result'
+                            ? callsForTurn.get(cTool.toolCallId)
+                            : undefined;
+                        const cCall = cTool.type === 'tool_call' ? cTool : cPaired;
+                        const readPath = typeof cCall?.input?.path === 'string'
+                            ? cCall.input.path
+                            : typeof cCall?.input?.file_path === 'string'
+                                ? cCall.input.file_path
+                                : '';
+                        const parsed = parseNativeReadPath(readPath);
+                        const existing = readItemsByCallId.get(cTool.toolCallId);
+                        if (existing && !existing.isRunning && cTool.type === 'tool_call') {
+                            j++;
+                            continue;
+                        }
+                        const isErr = cTool.type === 'tool_result' && cTool.isError;
+                        const errMsg = isErr ? (cTool.error || 'Failed to read') : undefined;
+                        readItemsByCallId.set(cTool.toolCallId, {
+                            part: cTool,
+                            pairedCall: cPaired,
+                            path: normalizeWorkspaceToolPath(parsed.path),
+                            line: parsed.line,
+                            isError: isErr,
+                            isRunning: cTool.type === 'tool_call',
+                            errorMessage: errMsg,
+                        });
+                        j++;
+                    }
+
+                    const readItems = Array.from(readItemsByCallId.values());
+                    if (readItems.length > 1) {
+                        rendered.push(
+                            <FadeInOnReveal key={`read-group-${toolPartId}`}>
+                                <ReadToolGroup
+                                    items={readItems}
+                                    directory={effectiveDirectory ?? ''}
+                                />
+                            </FadeInOnReveal>
+                        );
+                        for (let k = i; k < j; k++) {
+                            const pK = visibleParts[k]!;
+                            if (pK.type === 'tool_call' || pK.type === 'tool_result') {
+                                flushSegmentsAfterTool(pK.partId);
+                            }
+                        }
+                        i = j;
+                        continue;
+                    }
                 }
 
                 // Expandable tools: bash, edit, write, task, question — individual rows

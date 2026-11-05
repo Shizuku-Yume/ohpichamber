@@ -272,7 +272,7 @@ export class SessionJournal {
         const part = ref?.message.parts[ref.index];
         if (part?.type === 'text' || part?.type === 'reasoning') part.content += event.delta; return;
       }
-      case 'part.completed': {
+      case 'part.updated': case 'part.completed': {
         const ref = this.partById.get(event.part.partId);
         if (!ref) return;
         const part = structuredClone(event.part);

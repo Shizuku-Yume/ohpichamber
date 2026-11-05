@@ -32,6 +32,7 @@ const ProjectionEventSchema = z.union([
   CanonicalEventSchema.options[23].omit(envelope),
   CanonicalEventSchema.options[24].omit(envelope),
   CanonicalEventSchema.options[25].omit(envelope),
+  CanonicalEventSchema.options[26].omit(envelope),
   SubagentUpdatedEventSchema.omit(envelope),
   AdvisorYieldedEventSchema.omit(envelope),
   CleanseProgressEventSchema.omit(envelope),

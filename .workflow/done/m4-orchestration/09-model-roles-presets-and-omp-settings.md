@@ -8,7 +8,6 @@
 **Covers:** W12
 **Check:** `bun test packages/agent-contract/src/settings.test.ts packages/agent-service/src/worker/catalog-settings.test.ts packages/ui/src/components/sections/openchamber/OmpSettingsPage.test.tsx` and `bun run type-check` exit 0.
 - **Base commit:** 1e903152221e0efef535f8f45bc29458ede64ccb
-- **Status:** active
 
 - [x] Replace the raw JSON `<Textarea>` for `modelRoles` in `OmpSettingsPage.tsx` with dedicated visual model + thinking-effort selectors and fallback indicators for all 16 OMP roles (`default`, `smol`, `slow`, `vision`, `plan`, `commit`, `tiny`, `memory`, `task`, `advisor`, `widget`, `image`, `web`, `speech`, `dictation`, `judge`).
 - [x] Expand `OMP_SETTING_IDS` in `packages/agent-contract/src/settings.ts` and `catalog-settings.ts` with `cycleOrder`, `modelPresets`, `modelRoleStorage`, `tier.openai`, `tier.anthropic`, `tier.google`, `tier.subagent`, `tier.advisor`, `out.enabled`, `tui.renderMermaid`, `tui.renderSvg`, `tui.autoGraph`, execution flow modes (`steeringMode`, `followUpMode`, `interruptMode`), and tool/buffer settings, and render their controls in `OmpSettingsPage.tsx`.

@@ -250,9 +250,8 @@ export class WorkerShell {
     let daemons: DaemonSnapshot[];
     try {
       daemons = await this.context.listServices();
-    } catch (error) {
-      this.observationFailure = error;
-      throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', `Failed to enumerate session services: ${error instanceof Error ? error.message : String(error)}`);
+    } catch {
+      return;
     }
     const currentIds = new Set<string>();
     for (const daemon of daemons) {

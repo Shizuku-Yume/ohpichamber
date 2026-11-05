@@ -472,9 +472,13 @@ export class WorkerSession {
         workerGeneration: input.workerGeneration, epoch: input.observationEpoch ?? randomUUID(), cwd: input.cwd,
         widgets,
         listServices: async () => {
-          const res = await listServicesTolerant(toolSession);
-          if (res.error) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', res.error);
-          return res.services.filter(d => d.owner === input.rootSessionId);
+          try {
+            const res = await listServicesTolerant(toolSession);
+            if (res.error) return [];
+            return res.services.filter(d => d.owner === input.rootSessionId);
+          } catch {
+            return [];
+          }
         },
         serviceLogs: async (name: string) => {
           return serviceLogs(toolSession, name);

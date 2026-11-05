@@ -238,9 +238,10 @@ export function applyDirectoryEvent(state: State, event: CanonicalEvent): Direct
       if (event.continuationPending !== undefined) updated = { ...updated, session: { ...updated.session, continuationPending: event.continuationPending } }
       if (event.title !== undefined) updated = { ...updated, session: { ...updated.session, title: event.title } }
       if (event.selection !== undefined) updated = { ...updated, selection: event.selection }
+      if (event.loop !== undefined) updated = { ...updated, session: { ...updated.session, loop: event.loop } }
       const current = next.session.find((session) => session.sessionId === id)
       if (current) {
-        let session: Session = { ...current, ...(event.session ?? {}), ...(event.mode ? { mode: event.mode } : {}), ...(event.continuationPending === undefined ? {} : { continuationPending: event.continuationPending }), ...(event.title === undefined ? {} : { title: event.title }) }
+        let session: Session = { ...current, ...(event.session ?? {}), ...(event.mode ? { mode: event.mode } : {}), ...(event.continuationPending === undefined ? {} : { continuationPending: event.continuationPending }), ...(event.title === undefined ? {} : { title: event.title }), ...(event.loop !== undefined ? { loop: event.loop } : {}) }
         if (event.metadataRevision !== undefined && compareCounters(event.metadataRevision, current.metadataRevision) >= 0) {
           session = { ...session, metadata: event.metadata ?? null, metadataRevision: event.metadataRevision }
         }

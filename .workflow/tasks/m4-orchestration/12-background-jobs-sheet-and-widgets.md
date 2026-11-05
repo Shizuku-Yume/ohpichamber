@@ -2,7 +2,7 @@
 
 **Effort:** m4-orchestration
 **Task type:** feature
-**Blocked by:** 06
+**Blocked by:** 08
 **Files:** `packages/agent-contract/src/shell.ts`, `packages/agent-service/src/worker/shell.ts`, `packages/agent-service/src/worker/session.ts`, `packages/ui/src/components/chat/BackgroundShellsStrip.tsx`, `packages/ui/src/components/chat/JobsSheetDialog.tsx`, `packages/ui/src/stores/useBackgroundShellsStore.ts`
 **Read first:** `.workflow/specs/m4-orchestration.md`; `.workflow/research/omp-tui-parity-audit.md` (§1.5, §2)
 **Covers:** W15

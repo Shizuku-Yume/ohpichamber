@@ -2,6 +2,7 @@
 
 **Status:** in progress
 **Priority:** high
+**Integration branch:** m4-orchestration/integration
 
 ## What this is for
 
@@ -48,6 +49,18 @@ The M3 migration, Post-M3 Hardening, Upstream Refresh, and OMP-Native Chat/Parit
 
 Every worker capability stays in-process inside the Agent Service worker (`packages/agent-service/src/worker/`) over the pinned OMP 18.16.0 package exports (`vendor/omp/650f3a10/`), projected through JSON-safe `@openchamber/agent-contract` schemas and authorized by the Host Gateway. No `omp --mode rpc-ui` subprocess is spawned, no SDK object crosses IPC or HTTP, and Host Gatekeeper path/command/egress rules remain authoritative.
 
+
+### Parallel lanes
+
+Work runs across five parallel lanes, each in its own worktree under `/home/shizuku/Project/ohpichamber-worktrees/m4-lane-<a..e>` cut from `m4-orchestration/integration`. Each lane works its assigned tasks in order, runs its focused checks and `oxlint`, commits each completed task, and merges into `m4-orchestration/integration`. Task 14 runs after Lanes A–E land on `m4-orchestration/integration`.
+
+| Lane | Worktree | Tasks (in order) | Exclusive file ownership |
+|---|---|---|---|
+| **Lane A** | `m4-lane-a` | `01` → `02` → `03` → `05` | `packages/web/server/lib/{workflows,routing,small-model,permission-auto-accept,notifications,host}/`, `packages/ui/src/components/{views/SettingsView.tsx,sections/{routing,behavior,openchamber/DefaultsSettings.tsx,openchamber/OpenChamberToolsSettings.tsx,extensions,plugins,snippets}}/`, `packages/ui/src/lib/{smallModelRequest.ts,gitApi.ts,responseStyle.ts,settings/registry.ts}`, `packages/ui/src/stores/useUIStore.ts` |
+| **Lane B** | `m4-lane-b` | `09` → `10` | `packages/agent-contract/src/settings.ts`, `packages/agent-service/src/worker/{catalog-settings.ts,builtin-commands.ts}`, `packages/ui/src/components/sections/openchamber/OmpSettingsPage.tsx`, `packages/ui/src/lib/i18n/messages/ompSettingsI18n.ts`, `packages/ui/src/components/chat/{CommandAutocomplete.tsx,FileMentionAutocomplete.tsx,ChatInput.tsx,composer/}` |
+| **Lane C** | `m4-lane-c` | `04` → `11` | `packages/agent-service/src/worker/{mcp.ts,mode.ts}`, `packages/agent-contract/src/catalogs.ts`, `packages/ui/src/components/sections/mcp/`, `packages/ui/src/components/chat/{btw/BtwPanel.tsx,btw/useBtwPanelState.ts,PlanReviewCard.tsx}`, `packages/agent-service/src/worker/session.ts` (LSP enable, `selectBranch`, `checkpoint`/`rewind`, `btw.branch`) |
+| **Lane D** | `m4-lane-d` | `06` → `08` → `12` | `packages/agent-contract/src/{messages.ts,events.ts,shell.ts}`, `packages/agent-service/src/worker/{projection.ts,shell.ts}`, `packages/ui/src/lib/toolHelpers.ts`, `packages/ui/src/sync/event-reducer.ts`, `packages/ui/src/components/chat/{message/,MarkdownRendererImpl.tsx,markdown/,SessionRecapSpacer.tsx,BackgroundShellsStrip.tsx,JobsSheetDialog.tsx}`, `packages/ui/src/components/ui/ContextUsageDisplay.tsx`, `packages/ui/src/stores/useBackgroundShellsStore.ts` |
+| **Lane E** | `m4-lane-e` | `07` → `13` | `packages/agent-contract/src/session.ts`, `packages/agent-service/src/{protocol.ts,supervisor/service.ts}`, `packages/web/server/lib/openchamber-sessions/routes.js`, `packages/ui/src/api/canonicalClient.ts`, `packages/ui/src/components/chat/{work-status/WorkStatusSubagentsSection.tsx,SubagentHudTray.tsx}`, `packages/agent-service/src/worker/session.ts` (subagent progress/steer/cancel, `/loop`, `/omfg`, `/cleanse`, `/tan`, `/seance`, Advisor) |
 ## What it must not do
 
 - Must not re-introduce root `agentId` selection on chat, routing, scheduled tasks, multi-run, or workflows.

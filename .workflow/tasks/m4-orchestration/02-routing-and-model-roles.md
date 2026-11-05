@@ -2,7 +2,7 @@
 
 **Effort:** m4-orchestration
 **Task type:** bugfix
-**Blocked by:** None
+**Blocked by:** 01
 **Files:** `packages/ui/src/components/sections/routing/RoutingPage.tsx`, `packages/ui/src/components/sections/routing/RoutingPage.test.tsx`, `packages/web/server/lib/routing/runtime.js`, `packages/web/server/lib/routing/runtime.test.js`, `packages/web/server/lib/host/prompt-delivery-runtime.js`, `packages/web/server/lib/host/prompt-delivery-runtime.test.js`, `packages/web/server/lib/small-model/index.js`, `packages/web/server/lib/small-model/index.test.js`, `packages/ui/src/lib/smallModelRequest.ts`, `packages/ui/src/lib/smallModelRequest.test.ts`, `packages/ui/src/lib/gitApi.ts`, `packages/ui/src/components/sections/openchamber/DefaultsSettings.tsx`, `packages/ui/src/components/sections/openchamber/SessionWarmingCheckbox.test.tsx`, `packages/web/server/lib/host/settings-helpers.js`, `packages/web/server/lib/host/settings-registry.json`, `packages/ui/src/lib/settings/registry.ts`
 **Read first:** `.workflow/specs/m4-orchestration.md`; `.workflow/decisions.md` (2026-11-05 - Fix auto routing effort mapping and unify small-model resolution on OMP modelRoles); `packages/web/server/lib/routing/DOCUMENTATION.md`
 **Covers:** W2, W3

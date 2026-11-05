@@ -2,7 +2,7 @@
 
 **Effort:** m4-orchestration
 **Task type:** feature
-**Blocked by:** 02
+**Blocked by:** None
 **Files:** `packages/agent-contract/src/settings.ts`, `packages/agent-contract/src/settings.test.ts`, `packages/agent-service/src/worker/catalog-settings.ts`, `packages/agent-service/src/worker/catalog-settings.test.ts`, `packages/ui/src/components/sections/openchamber/OmpSettingsPage.tsx`, `packages/ui/src/components/sections/openchamber/OmpSettingsPage.test.tsx`, `packages/ui/src/lib/i18n/messages/ompSettingsI18n.ts`
 **Read first:** `.workflow/specs/m4-orchestration.md`; `.workflow/research/omp-tui-parity-audit.md` (§1.4, §2)
 **Covers:** W12

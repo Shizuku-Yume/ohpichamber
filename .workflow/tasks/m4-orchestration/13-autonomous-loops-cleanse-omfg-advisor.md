@@ -2,7 +2,7 @@
 
 **Effort:** m4-orchestration
 **Task type:** feature
-**Blocked by:** 07, 10
+**Blocked by:** 07
 **Files:** `packages/agent-contract/src/session.ts`, `packages/agent-contract/src/events.ts`, `packages/agent-service/src/worker/session.ts`, `packages/agent-service/src/worker/builtin-commands.ts`, `packages/agent-service/src/worker/projection.ts`, `packages/ui/src/components/chat/`
 **Read first:** `.workflow/specs/m4-orchestration.md`; `.workflow/research/omp-tui-parity-audit.md` (§1.7, §2)
 **Covers:** W16

@@ -10,7 +10,7 @@
 **Check:** `bun run docs:validate`, `.workflow/bin/workflow validate`, `bun run type-check`, `bun run lint`, and root `bun run test` exit 0; real-provider verification receipt and screenshots recorded under `/home/shizuku/Project/ohpichamber-omp-artifacts/m4-verification-<date>/`.
 - **Base commit:** b3fcef1a9257ee7064b388a8816654e15dbddae2
 
-- [ ] Execute real-provider smoke run across remaining unverified subsystems and residual gaps (retained for remaining browser compositor timeout on capturePage/snapshot, Linear OAuth external account configuration, and live worktree sessions; Session Assist, /omfg and /cleanse model repair, and scoped LSP verified live).
+- [ ] Execute real-provider smoke run across remaining unverified subsystems and residual gaps (retained only for Linear OAuth external account configuration, live worktree sessions, and Electron compositor capture limitation).
 - [x] Update product documentation to accurately delineate runtime-verified core capabilities from automated-only subsystem coverage (retaining runtime note banners across all 12 locales on notifications and sessions-in-work; verified removals on auto-model-routing, notes-todos-plans, scheduled-tasks, and multi-run).
 - [x] Synchronize `.workflow/development.md` and migration design documents (`scope.md`, `implementation-plan.md`, `architecture.md`, `contracts.md`, `README.md`, `AGENTS.md`) and pass the full root gate.
 

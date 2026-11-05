@@ -458,12 +458,19 @@ export const Header: React.FC = () => {
     const val = state.ompSettings?.settings?.find((s) => s.id === 'compaction.thresholdPercent')?.value;
     return typeof val === 'number' && val > 0 ? val : null;
   });
-  const compactionSpeculationPercent = useConfigStore((state) => {
-    const val = state.ompSettings?.settings?.find((s) => s.id === 'compaction.thresholdPercent')?.value;
+  const compactionAsyncEnabled = useConfigStore((state) => {
     const asyncSetting = state.ompSettings?.settings?.find((s) => s.id === 'compaction.asyncEnabled')?.value;
-    const asyncEnabled = asyncSetting !== false;
-    return typeof val === 'number' && val > 0 && asyncEnabled ? Math.max(10, val - 10) : null;
+    return asyncSetting !== false;
   });
+  const compactionSpeculationPercent = React.useMemo(() => {
+    if (!compactionAsyncEnabled || compactionThresholdPercent === null || typeof contextLimit !== 'number' || contextLimit <= 0) {
+      return null;
+    }
+    const thresholdTokens = (compactionThresholdPercent / 100) * contextLimit;
+    const leadTokens = Math.min(32000, Math.max(8192, Math.floor(thresholdTokens * 0.125)));
+    const speculationTokens = thresholdTokens - leadTokens;
+    return Math.max(0, Math.round((speculationTokens / contextLimit) * 100));
+  }, [compactionAsyncEnabled, compactionThresholdPercent, contextLimit]);
   const refreshCurrentInstanceLabel = React.useCallback(async () => {
     if (typeof window === 'undefined' || !isDesktopApp) {
       return;

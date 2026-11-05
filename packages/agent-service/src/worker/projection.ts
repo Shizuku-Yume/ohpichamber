@@ -916,22 +916,13 @@ export class WorkerProjection {
     let leafMessageId: string | null = null;
     for (const [entryIndex, entry] of entries.entries()) {
       if (entry.type === 'compaction') {
-        const compactionEntry = entry as unknown as {
-          id: string;
-          tokensBefore: number;
-          tokensAfter?: number;
-          method?: string;
-          summary?: string;
-          warning?: string;
-          timestamp: string;
-        };
-        const rawMethod = compactionEntry.method;
+        const rawMethod = entry.method;
         const method: 'soft-compacted' | 'snap-compacted' | 'shaken' | 'remote-compacted' | 'handed-off' | 'compacted' =
-          rawMethod === 'soft' || rawMethod === 'context-full' || rawMethod === 'soft-compacted' ? 'soft-compacted'
-          : rawMethod === 'remote' || rawMethod === 'remote-compacted' ? 'remote-compacted'
-          : rawMethod === 'shake' || rawMethod === 'shaken' ? 'shaken'
-          : rawMethod === 'snapcompact' || rawMethod === 'snap-compacted' ? 'snap-compacted'
-          : rawMethod === 'handoff' || rawMethod === 'handed-off' ? 'handed-off'
+          rawMethod === 'soft' ? 'soft-compacted'
+          : rawMethod === 'remote' ? 'remote-compacted'
+          : rawMethod === 'shake' ? 'shaken'
+          : rawMethod === 'snapcompact' ? 'snap-compacted'
+          : rawMethod === 'handoff' ? 'handed-off'
           : 'compacted';
         const compactionPart: NoticePart = {
           type: 'notice',
@@ -940,10 +931,9 @@ export class WorkerProjection {
           level: 'info',
           details: {
             method,
-            tokensBefore: compactionEntry.tokensBefore ?? 0,
-            tokensAfter: compactionEntry.tokensAfter,
-            summary: compactionEntry.summary,
-            warning: compactionEntry.warning,
+            tokensBefore: entry.tokensBefore ?? 0,
+            tokensAfter: entry.tokensAfter,
+            summary: entry.summary,
           },
         };
         const messageId = opaqueNativeId('message', this.sessionId, entry.id);
@@ -1012,10 +1002,7 @@ export class WorkerProjection {
       const persistedNotices = noticesByMessageId.get(message.messageId);
       if (persistedNotices) {
         for (const notice of persistedNotices) {
-          const alreadyPresent = message.parts.some(
-            (p) => p.type === 'notice' && p.noticeType === notice.noticeType,
-          );
-          if (!alreadyPresent) {
+          if (!message.parts.some((p) => p.partId === notice.partId)) {
             message.parts.push(notice);
           }
         }

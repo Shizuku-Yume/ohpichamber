@@ -21,9 +21,6 @@ export async function captureNativePolicy(input: { projectId: string; workspaceI
       : provider?.endpoint;
     if (endpoint !== null && endpoint !== undefined) nativeProvider.endpoint = endpoint;
     providers.push(nativeProvider);
-    if ('baseUrl' in native && typeof native.baseUrl === 'string' && native.baseUrl && provider?.endpoint && provider.endpoint !== native.baseUrl) {
-      providers.push({ providerId: native.provider, modelId: native.id, endpoint: provider.endpoint });
-    }
   }
   return HostNativePolicySnapshotSchema.parse({ ...input, providers, mcpServers, agentIds: profiles.agents.map(agent => agent.agentId), permissionPresetIds: [...new Set(profiles.agents.flatMap(agent => agent.permissionPresetId === undefined ? [] : [agent.permissionPresetId]))] });
 }

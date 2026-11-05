@@ -64,11 +64,11 @@ describe('captureNativePolicy endpoint resolution', () => {
     );
     expect(astraCustom).toBeDefined();
 
-    // Verify provider-level fallback endpoint is also authorized
+    // Verify provider-level fallback endpoint is NOT permitted when model has explicit baseUrl (fail-closed)
     const astraProvider = snapshot.providers.find(
       p => p.providerId === 'CLIProxyAPI' && p.modelId === 'gpt-6-astra' && p.endpoint === 'https://cli.example.com/v1'
     );
-    expect(astraProvider).toBeDefined();
+    expect(astraProvider).toBeUndefined();
 
     // Verify model without custom baseUrl uses provider.endpoint
     const sonnet = snapshot.providers.find(

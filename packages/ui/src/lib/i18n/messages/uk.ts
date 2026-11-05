@@ -1,3 +1,4 @@
+import { subagentHudI18n } from './subagent-hud.i18n';
 import { settingsDict } from './uk.settings';
 import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { referencePickerI18n } from './reference-picker.i18n';
@@ -39,6 +40,7 @@ import { guestStatusViewI18n } from './guest-status-view.i18n';
 import { ompSettingsI18n } from './omp-settings.i18n';
 import { workerRunsI18n } from './worker-runs.i18n';
 export const dict = {
+  ...subagentHudI18n['uk'],
   ...ompSettingsI18n.uk,
   ...settingsDict,
   ...linearIssuePickerI18n.uk,
@@ -212,6 +214,7 @@ export const dict = {
   "settings.view.nav.group.general": "OpenChamber",
   "settings.view.nav.group.projects": "Робочий простір",
   "settings.view.nav.group.opencode": "OMP",
+  "settings.view.nav.group.agent": "OMP",
   "settings.view.nav.group.content": "Бібліотека",
   "settings.page.projects.title": "Проєкти",
   "settings.page.remoteInstances.title": "Віддалені інстанси",
@@ -220,7 +223,7 @@ export const dict = {
   "settings.page.agents.title": "Агенти",
   "settings.page.commands.title": "Команди",
   "settings.page.mcp.title": "MCP",
-  "settings.page.plugins.title": "Plugins",
+  "settings.page.plugins.title": "Плагіни OMP",
   "settings.page.skills.title": "Навички",
   "settings.page.skillsCatalog.title": "Каталог навичок",
   "settings.page.git.title": "Git",
@@ -242,8 +245,8 @@ export const dict = {
   "settings.page.tunnel.title": "Зовнішній тунель",
   "settings.page.tunnel.description": "Відкрийте цей екземпляр через віддалений тунель.",
   "settings.page.about.title": "Про застосунок",
-  "settings.page.snippets.title": "Сніпети",
-  "settings.snippets.sidebar.title": "Сніпети",
+  "settings.page.snippets.title": "Шаблони промптів",
+  "settings.snippets.sidebar.title": "Шаблони промптів",
   "settings.snippets.sidebar.total": "Всього: {count}",
   "settings.snippets.sidebar.actions.create": "Створити сніпет",
   "settings.snippets.sidebar.actions.more": "Додаткові дії для {name}",
@@ -2814,7 +2817,7 @@ export const dict = {
   "settings.extensions.identity.loadFailed": "Не вдалося завантажити Git identities цього інстанса. Глобальна identity залишається доступною.",
   "settings.extensions.request.noResponse": "HTTP-відповідь не надійшла. Перевірте з’єднання з цим інстансом.",
   "settings.extensions.request.invalidResponse": "Неочікувана відповідь сервера (HTTP {status}).",
-  "settings.page.extensions.title": "Розширення",
+  "settings.page.extensions.title": "Гостьові розширення",
   "settings.page.extensions.description": "Розширення з теки, ZIP або git URL — панелі, attach-меню, інтеграції та локальні сервіси. Це не плагіни OpenCode.",
   "settings.extensions.section.installed": "Встановлені",
   "settings.extensions.empty": "Розширень не завантажено.",

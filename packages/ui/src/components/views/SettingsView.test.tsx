@@ -57,7 +57,7 @@ test('SettingsView does not render behavior navigation item and excludes retired
     root.render(
       <RuntimeAPIContext.Provider value={{} as import('@/lib/api/types').RuntimeAPIs}>
         <I18nProvider>
-          <SettingsView onClose={() => {}} />
+          <SettingsView onClose={() => {}} forceMobile={false} />
         </I18nProvider>
       </RuntimeAPIContext.Provider>
     );
@@ -74,4 +74,28 @@ test('SettingsView does not render behavior navigation item and excludes retired
   expect(navTexts.some((text) => text === 'Agents')).toBe(true);
   expect(navTexts.some((text) => text === 'Commands')).toBe(true);
   expect(navTexts.some((text) => text === 'MCP')).toBe(true);
+});
+
+test('SettingsView displays clarified Guest Extensions, OMP Plugins, and Prompt Templates labels', async () => {
+  await act(async () => {
+    root.render(
+      <RuntimeAPIContext.Provider value={{} as import('@/lib/api/types').RuntimeAPIs}>
+        <I18nProvider>
+          <SettingsView onClose={() => {}} forceMobile={false} />
+        </I18nProvider>
+      </RuntimeAPIContext.Provider>
+    );
+  });
+
+  const buttonElements = Array.from(container.querySelectorAll('button'));
+  const navTexts = buttonElements.map((b) => b.textContent?.trim() || '');
+  // Verify clarified names in settings navigation
+  expect(navTexts.some((text) => text === 'Guest Extensions')).toBe(true);
+  expect(navTexts.some((text) => text === 'OMP Plugins')).toBe(true);
+  expect(navTexts.some((text) => text === 'Prompt Templates')).toBe(true);
+
+  // Verify old unclarified names are no longer used as standalone nav items
+  expect(navTexts.includes('Extensions')).toBe(false);
+  expect(navTexts.includes('Plugins')).toBe(false);
+  expect(navTexts.includes('Snippets')).toBe(false);
 });

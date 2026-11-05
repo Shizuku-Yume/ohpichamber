@@ -125,7 +125,7 @@ const pageOrder: SettingsPageSlug[] = [
   'tunnel',
   'git',
   'isolated-spaces',
-  // 'opencode' group — OpenCode
+  // 'agent' group
   'providers',
   'web-search',
   'omp',
@@ -140,7 +140,7 @@ const pageOrder: SettingsPageSlug[] = [
   'skills.catalog',
 ];
 
-const NAV_GROUP_ORDER = ['general', 'projects', 'opencode', 'content'] as const;
+const NAV_GROUP_ORDER = ['general', 'projects', 'agent', 'content'] as const;
 
 function buildRuntimeContext(isDesktop: boolean, isMobile: boolean, routingAvailable: boolean, enterpriseMode: boolean, jevBlockedByEnterprise: boolean): SettingsRuntimeContext {
   const isWeb = !isDesktop && isWebRuntime();

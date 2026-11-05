@@ -1,5 +1,6 @@
 import React from 'react';
 import { Icon } from '@/components/icon/Icon';
+import { useI18n } from '@/lib/i18n';
 import type { AdvisorNote } from '@openchamber/agent-contract';
 
 export interface AdvisorMessageProps {
@@ -8,6 +9,7 @@ export interface AdvisorMessageProps {
 }
 
 export const AdvisorMessage: React.FC<AdvisorMessageProps> = ({ notes, className = '' }) => {
+  const { t } = useI18n();
   if (!notes || notes.length === 0) return null;
 
   return (
@@ -17,10 +19,9 @@ export const AdvisorMessage: React.FC<AdvisorMessageProps> = ({ notes, className
     >
       <div className="flex items-center gap-2 mb-2 font-medium text-foreground">
         <Icon name="ai-agent" className="size-4 text-primary" />
-        <span>Advisor Watchdog</span>
-        <span className="text-muted-foreground text-[11px]">({notes.length} advisory note{notes.length === 1 ? '' : 's'})</span>
+        <span>{t('chat.advisorMessage.title')}</span>
+        <span className="text-muted-foreground text-[11px]">{t('chat.advisorMessage.notes', { count: notes.length })}</span>
       </div>
-
       <div className="flex flex-col gap-2">
         {notes.map((note) => {
           const isBlocker = note.severity === 'blocker';
@@ -47,7 +48,7 @@ export const AdvisorMessage: React.FC<AdvisorMessageProps> = ({ notes, className
                 <span
                   className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider border ${severityClass}`}
                 >
-                  {note.severity}
+                  {t(`chat.advisorMessage.severity.${note.severity}`)}
                 </span>
                 {note.advisorName && (
                   <span className="text-[10px] text-muted-foreground font-mono">

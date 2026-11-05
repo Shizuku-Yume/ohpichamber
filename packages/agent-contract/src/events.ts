@@ -69,6 +69,7 @@ export const CleanseProgressEventSchema = DataEventEnvelopeSchema.extend({
   activeCheckers: z.array(z.string()),
   completedCheckers: z.array(z.string()),
   repairedFiles: z.array(z.string()),
+  diagnosticsCount: z.number().int().nonnegative().optional(),
   status: z.enum(['discovering', 'repairing', 'verifying', 'completed', 'failed', 'cancelled']),
   summary: z.string().optional(),
 });

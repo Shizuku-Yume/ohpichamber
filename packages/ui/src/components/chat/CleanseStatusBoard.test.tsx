@@ -3,6 +3,7 @@ import { Window } from 'happy-dom';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { CleanseStatusBoard } from './CleanseStatusBoard';
+import { I18nProvider } from '@/lib/i18n';
 
 describe('CleanseStatusBoard', () => {
   test('renders status board, checkers, and repaired files', () => {
@@ -17,16 +18,17 @@ describe('CleanseStatusBoard', () => {
     });
     const host = document.createElement('div');
     const root = createRoot(host);
-
     act(() => {
       root.render(
-        <CleanseStatusBoard
-          status="repairing"
-          activeCheckers={['typescript']}
-          completedCheckers={['oxlint']}
-          repairedFiles={['src/app.ts', 'src/util.ts']}
-          summary="Diagnosing and fixing syntax errors"
-        />,
+        <I18nProvider>
+          <CleanseStatusBoard
+            status="repairing"
+            activeCheckers={['typescript']}
+            completedCheckers={['oxlint']}
+            repairedFiles={['src/app.ts', 'src/util.ts']}
+            summary="Diagnosing and fixing syntax errors"
+          />
+        </I18nProvider>,
       );
     });
 

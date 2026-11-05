@@ -35,7 +35,7 @@
   - Real-path service smoke: started dev server on ports 5205 and 3935; verified `/health` returned HTTP 200 with `runtime: web` and `agentService: { phase: ready }`.
 
 - **Check after:**
-  - `bun test packages/agent-service/src/worker/session-native.test.ts packages/ui/src/components/chat/`: exact declared task command output: 1516 pass, 123 fail across 1639 tests across 199 files (129.76s), where chat failures in single-process batch execution stem from pre-existing mock.module and store singleton leakage across un-isolated UI tests documented in development.md.
+  - `bun test packages/agent-service/src/worker/session-native.test.ts packages/ui/src/components/chat/`: exact declared task command output: 1516 pass, 123 fail across 1639 tests across 199 files (129.76s); the declared bun batch fails from cross-suite test isolation and acceptance remains explicitly unverified under the raw combined command.
   - `node scripts/run-isolated-tests.mjs packages/ui/src/components/chat/`: 192/192 test files passed (covering every UI chat test file in isolated processes per repository isolated-runner contract).
   - `bun test packages/agent-service/src/worker/session-native.test.ts`: 49 pass, 0 fail, 309 expect() calls (including autonomous commands /loop, /omfg, /cleanse, /tan, /seance, /advisor, and loop.stop).
   - `bun run type-check`: 0 type errors across 3,215 files across 5 projects (1.92s).

@@ -19,6 +19,7 @@ export const subagentHudI18n = {
     'chat.cleanseStatusBoard.checkers': 'Checkers ({count})',
     'chat.cleanseStatusBoard.repairedFiles': 'Repaired Files ({count})',
     'chat.cleanseStatusBoard.noRepairedFiles': 'None',
+    'chat.cleanseStatusBoard.dismiss': 'Dismiss',
   },
   de: {
     'chat.subagentHud.title': 'Subagenten',
@@ -40,6 +41,7 @@ export const subagentHudI18n = {
     'chat.cleanseStatusBoard.checkers': 'Prüfer ({count})',
     'chat.cleanseStatusBoard.repairedFiles': 'Reparierte Dateien ({count})',
     'chat.cleanseStatusBoard.noRepairedFiles': 'Keine',
+    'chat.cleanseStatusBoard.dismiss': 'Schließen',
   },
   fr: {
     'chat.subagentHud.title': 'Sous-agents',
@@ -61,6 +63,7 @@ export const subagentHudI18n = {
     'chat.cleanseStatusBoard.checkers': 'Vérificateurs ({count})',
     'chat.cleanseStatusBoard.repairedFiles': 'Fichiers réparés ({count})',
     'chat.cleanseStatusBoard.noRepairedFiles': 'Aucun',
+    'chat.cleanseStatusBoard.dismiss': 'Ignorer',
   },
   nl: {
     'chat.subagentHud.title': 'Subagenten',
@@ -82,6 +85,7 @@ export const subagentHudI18n = {
     'chat.cleanseStatusBoard.checkers': 'Checkers ({count})',
     'chat.cleanseStatusBoard.repairedFiles': 'Herstelde bestanden ({count})',
     'chat.cleanseStatusBoard.noRepairedFiles': 'Geen',
+    'chat.cleanseStatusBoard.dismiss': 'Sluiten',
   },
   es: {
     'chat.subagentHud.title': 'Subagentes',
@@ -103,6 +107,7 @@ export const subagentHudI18n = {
     'chat.cleanseStatusBoard.checkers': 'Comprobadores ({count})',
     'chat.cleanseStatusBoard.repairedFiles': 'Archivos reparados ({count})',
     'chat.cleanseStatusBoard.noRepairedFiles': 'Ninguno',
+    'chat.cleanseStatusBoard.dismiss': 'Descartar',
   },
   ja: {
     'chat.subagentHud.title': 'サブエージェント',
@@ -124,6 +129,7 @@ export const subagentHudI18n = {
     'chat.cleanseStatusBoard.checkers': 'チェッカー ({count})',
     'chat.cleanseStatusBoard.repairedFiles': '修正ファイル ({count})',
     'chat.cleanseStatusBoard.noRepairedFiles': 'なし',
+    'chat.cleanseStatusBoard.dismiss': '閉じる',
   },
   'pt-BR': {
     'chat.subagentHud.title': 'Subagentes',
@@ -145,6 +151,7 @@ export const subagentHudI18n = {
     'chat.cleanseStatusBoard.checkers': 'Verificadores ({count})',
     'chat.cleanseStatusBoard.repairedFiles': 'Arquivos reparados ({count})',
     'chat.cleanseStatusBoard.noRepairedFiles': 'Nenhum',
+    'chat.cleanseStatusBoard.dismiss': 'Dispensar',
   },
   uk: {
     'chat.subagentHud.title': 'Субагенти',
@@ -166,6 +173,7 @@ export const subagentHudI18n = {
     'chat.cleanseStatusBoard.checkers': 'Перевірки ({count})',
     'chat.cleanseStatusBoard.repairedFiles': 'Виправлені файли ({count})',
     'chat.cleanseStatusBoard.noRepairedFiles': 'Немає',
+    'chat.cleanseStatusBoard.dismiss': 'Закрити',
   },
   ko: {
     'chat.subagentHud.title': '서브에이전트',
@@ -187,6 +195,7 @@ export const subagentHudI18n = {
     'chat.cleanseStatusBoard.checkers': '검사기 ({count})',
     'chat.cleanseStatusBoard.repairedFiles': '수정된 파일 ({count})',
     'chat.cleanseStatusBoard.noRepairedFiles': '없음',
+    'chat.cleanseStatusBoard.dismiss': '닫기',
   },
   pl: {
     'chat.subagentHud.title': 'Podagenci',
@@ -208,6 +217,7 @@ export const subagentHudI18n = {
     'chat.cleanseStatusBoard.checkers': 'Narzędzia sprawdzające ({count})',
     'chat.cleanseStatusBoard.repairedFiles': 'Naprawione pliki ({count})',
     'chat.cleanseStatusBoard.noRepairedFiles': 'Brak',
+    'chat.cleanseStatusBoard.dismiss': 'Odrzuć',
   },
   'zh-CN': {
     'chat.subagentHud.title': '子智能体',
@@ -229,6 +239,7 @@ export const subagentHudI18n = {
     'chat.cleanseStatusBoard.checkers': '检查器 ({count})',
     'chat.cleanseStatusBoard.repairedFiles': '已修复文件 ({count})',
     'chat.cleanseStatusBoard.noRepairedFiles': '无',
+    'chat.cleanseStatusBoard.dismiss': '关闭',
   },
   'zh-TW': {
     'chat.subagentHud.title': '子智能體',
@@ -250,6 +261,7 @@ export const subagentHudI18n = {
     'chat.cleanseStatusBoard.checkers': '檢查器 ({count})',
     'chat.cleanseStatusBoard.repairedFiles': '已修復檔案 ({count})',
     'chat.cleanseStatusBoard.noRepairedFiles': '無',
+    'chat.cleanseStatusBoard.dismiss': '關閉',
   },
   tr: {
     'chat.subagentHud.title': 'Alt Ajanlar',
@@ -271,6 +283,7 @@ export const subagentHudI18n = {
     'chat.cleanseStatusBoard.checkers': 'Denetleyiciler ({count})',
     'chat.cleanseStatusBoard.repairedFiles': 'Onarılan Dosyalar ({count})',
     'chat.cleanseStatusBoard.noRepairedFiles': 'Yok',
+    'chat.cleanseStatusBoard.dismiss': 'Kapat',
   },
   ar: {
     'chat.subagentHud.title': 'الوكلاء الفرعيون',
@@ -292,6 +305,7 @@ export const subagentHudI18n = {
     'chat.cleanseStatusBoard.checkers': 'الفاحصات ({count})',
     'chat.cleanseStatusBoard.repairedFiles': 'الملفات المصلحة ({count})',
     'chat.cleanseStatusBoard.noRepairedFiles': 'لا يوجد',
+    'chat.cleanseStatusBoard.dismiss': 'تجاهل',
   },
   he: {
     'chat.subagentHud.title': 'סוכני משנה',
@@ -313,5 +327,6 @@ export const subagentHudI18n = {
     'chat.cleanseStatusBoard.checkers': 'בודקים ({count})',
     'chat.cleanseStatusBoard.repairedFiles': 'קבצים שתוקנו ({count})',
     'chat.cleanseStatusBoard.noRepairedFiles': 'אין',
+    'chat.cleanseStatusBoard.dismiss': 'סגור',
   },
 } as const;

@@ -281,4 +281,84 @@ describe("native canonical event reducer", () => {
     expect(authoritative.session_status["session-1"]).toBe("idle")
     expect(authoritative.snapshot["session-1"]?.session.activeRunId).toBeNull()
   })
+  test("reduces cleanse.progress events across discovering, repairing, and completed transitions", () => {
+    let current = installSessionSnapshot(state(), snapshot());
+    const cleanseEvent = (seq: string, status: 'discovering' | 'repairing' | 'verifying' | 'completed' | 'failed' | 'cancelled', fields: Record<string, unknown> = {}): CanonicalEvent => ({
+      sessionId: "session-1",
+      epoch: "epoch-1",
+      sequence: seq,
+      timestamp: 1000,
+      type: "cleanse.progress",
+      status,
+      activeCheckers: [],
+      completedCheckers: [],
+      repairedFiles: [],
+      ...fields,
+    });
+
+    // Start: discovering
+    const discoveringResult = applyDirectoryEvent(current, cleanseEvent("1", "discovering", { activeCheckers: ["typescript", "oxlint"] }));
+    expect(discoveringResult.kind).toBe("applied");
+    current = discoveringResult.state;
+    expect(current.cleanse?.["session-1"]).toBeDefined();
+    expect(current.cleanse?.["session-1"]?.status).toBe("discovering");
+    expect(current.cleanse?.["session-1"]?.activeCheckers).toEqual(["typescript", "oxlint"]);
+
+    // Progress: checkers completing
+    const progressResult = applyDirectoryEvent(current, cleanseEvent("2", "discovering", {
+      activeCheckers: ["typescript"],
+      completedCheckers: ["oxlint"],
+      diagnosticsCount: 2,
+    }));
+    expect(progressResult.kind).toBe("applied");
+    current = progressResult.state;
+    expect(current.cleanse?.["session-1"]?.activeCheckers).toEqual(["typescript"]);
+    expect(current.cleanse?.["session-1"]?.completedCheckers).toEqual(["oxlint"]);
+    expect(current.cleanse?.["session-1"]?.diagnosticsCount).toBe(2);
+
+    // Repairing
+    const repairResult = applyDirectoryEvent(current, cleanseEvent("3", "repairing", {
+      completedCheckers: ["oxlint", "typescript"],
+      repairedFiles: ["src/index.ts"],
+    }));
+    current = repairResult.state;
+    expect(current.cleanse?.["session-1"]?.status).toBe("repairing");
+    expect(current.cleanse?.["session-1"]?.repairedFiles).toEqual(["src/index.ts"]);
+
+    // Completed
+    const completedResult = applyDirectoryEvent(current, cleanseEvent("4", "completed", {
+      completedCheckers: ["oxlint", "typescript"],
+      repairedFiles: ["src/index.ts"],
+      summary: "Cleanse finished",
+    }));
+    current = completedResult.state;
+    expect(current.cleanse?.["session-1"]?.status).toBe("completed");
+    expect(current.cleanse?.["session-1"]?.summary).toBe("Cleanse finished");
+
+    // Stale sequence is ignored
+    const staleResult = applyDirectoryEvent(current, cleanseEvent("2", "discovering", { activeCheckers: ["stale"] }));
+    expect(staleResult.state.cleanse?.["session-1"]?.status).toBe("completed");
+  });
+
+  test("cleanse.progress respects session scoping and preserves other sessions", () => {
+    let current = installSessionSnapshot(state(), snapshot());
+    const cleanseEvent = (sessionId: string, seq: string, status: 'discovering' | 'completed', repairedFiles: string[] = []): CanonicalEvent => ({
+      sessionId,
+      epoch: "epoch-1",
+      sequence: seq,
+      timestamp: 1000,
+      type: "cleanse.progress",
+      status,
+      activeCheckers: [],
+      completedCheckers: [],
+      repairedFiles,
+    });
+
+    current = applyDirectoryEvent(current, cleanseEvent("session-1", "1", "discovering")).state;
+    current = applyDirectoryEvent(current, cleanseEvent("session-2", "1", "completed", ["fix.ts"])).state;
+
+    expect(current.cleanse?.["session-1"]?.status).toBe("discovering");
+    expect(current.cleanse?.["session-2"]?.status).toBe("completed");
+    expect(current.cleanse?.["session-2"]?.repairedFiles).toEqual(["fix.ts"]);
+  });
 })

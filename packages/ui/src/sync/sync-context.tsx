@@ -18,6 +18,7 @@ import { useGlobalSyncStore } from "./global-sync-store"
 import { applyDirectoryEvent, compareCounters, mergeHostSession } from "./event-reducer"
 import { useBtwStore } from "@/stores/useBtwStore"
 import { useSubagentsStore } from "@/stores/useSubagentsStore"
+import { useCleanseStore } from "@/stores/useCleanseStore"
 import { createEventPipeline, type EventPipeline } from "./event-pipeline"
 import { subscribeSessionFoldersSync } from "./session-folders-sync";
 import { subscribeSessionDraftsSync } from "./session-drafts-sync";
@@ -103,6 +104,9 @@ export function handleEvents(target: SessionMessageTarget, events: readonly Cano
     if (event.type === "subagent.updated") {
       useSubagentsStore.getState().applySubagentUpdate(target.sessionId, event.subagent);
       continue;
+    }
+    if (event.type === "cleanse.progress") {
+      useCleanseStore.getState().applyCleanseProgress(target.sessionId, event);
     }
     const result = applyDirectoryEvent(next, event)
     if (result.kind === "resnapshot") { contiguous = false; break }

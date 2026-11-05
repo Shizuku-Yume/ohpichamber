@@ -73,6 +73,8 @@ export const CleanseProgressEventSchema = DataEventEnvelopeSchema.extend({
   status: z.enum(['discovering', 'repairing', 'verifying', 'completed', 'failed', 'cancelled']),
   summary: z.string().optional(),
 });
+export type CleanseProgressEvent = z.infer<typeof CleanseProgressEventSchema>;
+export type CleanseProgressStatus = CleanseProgressEvent['status'];
 export const CanonicalEventSchema = z.discriminatedUnion('type', [
   sessionUpdatedSchema,
   DataEventEnvelopeSchema.extend({ type: z.literal('session.deleted'), deletedSessionIds: z.array(EntityIdSchema).min(1) }),

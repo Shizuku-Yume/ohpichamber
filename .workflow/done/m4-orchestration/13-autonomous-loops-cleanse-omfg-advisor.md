@@ -31,6 +31,7 @@
   - Implemented Advisor watchdog (`/advisor` commands using native `AgentSession` advisor controls and `session.subscribe` event listener extracting actual advisor feedback from custom advisor messages and `advisor_yielded` into `AdvisorNote[]` with severity badges and note rails).
   - Implemented `AdvisorMessage.tsx` timeline cards with `blocker`, `concern`, and `nit` severity badges and note rails in `packages/ui/src/components/chat/`.
   - Implemented `CleanseStatusBoard.tsx` with active/completed checkers, repaired file listings, and status indicators in `packages/ui/src/components/chat/`.
+  - Projected Cleanse progress end-to-end (W17 fix): connected `cleanse.progress` event reduction in `packages/ui/src/sync/event-reducer.ts`, added domain-owned `useCleanseStore`, and rendered `CleanseTimelineBoard` / `CleanseStatusBoard` in the chat timeline (`ChatContainer.tsx`) with dismiss action and live status transitions.
   - Added live loop iteration and Stop button indicator in composer top rows in `packages/ui/src/components/chat/ChatInput.tsx`.
   - Real-path service smoke: started dev server on ports 5205 and 3935; verified `/health` returned HTTP 200 with `runtime: web` and `agentService: { phase: ready }`.
 

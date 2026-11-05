@@ -20,7 +20,11 @@ const snapshot = {
 const output = {
   job: identity, requestedCursor: '0', startCursor: '0', cursor: '2', skippedBytes: '0', output: 'ok', ended: false,
 };
+const streamData = {
+  job: identity, streamId: 1, start: 0, end: 12, chunk: 'hello 世界', open: false,
+};
 const payloadFor = (target, method) => {
+  if (target.includes('/stream?')) return streamData;
   if (target.includes('/output?')) return output;
   if (target.endsWith('/stop')) return { job: stopped };
   if (target.endsWith('/shell/jobs')) return method === 'POST' ? running : snapshot;
@@ -122,5 +126,18 @@ describe('canonical shell observation admission', () => {
     expect(response.status).toBe(403);
     expect(response.body.code).toBe('UNAUTHORIZED');
     expect(calls).toEqual([]);
+  });
+
+  it('inspects proc stream through the authorized Host session scope with safe UTF-8 decoding', async () => {
+    const { app, calls, hostScopes } = fixture();
+    const response = await authorized(request(app).get(
+      '/api/agent/v1/sessions/ses_one/shell/jobs/job_one/stream?epoch=epoch_one&workerGeneration=gen_one&streamId=1&from=0',
+    ));
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(streamData);
+    expect(hostScopes).toEqual(['ses_one']);
+    expect(calls).toEqual([
+      '/api/agent/v1/sessions/ses_one/shell/jobs/job_one/stream?epoch=epoch_one&workerGeneration=gen_one&streamId=1&from=0',
+    ]);
   });
 });

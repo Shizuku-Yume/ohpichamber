@@ -22,7 +22,7 @@ Check before:
 
 Work:
 - Implemented contracts in `packages/agent-contract/src/shell.ts`: `JobWidgetView`, `JobWidgetBlock`, `PipeStreamSummary`, `ShellStreamRequest`, `ShellStreamResponse`, `ShellStdinRequest`, `ShellStdinResult`.
-- Enhanced `WorkerShell` (`packages/agent-service/src/worker/shell.ts`) with `AsyncJobManager`, pipe stream inspection with bounded 64 KiB chunks, safe UTF-8 boundaries, and stdin routing exclusively to named services (`sendService`) while verifying session isolation, resync protection, and daemon terminal state on stop.
+- Enhanced `WorkerShell` (`packages/agent-service/src/worker/shell.ts`) with `AsyncJobManager`, pipe stream inspection with bounded 64 KiB chunks, safe UTF-8 boundaries preserving complete multibyte characters (CJK/emoji) and continuation byte retention across split stream reads (`chunk.end`), and stdin routing exclusively to named services (`sendService`) while verifying session isolation, resync protection, and daemon terminal state on stop.
 - Bound `JobWidgets` registry to `cfgAsyncWidgets` setting in `packages/agent-service/src/worker/session.ts`.
 - Built full JobWidget block renderers (sparkline, bars, meter, grid, stat, text) and interactive `JobsSheetDialog.tsx` with live polling tail terminal, pipe stream viewers, and service stdin controls.
 - Added `BackgroundShellsStrip.tsx` live tiles with mini widget summaries and click-through to `JobsSheetDialog.tsx`.
@@ -30,7 +30,7 @@ Work:
 
 Check after:
 - `node scripts/run-isolated-tests.mjs packages/agent-service/src/worker/ packages/ui/src/components/chat/` passed (227/227 test files passed, 0 fail).
-- `bun test packages/agent-service/src/worker/shell.test.ts` passed (3/3 tests passed, 32 assertions).
+- `bun test packages/agent-service/src/worker/shell.test.ts` passed (6/6 tests passed, 58 assertions).
 - `bun run type-check` passed (exit 0, checked 3,222 files across 5 projects).
 - `bun run lint` passed (exit 0 across all workspaces).
 - `bunx oxlint` passed on all changed files (exit 0, 0 findings).

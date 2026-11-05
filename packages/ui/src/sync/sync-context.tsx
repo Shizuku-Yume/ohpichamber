@@ -18,6 +18,7 @@ import { useGlobalSyncStore } from "./global-sync-store"
 import { applyDirectoryEvent, compareCounters, mergeHostSession } from "./event-reducer"
 import { useBtwStore } from "@/stores/useBtwStore"
 import { useSubagentsStore } from "@/stores/useSubagentsStore"
+import { useCleanseStore } from "@/stores/useCleanseStore"
 import { createEventPipeline, type EventPipeline } from "./event-pipeline"
 import { subscribeSessionFoldersSync } from "./session-folders-sync";
 import { subscribeSessionDraftsSync } from "./session-drafts-sync";
@@ -102,6 +103,9 @@ export function handleEvents(target: SessionMessageTarget, events: readonly Cano
     if (event.type === "subagent.updated") {
       useSubagentsStore.getState().applySubagentUpdate(target.sessionId, event.subagent);
       continue;
+    }
+    if (event.type === "cleanse.progress") {
+      useCleanseStore.getState().applyCleanseProgress(target.sessionId, event);
     }
     const result = applyDirectoryEvent(next, event)
     if (result.kind === "resnapshot") { contiguous = false; break }
@@ -285,7 +289,8 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     disposalRef.current = undefined
     messageLoader.activate()
     messageLoader.configure({ client, runtimeKey: props.runtimeKey, isCurrent, onSnapshot })
-    const pipeline = createEventPipeline({ client, isCurrent,
+    const pipeline = createEventPipeline({
+      client, isCurrent,
       onEvents(target, events) {
         const previous = childStores.getChild(target.directory)?.getState().sessionDeletedRevision
         const contiguous = handleEvents(target, events, childStores)
@@ -329,7 +334,8 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
       },
     })
     pipelineRef.current = pipeline
-    const unconfigure = childStores.configure({ isCurrentScope: isCurrent,
+    const unconfigure = childStores.configure({
+      isCurrentScope: isCurrent,
       onBootstrap(context) {
         const store = childStores.getChild(context.directory)
         if (!store) return
@@ -371,7 +377,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
       if (!isCurrent()) return
       for (const [directory, store] of childStores.children) {
         if (!store.getState().workspace || !childStores.pinned(directory)) continue
-        void loadSessions(directory).catch(() => {})
+        void loadSessions(directory).catch(() => { })
       }
     }, 15_000)
     const resume = () => {
@@ -423,7 +429,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     if (directory) childStores.ensureChild(directory, { priority: "selected", reason: "current-directory" })
     setSyncRefs(childStores, directory)
     setActionRefs(childStores, () => currentDirectoryRef.current, (targetDirectory, sessionId) => {
-      if (isCurrent()) void messageLoader.refresh({ directory: targetDirectory, sessionId }).catch(() => {})
+      if (isCurrent()) void messageLoader.refresh({ directory: targetDirectory, sessionId }).catch(() => { })
     })
     setOptimisticRefs(
       (input) => { if (isCurrent()) messageLoader.optimisticAdd({ ...input, directory: input.directory || currentDirectoryRef.current }) },
@@ -434,7 +440,8 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     return () => { if (getImperativeSessionMessageLoader() === messageLoader) setImperativeSessionMessageLoader(null) }
   }, [childStores, isCurrent, messageLoader, props.directory])
 
-  useEffect(() => messageLoader.startCacheRetention({ isCurrent,
+  useEffect(() => messageLoader.startCacheRetention({
+    isCurrent,
     isViewed: (target) => activeTarget?.directory === target.directory && activeTarget.sessionId === target.sessionId || (externallyViewedSessions.get(`${target.directory}\n${target.sessionId}`) ?? 0) > Date.now(),
     isActive: (target) => { const status = childStores.getChild(target.directory)?.getState().session_status[target.sessionId]; return status === "running" || status === "awaiting_approval" || status === "awaiting_input" },
     releaseDerivedCache: (target) => { pipelineRef.current?.detach(target) },
@@ -463,7 +470,7 @@ export function useSessionMessageLoadState(sessionId: string, directory?: string
     return resolved && sessionId ? { directory: resolved, sessionId } : null
   }, [current, directory, sessionId])
   return useSyncExternalStore(
-    useCallback((notify) => target ? runtime.messageLoader.subscribe(target, notify) : () => {}, [runtime.messageLoader, target]),
+    useCallback((notify) => target ? runtime.messageLoader.subscribe(target, notify) : () => { }, [runtime.messageLoader, target]),
     useCallback(() => target ? runtime.messageLoader.getSnapshot(target) : EMPTY_LOAD, [runtime.messageLoader, target]),
     () => EMPTY_LOAD,
   )
@@ -572,7 +579,7 @@ export function useSessionMessageRecords(sessionId: string, directory?: string, 
   const store = useDirectoryStore(directory)
   const cache = useRef<SessionMessageRecordsSnapshot>({ sessionId, list: EMPTY_MESSAGES, byId: new Map() })
   const get = useCallback(() => { if (options?.enabled === false) return cache.current.sessionId === sessionId ? cache.current.list : EMPTY_MESSAGES; cache.current = buildSessionMessageRecordsSnapshot(store.getState(), sessionId, cache.current); return cache.current.list }, [store, sessionId, options?.enabled])
-  return useSyncExternalStore(useCallback((notify) => options?.enabled === false ? () => {} : subscribeDirectorySessionMessages(store, sessionId, (change) => { if (options?.suspendPartUpdates && !change.messagesChanged && !change.reset && change.partMessageIds.length && change.partMessageIds.every((id) => !options.suspendPartUpdatesForMessageId || id === options.suspendPartUpdatesForMessageId)) return; notify() }), [store, sessionId, options?.enabled, options?.suspendPartUpdates, options?.suspendPartUpdatesForMessageId]), get, get)
+  return useSyncExternalStore(useCallback((notify) => options?.enabled === false ? () => { } : subscribeDirectorySessionMessages(store, sessionId, (change) => { if (options?.suspendPartUpdates && !change.messagesChanged && !change.reset && change.partMessageIds.length && change.partMessageIds.every((id) => !options.suspendPartUpdatesForMessageId || id === options.suspendPartUpdatesForMessageId)) return; notify() }), [store, sessionId, options?.enabled, options?.suspendPartUpdates, options?.suspendPartUpdatesForMessageId]), get, get)
 }
 export function useUserMessageHistory(sessionId: string, directory?: string): TranscriptPrompt[] {
   const store = useDirectoryStore(directory)

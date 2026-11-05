@@ -23,6 +23,7 @@ import { createEventPipeline, type EventPipeline } from "./event-pipeline"
 import { subscribeSessionFoldersSync } from "./session-folders-sync";
 import { subscribeSessionDraftsSync } from "./session-drafts-sync";
 import { subscribeMessageQueueSync } from "./message-queue-sync";
+import { subscribeSessionMetadataSync } from "./session-metadata-sync";
 
 import { SessionMessageLoader, getImperativeSessionMessageLoader, setImperativeSessionMessageLoader, type SessionMessageLoadState, type SessionMessageTarget } from "./session-message-loader"
 import { setSyncRefs } from "./sync-refs"
@@ -355,6 +356,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     const unsubscribeFolderEvents = subscribeSessionFoldersSync(props.runtimeKey);
     const unsubscribeDraftEvents = subscribeSessionDraftsSync(props.runtimeKey);
     const unsubscribeMessageQueueEvents = subscribeMessageQueueSync(props.runtimeKey ?? getRuntimeKey());
+    const unsubscribeMetadataEvents = subscribeSessionMetadataSync(props.runtimeKey ?? getRuntimeKey());
     const stopBeforeSwitch = subscribeRuntimeEndpointWillChange((detail) => {
       if (detail.runtimeKey === props.runtimeKey) return
       currentRef.current = false
@@ -413,7 +415,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     document.addEventListener("visibilitychange", visible)
     return () => {
       currentRef.current = false
-      stopBeforeSwitch(); resumeAfterSwitch(); stopAuthRecovery(); stopConnectionRecovery(); unconfigure(); pipeline.cleanup(); clearInterval(discoveryTimer); unsubscribeFolderEvents(); unsubscribeDraftEvents(); unsubscribeMessageQueueEvents();
+      stopBeforeSwitch(); resumeAfterSwitch(); stopAuthRecovery(); stopConnectionRecovery(); unconfigure(); pipeline.cleanup(); clearInterval(discoveryTimer); unsubscribeFolderEvents(); unsubscribeDraftEvents(); unsubscribeMessageQueueEvents(); unsubscribeMetadataEvents();
       window.removeEventListener("online", resume)
       window.removeEventListener("offline", offline)
       window.removeEventListener("pageshow", pageshow)

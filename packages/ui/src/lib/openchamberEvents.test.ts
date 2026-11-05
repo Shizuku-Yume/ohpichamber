@@ -416,4 +416,65 @@ describe('openchamber events', () => {
     ]);
     unsubscribe();
   });
+
+  test('dispatches session-metadata update event and drops malformed payload', async () => {
+    // Dynamic import to bind mock EventSource instance created for this test scope
+    const { subscribeOpenchamberEvents } = await import('./openchamberEvents');
+    const events: unknown[] = [];
+    const unsubscribe = subscribeOpenchamberEvents((event) => events.push(event));
+    const source = MockEventSource.instances[0];
+
+    // Valid metadata with sessionID
+    source.onmessage?.({
+      data: JSON.stringify({
+        type: 'openchamber:session-metadata',
+        properties: {
+          sessionID: 'ses_meta_42',
+          revision: '3',
+          metadata: {
+            openchamber: {
+              assist: {
+                recap: 'Recap text',
+                suggestion: 'Suggestion text',
+                forMessageID: 'msg_1',
+                generatedAt: 12345,
+              },
+            },
+          },
+        },
+      }),
+    });
+
+    // Invalid: missing revision / invalid format
+    source.onmessage?.({
+      data: JSON.stringify({
+        type: 'openchamber:session-metadata',
+        properties: {
+          sessionID: 'ses_meta_42',
+          metadata: {},
+        },
+      }),
+    });
+
+    expect(events).toEqual([
+      {
+        type: 'session-metadata',
+        state: {
+          sessionId: 'ses_meta_42',
+          revision: '3',
+          metadata: {
+            openchamber: {
+              assist: {
+                recap: 'Recap text',
+                suggestion: 'Suggestion text',
+                forMessageID: 'msg_1',
+                generatedAt: 12345,
+              },
+            },
+          },
+        },
+      },
+    ]);
+    unsubscribe();
+  });
 });

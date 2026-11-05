@@ -185,6 +185,12 @@ describe('Canonical catalogs and scoped operations', () => {
     expect(Catalog.MCPTransportSchema.safeParse({ type: 'sse', url: 'https://mcp.example?token=secret' }).success).toBe(false);
   });
 
+  test('MCPServerConfigSchema accepts optional managed boolean flag', () => {
+    expect(Catalog.MCPServerConfigSchema.parse({ ...server, managed: false }).managed).toBe(false);
+    expect(Catalog.MCPServerConfigSchema.parse({ ...server, managed: true }).managed).toBe(true);
+    expect(Catalog.MCPServerConfigSchema.parse(server).managed).toBeUndefined();
+  });
+
   test('wire counters are uint64 decimal and invalid counter text never throws from revision comparison', () => {
     const high = '18446744073709551615';
     expect(Catalog.MCPCatalogReadSchema.parse({ configuration: { ...configuration, persistedRevision: high }, workerCatalog: { ...mcpState, appliedRevision: high, catalogRevision: high } }).configuration.persistedRevision).toBe(high);

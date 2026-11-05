@@ -43,8 +43,17 @@ type McpRuntimeStatus = 'ready' | 'unavailable' | 'disabled' | 'unapplied';
 const StatusPill: React.FC<{
   status: McpRuntimeStatus;
   enabled: boolean;
-}> = ({ status, enabled }) => {
+  managed?: boolean;
+}> = ({ status, enabled, managed }) => {
   const { t } = useI18n();
+  if (managed === false) {
+    return (
+      <div className="flex items-center gap-1">
+        <SettingsCardPill tone="neutral">{t('settings.mcp.grid.status.readOnly')}</SettingsCardPill>
+        {!enabled ? <SettingsCardPill tone="neutral">{t('settings.mcp.grid.status.disabled')}</SettingsCardPill> : null}
+      </div>
+    );
+  }
   if (!enabled) return <SettingsCardPill tone="neutral">{t('settings.mcp.grid.status.disabled')}</SettingsCardPill>;
   const pill: { tone: SettingsCardTone; label: string } = status === 'ready'
     ? { tone: 'success', label: t('settings.mcp.page.status.label.connected') }
@@ -174,7 +183,7 @@ export const McpGrid: React.FC = () => {
               icon={<SettingsCardIcon name={server.transport.type === 'stdio' ? 'server' : 'global'} />}
               title={server.label}
               subtitle={target || undefined}
-              badges={<StatusPill status={status} enabled={server.enabled} />}
+              badges={<StatusPill status={status} enabled={server.enabled} managed={server.managed} />}
               muted={!server.enabled}
               footer={<span>{t(transportKey)}</span>}
               onOpen={() => {
@@ -182,7 +191,7 @@ export const McpGrid: React.FC = () => {
                 setSelectedMcp(server.serverId);
               }}
               actionsLabel={t('settings.mcp.grid.actionsAria', { name: server.label })}
-              actions={[{
+              actions={server.managed === false ? [] : [{
                 label: t('settings.common.actions.delete'),
                 icon: 'delete-bin',
                 destructive: true,

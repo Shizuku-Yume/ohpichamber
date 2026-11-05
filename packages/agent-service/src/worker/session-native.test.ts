@@ -646,7 +646,7 @@ test('worker sends plain OMP system and developer context plus only the user pin
     const created = await createAgentSession({
       cwd: harness.root, agentDir: harness.agentDirectory, sessionManager: plainManager, authStorage: runtime.authStorage,
       modelRegistry: runtime.modelRegistry, settings: runtime.settings, initialModelRefreshStrategy: 'offline',
-      enableMCP: false, enableLsp: false, disableExtensionDiscovery: true, hasUI: true, interactivePrompts: true,
+      enableMCP: false, disableExtensionDiscovery: true, hasUI: true, interactivePrompts: true,
     });
     plain = created.session;
     const model = runtime.modelRegistry.find('native-fixture', 'native-model');
@@ -903,6 +903,144 @@ test('native branch CAS rejects stale owner/version and redo expires after a new
     } finally { unsubscribe(); }
     expect(harness.fatal()).toBe(false);
   } finally { await harness.close(); }
+}, 30000);
+
+test('branch revert on unchanged leaf returns 409 without failing worker and subsequent prompt succeeds', async () => {
+  const harness = await fixture({ respond: () => completion() });
+  try {
+    // Verify LSP tool is available inside worker session (enableLsp is not forced to false)
+    expect(harness.worker.session.getAllToolNames()).toContain('lsp');
+
+    const terminal = Promise.withResolvers<void>();
+    const unsubscribe = harness.worker.session.subscribe(event => {
+      if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve();
+    });
+    try {
+      await harness.worker.operation({ type: 'prompt', runId: 'first-run', request: prompt('First prompt') });
+      await terminal.promise;
+    } finally {
+      unsubscribe();
+    }
+
+    const before = harness.worker.seed();
+    expect(before.messages.length).toBeGreaterThan(0);
+    const lastMessage = before.messages.at(-1)!;
+    // First revert moves leaf to the target assistant message
+    const reverted = await harness.worker.operation({
+      type: 'branch',
+      request: {
+        action: 'revert',
+        messageId: lastMessage.messageId,
+        branchId: before.branch.branchId,
+        branchVersion: before.branch.branchVersion,
+      },
+    });
+    if (reverted.type !== 'branch') throw new Error('Branch operation expected');
+
+    // Second revert targeting the same message: navigateTree detects target is already at leaf and does not change leaf
+    // Must reject with 409 COMMAND_IN_FLIGHT without appending duplicate branch entry and without failing worker
+    const leafBefore = harness.worker.session.sessionManager.getLeafId();
+    await expect(harness.worker.operation({
+      type: 'branch',
+      request: {
+        action: 'revert',
+        messageId: lastMessage.messageId,
+        branchId: reverted.result.branch.branchId,
+        branchVersion: reverted.result.branch.branchVersion,
+      },
+    })).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });
+
+    // No duplicate branch entry appended to tree
+    expect(harness.worker.session.sessionManager.getLeafId()).toBe(leafBefore);
+
+    // Worker generation must not be marked fatal / failed
+    expect(harness.fatal()).toBe(false);
+
+    // Subsequent prompt in the SAME worker generation succeeds
+    const secondTerminal = Promise.withResolvers<void>();
+    const unsubscribeSecond = harness.worker.session.subscribe(event => {
+      if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) secondTerminal.resolve();
+    });
+    try {
+      await harness.worker.operation({ type: 'prompt', runId: 'second-run', request: prompt('Second prompt in same generation') });
+      await secondTerminal.promise;
+    } finally {
+      unsubscribeSecond();
+    }
+
+    expect(harness.fatal()).toBe(false);
+    const after = harness.worker.seed();
+    expect(after.messages.length).toBeGreaterThan(before.messages.length);
+  } finally {
+    await harness.close();
+  }
+}, 30000);
+
+test('branch revert rollback restores previous leaf and in-memory messages without failing worker', async () => {
+  const harness = await fixture({ respond: () => completion() });
+  try {
+    const terminal = Promise.withResolvers<void>();
+    const unsubscribe = harness.worker.session.subscribe(event => {
+      if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve();
+    });
+    try {
+      await harness.worker.operation({ type: 'prompt', runId: 'p1', request: prompt('Prompt 1') });
+      await terminal.promise;
+    } finally {
+      unsubscribe();
+    }
+    const before = harness.worker.seed();
+    const manager = harness.worker.session.sessionManager;
+    const priorLeaf = manager.getLeafId();
+
+    // Mock manager.appendEntriesAtomically to fail once after navigateTree succeeds
+    const originalAppend = manager.appendEntriesAtomically.bind(manager);
+    let injected = false;
+    manager.appendEntriesAtomically = (async (fn: () => Promise<unknown>) => {
+      if (!injected) {
+        injected = true;
+        throw new Error('Injected commit failure');
+      }
+      return originalAppend(fn);
+    }) as typeof manager.appendEntriesAtomically;
+
+    await expect(harness.worker.operation({
+      type: 'branch',
+      request: {
+        action: 'revert',
+        messageId: before.messages[0]!.messageId,
+        branchId: before.branch.branchId,
+        branchVersion: before.branch.branchVersion,
+      },
+    })).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });
+
+    // Restores branch positioned on prior leaf with branch selection entry
+    const restoredLeaf = manager.getEntry(manager.getLeafId() ?? '');
+    expect(restoredLeaf?.parentId).toBe(priorLeaf);
+    expect(restoredLeaf?.type).toBe('custom');
+    // Worker generation is not killed
+    expect(harness.fatal()).toBe(false);
+
+    // In-memory messages match display context of restored branch
+    expect(harness.worker.session.agent.state.messages).toHaveLength(
+      harness.worker.session.buildDisplaySessionContext().messages.length,
+    );
+
+    // Subsequent prompt succeeds in same worker generation
+    const secondTerminal = Promise.withResolvers<void>();
+    const unsubscribeSecond = harness.worker.session.subscribe(event => {
+      if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) secondTerminal.resolve();
+    });
+    try {
+      await harness.worker.operation({ type: 'prompt', runId: 'p2', request: prompt('Prompt 2') });
+      await secondTerminal.promise;
+    } finally {
+      unsubscribeSecond();
+    }
+    expect(harness.fatal()).toBe(false);
+  } finally {
+    await harness.close();
+  }
 }, 30000);
 test('actual native TaskTool owns a child session and persists its history', async () => {
   let requests = 0;

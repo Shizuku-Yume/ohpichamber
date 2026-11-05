@@ -233,6 +233,7 @@ import { SessionSuggestionChip } from '@/components/chat/SessionSuggestionChip';
 import { SessionDoneHintRow } from '@/components/chat/SessionDoneHintRow';
 import { SessionReviewHintRow } from '@/components/chat/SessionReviewHintRow';
 import { BackgroundShellsStrip } from '@/components/chat/BackgroundShellsStrip';
+import { SubagentHudTray } from '@/components/chat/SubagentHudTray';
 import { useWorktreeBootstrapPending } from '@/hooks/useWorktreeBootstrapPending';
 import { FormDock } from '@/components/chat/FormDock';
 import { PermissionDock } from '@/components/chat/PermissionDock';
@@ -3765,6 +3766,12 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             sessionId={currentSessionId}
         />
     ) : null;
+    const subagentHudRow = !isBtwActive && !newSessionDraftOpen ? (
+        <SubagentHudTray
+            key={`subagent-hud-${currentSessionId ?? ''}`}
+            sessionId={currentSessionId}
+        />
+    ) : null;
     // A new worktree still running its setup commands, first of all: until it
     // ends, a first prompt can wait with nothing else saying why.
     const worktreeSetupDirectory = currentSessionDirectoryForSync ?? currentDirectory ?? null;
@@ -3818,7 +3825,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     ) : null;
     // Null exactly when the suggestion row alone would have been: the mobile
     // pill picks its shape from whether a top row exists.
-    const composerTopRows = worktreeSetupRow || spaceWaitRow || todoRow || goalRow || workerRunRow || autoReviewRow || backgroundShellsRow || revertRow || queueRow || doneHintRow || reviewHintRow || suggestionRow ? (
+    const composerTopRows = worktreeSetupRow || spaceWaitRow || todoRow || goalRow || workerRunRow || autoReviewRow || subagentHudRow || backgroundShellsRow || revertRow || queueRow || doneHintRow || reviewHintRow || suggestionRow ? (
         <>
             {worktreeSetupRow}
             {spaceWaitRow}
@@ -3826,6 +3833,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             {goalRow}
             {workerRunRow}
             {autoReviewRow}
+            {subagentHudRow}
             {backgroundShellsRow}
             {revertRow}
             {queueRow}

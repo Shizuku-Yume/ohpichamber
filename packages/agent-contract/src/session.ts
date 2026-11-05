@@ -99,7 +99,18 @@ export type Run = z.infer<typeof RunSchema>;
 export const SubagentSchema = z.strictObject({
   subagentId: EntityIdSchema, parentSessionId: EntityIdSchema, childSessionId: EntityIdSchema,
   toolCallId: EntityIdSchema.optional(),
-  role: z.string(), solutionSpace: z.string().optional(), status: z.enum(['idle', 'running', 'completed', 'failed']),
+  role: z.string(), solutionSpace: z.string().optional(), status: z.enum(['idle', 'running', 'completed', 'failed', 'cancelled']),
+  activeTool: z.string().optional(),
+  tokens: z.number().int().nonnegative().optional(),
+  cost: z.number().nonnegative().optional(),
+  turnCount: z.number().int().nonnegative().optional(),
+  retryCountdown: z.number().nonnegative().optional(),
+  depth: z.number().int().min(0).max(8).optional(),
+  parentSubagentId: EntityIdSchema.optional(),
+  description: z.string().optional(),
+  task: z.string().optional(),
+  lastIntent: z.string().optional(),
+  durationMs: z.number().nonnegative().optional(),
 });
 export type Subagent = z.infer<typeof SubagentSchema>;
 export const SessionCreateRequestSchema = z.strictObject({
@@ -141,6 +152,8 @@ export const SessionControlRequestSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('command'), text: z.string().min(1) }),
   z.strictObject({ type: z.literal('btw.ask'), question: z.string().min(1), recordId: EntityIdSchema.optional() }),
   z.strictObject({ type: z.literal('btw.cancel'), recordId: EntityIdSchema.optional() }),
+  z.strictObject({ type: z.literal('subagent.steer'), subagentId: EntityIdSchema, message: z.string().min(1) }),
+  z.strictObject({ type: z.literal('subagent.cancel'), subagentId: EntityIdSchema }),
 ]);
 export type SessionControlRequest = z.infer<typeof SessionControlRequestSchema>;
 export const SessionControlAckSchema = z.discriminatedUnion('type', [
@@ -150,6 +163,8 @@ export const SessionControlAckSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('command'), output: z.string() }),
   z.strictObject({ type: z.literal('btw.ask'), recordId: EntityIdSchema }),
   z.strictObject({ type: z.literal('btw.cancel'), cancelled: z.boolean() }),
+  z.strictObject({ type: z.literal('subagent.steer'), subagentId: EntityIdSchema, accepted: z.boolean() }),
+  z.strictObject({ type: z.literal('subagent.cancel'), subagentId: EntityIdSchema, cancelled: z.boolean() }),
 ]);
 export type SessionControlAck = z.infer<typeof SessionControlAckSchema>;
 export const RunAbortAckSchema = z.strictObject({ run: RunSchema });

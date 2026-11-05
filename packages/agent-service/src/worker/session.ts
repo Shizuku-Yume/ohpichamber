@@ -4,7 +4,9 @@ import { randomUUID } from 'node:crypto';
 import { isProbablyBinary } from '@oh-my-pi/pi-utils';
 import { createAgentSession, type ExtensionFactory } from '@oh-my-pi/pi-coding-agent/sdk';
 import { EventBus } from '@oh-my-pi/pi-coding-agent/utils/event-bus';
-import { TASK_SUBAGENT_LIFECYCLE_CHANNEL, type SubagentLifecyclePayload } from '@oh-my-pi/pi-coding-agent/task';
+import { TASK_SUBAGENT_LIFECYCLE_CHANNEL, TASK_SUBAGENT_PROGRESS_CHANNEL, TASK_SUBAGENT_EVENT_CHANNEL, type SubagentLifecyclePayload, type SubagentProgressPayload, type SubagentEventPayload } from '@oh-my-pi/pi-coding-agent/task';
+import { AgentLifecycleManager } from '@oh-my-pi/pi-coding-agent/registry/agent-lifecycle';
+import { USER_INTERRUPT_LABEL } from '@oh-my-pi/pi-coding-agent/session/messages';
 import type { AgentMessage } from '@oh-my-pi/pi-agent-core';
 import type { AgentSession } from '@oh-my-pi/pi-coding-agent/session/agent-session';
 import type { PromptOptions } from '@oh-my-pi/pi-coding-agent/session/agent-session-types';
@@ -15,7 +17,7 @@ import { initializeExtensions } from '@oh-my-pi/pi-coding-agent/modes/runtime-in
 import { executeAcpBuiltinSlashCommand, isAllowedBuiltinCommand, isReadOnlyBuiltinCommand, parseSlashCommand } from './builtin-commands.ts';
 import type { SlashCommandRuntime } from '@oh-my-pi/pi-coding-agent/slash-commands/types';
 import { RpcBtwController } from '@oh-my-pi/pi-coding-agent/modes/rpc/rpc-btw';
-import { JsonObjectSchema, MCPOAuthPublicConfigurationSchema, SessionBranchRequestSchema, type Agent, type CapturedSendOptions, type JsonObject, type Run, type RunOrigin, type SessionBranchRequest } from '@openchamber/agent-contract';
+import { JsonObjectSchema, MCPOAuthPublicConfigurationSchema, SessionBranchRequestSchema, type Agent, type CapturedSendOptions, type JsonObject, type Run, type RunOrigin, type SessionBranchRequest, type Subagent } from '@openchamber/agent-contract';
 import type { WorkerBootstrapMessage, WorkerInteraction, WorkerOperation, WorkerOperationResult } from '../protocol.ts';
 import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
@@ -84,6 +86,8 @@ export class WorkerSession {
   private planRevision = 0;
   private planReviewTask: Promise<void> | undefined;
   private publishedContinuationPending = false;
+  private readonly liveSubagents = new Map<string, Subagent>();
+  private readonly toolCallToSubagentId = new Map<string, string>();
   private constructor(
     readonly session: AgentSession,
     private readonly authStorage: AuthStorage,
@@ -125,8 +129,15 @@ export class WorkerSession {
       if (title) this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', title } }]);
     });
     this.subagentEventBus.on(TASK_SUBAGENT_LIFECYCLE_CHANNEL, data => {
-      // SAFETY: The worker publishes this channel only with SubagentLifecyclePayload.
-      this.onSubagent(data as SubagentLifecyclePayload);
+      const payload = data as SubagentLifecyclePayload;
+      this.onSubagent(payload);
+      this.handleSubagentLifecycle(payload);
+    });
+    this.subagentEventBus.on(TASK_SUBAGENT_PROGRESS_CHANNEL, data => {
+      this.handleSubagentProgress(data as SubagentProgressPayload);
+    });
+    this.subagentEventBus.on(TASK_SUBAGENT_EVENT_CHANNEL, data => {
+      this.handleSubagentEvent(data as SubagentEventPayload);
     });
     session.agent.prepareQueuedMessages = async (messages, signal, ...rest) => {
       const nativePreparation = await this.nativeQueuedPreparation?.(messages, signal, ...(rest as [never]));
@@ -424,6 +435,131 @@ export class WorkerSession {
       await this.session.sessionManager.flush();
     });
     return this.binding;
+  }
+  private handleSubagentLifecycle(payload: SubagentLifecyclePayload): void {
+    const existing = this.liveSubagents.get(payload.id);
+    const status: Subagent['status'] = payload.status === 'started' ? 'running'
+      : payload.status === 'completed' ? 'completed'
+      : payload.status === 'aborted' ? 'cancelled'
+      : 'failed';
+    let parentSubagentId: string | undefined = existing?.parentSubagentId;
+    let depth = existing?.depth ?? 0;
+    if (!parentSubagentId && payload.parentToolCallId) {
+      const parentId = this.toolCallToSubagentId.get(payload.parentToolCallId);
+      if (parentId && parentId !== payload.id) {
+        parentSubagentId = parentId;
+        const parent = this.liveSubagents.get(parentId);
+        depth = Math.min(8, (parent?.depth ?? 0) + 1);
+      }
+    }
+    const subagent: Subagent = {
+      subagentId: payload.id,
+      parentSessionId: this.sessionId,
+      childSessionId: payload.id,
+      toolCallId: payload.parentToolCallId ?? existing?.toolCallId,
+      role: payload.agent,
+      solutionSpace: existing?.solutionSpace,
+      status,
+      activeTool: existing?.activeTool,
+      tokens: existing?.tokens,
+      cost: existing?.cost,
+      turnCount: existing?.turnCount,
+      retryCountdown: existing?.retryCountdown,
+      depth,
+      parentSubagentId,
+      description: payload.description ?? existing?.description,
+      task: existing?.task,
+      lastIntent: existing?.lastIntent,
+      durationMs: existing?.durationMs,
+    };
+    this.liveSubagents.set(payload.id, subagent);
+    this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent: { ...subagent } } }]);
+  }
+
+  private handleSubagentProgress(payload: SubagentProgressPayload): void {
+    const p = payload.progress;
+    if (!p) return;
+    const existing = this.liveSubagents.get(p.id);
+    let parentSubagentId = existing?.parentSubagentId;
+    let depth = existing?.depth ?? 0;
+    if (!parentSubagentId && payload.parentToolCallId) {
+      const parentId = this.toolCallToSubagentId.get(payload.parentToolCallId);
+      if (parentId && parentId !== p.id) {
+        parentSubagentId = parentId;
+        const parent = this.liveSubagents.get(parentId);
+        depth = Math.min(8, (parent?.depth ?? 0) + 1);
+      }
+    }
+    let retryCountdown: number | undefined;
+    if (p.retryState) {
+      const remainingMs = Math.max(0, p.retryState.delayMs - (Date.now() - p.retryState.startedAtMs));
+      retryCountdown = Math.ceil(remainingMs / 1000);
+    }
+    const status: Subagent['status'] = p.status === 'completed' ? 'completed'
+      : p.status === 'aborted' ? 'cancelled'
+      : p.status === 'failed' ? 'failed'
+      : 'running';
+    const subagent: Subagent = {
+      subagentId: p.id,
+      parentSessionId: this.sessionId,
+      childSessionId: p.id,
+      toolCallId: payload.parentToolCallId ?? existing?.toolCallId,
+      role: p.agent || payload.agent,
+      solutionSpace: existing?.solutionSpace,
+      status,
+      activeTool: p.currentTool ?? existing?.activeTool,
+      tokens: p.tokens !== undefined && p.tokens >= 0 ? p.tokens : existing?.tokens,
+      cost: p.cost !== undefined && p.cost >= 0 ? p.cost : existing?.cost,
+      turnCount: p.toolCount ?? p.requests ?? existing?.turnCount,
+      retryCountdown,
+      depth,
+      parentSubagentId,
+      description: p.description ?? existing?.description,
+      task: p.task ?? payload.task ?? existing?.task,
+      lastIntent: p.lastIntent ?? existing?.lastIntent,
+      durationMs: p.durationMs ?? existing?.durationMs,
+    };
+    this.liveSubagents.set(p.id, subagent);
+    this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent: { ...subagent } } }]);
+  }
+
+  private handleSubagentEvent(payload: SubagentEventPayload): void {
+    const { id, event } = payload;
+    const existing = this.liveSubagents.get(id);
+    if (!existing) return;
+    let changed = false;
+    const updated: Subagent = { ...existing };
+    if (event.type === 'tool_execution_start') {
+      const toolEvent = event as { toolName?: string; toolCallId?: string };
+      if (toolEvent.toolName) {
+        updated.activeTool = toolEvent.toolName;
+        changed = true;
+      }
+      if (toolEvent.toolCallId) {
+        this.toolCallToSubagentId.set(toolEvent.toolCallId, id);
+      }
+    } else if (event.type === 'tool_execution_end') {
+      if (updated.activeTool) {
+        updated.activeTool = undefined;
+        changed = true;
+      }
+    } else if (event.type === 'message_end') {
+      const msgEvent = event as { message?: { usage?: { totalTokens?: number; cost?: number } } };
+      if (msgEvent.message?.usage) {
+        if (typeof msgEvent.message.usage.totalTokens === 'number') {
+          updated.tokens = (updated.tokens ?? 0) + msgEvent.message.usage.totalTokens;
+          changed = true;
+        }
+        if (typeof msgEvent.message.usage.cost === 'number') {
+          updated.cost = (updated.cost ?? 0) + msgEvent.message.usage.cost;
+          changed = true;
+        }
+      }
+    }
+    if (changed) {
+      this.liveSubagents.set(id, updated);
+      this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent: { ...updated } } }]);
+    }
   }
 
   private async prepare(operation: PromptOperation): Promise<PreparedPrompt> {
@@ -755,6 +891,49 @@ export class WorkerSession {
       }
       case 'btw.cancel':
         return { type: 'btw.cancel', cancelled: this.btw.cancel(operation.recordId) };
+      case 'subagent.steer': {
+        const owned = this.liveSubagents.get(operation.subagentId);
+        if (!owned || owned.parentSessionId !== this.sessionId) {
+          throw new ProjectionError(404, 'SESSION_NOT_FOUND', `Subagent not found in this session: ${operation.subagentId}`);
+        }
+        const notRunning = `Subagent not running: ${operation.subagentId}`;
+        try {
+          const session = await AgentLifecycleManager.global().ensureLive(operation.subagentId);
+          const accepted = Promise.withResolvers<void>();
+          const unsubscribe = session.subscribe(event => {
+            if (event.type === 'agent_start') accepted.resolve();
+          });
+          session.prompt(operation.message, { streamingBehavior: 'steer', throwOnDrop: true }).then(
+            () => accepted.resolve(),
+            err => accepted.reject(err),
+          );
+          try {
+            await accepted.promise;
+          } finally {
+            unsubscribe();
+          }
+          return { type: 'subagent.steer', subagentId: operation.subagentId, accepted: true };
+        } catch (error) {
+          throw new ProjectionError(404, 'SESSION_NOT_FOUND', error instanceof Error ? error.message : notRunning);
+        }
+      }
+      case 'subagent.cancel': {
+        const owned = this.liveSubagents.get(operation.subagentId);
+        if (!owned || owned.parentSessionId !== this.sessionId) {
+          return { type: 'subagent.cancel', subagentId: operation.subagentId, cancelled: false };
+        }
+        const ref = AgentRegistry.global().get(operation.subagentId);
+        if (!ref) {
+          return { type: 'subagent.cancel', subagentId: operation.subagentId, cancelled: false };
+        }
+        await Promise.allSettled([
+          AgentLifecycleManager.global().release(operation.subagentId, ref, { tombstone: true }),
+          ref.session ? ref.session.abort({ reason: USER_INTERRUPT_LABEL }) : Promise.resolve(),
+        ]);
+        owned.status = 'cancelled';
+        this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent: { ...owned } } }]);
+        return { type: 'subagent.cancel', subagentId: operation.subagentId, cancelled: true };
+      }
       case 'command': {
         const parsed = parseSlashCommand(operation.text);
         if (!parsed || !isAllowedBuiltinCommand(parsed.name)) throw new ProjectionError(400, 'INVALID_REQUEST', 'Slash command is not allowed');

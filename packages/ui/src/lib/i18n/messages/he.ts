@@ -1,3 +1,4 @@
+import { subagentHudI18n } from './subagent-hud.i18n';
 import { settingsDict } from './he.settings';
 import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { referencePickerI18n } from './reference-picker.i18n';
@@ -41,6 +42,7 @@ import { workerRunsI18n } from './worker-runs.i18n';
 import { btwI18n } from './btw.i18n';
 export const dict = {
   ...btwI18n.he,
+  ...subagentHudI18n['he'],
   ...ompSettingsI18n.he,
   ...settingsDict,
   ...linearIssuePickerI18n.he,
@@ -3919,6 +3921,7 @@ export const dict = {
   "settings.view.nav.group.general": "OpenChamber",
   "settings.view.nav.group.projects": "סביבת עבודה",
   "settings.view.nav.group.opencode": "OMP",
+  "settings.view.nav.group.agent": "OMP",
   "settings.view.nav.group.content": "ספרייה",
   "settings.page.projects.title": "פרויקטים",
   "settings.page.remoteInstances.title": "מופעים מרוחקים",
@@ -3927,7 +3930,7 @@ export const dict = {
   "settings.page.agents.title": "סוכנים",
   "settings.page.commands.title": "פקודות",
   "settings.page.mcp.title": "MCP",
-  "settings.page.plugins.title": "תוספים",
+  "settings.page.plugins.title": "תוספי OMP",
   "settings.page.skills.title": "מיומנויות",
   "settings.page.skillsCatalog.title": "קטלוג מיומנויות",
   "settings.page.git.title": "Git",
@@ -3949,8 +3952,8 @@ export const dict = {
   "settings.page.tunnel.title": "מנהרה חיצונית",
   "settings.page.tunnel.description": "חשיפת המופע הזה דרך מנהרה מרוחקת.",
   "settings.page.about.title": "אודות",
-  "settings.page.snippets.title": "קטעי קוד",
-  "settings.snippets.sidebar.title": "קטעי קוד",
+  "settings.page.snippets.title": "תבניות פרומפט",
+  "settings.snippets.sidebar.title": "תבניות פרומפט",
   "settings.snippets.sidebar.total": "סך הכול: {count}",
   "settings.snippets.sidebar.actions.create": "צור קטע קוד",
   "settings.snippets.sidebar.actions.more": "פעולות נוספות עבור {name}",
@@ -6580,7 +6583,7 @@ export const dict = {
   "settings.extensions.identity.loadFailed": "לא ניתן היה לטעון זהויות Git מהמופע הזה. הזהות הגלובלית עדיין זמינה.",
   "settings.extensions.request.noResponse": "לא התקבלה תגובת HTTP. יש לבדוק את החיבור למופע הזה.",
   "settings.extensions.request.invalidResponse": "תגובה לא צפויה מהשרת (HTTP {status}).",
-  "settings.page.extensions.title": "הרחבות",
+  "settings.page.extensions.title": "הרחבות אורח",
   "settings.page.extensions.description": "הרחבות מתיקייה, מקובץ ZIP או מכתובת git — חלוניות, תפריטי צירוף, שילובים ושירותים מקומיים. לא תוספים של OpenCode.",
   "settings.extensions.section.installed": "מותקנות",
   "settings.extensions.empty": "לא נטענו הרחבות.",

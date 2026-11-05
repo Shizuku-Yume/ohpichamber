@@ -464,27 +464,6 @@ describe('settings helpers', () => {
     expect(helpers.sanitizeSettingsUpdate({ desktopWindowControlsStyle: 'auto' })).toEqual({});
   });
 
-  it('sanitizes the persisted permission auto-accept policy', () => {
-    const helpers = createTestHelpers();
-
-    expect(helpers.sanitizeSettingsUpdate({
-      permissionAutoAccept: {
-        sessions: { root: true, child: false, guarded: 'safety', open: 'auto', manual: 'ask', invalid: 'true' },
-      },
-    })).toEqual({
-      permissionAutoAccept: {
-        sessions: { root: true, child: false, guarded: 'safety', open: 'auto', manual: 'ask' },
-        revision: 0,
-      },
-    });
-  });
-
-  it('accepts only a known default permission mode', () => {
-    const helpers = createTestHelpers();
-
-    expect(helpers.sanitizeSettingsUpdate({ permissionDefaultMode: 'safety' })).toEqual({ permissionDefaultMode: 'safety' });
-    expect(helpers.sanitizeSettingsUpdate({ permissionDefaultMode: 'always' })).toEqual({});
-  });
 
   it('accepts desktopUiPassword as a persisted shared setting', () => {
     const helpers = createTestHelpers();
@@ -821,8 +800,8 @@ describe('settings registry gate', () => {
     securityScopedBookmarks: ['bookmark'], pinnedDirectories: ['/home/testuser/project'],
     desktopLanAccessEnabled: true, desktopKeepAwakeEnabled: true, desktopMinimizeToTrayEnabled: true, desktopMacMenuBarEnabled: true, desktopLinuxNativeFrame: true, sidebarShowChatsSection: false,
     desktopUiPassword: 'secret', githubClientId: 'client', githubScopes: 'repo', gitlabClientId: 'gitlab-client', skillCatalogs: [{ id: 'c', label: 'C', source: 'https://x' }],
-    defaultGitIdentityId: 'global', permissionAutoAccept: { sessions: { s: true }, revision: 1 }, permissionDefaultMode: 'safety', messageSearchEnabled: true, messageSearchReasoningEnabled: true,
-    agentControlToolEnabled: true, agentWebToolEnabled: true, browserProvider: 'builtin', agentMemoryToolEnabled: true, agentNotifyToolEnabled: true, agentToolsCodeMode: true, isolatedSpacesEnabled: true, isolatedSpacesIdleStop: { enabled: true, hours: 4 },
+    defaultGitIdentityId: 'global', messageSearchEnabled: true, messageSearchReasoningEnabled: true,
+    agentControlToolEnabled: true, agentWebToolEnabled: true, browserProvider: 'builtin', agentMemoryToolEnabled: true, agentNotifyToolEnabled: true, isolatedSpacesEnabled: true, isolatedSpacesIdleStop: { enabled: true, hours: 4 },
     // Registry keys the settings-registry regeneration added; the gate fails
     // without a fixture line for each, and these are their real shapes.
     openLinksInBrowserPanel: true, liveBrowserTabLimit: 4, openTrackerLinksOnBoard: true, layoutAnimations: true,
@@ -849,8 +828,7 @@ describe('settings registry gate', () => {
     draftStarters: [{ type: 'command', name: 'plan-feature' }], draftStartersVisible: true, draftStartersCraftGoalAdded: true, draftStartersScheduleTaskAdded: true,
     fontSize: 100, terminalFontSize: 14, editorFontSize: 14, uiFont: 'inter', monoFont: 'jetbrains-mono', customUiFont: 'Maple Mono NF CN', customMonoFont: 'Maple Mono', padding: 100, cornerRadius: 8,
     shortcutOverrides: { 'chat.send': 'mod+enter' },
-    defaultModel: 'anthropic/claude', defaultVariant: 'high', defaultAgent: 'build', smallModelUseDefault: false, smallModelOverride: 'anthropic/haiku',
-    walkthroughModelOverride: 'anthropic/claude', zenModel: 'zen/model',
+    defaultModel: 'anthropic/claude', defaultVariant: 'high', defaultAgent: 'build', zenModel: 'zen/model',
     favoriteModels: [{ providerID: 'anthropic', modelID: 'claude' }], hiddenModels: [{ providerID: 'openai', modelID: 'gpt' }], collapsedModelProviders: ['openai'],
     recentModels: [{ providerID: 'anthropic', modelID: 'claude' }], lastSelectedModel: 'anthropic/claude', recentAgents: ['build'], favoriteAgents: ['build'], recentEfforts: { 'anthropic/claude': ['high'] }, providerOrder: ['anthropic'],
     sessionRecapEnabled: true, sessionSuggestionEnabled: true, sessionWorkEnabled: true, sessionWorkAutoOpen: true, sessionReviewOfferEnabled: true, sessionWorkKeepInGroup: true, sessionGoalEnabled: true, sessionGoalDefaultBudgetEnabled: true, sessionGoalDefaultBudget: 5,
@@ -859,14 +837,13 @@ describe('settings registry gate', () => {
     notificationTemplates: { completion: { title: 't', message: 'm' } }, reportUsage: true,
     usageDisplayMode: 'usage', usageDropdownProviders: ['anthropic'], usageSelectedModels: { anthropic: ['claude'] }, usageCollapsedFamilies: { anthropic: ['f'] },
     usageExpandedFamilies: { anthropic: ['f'] }, usageModelGroups: { anthropic: { customGroups: [{ id: 'g', label: 'G', models: ['claude'], order: 0 }] } },
-    responseStyleEnabled: true, responseStylePreset: 'concise', responseStyleCustomInstructions: 'x',
     pwaAppName: 'OpenChamber', pwaOrientation: 'portrait', mobileKeyboardMode: 'native', desktopWindowControlsPosition: 'left', desktopWindowControlsStyle: 'classic',
     inputBarOffset: 10,
     customProviderIcons: { 'campus-llm': 'cloud' },
     layoutAnimations: true, openLinksInBrowserPanel: false, liveBrowserTabLimit: 8,
     openTrackerLinksOnBoard: true, worktreeArchiveOnDoneEnabled: false, showOpenCodeUpdateNotifications: true,
     agentScheduleToolEnabled: true, agentKnowledgeToolEnabled: false, agentRenderToolEnabled: false, agentWorkflowToolEnabled: false,
-    mobileReturnKeySends: true, savePastedImagesAsFiles: true, smallModelVariant: 'high',
+    mobileReturnKeySends: true, savePastedImagesAsFiles: true,
   };
 
   it('accepts a valid value for every persistable registry key (no server-side drift)', () => {

@@ -264,6 +264,7 @@ export async function generateCommitMessage(
       prompt: `${hiddenPrompt}\n\nDiffs of the selected files:\n${diffs}`,
       directory,
       format: { kind: 'json', schema: { type: 'object', properties: { subject: { type: 'string' }, highlights: { type: 'array', items: { type: 'string' } } }, required: ['subject', 'highlights'], additionalProperties: false } },
+      role: 'commit',
     };
     if (options?.providerId && options.modelId) request.selection = { providerId: options.providerId, modelId: options.modelId };
     else if (currentProviderId && currentModelId) request.preferred = { providerId: currentProviderId, modelId: currentModelId };
@@ -453,6 +454,7 @@ export async function generatePullRequestDescription(
       prompt: hiddenPrompt,
       directory,
       format: { kind: 'json', schema: { type: 'object', properties: { title: { type: 'string' }, body: { type: 'string' } }, required: ['title', 'body'], additionalProperties: false } },
+      role: 'commit',
     };
     if (payload.providerId && payload.modelId) request.selection = { providerId: payload.providerId, modelId: payload.modelId };
     else if (currentProviderId && currentModelId) request.preferred = { providerId: currentProviderId, modelId: currentModelId };

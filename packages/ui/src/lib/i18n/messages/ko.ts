@@ -1,3 +1,4 @@
+import { subagentHudI18n } from './subagent-hud.i18n';
 import { settingsDict } from './ko.settings';
 import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { referencePickerI18n } from './reference-picker.i18n';
@@ -41,6 +42,7 @@ import { workerRunsI18n } from './worker-runs.i18n';
 import { btwI18n } from './btw.i18n';
 export const dict = {
   ...btwI18n.ko,
+  ...subagentHudI18n['ko'],
   ...ompSettingsI18n.ko,
   ...settingsDict,
   ...linearIssuePickerI18n.ko,
@@ -214,6 +216,7 @@ export const dict = {
   "settings.view.nav.group.general": "OpenChamber",
   "settings.view.nav.group.projects": "워크스페이스",
   "settings.view.nav.group.opencode": "OMP",
+  "settings.view.nav.group.agent": "OMP",
   "settings.view.nav.group.content": "라이브러리",
   "settings.page.projects.title": "프로젝트",
   "settings.page.remoteInstances.title": "원격 인스턴스",
@@ -222,7 +225,7 @@ export const dict = {
   "settings.page.agents.title": "에이전트",
   "settings.page.commands.title": "명령어",
   "settings.page.mcp.title": "MCP",
-  "settings.page.plugins.title": "Plugins",
+  "settings.page.plugins.title": "OMP 플러그인",
   "settings.page.skills.title": "스킬",
   "settings.page.skillsCatalog.title": "스킬 카탈로그",
   "settings.page.git.title": "Git",
@@ -244,8 +247,8 @@ export const dict = {
   "settings.page.tunnel.title": "외부 터널",
   "settings.page.tunnel.description": "원격 터널로 이 인스턴스를 노출합니다.",
   "settings.page.about.title": "정보",
-  "settings.page.snippets.title": "스니펫",
-  "settings.snippets.sidebar.title": "스니펫",
+  "settings.page.snippets.title": "프롬프트 템플릿",
+  "settings.snippets.sidebar.title": "프롬프트 템플릿",
   "settings.snippets.sidebar.total": "총 {count}개",
   "settings.snippets.sidebar.actions.create": "스니펫 만들기",
   "settings.snippets.sidebar.actions.more": "{name} 추가 작업",
@@ -2816,7 +2819,7 @@ export const dict = {
   "settings.extensions.identity.loadFailed": "이 인스턴스의 Git ID를 불러오지 못했습니다. 전역 ID는 계속 사용할 수 있습니다.",
   "settings.extensions.request.noResponse": "HTTP 응답을 받지 못했습니다. 이 인스턴스와의 연결을 확인하세요.",
   "settings.extensions.request.invalidResponse": "예상하지 못한 서버 응답입니다 (HTTP {status}).",
-  "settings.page.extensions.title": "확장",
+  "settings.page.extensions.title": "게스트 확장",
   "settings.page.extensions.description": "폴더, ZIP, git URL에서 넣는 확장입니다. 패널, 첨부 메뉴, 연동, 로컬 서비스. OpenCode 플러그인과는 다릅니다.",
   "settings.extensions.section.installed": "설치됨",
   "settings.extensions.empty": "불러온 확장이 없습니다.",

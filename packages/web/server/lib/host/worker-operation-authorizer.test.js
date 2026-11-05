@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { createProjectDirectoryRuntime } from './project-directory-runtime.js';
-import { createWorkerOperationAuthorizer } from './worker-operation-authorizer.js';
+import { createWorkerOperationAuthorizer, isPermissionPresetId, PERMISSION_PRESET_IDS } from './worker-operation-authorizer.js';
 
 const server = { serverId: 'oauth-server', label: 'OAuth server', enabled: true, transport: { type: 'http', url: 'https://mcp.example/tools' } };
 const endpointFields = ['authorizationUrl', 'tokenUrl', 'issuerUrl', 'registrationUrl', 'resourceMetadataUrl', 'redirectUri', 'resource'];
@@ -276,6 +276,49 @@ describe('Host-owned native descriptor authority', () => {
     try {
       expect(await denied.authorize(denied.scope, request)).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
     } finally { await denied.close(); }
+  });
+  it('validates permissionPresetId and authorizes permission.preset tools against workspace policy', async () => {
+    expect(PERMISSION_PRESET_IDS).toEqual(['ask', 'safety', 'auto']);
+    expect(isPermissionPresetId('ask')).toBe(true);
+    expect(isPermissionPresetId('safety')).toBe(true);
+    expect(isPermissionPresetId('auto')).toBe(true);
+    expect(isPermissionPresetId('invalid')).toBe(false);
+    expect(isPermissionPresetId(null)).toBe(false);
+    expect(isPermissionPresetId(123)).toBe(false);
+
+    const harness = await nativeHarness();
+    try {
+      harness.policy.permissionPresetIds.push('safety');
+      expect(await harness.authorize(harness.scope, {
+        type: 'tool',
+        toolName: 'permission.preset',
+        input: { presetId: 'safety' },
+        permissionPresetId: 'safety',
+      })).toEqual({ allowed: true });
+
+      expect(await harness.authorize(harness.scope, {
+        type: 'tool',
+        toolName: 'permission.preset',
+        input: { presetId: 'invalid' },
+        permissionPresetId: 'invalid',
+      })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+
+      expect(await harness.authorize(harness.scope, {
+        type: 'tool',
+        toolName: 'permission.preset',
+        input: { presetId: 'auto' },
+        permissionPresetId: 'auto',
+      })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+
+      expect(await harness.authorize(harness.scope, {
+        type: 'tool',
+        toolName: 'permission.preset',
+        input: { presetId: 'ask' },
+        permissionPresetId: 'safety',
+      })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+    } finally {
+      await harness.close();
+    }
   });
 });
 

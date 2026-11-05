@@ -1,3 +1,4 @@
+import { subagentHudI18n } from './subagent-hud.i18n';
 import { settingsDict } from './zh-TW.settings';
 import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { referencePickerI18n } from './reference-picker.i18n';
@@ -41,6 +42,7 @@ import { workerRunsI18n } from './worker-runs.i18n';
 import { btwI18n } from './btw.i18n';
 export const dict = {
   ...btwI18n['zh-TW'],
+  ...subagentHudI18n['zh-TW'],
   ...ompSettingsI18n['zh-TW'],
   ...settingsDict,
   ...linearIssuePickerI18n['zh-TW'],
@@ -212,6 +214,7 @@ export const dict = {
   "settings.view.nav.group.general": "OpenChamber",
   "settings.view.nav.group.projects": "工作區",
   "settings.view.nav.group.opencode": "OMP",
+  "settings.view.nav.group.agent": "OMP",
   "settings.view.nav.group.content": "資源庫",
   "settings.page.projects.title": "專案",
   "settings.page.remoteInstances.title": "遠端執行個體",
@@ -241,8 +244,8 @@ export const dict = {
   "settings.page.tunnel.title": "外部通道",
   "settings.page.tunnel.description": "透過遠端通道公開此實例。",
   "settings.page.about.title": "關於",
-  "settings.page.snippets.title": "程式片段",
-  "settings.snippets.sidebar.title": "程式片段",
+  "settings.page.snippets.title": "提示詞範本",
+  "settings.snippets.sidebar.title": "提示詞範本",
   "settings.snippets.sidebar.total": "共 {count} 個",
   "settings.snippets.sidebar.actions.create": "創建程式片段",
   "settings.snippets.sidebar.actions.more": "{name} 的更多操作",
@@ -2557,7 +2560,7 @@ export const dict = {
   "settings.openchamber.desktopPassword.field.passwordPlaceholder": "不需要密碼",
   "settings.openchamber.desktopPassword.field.passwordSetPlaceholder": "已設定密碼。輸入新密碼以取代。",
   "settings.openchamber.desktopPassword.actions.removePassword": "移除密碼",
-  "settings.page.plugins.title": "外掛",
+  "settings.page.plugins.title": "OMP 外掛程式",
   "settings.plugins.dialog.add.action.cancel": "取消",
   "settings.plugins.dialog.add.action.submit": "新增",
   "settings.plugins.dialog.add.tab.file": "新增檔案",
@@ -2816,7 +2819,7 @@ export const dict = {
   "settings.extensions.identity.loadFailed": "無法載入此執行個體的 Git 身分。全域身分仍然可用。",
   "settings.extensions.request.noResponse": "未收到 HTTP 回應。請檢查與此執行個體的連線。",
   "settings.extensions.request.invalidResponse": "伺服器傳回非預期的回應 (HTTP {status})。",
-  "settings.page.extensions.title": "擴充功能",
+  "settings.page.extensions.title": "訪客擴充功能",
   "settings.page.extensions.description": "從資料夾、ZIP 或 git URL 安裝的擴充功能：面板、附加選單、整合與本機服務。和 OpenCode 外掛不是同一件事。",
   "settings.extensions.section.installed": "已安裝",
   "settings.extensions.empty": "尚未載入擴充功能。",

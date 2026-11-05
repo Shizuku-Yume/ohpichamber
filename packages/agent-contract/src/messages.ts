@@ -39,8 +39,123 @@ export const StepSummaryPartSchema = z.strictObject({
   type: z.literal('step_summary'), partId: EntityIdSchema, title: z.string(), durationMs: z.number().finite().nonnegative().optional(),
 });
 export type StepSummaryPart = z.infer<typeof StepSummaryPartSchema>;
+export const TodoNoticePartSchema = z.strictObject({
+  type: z.literal('notice'),
+  partId: EntityIdSchema,
+  noticeType: z.literal('todo_reminder'),
+  level: z.enum(['info', 'warning', 'error']),
+  title: z.string().optional(),
+  message: z.string().optional(),
+  details: z.strictObject({
+    attempt: z.number().int().positive(),
+    maxAttempts: z.number().int().positive(),
+    todos: z.array(z.strictObject({
+      content: z.string(),
+      status: z.enum(['pending', 'in_progress', 'completed', 'blocked', 'abandoned']),
+    })),
+  }),
+});
+
+export const TtsrNoticePartSchema = z.strictObject({
+  type: z.literal('notice'),
+  partId: EntityIdSchema,
+  noticeType: z.literal('ttsr_triggered'),
+  level: z.enum(['info', 'warning', 'error']),
+  title: z.string().optional(),
+  message: z.string().optional(),
+  details: z.strictObject({
+    rules: z.array(z.strictObject({
+      name: z.string(),
+      description: z.string().optional(),
+    })),
+  }),
+});
+
+export const AutoRetryNoticePartSchema = z.strictObject({
+  type: z.literal('notice'),
+  partId: EntityIdSchema,
+  noticeType: z.literal('auto_retry_start'),
+  level: z.enum(['info', 'warning', 'error']),
+  title: z.string().optional(),
+  message: z.string().optional(),
+  details: z.strictObject({
+    attempt: z.number().int().positive(),
+    maxAttempts: z.number().int().positive(),
+    delayMs: z.number().nonnegative(),
+    errorMessage: z.string(),
+  }),
+});
+
+export const RetryFallbackNoticePartSchema = z.strictObject({
+  type: z.literal('notice'),
+  partId: EntityIdSchema,
+  noticeType: z.literal('retry_fallback_applied'),
+  level: z.enum(['info', 'warning', 'error']),
+  title: z.string().optional(),
+  message: z.string().optional(),
+  details: z.strictObject({
+    from: z.string(),
+    to: z.string(),
+    role: z.string(),
+    reason: z.string().optional(),
+  }),
+});
+
+export const ServedModelMismatchNoticePartSchema = z.strictObject({
+  type: z.literal('notice'),
+  partId: EntityIdSchema,
+  noticeType: z.literal('served_model_mismatch'),
+  level: z.enum(['info', 'warning', 'error']),
+  title: z.string().optional(),
+  message: z.string().optional(),
+  details: z.strictObject({
+    requested: z.string(),
+    served: z.string(),
+    provider: z.string().optional(),
+    upstreamProvider: z.string().optional(),
+  }),
+});
+
+export const CacheInvalidationNoticePartSchema = z.strictObject({
+  type: z.literal('notice'),
+  partId: EntityIdSchema,
+  noticeType: z.literal('cache_invalidation'),
+  level: z.enum(['info', 'warning', 'error']),
+  title: z.string().optional(),
+  message: z.string().optional(),
+  details: z.strictObject({
+    reprocessedTokens: z.number().int().positive(),
+  }),
+});
+export const CompactionNoticePartSchema = z.strictObject({
+  type: z.literal('notice'),
+  partId: EntityIdSchema,
+  noticeType: z.literal('compaction'),
+  level: z.enum(['info', 'warning', 'error']),
+  title: z.string().optional(),
+  message: z.string().optional(),
+  details: z.strictObject({
+    method: z.enum(['soft-compacted', 'snap-compacted', 'shaken', 'remote-compacted', 'handed-off', 'compacted']),
+    tokensBefore: z.number().int().nonnegative(),
+    tokensAfter: z.number().int().nonnegative().optional(),
+    summary: z.string().optional(),
+    warning: z.string().optional(),
+  }),
+});
+
+export const NoticePartSchema = z.discriminatedUnion('noticeType', [
+  TodoNoticePartSchema,
+  TtsrNoticePartSchema,
+  AutoRetryNoticePartSchema,
+  RetryFallbackNoticePartSchema,
+  ServedModelMismatchNoticePartSchema,
+  CacheInvalidationNoticePartSchema,
+  CompactionNoticePartSchema,
+]);
+export type NoticePart = z.infer<typeof NoticePartSchema>;
+export type CompactionNoticePart = z.infer<typeof CompactionNoticePartSchema>;
 export const PartSchema = z.discriminatedUnion('type', [
-  TextPartSchema, ReasoningPartSchema, ToolCallPartSchema, ToolResultPartSchema, AttachmentPartSchema, StepSummaryPartSchema,
+  TextPartSchema, ReasoningPartSchema, ToolCallPartSchema, ToolResultPartSchema, AttachmentPartSchema, StepSummaryPartSchema, NoticePartSchema,
 ]);
 export type Part = z.infer<typeof PartSchema>;
 export const TokenUsageCostSchema = z.strictObject({

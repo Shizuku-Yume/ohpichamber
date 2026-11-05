@@ -103,10 +103,12 @@ function expectContextOrder(request: ProviderRequest | undefined, markers: strin
   }
 }
 
-function completion(tool?: { name: string; input: JsonObject; id: string }): Response {
+function completion(tool?: { name: string; input: JsonObject; id: string } | string): Response {
+  const isTool = typeof tool === 'object' && tool !== null;
+  const content = typeof tool === 'string' ? tool : 'Native operation finished.';
   const chunk = { id: 'native-response', object: 'chat.completion.chunk', created: 1, model: 'native-model', choices: [{ index: 0,
-    delta: tool ? { role: 'assistant', tool_calls: [{ index: 0, id: tool.id, type: 'function', function: { name: tool.name, arguments: JSON.stringify(tool.input) } }] }
-      : { role: 'assistant', content: 'Native operation finished.' }, finish_reason: null }] };
+    delta: isTool ? { role: 'assistant', tool_calls: [{ index: 0, id: tool.id, type: 'function', function: { name: tool.name, arguments: JSON.stringify(tool.input) } }] }
+      : { role: 'assistant', content }, finish_reason: null }] };
   const finish = { ...chunk, choices: [{ index: 0, delta: {}, finish_reason: tool ? 'tool_calls' : 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 3, total_tokens: 13 } };
   return new Response(`data: ${JSON.stringify(chunk)}\n\ndata: ${JSON.stringify(finish)}\n\ndata: [DONE]\n\n`, { headers: { 'content-type': 'text/event-stream' } });
 }
@@ -444,6 +446,52 @@ test('native builtin command returns context output without starting a provider 
     expect(harness.fatal()).toBe(false);
   } finally { await harness.close(); }
 }, 30000);
+test('headless slash commands execute allowed commands like /dirs and /clear without fatal errors', async () => {
+  const harness = await fixture({ respond: () => completion() });
+  try {
+    const dirsResult = await harness.worker.operation({ type: 'command', text: '/dirs' });
+    expect(dirsResult.type).toBe('command');
+    if (dirsResult.type !== 'command') throw new Error('Expected command output');
+    expect(dirsResult.output).toBeDefined();
+
+    const clearResult = await harness.worker.operation({ type: 'command', text: '/clear' });
+    expect(clearResult.type).toBe('command');
+    if (clearResult.type !== 'command') throw new Error('Expected command output');
+    expect(clearResult.output).toContain('Context reset');
+    expect(harness.worker.session.sessionManager.getTurnBudget()?.total ?? null).toBeNull();
+    expect(harness.fatal()).toBe(false);
+  } finally { await harness.close(); }
+}, 30000);
+
+test('turn budget and standalone magic keywords apply budget ceiling and notices in prepare', async () => {
+  const harness = await fixture({ respond: () => completion() });
+  try {
+    const terminal = Promise.withResolvers<void>();
+    const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve(); });
+    await harness.worker.operation({
+      type: 'prompt',
+      runId: 'budget-test-run',
+      request: prompt('please ultrathink this request +50k!'),
+    });
+    await terminal.promise;
+    unsubscribe();
+    expect(harness.worker.session.sessionManager.getTurnBudget()?.total).toBe(50000);
+    expect(harness.worker.session.sessionManager.getTurnBudget()?.hard).toBe(true);
+
+    const terminal2 = Promise.withResolvers<void>();
+    const unsubscribe2 = harness.worker.session.subscribe(event => { if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal2.resolve(); });
+    await harness.worker.operation({
+      type: 'prompt',
+      runId: 'budget-test-run-2',
+      request: prompt('normal follow-up without budget'),
+    });
+    await terminal2.promise;
+    unsubscribe2();
+    expect(harness.worker.session.sessionManager.getTurnBudget()?.total ?? null).toBeNull();
+    expect(harness.fatal()).toBe(false);
+  } finally { await harness.close(); }
+}, 30000);
+
 
 
 test('native web_search tool routes to Host web-search authorization and performs one loopback search', async () => {
@@ -649,6 +697,7 @@ test('worker sends plain OMP system and developer context plus only the user pin
       cwd: harness.root, agentDir: harness.agentDirectory, sessionManager: plainManager, authStorage: runtime.authStorage,
       modelRegistry: runtime.modelRegistry, settings: runtime.settings, initialModelRefreshStrategy: 'offline',
       enableMCP: false, disableExtensionDiscovery: true, hasUI: true, interactivePrompts: true,
+      tuiTranscript: true,
     });
     plain = created.session;
     const model = runtime.modelRegistry.find('native-fixture', 'native-model');
@@ -1692,6 +1741,80 @@ test('valid execution model with thinking level applies to session execution', a
     await execution.promise;
     expect(harness.fatal()).toBe(false);
     expect(harness.worker.session.model?.id).toBe('native-model');
+test('autonomous commands /loop, /omfg, /cleanse, /tan, /seance, /advisor and loop.stop resolve properly', async () => {
+  const ttsrJson = JSON.stringify({
+    name: 'no-any',
+    description: 'Never use any in TypeScript',
+    scope: 'tool:edit(*.ts)',
+    condition: ': any',
+    body: 'Never use any.',
+  });
+  const harness = await fixture({ respond: () => completion(ttsrJson) });
+  try {
+    const loopRes = await harness.worker.operation({ type: 'command', text: '/loop 5 --until "true"' });
+    expect(loopRes.type).toBe('command');
+    if ('output' in loopRes && typeof loopRes.output === 'string') {
+      expect(loopRes.output).toContain('Loop mode enabled');
+    }
+
+    const stopRes = await harness.worker.operation({ type: 'loop.stop' });
+    expect(stopRes).toEqual({ type: 'loop.stop', stopped: true });
+
+    const omfgRes = await harness.worker.operation({ type: 'command', text: '/omfg do not use any' });
+    expect(omfgRes.type).toBe('command');
+    if ('output' in omfgRes && typeof omfgRes.output === 'string') {
+      expect(omfgRes.output).toContain('Synthesized TTSR rule');
+    }
+
+    const cleanseRes = await harness.worker.operation({ type: 'command', text: '/cleanse' });
+    expect(cleanseRes.type).toBe('command');
+    if ('output' in cleanseRes && typeof cleanseRes.output === 'string') {
+      expect(cleanseRes.output).toContain('Cleanse diagnostics');
+    }
+
+    const tanRes = await harness.worker.operation({ type: 'command', text: '/tan research new feature' });
+    expect(tanRes.type).toBe('command');
+    let cloneId = '';
+    if ('output' in tanRes && typeof tanRes.output === 'string') {
+      expect(tanRes.output).toContain('Dispatched background clone');
+      const match = tanRes.output.match(/cloneId:\s*([^)]+)\)/);
+      if (match) cloneId = match[1].trim();
+    }
+    expect(cloneId).toBeTruthy();
+
+    const tanCancel = await harness.worker.operation({ type: 'subagent.cancel', subagentId: cloneId });
+    expect(tanCancel).toEqual({ type: 'subagent.cancel', subagentId: cloneId, cancelled: true });
+
+    await expect(harness.worker.operation({ type: 'command', text: '/seance non-existent-session' })).rejects.toThrow();
+
+    const advisorRes = await harness.worker.operation({ type: 'command', text: '/advisor' });
+    expect(advisorRes.type).toBe('command');
+    if ('output' in advisorRes && typeof advisorRes.output === 'string') {
+      expect(advisorRes.output).toContain('Advisor');
+    }
+
+    harness.worker.handleSessionEvent({
+      type: 'message_end',
+      message: {
+        role: 'custom',
+        customType: 'advisor',
+        content: 'Consider adding timeout to network requests',
+        details: {
+          notes: [{
+            note: 'Missing return statement in critical path',
+            severity: 'blocker',
+            advisor: 'watchdog',
+          }],
+        },
+      } as unknown as Parameters<typeof harness.worker.handleSessionEvent>[0],
+    });
+    harness.worker.handleSessionEvent({ type: 'advisor_yielded' } as unknown as Parameters<typeof harness.worker.handleSessionEvent>[0]);
+    const advisorYielded = harness.events.find(e => e.event.type === 'advisor_yielded');
+    expect(advisorYielded).toBeTruthy();
+    if (advisorYielded && advisorYielded.event.type === 'advisor_yielded') {
+      expect(advisorYielded.event.notes.length).toBeGreaterThan(0);
+      expect(advisorYielded.event.notes[0].text).toContain('Missing return statement');
+    }
   } finally {
     await harness.close();
   }

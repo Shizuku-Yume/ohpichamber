@@ -1,3 +1,4 @@
+import { subagentHudI18n } from './subagent-hud.i18n';
 import { settingsDict } from './pt-BR.settings';
 import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { referencePickerI18n } from './reference-picker.i18n';
@@ -41,6 +42,7 @@ import { workerRunsI18n } from './worker-runs.i18n';
 import { btwI18n } from './btw.i18n';
 export const dict = {
   ...btwI18n['pt-BR'],
+  ...subagentHudI18n['pt-BR'],
   ...ompSettingsI18n['pt-BR'],
   ...settingsDict,
   ...linearIssuePickerI18n['pt-BR'],
@@ -214,6 +216,7 @@ export const dict = {
   "settings.view.nav.group.general": "OpenChamber",
   "settings.view.nav.group.projects": "Espaço de trabalho",
   "settings.view.nav.group.opencode": "OMP",
+  "settings.view.nav.group.agent": "OMP",
   "settings.view.nav.group.content": "Biblioteca",
   "settings.page.projects.title": "Projetos",
   "settings.page.remoteInstances.title": "Instâncias remotas",
@@ -222,7 +225,7 @@ export const dict = {
   "settings.page.agents.title": "Agentes",
   "settings.page.commands.title": "Comandos",
   "settings.page.mcp.title": "MCP",
-  "settings.page.plugins.title": "Plugins",
+  "settings.page.plugins.title": "Plugins do OMP",
   "settings.page.skills.title": "Habilidades",
   "settings.page.skillsCatalog.title": "Catálogo de habilidades",
   "settings.page.git.title": "Git",
@@ -244,8 +247,8 @@ export const dict = {
   "settings.page.tunnel.title": "Túnel externo",
   "settings.page.tunnel.description": "Exponha esta instância por um túnel remoto.",
   "settings.page.about.title": "Sobre",
-  "settings.page.snippets.title": "Snippets",
-  "settings.snippets.sidebar.title": "Snippets",
+  "settings.page.snippets.title": "Modelos de prompt",
+  "settings.snippets.sidebar.title": "Modelos de prompt",
   "settings.snippets.sidebar.total": "Total: {count}",
   "settings.snippets.sidebar.actions.create": "Criar snippet",
   "settings.snippets.sidebar.actions.more": "Mais ações para {name}",
@@ -2816,7 +2819,7 @@ export const dict = {
   "settings.extensions.identity.loadFailed": "Não foi possível carregar as identidades Git desta instância. A identidade global continua disponível.",
   "settings.extensions.request.noResponse": "Nenhuma resposta HTTP foi recebida. Verifique a conexão com esta instância.",
   "settings.extensions.request.invalidResponse": "Resposta inesperada do servidor (HTTP {status}).",
-  "settings.page.extensions.title": "Extensões",
+  "settings.page.extensions.title": "Extensões convidadas",
   "settings.page.extensions.description": "Extensões a partir de uma pasta, um ZIP ou uma URL git — painéis, menus de anexar, integrações e serviços locais. Não são plugins do OpenCode.",
   "settings.extensions.section.installed": "Instaladas",
   "settings.extensions.empty": "Nenhuma extensão carregada.",

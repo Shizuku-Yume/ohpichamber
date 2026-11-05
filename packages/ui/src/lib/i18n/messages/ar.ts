@@ -1,3 +1,4 @@
+import { subagentHudI18n } from './subagent-hud.i18n';
 import { settingsDict } from './ar.settings';
 import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { referencePickerI18n } from './reference-picker.i18n';
@@ -41,6 +42,7 @@ import { workerRunsI18n } from './worker-runs.i18n';
 import { btwI18n } from './btw.i18n';
 export const dict = {
   ...btwI18n.ar,
+  ...subagentHudI18n['ar'],
   ...ompSettingsI18n.ar,
   ...settingsDict,
   ...linearIssuePickerI18n.ar,
@@ -3919,6 +3921,7 @@ export const dict = {
   "settings.view.nav.group.general": "OpenChamber",
   "settings.view.nav.group.projects": "مساحة العمل",
   "settings.view.nav.group.opencode": "OMP",
+  "settings.view.nav.group.agent": "OMP",
   "settings.view.nav.group.content": "المكتبة",
   "settings.page.projects.title": "المشاريع",
   "settings.page.remoteInstances.title": "النسخ البعيدة",
@@ -3927,7 +3930,7 @@ export const dict = {
   "settings.page.agents.title": "الوكلاء",
   "settings.page.commands.title": "الأوامر",
   "settings.page.mcp.title": "MCP",
-  "settings.page.plugins.title": "المكوّنات الإضافية",
+  "settings.page.plugins.title": "مكونات OMP الإضافية",
   "settings.page.skills.title": "المهارات",
   "settings.page.skillsCatalog.title": "كتالوج المهارات",
   "settings.page.git.title": "Git",
@@ -3949,8 +3952,8 @@ export const dict = {
   "settings.page.tunnel.title": "النفق الخارجي",
   "settings.page.tunnel.description": "إتاحة هذه النسخة عبر نفق بعيد.",
   "settings.page.about.title": "حول",
-  "settings.page.snippets.title": "المقتطفات",
-  "settings.snippets.sidebar.title": "المقتطفات",
+  "settings.page.snippets.title": "قوالب المطالبات",
+  "settings.snippets.sidebar.title": "قوالب المطالبات",
   "settings.snippets.sidebar.total": "الإجمالي: {count}",
   "settings.snippets.sidebar.actions.create": "إنشاء مقتطف",
   "settings.snippets.sidebar.actions.more": "إجراءات إضافية لـ {name}",
@@ -6580,7 +6583,7 @@ export const dict = {
   "settings.extensions.identity.loadFailed": "تعذّر تحميل هويات Git من هذه النسخة. الهوية العامة لا تزال متاحة.",
   "settings.extensions.request.noResponse": "لم تصل أي استجابة HTTP. تحقق من الاتصال بهذه النسخة.",
   "settings.extensions.request.invalidResponse": "استجابة غير متوقعة من الخادم (HTTP {status}).",
-  "settings.page.extensions.title": "الإضافات",
+  "settings.page.extensions.title": "إضافات الضيف",
   "settings.page.extensions.description": "إضافات من مجلد أو ملف ZIP أو URL لـ git — لوحات وقوائم إرفاق وتكاملات وخدمات محلية. ليست مكوّنات OpenCode الإضافية.",
   "settings.extensions.section.installed": "المثبتة",
   "settings.extensions.empty": "لم تُحمَّل أي إضافات.",

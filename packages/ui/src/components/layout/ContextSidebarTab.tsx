@@ -99,6 +99,9 @@ const estimatePartChars = (part: Part, role: 'user' | 'assistant' | 'tool' | 'ot
   if (part.type === 'attachment') {
     return { ...EMPTY_BUCKETS, other: part.name.length + part.mediaType.length + part.uri.length };
   }
+  if (part.type === 'notice') {
+    return { ...EMPTY_BUCKETS, other: (part.title?.length ?? 0) + (part.message?.length ?? 0) };
+  }
   return { ...EMPTY_BUCKETS, other: part.title.length };
 };
 

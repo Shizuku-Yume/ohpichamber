@@ -1,3 +1,4 @@
+import { subagentHudI18n } from './subagent-hud.i18n';
 import { settingsDict } from './es.settings';
 import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { referencePickerI18n } from './reference-picker.i18n';
@@ -41,6 +42,7 @@ import { workerRunsI18n } from './worker-runs.i18n';
 import { btwI18n } from './btw.i18n';
 export const dict = {
   ...btwI18n.es,
+  ...subagentHudI18n['es'],
   ...ompSettingsI18n.es,
   ...settingsDict,
   ...linearIssuePickerI18n.es,
@@ -214,6 +216,7 @@ export const dict = {
   "settings.view.nav.group.general": "OpenChamber",
   "settings.view.nav.group.projects": "Espacio de trabajo",
   "settings.view.nav.group.opencode": "OMP",
+  "settings.view.nav.group.agent": "OMP",
   "settings.view.nav.group.content": "Biblioteca",
   "settings.page.projects.title": "Proyectos",
   "settings.page.remoteInstances.title": "Instancias remotas",
@@ -222,7 +225,7 @@ export const dict = {
   "settings.page.agents.title": "Agentes",
   "settings.page.commands.title": "Comandos",
   "settings.page.mcp.title": "MCP",
-  "settings.page.plugins.title": "Plugins",
+  "settings.page.plugins.title": "Plugins de OMP",
   "settings.page.skills.title": "Habilidades",
   "settings.page.skillsCatalog.title": "Catálogo de habilidades",
   "settings.page.git.title": "Git",
@@ -244,8 +247,8 @@ export const dict = {
   "settings.page.tunnel.title": "Túnel externo",
   "settings.page.tunnel.description": "Expón esta instancia a través de un túnel remoto.",
   "settings.page.about.title": "Acerca de",
-  "settings.page.snippets.title": "Snippets",
-  "settings.snippets.sidebar.title": "Snippets",
+  "settings.page.snippets.title": "Plantillas de prompt",
+  "settings.snippets.sidebar.title": "Plantillas de prompt",
   "settings.snippets.sidebar.total": "Total: {count}",
   "settings.snippets.sidebar.actions.create": "Crear snippet",
   "settings.snippets.sidebar.actions.more": "Más acciones para {name}",
@@ -2816,7 +2819,7 @@ export const dict = {
   "settings.extensions.identity.loadFailed": "No se pudieron cargar las identidades Git de esta instancia. La identidad global sigue disponible.",
   "settings.extensions.request.noResponse": "No se recibió una respuesta HTTP. Revisa la conexión con esta instancia.",
   "settings.extensions.request.invalidResponse": "Respuesta inesperada del servidor (HTTP {status}).",
-  "settings.page.extensions.title": "Extensiones",
+  "settings.page.extensions.title": "Extensiones de invitado",
   "settings.page.extensions.description": "Extensiones desde una carpeta, un ZIP o una URL de git: paneles, menús de adjuntar, integraciones y servicios locales. No son plugins de OpenCode.",
   "settings.extensions.section.installed": "Instaladas",
   "settings.extensions.empty": "No hay extensiones cargadas.",

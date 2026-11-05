@@ -19,10 +19,18 @@ import {
   filterStaleRecentFiles,
   mentionServerQuery,
   rankFileMentionResults,
+  type FileMentionHit,
 } from './fileMentionResults';
 import { matchesRankQuery } from '@/lib/search/fuzzySearch';
 
 type FileInfo = ProjectFileSearchHit;
+const OMP_INTERNAL_SCHEMES: readonly FileMentionHit[] = [
+  { name: 'skill://', path: 'skill://', relativePath: 'skill://', kind: 'file' },
+  { name: 'local://', path: 'local://', relativePath: 'local://', kind: 'file' },
+  { name: 'proc://', path: 'proc://', relativePath: 'proc://', kind: 'file' },
+  { name: 'agent://', path: 'agent://', relativePath: 'agent://', kind: 'file' },
+  { name: 'history://', path: 'history://', relativePath: 'history://', kind: 'file' },
+] as const;
 
 export interface FileMentionHandle {
   handleKeyDown: (key: string) => void;
@@ -30,7 +38,7 @@ export interface FileMentionHandle {
 
 interface FileMentionAutocompleteProps {
   searchQuery: string;
-  onFileSelect: (file: FileInfo) => void;
+  onFileSelect: (file: { name: string; path: string; relativePath?: string }) => void;
   onClose: () => void;
   style?: React.CSSProperties;
 }
@@ -190,10 +198,16 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
     () => filterStaleRecentFiles(recentFiles, staleRecentPaths),
     [recentFiles, staleRecentPaths],
   );
-  const visibleResults = React.useMemo(
-    () => rankFileMentionResults(files, directories, normalizedSearchQuery, 20),
-    [files, directories, normalizedSearchQuery],
-  );
+  const visibleSchemes = React.useMemo(() => {
+    const q = normalizedSearchQuery.toLowerCase();
+    if (!q) return OMP_INTERNAL_SCHEMES;
+    return OMP_INTERNAL_SCHEMES.filter(s => s.name.toLowerCase().includes(q));
+  }, [normalizedSearchQuery]);
+  const visibleResults = React.useMemo(() => {
+    const ranked = rankFileMentionResults(files, directories, normalizedSearchQuery, 20);
+    if (visibleSchemes.length === 0) return ranked;
+    return [...visibleSchemes, ...ranked];
+  }, [files, directories, normalizedSearchQuery, visibleSchemes]);
 
   React.useEffect(() => {
     const handlePointerDown = (event: MouseEvent | TouchEvent) => {
@@ -436,8 +450,9 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
     }
   }), [visibleResults, visibleRecentFiles, onClose, handleFileSelect]);
 
-  const getFileIcon = (file: FileInfo) => {
+  const getFileIcon = (file: { path: string; extension?: string }) => {
     const ext = file.extension?.toLowerCase();
+    if (file.path.includes('://')) return 'terminal-box-line';
     switch (ext) {
       case 'ts':
       case 'tsx':

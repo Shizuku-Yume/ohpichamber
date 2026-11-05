@@ -38,6 +38,31 @@ const LOCAL_COMMAND_NAMES = [
   'init', 'review', 'undo', 'redo', 'timeline', 'compact', 'fork', 'btw', 'summary', 'workspace-review', 'handoff-review',
   'plan-feature', 'craft-goal', 'schedule-task', 'catch-up', 'debug', 'weigh', 'explore',
 ];
+const BUILTIN_COMMAND_DESCRIPTIONS: Record<string, string> = {
+  compact: 'Compact conversation context',
+  shake: 'Shake context to drop transient output',
+  todo: 'Inspect or manage todos',
+  jobs: 'Inspect background jobs and streams',
+  usage: 'Inspect token usage and costs',
+  context: 'Inspect context window allocation',
+  tools: 'List enabled tools and descriptors',
+  handoff: 'Create handoff summary documentation',
+  retry: 'Retry the last turn with a fallback model',
+  rename: 'Rename the active session',
+  effort: 'Adjust reasoning effort for thinking models',
+  model: 'Switch active model role or selection',
+  switch: 'Quick-cycle to next model in cycleOrder',
+  fast: 'Switch to fast/smol model tier',
+  slow: 'Switch to thinking/slow model tier',
+  prewalk: 'Run prewalk inspection before execution',
+  force: 'Force run without confirmation',
+  pin: 'Pin or unpin files in context',
+  fresh: 'Start fresh turn without prior branch context',
+  clear: 'Clear conversation context in place',
+  dirs: 'List accessible workspace directories',
+  session: 'Manage session metadata and branches',
+  memory: 'Inspect or manage memory consolidation',
+};
 
 export interface CommandAutocompleteHandle {
   handleKeyDown: (key: string) => void;
@@ -129,7 +154,11 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
 
     const builtInCommands: CommandInfo[] = [
       ...(hasSession ? builtinCommandNames.map((name): CommandInfo => ({
-        id: `builtin:${name}`, name, source: 'native', isBuiltIn: true,
+        id: `builtin:${name}`,
+        name,
+        source: 'native',
+        isBuiltIn: true,
+        description: BUILTIN_COMMAND_DESCRIPTIONS[name],
       })) : []),
       ...(hasSession
         ? [{ id: 'openchamber:init', name: 'init', source: 'openchamber' as const, description: t('chat.commandAutocomplete.command.initDescription'), isBuiltIn: true }]

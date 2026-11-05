@@ -108,7 +108,7 @@ Independently verified from actual diffs between merge base `dee0c88ebd`, refres
 - `packages/ui/src/components/views/DiffView.tsx` [KEPT MAIN]: Upstream Task 12 diff refactor eliminated `execution.agentId`; parity's deletion of `agentId: execution.agentId` was subsumed by upstream's refactor.
 - 10 Settings Catalogs (`de.settings.ts`, `en.settings.ts`, `fr.settings.ts`, `ja.settings.ts`, `ko.settings.ts`, `nl.settings.ts`, `pl.settings.ts`, `tr.settings.ts`, `zh-CN.settings.ts`, `zh-TW.settings.ts`) [KEPT MAIN]: Upstream modularized settings dictionaries into dedicated files. Parity's OMP settings strings were consolidated into `ompSettingsI18n.ts` rather than fragmented across `*.settings.ts`.
 
-#### 4. Reconciled Paths (166 paths) — Upstream Additions Preserved + Parity Behaviors Applied
+#### 4. Reconciled Paths (167 paths) — Upstream Additions Preserved + Parity Behaviors Applied
 - **Workflow & Contracts (3 paths):**
   - `.workflow/decisions.md`: Preserved upstream union entries + parity decisions.
   - `.workflow/development.md`: Preserved upstream refresh guidelines + parity test commands.
@@ -128,7 +128,7 @@ Independently verified from actual diffs between merge base `dee0c88ebd`, refres
   - `src/worker/questions.ts`, `src/worker/requests.ts`: Combined question schemas and request CAS with ACP cards.
   - `src/worker/session.ts`, `src/worker/session-interaction.test.ts`, `src/interaction/manager.test.ts`, `src/worker/interaction.test.ts`: Preserved ACP permission bridge, `getEditorComponent`, `rerenderMessage`, `getLinkClicksAvailable`, `requestPlanReview` without `ohpichamber.context` or tool guidance in worker prompts.
   - `src/worker/types.ts`: Reconciled worker types across both feature sets.
-- **Web Server Subsystem (30 paths):**
+- **Web Server Subsystem (31 paths):**
   - `server/index.js`: Preserved worktree archive routes, agentScopeStore wiring, OMP session service.
   - `server/lib/dev-servers/routes.js`, `server/lib/fs/routes.js`, `server/lib/git/routes.js`, `server/lib/guests/routes.js`, `server/lib/linear/routes.js`, `server/lib/magic-prompts/routes.js`, `server/lib/notifications/routes.js`, `server/lib/openchamber-control/routes.js`, `server/lib/project-context/routes.js`, `server/lib/quota/routes.js`, `server/lib/scheduled-tasks/routes.js`, `server/lib/session-folders/routes.js`, `server/lib/source-control/routes.js`, `server/lib/tunnels/routes.js`, `server/lib/walkthrough/routes.js`: Reconciled upstream route improvements while enforcing Host scope boundaries and origin gates.
   - `server/lib/git/service.test.js`, `server/lib/git/worktree-archive-host.test.js`, `server/lib/git/worktree-archive-native.test.js`: Reconciled worktree archive host/native test suites with agentScopeStore bindings.
@@ -139,7 +139,7 @@ Independently verified from actual diffs between merge base `dee0c88ebd`, refres
   - `server/lib/openchamber-sessions/routes.test.js`, `server/lib/openchamber-sessions/routes-native-controls.test.js`: Reconciled canonical session test suites with agentScopeStore and admission fence.
   - `server/lib/openchamber-sessions/session-link.test.js`, `server/lib/openchamber-sessions/session-linked-issues.js`, `server/lib/openchamber-sessions/session-linked-issues.test.js`: Reconciled linked issues operations through Host metadata.
   - `server/lib/host/direct-command-admission-store.test.mjs`: Reconciled direct command admission store tests with agentScopeStore workspace registration.
-  - `server/lib/session-knowledge/runtime.test.js` & `DOCUMENTATION.md`: Substantive mixed-version merge preserving 100% of nonconflicting upstream tests and helpers (metadata stores, pin isolation, unpinning, delivery recording, signature persistence, plan reading), with upstream tool availability and memory instruction assertions adapted to OMP no-prompt-injection invariants (focused `bun test packages/web/server/lib/session-knowledge/` passes 27/27, oxlint 0 errors; no whole-file parity exception).
+  - `packages/web/server/lib/session-knowledge/runtime.test.js`: Substantive mixed-version merge preserving 100% of nonconflicting upstream tests and helpers (metadata stores, pin isolation, unpinning, delivery recording, signature persistence, plan reading), with upstream tool availability and memory instruction assertions adapted to OMP no-prompt-injection invariants (focused `bun test packages/web/server/lib/session-knowledge/` passes 27/27, oxlint 0 errors; no whole-file parity exception).
 - **UI Subsystem (111 paths):**
   - Hot-spots: `ChatInput.tsx`, `ModelControls.tsx`, `ComposerFooter.tsx`, `buildOutgoingMessage.ts`, `useConfigStore.ts`, `session-ui-store.ts`, `sync-context.tsx`, `useUIStore.ts`, `messageQueueStore.ts`, `ContextPanel.tsx`, `SessionSidebarRows.tsx`, `SourceBoardActions.tsx`, `ScheduledTaskEditorDialog.tsx`, `CommandAutocomplete.tsx`, `DefaultsSettings.tsx`, `SessionWarmingCheckbox.tsx`.
   - Catalogs: All 26 refreshed upstream catalogs preserved whole; parity keys added (`chat.chatInput.mode.*`, `chat.planReview.*`, `chat.compact.instructions.*`, `chat.modelControls.off/routes/effort`, `chat.permissionCard.alwaysAllow`); ar and he catalogs carry 8,739 keys (baseline 8,719 - 16 per-session warming removals + 36 parity keys with translations; 349 inherited missing vs en).
@@ -153,7 +153,7 @@ Independently verified from actual diffs between merge base `dee0c88ebd`, refres
 - Follow-up defect fixes:
   - `d1bcbc8d7b`: fix(omp): preserve parentSessionId on cold reads and reconcile P1 test contracts.
   - `88e347538b`: feat(host): admit native todo session operations through Host authorizer.
-- Final gate verification on candidate `88e347538b` (subsequently landed on `main` at HEAD `e728bd3944`; test adaptation touched only tests/documentation with zero product source changes):
+- Final gate verification on candidate `88e347538b` (landing merge `e728bd3944`; current verification/documentation tip `23c2b5c1e7`; test adaptation touched only tests/documentation with zero product source changes):
   - `bun install --frozen-lockfile`: exit 0.
   - `bun run type-check`: exit 0 (0 errors across 5 projects / 3,196 files).
   - `bun run lint`: exit 0 across all workspaces.

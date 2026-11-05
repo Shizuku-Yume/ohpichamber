@@ -1,6 +1,6 @@
 # M4: Orchestration adaptation, OMP TUI parity, and feature verification
 
-**Status:** in progress
+**Status:** done
 **Priority:** high
 **Integration branch:** m4-orchestration/integration
 

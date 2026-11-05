@@ -1,6 +1,5 @@
 # 14: Run end-to-end M4 & OMP TUI parity verification and remove unverified M4 product doc banners
 
-**Status:** active
 **Effort:** m4-orchestration
 **Task type:** feature
 **Blocked by:** 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13
@@ -9,8 +8,7 @@
 **Covers:** W17, W18
 **Check:** `bun run docs:validate`, `.workflow/bin/workflow validate`, `bun run type-check`, `bun run lint`, and root `bun run test` exit 0; real-provider verification receipt and screenshots recorded under `/home/shizuku/Project/ohpichamber-omp-artifacts/m4-verification-<date>/`.
 - **Base commit:** b3fcef1a9257ee7064b388a8816654e15dbddae2
-
-- [ ] Execute real-provider smoke run across remaining unverified subsystems and residual gaps (retained only for Linear OAuth external account configuration, live worktree sessions, and Electron compositor capture limitation).
+- [x] Execute real-provider smoke run across remaining unverified subsystems and residual gaps (all reachable W17 behavior verified across 13 M4 feature areas; residual environmental limitations recorded as accepted debt under maintainer waiver: Linear OAuth external account unavailable, live worktree sessions uncertified, Electron compositor capturePage timeout).
 - [x] Update product documentation to accurately delineate runtime-verified core capabilities from automated-only subsystem coverage (retaining runtime note banners across all 12 locales on notifications and sessions-in-work; verified removals on auto-model-routing, notes-todos-plans, scheduled-tasks, and multi-run).
 - [x] Synchronize `.workflow/development.md` and migration design documents (`scope.md`, `implementation-plan.md`, `architecture.md`, `contracts.md`, `README.md`, `AGENTS.md`) and pass the full root gate.
 
@@ -71,7 +69,11 @@ Check after:
 - `bun run type-check` passed (clean across 3,225 files in 5 projects, 0 errors).
 - `bun run lint` passed (clean across all workspaces, 0 errors).
 - `bunx oxlint` passed across all modified source files (0 findings).
-- Root gate `bun run test` (running `node scripts/run-isolated-tests.mjs --suites`): 7/7 workspace suites passed (scripts: 23/23, sdk: 26/26, ui: 1016/1016, agent-contract: 192/192, agent-service: 391 pass across 56 files [311.47s], electron: 54/54, web: 465 passed [7475 passed]). External log recorded at `/home/shizuku/Project/ohpichamber-omp-artifacts/m4-verification-2026-11-05/root-bun-test.log`.
+- Root gate `bun run test` (running `node scripts/run-isolated-tests.mjs --suites`): 7/7 workspace suites passed (scripts: 23/23, sdk: 26/26, ui: 1020/1020, agent-contract: 192/192 [1327 assertions], agent-service: 399 pass, 7 skip, 0 fail across 56 files [311.54s, 2732 assertions], electron: 54/54, web: 466 passed / 9 skipped across 475 files [7500 passed, 142 skipped, 148.71s]). External log recorded at `/home/shizuku/Project/ohpichamber-omp-artifacts/m4-verification-2026-11-05/root-bun-test-close.log`.
+- Residual environmental waivers accepted by maintainer directive (2026-11-06):
+  - Linear OAuth external account configuration unavailable (external blocker; `GET /api/linear/auth/status` -> `{ connected: false }`; warning banners preserved in `notifications.mdx` across all 12 locales; tracked in `technical-debt.md`).
+  - Live worktree sessions uncertified on OMP runtime (architectural limitation; warning banners preserved in `sessions-in-work.mdx` across all 12 locales; tracked in `technical-debt.md`).
+  - Electron Linux compositor `capturePage` / snapshot timeout under virtual display (environmental limitation; Browser Control lease acquisition, native Chromium `<webview>` mounting, URL navigation, and direct DOM execution verified in 1ms via `webview.executeJavaScript()`; tracked in `technical-debt.md`).
 - Targeted suites: `bun test packages/ui/src/components/chat/JobsSheetDialog.test.tsx packages/ui/src/components/chat/BackgroundShellsStrip.test.tsx` passed (8/8 pass, 45 assertions); `bun test packages/agent-service/src/worker/shell.test.ts` passed (3/3 pass, 32 assertions); `bun test packages/ui/src/lib/i18n/messages.test.ts` passed (10/10 pass, 4045 assertions across 14 locales); `bun test packages/ui/src/lib/infiniteAnimations.test.ts` passed (2/2 pass, 5 assertions); `bun test packages/agent-contract/src/metadata.test.ts packages/ui/src/lib/multirun/createSession.test.ts packages/web/server/lib/openchamber-sessions/routes.test.js` passed (37/37 pass, 132 assertions); `bun test packages/ui/src/stores/useCleanseStore.test.ts packages/ui/src/sync/event-reducer.test.ts packages/ui/src/components/chat/CleanseStatusBoard.test.tsx` passed (43/43 pass, 191 assertions); Session Assist focused suites passed across separate packages: event stream tests 68, `openchamberEvents.test.ts` 13, `sessionActions` 80, `sessionAssist` runtime 18, `session-metadata-sync.test.ts` 3, lifecycle integration 1.
 - Real-provider verification receipt: `/home/shizuku/Project/ohpichamber-omp-artifacts/m4-verification-2026-11-05/m4-verification-receipt.json` (reflects exact verified levels: core real-provider turn + full root gate passed; session, boundary, orchestration, utility, and electron lane proofs incorporated; unverified gaps preserved; Linear OAuth blocked).
 - W15 verification receipt: `/home/shizuku/Project/ohpichamber-omp-artifacts/m4-d-2026-11-05/w15-smoke-receipt.json`.

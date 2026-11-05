@@ -102,6 +102,29 @@ function resolveRoleFallback(
 
 const ModelRolesRecordSchema = z.record(z.string(), z.string());
 
+/** Safely validate object fields without unjustified type assertions. */
+function parseSafeRolesRecord(val: unknown): Record<string, string> {
+  const parsed = ModelRolesRecordSchema.safeParse(val);
+  if (parsed.success) return parsed.data;
+  if (val && typeof val === 'object' && !Array.isArray(val)) {
+    const result: Record<string, string> = {};
+    for (const [k, v] of Object.entries(val)) {
+      if (typeof v === 'string') {
+        result[k] = v;
+      }
+    }
+    return result;
+  }
+  return {};
+}
+
+const DEFAULT_EFFORT_OPTIONS: readonly { value: string; labelKey: I18nKey }[] = [
+  { value: 'minimal', labelKey: 'settings.omp.modelRoles.effort.minimal' },
+  { value: 'low', labelKey: 'settings.omp.modelRoles.effort.low' },
+  { value: 'medium', labelKey: 'settings.omp.modelRoles.effort.medium' },
+  { value: 'high', labelKey: 'settings.omp.modelRoles.effort.high' },
+  { value: 'max', labelKey: 'settings.omp.modelRoles.effort.max' },
+] as const;
 type Values = Record<string, OmpSettingValue>;
 type Drafts = Record<string, string>;
 type DraftErrors = Record<string, string | null>;
@@ -160,8 +183,7 @@ const ModelRolesSection: React.FC<{
 }> = ({ setting, form, models, disabled, onChange, onImmediate }) => {
   const { t } = useI18n();
   const rawRoles = form[setting.id];
-  const parsedRoles = ModelRolesRecordSchema.safeParse(rawRoles);
-  const rolesMap: Record<string, string> = parsedRoles.success ? parsedRoles.data : {};
+  const rolesMap = parseSafeRolesRecord(rawRoles);
 
   return (
     <SettingsSection
@@ -289,13 +311,10 @@ const ModelRolesSection: React.FC<{
                             value: opt.reasoningEffort,
                             label: opt.label,
                           }))
-                        : [
-                            { value: 'minimal', label: t('settings.omp.modelRoles.effort.minimal') },
-                            { value: 'low', label: t('settings.omp.modelRoles.effort.low') },
-                            { value: 'medium', label: t('settings.omp.modelRoles.effort.medium') },
-                            { value: 'high', label: t('settings.omp.modelRoles.effort.high') },
-                            { value: 'max', label: t('settings.omp.modelRoles.effort.max') },
-                          ]
+                        : DEFAULT_EFFORT_OPTIONS.map(opt => ({
+                            value: opt.value,
+                            label: t(opt.labelKey),
+                          }))
                       ).map(opt => (
                         <SelectItem key={opt.value} value={opt.value}>
                           {opt.label}

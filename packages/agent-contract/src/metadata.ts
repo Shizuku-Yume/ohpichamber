@@ -41,13 +41,15 @@ const linkedIssueSchema = z.discriminatedUnion('kind', [
   z.strictObject({ ...linkedItemFields, kind: z.literal('external'), thread: z.enum(['issue', 'change']), identifier: EntityIdSchema }),
 ]);
 const multirunSchema = z.strictObject({
-  version: z.literal(1), sessionID: EntityIdSchema.nullable(),
+  version: z.literal(1), sessionID: EntityIdSchema.nullable().optional(),
   group: z.discriminatedUnion('kind', [
     z.strictObject({ kind: z.literal('id'), id: z.uuid() }),
-    z.strictObject({ kind: z.literal('legacy'), scope: EntityIdSchema.refine(
-      (scope) => !scope.startsWith('/') && !scope.startsWith('\\') && !/^[A-Za-z]:/.test(scope),
-      { message: 'Legacy multi-run scope must be an opaque public identity' },
-    ) }),
+    z.strictObject({
+      kind: z.literal('legacy'), scope: EntityIdSchema.refine(
+        (scope) => !scope.startsWith('/') && !scope.startsWith('\\') && !/^[A-Za-z]:/.test(scope),
+        { message: 'Legacy multi-run scope must be an opaque public identity' },
+      )
+    }),
   ]),
   groupSlug: EntityIdSchema, runGroup: z.string().regex(/^g[1-9]\d*$/).optional(),
   providerID: EntityIdSchema, modelID: EntityIdSchema, index: z.number().int().positive().optional(),
@@ -77,35 +79,37 @@ export const SessionMetadataStateSchema = z.strictObject({
   message: 'Confirmed missing metadata has null data and revision 0', path: ['metadata'],
 });
 export type SessionMetadataState = z.infer<typeof SessionMetadataStateSchema>;
-export const SessionMetadataPatchSchema = z.strictObject({ changes: z.strictObject({
-  folder: z.string().nullable().optional(), isPinned: z.boolean().nullable().optional(),
-  color: z.string().nullable().optional(), icon: z.string().nullable().optional(), notes: z.string().nullable().optional(),
-  openchamber: z.strictObject({
-    goal: z.strictObject({
-      id: goalFields.id.nullable(), objective: goalFields.objective.nullable(), objectiveFile: goalFields.objectiveFile.nullable(),
-      status: goalFields.status.nullable(), tokenBudget: goalFields.tokenBudget,
-      tokensUsed: goalFields.tokensUsed.nullable(), tokensBaseline: goalFields.tokensBaseline.nullable(),
-      tokensCommitted: goalFields.tokensCommitted.nullable(), turnsUsed: goalFields.turnsUsed.nullable(),
-      blockedStreak: goalFields.blockedStreak.nullable(), auditFailStreak: goalFields.auditFailStreak.nullable(),
-      note: goalFields.note.nullable(), statusReason: goalFields.statusReason.nullable(),
-      lastAccountedMessageID: goalFields.lastAccountedMessageID.nullable(),
-      createdAt: goalFields.createdAt.nullable(), updatedAt: goalFields.updatedAt.nullable(),
+export const SessionMetadataPatchSchema = z.strictObject({
+  changes: z.strictObject({
+    folder: z.string().nullable().optional(), isPinned: z.boolean().nullable().optional(),
+    color: z.string().nullable().optional(), icon: z.string().nullable().optional(), notes: z.string().nullable().optional(),
+    openchamber: z.strictObject({
+      goal: z.strictObject({
+        id: goalFields.id.nullable(), objective: goalFields.objective.nullable(), objectiveFile: goalFields.objectiveFile.nullable(),
+        status: goalFields.status.nullable(), tokenBudget: goalFields.tokenBudget,
+        tokensUsed: goalFields.tokensUsed.nullable(), tokensBaseline: goalFields.tokensBaseline.nullable(),
+        tokensCommitted: goalFields.tokensCommitted.nullable(), turnsUsed: goalFields.turnsUsed.nullable(),
+        blockedStreak: goalFields.blockedStreak.nullable(), auditFailStreak: goalFields.auditFailStreak.nullable(),
+        note: goalFields.note.nullable(), statusReason: goalFields.statusReason.nullable(),
+        lastAccountedMessageID: goalFields.lastAccountedMessageID.nullable(),
+        createdAt: goalFields.createdAt.nullable(), updatedAt: goalFields.updatedAt.nullable(),
+      }).nullable().optional(),
+      assist: z.strictObject({
+        recap: assistFields.recap.nullable().optional(), suggestion: assistFields.suggestion.nullable().optional(),
+        forMessageID: assistFields.forMessageID.nullable().optional(), generatedAt: assistFields.generatedAt.nullable().optional(),
+      }).nullable().optional(),
+      knowledge_context_delivered: z.string().nullable().optional(),
+      context_obligatory_last_compaction_message_id: EntityIdSchema.nullable().optional(),
+      project_context_pins: z.strictObject({ notes: pinsFields.notes.nullable(), plans: pinsFields.plans.nullable() }).nullable().optional(),
+      context_obligatory_messages: z.array(contextMessageSchema).nullable().optional(),
+      linked_issues: z.array(linkedIssueSchema).nullable().optional(),
+      work: workSchema.extend({
+        state: workFields.state.nullable(), openedAt: workFields.openedAt.nullable(), openedBy: workFields.openedBy.nullable(),
+      }).nullable().optional(),
+      reviewOffer: z.strictObject({ at: reviewOfferFields.at.nullable().optional() }).nullable().optional(),
+      reviewSessionID: EntityIdSchema.nullable().optional(), kind: z.literal('review').nullable().optional(),
+      originalSessionID: EntityIdSchema.nullable().optional(), multirun: multirunSchema.nullable().optional(),
     }).nullable().optional(),
-    assist: z.strictObject({
-      recap: assistFields.recap.nullable().optional(), suggestion: assistFields.suggestion.nullable().optional(),
-      forMessageID: assistFields.forMessageID.nullable().optional(), generatedAt: assistFields.generatedAt.nullable().optional(),
-    }).nullable().optional(),
-    knowledge_context_delivered: z.string().nullable().optional(),
-    context_obligatory_last_compaction_message_id: EntityIdSchema.nullable().optional(),
-    project_context_pins: z.strictObject({ notes: pinsFields.notes.nullable(), plans: pinsFields.plans.nullable() }).nullable().optional(),
-    context_obligatory_messages: z.array(contextMessageSchema).nullable().optional(),
-    linked_issues: z.array(linkedIssueSchema).nullable().optional(),
-    work: workSchema.extend({
-      state: workFields.state.nullable(), openedAt: workFields.openedAt.nullable(), openedBy: workFields.openedBy.nullable(),
-    }).nullable().optional(),
-    reviewOffer: z.strictObject({ at: reviewOfferFields.at.nullable().optional() }).nullable().optional(),
-    reviewSessionID: EntityIdSchema.nullable().optional(), kind: z.literal('review').nullable().optional(),
-    originalSessionID: EntityIdSchema.nullable().optional(), multirun: multirunSchema.nullable().optional(),
-  }).nullable().optional(),
-}) });
+  })
+});
 export type SessionMetadataPatch = z.infer<typeof SessionMetadataPatchSchema>;

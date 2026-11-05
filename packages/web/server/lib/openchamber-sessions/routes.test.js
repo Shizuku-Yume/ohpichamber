@@ -43,8 +43,8 @@ const createApp = (overrides = {}) => {
     registerSessionScope: async () => true,
     resolveAttachments: async () => [],
     capturePrompt: async (_scope, body) => body,
-    beforeDispatch: async () => {},
-    onPromptAccepted: async () => {},
+    beforeDispatch: async () => { },
+    onPromptAccepted: async () => { },
     directCommandAdmissionStore: overrides.directCommandAdmissionStore ?? routeFixture.directCommandAdmissionStore,
     archiveStore,
     sessionMetadataStore,
@@ -90,22 +90,26 @@ describe('canonical session route contracts', () => {
   it('rejects malformed archive batches', async () => { const { app } = createApp({ routes }); await request(app).post('/api/openchamber/sessions/archive').send({ ids: [] }).expect(400); await request(app).post('/api/openchamber/sessions/archive').send({ ids: ['ses_admitted'], archivedAt: -1 }).expect(400); });
   it('reopens a cold session before a run, starts one worker, and keeps the second send live', async () => {
     const live = new Set(); const calls = []; let workerStarts = 0;
-    const runtime = id => ({ sessionId: id, rootSessionId: id, projectId: 'proj_1', workspaceId: 'ws_1', displayPath: 'app',
-      createdAt: 1, updatedAt: 2, epoch: `epoch-${id}`, headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' } });
-    const service = { request: async (pathname, init = {}) => {
-      calls.push(pathname);
-      const id = decodeURIComponent(pathname.split('/').at(-2));
-      if (pathname.endsWith('/reopen')) {
-        if (!live.has(id)) { live.add(id); workerStarts += 1; }
-        return Response.json(runtime(id));
+    const runtime = id => ({
+      sessionId: id, rootSessionId: id, projectId: 'proj_1', workspaceId: 'ws_1', displayPath: 'app',
+      createdAt: 1, updatedAt: 2, epoch: `epoch-${id}`, headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' }
+    });
+    const service = {
+      request: async (pathname, init = {}) => {
+        calls.push(pathname);
+        const id = decodeURIComponent(pathname.split('/').at(-2));
+        if (pathname.endsWith('/reopen')) {
+          if (!live.has(id)) { live.add(id); workerStarts += 1; }
+          return Response.json(runtime(id));
+        }
+        if (pathname.endsWith('/runs')) {
+          if (!live.has(id)) return Response.json({ type: 'urn:ohpichamber:problem:SERVICE_UNAVAILABLE', title: 'Unavailable', status: 503, code: 'SERVICE_UNAVAILABLE', detail: 'Cold session has no worker', retryable: true }, { status: 503 });
+          const body = JSON.parse(init.body);
+          return Response.json({ run: { runId: body.runId, sessionId: id, status: 'running', origin: 'host', createdAt: 1 } });
+        }
+        throw new Error(`Unexpected service request ${pathname}`);
       }
-      if (pathname.endsWith('/runs')) {
-        if (!live.has(id)) return Response.json({ type: 'urn:ohpichamber:problem:SERVICE_UNAVAILABLE', title: 'Unavailable', status: 503, code: 'SERVICE_UNAVAILABLE', detail: 'Cold session has no worker', retryable: true }, { status: 503 });
-        const body = JSON.parse(init.body);
-        return Response.json({ run: { runId: body.runId, sessionId: id, status: 'running', origin: 'host', createdAt: 1 } });
-      }
-      throw new Error(`Unexpected service request ${pathname}`);
-    } };
+    };
     const { createOpenChamberSessionService, registerCanonicalSessionRoutes } = routes;
     const sessionService = createOpenChamberSessionService({
       agentScopeStore: routeFixture.agentScopeStore,
@@ -116,8 +120,8 @@ describe('canonical session route contracts', () => {
       registerSessionScope: async () => true,
       resolveAttachments: async () => [],
       capturePrompt: async (_scope, body) => body,
-      beforeDispatch: async () => {},
-      onPromptAccepted: async () => {},
+      beforeDispatch: async () => { },
+      onPromptAccepted: async () => { },
       directCommandAdmissionStore: routeFixture.directCommandAdmissionStore,
       archiveStore: createMemoryArchiveStore(),
       sessionMetadataStore: createMemorySessionMetadataStore(),
@@ -126,8 +130,10 @@ describe('canonical session route contracts', () => {
     const router = express.Router();
     registerCanonicalSessionRoutes(router, sessionService);
     app.use('/api/agent/v1/sessions', router);
-    const prompt = { input: { text: 'Cold prompt', attachments: [], context: [] },
-      options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null } };
+    const prompt = {
+      input: { text: 'Cold prompt', attachments: [], context: [] },
+      options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null }
+    };
     const first = await request(app).post('/api/agent/v1/sessions/ses_admitted/runs').send(prompt).expect(200);
     expect(first.body.run).toMatchObject({ sessionId: 'ses_admitted', status: 'running' });
     const second = await request(app).post('/api/agent/v1/sessions/ses_admitted/runs').send(prompt).expect(200);
@@ -140,10 +146,12 @@ describe('canonical session route contracts', () => {
   });
   it('enforces Host admission invariant: rejects cold send when agentScopeStore is missing instead of bypassing admission', async () => {
     const calls = [];
-    const service = { request: async (pathname) => {
-      calls.push(pathname);
-      return Response.json({});
-    } };
+    const service = {
+      request: async (pathname) => {
+        calls.push(pathname);
+        return Response.json({});
+      }
+    };
     const { createOpenChamberSessionService, registerCanonicalSessionRoutes } = routes;
     const sessionService = createOpenChamberSessionService({
       service,
@@ -154,8 +162,8 @@ describe('canonical session route contracts', () => {
       registerSessionScope: async () => true,
       resolveAttachments: async () => [],
       capturePrompt: async (_scope, body) => body,
-      beforeDispatch: async () => {},
-      onPromptAccepted: async () => {},
+      beforeDispatch: async () => { },
+      onPromptAccepted: async () => { },
       directCommandAdmissionStore: routeFixture.directCommandAdmissionStore,
       archiveStore: createMemoryArchiveStore(),
       sessionMetadataStore: createMemorySessionMetadataStore(),
@@ -164,8 +172,10 @@ describe('canonical session route contracts', () => {
     const router = express.Router();
     registerCanonicalSessionRoutes(router, sessionService);
     app.use('/api/agent/v1/sessions', router);
-    const prompt = { input: { text: 'Cold prompt', attachments: [], context: [] },
-      options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null } };
+    const prompt = {
+      input: { text: 'Cold prompt', attachments: [], context: [] },
+      options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null }
+    };
     const response = await request(app).post('/api/agent/v1/sessions/ses_admitted/runs').send(prompt).expect(503);
     expect(response.body).toMatchObject({
       code: 'SERVICE_UNAVAILABLE',
@@ -384,6 +394,132 @@ describe('canonical session route contracts', () => {
         .expect(403);
     });
   });
+
+  describe('session create with multi-run metadata', () => {
+    const multirunBase = {
+      version: 1,
+      group: { kind: 'id', id: '550e8400-e29b-41d4-a716-446655440000' },
+      groupSlug: 'group_bench',
+      runGroup: 'g1',
+      providerID: 'provider_1',
+      modelID: 'model_1',
+      role: 'run',
+      title: 'Run 1',
+    };
+
+    it('creates session with initial multi-run metadata having sessionID: null and binds returned sessionID on follow-up', async () => {
+      const service = {
+        request: vi.fn(async (path, init) => {
+          if (path === '/internal/sessions') {
+            const body = JSON.parse(init.body);
+            return Response.json(runtimeSession({
+              sessionId: body.rootSessionId,
+              rootSessionId: body.rootSessionId,
+              projectId: body.projectId,
+              workspaceId: body.workspaceId,
+            }));
+          }
+          return Response.json({});
+        }),
+      };
+      const { app, sessionMetadataStore } = createApp({
+        routes,
+        service,
+        agentScopeStore: routeFixture.agentScopeStore,
+        resolveHostSessionScope: async (id) => validScope(id),
+      });
+
+      const response = await request(app)
+        .post('/api/openchamber/sessions')
+        .send({
+          projectId: 'proj_1',
+          workspaceId: 'ws_1',
+          options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null },
+          metadata: { openchamber: { multirun: { ...multirunBase, sessionID: null } } },
+        })
+        .expect(200);
+
+      const createdSession = response.body.session;
+      expect(createdSession.sessionId).toBeDefined();
+      expect(createdSession.metadata.openchamber.multirun).toMatchObject({
+        version: 1,
+        groupSlug: 'group_bench',
+        runGroup: 'g1',
+        providerID: 'provider_1',
+        modelID: 'model_1',
+        role: 'run',
+        title: 'Run 1',
+      });
+
+      // Follow-up: patch with newly created sessionId to bind multi-run membership
+      const boundPatch = {
+        changes: {
+          openchamber: {
+            multirun: { ...multirunBase, sessionID: createdSession.sessionId },
+          },
+        },
+      };
+      await request(app)
+        .patch(`/api/openchamber/sessions/${createdSession.sessionId}/metadata`)
+        .send(boundPatch)
+        .expect(200);
+
+      const updatedState = await sessionMetadataStore.getState(createdSession.sessionId);
+      expect(updatedState.metadata.openchamber.multirun.sessionID).toBe(createdSession.sessionId);
+    });
+
+    it('creates session with multi-run metadata when sessionID is omitted', async () => {
+      const service = {
+        request: vi.fn(async (path, init) => {
+          if (path === '/internal/sessions') {
+            const body = JSON.parse(init.body);
+            return Response.json(runtimeSession({
+              sessionId: body.rootSessionId,
+              rootSessionId: body.rootSessionId,
+              projectId: body.projectId,
+              workspaceId: body.workspaceId,
+            }));
+          }
+          return Response.json({});
+        }),
+      };
+      const { app } = createApp({
+        routes,
+        service,
+        agentScopeStore: routeFixture.agentScopeStore,
+      });
+
+      const response = await request(app)
+        .post('/api/openchamber/sessions')
+        .send({
+          projectId: 'proj_1',
+          workspaceId: 'ws_1',
+          options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null },
+          metadata: { openchamber: { multirun: { ...multirunBase } } },
+        })
+        .expect(200);
+
+      expect(response.body.session.sessionId).toBeDefined();
+      expect(response.body.session.metadata.openchamber.multirun.groupSlug).toBe('group_bench');
+    });
+
+    it('rejects session create with malformed multi-run metadata', async () => {
+      const { app } = createApp({
+        routes,
+        agentScopeStore: routeFixture.agentScopeStore,
+      });
+
+      await request(app)
+        .post('/api/openchamber/sessions')
+        .send({
+          projectId: 'proj_1',
+          workspaceId: 'ws_1',
+          options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null },
+          metadata: { openchamber: { multirun: { ...multirunBase, sessionID: 123 } } },
+        })
+        .expect(400);
+    });
+  });
 });
 
 describe('canonical session list persistence', () => {
@@ -400,8 +536,8 @@ describe('canonical session list persistence', () => {
       registerSessionScope: async () => true,
       resolveAttachments: async () => [],
       capturePrompt: async (_scope, body) => body,
-      beforeDispatch: async () => {},
-      onPromptAccepted: async () => {},
+      beforeDispatch: async () => { },
+      onPromptAccepted: async () => { },
       sessionMetadataStore: state.sessionMetadataStore,
       archiveStore: state.archiveStore,
       directCommandAdmissionStore: state.directCommandAdmissionStore,
@@ -416,18 +552,20 @@ describe('canonical session list persistence', () => {
       await state.initialize();
       const { createOpenChamberSessionService } = await import('./routes.js');
       const service = createOpenChamberSessionService({
-        service: { request: async (pathname, init) => {
-          calls.push({ pathname, body: init?.body });
-          return Response.json(runtimeSession({ title: 'Renamed' }));
-        } },
+        service: {
+          request: async (pathname, init) => {
+            calls.push({ pathname, body: init?.body });
+            return Response.json(runtimeSession({ title: 'Renamed' }));
+          }
+        },
         resolveWorkspaceScope: async () => ({ ...validScope('workspace'), projectId: 'project', workspaceId: 'workspace' }),
         resolveSessionScope: async id => validScope(id),
         resolveHostSessionScope: async id => ({ ...validScope(id), projectId: 'project', workspaceId: 'workspace' }),
         registerSessionScope: async () => true,
         resolveAttachments: async () => [],
         capturePrompt: async (_scope, body) => body,
-        beforeDispatch: async () => {},
-        onPromptAccepted: async () => {},
+        beforeDispatch: async () => { },
+        onPromptAccepted: async () => { },
         sessionMetadataStore: state.sessionMetadataStore,
         archiveStore: state.archiveStore,
         directCommandAdmissionStore: state.directCommandAdmissionStore,
@@ -449,19 +587,21 @@ describe('canonical session list persistence', () => {
       await state.initialize();
       const { createOpenChamberSessionService } = await import('./routes.js');
       const service = createOpenChamberSessionService({
-        service: { request: async (pathname) => {
-          calls.push(pathname);
-          if (pathname.endsWith('/snapshot')) return Response.json(snapshotFixture());
-          return Response.json(historyFixture());
-        } },
+        service: {
+          request: async (pathname) => {
+            calls.push(pathname);
+            if (pathname.endsWith('/snapshot')) return Response.json(snapshotFixture());
+            return Response.json(historyFixture());
+          }
+        },
         resolveWorkspaceScope: async () => ({ ...validScope('workspace'), projectId: 'project', workspaceId: 'workspace' }),
         resolveSessionScope: async id => ({ ...validScope(id), projectId: 'project', workspaceId: 'workspace' }),
         resolveHostSessionScope: async id => ({ ...validScope(id), projectId: 'project', workspaceId: 'workspace' }),
         registerSessionScope: async () => true,
         resolveAttachments: async () => [],
         capturePrompt: async (_scope, body) => body,
-        beforeDispatch: async () => {},
-        onPromptAccepted: async () => {},
+        beforeDispatch: async () => { },
+        onPromptAccepted: async () => { },
         sessionMetadataStore: state.sessionMetadataStore,
         archiveStore: state.archiveStore,
         directCommandAdmissionStore: state.directCommandAdmissionStore,
@@ -551,8 +691,8 @@ describe('canonical session list persistence', () => {
         registerSessionScope: async () => true,
         resolveAttachments: async () => [],
         capturePrompt: async (_scope, body) => body,
-        beforeDispatch: async () => {},
-        onPromptAccepted: async () => {},
+        beforeDispatch: async () => { },
+        onPromptAccepted: async () => { },
         sessionMetadataStore: state.sessionMetadataStore,
         archiveStore: state.archiveStore,
         directCommandAdmissionStore: state.directCommandAdmissionStore,

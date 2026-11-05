@@ -21,12 +21,10 @@ export const isSubagentTool = (name: ToolName): boolean => name === NATIVE_TOOLS
 export const isQuestionTool = (name: ToolName): boolean => name === NATIVE_TOOLS.ask;
 export const isEditTool = (name: ToolName): boolean => name === NATIVE_TOOLS.edit;
 export const isWriteTool = (name: ToolName): boolean => name === NATIVE_TOOLS.write;
-export const isAstEditTool = (name: ToolName): boolean => name === NATIVE_TOOLS.ast_edit;
-export const isAstGrepTool = (name: ToolName): boolean => name === NATIVE_TOOLS.ast_grep;
-export const isEvalTool = (name: ToolName): boolean => name === NATIVE_TOOLS.eval;
-export const isLspTool = (name: ToolName): boolean => name === NATIVE_TOOLS.lsp;
-export const isCheckpointTool = (name: ToolName): boolean => name === NATIVE_TOOLS.checkpoint;
-export const isRewindTool = (name: ToolName): boolean => name === NATIVE_TOOLS.rewind;
+const isAstEditTool = (name: ToolName): boolean => name === NATIVE_TOOLS.ast_edit;
+const isAstGrepTool = (name: ToolName): boolean => name === NATIVE_TOOLS.ast_grep;
+const isEvalTool = (name: ToolName): boolean => name === NATIVE_TOOLS.eval;
+const isLspTool = (name: ToolName): boolean => name === NATIVE_TOOLS.lsp;
 export const isFileChangeTool = (name: ToolName): boolean => isEditTool(name) || isWriteTool(name) || isAstEditTool(name);
 export const isExplorationTool = (name: ToolName): boolean => name === NATIVE_TOOLS.read || name === NATIVE_TOOLS.grep || name === NATIVE_TOOLS.glob || name === NATIVE_TOOLS.find;
 export const isWebTool = (name: ToolName): boolean => name === NATIVE_TOOLS.web_search || name === 'fetch';

@@ -31,10 +31,9 @@ The Host's canonical session stream connects to the private Agent Service. `tran
 - `serializeMessageStreamWsEvent(payload, options)` and `sendSerializedMessageStreamWsFrame(socket, frame)` separate encoding from per-socket delivery. Delivery retains ready-state and backpressure checks.
 
 ### Runtime helpers
-- `createGlobalMessageStreamHub(...)`: reads canonical session events from the Host-supervised Agent Service and owns bounded cursor replay and per-session recovery.
+- `createGlobalMessageStreamHub(...)`: reads canonical session events from the Host-supervised Agent Service and owns bounded cursor replay and per-session recovery. Provides reference-counted session lease management (`retainSession(sessionId, leaseKey)`, `releaseSession(sessionId, leaseKey)`) that shares active per-session SSE streams across concurrent consumers (runs, browser SSE/WS, initial observation) and tears down the stream once all leases release.
 - `createGlobalUiEventBroadcaster({ sseClients, wsClients, writeSseEvent })`: returns a broadcaster that fans out the same synthetic UI event to SSE and WS clients.
 - `createMessageStreamWsRuntime(...)`: mounts the Host WebSocket server and connects browser clients to the shared event hub.
-
 ### Legacy translation
 - `translateWireEvent(payload)`: maps one legacy OpenCode wire payload to zero or more retained Host-consumer events. The hub uses it only for the `translated()` view of an injected space-scoped payload; no current space produces such a payload.
 - `wireEventDirectory(payload)` and `forwardTranslatedWireEvent(payload, handle)` remain beside the translation table for its historical tests. The removed per-space event feed was their only production consumer.
@@ -46,7 +45,7 @@ The Host's canonical session stream connects to the private Agent Service. `tran
 - Global canonical streams use Host-issued cursors, bounded replay, snapshot repair and reconnect handling; they do not depend on OpenCode SSE ids.
 - The shared Host hub multiplexes canonical Agent Service events and explicitly opted-in space-scoped injected events. Canonical session subscribers and space-event subscribers remain separately scoped.
 - Browser transport concerns live in the WS bridge modules; server-side global stream ownership lives in `global-hub.js`.
-
+- Per-session event streams follow an explicit lease-counted lifecycle: active prompt runs, browser WebSocket/SSE connections, and transient session-creation snapshots acquire named leases. Leases are ref-counted per key to safely support concurrent dispatches and repeat subscriptions without underflow. When the last lease is released (`leases.size === 0`), the hub immediately aborts the stream and cancels the reader, preventing background reader leaks.
 ## Notes for contributors
 - Keep protocol helpers pure and small so they can be unit tested without spinning up a server.
 - Keep `runtime.js` focused on WebSocket upgrade and endpoint dispatch. Put global browser-client lifecycle in `global-ws-bridge.js`, directory stream lifecycle in `directory-ws-bridge.js`, and stream sharing in `global-hub.js`.

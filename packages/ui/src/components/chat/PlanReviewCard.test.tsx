@@ -15,7 +15,12 @@ import { dict as tr } from '@/lib/i18n/messages/tr';
 import { dict as uk } from '@/lib/i18n/messages/uk';
 import { dict as zhCN } from '@/lib/i18n/messages/zh-CN';
 import { dict as zhTW } from '@/lib/i18n/messages/zh-TW';
+import { SyncContext, SyncRuntimeContext } from '@/sync/sync-context';
 import { PlanReviewCard } from './PlanReviewCard';
+
+const mockRuntime = { childStores: { children: new Map() }, messageLoader: {}, client: {}, runtimeKey: 'test', currentDirectory: { get: () => '', subscribe: () => () => undefined } };
+const SystemContext = SyncContext as unknown as React.Context<unknown>;
+const RuntimeContext = SyncRuntimeContext as unknown as React.Context<unknown>;
 
 const form: QuestionRequest = {
     questionId: 'review-1', sessionId: 'session-1', turnId: 'turn-1',
@@ -29,7 +34,11 @@ const form: QuestionRequest = {
 };
 
 const renderCard = (request = form, docked = false) => renderToStaticMarkup(
-    <I18nProvider><PlanReviewCard form={request} docked={docked} /></I18nProvider>,
+    <SystemContext.Provider value={mockRuntime}>
+        <RuntimeContext.Provider value={mockRuntime}>
+            <I18nProvider><PlanReviewCard form={request} docked={docked} /></I18nProvider>
+        </RuntimeContext.Provider>
+    </SystemContext.Provider>,
 );
 
 describe('PlanReviewCard', () => {
@@ -38,7 +47,8 @@ describe('PlanReviewCard', () => {
         expect(html).toContain('Composer improvements');
         expect(html).toContain('local://plans/composer.md');
         expect(html).toContain('form-markdown typography-meta');
-        expect(html).toContain('Preserve **omp.ask** keyboard behavior.');
+        expect(html).toMatch(/Preserve (\*\*omp\.ask\*\*|<strong>omp\.ask<\/strong>) keyboard behavior\./);
+        expect(html).toContain('id="plan-execution-model"');
         for (const label of ['Approve', 'Approve and compact', 'Send feedback', 'Reject']) {
             expect(html).toContain(label);
         }

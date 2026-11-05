@@ -68,8 +68,16 @@ export class WorkerModeController {
   private previous: Previous | undefined;
   private vibePrevious: VibePrevious | undefined;
   private current: SessionMode;
-
-  constructor(private readonly session: AgentSession, private readonly propose: PlanProposalHandler = title => session.preparePlanForReview(title), startGoalRun?: (start: () => Promise<boolean>) => Promise<boolean>, onContinuationDropped?: () => void) {
+  private armedPlan: { planReference: string } | null = null;
+  private pendingTransition: Promise<void> | null = null;
+  private transitionError: Error | null = null;
+  constructor(
+    private readonly session: AgentSession,
+    private readonly propose: PlanProposalHandler = title => session.preparePlanForReview(title),
+    startGoalRun?: (start: () => Promise<boolean>) => Promise<boolean>,
+    onContinuationDropped?: () => void,
+    private readonly onModeChanged?: (mode: SessionMode) => void,
+  ) {
     const continuationModes = cfgGoalContinuationModes.get(session.settings);
     if (!continuationModes.includes('rpc')) cfgGoalContinuationModes.override(session.settings, [...continuationModes, 'rpc']);
     const nativePrompt = session.promptCustomMessage.bind(session);
@@ -113,17 +121,67 @@ export class WorkerModeController {
   }
 
   mode(): SessionMode {
+    if (this.armedPlan) return { kind: 'plan', status: 'armed', planReference: this.armedPlan.planReference };
     const goal = this.session.getGoalModeState()?.goal;
     if (goal && goal.status !== 'dropped') return { kind: 'goal', status: goal.status, objective: goal.objective, tokenBudget: goal.tokenBudget ?? null, tokensUsed: goal.tokensUsed };
     return readSessionMode(this.session.sessionManager);
   }
 
   async goalState(): Promise<RpcGoalResult> { return this.goal.handle({ op: 'get' }); }
-  observe(event: Parameters<RpcGoalController['observe']>[0]): void { this.goal.observe(event); }
-  stopForHostAbort(): void { this.goal.stopForHostAbort(); }
+  isTransitioning(): boolean { return this.pendingTransition !== null; }
+  observe(event: Parameters<RpcGoalController['observe']>[0]): void {
+    this.goal.observe(event);
+    if (this.armedPlan && event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) {
+      const currentArmed = this.armedPlan;
+      this.pendingTransition = this.enterPlan()
+        .then(() => {
+          if (this.armedPlan !== currentArmed) return;
+          this.armedPlan = null;
+          this.transitionError = null;
+          this.onModeChanged?.(this.mode());
+        })
+        .catch(error => {
+          if (this.armedPlan !== currentArmed) return;
+          this.armedPlan = null;
+          this.transitionError = error instanceof Error ? error : new Error(String(error));
+          this.onModeChanged?.(this.mode());
+        })
+        .finally(() => {
+          this.pendingTransition = null;
+        });
+    }
+  }
+  async settleTransition(): Promise<void> {
+    if (this.pendingTransition) await this.pendingTransition;
+    if (this.transitionError) {
+      const err = this.transitionError;
+      this.transitionError = null;
+      throw err;
+    }
+  }
+  stopForHostAbort(): void {
+    const wasArmed = this.armedPlan !== null;
+    this.armedPlan = null;
+    this.transitionError = null;
+    this.goal.stopForHostAbort();
+    if (wasArmed) {
+      this.onModeChanged?.(this.mode());
+    }
+  }
 
   async set(kind: 'main' | 'plan' | 'vibe'): Promise<SessionMode> {
-    if (this.session.isStreaming) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
+    if (this.session.isStreaming) {
+      if (kind === 'plan') {
+        this.armedPlan = { planReference: 'local://PLAN.md' };
+        return this.mode();
+      }
+      if (kind === 'main' && this.armedPlan) {
+        this.armedPlan = null;
+        return this.mode();
+      }
+      throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
+    }
+    this.armedPlan = null;
     if (this.mode().kind === 'goal') {
       await this.goal.handle({ op: 'drop' });
       this.session.sessionManager.appendModeChange('none');
@@ -197,6 +255,7 @@ export class WorkerModeController {
     };
     const planModel = this.session.resolveRoleModelWithThinking('plan');
     if (!planModel.model) throw new ProjectionError(422, 'MODEL_UNAVAILABLE', 'The plan model role is unavailable');
+    const targetModel = planModel.model;
     const originalTools = this.session.getEnabledToolNames();
     const originalState = this.session.getPlanModeState();
     // Native Code Mode partitions tools using plan state, so state must land first.
@@ -204,7 +263,7 @@ export class WorkerModeController {
     try {
       await this.session.setActiveToolsByName([...new Set([...originalTools, ...(this.session.hasBuiltInTool('write') ? ['write'] : [])])]);
       this.session.setPlanProposalHandler(this.propose);
-      await this.session.setModelTemporary(planModel.model, planModel.thinkingLevel);
+      await this.session.setModelTemporary(targetModel, planModel.thinkingLevel);
       const modeData: PlanModeData = {
         planFilePath: reference, previousTools: previous.tools, previousMounted: previous.mounted, previousRegistered: previous.registered,
       };

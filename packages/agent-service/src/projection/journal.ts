@@ -7,7 +7,7 @@ import type { ProjectionInput, ProjectionSeed } from './protocol.ts';
 export class ProjectionError extends Error {
   constructor(readonly status: number, readonly code: ProblemCode, message: string, readonly details?: JsonObject) { super(message); }
 }
-type SessionIdentity = Pick<RuntimeSession, 'sessionId' | 'projectId' | 'workspaceId' | 'displayPath' | 'rootSessionId' | 'parentSessionId'>;
+type SessionIdentity = { sessionId: string; projectId: string; workspaceId: string; displayPath: string; rootSessionId: string; parentSessionId?: string };
 type Listener = (event: CanonicalEvent | StreamInvalidated) => void;
 const REPLAY_LIMIT = 1000;
 const U64_MAX = 18_446_744_073_709_551_615n;
@@ -151,6 +151,11 @@ export class SessionJournal {
     this.listeners.add(onEvent);
     return { replay, unsubscribe: () => { this.listeners.delete(onEvent); } };
   }
+  rekey(sessionId: string, rootSessionId = sessionId): void {
+    this.identity.sessionId = sessionId;
+    this.identity.rootSessionId = rootSessionId;
+  }
+
 
   replace(seed: ProjectionSeed): void {
     this.resetEpoch();

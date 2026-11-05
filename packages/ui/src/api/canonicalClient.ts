@@ -325,6 +325,15 @@ export class CanonicalClient {
       body: bodyFor(C.SessionControlRequestSchema, { type: 'btw.cancel' }),
     });
   }
+  branchFromBtw(sessionId: string, recordId: string): Promise<Extract<C.SessionControlAck, { type: 'btw.branch' }>> {
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/control`, scoped(C.SessionControlAckSchema, result => result.type === 'btw.branch'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: bodyFor(C.SessionControlRequestSchema, { type: 'btw.branch', recordId }),
+    }).then(result => {
+      if (result.type !== 'btw.branch') throw new Error('BTW branch response identified another control');
+      return result;
+    });
+  }
   steerSubagent(sessionId: string, subagentId: string, message: string): Promise<Extract<C.SessionControlAck, { type: 'subagent.steer' }>> {
     return request(`/api/agent/v1/sessions/${id(sessionId)}/control`, scoped(C.SessionControlAckSchema, result => result.type === 'subagent.steer'), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },

@@ -6,8 +6,10 @@ import { canonicalClient } from '@/api/canonicalClient';
 import { isIMECompositionEvent } from '@/lib/ime';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon/Icon';
+import { toast } from '@/components/ui';
 import { useBtwStore } from '@/stores/useBtwStore';
-import type { BtwPanelState } from './useBtwPanelState';
+import { extractBtwInject, type BtwPanelState } from './useBtwPanelState';
+import { openSessionLink } from '@/lib/router/openSessionFromRoute';
 
 /** The transient `/btw` answer panel. */
 const BtwPanelView: React.FC<{ parentSessionId: string; panel: BtwPanelState; onExit: () => void }> = ({
@@ -27,12 +29,111 @@ const BtwPanelView: React.FC<{ parentSessionId: string; panel: BtwPanelState; on
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [onExit, panel.collapsed, panel.ephemeralRecordId, panel.pending]);
 
+    const [promoting, setPromoting] = React.useState(false);
+    const [injecting, setInjecting] = React.useState(false);
+
+    const handlePromote = React.useCallback(async () => {
+        if (!panel.ephemeralRecordId || panel.ephemeralStatus !== 'completed' || promoting) return;
+        setPromoting(true);
+        try {
+            const result = await canonicalClient.branchFromBtw(parentSessionId, panel.ephemeralRecordId);
+            toast.success(t('chat.btw.promoteSuccess'));
+            useBtwStore.getState().setPanelState(parentSessionId, {
+                ephemeralRecordId: undefined,
+                ephemeralText: '',
+                ephemeralStatus: 'idle',
+                collapsed: true,
+            });
+            onExit();
+            if (result.sessionId && result.sessionId !== parentSessionId) {
+                void openSessionLink(result.sessionId, null);
+            }
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : String(err));
+        } finally {
+            setPromoting(false);
+        }
+    }, [onExit, panel.ephemeralRecordId, panel.ephemeralStatus, parentSessionId, promoting, t]);
+
+    const handleInject = React.useCallback(async () => {
+        const injectText = extractBtwInject(panel.ephemeralText);
+        if (!injectText || panel.ephemeralStatus !== 'completed' || injecting) return;
+        setInjecting(true);
+        try {
+            const requestPayload = {
+                input: { text: injectText, attachments: [], context: [] },
+                options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null },
+            };
+            try {
+                await canonicalClient.steer(parentSessionId, requestPayload);
+            } catch (err: unknown) {
+                const isObject = typeof err === 'object' && err !== null;
+                const code = isObject && 'code' in err ? (err as Record<string, unknown>).code : undefined;
+                const status = isObject && 'status' in err ? (err as Record<string, unknown>).status : undefined;
+                const isRunNotActive = code === 'RUN_NOT_ACTIVE'
+                    || status === 404
+                    || (err instanceof Error && (err.message.includes('RUN_NOT_ACTIVE') || err.message.includes('No active run') || err.message.includes('Run not found')));
+                if (isRunNotActive) {
+                    await canonicalClient.createRun(parentSessionId, requestPayload);
+                } else {
+                    throw err;
+                }
+            }
+            useBtwStore.getState().setPanelState(parentSessionId, {
+                ephemeralRecordId: undefined,
+                ephemeralText: '',
+                ephemeralStatus: 'idle',
+                collapsed: true,
+            });
+            onExit();
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : String(err));
+        } finally {
+            setInjecting(false);
+        }
+    }, [injecting, onExit, panel.ephemeralStatus, panel.ephemeralText, parentSessionId]);
+
     const setCollapsed = React.useCallback((collapsed: boolean) => {
         useBtwStore.getState().setPanelState(parentSessionId, { collapsed });
     }, [parentSessionId]);
+
+    const injectText = React.useMemo(() => extractBtwInject(panel.ephemeralText), [panel.ephemeralText]);
+
     let content: React.ReactNode = null;
     if (panel.ephemeralRecordId) {
-        content = <div className="max-h-48 overflow-y-auto whitespace-pre-wrap px-4 py-3 text-sm">{panel.ephemeralText || t('chat.btw.loading')}</div>;
+        content = (
+            <div className="space-y-2">
+                <div className="max-h-48 overflow-y-auto whitespace-pre-wrap px-4 py-3 text-sm">{panel.ephemeralText || t('chat.btw.loading')}</div>
+                {panel.ephemeralStatus === 'completed' ? (
+                    <div className="flex flex-wrap items-center gap-2 border-t border-border/40 px-4 py-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="xs"
+                            onClick={() => void handlePromote()}
+                            disabled={promoting}
+                            className="!font-normal text-xs"
+                        >
+                            <Icon name={promoting ? 'loader-4' : 'git-branch'} className={promoting ? 'mr-1 size-3 animate-spin' : 'mr-1 size-3'} />
+                            {t('chat.btw.promoteToBranch')}
+                        </Button>
+                        {injectText ? (
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="xs"
+                                onClick={() => void handleInject()}
+                                disabled={injecting}
+                                className="!font-normal text-xs"
+                            >
+                                <Icon name={injecting ? 'loader-4' : 'corner-down-right'} className={injecting ? 'mr-1 size-3 animate-spin' : 'mr-1 size-3'} />
+                                {t('chat.btw.injectSteer')}
+                            </Button>
+                        ) : null}
+                    </div>
+                ) : null}
+            </div>
+        );
     } else if (panel.pending) {
         content = <div className="px-4 py-3 text-sm text-muted-foreground">{t('chat.btw.draftHint')}</div>;
     }

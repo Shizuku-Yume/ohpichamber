@@ -1,6 +1,7 @@
 import React from 'react';
 import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
+import { useCleanseStore } from '@/stores/useCleanseStore';
 
 export interface CleanseStatusBoardProps {
   status: 'discovering' | 'repairing' | 'verifying' | 'completed' | 'failed' | 'cancelled';
@@ -9,8 +10,8 @@ export interface CleanseStatusBoardProps {
   repairedFiles: string[];
   summary?: string;
   className?: string;
+  onDismiss?: () => void;
 }
-
 export const CleanseStatusBoard: React.FC<CleanseStatusBoardProps> = ({
   status,
   activeCheckers,
@@ -18,6 +19,7 @@ export const CleanseStatusBoard: React.FC<CleanseStatusBoardProps> = ({
   repairedFiles,
   summary,
   className = '',
+  onDismiss,
 }) => {
   const { t } = useI18n();
   const isRunning = status === 'discovering' || status === 'repairing' || status === 'verifying';
@@ -42,11 +44,24 @@ export const CleanseStatusBoard: React.FC<CleanseStatusBoardProps> = ({
           <Icon name="tools" className="size-4 text-primary" />
           <span>{t('chat.cleanseStatusBoard.title')}</span>
         </div>
-        <span
-          className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider border ${statusColor}`}
-        >
-          {status}
-        </span>
+        <div className="flex items-center gap-1.5">
+          <span
+            className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider border ${statusColor}`}
+          >
+            {status}
+          </span>
+          {onDismiss && !isRunning && (
+            <button
+              type="button"
+              onClick={onDismiss}
+              className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors inline-flex items-center justify-center cursor-pointer"
+              aria-label={t('chat.cleanseStatusBoard.dismiss')}
+              data-testid="cleanse-status-board-dismiss"
+            >
+              <Icon name="close" className="size-3" />
+            </button>
+          )}
+        </div>
       </div>
 
       {summary && (
@@ -103,6 +118,42 @@ export const CleanseStatusBoard: React.FC<CleanseStatusBoardProps> = ({
           </div>
         </div>
       </div>
+    </div>
+  );
+};
+
+export interface CleanseTimelineBoardProps {
+  sessionId: string | null;
+  directory?: string;
+  className?: string;
+}
+
+export const CleanseTimelineBoard: React.FC<CleanseTimelineBoardProps> = ({
+  sessionId,
+  className = '',
+}) => {
+  const cleanse = useCleanseStore(
+    React.useCallback((state) => (sessionId ? state.bySession[sessionId] : undefined), [sessionId]),
+  );
+
+  const handleDismiss = React.useCallback(() => {
+    if (sessionId) {
+      useCleanseStore.getState().clearSessionCleanse(sessionId);
+    }
+  }, [sessionId]);
+
+  if (!cleanse) return null;
+
+  return (
+    <div className={`chat-message-column ${className}`} data-testid="cleanse-timeline-container">
+      <CleanseStatusBoard
+        status={cleanse.status}
+        activeCheckers={cleanse.activeCheckers}
+        completedCheckers={cleanse.completedCheckers}
+        repairedFiles={cleanse.repairedFiles}
+        summary={cleanse.summary}
+        onDismiss={handleDismiss}
+      />
     </div>
   );
 };

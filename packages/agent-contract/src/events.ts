@@ -46,6 +46,10 @@ const sessionStatusSchema = DataEventEnvelopeSchema.extend({
   message: 'Runtime status must identify its live outer run',
 });
 
+export const SubagentUpdatedEventSchema = DataEventEnvelopeSchema.extend({
+  type: z.literal('subagent.updated'),
+  subagent: SubagentSchema,
+});
 export const CanonicalEventSchema = z.discriminatedUnion('type', [
   sessionUpdatedSchema,
   DataEventEnvelopeSchema.extend({ type: z.literal('session.deleted'), deletedSessionIds: z.array(EntityIdSchema).min(1) }),
@@ -85,7 +89,7 @@ export const CanonicalEventSchema = z.discriminatedUnion('type', [
   DataEventEnvelopeSchema.extend({ type: z.literal('shell.updated'), job: ShellJobSchema }),
   DataEventEnvelopeSchema.extend({ type: z.literal('session.compacted'), compactionId: EntityIdSchema, tokensBefore: z.number().int().nonnegative(), completedAt: TimestampSchema }),
   DataEventEnvelopeSchema.extend({ type: z.literal('message.updated'), messageId: EntityIdSchema, providerId: z.string().min(1).optional(), modelId: z.string().min(1).optional(), usage: TokenUsageSchema.optional() }),
-  DataEventEnvelopeSchema.extend({ type: z.literal('subagent.updated'), subagent: SubagentSchema }),
+  SubagentUpdatedEventSchema,
 ]);
 export type CanonicalEvent = z.infer<typeof CanonicalEventSchema>;
 

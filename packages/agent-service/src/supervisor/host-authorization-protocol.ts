@@ -5,8 +5,8 @@ import { WorkerBootstrapSchema, WorkerPolicyRequestSchema, WorkerPolicyResultSch
 
 const PrivatePathSchema = z.string().min(1).refine(isAbsolute);
 import { NativeOperationDescriptorSchema, HostActionRequestSchema, HostActionResultSchema } from '../native-policy-protocol.ts';
-export { NativeOperationDescriptorSchema, NativePolicyContextSchema, HostActionRequestSchema, HostActionResultSchema, HostNativePolicySnapshotSchema } from '../native-policy-protocol.ts';
-export type { NativeOperationDescriptor, NativePolicyContext, HostActionRequest, HostActionResult, HostNativePolicySnapshot } from '../native-policy-protocol.ts';
+export { NativeOperationDescriptorSchema, NativeLspActionSchema, NativePolicyContextSchema, HostActionRequestSchema, HostActionResultSchema, HostNativePolicySnapshotSchema } from '../native-policy-protocol.ts';
+export type { NativeOperationDescriptor, NativeLspAction, NativePolicyContext, HostActionRequest, HostActionResult, HostNativePolicySnapshot } from '../native-policy-protocol.ts';
 export const CapturedHostBootstrapScopeSchema = z.strictObject({
   rootSessionId: EntityIdSchema, projectId: EntityIdSchema, workspaceId: EntityIdSchema,
   cwd: PrivatePathSchema, agentDirectory: PrivatePathSchema, agentDirectoryId: EntityIdSchema.optional(),
@@ -25,9 +25,11 @@ export type HostSessionRelocationPrepare = z.infer<typeof HostSessionRelocationP
 export const HostSessionRelocationPreparedSchema = z.strictObject({ transactionId: EntityIdSchema, session: RuntimeSessionSchema });
 export const HostSessionRelocationFinalizeSchema = z.strictObject({ transactionId: EntityIdSchema, action: z.enum(['commit', 'rollback']) });
 export const HostSessionRelocationFinalizedSchema = z.strictObject({ session: RuntimeSessionSchema });
-export const HostSessionRelocationPendingSchema = z.strictObject({ relocation: z.strictObject({
-  transactionId: EntityIdSchema, sourceWorkspaceId: EntityIdSchema, destinationWorkspaceId: EntityIdSchema,
-}).nullable() });
+export const HostSessionRelocationPendingSchema = z.strictObject({
+  relocation: z.strictObject({
+    transactionId: EntityIdSchema, sourceWorkspaceId: EntityIdSchema, destinationWorkspaceId: EntityIdSchema,
+  }).nullable()
+});
 export const HostApprovalPolicyListRequestSchema = z.strictObject({
   sessionId: EntityIdSchema, workspaceId: EntityIdSchema, forkOf: EntityIdSchema.optional(), forkTicketId: EntityIdSchema.optional(),
 });

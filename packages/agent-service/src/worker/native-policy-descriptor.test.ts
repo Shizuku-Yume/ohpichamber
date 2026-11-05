@@ -95,4 +95,114 @@ describe('trusted execution-free first-party target inspection', () => {
     }
     expect(await readFile(join(cwd, 'src/a.ts'), 'utf8')).toBe('old\n');
   });
+  test('describes read-only LSP actions and resolves exact workspace targets', async () => {
+    const cwd = await workspace();
+    const filePath = join(cwd, 'src/a.ts');
+    const fileUri = Bun.pathToFileURL(filePath).href;
+
+    // hover, definition, type_definition, implementation, references with path
+    for (const action of ['hover', 'definition', 'type_definition', 'implementation', 'references']) {
+      const descPath = await describeNativeOperation(cwd, { type: 'tool', toolName: 'lsp', input: { action, file: 'src/a.ts', line: 1 } });
+      expect(descPath?.toolName).toBe('lsp');
+      expect(descPath?.lspAction).toBe(action);
+      expect(descPath?.sourcePaths).toEqual([filePath]);
+      expect(descPath?.destinationPaths).toEqual([]);
+      expect(descPath?.fileOps).toEqual([]);
+
+      // With file:// URI
+      const descUri = await describeNativeOperation(cwd, { type: 'tool', toolName: 'lsp', input: { action, file: fileUri, line: 1 } });
+      expect(descUri?.sourcePaths).toEqual([filePath]);
+    }
+
+    // status action targets cwd
+    const statusDesc = await describeNativeOperation(cwd, { type: 'tool', toolName: 'lsp', input: { action: 'status' } });
+    expect(statusDesc?.lspAction).toBe('status');
+    expect(statusDesc?.lspMethod).toBe('status');
+    expect(statusDesc?.sourcePaths).toEqual([cwd]);
+    expect(statusDesc?.destinationPaths).toEqual([]);
+
+    // capabilities with/without file
+    const capAll = await describeNativeOperation(cwd, { type: 'tool', toolName: 'lsp', input: { action: 'capabilities' } });
+    expect(capAll?.sourcePaths).toEqual([cwd]);
+    const capFile = await describeNativeOperation(cwd, { type: 'tool', toolName: 'lsp', input: { action: 'capabilities', file: 'src/a.ts' } });
+    expect(capFile?.sourcePaths).toEqual([filePath]);
+
+    // diagnostics with '*' vs specific file
+    const diagAll = await describeNativeOperation(cwd, { type: 'tool', toolName: 'lsp', input: { action: 'diagnostics', file: '*' } });
+    expect(diagAll?.sourcePaths).toEqual([cwd]);
+    expect(diagAll?.lspMethod).toBe('workspace/diagnostic');
+    const diagFile = await describeNativeOperation(cwd, { type: 'tool', toolName: 'lsp', input: { action: 'diagnostics', file: 'src/a.ts' } });
+    expect(diagFile?.sourcePaths).toEqual([filePath]);
+    expect(diagFile?.lspMethod).toBe('textDocument/diagnostic');
+
+    // symbols with '*' or omitted vs specific file
+    const symAll = await describeNativeOperation(cwd, { type: 'tool', toolName: 'lsp', input: { action: 'symbols' } });
+    expect(symAll?.sourcePaths).toEqual([cwd]);
+    expect(symAll?.lspMethod).toBe('workspace/symbol');
+    const symFile = await describeNativeOperation(cwd, { type: 'tool', toolName: 'lsp', input: { action: 'symbols', file: 'src/a.ts' } });
+    expect(symFile?.sourcePaths).toEqual([filePath]);
+    expect(symFile?.lspMethod).toBe('textDocument/documentSymbol');
+
+    // code_actions query (apply !== true)
+    const codeActionQuery = await describeNativeOperation(cwd, { type: 'tool', toolName: 'lsp', input: { action: 'code_actions', file: 'src/a.ts' } });
+    expect(codeActionQuery?.lspAction).toBe('code_actions');
+    expect(codeActionQuery?.sourcePaths).toEqual([filePath]);
+    expect(codeActionQuery?.destinationPaths).toEqual([]);
+  });
+
+  test('describes LSP mutations with explicit destination paths and fileOps', async () => {
+    const cwd = await workspace();
+    const filePath = join(cwd, 'src/a.ts');
+    const newFilePath = join(cwd, 'src/b.ts');
+
+    // code_actions with apply: true
+    const codeActionApply = await describeNativeOperation(cwd, { type: 'tool', toolName: 'lsp', input: { action: 'code_actions', file: 'src/a.ts', apply: true } });
+    expect(codeActionApply?.lspAction).toBe('code_actions');
+    expect(codeActionApply?.sourcePaths).toEqual([filePath]);
+    expect(codeActionApply?.destinationPaths).toEqual([filePath]);
+
+    // rename
+    const renameDesc = await describeNativeOperation(cwd, { type: 'tool', toolName: 'lsp', input: { action: 'rename', file: 'src/a.ts', new_name: 'b' } });
+    expect(renameDesc?.lspAction).toBe('rename');
+    expect(renameDesc?.sourcePaths).toEqual([filePath]);
+    expect(renameDesc?.destinationPaths).toEqual([filePath]);
+
+    // rename_file
+    const renameFileDesc = await describeNativeOperation(cwd, { type: 'tool', toolName: 'lsp', input: { action: 'rename_file', file: 'src/a.ts', new_name: 'src/b.ts' } });
+    expect(renameFileDesc?.lspAction).toBe('rename_file');
+    expect(renameFileDesc?.sourcePaths).toEqual([filePath]);
+    expect(renameFileDesc?.destinationPaths).toEqual([newFilePath]);
+    expect(renameFileDesc?.fileOps).toEqual([{ kind: 'rename', path: filePath, to: newFilePath }]);
+  });
+
+  test('rejects malformed LSP params, escaped paths, and unauthorized URIs', async () => {
+    const cwd = await workspace();
+
+    // Missing / invalid action
+    await expect(describeNativeOperation(cwd, { type: 'tool', toolName: 'lsp', input: {} })).rejects.toThrow('action is missing');
+    await expect(describeNativeOperation(cwd, { type: 'tool', toolName: 'lsp', input: { action: '' } })).rejects.toThrow('action is missing');
+
+    // Missing file for file-requiring action
+    await expect(describeNativeOperation(cwd, { type: 'tool', toolName: 'lsp', input: { action: 'hover' } })).rejects.toThrow('requires a valid file target');
+    await expect(describeNativeOperation(cwd, { type: 'tool', toolName: 'lsp', input: { action: 'hover', file: '*' } })).rejects.toThrow('requires a valid file target');
+    await expect(describeNativeOperation(cwd, { type: 'tool', toolName: 'lsp', input: { action: 'rename', file: 'src/a.ts' } })).rejects.toThrow('requires a new name');
+    await expect(describeNativeOperation(cwd, { type: 'tool', toolName: 'lsp', input: { action: 'rename_file', file: 'src/a.ts' } })).rejects.toThrow('requires file and new_name');
+
+    // Nul byte in path
+    await expect(describeNativeOperation(cwd, { type: 'tool', toolName: 'lsp', input: { action: 'hover', file: 'src/a\0.ts' } })).rejects.toThrow('invalid byte');
+
+    // Non-file URL
+    await expect(describeNativeOperation(cwd, { type: 'tool', toolName: 'lsp', input: { action: 'hover', file: 'https://example.com/a.ts' } })).rejects.toThrow('separate Host capability');
+    await expect(describeNativeOperation(cwd, { type: 'tool', toolName: 'lsp', input: { action: 'hover', file: 'agent://something' } })).rejects.toThrow('separate Host capability');
+
+    // Client cannot spoof cwd via payload
+    const fakeCwdDesc = await describeNativeOperation(cwd, { type: 'tool', toolName: 'lsp', input: { action: 'hover', file: 'src/a.ts', cwd: '/spoofed/path' } });
+    expect(fakeCwdDesc?.sourcePaths).toEqual([join(cwd, 'src/a.ts')]);
+
+    // Escaped paths are recorded as absolute escaped paths (for authorizer rejection)
+    const escapedDesc = await describeNativeOperation(cwd, { type: 'tool', toolName: 'lsp', input: { action: 'hover', file: '../../outside.ts' } });
+    expect(escapedDesc?.sourcePaths).toEqual([join(cwd, '../../outside.ts')]);
+    const fileUrlEscape = await describeNativeOperation(cwd, { type: 'tool', toolName: 'lsp', input: { action: 'hover', file: 'file:///etc/passwd' } });
+    expect(fileUrlEscape?.sourcePaths).toEqual(['/etc/passwd']);
+  });
 });

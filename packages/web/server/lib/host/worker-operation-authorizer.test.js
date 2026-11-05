@@ -15,8 +15,10 @@ beforeAll(async () => {
   const cwd = await fs.realpath(fileURLToPath(new URL('..', import.meta.url)));
   const agentDirectory = await fs.realpath(fileURLToPath(new URL('.', import.meta.url)));
   scope = { rootSessionId: 'root', workerGeneration: 'generation', projectId: 'project', workspaceId: 'workspace', agentDirectoryId: 'agent-directory', cwd, agentDirectory };
-  const policy = { projectId: scope.projectId, workspaceId: scope.workspaceId, agentDirectoryId: scope.agentDirectoryId, cwd, agentDirectory,
-    providers: [], mcpServers: [server], fileTools: [], shellCommands: [], toolRequests: [], agentIds: [], permissionPresetIds: [], providerEntry: true };
+  const policy = {
+    projectId: scope.projectId, workspaceId: scope.workspaceId, agentDirectoryId: scope.agentDirectoryId, cwd, agentDirectory,
+    providers: [], mcpServers: [server], fileTools: [], shellCommands: [], toolRequests: [], agentIds: [], permissionPresetIds: [], providerEntry: true
+  };
   const directoryOwner = createProjectDirectoryRuntime({ fsPromises: fs, path, normalizeDirectoryPath: value => value });
   authorize = createWorkerOperationAuthorizer({
     resolvePolicy: async () => policy,
@@ -58,8 +60,10 @@ async function nativeHarness(rows = [], enterprisePolicyOptions) {
   const cwd = await fs.realpath(path.join(root, 'workspace'));
   const agentDirectory = await fs.realpath(path.join(root, 'agent'));
   const nativeScope = { rootSessionId: 'native-root', workerGeneration: 'native-generation', projectId: 'native-project', workspaceId: 'native-workspace', agentDirectoryId: 'native-source', cwd, agentDirectory };
-  const policy = { projectId: nativeScope.projectId, workspaceId: nativeScope.workspaceId, agentDirectoryId: nativeScope.agentDirectoryId, cwd, agentDirectory,
-    providers: [{ providerId: 'fixture', modelId: 'small', endpoint: 'https://fixture.example/v1' }], mcpServers: [], fileTools: ['read', 'write'], shellCommands: [], toolRequests: [], agentIds: [], permissionPresetIds: [], providerEntry: true };
+  const policy = {
+    projectId: nativeScope.projectId, workspaceId: nativeScope.workspaceId, agentDirectoryId: nativeScope.agentDirectoryId, cwd, agentDirectory,
+    providers: [{ providerId: 'fixture', modelId: 'small', endpoint: 'https://fixture.example/v1' }], mcpServers: [], fileTools: ['read', 'write'], shellCommands: [], toolRequests: [], agentIds: [], permissionPresetIds: [], providerEntry: true
+  };
   const directoryOwner = createProjectDirectoryRuntime({ fsPromises: fs, path, normalizeDirectoryPath: value => value });
   const nativeAuthorize = createWorkerOperationAuthorizer({ resolvePolicy: async () => policy, validateDirectoryPath: directoryOwner.validateDirectoryPath, approvalPolicyStore: { list: () => rows }, enterprisePolicyOptions });
   return { scope: nativeScope, policy, authorize: nativeAuthorize, outside: path.join(root, 'outside'), close: () => fs.rm(root, { recursive: true, force: true }) };
@@ -173,8 +177,10 @@ describe('Host-owned native descriptor authority', () => {
     try {
       harness.policy.shellCommands.push(command);
       const request = { type: 'tool', toolName: 'bash', input, approvalId: 'approval', toolCallId: 'call' };
-      const descriptor = { toolName: 'bash', sourcePaths: [], destinationPaths: [], fileOps: [], command,
-        approvalGrant: { approvalId: 'approval', toolCallId: 'call', rootSessionId: harness.scope.rootSessionId, workerGeneration: harness.scope.workerGeneration, epoch: 'epoch', command } };
+      const descriptor = {
+        toolName: 'bash', sourcePaths: [], destinationPaths: [], fileOps: [], command,
+        approvalGrant: { approvalId: 'approval', toolCallId: 'call', rootSessionId: harness.scope.rootSessionId, workerGeneration: harness.scope.workerGeneration, epoch: 'epoch', command }
+      };
       expect(await harness.authorize(harness.scope, request, descriptor)).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
     } finally { await harness.close(); }
   });
@@ -344,6 +350,154 @@ describe('native web-search egress authority', () => {
         expect(await harness.authorize({ ...harness.scope, ...mismatch }, { type: 'web-search' })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
       }
       expect(await harness.authorize(harness.scope, { type: 'web-search', endpoint: 'http://localhost:8080' })).toEqual({ allowed: false, code: 'INVALID_REQUEST', status: 400 });
+    } finally { await harness.close(); }
+  });
+});
+describe('Host-owned native LSP tool authorization', () => {
+  it('authorizes read-only LSP actions on workspace-contained files under read policy', async () => {
+    const harness = await nativeHarness();
+    try {
+      const inside = path.join(harness.scope.cwd, 'inside.ts');
+      await fs.writeFile(inside, 'export const a = 1;');
+
+      for (const action of ['hover', 'definition', 'type_definition', 'implementation', 'references']) {
+        const request = { type: 'tool', toolName: 'lsp', input: { action, file: 'inside.ts', line: 1 } };
+        const descriptor = { toolName: 'lsp', lspAction: action, lspMethod: `textDocument/${action}`, sourcePaths: [inside], destinationPaths: [], fileOps: [] };
+        expect(await harness.authorize(harness.scope, request, descriptor)).toEqual({ allowed: true });
+      }
+
+      // status
+      const statusReq = { type: 'tool', toolName: 'lsp', input: { action: 'status' } };
+      const statusDesc = { toolName: 'lsp', lspAction: 'status', lspMethod: 'status', sourcePaths: [harness.scope.cwd], destinationPaths: [], fileOps: [] };
+      expect(await harness.authorize(harness.scope, statusReq, statusDesc)).toEqual({ allowed: true });
+
+      // diagnostics workspace (*) and file
+      const diagAllReq = { type: 'tool', toolName: 'lsp', input: { action: 'diagnostics', file: '*' } };
+      const diagAllDesc = { toolName: 'lsp', lspAction: 'diagnostics', lspMethod: 'workspace/diagnostic', sourcePaths: [harness.scope.cwd], destinationPaths: [], fileOps: [] };
+      expect(await harness.authorize(harness.scope, diagAllReq, diagAllDesc)).toEqual({ allowed: true });
+
+      const diagFileReq = { type: 'tool', toolName: 'lsp', input: { action: 'diagnostics', file: 'inside.ts' } };
+      const diagFileDesc = { toolName: 'lsp', lspAction: 'diagnostics', lspMethod: 'textDocument/diagnostic', sourcePaths: [inside], destinationPaths: [], fileOps: [] };
+      expect(await harness.authorize(harness.scope, diagFileReq, diagFileDesc)).toEqual({ allowed: true });
+
+      // symbols workspace and file
+      const symAllReq = { type: 'tool', toolName: 'lsp', input: { action: 'symbols' } };
+      const symAllDesc = { toolName: 'lsp', lspAction: 'symbols', lspMethod: 'workspace/symbol', sourcePaths: [harness.scope.cwd], destinationPaths: [], fileOps: [] };
+      expect(await harness.authorize(harness.scope, symAllReq, symAllDesc)).toEqual({ allowed: true });
+
+      const symFileReq = { type: 'tool', toolName: 'lsp', input: { action: 'symbols', file: 'inside.ts' } };
+      const symFileDesc = { toolName: 'lsp', lspAction: 'symbols', lspMethod: 'textDocument/documentSymbol', sourcePaths: [inside], destinationPaths: [], fileOps: [] };
+      expect(await harness.authorize(harness.scope, symFileReq, symFileDesc)).toEqual({ allowed: true });
+
+      // capabilities
+      const capReq = { type: 'tool', toolName: 'lsp', input: { action: 'capabilities' } };
+      const capDesc = { toolName: 'lsp', lspAction: 'capabilities', lspMethod: 'capabilities', sourcePaths: [harness.scope.cwd], destinationPaths: [], fileOps: [] };
+      expect(await harness.authorize(harness.scope, capReq, capDesc)).toEqual({ allowed: true });
+
+      // code_actions query (apply !== true)
+      const caReq = { type: 'tool', toolName: 'lsp', input: { action: 'code_actions', file: 'inside.ts' } };
+      const caDesc = { toolName: 'lsp', lspAction: 'code_actions', lspMethod: 'textDocument/codeAction', sourcePaths: [inside], destinationPaths: [], fileOps: [] };
+      expect(await harness.authorize(harness.scope, caReq, caDesc)).toEqual({ allowed: true });
+    } finally { await harness.close(); }
+  });
+
+  it('fails closed for escaped paths, symlink escapes, and missing read permissions', async () => {
+    const harness = await nativeHarness();
+    try {
+      const inside = path.join(harness.scope.cwd, 'inside.ts');
+      const outside = path.join(harness.outside, 'outside.ts');
+      await fs.writeFile(inside, 'inside');
+      await fs.writeFile(outside, 'outside');
+      await fs.symlink(harness.outside, path.join(harness.scope.cwd, 'linked'));
+      const escapedSymlink = path.join(harness.scope.cwd, 'linked', 'outside.ts');
+
+      const req = { type: 'tool', toolName: 'lsp', input: { action: 'hover', file: 'outside.ts', line: 1 } };
+
+      // Outside path
+      expect(await harness.authorize(harness.scope, req, { toolName: 'lsp', lspAction: 'hover', sourcePaths: [outside], destinationPaths: [], fileOps: [] })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+
+      // Symlink escape
+      expect(await harness.authorize(harness.scope, req, { toolName: 'lsp', lspAction: 'hover', sourcePaths: [escapedSymlink], destinationPaths: [], fileOps: [] })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+
+      // Read permission stripped from policy
+      harness.policy.fileTools = ['write'];
+      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'lsp', input: { action: 'hover', file: 'inside.ts', line: 1 } }, { toolName: 'lsp', lspAction: 'hover', sourcePaths: [inside], destinationPaths: [], fileOps: [] })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+
+      // Read-only query claiming destination paths fails closed
+      harness.policy.fileTools = ['read', 'write'];
+      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'lsp', input: { action: 'hover', file: 'inside.ts', line: 1 } }, { toolName: 'lsp', lspAction: 'hover', sourcePaths: [inside], destinationPaths: [inside], fileOps: [] })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+    } finally { await harness.close(); }
+  });
+
+  it('fails closed for malformed params and unsupported methods', async () => {
+    const harness = await nativeHarness();
+    try {
+      const inside = path.join(harness.scope.cwd, 'inside.ts');
+      await fs.writeFile(inside, 'inside');
+
+      // Missing descriptor -> 400
+      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'lsp', input: { action: 'hover', file: 'inside.ts' } })).toEqual({ allowed: false, code: 'INVALID_REQUEST', status: 400 });
+
+      // Descriptor missing lspAction -> 400
+      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'lsp', input: { action: 'hover', file: 'inside.ts' } }, { toolName: 'lsp', sourcePaths: [inside], destinationPaths: [], fileOps: [] })).toEqual({ allowed: false, code: 'INVALID_REQUEST', status: 400 });
+
+      // Descriptor toolName mismatch -> 400
+      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'lsp', input: { action: 'hover', file: 'inside.ts' } }, { toolName: 'read', sourcePaths: [inside], destinationPaths: [], fileOps: [] })).toEqual({ allowed: false, code: 'INVALID_REQUEST', status: 400 });
+
+      // Unsupported actions -> 403
+      for (const action of ['reload', 'request', 'unknown_action', 'eval']) {
+        const req = { type: 'tool', toolName: 'lsp', input: { action } };
+        const desc = { toolName: 'lsp', lspAction: action, sourcePaths: [inside], destinationPaths: [], fileOps: [] };
+        expect(await harness.authorize(harness.scope, req, desc)).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      }
+    } finally { await harness.close(); }
+  });
+
+  it('fails closed for mutations without explicit approval grant, and authorizes granted mutations', async () => {
+    const harness = await nativeHarness();
+    try {
+      const inside = path.join(harness.scope.cwd, 'inside.ts');
+      const renamed = path.join(harness.scope.cwd, 'renamed.ts');
+      await fs.writeFile(inside, 'inside');
+
+      // rename without approval grant -> 403 approvalRequired
+      const renameReq = { type: 'tool', toolName: 'lsp', input: { action: 'rename', file: 'inside.ts', line: 1, new_name: 'renamed' }, approvalId: 'app-1', toolCallId: 'call-1' };
+      const renameDesc = { toolName: 'lsp', lspAction: 'rename', sourcePaths: [inside], destinationPaths: [inside], fileOps: [] };
+      expect(await harness.authorize(harness.scope, renameReq, renameDesc)).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403, approvalRequired: true });
+
+      // code_actions with apply: true without grant -> 403 approvalRequired
+      const caApplyReq = { type: 'tool', toolName: 'lsp', input: { action: 'code_actions', file: 'inside.ts', apply: true }, approvalId: 'app-1', toolCallId: 'call-1' };
+      const caApplyDesc = { toolName: 'lsp', lspAction: 'code_actions', sourcePaths: [inside], destinationPaths: [inside], fileOps: [] };
+      expect(await harness.authorize(harness.scope, caApplyReq, caApplyDesc)).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403, approvalRequired: true });
+
+      // rename_file without grant -> 403 approvalRequired
+      const rfReq = { type: 'tool', toolName: 'lsp', input: { action: 'rename_file', file: 'inside.ts', new_name: 'renamed.ts' }, approvalId: 'app-1', toolCallId: 'call-1' };
+      const rfDesc = { toolName: 'lsp', lspAction: 'rename_file', sourcePaths: [inside], destinationPaths: [renamed], fileOps: [{ kind: 'rename', path: inside, to: renamed }] };
+      expect(await harness.authorize(harness.scope, rfReq, rfDesc)).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403, approvalRequired: true });
+
+      // Mutation without write permission in fileTools fails closed
+      harness.policy.fileTools = ['read'];
+      const grant = { approvalId: 'app-1', toolCallId: 'call-1', rootSessionId: harness.scope.rootSessionId, workerGeneration: harness.scope.workerGeneration, epoch: 'epoch-1', command: 'rename' };
+      expect(await harness.authorize(harness.scope, renameReq, { ...renameDesc, approvalGrant: grant })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+
+      // Mutation with valid grant and write permission succeeds
+      harness.policy.fileTools = ['read', 'write'];
+      expect(await harness.authorize(harness.scope, renameReq, { ...renameDesc, approvalGrant: grant })).toEqual({ allowed: true });
+      expect(await harness.authorize(harness.scope, caApplyReq, { ...caApplyDesc, approvalGrant: grant })).toEqual({ allowed: true });
+      expect(await harness.authorize(harness.scope, rfReq, { ...rfDesc, approvalGrant: grant })).toEqual({ allowed: true });
+    } finally { await harness.close(); }
+  });
+
+  it('enforces explicit policy denial in approval store against LSP operations', async () => {
+    const input = { action: 'hover', file: 'inside.ts', line: 1 };
+    const rows = [{ target: { toolName: 'lsp', pattern: JSON.stringify(input) }, decision: 'deny' }];
+    const harness = await nativeHarness(rows);
+    try {
+      const inside = path.join(harness.scope.cwd, 'inside.ts');
+      await fs.writeFile(inside, 'inside');
+      const req = { type: 'tool', toolName: 'lsp', input };
+      const desc = { toolName: 'lsp', lspAction: 'hover', sourcePaths: [inside], destinationPaths: [], fileOps: [] };
+      expect(await harness.authorize(harness.scope, req, desc)).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
     } finally { await harness.close(); }
   });
 });

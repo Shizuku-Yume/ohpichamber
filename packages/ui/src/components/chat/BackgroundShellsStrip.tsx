@@ -15,6 +15,7 @@ import {
   useBackgroundShellsStore,
   type TrackedShell,
 } from '@/sync/background-shells';
+import { JobsSheetDialog } from './JobsSheetDialog';
 
 interface BackgroundShellsStripProps {
   sessionId: string | null;
@@ -52,13 +53,18 @@ const ShellElapsed: React.FC<{ startedAt: number }> = ({ startedAt }) => {
   );
 };
 
-const ShellRow: React.FC<{ shell: TrackedShell; rootSessionId: string }> = ({ shell, rootSessionId }) => {
+const ShellRow: React.FC<{
+  shell: TrackedShell;
+  rootSessionId: string;
+  onSelect?: (shell: TrackedShell) => void;
+}> = ({ shell, rootSessionId, onSelect }) => {
   const { t } = useI18n();
   const [stopping, setStopping] = React.useState(false);
   const fromSubagent = shell.sessionId !== rootSessionId;
 
   // Completion is authoritative only when the canonical shell event arrives.
-  const stop = () => {
+  const stop = (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (stopping) return;
     setStopping(true);
     const sessionId = shell.sessionId;
@@ -75,13 +81,35 @@ const ShellRow: React.FC<{ shell: TrackedShell; rootSessionId: string }> = ({ sh
     });
   };
 
+  const widget = shell.widget;
+  const firstBlock = widget?.blocks[0];
+
   return (
-    <div className="flex h-10 items-center gap-2 pl-3 pr-1.5">
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => onSelect?.(shell)}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onSelect?.(shell); }}
+      className="flex h-10 items-center gap-2 pl-3 pr-1.5 hover:bg-surface-2/60 transition-colors cursor-pointer select-none"
+    >
+      <span className="size-2 rounded-full bg-emerald-500 animate-pulse shrink-0" title={t('chat.backgroundShells.running')} />
       <Icon name="terminal-box" className="size-3.5 shrink-0 text-muted-foreground" />
       <Tooltip delayDuration={COMMAND_TOOLTIP_DELAY_MS}>
         <TooltipTrigger asChild>
-          <span className="min-w-0 flex-1 truncate font-mono typography-meta text-foreground">
-            {shell.command}
+          <span className="min-w-0 flex-1 truncate font-mono typography-meta text-foreground flex items-baseline gap-1.5">
+            {shell.caption ? (
+              <>
+                <span className="font-sans font-medium text-foreground truncate">{shell.caption}</span>
+                <span className="font-mono text-muted-foreground text-xs truncate">({shell.command})</span>
+              </>
+            ) : shell.intent ? (
+              <>
+                <span className="font-sans font-medium text-foreground truncate">{shell.intent}</span>
+                <span className="font-mono text-muted-foreground text-xs truncate">({shell.command})</span>
+              </>
+            ) : (
+              <span className="truncate">{shell.command}</span>
+            )}
           </span>
         </TooltipTrigger>
         {/* The row shows one truncated line; the tooltip keeps the command's
@@ -92,6 +120,22 @@ const ShellRow: React.FC<{ shell: TrackedShell; rootSessionId: string }> = ({ sh
           </pre>
         </TooltipContent>
       </Tooltip>
+
+      {/* Mini Widget Pill */}
+      {widget?.headline ? (
+        <span className="font-mono font-medium text-[11px] text-primary bg-primary/10 px-1.5 py-0.5 rounded border border-primary/20 shrink-0">
+          {widget.headline.text}
+        </span>
+      ) : firstBlock?.kind === 'meter' ? (
+        <span className="font-mono text-[11px] text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 shrink-0">
+          {Math.round(firstBlock.value * 100)}%
+        </span>
+      ) : firstBlock?.kind === 'spark' ? (
+        <span className="font-mono text-[11px] text-primary bg-primary/10 px-1.5 py-0.5 rounded border border-primary/20 shrink-0">
+          {firstBlock.last}
+        </span>
+      ) : null}
+
       {fromSubagent ? (
         <span className="shrink-0 typography-meta text-muted-foreground">{t('chat.backgroundShells.subagent')}</span>
       ) : null}
@@ -122,15 +166,24 @@ export const BackgroundShellsStrip: React.FC<BackgroundShellsStripProps> = React
   const { t } = useI18n();
   const shells = useSessionTreeShells(sessionId ?? '');
   const [expanded, setExpanded] = React.useState(false);
+  const [selectedShell, setSelectedShell] = React.useState<TrackedShell | null>(null);
   const listId = React.useId();
 
   if (!sessionId || shells.length === 0) return null;
 
   if (shells.length === 1) {
     return (
-      <div role="group" className="border-b border-border/60" aria-label={t('chat.backgroundShells.aria')}>
-        <ShellRow shell={shells[0]} rootSessionId={sessionId} />
-      </div>
+      <>
+        <div role="group" className="border-b border-border/60" aria-label={t('chat.backgroundShells.aria')}>
+          <ShellRow shell={shells[0]!} rootSessionId={sessionId} onSelect={setSelectedShell} />
+        </div>
+        <JobsSheetDialog
+          open={Boolean(selectedShell)}
+          onOpenChange={(open) => { if (!open) setSelectedShell(null); }}
+          shell={selectedShell}
+          rootSessionId={sessionId}
+        />
+      </>
     );
   }
 
@@ -158,10 +211,16 @@ export const BackgroundShellsStrip: React.FC<BackgroundShellsStripProps> = React
       {expanded ? (
         <div id={listId}>
           {shells.map((shell) => (
-            <ShellRow key={`${shell.sessionId}:${shell.jobId}:${shell.epoch}:${shell.workerGeneration}`} shell={shell} rootSessionId={sessionId} />
+            <ShellRow key={`${shell.sessionId}:${shell.jobId}:${shell.epoch}:${shell.workerGeneration}`} shell={shell} rootSessionId={sessionId} onSelect={setSelectedShell} />
           ))}
         </div>
       ) : null}
+      <JobsSheetDialog
+        open={Boolean(selectedShell)}
+        onOpenChange={(open) => { if (!open) setSelectedShell(null); }}
+        shell={selectedShell}
+        rootSessionId={sessionId}
+      />
     </div>
   );
 });

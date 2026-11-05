@@ -13,6 +13,11 @@ import type { PromptOptions } from '@oh-my-pi/pi-coding-agent/session/agent-sess
 import type { AuthStorage } from '@oh-my-pi/pi-coding-agent/session/auth-storage';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import { AgentRegistry } from '@oh-my-pi/pi-coding-agent/registry/agent-registry';
+import { JobWidgets } from '@oh-my-pi/pi-coding-agent/job-widgets/registry';
+import { createModelJobCaptionWriter } from '@oh-my-pi/pi-coding-agent/job-widgets/caption';
+import { listServicesTolerant, sendService, serviceLogs, stopService } from '@oh-my-pi/pi-coding-agent/launch/services';
+import { cfgAsyncWidgets } from '@oh-my-pi/pi-coding-agent/tools/settings';
+import type { ToolSession } from '@oh-my-pi/pi-coding-agent/tools';
 import { initializeExtensions } from '@oh-my-pi/pi-coding-agent/modes/runtime-init';
 import { executeAcpBuiltinSlashCommand, isAllowedBuiltinCommand, isReadOnlyBuiltinCommand, parseSlashCommand } from './builtin-commands.ts';
 import type { SlashCommandRuntime } from '@oh-my-pi/pi-coding-agent/slash-commands/types';
@@ -33,7 +38,7 @@ import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts'
 import { ProjectionError } from '../projection/journal.ts';
 import { WorkerInteraction as NativeInteraction } from './interaction.ts';
 import { WorkerModeController } from './mode.ts';
-import { BRANCH_TYPE, rememberPrivateRoots, resolveCanonicalMessage, selectedBranchRevert, WorkerProjection, type BranchSelection } from './projection.ts';
+import { BRANCH_TYPE, nativePrivateRootContext, rememberPrivateRoots, resolveCanonicalMessage, selectedBranchRevert, WorkerProjection, type BranchSelection } from './projection.ts';
 import { WorkerCatalogs } from './catalogs.ts';
 import { WorkerMcp, readNativeMcpConfigurationIfPresent } from './mcp.ts';
 import { NativeMcpCredentials } from './mcp-credentials.ts';
@@ -426,11 +431,44 @@ export class WorkerSession {
       });
       const nativeOwnerId = nativeSession.getAgentId();
       if (!nativeSession.asyncJobManager || nativeOwnerId === undefined) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Native shell ownership is unavailable');
+      const captioner = createModelJobCaptionWriter({
+        sessionId: () => input.rootSessionId,
+        settings: nativeSession.settings,
+        modelRegistry,
+      });
+      const widgets = new JobWidgets({
+        captioner,
+        enabled: () => cfgAsyncWidgets.get(nativeSession.settings),
+      });
+      const toolSession: ToolSession = Object.assign(Object.create(nativeSession), {
+        cwd: input.cwd,
+        hasUI: true,
+        getSessionId: () => input.rootSessionId,
+        getAgentId: () => nativeOwnerId,
+        getSessionFile: () => manager?.getSessionFile() ?? undefined,
+        getSessionSpawns: () => { const file = manager?.getSessionFile(); return file ? file.replace(/\.jsonl$/, '') : null; },
+      });
       // Subscribe before readiness and prompt admission; factory creation starts no Bash jobs.
       shell = new WorkerShell({
         manager: nativeSession.asyncJobManager, nativeOwner: { agentId: nativeOwnerId, registry: AgentRegistry.global() },
         workspaceId: input.workspaceId, projectId: input.projectId, sessionId: input.rootSessionId,
         workerGeneration: input.workerGeneration, epoch: input.observationEpoch ?? randomUUID(), cwd: input.cwd,
+        widgets,
+        listServices: async () => {
+          const res = await listServicesTolerant(toolSession);
+          if (res.error) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', res.error);
+          return res.services.filter(d => d.owner === input.rootSessionId);
+        },
+        serviceLogs: async (name: string) => {
+          return serviceLogs(toolSession, name);
+        },
+        sendServiceInput: async (serviceName: string, inputData: string) => {
+          await sendService(toolSession, serviceName, inputData);
+        },
+        stopService: async (name: string) => {
+          await stopService(toolSession, name);
+        },
+        privateRoots: nativePrivateRootContext(manager),
       });
       const completion = new WorkerCompletion(modelRegistry, input.workspaceId, async (selection, controls) => {
         const selected = await catalogs.resolveSelection(selection, controls);

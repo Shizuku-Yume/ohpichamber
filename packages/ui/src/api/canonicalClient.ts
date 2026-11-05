@@ -8,7 +8,7 @@ import type {
   ProviderCredentialDeleteRequest, ProviderCredentialMutationResult, ProviderCredentialWriteRequest, ProviderDeleteRequest,
   ProviderMutationResult, QuestionReply, QuestionRequest, RunAbortAck, RunCreateRequest, Session, SessionCreateAck,
   SessionCreateRequest, SessionDeleteAck, SessionMetadataPatch, SessionMetadataState, SessionSnapshot, SessionBranchRequest, SessionBranchResult, SessionRelocateResult, ShellJob,
-  ShellOutput, ShellSnapshot, ShellStartRequest, ShellStopRequest, SkillsApplyRequest, SkillsApplyResult,
+  ShellOutput, ShellSnapshot, ShellStartRequest, ShellStdinRequest, ShellStdinResult, ShellStopRequest, ShellStreamResponse, SkillsApplyRequest, SkillsApplyResult,
   SkillsCatalogState, SkillExpandRequest, SkillExpandResult, CompletionRequest, CompletionResult, CompletionCancelRequest, CompletionCancelResult,
   MCPCatalogRead, MCPConfigureRequest, MCPApplyRequest, MCPApplyResult, MCPReconnectRequest, MCPOAuthRequest, MCPOAuthResult, SteerAck, SteerRequest, Workspace,
   WorkspaceList, ProjectList, QueueAppendRequest, QueueDeleteRequest, QueueReorderRequest, QueueState, Subagent,
@@ -467,6 +467,14 @@ export class CanonicalClient {
   stopShell(sessionId: string, job: ShellStopRequest, signal?: AbortSignal): Promise<ShellJob> {
     const expected = { ...job.job };
     return request(`/api/agent/v1/sessions/${id(sessionId)}/shell/jobs/${id(expected.jobId)}/stop`, scoped(C.ShellStopResultSchema, result => sameJob(result.job, expected)), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.ShellStopRequestSchema, job, body => body.job.sessionId === sessionId), signal }).then((result) => result.job);
+  }
+  getShellStream(sessionId: string, job: { jobId: string; epoch: string; workerGeneration: string }, streamId: number, from?: number, signal?: AbortSignal): Promise<ShellStreamResponse> {
+    const expected = { ...job, sessionId };
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/shell/jobs/${id(job.jobId)}/stream${query({ epoch: job.epoch, workerGeneration: job.workerGeneration, streamId, from })}`, scoped(C.ShellStreamResponseSchema, result => sameJob(result.job, expected) && result.streamId === streamId), { signal });
+  }
+  writeShellStdin(sessionId: string, input: ShellStdinRequest, signal?: AbortSignal): Promise<ShellStdinResult> {
+    const expected = { ...input.job };
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/shell/jobs/${id(expected.jobId)}/stdin`, scoped(C.ShellStdinResultSchema, result => sameJob(result.job, expected)), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.ShellStdinRequestSchema, input, body => body.job.sessionId === sessionId), signal });
   }
   getWorkspaceMcpConfig(workspaceId: string): Promise<C.MCPConfigurationState> {
     return request(`/api/agent/v1/workspaces/${id(workspaceId)}/mcp/config`, scoped(C.MCPConfigurationStateSchema, result => result.workspaceId === workspaceId));

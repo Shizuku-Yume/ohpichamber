@@ -169,6 +169,16 @@ describe('tokenizeComposer — magic keywords and turn budget', () => {
         expect(shimmer).toHaveLength(0);
     });
 
+    test('embedded keyword with hyphens, dots, or calls is not treated as standalone prose', () => {
+        const ranges = tokenizeComposer('ultrathink-mode ultrathink.ts foo/ultrathink ultrathink()', context());
+        const shimmer = ranges.filter(r => r.style === 'attention' && r.className?.includes('from-'));
+        expect(shimmer).toHaveLength(0);
+
+        const punctuationRanges = tokenizeComposer('"ultrathink", (orchestrate)!', context());
+        const punctShimmer = punctuationRanges.filter(r => r.style === 'attention' && r.className?.includes('from-'));
+        expect(punctShimmer).toHaveLength(2);
+    });
+
     test('turn budget directive +50k! in prose is highlighted with amber badge', () => {
         const ranges = tokenizeComposer('deploy now +50k!', context());
         const budget = ranges.find(r => r.style === 'attention' && r.className?.includes('bg-amber-500/20'));

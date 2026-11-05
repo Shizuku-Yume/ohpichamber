@@ -453,7 +453,8 @@ test('headless slash commands execute allowed commands like /dirs and /clear wit
     const clearResult = await harness.worker.operation({ type: 'command', text: '/clear' });
     expect(clearResult.type).toBe('command');
     if (clearResult.type !== 'command') throw new Error('Expected command output');
-    expect(clearResult.output).toContain('cleared');
+    expect(clearResult.output).toContain('Context reset');
+    expect(harness.worker.session.sessionManager.getTurnBudget()?.total ?? null).toBeNull();
     expect(harness.fatal()).toBe(false);
   } finally { await harness.close(); }
 }, 30000);
@@ -472,6 +473,17 @@ test('turn budget and standalone magic keywords apply budget ceiling and notices
     unsubscribe();
     expect(harness.worker.session.sessionManager.getTurnBudget()?.total).toBe(50000);
     expect(harness.worker.session.sessionManager.getTurnBudget()?.hard).toBe(true);
+
+    const terminal2 = Promise.withResolvers<void>();
+    const unsubscribe2 = harness.worker.session.subscribe(event => { if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal2.resolve(); });
+    await harness.worker.operation({
+      type: 'prompt',
+      runId: 'budget-test-run-2',
+      request: prompt('normal follow-up without budget'),
+    });
+    await terminal2.promise;
+    unsubscribe2();
+    expect(harness.worker.session.sessionManager.getTurnBudget()?.total ?? null).toBeNull();
     expect(harness.fatal()).toBe(false);
   } finally { await harness.close(); }
 }, 30000);

@@ -108,7 +108,12 @@ export function tokenizeComposer(
     }
     const nonProseRanges = [...highlightFencedCode(text), ...tokenizeMarkdown(text).filter(r => r.style === 'code' || r.style === 'codeFence')];
 
-    const magicKeywordRegex = /\b(ultrathink|orchestrate|workflowz|jevify)\b/gi;
+    const LEFT_BOUNDARY = String.raw`(?<![\p{L}\p{N}_./\\-])(?<!::)`;
+    const RIGHT_BOUNDARY = String.raw`(?![\p{L}\p{N}_/\\-])(?!\.[\p{L}\p{N}_-])(?!\()`;
+    const magicKeywordRegex = new RegExp(
+        `${LEFT_BOUNDARY}(ultrathink|orchestrate|workflowz|jevify)${RIGHT_BOUNDARY}`,
+        'giu'
+    );
     let magicMatch: RegExpExecArray | null;
     while ((magicMatch = magicKeywordRegex.exec(text)) !== null) {
         const start = magicMatch.index;

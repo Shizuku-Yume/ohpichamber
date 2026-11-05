@@ -30,8 +30,12 @@ Work:
 - Verified via automated unit tests, type-check, oxlint, and live browser smoke check on port 5202 in isolated context `m4-b`.
 
 Check after:
-- `bun test packages/agent-service/src/worker/session-native.test.ts`: pass (48 tests).
-- `bun test packages/ui/src/components/chat/composer/language/__tests__/tokenize.test.ts packages/ui/src/components/chat/FileMentionAutocomplete.test.tsx packages/ui/src/components/chat/CommandAutocomplete.test.tsx packages/ui/src/components/chat/composer/submit/__tests__/slashCommands.test.ts`: 59 pass, 0 fail (159 expect calls).
-- `bun run type-check`: 0 errors across 3,205 files in 5 projects.
+- `bun test packages/agent-service/src/worker/session-native.test.ts`: pass (51 tests, 315 expect calls).
+- `node scripts/run-isolated-tests.mjs packages/ui/src/components/chat`: 194/194 test files passed.
+- `bun test packages/ui/src/components/chat/composer/language/__tests__/tokenize.test.ts packages/ui/src/components/chat/composer/language/__tests__/triggers.test.ts packages/ui/src/components/chat/FileMentionAutocomplete.test.tsx packages/ui/src/components/chat/CommandAutocomplete.test.tsx packages/ui/src/components/chat/composer/submit/__tests__/slashCommands.test.ts`: pass (83 tests, 219 expect calls).
+- `bun run type-check`: 0 errors across 3,210 files in 5 projects.
 - `bunx oxlint`: 0 errors.
+- Verified standalone keyword boundaries (hyphens/dots/calls excluded, sentence punctuation allowed).
+- Verified budget lifecycle (reset on turns without token budget) and `/clear` context reset reporting.
+- Verified `ChatInput` OMP `composer.predictions` setting query and internal scheme caret triggers (`skill://`, `local://`, `proc://`, `agent://`, `history://`).
 - Live browser smoke on port 5202: all magic keyword shimmers verified, code masking verified, turn budget badge verified.

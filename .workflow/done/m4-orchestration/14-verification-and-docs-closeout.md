@@ -8,7 +8,6 @@
 **Covers:** W17, W18
 **Check:** `bun run docs:validate`, `.workflow/bin/workflow validate`, `bun run type-check`, `bun run lint`, and root `bun run test` exit 0; real-provider verification receipt and screenshots recorded under `/home/shizuku/Project/ohpichamber-omp-artifacts/m4-verification-<date>/`.
 - **Base commit:** b3fcef1a9257ee7064b388a8816654e15dbddae2
-- **Status:** active
 
 - [x] Execute focused automated suites and a real-provider smoke run across all M4 orchestration features (`Workflows`, `Routing`, `Scheduled Tasks` with `goalEnabled`, `Multi-run` & `Fusion`, `Session Assist`, `AI Git Commit/PR`, `Walkthrough`, `Guest generate`, `Notifications` & `Linear`, `Browser Control`, `Quota`/`UsageStatsView`) and OMP TUI parity features (`out://`, inline SVG/table charts, `ast_edit` diffs, `ReadToolGroup`, Subagent HUD + steer/cancel, timeline notices & compaction divider, 16 `modelRoles` selectors, extended slash commands & magic keywords, `checkpoint`/`rewind` & `branchFromBtw`, Jobs Sheet, `/loop`/`/omfg`/`/cleanse`/`/tan`/`/seance` & Advisor).
 - [x] Remove the unverified M4 warning banners and retired root-agent instructions from `auto-model-routing.mdx`, `scheduled-tasks.mdx`, `multi-run.mdx`, `notifications.mdx`, `sessions-in-work.mdx`, and `notes-todos-plans.mdx` across English and all 11 translated locales.

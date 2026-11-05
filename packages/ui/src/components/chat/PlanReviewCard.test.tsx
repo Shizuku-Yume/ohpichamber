@@ -47,7 +47,8 @@ describe('PlanReviewCard', () => {
         expect(html).toContain('Composer improvements');
         expect(html).toContain('local://plans/composer.md');
         expect(html).toContain('form-markdown typography-meta');
-        expect(html).toContain('Preserve **omp.ask** keyboard behavior.');
+        expect(html).toMatch(/Preserve (\*\*omp\.ask\*\*|<strong>omp\.ask<\/strong>) keyboard behavior\./);
+        expect(html).toContain('id="plan-execution-model"');
         for (const label of ['Approve', 'Approve and compact', 'Send feedback', 'Reject']) {
             expect(html).toContain(label);
         }

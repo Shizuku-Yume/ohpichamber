@@ -3,6 +3,7 @@ import { Window } from 'happy-dom';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { AdvisorMessage } from './AdvisorMessage';
+import { I18nProvider } from '@/lib/i18n';
 import type { AdvisorNote } from '@openchamber/agent-contract';
 
 describe('AdvisorMessage', () => {
@@ -19,7 +20,11 @@ describe('AdvisorMessage', () => {
     const host = document.createElement('div');
     const root = createRoot(host);
     act(() => {
-      root.render(<AdvisorMessage notes={[]} />);
+      root.render(
+        <I18nProvider>
+          <AdvisorMessage notes={[]} />
+        </I18nProvider>,
+      );
     });
     expect(host.querySelector('[data-testid="advisor-message-card"]')).toBeNull();
     root.unmount();
@@ -55,15 +60,19 @@ describe('AdvisorMessage', () => {
     ];
 
     act(() => {
-      root.render(<AdvisorMessage notes={notes} />);
+      root.render(
+        <I18nProvider>
+          <AdvisorMessage notes={notes} />
+        </I18nProvider>,
+      );
     });
 
     const card = host.querySelector('[data-testid="advisor-message-card"]');
     expect(card).not.toBeNull();
     expect(card?.textContent).toContain('Advisor Watchdog');
-    expect(card?.textContent).toContain('blocker');
+    expect(card?.textContent).toContain('Blocker');
     expect(card?.textContent).toContain('Missing return statement in critical path');
-    expect(card?.textContent).toContain('concern');
+    expect(card?.textContent).toContain('Concern');
     expect(card?.textContent).toContain('Consider adding timeout to network request');
 
     root.unmount();

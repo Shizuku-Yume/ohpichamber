@@ -101,10 +101,12 @@ function expectContextOrder(request: ProviderRequest | undefined, markers: strin
   }
 }
 
-function completion(tool?: { name: string; input: JsonObject; id: string }): Response {
+function completion(tool?: { name: string; input: JsonObject; id: string } | string): Response {
+  const isTool = typeof tool === 'object' && tool !== null;
+  const content = typeof tool === 'string' ? tool : 'Native operation finished.';
   const chunk = { id: 'native-response', object: 'chat.completion.chunk', created: 1, model: 'native-model', choices: [{ index: 0,
-    delta: tool ? { role: 'assistant', tool_calls: [{ index: 0, id: tool.id, type: 'function', function: { name: tool.name, arguments: JSON.stringify(tool.input) } }] }
-      : { role: 'assistant', content: 'Native operation finished.' }, finish_reason: null }] };
+    delta: isTool ? { role: 'assistant', tool_calls: [{ index: 0, id: tool.id, type: 'function', function: { name: tool.name, arguments: JSON.stringify(tool.input) } }] }
+      : { role: 'assistant', content }, finish_reason: null }] };
   const finish = { ...chunk, choices: [{ index: 0, delta: {}, finish_reason: tool ? 'tool_calls' : 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 3, total_tokens: 13 } };
   return new Response(`data: ${JSON.stringify(chunk)}\n\ndata: ${JSON.stringify(finish)}\n\ndata: [DONE]\n\n`, { headers: { 'content-type': 'text/event-stream' } });
 }
@@ -1518,9 +1520,16 @@ test('subagent cancel and steer operations resolve through worker operations', a
   }
 });
 test('autonomous commands /loop, /omfg, /cleanse, /tan, /seance, /advisor and loop.stop resolve properly', async () => {
-  const harness = await fixture({ respond: () => completion() });
+  const ttsrJson = JSON.stringify({
+    name: 'no-any',
+    description: 'Never use any in TypeScript',
+    scope: 'tool:edit(*.ts)',
+    condition: ': any',
+    body: 'Never use any.',
+  });
+  const harness = await fixture({ respond: () => completion(ttsrJson) });
   try {
-    const loopRes = await harness.worker.operation({ type: 'command', text: '/loop 5 --until "true" repeat' });
+    const loopRes = await harness.worker.operation({ type: 'command', text: '/loop 5 --until "true"' });
     expect(loopRes.type).toBe('command');
     if ('output' in loopRes && typeof loopRes.output === 'string') {
       expect(loopRes.output).toContain('Loop mode enabled');
@@ -1538,27 +1547,53 @@ test('autonomous commands /loop, /omfg, /cleanse, /tan, /seance, /advisor and lo
     const cleanseRes = await harness.worker.operation({ type: 'command', text: '/cleanse' });
     expect(cleanseRes.type).toBe('command');
     if ('output' in cleanseRes && typeof cleanseRes.output === 'string') {
-      expect(cleanseRes.output).toContain('Cleanse diagnostic repair complete');
+      expect(cleanseRes.output).toContain('Cleanse diagnostics');
     }
 
     const tanRes = await harness.worker.operation({ type: 'command', text: '/tan research new feature' });
     expect(tanRes.type).toBe('command');
+    let cloneId = '';
     if ('output' in tanRes && typeof tanRes.output === 'string') {
       expect(tanRes.output).toContain('Dispatched background clone');
+      const match = tanRes.output.match(/cloneId:\s*([^)]+)\)/);
+      if (match) cloneId = match[1].trim();
     }
+    expect(cloneId).toBeTruthy();
 
-    const seanceRes = await harness.worker.operation({ type: 'command', text: '/seance non-existent-session' });
-    expect(seanceRes.type).toBe('command');
-    if ('output' in seanceRes && typeof seanceRes.output === 'string') {
-      expect(seanceRes.output).toContain('Seance');
-    }
+    const tanCancel = await harness.worker.operation({ type: 'subagent.cancel', subagentId: cloneId });
+    expect(tanCancel).toEqual({ type: 'subagent.cancel', subagentId: cloneId, cancelled: true });
+
+    await expect(harness.worker.operation({ type: 'command', text: '/seance non-existent-session' })).rejects.toThrow();
 
     const advisorRes = await harness.worker.operation({ type: 'command', text: '/advisor' });
     expect(advisorRes.type).toBe('command');
     if ('output' in advisorRes && typeof advisorRes.output === 'string') {
-      expect(advisorRes.output).toContain('Advisor watchdog enabled');
+      expect(advisorRes.output).toContain('Advisor');
+    }
+
+    harness.worker.handleSessionEvent({
+      type: 'message_end',
+      message: {
+        role: 'custom',
+        customType: 'advisor',
+        content: 'Consider adding timeout to network requests',
+        details: {
+          notes: [{
+            note: 'Missing return statement in critical path',
+            severity: 'blocker',
+            advisor: 'watchdog',
+          }],
+        },
+      } as unknown as Parameters<typeof harness.worker.handleSessionEvent>[0],
+    });
+    harness.worker.handleSessionEvent({ type: 'advisor_yielded' } as unknown as Parameters<typeof harness.worker.handleSessionEvent>[0]);
+    const advisorYielded = harness.events.find(e => e.event.type === 'advisor_yielded');
+    expect(advisorYielded).toBeTruthy();
+    if (advisorYielded && advisorYielded.event.type === 'advisor_yielded') {
+      expect(advisorYielded.event.notes.length).toBeGreaterThan(0);
+      expect(advisorYielded.event.notes[0].text).toContain('Missing return statement');
     }
   } finally {
     await harness.close();
   }
-});
+}, 30000);

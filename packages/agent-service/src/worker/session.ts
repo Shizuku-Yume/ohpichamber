@@ -25,7 +25,8 @@ import { JsonObjectSchema, MCPOAuthPublicConfigurationSchema, SessionBranchReque
 import { parseLoopArgs } from '@oh-my-pi/pi-coding-agent/modes/loop-limit';
 import { evaluateLoopCondition, describeLoopCondition } from '@oh-my-pi/pi-coding-agent/modes/loop-condition';
 type LoopConditionConfig = { command: string; until: boolean };
-import { sanitizeRuleName } from '@oh-my-pi/pi-coding-agent/modes/controllers/omfg-rule';
+import { parseGeneratedRule, sanitizeRuleName } from '@oh-my-pi/pi-coding-agent/modes/controllers/omfg-rule';
+import { runCleanse, type CleanseRunUi } from '@oh-my-pi/pi-coding-agent/cleanse/index';
 import { resolveSeanceSource } from '@oh-my-pi/pi-coding-agent/task/seance';
 import type { WorkerBootstrapMessage, WorkerInteraction, WorkerOperation, WorkerOperationResult } from '../protocol.ts';
 import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
@@ -103,6 +104,7 @@ export class WorkerSession {
   private loopStartedAtMs?: number;
   private advisorActive = false;
   private pendingAdvisorNotes: AdvisorNote[] = [];
+  private readonly activeTanSessions = new Map<string, { session: AgentSession; abort: () => Promise<void>; dispose: () => Promise<void> }>();
   private constructor(
     readonly session: AgentSession,
     private readonly authStorage: AuthStorage,
@@ -172,29 +174,104 @@ export class WorkerSession {
         },
       };
     };
-    this.unsubscribe = session.subscribe(event => {
-      try {
-        this.modeController.observe(event);
-        this.publishContinuationPending();
-        this.emit(this.projection.consume(event));
-        if (event.type === 'goal_updated' || event.type === 'agent_end') this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', mode: this.modeController.mode() } }]);
-        if (event.type === 'thinking_level_changed') {
-          const model = session.model;
-          this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', selection: {
-            model: model ? { providerId: model.provider, modelId: model.id } : null,
-            thinkingLevel: event.configured ?? event.thinkingLevel ?? null,
-          } } }]);
+    this.unsubscribe = session.subscribe(event => this.handleSessionEvent(event));
+  }
+
+  handleSessionEvent(event: Parameters<Parameters<AgentSession['subscribe']>[0]>[0]): void {
+    try {
+      this.modeController.observe(event);
+      this.publishContinuationPending();
+      this.emit(this.projection.consume(event));
+      if (event.type === 'goal_updated' || event.type === 'agent_end') this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', mode: this.modeController.mode() } }]);
+      if (event.type === 'thinking_level_changed') {
+        const model = this.session.model;
+        this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', selection: {
+          model: model ? { providerId: model.provider, modelId: model.id } : null,
+          thinkingLevel: event.configured ?? event.thinkingLevel ?? null,
+        } } }]);
+      }
+      if (event.type === 'message_end' || event.type === 'turn_end' || event.type === 'agent_end') void this.bind().catch(() => this.fail());
+      if (event.type === 'agent_end') {
+        this.scheduleAutoTitle();
+        if (this.loopState.active) void this.handleLoopTurnEnd();
+      }
+      if (
+        (event.type === 'message_start' || event.type === 'message_end') &&
+        event.message.role === 'custom' &&
+        (event.message as { customType?: string }).customType === 'advisor'
+      ) {
+        const detailsNotes = (event.message as { details?: { notes?: Array<{ note?: string; text?: string; severity?: string; advisor?: string }> } }).details?.notes;
+        if (Array.isArray(detailsNotes)) {
+          for (const item of detailsNotes) {
+            const text = item.note ?? item.text ?? '';
+            if (text && !this.pendingAdvisorNotes.some(p => p.text === text)) {
+              this.pendingAdvisorNotes.push({
+                noteId: randomUUID(),
+                severity: ['blocker', 'concern', 'nit'].includes(item.severity ?? '') ? (item.severity as 'blocker' | 'concern' | 'nit') : 'concern',
+                text,
+                timestamp: Date.now(),
+                advisorName: item.advisor ?? 'advisor',
+              });
+            }
+          }
         }
-        if (event.type === 'message_end' || event.type === 'turn_end' || event.type === 'agent_end') void this.bind().catch(() => this.fail());
-        if (event.type === 'agent_end') {
-          this.scheduleAutoTitle();
-          if (this.loopState.active) void this.handleLoopTurnEnd();
+      }
+      if ((event as { type: string }).type === 'advisor_yielded') {
+        const incomingNotes: AdvisorNote[] = [];
+        const eventNotes = (event as { notes?: unknown }).notes;
+        if (Array.isArray(eventNotes)) {
+          for (const item of eventNotes) {
+            if (typeof item === 'object' && item !== null) {
+              const cast = item as { noteId?: string; severity?: string; text?: string; note?: string; timestamp?: number; advisorName?: string; advisor?: string };
+              incomingNotes.push({
+                noteId: cast.noteId ?? randomUUID(),
+                severity: ['blocker', 'concern', 'nit'].includes(cast.severity ?? '') ? (cast.severity as 'blocker' | 'concern' | 'nit') : 'concern',
+                text: cast.text ?? cast.note ?? '',
+                timestamp: cast.timestamp ?? Date.now(),
+                advisorName: cast.advisorName ?? cast.advisor ?? 'advisor',
+              });
+            }
+          }
         }
-        if ((event as { type: string }).type === 'advisor_yielded') {
-          this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'advisor_yielded', notes: this.pendingAdvisorNotes.splice(0) } }]);
+        const queued = [
+          ...this.session.agent.peekSteeringQueue(),
+          ...this.session.agent.peekFollowUpQueue(),
+        ];
+        for (const msg of queued) {
+          if (msg.role === 'custom' && (msg as { customType?: string }).customType === 'advisor') {
+            const detailsNotes = (msg as { details?: { notes?: Array<{ note?: string; text?: string; severity?: string; advisor?: string }> } }).details?.notes;
+            if (Array.isArray(detailsNotes)) {
+              for (const item of detailsNotes) {
+                incomingNotes.push({
+                  noteId: randomUUID(),
+                  severity: ['blocker', 'concern', 'nit'].includes(item.severity ?? '') ? (item.severity as 'blocker' | 'concern' | 'nit') : 'concern',
+                  text: item.note ?? item.text ?? '',
+                  timestamp: Date.now(),
+                  advisorName: item.advisor ?? 'advisor',
+                });
+              }
+            }
+          }
         }
-      } catch { this.fail(); }
-    });
+        for (const n of incomingNotes) {
+          if (n.text && !this.pendingAdvisorNotes.some(p => p.text === n.text)) {
+            this.pendingAdvisorNotes.push(n);
+          }
+        }
+        if (this.pendingAdvisorNotes.length > 0) {
+          const notesToEmit = [...this.pendingAdvisorNotes];
+          this.pendingAdvisorNotes = [];
+          this.emit([{
+            timestamp: Date.now(),
+            transient: true,
+            event: {
+              type: 'advisor_yielded',
+              notes: notesToEmit,
+            },
+          }]);
+        }
+      }
+    } catch { this.fail(); }
   }
 
   static async open(input: WorkerBootstrapMessage, publish: (inputs: ProjectionInput[]) => void, onInteraction: (interaction: WorkerInteraction) => void, onFatal: () => void, hostAuthorize: WorkerAuthorize, invokeHostAction: WorkerHostInvoke, publishPolicy: (snapshot: HostNativePolicySnapshot) => void, onSubagent: (payload: SubagentLifecyclePayload) => void): Promise<WorkerSession> {
@@ -1006,6 +1083,11 @@ export class WorkerSession {
         if (!owned || owned.parentSessionId !== this.sessionId) {
           return { type: 'subagent.cancel', subagentId: operation.subagentId, cancelled: false };
         }
+        const tan = this.activeTanSessions.get(operation.subagentId);
+        if (tan) {
+          await tan.abort();
+          return { type: 'subagent.cancel', subagentId: operation.subagentId, cancelled: true };
+        }
         const ref = AgentRegistry.global().get(operation.subagentId);
         if (!ref) {
           return { type: 'subagent.cancel', subagentId: operation.subagentId, cancelled: false };
@@ -1057,6 +1139,11 @@ export class WorkerSession {
             prompt: loopArgs.prompt,
           };
           this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', loop: this.loopState } }]);
+          if (loopArgs.prompt) {
+            setTimeout(() => {
+              void this.session.prompt(loopArgs.prompt!).catch(() => {});
+            }, 10);
+          }
           const desc = [
             loopArgs.limit ? (loopArgs.limit.kind === 'iterations' ? `${loopArgs.limit.iterations} iterations` : `${loopArgs.limit.durationMs / 1000}s`) : undefined,
             conditionDesc,
@@ -1066,81 +1153,288 @@ export class WorkerSession {
         if (parsed.name === 'omfg') {
           const complaint = parsed.args.trim();
           if (!complaint) throw new ProjectionError(400, 'INVALID_REQUEST', 'Usage: /omfg <complaint>');
-          const ruleName = sanitizeRuleName(complaint.slice(0, 30)) || `rule-${Date.now()}`;
+          const promptText = `The user is frustrated about recurring agent behavior:\n"${complaint}"\nAuthor ONE Time Traveling Stream Rule (TTSR) in JSON format with fields: name, description, scope, condition, body.`;
+          let replyText = '';
+          try {
+            const result = await this.session.runEphemeralTurn({ promptText });
+            replyText = result.replyText;
+          } catch (error) {
+            throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', `TTSR rule synthesis model turn failed: ${error instanceof Error ? error.message : String(error)}`);
+          }
+          const parsedRule = parseGeneratedRule(replyText);
+          if ('error' in parsedRule) {
+            throw new ProjectionError(400, 'INVALID_REQUEST', `Model did not return a valid TTSR rule: ${parsedRule.error}`);
+          }
+          const ruleName = sanitizeRuleName(parsedRule.rule.name);
+          if (!ruleName) {
+            throw new ProjectionError(400, 'INVALID_REQUEST', 'Synthesized TTSR rule has an invalid name');
+          }
           const rulePath = join(this.cwd, '.omp', 'rules', `${ruleName}.md`);
-          const ruleContent = `---\ndescription: "Generated from /omfg: ${complaint.replace(/"/g, '\\"')}"\nglobs: ["*"]\n---\n\n# Rule: ${ruleName}\n\nWhen working on tasks, observe this constraint:\n${complaint}\n`;
           await mkdir(dirname(rulePath), { recursive: true });
-          await writeFile(rulePath, ruleContent, 'utf8');
+          await writeFile(rulePath, parsedRule.fileContent, 'utf8');
           await this.session.refreshSkillsAndCommands();
           return { type: 'command', output: `Synthesized TTSR rule "${ruleName}" in .omp/rules/${ruleName}.md` };
         }
         if (parsed.name === 'cleanse') {
-          this.emit([{
-            timestamp: Date.now(),
-            transient: true,
-            event: {
-              type: 'cleanse.progress',
-              status: 'discovering',
-              activeCheckers: ['typescript', 'linter'],
-              completedCheckers: [],
-              repairedFiles: [],
-              summary: 'Cleanse diagnostic discovery in progress',
+          const activeCheckers: string[] = [];
+          const completedCheckers: string[] = [];
+          const repairedFiles: string[] = [];
+          let diagnosticsCount = 0;
+
+          const emitCleanse = (status: 'discovering' | 'repairing' | 'verifying' | 'completed' | 'failed' | 'cancelled') => {
+            this.emit([{
+              timestamp: Date.now(),
+              transient: true,
+              event: {
+                type: 'cleanse.progress',
+                status,
+                activeCheckers: [...activeCheckers],
+                completedCheckers: [...completedCheckers],
+                repairedFiles: [...repairedFiles],
+                diagnosticsCount,
+              },
+            }]);
+          };
+
+          emitCleanse('discovering');
+
+          const ui: CleanseRunUi = {
+            board: {
+              interactive: false,
+              log: () => {},
+              phase: () => {},
+              checkerStarted: checker => {
+                if (!activeCheckers.includes(checker.label)) activeCheckers.push(checker.label);
+                emitCleanse('discovering');
+              },
+              checkerFinished: check => {
+                const idx = activeCheckers.indexOf(check.label);
+                if (idx !== -1) activeCheckers.splice(idx, 1);
+                if (!completedCheckers.includes(check.label)) completedCheckers.push(check.label);
+                diagnosticsCount += check.diagnostics?.length ?? 0;
+                emitCleanse('discovering');
+              },
+              repairFinished: () => {
+                emitCleanse('verifying');
+              },
+              agentStarted: (name, assignment) => {
+                const files = assignment.groups.map(g => g.file).filter((f): f is string => Boolean(f));
+                for (const f of files) {
+                  if (!repairedFiles.includes(f)) repairedFiles.push(f);
+                }
+                const subagentId = `Cleanse-${name}`;
+                const subagent: Subagent = {
+                  subagentId,
+                  parentSessionId: this.sessionId,
+                  childSessionId: subagentId,
+                  role: 'cleanse-repair',
+                  status: 'running',
+                };
+                this.liveSubagents.set(subagentId, subagent);
+                this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent } }]);
+                emitCleanse('repairing');
+              },
+              agentProgress: (name, progress) => {
+                const subagentId = `Cleanse-${name}`;
+                const existing = this.liveSubagents.get(subagentId);
+                if (existing) {
+                  const updated: Subagent = {
+                    ...existing,
+                    tokens: (progress as { tokens?: number })?.tokens ?? existing.tokens,
+                    activeTool: (progress as { activeTool?: string })?.activeTool ?? existing.activeTool,
+                  };
+                  this.liveSubagents.set(subagentId, updated);
+                  this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent: updated } }]);
+                }
+              },
+              agentFinished: (outcome, _assignment) => {
+                const subagentId = `Cleanse-${outcome.name}`;
+                const existing = this.liveSubagents.get(subagentId);
+                if (existing) {
+                  const finalized: Subagent = {
+                    ...existing,
+                    status: outcome.success ? 'completed' : 'failed',
+                  };
+                  this.liveSubagents.set(subagentId, finalized);
+                  this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent: finalized } }]);
+                }
+                emitCleanse('repairing');
+              },
+              close: () => {},
             },
-          }]);
-          this.emit([{
-            timestamp: Date.now(),
-            transient: true,
-            event: {
-              type: 'cleanse.progress',
-              status: 'completed',
-              activeCheckers: [],
-              completedCheckers: ['typescript', 'linter'],
-              repairedFiles: [],
-              summary: 'Cleanse diagnostic repair complete',
-            },
-          }]);
-          return { type: 'command', output: 'Cleanse diagnostic repair complete. CleanseStatusBoard updated.' };
+            print: () => {},
+            printError: () => {},
+          };
+
+          const abortController = new AbortController();
+          const modelSelector = this.session.model ? formatModelString(this.session.model) : undefined;
+          try {
+            const result = await runCleanse({ all: true, maxAgents: 4, model: modelSelector }, ui, abortController.signal);
+            const finalStatus = result.status === 'cancelled' ? 'cancelled' : 'completed';
+            emitCleanse(finalStatus);
+            return {
+              type: 'command',
+              output: `Cleanse diagnostics: ${result.report.checks.length} check(s) executed, ${result.report.diagnostics.length} diagnostic(s) detected across ${repairedFiles.length} file(s).`,
+            };
+          } catch (error) {
+            emitCleanse('failed');
+            throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', `Cleanse execution failed: ${error instanceof Error ? error.message : String(error)}`);
+          }
         }
         if (parsed.name === 'tan') {
           const work = parsed.args.trim();
           if (!work) throw new ProjectionError(400, 'INVALID_REQUEST', 'Usage: /tan <work>');
-          const tanId = `tan-${randomUUID().slice(0, 8)}`;
-          const subagent: Subagent = {
-            subagentId: tanId,
-            parentSessionId: this.sessionId,
-            childSessionId: tanId,
-            role: 'tan-worker',
-            status: 'running',
-            description: work,
-          };
-          this.liveSubagents.set(tanId, subagent);
-          this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent } }]);
-          return { type: 'command', output: `Dispatched background clone for tangential work: "${work}" (id: ${tanId})` };
+          const sessionDir = this.sessionFile.slice(0, -6);
+          const cloneId = `Tan-${randomUUID().slice(0, 8)}`;
+          const cloneFile = join(sessionDir, `${cloneId}.jsonl`);
+          try {
+            const cloneManager = await SessionManager.forkFrom(this.sessionFile, this.cwd, sessionDir, undefined, {
+              copyArtifacts: false,
+              suppressBreadcrumb: true,
+              sessionFile: cloneFile,
+              resetInheritedCost: true,
+              repairInterruptedTail: true,
+            });
+            const cloneSessionId = cloneManager.getSessionId() ?? cloneId;
+            const created = await createAgentSession({
+              cwd: this.cwd,
+              sessionManager: cloneManager,
+              model: this.session.model,
+              systemPrompt: [...this.session.systemPrompt],
+              toolNames: this.session.getEnabledToolNames(),
+              mountedToolNames: this.session.getMountedXdevToolNames(),
+              modelRegistry: this.session.modelRegistry,
+              authStorage: this.authStorage,
+              settings: this.session.settings,
+              hasUI: false,
+              enableMCP: false,
+              agentId: cloneId,
+              agentDisplayName: 'tan',
+            });
+            const subagent: Subagent = {
+              subagentId: cloneId,
+              parentSessionId: this.sessionId,
+              childSessionId: cloneSessionId,
+              role: 'tan-worker',
+              status: 'running',
+              description: work,
+            };
+            this.liveSubagents.set(cloneId, subagent);
+            this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent } }]);
+
+            let finalized = false;
+            let unsubscribeTan: (() => void) | undefined;
+            const finalize = async (finalStatus: 'completed' | 'failed' | 'cancelled') => {
+              if (finalized) return;
+              finalized = true;
+              if (unsubscribeTan) {
+                unsubscribeTan();
+                unsubscribeTan = undefined;
+              }
+              this.activeTanSessions.delete(cloneId);
+              const current = this.liveSubagents.get(cloneId);
+              if (current && current.status === 'running') {
+                const updated: Subagent = {
+                  ...current,
+                  status: finalStatus,
+                };
+                this.liveSubagents.set(cloneId, updated);
+                this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent: updated } }]);
+              }
+              try {
+                await created.session.dispose();
+              } catch {
+                // Best-effort session disposal on finalization
+              }
+            };
+
+            this.activeTanSessions.set(cloneId, {
+              session: created.session,
+              abort: async () => {
+                try { await created.session.abort(); } catch {
+                  // Suppress abort rejection on cancel
+                }
+                await finalize('cancelled');
+              },
+              dispose: async () => {
+                await finalize('cancelled');
+              },
+            });
+
+            unsubscribeTan = created.session.subscribe(event => {
+              const current = this.liveSubagents.get(cloneId);
+              if (!current || current.status !== 'running') return;
+              if (event.type === 'tool_execution_start') {
+                const updated: Subagent = {
+                  ...current,
+                  activeTool: event.toolName,
+                  turnCount: (current.turnCount ?? 0) + 1,
+                };
+                this.liveSubagents.set(cloneId, updated);
+                this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent: updated } }]);
+              } else if (event.type === 'message_end' && event.message.role === 'assistant') {
+                const usage = (event.message as { usage?: { total_tokens?: number } }).usage;
+                if (usage?.total_tokens) {
+                  const updated: Subagent = {
+                    ...current,
+                    tokens: (current.tokens ?? 0) + usage.total_tokens,
+                  };
+                  this.liveSubagents.set(cloneId, updated);
+                  this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent: updated } }]);
+                }
+              } else if (event.type === 'agent_end') {
+                void finalize('completed');
+              }
+            });
+
+            void created.session.prompt(work, { streamingBehavior: 'followUp' })
+              .then(() => finalize('completed'))
+              .catch(() => finalize('failed'));
+
+            return { type: 'command', output: `Dispatched background clone for tangential work: "${work}" (cloneId: ${cloneId})` };
+          } catch (error) {
+            throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', `Background session clone dispatch failed: ${error instanceof Error ? error.message : String(error)}`);
+          }
         }
         if (parsed.name === 'seance') {
           const target = parsed.args.trim();
           if (!target) throw new ProjectionError(400, 'INVALID_REQUEST', 'Usage: /seance <sessionId>');
-          try {
-            const resolved = await resolveSeanceSource(target, { cwd: this.cwd });
-            return { type: 'command', output: `Seance: Connected to historical session ${resolved.id} (${resolved.file}) read-only.` };
-          } catch (error) {
-            return { type: 'command', output: `Seance: ${error instanceof Error ? error.message : String(error)}` };
+          const resolved = await resolveSeanceSource(target, { cwd: this.cwd });
+          const taskTool = this.session.agent.state.tools.find(t => t.name === 'task');
+          if (!taskTool) {
+            throw new ProjectionError(503, 'UNSUPPORTED_CAPABILITY', 'The task tool is required for /seance consultation');
           }
+          const seanceResult = await taskTool.execute(`seance-${randomUUID().slice(0, 8)}`, {
+            agent: 'seance',
+            sourceSession: resolved.id,
+            task: 'Read historical session transcript and provide summary analysis.',
+            solutionSpace: 'Historical consult only; read-only.',
+          });
+          const text = seanceResult.content
+            .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
+            .map(p => p.text)
+            .join('\n')
+            .trim();
+          return { type: 'command', output: `Seance (${resolved.id}): ${text || 'Consultation complete.'}` };
         }
         if (parsed.name === 'advisor') {
-          this.advisorActive = !this.advisorActive;
-          if (this.advisorActive) {
-            const note: AdvisorNote = {
-              noteId: randomUUID(),
-              severity: 'concern',
-              text: 'Advisor watchdog initialized. Monitoring session turns for potential regressions.',
-              timestamp: Date.now(),
-              advisorName: 'watchdog',
-            };
-            this.pendingAdvisorNotes.push(note);
-            this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'advisor_yielded', notes: [note] } }]);
+          const args = parsed.args.trim();
+          if (args === 'on') {
+            const active = this.session.setAdvisorEnabled(true);
+            this.advisorActive = active;
+            return { type: 'command', output: active ? 'Advisor enabled.' : "Advisor setting enabled, but no model is assigned to the 'advisor' role." };
           }
-          return { type: 'command', output: `Advisor watchdog ${this.advisorActive ? 'enabled' : 'disabled'}.` };
+          if (args === 'off') {
+            this.session.setAdvisorEnabled(false);
+            this.advisorActive = false;
+            return { type: 'command', output: 'Advisor disabled.' };
+          }
+          if (args === 'status') {
+            return { type: 'command', output: this.session.formatAdvisorStatus() };
+          }
+          const active = this.session.toggleAdvisorEnabled();
+          this.advisorActive = active;
+          return { type: 'command', output: active ? 'Advisor enabled.' : 'Advisor disabled.' };
         }
         await this.binding;
         if (parsed.name === 'clear') {
@@ -1310,6 +1604,12 @@ export class WorkerSession {
       await this.promptTask;
       await this.planReviewTask;
       await this.bind();
+      for (const tan of this.activeTanSessions.values()) {
+        try { await tan.dispose(); } catch {
+          // Suppress disposal errors during worker teardown
+        }
+      }
+      this.activeTanSessions.clear();
     } finally {
       this.unsubscribe();
       this.titleUnsubscribe();

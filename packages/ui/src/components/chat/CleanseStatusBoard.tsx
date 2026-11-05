@@ -1,5 +1,6 @@
 import React from 'react';
 import { Icon } from '@/components/icon/Icon';
+import { useI18n } from '@/lib/i18n';
 
 export interface CleanseStatusBoardProps {
   status: 'discovering' | 'repairing' | 'verifying' | 'completed' | 'failed' | 'cancelled';
@@ -18,6 +19,7 @@ export const CleanseStatusBoard: React.FC<CleanseStatusBoardProps> = ({
   summary,
   className = '',
 }) => {
+  const { t } = useI18n();
   const isRunning = status === 'discovering' || status === 'repairing' || status === 'verifying';
   const isSuccess = status === 'completed';
   const isFailed = status === 'failed';
@@ -38,7 +40,7 @@ export const CleanseStatusBoard: React.FC<CleanseStatusBoardProps> = ({
       <div className="flex items-center justify-between gap-2 mb-2">
         <div className="flex items-center gap-1.5 font-medium text-foreground">
           <Icon name="tools" className="size-4 text-primary" />
-          <span>Cleanse Status Board</span>
+          <span>{t('chat.cleanseStatusBoard.title')}</span>
         </div>
         <span
           className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider border ${statusColor}`}
@@ -56,7 +58,7 @@ export const CleanseStatusBoard: React.FC<CleanseStatusBoardProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-border/40">
         <div>
           <span className="text-[10px] uppercase font-semibold text-muted-foreground">
-            Checkers ({completedCheckers.length + activeCheckers.length})
+            {t('chat.cleanseStatusBoard.checkers', { count: completedCheckers.length + activeCheckers.length })}
           </span>
           <div className="flex flex-wrap gap-1 mt-1">
             {completedCheckers.map((checker) => (
@@ -82,11 +84,11 @@ export const CleanseStatusBoard: React.FC<CleanseStatusBoardProps> = ({
 
         <div>
           <span className="text-[10px] uppercase font-semibold text-muted-foreground">
-            Repaired Files ({repairedFiles.length})
+            {t('chat.cleanseStatusBoard.repairedFiles', { count: repairedFiles.length })}
           </span>
           <div className="flex flex-wrap gap-1 mt-1">
             {repairedFiles.length === 0 ? (
-              <span className="text-[10px] text-muted-foreground italic">None</span>
+              <span className="text-[10px] text-muted-foreground italic">{t('chat.cleanseStatusBoard.noRepairedFiles')}</span>
             ) : (
               repairedFiles.map((file) => (
                 <span

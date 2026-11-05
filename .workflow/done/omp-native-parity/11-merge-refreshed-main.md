@@ -1,7 +1,6 @@
 # 11: Merge the refreshed main into the parity integration branch
 
 **Effort:** omp-native-parity
-**Status:** active
 **Task type:** feature
 **Base commit:** 64de3c9c95b7e5a3dc8d49924d47da216b89c6c8
 

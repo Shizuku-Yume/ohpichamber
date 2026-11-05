@@ -677,3 +677,23 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** no (maintainer decision).
 - **Revisit when:** The maintainer schedules the dedicated M4 milestone effort and executes the comparison audit.
 - **Effort:** post-m3-hardening
+
+## 2026-11-05 - Baseline dead-code findings against main with zero new findings for parity integration
+
+- **Decided:** Accept the inherited `main` (`46c8dcc8aa`) dead-code baseline of 143 findings (17 files, 63 exports, 60 types, 3 config hints) for `omp-native-parity/integration` and require zero net new dead-code findings compared with `main`, without deleting inherited code. The `bun run dead-code` command still exits 1 due to the inherited baseline findings and is not claimed as code-clean or exit 0.
+- **Instead of:** Attempting broad deletions of the 143 inherited findings across unrelated subsystems during integration, or falsely claiming `bun run dead-code` exits 0.
+- **Because:** The user explicitly decided to require only that this merge introduces no new problems ("只要求这次合并没有增加新的问题"). The 143 inherited baseline findings are identical between `main` and candidate, pre-date the parity merge, and include false positives (e.g. lazy-loaded markdown renderers, native bridges, API types) that are unsafe to delete inside the parity effort.
+- **Decided by:** user
+- **Mine:** no
+- **Revisit when:** Repository-wide dead-code cleanup is scheduled as a dedicated workspace maintenance task on `main`.
+- **Effort:** omp-native-parity
+
+## 2026-11-05 - Retain parity useBtwPanelState implementation until upstream helpers are used
+
+- **Decided:** Retain the parity whole-file implementation of `packages/ui/src/components/chat/btw/useBtwPanelState.ts` with ephemeral BTW text state (`ephemeralRecordId`, `ephemeralText`, `ephemeralStatus`) and omission of unused fork-only helpers (`btwHoldsDock`, `parentPromoted`). Switch to the upstream implementation only after a future upstream refresh makes those helpers actually used by real callers or features.
+- **Instead of:** Forcing adoption of upstream's `useBtwPanelState.ts` with unused `btwHoldsDock` and `parentPromoted` helpers now, or creating a premature hybrid merge.
+- **Because:** The user explicitly approved keeping the parity version until upstream updates it with real usage ("那就用parit的吧 上游更新了再用上游的"). Investigation confirmed `btwHoldsDock` has 0 callers across the repository and `parentPromoted` has 0 callers and 0 setters; adding them now would introduce unused dead code while parity relies on ephemeral text BTW state.
+- **Decided by:** user
+- **Mine:** no
+- **Revisit when:** A future upstream refresh introduces real callers or features that consume `btwHoldsDock` or `parentPromoted`.
+- **Effort:** omp-native-parity

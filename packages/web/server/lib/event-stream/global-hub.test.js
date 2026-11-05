@@ -122,4 +122,32 @@ describe('canonical global event hub', () => {
     expect(JSON.stringify(statuses)).not.toContain('credential');
     await hub.stop();
   });
+
+  it('tracks session leases, shares the active stream, and tears down only when the last lease is released', async () => {
+    const { hub, calls, cancelled } = fixture();
+    const firstLease = await hub.retainSession('session', 'lease-1');
+    expect(hub.isSessionConnected('session')).toBe(true);
+    expect(hub.hasLeases('session')).toBe(true);
+    expect(hub.getSessionLeases('session')).toEqual(['lease-1']);
+    expect(calls).toHaveLength(2); // snapshot + events
+
+    // Second lease shares the active stream without duplicate connection calls
+    const secondLease = await hub.retainSession('session', 'lease-2');
+    expect(hub.getSessionLeases('session')).toEqual(['lease-1', 'lease-2']);
+    expect(calls).toHaveLength(2);
+
+    // Releasing first lease keeps stream connected
+    await firstLease.release();
+    expect(hub.isSessionConnected('session')).toBe(true);
+    expect(hub.getSessionLeases('session')).toEqual(['lease-2']);
+    expect(cancelled()).toBe(false);
+
+    // Releasing final lease triggers teardown
+    await secondLease.release();
+    expect(hub.isSessionConnected('session')).toBe(false);
+    expect(hub.hasLeases('session')).toBe(false);
+    expect(cancelled()).toBe(true);
+
+    await hub.stop();
+  });
 });

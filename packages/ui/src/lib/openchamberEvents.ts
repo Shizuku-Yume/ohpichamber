@@ -9,24 +9,25 @@ import { z } from 'zod';
 import { trackedItemRecordsSchema } from './trackedItems/model';
 import type { SyncEvent } from './opencode/events';
 import { classifyStreamPayload } from '@/sync/event-pipeline';
+import { SessionMetadataStateSchema, type SessionMetadataState } from '@openchamber/agent-contract';
 
 type ScheduledTaskRanEvent = {
-  type: 'scheduled-task-ran';
-  projectId: string;
-  taskId: string;
-  ranAt: number;
-  status: 'running' | 'success' | 'error';
-  sessionId?: string;
+ type: 'scheduled-task-ran';
+ projectId: string;
+ taskId: string;
+ ranAt: number;
+ status: 'running' | 'success' | 'error';
+ sessionId?: string;
 };
 
 type SessionCreatedEvent = {
-  type: 'session-created';
-  sessionId: string;
-  directory: string;
-  projectId?: string;
-  createdAt: number;
-  promptDispatched: boolean;
-  dispatchedAsCommand: boolean;
+ type: 'session-created';
+ sessionId: string;
+ directory: string;
+ projectId?: string;
+ createdAt: number;
+ promptDispatched: boolean;
+ dispatchedAsCommand: boolean;
 };
 
 /**
@@ -36,9 +37,9 @@ type SessionCreatedEvent = {
  * listener can map them onto its registered projects and refresh only those.
  */
 type WorktreeChangedEvent = {
-  type: 'worktree-changed';
-  directories: string[];
-  changedAt: number;
+ type: 'worktree-changed';
+ directories: string[];
+ changedAt: number;
 };
 
 /**
@@ -46,11 +47,11 @@ type WorktreeChangedEvent = {
  * connected client; only the one owning a browser view answers.
  */
 type BrowserControlRequestEvent = {
-  type: 'browser-control-request';
-  requestId: string;
-  action: string;
-  parameters: Record<string, unknown>;
-  context: BrowserControlRequestContext;
+ type: 'browser-control-request';
+ requestId: string;
+ action: string;
+ parameters: Record<string, unknown>;
+ context: BrowserControlRequestContext;
 };
 
 /**
@@ -58,8 +59,8 @@ type BrowserControlRequestEvent = {
  * null when unknown (an older server, or a caller with no session).
  */
 const browserControlRequestContextSchema = z.object({
-  directory: z.string().min(1).nullable().catch(null),
-  sessionId: z.string().min(1).nullable().catch(null),
+ directory: z.string().min(1).nullable().catch(null),
+ sessionId: z.string().min(1).nullable().catch(null),
 });
 export type BrowserControlRequestContext = z.infer<typeof browserControlRequestContextSchema>;
 const UNKNOWN_BROWSER_CONTROL_CONTEXT: BrowserControlRequestContext = { directory: null, sessionId: null };
@@ -69,9 +70,9 @@ const UNKNOWN_BROWSER_CONTROL_CONTEXT: BrowserControlRequestContext = { director
  * client receives it; one showing that project opens the file.
  */
 const fileOpenRequestSchema = z.object({
-  path: z.string().min(1),
-  directory: z.string().min(1).nullable(),
-  sessionId: z.string().min(1).nullable(),
+ path: z.string().min(1),
+ directory: z.string().min(1).nullable(),
+ sessionId: z.string().min(1).nullable(),
 });
 type FileOpenRequestEvent = { type: 'file-open-request' } & z.infer<typeof fileOpenRequestSchema>;
 
@@ -81,11 +82,11 @@ type FileOpenRequestEvent = { type: 'file-open-request' } & z.infer<typeof fileO
  * shows that project opens the plan.
  */
 const planOpenRequestSchema = z.object({
-  projectId: z.string().min(1),
-  planId: z.string().min(1),
-  title: z.string(),
-  directory: z.string().min(1).nullable(),
-  sessionId: z.string().min(1).nullable(),
+ projectId: z.string().min(1),
+ planId: z.string().min(1),
+ title: z.string(),
+ directory: z.string().min(1).nullable(),
+ sessionId: z.string().min(1).nullable(),
 });
 type PlanOpenRequestEvent = { type: 'plan-open-request' } & z.infer<typeof planOpenRequestSchema>;
 
@@ -95,9 +96,9 @@ type PlanOpenRequestEvent = { type: 'plan-open-request' } & z.infer<typeof planO
  * between being sent and being handled.
  */
 type AgentMemoryChangedEvent = {
-  type: 'agent-memory-changed';
-  scope: 'global' | 'project';
-  projectId?: string;
+ type: 'agent-memory-changed';
+ scope: 'global' | 'project';
+ projectId?: string;
 };
 
 const projectContextChangedSchema = z.object({ projectId: z.string().min(1) });
@@ -117,8 +118,8 @@ type SessionDraftsChangedEvent = { type: 'session-drafts-changed' } & z.infer<ty
  * The setting is already written; listeners update the store and tell the user.
  */
 const browserProviderResetSchema = z.object({
-  guestId: z.string().min(1),
-  guestName: z.string().min(1),
+ guestId: z.string().min(1),
+ guestName: z.string().min(1),
 });
 type BrowserProviderResetEvent = { type: 'browser-provider-reset' } & z.infer<typeof browserProviderResetSchema>;
 
@@ -135,61 +136,61 @@ type SourceControlProvidersChangedEvent = { type: 'source-control-providers-chan
  * its next account (for every session), or this session to the fallback model.
  */
 const limitFailoverSchema = z.discriminatedUnion('kind', [
-  z.object({
-    kind: z.literal('account'),
-    sessionId: z.string().min(1),
-    providerId: z.string().min(1),
-    fromAccount: z.string().nullable(),
-    toAccount: z.string().min(1),
-  }),
-  z.object({
-    kind: z.literal('model'),
-    sessionId: z.string().min(1),
-    providerId: z.string().min(1),
-    modelId: z.string().min(1),
-    toProviderId: z.string().min(1),
-    toModelId: z.string().min(1),
-  }),
+ z.object({
+  kind: z.literal('account'),
+  sessionId: z.string().min(1),
+  providerId: z.string().min(1),
+  fromAccount: z.string().nullable(),
+  toAccount: z.string().min(1),
+ }),
+ z.object({
+  kind: z.literal('model'),
+  sessionId: z.string().min(1),
+  providerId: z.string().min(1),
+  modelId: z.string().min(1),
+  toProviderId: z.string().min(1),
+  toModelId: z.string().min(1),
+ }),
 ]);
 type LimitFailoverEvent = { type: 'limit-failover'; failover: z.infer<typeof limitFailoverSchema> };
 
 /** Jev routing events; each carries what the routing store needs and nothing the UI must re-derive. */
 const routingUpdatedSchema = z.object({
-  available: z.boolean(),
-  autoReady: z.boolean(),
-  // Absent from servers before the classifier pick, where Jev always answered.
-  jevAvailable: z.boolean().default(true),
-  tokenPresent: z.boolean(),
-  jevSource: z.enum(['typesafe', 'zen-free']),
+ available: z.boolean(),
+ autoReady: z.boolean(),
+ // Absent from servers before the classifier pick, where Jev always answered.
+ jevAvailable: z.boolean().default(true),
+ tokenPresent: z.boolean(),
+ jevSource: z.enum(['typesafe', 'zen-free']),
 });
 
 const routingDecisionSchema = z.object({
-  sessionId: z.string().min(1),
-  at: z.number(),
-  category: z.string().nullable(),
-  confidence: z.number(),
-  reason: z.enum(['routed', 'low-confidence', 'unknown-category', 'error', 'not-ready']),
-  providerID: z.string().optional(),
-  modelID: z.string().optional(),
-  variant: z.string().nullable().optional(),
-  agent: z.string().nullable().optional(),
-  error: z.string().optional(),
+ sessionId: z.string().min(1),
+ at: z.number(),
+ category: z.string().nullable(),
+ confidence: z.number(),
+ reason: z.enum(['routed', 'low-confidence', 'unknown-category', 'error', 'not-ready']),
+ providerID: z.string().optional(),
+ modelID: z.string().optional(),
+ variant: z.string().nullable().optional(),
+ agent: z.string().nullable().optional(),
+ error: z.string().optional(),
 });
 
 const routingPermissionHeldSchema = z.object({
-  permissionId: z.string().min(1),
-  sessionId: z.string().min(1),
-  // Where the request lives, so the held request can be announced from its directory's store.
-  directory: z.string().nullable().default(null),
-  score: z.number(),
-  kind: z.string().nullable(),
+ permissionId: z.string().min(1),
+ sessionId: z.string().min(1),
+ // Where the request lives, so the held request can be announced from its directory's store.
+ directory: z.string().nullable().default(null),
+ score: z.number(),
+ kind: z.string().nullable(),
 });
 
 const routingSafetySkippedSchema = z.object({
-  permissionId: z.string().min(1),
-  sessionId: z.string().min(1),
-  directory: z.string().nullable().default(null),
-  error: z.string(),
+ permissionId: z.string().min(1),
+ sessionId: z.string().min(1),
+ directory: z.string().nullable().default(null),
+ error: z.string(),
 });
 
 type RoutingUpdatedEvent = { type: 'routing-updated' } & z.infer<typeof routingUpdatedSchema>;
@@ -214,51 +215,53 @@ const sourceControlActivitySchema = z.object({ directory: z.string().min(1) });
 const spaceStreamConnectedSchema = z.object({ spaceId: z.string().regex(/^[0-9a-f]{12}$/), status: z.literal('connected') });
 
 const notificationPropertiesSchema = z.object({
-  title: z.string().optional(),
-  body: z.string().optional(),
-  tag: z.string().optional(),
-  kind: z.string().optional(),
-  sessionId: z.string().optional(),
-  directory: z.string().optional(),
-  requireHidden: z.boolean().optional(),
-  showWhenFocused: z.boolean().optional(),
+ title: z.string().optional(),
+ body: z.string().optional(),
+ tag: z.string().optional(),
+ kind: z.string().optional(),
+ sessionId: z.string().optional(),
+ directory: z.string().optional(),
+ requireHidden: z.boolean().optional(),
+ showWhenFocused: z.boolean().optional(),
 });
 
+export type SessionMetadataEvent = { type: 'session-metadata'; state: SessionMetadataState };
 type OpenChamberEvent =
-  | { type: 'notification'; payload: z.infer<typeof notificationPropertiesSchema> }
-  /** `connectionId` names this connection on the server; absent from servers before tracked items. */
-  | { type: 'event-stream-ready'; connectionId: string | null }
-  | TrackedItemsChangedEvent
-  /** An agent turn finished in `directory`; its branches may have a new pull request. */
-  | { type: 'source-control-activity'; directory: string }
-  | RoutingUpdatedEvent
-  | RoutingDecisionEvent
-  | RoutingPermissionHeldEvent
-  | RoutingSafetySkippedEvent
-  | MessageQueueUpdatedEvent
-  | PermissionPolicyEvent
-  /** The host follows this space's queue again; what changed in a gap is read from the space. */
-  | { type: 'space-queue-stream'; spaceId: string }
-  /** The host follows this space's permission modes again; what changed in a gap is read from the space. */
-  | { type: 'space-permission-stream'; spaceId: string }
-  | ScheduledTaskRanEvent
-  | SessionCreatedEvent
-  | WorktreeChangedEvent
-  | BrowserControlRequestEvent
-  | FileOpenRequestEvent
-  | PlanOpenRequestEvent
-  | BrowserProviderResetEvent
-  | SourceControlProvidersChangedEvent
-  | LimitFailoverEvent
-  | ProjectContextChangedEvent
-  | SessionFoldersChangedEvent
-  | SessionDraftsChangedEvent
-  | AgentMemoryChangedEvent;
+ | { type: 'notification'; payload: z.infer<typeof notificationPropertiesSchema> }
+ /** `connectionId` names this connection on the server; absent from servers before tracked items. */
+ | { type: 'event-stream-ready'; connectionId: string | null }
+ | TrackedItemsChangedEvent
+ /** An agent turn finished in `directory`; its branches may have a new pull request. */
+ | { type: 'source-control-activity'; directory: string }
+ | RoutingUpdatedEvent
+ | RoutingDecisionEvent
+ | RoutingPermissionHeldEvent
+ | RoutingSafetySkippedEvent
+ | MessageQueueUpdatedEvent
+ | PermissionPolicyEvent
+ /** The host follows this space's queue again; what changed in a gap is read from the space. */
+ | { type: 'space-queue-stream'; spaceId: string }
+ /** The host follows this space's permission modes again; what changed in a gap is read from the space. */
+ | { type: 'space-permission-stream'; spaceId: string }
+ | ScheduledTaskRanEvent
+ | SessionCreatedEvent
+ | WorktreeChangedEvent
+ | BrowserControlRequestEvent
+ | FileOpenRequestEvent
+ | PlanOpenRequestEvent
+ | BrowserProviderResetEvent
+ | SourceControlProvidersChangedEvent
+ | LimitFailoverEvent
+ | ProjectContextChangedEvent
+ | SessionFoldersChangedEvent
+ | SessionDraftsChangedEvent
+ | AgentMemoryChangedEvent
+ | SessionMetadataEvent;
 type Listener = (event: OpenChamberEvent) => void;
 
 const worktreeChangedPropertiesSchema = z.object({
-  directories: z.array(z.string().min(1)).min(1),
-  at: z.number().optional(),
+ directories: z.array(z.string().min(1)).min(1),
+ at: z.number().optional(),
 });
 
 let eventSource: EventSource | null = null;
@@ -274,465 +277,484 @@ const MAX_RECONNECT_DELAY_MS = 30_000;
 const HEARTBEAT_TIMEOUT_MS = 45_000;
 
 const clearHeartbeatTimer = () => {
-  if (!heartbeatTimer) {
-    return;
-  }
-  clearTimeout(heartbeatTimer);
-  heartbeatTimer = null;
+ if (!heartbeatTimer) {
+  return;
+ }
+ clearTimeout(heartbeatTimer);
+ heartbeatTimer = null;
 };
 
 const cancelAuthSessionWait = () => {
-  authSessionWait?.abort();
-  authSessionWait = null;
+ authSessionWait?.abort();
+ authSessionWait = null;
 };
 
 const scheduleReconnect = () => {
-  if (reconnectTimer || authSessionWait || listeners.size === 0) {
-    return;
-  }
-  // An expired session answers every attempt with 401; wait for the login
-  // instead and reconnect right after it.
-  if (useAuthSessionStore.getState().state !== 'ok') {
-    const wait = new AbortController();
-    authSessionWait = wait;
-    void waitForAuthSession(wait.signal).then(() => {
-      if (wait.signal.aborted) return;
-      authSessionWait = null;
-      reconnectAttempt = 0;
-      connect();
-    });
-    return;
-  }
-  const delay = Math.min(1_000 * Math.pow(2, Math.min(reconnectAttempt, 5)), MAX_RECONNECT_DELAY_MS);
-  reconnectTimer = setTimeout(() => {
-    reconnectTimer = null;
-    reconnectAttempt += 1;
-    connect();
-  }, delay);
+ if (reconnectTimer || authSessionWait || listeners.size === 0) {
+  return;
+ }
+ // An expired session answers every attempt with 401; wait for the login
+ // instead and reconnect right after it.
+ if (useAuthSessionStore.getState().state !== 'ok') {
+  const wait = new AbortController();
+  authSessionWait = wait;
+  void waitForAuthSession(wait.signal).then(() => {
+   if (wait.signal.aborted) return;
+   authSessionWait = null;
+   reconnectAttempt = 0;
+   connect();
+  });
+  return;
+ }
+ const delay = Math.min(1_000 * Math.pow(2, Math.min(reconnectAttempt, 5)), MAX_RECONNECT_DELAY_MS);
+ reconnectTimer = setTimeout(() => {
+  reconnectTimer = null;
+  reconnectAttempt += 1;
+  connect();
+ }, delay);
 };
 
 const cleanupSource = () => {
-  clearHeartbeatTimer();
-  relayAbortController?.abort();
-  relayAbortController = null;
-  if (eventSource) {
-    eventSource.close();
-  }
-  eventSource = null;
+ clearHeartbeatTimer();
+ relayAbortController?.abort();
+ relayAbortController = null;
+ if (eventSource) {
+  eventSource.close();
+ }
+ eventSource = null;
 };
 
 const connectRelay = (canControlBrowser: boolean) => {
-  const controller = new AbortController();
-  relayAbortController = controller;
-  void (async () => {
-    try {
-      const response = await runtimeFetch('/api/openchamber/events', {
-        query: canControlBrowser ? { browser: '1' } : undefined,
-        headers: { Accept: 'text/event-stream' },
-        signal: controller.signal,
-      });
-      if (controller.signal.aborted) {
-        await response.body?.cancel();
-        return;
+ const controller = new AbortController();
+ relayAbortController = controller;
+ void (async () => {
+  try {
+   const response = await runtimeFetch('/api/openchamber/events', {
+    query: canControlBrowser ? { browser: '1' } : undefined,
+    headers: { Accept: 'text/event-stream' },
+    signal: controller.signal,
+   });
+   if (controller.signal.aborted) {
+    await response.body?.cancel();
+    return;
+   }
+   if (!response.ok || !response.body) {
+    await response.body?.cancel();
+    throw new Error(`OpenChamber events returned ${response.status}`);
+   }
+   const reader = response.body.getReader();
+   const decoder = new TextDecoder();
+   let pending = '';
+   let data: string[] = [];
+   resetHeartbeatTimer();
+   try {
+    while (!controller.signal.aborted) {
+     const { value, done } = await reader.read();
+     if (done) break;
+     pending += decoder.decode(value, { stream: true });
+     let newline = pending.indexOf('\n');
+     while (newline !== -1) {
+      const line = pending.slice(0, newline).replace(/\r$/, '');
+      pending = pending.slice(newline + 1);
+      if (line === '') {
+       if (data.length && !controller.signal.aborted) {
+        resetHeartbeatTimer();
+        const envelope = parseEnvelope(data.join('\n'));
+        if (envelope) dispatchFromEnvelope(envelope);
+       }
+       data = [];
+      } else if (line === 'data' || line.startsWith('data:')) {
+       data.push(line === 'data' ? '' : line.slice(5).replace(/^ /, ''));
       }
-      if (!response.ok || !response.body) {
-        await response.body?.cancel();
-        throw new Error(`OpenChamber events returned ${response.status}`);
-      }
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let pending = '';
-      let data: string[] = [];
-      resetHeartbeatTimer();
-      try {
-        while (!controller.signal.aborted) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          pending += decoder.decode(value, { stream: true });
-          let newline = pending.indexOf('\n');
-          while (newline !== -1) {
-            const line = pending.slice(0, newline).replace(/\r$/, '');
-            pending = pending.slice(newline + 1);
-            if (line === '') {
-              if (data.length && !controller.signal.aborted) {
-                resetHeartbeatTimer();
-                const envelope = parseEnvelope(data.join('\n'));
-                if (envelope) dispatchFromEnvelope(envelope);
-              }
-              data = [];
-            } else if (line === 'data' || line.startsWith('data:')) {
-              data.push(line === 'data' ? '' : line.slice(5).replace(/^ /, ''));
-            }
-            newline = pending.indexOf('\n');
-          }
-        }
-      } finally {
-        if (!controller.signal.aborted) await reader.cancel();
-        reader.releaseLock();
-      }
-    } catch {
-      // A failed or ended stream follows the same reconnect path as EventSource.
+      newline = pending.indexOf('\n');
+     }
     }
-    if (relayAbortController !== controller) return;
-    cleanupSource();
-    scheduleReconnect();
-  })();
+   } finally {
+    if (!controller.signal.aborted) await reader.cancel();
+    reader.releaseLock();
+   }
+  } catch {
+   // A failed or ended stream follows the same reconnect path as EventSource.
+  }
+  if (relayAbortController !== controller) return;
+  cleanupSource();
+  scheduleReconnect();
+ })();
 };
 
 const resetHeartbeatTimer = () => {
-  clearHeartbeatTimer();
-  if (listeners.size === 0) {
-    return;
-  }
-  heartbeatTimer = setTimeout(() => {
-    cleanupSource();
-    scheduleReconnect();
-  }, HEARTBEAT_TIMEOUT_MS);
+ clearHeartbeatTimer();
+ if (listeners.size === 0) {
+  return;
+ }
+ heartbeatTimer = setTimeout(() => {
+  cleanupSource();
+  scheduleReconnect();
+ }, HEARTBEAT_TIMEOUT_MS);
 };
 
 const parseEnvelope = (raw: string): { type: string; properties: unknown } | null => {
-  if (!raw || raw.trim().length === 0) {
-    return null;
-  }
+ if (!raw || raw.trim().length === 0) {
+  return null;
+ }
 
-  try {
-    const parsed = JSON.parse(raw);
-    const type = typeof parsed?.type === 'string' ? parsed.type : '';
-    const properties = parsed?.properties;
-    if (!type) {
-      return null;
-    }
-    return { type, properties };
-  } catch {
-    return null;
+ try {
+  const parsed = JSON.parse(raw);
+  const type = typeof parsed?.type === 'string' ? parsed.type : '';
+  const properties = parsed?.properties;
+  if (!type) {
+   return null;
   }
+  return { type, properties };
+ } catch {
+  return null;
+ }
 };
 
 const getEventProperties = (properties: unknown): Record<string, unknown> | null => {
-  if (!properties || typeof properties !== 'object') {
-    return null;
-  }
-  return properties as Record<string, unknown>;
+ if (!properties || typeof properties !== 'object') {
+  return null;
+ }
+ return properties as Record<string, unknown>;
 };
 
 const dispatchFromEnvelope = (envelope: { type: string; properties: unknown }) => {
-  if (envelope.type === 'openchamber:notification') {
-    const parsed = notificationPropertiesSchema.safeParse(envelope.properties);
-    if (parsed.success) {
-      for (const listener of listeners) listener({ type: 'notification', payload: parsed.data });
-    }
-    return;
+ if (envelope.type === 'openchamber:session-metadata') {
+  const raw = getEventProperties(envelope.properties);
+  if (!raw) return;
+  const sessionId = typeof raw.sessionId === 'string' && raw.sessionId.length > 0
+   ? raw.sessionId
+   : typeof raw.sessionID === 'string' && raw.sessionID.length > 0
+    ? raw.sessionID
+    : undefined;
+  if (!sessionId) return;
+  const parsed = SessionMetadataStateSchema.safeParse({
+   sessionId,
+   revision: raw.revision,
+   metadata: raw.metadata ?? null,
+  });
+  if (parsed.success) {
+   for (const listener of listeners) listener({ type: 'session-metadata', state: parsed.data });
   }
-
-  if (envelope.type === 'openchamber:event-stream-ready') {
-    reconnectAttempt = 0;
-    const ready = eventStreamReadySchema.safeParse(envelope.properties);
-    const connectionId = ready.success ? ready.data.connectionId ?? null : null;
-    for (const listener of listeners) listener({ type: 'event-stream-ready', connectionId });
-    return;
+  return;
+ }
+ if (envelope.type === 'openchamber:notification') {
+  const parsed = notificationPropertiesSchema.safeParse(envelope.properties);
+  if (parsed.success) {
+   for (const listener of listeners) listener({ type: 'notification', payload: parsed.data });
   }
+  return;
+ }
 
-  if (envelope.type === 'openchamber:source-control.activity') {
-    const parsed = sourceControlActivitySchema.safeParse(envelope.properties);
-    if (parsed.success) for (const listener of listeners) listener({ type: 'source-control-activity', directory: parsed.data.directory });
-    return;
+ if (envelope.type === 'openchamber:event-stream-ready') {
+  reconnectAttempt = 0;
+  const ready = eventStreamReadySchema.safeParse(envelope.properties);
+  const connectionId = ready.success ? ready.data.connectionId ?? null : null;
+  for (const listener of listeners) listener({ type: 'event-stream-ready', connectionId });
+  return;
+ }
+
+ if (envelope.type === 'openchamber:source-control.activity') {
+  const parsed = sourceControlActivitySchema.safeParse(envelope.properties);
+  if (parsed.success) for (const listener of listeners) listener({ type: 'source-control-activity', directory: parsed.data.directory });
+  return;
+ }
+
+ if (envelope.type === 'openchamber:tracked-items.changed') {
+  const records = trackedItemRecordsSchema.parse(getEventProperties(envelope.properties)?.states);
+  if (records.length > 0) for (const listener of listeners) listener({ type: 'tracked-items-changed', records });
+  return;
+ }
+
+ if (envelope.type === 'openchamber:message-queue.updated') {
+  const parsed = messageQueueUpdatedEventSchema.safeParse(envelope);
+  if (parsed.success) {
+   for (const listener of listeners) listener(parsed.data);
   }
+  return;
+ }
 
-  if (envelope.type === 'openchamber:tracked-items.changed') {
-    const records = trackedItemRecordsSchema.parse(getEventProperties(envelope.properties)?.states);
-    if (records.length > 0) for (const listener of listeners) listener({ type: 'tracked-items-changed', records });
-    return;
+ if (envelope.type === 'openchamber:permission-auto-accept.updated' || envelope.type === 'openchamber:permission-auto-accept.left-for-user') {
+  const classified = classifyStreamPayload(envelope, undefined);
+  if (classified.kind !== 'events') return;
+  for (const { event } of classified.events) {
+   if (event.type !== 'openchamber.permission-auto-accept' && event.type !== 'openchamber.permission-left-for-user') continue;
+   for (const listener of listeners) listener({ type: 'permission-policy', event: event as PermissionPolicySyncEvent });
   }
+  return;
+ }
 
-  if (envelope.type === 'openchamber:message-queue.updated') {
-    const parsed = messageQueueUpdatedEventSchema.safeParse(envelope);
-    if (parsed.success) {
-      for (const listener of listeners) listener(parsed.data);
-    }
-    return;
-  }
+ if (envelope.type === 'openchamber:space-queue-stream') {
+  const parsed = spaceStreamConnectedSchema.safeParse(envelope.properties);
+  if (parsed.success) for (const listener of listeners) listener({ type: 'space-queue-stream', spaceId: parsed.data.spaceId });
+  return;
+ }
 
-  if (envelope.type === 'openchamber:permission-auto-accept.updated' || envelope.type === 'openchamber:permission-auto-accept.left-for-user') {
-    const classified = classifyStreamPayload(envelope, undefined);
-    if (classified.kind !== 'events') return;
-    for (const { event } of classified.events) {
-      if (event.type !== 'openchamber.permission-auto-accept' && event.type !== 'openchamber.permission-left-for-user') continue;
-      for (const listener of listeners) listener({ type: 'permission-policy', event: event as PermissionPolicySyncEvent });
-    }
-    return;
-  }
+ if (envelope.type === 'openchamber:space-permission-stream') {
+  const parsed = spaceStreamConnectedSchema.safeParse(envelope.properties);
+  if (parsed.success) for (const listener of listeners) listener({ type: 'space-permission-stream', spaceId: parsed.data.spaceId });
+  return;
+ }
 
-  if (envelope.type === 'openchamber:space-queue-stream') {
-    const parsed = spaceStreamConnectedSchema.safeParse(envelope.properties);
-    if (parsed.success) for (const listener of listeners) listener({ type: 'space-queue-stream', spaceId: parsed.data.spaceId });
-    return;
-  }
+ if (envelope.type === 'openchamber:heartbeat') {
+  return;
+ }
 
-  if (envelope.type === 'openchamber:space-permission-stream') {
-    const parsed = spaceStreamConnectedSchema.safeParse(envelope.properties);
-    if (parsed.success) for (const listener of listeners) listener({ type: 'space-permission-stream', spaceId: parsed.data.spaceId });
-    return;
-  }
+ if (envelope.type === 'openchamber:routing.updated') {
+  const parsed = routingUpdatedSchema.safeParse(envelope.properties);
+  if (parsed.success) for (const listener of listeners) listener({ type: 'routing-updated', ...parsed.data });
+  return;
+ }
 
-  if (envelope.type === 'openchamber:heartbeat') {
-    return;
-  }
+ if (envelope.type === 'openchamber:routing.decision') {
+  const parsed = routingDecisionSchema.safeParse(envelope.properties);
+  if (parsed.success) for (const listener of listeners) listener({ type: 'routing-decision', decision: parsed.data });
+  return;
+ }
 
-  if (envelope.type === 'openchamber:routing.updated') {
-    const parsed = routingUpdatedSchema.safeParse(envelope.properties);
-    if (parsed.success) for (const listener of listeners) listener({ type: 'routing-updated', ...parsed.data });
-    return;
-  }
+ if (envelope.type === 'openchamber:routing.permission-held') {
+  const parsed = routingPermissionHeldSchema.safeParse(envelope.properties);
+  if (parsed.success) for (const listener of listeners) listener({ type: 'routing-permission-held', ...parsed.data });
+  return;
+ }
 
-  if (envelope.type === 'openchamber:routing.decision') {
-    const parsed = routingDecisionSchema.safeParse(envelope.properties);
-    if (parsed.success) for (const listener of listeners) listener({ type: 'routing-decision', decision: parsed.data });
-    return;
-  }
+ if (envelope.type === 'openchamber:routing.safety-skipped') {
+  const parsed = routingSafetySkippedSchema.safeParse(envelope.properties);
+  if (parsed.success) for (const listener of listeners) listener({ type: 'routing-safety-skipped', ...parsed.data });
+  return;
+ }
 
-  if (envelope.type === 'openchamber:routing.permission-held') {
-    const parsed = routingPermissionHeldSchema.safeParse(envelope.properties);
-    if (parsed.success) for (const listener of listeners) listener({ type: 'routing-permission-held', ...parsed.data });
-    return;
-  }
+ if (envelope.type === 'openchamber:plan-open-request') {
+  const parsed = planOpenRequestSchema.safeParse(envelope.properties);
+  if (parsed.success) for (const listener of listeners) listener({ type: 'plan-open-request', ...parsed.data });
+  return;
+ }
 
-  if (envelope.type === 'openchamber:routing.safety-skipped') {
-    const parsed = routingSafetySkippedSchema.safeParse(envelope.properties);
-    if (parsed.success) for (const listener of listeners) listener({ type: 'routing-safety-skipped', ...parsed.data });
-    return;
-  }
+ if (envelope.type === 'openchamber:file-open-request') {
+  const parsed = fileOpenRequestSchema.safeParse(envelope.properties);
+  if (parsed.success) for (const listener of listeners) listener({ type: 'file-open-request', ...parsed.data });
+  return;
+ }
 
-  if (envelope.type === 'openchamber:plan-open-request') {
-    const parsed = planOpenRequestSchema.safeParse(envelope.properties);
-    if (parsed.success) for (const listener of listeners) listener({ type: 'plan-open-request', ...parsed.data });
-    return;
-  }
+ if (envelope.type === 'openchamber:browser-provider-reset') {
+  const parsed = browserProviderResetSchema.safeParse(envelope.properties);
+  if (parsed.success) for (const listener of listeners) listener({ type: 'browser-provider-reset', ...parsed.data });
+  return;
+ }
 
-  if (envelope.type === 'openchamber:file-open-request') {
-    const parsed = fileOpenRequestSchema.safeParse(envelope.properties);
-    if (parsed.success) for (const listener of listeners) listener({ type: 'file-open-request', ...parsed.data });
-    return;
-  }
+ if (envelope.type === 'openchamber:source-control-providers-changed') {
+  for (const listener of listeners) listener({ type: 'source-control-providers-changed' });
+  return;
+ }
 
-  if (envelope.type === 'openchamber:browser-provider-reset') {
-    const parsed = browserProviderResetSchema.safeParse(envelope.properties);
-    if (parsed.success) for (const listener of listeners) listener({ type: 'browser-provider-reset', ...parsed.data });
-    return;
-  }
+ if (envelope.type === 'openchamber:limit-failover') {
+  const parsed = limitFailoverSchema.safeParse(envelope.properties);
+  if (parsed.success) for (const listener of listeners) listener({ type: 'limit-failover', failover: parsed.data });
+  return;
+ }
 
-  if (envelope.type === 'openchamber:source-control-providers-changed') {
-    for (const listener of listeners) listener({ type: 'source-control-providers-changed' });
-    return;
-  }
+ if (envelope.type === 'openchamber:project-context-changed') {
+  const parsed = projectContextChangedSchema.safeParse(envelope.properties);
+  if (parsed.success) for (const listener of listeners) listener({ type: 'project-context-changed', ...parsed.data });
+  return;
+ }
 
-  if (envelope.type === 'openchamber:limit-failover') {
-    const parsed = limitFailoverSchema.safeParse(envelope.properties);
-    if (parsed.success) for (const listener of listeners) listener({ type: 'limit-failover', failover: parsed.data });
-    return;
-  }
+ if (envelope.type === 'openchamber:session-drafts-changed') {
+  const parsed = sessionDraftsChangedSchema.safeParse(envelope.properties);
+  if (parsed.success) for (const listener of listeners) listener({ type: 'session-drafts-changed', ...parsed.data });
+  return;
+ }
 
-  if (envelope.type === 'openchamber:project-context-changed') {
-    const parsed = projectContextChangedSchema.safeParse(envelope.properties);
-    if (parsed.success) for (const listener of listeners) listener({ type: 'project-context-changed', ...parsed.data });
-    return;
-  }
+ if (envelope.type === 'openchamber:session-folders-changed') {
+  const parsed = sessionFoldersChangedSchema.safeParse(envelope.properties);
+  if (parsed.success) for (const listener of listeners) listener({ type: 'session-folders-changed', ...parsed.data });
+  return;
+ }
 
-  if (envelope.type === 'openchamber:session-drafts-changed') {
-    const parsed = sessionDraftsChangedSchema.safeParse(envelope.properties);
-    if (parsed.success) for (const listener of listeners) listener({ type: 'session-drafts-changed', ...parsed.data });
-    return;
-  }
-
-  if (envelope.type === 'openchamber:session-folders-changed') {
-    const parsed = sessionFoldersChangedSchema.safeParse(envelope.properties);
-    if (parsed.success) for (const listener of listeners) listener({ type: 'session-folders-changed', ...parsed.data });
-    return;
-  }
-
-  if (envelope.type === 'openchamber:agent-memory-changed') {
-    const properties = getEventProperties(envelope.properties);
-    const scope = properties?.scope === 'project' ? 'project' : 'global';
-    const nextEvent: AgentMemoryChangedEvent = {
-      type: 'agent-memory-changed',
-      scope,
-      ...(typeof properties?.projectId === 'string' && properties.projectId.length > 0
-        ? { projectId: properties.projectId }
-        : {}),
-    };
-    for (const listener of listeners) {
-      listener(nextEvent);
-    }
-    return;
-  }
-
-  if (envelope.type === 'openchamber:session-created') {
-    const properties = getEventProperties(envelope.properties);
-    const sessionId = typeof properties?.sessionId === 'string' ? properties.sessionId : '';
-    const directory = typeof properties?.directory === 'string' ? properties.directory : '';
-    if (!sessionId || !directory) {
-      return;
-    }
-
-    const nextEvent: SessionCreatedEvent = {
-      type: 'session-created',
-      sessionId,
-      directory,
-      createdAt: typeof properties?.createdAt === 'number' ? properties.createdAt : Date.now(),
-      promptDispatched: properties?.promptDispatched === true,
-      dispatchedAsCommand: properties?.dispatchedAsCommand === true,
-      ...(typeof properties?.projectId === 'string' && properties.projectId.length > 0
-        ? { projectId: properties.projectId }
-        : {}),
-    };
-    for (const listener of listeners) {
-      listener(nextEvent);
-    }
-    return;
-  }
-
-  if (envelope.type === 'openchamber:worktree-changed') {
-    const parsed = worktreeChangedPropertiesSchema.safeParse(envelope.properties);
-    if (!parsed.success) return;
-    const nextEvent: WorktreeChangedEvent = {
-      type: 'worktree-changed',
-      directories: parsed.data.directories,
-      changedAt: parsed.data.at ?? Date.now(),
-    };
-    for (const listener of listeners) listener(nextEvent);
-    return;
-  }
-
-  if (envelope.type === 'openchamber:browser-control-request') {
-    const properties = getEventProperties(envelope.properties);
-    const requestId = typeof properties?.requestId === 'string' ? properties.requestId : '';
-    const action = typeof properties?.action === 'string' ? properties.action : '';
-    if (!requestId || !action) {
-      return;
-    }
-
-    const rawParameters = properties?.parameters;
-    const nextEvent: BrowserControlRequestEvent = {
-      type: 'browser-control-request',
-      requestId,
-      action,
-      parameters: rawParameters && typeof rawParameters === 'object' && !Array.isArray(rawParameters)
-        ? rawParameters as Record<string, unknown>
-        : {},
-      context: browserControlRequestContextSchema.safeParse(properties?.context).data ?? UNKNOWN_BROWSER_CONTROL_CONTEXT,
-    };
-    for (const listener of listeners) {
-      listener(nextEvent);
-    }
-    return;
-  }
-
-  if (envelope.type !== 'openchamber:scheduled-task-ran') {
-    return;
-  }
-
+ if (envelope.type === 'openchamber:agent-memory-changed') {
   const properties = getEventProperties(envelope.properties);
-  const projectId = typeof properties?.projectId === 'string' ? properties.projectId : '';
-  const taskId = typeof properties?.taskId === 'string' ? properties.taskId : '';
-  const ranAt = typeof properties?.ranAt === 'number' ? properties.ranAt : Date.now();
-  const rawStatus = properties?.status;
-  const status = rawStatus === 'running' || rawStatus === 'error' ? rawStatus : 'success';
-  if (!projectId || !taskId) {
-    return;
-  }
-
-  const nextEvent: ScheduledTaskRanEvent = {
-    type: 'scheduled-task-ran',
-    projectId,
-    taskId,
-    ranAt,
-    status,
-    ...(typeof properties?.sessionId === 'string' && properties.sessionId.length > 0
-      ? { sessionId: properties.sessionId }
-      : {}),
+  const scope = properties?.scope === 'project' ? 'project' : 'global';
+  const nextEvent: AgentMemoryChangedEvent = {
+   type: 'agent-memory-changed',
+   scope,
+   ...(typeof properties?.projectId === 'string' && properties.projectId.length > 0
+    ? { projectId: properties.projectId }
+    : {}),
   };
   for (const listener of listeners) {
-    listener(nextEvent);
+   listener(nextEvent);
   }
+  return;
+ }
+
+ if (envelope.type === 'openchamber:session-created') {
+  const properties = getEventProperties(envelope.properties);
+  const sessionId = typeof properties?.sessionId === 'string' ? properties.sessionId : '';
+  const directory = typeof properties?.directory === 'string' ? properties.directory : '';
+  if (!sessionId || !directory) {
+   return;
+  }
+
+  const nextEvent: SessionCreatedEvent = {
+   type: 'session-created',
+   sessionId,
+   directory,
+   createdAt: typeof properties?.createdAt === 'number' ? properties.createdAt : Date.now(),
+   promptDispatched: properties?.promptDispatched === true,
+   dispatchedAsCommand: properties?.dispatchedAsCommand === true,
+   ...(typeof properties?.projectId === 'string' && properties.projectId.length > 0
+    ? { projectId: properties.projectId }
+    : {}),
+  };
+  for (const listener of listeners) {
+   listener(nextEvent);
+  }
+  return;
+ }
+
+ if (envelope.type === 'openchamber:worktree-changed') {
+  const parsed = worktreeChangedPropertiesSchema.safeParse(envelope.properties);
+  if (!parsed.success) return;
+  const nextEvent: WorktreeChangedEvent = {
+   type: 'worktree-changed',
+   directories: parsed.data.directories,
+   changedAt: parsed.data.at ?? Date.now(),
+  };
+  for (const listener of listeners) listener(nextEvent);
+  return;
+ }
+
+ if (envelope.type === 'openchamber:browser-control-request') {
+  const properties = getEventProperties(envelope.properties);
+  const requestId = typeof properties?.requestId === 'string' ? properties.requestId : '';
+  const action = typeof properties?.action === 'string' ? properties.action : '';
+  if (!requestId || !action) {
+   return;
+  }
+
+  const rawParameters = properties?.parameters;
+  const nextEvent: BrowserControlRequestEvent = {
+   type: 'browser-control-request',
+   requestId,
+   action,
+   parameters: rawParameters && typeof rawParameters === 'object' && !Array.isArray(rawParameters)
+    ? rawParameters as Record<string, unknown>
+    : {},
+   context: browserControlRequestContextSchema.safeParse(properties?.context).data ?? UNKNOWN_BROWSER_CONTROL_CONTEXT,
+  };
+  for (const listener of listeners) {
+   listener(nextEvent);
+  }
+  return;
+ }
+
+ if (envelope.type !== 'openchamber:scheduled-task-ran') {
+  return;
+ }
+
+ const properties = getEventProperties(envelope.properties);
+ const projectId = typeof properties?.projectId === 'string' ? properties.projectId : '';
+ const taskId = typeof properties?.taskId === 'string' ? properties.taskId : '';
+ const ranAt = typeof properties?.ranAt === 'number' ? properties.ranAt : Date.now();
+ const rawStatus = properties?.status;
+ const status = rawStatus === 'running' || rawStatus === 'error' ? rawStatus : 'success';
+ if (!projectId || !taskId) {
+  return;
+ }
+
+ const nextEvent: ScheduledTaskRanEvent = {
+  type: 'scheduled-task-ran',
+  projectId,
+  taskId,
+  ranAt,
+  status,
+  ...(typeof properties?.sessionId === 'string' && properties.sessionId.length > 0
+   ? { sessionId: properties.sessionId }
+   : {}),
+ };
+ for (const listener of listeners) {
+  listener(nextEvent);
+ }
 };
 
 const connect = () => {
-  if (typeof window === 'undefined' || listeners.size === 0) {
-    return;
-  }
-  if (relayAbortController || (eventSource && eventSource.readyState !== EventSource.CLOSED)) {
-    return;
-  }
+ if (typeof window === 'undefined' || listeners.size === 0) {
+  return;
+ }
+ if (relayAbortController || (eventSource && eventSource.readyState !== EventSource.CLOSED)) {
+  return;
+ }
 
+ cleanupSource();
+
+ // Tell the server what this client can do while the connection lasts. Only a
+ // Chromium host can drive a page; a browser tab can display one but not be
+ // driven, and the agent tool needs to know which it is talking to without a
+ // setting anyone has to remember to change.
+ const canControlBrowser = canDriveBrowserPage();
+ if (isRelayModeActive()) {
+  connectRelay(canControlBrowser);
+  return;
+ }
+ if (typeof EventSource !== 'function') return;
+ const source = new EventSource(getRuntimeUrlResolver().sse(
+  '/api/openchamber/events',
+  canControlBrowser ? { browser: '1' } : undefined,
+ ));
+ source.onopen = () => {
+  if (eventSource !== source) return;
+  resetHeartbeatTimer();
+ };
+ source.onmessage = (event) => {
+  if (eventSource !== source) return;
+  resetHeartbeatTimer();
+  const envelope = parseEnvelope(event.data);
+  if (!envelope) {
+   return;
+  }
+  dispatchFromEnvelope(envelope);
+ };
+
+ source.onerror = () => {
+  if (eventSource !== source) return;
   cleanupSource();
+  scheduleReconnect();
+ };
 
-  // Tell the server what this client can do while the connection lasts. Only a
-  // Chromium host can drive a page; a browser tab can display one but not be
-  // driven, and the agent tool needs to know which it is talking to without a
-  // setting anyone has to remember to change.
-  const canControlBrowser = canDriveBrowserPage();
-  if (isRelayModeActive()) {
-    connectRelay(canControlBrowser);
-    return;
-  }
-  if (typeof EventSource !== 'function') return;
-  const source = new EventSource(getRuntimeUrlResolver().sse(
-    '/api/openchamber/events',
-    canControlBrowser ? { browser: '1' } : undefined,
-  ));
-  source.onopen = () => {
-    if (eventSource !== source) return;
-    resetHeartbeatTimer();
-  };
-  source.onmessage = (event) => {
-    if (eventSource !== source) return;
-    resetHeartbeatTimer();
-    const envelope = parseEnvelope(event.data);
-    if (!envelope) {
-      return;
-    }
-    dispatchFromEnvelope(envelope);
-  };
-
-  source.onerror = () => {
-    if (eventSource !== source) return;
-    cleanupSource();
-    scheduleReconnect();
-  };
-
-  eventSource = source;
+ eventSource = source;
 };
 
 const ensureRuntimeChangeSubscription = () => {
-  if (runtimeChangeUnsubscribe || typeof window === 'undefined') return;
-  runtimeChangeUnsubscribe = subscribeRuntimeEndpointChanged(() => {
-    cleanupSource();
-    cancelAuthSessionWait();
-    reconnectAttempt = 0;
-    connect();
-  });
+ if (runtimeChangeUnsubscribe || typeof window === 'undefined') return;
+ runtimeChangeUnsubscribe = subscribeRuntimeEndpointChanged(() => {
+  cleanupSource();
+  cancelAuthSessionWait();
+  reconnectAttempt = 0;
+  connect();
+ });
 };
 
 const cleanupRuntimeChangeSubscription = () => {
-  runtimeChangeUnsubscribe?.();
-  runtimeChangeUnsubscribe = null;
+ runtimeChangeUnsubscribe?.();
+ runtimeChangeUnsubscribe = null;
 };
 
 export const subscribeOpenchamberEvents = (listener: Listener): (() => void) => {
-  listeners.add(listener);
-  ensureRuntimeChangeSubscription();
-  connect();
+ listeners.add(listener);
+ ensureRuntimeChangeSubscription();
+ connect();
 
-  return () => {
-    listeners.delete(listener);
-    if (listeners.size === 0) {
-      if (reconnectTimer) {
-        clearTimeout(reconnectTimer);
-        reconnectTimer = null;
-      }
-      cancelAuthSessionWait();
-      reconnectAttempt = 0;
-      cleanupSource();
-      cleanupRuntimeChangeSubscription();
-    }
-  };
+ return () => {
+  listeners.delete(listener);
+  if (listeners.size === 0) {
+   if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+   }
+   cancelAuthSessionWait();
+   reconnectAttempt = 0;
+   cleanupSource();
+   cleanupRuntimeChangeSubscription();
+  }
+ };
 };

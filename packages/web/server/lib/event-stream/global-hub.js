@@ -21,6 +21,7 @@ export function createGlobalMessageStreamHub({
   const frameSubscribers = new Set();
   const statusSubscribers = new Set();
   const replay = [];
+  const sessionLeases = new Map();
   const prefix = `hub-${randomUUID()}-`;
   let sequence = 0n;
   let replayBytes = 0;
@@ -69,7 +70,7 @@ export function createGlobalMessageStreamHub({
         } catch { console.warn('Canonical frame subscriber failed'); }
       }
     });
-    delivery = run.catch(() => {});
+    delivery = run.catch(() => { });
     return run;
   };
 
@@ -85,7 +86,7 @@ export function createGlobalMessageStreamHub({
     };
     const subscribers = spaceId === null ? eventSubscribers : spaceEventSubscribers;
     const run = delivery.then(() => notify(subscribers, record));
-    delivery = run.catch(() => {});
+    delivery = run.catch(() => { });
     return run;
   };
 
@@ -93,7 +94,7 @@ export function createGlobalMessageStreamHub({
     entry.ready = (async () => {
       entry.scope = await resolveSessionScope(entry.sessionId);
       if (![entry.scope?.projectId, entry.scope?.workspaceId, entry.scope?.cwd, entry.scope?.agentDirectoryId,
-        entry.scope?.agentDirectory, entry.scope?.rootSessionId].every((value) => typeof value === 'string' && value.length > 0)) {
+      entry.scope?.agentDirectory, entry.scope?.rootSessionId].every((value) => typeof value === 'string' && value.length > 0)) {
         throw new Error('HOST_SCOPE_UNAVAILABLE');
       }
       if (entry.controller.signal.aborted) return;
@@ -115,7 +116,7 @@ export function createGlobalMessageStreamHub({
         method: 'GET', headers: { Accept: 'text/event-stream', 'Last-Event-ID': entry.cursor }, signal: entry.controller.signal,
       });
       if (!response.ok || !response.body || response.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase() !== 'text/event-stream') {
-        await response.body?.cancel().catch(() => {});
+        await response.body?.cancel().catch(() => { });
         throw Object.assign(new Error('STREAM_UNAVAILABLE'), { status: response.status });
       }
       if (entry.controller.signal.aborted) { await response.body.cancel(); return; }
@@ -199,7 +200,7 @@ export function createGlobalMessageStreamHub({
       }
     } finally {
       entry.connected = false;
-      await entry.reader.cancel().catch(() => {});
+      await entry.reader.cancel().catch(() => { });
       entry.reader.releaseLock();
       entry.reader = null;
       if (!entry.controller.signal.aborted) await status(entry, 'disconnect');
@@ -216,21 +217,57 @@ export function createGlobalMessageStreamHub({
     const restarting = replayNeedsReset;
     if (replayNeedsReset) { clearReplay(); replayNeedsReset = false; }
     started = true;
-    const entry = { sessionId, cursor: cursor ?? existing?.cursor, controller: new AbortController(), connected: false,
-      connectedOnce: existing?.connectedOnce === true || restarting, replayReset: restarting };
+    const entry = {
+      sessionId, cursor: cursor ?? existing?.cursor, controller: new AbortController(), connected: false,
+      connectedOnce: existing?.connectedOnce === true || restarting, replayReset: restarting
+    };
     sessions.set(sessionId, entry);
     try { await open(entry); }
     catch (error) { if (sessions.get(sessionId) === entry) sessions.delete(sessionId); throw error; }
   };
   const unsubscribeSession = async (sessionId) => {
+    sessionLeases.delete(sessionId);
     const entry = sessions.get(sessionId);
     if (!entry) return;
     sessions.delete(sessionId);
     entry.controller.abort();
-    await entry.reader?.cancel().catch(() => {});
-    await entry.ready?.catch(() => {});
+    await entry.reader?.cancel().catch(() => { });
+    await entry.ready?.catch(() => { });
     await entry.finished;
   };
+  const retainSession = async (sessionId, leaseKey = 'default', options = {}) => {
+    EntityIdSchema.parse(sessionId);
+    let leases = sessionLeases.get(sessionId);
+    if (!leases) {
+      leases = new Set();
+      sessionLeases.set(sessionId, leases);
+    }
+    leases.add(leaseKey);
+    try {
+      await subscribeSession(sessionId, options);
+    } catch (error) {
+      leases.delete(leaseKey);
+      if (leases.size === 0) sessionLeases.delete(sessionId);
+      throw error;
+    }
+    let released = false;
+    const release = async () => {
+      if (released) return;
+      released = true;
+      await releaseSession(sessionId, leaseKey);
+    };
+    return { release };
+  };
+  const releaseSession = async (sessionId, leaseKey = 'default') => {
+    const leases = sessionLeases.get(sessionId);
+    if (!leases) return;
+    leases.delete(leaseKey);
+    if (leases.size === 0) {
+      sessionLeases.delete(sessionId);
+      await unsubscribeSession(sessionId).catch(() => { });
+    }
+  };
+  const hasLeases = (sessionId) => (sessionLeases.get(sessionId)?.size ?? 0) > 0;
   const subscribe = (set, subscriber) => {
     if (typeof subscriber !== 'function') throw new TypeError('Subscriber must be a function');
     set.add(subscriber);
@@ -240,6 +277,10 @@ export function createGlobalMessageStreamHub({
     async start(sessionIds = []) { started = true; await Promise.all(sessionIds.map((id) => subscribeSession(id))); },
     subscribeSession,
     unsubscribeSession,
+    retainSession,
+    releaseSession,
+    hasLeases,
+    getSessionLeases: (sessionId) => Array.from(sessionLeases.get(sessionId) ?? []),
     injectEvent,
     stop() {
       if (stopping) return stopping;

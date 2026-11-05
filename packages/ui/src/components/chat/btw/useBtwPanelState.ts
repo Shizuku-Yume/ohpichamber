@@ -22,3 +22,9 @@ export function useBtwPanelState(parentSessionId: string | null | undefined): Bt
     ephemeralStatus: uiState?.ephemeralStatus ?? 'idle',
   }), [uiState]);
 }
+
+/** Extract content enclosed in <inject>...</inject> tags for steering. */
+export function extractBtwInject(text: string): string | null {
+  const match = /<inject>([\s\S]*?)<\/inject>/i.exec(text);
+  return match && match[1]?.trim() ? match[1].trim() : null;
+}

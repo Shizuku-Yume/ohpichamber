@@ -70,9 +70,13 @@ export const PlanReviewSchema = z.strictObject({
   planText: z.string().min(1),
 });
 export type PlanReview = z.infer<typeof PlanReviewSchema>;
+const ExecutionModelSelectionSchema = z.strictObject({
+  providerId: EntityIdSchema,
+  modelId: EntityIdSchema,
+});
 export const PlanReviewResponseSchema = z.discriminatedUnion('action', [
-  z.strictObject({ action: z.literal('approve') }),
-  z.strictObject({ action: z.literal('approve-compact') }),
+  z.strictObject({ action: z.literal('approve'), executionModel: ExecutionModelSelectionSchema.optional() }),
+  z.strictObject({ action: z.literal('approve-compact'), executionModel: ExecutionModelSelectionSchema.optional() }),
   z.strictObject({ action: z.literal('feedback'), feedback: z.string().trim().min(1) }),
   z.strictObject({ action: z.literal('reject') }),
 ]);

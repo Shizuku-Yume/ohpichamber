@@ -1,3 +1,4 @@
+import { subagentHudI18n } from './subagent-hud.i18n';
 import { settingsDict } from './tr.settings';
 import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { referencePickerI18n } from './reference-picker.i18n';
@@ -39,6 +40,7 @@ import { guestStatusViewI18n } from './guest-status-view.i18n';
 import { ompSettingsI18n } from './omp-settings.i18n';
 import { workerRunsI18n } from './worker-runs.i18n';
 export const dict = {
+  ...subagentHudI18n['tr'],
   ...ompSettingsI18n.tr,
   ...settingsDict,
   ...linearIssuePickerI18n.tr,
@@ -192,6 +194,7 @@ export const dict = {
   "settings.view.nav.group.general": "OpenChamber",
   "settings.view.nav.group.projects": "Çalışma alanı",
   "settings.view.nav.group.opencode": "OMP",
+  "settings.view.nav.group.agent": "OMP",
   "settings.view.nav.group.content": "Kitaplık",
   "settings.page.projects.title": "Projeler",
   "settings.page.remoteInstances.title": "Uzak Örnekler",
@@ -200,7 +203,7 @@ export const dict = {
   "settings.page.agents.title": "Agent'ler",
   "settings.page.commands.title": "Komutlar",
   "settings.page.mcp.title": "MCP",
-  "settings.page.plugins.title": "Plugin'ler",
+  "settings.page.plugins.title": "OMP Eklentileri",
   "settings.page.skills.title": "Skill'ler",
   "settings.page.skillsCatalog.title": "Skill Kataloğu",
   "settings.page.git.title": "Git",
@@ -222,8 +225,8 @@ export const dict = {
   "settings.page.tunnel.title": "Harici Tunnel",
   "settings.page.tunnel.description": "Bu örneği uzak bir tunnel üzerinden erişime açın.",
   "settings.page.about.title": "Hakkında",
-  "settings.page.snippets.title": "Snippet'ler",
-  "settings.snippets.sidebar.title": "Snippet'ler",
+  "settings.page.snippets.title": "İstem Şablonları",
+  "settings.snippets.sidebar.title": "İstem Şablonları",
   "settings.snippets.sidebar.total": "Toplam: {count}",
   "settings.snippets.sidebar.actions.create": "Snippet oluştur",
   "settings.snippets.sidebar.actions.more": "{name} için daha fazla eylem",
@@ -2849,7 +2852,7 @@ export const dict = {
   "settings.extensions.identity.loadFailed": "Bu örneğin Git kimlikleri yüklenemedi. Genel kimlik hâlâ kullanılabilir.",
   "settings.extensions.request.noResponse": "HTTP yanıtı alınamadı. Bu örnekle bağlantıyı kontrol edin.",
   "settings.extensions.request.invalidResponse": "Beklenmeyen sunucu yanıtı (HTTP {status}).",
-  "settings.page.extensions.title": "Uzantılar",
+  "settings.page.extensions.title": "Konuk Uzantıları",
   "settings.page.extensions.description": "Klasörden, ZIP’ten veya git URL’sinden yüklenen uzantılar — paneller, ekleme menüleri, entegrasyonlar ve yerel servisler. OpenCode eklentileri değil.",
   "settings.extensions.section.installed": "Yüklü",
   "settings.extensions.empty": "Yüklü uzantı yok.",

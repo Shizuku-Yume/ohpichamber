@@ -1,3 +1,4 @@
+import { subagentHudI18n } from './subagent-hud.i18n';
 import { settingsDict } from './zh-CN.settings';
 import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { referencePickerI18n } from './reference-picker.i18n';
@@ -39,6 +40,7 @@ import { guestStatusViewI18n } from './guest-status-view.i18n';
 import { ompSettingsI18n } from './omp-settings.i18n';
 import { workerRunsI18n } from './worker-runs.i18n';
 export const dict = {
+  ...subagentHudI18n['zh-CN'],
   ...ompSettingsI18n['zh-CN'],
   ...settingsDict,
   ...linearIssuePickerI18n['zh-CN'],
@@ -212,6 +214,7 @@ export const dict = {
   "settings.view.nav.group.general": "OpenChamber",
   "settings.view.nav.group.projects": "工作区",
   "settings.view.nav.group.opencode": "OMP",
+  "settings.view.nav.group.agent": "OMP",
   "settings.view.nav.group.content": "资源库",
   "settings.page.projects.title": "项目",
   "settings.page.remoteInstances.title": "远程实例",
@@ -220,7 +223,7 @@ export const dict = {
   "settings.page.agents.title": "智能体",
   "settings.page.commands.title": "命令",
   "settings.page.mcp.title": "MCP",
-  "settings.page.plugins.title": "插件",
+  "settings.page.plugins.title": "OMP 插件",
   "settings.page.skills.title": "技能",
   "settings.page.skillsCatalog.title": "技能目录",
   "settings.page.git.title": "Git",
@@ -242,8 +245,8 @@ export const dict = {
   "settings.page.tunnel.title": "外部隧道",
   "settings.page.tunnel.description": "通过远程隧道公开此实例。",
   "settings.page.about.title": "关于",
-  "settings.page.snippets.title": "代码片段",
-  "settings.snippets.sidebar.title": "代码片段",
+  "settings.page.snippets.title": "提示词模板",
+  "settings.snippets.sidebar.title": "提示词模板",
   "settings.snippets.sidebar.total": "共 {count} 个",
   "settings.snippets.sidebar.actions.create": "创建代码片段",
   "settings.snippets.sidebar.actions.more": "{name} 的更多操作",
@@ -2814,7 +2817,7 @@ export const dict = {
   "settings.extensions.identity.loadFailed": "无法加载此实例的 Git 身份。全局身份仍然可用。",
   "settings.extensions.request.noResponse": "未收到 HTTP 响应。请检查与此实例的连接。",
   "settings.extensions.request.invalidResponse": "服务器返回了意外响应 (HTTP {status})。",
-  "settings.page.extensions.title": "扩展",
+  "settings.page.extensions.title": "访客扩展",
   "settings.page.extensions.description": "从文件夹、ZIP 或 git URL 安装的扩展：面板、附加菜单、集成和本地服务。和 OpenCode 插件不是一回事。",
   "settings.extensions.section.installed": "已安装",
   "settings.extensions.empty": "尚未加载扩展。",

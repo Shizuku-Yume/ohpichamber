@@ -36,7 +36,7 @@ export type SettingsPageSlug =
 type SettingsPageGroup =
   | 'general'
   | 'projects'
-  | 'opencode'
+  | 'agent'
   | 'content';
 
 export interface SettingsRuntimeContext {
@@ -94,14 +94,14 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
   {
     slug: 'providers',
     title: 'Providers',
-    group: 'opencode',
+    group: 'agent',
     kind: 'single',
     keywords: ['provider', 'providers', 'models', 'model', 'api key', 'api keys', 'openai', 'anthropic', 'ollama', 'credentials'],
   },
   {
     slug: 'web-search',
     title: 'Web search',
-    group: 'opencode',
+    group: 'agent',
     kind: 'single',
     keywords: ['web search', 'websearch', 'search', 'internet', 'exa', 'tavily', 'firecrawl', 'parallel', 'tinyfish'],
   },
@@ -115,7 +115,7 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
   {
     slug: 'omp',
     title: 'OMP',
-    group: 'opencode',
+    group: 'agent',
     kind: 'single',
     description: 'Agent behaviour shared with OMP\'s config.yml. Changes apply to new sessions.',
     keywords: ['omp', 'behavior', 'behaviour', 'compaction', 'retry', 'approval', 'thinking', 'budget', 'skills', 'mcp', 'lsp', 'model roles', 'enabled models', 'plan', 'goal'],
@@ -123,28 +123,28 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
   {
     slug: 'agents',
     title: 'Agents',
-    group: 'opencode',
+    group: 'agent',
     kind: 'split',
     keywords: ['agent', 'agents', 'prompts', 'tools', 'permissions'],
   },
   {
     slug: 'commands',
     title: 'Commands',
-    group: 'opencode',
+    group: 'agent',
     kind: 'split',
     keywords: ['command', 'commands', 'slash', 'macros', 'automation'],
   },
   {
     slug: 'mcp',
     title: 'MCP',
-    group: 'opencode',
+    group: 'agent',
     kind: 'single',
     keywords: ['mcp', 'model context protocol', 'servers', 'tools', 'remote', 'stdio'],
   },
   {
     slug: 'plugins',
-    title: 'Plugins',
-    group: 'opencode',
+    title: 'OMP Plugins',
+    group: 'agent',
     kind: 'single',
     keywords: ['plugin', 'plugins', 'addons', 'npm', 'opencode-wakatime'],
   },
@@ -215,7 +215,7 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
   },
   {
     slug: 'snippets',
-    title: 'Snippets',
+    title: 'Prompt Templates',
     group: 'content',
     kind: 'split',
     keywords: ['prompt', 'templates', 'multi-run', 'strategy', 'approach'],
@@ -237,7 +237,7 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
   { slug: 'integrations', title: 'Integrations', group: 'general', kind: 'single', keywords: ['integration', 'connect', 'oauth', 'github', 'linear', 'extension', 'claude', 'plugin'] },
   {
     slug: 'extensions',
-    title: 'Extensions',
+    title: 'Guest Extensions',
     group: 'general',
     kind: 'single',
     keywords: ['extension', 'extensions', 'guest', 'panel', 'rail', 'folder', 'zip', 'git', 'url'],

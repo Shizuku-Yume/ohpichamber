@@ -325,6 +325,24 @@ export class CanonicalClient {
       body: bodyFor(C.SessionControlRequestSchema, { type: 'btw.cancel' }),
     });
   }
+  steerSubagent(sessionId: string, subagentId: string, message: string): Promise<Extract<C.SessionControlAck, { type: 'subagent.steer' }>> {
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/control`, scoped(C.SessionControlAckSchema, result => result.type === 'subagent.steer'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: bodyFor(C.SessionControlRequestSchema, { type: 'subagent.steer', subagentId, message }),
+    }).then(result => {
+      if (result.type !== 'subagent.steer') throw new Error('Subagent steer response identified another control');
+      return result;
+    });
+  }
+  cancelSubagent(sessionId: string, subagentId: string): Promise<Extract<C.SessionControlAck, { type: 'subagent.cancel' }>> {
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/control`, scoped(C.SessionControlAckSchema, result => result.type === 'subagent.cancel'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: bodyFor(C.SessionControlRequestSchema, { type: 'subagent.cancel', subagentId }),
+    }).then(result => {
+      if (result.type !== 'subagent.cancel') throw new Error('Subagent cancel response identified another control');
+      return result;
+    });
+  }
   createRun(sessionId: string, input: RunCreateRequest, commandId?: string): Promise<RunCreateAck> {
     return request(`/api/agent/v1/sessions/${id(sessionId)}/runs`, scoped(z.strictObject({ run: C.RunSchema }), result => result.run.sessionId === sessionId), { method: 'POST', headers: { 'Content-Type': 'application/json', ...headersFor(commandId) }, body: bodyFor(C.RunCreateRequestSchema, input) });
   }

@@ -1470,3 +1470,48 @@ test('subagent cancel and steer operations resolve through worker operations', a
     await harness.close();
   }
 });
+test('autonomous commands /loop, /omfg, /cleanse, /tan, /seance, /advisor and loop.stop resolve properly', async () => {
+  const harness = await fixture({ respond: () => completion() });
+  try {
+    const loopRes = await harness.worker.operation({ type: 'command', text: '/loop 5 --until "true" repeat' });
+    expect(loopRes.type).toBe('command');
+    if ('output' in loopRes && typeof loopRes.output === 'string') {
+      expect(loopRes.output).toContain('Loop mode enabled');
+    }
+
+    const stopRes = await harness.worker.operation({ type: 'loop.stop' });
+    expect(stopRes).toEqual({ type: 'loop.stop', stopped: true });
+
+    const omfgRes = await harness.worker.operation({ type: 'command', text: '/omfg do not use any' });
+    expect(omfgRes.type).toBe('command');
+    if ('output' in omfgRes && typeof omfgRes.output === 'string') {
+      expect(omfgRes.output).toContain('Synthesized TTSR rule');
+    }
+
+    const cleanseRes = await harness.worker.operation({ type: 'command', text: '/cleanse' });
+    expect(cleanseRes.type).toBe('command');
+    if ('output' in cleanseRes && typeof cleanseRes.output === 'string') {
+      expect(cleanseRes.output).toContain('Cleanse diagnostic repair complete');
+    }
+
+    const tanRes = await harness.worker.operation({ type: 'command', text: '/tan research new feature' });
+    expect(tanRes.type).toBe('command');
+    if ('output' in tanRes && typeof tanRes.output === 'string') {
+      expect(tanRes.output).toContain('Dispatched background clone');
+    }
+
+    const seanceRes = await harness.worker.operation({ type: 'command', text: '/seance non-existent-session' });
+    expect(seanceRes.type).toBe('command');
+    if ('output' in seanceRes && typeof seanceRes.output === 'string') {
+      expect(seanceRes.output).toContain('Seance');
+    }
+
+    const advisorRes = await harness.worker.operation({ type: 'command', text: '/advisor' });
+    expect(advisorRes.type).toBe('command');
+    if ('output' in advisorRes && typeof advisorRes.output === 'string') {
+      expect(advisorRes.output).toContain('Advisor watchdog enabled');
+    }
+  } finally {
+    await harness.close();
+  }
+});

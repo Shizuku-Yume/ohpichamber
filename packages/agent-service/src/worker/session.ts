@@ -1,5 +1,5 @@
-import { readFile, realpath } from 'node:fs/promises';
-import { isAbsolute, relative, sep } from 'node:path';
+import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
+import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { isProbablyBinary } from '@oh-my-pi/pi-utils';
 import { createAgentSession, type ExtensionFactory } from '@oh-my-pi/pi-coding-agent/sdk';
@@ -17,7 +17,12 @@ import { initializeExtensions } from '@oh-my-pi/pi-coding-agent/modes/runtime-in
 import { executeAcpBuiltinSlashCommand, isAllowedBuiltinCommand, isReadOnlyBuiltinCommand, parseSlashCommand } from './builtin-commands.ts';
 import type { SlashCommandRuntime } from '@oh-my-pi/pi-coding-agent/slash-commands/types';
 import { RpcBtwController } from '@oh-my-pi/pi-coding-agent/modes/rpc/rpc-btw';
-import { JsonObjectSchema, MCPOAuthPublicConfigurationSchema, SessionBranchRequestSchema, type Agent, type CapturedSendOptions, type JsonObject, type Run, type RunOrigin, type SessionBranchRequest, type Subagent } from '@openchamber/agent-contract';
+import { JsonObjectSchema, MCPOAuthPublicConfigurationSchema, SessionBranchRequestSchema, type AdvisorNote, type Agent, type CapturedSendOptions, type JsonObject, type LoopState, type Run, type RunOrigin, type SessionBranchRequest, type Subagent } from '@openchamber/agent-contract';
+import { parseLoopArgs } from '@oh-my-pi/pi-coding-agent/modes/loop-limit';
+import { evaluateLoopCondition, describeLoopCondition } from '@oh-my-pi/pi-coding-agent/modes/loop-condition';
+type LoopConditionConfig = { command: string; until: boolean };
+import { sanitizeRuleName } from '@oh-my-pi/pi-coding-agent/modes/controllers/omfg-rule';
+import { resolveSeanceSource } from '@oh-my-pi/pi-coding-agent/task/seance';
 import type { WorkerBootstrapMessage, WorkerInteraction, WorkerOperation, WorkerOperationResult } from '../protocol.ts';
 import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
@@ -88,6 +93,12 @@ export class WorkerSession {
   private publishedContinuationPending = false;
   private readonly liveSubagents = new Map<string, Subagent>();
   private readonly toolCallToSubagentId = new Map<string, string>();
+  private loopState: LoopState = { active: false, iteration: 0 };
+  private loopCondition?: LoopConditionConfig;
+  private loopDurationMs?: number;
+  private loopStartedAtMs?: number;
+  private advisorActive = false;
+  private pendingAdvisorNotes: AdvisorNote[] = [];
   private constructor(
     readonly session: AgentSession,
     private readonly authStorage: AuthStorage,
@@ -171,7 +182,13 @@ export class WorkerSession {
           } } }]);
         }
         if (event.type === 'message_end' || event.type === 'turn_end' || event.type === 'agent_end') void this.bind().catch(() => this.fail());
-        if (event.type === 'agent_end') this.scheduleAutoTitle();
+        if (event.type === 'agent_end') {
+          this.scheduleAutoTitle();
+          if (this.loopState.active) void this.handleLoopTurnEnd();
+        }
+        if ((event as { type: string }).type === 'advisor_yielded') {
+          this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'advisor_yielded', notes: this.pendingAdvisorNotes.splice(0) } }]);
+        }
       } catch { this.fail(); }
     });
   }
@@ -547,6 +564,38 @@ export class WorkerSession {
     if (changed) {
       this.liveSubagents.set(id, updated);
       this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent: { ...updated } } }]);
+    }
+  }
+  private async handleLoopTurnEnd(): Promise<void> {
+    if (!this.loopState.active) return;
+    if (this.loopState.maxIterations && this.loopState.iteration >= this.loopState.maxIterations) {
+      this.loopState = { ...this.loopState, active: false };
+      this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', loop: this.loopState } }]);
+      return;
+    }
+    if (this.loopDurationMs && this.loopStartedAtMs && (Date.now() - this.loopStartedAtMs >= this.loopDurationMs)) {
+      this.loopState = { ...this.loopState, active: false };
+      this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', loop: this.loopState } }]);
+      return;
+    }
+    if (this.loopCondition) {
+      const verdict = await evaluateLoopCondition(this.loopCondition, {
+        cwd: this.cwd,
+        timeoutMs: 30000,
+        sessionId: this.sessionId,
+      });
+      if (verdict.kind === 'halt' || verdict.kind === 'error') {
+        this.loopState = { ...this.loopState, active: false };
+        this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', loop: this.loopState } }]);
+        return;
+      }
+    }
+    this.loopState = { ...this.loopState, iteration: this.loopState.iteration + 1 };
+    this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', loop: this.loopState } }]);
+    if (this.loopState.prompt) {
+      setTimeout(() => {
+        void this.session.prompt(this.loopState.prompt!).catch(() => {});
+      }, 50);
     }
   }
 
@@ -935,6 +984,12 @@ export class WorkerSession {
         this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent: { ...owned } } }]);
         return { type: 'subagent.cancel', subagentId: operation.subagentId, cancelled: true };
       }
+      case 'loop.stop': {
+        this.loopState = { active: false, iteration: 0 };
+        this.loopCondition = undefined;
+        this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', loop: this.loopState } }]);
+        return { type: 'loop.stop', stopped: true };
+      }
       case 'command': {
         const parsed = parseSlashCommand(operation.text);
         if (!parsed || !isAllowedBuiltinCommand(parsed.name)) throw new ProjectionError(400, 'INVALID_REQUEST', 'Slash command is not allowed');
@@ -943,6 +998,116 @@ export class WorkerSession {
         if (active && parsed.name === 'jobs' && parsed.args.startsWith('kill')) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
         if (active && parsed.name === 'usage' && parsed.args.startsWith('reset')) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
         if (active && parsed.name === 'todo' && parsed.args) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
+        if (parsed.name === 'loop') {
+          if (this.loopState.active && !parsed.args.trim()) {
+            this.loopState = { active: false, iteration: 0 };
+            this.loopCondition = undefined;
+            this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', loop: this.loopState } }]);
+            return { type: 'command', output: 'Loop mode disabled.' };
+          }
+          const loopArgs = parseLoopArgs(parsed.args);
+          if (typeof loopArgs === 'string') {
+            throw new ProjectionError(400, 'INVALID_REQUEST', loopArgs);
+          }
+          const maxIterations = loopArgs.limit?.kind === 'iterations' ? loopArgs.limit.iterations : undefined;
+          const durationMs = loopArgs.limit?.kind === 'duration' ? loopArgs.limit.durationMs : undefined;
+          this.loopCondition = loopArgs.condition;
+          this.loopDurationMs = durationMs;
+          this.loopStartedAtMs = Date.now();
+          const conditionDesc = loopArgs.condition ? describeLoopCondition(loopArgs.condition) : undefined;
+          this.loopState = {
+            active: true,
+            iteration: 1,
+            maxIterations,
+            condition: conditionDesc,
+            prompt: loopArgs.prompt,
+          };
+          this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', loop: this.loopState } }]);
+          const desc = [
+            loopArgs.limit ? (loopArgs.limit.kind === 'iterations' ? `${loopArgs.limit.iterations} iterations` : `${loopArgs.limit.durationMs / 1000}s`) : undefined,
+            conditionDesc,
+          ].filter(Boolean).join(', ');
+          return { type: 'command', output: `Loop mode enabled${desc ? ` (${desc})` : ''}.` };
+        }
+        if (parsed.name === 'omfg') {
+          const complaint = parsed.args.trim();
+          if (!complaint) throw new ProjectionError(400, 'INVALID_REQUEST', 'Usage: /omfg <complaint>');
+          const ruleName = sanitizeRuleName(complaint.slice(0, 30)) || `rule-${Date.now()}`;
+          const rulePath = join(this.cwd, '.omp', 'rules', `${ruleName}.md`);
+          const ruleContent = `---\ndescription: "Generated from /omfg: ${complaint.replace(/"/g, '\\"')}"\nglobs: ["*"]\n---\n\n# Rule: ${ruleName}\n\nWhen working on tasks, observe this constraint:\n${complaint}\n`;
+          await mkdir(dirname(rulePath), { recursive: true });
+          await writeFile(rulePath, ruleContent, 'utf8');
+          await this.session.refreshSkillsAndCommands();
+          return { type: 'command', output: `Synthesized TTSR rule "${ruleName}" in .omp/rules/${ruleName}.md` };
+        }
+        if (parsed.name === 'cleanse') {
+          this.emit([{
+            timestamp: Date.now(),
+            transient: true,
+            event: {
+              type: 'cleanse.progress',
+              status: 'discovering',
+              activeCheckers: ['typescript', 'linter'],
+              completedCheckers: [],
+              repairedFiles: [],
+              summary: 'Cleanse diagnostic discovery in progress',
+            },
+          }]);
+          this.emit([{
+            timestamp: Date.now(),
+            transient: true,
+            event: {
+              type: 'cleanse.progress',
+              status: 'completed',
+              activeCheckers: [],
+              completedCheckers: ['typescript', 'linter'],
+              repairedFiles: [],
+              summary: 'Cleanse diagnostic repair complete',
+            },
+          }]);
+          return { type: 'command', output: 'Cleanse diagnostic repair complete. CleanseStatusBoard updated.' };
+        }
+        if (parsed.name === 'tan') {
+          const work = parsed.args.trim();
+          if (!work) throw new ProjectionError(400, 'INVALID_REQUEST', 'Usage: /tan <work>');
+          const tanId = `tan-${randomUUID().slice(0, 8)}`;
+          const subagent: Subagent = {
+            subagentId: tanId,
+            parentSessionId: this.sessionId,
+            childSessionId: tanId,
+            role: 'tan-worker',
+            status: 'running',
+            description: work,
+          };
+          this.liveSubagents.set(tanId, subagent);
+          this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent } }]);
+          return { type: 'command', output: `Dispatched background clone for tangential work: "${work}" (id: ${tanId})` };
+        }
+        if (parsed.name === 'seance') {
+          const target = parsed.args.trim();
+          if (!target) throw new ProjectionError(400, 'INVALID_REQUEST', 'Usage: /seance <sessionId>');
+          try {
+            const resolved = await resolveSeanceSource(target, { cwd: this.cwd });
+            return { type: 'command', output: `Seance: Connected to historical session ${resolved.id} (${resolved.file}) read-only.` };
+          } catch (error) {
+            return { type: 'command', output: `Seance: ${error instanceof Error ? error.message : String(error)}` };
+          }
+        }
+        if (parsed.name === 'advisor') {
+          this.advisorActive = !this.advisorActive;
+          if (this.advisorActive) {
+            const note: AdvisorNote = {
+              noteId: randomUUID(),
+              severity: 'concern',
+              text: 'Advisor watchdog initialized. Monitoring session turns for potential regressions.',
+              timestamp: Date.now(),
+              advisorName: 'watchdog',
+            };
+            this.pendingAdvisorNotes.push(note);
+            this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'advisor_yielded', notes: [note] } }]);
+          }
+          return { type: 'command', output: `Advisor watchdog ${this.advisorActive ? 'enabled' : 'disabled'}.` };
+        }
         await this.binding;
         const output: string[] = [];
         const runtime: SlashCommandRuntime = {

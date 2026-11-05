@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components -- SyncProvider, its contexts, hooks, and runtime helpers are one contract module. */
 import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from "react"
 import { useStore, type StoreApi } from "zustand"
-import type { ApprovalRequest, CanonicalEvent, Message, Part, QuestionRequest, Run, Session, SessionRuntimeStatus, SessionSnapshot } from "@openchamber/agent-contract"
+import type { AdvisorNote, ApprovalRequest, CanonicalEvent, Message, Part, QuestionRequest, Run, Session, SessionRuntimeStatus, SessionSnapshot } from "@openchamber/agent-contract"
 import { canonicalClient, type CanonicalClient } from "@/api/canonicalClient"
 import { getRuntimeKey, subscribeRuntimeEndpointChanged, subscribeRuntimeEndpointWillChange } from "@/lib/runtime-switch"
 import { normalizePath } from "@/lib/pathNormalization"
@@ -19,6 +19,7 @@ import { applyDirectoryEvent, compareCounters, mergeHostSession } from "./event-
 import { useBtwStore } from "@/stores/useBtwStore"
 import { useSubagentsStore } from "@/stores/useSubagentsStore"
 import { useCleanseStore } from "@/stores/useCleanseStore"
+import { useAdvisorStore } from "@/stores/useAdvisorStore"
 import { createEventPipeline, type EventPipeline } from "./event-pipeline"
 import { subscribeSessionFoldersSync } from "./session-folders-sync";
 import { subscribeSessionDraftsSync } from "./session-drafts-sync";
@@ -107,6 +108,9 @@ export function handleEvents(target: SessionMessageTarget, events: readonly Cano
     }
     if (event.type === "cleanse.progress") {
       useCleanseStore.getState().applyCleanseProgress(target.sessionId, event);
+    }
+    if (event.type === "advisor_yielded") {
+      useAdvisorStore.getState().applyAdvisorYielded(target.sessionId, event);
     }
     const result = applyDirectoryEvent(next, event)
     if (result.kind === "resnapshot") { contiguous = false; break }
@@ -509,6 +513,18 @@ export function useSessionForms(sessionId: string, directory?: string): Question
   return useSyncExternalStore(useCallback((notify) => subscribeDirectoryForm(store, sessionId, notify), [store, sessionId]), useCallback(() => store.getState().form[sessionId] ?? EMPTY_QUESTIONS, [store, sessionId]), () => EMPTY_QUESTIONS)
 }
 export function useSessions(directory?: string): Session[] { return useDirectorySync(useCallback((state) => state.session, []), directory) }
+
+const EMPTY_ADVISOR_NOTES: AdvisorNote[] = [];
+export function useSessionAdvisorNotes(sessionId: string | null | undefined, directory?: string): AdvisorNote[] {
+  const storeNotes = useAdvisorStore(
+    useCallback((state) => (sessionId ? state.bySession[sessionId]?.notes : undefined), [sessionId]),
+  );
+  const dirNotes = useDirectorySync(
+    useCallback((state) => (sessionId ? state.advisor?.[sessionId]?.notes : undefined), [sessionId]),
+    directory,
+  );
+  return storeNotes ?? dirNotes ?? EMPTY_ADVISOR_NOTES;
+}
 
 function useLiveSelector<T>(selector: (states: State[]) => T, isEqual: (left: T, right: T) => boolean, slice: "session" | "session_status"): T {
   const { childStores } = useSyncRuntime()

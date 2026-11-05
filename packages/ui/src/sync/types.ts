@@ -1,4 +1,5 @@
 import type {
+ AdvisorNote,
  ApprovalRequest,
  Message,
  Project,
@@ -73,6 +74,14 @@ export type State = {
  limit: number
  message: Record<string, Message[]>
  cleanse: Record<string, CleanseProgressState>
+ advisor: Record<string, AdvisorState>
+}
+export type AdvisorState = {
+ sessionId: string
+ epoch: string
+ sequence: string
+ notes: AdvisorNote[]
+ updatedAt: number
 }
 export type CleanseProgressState = {
  sessionId: string
@@ -158,6 +167,7 @@ export const INITIAL_STATE: State = {
  limit: 5,
  message: {},
  cleanse: {},
+ advisor: {},
 }
 
 export const INITIAL_GLOBAL_STATE: GlobalState = {

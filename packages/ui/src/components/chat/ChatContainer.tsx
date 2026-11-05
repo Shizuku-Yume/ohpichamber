@@ -52,6 +52,7 @@ import {
 } from '@/components/chat/composer/state/composerInsetReaders';
 import { SessionErrorNotice } from '@/components/chat/SessionErrorNotice';
 import { CleanseTimelineBoard } from '@/components/chat/CleanseStatusBoard';
+import { AdvisorTimelineCard } from '@/components/chat/AdvisorMessage';
 import { canonicalProblemDetail } from '@/lib/problemMessage';
 import ScrollToBottomButton from './components/ScrollToBottomButton';
 import { PromptNavigatorRail } from './components/PromptNavigatorRail';
@@ -362,6 +363,7 @@ const ChatViewport = React.memo(({
   <>
    {/* Permissions and forms dock above the composer (`PermissionDock`, `FormDock`). */}
    <CleanseTimelineBoard sessionId={currentSessionId} directory={directory} />
+   <AdvisorTimelineCard sessionId={currentSessionId} directory={directory} />
    <SessionErrorNotice sessionId={currentSessionId} directory={directory} />
 
    {/* Tail spacer. With a floating composer it reserves the band the

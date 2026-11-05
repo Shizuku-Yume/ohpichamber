@@ -1,5 +1,5 @@
-import type { CanonicalEvent, Message, Part, QueueState, Run, Session, SessionMetadataState, SessionSnapshot } from "@openchamber/agent-contract"
-import type { CleanseProgressState, State } from "./types"
+import type { AdvisorNote, CanonicalEvent, Message, Part, QueueState, Run, Session, SessionMetadataState, SessionSnapshot } from "@openchamber/agent-contract"
+import type { AdvisorState, CleanseProgressState, State } from "./types"
 import { omitKeys } from "@/lib/omitKeys"
 
 export function compareCounters(left: string, right: string): number {
@@ -12,6 +12,36 @@ const clearInvalidation = (invalidated: Record<string, true> | undefined, sessio
  const next = { ...invalidated }
  delete next[sessionId]
  return next
+}
+
+export function mergeAdvisorNotes(
+ existingNotes: readonly AdvisorNote[],
+ incomingNotes: readonly AdvisorNote[],
+): AdvisorNote[] {
+ const byId = new Map<string, AdvisorNote>();
+ for (const note of existingNotes) {
+  byId.set(note.noteId, note);
+ }
+ for (const note of incomingNotes) {
+  byId.set(note.noteId, note);
+ }
+ return Array.from(byId.values()).sort(
+  (a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0) || a.noteId.localeCompare(b.noteId),
+ );
+}
+
+export function clearSessionAdvisor(state: State, sessionId: string): State {
+ if (!state.advisor?.[sessionId]) return state;
+ const advisor = { ...state.advisor };
+ delete advisor[sessionId];
+ return { ...state, advisor };
+}
+
+export function clearSessionCleanse(state: State, sessionId: string): State {
+ if (!state.cleanse?.[sessionId]) return state;
+ const cleanse = { ...state.cleanse };
+ delete cleanse[sessionId];
+ return { ...state, cleanse };
 }
 const retain = <T>(current: readonly T[], incoming: readonly T[], key: (item: T) => string): T[] => {
  const prior = new Map(current.map((item) => [key(item), item]))
@@ -180,15 +210,20 @@ export function installRuntimeRun(state: State, run: Run, requestBaseline: RunCo
 
 /** Every canonical variant shares the same sequence gate. Never apply across a gap. */
 export function applyDirectoryEvent(state: State, event: CanonicalEvent): DirectoryEventResult {
- if (event.type === 'btw.delta' || event.type === 'btw.completed' || event.type === 'subagent.updated' || event.type === 'advisor_yielded') return { kind: 'applied', state };
+ if (event.type === 'btw.delta' || event.type === 'btw.completed' || event.type === 'subagent.updated') return { kind: 'applied', state };
  if (event.type === 'cleanse.progress') {
   const id = event.sessionId;
   const existing = state.cleanse?.[id];
   if (existing) {
-   if (event.epoch && existing.epoch) {
-    const epochComp = compareCounters(event.epoch, existing.epoch);
-    if (epochComp < 0) return { kind: 'applied', state };
-    if (epochComp === 0 && event.sequence && existing.sequence && compareCounters(event.sequence, existing.sequence) < 0) {
+   const eventEpoch = event.epoch ?? '0';
+   const existingEpoch = existing.epoch ?? '0';
+   if (eventEpoch === existingEpoch) {
+    if (event.sequence && existing.sequence && compareCounters(event.sequence, existing.sequence) < 0) {
+     return { kind: 'applied', state };
+    }
+   } else {
+    const eventTime = event.timestamp ?? 0;
+    if (eventTime && existing.updatedAt && eventTime < existing.updatedAt) {
      return { kind: 'applied', state };
     }
    }
@@ -212,6 +247,43 @@ export function applyDirectoryEvent(state: State, event: CanonicalEvent): Direct
     cleanse: {
      ...state.cleanse,
      [id]: nextCleanseState,
+    },
+   },
+  };
+ }
+ if (event.type === 'advisor_yielded') {
+  const id = event.sessionId;
+  const existing = state.advisor?.[id];
+  const eventEpoch = event.epoch ?? '0';
+  if (existing) {
+   const existingEpoch = existing.epoch ?? '0';
+   if (eventEpoch === existingEpoch) {
+    if (event.sequence && existing.sequence && compareCounters(event.sequence, existing.sequence) < 0) {
+     return { kind: 'applied', state };
+    }
+   } else {
+    const eventTime = event.timestamp ?? 0;
+    if (eventTime && existing.updatedAt && eventTime < existing.updatedAt) {
+     return { kind: 'applied', state };
+    }
+   }
+  }
+  const priorNotes = existing && existing.epoch === eventEpoch ? existing.notes : [];
+  const notes = mergeAdvisorNotes(priorNotes, event.notes);
+  const nextAdvisorState: AdvisorState = {
+   sessionId: id,
+   epoch: eventEpoch,
+   sequence: event.sequence ?? '0',
+   notes,
+   updatedAt: event.timestamp ?? Date.now(),
+  };
+  return {
+   kind: 'applied',
+   state: {
+    ...state,
+    advisor: {
+     ...state.advisor,
+     [id]: nextAdvisorState,
     },
    },
   };
@@ -307,6 +379,7 @@ export function applyDirectoryEvent(state: State, event: CanonicalEvent): Direct
      sessionRevision: revision, sessionDeletedRevision,
      snapshot: without(next.snapshot), message: without(next.message), permission: without(next.permission), form: without(next.form),
      queue: without(next.queue), partOwner: without(next.partOwner), session_status: without(next.session_status),
+     cleanse: without(next.cleanse), advisor: without(next.advisor),
      runControlActiveRun: next.runControlActiveRun ? without(next.runControlActiveRun) : next.runControlActiveRun,
      sessionCursor: without(next.sessionCursor), sessionEpoch: without(next.sessionEpoch), sessionStatusInvalidated: next.sessionStatusInvalidated ? without(next.sessionStatusInvalidated) : next.sessionStatusInvalidated,
     }

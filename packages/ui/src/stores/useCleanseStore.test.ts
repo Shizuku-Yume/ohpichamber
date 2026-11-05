@@ -205,41 +205,79 @@ describe('useCleanseStore', () => {
     expect(state?.sequence).toBe('100');
   });
 
-  test('rejects stale epoch events and accepts newer epochs', () => {
+  test('rejects earlier sequence in same epoch A and accepts first/low sequence in new epoch B with opaque UUID', () => {
+    const epochA = 'ffffffff-1111-4111-8111-111111111111';
+    const epochB = '00000000-2222-4222-8222-222222222222'; // Lexicographically earlier than epochA!
+
+    // Initial state at sequence 10 in epoch A
     useCleanseStore.getState().applyCleanseProgress(
       'session-alpha',
       makeEvent({
-        epoch: '2',
-        sequence: '5',
-        status: 'discovering',
-      }),
-    );
-
-    // Stale event from epoch 1
-    useCleanseStore.getState().applyCleanseProgress(
-      'session-alpha',
-      makeEvent({
-        epoch: '1',
-        sequence: '500',
-        status: 'completed',
-      }),
-    );
-
-    expect(useCleanseStore.getState().bySession['session-alpha']?.epoch).toBe('2');
-    expect(useCleanseStore.getState().bySession['session-alpha']?.status).toBe('discovering');
-
-    // Newer epoch 3
-    useCleanseStore.getState().applyCleanseProgress(
-      'session-alpha',
-      makeEvent({
-        epoch: '3',
-        sequence: '1',
+        epoch: epochA,
+        sequence: '10',
+        timestamp: 1000,
         status: 'repairing',
       }),
     );
 
-    expect(useCleanseStore.getState().bySession['session-alpha']?.epoch).toBe('3');
-    expect(useCleanseStore.getState().bySession['session-alpha']?.status).toBe('repairing');
+    // Stale sequence 5 in epoch A is rejected
+    useCleanseStore.getState().applyCleanseProgress(
+      'session-alpha',
+      makeEvent({
+        epoch: epochA,
+        sequence: '5',
+        timestamp: 1050,
+        status: 'discovering',
+      }),
+    );
+
+    let state = useCleanseStore.getState().bySession['session-alpha'];
+    expect(state?.epoch).toBe(epochA);
+    expect(state?.sequence).toBe('10');
+    expect(state?.status).toBe('repairing');
+
+    // Restart with opaque UUID epoch B (lexicographically earlier): first sequence "1" must be accepted!
+    useCleanseStore.getState().applyCleanseProgress(
+      'session-alpha',
+      makeEvent({
+        epoch: epochB,
+        sequence: '1',
+        timestamp: 2000,
+        status: 'discovering',
+      }),
+    );
+
+    state = useCleanseStore.getState().bySession['session-alpha'];
+    expect(state?.epoch).toBe(epochB);
+    expect(state?.sequence).toBe('1');
+    expect(state?.status).toBe('discovering');
+
+    // Historical stale event from older epoch A arriving late (timestamp 1100 < 2000) is rejected
+    useCleanseStore.getState().applyCleanseProgress(
+      'session-alpha',
+      makeEvent({
+        epoch: epochA,
+        sequence: '99',
+        timestamp: 1100,
+        status: 'completed',
+      }),
+    );
+
+    state = useCleanseStore.getState().bySession['session-alpha'];
+    expect(state?.epoch).toBe(epochB);
+    expect(state?.sequence).toBe('1');
+    expect(state?.status).toBe('discovering');
+  });
+
+  test('rejects event with invalid lifecycle status', () => {
+    useCleanseStore.getState().applyCleanseProgress(
+      'session-alpha',
+      makeEvent({
+        status: 'invalid-status' as unknown as CleanseProgressEvent['status'],
+      }),
+    );
+
+    expect(useCleanseStore.getState().bySession['session-alpha']).toBeUndefined();
   });
 
   test('clearSessionCleanse removes only the targeted session', () => {

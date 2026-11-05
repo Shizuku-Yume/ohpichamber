@@ -17,6 +17,15 @@ export interface CleanseState {
   updatedAt: number;
 }
 
+const VALID_CLEANSE_STATUSES: Record<CleanseProgressStatus, true> = {
+  discovering: true,
+  repairing: true,
+  verifying: true,
+  completed: true,
+  failed: true,
+  cancelled: true,
+};
+
 type CleanseStore = {
   bySession: Record<string, CleanseState>;
   applyCleanseProgress: (sessionId: string, event: CleanseProgressEvent) => void;
@@ -28,12 +37,18 @@ export const useCleanseStore = create<CleanseStore>()((set) => ({
   bySession: {},
   applyCleanseProgress: (sessionId, event) =>
     set((state) => {
+      if (!VALID_CLEANSE_STATUSES[event.status]) return state;
       const existing = state.bySession[sessionId];
       if (existing) {
-        if (event.epoch && existing.epoch) {
-          const epochComparison = compareCounters(event.epoch, existing.epoch);
-          if (epochComparison < 0) return state;
-          if (epochComparison === 0 && event.sequence && existing.sequence && compareCounters(event.sequence, existing.sequence) < 0) {
+        const eventEpoch = event.epoch ?? '0';
+        const existingEpoch = existing.epoch ?? '0';
+        if (eventEpoch === existingEpoch) {
+          if (event.sequence && existing.sequence && compareCounters(event.sequence, existing.sequence) < 0) {
+            return state;
+          }
+        } else {
+          const eventTime = event.timestamp ?? 0;
+          if (eventTime && existing.updatedAt && eventTime < existing.updatedAt) {
             return state;
           }
         }

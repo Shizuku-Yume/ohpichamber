@@ -52,6 +52,24 @@ export interface WorkerShellContext {
   privateRoots?: Array<{ root: string; label: string }>;
 }
 
+function findSafeUtf8End(buffer: Uint8Array, start = 0): number {
+  const len = buffer.length;
+  if (len <= start) return start;
+  for (let offset = 1; offset <= 4 && len - offset >= start; offset++) {
+    const byte = buffer[len - offset]!;
+    if ((byte & 0x80) !== 0) {
+      if ((byte & 0xe0) === 0xc0) return offset < 2 ? len - offset : len;
+      if ((byte & 0xf0) === 0xe0) return offset < 3 ? len - offset : len;
+      if ((byte & 0xf8) === 0xf0) return offset < 4 ? len - offset : len;
+      if ((byte & 0xc0) === 0x80) continue;
+      return len;
+    } else {
+      return len;
+    }
+  }
+  return len;
+}
+
 export class WorkerShell {
   private readonly jobs = new Map<string, Job>();
   private readonly nativeJobs = new Map<string, string>();
@@ -222,21 +240,16 @@ export class WorkerShell {
     }
     const buffer = chunk.data;
     let start = chunk.start;
-    const end = chunk.end;
-    let text = '';
+    let safeStart = 0;
     if (buffer.length > MAX_OUTPUT_BYTES) {
       const offset = buffer.length - MAX_OUTPUT_BYTES;
-      let safeStart = offset;
+      safeStart = offset;
       while (safeStart < buffer.length && (buffer[safeStart]! & 0xc0) === 0x80) safeStart++;
-      let safeEnd = buffer.length;
-      while (safeEnd > safeStart && (buffer[safeEnd - 1]! & 0xc0) === 0x80) safeEnd--;
-      text = decoder.decode(buffer.subarray(safeStart, safeEnd));
       start += safeStart;
-    } else {
-      let safeEnd = buffer.length;
-      while (safeEnd > 0 && (buffer[safeEnd - 1]! & 0xc0) === 0x80) safeEnd--;
-      text = decoder.decode(buffer.subarray(0, safeEnd));
     }
+    const safeEnd = findSafeUtf8End(buffer, safeStart);
+    const text = decoder.decode(buffer.subarray(safeStart, safeEnd));
+    const end = chunk.start + safeEnd;
     return {
       job: request.job,
       streamId: request.streamId,
@@ -379,12 +392,12 @@ export class WorkerShell {
     const rawStreams = native.process?.streams?.list();
     const streams: PipeStreamSummary[] | undefined = rawStreams && rawStreams.length > 0
       ? rawStreams.map(s => ({
-          id: s.id,
-          producer: this.publicText(s.producer),
-          consumer: this.publicText(s.consumer),
-          total: s.total,
-          open: s.open,
-        }))
+        id: s.id,
+        producer: this.publicText(s.producer),
+        consumer: this.publicText(s.consumer),
+        total: s.total,
+        open: s.open,
+      }))
       : undefined;
     return {
       intent,

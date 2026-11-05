@@ -68,16 +68,11 @@ fork's.
 - Pinned notes and pinned plan bodies (`buildPinnedBlock`). A plan whose
   markdown cannot be read is marked, not dropped: losing one attachment must
   not silently shrink the context.
-- The memory index, titles only (`buildMemoryBlock`). Titles only because an
-  index carrying full text grows without bound until it crowds out the
-  conversation it was meant to inform.
-- Guidance for the managed tools the session actually has (`buildGuidance`):
-  when to link (`SESSION_LINK_GUIDANCE`), when to draw a page
-  (`RENDER_PAGE_GUIDANCE`), and when to offer a workflow
-  (`WORKFLOW_GUIDANCE`). A rule about when to act belongs where the model reads
-  it before choosing a tool; stated only in the action's description, an agent
-  handed an issue to investigate never opened a session-control tool and never
-  linked it.
+- In OMP, memory indexes and tool guidance (`SESSION_LINK_GUIDANCE`,
+  `RENDER_PAGE_GUIDANCE`, `WORKFLOW_GUIDANCE`) are strictly excluded from
+  worker prompts to preserve native prompt parity and prevent prompt injection.
+  The UI panel summary still reads memory counts via `collectSummary`, but
+  knowledge delivery (`buildKnowledgeText`) carries only user pins.
 
 ## Failure behaviour
 

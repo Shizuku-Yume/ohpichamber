@@ -11,7 +11,7 @@
 - **Base commit:** b3fcef1a9257ee7064b388a8816654e15dbddae2
 
 - [ ] Execute real-provider smoke run across remaining unverified subsystems (Scheduled Tasks, Multi-run/Fusion, Session Assist, AI Git Commit/PR, Walkthrough, Guest generate, Notifications/Linear, Browser Control, Quota/Usage, Autonomous Loops).
-- [x] Update product documentation to accurately delineate runtime-verified core capabilities from automated-only subsystem coverage (retaining runtime note banners across all 12 locales on scheduled-tasks, multi-run, notifications, sessions-in-work; verified removals on auto-model-routing and notes-todos-plans).
+- [x] Update product documentation to accurately delineate runtime-verified core capabilities from automated-only subsystem coverage (retaining runtime note banners across all 12 locales on notifications and sessions-in-work; verified removals on auto-model-routing, notes-todos-plans, scheduled-tasks, and multi-run).
 - [x] Synchronize `.workflow/development.md` and migration design documents (`scope.md`, `implementation-plan.md`, `architecture.md`, `contracts.md`, `README.md`, `AGENTS.md`) and pass the full root gate.
 
 ## Progress
@@ -22,7 +22,7 @@ Check before:
 - Full root gate verification required across all 13 landed M4 feature areas.
 
 Work:
-- Verified documentation truth: removed warning banners for live-verified capabilities (`auto-model-routing.mdx` verified via Task 02 real path, `notes-todos-plans.mdx` verified via Task 11 real run); retained unverified runtime note banners across all 12 locales for subsystems lacking live real-provider smoke runs (`scheduled-tasks.mdx`, `multi-run.mdx`, `notifications.mdx`, `sessions-in-work.mdx`). Updated `packages/docs/README.md` to accurately delineate verified core orchestration from automated-only subsystem coverage.
+- Verified documentation truth: removed warning banners for live-verified capabilities (`auto-model-routing.mdx` verified via Task 02 real path, `notes-todos-plans.mdx` verified via Task 11 real run, `scheduled-tasks.mdx` verified via orchestration lane timer/manual E2E, `multi-run.mdx` verified via fix commit `644c5845b5` and live 2-lane run + automatic fusion); retained unverified runtime note banners across all 12 locales for subsystems lacking certification (`notifications.mdx` due to Linear OAuth external account blocked, `sessions-in-work.mdx` due to live worktree sessions uncertified). Updated `packages/docs/README.md` to accurately delineate verified core orchestration from automated-only subsystem coverage.
 - Hardened `WorkerShell` and `WorkerSession` against broker unavailability and validated capacity and eviction lifecycle suites.
 - Remediation passes: synchronized 40 missing i18n keys across all 14 locales in `m4-lane-d.i18n.ts`; eliminated infinite `animate-pulse` animations; fixed `WorkerSession.listServices` to throw typed `ProjectionError(503, 'SERVICE_UNAVAILABLE')` on broker failure instead of returning `[]` empty success; aligned supervisor `ShellCoordinator` stream and stdin identity-sensitivity and caller session scoping; bounded stream UTF-8 slicing to safe code point boundaries; updated `JobsSheetDialog.tsx` to preserve last valid logs in `<pre>` under `[role="alert"]` fetch error overlays; and landed fix commit `644c5845b5` updating `multirunSchema.sessionID` to optional nullable across contract, UI, and route integration tests.
 - Synchronized `.workflow/development.md` with Task 14 closeout entries and verified migration design documents.

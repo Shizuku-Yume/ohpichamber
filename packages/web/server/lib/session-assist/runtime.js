@@ -283,6 +283,7 @@ export const createSessionAssistRuntime = ({
   if (event.type === 'session.status' && event.runtimeStatus !== 'idle') {
    invalidate(sessionId);
    retireStored(sessionId, scope?.cwd || '');
+   if (event.runtimeStatus === 'unavailable') onTurnSettled?.(sessionId);
    return;
   }
   if (event.type === 'message.created' && event.role === 'user') {

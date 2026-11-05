@@ -213,7 +213,7 @@ export function createGlobalMessageStreamHub({
     if (stopping) await stopping;
     const existing = sessions.get(sessionId);
     if (existing?.connected || (existing && !existing.finished)) return existing.ready;
-    if (existing) await unsubscribeSession(sessionId);
+    if (existing) await unsubscribeSession(sessionId, { preserveLeases: true });
     const restarting = replayNeedsReset;
     if (replayNeedsReset) { clearReplay(); replayNeedsReset = false; }
     started = true;
@@ -225,8 +225,8 @@ export function createGlobalMessageStreamHub({
     try { await open(entry); }
     catch (error) { if (sessions.get(sessionId) === entry) sessions.delete(sessionId); throw error; }
   };
-  const unsubscribeSession = async (sessionId) => {
-    sessionLeases.delete(sessionId);
+  const unsubscribeSession = async (sessionId, { preserveLeases = false } = {}) => {
+    if (!preserveLeases) sessionLeases.delete(sessionId);
     const entry = sessions.get(sessionId);
     if (!entry) return;
     sessions.delete(sessionId);
@@ -239,14 +239,17 @@ export function createGlobalMessageStreamHub({
     EntityIdSchema.parse(sessionId);
     let leases = sessionLeases.get(sessionId);
     if (!leases) {
-      leases = new Set();
+      leases = new Map();
       sessionLeases.set(sessionId, leases);
     }
-    leases.add(leaseKey);
+    const current = leases.get(leaseKey) ?? 0;
+    leases.set(leaseKey, current + 1);
     try {
       await subscribeSession(sessionId, options);
     } catch (error) {
-      leases.delete(leaseKey);
+      const remaining = (leases.get(leaseKey) ?? 1) - 1;
+      if (remaining <= 0) leases.delete(leaseKey);
+      else leases.set(leaseKey, remaining);
       if (leases.size === 0) sessionLeases.delete(sessionId);
       throw error;
     }
@@ -261,7 +264,13 @@ export function createGlobalMessageStreamHub({
   const releaseSession = async (sessionId, leaseKey = 'default') => {
     const leases = sessionLeases.get(sessionId);
     if (!leases) return;
-    leases.delete(leaseKey);
+    const current = leases.get(leaseKey);
+    if (current === undefined || current <= 0) return;
+    if (current <= 1) {
+      leases.delete(leaseKey);
+    } else {
+      leases.set(leaseKey, current - 1);
+    }
     if (leases.size === 0) {
       sessionLeases.delete(sessionId);
       await unsubscribeSession(sessionId).catch(() => { });
@@ -280,11 +289,12 @@ export function createGlobalMessageStreamHub({
     retainSession,
     releaseSession,
     hasLeases,
-    getSessionLeases: (sessionId) => Array.from(sessionLeases.get(sessionId) ?? []),
+    getSessionLeases: (sessionId) => Array.from(sessionLeases.get(sessionId)?.keys() ?? []),
     injectEvent,
     stop() {
       if (stopping) return stopping;
       started = false;
+      sessionLeases.clear();
       replayNeedsReset = everConnected;
       stopping = Promise.all([...sessions.keys()].map(unsubscribeSession)).then(() => delivery).finally(() => { stopping = null; });
       return stopping;

@@ -702,19 +702,28 @@ const openChamberSessionService = createOpenChamberSessionService({
  beforeDispatch: (scope, capture) => hostPromptDeliveryRuntime.beforeDispatch(scope, capture.request),
  onPromptAccepted: async (scope, capture, receipt) => {
   const result = await hostPromptDeliveryRuntime.onPromptAccepted(scope, capture.request, receipt);
-  void (globalMessageStreamHub.retainSession
-   ? globalMessageStreamHub.retainSession(scope.sessionId, 'run')
-   : globalMessageStreamHub.subscribeSession(scope.sessionId)
-  ).catch((error) => console.warn('[agent-events] session observation failed:', error.code ?? 'SERVICE_UNAVAILABLE'));
+  try {
+   if (globalMessageStreamHub.retainSession) {
+    await globalMessageStreamHub.retainSession(scope.sessionId, 'run');
+   } else {
+    await globalMessageStreamHub.subscribeSession(scope.sessionId);
+   }
+  } catch (error) {
+   console.warn('[agent-events] session observation failed:', error?.code ?? 'SERVICE_UNAVAILABLE');
+  }
   return result;
  },
  publishSessionEvent: (event) => {
   const sessionId = event?.properties?.sessionId;
   if (sessionId) {
-   void (globalMessageStreamHub.retainSession
-    ? globalMessageStreamHub.retainSession(sessionId, 'session-created')
-    : globalMessageStreamHub.subscribeSession(sessionId)
-   ).catch((error) => console.warn('[agent-events] session observation failed:', error.code ?? 'SERVICE_UNAVAILABLE'));
+   if (globalMessageStreamHub.retainSession) {
+    void globalMessageStreamHub.retainSession(sessionId, 'session-created')
+     .then((lease) => lease?.release?.())
+     .catch((error) => console.warn('[agent-events] session observation failed:', error?.code ?? 'SERVICE_UNAVAILABLE'));
+   } else {
+    void globalMessageStreamHub.subscribeSession(sessionId)
+     .catch((error) => console.warn('[agent-events] session observation failed:', error?.code ?? 'SERVICE_UNAVAILABLE'));
+   }
   }
  },
  sessionMetadataStore,
@@ -845,10 +854,7 @@ const sessionAssistRuntime = createSessionAssistRuntime({
  persistSessionAssist: (sessionID, directory, assist) =>
   persistSessionMetadataPatch(sessionID, { openchamber: { assist } }, { directory }),
  onTurnSettled: (sessionId) => {
-  const state = sessionRuntime.getSessionState(sessionId);
-  if (!state || state.status !== 'running') {
-   void globalMessageStreamHub.releaseSession(sessionId, 'run');
-  }
+  void globalMessageStreamHub.releaseSession(sessionId, 'run');
  },
 });
 /**

@@ -88,6 +88,7 @@ export const createSessionAssistRuntime = ({
  const ready = new Map();
  // Sessions holding an assist this process wrote, keyed to their directory.
  const persisted = new Map();
+ const settled = new Set();
  let stopped = false;
 
  const clearTimer = (sessionId) => {
@@ -103,6 +104,7 @@ export const createSessionAssistRuntime = ({
   gates.delete(sessionId);
   ready.delete(sessionId);
   inflight.get(sessionId)?.controller.abort();
+  settled.delete(sessionId);
  };
 
  // A new turn makes the stored recap and suggestion describe an older turn:
@@ -181,17 +183,18 @@ export const createSessionAssistRuntime = ({
   if (!enabled.recap || !allowed.recap) recap = '';
   if (!enabled.suggestion || !allowed.suggestion) suggestion = '';
   if (!recap && !suggestion) return;
-  await persistSessionAssist(sessionId, directory, {
+  await persistSessionAssist(sessionId, directory || scope.cwd || '', {
    recap,
    suggestion,
    forMessageID: last.id,
    generatedAt: Date.now(),
   });
-  persisted.set(sessionId, directory);
+  persisted.set(sessionId, directory || scope.cwd || '');
  };
 
  const startGeneration = (sessionId, directory, armedAt, allowed) => {
   if (stopped) {
+   settled.add(sessionId);
    onTurnSettled?.(sessionId);
    return;
   }
@@ -212,6 +215,7 @@ export const createSessionAssistRuntime = ({
      ready.delete(sessionId);
      startGeneration(sessionId, next.directory, next.armedAt, next.allowed);
     } else {
+     settled.add(sessionId);
      onTurnSettled?.(sessionId);
     }
    });
@@ -232,11 +236,14 @@ export const createSessionAssistRuntime = ({
  // The quiet window is armed only for fields Jev did not rule out; with
  // nothing left there is no timer and no Small Model call at all.
  const onTurnEnd = (sessionId, directory) => {
-  clearTimer(sessionId);
+  if (timers.has(sessionId) || gates.has(sessionId) || inflight.has(sessionId) || persisted.has(sessionId) || settled.has(sessionId)) {
+   return;
+  }
   const armedAt = Date.now();
   if (typeof evaluateTurn !== 'function') {
    const enabled = getTargets();
    if (!enabled.recap && !enabled.suggestion) {
+    settled.add(sessionId);
     onTurnSettled?.(sessionId);
     return;
    }
@@ -250,12 +257,16 @@ export const createSessionAssistRuntime = ({
    .catch(() => null)
    .then((allowed) => {
     if (stopped || gates.get(sessionId) !== gate) {
-     if (stopped) onTurnSettled?.(sessionId);
+     if (stopped) {
+      settled.add(sessionId);
+      onTurnSettled?.(sessionId);
+     }
      return;
     }
     gates.delete(sessionId);
     const fields = allowed ?? ALL_FIELDS;
     if (!fields.recap && !fields.suggestion) {
+     settled.add(sessionId);
      onTurnSettled?.(sessionId);
      return;
     }
@@ -273,22 +284,45 @@ export const createSessionAssistRuntime = ({
    }
    return;
   }
-  const sessionId = typeof event?.sessionId === 'string' ? event.sessionId : '';
-  if (!sessionId || (scope?.sessionId && scope.sessionId !== sessionId)) return;
-  if (event.type === 'session.status' && event.runtimeStatus === 'idle') {
-   if (lineage?.isChild(sessionId) !== true) onTurnEnd(sessionId, scope?.cwd || '');
-   else onTurnSettled?.(sessionId);
+  if (event.type === 'session.deleted') {
+   for (const id of event.deletedSessionIds ?? []) {
+    invalidate(id);
+    persisted.delete(id);
+    settled.delete(id);
+   }
    return;
   }
-  if (event.type === 'session.status' && event.runtimeStatus !== 'idle') {
+  const sessionId = typeof event?.sessionId === 'string' ? event.sessionId : '';
+  if (!sessionId || (scope?.sessionId && scope.sessionId !== sessionId)) return;
+  const isTurnCompleted = event.type === 'run.completed' || (event.type === 'session.status' && event.runtimeStatus === 'idle');
+  if (isTurnCompleted) {
+   if (lineage?.isChild(sessionId) !== true) onTurnEnd(sessionId, scope?.cwd || '');
+   else if (!settled.has(sessionId)) {
+    settled.add(sessionId);
+    onTurnSettled?.(sessionId);
+   }
+   return;
+  }
+  if (event.type === 'run.started' || (event.type === 'session.status' && event.runtimeStatus !== 'idle')) {
    invalidate(sessionId);
    retireStored(sessionId, scope?.cwd || '');
-   if (event.runtimeStatus === 'unavailable') onTurnSettled?.(sessionId);
+   if (event.runtimeStatus === 'unavailable') {
+    settled.add(sessionId);
+    onTurnSettled?.(sessionId);
+   }
+   return;
+  }
+  if (event.type === 'run.failed' || event.type === 'run.cancelled') {
+   invalidate(sessionId);
+   retireStored(sessionId, scope?.cwd || '');
+   settled.add(sessionId);
+   onTurnSettled?.(sessionId);
    return;
   }
   if (event.type === 'message.created' && event.role === 'user') {
    const since = timers.get(sessionId)?.armedAt ?? gates.get(sessionId)?.armedAt ?? inflight.get(sessionId)?.armedAt;
    if (since !== undefined && Number(event.createdAt) >= since) invalidate(sessionId);
+   settled.delete(sessionId);
   }
  };
 

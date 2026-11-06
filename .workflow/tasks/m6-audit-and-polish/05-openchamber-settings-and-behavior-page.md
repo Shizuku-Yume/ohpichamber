@@ -8,7 +8,7 @@
 **Covers:** W3
 **Files:** `packages/ui/src/components/sections/behavior/BehaviorPage.tsx`; `packages/ui/src/lib/responseStyle.ts`; `packages/ui/src/components/views/SettingsView.tsx`; `packages/ui/src/components/sections/openchamber/OpenChamberPage.tsx`; `packages/ui/src/components/sections/openchamber/DesktopAppSettings.tsx`; `packages/ui/src/components/sections/openchamber/DesktopNetworkSettings.tsx`; `packages/ui/src/components/sections/openchamber/desktopRestartDrafts.ts`; `packages/ui/src/components/sections/openchamber/DefaultsSettings.tsx`; `packages/ui/src/components/sections/openchamber/MobileWorkspaceTabsSettings.tsx`; `packages/ui/src/components/sections/openchamber/OpenChamberVisualSettings.tsx`; `packages/ui/src/components/sections/openchamber/MergedWorktreeCleanupSettings.tsx`; `packages/ui/src/components/sections/openchamber/PasskeySettings.tsx`; `packages/ui/src/components/sections/openchamber/ChatSettings.tsx`; `packages/web/server/lib/host/behavior-routes.js`; `packages/web/server/lib/host/behavior-routes.test.js`; `packages/ui/src/lib/settings/search.ts`
 **Read first:** `.workflow/specs/m6-audit-and-polish.md`; `.workflow/research/m6-audit-list-a-openchamber-ux.md` (§6, §7, §8.1); `packages/ui/src/components/sections/PATTERNS.md`; `packages/ui/src/lib/theme/STYLING.md`; `.agents/skills/openchamber-change-discipline/SKILL.md`
-**Check:** `bun test packages/ui/src/components/sections packages/web/server/lib/prompt-delivery && bun run --cwd packages/ui type-check` → exits 0 with `BehaviorPage` zero-injection on `default`, separated `DesktopAppSettings`, restored `DefaultsSettings`, and all 6 OpenChamber UI controls verified.
+**Check:** `bun test packages/ui/src/components/sections/behavior packages/ui/src/components/sections/openchamber/DefaultsSettings.test.tsx packages/ui/src/lib/settings/search.test.ts packages/ui/src/sync/session-ui-store.test.js packages/ui/src/lib/responseStyle.test.ts && bunx vitest run packages/web/server/lib/host/behavior-prompt.test.js packages/web/server/lib/host/behavior-routes.test.js packages/web/server/lib/host/prompt-delivery-runtime.test.js && bun run --cwd packages/ui type-check && bunx --bun oxlint packages/ui/src/components/sections/openchamber/{DesktopAppSettings.tsx,DesktopNetworkSettings.tsx,desktopRestartDrafts.ts,DefaultsSettings.tsx,DefaultsSettings.test.tsx,MobileWorkspaceTabsSettings.tsx,MergedWorktreeCleanupSettings.tsx,PasskeySettings.tsx,ChatSettings.tsx,OpenChamberVisualSettings.tsx,OpenChamberPage.tsx} packages/ui/src/lib/settings/{search.ts,search.test.ts} packages/ui/src/stores/useUIStore.ts packages/ui/src/sync/{session-ui-store.ts,session-ui-store.test.js} packages/web/server/lib/host/{behavior-routes.js,behavior-routes.test.js}` → exits 0 for all isolated Window 05 passing checks; item 5 remains blocked by W6 ownership.
 
 - [x] Restore `BehaviorPage.tsx` (response-style presets + project `AGENTS.md` / global rules editor) in `SettingsView.tsx` under the `agent` group, enforcing **strict zero-injection on `default`** (0 bytes injected when `default` or unset; non-default presets passed cleanly via session/system options without mutating user prompt messages).
 - [x] Split `DesktopAppSettings.tsx` out of `DesktopNetworkSettings.tsx` and restore `desktopRestartDrafts.ts` so desktop window/tray/launch/Quake controls and local network access are distinct sections.
@@ -20,13 +20,29 @@
 
 - **Item 5 Blocked by W6 Ownership Boundary:** `useAssistantStatus.ts` maps OMP native tool status and Compact action delegates to `canonicalClient.compactSession(sessionId)`. However, full attachment parity requires modifying `packages/agent-service/src/worker/session.ts` (currently inlining text as `fileMention` while throwing HTTP 413 for >5MB and HTTP 415 for binary, lacking delimiter framing and fallback paths for `read`). Per `common.md`, `packages/agent-service/src/worker/session.ts` is owned exclusively by W6 (`06-native-subagents-and-tree-cost`), so editing it in W5 is disallowed by project change discipline. Item 5 remains open pending W6 cutover.
 
-## Test Evidence and Check Analysis
+## Progress
 
-- **Composite Check Command Analysis:**
-  Running `bun test packages/ui/src/components/sections packages/web/server/lib/prompt-delivery` exits 1 (141 pass / 58 fail across 44 files).
-  1. *Stale path in check command:* `packages/web/server/lib/prompt-delivery` does not exist; prompt delivery runtime lives at `packages/web/server/lib/host/prompt-delivery-runtime.js`.
-  2. *Process-wide React mock pollution:* The 58 UI failures are caused entirely by pre-existing `packages/ui/src/components/sections/openchamber/sourceControlOAuthPolling.test.tsx`, which registers process-wide `mock.module('react', ...)` and UI mocks that break React hooks across subsequent test files executed in the same Bun process.
-- **Isolated Component & Route Test Evidence (All Pass):**
+### Check before
+- Inspected baseline attachment handling in `packages/agent-service/src/worker/session.ts`: inlines text attachments as native `fileMention` parts without delimiter framing, rejects text >5MB with HTTP 413, and rejects binary attachments with HTTP 415 instead of falling back to paths for `read`. While `useAssistantStatus.ts` maps native tool statuses and Compact delegates to `canonicalClient.compactSession(sessionId)`, full attachment parity requires updating `worker/session.ts`. However, `common.md` assigns `packages/agent-service/src/worker/session.ts` exclusively to W6 (`06-native-subagents-and-tree-cost`), so editing it in W5 is blocked by ownership boundary.
+- Executed the broad check command `bun test packages/ui/src/components/sections packages/web/server/lib/prompt-delivery` at baseline: exited 1 (141 pass / 58 fail across 44 files). Failure analysis revealed: (1) `packages/web/server/lib/prompt-delivery` is a stale nonexistent path (real path is `packages/web/server/lib/host/prompt-delivery-runtime.js`), and (2) all 58 UI test failures were caused by pre-existing global module mock pollution in `packages/ui/src/components/sections/openchamber/sourceControlOAuthPolling.test.tsx` (`mock.module('react', ...)` leaks across test files in Bun).
+- Baseline `bun run --cwd packages/ui type-check` had pre-existing type errors in `BehaviorPage.test.tsx` (happy-dom event prototype mismatch) and `useConfigStore.ts` `localStorage` reference error in test runner.
+
+### Work
+- Partitioned `DesktopAppSettings.tsx` (launch at login, minimize to tray, keep awake, macOS menu bar, Linux native frame, mini chat shortcut, Quake mode, shortcut recording dialog) from `DesktopNetworkSettings.tsx` (UI password, LAN access) matching upstream `0056bf6a9`, and restored `desktopRestartDrafts.ts` for single-write atomic restart drafts.
+- Deduplicated `DefaultsSettings.tsx` in `OpenChamberPage.tsx` so it renders strictly under Sessions tab; restored Default Model selector mapped to OMP role `default`, Default Thinking Effort selector, and Default Session Mode selector (`main`/`plan`/`vibe`/`goal`).
+- Refactored `DefaultsSettings.tsx` layout to use container query (`@xl:flex-row`) and shared trigger classes (`SETTINGS_SELECT_ROW_TRIGGER_CLASS`), and verified `showDeletionDialog` and `showChatsSection` persist via `updateDesktopSettings`.
+- Wired Default Session Mode to `useUIStore` and `session-ui-store.ts` `openNewSessionDraft`, verified with unit test in `session-ui-store.test.js`.
+- Restored `MobileWorkspaceTabsSettings.tsx` with self-contained `@dnd-kit` sortable visibility list and mounted it under general mobile settings.
+- Restored `worktreeArchiveOnDoneEnabled` in `MergedWorktreeCleanupSettings.tsx` using localized keys from `settings.openchamber.finishedWorktrees`.
+- Restored `liveBrowserTabLimit` (1-20 NumberInput stepper) in `OpenChamberVisualSettings.tsx` with shared stepper row classes.
+- Restored inline Passkey label rename in `PasskeySettings.tsx` via `renameStoredPasskey`.
+- Restored `mobileReturnKeySends` (mobile-gated) and `savePastedImagesAsFiles` in `ChatSettings.tsx`.
+- Restored search registry coverage and anchors in `packages/ui/src/lib/settings/search.ts` with surface availability gating, verified with unit tests in `search.test.ts`.
+- Removed absolute Host paths from `behavior-routes.js` GET and PUT responses and updated `behavior-routes.test.js`.
+- Executed live Web smoke via Chrome DevTools CLI on ports 5225/3955 with data dir `/tmp/m6-w5-data`, testing Settings navigation, Behavior page zero-injection default and explicit preset selection (Concise), Global AGENTS.md read/write without path leakage, and Sessions restored controls.
+
+### Check after
+- Focused isolated test suites all pass cleanly (exit 0):
   - `bun test packages/ui/src/components/sections/behavior/BehaviorPage.test.tsx`: 3 pass, 0 fail (10 assertions)
   - `bun test packages/ui/src/lib/responseStyle.test.ts`: 3 pass, 0 fail (28 assertions)
   - `bun test packages/ui/src/components/sections/openchamber/DefaultsSettings.test.tsx`: 4 pass, 0 fail (11 assertions)
@@ -34,19 +50,7 @@
   - `bun test packages/ui/src/sync/session-ui-store.test.js`: 84 pass, 0 fail (226 assertions)
   - `bunx vitest run packages/web/server/lib/host/behavior-prompt.test.js packages/web/server/lib/host/behavior-routes.test.js packages/web/server/lib/host/prompt-delivery-runtime.test.js`: 3 test files passed, 18 tests passed
   - `bun run --cwd packages/ui type-check`: No type errors in 2,972 files across 2 projects
-  - `bunx --bun oxlint <touched files>`: 0 errors, 0 warnings across all files
-
-## Progress
-
-- [x] Restored `desktopRestartDrafts.ts` and partitioned `DesktopAppSettings.tsx` (launch at login, minimize to tray, keep awake, Mac menu bar, Linux native frame, mini chat shortcut, Quake console mode) from `DesktopNetworkSettings.tsx` (LAN access and UI password).
-- [x] Deduplicated `DefaultsSettings.tsx` in `OpenChamberPage.tsx` so it renders strictly under Sessions tab; restored Default Model selector mapped to OMP role `default`, Default Thinking Effort selector, and Default Session Mode selector (`main`/`plan`/`vibe`/`goal`).
-- [x] Wired Default Session Mode to `useUIStore` and `session-ui-store.ts` `openNewSessionDraft`, verified with unit test in `session-ui-store.test.js`.
-- [x] Restored container queries (`@xl:flex-row`) and shared trigger classes (`SETTINGS_SELECT_ROW_TRIGGER_CLASS`) on model and effort pickers.
-- [x] Restored `MobileWorkspaceTabsSettings.tsx` with `@dnd-kit` sortable visibility list and mounted it under general mobile settings.
-- [x] Restored `worktreeArchiveOnDoneEnabled` in `MergedWorktreeCleanupSettings.tsx` using localized keys from `settings.openchamber.finishedWorktrees`.
-- [x] Restored `liveBrowserTabLimit` (1-20 stepper) in `OpenChamberVisualSettings.tsx` with shared `NumberInput` classes.
-- [x] Restored inline Passkey label rename in `PasskeySettings.tsx` via `renameStoredPasskey`.
-- [x] Restored `mobileReturnKeySends` (mobile-gated) and `savePastedImagesAsFiles` in `ChatSettings.tsx`.
-- [x] Restored search registry coverage and anchors in `packages/ui/src/lib/settings/search.ts` with surface availability gating, verified with unit tests in `search.test.ts`.
-- [x] Removed absolute Host paths from `behavior-routes.js` GET and PUT responses and verified with focused route test suite.
-- [x] Executed live Web smoke via Chrome DevTools CLI on ports 5225/3955 with data dir `/tmp/m6-w5-data`, testing Settings, Behavior page default zero-injection and explicit preset selection, and Sessions restored controls.
+  - `bunx --bun oxlint <touched files>`: 0 errors, 0 warnings across all modified/created files
+  - `.workflow/bin/workflow validate`: Workflow is valid (220 task files) (exit 0)
+- Broad check command `bun test packages/ui/src/components/sections packages/web/server/lib/prompt-delivery` still fails at exit 1 due to the stale prompt-delivery path and pre-existing React mock pollution from `sourceControlOAuthPolling.test.tsx`.
+- Item 5 remains open and unchecked due to the aforementioned W6 file ownership boundary on `packages/agent-service/src/worker/session.ts`.

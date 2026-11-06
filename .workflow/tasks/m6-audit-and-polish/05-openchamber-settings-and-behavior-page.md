@@ -4,7 +4,6 @@
 **Task type:** feature
 **Base commit:** 876a08f538
 **Started:** 2026-11-07
-**Finished:** 2026-11-07
 **Blocked by:** 01, 02, 03
 **Covers:** W3
 **Files:** `packages/ui/src/components/sections/behavior/BehaviorPage.tsx`; `packages/ui/src/lib/responseStyle.ts`; `packages/ui/src/components/views/SettingsView.tsx`; `packages/ui/src/components/sections/openchamber/OpenChamberPage.tsx`; `packages/ui/src/components/sections/openchamber/DesktopAppSettings.tsx`; `packages/ui/src/components/sections/openchamber/DesktopNetworkSettings.tsx`; `packages/ui/src/components/sections/openchamber/desktopRestartDrafts.ts`; `packages/ui/src/components/sections/openchamber/DefaultsSettings.tsx`; `packages/ui/src/components/sections/openchamber/MobileWorkspaceTabsSettings.tsx`; `packages/ui/src/components/sections/openchamber/OpenChamberVisualSettings.tsx`; `packages/ui/src/components/sections/openchamber/MergedWorktreeCleanupSettings.tsx`; `packages/ui/src/components/sections/openchamber/PasskeySettings.tsx`; `packages/ui/src/components/sections/openchamber/ChatSettings.tsx`; `packages/web/server/lib/host/behavior-routes.js`; `packages/web/server/lib/host/behavior-routes.test.js`; `packages/ui/src/lib/settings/search.ts`
@@ -15,7 +14,27 @@
 - [x] Split `DesktopAppSettings.tsx` out of `DesktopNetworkSettings.tsx` and restore `desktopRestartDrafts.ts` so desktop window/tray/launch/Quake controls and local network access are distinct sections.
 - [x] Deduplicate `DefaultsSettings.tsx` in `OpenChamberPage.tsx` (render only under the Sessions tab, removing the duplicate on the General tab) and restore Default Model (mapped to OMP `default` role), Default Thinking Effort, and Default Session Mode (`main`/`plan`/`vibe`/`goal`) selectors.
 - [x] Restore the 6 dropped OpenChamber controls whose backing stores already exist: `MobileWorkspaceTabsSettings.tsx` (drag-to-reorder mobile bottom tabs), `worktreeArchiveOnDoneEnabled` in `MergedWorktreeCleanupSettings.tsx`, `liveBrowserTabLimit` (1–20) stepper in `OpenChamberVisualSettings.tsx`, inline Passkey label rename in `PasskeySettings.tsx`, and `mobileReturnKeySends` + `savePastedImagesAsFiles` in `ChatSettings.tsx`.
-- [x] Ensure `useAssistantStatus.ts` maps OMP native tool names (`bash`, `task`, `ask`, `find`, `grep`, `glob`, `todo`), text attachments inline cleanly with delimiters while binary/large attachments supply paths for `read`, and the Compact action calls the Canonical compact RPC (`session.compact()`).
+- [ ] Ensure `useAssistantStatus.ts` maps OMP native tool names (`bash`, `task`, `ask`, `find`, `grep`, `glob`, `todo`), text attachments inline cleanly with delimiters while binary/large attachments supply paths for `read`, and the Compact action calls the Canonical compact RPC (`session.compact()`).
+
+## Blockers and Incomplete Scope
+
+- **Item 5 Blocked by W6 Ownership Boundary:** `useAssistantStatus.ts` maps OMP native tool status and Compact action delegates to `canonicalClient.compactSession(sessionId)`. However, full attachment parity requires modifying `packages/agent-service/src/worker/session.ts` (currently inlining text as `fileMention` while throwing HTTP 413 for >5MB and HTTP 415 for binary, lacking delimiter framing and fallback paths for `read`). Per `common.md`, `packages/agent-service/src/worker/session.ts` is owned exclusively by W6 (`06-native-subagents-and-tree-cost`), so editing it in W5 is disallowed by project change discipline. Item 5 remains open pending W6 cutover.
+
+## Test Evidence and Check Analysis
+
+- **Composite Check Command Analysis:**
+  Running `bun test packages/ui/src/components/sections packages/web/server/lib/prompt-delivery` exits 1 (141 pass / 58 fail across 44 files).
+  1. *Stale path in check command:* `packages/web/server/lib/prompt-delivery` does not exist; prompt delivery runtime lives at `packages/web/server/lib/host/prompt-delivery-runtime.js`.
+  2. *Process-wide React mock pollution:* The 58 UI failures are caused entirely by pre-existing `packages/ui/src/components/sections/openchamber/sourceControlOAuthPolling.test.tsx`, which registers process-wide `mock.module('react', ...)` and UI mocks that break React hooks across subsequent test files executed in the same Bun process.
+- **Isolated Component & Route Test Evidence (All Pass):**
+  - `bun test packages/ui/src/components/sections/behavior/BehaviorPage.test.tsx`: 3 pass, 0 fail (10 assertions)
+  - `bun test packages/ui/src/lib/responseStyle.test.ts`: 3 pass, 0 fail (28 assertions)
+  - `bun test packages/ui/src/components/sections/openchamber/DefaultsSettings.test.tsx`: 4 pass, 0 fail (11 assertions)
+  - `bun test packages/ui/src/lib/settings/search.test.ts`: 12 pass, 0 fail (38 assertions)
+  - `bun test packages/ui/src/sync/session-ui-store.test.js`: 84 pass, 0 fail (226 assertions)
+  - `bunx vitest run packages/web/server/lib/host/behavior-prompt.test.js packages/web/server/lib/host/behavior-routes.test.js packages/web/server/lib/host/prompt-delivery-runtime.test.js`: 3 test files passed, 18 tests passed
+  - `bun run --cwd packages/ui type-check`: No type errors in 2,972 files across 2 projects
+  - `bunx --bun oxlint <touched files>`: 0 errors, 0 warnings across all files
 
 ## Progress
 

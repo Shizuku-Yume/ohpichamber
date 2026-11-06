@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ProblemDetailsSchema, RuntimeSessionSchema } from '@openchamber/agent-contract';
 import { HostNativePolicySnapshotSchema, HostWorkspacePolicySchema, HostWorkspaceRegisteredSchema } from '@openchamber/agent-service/private-protocol';
@@ -25,12 +27,30 @@ const sameScope = (left, right) => left.projectId === right.projectId
   && left.workspaceId === right.workspaceId && left.agentDirectoryId === right.agentDirectoryId
   && left.cwd === right.cwd && left.agentDirectory === right.agentDirectory;
 
+export {
+  ensureAgentRuntimeSymlinks,
+  resolveWebAgentRuntime,
+} from '../../../scripts/standalone-loader.mjs';
+
 /** Node admission and machine policy around the separate, SDK-owning Bun service. */
 export function createHostAgentRuntime({
   dataDir, scopeRuntime, validateDirectoryPath, getEnvironmentForDirectory,
-  invokeHostAction, enterprisePolicyOptions, bunPath,
-  entrypoint = fileURLToPath(new URL('../index.js', import.meta.resolve('@openchamber/agent-service/private-protocol'))),
+  invokeHostAction, enterprisePolicyOptions, bunPath, entrypoint,
 }) {
+  let resolvedBunPath = bunPath ?? process.env.OHPICHAMBER_BUN;
+  let resolvedEntrypoint = entrypoint ?? process.env.OHPICHAMBER_AGENT_SERVICE_ENTRYPOINT;
+  if (!resolvedBunPath || !resolvedEntrypoint) {
+    const bundled = resolveWebAgentRuntime();
+    if (bundled) {
+      resolvedBunPath ??= bundled.bunPath;
+      resolvedEntrypoint ??= bundled.entrypoint;
+    } else {
+      resolvedBunPath ??= 'bun';
+      resolvedEntrypoint ??= fileURLToPath(new URL('../index.js', import.meta.resolve('@openchamber/agent-service/private-protocol')));
+    }
+  }
+  process.env.OHPICHAMBER_BUN ??= resolvedBunPath;
+  process.env.OHPICHAMBER_AGENT_SERVICE_ENTRYPOINT ??= resolvedEntrypoint;
   const approvalPolicyStore = openApprovalPolicyStore({ dataDir });
   let service;
   let skillFileOwner;
@@ -53,7 +73,7 @@ export function createHostAgentRuntime({
     resolvePolicy, validateDirectoryPath, enterprisePolicyOptions, approvalPolicyStore,
   });
   service = createAgentServiceSupervisor({
-    bunPath, entrypoint, dataDir, approvalPolicyStore, authorizeWorkerOperation,
+    bunPath: resolvedBunPath, entrypoint: resolvedEntrypoint, dataDir, approvalPolicyStore, authorizeWorkerOperation,
     invokeHostAction, handleSkillSource: (operation, capturedScope) => skillFileOwner.handle(operation, capturedScope),
   });
   skillFileOwner = createSkillFileOwner({ service });

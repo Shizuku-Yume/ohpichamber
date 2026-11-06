@@ -108,10 +108,14 @@ export type Run = z.infer<typeof RunSchema>;
 export const SubagentSchema = z.strictObject({
   subagentId: EntityIdSchema, parentSessionId: EntityIdSchema, childSessionId: EntityIdSchema,
   toolCallId: EntityIdSchema.optional(),
-  role: z.string(), solutionSpace: z.string().optional(), status: z.enum(['idle', 'running', 'completed', 'failed', 'cancelled']),
+  role: z.string(), solutionSpace: z.string().optional(), status: z.enum(['idle', 'running', 'parked', 'completed', 'failed', 'cancelled']),
   activeTool: z.string().optional(),
   tokens: z.number().int().nonnegative().optional(),
   cost: z.number().nonnegative().optional(),
+  /** Own-session spend, excluding everything the subagent's own children spent. */
+  directCost: z.number().nonnegative().optional(),
+  /** Own spend plus every descendant's, so a row answers "what did this line cost". */
+  treeCost: z.number().nonnegative().optional(),
   turnCount: z.number().int().nonnegative().optional(),
   retryCountdown: z.number().nonnegative().optional(),
   depth: z.number().int().min(0).max(8).optional(),
@@ -120,8 +124,55 @@ export const SubagentSchema = z.strictObject({
   task: z.string().optional(),
   lastIntent: z.string().optional(),
   durationMs: z.number().nonnegative().optional(),
+  createdAt: TimestampSchema.optional(),
+  updatedAt: TimestampSchema.optional(),
+  /** True when the row was rebuilt from a persisted transcript rather than a live run. */
+  persisted: z.boolean().optional(),
+  sessionFile: z.string().optional(),
+  outputPath: z.string().optional(),
+  patchPath: z.string().optional(),
 });
 export type Subagent = z.infer<typeof SubagentSchema>;
+export const SubagentListResponseSchema = z.strictObject({
+  subagents: z.array(SubagentSchema),
+});
+export type SubagentListResponse = z.infer<typeof SubagentListResponseSchema>;
+export const SubagentTranscriptEntrySchema = z.strictObject({
+  entryId: EntityIdSchema,
+  role: z.enum(['user', 'assistant', 'system']),
+  text: z.string(),
+  createdAt: TimestampSchema,
+  providerId: z.string().optional(),
+  modelId: z.string().optional(),
+  toolCalls: z.array(z.string().min(1)),
+});
+export type SubagentTranscriptEntry = z.infer<typeof SubagentTranscriptEntrySchema>;
+export const SubagentTranscriptResponseSchema = z.strictObject({
+  subagentId: EntityIdSchema,
+  sessionFile: z.string(),
+  entries: z.array(SubagentTranscriptEntrySchema),
+});
+export type SubagentTranscriptResponse = z.infer<typeof SubagentTranscriptResponseSchema>;
+export const SubagentTreeCostResponseSchema = z.strictObject({
+  sessionId: EntityIdSchema,
+  /** Direct (own-session) spend of every listed subagent. */
+  directCost: z.number().nonnegative(),
+  /** Direct spend rolled up over the whole subagent tree. */
+  treeCost: z.number().nonnegative(),
+});
+export type SubagentTreeCostResponse = z.infer<typeof SubagentTreeCostResponseSchema>;
+export const SessionRecapEntrySchema = z.strictObject({
+  sessionId: EntityIdSchema,
+  cwd: z.string(),
+  recap: z.string().min(1),
+  /** Epoch milliseconds, converted from the native index's UNIX seconds. */
+  createdAt: TimestampSchema,
+});
+export type SessionRecapEntry = z.infer<typeof SessionRecapEntrySchema>;
+export const SessionRecapListResponseSchema = z.strictObject({
+  recaps: z.array(SessionRecapEntrySchema),
+});
+export type SessionRecapListResponse = z.infer<typeof SessionRecapListResponseSchema>;
 export const SessionCreateRequestSchema = z.strictObject({
   projectId: EntityIdSchema, workspaceId: EntityIdSchema, options: CapturedSendOptionsSchema,
   title: z.string().trim().min(1).optional(),
@@ -169,6 +220,7 @@ export const SessionControlRequestSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('btw.branch'), recordId: EntityIdSchema }),
   z.strictObject({ type: z.literal('subagent.steer'), subagentId: EntityIdSchema, message: z.string().min(1) }),
   z.strictObject({ type: z.literal('subagent.cancel'), subagentId: EntityIdSchema }),
+  z.strictObject({ type: z.literal('subagent.revive'), subagentId: EntityIdSchema, message: z.string().min(1).optional() }),
   z.strictObject({ type: z.literal('loop.stop') }),
 ]);
 export type SessionControlRequest = z.infer<typeof SessionControlRequestSchema>;
@@ -182,6 +234,7 @@ export const SessionControlAckSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('btw.branch'), sessionFile: z.string().optional(), sessionId: EntityIdSchema.optional(), rootSessionId: EntityIdSchema.optional(), branch: SessionBranchStateSchema }),
   z.strictObject({ type: z.literal('subagent.steer'), subagentId: EntityIdSchema, accepted: z.boolean() }),
   z.strictObject({ type: z.literal('subagent.cancel'), subagentId: EntityIdSchema, cancelled: z.boolean() }),
+  z.strictObject({ type: z.literal('subagent.revive'), subagentId: EntityIdSchema, revived: z.boolean(), prompted: z.boolean() }),
   z.strictObject({ type: z.literal('loop.stop'), stopped: z.boolean() }),
 ]);
 export type SessionControlAck = z.infer<typeof SessionControlAckSchema>;

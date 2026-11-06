@@ -7,6 +7,7 @@ import { useI18n } from '@/lib/i18n';
 import { canonicalClient } from '@/api/canonicalClient';
 import { useSubagentsStore } from '@/stores/useSubagentsStore';
 import type { Subagent } from '@openchamber/agent-contract';
+import { AgentHubModal } from '@/components/chat/AgentHubModal';
 
 const EMPTY_SUBAGENTS: Subagent[] = [];
 
@@ -170,6 +171,7 @@ const SubagentRow: React.FC<SubagentRowProps> = ({ subagent, sessionId }) => {
 export const SubagentHudTray: React.FC<SubagentHudTrayProps> = React.memo(({ sessionId }) => {
   const { t } = useI18n();
   const [expanded, setExpanded] = React.useState(true);
+  const [hubOpen, setHubOpen] = React.useState(false);
   const subagents = useSubagentsStore(
     React.useCallback((state) => (sessionId && state.byParent[sessionId]) ? state.byParent[sessionId] : EMPTY_SUBAGENTS, [sessionId]),
   );
@@ -192,6 +194,7 @@ export const SubagentHudTray: React.FC<SubagentHudTrayProps> = React.memo(({ ses
   const totalCost = subagents.reduce((acc, s) => acc + (s.cost ?? 0), 0);
 
   return (
+    <>
     <div
       className="border-b border-border/60 bg-muted/20 px-3 py-1.5 transition-colors"
       data-testid="subagent-hud-tray"
@@ -231,6 +234,8 @@ export const SubagentHudTray: React.FC<SubagentHudTrayProps> = React.memo(({ ses
         </div>
       )}
     </div>
+    <AgentHubModal open={hubOpen} onOpenChange={setHubOpen} sessionId={sessionId} />
+    </>
   );
 });
 

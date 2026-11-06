@@ -8,6 +8,7 @@ import { McpOperationSchema, McpResultSchema } from './worker/mcp/protocol.ts';
 import { ShellOperationSchema, ShellResultSchema } from './shell/protocol.ts';
 import { CompletionOperationSchema, CompletionResultSchema } from './completion/protocol.ts';
 import { UsageQuerySchema, UsageStatsSchema, UsageToolsResponseSchema } from '@openchamber/agent-contract';
+import { SubagentSchema, SubagentTranscriptResponseSchema, SubagentTreeCostResponseSchema } from '@openchamber/agent-contract';
 import { NativePolicyContextSchema, HostActionRequestSchema, HostActionResultSchema, HostNativePolicySnapshotSchema } from './native-policy-protocol.ts';
 import { WebSearchOperationSchema, WebSearchResultSchema } from './worker/websearch/protocol.ts';
 
@@ -81,6 +82,10 @@ export const WorkerOperationSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('btw.branch'), recordId: EntityIdSchema }),
   z.strictObject({ type: z.literal('subagent.steer'), subagentId: EntityIdSchema, message: z.string().min(1) }),
   z.strictObject({ type: z.literal('subagent.cancel'), subagentId: EntityIdSchema }),
+  z.strictObject({ type: z.literal('subagent.revive'), subagentId: EntityIdSchema, message: z.string().min(1).optional() }),
+  z.strictObject({ type: z.literal('subagents.list') }),
+  z.strictObject({ type: z.literal('subagents.transcript'), subagentId: EntityIdSchema }),
+  z.strictObject({ type: z.literal('subagents.tree-cost') }),
   z.strictObject({ type: z.literal('loop.stop') }),
   z.strictObject({ type: z.literal('mode.set'), mode: z.enum(['main', 'plan', 'vibe']) }),
   z.strictObject({ type: z.literal('session.rename'), title: z.string().trim().min(1) }),
@@ -133,6 +138,10 @@ const WorkerOperationResultSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('btw.branch'), sessionFile: z.string().optional(), sessionId: EntityIdSchema.optional(), rootSessionId: EntityIdSchema.optional(), branch: SessionBranchStateSchema, seed: ProjectionSeedSchema.optional() }),
   z.strictObject({ type: z.literal('subagent.steer'), subagentId: EntityIdSchema, accepted: z.boolean() }),
   z.strictObject({ type: z.literal('subagent.cancel'), subagentId: EntityIdSchema, cancelled: z.boolean() }),
+  z.strictObject({ type: z.literal('subagent.revive'), subagentId: EntityIdSchema, revived: z.boolean(), prompted: z.boolean() }),
+  z.strictObject({ type: z.literal('subagents.list'), subagents: z.array(SubagentSchema) }),
+  z.strictObject({ type: z.literal('subagents.transcript'), transcript: SubagentTranscriptResponseSchema }),
+  z.strictObject({ type: z.literal('subagents.tree-cost'), cost: SubagentTreeCostResponseSchema }),
   z.strictObject({ type: z.literal('loop.stop'), stopped: z.boolean() }),
   z.strictObject({ type: z.literal('approval.resolve'), resolved: z.literal(true) }),
   z.strictObject({ type: z.literal('question.resolve'), resolved: z.literal(true) }),

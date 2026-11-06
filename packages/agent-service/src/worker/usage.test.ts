@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { UsageStatsSchema, UsageToolsResponseSchema, type UsageQuery } from '@openchamber/agent-contract';
@@ -7,7 +7,7 @@ import type { FileEntry, SessionEntry, SessionMessageEntry } from '@oh-my-pi/pi-
 import { loadSessionFile } from '@oh-my-pi/pi-coding-agent/session/session-loader';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import type { UsageSessionReference } from '../protocol.ts';
-import { getUsageStats, getUsageTools } from './usage.ts';
+import { getUsageStats, getUsageTools, settleUsageSession } from './usage.ts';
 
 let directory: string;
 const start = Date.parse('2026-03-07T05:00:00Z');
@@ -112,6 +112,26 @@ test('malformed, truncated, empty and missing transcripts preserve siblings with
   expect(JSON.stringify(stats.errors)).not.toContain(directory);
   await expect(getUsageStats(query, [malformed, missing])).rejects.toThrow('USAGE_UNAVAILABLE');
   await expect(getUsageTools(query, [truncated, empty])).rejects.toThrow('USAGE_UNAVAILABLE');
+});
+
+test('settlement indexes the transcript and an unchanged repeat request reuses the validated read', async () => {
+  const source = await transcript('warm', [user('warm-u', null, start), assistant('warm-a', 'warm-u', start + 1)]);
+  await settleUsageSession(source.sessionFile);
+  const bytes = await readFile(source.sessionFile, 'utf8');
+  // Pin one exact mtime so the size+mtime key is deterministic across calls.
+  const pinned = new Date('2026-03-07T05:00:00Z');
+  await utimes(source.sessionFile, pinned, pinned);
+  expect((await getUsageStats(query, [source])).steps).toBe(1);
+  // Same size and same pinned mtime, but now unparsable: a re-parse would
+  // refuse it, so returning the same counts proves the validated read was reused.
+  await writeFile(source.sessionFile, 'x'.repeat(bytes.length));
+  await utimes(source.sessionFile, pinned, pinned);
+  expect((await getUsageStats(query, [source])).steps).toBe(1);
+  // Growing the file breaks the key, so the new bytes are validated and refused
+  // instead of being reported as authoritative zeros.
+  await writeFile(source.sessionFile, 'x'.repeat(bytes.length + 1));
+  await utimes(source.sessionFile, pinned, pinned);
+  await expect(getUsageStats(query, [source])).rejects.toThrow('USAGE_UNAVAILABLE');
 });
 
 test('active native DAG excludes abandoned branch and deduplicates proven fork lineage, not unrelated short ID collisions', async () => {

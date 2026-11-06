@@ -1,4 +1,4 @@
-import { realpath } from 'node:fs/promises';
+import { realpath, stat } from 'node:fs/promises';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { z } from 'zod';
 import { UsageQuerySchema, type UsageModel, type UsageQuery, type UsageQueryResult, type UsageStats, type UsageTokens, type UsageToolTotals, type UsageToolsResponse, type UsageToolUsage } from '@openchamber/agent-contract';
@@ -28,14 +28,42 @@ class CorruptSession extends Error {}
 type Source = { reference: UsageSessionReference; header: SessionHeader; branch: SessionEntry[] };
 type Batch = { sources: Source[]; errors: Record<string, string>; families: Map<Source, string> };
 
+/**
+ * Validated transcripts keyed by file when the index has not seen them.
+ *
+ * `stats.db` cannot answer these two questions, so the authoritative projection
+ * stays here: its `messages` / `tool_calls` tables carry no `parent_id`, so the
+ * abandoned-branch walk that `getBranch()` performs is not expressible in SQL,
+ * and `tool_calls` records only a call time — a tool result's arrival time
+ * decides whether an outcome falls inside `[from, to)`, which the index does
+ * not store. `getOverallStats` would also aggregate every row in the database,
+ * losing the authorized-reference scope this report must keep, so the canonical
+ * answer stays a projection of the references the Host admitted — but a warm
+ * reference costs one `stat` and no JSONL parse.
+ */
+const validatedSources = new Map<string, { size: number; mtimeMs: number; tools: boolean; source: Source }>();
+
 /** Read only the authorized transcript. No ancestor paths, stats databases, or session directories are scanned. */
 async function readSource(reference: UsageSessionReference, includeTools: boolean): Promise<Source> {
   const file = await realpath(reference.sessionFile);
+  // Containment below must run on every call: a symlink swapped in after a
+  // cached read would otherwise be trusted.
+
   if (file !== resolve(reference.sessionFile)) throw new Error('USAGE_SESSION_UNCONTAINED');
   if (reference.sessionsDirectory !== undefined) {
     const directory = await realpath(reference.sessionsDirectory);
     const path = relative(directory, file);
     if (isAbsolute(path) || path === '..' || path.startsWith(`..${sep}`) || path === '') throw new Error('USAGE_SESSION_UNCONTAINED');
+  }
+  // Reuse a validated read while the file is byte-identical, so the steady
+  // state never re-parses the JSONL on a subsequent request.
+  const cached = validatedSources.get(file);
+  if (cached !== undefined) {
+    const info = await stat(file).catch(() => null);
+    if (info && info.size === cached.size && info.mtimeMs === cached.mtimeMs && (cached.tools || !includeTools)) {
+      return { ...cached.source, reference };
+    }
+    validatedSources.delete(file);
   }
   const loaded = await loadSessionFile(file, undefined, { throwIfMissing: true });
   if (loaded.malformedRecords > 0 || loaded.invalidHeader || loaded.sourceSize === null || loaded.entries.length === 0) throw new CorruptSession();
@@ -91,6 +119,8 @@ async function readSource(reference: UsageSessionReference, includeTools: boolea
   try {
     const branch = manager.getBranch();
     if (branch.length > 0 && branch[0]?.parentId !== null) throw new CorruptSession();
+    const info = await stat(file).catch(() => null);
+    if (info) validatedSources.set(file, { size: info.size, mtimeMs: info.mtimeMs, tools: includeTools, source: { reference, header, branch } });
     return { reference, header, branch };
   } finally {
     await manager.close();

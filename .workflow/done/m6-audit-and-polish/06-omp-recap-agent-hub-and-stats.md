@@ -11,7 +11,7 @@
 **Read first:** `.workflow/specs/m6-audit-and-polish.md`; `.workflow/research/m6-audit-list-b-omp-capabilities.md` (§2, §3, §5.3, §6); `.workflow/research/m6-audit-list-c-ui-compliance.md` (§5.2.2–§5.2.4 for `SessionRecapSpacer.tsx`, `SubagentHudTray.tsx`, `WorkStatusSubagentsSection.tsx`); `packages/ui/src/lib/theme/STYLING.md`
 **Check:** `bun test packages/agent-contract packages/agent-service && bun run --cwd packages/ui type-check` → exits 0 with native `IdleMaintenance` recaps, persisted subagents + `subagent.revive` + `AgentHubModal.tsx`, and `@oh-my-pi/omp-stats` `StatsDatabase` integration passing.
 
-- [x] Initialize OMP's native `session.enableIdleMaintenance({ isBlocked, scheduledTurn, onRecap })` in `packages/agent-service/src/worker/session.ts` to journal recaps in `history.db` (`session_recaps`) (recaps reach the UI through the journal route rather than a canonical event, since the shared reducer owns event variants), expose `GET /api/agent/v1/sessions/:id/recaps` (`listSessionRecaps`), register `recap.enabled` and `recap.idleSeconds`, and retire the legacy `packages/web/server/lib/session-assist/` small-model polling watcher.
+- [x] Initialize OMP's native `session.enableIdleMaintenance({ isBlocked, scheduledTurn, onRecap })` in `packages/agent-service/src/worker/session.ts` to journal recaps in `history.db` (`session_recaps`) (the canonical event is transient and reaches the UI immediately through `useSessionRecapStore`, while the journal route covers frames this client missed), expose `GET /api/agent/v1/sessions/:id/recaps` (`listSessionRecaps`), register `recap.enabled` and `recap.idleSeconds`, and retire the legacy `packages/web/server/lib/session-assist/` small-model polling watcher.
 - [x] Update `SessionRecapSpacer.tsx` (`SessionRecapNote` and `CompactionDivider`) and `useSessionAssist.ts` to render `session.recap` immediately (removing the 60s client delay), display full compaction metadata (`method`, `tokensBefore`, `tokensAfter`, `summary`), and remove hardcoded English fallback chains / token suffixes per Audit List C.
 - [x] Wire OMP `Agent Hub` in `worker/session.ts` and `@openchamber/agent-contract`: call `registerPersistedSubagents` on bootstrap so subagents survive UI reloads as `parked`, support `subagent.revive` via `AgentLifecycleManager`, and expose `GET /api/agent/v1/sessions/:id/subagents`, `GET /api/agent/v1/sessions/:id/subagents/:subagentId/transcript` (`agentTranscriptSource`), and `GET /api/agent/v1/sessions/:id/subagents/tree-cost` (`sumSubagentTreeCost`).
 - [x] Build `packages/ui/src/components/chat/AgentHubModal.tsx` (openable from `SubagentHudTray.tsx` and `WorkStatusSubagentsSection.tsx`) with hierarchical subagent table, direct + tree cost rollups, transcript viewer, and Revive & Prompt / Steer / Cancel controls; remediate all Audit List C primitive/i18n/RTL issues in `SubagentHudTray.tsx` and `WorkStatusSubagentsSection.tsx` (`size="xs"` buttons, shared `Input`, logical `ps-*`/`ms-*` classes).
@@ -62,15 +62,21 @@
   `idleRecapBlocked()` deliberately excludes `promptTask`, which stays assigned after a turn settles and would have
   blocked every recap.
 - `agent-service/src/worker/usage.ts`: `settleUsageSession()` settles each transcript into `@oh-my-pi/omp-stats`'
-  `stats.db`. The canonical usage report still projects the validated native branch, because `stats.db` has no
-  authorized-reference set and no abandoned-branch notion.
+  `stats.db` on turn end, and `getUsageStats` / `getUsageTools` reuse a validated read keyed by
+  `(size, mtime)` so a repeat request scans no JSONL — proven by a test that rewrites the bytes at the same
+  size and mtime and still gets the same answer, then grows the file and is correctly refused. The canonical
+  report stays an authorized-reference projection: `stats.db`'s `messages` / `tool_calls` store no `parent_id`
+  (so `getBranch()`'s abandoned-branch walk is not expressible in SQL) and no tool-result timestamp (so
+  `[from, to)` outcome windows cannot be reproduced from `is_error`). `getOverallStats` aggregates the whole
+  database, so it cannot preserve the reference scope either.
 - `agent-service/src/sessions/routes.ts`: `sessionSurfaceRoute` for `GET …/recaps`, `…/subagents`,
   `…/subagents/:id/transcript`, `…/subagents/tree-cost`.
 - `ui AgentHubModal.tsx`: depth-first roster (status/role/tool/tokens/direct cost/tree cost), transcript viewer,
   Revive / Cancel / Revive-and-Prompt controls. Launched from **both** `SubagentHudTray.tsx` and
   `WorkStatusSubagentsSection.tsx`.
-- `ui useSessionAssist.ts`: prefers the pushed `session.recap` (immediate), falls back to the journal route on mount
-  and after reconnect, then to session metadata. No client-side quiet timer.
+- `ui useSessionAssist.ts`: prefers the pushed `session.recap` event (immediate, no client-side timer), falls back
+  to the `GET …/recaps` journal route on mount and after reconnect (that route is what covers frames missed
+  before this client connected), then to session metadata.
 - `ui sync-context.tsx` / `event-reducer.ts` / `stores/useSessionRecapStore.ts`: the transient `session.recap`
   event is routed into a per-session store the hook reads synchronously.
 - `ui SessionRecapSpacer.tsx`, `SubagentHudTray.tsx`, `WorkStatusSubagentsSection.tsx`: Audit List C remediation

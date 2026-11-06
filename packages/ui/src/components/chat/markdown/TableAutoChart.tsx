@@ -42,13 +42,17 @@ function extractColumnUnit(header: string | undefined, sampleCells: string[]): s
   return '';
 }
 
+// Data-viz series use the theme's chart hues, the same palette `gitGraph.ts`
+// draws lanes from. `--tools-icon` is a tool-glyph tint and `--accent` is
+// overwritten at runtime with `surface.subtle` (a background tone), so neither
+// can stand in for a series colour.
 const SERIES_COLORS = [
-  'var(--primary)',
-  'var(--status-success)',
-  'var(--status-warning)',
-  'var(--tools-icon)',
-  'var(--status-error)',
-  'var(--accent)',
+  'var(--chart-1)',
+  'var(--chart-2)',
+  'var(--chart-3)',
+  'var(--chart-4)',
+  'var(--chart-5)',
+  'var(--status-info)',
 ];
 
 export function TableAutoChart({ headers, rows, className }: TableAutoChartProps) {
@@ -143,7 +147,7 @@ export function TableAutoChart({ headers, rows, className }: TableAutoChartProps
       )}
     >
       <div className="flex items-center justify-between text-xs text-muted-foreground font-medium px-1">
-        <span>{t('markdownRenderer.table.chartTitle') || 'Table Chart'}</span>
+        <span>{t('markdownRenderer.table.chartTitle')}</span>
         {seriesNames.length > 1 && (
           <div className="flex items-center gap-3">
             {seriesNames.map((name, sIdx) => (
@@ -163,7 +167,7 @@ export function TableAutoChart({ headers, rows, className }: TableAutoChartProps
           viewBox={`0 0 ${chartWidth} ${chartHeight}`}
           className="w-full h-auto min-w-[480px] font-sans text-xs"
           role="img"
-          aria-label={t('markdownRenderer.table.chartTitle') || 'Table numeric chart visualization'}
+          aria-label={t('markdownRenderer.table.chartAria')}
         >
           {/* Background grid lines */}
           {[0, 0.25, 0.5, 0.75, 1].map((pct, idx) => {

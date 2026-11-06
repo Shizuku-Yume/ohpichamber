@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import '../scripts/standalone-loader.mjs';
 import fs from 'fs';
 import path from 'path';
 import { spawnSync } from 'child_process';
@@ -72,6 +73,7 @@ import {
   logStatus,
 } from './cli-output.js';
 import { applyConnectAttemptTimeout } from '../server/lib/network-defaults.js';
+import { resolveWebAgentRuntime, registerStandaloneLoader } from '../scripts/standalone-loader.mjs';
 
 // The CLI process performs provider fetches (quota/usage, update notes) under
 // Node/undici, whose happy-eyeballs default aborts each connect attempt after
@@ -82,7 +84,24 @@ applyConnectAttemptTimeout();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PACKAGE_JSON = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
+const PACKAGE_ROOT = path.resolve(__dirname, '..');
+const PACKAGE_JSON = JSON.parse(fs.readFileSync(path.join(PACKAGE_ROOT, 'package.json'), 'utf8'));
+
+const bundledAgentRuntime = resolveWebAgentRuntime(PACKAGE_ROOT);
+if (bundledAgentRuntime) {
+  process.env.OHPICHAMBER_BUN ??= bundledAgentRuntime.bunPath;
+  process.env.OHPICHAMBER_AGENT_SERVICE_ENTRYPOINT ??= bundledAgentRuntime.entrypoint;
+  registerStandaloneLoader();
+  const loaderPath = path.resolve(PACKAGE_ROOT, 'scripts', 'standalone-loader.mjs');
+  if (fs.existsSync(loaderPath)) {
+    const importFlag = `--import=${pathToFileURL(loaderPath).href}`;
+    if (!process.env.NODE_OPTIONS?.includes(loaderPath)) {
+      process.env.NODE_OPTIONS = process.env.NODE_OPTIONS
+        ? `${process.env.NODE_OPTIONS} ${importFlag}`
+        : importFlag;
+    }
+  }
+}
 
 let onCancelCleanup = null;
 let activeCommandOptions = null;
@@ -121,6 +140,12 @@ function importFromFilePath(filePath) {
 function getBunBinary() {
   if (typeof process.env.BUN_BINARY === 'string' && process.env.BUN_BINARY.trim().length > 0) {
     return process.env.BUN_BINARY.trim();
+  }
+  if (typeof process.env.OHPICHAMBER_BUN === 'string' && process.env.OHPICHAMBER_BUN.trim().length > 0) {
+    return process.env.OHPICHAMBER_BUN.trim();
+  }
+  if (bundledAgentRuntime?.bunPath) {
+    return bundledAgentRuntime.bunPath;
   }
   if (typeof process.env.BUN_INSTALL === 'string' && process.env.BUN_INSTALL.trim().length > 0) {
     // The Windows installer places bun.exe there; spawnSync does not append

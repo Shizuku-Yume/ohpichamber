@@ -21,7 +21,10 @@
     "build": "bun ../../scripts/build-builtin-extensions.mjs && NODE_OPTIONS=--max-old-space-size=6144 vite build",
     "build:diag": "bun ../../scripts/build-builtin-extensions.mjs && NODE_OPTIONS=--max-old-space-size=6144 vite build --config vite.diag.config.ts",
     "build:watch": "bun ../../scripts/build-builtin-extensions.mjs && vite build --watch",
-    "prepack": "bun ../../scripts/build-builtin-extensions.mjs",
+    "prepack": "node ./scripts/prepack.mjs",
+    "postpack": "node ./scripts/postpack.mjs",
+    "stage:runtime": "node ./scripts/prepare-agent-runtime.mjs",
+    "pack:standalone": "node ./scripts/pack-standalone.mjs",
     "type-check": "bun check -b",
     "lint": "oxlint -c ../../oxlint.config.ts --report-unused-disable-directives src",
     "test": "vitest run",
@@ -31,9 +34,7 @@
     "@clack/prompts": "^1.1.0",
     "@gitbeaker/rest": "43.8.0",
     "@octokit/rest": "^22.0.1",
-    "@openchamber/agent-contract": "workspace:*",
-    "@openchamber/agent-service": "workspace:*",
-    "@openchamber/sdk": "workspace:*",
+    "@openchamber/sdk": "^3.0.0",
     "@simplewebauthn/server": "13.3.3",
     "bun-pty": "0.5.1",
     "compression": "^1.8.1",
@@ -107,7 +108,12 @@
     "server",
     "bin",
     "public",
+    "resources/agent-runtime",
+    "scripts/standalone-loader.mjs",
     "package.json",
     "README.md"
+  ],
+  "bundleDependencies": [
+    "@openchamber/sdk"
   ]
 }

@@ -1,6 +1,7 @@
 # Closeout: m5-release-surfaces
 
-**Accepted:** 2026-11-06 by maintainer directive
+**Status:** Completed
+**Closed:** 2026-11-06
 
 ## Shipped
 

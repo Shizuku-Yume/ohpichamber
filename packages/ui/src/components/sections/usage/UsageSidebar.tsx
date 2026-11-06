@@ -74,7 +74,7 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
               title={t('settings.usage.sidebar.actions.refreshTitle')}
               disabled={isLoading}
             >
-              <Icon name="refresh" className={cn('h-3.5 w-3.5', isLoading && 'animate-spin')} />
+              <Icon name="refresh" className={cn('size-3.5', isLoading && 'animate-spin')} />
             </Button>
           </div>
         </div>
@@ -125,7 +125,7 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
                 className="flex min-w-0 flex-1 items-center gap-2 rounded-sm text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <span className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={statusStyle} />
-                <ProviderLogo providerId={provider.id} className="h-4 w-4 flex-shrink-0" />
+                <ProviderLogo providerId={provider.id} className="size-4 shrink-0" />
                 <span className="typography-ui-label font-normal truncate flex-1 min-w-0 text-foreground">
                   {provider.name}
                 </span>

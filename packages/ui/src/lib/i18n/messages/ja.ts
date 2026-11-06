@@ -896,6 +896,8 @@ export const dict = {
   "settings.commands.page.subtitle.edit": "Command 設定を編集",
   "settings.commands.page.section.identity": "識別情報",
   "settings.commands.page.section.executionContext": "実行コンテキスト",
+  "settings.commands.page.field.group": "コマンドグループ",
+  "settings.commands.page.field.argumentHint": "引数のヒント",
   "settings.commands.page.section.template": "コマンドテンプレート",
   "settings.commands.page.field.commandName": "Command 名",
   "settings.commands.page.field.commandNamePlaceholder": "command-name",

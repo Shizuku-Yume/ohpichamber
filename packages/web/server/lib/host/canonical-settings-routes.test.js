@@ -54,7 +54,7 @@ beforeEach(async () => {
   resolveCalls = [];
   servicePhase = 'ready';
   policyEnabled = false;
-  requestService = async (_url, init) => Response.json(init.method === 'PUT' ? updated : state);
+  requestService = async (_url, init) => Response.json(['PUT', 'PATCH'].includes(init.method) ? updated : state);
   app = express();
   registerCommonRequestMiddleware(app, { express });
   registerCanonicalHostRoutes(app, {
@@ -77,7 +77,7 @@ beforeEach(async () => {
     listProjects: async () => ({ items: [], errors: {} }),
     listWorkspaces: async () => ({ items: [], errors: {} }),
     resolveCredentialHandoff: async () => { throw new Error('Settings must not read credentials'); },
-    queueRoutes: () => {}, sessionRoutes: () => {}, attachmentRoutes: () => {},
+    queueRoutes: () => { }, sessionRoutes: () => { }, attachmentRoutes: () => { },
   });
 });
 afterEach(async () => {
@@ -128,6 +128,21 @@ describe('canonical OMP settings Host boundary', () => {
     assertProblem(await request(app).put(endpoint).set('Authorization', `Bearer ${token}`).type('text').send('60'), 415, 'UNSUPPORTED_MEDIA_TYPE');
     assertProblem(await request(app).get(`${endpoint}?workspaceId=workspace_foreign`).set('Authorization', `Bearer ${token}`), 400, 'INVALID_REQUEST');
     expect(requests).toEqual([]);
+  });
+
+  it('accepts the canonical omp/settings path and PATCH for the same workspace revision', async () => {
+    const ompEndpoint = '/api/agent/v1/workspaces/workspace_1/omp/settings';
+    const read = await request(app).get(ompEndpoint).set('Authorization', `Bearer ${token}`).expect(200);
+    expect(read.body).toEqual(state);
+    const update = { expectedRevision: '7', changes: [{ id: 'compaction.thresholdPercent', value: 60 }] };
+    const patched = await request(app).patch(ompEndpoint).set('Authorization', `Bearer ${token}`).send(update).expect(200);
+    expect(patched.body).toEqual(updated);
+    expect(requests.map(entry => ({ url: entry.url, method: entry.init.method }))).toEqual([
+      { url: ompEndpoint, method: 'GET' },
+      { url: ompEndpoint, method: 'PATCH' },
+    ]);
+    assertProblem(await request(app).get('/api/agent/v1/workspaces/workspace_foreign/omp/settings').set('Authorization', `Bearer ${token}`), 403, 'UNAUTHORIZED');
+    assertProblem(await request(app).patch(ompEndpoint).set('Authorization', `Bearer ${token}`).send({ expectedRevision: '7', changes: [] }), 400, 'INVALID_REQUEST');
   });
 
   it('keeps behaviour settings available in enterprise mode and refuses service-unready operations', async () => {

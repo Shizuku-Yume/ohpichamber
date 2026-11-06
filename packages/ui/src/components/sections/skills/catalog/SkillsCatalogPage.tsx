@@ -6,6 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
 import { SettingsSection } from '@/components/sections/shared/SettingsSection';
+import { SettingsAddCard, SETTINGS_CARD_GRID_CLASS } from '@/components/sections/shared/SettingsCards';
 import { SortableTabsStrip } from '@/components/ui/sortable-tabs-strip';
 import {
   Dialog,
@@ -120,7 +121,7 @@ const SourceCard: React.FC<{
       onClick={onSelect}
       aria-pressed={isActive}
       className={cn(
-        'oc-surface-elevated w-full min-h-24 text-left rounded-lg border bg-surface-elevated p-3.5 flex gap-3 items-start transition-colors',
+        'oc-surface-elevated flex min-h-24 w-full items-start gap-3 rounded-lg border bg-surface-elevated p-3.5 text-start transition-colors',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         isActive
           ? 'border-border bg-interactive-selection text-interactive-selection-foreground'
@@ -131,7 +132,7 @@ const SourceCard: React.FC<{
         <span className="flex items-center gap-2">
           <span className="typography-ui-label font-medium text-foreground truncate">{source.label}</span>
           {isLoading ? (
-            <Icon name="refresh" className="h-3 w-3 animate-spin text-muted-foreground shrink-0" />
+            <Icon name="refresh" className="size-3 shrink-0 animate-spin text-muted-foreground" />
           ) : (
             skillsCount !== null && (
               <span className="typography-micro text-muted-foreground shrink-0">
@@ -147,7 +148,7 @@ const SourceCard: React.FC<{
               className="typography-micro text-muted-foreground flex items-center gap-1"
               title={t('settings.skills.catalog.page.source.stars', { count: stars })}
             >
-              <Icon name="star" className="h-3 w-3" />
+              <Icon name="star" className="size-3" />
               {formatStars(stars)}
             </span>
           )}
@@ -426,13 +427,14 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
 
         <div data-settings-item="skills.catalog.search" className="mb-5">
           <div className="relative max-w-md">
-            <Icon name="search" className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Icon name="search" className="absolute inset-s-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               ref={searchInputRef}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t('settings.skills.catalog.page.searchAllPlaceholder')}
-              className={cn('h-8 pl-8 w-full', search && 'pr-8')}
+              inputSize="compact"
+              className={cn('w-full ps-8', search && 'pe-8')}
             />
             {search && (
               <button
@@ -441,10 +443,10 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
                   setSearch('');
                   searchInputRef.current?.focus();
                 }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-4 w-4 rounded text-muted-foreground hover:text-foreground transition-colors"
+                className="absolute inset-e-2 top-1/2 flex size-4 -translate-y-1/2 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground"
                 title={t('settings.skills.catalog.page.search.clear')}
               >
-                <Icon name="close" className="h-3 w-3" />
+                <Icon name="close" className="size-3" />
               </button>
             )}
           </div>
@@ -456,7 +458,7 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
           settingsItem="skills.catalog.source"
           contentClassName="space-y-0"
         >
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-1.5">
+          <div className={`${SETTINGS_CARD_GRID_CLASS} py-1.5`}>
             {sources.map((src) => (
               <SourceCard
                 key={src.id}
@@ -469,27 +471,15 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
               />
             ))}
 
-            <button
-              type="button"
-              data-settings-item="skills.catalog.add-catalog"
+            <SettingsAddCard
+              settingsItem="skills.catalog.add-catalog"
+              label={t('settings.skills.catalog.page.source.addOwnTitle')}
+              hint={t('settings.skills.catalog.page.source.addOwnDescription')}
               onClick={() => {
                 setEditingCatalogId(null);
                 setCatalogDialogOpen(true);
               }}
-              className="min-h-24 text-left rounded-lg border border-dashed border-[var(--interactive-border)] hover:border-[var(--interactive-border-hover)] hover:bg-[var(--surface-muted)] p-3.5 flex gap-3 items-start transition-colors"
-            >
-              <span className="flex items-center justify-center rounded-md bg-transparent text-muted-foreground w-8 h-8 shrink-0">
-                <Icon name="add" className="h-4 w-4" />
-              </span>
-              <span className="min-w-0">
-                <span className="typography-ui-label text-muted-foreground block">
-                  {t('settings.skills.catalog.page.source.addOwnTitle')}
-                </span>
-                <span className="typography-micro text-muted-foreground/70 block mt-0.5">
-                  {t('settings.skills.catalog.page.source.addOwnDescription')}
-                </span>
-              </span>
-            </button>
+            />
           </div>
         </SettingsSection>
 
@@ -661,7 +651,7 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
                                 className="font-mono hover:underline truncate inline-flex items-center gap-1"
                                 title={t('settings.skills.catalog.page.skill.viewOnGithub')}
                               >
-                                <Icon name="github" className="h-3 w-3 shrink-0" />
+                                <Icon name="github" className="size-3 shrink-0" />
                                 {item.repoSource}
                               </a>
                             ) : (
@@ -702,7 +692,7 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
                               onClick={() => setUninstallItems([item])}
                               title={t('settings.skills.sidebar.deleteDialog.title')}
                             >
-                              <Icon name="check" className="h-4 w-4" />
+                              <Icon name="check" className="size-4" />
                             </Button>
                           ) : (
                             <Button

@@ -64,7 +64,8 @@ const RenameField: React.FC<{
           }
         }}
         aria-label={t('settings.providers.accounts.nameAria')}
-        className="h-8 max-w-[18rem]"
+        inputSize="compact"
+        className="max-w-[18rem]"
         maxLength={128}
       />
       <Button type="submit" size="xs">{t('settings.providers.accounts.save')}</Button>
@@ -124,7 +125,7 @@ export const ProviderAccounts: React.FC<ProviderAccountsProps> = ({
                   <div className="flex min-w-0 items-center gap-2">
                     <span className="truncate typography-ui-label font-medium text-foreground">{name}</span>
                     {showActive && active ? (
-                      <span className="shrink-0 rounded-full bg-[var(--interactive-selection)] px-2 py-px text-[10px] font-medium text-[var(--interactive-selection-foreground)]">
+                      <span className="shrink-0 rounded-full bg-[var(--interactive-selection)] px-2 py-px typography-micro font-medium text-[var(--interactive-selection-foreground)]">
                         {t('settings.providers.accounts.active')}
                       </span>
                     ) : null}

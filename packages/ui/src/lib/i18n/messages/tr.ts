@@ -872,6 +872,8 @@ export const dict = {
   "settings.commands.page.subtitle.edit": "Komut ayarlarını düzenle",
   "settings.commands.page.section.identity": "Kimlik",
   "settings.commands.page.section.executionContext": "Yürütme Bağlamı",
+  "settings.commands.page.field.group": "Komut grubu",
+  "settings.commands.page.field.argumentHint": "Argüman ipucu",
   "settings.commands.page.section.template": "Komut Şablonu",
   "settings.commands.page.field.commandName": "Komut adı",
   "settings.commands.page.field.commandNamePlaceholder": "command-name",

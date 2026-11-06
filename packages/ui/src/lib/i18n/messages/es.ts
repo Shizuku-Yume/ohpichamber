@@ -863,6 +863,8 @@ export const dict = {
   "settings.commands.page.subtitle.edit": "Editar configuración del comando",
   "settings.commands.page.section.identity": "Identidad",
   "settings.commands.page.section.executionContext": "Contexto de ejecución",
+  "settings.commands.page.field.group": "Grupo de comandos",
+  "settings.commands.page.field.argumentHint": "Sugerencia de argumentos",
   "settings.commands.page.section.template": "Plantilla del comando",
   "settings.commands.page.field.commandName": "Nombre del comando",
   "settings.commands.page.field.commandNamePlaceholder": "nombre-del-comando",

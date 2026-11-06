@@ -13,7 +13,7 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { refreshGlobalSessions, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
-import { PROJECT_COLOR_MAP, PROJECT_ICON_MAP, ProjectIconImage } from '@/lib/projectMeta';
+import { PROJECT_ICON_MAP, ProjectIconImage, resolveProjectColor } from '@/lib/projectMeta';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { cn, formatDirectoryName } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
@@ -192,7 +192,7 @@ const LoopApprovalMark: React.FC<{ reason: NonNullable<ScheduledTask['loopApprov
     : t('sessions.scheduledTasks.dialog.loopFile.enableOnThisComputer');
   return (
     <span role="img" aria-label={label} title={label} className="inline-flex text-muted-foreground/70">
-      <Icon name={reason === 'outdated' ? 'file-edit' : 'git-branch'} className="h-3.5 w-3.5" />
+      <Icon name={reason === 'outdated' ? 'file-edit' : 'git-branch'} className="size-3.5" />
     </span>
   );
 };
@@ -245,18 +245,18 @@ export function ScheduledTasksView({ layout, onLeave }: {
   const renderProjectLabel = React.useCallback((project: ProjectEntry) => {
     const displayLabel = project.label?.trim() || formatDirectoryName(project.path, homeDirectory || undefined);
     const projectIconName = project.icon ? PROJECT_ICON_MAP[project.icon] : null;
-    const iconColor = project.color ? PROJECT_COLOR_MAP[project.color] : undefined;
+    const iconColor = resolveProjectColor(project.color) ?? undefined;
     const fallbackIcon = projectIconName ? (
-      <Icon name={projectIconName} className="h-3.5 w-3.5 shrink-0" style={iconColor ? { color: iconColor } : undefined} />
+      <Icon name={projectIconName} className="size-3.5 shrink-0" style={iconColor ? { color: iconColor } : undefined} />
     ) : (
-      <Icon name="folder" className="h-3.5 w-3.5 shrink-0 text-muted-foreground/80"  style={iconColor ? { color: iconColor } : undefined}/>
+      <Icon name="folder" className="size-3.5 shrink-0 text-muted-foreground/80"  style={iconColor ? { color: iconColor } : undefined}/>
     );
 
     return (
       <span className="inline-flex min-w-0 items-center gap-1.5">
         {project.iconImage ? (
           <span
-            className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center overflow-hidden rounded-[3px]"
+            className="inline-flex size-3.5 shrink-0 items-center justify-center overflow-hidden rounded-[3px]"
             style={project.iconBackground ? { backgroundColor: project.iconBackground } : undefined}
           >
             <ProjectIconImage
@@ -463,7 +463,7 @@ export function ScheduledTasksView({ layout, onLeave }: {
 
   const chatsLabel = (
     <span className="inline-flex min-w-0 items-center gap-1.5">
-      <Icon name="chat-4" className="h-3.5 w-3.5 shrink-0 text-muted-foreground/80" />
+      <Icon name="chat-4" className="size-3.5 shrink-0 text-muted-foreground/80" />
       <span className="truncate">{t('sessions.scheduledTasks.dialog.project.chats')}</span>
     </span>
   );
@@ -595,7 +595,7 @@ export function ScheduledTasksView({ layout, onLeave }: {
 
                 <div className={cn('mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 typography-micro text-muted-foreground', !task.enabled && 'opacity-60')}>
                   <span className="inline-flex items-center gap-1.5">
-                    <Icon name="timer" className="h-3.5 w-3.5" />
+                    <Icon name="timer" className="size-3.5" />
                     <span className="font-medium text-foreground">{t('sessions.scheduledTasks.dialog.nextRun.label')}</span>
                     {nextAt ? (
                       <>
@@ -608,14 +608,14 @@ export function ScheduledTasksView({ layout, onLeave }: {
                     )}
                   </span>
                   <span className="inline-flex items-center gap-1.5">
-                    <Icon name="history" className="h-3.5 w-3.5" />
+                    <Icon name="history" className="size-3.5" />
                     <span className="font-medium text-foreground">{t('sessions.scheduledTasks.dialog.lastRun.label')}</span>
                     {status === 'running' ? (
                       <span
                         className="inline-flex items-center gap-1"
                         style={{ color: 'var(--status-warning)' }}
                       >
-                        <Icon name="loader-4" className="h-3.5 w-3.5 animate-spin" />
+                        <Icon name="loader-4" className="size-3.5 animate-spin" />
                         {t('sessions.scheduledTasks.dialog.lastRun.runningNow')}
                       </span>
                     ) : lastAt ? (
@@ -625,7 +625,7 @@ export function ScheduledTasksView({ layout, onLeave }: {
                             className="inline-flex items-center gap-1"
                             style={{ color: `var(--status-${meta.tone})` }}
                           >
-                            <Icon name={meta.Icon} className="h-3.5 w-3.5" />
+                            <Icon name={meta.Icon} className="size-3.5" />
                             {statusLabel}
                           </span>
                         ) : null}
@@ -643,7 +643,7 @@ export function ScheduledTasksView({ layout, onLeave }: {
                     className={cn('mt-3 flex items-start gap-2 rounded-md border p-2 typography-micro', !task.enabled && 'opacity-60')}
                     style={toneStyle('error')}
                   >
-                    <Icon name="error-warning" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    <Icon name="error-warning" className="mt-0.5 size-3.5 shrink-0" />
                     <span className="min-w-0 break-words">{task.state.lastError}</span>
                   </div>
                 ) : null}

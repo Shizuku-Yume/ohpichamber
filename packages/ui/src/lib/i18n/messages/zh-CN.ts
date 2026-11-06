@@ -863,6 +863,8 @@ export const dict = {
   "settings.commands.page.subtitle.edit": "编辑命令设置",
   "settings.commands.page.section.identity": "身份",
   "settings.commands.page.section.executionContext": "执行上下文",
+  "settings.commands.page.field.group": "命令分组",
+  "settings.commands.page.field.argumentHint": "参数提示",
   "settings.commands.page.section.template": "命令模板",
   "settings.commands.page.field.commandName": "命令名称",
   "settings.commands.page.field.commandNamePlaceholder": "command-name",

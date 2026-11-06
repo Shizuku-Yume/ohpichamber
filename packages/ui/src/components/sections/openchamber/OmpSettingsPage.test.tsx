@@ -236,9 +236,10 @@ test('renders visual selectors and fallback indicators for all 16 OMP model role
     expect(roleRow?.textContent).toContain(role.tag);
   }
 
-  // Verify fallback indicator for commit (which inherits from smol = openai/gpt-4o-mini)
-  const commitFallback = container.querySelector('[data-testid="fallback-commit"]');
-  expect(commitFallback?.textContent).toContain('@smol (openai/gpt-4o-mini)');
+  // Verify fallback indicator for commit (which inherits from smol = openai/gpt-4o-mini).
+  // Production markup carries no test-only attributes; the row text states it.
+  const commitRow = container.querySelector('[data-settings-item="omp.modelRoles.commit"]');
+  expect(commitRow?.textContent).toContain('@smol (openai/gpt-4o-mini)');
 
   // Verify thinking effort selector exists for default (which has claude-3-7-sonnet, a reasoning model)
   const defaultRow = container.querySelector('[data-settings-item="omp.modelRoles.default"]');

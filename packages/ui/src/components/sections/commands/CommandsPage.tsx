@@ -17,6 +17,7 @@ import {
   SettingsFieldRow,
   SettingsStackedField,
   SETTINGS_CUSTOM_TRIGGER_CLASS,
+  SETTINGS_SELECT_ROW_TRIGGER_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 
 interface CommandForm {
@@ -108,7 +109,7 @@ export const CommandsPage: React.FC = () => {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="text-center text-muted-foreground">
-          <Icon name="terminal-box" className="mx-auto mb-3 h-12 w-12 opacity-50" />
+          <Icon name="terminal-box" className="mx-auto mb-3 size-12 opacity-50" />
           <p className="typography-body">{t('settings.commands.page.empty.title')}</p>
           <p className="typography-meta mt-1 opacity-75">{t('settings.commands.page.empty.description')}</p>
         </div>
@@ -129,19 +130,19 @@ export const CommandsPage: React.FC = () => {
           <Select value={form.scope} onValueChange={scope => {
             if (scope === 'agent' || scope === 'workspace') setForm({ ...form, scope });
           }}>
-            <SelectTrigger className="w-fit min-w-[100px]">
+            <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}>
               <SelectValue placeholder={t('settings.agents.page.field.scopePlaceholder')} />
             </SelectTrigger>
             <SelectContent align="end">
               <SelectItem value="agent">
                 <div className="flex items-center gap-2">
-                  <Icon name="user-3" className="h-3.5 w-3.5" />
+                  <Icon name="user-3" className="size-3.5" />
                   <span>{t('settings.common.scope.global')}</span>
                 </div>
               </SelectItem>
               <SelectItem value="workspace">
                 <div className="flex items-center gap-2">
-                  <Icon name="folder" className="h-3.5 w-3.5" />
+                  <Icon name="folder" className="size-3.5" />
                   <span>{t('settings.common.scope.project')}</span>
                 </div>
               </SelectItem>
@@ -153,10 +154,13 @@ export const CommandsPage: React.FC = () => {
             placeholder={t('settings.commands.page.field.descriptionPlaceholder')} rows={2}
             className="w-full resize-none min-h-[60px] bg-transparent" />
         </SettingsStackedField>
-        <SettingsFieldRow settingsItem="commands.argument-hint" label={<code className="font-mono">$ARGUMENTS</code>}
+        <SettingsFieldRow settingsItem="commands.argument-hint" label={t('settings.commands.page.field.argumentHint')}
           info={t('settings.commands.page.templateHint.userInput')}>
           <Input value={form.argumentHint} onChange={event => setForm({ ...form, argumentHint: event.target.value })}
-            aria-label="$ARGUMENTS" className="h-8 w-64 px-2" />
+            aria-label="$ARGUMENTS"
+            inputSize="compact"
+            className="w-64 px-2"
+          />
         </SettingsFieldRow>
       </SettingsSection>
       <SettingsSection title={t('settings.commands.page.section.executionContext')} contentClassName="space-y-0">
@@ -167,7 +171,7 @@ export const CommandsPage: React.FC = () => {
               requestSave();
             }} className={SETTINGS_CUSTOM_TRIGGER_CLASS} />
         </SettingsFieldRow>
-        {group ? <SettingsFieldRow settingsItem="commands.group" label={<code className="font-mono">group</code>}>
+        {group ? <SettingsFieldRow settingsItem="commands.group" label={t('settings.commands.page.field.group')}>
           <span className="typography-meta text-muted-foreground truncate">{group}</span>
         </SettingsFieldRow> : null}
       </SettingsSection>
@@ -182,10 +186,10 @@ export const CommandsPage: React.FC = () => {
         </p>
         {isNew && <div className="flex items-center gap-2 pt-3">
           <Button onClick={() => void create()} disabled={creating || !form.name.trim() || !form.content.trim()}
-            size="xs" className="!font-normal">
+            size="xs" >
             {creating ? t('settings.common.actions.saving') : t('settings.common.actions.create')}
           </Button>
-          <Button variant="ghost" onClick={cancelCreate} disabled={creating} size="xs" className="!font-normal">
+          <Button variant="ghost" onClick={cancelCreate} disabled={creating} size="xs" >
             {t('settings.common.actions.cancel')}
           </Button>
         </div>}

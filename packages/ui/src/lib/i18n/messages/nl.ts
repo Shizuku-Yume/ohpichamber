@@ -958,6 +958,8 @@ export const dict = {
   "settings.commands.page.subtitle.edit": "Opdrachtinstellingen bewerken",
   "settings.commands.page.section.identity": "Identiteit",
   "settings.commands.page.section.executionContext": "Uitvoeringscontext",
+  "settings.commands.page.field.group": "Commandogroep",
+  "settings.commands.page.field.argumentHint": "Argumenthint",
   "settings.commands.page.section.template": "Opdrachtsjabloon",
   "settings.commands.page.field.commandName": "Opdrachtnaam",
   "settings.commands.page.field.commandNamePlaceholder": "opdrachtnaam",

@@ -860,6 +860,8 @@ export const dict = {
   "settings.commands.page.subtitle.edit": "編輯命令設定",
   "settings.commands.page.section.identity": "身分",
   "settings.commands.page.section.executionContext": "執行上下文",
+  "settings.commands.page.field.group": "指令群組",
+  "settings.commands.page.field.argumentHint": "參數提示",
   "settings.commands.page.section.template": "命令模板",
   "settings.commands.page.field.commandName": "命令名稱",
   "settings.commands.page.field.commandNamePlaceholder": "command-name",

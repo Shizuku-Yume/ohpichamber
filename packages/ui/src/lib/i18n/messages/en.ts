@@ -895,6 +895,8 @@ export const dict = {
   "settings.commands.page.subtitle.edit": "Edit command settings",
   "settings.commands.page.section.identity": "Identity",
   "settings.commands.page.section.executionContext": "Execution context",
+  "settings.commands.page.field.group": "Command group",
+  "settings.commands.page.field.argumentHint": "Arguments hint",
   "settings.commands.page.section.template": "Command template",
   "settings.commands.page.field.commandName": "Command name",
   "settings.commands.page.field.commandNamePlaceholder": "command-name",

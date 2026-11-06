@@ -863,6 +863,8 @@ export const dict = {
   "settings.commands.page.subtitle.edit": "명령어 설정 편집",
   "settings.commands.page.section.identity": "정체성",
   "settings.commands.page.section.executionContext": "실행 컨텍스트",
+  "settings.commands.page.field.group": "명령 그룹",
+  "settings.commands.page.field.argumentHint": "인수 힌트",
   "settings.commands.page.section.template": "명령어 템플릿",
   "settings.commands.page.field.commandName": "명령어 이름",
   "settings.commands.page.field.commandNamePlaceholder": "command-name (예: review-pr)",

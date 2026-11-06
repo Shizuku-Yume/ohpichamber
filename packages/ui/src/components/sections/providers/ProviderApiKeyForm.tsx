@@ -2,7 +2,10 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui';
-import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
+import {
+  SettingsStackedField,
+  SETTINGS_HELPER_CLASS,
+} from '@/components/sections/shared/SettingsSection';
 import { useI18n } from '@/lib/i18n';
 
 interface ProviderApiKeyFormProps {
@@ -50,32 +53,31 @@ export const ProviderApiKeyForm: React.FC<ProviderApiKeyFormProps> = ({
 
   return (
     <div className="space-y-3 py-1.5">
-      <div>
-        <label className="typography-ui-label text-foreground flex items-center gap-1.5">
-          {t('settings.providers.page.auth.apiKeyLabel')}
-          <SettingsInfoHint>{t('settings.providers.page.auth.apiKeyTooltip')}</SettingsInfoHint>
-        </label>
-        <div className="mt-1.5 flex flex-col gap-2 @xl:flex-row @xl:items-center">
-          <Input
-            type="password"
-            value={apiKey}
-            onChange={(event) => setApiKey(event.target.value)}
-            placeholder={t('settings.providers.page.auth.apiKeyPlaceholder')}
-            autoComplete="new-password"
-            disabled={saving || disabled}
-            className="flex-1 font-mono text-xs"
-          />
-          <Button
-            size="xs"
-            className="!font-normal shrink-0"
-            onClick={() => void save()}
-            disabled={saving || disabled}
-          >
-            {saving ? t('settings.providers.page.actions.saving') : t('settings.providers.page.actions.saveKey')}
-          </Button>
-        </div>
-      </div>
-      <p className="typography-meta text-muted-foreground">{t('settings.providers.native.secretHint')}</p>
+      <SettingsStackedField
+        label={t('settings.providers.page.auth.apiKeyLabel')}
+        info={t('settings.providers.page.auth.apiKeyTooltip')}
+        controlClassName="w-full max-w-none"
+      >
+        <Input
+          type="password"
+          value={apiKey}
+          onChange={(event) => setApiKey(event.target.value)}
+          placeholder={t('settings.providers.page.auth.apiKeyPlaceholder')}
+          autoComplete="new-password"
+          disabled={saving || disabled}
+          inputSize="compact"
+          className="min-w-0 flex-1 font-mono"
+        />
+        <Button
+          size="xs"
+          className="shrink-0"
+          onClick={() => void save()}
+          disabled={saving || disabled}
+        >
+          {saving ? t('settings.providers.page.actions.saving') : t('settings.providers.page.actions.saveKey')}
+        </Button>
+      </SettingsStackedField>
+      <p className={SETTINGS_HELPER_CLASS}>{t('settings.providers.native.secretHint')}</p>
       {failed ? (
         <p role="alert" className="typography-meta text-[var(--status-error)]">
           {t('settings.providers.page.toast.apiKeySaveFailed')}

@@ -1,7 +1,9 @@
 import React from 'react';
 import type { WebSearchMutationResult, WebSearchProviderEntry } from '@openchamber/agent-contract';
 import { Button } from '@/components/ui/button';
+import { Icon } from '@/components/icon/Icon';
 import { Input } from '@/components/ui/input';
+import { NumberInput } from '@/components/ui/number-input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
@@ -14,6 +16,10 @@ import {
   SETTINGS_CALLOUT_TITLE_CLASS,
   SETTINGS_CONTROL_CLUSTER_CLASS,
   SETTINGS_HELPER_CLASS,
+  SETTINGS_ICON_BUTTON_CLASS,
+  SETTINGS_NUMBER_INPUT_CLASS,
+  SETTINGS_NUMBER_STEPPER_ROW_CLASS,
+  SETTINGS_NUMBER_UNIT_CLASS,
   SETTINGS_SELECT_ROW_TRIGGER_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { getWebSearchScopeKey, useWebSearchStore, type WebSearchSnapshot } from '@/stores/useWebSearchStore';
@@ -42,6 +48,9 @@ const sameSelection = (a: Selection, b: Selection): boolean =>
 
 /** Sentinel for the add-fallback select; it never leaves the control. */
 const ADD_FALLBACK_VALUE = '__add-fallback__';
+
+/** OMP's native `providers.webSearchTimeoutSeconds` default, used by the reset action. */
+const DEFAULT_TIMEOUT_SECONDS = 60;
 
 const SelectionSection: React.FC<{ snapshot: WebSearchSnapshot }> = ({ snapshot }) => {
   const { t } = useI18n();
@@ -82,15 +91,6 @@ const SelectionSection: React.FC<{ snapshot: WebSearchSnapshot }> = ({ snapshot 
     });
   };
 
-  const [timeoutDraft, setTimeoutDraft] = React.useState(String(snapshot.timeoutSeconds));
-  React.useEffect(() => {
-    setTimeoutDraft(String(snapshot.timeoutSeconds));
-  }, [snapshot.timeoutSeconds]);
-  const timeoutValue = Number(timeoutDraft);
-  const timeoutValid = timeoutDraft.trim().length > 0
-    && Number.isFinite(timeoutValue)
-    && timeoutValue >= 0.001
-    && timeoutValue <= 300;
 
   return (
     <SettingsSection
@@ -184,7 +184,7 @@ const SelectionSection: React.FC<{ snapshot: WebSearchSnapshot }> = ({ snapshot 
                 className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
                 aria-label={t('settings.webSearch.native.addFallback')}
               >
-                <SelectValue>{() => t('settings.webSearch.native.addFallback')}</SelectValue>
+                <SelectValue placeholder={t('settings.webSearch.native.addFallback')} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={ADD_FALLBACK_VALUE}>{t('settings.webSearch.native.addFallback')}</SelectItem>
@@ -202,24 +202,31 @@ const SelectionSection: React.FC<{ snapshot: WebSearchSnapshot }> = ({ snapshot 
           label={t('settings.webSearch.native.timeout')}
           settingsItem="web-search.timeout"
         >
-          <div className={`${SETTINGS_CONTROL_CLUSTER_CLASS} flex items-center gap-2`}>
-            <Input
-              type="number"
-              min={0.001}
+          <div className={SETTINGS_NUMBER_STEPPER_ROW_CLASS}>
+            <NumberInput
+              value={snapshot.timeoutSeconds}
+              onValueChange={(value) => {
+                if (!Number.isFinite(value) || value < 1 || value > 300) return;
+                void commit({ timeoutSeconds: value });
+              }}
+              min={1}
               max={300}
-              step="any"
-              value={timeoutDraft}
+              step={1}
               disabled={busy}
-              onChange={(event) => setTimeoutDraft(event.target.value)}
+              className={SETTINGS_NUMBER_INPUT_CLASS}
               aria-label={t('settings.webSearch.native.timeout')}
-              className="h-8 min-w-0 flex-1"
             />
+            <span className={SETTINGS_NUMBER_UNIT_CLASS} aria-hidden="true">{t('settings.webSearch.native.timeoutUnit')}</span>
             <Button
-              size="xs"
-              disabled={busy || !timeoutValid || timeoutValue === snapshot.timeoutSeconds}
-              onClick={() => void commit({ timeoutSeconds: timeoutValue })}
+              variant="ghost"
+              size="icon"
+              className={SETTINGS_ICON_BUTTON_CLASS}
+              disabled={busy || snapshot.timeoutSeconds === DEFAULT_TIMEOUT_SECONDS}
+              onClick={() => void commit({ timeoutSeconds: DEFAULT_TIMEOUT_SECONDS })}
+              aria-label={t('settings.webSearch.native.resetTimeout')}
+              title={t('settings.common.actions.reset')}
             >
-              {t('settings.webSearch.keys.save')}
+              <Icon name="restart" className="size-3.5" />
             </Button>
           </div>
         </SettingsFieldRow>
@@ -280,7 +287,8 @@ const ProviderKeyRow: React.FC<{ provider: WebSearchProviderEntry }> = ({ provid
             }}
             placeholder={t('settings.webSearch.keys.placeholder')}
             aria-label={t('settings.webSearch.keys.inputAria', { provider: provider.name })}
-            className="h-8 min-w-0 flex-1 rounded-md px-3 font-mono text-xs"
+            inputSize="compact"
+            className="min-w-0 flex-1 font-mono"
           />
           <Button size="xs" disabled={busy || draft.trim().length === 0} onClick={() => void handleSave()}>
             {t('settings.webSearch.keys.save')}

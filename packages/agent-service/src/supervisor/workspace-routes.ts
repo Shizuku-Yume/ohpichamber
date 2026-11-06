@@ -156,7 +156,9 @@ export class WorkspaceRoutes {
       if (request.method === 'PUT') return { status: 200, body: await this.catalogs.updateCacheWarming(workspaceId, await readBody(request, CacheWarmingUpdateRequestSchema)) };
       return null;
     }
-    const settingsRoute = /^\/api\/agent\/v1\/workspaces\/([^/]+)\/settings$/.exec(url.pathname);
+    // `omp/settings` is the canonical OMP settings path; `/settings` is the short
+    // form the client uses. Both address the same workspace revision.
+    const settingsRoute = /^\/api\/agent\/v1\/workspaces\/([^/]+)\/(?:omp\/)?settings$/.exec(url.pathname);
     if (settingsRoute) {
       const workspaceId = id(settingsRoute[1]);
       this.catalogs.get(workspaceId);
@@ -165,7 +167,7 @@ export class WorkspaceRoutes {
         if (result.type !== 'catalog.settings') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
         return { status: 200, body: result.state };
       }
-      if (request.method === 'PUT') {
+      if (request.method === 'PUT' || request.method === 'PATCH') {
         const result = await this.catalogs.operation(workspaceId, {
           type: 'catalog.settings.write', request: await readBody(request, OmpSettingsUpdateRequestSchema),
         });

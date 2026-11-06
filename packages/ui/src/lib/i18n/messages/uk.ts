@@ -863,6 +863,8 @@ export const dict = {
   "settings.commands.page.subtitle.edit": "Редагувати параметри команди",
   "settings.commands.page.section.identity": "Ідентичність",
   "settings.commands.page.section.executionContext": "Контекст виконання",
+  "settings.commands.page.field.group": "Група команд",
+  "settings.commands.page.field.argumentHint": "Підказка аргументів",
   "settings.commands.page.section.template": "Шаблон команди",
   "settings.commands.page.field.commandName": "Назва команди",
   "settings.commands.page.field.commandNamePlaceholder": "Назва команди",

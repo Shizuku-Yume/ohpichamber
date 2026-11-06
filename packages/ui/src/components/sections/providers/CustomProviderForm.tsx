@@ -9,6 +9,7 @@ import {
   SETTINGS_FIELDS_STACK_CLASS,
   SETTINGS_HELPER_CLASS,
   SETTINGS_ICON_BUTTON_CLASS,
+  SETTINGS_SELECT_TRIGGER_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
@@ -257,7 +258,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
             value={form.providerId}
             onChange={(event) => setField('providerId', event.target.value)}
             placeholder={t('settings.providers.page.custom.field.providerID.placeholder')}
-            className="h-8 rounded-md px-3 font-mono text-xs"
+            className="h-7 rounded-md px-3 font-mono text-xs"
             autoFocus={!isEdit}
             disabled={isEdit || busy}
             aria-invalid={Boolean(fieldErrors.providerId)}
@@ -279,7 +280,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
             }}
             disabled={busy}
           >
-            <SelectTrigger aria-label={t('settings.providers.page.custom.field.protocol.label')} className="w-full">
+            <SelectTrigger aria-label={t('settings.providers.page.custom.field.protocol.label')} className={SETTINGS_SELECT_TRIGGER_CLASS}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -301,7 +302,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
             onChange={(event) => setField('name', event.target.value)}
             disabled={busy}
             placeholder={t('settings.providers.page.custom.field.name.placeholder')}
-            className="h-8 rounded-md px-3"
+            className="h-7 rounded-md px-3"
             aria-invalid={Boolean(fieldErrors.name)}
             aria-label={t('settings.providers.page.custom.field.name.label')}
           />
@@ -357,7 +358,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
             onChange={(event) => setField('endpoint', event.target.value)}
             disabled={busy}
             placeholder={t('settings.providers.page.custom.field.baseURL.placeholder')}
-            className="h-8 rounded-md px-3 font-mono text-xs"
+            className="h-7 rounded-md px-3 font-mono text-xs"
             aria-invalid={Boolean(fieldErrors.endpoint)}
             aria-label={t('settings.providers.page.custom.field.baseURL.label')}
           />
@@ -380,7 +381,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
               ? t('settings.providers.page.custom.field.apiKey.editPlaceholder')
               : t('settings.providers.page.custom.field.apiKey.placeholder')}
             autoComplete="new-password"
-            className="h-8 rounded-md px-3 font-mono text-xs"
+            className="h-7 rounded-md px-3 font-mono text-xs"
             aria-label={t('settings.providers.page.custom.field.apiKey.label')}
           />
         </SettingsStackedField>
@@ -396,7 +397,6 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
               type="button"
               variant="outline"
               size="xs"
-              className="!font-normal"
               onClick={() => void discoverModels()}
               disabled={disabled || !form.endpoint.trim()}
             >
@@ -444,7 +444,6 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
           type="button"
           variant="outline"
           size="xs"
-          className="!font-normal"
           disabled={disabled}
           onClick={() => {
             const row = createModelRow();
@@ -496,7 +495,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
                         onChange={(event) => setHeader(index, 'name', event.target.value)}
                         disabled={busy}
                         placeholder={t('settings.providers.page.custom.headers.keyPlaceholder')}
-                        className="mt-1 h-8 rounded-md px-3 font-mono text-xs"
+                        className="mt-1 h-7 rounded-md px-3 font-mono text-xs"
                         aria-invalid={Boolean(headerErrors[index]?.name)}
                         aria-label={t('settings.providers.page.custom.headers.keyLabel')}
                       />
@@ -515,7 +514,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
                         disabled={busy}
                         placeholder={t('settings.providers.page.custom.headers.valuePlaceholder')}
                         autoComplete="new-password"
-                        className="mt-1 h-8 rounded-md px-3 font-mono text-xs"
+                        className="mt-1 h-7 rounded-md px-3 font-mono text-xs"
                         aria-invalid={Boolean(headerErrors[index]?.value)}
                         aria-label={t('settings.providers.page.custom.headers.valueLabel')}
                       />
@@ -549,7 +548,6 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
               type="button"
               variant="outline"
               size="xs"
-              className="!font-normal"
               disabled={disabled}
               onClick={() => {
                 setForm((previous) => ({
@@ -568,7 +566,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
       {formError ? <p className="py-3 typography-meta text-[var(--status-error)]" role="alert">{formError}</p> : null}
 
       <div className="flex flex-wrap items-center gap-2 py-4">
-        <Button type="button" variant="outline" size="xs" className="!font-normal" onClick={onCancel} disabled={busy}>
+        <Button type="button" variant="outline" size="xs" onClick={onCancel} disabled={busy}>
           {t('settings.providers.page.custom.actions.back')}
         </Button>
         {onDisconnect ? (
@@ -576,14 +574,13 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
             type="button"
             variant="destructive"
             size="xs"
-            className="!font-normal"
             onClick={() => void onDisconnect()}
             disabled={busy}
           >
             {t('settings.providers.page.actions.disconnect')}
           </Button>
         ) : null}
-        <Button type="submit" size="xs" className="!font-normal" disabled={busy || discovering}>
+        <Button type="submit" size="xs" disabled={busy || discovering}>
           {busy
             ? t('settings.providers.page.actions.saving')
             : isEdit

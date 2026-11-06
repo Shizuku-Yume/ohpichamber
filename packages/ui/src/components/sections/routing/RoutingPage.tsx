@@ -83,7 +83,7 @@ const VariantSelect: React.FC<{
   const selected = knownVariant(value, efforts) ?? DEFAULT_VARIANT_VALUE;
   const label = (variant: string) => {
     if (variant === DEFAULT_VARIANT_VALUE) return t('settings.routing.thinking.default');
-    if (variant === 'off') return t('chat.modelControls.off') || 'Off';
+    if (variant === 'off') return t('chat.modelControls.off');
     return variant.charAt(0).toUpperCase() + variant.slice(1);
   };
   return (
@@ -121,16 +121,16 @@ const CategoryRow: React.FC<{
   return (
     <div className={cn('py-1', !category.enabled && 'opacity-60')}>
       <div className="flex items-center gap-2">
-        <button
-          type="button"
+        <Button
+          variant="ghost"
           onClick={onToggle}
           aria-expanded={expanded}
-          className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1.5 text-start hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex h-auto min-w-0 flex-1 justify-start gap-2 px-1 py-1.5"
         >
-          <Icon name={expanded ? 'arrow-down-s' : 'arrow-right-s'} className="size-4 flex-shrink-0 text-muted-foreground" />
+          <Icon name={expanded ? 'arrow-down-s' : 'arrow-right-s'} className="size-4 shrink-0 text-muted-foreground" />
           <span className="typography-ui-label font-medium text-foreground truncate">{category.name || category.id}</span>
           <span className="typography-meta text-muted-foreground truncate">{summary}</span>
-        </button>
+        </Button>
         <Switch
           checked={category.enabled}
           onCheckedChange={(checked) => onChange({ enabled: checked })}
@@ -145,7 +145,8 @@ const CategoryRow: React.FC<{
                 value={category.name}
                 onChange={(event) => onChange({ name: event.target.value })}
                 aria-label={t('settings.routing.category.name')}
-                className="h-8 w-full rounded-md px-3"
+                inputSize="compact"
+                className="w-full"
                 maxLength={60}
               />
             </SettingsStackedField>
@@ -158,17 +159,16 @@ const CategoryRow: React.FC<{
                 placeholder={t('settings.routing.model.useFallback')}
               />
             </SettingsStackedField>
-            <SettingsStackedField label={t('settings.routing.category.thinking')} controlClassName="max-w-none">
-              <VariantSelect
-                providerID={category.model?.providerID}
-                modelID={category.model?.modelID}
-                value={category.variant}
-                onChange={(variant) => onChange({ variant })}
-                ariaLabel={t('settings.routing.category.thinking')}
-                className="w-full"
-              />
-            </SettingsStackedField>
           </SettingsTwoColumn>
+          <SettingsFieldRow label={t('settings.routing.category.thinking')} settingsItem="routing.category-thinking">
+            <VariantSelect
+              providerID={category.model?.providerID}
+              modelID={category.model?.modelID}
+              value={category.variant}
+              onChange={(variant) => onChange({ variant })}
+              ariaLabel={t('settings.routing.category.thinking')}
+            />
+          </SettingsFieldRow>
           <SettingsStackedField
             label={t('settings.routing.category.description')}
             info={t('settings.routing.category.descriptionInfo')}
@@ -185,9 +185,9 @@ const CategoryRow: React.FC<{
           </SettingsStackedField>
           <div className="flex flex-wrap items-center gap-2">
             {onReset ? (
-              <Button size="sm" variant="outline" onClick={onReset}>{t('settings.routing.category.reset')}</Button>
+              <Button size="xs" variant="outline" onClick={onReset}>{t('settings.routing.category.reset')}</Button>
             ) : null}
-            <Button size="sm" variant="ghost" onClick={onRemove}>{t('settings.routing.category.remove')}</Button>
+            <Button size="xs" variant="ghost" onClick={onRemove}>{t('settings.routing.category.remove')}</Button>
           </div>
         </div>
       ) : null}
@@ -423,7 +423,7 @@ export const RoutingPage: React.FC = () => {
               {removedBuiltins.length > 0 ? (
                 <div className="flex flex-wrap items-center gap-2">
                   {removedBuiltins.map((builtin) => (
-                    <Button key={builtin.id} size="sm" variant="outline" onClick={() => restoreCategory(builtin.id)}>
+                    <Button key={builtin.id} size="xs" variant="outline" onClick={() => restoreCategory(builtin.id)}>
                       {t('settings.routing.category.restore', { name: builtin.name })}
                     </Button>
                   ))}
@@ -437,10 +437,11 @@ export const RoutingPage: React.FC = () => {
                     onKeyDown={(event) => { if (event.key === 'Enter') addCategory(); }}
                     placeholder={t('settings.routing.categories.addPlaceholder')}
                     aria-label={t('settings.routing.categories.addLabel')}
-                    className="h-8 rounded-md px-3 min-w-0 flex-1"
+                    inputSize="compact"
+                    className="min-w-0 flex-1"
                     maxLength={60}
                   />
-                  <Button size="sm" variant="outline" onClick={addCategory} disabled={newCategoryName.trim().length === 0}>
+                  <Button size="xs" variant="outline" onClick={addCategory} disabled={newCategoryName.trim().length === 0}>
                     {t('settings.routing.categories.add')}
                   </Button>
                 </div>

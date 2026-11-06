@@ -845,6 +845,8 @@ export const dict = {
   "settings.commands.page.subtitle.edit": "Befehlseinstellungen bearbeiten",
   "settings.commands.page.section.identity": "Identität",
   "settings.commands.page.section.executionContext": "Ausführungskontext",
+  "settings.commands.page.field.group": "Befehlsgruppe",
+  "settings.commands.page.field.argumentHint": "Argumenthinweis",
   "settings.commands.page.section.template": "Befehlsvorlage",
   "settings.commands.page.field.commandName": "Befehlsname",
   "settings.commands.page.field.commandNamePlaceholder": "befehlsname",

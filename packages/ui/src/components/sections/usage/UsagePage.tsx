@@ -215,9 +215,9 @@ export const UsagePage: React.FC = () => {
           UI consumer left; shown here it labeled DeepSeek with Claude's
           rate-limit message. */}
       {selectedProviderError && (
-        <div className="mb-8 rounded-lg border border-[var(--status-error-border)] bg-[var(--status-error-background)] px-4 py-3">
+        <div role="alert" className="mb-8 space-y-1">
           <p className="typography-ui-label font-medium text-[var(--status-error)]">{t('settings.usage.page.state.refreshFailedTitle')}</p>
-          <p className="typography-meta text-[var(--status-error)]/80 mt-1">{selectedProviderError}</p>
+          <p className="typography-meta text-muted-foreground">{selectedProviderError}</p>
         </div>
       )}
 
@@ -253,16 +253,16 @@ export const UsagePage: React.FC = () => {
                   onOpenChange={() => toggleFamilyCollapsed(family.id)}
                 >
                   <CollapsibleTrigger className="flex w-full items-center justify-between py-0.5 group">
-                    <div className="flex items-center gap-1.5 text-left">
+                    <div className="flex items-center gap-1.5 text-start">
                       <span className="typography-ui-label font-normal text-foreground">{family.label}</span>
                       <span className="typography-micro text-muted-foreground">
                         ({familyModels.length})
                       </span>
                     </div>
                     {isCollapsed ? (
-                      <Icon name="arrow-right-s" className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                      <Icon name="arrow-right-s" className="size-4 text-muted-foreground transition-colors group-hover:text-foreground" />
                     ) : (
-                      <Icon name="arrow-down-s" className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                      <Icon name="arrow-down-s" className="size-4 text-muted-foreground transition-colors group-hover:text-foreground" />
                     )}
                   </CollapsibleTrigger>
                   <CollapsibleContent>
@@ -305,16 +305,16 @@ export const UsagePage: React.FC = () => {
                   onOpenChange={() => toggleFamilyCollapsed('other')}
                 >
                   <CollapsibleTrigger className="flex w-full items-center justify-between py-0.5 group">
-                    <div className="flex items-center gap-1.5 text-left">
+                    <div className="flex items-center gap-1.5 text-start">
                       <span className="typography-ui-label font-normal text-foreground">{t('settings.usage.page.section.otherModels')}</span>
                       <span className="typography-micro text-muted-foreground">
                         ({otherModels.length})
                       </span>
                     </div>
                     {isCollapsed ? (
-                      <Icon name="arrow-right-s" className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                      <Icon name="arrow-right-s" className="size-4 text-muted-foreground transition-colors group-hover:text-foreground" />
                     ) : (
-                      <Icon name="arrow-down-s" className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                      <Icon name="arrow-down-s" className="size-4 text-muted-foreground transition-colors group-hover:text-foreground" />
                     )}
                   </CollapsibleTrigger>
                   <CollapsibleContent>

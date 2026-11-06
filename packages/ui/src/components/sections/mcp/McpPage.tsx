@@ -14,7 +14,10 @@ import {
   SettingsCheckboxRow,
   SETTINGS_FIELD_LABEL_CLASS,
   SETTINGS_HELPER_CLASS,
+  SETTINGS_ICON_BUTTON_CLASS,
+  SETTINGS_SELECT_ROW_TRIGGER_CLASS,
 } from '@/components/sections/shared/SettingsSection';
+import { readClipboardText } from '@/lib/clipboard';
 import {
   useAutosave,
   AUTOSAVE_SAVED,
@@ -226,7 +229,7 @@ const CredentialEditor: React.FC<CredentialEditorProps> = ({
 
   const pastePairs = async () => {
     try {
-      const raw = await navigator.clipboard.readText();
+      const raw = await readClipboardText();
       const parsed: CredentialDraftRow[] = [];
       for (const line of raw.split('\n')) {
         const trimmed = line.trim();
@@ -270,13 +273,13 @@ const CredentialEditor: React.FC<CredentialEditorProps> = ({
         <Button
           variant="ghost"
           size="xs"
-          className="!font-normal gap-1 text-muted-foreground"
+          className="gap-1 text-muted-foreground"
           onClick={() => void pastePairs()}
           type="button"
           title={pasteTitle}
           disabled={disabled}
         >
-          <Icon name="clipboard" className="h-3 w-3" />
+          <Icon name="clipboard" className="size-3" />
           {pasteLabel}
         </Button>
       </div>
@@ -303,14 +306,14 @@ const CredentialEditor: React.FC<CredentialEditorProps> = ({
               </span>
             </div>
             <Button
-              size="sm"
+              size="icon"
               variant="ghost"
-              className="h-7 w-7 shrink-0 px-0 text-muted-foreground hover:text-[var(--status-error)]"
+              className={cn(SETTINGS_ICON_BUTTON_CLASS, 'shrink-0 hover:text-[var(--status-error)]')}
               onClick={() => onRemoveReference(key)}
               aria-label={t('settings.mcp.page.env.removeVariableAria')}
               disabled={disabled}
             >
-              <Icon name="delete-bin" className="h-3.5 w-3.5" />
+              <Icon name="delete-bin" className="size-3.5" />
             </Button>
           </div>
         ))}
@@ -323,14 +326,14 @@ const CredentialEditor: React.FC<CredentialEditorProps> = ({
               <span className="absolute right-2 typography-micro text-muted-foreground">{t('settings.common.status.saved')}</span>
             </div>
             <Button
-              size="sm"
+              size="icon"
               variant="ghost"
-              className="h-7 w-7 shrink-0 px-0 text-muted-foreground hover:text-[var(--status-error)]"
+              className={cn(SETTINGS_ICON_BUTTON_CLASS, 'shrink-0 hover:text-[var(--status-error)]')}
               onClick={onRemoveBearer}
               aria-label={t('settings.mcp.page.env.removeVariableAria')}
               disabled={disabled}
             >
-              <Icon name="delete-bin" className="h-3.5 w-3.5" />
+              <Icon name="delete-bin" className="size-3.5" />
             </Button>
           </div>
         ) : null}
@@ -364,14 +367,14 @@ const CredentialEditor: React.FC<CredentialEditorProps> = ({
               disabled={disabled}
             />
             <Button
-              size="sm"
+              size="icon"
               variant="ghost"
-              className="h-7 w-7 shrink-0 px-0 text-muted-foreground hover:text-[var(--status-error)]"
+              className={cn(SETTINGS_ICON_BUTTON_CLASS, 'shrink-0 hover:text-[var(--status-error)]')}
               onClick={() => removeRow(index)}
               aria-label={t('settings.mcp.page.env.removeVariableAria')}
               disabled={disabled}
             >
-              <Icon name="delete-bin" className="h-3.5 w-3.5" />
+              <Icon name="delete-bin" className="size-3.5" />
             </Button>
           </div>
         ))}
@@ -399,12 +402,12 @@ const CredentialEditor: React.FC<CredentialEditorProps> = ({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button variant="outline" size="xs" className="!font-normal gap-1.5" onClick={addRow} type="button" disabled={disabled}>
-          <Icon name="add" className="h-3.5 w-3.5" />
+        <Button variant="outline" size="xs" className=" gap-1.5" onClick={addRow} type="button" disabled={disabled}>
+          <Icon name="add" className="size-3.5" />
           {isEnv ? t('settings.mcp.page.env.addVariable') : t('settings.providers.page.custom.headers.add')}
         </Button>
         {hasPending ? (
-          <Button size="xs" className="!font-normal" onClick={onSave} disabled={disabled || saving}>
+          <Button size="xs" onClick={onSave} disabled={disabled || saving}>
             {saving ? t('settings.common.actions.saving') : t('settings.common.actions.saveChanges')}
           </Button>
         ) : null}
@@ -743,7 +746,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
 
   const handlePasteImportClipboard = async () => {
     try {
-      const text = await navigator.clipboard.readText();
+      const text = await readClipboardText();
       setSnippet(text);
       setImportError(null);
     } catch {
@@ -755,8 +758,8 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
   const connected = created && isMcpServerConnected(statusEntry);
   const connectionKind: 'local' | 'remote' = draft.transport.type === 'stdio' ? 'local' : 'remote';
   const connectionTabs = React.useMemo<SortableTabsStripItem[]>(() => [
-    { id: 'local', label: t('settings.mcp.page.connection.kindCommand'), icon: <Icon name="terminal" className="h-3.5 w-3.5" /> },
-    { id: 'remote', label: t('settings.mcp.page.connection.kindLink'), icon: <Icon name="global" className="h-3.5 w-3.5" /> },
+    { id: 'local', label: t('settings.mcp.page.connection.kindCommand'), icon: <Icon name="terminal" className="size-3.5" /> },
+    { id: 'remote', label: t('settings.mcp.page.connection.kindLink'), icon: <Icon name="global" className="size-3.5" /> },
   ], [t]);
   const credentials = draft.transport.type === 'stdio'
     ? draft.transport.envCredentialRefs ?? {}
@@ -796,21 +799,21 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
             <Button
               variant={connected ? 'outline' : 'default'}
               size="xs"
-              className="!font-normal"
+              
               onClick={() => void handleConnectionAction()}
               disabled={busy}
             >
               {busy ? t('settings.mcp.page.actions.working') : connected ? t('settings.mcp.page.actions.disconnect') : t('settings.mcp.page.actions.connect')}
             </Button>
             {connected ? (
-              <Button variant="ghost" size="xs" className="!font-normal gap-1 text-muted-foreground" onClick={() => void handleTestConnection()} disabled={busy || !draft.enabled}>
+              <Button variant="ghost" size="xs" className=" gap-1 text-muted-foreground" onClick={() => void handleTestConnection()} disabled={busy || !draft.enabled}>
                 {busy ? t('settings.mcp.page.actions.testing') : t('settings.mcp.page.actions.test')}
               </Button>
             ) : null}
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7 text-muted-foreground hover:text-[var(--status-error)]"
+              className={cn(SETTINGS_ICON_BUTTON_CLASS, 'hover:text-[var(--status-error)]')}
               onClick={() => setDeleteOpen(true)}
               disabled={busy}
               aria-label={t('settings.common.actions.delete')}
@@ -871,7 +874,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
                 </div>
                 {status === 'unavailable' ? (
                   <div className="flex flex-wrap items-center gap-2">
-                    <Button variant="outline" size="xs" className="!font-normal" onClick={() => void handleTestConnection()} disabled={busy || !draft.enabled}>
+                    <Button variant="outline" size="xs" onClick={() => void handleTestConnection()} disabled={busy || !draft.enabled}>
                       {busy ? t('settings.mcp.page.actions.testing') : t('settings.mcp.page.actions.testConnection')}
                     </Button>
                   </div>
@@ -895,12 +898,12 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
             <Button
               variant="ghost"
               size="xs"
-              className="!font-normal gap-1.5 text-muted-foreground"
+              className="gap-1.5 text-muted-foreground"
               onClick={() => { setImportOpen(true); setImportError(null); }}
               type="button"
               title={t('settings.mcp.page.server.importJsonTitle')}
             >
-              <Icon name="file-code" className="h-3.5 w-3.5" />
+              <Icon name="file-code" className="size-3.5" />
               {t('settings.mcp.page.server.importJson')}
             </Button>
           ) : null}
@@ -1004,7 +1007,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
                     changeRemoteTransport(type);
                   }}
                 >
-                  <SelectTrigger className="w-fit min-w-[100px]" disabled={busy || isReadOnly}>
+                  <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS} disabled={busy || isReadOnly}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent align="end">
@@ -1062,16 +1065,16 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
         <div className="flex flex-wrap items-center gap-2 pb-8">
           {!created ? (
             <>
-              <Button onClick={() => void handleCreate()} disabled={busy} size="xs" className="!font-normal">
+              <Button onClick={() => void handleCreate()} disabled={busy} size="xs">
                 {busy ? t('settings.common.actions.saving') : t('settings.common.actions.create')}
               </Button>
-              <Button variant="ghost" onClick={handleCancel} disabled={busy} size="xs" className="!font-normal">
+              <Button variant="ghost" onClick={handleCancel} disabled={busy} size="xs">
                 {t('settings.common.actions.cancel')}
               </Button>
             </>
           ) : null}
           {isNew || initial.managed === false ? null : (
-            <Button variant="ghost" size="xs" className="!font-normal text-[var(--status-error)] hover:text-[var(--status-error)]" onClick={() => setDeleteOpen(true)} disabled={busy}>
+            <Button variant="ghost" size="xs" className=" text-[var(--status-error)] hover:text-[var(--status-error)]" onClick={() => setDeleteOpen(true)} disabled={busy}>
               <Icon name="delete-bin" className="size-3.5" />
               {t('settings.common.actions.delete')}
             </Button>
@@ -1106,8 +1109,8 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
             />
             {importError ? <p className="typography-micro text-[var(--status-error)]">{importError}</p> : null}
             <div className="flex flex-wrap items-center gap-2">
-              <Button variant="outline" size="xs" className="!font-normal gap-1" onClick={() => void handlePasteImportClipboard()} type="button">
-                <Icon name="clipboard" className="h-3.5 w-3.5" />
+              <Button variant="outline" size="xs" className=" gap-1" onClick={() => void handlePasteImportClipboard()} type="button">
+                <Icon name="clipboard" className="size-3.5" />
                 {t('settings.mcp.page.importDialog.pasteFromClipboard')}
               </Button>
             </div>

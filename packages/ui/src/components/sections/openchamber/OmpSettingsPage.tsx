@@ -15,8 +15,11 @@ import {
   SettingsSection,
   SettingsStackedField,
   SETTINGS_HELPER_CLASS,
+  SETTINGS_DESCRIPTION_CLASS,
+  SETTINGS_FIELD_LABEL_CLASS,
   SETTINGS_NUMBER_INPUT_CLASS,
   SETTINGS_SELECT_ROW_TRIGGER_CLASS,
+  SETTINGS_SELECT_TRIGGER_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
 import {
@@ -191,7 +194,7 @@ const ModelRolesSection: React.FC<{
       divider={false}
       settingsItem="omp.modelRoles"
     >
-      <p className="text-sm text-muted-foreground mb-4">
+      <p className={`${SETTINGS_DESCRIPTION_CLASS} mb-4`}>
         {t('settings.omp.modelRoles.description')}
       </p>
       <div className="space-y-4">
@@ -210,8 +213,8 @@ const ModelRolesSection: React.FC<{
 
           const label = (
             <div className="flex items-center gap-2">
-              <span className="font-medium text-sm">{roleLabel}</span>
-              <span className="px-1.5 py-0.5 rounded text-[10px] font-mono uppercase bg-muted text-muted-foreground border">
+              <span className={SETTINGS_FIELD_LABEL_CLASS}>{roleLabel}</span>
+              <span className="rounded border border-[var(--interactive-border)] bg-[var(--surface-muted)] px-1.5 py-0.5 typography-micro font-mono uppercase text-muted-foreground">
                 {role.tag}
               </span>
             </div>
@@ -221,7 +224,7 @@ const ModelRolesSection: React.FC<{
             <span className="block">
               {roleDesc ? <span className="block">{roleDesc}</span> : null}
               {!selectedModelId && fallback && (
-                <span className="block text-xs text-muted-foreground font-mono mt-1" data-testid={`fallback-${role.id}`}>
+                <span className={`mt-1 block font-mono ${SETTINGS_HELPER_CLASS}`}>
                   {fallback.model
                     ? t('settings.omp.modelRoles.fallbackToWithModel', { role: fallback.role, model: fallback.model })
                     : t('settings.omp.modelRoles.fallbackTo', { role: fallback.role })}
@@ -238,7 +241,7 @@ const ModelRolesSection: React.FC<{
               settingsItem={`omp.modelRoles.${role.id}`}
             >
 
-              <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+              <div className="flex flex-col items-start gap-2 @xl:flex-row @xl:items-center">
                 <Select
                   value={selectedModelId || '__inherit__'}
                   onValueChange={val => {
@@ -259,8 +262,8 @@ const ModelRolesSection: React.FC<{
                   disabled={disabled}
                 >
                   <SelectTrigger
-                    className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
-                    aria-label={`${roleLabel} model`}
+                    className={SETTINGS_SELECT_TRIGGER_CLASS}
+                    aria-label={t('settings.omp.modelRoles.modelAria', { role: roleLabel })}
                   >
                     <SelectValue placeholder={t('settings.omp.modelRoles.inheritFallback')} />
                   </SelectTrigger>
@@ -297,8 +300,8 @@ const ModelRolesSection: React.FC<{
                     disabled={disabled}
                   >
                     <SelectTrigger
-                      className="w-[140px]"
-                      aria-label={`${roleLabel} ${t('settings.omp.modelRoles.thinkingEffort')}`}
+                      className={SETTINGS_SELECT_TRIGGER_CLASS}
+                      aria-label={t('settings.omp.modelRoles.effortAria', { role: roleLabel })}
                     >
                       <SelectValue placeholder={t('settings.omp.modelRoles.thinkingDefault')} />
                     </SelectTrigger>
@@ -341,11 +344,12 @@ const Group: React.FC<{
   errors: DraftErrors;
   disabled: boolean;
   first: boolean;
+  settingsItem?: string;
   onChange: (setting: OmpSetting, value: OmpSettingValue) => void;
   onDraft: (setting: OmpSetting, text: string) => void;
   onImmediate: () => void;
-}> = ({ title, settings, form, drafts, errors, disabled, first, onChange, onDraft, onImmediate }) => (
-  <SettingsSection title={title} divider={!first} settingsItem={first ? 'omp.behaviour' : undefined}>
+}> = ({ title, settings, form, drafts, errors, disabled, first, settingsItem, onChange, onDraft, onImmediate }) => (
+  <SettingsSection title={title} divider={!first} settingsItem={settingsItem ?? (first ? 'omp.behaviour' : undefined)}>
     <div className="space-y-4">
       {settings.map(setting => {
         const label = setting.label ?? <span className="font-mono">{setting.id}</span>;
@@ -585,8 +589,8 @@ export const OmpSettingsPage: React.FC = () => {
     setForm(current => ({ ...current, [setting.id]: parsed.value }));
   }, [t]);
 
-  const groups = React.useMemo(() => {
-    if (!state) return [];
+  const grouped = React.useMemo(() => {
+    if (!state) return { groups: [] as [string, OmpSetting[]][], advancedTitle: null as string | null };
     const map = new Map<string, OmpSetting[]>();
     const advanced: OmpSetting[] = [];
     for (const setting of state.settings) {
@@ -599,7 +603,7 @@ export const OmpSettingsPage: React.FC = () => {
     // Config-file-only settings have no OMP panel group; keep them together at
     // the end so the labelled behaviour groups lead the page.
     if (advanced.length > 0) map.set(t('settings.omp.advanced'), advanced);
-    return [...map.entries()];
+    return { groups: [...map.entries()], advancedTitle: advanced.length > 0 ? t('settings.omp.advanced') : null };
   }, [state, t]);
 
   if (loading && !state) {
@@ -638,7 +642,7 @@ export const OmpSettingsPage: React.FC = () => {
           onImmediate={autosave.requestSave}
         />
       )}
-      {groups.map(([title, settings], index) => (
+      {grouped.groups.map(([title, settings], index) => (
         <Group
           key={title}
           title={title}
@@ -648,6 +652,7 @@ export const OmpSettingsPage: React.FC = () => {
           errors={errors}
           disabled={loading}
           first={!modelRolesSetting && index === 0}
+          settingsItem={grouped.advancedTitle === title ? 'omp.advanced' : undefined}
           onChange={onChange}
           onDraft={onDraft}
           onImmediate={autosave.requestSave}

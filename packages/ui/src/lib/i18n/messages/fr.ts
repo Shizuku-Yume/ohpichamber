@@ -765,6 +765,8 @@ export const dict = {
   "settings.commands.page.subtitle.edit": "Modifier les paramètres de la commande",
   "settings.commands.page.section.identity": "Identité",
   "settings.commands.page.section.executionContext": "Contexte d'exécution",
+  "settings.commands.page.field.group": "Groupe de commandes",
+  "settings.commands.page.field.argumentHint": "Indice d'arguments",
   "settings.commands.page.section.template": "Modèle de commande",
   "settings.commands.page.field.commandName": "Nom de la commande",
   "settings.commands.page.field.commandNamePlaceholder": "nom-commande",

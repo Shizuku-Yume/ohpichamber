@@ -25,12 +25,11 @@ import { toast } from '@/components/ui';
 import { Icon } from '@/components/icon/Icon';
 import type { IconName } from '@/components/icon/icons';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
-import { SettingsSection } from '@/components/sections/shared/SettingsSection';
+import { SETTINGS_ICON_BUTTON_CLASS, SettingsSection } from '@/components/sections/shared/SettingsSection';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
 import { SettingsBackButton } from '@/components/sections/shared/SettingsCards';
 import { ClassificationProvidersPage } from '@/components/sections/classification/ClassificationProvidersPage';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
-import { useDeviceInfo } from '@/lib/device';
 import { cn } from '@/lib/utils';
 import { ProviderGrid } from './ProviderGrid';
 import { ProviderConnectPicker } from './ProviderConnectPicker';
@@ -88,7 +87,6 @@ function ProviderDetail({
   onClearAuthFailure,
 }: ProviderDetailProps) {
   const { t } = useI18n();
-  const { isMobile } = useDeviceInfo();
   const [detail, setDetail] = React.useState<Detail | null>(null);
   const [failed, setFailed] = React.useState(false);
   const [retry, setRetry] = React.useState(0);
@@ -295,7 +293,6 @@ function ProviderDetail({
               <Button
                 variant="outline"
                 size="xs"
-                className="!font-normal"
                 onClick={() => {
                   setAuthPanelDismissed(false);
                   setShowAuthPanel(false);
@@ -309,7 +306,6 @@ function ProviderDetail({
               <Button
                 variant="outline"
                 size="xs"
-                className="!font-normal"
                 onClick={() => {
                   const nextOpen = !showAuthPanel;
                   setShowAuthPanel(nextOpen);
@@ -342,7 +338,7 @@ function ProviderDetail({
           />
         ) : !showAuthPanel && authStatusIncomplete ? (
           <div className="flex items-center gap-1.5 py-1.5">
-            <Icon name="alert" className="h-4 w-4 shrink-0 text-[var(--status-warning)]" />
+            <Icon name="alert" className="size-4 shrink-0 text-[var(--status-warning)]" />
             <span className="typography-ui-label text-foreground">{t('settings.providers.page.auth.incomplete')}</span>
             {provider.authMethods.includes('api-key')
               ? <SettingsInfoHint>{t('settings.providers.page.auth.incompleteHint')}</SettingsInfoHint>
@@ -363,10 +359,7 @@ function ProviderDetail({
             {t('settings.providers.page.auth.loadingMethods')}
           </div>
         ) : (
-          <div className={cn(
-            'space-y-4',
-            accounts.length > 0 && 'rounded-xl border border-[var(--interactive-border)] p-4',
-          )}>
+          <div className="space-y-4">
             {provider.authMethods.includes('api-key') ? (
               <ProviderApiKeyForm
                 key={provider.providerId}
@@ -408,7 +401,6 @@ function ProviderDetail({
               <Button
                 variant="outline"
                 size="xs"
-                className="!font-normal"
                 onClick={() => hideAllModels(provider.providerId, providerModels.map((model) => model.modelId))}
               >
                 {t('settings.providers.page.actions.hideAll')}
@@ -416,7 +408,6 @@ function ProviderDetail({
               <Button
                 variant="outline"
                 size="xs"
-                className="!font-normal"
                 onClick={() => showAllModels(provider.providerId)}
               >
                 {t('settings.providers.page.actions.showAll')}
@@ -426,12 +417,12 @@ function ProviderDetail({
           settingsItem="providers.models"
         >
           <div className="relative mb-2">
-            <Icon name="search" className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Icon name="search" className="absolute inset-s-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder={t('settings.providers.page.models.filterPlaceholder')}
-              className="h-7 w-full pl-8"
+              className="h-7 w-full ps-8"
             />
           </div>
 
@@ -461,47 +452,45 @@ function ProviderDetail({
                         {model.name}
                       </span>
                       <div className="flex shrink-0 items-center gap-2">
-                        {isMobile ? (
-                          tokenSummary || capabilities.length > 0 ? (
-                            <SettingsInfoHint className="h-6 w-6">
-                              <div className="space-y-1.5">
-                                {tokenSummary ? <div className="font-medium">{tokenSummary}</div> : null}
-                                {capabilities.map(({ key, icon, label }) => (
-                                  <div key={key} className="flex items-center gap-1.5">
-                                    <Icon name={icon} className="h-3.5 w-3.5" />
-                                    {label}
-                                  </div>
-                                ))}
-                              </div>
-                            </SettingsInfoHint>
-                          ) : null
-                        ) : (
-                          <>
-                            {tokenSummary ? (
-                              <span className="shrink-0 rounded bg-[var(--surface-muted)] px-1.5 py-0.5 typography-micro text-muted-foreground">
-                                {tokenSummary}
-                              </span>
-                            ) : null}
-                            {capabilities.length > 0 ? (
-                              <div className="flex shrink-0 items-center gap-1">
-                                {capabilities.map(({ key, icon, label }) => (
-                                  <span
-                                    key={key}
-                                    className="flex h-5 w-5 items-center justify-center rounded bg-[var(--surface-muted)] text-muted-foreground"
-                                    title={label}
-                                    aria-label={label}
-                                  >
-                                    <Icon name={icon} className="h-3 w-3" />
-                                  </span>
-                                ))}
-                              </div>
-                            ) : null}
-                          </>
-                        )}
-                        <button
-                          type="button"
+                        {tokenSummary || capabilities.length > 0 ? (
+                          <SettingsInfoHint className="@xl:hidden inline-flex size-6">
+                            <div className="space-y-1.5">
+                              {tokenSummary ? <div className="font-medium">{tokenSummary}</div> : null}
+                              {capabilities.map(({ key, icon, label }) => (
+                                <div key={key} className="flex items-center gap-1.5">
+                                  <Icon name={icon} className="size-3.5" />
+                                  {label}
+                                </div>
+                              ))}
+                            </div>
+                          </SettingsInfoHint>
+                        ) : null}
+                        <div className="hidden shrink-0 items-center gap-2 @xl:flex">
+                          {tokenSummary ? (
+                            <span className="shrink-0 rounded bg-[var(--surface-muted)] px-1.5 py-0.5 typography-micro text-muted-foreground">
+                              {tokenSummary}
+                            </span>
+                          ) : null}
+                          {capabilities.length > 0 ? (
+                            <div className="flex shrink-0 items-center gap-1">
+                              {capabilities.map(({ key, icon, label }) => (
+                                <span
+                                  key={key}
+                                  className="flex size-5 items-center justify-center rounded bg-[var(--surface-muted)] text-muted-foreground"
+                                  title={label}
+                                  aria-label={label}
+                                >
+                                  <Icon name={icon} className="size-3" />
+                                </span>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={SETTINGS_ICON_BUTTON_CLASS}
                           onClick={() => toggleHiddenModel(provider.providerId, model.modelId)}
-                          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-[var(--interactive-hover)]/50 hover:text-foreground"
                           title={isHidden
                             ? t('settings.providers.page.models.actions.showModelInSelectors')
                             : t('settings.providers.page.models.actions.hideModelFromSelectors')}
@@ -510,9 +499,9 @@ function ProviderDetail({
                             : t('settings.providers.page.models.actions.hideModel')}
                         >
                           {isHidden
-                            ? <Icon name="eye-off" className="h-3.5 w-3.5" />
-                            : <Icon name="eye" className="h-3.5 w-3.5" />}
-                        </button>
+                            ? <Icon name="eye-off" className="size-3.5" />
+                            : <Icon name="eye" className="size-3.5" />}
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -786,7 +775,7 @@ export const ProvidersPage: React.FC = () => {
         titleLeading={isCustomCreate ? candidateBackButton : (
           <span className="flex items-center gap-2">
             {candidateBackButton}
-            <ProviderLogo providerId={candidate} className="h-5 w-5 shrink-0" />
+            <ProviderLogo providerId={candidate} className="size-5 shrink-0" />
           </span>
         )}
         showSaveStatus={false}
@@ -854,7 +843,7 @@ export const ProvidersPage: React.FC = () => {
         titleLeading={(
           <span className="flex items-center gap-2">
             <SettingsBackButton label={t('settings.providers.page.back')} onClick={backToGrid} />
-            <ProviderLogo providerId={provider.providerId} className="h-5 w-5 shrink-0" />
+            <ProviderLogo providerId={provider.providerId} className="size-5 shrink-0" />
           </span>
         )}
         description={(

@@ -329,6 +329,8 @@ export const dict = {
   "settings.commands.page.field.overrideAgent": "Nadpisz agenta",
   "settings.commands.page.field.templatePlaceholder": "Twój szablon polecenia tutaj...\n\nUżyj $ARGUMENTS, aby odnieść się do danych wejściowych użytkownika.\nUżyj !`polecenie shell`, aby wstrzyknąć wynik z konsoli.\nUżyj @nazwa_pliku, aby dołączyć zawartość pliku.",
   "settings.commands.page.section.executionContext": "Kontekst wykonania",
+  "settings.commands.page.field.group": "Grupa poleceń",
+  "settings.commands.page.field.argumentHint": "Podpowiedź argumentów",
   "settings.commands.page.section.identity": "Tożsamość",
   "settings.commands.page.section.template": "Szablon polecenia",
   "settings.commands.page.subtitle.edit": "Edytuj ustawienia polecenia",

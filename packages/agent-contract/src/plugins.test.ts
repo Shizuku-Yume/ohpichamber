@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import {
   InstalledPluginEntrySchema, LocalExtensionEntrySchema, LocalExtensionWriteRequestSchema,
-  PluginConfigureRequestSchema, PluginInstallRequestSchema, PluginMutationResultSchema,
+  MarketplaceEntrySchema, PluginConfigureRequestSchema, PluginInstallRequestSchema, PluginMarketplaceManageRequestSchema,
+  PluginMarketplaceSourcesSchema, PluginMutationResultSchema, PluginUpdateCheckEntrySchema,
   PluginCatalogStateSchema, type InstalledPluginEntry,
 } from './plugins.ts';
 
@@ -80,6 +81,39 @@ describe('native plugin contracts', () => {
     const siblingWorker = { ...worker, rootSessionId: 'sibling-session', workspaceId: 'sibling-workspace' };
     expect(PluginMutationResultSchema.safeParse({ ...result, workers: [applied, { ...applied, worker: siblingWorker }] }).success).toBe(true);
     expect(PluginCatalogStateSchema.safeParse({ ...catalog, workers: [{ worker: siblingWorker, status: 'ready', appliedRevision: '1', error: null }] }).success).toBe(false);
+  });
+
+  test('marketplace management distinguishes the read-only list action from registry writes', () => {
+    expect(PluginMarketplaceManageRequestSchema.safeParse({ action: 'list' }).success).toBe(true);
+    expect(PluginMarketplaceManageRequestSchema.safeParse({ action: 'list', name: 'team' }).success).toBe(false);
+    expect(PluginMarketplaceManageRequestSchema.safeParse({ action: 'add', expectedRevision: '0', source: 'owner/repo' }).success).toBe(true);
+    expect(PluginMarketplaceManageRequestSchema.safeParse({ action: 'remove', name: 'team' }).success).toBe(false);
+    expect(PluginMarketplaceManageRequestSchema.safeParse({ action: 'remove', expectedRevision: '0', name: 'team' }).success).toBe(true);
+    expect(PluginMarketplaceManageRequestSchema.safeParse({ action: 'update', expectedRevision: '0' }).success).toBe(true);
+    expect(PluginMarketplaceSourcesSchema.parse({ workspaceId: 'workspace', revision: '0', sources: [] }).sources).toEqual([]);
+  });
+
+  test('catalog update entries describe native marketplace targets and generated defaults stay empty', () => {
+    const update = { pluginId: 'proof@native', scope: 'global',
+      target: { kind: 'marketplace', name: 'proof', marketplace: 'native', scope: 'user' }, from: '1.0.0', to: '2.0.0' };
+    expect(PluginUpdateCheckEntrySchema.safeParse(update).success).toBe(true);
+    expect(PluginUpdateCheckEntrySchema.safeParse({ ...update, scope: 'workspace' }).success).toBe(false);
+    expect(PluginUpdateCheckEntrySchema.safeParse({ ...update,
+      target: { kind: 'marketplace', name: 'proof', marketplace: 'native', scope: 'project' } }).success).toBe(false);
+    const parsed = PluginCatalogStateSchema.parse({ workspaceId: 'workspace', revision: '1', plugins: [], marketplace: [],
+      localExtensions: [], workers: [] });
+    expect(parsed.marketplaceSources).toEqual([]);
+    expect(parsed.availableUpdates).toEqual([]);
+  });
+
+  test('marketplace entries carry rich manifest details without fabricated fields', () => {
+    const entry = MarketplaceEntrySchema.parse({ marketplace: 'native', name: 'proof', description: 'Native proof',
+      version: '1.0.0', details: { author: { name: 'Author' }, license: 'MIT', keywords: ['native'],
+        category: 'tools', commands: ['proof'], mcpServers: { proof: { command: 'proof' } }, lspServers: './lsp.json' } });
+    expect(entry.details).toMatchObject({ author: { name: 'Author' }, category: 'tools', keywords: ['native'] });
+    expect(MarketplaceEntrySchema.parse({ marketplace: 'native', name: 'plain', description: '', version: null }).details).toBeUndefined();
+    expect(MarketplaceEntrySchema.safeParse({ marketplace: 'native', name: 'plain', description: '', version: null,
+      details: { source: './plugins/plain' } }).success).toBe(false);
   });
 
   test('catalogs reject duplicate native plugin identities', () => {

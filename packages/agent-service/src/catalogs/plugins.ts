@@ -5,7 +5,7 @@ import {
   PluginCatalogStateSchema, PluginDoctorResultSchema, PluginMarketplaceStateSchema, LocalExtensionSourceSchema,
   PluginWorkerApplyOutcomeSchema, PluginMutationResultSchema, PluginMarketplaceManageRequestSchema,
   PluginPreviewUpgradeRequestSchema, PluginUpgradeAllRequestSchema, PluginUpgradeRequestSchema,
-  PluginUpdateCheckResultSchema, PluginUpgradePreviewResultSchema,
+  PluginUpdateCheckResultSchema, PluginUpgradePreviewResultSchema, PluginMarketplaceSourcesSchema,
 } from '@openchamber/agent-contract';
 
 export const NativePluginOperationSchemas = [
@@ -36,6 +36,7 @@ export const NativePluginResultSchemas = [
   z.strictObject({ type: z.literal('plugins.doctor'), result: PluginDoctorResultSchema }),
   z.strictObject({ type: z.literal('plugins.marketplace'), result: PluginMarketplaceStateSchema }),
   z.strictObject({ type: z.literal('plugins.updateCheck'), result: PluginUpdateCheckResultSchema }),
+  z.strictObject({ type: z.literal('plugins.marketplaceSources'), result: PluginMarketplaceSourcesSchema }),
   z.strictObject({ type: z.literal('plugins.upgradePreview'), result: PluginUpgradePreviewResultSchema }),
   z.strictObject({ type: z.literal('plugins.local'), result: LocalExtensionSourceSchema }),
   z.strictObject({ type: z.literal('plugins.applied'), result: PluginWorkerApplyOutcomeSchema }),

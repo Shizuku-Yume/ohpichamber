@@ -215,6 +215,9 @@ export class NativePlugins {
       type: 'plugins.updateCheck',
       result: { workspaceId, revision, updates: await this.availableUpdates(marketplace) }
     };
+    if (operation.type === 'plugins.marketplace.manage' && operation.request.action === 'list') {
+      return { type: 'plugins.marketplaceSources', result: { workspaceId, revision, sources: await this.marketplaceSources(marketplace) } };
+    }
     if (operation.type === 'plugins.marketplace.previewUpgrade') {
       return { type: 'plugins.upgradePreview', result: { workspaceId, revision, preview: await this.previewUpgrades(marketplace, operation.request.target) } };
     }
@@ -222,6 +225,9 @@ export class NativePlugins {
       switch (operation.type) {
         case 'plugins.marketplace.manage': {
           const request = operation.request;
+          // `list` is handled above as a read; the baseline documents why the
+          // narrowing exists so a future native action cannot silently fall here.
+          if (request.action === 'list') throw new ProjectionError(400, 'INVALID_REQUEST', 'Marketplace listing is a cached read');
           if (request.action === 'add') await marketplace.addMarketplace(request.source);
           else if (request.action === 'remove') {
             if ((await marketplace.listMarketplaces()).some(source => source.name === request.name)) await marketplace.removeMarketplace(request.name);

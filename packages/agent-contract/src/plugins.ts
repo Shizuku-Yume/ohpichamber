@@ -105,15 +105,24 @@ export const PluginMarketplaceStateSchema = z.strictObject({
  sources: z.array(MarketplaceSourceSchema).default([]), updates: z.array(PluginUpdateCheckEntrySchema).default([]),
 });
 export type PluginMarketplaceState = z.infer<typeof PluginMarketplaceStateSchema>;
+/** Configured catalog sources as the native registry reports them; never merged with installed state. */
+export const PluginMarketplaceSourcesSchema = z.strictObject({
+ workspaceId: EntityIdSchema, revision: CounterSchema, sources: z.array(MarketplaceSourceSchema),
+});
+export type PluginMarketplaceSources = z.infer<typeof PluginMarketplaceSourcesSchema>;
 /**
  * Source management is the only marketplace action that reaches the network.
  * `list` and the catalog snapshot read cached state; refreshes are explicit.
+ * `list` is a read, so it carries no expected revision and never commits one.
  */
 export const PluginMarketplaceManageRequestSchema = z.discriminatedUnion('action', [
+ z.strictObject({ action: z.literal('list') }),
  z.strictObject({ action: z.literal('add'), expectedRevision: CounterSchema, source: z.string().min(1).max(2048) }),
  z.strictObject({ action: z.literal('remove'), expectedRevision: CounterSchema, name: z.string().min(1) }),
  z.strictObject({ action: z.literal('update'), expectedRevision: CounterSchema, name: z.string().min(1).optional() }),
 ]);
+/** Manage requests that write the native registry; `list` is a read and returns sources instead. */
+export type PluginMarketplaceMutationRequest = Exclude<PluginMarketplaceManageRequest, { action: 'list' }>;
 export type PluginMarketplaceManageRequest = z.infer<typeof PluginMarketplaceManageRequestSchema>;
 /** Preview is a read of the native upgrade plan; `target` selects one plugin, absent selects every outdated one. */
 export const PluginPreviewUpgradeRequestSchema = z.strictObject({ target: PluginTargetSchema.optional() });

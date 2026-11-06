@@ -432,6 +432,7 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
   const [doctorRefreshing, setDoctorRefreshing] = React.useState(false);
   const [marketplaceScope, setMarketplaceScope] = React.useState<'user' | 'project'>('project');
   const [marketplaceQuery, setMarketplaceQuery] = React.useState('');
+  const [marketplaceFacet, setMarketplaceFacet] = React.useState<string | null>(null);
   const [upgradingAll, setUpgradingAll] = React.useState(false);
   const [sourcesOpen, setSourcesOpen] = React.useState(false);
 
@@ -465,10 +466,22 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
     : undefined;
   const deleteName = deleteTarget?.kind === 'plugin' ? deleteTarget.plugin.name : deleteTarget?.extension.extensionId ?? '';
 
-  const marketplaceEntries = React.useMemo(
-    () => rankByQuery(catalog?.marketplace ?? [], marketplaceQuery, entry => [entry.name, entry.description, entry.marketplace]),
-    [catalog, marketplaceQuery],
-  );
+  /** Categories and keywords the configured catalogs actually publish, deduplicated across marketplaces. */
+  const marketplaceFacets = React.useMemo(() => {
+    const facets = new Set<string>();
+    for (const entry of catalog?.marketplace ?? []) {
+      if (entry.details?.category) facets.add(entry.details.category);
+      for (const keyword of entry.details?.keywords ?? []) facets.add(keyword);
+    }
+    return [...facets].sort((left, right) => left.localeCompare(right));
+  }, [catalog]);
+  const marketplaceEntries = React.useMemo(() => {
+    const scoped = marketplaceFacet === null ? catalog?.marketplace ?? []
+      : (catalog?.marketplace ?? []).filter(entry => entry.details?.category === marketplaceFacet
+        || (entry.details?.keywords ?? []).includes(marketplaceFacet));
+    return rankByQuery(scoped, marketplaceQuery, entry => [entry.name, entry.description, entry.marketplace,
+      entry.details?.category ?? '', ...(entry.details?.keywords ?? []), entry.details?.author?.name ?? '']);
+  }, [catalog, marketplaceFacet, marketplaceQuery]);
 
   const requestDelete = (target: PluginDeleteTarget) => {
     setOperationError(null);
@@ -808,6 +821,30 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
               </SelectContent>
             </Select>
           </SettingsFieldRow>
+
+          {marketplaceFacets.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-1">
+              <Button
+                variant="chip"
+                size="xs"
+                aria-pressed={marketplaceFacet === null}
+                onClick={() => setMarketplaceFacet(null)}
+              >
+                {t('settings.plugins.marketplace.allCategories')}
+              </Button>
+              {marketplaceFacets.map(facet => (
+                <Button
+                  key={facet}
+                  variant="chip"
+                  size="xs"
+                  aria-pressed={marketplaceFacet === facet}
+                  onClick={() => setMarketplaceFacet(current => current === facet ? null : facet)}
+                >
+                  {facet}
+                </Button>
+              ))}
+            </div>
+          ) : null}
 
           {catalog.marketplace.length === 0 ? (
             <p className="py-2 typography-meta text-muted-foreground">{t('settings.plugins.marketplace.empty')}</p>

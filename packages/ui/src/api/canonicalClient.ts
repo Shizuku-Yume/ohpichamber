@@ -97,8 +97,11 @@ export class CanonicalClient {
     apply: (workspaceId: string, input: C.PluginApplyRequest): Promise<C.PluginMutationResult> =>
       request(`/api/agent/v1/workspaces/${id(workspaceId)}/plugins/apply`, scoped(C.PluginMutationResultSchema, result => result.workspaceId === workspaceId), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.PluginApplyRequestSchema, input) }),
     marketplace: (workspaceId: string): Promise<C.PluginMarketplaceState> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/plugins/marketplace`, scoped(C.PluginMarketplaceStateSchema, result => result.workspaceId === workspaceId)),
-    manageMarketplace: (workspaceId: string, input: C.PluginMarketplaceManageRequest): Promise<C.PluginMutationResult> =>
+    /** `list` is a read and answers with sources; every other action commits a new catalog. */
+    manageMarketplace: (workspaceId: string, input: C.PluginMarketplaceMutationRequest): Promise<C.PluginMutationResult> =>
       request(`/api/agent/v1/workspaces/${id(workspaceId)}/plugins/marketplace/manage`, scoped(C.PluginMutationResultSchema, result => result.workspaceId === workspaceId), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.PluginMarketplaceManageRequestSchema, input) }),
+    listMarketplaceSources: (workspaceId: string): Promise<C.PluginMarketplaceSources> =>
+      request(`/api/agent/v1/workspaces/${id(workspaceId)}/plugins/marketplace/manage`, scoped(C.PluginMarketplaceSourcesSchema, result => result.workspaceId === workspaceId), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.PluginMarketplaceManageRequestSchema, { action: 'list' }) }),
     checkUpdates: (workspaceId: string): Promise<C.PluginUpdateCheckResult> =>
       request(`/api/agent/v1/workspaces/${id(workspaceId)}/plugins/marketplace/updates`, scoped(C.PluginUpdateCheckResultSchema, result => result.workspaceId === workspaceId)),
     previewUpgrade: (workspaceId: string, input: C.PluginPreviewUpgradeRequest): Promise<C.PluginUpgradePreviewResult> =>

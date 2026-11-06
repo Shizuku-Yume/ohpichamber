@@ -1,6 +1,7 @@
 /** Plugin marketplace browsing, source management, updates and detail strings — merged into each locale's main dictionary. */
 export const pluginsMarketplaceI18n = {
   en: {
+    'settings.plugins.marketplace.allCategories': 'All categories',
     'settings.plugins.marketplace.sourcesButton': 'Manage sources',
     'settings.plugins.marketplace.toast.installed': 'Installed {name}',
     'settings.plugins.marketplace.source.github': 'GitHub',
@@ -41,6 +42,7 @@ export const pluginsMarketplaceI18n = {
     'settings.plugins.details.none': 'This plugin publishes no marketplace details.',
   },
   nl: {
+    'settings.plugins.marketplace.allCategories': 'Alle categorieën',
     'settings.plugins.marketplace.sourcesButton': 'Bronnen beheren',
     'settings.plugins.marketplace.toast.installed': '{name} geïnstalleerd',
     'settings.plugins.marketplace.source.github': 'GitHub',
@@ -81,6 +83,7 @@ export const pluginsMarketplaceI18n = {
     'settings.plugins.details.none': 'Dit plugin publiceert geen marketplace-details.',
   },
   uk: {
+    'settings.plugins.marketplace.allCategories': 'Усі категорії',
     'settings.plugins.marketplace.sourcesButton': 'Керувати джерелами',
     'settings.plugins.marketplace.toast.installed': '{name} встановлено',
     'settings.plugins.marketplace.source.github': 'GitHub',
@@ -121,6 +124,7 @@ export const pluginsMarketplaceI18n = {
     'settings.plugins.details.none': 'Цей плагін не публікує деталей маркетплейсу.',
   },
   de: {
+    'settings.plugins.marketplace.allCategories': 'Alle Kategorien',
     'settings.plugins.marketplace.sourcesButton': 'Quellen verwalten',
     'settings.plugins.marketplace.toast.installed': '{name} installiert',
     'settings.plugins.marketplace.source.github': 'GitHub',
@@ -161,6 +165,7 @@ export const pluginsMarketplaceI18n = {
     'settings.plugins.details.none': 'Dieses Plugin veröffentlicht keine Marketplace-Details.',
   },
   es: {
+    'settings.plugins.marketplace.allCategories': 'Todas las categorías',
     'settings.plugins.marketplace.sourcesButton': 'Gestionar fuentes',
     'settings.plugins.marketplace.toast.installed': '{name} instalado',
     'settings.plugins.marketplace.source.github': 'GitHub',
@@ -201,6 +206,7 @@ export const pluginsMarketplaceI18n = {
     'settings.plugins.details.none': 'Este plugin no publica detalles del marketplace.',
   },
   fr: {
+    'settings.plugins.marketplace.allCategories': 'Toutes les catégories',
     'settings.plugins.marketplace.sourcesButton': 'Gérer les sources',
     'settings.plugins.marketplace.toast.installed': '{name} installé',
     'settings.plugins.marketplace.source.github': 'GitHub',
@@ -241,6 +247,7 @@ export const pluginsMarketplaceI18n = {
     'settings.plugins.details.none': 'Ce plugin ne publie aucun détail de marketplace.',
   },
   ja: {
+    'settings.plugins.marketplace.allCategories': 'すべてのカテゴリ',
     'settings.plugins.marketplace.sourcesButton': 'ソースを管理',
     'settings.plugins.marketplace.toast.installed': '{name} をインストールしました',
     'settings.plugins.marketplace.source.github': 'GitHub',
@@ -281,6 +288,7 @@ export const pluginsMarketplaceI18n = {
     'settings.plugins.details.none': 'このプラグインはマーケットプレイスの詳細を公開していません。',
   },
   ko: {
+    'settings.plugins.marketplace.allCategories': '모든 카테고리',
     'settings.plugins.marketplace.sourcesButton': '소스 관리',
     'settings.plugins.marketplace.toast.installed': '{name} 설치됨',
     'settings.plugins.marketplace.source.github': 'GitHub',
@@ -321,6 +329,7 @@ export const pluginsMarketplaceI18n = {
     'settings.plugins.details.none': '이 플러그인은 마켓플레이스 세부 정보를 게시하지 않습니다.',
   },
   pl: {
+    'settings.plugins.marketplace.allCategories': 'Wszystkie kategorie',
     'settings.plugins.marketplace.sourcesButton': 'Zarządzaj źródłami',
     'settings.plugins.marketplace.toast.installed': 'Zainstalowano {name}',
     'settings.plugins.marketplace.source.github': 'GitHub',
@@ -361,6 +370,7 @@ export const pluginsMarketplaceI18n = {
     'settings.plugins.details.none': 'Ten plugin nie publikuje szczegółów marketplace.',
   },
   tr: {
+    'settings.plugins.marketplace.allCategories': 'Tüm kategoriler',
     'settings.plugins.marketplace.sourcesButton': 'Kaynakları yönet',
     'settings.plugins.marketplace.toast.installed': '{name} kuruldu',
     'settings.plugins.marketplace.source.github': 'GitHub',
@@ -401,6 +411,7 @@ export const pluginsMarketplaceI18n = {
     'settings.plugins.details.none': 'Bu eklenti market ayrıntısı yayımlamıyor.',
   },
   ar: {
+    'settings.plugins.marketplace.allCategories': 'كل الفئات',
     'settings.plugins.marketplace.sourcesButton': 'إدارة المصادر',
     'settings.plugins.marketplace.toast.installed': 'تم تثبيت {name}',
     'settings.plugins.marketplace.source.github': 'GitHub',
@@ -441,6 +452,7 @@ export const pluginsMarketplaceI18n = {
     'settings.plugins.details.none': 'هذه الإضافة لا تنشر تفاصيل المتجر.',
   },
   he: {
+    'settings.plugins.marketplace.allCategories': 'כל הקטגוריות',
     'settings.plugins.marketplace.sourcesButton': 'ניהול מקורות',
     'settings.plugins.marketplace.toast.installed': '{name} הותקן',
     'settings.plugins.marketplace.source.github': 'GitHub',
@@ -481,6 +493,7 @@ export const pluginsMarketplaceI18n = {
     'settings.plugins.details.none': 'תוסף זה אינו מפרסם פרטי חנות.',
   },
   'pt-BR': {
+    'settings.plugins.marketplace.allCategories': 'Todas as categorias',
     'settings.plugins.marketplace.sourcesButton': 'Gerenciar fontes',
     'settings.plugins.marketplace.toast.installed': '{name} instalado',
     'settings.plugins.marketplace.source.github': 'GitHub',
@@ -521,6 +534,7 @@ export const pluginsMarketplaceI18n = {
     'settings.plugins.details.none': 'Este plugin não publica detalhes do marketplace.',
   },
   'zh-CN': {
+    'settings.plugins.marketplace.allCategories': '所有类别',
     'settings.plugins.marketplace.sourcesButton': '管理来源',
     'settings.plugins.marketplace.toast.installed': '已安装 {name}',
     'settings.plugins.marketplace.source.github': 'GitHub',
@@ -561,6 +575,7 @@ export const pluginsMarketplaceI18n = {
     'settings.plugins.details.none': '此插件未发布市场详情。',
   },
   'zh-TW': {
+    'settings.plugins.marketplace.allCategories': '所有類別',
     'settings.plugins.marketplace.sourcesButton': '管理來源',
     'settings.plugins.marketplace.toast.installed': '已安裝 {name}',
     'settings.plugins.marketplace.source.github': 'GitHub',

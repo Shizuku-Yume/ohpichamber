@@ -29,6 +29,7 @@ import { LOCALES } from '@/lib/i18n/runtime';
 import { useI18nStore } from '@/lib/i18n/store';
 import { isInputHistoryLimit, isInputHistoryScope, type InputHistoryScope } from '@/lib/inputHistoryScope';
 import { normalizeMobileKeyboardMode } from '@/lib/mobileKeyboardMode';
+import { isResponseStylePreset, type ResponseStylePreset } from '@/lib/responseStyle';
 import { isTerminalShell } from '@/lib/terminalShell';
 import { sanitizeWorkStatusHiddenSections, sanitizeWorkStatusSectionOrder } from '@/components/chat/work-status/sections';
 import { useInputHistoryStore } from '@/stores/useInputHistoryStore';
@@ -191,6 +192,7 @@ const parseDraftStarters: SettingsParser<DraftStarterRef[]> = mapParser(fromSche
 const parseWorkStatusHiddenSections: SettingsParser<string[]> = mapParser(fromSchema(z.array(z.unknown())), (value) => sanitizeWorkStatusHiddenSections(value));
 const parseLargeTextPasteBehavior: SettingsParser<LargeTextPasteBehavior> = parseOneOf(['ask', 'attach', 'inline', 'inline-double-paste']);
 const parseFileEditorKeymap: SettingsParser<FileEditorKeymap> = parseOneOf(['default', 'vim']);
+const parseResponseStylePreset: SettingsParser<ResponseStylePreset> = parseGuarded(isResponseStylePreset);
 
 /**
  * Removing a built-in starter must stay a durable choice, so the list is only
@@ -562,6 +564,15 @@ export const SETTINGS_REGISTRY = {
   usageExpandedFamilies: field({ scope: 'profile', parse: parseStringRecordOfStringLists }),
   usageModelGroups: field<UsageModelGroups>({ scope: 'profile', parse: parseUsageModelGroups }),
 
+  // ── Behavior page (profile; the page writes these itself) ──
+  // AGENTS.md rules live in the files OMP loads natively; only the resolved
+  // response-style instruction travels with a prompt.
+  // The resolved instruction of the selected preset. `default` and a blank
+  // custom preset store '' — the zero-injection case.
+  responseStyleInstruction: field({ scope: 'profile', parse: parseTextUpTo(100_000) }),
+  responseStyleEnabled: field({ scope: 'profile', parse: parseBoolean }),
+  responseStylePreset: field({ scope: 'profile', parse: parseResponseStylePreset }),
+  responseStyleCustomInstructions: field({ scope: 'profile', parse: parseTextUpTo(50_000) }),
 
   // The server serves the PWA manifest from these, so they are facts about
   // the instance even though only the installed web app shows them.

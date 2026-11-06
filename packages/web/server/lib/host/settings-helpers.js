@@ -56,6 +56,14 @@ const REGISTRY_BOOLEAN_SETTINGS = Object.freeze([
 ]);
 const LIVE_BROWSER_TABS_MIN = 1;
 const LIVE_BROWSER_TABS_MAX = 20;
+// Both mirror the registry parsers for the resolved instruction and the
+// freeform custom preset text.
+const MAX_RESPONSE_STYLE_INSTRUCTION_LENGTH = 100_000;
+const MAX_RESPONSE_STYLE_CUSTOM_LENGTH = 50_000;
+// Mirrors `RESPONSE_STYLE_PRESETS` in packages/ui/src/lib/responseStyle.ts.
+const RESPONSE_STYLE_PRESET_VALUES = new Set([
+  'default', 'concise', 'detailed', 'mentor', 'pushback', 'noFiller', 'matchEnergy', 'warmPeer', 'custom',
+]);
 
 /** Provider id -> icon id; unknown icons and malformed entries are dropped one by one. */
 const sanitizeCustomProviderIcons = (value) => {
@@ -1013,6 +1021,21 @@ export const createSettingsHelpers = (dependencies) => {
     // Usage reporting opt-out (default: true/enabled)
     if (typeof candidate.reportUsage === 'boolean') {
       result.reportUsage = candidate.reportUsage;
+    }
+
+    // Behavior page (profile). The resolved response-style instruction is what
+    // prompt delivery reads; the preset/flag keep the editor's own state.
+    if (typeof candidate.responseStyleInstruction === 'string') {
+      result.responseStyleInstruction = candidate.responseStyleInstruction.slice(0, MAX_RESPONSE_STYLE_INSTRUCTION_LENGTH);
+    }
+    if (typeof candidate.responseStyleEnabled === 'boolean') {
+      result.responseStyleEnabled = candidate.responseStyleEnabled;
+    }
+    if (RESPONSE_STYLE_PRESET_VALUES.has(candidate.responseStylePreset)) {
+      result.responseStylePreset = candidate.responseStylePreset;
+    }
+    if (typeof candidate.responseStyleCustomInstructions === 'string') {
+      result.responseStyleCustomInstructions = candidate.responseStyleCustomInstructions.slice(0, MAX_RESPONSE_STYLE_CUSTOM_LENGTH);
     }
 
 

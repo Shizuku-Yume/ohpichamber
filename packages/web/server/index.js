@@ -139,6 +139,8 @@ import { createHostAgentRuntime } from './lib/host/agent-runtime.js';
 import { createAttachmentRoutes } from './lib/host/attachment-routes.js';
 import { createLegacyAttachmentImporter } from './lib/host/legacy-attachment-importer.js';
 import { createHostPromptDeliveryRuntime } from './lib/host/prompt-delivery-runtime.js';
+import { createBehaviorPromptSource } from './lib/host/behavior-prompt.js';
+import { readMergedSettingsSync } from './lib/host/settings-files.js';
 import { createSelectedCredentialResolver, createSelectedCredentialHandoff, createCatalogCredentialSelections } from './lib/host/private-credential.js';
 import { createScheduledTaskService } from './lib/scheduled-tasks/service.js';
 import { createOpenChamberControlService } from './lib/openchamber-control/service.js';
@@ -1172,6 +1174,14 @@ const hostPromptDeliveryRuntime = createHostPromptDeliveryRuntime({
  sessionKnowledgeRuntime,
  scheduledTasksRuntime,
  sessionRuntime,
+ // Behavior text is opt-in; the source resolves to an empty list when the
+ // profile sets no rules and no non-default response style.
+ behaviorPromptSource: createBehaviorPromptSource({
+  fsModule: fs,
+  pathModule: path,
+  settingsFilePath: SETTINGS_FILE_PATH,
+  readMergedSettings: readMergedSettingsSync,
+ }),
 });
 const convertLegacyQueue = async () => {
  const result = await promptQueueStore.convertLegacy({

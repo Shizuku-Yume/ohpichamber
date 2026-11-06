@@ -844,6 +844,8 @@ describe('settings registry gate', () => {
     openTrackerLinksOnBoard: true, worktreeArchiveOnDoneEnabled: false, showOpenCodeUpdateNotifications: true,
     agentScheduleToolEnabled: true, agentKnowledgeToolEnabled: false, agentRenderToolEnabled: false, agentWorkflowToolEnabled: false,
     mobileReturnKeySends: true, savePastedImagesAsFiles: true,
+    responseStyleInstruction: 'Keep replies short.',
+    responseStyleEnabled: true, responseStylePreset: 'concise', responseStyleCustomInstructions: 'Be brief.',
   };
 
   it('accepts a valid value for every persistable registry key (no server-side drift)', () => {

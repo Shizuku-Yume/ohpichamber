@@ -683,6 +683,18 @@
     "usageModelGroups": {
       "scope": "profile"
     },
+    "responseStyleInstruction": {
+      "scope": "profile"
+    },
+    "responseStyleEnabled": {
+      "scope": "profile"
+    },
+    "responseStylePreset": {
+      "scope": "profile"
+    },
+    "responseStyleCustomInstructions": {
+      "scope": "profile"
+    },
     "pwaAppName": {
       "scope": "instance",
       "surfaces": [

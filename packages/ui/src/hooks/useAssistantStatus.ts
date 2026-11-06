@@ -82,15 +82,15 @@ const DEFAULT_WORKING: WorkingSummary = {
 const EMPTY_PARTS: Part[] = [];
 const STATUS_SIGNATURE_SEPARATOR = '\u0000';
 
-type ToolBucket = 'read' | 'search' | 'edit' | 'command' | 'lookup' | 'delegate' | 'question' | 'skill';
+type ToolBucket = 'read' | 'search' | 'edit' | 'command' | 'lookup' | 'delegate' | 'question' | 'skill' | 'plan' | 'evaluate';
 
 // OMP builtin tools use their native identities; other names stay visible.
 const TOOL_BUCKETS: Record<string, ToolBucket> = {
-    read: 'read', grep: 'search', glob: 'search', find: 'search',
+    read: 'read', grep: 'search', glob: 'search', find: 'search', ast_grep: 'search',
     edit: 'edit', write: 'edit', ast_edit: 'edit',
-    bash: 'command',
-    web_search: 'lookup', fetch: 'lookup', github: 'lookup',
-    task: 'delegate', ask: 'question', manage_skill: 'skill',
+    bash: 'command', eval: 'evaluate',
+    lsp: 'lookup', web_search: 'lookup', fetch: 'lookup', github: 'lookup',
+    task: 'delegate', ask: 'question', manage_skill: 'skill', todo: 'plan',
 };
 
 // [one call, several calls]; `{count}` becomes the number of parallel calls in
@@ -100,10 +100,12 @@ const BUCKET_PHRASES = {
     search: ['searching files', 'searching files'],
     edit: ['editing a file', 'editing {count} files'],
     command: ['running a command', 'running {count} commands'],
+    evaluate: ['running code', 'running {count} code samples'],
     lookup: ['looking things up', 'looking things up'],
     delegate: ['handing off a task', 'handing off {count} tasks'],
     question: ['asking a question', 'asking a question'],
     skill: ['picking up a skill', 'picking up {count} skills'],
+    plan: ['updating the plan', 'updating the plan'],
 } satisfies Record<ToolBucket, readonly [string, string]>;
 const WORKING_PHRASES = [
     'working',

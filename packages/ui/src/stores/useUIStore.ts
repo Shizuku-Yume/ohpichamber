@@ -1032,6 +1032,8 @@ interface UIStore {
   expandReasoningWhileStreaming: boolean;
   activityRenderMode: ActivityRenderMode;
   showDeletionDialog: boolean;
+  defaultSessionMode: 'main' | 'plan' | 'vibe' | 'goal';
+  setDefaultSessionMode: (mode: 'main' | 'plan' | 'vibe' | 'goal') => void;
   autoDeleteEnabled: boolean;
   /** Global file-editor autosave. Default true for backward compatibility. */
   autoSaveEnabled: boolean;
@@ -1602,6 +1604,7 @@ export const useUIStore = create<UIStore>()(
         expandReasoningWhileStreaming: false,
         activityRenderMode: 'summary',
         showDeletionDialog: true,
+        defaultSessionMode: 'main',
         autoDeleteEnabled: false,
         autoSaveEnabled: true,
         confirmFileTreeMove: true,
@@ -2743,6 +2746,9 @@ export const useUIStore = create<UIStore>()(
         setShowDeletionDialog: (value) => {
           set({ showDeletionDialog: value });
         },
+        setDefaultSessionMode: (value) => {
+          set({ defaultSessionMode: value });
+        },
 
         setAutoDeleteEnabled: (value) => {
           set({ autoDeleteEnabled: value });
@@ -3828,6 +3834,7 @@ export const useUIStore = create<UIStore>()(
           activityRenderMode: state.activityRenderMode,
           showDeletionDialog: state.showDeletionDialog,
           autoDeleteEnabled: state.autoDeleteEnabled,
+          defaultSessionMode: state.defaultSessionMode,
           autoSaveEnabled: state.autoSaveEnabled,
           confirmFileTreeMove: state.confirmFileTreeMove,
           layoutAnimations: state.layoutAnimations,

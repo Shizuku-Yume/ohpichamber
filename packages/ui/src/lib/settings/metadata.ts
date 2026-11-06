@@ -10,6 +10,7 @@ export type SettingsPageSlug =
   | 'providers'
   | 'web-search'
   | 'omp'
+  | 'behavior'
   | 'usage'
   | 'agents'
   | 'commands'
@@ -119,6 +120,13 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
     kind: 'single',
     description: 'Agent behaviour shared with OMP\'s config.yml. Changes apply to new sessions.',
     keywords: ['omp', 'behavior', 'behaviour', 'compaction', 'retry', 'approval', 'thinking', 'budget', 'skills', 'mcp', 'lsp', 'model roles', 'enabled models', 'plan', 'goal'],
+  },
+  {
+    slug: 'behavior',
+    title: 'Behavior',
+    group: 'agent',
+    kind: 'single',
+    keywords: ['behavior', 'response style', 'tone', 'instructions', 'custom instructions', 'agents.md', 'global rules', 'project rules'],
   },
   {
     slug: 'agents',
@@ -315,6 +323,8 @@ export function getSettingsNavIcon(slug: SettingsPageSlug): IconName | null {
       return 'global';
     case 'omp':
       return 'equalizer-2';
+    case 'behavior':
+      return 'brain';
     case 'agents':
       return 'ai-agent';
     case 'commands':

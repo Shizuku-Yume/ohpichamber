@@ -21,6 +21,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Icon } from "@/components/icon/Icon";
+import { LIVE_BROWSER_TABS_MAX, LIVE_BROWSER_TABS_MIN } from '@/lib/browser/liveTabs';
 import {
     isDesktopShell,
     isWebRuntime,
@@ -313,7 +314,7 @@ const normalizeUserMessageRenderingMode = (mode: unknown): 'markdown' | 'plain' 
     return mode === 'markdown' ? 'markdown' : 'plain';
 };
 
-type VisibleSetting = 'sessionAssist' | 'sessionGoal' | 'theme' | 'windowControlsPosition' | 'pwaInstallName' | 'pwaOrientation' | 'mobileKeyboardMode' | 'timeFormat' | 'weekStart' | 'fontSize' | 'terminalFontSize' | 'terminalShell' | 'terminalLoginShell' | 'editorFontSize' | 'spacing' | 'scrollbars' | 'inputBarOffset' | 'mermaidRendering' | 'userMessageRendering' | 'chatRenderMode' | 'messageTransport' | 'activityRenderMode' | 'collapsibleUserMessages' | 'stickyUserHeader' | 'promptNavigatorEnabled' | 'wideChatLayout' | 'codeBlockLineWrap' | 'tableCellWrap' | 'copyMessagesAsPlainText' | 'splitAssistantMessageActions' | 'subagentReadOnlyBanner' | 'diffLayout' | 'mobileStatusBar' | 'dotfiles' | 'fileViewerPreview' | 'reasoning' | 'showToolFileIcons' | 'showTurnChangedFiles' | 'expandedTools' | 'followUpBehavior' | 'inputHistoryScope' | 'inputHistoryLimit' | 'messageSearch' | 'terminalQuickKeys' | 'fileEditorKeymap' | 'persistDraft' | 'inputSpellcheck' | 'largeTextPaste' | 'enterToSend' | 'reportUsage' | 'autoSaveEnabled' | 'confirmFileTreeMove' | 'sessionTabs' | 'animatedActivityIndicators';
+type VisibleSetting = 'sessionAssist' | 'sessionGoal' | 'theme' | 'windowControlsPosition' | 'pwaInstallName' | 'pwaOrientation' | 'mobileKeyboardMode' | 'timeFormat' | 'weekStart' | 'fontSize' | 'terminalFontSize' | 'terminalShell' | 'terminalLoginShell' | 'editorFontSize' | 'spacing' | 'scrollbars' | 'inputBarOffset' | 'mermaidRendering' | 'userMessageRendering' | 'chatRenderMode' | 'messageTransport' | 'activityRenderMode' | 'collapsibleUserMessages' | 'stickyUserHeader' | 'promptNavigatorEnabled' | 'wideChatLayout' | 'codeBlockLineWrap' | 'tableCellWrap' | 'copyMessagesAsPlainText' | 'splitAssistantMessageActions' | 'subagentReadOnlyBanner' | 'diffLayout' | 'mobileStatusBar' | 'dotfiles' | 'fileViewerPreview' | 'reasoning' | 'showToolFileIcons' | 'showTurnChangedFiles' | 'expandedTools' | 'followUpBehavior' | 'inputHistoryScope' | 'inputHistoryLimit' | 'messageSearch' | 'terminalQuickKeys' | 'fileEditorKeymap' | 'persistDraft' | 'inputSpellcheck' | 'largeTextPaste' | 'enterToSend' | 'reportUsage' | 'autoSaveEnabled' | 'confirmFileTreeMove' | 'sessionTabs' | 'liveBrowserTabs' | 'animatedActivityIndicators';
 
 const WINDOW_CONTROLS_POSITION_OPTIONS: Array<{ id: DesktopWindowControlsPosition; labelKey: string }> = [
     { id: 'left', labelKey: 'settings.openchamber.desktopNetwork.option.windowControlsLeft' },
@@ -419,6 +420,8 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const sessionTabsEnabled = useUIStore(state => state.sessionTabsEnabled);
     const setSessionTabsEnabled = useUIStore(state => state.setSessionTabsEnabled);
     const setShowTerminalQuickKeysOnDesktop = useUIStore(state => state.setShowTerminalQuickKeysOnDesktop);
+    const liveBrowserTabLimit = useUIStore(state => state.liveBrowserTabLimit);
+    const setLiveBrowserTabLimit = useUIStore(state => state.setLiveBrowserTabLimit);
     const fileEditorKeymap = useUIStore(state => state.fileEditorKeymap);
     const setFileEditorKeymap = useUIStore(state => state.setFileEditorKeymap);
     const fileEditorVimMappings = useUIStore(state => state.fileEditorVimMappings);
@@ -739,7 +742,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const showWindowControlsPositionSetting = shouldShow('windowControlsPosition') && showWindowControlsPosition;
     const hasAppearanceSettings = shouldShow('theme') || showWindowControlsPositionSetting || shouldShow('pwaInstallName') || shouldShow('pwaOrientation') || shouldShow('timeFormat') || shouldShow('weekStart');
     const hasLayoutSettings = shouldShow('fontSize') || shouldShow('terminalFontSize') || shouldShow('editorFontSize') || shouldShow('spacing') || (shouldShow('scrollbars') && !hasThemeSettings) || (shouldShow('inputBarOffset') && isMobile);
-    const hasNavigationSettings = (shouldShow('terminalQuickKeys') && !isMobile) || shouldShow('terminalShell') || shouldShow('terminalLoginShell') || shouldShow('fileEditorKeymap') || shouldShow('autoSaveEnabled') || (shouldShow('confirmFileTreeMove') && !isMobile) || (shouldShow('sessionTabs') && !isMobile);
+    const hasNavigationSettings = (shouldShow('terminalQuickKeys') && !isMobile) || shouldShow('terminalShell') || shouldShow('terminalLoginShell') || shouldShow('fileEditorKeymap') || shouldShow('autoSaveEnabled') || (shouldShow('confirmFileTreeMove') && !isMobile) || (shouldShow('sessionTabs') && !isMobile) || (shouldShow('liveBrowserTabs') && isDesktopShell() && !isMobile);
     const hasBehaviorSettings = shouldShow('mermaidRendering')
         || shouldShow('sessionGoal')
         || shouldShow('userMessageRendering')
@@ -1700,6 +1703,29 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                     info={t('settings.openchamber.visual.field.sessionTabsInfo')}
                                 />
                             </SettingsControlGroup>
+                        )}
+                        {shouldShow('liveBrowserTabs') && isDesktopShell() && !isMobile && (
+                            <SettingsFieldRow
+                                label={t('settings.openchamber.visual.field.liveBrowserTabs')}
+                                info={t('settings.openchamber.visual.field.liveBrowserTabsInfo')}
+                                settingsItem="appearance.live-browser-tabs"
+                            >
+                                <div className={SETTINGS_NUMBER_STEPPER_ROW_CLASS}>
+                                    <NumberInput
+                                        value={liveBrowserTabLimit}
+                                        onValueChange={setLiveBrowserTabLimit}
+                                        min={LIVE_BROWSER_TABS_MIN}
+                                        max={LIVE_BROWSER_TABS_MAX}
+                                        step={1}
+                                        className={SETTINGS_NUMBER_INPUT_CLASS}
+                                        deferExternalValueWhileFocused
+                                        aria-label={t('settings.openchamber.visual.field.liveBrowserTabs')}
+                                    />
+                                    <span className={SETTINGS_NUMBER_UNIT_CLASS}>
+                                        {t('settings.openchamber.visual.field.liveBrowserTabsUnit')}
+                                    </span>
+                                </div>
+                            </SettingsFieldRow>
                         )}
                     </SettingsSection>
                 )}

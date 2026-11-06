@@ -118,3 +118,21 @@ export const QuestionRequestSchema = RequestCASSchema.extend({
   }
 });
 export type QuestionRequest = z.infer<typeof QuestionRequestSchema>;
+
+/**
+ * Per-subagent control actions. `subagent.revive` brings a `parked`
+ * subagent back through OMP's lifecycle manager and, when a message is
+ * supplied, immediately hands it that instruction.
+ */
+export const SubagentControlRequestSchema = z.discriminatedUnion('type', [
+  z.strictObject({ type: z.literal('subagent.steer'), subagentId: EntityIdSchema, message: z.string().min(1) }),
+  z.strictObject({ type: z.literal('subagent.cancel'), subagentId: EntityIdSchema }),
+  z.strictObject({ type: z.literal('subagent.revive'), subagentId: EntityIdSchema, message: z.string().min(1).optional() }),
+]);
+export type SubagentControlRequest = z.infer<typeof SubagentControlRequestSchema>;
+export const SubagentControlAckSchema = z.discriminatedUnion('type', [
+  z.strictObject({ type: z.literal('subagent.steer'), subagentId: EntityIdSchema, accepted: z.boolean() }),
+  z.strictObject({ type: z.literal('subagent.cancel'), subagentId: EntityIdSchema, cancelled: z.boolean() }),
+  z.strictObject({ type: z.literal('subagent.revive'), subagentId: EntityIdSchema, revived: z.boolean(), prompted: z.boolean() }),
+]);
+export type SubagentControlAck = z.infer<typeof SubagentControlAckSchema>;

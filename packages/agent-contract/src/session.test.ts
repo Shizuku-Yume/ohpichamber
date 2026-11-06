@@ -7,6 +7,7 @@ import {
   SessionDeleteAckSchema, SessionDeleteRequestSchema, SessionRuntimeStatusSchema, SessionSchema,
   SteerAckSchema, SteerRequestSchema, SubagentSchema, SessionControlRequestSchema, SessionControlAckSchema, SessionModeSchema,
 } from './session.ts';
+import { SubagentControlAckSchema, SubagentControlRequestSchema } from './requests.ts';
 
 const id = 'ses_01';
 const timestamp = 1774201000000;
@@ -181,6 +182,11 @@ describe('session schemas', () => {
     expect(SessionControlRequestSchema.parse({ type: 'subagent.cancel', subagentId: 'sub_01' })).toEqual({ type: 'subagent.cancel', subagentId: 'sub_01' });
     expect(SessionControlAckSchema.parse({ type: 'subagent.steer', subagentId: 'sub_01', accepted: true })).toEqual({ type: 'subagent.steer', subagentId: 'sub_01', accepted: true });
     expect(SessionControlAckSchema.parse({ type: 'subagent.cancel', subagentId: 'sub_01', cancelled: true })).toEqual({ type: 'subagent.cancel', subagentId: 'sub_01', cancelled: true });
+    expect(SubagentControlRequestSchema.parse({ type: 'subagent.revive', subagentId: 'sub_01' })).toEqual({ type: 'subagent.revive', subagentId: 'sub_01' });
+    expect(SubagentControlRequestSchema.parse({ type: 'subagent.revive', subagentId: 'sub_01', message: 'finish the tests' })).toEqual({ type: 'subagent.revive', subagentId: 'sub_01', message: 'finish the tests' });
+    expect(SubagentControlAckSchema.parse({ type: 'subagent.revive', subagentId: 'sub_01', revived: true, prompted: false })).toEqual({ type: 'subagent.revive', subagentId: 'sub_01', revived: true, prompted: false });
+    // A revive must never carry an empty instruction: it either prompts or it does not.
+    expect(SubagentControlRequestSchema.safeParse({ type: 'subagent.revive', subagentId: 'sub_01', message: '' }).success).toBe(false);
   });
 
   test('run, abort, steer and follow-up preserve captured prompt and acknowledgement shapes', () => {

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SubagentControlAckSchema, SubagentControlRequestSchema } from './requests.ts';
 import { CounterSchema, EntityIdSchema, EpochSchema, PositiveCounterSchema, TimestampSchema } from './primitives.ts';
 import { CapturedSendOptionsSchema, PromptAttachmentSchema, PromptRequestSchema } from './prompt.ts';
 import { SessionMetadataSchema } from './metadata.ts';
@@ -218,9 +219,7 @@ export const SessionControlRequestSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('btw.ask'), question: z.string().min(1), recordId: EntityIdSchema.optional() }),
   z.strictObject({ type: z.literal('btw.cancel'), recordId: EntityIdSchema.optional() }),
   z.strictObject({ type: z.literal('btw.branch'), recordId: EntityIdSchema }),
-  z.strictObject({ type: z.literal('subagent.steer'), subagentId: EntityIdSchema, message: z.string().min(1) }),
-  z.strictObject({ type: z.literal('subagent.cancel'), subagentId: EntityIdSchema }),
-  z.strictObject({ type: z.literal('subagent.revive'), subagentId: EntityIdSchema, message: z.string().min(1).optional() }),
+  ...SubagentControlRequestSchema.options,
   z.strictObject({ type: z.literal('loop.stop') }),
 ]);
 export type SessionControlRequest = z.infer<typeof SessionControlRequestSchema>;
@@ -232,9 +231,7 @@ export const SessionControlAckSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('btw.ask'), recordId: EntityIdSchema }),
   z.strictObject({ type: z.literal('btw.cancel'), cancelled: z.boolean() }),
   z.strictObject({ type: z.literal('btw.branch'), sessionFile: z.string().optional(), sessionId: EntityIdSchema.optional(), rootSessionId: EntityIdSchema.optional(), branch: SessionBranchStateSchema }),
-  z.strictObject({ type: z.literal('subagent.steer'), subagentId: EntityIdSchema, accepted: z.boolean() }),
-  z.strictObject({ type: z.literal('subagent.cancel'), subagentId: EntityIdSchema, cancelled: z.boolean() }),
-  z.strictObject({ type: z.literal('subagent.revive'), subagentId: EntityIdSchema, revived: z.boolean(), prompted: z.boolean() }),
+  ...SubagentControlAckSchema.options,
   z.strictObject({ type: z.literal('loop.stop'), stopped: z.boolean() }),
 ]);
 export type SessionControlAck = z.infer<typeof SessionControlAckSchema>;

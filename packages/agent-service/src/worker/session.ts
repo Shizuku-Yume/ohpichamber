@@ -197,7 +197,11 @@ export class WorkerSession {
     session.enableIdleMaintenance({
       isBlocked: () => this.idleRecapBlocked(),
       scheduledTurn: () => this.scheduledTurn(),
-      onRecap: () => undefined,
+      onRecap: recap => {
+        // Transient: the recap is a hint about the settled turn, not a durable
+        // transcript entry, so it must not become part of the history stream.
+        this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'session.recap', recap, createdAt: Date.now() } }]);
+      },
     });
     // Subagents restored from persisted transcripts become `parked` refs, so a
     // UI reload still sees the swarm the previous worker built.
@@ -636,8 +640,10 @@ export class WorkerSession {
    * active loop iteration or a transition would describe work still in motion.
    */
   private idleRecapBlocked(): boolean {
+    // No turn reference here: `promptTask` stays assigned after a turn completes
+    // (hosts await it as the settled handle), so it would block every recap.
     return this.closed || this.failed || this.compacting || this.controllingBranch
-      || this.planReviewTask !== undefined || this.promptTask !== undefined;
+      || this.planReviewTask !== undefined;
   }
 
   /** A loop with turns left keeps IdleMaintenance waiting rather than recapping a partial run. */

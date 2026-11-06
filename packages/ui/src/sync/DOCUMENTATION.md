@@ -46,6 +46,17 @@ Discovery failures are scoped. `client.listSessions(workspaceId)` returns `{ ite
 
 Web, PWA, and Electron use the retained Host owner. Hosted mobile and Capacitor use the active Host through shared runtime transport. VS Code is retired and receives no new support.
 
+### Workbench metadata: pins, unread marks and turn length
+
+Pins, unread marks and the last turn's length are Host workbench state in the same operational record, not device preferences: they outlive a page, so every client of one Host must see the same sidebar row. The contract (`packages/agent-contract/src/metadata.ts`) types them as `openchamber.pinned = { at }`, `openchamber.workbench = { lastIdleAt?, viewedAt?, lastTurnOutcome? }` and `openchamber.turn = { endedAt, durationMs }`.
+
+Authority and invariants:
+
+- **Pins.** `pinned.at` is when the user pinned. `useSessionPinnedStore` derives its ids from `openchamber.pinned` on the global store's active sessions and adds a pending overlay while a write is in flight, so a click shows before the round trip and the Host's revision is the outcome. `localStorage` (`oc.sessions.pinned.v2`) holds only pins left by the retired device-local store; `migrateLegacyPins` moves them into metadata once the list is complete, and a failed write keeps the local pin for the next complete load. `toggleSessionPin` serializes clicks per session in `pinQueues` so the last click wins on the server too.
+- **Unread marks.** `workbench.lastIdleAt` is when a turn last ended and `workbench.viewedAt` is the newest ending a viewer acknowledged; a session is unread while `lastIdleAt` is newer than `viewedAt` or no view is recorded. `isSessionUnread` reports top-level, unarchived sessions only — a subtask reports to its parent. A view advances `viewedAt` optimistically in `markSessionUnreadSeen` and is confirmed by the patched metadata; a failed write restores the earlier watermark unless something newer replaced it.
+- **Turn length.** The Host measures each run from canonical `run.started` to `run.completed`/`run.failed`/`run.cancelled` and writes `endedAt`, `durationMs = max(0, finishedAt - startedAt)` and the matching `lastIdleAt`/`lastTurnOutcome` in one patch. A run is matched to its own start by `runId`, and a subsession's runs are skipped because they roll up into the root. `getRecordedTurnDurationMs` shows the length only when the record's `endedAt` is within one second of the idle mark, so a record left by an older turn does not render.
+- **Subtask turns.** Because the Host settles a subsession's runs on the root, a child record never carries its own idle mark. A subtask that finished is therefore known from the client's notification index, which is why the collapsed-activity selector and the tray count union metadata unread with `useNotificationStore` before honouring `notifyOnSubtasks`. That index is client state, never the authority for a top-level row.
+
 Prompt, goal and review metadata operations retain the runtime key and switch
 revision captured at submission through their asynchronous Host reads and
 dispatch. A switch away and back invalidates the old operation as well as a

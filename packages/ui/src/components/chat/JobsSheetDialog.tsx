@@ -49,15 +49,15 @@ function toneToColorClass(tone?: string): string {
 function toneToProgressClass(tone?: string): string {
   switch (tone) {
     case 'success':
-      return 'bg-emerald-500';
+      return 'bg-status-success';
     case 'error':
-      return 'bg-rose-500';
+      return 'bg-status-error';
     case 'warning':
-      return 'bg-amber-500';
+      return 'bg-status-warning';
     case 'info':
-      return 'bg-blue-500';
+      return 'bg-status-info';
     case 'accent':
-      return 'bg-violet-500';
+      return 'bg-accent';
     case 'muted':
     default:
       return 'bg-primary';
@@ -65,6 +65,7 @@ function toneToProgressClass(tone?: string): string {
 }
 
 const JobWidgetBlockRenderer: React.FC<{ block: JobWidgetBlock }> = ({ block }) => {
+  const { t } = useI18n();
   switch (block.kind) {
     case 'spark': {
       const { label, values, min, max, last, tone } = block;
@@ -78,7 +79,7 @@ const JobWidgetBlockRenderer: React.FC<{ block: JobWidgetBlock }> = ({ block }) 
       }).join(' ');
 
       return (
-        <div className="flex flex-col gap-1 p-3 rounded-lg border border-border/50 bg-surface-2/40">
+        <div className="flex flex-col gap-1 p-3 rounded-lg border border-border/50 bg-[var(--surface-subtle)]">
           <div className="flex items-center justify-between text-xs">
             <span className="font-medium text-foreground">{label}</span>
             <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-mono font-medium border ${toneToColorClass(tone)}`}>
@@ -94,7 +95,7 @@ const JobWidgetBlockRenderer: React.FC<{ block: JobWidgetBlock }> = ({ block }) 
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 points={points}
-                className={tone === 'error' ? 'text-rose-500' : tone === 'success' ? 'text-emerald-500' : 'text-primary'}
+                className={tone === 'error' ? 'text-status-error' : tone === 'success' ? 'text-status-success' : 'text-primary'}
               />
             </svg>
           ) : (
@@ -103,8 +104,8 @@ const JobWidgetBlockRenderer: React.FC<{ block: JobWidgetBlock }> = ({ block }) 
             </div>
           )}
           <div className="flex justify-between text-[10px] text-muted-foreground tabular-nums">
-            <span>min: {min}</span>
-            <span>max: {max}</span>
+            <span>{t('chat.jobsSheet.min', { value: min })}</span>
+            <span>{t('chat.jobsSheet.max', { value: max })}</span>
           </div>
         </div>
       );
@@ -113,7 +114,7 @@ const JobWidgetBlockRenderer: React.FC<{ block: JobWidgetBlock }> = ({ block }) 
     case 'bars': {
       const { label, items, max } = block;
       return (
-        <div className="flex flex-col gap-2 p-3 rounded-lg border border-border/50 bg-surface-2/40">
+        <div className="flex flex-col gap-2 p-3 rounded-lg border border-border/50 bg-[var(--surface-subtle)]">
           <span className="text-xs font-medium text-foreground">{label}</span>
           <div className="flex flex-col gap-1.5">
             {items.map((item: { label: string; value: number; text: string; tone?: string }, idx: number) => {
@@ -124,7 +125,7 @@ const JobWidgetBlockRenderer: React.FC<{ block: JobWidgetBlock }> = ({ block }) 
                     <span>{item.label}</span>
                     <span className="font-mono">{item.text}</span>
                   </div>
-                  <div className="h-1.5 w-full rounded-full bg-surface-3 overflow-hidden">
+                  <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all duration-300 ${toneToProgressClass(item.tone)}`}
                       style={{ width: `${pct}%` }}
@@ -142,12 +143,12 @@ const JobWidgetBlockRenderer: React.FC<{ block: JobWidgetBlock }> = ({ block }) 
       const { label, value, text: meterText, tone } = block;
       const pct = Math.min(100, Math.max(0, Math.round(value * 100)));
       return (
-        <div className="flex flex-col gap-1.5 p-3 rounded-lg border border-border/50 bg-surface-2/40">
+        <div className="flex flex-col gap-1.5 p-3 rounded-lg border border-border/50 bg-[var(--surface-subtle)]">
           <div className="flex items-center justify-between text-xs">
             <span className="font-medium text-foreground">{label}</span>
             <span className="font-mono text-muted-foreground">{meterText} ({pct}%)</span>
           </div>
-          <div className="h-2 w-full rounded-full bg-surface-3 overflow-hidden">
+          <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
             <div
               className={`h-full rounded-full transition-all duration-300 ${toneToProgressClass(tone)}`}
               style={{ width: `${pct}%` }}
@@ -160,7 +161,7 @@ const JobWidgetBlockRenderer: React.FC<{ block: JobWidgetBlock }> = ({ block }) 
     case 'grid': {
       const { label, items } = block;
       return (
-        <div className="flex flex-col gap-1.5 p-3 rounded-lg border border-border/50 bg-surface-2/40">
+        <div className="flex flex-col gap-1.5 p-3 rounded-lg border border-border/50 bg-[var(--surface-subtle)]">
           <span className="text-xs font-medium text-foreground">{label}</span>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {items.map((item: { label: string; text: string; tone: string }, idx: number) => (
@@ -170,7 +171,7 @@ const JobWidgetBlockRenderer: React.FC<{ block: JobWidgetBlock }> = ({ block }) 
               >
                 <div className={`size-1.5 rounded-full ${toneToProgressClass(item.tone)}`} />
                 <span className="font-medium truncate">{item.label}</span>
-                <span className="text-[10px] ml-auto opacity-80">{item.text}</span>
+                <span className="text-[10px] ms-auto opacity-80">{item.text}</span>
               </div>
             ))}
           </div>
@@ -181,13 +182,13 @@ const JobWidgetBlockRenderer: React.FC<{ block: JobWidgetBlock }> = ({ block }) 
     case 'stat': {
       const { items } = block;
       return (
-        <div className="flex flex-wrap gap-2 p-2 rounded-lg border border-border/50 bg-surface-2/40">
+        <div className="flex flex-wrap gap-2 p-2 rounded-lg border border-border/50 bg-[var(--surface-subtle)]">
           {items.map((item: { label: string; text: string; tone?: string; trend?: { text: string; tone: string } }, idx: number) => (
-            <div key={idx} className="flex items-baseline gap-1.5 px-2.5 py-1 rounded bg-surface-1 border border-border/40 text-xs">
+            <div key={idx} className="flex items-baseline gap-1.5 px-2.5 py-1 rounded bg-[var(--surface-elevated)] border border-border/40 text-xs">
               <span className="text-muted-foreground">{item.label}:</span>
               <span className={`font-mono font-medium ${toneToColorClass(item.tone).split(' ')[0]}`}>{item.text}</span>
               {item.trend ? (
-                <span className={`text-[10px] ${item.trend.tone === 'success' ? 'text-emerald-500' : item.trend.tone === 'error' ? 'text-rose-500' : 'text-muted-foreground'}`}>
+                <span className={`text-[10px] ${item.trend.tone === 'success' ? 'text-status-success' : item.trend.tone === 'error' ? 'text-status-error' : 'text-muted-foreground'}`}>
                   {item.trend.text}
                 </span>
               ) : null}
@@ -199,7 +200,7 @@ const JobWidgetBlockRenderer: React.FC<{ block: JobWidgetBlock }> = ({ block }) 
 
     case 'text': {
       return (
-        <div className="p-2.5 rounded-lg border border-border/50 bg-surface-2/40 font-mono text-xs text-muted-foreground whitespace-pre-wrap break-all">
+        <div className="p-2.5 rounded-lg border border-border/50 bg-[var(--surface-subtle)] font-mono text-xs text-muted-foreground whitespace-pre-wrap break-all">
           {block.text}
         </div>
       );
@@ -211,8 +212,9 @@ const JobWidgetBlockRenderer: React.FC<{ block: JobWidgetBlock }> = ({ block }) 
 };
 
 export const JobWidgetViewRenderer: React.FC<{ widget: JobWidgetView }> = ({ widget }) => {
+  const { t } = useI18n();
   return (
-    <div className="flex flex-col gap-2.5 rounded-xl border border-border bg-surface-1/50 p-3.5">
+    <div className="flex flex-col gap-2.5 rounded-xl border border-border bg-[var(--surface-subtle)] p-3.5">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Icon name="pulse" className="size-4 text-primary" />
@@ -225,7 +227,7 @@ export const JobWidgetViewRenderer: React.FC<{ widget: JobWidgetView }> = ({ wid
             ) : null}
             <span className="font-mono font-semibold text-sm text-foreground">{widget.headline.text}</span>
             {widget.headline.trend ? (
-              <span className={`text-xs ${widget.headline.trend.tone === 'success' ? 'text-emerald-500' : 'text-rose-500'}`}>
+              <span className={`text-xs ${widget.headline.trend.tone === 'success' ? 'text-status-success' : 'text-status-error'}`}>
                 {widget.headline.trend.text}
               </span>
             ) : null}
@@ -235,7 +237,7 @@ export const JobWidgetViewRenderer: React.FC<{ widget: JobWidgetView }> = ({ wid
 
       {widget.stage ? (
         <div className="text-xs text-muted-foreground font-mono truncate">
-          Stage: {widget.stage}
+          {t('chat.jobsSheet.stage', { stage: widget.stage })}
         </div>
       ) : null}
 
@@ -318,7 +320,7 @@ export const JobsSheetDialog: React.FC<JobsSheetDialogProps> = ({
         }
       } catch (err: unknown) {
         if (!cancelled) {
-          setOutputError(err instanceof Error ? err.message : 'Failed to load output');
+          setOutputError(err instanceof Error ? err.message : t('chat.jobsSheet.loadOutputFailed'));
         }
       } finally {
         if (!cancelled && isRunning) {
@@ -332,7 +334,7 @@ export const JobsSheetDialog: React.FC<JobsSheetDialogProps> = ({
       cancelled = true;
       clearTimeout(pollTimer);
     };
-  }, [open, sessionId, jobId, epoch, workerGeneration, isRunning]);
+  }, [open, sessionId, jobId, epoch, workerGeneration, isRunning, t]);
 
   // Load selected stream with recursive setTimeout and offset pagination
   useEffect(() => {
@@ -360,7 +362,7 @@ export const JobsSheetDialog: React.FC<JobsSheetDialogProps> = ({
         }
       } catch (err: unknown) {
         if (!cancelled) {
-          setStreamError(err instanceof Error ? err.message : 'Failed to inspect stream');
+          setStreamError(err instanceof Error ? err.message : t('chat.jobsSheet.inspectStreamFailed'));
         }
       } finally {
         if (!cancelled && isRunning) {
@@ -374,7 +376,7 @@ export const JobsSheetDialog: React.FC<JobsSheetDialogProps> = ({
       cancelled = true;
       clearTimeout(pollTimer);
     };
-  }, [open, sessionId, jobId, epoch, workerGeneration, activeTab, selectedStreamId, isRunning]);
+  }, [open, sessionId, jobId, epoch, workerGeneration, activeTab, selectedStreamId, isRunning, t]);
 
   // Set default stream when tab changes to streams
   useEffect(() => {
@@ -440,8 +442,8 @@ export const JobsSheetDialog: React.FC<JobsSheetDialogProps> = ({
             </DialogTitle>
             <div className="flex items-center gap-2">
               {isRunning ? (
-                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold border text-emerald-500 border-emerald-500/30 bg-emerald-500/10 gap-1">
-                  <span className="size-1.5 rounded-full bg-emerald-500" />
+                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold border text-status-success border-status-success/30 bg-status-success/10 gap-1">
+                  <span className="size-1.5 rounded-full bg-status-success" />
                   {t('chat.backgroundShells.running')}
                 </span>
               ) : (
@@ -459,7 +461,7 @@ export const JobsSheetDialog: React.FC<JobsSheetDialogProps> = ({
           </DialogDescription>
           {shell.pids && shell.pids.length > 0 ? (
             <div className="flex items-center gap-2 text-xs text-muted-foreground font-mono">
-              <span>PIDs: {shell.pids.join(', ')}</span>
+              <span>{t('chat.jobsSheet.pids', { pids: shell.pids.join(', ') })}</span>
             </div>
           ) : null}
         </DialogHeader>
@@ -480,7 +482,7 @@ export const JobsSheetDialog: React.FC<JobsSheetDialogProps> = ({
             }`}
             onClick={() => setActiveTab('output')}
           >
-            {t('chat.backgroundShells.terminalOutput')} (Tail 64 KiB)
+            {t('chat.jobsSheet.outputTail')}
           </button>
           {shell.streams && shell.streams.length > 0 ? (
             <button
@@ -501,7 +503,7 @@ export const JobsSheetDialog: React.FC<JobsSheetDialogProps> = ({
         </div>
 
         {/* Active tab content */}
-        <div className="flex-1 min-h-[160px] max-h-[300px] flex flex-col rounded-lg border border-border bg-surface-2 overflow-hidden">
+        <div className="flex-1 min-h-[160px] max-h-[300px] flex flex-col rounded-lg border border-border bg-[var(--surface-elevated)] overflow-hidden">
           {activeTab === 'output' ? (
             <div className="flex-1 flex flex-col overflow-hidden">
               {outputError ? (
@@ -518,15 +520,15 @@ export const JobsSheetDialog: React.FC<JobsSheetDialogProps> = ({
             </div>
           ) : (
             <div className="flex-1 flex flex-col overflow-hidden">
-              <div className="flex items-center gap-1.5 p-2 border-b border-border/60 bg-surface-1 overflow-x-auto shrink-0">
+              <div className="flex items-center gap-1.5 p-2 border-b border-border/60 bg-[var(--surface-elevated)] overflow-x-auto shrink-0">
                 {shell.streams?.map((s) => (
                   <button
                     key={s.id}
                     type="button"
                     className={`px-2.5 py-1 rounded text-xs font-mono transition-colors whitespace-nowrap ${
                       selectedStreamId === s.id
-                        ? 'bg-primary text-primary-foreground font-medium'
-                        : 'bg-surface-2 hover:bg-surface-3 text-muted-foreground'
+                        ? 'bg-interactive-selection text-interactive-selection-foreground font-medium'
+                        : 'bg-[var(--surface-elevated)] hover:bg-muted text-muted-foreground'
                     }`}
                     onClick={() => setSelectedStreamId(s.id)}
                   >

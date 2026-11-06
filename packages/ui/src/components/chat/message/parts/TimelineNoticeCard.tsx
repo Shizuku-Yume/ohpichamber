@@ -68,23 +68,23 @@ export const TimelineNoticeCard: React.FC<TimelineNoticeCardProps> = ({ notice, 
           tItem => tItem.status === 'pending' || tItem.status === 'in_progress' || tItem.status === 'blocked'
         ).length;
         return incompleteCount === 1
-          ? (t('chat.notice.todoReminderSingle', { count: incompleteCount, attempt: notice.details.attempt, maxAttempts: notice.details.maxAttempts }) || `1 incomplete todo · reminder ${notice.details.attempt}/${notice.details.maxAttempts}`)
-          : (t('chat.notice.todoReminder', { count: incompleteCount, attempt: notice.details.attempt, maxAttempts: notice.details.maxAttempts }) || `${incompleteCount} incomplete todos · reminder ${notice.details.attempt}/${notice.details.maxAttempts}`);
+          ? t('chat.notice.todoReminderSingle', { count: incompleteCount, attempt: notice.details.attempt, maxAttempts: notice.details.maxAttempts })
+          : t('chat.notice.todoReminder', { count: incompleteCount, attempt: notice.details.attempt, maxAttempts: notice.details.maxAttempts });
       }
       case 'ttsr_triggered': {
         const count = notice.details.rules.length;
         return count === 1
-          ? (t('chat.notice.ttsrTriggered', { name: notice.details.rules[0]?.name ?? '' }) || `Injecting rule: ${notice.details.rules[0]?.name ?? ''}`)
-          : (t('chat.notice.ttsrTriggeredMulti', { count }) || `Injecting ${count} rules`);
+          ? t('chat.notice.ttsrTriggered', { name: notice.details.rules[0]?.name ?? '' })
+          : t('chat.notice.ttsrTriggeredMulti', { count });
       }
       case 'auto_retry_start':
-        return t('chat.notice.autoRetryStart', { attempt: notice.details.attempt, maxAttempts: notice.details.maxAttempts }) || `Auto-retry (attempt ${notice.details.attempt}/${notice.details.maxAttempts})`;
+        return t('chat.notice.autoRetryStart', { attempt: notice.details.attempt, maxAttempts: notice.details.maxAttempts });
       case 'retry_fallback_applied':
-        return t('chat.notice.retryFallbackApplied', { from: notice.details.from, to: notice.details.to, role: notice.details.role }) || `Model fallback: ${notice.details.from} → ${notice.details.to} (${notice.details.role})`;
+        return t('chat.notice.retryFallbackApplied', { from: notice.details.from, to: notice.details.to, role: notice.details.role });
       case 'served_model_mismatch':
-        return t('chat.notice.servedModelMismatch', { requested: notice.details.requested, served: notice.details.served }) || `Model mismatch: requested ${notice.details.requested}, served ${notice.details.served}`;
+        return t('chat.notice.servedModelMismatch', { requested: notice.details.requested, served: notice.details.served });
       case 'cache_invalidation':
-        return t('chat.notice.cacheInvalidation') || 'Prompt cache invalidated';
+        return t('chat.notice.cacheInvalidation');
     }
   }, [notice, t]);
 
@@ -111,10 +111,10 @@ export const TimelineNoticeCard: React.FC<TimelineNoticeCardProps> = ({ notice, 
             type="button"
             onClick={() => setIsExpanded(prev => !prev)}
             aria-expanded={isExpanded}
-            aria-label={isExpanded ? (t('chat.notice.hide') || 'Hide notice details') : (t('chat.notice.details') || 'Show notice details')}
+            aria-label={isExpanded ? t('chat.notice.hideDetailsAria') : t('chat.notice.showDetailsAria')}
             className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground shrink-0 cursor-pointer"
           >
-            <span>{isExpanded ? (t('chat.notice.hide') || 'Hide') : (t('chat.notice.details') || 'Details')}</span>
+            <span>{isExpanded ? t('chat.notice.hide') : t('chat.notice.details')}</span>
             <Icon
               name="arrow-down-s"
               className={cn('size-3.5 transition-transform duration-200', isExpanded && 'rotate-180')}
@@ -131,9 +131,10 @@ export const TimelineNoticeCard: React.FC<TimelineNoticeCardProps> = ({ notice, 
                 const isDone = todo.status === 'completed';
                 return (
                   <li key={idx} className="flex items-center gap-1.5">
-                    <span className={isDone ? 'text-status-success font-bold' : 'text-status-warning'}>
-                      {isDone ? '☑' : '☐'}
-                    </span>
+                    <Icon
+                      name={isDone ? 'checkbox-circle' : 'checkbox-blank-circle'}
+                      className={cn('size-3.5 shrink-0', isDone ? 'text-status-success' : 'text-status-warning')}
+                    />
                     <span className={isDone ? 'line-through opacity-70' : ''}>{todo.content}</span>
                     <span className="text-[10px] opacity-60">({todo.status})</span>
                   </li>
@@ -156,10 +157,10 @@ export const TimelineNoticeCard: React.FC<TimelineNoticeCardProps> = ({ notice, 
           {notice.noticeType === 'auto_retry_start' && (
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <span className="font-medium">Attempt:</span>
+                <span className="font-medium">{t('chat.notice.attempt')}</span>
                 <span className="font-mono">{notice.details.attempt} / {notice.details.maxAttempts}</span>
                 {notice.details.delayMs > 0 && (
-                  <span className="text-[10px] text-muted-foreground">({Math.round(notice.details.delayMs / 1000)}s delay)</span>
+                  <span className="text-[10px] text-muted-foreground">({t('chat.notice.retryDelay', { seconds: Math.round(notice.details.delayMs / 1000) })})</span>
                 )}
               </div>
               {notice.details.errorMessage && (
@@ -186,15 +187,21 @@ export const TimelineNoticeCard: React.FC<TimelineNoticeCardProps> = ({ notice, 
 
           {notice.noticeType === 'served_model_mismatch' && (
             <div className="space-y-1 font-mono text-[10px]">
-              <div>Requested: <span className="text-foreground">{notice.details.requested}</span></div>
-              <div>Served: <span className="text-status-warning font-semibold">{notice.details.served}</span></div>
-              <div>Provider: {notice.details.provider}{notice.details.upstreamProvider ? ` (via ${notice.details.upstreamProvider})` : ''}</div>
+              <div>{t('chat.notice.requested')} <span className="text-foreground">{notice.details.requested}</span></div>
+              <div>{t('chat.notice.served')} <span className="text-status-warning font-semibold">{notice.details.served}</span></div>
+              {notice.details.provider ? (
+                <div>
+                  {notice.details.upstreamProvider
+                    ? t('chat.notice.providerVia', { provider: notice.details.provider, upstream: notice.details.upstreamProvider })
+                    : t('chat.notice.provider', { provider: notice.details.provider })}
+                </div>
+              ) : null}
             </div>
           )}
 
           {notice.noticeType === 'cache_invalidation' && (
             <div className="flex items-center gap-2">
-              <span>Reprocessed tokens:</span>
+              <span>{t('chat.notice.reprocessedTokens')}</span>
               <span className="font-mono font-semibold text-foreground">
                 {notice.details.reprocessedTokens.toLocaleString()}
               </span>

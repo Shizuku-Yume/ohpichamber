@@ -11,8 +11,8 @@ import { getApprovalPolicyTitle } from './permissionPresentation';
 /**
  * The native approval decisions. "Always allow" is the session-scoped
  * decision and exists only when the request carries a policy target; the Host
- * keeps the authorization decision. Inline cards keep the status-coloured row;
- * the dock uses the shared buttons.
+ * keeps the authorization decision. Both variants use the shared buttons; the
+ * inline row tints its decisions with status tokens.
  */
 export const PermissionActions: React.FC<{
     permission: ApprovalRequest;
@@ -32,81 +32,71 @@ export const PermissionActions: React.FC<{
                 <Button variant="ghost" size="xs" disabled={isResponding} onClick={() => onRespond('reject')} className="text-[var(--status-error)]">
                     <Icon name="close" className="size-3.5" />
                     {t('chat.permissionCard.deny')}
-                    <kbd className="ml-1 hidden sm:inline typography-micro opacity-60">{formatShortcutForDisplay('alt+backspace')}</kbd>
+                    <kbd className="ms-1 hidden sm:inline typography-micro opacity-60">{formatShortcutForDisplay('alt+backspace')}</kbd>
                 </Button>
                 <div className="min-w-0 flex-1" />
                 {hasSessionAllow ? (
                     <Button variant="outline" size="xs" disabled={isResponding} onClick={() => onRespond('always')} title={alwaysTitle}>
                         <Icon name="time" className="size-3.5" />
                         <span className="max-w-[180px] truncate">{alwaysAllowLabel}</span>
-                        <kbd className="ml-1 hidden sm:inline typography-micro opacity-60">{formatShortcutForDisplay('alt+shift+enter')}</kbd>
+                        <kbd className="ms-1 hidden sm:inline typography-micro opacity-60">{formatShortcutForDisplay('alt+shift+enter')}</kbd>
                     </Button>
                 ) : null}
                 <Button size="xs" disabled={isResponding} onClick={() => onRespond('once')}>
                     {isResponding ? <Icon name="loader-4" className="size-3.5 animate-spin" /> : <Icon name="check" className="size-3.5" />}
                     {t('chat.permissionCard.allowOnce')}
-                    <kbd className="ml-1 hidden sm:inline typography-micro opacity-60">{formatShortcutForDisplay('alt+enter')}</kbd>
+                    <kbd className="ms-1 hidden sm:inline typography-micro opacity-60">{formatShortcutForDisplay('alt+enter')}</kbd>
                 </Button>
             </div>
         );
     }
 
-    const rowClass = cn(
-        'flex items-center gap-1.5 sm:gap-1 px-3 sm:px-2 py-1.5 sm:py-1 typography-meta font-medium rounded transition-all min-h-[32px] sm:min-h-0 w-full sm:w-auto',
-        'disabled:opacity-50 disabled:cursor-not-allowed',
-    );
-    const hover = (idle: string, active: string) => ({
-        onMouseEnter: (event: React.MouseEvent<HTMLButtonElement>) => { event.currentTarget.style.backgroundColor = active; },
-        onMouseLeave: (event: React.MouseEvent<HTMLButtonElement>) => { event.currentTarget.style.backgroundColor = idle; },
-    });
+    const rowClass = 'min-h-[32px] sm:min-h-0 w-full sm:w-auto justify-start sm:justify-center px-3 sm:px-2';
 
     return (
         <div className="px-2 pb-2 sm:pb-1.5 pt-1.5 sm:pt-1 flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-1.5 border-t border-border/20">
-            <button
-                type="button"
+            <Button
+                variant="ghost"
+                size="xs"
                 onClick={() => onRespond('once')}
                 disabled={isResponding}
-                className={rowClass}
-                style={{ backgroundColor: 'rgb(var(--status-success) / 0.1)', color: 'var(--status-success)' }}
-                {...hover('rgb(var(--status-success) / 0.1)', 'rgb(var(--status-success) / 0.2)')}
+                className={cn(rowClass, 'text-status-success hover:text-status-success bg-status-success/10 hover:bg-status-success/20')}
             >
-                <Icon name="check" className="h-3.5 w-3.5 sm:h-3 sm:w-3 flex-shrink-0" />
+                <Icon name="check" className="size-3.5 flex-shrink-0" />
                 {t('chat.permissionCard.allowOnce')}
-                <kbd className="ml-1 hidden sm:inline typography-micro opacity-60">{formatShortcutForDisplay('alt+enter')}</kbd>
-            </button>
+                <kbd className="ms-1 hidden sm:inline typography-micro opacity-60">{formatShortcutForDisplay('alt+enter')}</kbd>
+            </Button>
 
             {hasSessionAllow ? (
-                <button
-                    type="button"
+                <Button
+                    variant="ghost"
+                    size="xs"
                     onClick={() => onRespond('always')}
                     disabled={isResponding}
                     title={alwaysTitle}
-                    className={rowClass}
-                    style={{ backgroundColor: 'rgb(var(--muted) / 0.5)', color: 'var(--muted-foreground)' }}
-                    {...hover('rgb(var(--muted) / 0.5)', 'rgb(var(--muted) / 0.7)')}
+                    className={cn(rowClass, 'text-muted-foreground bg-muted/50 hover:bg-muted/70 hover:text-muted-foreground')}
                 >
-                    <Icon name="time" className="h-3.5 w-3.5 sm:h-3 sm:w-3 flex-shrink-0" />
+                    <Icon name="time" className="size-3.5 flex-shrink-0" />
                     <span className="truncate max-w-[180px]">{alwaysAllowLabel}</span>
-                    <kbd className="ml-1 hidden sm:inline typography-micro opacity-60">{formatShortcutForDisplay('alt+shift+enter')}</kbd>
-                </button>
+                    <kbd className="ms-1 hidden sm:inline typography-micro opacity-60">{formatShortcutForDisplay('alt+shift+enter')}</kbd>
+                </Button>
             ) : null}
 
-            <button
-                type="button"
+            <Button
+                variant="ghost"
+                size="xs"
                 onClick={() => onRespond('reject')}
                 disabled={isResponding}
-                className={rowClass}
-                style={{ backgroundColor: 'rgb(var(--status-error) / 0.1)', color: 'var(--status-error)' }}
-                {...hover('rgb(var(--status-error) / 0.1)', 'rgb(var(--status-error) / 0.2)')}
+                className={cn(rowClass, 'text-status-error hover:text-status-error bg-status-error/10 hover:bg-status-error/20')}
             >
-                <Icon name="close" className="h-3.5 w-3.5 sm:h-3 sm:w-3 flex-shrink-0" />
+                <Icon name="close" className="size-3.5 flex-shrink-0" />
                 {t('chat.permissionCard.deny')}
-                <kbd className="ml-1 hidden sm:inline typography-micro opacity-60">{formatShortcutForDisplay('alt+backspace')}</kbd>
-            </button>
+                <kbd className="ms-1 hidden sm:inline typography-micro opacity-60">{formatShortcutForDisplay('alt+backspace')}</kbd>
+            </Button>
 
             {isResponding ? (
-                <div className="flex justify-center w-full sm:w-auto sm:ml-auto py-1 sm:py-0 typography-meta text-muted-foreground">
-                    <div className="animate-spin h-3 w-3 border border-primary border-t-transparent rounded-full" />
+                <div className="flex justify-center w-full sm:w-auto sm:ms-auto py-1 sm:py-0 typography-meta text-muted-foreground">
+                    <Icon name="loader-4" className="size-3 animate-spin" />
                 </div>
             ) : null}
         </div>

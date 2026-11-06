@@ -90,9 +90,9 @@ const ShellRow: React.FC<{
       tabIndex={0}
       onClick={() => onSelect?.(shell)}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onSelect?.(shell); }}
-      className="flex h-10 items-center gap-2 pl-3 pr-1.5 hover:bg-surface-2/60 transition-colors cursor-pointer select-none"
+      className="flex h-10 items-center gap-2 ps-3 pe-1.5 hover:bg-[var(--interactive-hover)]/60 transition-colors cursor-pointer select-none"
     >
-      <span className="size-2 rounded-full bg-emerald-500 shrink-0" title={t('chat.backgroundShells.running')} />
+      <span className="size-2 rounded-full bg-status-success shrink-0" title={t('chat.backgroundShells.running')} />
       <Icon name="terminal-box" className="size-3.5 shrink-0 text-muted-foreground" />
       <Tooltip delayDuration={COMMAND_TOOLTIP_DELAY_MS}>
         <TooltipTrigger asChild>
@@ -127,7 +127,7 @@ const ShellRow: React.FC<{
           {widget.headline.text}
         </span>
       ) : firstBlock?.kind === 'meter' ? (
-        <span className="font-mono text-[11px] text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 shrink-0">
+        <span className="font-mono text-[11px] text-status-success bg-status-success/10 px-1.5 py-0.5 rounded border border-status-success/20 shrink-0">
           {Math.round(firstBlock.value * 100)}%
         </span>
       ) : firstBlock?.kind === 'spark' ? (
@@ -190,7 +190,7 @@ export const BackgroundShellsStrip: React.FC<BackgroundShellsStripProps> = React
   // The whole header toggles the list, as the queue header does.
   return (
     <div role="group" className="border-b border-border/60" aria-label={t('chat.backgroundShells.aria')}>
-      <div className="flex h-10 items-center pl-3 pr-3">
+      <div className="flex h-10 items-center ps-3 pe-3">
         <Button
           type="button"
           variant="ghost"
@@ -202,7 +202,7 @@ export const BackgroundShellsStrip: React.FC<BackgroundShellsStripProps> = React
           className="min-w-0 flex-1 shrink justify-start gap-2 px-0 text-sm font-normal normal-case text-muted-foreground hover:!bg-transparent hover:text-foreground has-[>svg]:px-0"
         >
           <Icon name="terminal-box" className="size-3.5 shrink-0" aria-hidden="true" />
-          <span className="min-w-0 flex-1 truncate text-left">
+          <span className="min-w-0 flex-1 truncate text-start">
             {t('chat.backgroundShells.count', { count: shells.length })}
           </span>
           <Icon name={expanded ? 'arrow-up-s' : 'arrow-down-s'} className="size-4 shrink-0" aria-hidden="true" />

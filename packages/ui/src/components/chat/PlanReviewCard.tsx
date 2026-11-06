@@ -2,6 +2,10 @@ import React from 'react';
 import type { PlanReviewResponse, QuestionRequest } from '@openchamber/agent-contract';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon/Icon';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { cn } from '@/lib/utils';
+import { dropdownTriggerVariants } from '@/components/ui/dropdown-trigger';
 import { useI18n } from '@/lib/i18n';
 import { isIMECompositionEvent } from '@/lib/ime';
 import { useRequestReveal } from '@/sync/request-reveal';
@@ -16,6 +20,10 @@ interface PlanReviewCardProps {
     docked?: boolean;
     forms?: readonly QuestionRequest[];
 }
+
+/** Select sentinel for "no explicit execution model"; Base UI rejects an
+ *  empty string as an item value. */
+const DEFAULT_MODEL_VALUE = '__default__';
 
 /** A plan decision is an answer, including Reject; it is never a cancellation. */
 export function PlanReviewCard({ form, docked = false, forms }: PlanReviewCardProps) {
@@ -67,7 +75,7 @@ export function PlanReviewCard({ form, docked = false, forms }: PlanReviewCardPr
             <label htmlFor={feedbackId} className="typography-meta font-medium text-foreground">
                 {t('chat.planReview.feedback')}
             </label>
-            <textarea
+            <Textarea
                 id={feedbackId}
                 value={feedback}
                 onChange={(event) => setFeedback(event.target.value)}
@@ -75,36 +83,55 @@ export function PlanReviewCard({ form, docked = false, forms }: PlanReviewCardPr
                 disabled={isResponding}
                 placeholder={t('chat.planReview.feedbackPlaceholder')}
                 rows={3}
-                className="mt-1 w-full resize-y rounded-md border border-border bg-background px-2 py-1.5 typography-meta text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary disabled:opacity-50"
+                outerClassName="mt-1"
+                className="min-h-[82px] typography-meta"
             />
             <div className="mt-2 flex flex-wrap items-center gap-2">
                 <label htmlFor="plan-execution-model" className="typography-micro text-muted-foreground">
                     {t('chat.planReview.executionModel')}:
                 </label>
-                <select
-                    id="plan-execution-model"
-                    aria-label={t('chat.planReview.executionModel')}
-                    value={executionModel ? `${executionModel.providerId}:${executionModel.modelId}` : ''}
-                    onChange={(event) => {
-                        const val = event.target.value;
-                        if (!val) {
+                <Select
+                    value={executionModel ? `${executionModel.providerId}:${executionModel.modelId}` : DEFAULT_MODEL_VALUE}
+                    onValueChange={(val) => {
+                        if (val === DEFAULT_MODEL_VALUE) {
                             setExecutionModel(null);
                             return;
                         }
-                        const [pId, ...mParts] = val.split(':');
-                        const mId = mParts.join(':');
-                        setExecutionModel({ providerId: pId, modelId: mId });
+                        const [providerId, ...modelParts] = val.split(':');
+                        setExecutionModel({ providerId, modelId: modelParts.join(':') });
                     }}
                     disabled={isResponding}
-                    className="h-6 rounded border border-border bg-background px-2 typography-micro text-foreground"
                 >
-                    <option value="">{t('chat.planReview.defaultModel')}</option>
-                    {providers.flatMap((p) => p.models.map((m) => (
-                        <option key={`${p.providerId}:${m.modelId}`} value={`${p.providerId}:${m.modelId}`}>
-                            {p.name} - {m.name || m.modelId}
-                        </option>
-                    )))}
-                </select>
+                    <SelectTrigger
+                        id="plan-execution-model"
+                        aria-label={t('chat.planReview.executionModel')}
+                        className={cn(dropdownTriggerVariants({ size: 'default' }), 'max-w-[16rem] typography-micro')}
+                    >
+                        <SelectValue placeholder={t('chat.planReview.defaultModel')}>
+                            {(value: string | undefined) => {
+                                if (!value || value === DEFAULT_MODEL_VALUE) {
+                                    return t('chat.planReview.defaultModel');
+                                }
+                                const [providerId, ...modelParts] = value.split(':');
+                                const modelId = modelParts.join(':');
+                                const provider = providers.find((entry) => entry.providerId === providerId);
+                                if (!provider) {
+                                    return modelId;
+                                }
+                                const model = provider.models.find((entry) => entry.modelId === modelId);
+                                return `${provider.name} - ${model?.name || modelId}`;
+                            }}
+                        </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value={DEFAULT_MODEL_VALUE}>{t('chat.planReview.defaultModel')}</SelectItem>
+                        {providers.flatMap((p) => p.models.map((m) => (
+                            <SelectItem key={`${p.providerId}:${m.modelId}`} value={`${p.providerId}:${m.modelId}`}>
+                                {`${p.name} - ${m.name || m.modelId}`}
+                            </SelectItem>
+                        )))}
+                    </SelectContent>
+                </Select>
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-2">
                 <Button size="xs" disabled={isResponding} onClick={() => void submit('approve')}>
@@ -136,9 +163,9 @@ export function PlanReviewCard({ form, docked = false, forms }: PlanReviewCardPr
                         onClick={() => setCollapsed((value) => !value)}
                         aria-expanded={!collapsed}
                         aria-label={t(collapsed ? 'chat.formDock.expandAria' : 'chat.formDock.collapseAria')}
-                        className="flex min-w-0 flex-1 items-center gap-2 text-left text-foreground"
+                        className="flex min-w-0 flex-1 items-center gap-2 text-start text-foreground"
                     >
-                        <Icon name="file-text" className="size-3.5 shrink-0 text-primary" />
+                        <Icon name="file-text" className="size-3.5 shrink-0 text-muted-foreground" />
                         <Icon name={collapsed ? 'arrow-up-s' : 'arrow-down-s'} className="size-4 shrink-0" />
                         <span className="typography-ui-label truncate">{t('chat.planReview.title')}</span>
                     </button>
@@ -155,7 +182,7 @@ export function PlanReviewCard({ form, docked = false, forms }: PlanReviewCardPr
             <div className="chat-column">
                 <section className="rounded-xl border border-border/30 bg-muted/10" aria-label={t('chat.planReview.title')}>
                     <div className="mb-2 flex items-center gap-2 border-b border-border/20 px-3 py-1.5">
-                        <Icon name="file-text" className="size-3.5 text-primary" />
+                        <Icon name="file-text" className="size-3.5 text-muted-foreground" />
                         <span className="typography-meta font-medium text-foreground">{t('chat.planReview.title')}</span>
                     </div>
                     {content}

@@ -151,7 +151,7 @@ describe('JobsSheetDialog & JobWidgetViewRenderer', () => {
   });
   test('renders all 4 widget kinds and stat/text blocks in JobWidgetViewRenderer', async () => {
     await act(async () => {
-      root.render(<JobWidgetViewRenderer widget={mockWidget} />);
+      root.render(<I18nProvider><JobWidgetViewRenderer widget={mockWidget} /></I18nProvider>);
     });
 
     const text = document.body.textContent ?? '';

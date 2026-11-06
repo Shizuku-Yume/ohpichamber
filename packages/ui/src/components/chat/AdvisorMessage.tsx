@@ -29,7 +29,7 @@ export const AdvisorMessage: React.FC<AdvisorMessageProps> = ({ notes, className
           <button
             type="button"
             onClick={onDismiss}
-            className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors inline-flex items-center justify-center cursor-pointer ml-auto"
+            className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors inline-flex items-center justify-center cursor-pointer ms-auto"
             aria-label={t('chat.advisorMessage.dismiss')}
             data-testid="advisor-message-dismiss"
           >
@@ -50,11 +50,11 @@ export const AdvisorMessage: React.FC<AdvisorMessageProps> = ({ notes, className
           return (
             <div
               key={note.noteId}
-              className={`border-l-2 pl-2.5 py-1 ${isBlocker
-                  ? 'border-l-destructive'
+              className={`border-s-2 ps-2.5 py-1 ${isBlocker
+                  ? 'border-s-destructive'
                   : isConcern
-                    ? 'border-l-warning'
-                    : 'border-l-muted-foreground'
+                    ? 'border-s-warning'
+                    : 'border-s-muted-foreground'
                 }`}
               data-testid={`advisor-note-${note.noteId}`}
             >

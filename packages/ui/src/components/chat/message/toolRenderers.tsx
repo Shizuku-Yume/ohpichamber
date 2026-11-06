@@ -1,6 +1,7 @@
 import type { JsonValue, ToolResultPart } from '@openchamber/agent-contract';
 import { z } from 'zod';
 
+import type { I18nKey, I18nParams } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { typography } from '@/lib/typography';
 import { SimpleMarkdownRenderer } from '../MarkdownRenderer';
@@ -167,7 +168,11 @@ export const unwrapTextBlocks = (data: JsonValue): string | null => {
 
 const GREP_DOT_STYLE = { backgroundColor: 'var(--status-info)', opacity: 0.6 };
 
-export const renderGrepOutput = (output: string, isMobile: boolean, options?: { unstyled?: boolean }) => {
+/** Non-React renderers receive the component's translator; count-dependent
+ *  copy resolves complete singular/plural messages instead of a suffix. */
+export type ToolRendererTranslate = (key: I18nKey, params?: I18nParams) => string;
+
+export const renderGrepOutput = (output: string, isMobile: boolean, t: ToolRendererTranslate, options?: { unstyled?: boolean }) => {
     try {
         const lines = output.trim().split('\n').filter(Boolean);
         if (lines.length === 0) return null;
@@ -197,14 +202,16 @@ export const renderGrepOutput = (output: string, isMobile: boolean, options?: { 
                 style={typography.tool.popup}
             >
                 <div className="typography-meta text-muted-foreground mb-2">
-                    Found {lines.length} match{lines.length !== 1 ? 'es' : ''}
+                    {lines.length === 1
+                        ? t('chat.toolPart.grepMatchesFoundSingle', { count: lines.length })
+                        : t('chat.toolPart.grepMatchesFoundPlural', { count: lines.length })}
                 </div>
                 {Object.entries(fileGroups).map(([filepath, matches]) => (
                     <div key={filepath} className="space-y-1">
                         <div className={cn('font-medium text-muted-foreground', isMobile ? 'typography-micro' : 'typography-code')}>
                             {filepath}
                         </div>
-                        <div className="pl-4 space-y-1">
+                        <div className="ps-4 space-y-1">
                             {matches.map((match, idx) => {
                                 if (!match.lineNum && !match.content) {
                                     return null;
@@ -238,7 +245,7 @@ export const renderGrepOutput = (output: string, isMobile: boolean, options?: { 
 
 const GLOB_DOT_STYLE = { backgroundColor: 'var(--status-info)', opacity: 0.6 };
 
-export const renderGlobOutput = (output: string, isMobile: boolean, options?: { unstyled?: boolean }) => {
+export const renderGlobOutput = (output: string, isMobile: boolean, t: ToolRendererTranslate, options?: { unstyled?: boolean }) => {
     try {
         const paths = output.trim().split('\n').filter(Boolean);
         if (paths.length === 0) return null;
@@ -266,14 +273,16 @@ export const renderGlobOutput = (output: string, isMobile: boolean, options?: { 
                 style={typography.tool.popup}
             >
                 <div className="typography-meta text-muted-foreground mb-2">
-                    Found {paths.length} file{paths.length !== 1 ? 's' : ''}
+                    {paths.length === 1
+                        ? t('chat.toolPart.globFilesFoundSingle', { count: paths.length })
+                        : t('chat.toolPart.globFilesFoundPlural', { count: paths.length })}
                 </div>
                 {sortedDirs.map((dir) => (
                     <div key={dir} className="space-y-1">
                         <div className={cn('font-medium text-muted-foreground', isMobile ? 'typography-micro' : 'typography-code')}>
                             {dir}/
                         </div>
-                        <div className={cn('pl-4 grid gap-1', isMobile ? 'grid-cols-1' : 'grid-cols-2')}>
+                        <div className={cn('ps-4 grid gap-1', isMobile ? 'grid-cols-1' : 'grid-cols-2')}>
                             {groups[dir].sort().map((filename) => (
                                 <div key={filename} className={cn('flex items-center gap-2 min-w-0', isMobile ? 'typography-micro' : 'typography-code')}>
                                     <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={GLOB_DOT_STYLE} />

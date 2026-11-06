@@ -43,12 +43,12 @@ function extractColumnUnit(header: string | undefined, sampleCells: string[]): s
 }
 
 const SERIES_COLORS = [
-  'var(--primary, #3b82f6)',
-  'var(--status-success, #10b981)',
-  'var(--status-warning, #f59e0b)',
-  'var(--tools-icon, #6366f1)',
-  'var(--status-error, #ef4444)',
-  'var(--accent, #0ea5e9)',
+  'var(--primary)',
+  'var(--status-success)',
+  'var(--status-warning)',
+  'var(--tools-icon)',
+  'var(--status-error)',
+  'var(--accent)',
 ];
 
 export function TableAutoChart({ headers, rows, className }: TableAutoChartProps) {

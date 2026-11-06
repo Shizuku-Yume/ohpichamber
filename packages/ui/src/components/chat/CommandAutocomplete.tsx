@@ -6,7 +6,7 @@ import { useChatSessionSelection } from './chatColumnSession';
 import { selectBuiltinCommandsForDirectory, selectCommandsForDirectory, useCommandsStore } from '@/stores/useCommandsStore';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, type I18nKey } from '@/lib/i18n';
 import { useUIStore } from '@/stores/useUIStore';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { useMobileAutocompleteMaxHeight } from './useMobileAutocompleteMaxHeight';
@@ -38,30 +38,32 @@ const LOCAL_COMMAND_NAMES = [
   'init', 'review', 'undo', 'redo', 'timeline', 'compact', 'fork', 'btw', 'summary', 'workspace-review', 'handoff-review',
   'plan-feature', 'craft-goal', 'schedule-task', 'catch-up', 'debug', 'weigh', 'explore',
 ];
-const BUILTIN_COMMAND_DESCRIPTIONS: Record<string, string> = {
-  compact: 'Compact conversation context',
-  shake: 'Shake context to drop transient output',
-  todo: 'Inspect or manage todos',
-  jobs: 'Inspect background jobs and streams',
-  usage: 'Inspect token usage and costs',
-  context: 'Inspect context window allocation',
-  tools: 'List enabled tools and descriptors',
-  handoff: 'Create handoff summary documentation',
-  retry: 'Retry the last turn with a fallback model',
-  rename: 'Rename the active session',
-  effort: 'Adjust reasoning effort for thinking models',
-  model: 'Switch active model role or selection',
-  switch: 'Quick-cycle to next model in cycleOrder',
-  fast: 'Switch to fast/smol model tier',
-  slow: 'Switch to thinking/slow model tier',
-  prewalk: 'Run prewalk inspection before execution',
-  force: 'Force run without confirmation',
-  pin: 'Pin or unpin files in context',
-  fresh: 'Start fresh turn without prior branch context',
-  clear: 'Clear conversation context in place',
-  dirs: 'List accessible workspace directories',
-  session: 'Manage session metadata and branches',
-  memory: 'Inspect or manage memory consolidation',
+// Descriptions resolve through the dictionary so a locale switch re-renders
+// every builtin command; `compact` already owns a key on the openchamber list.
+const BUILTIN_COMMAND_DESCRIPTION_KEYS: Record<string, I18nKey> = {
+  compact: 'chat.commandAutocomplete.command.compactDescription',
+  shake: 'chat.commandAutocomplete.command.shakeDescription',
+  todo: 'chat.commandAutocomplete.command.todoDescription',
+  jobs: 'chat.commandAutocomplete.command.jobsDescription',
+  usage: 'chat.commandAutocomplete.command.usageDescription',
+  context: 'chat.commandAutocomplete.command.contextDescription',
+  tools: 'chat.commandAutocomplete.command.toolsDescription',
+  handoff: 'chat.commandAutocomplete.command.handoffDescription',
+  retry: 'chat.commandAutocomplete.command.retryDescription',
+  rename: 'chat.commandAutocomplete.command.renameDescription',
+  effort: 'chat.commandAutocomplete.command.effortDescription',
+  model: 'chat.commandAutocomplete.command.modelDescription',
+  switch: 'chat.commandAutocomplete.command.switchDescription',
+  fast: 'chat.commandAutocomplete.command.fastDescription',
+  slow: 'chat.commandAutocomplete.command.slowDescription',
+  prewalk: 'chat.commandAutocomplete.command.prewalkDescription',
+  force: 'chat.commandAutocomplete.command.forceDescription',
+  pin: 'chat.commandAutocomplete.command.pinDescription',
+  fresh: 'chat.commandAutocomplete.command.freshDescription',
+  clear: 'chat.commandAutocomplete.command.clearDescription',
+  dirs: 'chat.commandAutocomplete.command.dirsDescription',
+  session: 'chat.commandAutocomplete.command.sessionDescription',
+  memory: 'chat.commandAutocomplete.command.memoryDescription',
 };
 
 export interface CommandAutocompleteHandle {
@@ -153,13 +155,16 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
     }));
 
     const builtInCommands: CommandInfo[] = [
-      ...(hasSession ? builtinCommandNames.map((name): CommandInfo => ({
-        id: `builtin:${name}`,
-        name,
-        source: 'native',
-        isBuiltIn: true,
-        description: BUILTIN_COMMAND_DESCRIPTIONS[name],
-      })) : []),
+      ...(hasSession ? builtinCommandNames.map((name): CommandInfo => {
+        const descriptionKey = BUILTIN_COMMAND_DESCRIPTION_KEYS[name];
+        return {
+          id: `builtin:${name}`,
+          name,
+          source: 'native',
+          isBuiltIn: true,
+          description: descriptionKey ? t(descriptionKey) : undefined,
+        };
+      }) : []),
       ...(hasSession
         ? [{ id: 'openchamber:init', name: 'init', source: 'openchamber' as const, description: t('chat.commandAutocomplete.command.initDescription'), isBuiltIn: true }]
         : []

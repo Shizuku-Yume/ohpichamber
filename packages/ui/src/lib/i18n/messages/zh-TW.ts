@@ -1,3 +1,4 @@
+import { chatWorkbenchI18n } from './chat-workbench.i18n';
 import { m4LaneDI18n } from './m4-lane-d.i18n';
 import { subagentHudI18n } from './subagent-hud.i18n';
 import { settingsDict } from './zh-TW.settings';
@@ -42,6 +43,7 @@ import { ompSettingsI18n } from './omp-settings.i18n';
 import { workerRunsI18n } from './worker-runs.i18n';
 import { btwI18n } from './btw.i18n';
 export const dict = {
+  ...chatWorkbenchI18n['zh-TW'],
   ...btwI18n['zh-TW'],
   ...subagentHudI18n['zh-TW'],
   ...ompSettingsI18n['zh-TW'],

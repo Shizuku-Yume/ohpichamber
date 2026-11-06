@@ -1,3 +1,4 @@
+import { chatWorkbenchI18n } from './chat-workbench.i18n';
 import { m4LaneDI18n } from './m4-lane-d.i18n';
 import { subagentHudI18n } from './subagent-hud.i18n';
 import { settingsDict } from './ko.settings';
@@ -42,6 +43,7 @@ import { ompSettingsI18n } from './omp-settings.i18n';
 import { workerRunsI18n } from './worker-runs.i18n';
 import { btwI18n } from './btw.i18n';
 export const dict = {
+  ...chatWorkbenchI18n['ko'],
   ...btwI18n.ko,
   ...subagentHudI18n['ko'],
   ...ompSettingsI18n.ko,

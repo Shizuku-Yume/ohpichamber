@@ -1307,7 +1307,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                     {effortOptions.map((effort) => (
                         <DropdownMenuItem key={effort} onSelect={() => handleEffortSelect(effort)}>
                             <span>{effort === 'off' ? t('chat.modelControls.off') : formatEffortLabel(effort)}</span>
-                            {selected === effort && <Icon name="check" className="ml-auto size-4" />}
+                            {selected === effort && <Icon name="check" className="ms-auto size-4" />}
                         </DropdownMenuItem>
                     ))}
                 </DropdownMenuContent>
@@ -1617,7 +1617,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                             type="button"
                             onClick={() => handleMobileModelApply(providerId, modelId, resolvedVariant)}
                             className={cn(
-                                'flex flex-1 min-w-0 items-start gap-2 text-left',
+                                'flex flex-1 min-w-0 items-start gap-2 text-start',
                                 'focus:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-lg'
                             )}
                         >
@@ -1644,7 +1644,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                             <span aria-hidden="true" className="h-3 w-px flex-shrink-0 bg-border/50" />
                                         ) : null}
                                         {indicatorIcons.length > 0 ? (
-                                            <div className="flex min-w-0 items-center gap-1 overflow-hidden whitespace-nowrap pl-0.5">
+                                            <div className="flex min-w-0 items-center gap-1 overflow-hidden whitespace-nowrap ps-0.5">
                                                 {indicatorIcons.map(({ key, icon: iconName, label }) => (
                                                 <span
                                                     key={`meta-${providerId}-${modelId}-${key}`}
@@ -1753,7 +1753,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                 <div className="flex flex-col gap-2">
                     <div>
                         <div className="relative">
-                            <Icon name="search" className="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+                            <Icon name="search" className="absolute start-2 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
                             <Input
                                 value={mobileModelQuery}
                                 onChange={(event) => {
@@ -1761,7 +1761,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                     setExpandedMobileModelKey(null);
                                 }}
                                         placeholder={t('chat.modelControls.searchProvidersOrModels')}
-                                className="pl-7 h-9 rounded-xl border-border/40 bg-[var(--surface-elevated)] typography-meta"
+                                className="ps-7 h-9 rounded-xl border-border/40 bg-[var(--surface-elevated)] typography-meta"
                             />
                             {mobileModelQuery && (
                                 <button
@@ -1770,7 +1770,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                         setMobileModelQuery('');
                                         setExpandedMobileModelKey(null);
                                     }}
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                    className="absolute end-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                                     aria-label={t('chat.modelControls.clearSearch')}
                                 >
                                     <Icon name="close-circle" className="size-4" />
@@ -1802,7 +1802,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                     {filteredFavorites.length > 0 && (
                         <div className="rounded-xl border border-border/40 bg-[var(--surface-elevated)] overflow-hidden">
                             <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                <Icon name="star-fill" className="size-3 inline-block mr-1.5 text-primary" />
+                                <Icon name="star-fill" className="size-3 inline-block me-1.5 text-primary" />
                                 {t('chat.modelControls.favorites')}
                             </div>
                             <div className="flex flex-col border-t border-border/30">
@@ -1820,7 +1820,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                     {filteredRecents.length > 0 && (
                         <div className="rounded-xl border border-border/40 bg-[var(--surface-elevated)] overflow-hidden">
                             <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                <Icon name="time" className="size-3 inline-block mr-1.5" />
+                                <Icon name="time" className="size-3 inline-block me-1.5" />
                                 {t('chat.modelControls.recent')}
                             </div>
                             <div className="flex flex-col border-t border-border/30">
@@ -1852,7 +1852,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                         }
                                         toggleMobileProviderExpansion(provider.providerId);
                                     }}
-                                    className="flex w-full items-center justify-between gap-1.5 px-2 py-1.5 text-left"
+                                    className="flex w-full items-center justify-between gap-1.5 px-2 py-1.5 text-start"
                                     aria-expanded={isExpanded}
                                 >
                                     <div className="flex items-center gap-2">
@@ -1940,7 +1940,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                     <button
                         type="button"
                         className={cn(
-                            'flex w-full items-center justify-between gap-2 rounded-xl border px-2 py-1.5 text-left',
+                            'flex w-full items-center justify-between gap-2 rounded-xl border px-2 py-1.5 text-start',
                             'focus:outline-none focus-visible:ring-1 focus-visible:ring-ring',
                             isDefault ? 'border-border bg-interactive-selection text-interactive-selection-foreground' : 'border-border/40'
                         )}
@@ -1959,7 +1959,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                 key={variant}
                                 type="button"
                                 className={cn(
-                                    'flex w-full items-center justify-between gap-2 rounded-xl border px-2 py-1.5 text-left',
+                                    'flex w-full items-center justify-between gap-2 rounded-xl border px-2 py-1.5 text-start',
                                     'focus:outline-none focus-visible:ring-1 focus-visible:ring-ring',
                                     selected ? 'border-border bg-interactive-selection text-interactive-selection-foreground' : 'border-border/40'
                                 )}
@@ -2206,7 +2206,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                     className="typography-meta group flex w-full items-center gap-1 rounded-md px-2 py-1.5 cursor-pointer hover:bg-interactive-hover/50"
                                 >
                                     <span className="flex size-4 items-center justify-center text-muted-foreground">
-                                        <Icon name="add" className="size-4 -mr-0.5" />
+                                        <Icon name="add" className="size-4 -me-0.5" />
                                     </span>
                                     <span className="font-medium text-foreground">{t('chat.modelControls.addNewProvider')}</span>
                                 </button>

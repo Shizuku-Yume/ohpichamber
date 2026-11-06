@@ -66,6 +66,7 @@ const collectFiles = (root, predicate) => {
 };
 
 const ONNX_ADDON_TARGET = /(?:^|\/)bin\/napi-v\d+\/([^/]+)\/([^/]+)\/onnxruntime_binding\.node$/;
+const PI_NATIVES_ADDON_TARGET = /(?:^|\/)@oh-my-pi\/pi-natives-([^-]+)-([^/]+)\//;
 
 // Launchers resolve `Icon=openchamber` through the hicolor theme, which only
 // reads `<size>/apps/` directories it declares: `scalable` and square sizes up
@@ -123,6 +124,10 @@ export const verifyExtractedPayload = ({
   const nativeModules = collectFiles(unpackedModules, (name, fullPath) => {
     if (!name.endsWith('.node')) return false;
     const normalizedPath = fullPath.split(path.sep).join('/');
+    const piNativesTarget = PI_NATIVES_ADDON_TARGET.exec(normalizedPath);
+    if (piNativesTarget && (piNativesTarget[1] !== 'linux' || piNativesTarget[2] !== targetArchitecture)) {
+      return false;
+    }
     if (!normalizedPath.includes('/prebuilds/')) return true;
     return normalizedPath.includes(`/prebuilds/linux-${targetArchitecture}/`);
   });
@@ -135,6 +140,8 @@ export const verifyExtractedPayload = ({
     const normalizedPath = modulePath.split(path.sep).join('/');
     const onnxTarget = ONNX_ADDON_TARGET.exec(normalizedPath);
     if (onnxTarget && (onnxTarget[1] !== 'linux' || onnxTarget[2] !== targetArchitecture)) continue;
+    const piNativesTarget = PI_NATIVES_ADDON_TARGET.exec(normalizedPath);
+    if (piNativesTarget && (piNativesTarget[1] !== 'linux' || piNativesTarget[2] !== targetArchitecture)) continue;
     assertElfArchitecture(modulePath, targetArchitecture, 'Native module');
   }
   return { nativeModuleCount: nativeModules.length, ...agent };

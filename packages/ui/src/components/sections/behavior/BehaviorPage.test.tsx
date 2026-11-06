@@ -145,9 +145,9 @@ test('editing global rules writes the AGENTS.md file and no settings copy', asyn
   if (!setValue) throw new Error('Missing native textarea setter');
   await act(async () => {
     setValue.call(rulesField, 'new rules');
-    rulesField.dispatchEvent(new WindowEvent('input', { bubbles: true }));
+    rulesField.dispatchEvent(new WindowEvent('input', { bubbles: true }) as unknown as Event);
   });
-  await act(async () => { rulesField.dispatchEvent(new WindowFocusEvent('focusout', { bubbles: true })); });
+  await act(async () => { rulesField.dispatchEvent(new WindowFocusEvent('focusout', { bubbles: true }) as unknown as FocusEvent); });
   await settle();
 
   expect(requests.settingsWrites.map((write) => write.body)).toEqual([

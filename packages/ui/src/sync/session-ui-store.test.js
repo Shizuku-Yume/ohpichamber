@@ -1400,3 +1400,32 @@ describe('canonical slash skill routing', () => {
   });
 });
 
+describe('defaultSessionMode in new session draft', () => {
+  test('initializes new draft with defaultSessionMode from useUIStore', () => {
+    const { useUIStore } = require('@/stores/useUIStore');
+    useUIStore.setState({ defaultSessionMode: 'plan' });
+    useSessionUIStore.getState().openNewSessionDraft();
+    expect(useSessionUIStore.getState().newSessionDraft.mode).toBe('plan');
+
+    useUIStore.setState({ defaultSessionMode: 'vibe' });
+    useSessionUIStore.getState().openNewSessionDraft();
+    expect(useSessionUIStore.getState().newSessionDraft.mode).toBe('vibe');
+
+    useUIStore.setState({ defaultSessionMode: 'goal' });
+    useSessionUIStore.getState().openNewSessionDraft();
+    expect(useSessionUIStore.getState().newSessionDraft.mode).toBe('goal');
+    expect(useSessionUIStore.getState().newSessionDraft.goalObjective).toEqual({ objective: '', tokenBudget: null });
+
+    useUIStore.setState({ defaultSessionMode: 'main' });
+    useSessionUIStore.getState().openNewSessionDraft();
+    expect(useSessionUIStore.getState().newSessionDraft.mode).toBeUndefined();
+  });
+
+  test('explicit options.mode overrides defaultSessionMode', () => {
+    const { useUIStore } = require('@/stores/useUIStore');
+    useUIStore.setState({ defaultSessionMode: 'plan' });
+    useSessionUIStore.getState().openNewSessionDraft({ mode: 'vibe' });
+    expect(useSessionUIStore.getState().newSessionDraft.mode).toBe('vibe');
+  });
+});
+

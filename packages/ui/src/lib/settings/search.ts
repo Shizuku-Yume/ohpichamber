@@ -325,6 +325,22 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     isAvailable: (ctx) => !ctx.isMobile,
   },
   {
+    id: 'appearance.live-browser-tabs',
+    page: 'general',
+    titleKey: 'settings.openchamber.visual.field.liveBrowserTabs',
+    descriptionKey: 'settings.openchamber.visual.field.liveBrowserTabsInfo',
+    keywords: ['browser', 'tabs', 'memory', 'reload', 'background', 'loaded'],
+    isAvailable: (ctx) => ctx.isDesktop && !ctx.isMobile,
+  },
+  {
+    id: 'layout.mobile-workspace-tabs',
+    page: 'general',
+    titleKey: 'settings.layout.general.mobileTabs.title',
+    descriptionKey: 'settings.layout.general.mobileTabs.info',
+    keywords: ['tabs', 'workspace', 'panel', 'order', 'hide', 'status', 'git', 'files', 'terminal', 'mobile'],
+    isAvailable: (ctx) => ctx.isMobile,
+  },
+  {
     id: 'appearance.terminal-quick-keys',
     page: 'general',
     titleKey: 'settings.openchamber.visual.field.terminalQuickKeys',
@@ -587,6 +603,21 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     isAvailable: (ctx) => !ctx.isMobile,
   },
   {
+    id: 'chat.mobile-return-key-sends',
+    page: 'chat',
+    titleKey: 'settings.openchamber.visual.field.mobileReturnKeySends',
+    descriptionKey: 'settings.openchamber.visual.field.mobileReturnKeySendsHint',
+    keywords: ['mobile', 'keyboard', 'return', 'send', 'composer'],
+    isAvailable: (ctx) => ctx.isMobile,
+  },
+  {
+    id: 'chat.save-pasted-images',
+    page: 'chat',
+    titleKey: 'settings.openchamber.visual.field.savePastedImagesAsFiles',
+    descriptionKey: 'settings.openchamber.visual.field.savePastedImagesAsFilesInfo',
+    keywords: ['paste', 'image', 'file', 'asset', 'screenshot', 'composer'],
+  },
+  {
     id: 'sessions.default-model',
     page: 'sessions',
     titleKey: 'settings.openchamber.defaults.field.defaultModel',
@@ -597,6 +628,12 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     page: 'sessions',
     titleKey: 'settings.openchamber.defaults.field.defaultThinking',
     keywords: ['thinking', 'reasoning', 'variant'],
+  },
+  {
+    id: 'sessions.default-mode',
+    page: 'sessions',
+    titleKey: 'chat.chatInput.mode.label',
+    keywords: ['mode', 'session mode', 'main', 'plan', 'vibe', 'goal', 'default'],
   },
   {
     id: 'sessions.deletion-dialog',
@@ -671,6 +708,13 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.openchamber.mergedWorktreeCleanup.field.enable',
     descriptionKey: 'settings.openchamber.mergedWorktreeCleanup.field.enableDescription',
     keywords: ['pr', 'pull request', 'merged', 'worktree', 'branch', 'archive', 'cleanup', 'remove'],
+  },
+  {
+    id: 'sessions.worktree-archive-on-done',
+    page: 'sessions',
+    titleKey: 'settings.openchamber.finishedWorktrees.field.archiveOnDone',
+    descriptionKey: 'settings.openchamber.finishedWorktrees.info',
+    keywords: ['worktree', 'archive', 'done', 'cleanup'],
   },
   {
     id: 'sessions.retention-only-archived',

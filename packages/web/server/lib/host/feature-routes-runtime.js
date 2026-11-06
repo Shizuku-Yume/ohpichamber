@@ -17,6 +17,7 @@ import { registerProjectContextRoutes } from '../project-context/routes.js';
 import { registerProjectDirectoryRoutes, registerProjectSetupRoutes } from '../projects/routes.js';
 import { registerAgentMemoryRoutes } from '../agent-memory/routes.js';
 import { registerSessionKnowledgeRoutes } from '../session-knowledge/routes.js';
+import { registerBehaviorRoutes } from './behavior-routes.js';
 import { registerMessageSearchRoutes } from '../message-search/routes.js';
 import { registerMessageQueueRoutes } from '../message-queue/runtime.js';
 import { registerRoutingRoutes } from '../routing/routes.js';
@@ -594,6 +595,7 @@ export const createFeatureRoutesRuntime = () => {
     registerProjectSetupRoutes(app, { projectConfigRuntime });
     registerAgentMemoryRoutes(app, { agentMemoryRuntime, isAgentMemoryEnabled });
     registerSessionKnowledgeRoutes(app, { sessionKnowledgeRuntime });
+    registerBehaviorRoutes(app, { fsPromises, os, resolveWorkspaceDirectory });
     registerMessageSearchRoutes(app, { messageSearchRuntime });
 
     if (!routeDependencies.sessionFoldersStore) throw new Error('Feature routes require the Host session folder store');

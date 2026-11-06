@@ -1512,8 +1512,17 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
       syntheticParts: options?.syntheticParts,
       targetFolderId: options?.targetFolderId,
       projectContextPins: options?.projectContextPins,
-      mode: options?.mode,
-      goalObjective: options?.goalObjective,
+      mode: options?.mode !== undefined
+        ? options.mode
+        : ((() => {
+            const defaultMode = useUIStore.getState().defaultSessionMode ?? 'main';
+            return defaultMode === 'main' ? undefined : defaultMode;
+          })()),
+      goalObjective: options?.goalObjective !== undefined
+        ? options.goalObjective
+        : (options?.mode === 'goal' || (options?.mode === undefined && useUIStore.getState().defaultSessionMode === 'goal')
+            ? { objective: '', tokenBudget: null }
+            : undefined),
     }
 
     set({

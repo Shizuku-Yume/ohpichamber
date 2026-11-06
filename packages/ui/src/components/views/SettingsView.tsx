@@ -21,6 +21,7 @@ import { AgentsSidebar } from '@/components/sections/agents/AgentsSidebar';
 import { AgentsPage } from '@/components/sections/agents/AgentsPage';
 import { WebSearchPage } from '@/components/sections/websearch/WebSearchPage';
 import { OmpSettingsPage } from '@/components/sections/openchamber/OmpSettingsPage';
+import { BehaviorPage } from '@/components/sections/behavior/BehaviorPage';
 import { CommandsSidebar } from '@/components/sections/commands/CommandsSidebar';
 import { CommandsPage } from '@/components/sections/commands/CommandsPage';
 import { McpPage } from '@/components/sections/mcp/McpPage';
@@ -129,6 +130,7 @@ const pageOrder: SettingsPageSlug[] = [
   'providers',
   'web-search',
   'omp',
+  'behavior',
   'agents',
   'commands',
   'mcp',
@@ -615,6 +617,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         return <WebSearchPage />;
       case 'omp':
         return <OmpSettingsPage />;
+      case 'behavior':
+        return <BehaviorPage />;
       case 'usage':
         return <UsagePage />;
       case 'about':

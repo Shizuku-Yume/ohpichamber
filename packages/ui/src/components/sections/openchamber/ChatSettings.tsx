@@ -339,6 +339,10 @@ const ComposerTab: React.FC = () => {
   const setLargeTextPasteBehavior = useUIStore((state) => state.setLargeTextPasteBehavior);
   const allowPromptingSubagentSessions = useUIStore((state) => state.allowPromptingSubagentSessions);
   const setAllowPromptingSubagentSessions = useUIStore((state) => state.setAllowPromptingSubagentSessions);
+  const mobileReturnKeySends = useUIStore((state) => state.mobileReturnKeySends);
+  const setMobileReturnKeySends = useUIStore((state) => state.setMobileReturnKeySends);
+  const savePastedImagesAsFiles = useUIStore((state) => state.savePastedImagesAsFiles);
+  const setSavePastedImagesAsFiles = useUIStore((state) => state.setSavePastedImagesAsFiles);
   const inputSpellcheckEnabled = useUIStore((state) => state.inputSpellcheckEnabled);
   const setInputSpellcheckEnabled = useUIStore((state) => state.setInputSpellcheckEnabled);
   const inputHistoryScope = useInputHistoryStore((state) => state.scope);
@@ -354,6 +358,11 @@ const ComposerTab: React.FC = () => {
     setEnterToSendConfigured(true);
     void updateDesktopSettings({ enterToSend: enabled, enterToSendConfigured: true });
   };
+  const handleMobileReturnKeySendsChange = (enabled: boolean) => {
+    setMobileReturnKeySends(enabled);
+    void updateDesktopSettings({ mobileReturnKeySends: enabled });
+  };
+
 
   const handleInputHistoryLimitChange = (value: number) => {
     const nextLimit = Math.round(value);
@@ -397,6 +406,16 @@ const ComposerTab: React.FC = () => {
               aria-label={t('settings.openchamber.visual.section.followUpBehaviorAria')}
             />
           </SettingsFieldRow>
+          {isMobile ? (
+            <SettingsCheckboxRow
+              checked={mobileReturnKeySends}
+              onChange={handleMobileReturnKeySendsChange}
+              label={t('settings.openchamber.visual.field.mobileReturnKeySends')}
+              ariaLabel={t('settings.openchamber.visual.field.mobileReturnKeySendsAria')}
+              info={t('settings.openchamber.visual.field.mobileReturnKeySendsHint')}
+              settingsItem="chat.mobile-return-key-sends"
+            />
+          ) : null}
         </div>
         <SettingsControlGroup
           title={t('settings.openchamber.visual.field.largeTextPaste')}
@@ -422,6 +441,17 @@ const ComposerTab: React.FC = () => {
             label={t('settings.openchamber.visual.field.allowPromptingSubagentSessions')}
             ariaLabel={t('settings.openchamber.visual.field.allowPromptingSubagentSessionsAria')}
             settingsItem="chat.subagent-read-only-banner"
+          />
+          <SettingsCheckboxRow
+            checked={savePastedImagesAsFiles}
+            onChange={(enabled) => {
+              setSavePastedImagesAsFiles(enabled);
+              void updateDesktopSettings({ savePastedImagesAsFiles: enabled });
+            }}
+            label={t('settings.openchamber.visual.field.savePastedImagesAsFiles')}
+            ariaLabel={t('settings.openchamber.visual.field.savePastedImagesAsFiles')}
+            info={t('settings.openchamber.visual.field.savePastedImagesAsFilesInfo')}
+            settingsItem="chat.save-pasted-images"
           />
         </div>
       </SettingsSection>

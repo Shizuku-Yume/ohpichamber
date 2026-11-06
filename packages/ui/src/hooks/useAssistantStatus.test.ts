@@ -136,6 +136,26 @@ describe('createParsedStatus', () => {
         expect(statusOf([tool('1', 'mcp__srv_custom')]).statusText).toBe('using mcp__srv_custom');
     });
 
+    test('maps every OMP native tool to an assistant-status bucket', () => {
+        expect(statusOf([tool('1', 'grep')]).statusText).toBe('searching files');
+        expect(statusOf([tool('1', 'glob')]).statusText).toBe('searching files');
+        expect(statusOf([tool('1', 'ast_grep')]).statusText).toBe('searching files');
+        expect(statusOf([tool('1', 'ast_edit')]).statusText).toBe('editing a file');
+        expect(statusOf([tool('1', 'todo')]).statusText).toBe('updating the plan');
+        expect(statusOf([tool('1', 'eval')]).statusText).toBe('running code');
+        expect(statusOf([tool('1', 'lsp')]).statusText).toBe('looking things up');
+        for (const name of ['bash', 'task', 'ask', 'find', 'grep', 'glob', 'todo']) {
+            const status = statusOf([tool('1', name)]);
+            expect(status.isGenericStatus).toBe(false);
+            expect(status.statusText).not.toBe(`using ${name}`);
+        }
+    });
+
+    test('counts parallel eval calls and keeps plan updates uncounted', () => {
+        expect(statusOf([tool('1', 'eval'), tool('2', 'eval')]).statusText).toBe('running 2 code samples');
+        expect(statusOf([tool('1', 'todo'), tool('2', 'todo')]).statusText).toBe('updating the plan');
+    });
+
     test('counts parallel calls in the same native category', () => {
         expect(statusOf([tool('1', 'read'), tool('2', 'read'), tool('3', 'read')]).statusText).toBe('reading 3 files');
         expect(statusOf([tool('1', 'write'), tool('2', 'edit')]).statusText).toBe('editing 2 files');

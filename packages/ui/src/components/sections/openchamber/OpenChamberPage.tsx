@@ -17,6 +17,8 @@ import { IsolatedSpacesSettings } from './IsolatedSpacesSettings';
 import { ISOLATED_SPACES_RELEASED } from '@/lib/spaces/release';
 import { OpenChamberToolsSettings } from './OpenChamberToolsSettings';
 import { DesktopNetworkSettings } from './DesktopNetworkSettings';
+import { DesktopAppSettings } from './DesktopAppSettings';
+import { MobileWorkspaceTabsSettings } from './MobileWorkspaceTabsSettings';
 import { KeyboardShortcutsSettings } from './KeyboardShortcutsSettings';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
 import { useDeviceInfo } from '@/lib/device';
@@ -46,16 +48,18 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
     const { isMobile } = useDeviceInfo();
     const runtimeEndpointEpoch = useRuntimeEndpointEpoch();
     const showAbout = isMobile && isWebRuntime();
-    const showDesktopNetworkSettings = isDesktopShell() && isDesktopLocalOriginActive();
+    const isLocalDesktop = isDesktopShell() && isDesktopLocalOriginActive();
+    const showDesktopNetworkSettings = isLocalDesktop;
 
     // If no section specified, show all (mobile/legacy behavior)
     if (!section) {
         return (
             <SettingsPageLayout showSaveStatus className="openchamber-page-body space-y-3 sm:space-y-6">
                 <OpenChamberVisualSettings />
-                <DefaultsSettings key={runtimeEndpointEpoch} />
                 <SessionWorkSettings />
                 {showDesktopNetworkSettings && <DesktopNetworkSettings />}
+                {isLocalDesktop && <DesktopAppSettings />}
+                {isMobile && <MobileWorkspaceTabsSettings />}
                 <EnvironmentVariablesSettings key={runtimeEndpointEpoch} />
                 <OpenChamberToolsSettings />
                 <SessionRetentionSettings />
@@ -143,12 +147,16 @@ const ShortcutsSectionContent: React.FC = () => {
 // passkeys, message stream transport, privacy.
 const GeneralSectionContent: React.FC = () => {
     const runtimeEndpointEpoch = useRuntimeEndpointEpoch();
-    const showDesktopNetworkSettings = isDesktopShell() && isDesktopLocalOriginActive();
+    const { isMobile } = useDeviceInfo();
+    const isLocalDesktop = isDesktopShell() && isDesktopLocalOriginActive();
+    const showDesktopNetworkSettings = isLocalDesktop;
     // Passkeys only work against the browser's WebAuthn UI on the web surface —
     // desktop shell and the Capacitor app never show the login screen.
     const showPasskeySettings = isWebRuntime() && !isDesktopShell() && !isCapacitorApp();
     return (
         <>
+            {isLocalDesktop && <DesktopAppSettings />}
+            {isMobile && <MobileWorkspaceTabsSettings />}
             {showDesktopNetworkSettings && <DesktopNetworkSettings />}
             {showPasskeySettings && <PasskeySettings />}
             <AppLinkSecuritySettings />
@@ -158,6 +166,7 @@ const GeneralSectionContent: React.FC = () => {
             <OpenChamberVisualSettings visibleSettings={[
                 'fileEditorKeymap',
                 'sessionTabs',
+                'liveBrowserTabs',
                 'autoSaveEnabled',
                 'confirmFileTreeMove',
                 'terminalQuickKeys',

@@ -53,6 +53,55 @@ describe('settings search', () => {
       expect(results.some((result) => result.id === 'chat.enter-to-send')).toBe(!isMobile);
     }
   });
+  test('restored mobile workspace tabs and return key sends are searchable only on mobile', () => {
+    for (const isMobile of [false, true]) {
+      const mobileTabsResults = buildSettingsSearchResults({
+        query: 'mobile',
+        runtimeCtx: { ...runtimeCtx, isMobile },
+        t,
+        getPageTitle: (page) => page,
+      });
+      expect(mobileTabsResults.some((result) => result.id === 'layout.mobile-workspace-tabs')).toBe(isMobile);
+      expect(mobileTabsResults.some((result) => result.id === 'chat.mobile-return-key-sends')).toBe(isMobile);
+    }
+  });
+
+  test('restored live browser tabs stepper is searchable on desktop only', () => {
+    const desktopResults = buildSettingsSearchResults({
+      query: 'browser tabs',
+      runtimeCtx: { ...runtimeCtx, isDesktop: true, isMobile: false },
+      t,
+      getPageTitle: (page) => page,
+    });
+    expect(desktopResults.some((result) => result.id === 'appearance.live-browser-tabs')).toBe(true);
+
+    const mobileResults = buildSettingsSearchResults({
+      query: 'browser tabs',
+      runtimeCtx: { ...runtimeCtx, isDesktop: false, isMobile: true },
+      t,
+      getPageTitle: (page) => page,
+    });
+    expect(mobileResults.some((result) => result.id === 'appearance.live-browser-tabs')).toBe(false);
+  });
+
+  test('restored default session mode and worktree archive on done are indexed under sessions', () => {
+    const results = buildSettingsSearchResults({
+      query: 'session mode',
+      runtimeCtx,
+      t,
+      getPageTitle: (page) => page,
+    });
+    expect(results.find((result) => result.id === 'sessions.default-mode')?.page).toBe('sessions');
+
+    const archiveResults = buildSettingsSearchResults({
+      query: 'worktree',
+      runtimeCtx,
+      t,
+      getPageTitle: (page) => page,
+    });
+    expect(archiveResults.find((result) => result.id === 'sessions.worktree-archive-on-done')?.page).toBe('sessions');
+  });
+
 
   test('finds the scrollbar preference on every retained surface', () => {
     for (const context of [runtimeCtx, { ...runtimeCtx, isDesktop: true }, { ...runtimeCtx, isMobile: true }]) {

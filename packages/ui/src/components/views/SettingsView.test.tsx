@@ -52,7 +52,7 @@ afterEach(async () => {
   container.remove();
 });
 
-test('SettingsView does not render behavior navigation item and excludes retired BehaviorPage', async () => {
+test('SettingsView renders the restored Behavior page in the agent navigation group', async () => {
   await act(async () => {
     root.render(
       <RuntimeAPIContext.Provider value={{} as import('@/lib/api/types').RuntimeAPIs}>
@@ -62,12 +62,11 @@ test('SettingsView does not render behavior navigation item and excludes retired
       </RuntimeAPIContext.Provider>
     );
   });
-  // Verify navigation buttons do not contain Behavior
   const buttonElements = Array.from(container.querySelectorAll('button'));
   const navTexts = buttonElements.map((b) => b.textContent?.trim() || '');
 
-  expect(navTexts.some((text) => text.toLowerCase() === 'behavior')).toBe(false);
-  expect(container.querySelector('[data-page="behavior"]')).toBeNull();
+  // Behavior is restored next to OMP for global and project AGENTS.md rules.
+  expect(navTexts.some((text) => text === 'Behavior')).toBe(true);
 
   // Verify OMP, Agents, Commands, MCP are present in navigation
   expect(navTexts.some((text) => text === 'OMP')).toBe(true);

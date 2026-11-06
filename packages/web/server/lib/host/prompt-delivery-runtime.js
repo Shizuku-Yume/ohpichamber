@@ -32,6 +32,8 @@ export function createHostPromptDeliveryRuntime({
 
   scheduledTasksRuntime,
   sessionRuntime,
+  /** Optional: `() => PromptContext[]` of the opt-in behavior instructions. */
+  behaviorPromptSource,
 }) {
   if (!resolveSessionScope) throw new TypeError('prompt delivery requires resolveSessionScope');
   if (!routingRuntime?.resolveAutoSelection) throw new TypeError('prompt delivery requires routing runtime');
@@ -72,6 +74,10 @@ export function createHostPromptDeliveryRuntime({
     if (scheduledTask) metadata.scheduledTask = scheduledTask;
     if (deliveryReceiptId) metadata.deliveryReceiptId = deliveryReceiptId;
     if (Object.keys(metadata).length > 0) context.push({ kind: 'context', text: knowledge.text || '', metadata });
+    // Behavior text is opt-in and resolves to an empty array when nothing is
+    // set, so a default/unset profile adds no context and no bytes.
+    const behaviorContext = await behaviorPromptSource?.();
+    if (behaviorContext?.length) context.push(...behaviorContext);
     return PromptRequestSchema.parse({ input: { ...parsed.input, context }, options });
   };
 

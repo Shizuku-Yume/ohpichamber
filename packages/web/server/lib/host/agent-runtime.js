@@ -27,10 +27,15 @@ const sameScope = (left, right) => left.projectId === right.projectId
   && left.workspaceId === right.workspaceId && left.agentDirectoryId === right.agentDirectoryId
   && left.cwd === right.cwd && left.agentDirectory === right.agentDirectory;
 
-export {
+import {
   ensureAgentRuntimeSymlinks,
   resolveWebAgentRuntime,
 } from '../../../scripts/standalone-loader.mjs';
+
+export {
+  ensureAgentRuntimeSymlinks,
+  resolveWebAgentRuntime,
+};
 
 /** Node admission and machine policy around the separate, SDK-owning Bun service. */
 export function createHostAgentRuntime({

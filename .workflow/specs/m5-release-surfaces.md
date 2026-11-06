@@ -1,6 +1,6 @@
 # M5: Packaging adaptation, OpenCode build removal, and runtime bundling
 
-**Status:** in progress
+**Status:** done
 **Priority:** high
 **Integration branch:** m5-release-surfaces/integration
 

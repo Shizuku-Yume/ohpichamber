@@ -129,6 +129,8 @@ test('applying plugin changes only calls the native apply after the confirmation
   await settle();
 
   expect(applies).toBe(0);
+  // The confirmation dialog mounts asynchronously; wait for its portal rather than one tick.
+  await waitFor(() => document.querySelector('[data-slot="dialog-content"]') !== null);
   const dialog = document.querySelector('[data-slot="dialog-content"]');
   if (!dialog) throw new Error('Missing apply confirmation dialog');
 

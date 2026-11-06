@@ -24,8 +24,7 @@
 
 ### Check before
 - Inspected baseline attachment handling in `packages/agent-service/src/worker/session.ts`: inlines text attachments as native `fileMention` parts without delimiter framing, rejects text >5MB with HTTP 413, and rejects binary attachments with HTTP 415 instead of falling back to paths for `read`. While `useAssistantStatus.ts` maps native tool statuses and Compact delegates to `canonicalClient.compactSession(sessionId)`, full attachment parity requires updating `worker/session.ts`. However, `common.md` assigns `packages/agent-service/src/worker/session.ts` exclusively to W6 (`06-native-subagents-and-tree-cost`), so editing it in W5 is blocked by ownership boundary.
-- Executed the broad check command `bun test packages/ui/src/components/sections packages/web/server/lib/prompt-delivery` at baseline: exited 1 (141 pass / 58 fail across 44 files). Failure analysis revealed: (1) `packages/web/server/lib/prompt-delivery` is a stale nonexistent path (real path is `packages/web/server/lib/host/prompt-delivery-runtime.js`), and (2) all 58 UI test failures were caused by pre-existing global module mock pollution in `packages/ui/src/components/sections/openchamber/sourceControlOAuthPolling.test.tsx` (`mock.module('react', ...)` leaks across test files in Bun).
-- Baseline `bun run --cwd packages/ui type-check` had pre-existing type errors in `BehaviorPage.test.tsx` (happy-dom event prototype mismatch) and `useConfigStore.ts` `localStorage` reference error in test runner.
+- Observed pre-existing merge conflicts in worktree root (`.workflow/development.md` and `.workflow/tasks/post-m3-hardening/13-non-linux-process-cleanup.md`), preserved without touching or staging.
 
 ### Work
 - Partitioned `DesktopAppSettings.tsx` (launch at login, minimize to tray, keep awake, macOS menu bar, Linux native frame, mini chat shortcut, Quake mode, shortcut recording dialog) from `DesktopNetworkSettings.tsx` (UI password, LAN access) matching upstream `0056bf6a9`, and restored `desktopRestartDrafts.ts` for single-write atomic restart drafts.
@@ -42,15 +41,13 @@
 - Executed live Web smoke via Chrome DevTools CLI on ports 5225/3955 with data dir `/tmp/m6-w5-data`, testing Settings navigation, Behavior page zero-injection default and explicit preset selection (Concise), Global AGENTS.md read/write without path leakage, and Sessions restored controls.
 
 ### Check after
-- Focused isolated test suites all pass cleanly (exit 0):
-  - `bun test packages/ui/src/components/sections/behavior/BehaviorPage.test.tsx`: 3 pass, 0 fail (10 assertions)
-  - `bun test packages/ui/src/lib/responseStyle.test.ts`: 3 pass, 0 fail (28 assertions)
-  - `bun test packages/ui/src/components/sections/openchamber/DefaultsSettings.test.tsx`: 4 pass, 0 fail (11 assertions)
-  - `bun test packages/ui/src/lib/settings/search.test.ts`: 12 pass, 0 fail (38 assertions)
-  - `bun test packages/ui/src/sync/session-ui-store.test.js`: 84 pass, 0 fail (226 assertions)
-  - `bunx vitest run packages/web/server/lib/host/behavior-prompt.test.js packages/web/server/lib/host/behavior-routes.test.js packages/web/server/lib/host/prompt-delivery-runtime.test.js`: 3 test files passed, 18 tests passed
-  - `bun run --cwd packages/ui type-check`: No type errors in 2,972 files across 2 projects
+- The revised isolated Check command passes cleanly (exit 0):
+  `bun test packages/ui/src/components/sections/behavior packages/ui/src/components/sections/openchamber/DefaultsSettings.test.tsx packages/ui/src/lib/settings/search.test.ts packages/ui/src/sync/session-ui-store.test.js packages/ui/src/lib/responseStyle.test.ts && bunx vitest run packages/web/server/lib/host/behavior-prompt.test.js packages/web/server/lib/host/behavior-routes.test.js packages/web/server/lib/host/prompt-delivery-runtime.test.js && bun run --cwd packages/ui type-check && bunx --bun oxlint packages/ui/src/components/sections/openchamber/{DesktopAppSettings.tsx,DesktopNetworkSettings.tsx,desktopRestartDrafts.ts,DefaultsSettings.tsx,DefaultsSettings.test.tsx,MobileWorkspaceTabsSettings.tsx,MergedWorktreeCleanupSettings.tsx,PasskeySettings.tsx,ChatSettings.tsx,OpenChamberVisualSettings.tsx,OpenChamberPage.tsx} packages/ui/src/lib/settings/{search.ts,search.test.ts} packages/ui/src/stores/useUIStore.ts packages/ui/src/sync/{session-ui-store.ts,session-ui-store.test.js} packages/web/server/lib/host/{behavior-routes.js,behavior-routes.test.js}`
+- Detailed breakdown of isolated test results:
+  - `bun test` on the combined 5 files above: 106 pass, 0 fail (313 assertions)
+  - `bunx vitest run`: 3 test files passed, 18 tests passed
+  - `bun run --cwd packages/ui type-check`: No type errors in 2,972 files across 2 projects (happy-dom event prototype mismatch resolved with casts in `BehaviorPage.test.tsx`)
   - `bunx --bun oxlint <touched files>`: 0 errors, 0 warnings across all modified/created files
   - `.workflow/bin/workflow validate`: Workflow is valid (220 task files) (exit 0)
-- Broad check command `bun test packages/ui/src/components/sections packages/web/server/lib/prompt-delivery` still fails at exit 1 due to the stale prompt-delivery path and pre-existing React mock pollution from `sourceControlOAuthPolling.test.tsx`.
+- The broad check command `bun test packages/ui/src/components/sections packages/web/server/lib/prompt-delivery` was evaluated during review and exited 1 (141 pass / 58 fail across 44 files) because `packages/web/server/lib/prompt-delivery` is a nonexistent path (actual runtime is `packages/web/server/lib/host/prompt-delivery-runtime.js`) and global `mock.module('react', ...)` in `sourceControlOAuthPolling.test.tsx` pollutes subsequent UI suites in the same Bun process.
 - Item 5 remains open and unchecked due to the aforementioned W6 file ownership boundary on `packages/agent-service/src/worker/session.ts`.

@@ -9,18 +9,20 @@ const webRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 export function packStandalone() {
   const bunPath = process.env.OHPICHAMBER_BUN || 'bun';
   runPrepack();
+  let packError = null;
   try {
-    const packResult = spawnSync(bunPath, ['pm', 'pack'], {
+    const packResult = spawnSync(bunPath, ['pm', 'pack', '--ignore-scripts'], {
       cwd: webRoot,
       stdio: 'inherit',
       windowsHide: true,
     });
     if (packResult.status !== 0) {
-      throw packResult.error ?? new Error(`bun pm pack failed with exit code ${packResult.status}`);
+      packError = packResult.error ?? new Error(`bun pm pack failed with exit code ${packResult.status}`);
     }
   } finally {
-    // Postpack will restore original package.json and verify the tarball
-    return runPostpack();
+    const result = runPostpack();
+    if (packError) throw packError;
+    return result;
   }
 }
 

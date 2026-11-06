@@ -34,7 +34,9 @@
     "@clack/prompts": "^1.1.0",
     "@gitbeaker/rest": "43.8.0",
     "@octokit/rest": "^22.0.1",
-    "@openchamber/sdk": "^3.0.0",
+    "@openchamber/agent-contract": "workspace:*",
+    "@openchamber/agent-service": "workspace:*",
+    "@openchamber/sdk": "workspace:*",
     "@simplewebauthn/server": "13.3.3",
     "bun-pty": "0.5.1",
     "compression": "^1.8.1",
@@ -112,8 +114,5 @@
     "scripts/standalone-loader.mjs",
     "package.json",
     "README.md"
-  ],
-  "bundleDependencies": [
-    "@openchamber/sdk"
   ]
 }

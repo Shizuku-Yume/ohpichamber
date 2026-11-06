@@ -61,6 +61,11 @@ export function ensureAgentRuntimeSymlinks(root) {
     if (!fs.existsSync(serviceDest) && fs.existsSync(serviceTarget)) {
       fs.symlinkSync(path.relative(webNm, serviceTarget), serviceDest, 'dir');
     }
+    const sdkDest = path.join(webNm, 'sdk');
+    const sdkTarget = path.join(targetWebRoot, 'resources', 'standalone-sdk');
+    if (!fs.existsSync(sdkDest) && fs.existsSync(sdkTarget)) {
+      fs.symlinkSync(path.relative(webNm, sdkTarget), sdkDest, 'dir');
+    }
   } catch {
     // best effort if node_modules is read-only
   }
@@ -128,20 +133,23 @@ export async function resolve(specifier, context, nextResolve) {
         return { format: 'module', shortCircuit: true, url: pathToFileURL(candidate).href };
       }
     }
+    const sdkRoot = fs.existsSync(path.join(webRoot, 'resources', 'standalone-sdk', 'dist'))
+      ? path.join(webRoot, 'resources', 'standalone-sdk')
+      : path.join(webRoot, 'node_modules', '@openchamber', 'sdk');
     if (specifier === '@openchamber/sdk') {
-      const candidate = path.join(webRoot, 'node_modules', '@openchamber', 'sdk', 'dist', 'index.js');
+      const candidate = path.join(sdkRoot, 'dist', 'index.js');
       if (fs.existsSync(candidate)) {
         return { format: 'module', shortCircuit: true, url: pathToFileURL(candidate).href };
       }
     }
     if (specifier === '@openchamber/sdk/schemas') {
-      const candidate = path.join(webRoot, 'node_modules', '@openchamber', 'sdk', 'dist', 'schemas.js');
+      const candidate = path.join(sdkRoot, 'dist', 'schemas.js');
       if (fs.existsSync(candidate)) {
         return { format: 'module', shortCircuit: true, url: pathToFileURL(candidate).href };
       }
     }
     if (specifier === '@openchamber/sdk/ui') {
-      const candidate = path.join(webRoot, 'node_modules', '@openchamber', 'sdk', 'dist', 'ui', 'index.js');
+      const candidate = path.join(sdkRoot, 'dist', 'ui', 'index.js');
       if (fs.existsSync(candidate)) {
         return { format: 'module', shortCircuit: true, url: pathToFileURL(candidate).href };
       }

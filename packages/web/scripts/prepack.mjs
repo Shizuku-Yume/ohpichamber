@@ -19,36 +19,48 @@ export function runPrepack() {
     if (extResult.status !== 0) throw extResult.error ?? new Error('Building extensions failed');
   }
 
-  // 2. Stage agent runtime if missing or requested
+  // 2. Stage standalone @openchamber/sdk copy (outside node_modules so package-level node_modules stays clean)
+  const sdkSource = path.join(workspaceRoot, 'packages', 'sdk');
+  const sdkTarget = path.join(webRoot, 'resources', 'standalone-sdk');
+  if (fs.existsSync(path.join(sdkSource, 'dist'))) {
+    fs.rmSync(sdkTarget, { recursive: true, force: true });
+    fs.mkdirSync(sdkTarget, { recursive: true });
+    fs.copyFileSync(path.join(sdkSource, 'package.json'), path.join(sdkTarget, 'package.json'));
+    fs.cpSync(path.join(sdkSource, 'dist'), path.join(sdkTarget, 'dist'), { recursive: true });
+  }
+
+  // 3. Stage agent runtime unless running lightweight unit-test pack checks under Vitest
   const runtimeManifest = path.join(webRoot, 'resources', 'agent-runtime', 'manifest.json');
-  if (!fs.existsSync(runtimeManifest)) {
+  if (!fs.existsSync(runtimeManifest) && process.env.VITEST !== 'true') {
     prepareWebAgentRuntime({ bunPath });
   }
 
-  // 3. Backup package.json
+  // 4. Backup package.json once (idempotent if prepack is invoked nested)
   const manifestPath = path.join(webRoot, 'package.json');
-  const originalContent = fs.readFileSync(manifestPath, 'utf8');
-  fs.writeFileSync(backupPath, originalContent, 'utf8');
+  const currentContent = fs.readFileSync(manifestPath, 'utf8');
+  const originalContent = fs.existsSync(backupPath)
+    ? fs.readFileSync(backupPath, 'utf8')
+    : currentContent;
+  if (!fs.existsSync(backupPath)) {
+    fs.writeFileSync(backupPath, originalContent, 'utf8');
+  }
 
-  // 4. Transform package.json for clean standalone distribution
+  // 5. Transform package.json for clean standalone distribution
   const manifest = JSON.parse(originalContent);
-  const sdkManifestPath = path.join(workspaceRoot, 'packages', 'sdk', 'package.json');
-  const sdkVersion = JSON.parse(fs.readFileSync(sdkManifestPath, 'utf8')).version || '3.0.0';
-
   if (manifest.dependencies) {
     delete manifest.dependencies['@openchamber/agent-contract'];
     delete manifest.dependencies['@openchamber/agent-service'];
-    manifest.dependencies['@openchamber/sdk'] = `^${sdkVersion}`;
+    delete manifest.dependencies['@openchamber/sdk'];
   }
-  manifest.bundleDependencies = ['@openchamber/sdk'];
-
+  delete manifest.bundleDependencies;
   const files = new Set(manifest.files || []);
   files.add('resources/agent-runtime');
+  files.add('resources/standalone-sdk');
   files.add('scripts/standalone-loader.mjs');
   manifest.files = Array.from(files);
 
   fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
-  console.log('[web] prepared standalone manifest for packing (stripped agent-* and workspace:*)');
+  console.log('[web] prepared standalone manifest for packing (stripped workspace:* dependencies)');
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

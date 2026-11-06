@@ -42,7 +42,6 @@ export function runPostpack() {
       fs.rmSync(targetRuntime, { recursive: true, force: true });
       execSync(`cp -a "${sourceRuntime}" "${targetRuntime}"`);
     }
-
     // Re-tar package directory with tar preserving symlinks and permissions
     execSync(`tar -czf "${tarballPath}" package`, { cwd: stagingDir });
 

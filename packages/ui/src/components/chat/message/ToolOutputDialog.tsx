@@ -1028,7 +1028,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                             </div>
                             {(() => {
                                 if (popupToolName === 'grep') {
-                                    return renderGrepOutput(popup.content, isMobile) ?? (
+                                    return renderGrepOutput(popup.content, isMobile, t) ?? (
                                         <WorkerHighlightedCode
                                             language={popup.language || 'text'}
                                             code={popup.content}
@@ -1040,7 +1040,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                 }
 
                                 if (popupToolName === 'glob') {
-                                    return renderGlobOutput(popup.content, isMobile) ?? (
+                                    return renderGlobOutput(popup.content, isMobile, t) ?? (
                                         <WorkerHighlightedCode
                                             language={popup.language || 'text'}
                                             code={popup.content}

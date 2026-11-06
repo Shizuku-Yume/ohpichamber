@@ -195,10 +195,10 @@ export const ComposerModeSelector = React.memo(function ComposerModeSelector({
             <span className="flex min-w-0 items-center gap-1.5">
                 <Icon name={MODE_ICONS[option.value]} className="size-4 flex-shrink-0" />
                 <span className={cn('truncate font-medium', option.value === selectedKind && 'text-foreground')}>{option.label}</span>
-                {option.value === selectedKind ? <Icon name="check" className="ml-auto size-4 flex-shrink-0 text-primary" /> : null}
+                {option.value === selectedKind ? <Icon name="check" className="ms-auto size-4 flex-shrink-0 text-primary" /> : null}
             </span>
-            <span className="pl-[1.375rem] text-start typography-micro text-muted-foreground">{option.description}</span>
-            {option.disabledReason ? <span className="pl-[1.375rem] text-start typography-micro text-muted-foreground">{option.disabledReason}</span> : null}
+            <span className="ps-[1.375rem] text-start typography-micro text-muted-foreground">{option.description}</span>
+            {option.disabledReason ? <span className="ps-[1.375rem] text-start typography-micro text-muted-foreground">{option.disabledReason}</span> : null}
         </span>
     );
 
@@ -221,7 +221,7 @@ export const ComposerModeSelector = React.memo(function ComposerModeSelector({
 
     const searchField = (id: string) => (
         <div className="relative">
-            <Icon name="search" className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Icon name="search" className="absolute start-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
                 id={id}
                 ref={searchRef}
@@ -232,7 +232,7 @@ export const ComposerModeSelector = React.memo(function ComposerModeSelector({
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 onKeyDown={handleSearchKeyDown}
-                className="h-8 pl-8 typography-meta"
+                className="h-8 ps-8 typography-meta"
             />
         </div>
     );

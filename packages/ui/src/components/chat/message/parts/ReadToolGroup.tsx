@@ -3,6 +3,7 @@ import type { ToolCallPart, ToolResultPart } from '@openchamber/agent-contract';
 import { toAbsoluteFilePath, getRelativeFilePath } from '@/lib/path-utils';
 import { useUIStore } from '@/stores/useUIStore';
 import { Icon } from '@/components/icon/Icon';
+import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
 
@@ -26,6 +27,7 @@ interface ReadToolGroupProps {
 export function ReadToolGroup({ items, directory, className, initialExpanded = false }: ReadToolGroupProps) {
   const [isExpanded, setIsExpanded] = React.useState(initialExpanded);
   const runtime = React.useContext(RuntimeAPIContext);
+  const { t } = useI18n();
 
   if (items.length === 0) return null;
 
@@ -88,7 +90,7 @@ export function ReadToolGroup({ items, directory, className, initialExpanded = f
         </span>
 
         <span className="typography-meta font-medium flex-shrink-0" style={{ color: 'var(--tools-title)' }}>
-          {`Read (${items.length})`}
+          {t('chat.readGroup.title', { count: items.length })}
         </span>
 
         {/* Inline preview when collapsed */}
@@ -103,15 +105,15 @@ export function ReadToolGroup({ items, directory, className, initialExpanded = f
         )}
 
         {/* Status badges */}
-        <div className="ml-auto flex items-center gap-1 shrink-0 text-xs">
+        <div className="ms-auto flex items-center gap-1 shrink-0 text-xs">
           {isAnyRunning && (
             <span className="text-muted-foreground text-[11px]">
-              running…
+              {t('chat.readGroup.running')}
             </span>
           )}
           {hasErrors && (
             <span className="text-status-error text-[11px] font-medium">
-              failed
+              {t('chat.readGroup.failed')}
             </span>
           )}
         </div>
@@ -149,7 +151,7 @@ export function ReadToolGroup({ items, directory, className, initialExpanded = f
                 <div className="flex flex-col min-w-0">
                   {/^[a-z][a-z0-9+.-]*:\/\//i.test(item.path) ? (
                     <span
-                      className="text-left font-mono truncate text-muted-foreground select-text"
+                      className="text-start font-mono truncate text-muted-foreground select-text"
                       title={displayPath}
                     >
                       {displayPath}
@@ -158,7 +160,7 @@ export function ReadToolGroup({ items, directory, className, initialExpanded = f
                     <button
                       type="button"
                       onClick={(e) => openFileAtLine(item.path, item.line, e)}
-                      className="text-left font-mono truncate text-foreground/90 hover:text-primary hover:underline cursor-pointer"
+                      className="text-start font-mono truncate text-foreground/90 hover:text-primary hover:underline cursor-pointer"
                       title={`${displayPath}${item.line ? `:${item.line}` : ''}`}
                     >
                       {displayPath}

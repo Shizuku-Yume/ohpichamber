@@ -1,3 +1,4 @@
+import { chatWorkbenchI18n } from './chat-workbench.i18n';
 import { settingsDict } from './en.settings';
 import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { referencePickerI18n } from './reference-picker.i18n';
@@ -41,6 +42,7 @@ import { workerRunsI18n } from './worker-runs.i18n';
 import { subagentHudI18n } from './subagent-hud.i18n';
 import { btwI18n } from './btw.i18n';
 export const dict = {
+  ...chatWorkbenchI18n['en'],
   ...ompSettingsI18n.en,
   ...settingsDict,
   ...linearIssuePickerI18n.en,

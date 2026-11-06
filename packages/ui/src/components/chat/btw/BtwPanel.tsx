@@ -114,7 +114,7 @@ const BtwPanelView: React.FC<{ parentSessionId: string; panel: BtwPanelState; on
                             disabled={promoting}
                             className="!font-normal text-xs"
                         >
-                            <Icon name={promoting ? 'loader-4' : 'git-branch'} className={promoting ? 'mr-1 size-3 animate-spin' : 'mr-1 size-3'} />
+                            <Icon name={promoting ? 'loader-4' : 'git-branch'} className={promoting ? 'me-1 size-3 animate-spin' : 'me-1 size-3'} />
                             {t('chat.btw.promoteToBranch')}
                         </Button>
                         {injectText ? (
@@ -126,7 +126,7 @@ const BtwPanelView: React.FC<{ parentSessionId: string; panel: BtwPanelState; on
                                 disabled={injecting}
                                 className="!font-normal text-xs"
                             >
-                                <Icon name={injecting ? 'loader-4' : 'corner-down-right'} className={injecting ? 'mr-1 size-3 animate-spin' : 'mr-1 size-3'} />
+                                <Icon name={injecting ? 'loader-4' : 'corner-down-right'} className={injecting ? 'me-1 size-3 animate-spin' : 'me-1 size-3'} />
                                 {t('chat.btw.injectSteer')}
                             </Button>
                         ) : null}
@@ -150,7 +150,7 @@ const BtwPanelView: React.FC<{ parentSessionId: string; panel: BtwPanelState; on
                         onClick={() => setCollapsed(!panel.collapsed)}
                         aria-label={panel.collapsed ? t('chat.btw.expandAria') : t('chat.btw.collapseAria')}
                         title={panel.collapsed ? t('chat.btw.expandAria') : t('chat.btw.collapseAria')}
-                        className="flex min-w-0 items-center gap-2 text-left text-muted-foreground transition-colors hover:text-foreground"
+                        className="flex min-w-0 items-center gap-2 text-start text-muted-foreground transition-colors hover:text-foreground"
                     >
                         {panel.ephemeralStatus === 'running'
                             ? <Icon name="loader-4" className="size-3.5 shrink-0 animate-spin" />

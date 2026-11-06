@@ -139,7 +139,7 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
                   y1={circularProgressSize / 2 + (circularProgressRadius - circularProgressStroke / 2 - 0.5) * Math.sin((thresholdPercent / 100) * 2 * Math.PI)}
                   x2={circularProgressSize / 2 + (circularProgressRadius + circularProgressStroke / 2 + 0.5) * Math.cos((thresholdPercent / 100) * 2 * Math.PI)}
                   y2={circularProgressSize / 2 + (circularProgressRadius + circularProgressStroke / 2 + 0.5) * Math.sin((thresholdPercent / 100) * 2 * Math.PI)}
-                  stroke="var(--status-warning, #f59e0b)"
+                  stroke="var(--status-warning)"
                   strokeWidth={1.5}
                   data-testid="compaction-threshold-tick"
                 />
@@ -150,7 +150,7 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
                   y1={circularProgressSize / 2 + (circularProgressRadius - circularProgressStroke / 2 - 0.5) * Math.sin((speculationPercent / 100) * 2 * Math.PI)}
                   x2={circularProgressSize / 2 + (circularProgressRadius + circularProgressStroke / 2 + 0.5) * Math.cos((speculationPercent / 100) * 2 * Math.PI)}
                   y2={circularProgressSize / 2 + (circularProgressRadius + circularProgressStroke / 2 + 0.5) * Math.sin((speculationPercent / 100) * 2 * Math.PI)}
-                  stroke="var(--accent, #0ea5e9)"
+                  stroke="var(--accent)"
                   strokeWidth={1.5}
                   data-testid="speculation-threshold-tick"
                 />

@@ -11,7 +11,7 @@ export const TodoCard: React.FC<{ phases: TodoPhase[] }> = React.memo(({ phases 
         <ul className="mt-1 space-y-0.5">
           {phase.tasks.map((task) => (
             <li key={`${phase.name}:${task.content}`} data-status={task.status} aria-label={`${task.status}: ${task.content}`} className="flex items-start gap-2 typography-meta text-muted-foreground">
-              <span aria-hidden="true" className={cn('mt-1 size-1.5 shrink-0 rounded-full', task.status === 'completed' ? 'bg-green-500' : task.status === 'blocked' ? 'bg-red-500' : 'bg-muted-foreground')} />
+              <span aria-hidden="true" className={cn('mt-1 size-1.5 shrink-0 rounded-full', task.status === 'completed' ? 'bg-status-success' : task.status === 'blocked' ? 'bg-status-error' : 'bg-muted-foreground')} />
               <span className={cn(task.status === 'completed' && 'line-through opacity-70')}>{task.content}</span>
             </li>
           ))}

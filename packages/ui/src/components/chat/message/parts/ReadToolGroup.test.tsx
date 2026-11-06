@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import React from 'react';
 import { renderToString } from 'react-dom/server';
+import { I18nProvider } from '@/lib/i18n';
 import { ReadToolGroup, type ReadToolGroupItem } from './ReadToolGroup';
 
 describe('ReadToolGroup component', () => {
@@ -20,7 +21,7 @@ describe('ReadToolGroup component', () => {
       },
     ];
 
-    const html = renderToString(<ReadToolGroup items={items} directory="/repo" />);
+    const html = renderToString(<I18nProvider><ReadToolGroup items={items} directory="/repo" /></I18nProvider>);
     expect(html).toContain('data-read-tool-group');
     expect(html).toContain('Read (2)');
     expect(html).toContain('src/a.ts');
@@ -43,7 +44,7 @@ describe('ReadToolGroup component', () => {
       },
     ];
 
-    const html = renderToString(<ReadToolGroup items={items} directory="/repo" initialExpanded />);
+    const html = renderToString(<I18nProvider><ReadToolGroup items={items} directory="/repo" initialExpanded /></I18nProvider>);
     expect(html).toContain('Read (2)');
     expect(html).toContain('failed');
     expect(html).toContain('proc://bg_1');

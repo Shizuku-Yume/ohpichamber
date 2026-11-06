@@ -110,7 +110,7 @@ export const CleanseStatusBoard: React.FC<CleanseStatusBoardProps> = ({
                   key={file}
                   className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted text-[10px] text-foreground font-mono"
                 >
-                  <Icon name="file" className="size-2.5 text-primary" />
+                  <Icon name="file" className="size-2.5 text-muted-foreground" />
                   {file}
                 </span>
               ))

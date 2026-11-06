@@ -150,7 +150,7 @@ export function FormFieldControl({
                                 key={`${optionIndex}:${option.label}`}
                                 onClick={toggle}
                                 className={cn(
-                                    'w-full px-1.5 py-1 text-left rounded transition-colors hover:bg-interactive-hover/30',
+                                    'w-full px-1.5 py-1 text-start rounded transition-colors hover:bg-interactive-hover/30',
                                     selected ? 'bg-interactive-selection/20' : null,
                                     isResponding ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer',
                                 )}
@@ -178,12 +178,12 @@ export function FormFieldControl({
                                     ) : null}
                                 </div>
                                 {option.description ? (
-                                    <div className="typography-micro break-words pl-[22px] text-muted-foreground">
+                                    <div className="typography-micro break-words ps-[22px] text-muted-foreground">
                                         {option.description}
                                     </div>
                                 ) : null}
                                 {option.preview ? (
-                                    <div className="pl-[22px] pt-0.5">
+                                    <div className="ps-[22px] pt-0.5">
                                         <FormMarkdown content={option.preview} size="micro" className="text-muted-foreground" />
                                     </div>
                                 ) : null}
@@ -196,7 +196,7 @@ export function FormFieldControl({
                         onClick={() => onChange(setAskCustom(question, answer, !answer.custom))}
                         disabled={isResponding}
                         className={cn(
-                            'w-full px-1.5 py-1 text-left rounded transition-colors hover:bg-interactive-hover/30',
+                            'w-full px-1.5 py-1 text-start rounded transition-colors hover:bg-interactive-hover/30',
                             answer.custom ? 'bg-interactive-selection/20' : null,
                             isResponding ? 'opacity-60 cursor-not-allowed' : null,
                         )}
@@ -217,7 +217,7 @@ export function FormFieldControl({
                         </div>
                     </button>
                     {answer.custom ? (
-                        <div className="pl-6 pr-1 pt-0.5">
+                        <div className="ps-6 pe-1 pt-0.5">
                             {customTextarea}
                         </div>
                     ) : null}

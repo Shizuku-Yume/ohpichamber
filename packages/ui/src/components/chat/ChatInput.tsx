@@ -523,7 +523,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                 if (cancelled) return;
                 const enabled = settings.settings.find(s => s.id === 'composer.predictions')?.value === true;
                 if (enabled && messageRef.current.length === 0) {
-                    setGhostPrediction('What should we do next?');
+                    setGhostPrediction(t('chat.chatInput.ghostPrediction'));
                 }
             } catch {
                 // Prediction unavailable or error
@@ -533,7 +533,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             cancelled = true;
             clearTimeout(timer);
         };
-    }, [currentSessionId, isBtwActive, message.length]);
+    }, [currentSessionId, isBtwActive, message.length, t]);
     const inputMode = isBtwActive ? 'normal' : storedInputMode;
     const activeRuntimeKey = getRuntimeKey();
     const isNewChatDraft = useSessionUIStore((s) => (
@@ -4270,8 +4270,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                                 : undefined}
                         >
                             {ghostPrediction && message === '' && (
-                                <div className="pointer-events-none absolute left-3 top-3 text-xs text-muted-foreground/50 font-mono italic select-none" data-testid="ghost-prediction">
-                                    {ghostPrediction} <kbd className="text-[10px] uppercase font-sans border rounded px-1 ml-1 opacity-70">Tab</kbd>
+                                <div className="pointer-events-none absolute start-3 top-3 text-xs text-muted-foreground/50 font-mono italic select-none" data-testid="ghost-prediction">
+                                    {ghostPrediction} <kbd className="text-[10px] uppercase font-sans border rounded px-1 ms-1 opacity-70">{t('chat.chatInput.ghostPredictionAcceptKey')}</kbd>
                                 </div>
                             )}
                             <ComposerEditor
@@ -4510,7 +4510,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                 <div className="flex flex-col px-3 pb-4 pt-1">
                     <button
                         type="button"
-                        className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-3 text-left typography-ui-label hover:bg-[var(--interactive-hover)]"
+                        className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-3 text-start typography-ui-label hover:bg-[var(--interactive-hover)]"
                         onClick={() => {
                             // The native file/photo picker takes over next — restoring
                             // the keyboard in between would flash it open and shut.
@@ -4524,7 +4524,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                     </button>
                     <button
                         type="button"
-                        className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-3 text-left typography-ui-label hover:bg-[var(--interactive-hover)]"
+                        className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-3 text-start typography-ui-label hover:bg-[var(--interactive-hover)]"
                         onClick={() => {
                             // Hand-off to the picker: don't sync-restore the
                             // keyboard under the overlay that opens next frame.
@@ -4539,7 +4539,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                     {showLinearPicker ? (
                         <button
                             type="button"
-                            className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-3 text-left typography-ui-label hover:bg-[var(--interactive-hover)]"
+                            className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-3 text-start typography-ui-label hover:bg-[var(--interactive-hover)]"
                             onClick={() => {
                                 mobileShell.skipNextOverlayCloseRestore();
                                 setMobileAttachMenuOpen(false);

@@ -50,16 +50,6 @@ An entry leaves this file in one of two ways:
 - **Solution:** add Host-owned pin state (canonical session metadata or a Host store), expose it through the session API, then port the upstream pin store and UI.
 - **Cost:** Host storage and contract change plus sidebar/palette consumers.
 
-## Terminal shutdown test races its own SIGTERM record
-
-- **Where:** `packages/web/server/lib/terminal/shutdown.test.js` ("escalates a noncooperative workload only after the shared deadline"), `packages/web/server/lib/terminal/shutdown.js`
-- **Added:** 2026-10-27
-- **Priority:** worth-doing
-- **Problem:** the test gives a SIGTERM-ignoring child a 350 ms grace while shutdown polls `/proc` in 250 ms steps before SIGKILL. Only about 100 ms is left for the child to be scheduled and append its synchronous `SIGTERM` record, so under machine load the SIGKILL wins and `assert.deepEqual(events, ['ready','SIGTERM'])` fails while the deadline assertion still passes. Reproduced on the pre-refresh tree: at `4d69e299e4` the web suite failed 1 of 3 clean runs with exactly this assertion; at `ce1ba86ffa` the same three-run sample was green, but the root suite flaked on it twice under load, and it passes repeatedly in isolation. `shutdown.js` and its test are unchanged between those commits, so this is a pre-existing timing race, not a refresh regression.
-- **Impact:** an unattended `bun run test` can fail on this test alone, hiding real failures and blocking a gate that would otherwise be green.
-- **Solution:** make the test wait for the recorded SIGTERM with its own bounded deadline (poll the events file for up to a second) before asserting, or raise the fixture's grace to at least 1000 ms so the 250 ms polling has slack. Keep the production grace and escalation semantics.
-- **Cost:** test-only change; no production behavior.
-
 ## Workspace session listing failure on transient supervisor errors, in-flight commands, or removed worktrees
 
 - **Where:** `packages/agent-service/src/sessions/registry.ts` (`list`, line 218; `runtime`, line 209), `packages/web/server/lib/host/agent-scope-runtime.js` (workspace catalog and `validateDirectoryPath`), `packages/web/server/lib/openchamber-sessions/routes.js` (`list`, lines 216, 235-237; archive/listing projection), `packages/ui/src/stores/useGlobalSessionsStore.ts` (line 742), `packages/ui/src/components/session/sidebar/list/useSidebarGroupStatus.ts` (line 62), `packages/ui/src/components/session/sidebar/projects/SessionGroupSection.tsx` (line 943), and `packages/ui/src/components/views/ArchiveView.tsx`.

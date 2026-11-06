@@ -20,6 +20,7 @@ import type {
   UsageStats, UsageToolsResponse,
   WebSearchConfigState, WebSearchMutationResult,
   PluginCatalogState, PluginMutationResult, PluginDoctorResult, PluginMarketplaceState,
+  PluginUpdateCheckResult, PluginUpgradePreviewResult,
 } from '@openchamber/agent-contract';
 import { HostStreamingPromptRequestSchema, WorkerBootstrapSchema, WorkerOperationSchema } from '../protocol.ts';
 import type { WorkerBootstrap, WorkerInfo, WorkerPolicyRequest, WorkerPolicyResult } from '../protocol.ts';
@@ -86,6 +87,7 @@ type ServiceResponse =
   | MCPConfigurationState | MCPConnectionTestResult | MCPWorkspaceReconnectResult | MCPSecretWriteResult
   | SkillsCatalogState | SkillsApplyResult | SkillExpandResult | SkillInstallResult
   | PluginCatalogState | PluginMutationResult | PluginDoctorResult | PluginMarketplaceState
+  | PluginUpdateCheckResult | PluginUpgradePreviewResult
   | ModelCatalog | ProviderCatalog | AgentCatalog
   | ProviderMutationResult | ModelMutationResult | ProviderCredentialMutationResult | AgentMutationResult
   | ProviderAccounts | ProviderOAuthMethods | ProviderOAuthResult | ProviderModelDiscoveryResult | ProviderConfigurationRead

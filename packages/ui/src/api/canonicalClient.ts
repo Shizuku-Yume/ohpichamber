@@ -92,11 +92,19 @@ export class CanonicalClient {
       request(`/api/agent/v1/workspaces/${id(workspaceId)}/plugins/uninstall`, scoped(C.PluginMutationResultSchema, result => result.workspaceId === workspaceId), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.PluginUninstallRequestSchema, input) }),
     configure: (workspaceId: string, input: C.PluginConfigureRequest): Promise<C.PluginMutationResult> =>
       request(`/api/agent/v1/workspaces/${id(workspaceId)}/plugins/${id(input.target.name)}`, scoped(C.PluginMutationResultSchema, result => result.workspaceId === workspaceId), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.PluginConfigureRequestSchema, input) }),
-    update: (workspaceId: string, input: C.PluginUninstallRequest): Promise<C.PluginMutationResult> =>
-      request(`/api/agent/v1/workspaces/${id(workspaceId)}/plugins/${id(input.target.name)}/update`, scoped(C.PluginMutationResultSchema, result => result.workspaceId === workspaceId), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.PluginUninstallRequestSchema, input) }),
+    update: (workspaceId: string, input: C.PluginUpgradeRequest): Promise<C.PluginMutationResult> =>
+      request(`/api/agent/v1/workspaces/${id(workspaceId)}/plugins/${id(input.target.name)}/update`, scoped(C.PluginMutationResultSchema, result => result.workspaceId === workspaceId), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.PluginUpgradeRequestSchema, input) }),
     apply: (workspaceId: string, input: C.PluginApplyRequest): Promise<C.PluginMutationResult> =>
       request(`/api/agent/v1/workspaces/${id(workspaceId)}/plugins/apply`, scoped(C.PluginMutationResultSchema, result => result.workspaceId === workspaceId), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.PluginApplyRequestSchema, input) }),
     marketplace: (workspaceId: string): Promise<C.PluginMarketplaceState> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/plugins/marketplace`, scoped(C.PluginMarketplaceStateSchema, result => result.workspaceId === workspaceId)),
+    manageMarketplace: (workspaceId: string, input: C.PluginMarketplaceManageRequest): Promise<C.PluginMutationResult> =>
+      request(`/api/agent/v1/workspaces/${id(workspaceId)}/plugins/marketplace/manage`, scoped(C.PluginMutationResultSchema, result => result.workspaceId === workspaceId), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.PluginMarketplaceManageRequestSchema, input) }),
+    checkUpdates: (workspaceId: string): Promise<C.PluginUpdateCheckResult> =>
+      request(`/api/agent/v1/workspaces/${id(workspaceId)}/plugins/marketplace/updates`, scoped(C.PluginUpdateCheckResultSchema, result => result.workspaceId === workspaceId)),
+    previewUpgrade: (workspaceId: string, input: C.PluginPreviewUpgradeRequest): Promise<C.PluginUpgradePreviewResult> =>
+      request(`/api/agent/v1/workspaces/${id(workspaceId)}/plugins/marketplace/preview-upgrade`, scoped(C.PluginUpgradePreviewResultSchema, result => result.workspaceId === workspaceId), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.PluginPreviewUpgradeRequestSchema, input) }),
+    upgradeAll: (workspaceId: string, input: C.PluginUpgradeAllRequest): Promise<C.PluginMutationResult> =>
+      request(`/api/agent/v1/workspaces/${id(workspaceId)}/plugins/marketplace/upgrade-all`, scoped(C.PluginMutationResultSchema, result => result.workspaceId === workspaceId), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.PluginUpgradeAllRequestSchema, input) }),
     doctor: (workspaceId: string): Promise<C.PluginDoctorResult> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/plugins/doctor`, scoped(C.PluginDoctorResultSchema, result => result.workspaceId === workspaceId)),
     readLocal: (workspaceId: string, extensionId: string): Promise<C.LocalExtensionSource> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/plugins/local/${id(extensionId)}`, scoped(C.LocalExtensionSourceSchema, result => result.workspaceId === workspaceId && result.extension.extensionId === extensionId)),
     writeLocal: (workspaceId: string, input: C.LocalExtensionWriteRequest): Promise<C.PluginMutationResult> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/plugins/local/${id(input.extensionId)}`, scoped(C.PluginMutationResultSchema, result => result.workspaceId === workspaceId), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.LocalExtensionWriteRequestSchema, input) }),
@@ -242,7 +250,7 @@ export class CanonicalClient {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(parsed),
     }).then((result) => {
       if (result.sessionId !== sessionId || result.branch.branchId !== parsed.branchId || BigInt(result.branch.branchVersion) <= BigInt(parsed.branchVersion)
-          || (parsed.action === 'revert' ? result.branch.revert?.messageId !== parsed.messageId : result.branch.revert !== undefined))
+        || (parsed.action === 'revert' ? result.branch.revert?.messageId !== parsed.messageId : result.branch.revert !== undefined))
         throw new Error('Branch response does not match the requested branch owner and selection');
       return result;
     });
@@ -573,7 +581,7 @@ export class CanonicalClient {
     void (async () => {
       let response: Response | undefined;
       let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
-      const cancel = () => { void reader?.cancel().catch(() => {}); };
+      const cancel = () => { void reader?.cancel().catch(() => { }); };
       controller.signal.addEventListener('abort', cancel, { once: true });
       try {
         response = await runtimeFetch(`/api/agent/v1/sessions/${id(sessionId)}/events`, { signal: controller.signal, headers: { Accept: 'text/event-stream', 'Last-Event-ID': cursor } });
@@ -650,10 +658,10 @@ export class CanonicalClient {
       } finally {
         controller.signal.removeEventListener('abort', cancel);
         if (reader) {
-          await reader.cancel().catch(() => {});
+          await reader.cancel().catch(() => { });
           reader.releaseLock();
         } else {
-          await response?.body?.cancel().catch(() => {});
+          await response?.body?.cancel().catch(() => { });
         }
       }
     })();

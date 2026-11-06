@@ -239,3 +239,125 @@ nativeTest('native doctor reports real checks without exposing native profile or
     expect(JSON.stringify(result)).toContain('[native plugin location]');
   } finally { await context.cleanup(); }
 });
+
+const marketplaceCatalog = (name: string, plugins: Array<Record<string, unknown>>) => JSON.stringify({
+  name, owner: { name: 'Test' }, plugins,
+});
+
+nativeTest('marketplace source management reads, adds and removes native registry entries without inventing catalogs', async () => {
+  const context = await fixture();
+  try {
+    const empty = await context.plugins.operation({ type: 'plugins.marketplace' }, '0');
+    if (empty.type !== 'plugins.marketplace') throw new Error('Expected cached marketplace state');
+    expect(empty.result.sources).toEqual([]);
+    expect(empty.result.updates).toEqual([]);
+
+    const sourceRoot = join(context.root, 'source-marketplace');
+    await mkdir(join(sourceRoot, '.omp-plugin'), { recursive: true });
+    await writeFile(join(sourceRoot, '.omp-plugin', 'marketplace.json'), marketplaceCatalog('source-proof', []));
+    await context.plugins.operation({ type: 'plugins.marketplace.manage',
+      request: { action: 'add', expectedRevision: '0', source: sourceRoot } }, '1');
+    const catalog = await context.plugins.read('1');
+    expect(catalog.marketplaceSources).toEqual([expect.objectContaining({
+      name: 'source-proof', sourceType: 'local', sourceUri: sourceRoot })]);
+    expect(catalog.marketplace).toEqual([]);
+
+    const state = await context.plugins.operation({ type: 'plugins.marketplace' }, '1');
+    if (state.type !== 'plugins.marketplace') throw new Error('Expected cached marketplace state');
+    expect(state.result.sources.map(source => source.name)).toEqual(['source-proof']);
+
+    await context.plugins.operation({ type: 'plugins.marketplace.manage',
+      request: { action: 'remove', expectedRevision: '1', name: 'source-proof' } }, '2');
+    expect((await context.plugins.read('2')).marketplaceSources).toEqual([]);
+  } finally { clearPluginRootsAndCaches(); await context.cleanup(); }
+});
+
+nativeTest('marketplace entries expose rich manifest metadata and update checks report from-to pairs per native scope', async () => {
+  const context = await fixture();
+  try {
+    const marketplaceRoot = join(context.root, 'rich-marketplace');
+    await mkdir(join(marketplaceRoot, '.omp-plugin'), { recursive: true });
+    const pluginDirectory = join(marketplaceRoot, 'plugins', 'proof');
+    await mkdir(pluginDirectory, { recursive: true });
+    await writeFile(join(pluginDirectory, 'package.json'), JSON.stringify({ name: '@native-proof/plugin', version: '1.0.0' }));
+    await writeFile(join(marketplaceRoot, '.omp-plugin', 'marketplace.json'), marketplaceCatalog('rich-proof', [{
+      name: 'proof', source: './plugins/proof', version: '1.0.0', description: 'Rich marketplace plugin',
+      author: { name: 'Native Author', email: 'author@example.invalid' }, homepage: 'https://example.invalid/home',
+      repository: 'https://example.invalid/repo', license: 'MIT', keywords: ['native', 'proof'], category: 'tools',
+      commands: ['proof-command'], agents: ['proof-agent'], mcpServers: { proof: { command: 'proof-server' } },
+      lspServers: ['./lsp.json'],
+    }]));
+    const manager = new MarketplaceManager({ marketplacesRegistryPath: getMarketplacesRegistryPath(), installedRegistryPath: getInstalledPluginsRegistryPath(),
+      projectInstalledRegistryPath: await resolveOrDefaultProjectRegistryPath(context.cwd), marketplacesCacheDir: getMarketplacesCacheDir(),
+      pluginsCacheDir: getPluginsCacheDir(), clearPluginRootsCaches: undefined });
+    await manager.addMarketplace(marketplaceRoot);
+
+    const catalog = await context.plugins.read('0');
+    expect(catalog.marketplaceSources.map(source => source.name)).toEqual(['rich-proof']);
+    expect(catalog.marketplace[0]).toMatchObject({
+      marketplace: 'rich-proof', name: 'proof', version: '1.0.0',
+      details: {
+        author: { name: 'Native Author', email: 'author@example.invalid' },
+        license: 'MIT', keywords: ['native', 'proof'], category: 'tools',
+        commands: ['proof-command'], agents: ['proof-agent'], lspServers: ['./lsp.json'],
+      },
+    });
+
+    await context.plugins.operation({ type: 'plugins.install', request: { expectedRevision: '0',
+      source: { kind: 'marketplace', name: 'proof', marketplace: 'rich-proof', scope: 'user' } } }, '1');
+    await writeFile(join(marketplaceRoot, '.omp-plugin', 'marketplace.json'), marketplaceCatalog('rich-proof', [{
+      name: 'proof', source: './plugins/proof', version: '2.0.0', description: 'Rich marketplace plugin' }]));
+    await manager.updateMarketplace('rich-proof');
+
+    const checked = await context.plugins.operation({ type: 'plugins.marketplace.checkUpdates' }, '1');
+    if (checked.type !== 'plugins.updateCheck') throw new Error('Expected native update check');
+    expect(checked.result.updates).toEqual([{ pluginId: 'proof@rich-proof', scope: 'global',
+      target: { kind: 'marketplace', name: 'proof', marketplace: 'rich-proof', scope: 'user' }, from: '1.0.0', to: '2.0.0' }]);
+    expect((await context.plugins.read('1')).availableUpdates).toEqual(checked.result.updates);
+  } finally { clearPluginRootsAndCaches(); await context.cleanup(); }
+});
+
+nativeTest('batch upgrade installs only outdated marketplace plugins and previews report the native change', async () => {
+  const context = await fixture();
+  try {
+    const marketplaceRoot = join(context.root, 'upgrade-marketplace');
+    await mkdir(join(marketplaceRoot, '.omp-plugin'), { recursive: true });
+    for (const name of ['current', 'outdated']) {
+      const pluginDirectory = join(marketplaceRoot, 'plugins', name);
+      await mkdir(pluginDirectory, { recursive: true });
+      await writeFile(join(pluginDirectory, 'package.json'), JSON.stringify({ name: `@native-proof/${name}`, version: '1.0.0' }));
+    }
+    await writeFile(join(marketplaceRoot, '.omp-plugin', 'marketplace.json'), marketplaceCatalog('upgrade-proof', [
+      { name: 'current', source: './plugins/current', version: '1.0.0', description: 'Current plugin' },
+      { name: 'outdated', source: './plugins/outdated', version: '1.0.0', description: 'Outdated plugin' },
+    ]));
+    const manager = new MarketplaceManager({ marketplacesRegistryPath: getMarketplacesRegistryPath(), installedRegistryPath: getInstalledPluginsRegistryPath(),
+      projectInstalledRegistryPath: await resolveOrDefaultProjectRegistryPath(context.cwd), marketplacesCacheDir: getMarketplacesCacheDir(),
+      pluginsCacheDir: getPluginsCacheDir(), clearPluginRootsCaches: undefined });
+    await manager.addMarketplace(marketplaceRoot);
+    for (const [index, name] of ['current', 'outdated'].entries()) {
+      await context.plugins.operation({ type: 'plugins.install', request: { expectedRevision: index === 0 ? '0' : '1',
+        source: { kind: 'marketplace', name, marketplace: 'upgrade-proof', scope: 'user' } } }, String(index + 1));
+    }
+    await writeFile(join(marketplaceRoot, 'plugins', 'outdated', 'package.json'), JSON.stringify({ name: '@native-proof/outdated', version: '2.0.0' }));
+    await writeFile(join(marketplaceRoot, '.omp-plugin', 'marketplace.json'), marketplaceCatalog('upgrade-proof', [
+      { name: 'current', source: './plugins/current', version: '1.0.0', description: 'Current plugin' },
+      { name: 'outdated', source: './plugins/outdated', version: '2.0.0', description: 'Outdated plugin' },
+    ]));
+    await manager.updateMarketplace('upgrade-proof');
+
+    const preview = await context.plugins.operation({ type: 'plugins.marketplace.previewUpgrade',
+      request: { target: { kind: 'marketplace', name: 'outdated', marketplace: 'upgrade-proof', scope: 'user' } } }, '2');
+    if (preview.type !== 'plugins.upgradePreview') throw new Error('Expected native upgrade preview');
+    expect(preview.result.preview).toEqual([{ pluginId: 'outdated@upgrade-proof', scope: 'global',
+      target: { kind: 'marketplace', name: 'outdated', marketplace: 'upgrade-proof', scope: 'user' },
+      from: '1.0.0', to: '2.0.0', change: 'upgrade' }]);
+
+    const before = (await context.plugins.read('2')).plugins.map(plugin => [plugin.name, plugin.version]);
+    expect(before).toEqual([['current', '1.0.0'], ['outdated', '1.0.0']]);
+    await context.plugins.operation({ type: 'plugins.marketplace.upgradeAll', request: { expectedRevision: '2' } }, '3');
+    const after = (await context.plugins.read('3')).plugins.map(plugin => [plugin.name, plugin.version]);
+    expect(after).toEqual([['current', '1.0.0'], ['outdated', '2.0.0']]);
+    expect((await context.plugins.read('3')).availableUpdates).toEqual([]);
+  } finally { clearPluginRootsAndCaches(); await context.cleanup(); }
+});

@@ -14,7 +14,8 @@ const plugin: InstalledPluginEntry = {
     { key: 'token', description: '', type: 'string', secret: true, configured: true, globalConfigured: true, overridden: false },
   ],
 };
-const catalog = { workspaceId: 'workspace', revision: '1', plugins: [plugin], marketplace: [], localExtensions: [], workers: [] };
+const catalog = { workspaceId: 'workspace', revision: '1', plugins: [plugin], marketplace: [], localExtensions: [], workers: [],
+  marketplaceSources: [], availableUpdates: [] };
 
 describe('native plugin contracts', () => {
   test('package installation has no fictitious workspace scope; marketplace scope is native', () => {

@@ -58,6 +58,8 @@ const emptyCatalog: PluginCatalogState = {
   marketplace: [],
   localExtensions: [],
   workers: [],
+  marketplaceSources: [],
+  availableUpdates: [],
 };
 
 installTestDomGlobals();

@@ -5,11 +5,17 @@ import { z } from 'zod';
 import { getAgentDir, getConfigRootDir, getPluginsDir, getPluginsLockfile, getPluginsPackageJson, getPluginsNodeModules, getProjectPluginOverridesPath, normalizePathForComparison } from '@oh-my-pi/pi-utils';
 import { PluginManager, validateSetting } from '@oh-my-pi/pi-coding-agent/extensibility/plugins/manager';
 import type { InstalledPlugin } from '@oh-my-pi/pi-coding-agent/extensibility/plugins/types';
-import { MarketplaceManager, buildPluginId, parsePluginId, getInstalledPluginsRegistryPath, getMarketplacesRegistryPath,
-  getMarketplacesCacheDir, getPluginsCacheDir } from '@oh-my-pi/pi-coding-agent/extensibility/plugins/marketplace';
+import type { MarketplacePluginEntry } from '@oh-my-pi/pi-coding-agent/extensibility/plugins/marketplace';
+import {
+  MarketplaceManager, buildPluginId, parsePluginId, getInstalledPluginsRegistryPath, getMarketplacesRegistryPath,
+  getMarketplacesCacheDir, getPluginsCacheDir
+} from '@oh-my-pi/pi-coding-agent/extensibility/plugins/marketplace';
 import { clearPluginRootsAndCaches, resolveOrDefaultProjectRegistryPath } from '@oh-my-pi/pi-coding-agent/discovery/helpers';
-import { JsonObjectSchema, type JsonObject, type InstalledPluginEntry, type PluginTarget, type PluginSettingDefinition,
-  type CatalogWorkerIdentity, type PluginCatalogState, type MarketplaceEntry } from '@openchamber/agent-contract';
+import {
+  MarketplacePluginDetailsSchema, JsonObjectSchema, type JsonObject, type InstalledPluginEntry, type PluginTarget, type PluginSettingDefinition,
+  type CatalogWorkerIdentity, type PluginCatalogState, type MarketplaceEntry, type MarketplaceSource,
+  type PluginUpdateCheckEntry, type PluginUpgradePreviewEntry, type MarketplacePluginDetails
+} from '@openchamber/agent-contract';
 import type { NativePluginOperation, NativePluginResult } from '../catalogs/plugins.ts';
 import { ProjectionError } from '../projection/journal.ts';
 import { PluginLocalSource } from './plugin-local-source.ts';
@@ -24,8 +30,37 @@ const NativePluginConfigSchema = z.object({
   settings: z.record(z.string(), JsonObjectSchema).optional(),
 });
 const NativePluginPackageSchema = z.object({ dependencies: z.record(z.string(), z.string()).optional() });
-const NativePluginOverridesSchema = z.object({ disabled: z.array(z.string()).optional(),
-  features: z.record(z.string(), z.array(z.string())).optional(), settings: z.record(z.string(), JsonObjectSchema).optional() });
+const NativePluginOverridesSchema = z.object({
+  disabled: z.array(z.string()).optional(),
+  features: z.record(z.string(), z.array(z.string())).optional(), settings: z.record(z.string(), JsonObjectSchema).optional()
+});
+
+/** Catalog entries also carry install sources; only manifest metadata becomes public detail. */
+function marketplaceDetails(entry: MarketplacePluginEntry): { details?: MarketplacePluginDetails } {
+  const details: MarketplacePluginDetails = {};
+  if (entry.author !== undefined) details.author = entry.author;
+  if (entry.homepage !== undefined) details.homepage = entry.homepage;
+  if (entry.repository !== undefined) details.repository = entry.repository;
+  if (entry.license !== undefined) details.license = entry.license;
+  if (entry.keywords !== undefined) details.keywords = entry.keywords;
+  if (entry.category !== undefined) details.category = entry.category;
+  if (entry.tags !== undefined) details.tags = entry.tags;
+  if (entry.commands !== undefined) details.commands = entry.commands;
+  if (entry.agents !== undefined) details.agents = entry.agents;
+  // Manifest maps are native `Record<string, unknown>`; the contract admits JSON only.
+  for (const key of ['hooks', 'mcpServers', 'lspServers', 'dapAdapters'] as const) {
+    const value = entry[key];
+    if (value !== undefined) Object.assign(details, { [key]: jsonCapability(value) });
+  }
+  if (Object.keys(details).length === 0) return {};
+  return { details: MarketplacePluginDetailsSchema.parse(details) };
+}
+
+function jsonCapability(value: string | string[] | Record<string, unknown>): string | string[] | JsonObject {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) return value.map(item => String(item));
+  return JsonObjectSchema.parse(value);
+}
 
 function pluginId(target: PluginTarget): string {
   return `plugin-${createHash('sha256').update(JSON.stringify(target)).digest('hex')}`;
@@ -53,11 +88,13 @@ export class NativePlugins {
     return {
       runtime, overrides, projectRuntime,
       packages: new PluginManager(this.context.cwd),
-      marketplace: new MarketplaceManager({ marketplacesRegistryPath: getMarketplacesRegistryPath(),
+      marketplace: new MarketplaceManager({
+        marketplacesRegistryPath: getMarketplacesRegistryPath(),
         installedRegistryPath: getInstalledPluginsRegistryPath(),
         projectInstalledRegistryPath: projectRegistry,
         marketplacesCacheDir: getMarketplacesCacheDir(), pluginsCacheDir: getPluginsCacheDir(),
-        clearPluginRootsCache: clearPluginRootsAndCaches }),
+        clearPluginRootsCache: clearPluginRootsAndCaches
+      }),
     };
   }
 
@@ -68,8 +105,10 @@ export class NativePlugins {
     const globalSettings: JsonObject = {};
     const settingDefinitions: PluginSettingDefinition[] = [];
     for (const [key, schema] of Object.entries(native.manifest.settings ?? {})) {
-      const base = { key, description: schema.description ?? '', secret: schema.secret === true, configured: Object.hasOwn(configured, key),
-        globalConfigured: Object.hasOwn(globalConfigured, key), overridden: Object.hasOwn(projectConfigured, key) };
+      const base = {
+        key, description: schema.description ?? '', secret: schema.secret === true, configured: Object.hasOwn(configured, key),
+        globalConfigured: Object.hasOwn(globalConfigured, key), overridden: Object.hasOwn(projectConfigured, key)
+      };
       switch (schema.type) {
         case 'string': case 'boolean': settingDefinitions.push({ ...base, type: schema.type }); break;
         case 'enum': settingDefinitions.push({ ...base, type: 'enum', values: schema.values }); break;
@@ -84,9 +123,11 @@ export class NativePlugins {
       const globalValue = globalConfigured[definition.key];
       if (!definition.secret && globalValue !== undefined) Object.defineProperty(globalSettings, definition.key, { value: globalValue, enumerable: true, writable: true, configurable: true });
     }
-    return { id: pluginId(target), target, name: target.name, version: native.version,
+    return {
+      id: pluginId(target), target, name: target.name, version: native.version,
       description: native.manifest.description ?? '', scope: target.kind === 'package' || target.scope === 'user' ? 'global' : 'workspace',
-      enabled: native.enabled, enabledFeatures: native.enabledFeatures, settingsScope: 'global', globalSettings, settings, settingDefinitions };
+      enabled: native.enabled, enabledFeatures: native.enabledFeatures, settingsScope: 'global', globalSettings, settings, settingDefinitions
+    };
   }
 
   async read(revision: string): Promise<PluginCatalogState> {
@@ -110,21 +151,31 @@ export class NativePlugins {
       } else plugin.enabled = entry.enabled !== false && native.enabled;
       plugins.push(plugin);
     }
-    return { workspaceId: this.context.worker.workspaceId, revision, plugins, marketplace: await this.marketplaceEntries(marketplace),
-      localExtensions: (await this.local.list()).map(extensionId => ({ extensionId, relativePath: `.omp/extensions/${extensionId}` })), workers: [] };
+    const sources = await this.marketplaceSources(marketplace);
+    return {
+      workspaceId: this.context.worker.workspaceId, revision, plugins, marketplace: await this.marketplaceEntries(marketplace),
+      marketplaceSources: sources, availableUpdates: await this.availableUpdates(marketplace),
+      localExtensions: (await this.local.list()).map(extensionId => ({ extensionId, relativePath: `.omp/extensions/${extensionId}` })), workers: []
+    };
   }
 
   async operation(operation: NativePluginOperation, revision: string): Promise<NativePluginResult> {
     const workspaceId = this.context.worker.workspaceId;
     if (operation.type === 'plugins.owner') {
       const project = await resolveOrDefaultProjectRegistryPath(this.context.cwd);
-      return { type: 'plugins.owner', rootPath: normalizePathForComparison(getPluginsDir()),
+      return {
+        type: 'plugins.owner', rootPath: normalizePathForComparison(getPluginsDir()),
         localSourcePath: normalizePathForComparison(join(this.context.cwd, '.omp', 'extensions')),
-        projectRegistryPath: project === undefined ? null : normalizePathForComparison(project) };
+        projectRegistryPath: project === undefined ? null : normalizePathForComparison(project)
+      };
     }
     if (operation.type === 'plugins.read') return { type: 'plugins.catalog', catalog: await this.read(revision) };
-    if (operation.type === 'plugins.local.read') return { type: 'plugins.local', result: { workspaceId, revision,
-      extension: { extensionId: operation.extensionId, relativePath: `.omp/extensions/${operation.extensionId}` }, content: await this.local.read(operation.extensionId) } };
+    if (operation.type === 'plugins.local.read') return {
+      type: 'plugins.local', result: {
+        workspaceId, revision,
+        extension: { extensionId: operation.extensionId, relativePath: `.omp/extensions/${operation.extensionId}` }, content: await this.local.read(operation.extensionId)
+      }
+    };
     if (operation.type === 'plugins.local.write') {
       await this.read(revision);
       await this.local.write(operation.request.extensionId, operation.request.content);
@@ -135,9 +186,15 @@ export class NativePlugins {
       await this.local.delete(operation.request.extensionId);
       return { type: 'plugins.catalog', catalog: await this.read(revision) };
     }
-    if (operation.type === 'plugins.apply') return { type: 'plugins.applied', result: { worker: this.context.worker,
-      outcome: 'failed', appliedRevision: null, error: { code: 'RELOAD_REQUIRED',
-        detail: 'The native SDK cannot reload extension modules in an active session. Open a new session to load committed plugins.', retryable: false } } };
+    if (operation.type === 'plugins.apply') return {
+      type: 'plugins.applied', result: {
+        worker: this.context.worker,
+        outcome: 'failed', appliedRevision: null, error: {
+          code: 'RELOAD_REQUIRED',
+          detail: 'The native SDK cannot reload extension modules in an active session. Open a new session to load committed plugins.', retryable: false
+        }
+      }
+    };
     const { packages, marketplace } = await this.managers();
     if (operation.type === 'plugins.doctor') {
       const privateRoots = [getPluginsDir(), getConfigRootDir(), getAgentDir(), this.context.cwd, dirname(getMarketplacesRegistryPath()), getMarketplacesCacheDir(), getPluginsCacheDir()].sort((left, right) => right.length - left.length);
@@ -148,9 +205,39 @@ export class NativePlugins {
       });
       return { type: 'plugins.doctor', result: { workspaceId, revision, checks } };
     }
-    if (operation.type === 'plugins.marketplace') {
-      await marketplace.updateAllMarketplaces();
-      return { type: 'plugins.marketplace', result: { workspaceId, revision, entries: await this.marketplaceEntries(marketplace) } };
+    if (operation.type === 'plugins.marketplace') return {
+      type: 'plugins.marketplace', result: {
+        workspaceId, revision, entries: await this.marketplaceEntries(marketplace),
+        sources: await this.marketplaceSources(marketplace), updates: await this.availableUpdates(marketplace)
+      }
+    };
+    if (operation.type === 'plugins.marketplace.checkUpdates') return {
+      type: 'plugins.updateCheck',
+      result: { workspaceId, revision, updates: await this.availableUpdates(marketplace) }
+    };
+    if (operation.type === 'plugins.marketplace.previewUpgrade') {
+      return { type: 'plugins.upgradePreview', result: { workspaceId, revision, preview: await this.previewUpgrades(marketplace, operation.request.target) } };
+    }
+    try {
+      switch (operation.type) {
+        case 'plugins.marketplace.manage': {
+          const request = operation.request;
+          if (request.action === 'add') await marketplace.addMarketplace(request.source);
+          else if (request.action === 'remove') {
+            if ((await marketplace.listMarketplaces()).some(source => source.name === request.name)) await marketplace.removeMarketplace(request.name);
+          } else if (request.name === undefined) await marketplace.updateAllMarketplaces();
+          else await marketplace.updateMarketplace(request.name);
+          break;
+        }
+        case 'plugins.marketplace.upgradeAll': await marketplace.upgradeAllPlugins(); break;
+      }
+    } catch (error) {
+      if (error instanceof ProjectionError) throw error;
+      throw new ProjectionError(400, 'INVALID_REQUEST', 'Native marketplace operation failed. Check the source, name and network access.');
+    }
+    if (operation.type === 'plugins.marketplace.manage' || operation.type === 'plugins.marketplace.upgradeAll') {
+      clearPluginRootsAndCaches();
+      return { type: 'plugins.catalog', catalog: await this.read(revision) };
     }
     try {
       if ('request' in operation && 'target' in operation.request) {
@@ -198,7 +285,7 @@ export class NativePlugins {
           }
           const projectRegistry = await resolveOrDefaultProjectRegistryPath(this.context.cwd);
           const paths = [getPluginsLockfile(), getProjectPluginOverridesPath(this.context.cwd), getInstalledPluginsRegistryPath(),
-            ...(projectRegistry === undefined ? [] : [projectRegistry, join(dirname(projectRegistry), 'omp-plugins.lock.json')])];
+          ...(projectRegistry === undefined ? [] : [projectRegistry, join(dirname(projectRegistry), 'omp-plugins.lock.json')])];
           const snapshots = new Map<string, string | null>();
           for (const path of paths) {
             try { snapshots.set(path, await readFile(path, 'utf8')); }
@@ -243,11 +330,63 @@ export class NativePlugins {
   private async marketplaceEntries(manager: MarketplaceManager): Promise<MarketplaceEntry[]> {
     const entries: MarketplaceEntry[] = [];
     for (const registry of await manager.listMarketplaces()) {
-      for (const entry of await manager.listAvailablePlugins(registry.name)) entries.push({ marketplace: registry.name,
-        name: entry.name, description: entry.description ?? '', version: entry.version ?? null });
+      for (const entry of await manager.listAvailablePlugins(registry.name)) {
+        entries.push({
+          marketplace: registry.name, name: entry.name, description: entry.description ?? '', version: entry.version ?? null,
+          ...marketplaceDetails(entry),
+        });
+      }
     }
     return entries;
   }
+  /** Registry entries are the configured catalog sources; reading them never fetches. */
+  private async marketplaceSources(manager: MarketplaceManager): Promise<MarketplaceSource[]> {
+    return (await manager.listMarketplaces()).map(source => ({
+      name: source.name, sourceType: source.sourceType, sourceUri: source.sourceUri,
+      catalogPath: source.catalogPath, addedAt: source.addedAt, updatedAt: source.updatedAt
+    }));
+  }
+  /** Cached-registry update check; the native manager compares installed versions to catalog versions. */
+  private async availableUpdates(manager: MarketplaceManager): Promise<PluginUpdateCheckEntry[]> {
+    const updates: PluginUpdateCheckEntry[] = [];
+    for (const update of await manager.checkForUpdates()) {
+      const parsed = parsePluginId(update.pluginId);
+      if (!parsed) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Native marketplace plugin identity is invalid');
+      updates.push({
+        pluginId: update.pluginId, scope: update.scope === 'user' ? 'global' : 'workspace',
+        target: { kind: 'marketplace', name: parsed.name, marketplace: parsed.marketplace, scope: update.scope },
+        from: update.from, to: update.to
+      });
+    }
+    return updates;
+  }
+  /** Native preview validates the real upgrade, so a rejected plugin is a failure, not an empty preview. */
+  private async previewUpgrades(manager: MarketplaceManager, target: PluginTarget | undefined): Promise<PluginUpgradePreviewEntry[]> {
+    const rows: PluginUpgradePreviewEntry[] = [];
+    if (target !== undefined) {
+      if (target.kind !== 'marketplace') throw new ProjectionError(400, 'INVALID_REQUEST', 'Native marketplace previews require a marketplace plugin target');
+      const pluginId = buildPluginId(target.name, target.marketplace);
+      for (const row of await manager.previewUpgradePlugin(pluginId, target.scope)) {
+        rows.push({
+          pluginId, scope: row.scope === 'user' ? 'global' : 'workspace',
+          target: { kind: 'marketplace', name: target.name, marketplace: target.marketplace, scope: row.scope },
+          from: row.from ?? null, to: row.to ?? null, change: row.change ?? null
+        });
+      }
+      return rows;
+    }
+    for (const row of await manager.previewUpgradeAllPlugins()) {
+      const parsed = parsePluginId(row.pluginId);
+      if (!parsed) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Native marketplace plugin identity is invalid');
+      rows.push({
+        pluginId: row.pluginId, scope: row.scope === 'user' ? 'global' : 'workspace',
+        target: { kind: 'marketplace', name: parsed.name, marketplace: parsed.marketplace, scope: row.scope },
+        from: row.from, to: row.to, change: 'upgrade'
+      });
+    }
+    return rows;
+  }
+
   private async atomicConfiguration(path: string, source: string): Promise<void> {
     await mkdir(dirname(path), { recursive: true, mode: 0o700 });
     const temporary = `${path}.${randomUUID()}.tmp`;

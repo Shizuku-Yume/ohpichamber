@@ -12,6 +12,7 @@ import { cfgSearxngEndpoint } from '@oh-my-pi/pi-coding-agent/web/settings';
 import { cfgProvidersWebSearchTimeoutSeconds } from '@oh-my-pi/pi-coding-agent/session/settings';
 import { cfgCompactionKeepRecentTokens } from '@oh-my-pi/pi-coding-agent/session/context-settings';
 import { cfgGoalContinuationModes } from '@oh-my-pi/pi-coding-agent/goals/settings';
+import { cfgRecapIdleSeconds } from '@oh-my-pi/pi-coding-agent/modes/settings';
 import { resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { createAgentSession } from '@oh-my-pi/pi-coding-agent/sdk';
 import type { AgentSession } from '@oh-my-pi/pi-coding-agent/session/agent-session';
@@ -116,15 +117,21 @@ function completion(tool?: { name: string; input: JsonObject; id: string } | str
  const finish = { ...chunk, choices: [{ index: 0, delta: {}, finish_reason: tool ? 'tool_calls' : 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 3, total_tokens: 13 } };
  return new Response(`data: ${JSON.stringify(chunk)}\n\ndata: ${JSON.stringify(finish)}\n\ndata: [DONE]\n\n`, { headers: { 'content-type': 'text/event-stream' } });
 }
-function waitForGoal(worker: WorkerSession, predicate: () => boolean): Promise<void> {
+function waitForGoal(worker: WorkerSession, predicate: () => boolean, timeoutMs?: number): Promise<void> {
  if (predicate()) return Promise.resolve();
- return new Promise<void>(resolve => {
-  const unsubscribe = worker.session.subscribe(() => {
-   if (!predicate()) return;
-   unsubscribe();
-   resolve();
-  });
+ const pending = Promise.withResolvers<void>();
+ let unsubscribe: () => void = () => {};
+ const timer = timeoutMs === undefined ? undefined : setTimeout(() => {
+  unsubscribe();
+  pending.reject(new Error('Timed out waiting for the worker predicate'));
+ }, timeoutMs);
+ unsubscribe = worker.session.subscribe(() => {
+  if (!predicate()) return;
+  unsubscribe();
+  if (timer !== undefined) clearTimeout(timer);
+  pending.resolve();
  });
+ return pending.promise;
 }
 
 async function fixture({ respond, invoke, machineCommands = [], onSubagent = () => { }, denyWebSearch = false, denyLsp = false, planModel = false, reasoningEfforts }: {
@@ -312,6 +319,31 @@ async function searxngLoopback(): Promise<{ url: string; requests: string[]; sto
  });
  return { url: `http://127.0.0.1:${server.port}`, requests, stop: () => server.stop(true) };
 }
+
+test('an idle stretch publishes a canonical recap event once OMP records it', async () => {
+ const harness = await fixture({ respond: () => completion() });
+ try {
+  const model = harness.worker.session.modelRegistry.find('native-fixture', 'native-model');
+  if (!model) throw new Error('Native fixture model is required');
+  await harness.worker.session.setModelTemporary(model);
+  // The production default is four minutes; this test only wants the wiring.
+  harness.worker.session.settings.writeValue(cfgRecapIdleSeconds, 1, 'override');
+  await harness.worker.operation({ type: 'prompt', runId: 'recap-run', request: prompt('Reply with the fixture marker.') });
+  // Idle maintenance runs off a timer rather than a session event, so poll for
+  // the published recap instead of waiting on the session subscription.
+  const deadline = Date.now() + 15000;
+  while (!harness.events.some(input => input.event.type === 'session.recap')) {
+   if (Date.now() > deadline) throw new Error('The idle recap was never published');
+   await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  const emitted = harness.events.find(input => input.event.type === 'session.recap');
+  if (!emitted || emitted.event.type !== 'session.recap') throw new Error('A canonical recap was not published');
+  expect(emitted.transient).toBe(true);
+  expect(emitted.event.recap.trim().length).toBeGreaterThan(0);
+  // Transient means it never becomes a durable transcript entry.
+  expect(harness.journal.snapshot().messages.some(message => message.role === 'recap')).toBe(false);
+ } finally { await harness.close(); }
+}, 30000);
 
 test('Agent Hub reads answer from the worker without a live subagent', async () => {
  const harness = await fixture({ respond: () => completion() });

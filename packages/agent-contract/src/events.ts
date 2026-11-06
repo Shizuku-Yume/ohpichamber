@@ -65,6 +65,13 @@ export const AdvisorYieldedEventSchema = DataEventEnvelopeSchema.extend({
   notes: z.array(AdvisorNoteSchema),
 });
 export type AdvisorYieldedEvent = z.infer<typeof AdvisorYieldedEventSchema>;
+/** A native idle recap, published once OMP's `IdleMaintenance` records it. */
+export const SessionRecapEventSchema = DataEventEnvelopeSchema.extend({
+  type: z.literal('session.recap'),
+  recap: z.string().min(1),
+  createdAt: TimestampSchema,
+});
+export type SessionRecapEvent = z.infer<typeof SessionRecapEventSchema>;
 export const CleanseProgressEventSchema = DataEventEnvelopeSchema.extend({
   type: z.literal('cleanse.progress'),
   activeCheckers: z.array(z.string()),
@@ -126,6 +133,7 @@ export const CanonicalEventSchema = z.discriminatedUnion('type', [
   }),
   DataEventEnvelopeSchema.extend({ type: z.literal('message.updated'), messageId: EntityIdSchema, providerId: z.string().min(1).optional(), modelId: z.string().min(1).optional(), usage: TokenUsageSchema.optional() }),
   SubagentUpdatedEventSchema,
+  SessionRecapEventSchema,
   AdvisorYieldedEventSchema,
   CleanseProgressEventSchema,
 ]);

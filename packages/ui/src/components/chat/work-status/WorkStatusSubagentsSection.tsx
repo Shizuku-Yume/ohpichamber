@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useSessionWorkflowRuns } from '@/lib/workflows/store';
 import { useGlobalSessionStatusStore } from '@/sync/global-session-status';
 import { Icon } from '@/components/icon/Icon';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { AgentHubModal } from '@/components/chat/AgentHubModal';
 import { toast } from '@/components/ui';
 import { canonicalClient } from '@/api/canonicalClient';
 import { useSubagentsStore } from '@/stores/useSubagentsStore';
@@ -40,6 +41,7 @@ const SubagentDuration: React.FC<{ sessionId: string }> = ({ sessionId }) => {
  */
 export const WorkStatusSubagentsSection: React.FC<Props> = ({ sessionId, directory }) => {
   const { t } = useI18n();
+  const [hubOpen, setHubOpen] = useState(false);
   const isMobile = useUIStore((state) => state.isMobile);
 
   const liveSessions = useAllLiveSessions();
@@ -175,6 +177,11 @@ export const WorkStatusSubagentsSection: React.FC<Props> = ({ sessionId, directo
       icon="ai-agent"
       defaultExpanded
       summary={busyChildren > 0 ? `${busyChildren}/${children.length}` : children.length}
+      action={(
+        <Button variant="ghost" size="xs" onClick={() => setHubOpen(true)} title={t('chat.workStatus.section.subagents')}>
+          <Icon name="apps" className="size-3" />
+        </Button>
+      )}
     >
       <div className="max-h-56 overflow-y-auto">
         {rows.map(({ child, blocked, asked, busy, failed, done }) => {
@@ -292,6 +299,7 @@ export const WorkStatusSubagentsSection: React.FC<Props> = ({ sessionId, directo
           );
         })}
       </div>
+      <AgentHubModal open={hubOpen} onOpenChange={setHubOpen} sessionId={sessionId} />
     </WorkStatusCollapsibleSection>
   );
 };

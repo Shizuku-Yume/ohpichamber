@@ -210,7 +210,7 @@ export function installRuntimeRun(state: State, run: Run, requestBaseline: RunCo
 
 /** Every canonical variant shares the same sequence gate. Never apply across a gap. */
 export function applyDirectoryEvent(state: State, event: CanonicalEvent): DirectoryEventResult {
- if (event.type === 'btw.delta' || event.type === 'btw.completed' || event.type === 'subagent.updated') return { kind: 'applied', state };
+ if (event.type === 'btw.delta' || event.type === 'btw.completed' || event.type === 'subagent.updated' || event.type === 'session.recap') return { kind: 'applied', state };
  if (event.type === 'cleanse.progress') {
   const id = event.sessionId;
   const existing = state.cleanse?.[id];

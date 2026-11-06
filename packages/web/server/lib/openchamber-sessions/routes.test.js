@@ -184,6 +184,63 @@ describe('canonical session route contracts', () => {
     expect(calls.filter(path => path.endsWith('/reopen'))).toHaveLength(0);
   });
 
+  it('merges and announces workbench metadata patches and broadcasts each committed change', async () => {
+    const sessionMetadataStore = createMemorySessionMetadataStore();
+    const broadcastGlobalUiEvent = vi.fn();
+    const { app } = createApp({ routes, sessionMetadataStore, broadcastGlobalUiEvent });
+
+    await request(app).patch('/api/openchamber/sessions/ses_admitted/metadata')
+      .send({
+        changes: {
+          openchamber: {
+            pinned: { at: 1_700 }, workbench: { lastIdleAt: 9, lastTurnOutcome: 'completed' },
+            turn: { endedAt: 9, durationMs: 4_000 },
+          }
+        }
+      })
+      .expect(200);
+    // A view advances one field; the pin and the finished turn survive.
+    const viewed = await request(app).patch('/api/openchamber/sessions/ses_admitted/metadata')
+      .send({ changes: { openchamber: { workbench: { viewedAt: 9 } } } })
+      .expect(200);
+    expect(viewed.body).toEqual({
+      sessionId: 'ses_admitted', revision: '2',
+      metadata: {
+        openchamber: {
+          pinned: { at: 1_700 }, workbench: { lastIdleAt: 9, viewedAt: 9, lastTurnOutcome: 'completed' },
+          turn: { endedAt: 9, durationMs: 4_000 },
+        }
+      },
+    });
+    // Unpinning deletes the pin alone; the run record is untouched.
+    const unpinned = await request(app).patch('/api/openchamber/sessions/ses_admitted/metadata')
+      .send({ changes: { openchamber: { pinned: null } } })
+      .expect(200);
+    expect(unpinned.body.metadata).toEqual({
+      openchamber: {
+        workbench: { lastIdleAt: 9, viewedAt: 9, lastTurnOutcome: 'completed' }, turn: { endedAt: 9, durationMs: 4_000 },
+      }
+    });
+    expect(broadcastGlobalUiEvent).toHaveBeenCalledTimes(3);
+    expect(broadcastGlobalUiEvent).toHaveBeenLastCalledWith({
+      type: 'openchamber:session-metadata',
+      properties: { sessionId: 'ses_admitted', sessionID: 'ses_admitted', metadata: unpinned.body.metadata, revision: '3' },
+    });
+  });
+
+  it('rejects malformed workbench metadata without writing or announcing', async () => {
+    const sessionMetadataStore = createMemorySessionMetadataStore();
+    const broadcastGlobalUiEvent = vi.fn();
+    const { app } = createApp({ routes, sessionMetadataStore, broadcastGlobalUiEvent });
+    for (const changes of [
+      { openchamber: { pinned: {} } },
+      { openchamber: { workbench: { lastTurnOutcome: 'aborted' } } },
+      { openchamber: { turn: { endedAt: 1, durationMs: -1 } } },
+    ]) await request(app).patch('/api/openchamber/sessions/ses_admitted/metadata').send({ changes }).expect(400);
+    expect(sessionMetadataStore.entries.size).toBe(0);
+    expect(broadcastGlobalUiEvent).not.toHaveBeenCalled();
+  });
+
   describe('session links the UI owns', () => {
     const agentEntry = {
       id: 'acme/app#7', number: 7, title: 'Add search', url: 'https://github.com/acme/app/pull/7', kind: 'pull', linkedAt: 5,

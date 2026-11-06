@@ -194,3 +194,49 @@ describe('Host metadata conversion and admission boundaries', () => {
     await store.close();
   });
 });
+
+describe('workbench metadata persistence', () => {
+  it('round-trips a pin, the unread watermark and the last turn', async () => {
+    const store = createSessionMetadataStore({ dataDir: makeDataDir() });
+    await store.setSessionMetadata('ses_a', {
+      openchamber: {
+        pinned: { at: 1_700_000_000_000 },
+        workbench: { lastIdleAt: 1_700_000_000_000, lastTurnOutcome: 'completed' },
+        turn: { endedAt: 1_700_000_000_000, durationMs: 4_250 },
+      },
+    });
+    await expect(store.get('ses_a')).resolves.toEqual({
+      openchamber: {
+        pinned: { at: 1_700_000_000_000 },
+        workbench: { lastIdleAt: 1_700_000_000_000, lastTurnOutcome: 'completed' },
+        turn: { endedAt: 1_700_000_000_000, durationMs: 4_250 },
+      },
+    });
+    await store.close();
+  });
+
+  it('advances the view watermark and clears a pin without disturbing the turn', async () => {
+    const store = createSessionMetadataStore({ dataDir: makeDataDir() });
+    await store.setSessionMetadata('ses_a', {
+      openchamber: { pinned: { at: 1 }, workbench: { lastIdleAt: 9 }, turn: { endedAt: 9, durationMs: 500 } },
+    });
+    await expect(store.setSessionMetadata('ses_a', { openchamber: { workbench: { viewedAt: 9 }, pinned: null } }))
+      .resolves.toEqual({
+        metadata: { openchamber: { workbench: { lastIdleAt: 9, viewedAt: 9 }, turn: { endedAt: 9, durationMs: 500 } } },
+        revision: '2', changed: true,
+      });
+    await store.close();
+  });
+
+  it('keeps the three workbench keys when importing selected legacy projections', async () => {
+    const store = createSessionMetadataStore({ dataDir: makeDataDir() });
+    await store.importOperationalSessions([{
+      id: 'ses_legacy',
+      metadata: { openchamber: { pinned: { at: 2 }, workbench: { lastIdleAt: 3, viewedAt: 3 }, turn: { endedAt: 3, durationMs: 1_000 }, transcript: 'dropped' } },
+    }], 'selected');
+    await expect(store.get('ses_legacy')).resolves.toEqual({
+      openchamber: { pinned: { at: 2 }, workbench: { lastIdleAt: 3, viewedAt: 3 }, turn: { endedAt: 3, durationMs: 1_000 } },
+    });
+    await store.close();
+  });
+});

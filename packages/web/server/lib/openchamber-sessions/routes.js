@@ -94,7 +94,16 @@ const createCanonicalSessionService = (dependencies) => {
     if (scope.workspaceId.startsWith('archive_')) throw new OpenChamberControlError('Deleted-space sessions are permanently read-only', 409, { code: 'SESSION_READ_ONLY', retryable: false });
   };
   const emit = (event) => { try { publishSessionEvent?.(event); } catch {} try { broadcastGlobalUiEvent?.(event); } catch {} };
-  const metadata = { getState: (id) => sessionMetadataStore.getState(id), set: async (id, patch, directory = '') => persistSessionMetadata ? persistSessionMetadata(id, patch, { directory }) : sessionMetadataStore.setSessionMetadata(id, patch) };
+  const metadata = { getState: (id) => sessionMetadataStore.getState(id), set: async (id, patch, directory = '') => {
+    if (persistSessionMetadata) return persistSessionMetadata(id, patch, { directory });
+    // The fallback owns the store for module tests and compositions without an
+    // injected writer, so it announces the committed merge like that writer.
+    const result = await sessionMetadataStore.setSessionMetadata(id, patch);
+    if (result.changed) {
+      try { broadcastGlobalUiEvent?.({ type: 'openchamber:session-metadata', properties: { sessionId: id, sessionID: id, metadata: result.metadata, revision: result.revision } }); } catch {}
+    }
+    return result;
+  } };
   const withSessionAdmission = async (scope, operation, rootSessionId, work, readOnly = false) => {
     if (!agentScopeStore) throw new OpenChamberControlError('Host session admission authority is unavailable', 503);
     const admission = await agentScopeStore.reserveSessionAdmission(scope.workspaceId, operation, rootSessionId);
@@ -348,7 +357,15 @@ const createCanonicalSessionService = (dependencies) => {
   const archive = async (payload = {}) => { const parsed = parseArchiveRequest(payload); if (!parsed.ok) throw new OpenChamberControlError(parsed.error, 400); const scopes = await Promise.all(parsed.ids.map((id) => hostScopeFor(id))); scopes.forEach(assertWritableScope); return archiveStore.archive(parsed.ids, parsed.archivedAt); };
   const unarchive = async (payload = {}) => { const parsed = parseIdBatch(payload); if (!parsed.ok) throw new OpenChamberControlError(parsed.error, 400); const scopes = await Promise.all(parsed.ids.map((id) => hostScopeFor(id))); scopes.forEach(assertWritableScope); return archiveStore.unarchive(parsed.ids); };
   const getMetadata = async (id) => { await hostScopeFor(id); const state = await sessionMetadataStore.getState(id); return SessionMetadataStateSchema.parse({ sessionId: id, revision: state?.revision ?? '0', metadata: state?.metadata ?? null }); };
-  const setMetadata = async (id, payload = {}) => { const scope = await hostScopeFor(id); assertWritableScope(scope); const patch = SessionMetadataPatchSchema.parse(payload); const result = await metadata.set(id, patch.changes, scope.cwd); return SessionMetadataStateSchema.parse({ sessionId: id, revision: result.revision, metadata: result.metadata }); };
+  const setMetadata = async (id, payload = {}) => {
+    const scope = await hostScopeFor(id);
+    assertWritableScope(scope);
+    // A client-supplied shape is invalid input, not a server failure.
+    const parsed = SessionMetadataPatchSchema.safeParse(payload);
+    if (!parsed.success) throw new OpenChamberControlError('Session metadata patch is invalid', 400, { code: 'INVALID_REQUEST' });
+    const result = await metadata.set(id, parsed.data.changes, scope.cwd);
+    return SessionMetadataStateSchema.parse({ sessionId: id, revision: result.revision, metadata: result.metadata });
+  };
   const rename = async (id, payload = {}) => {
     const input = SessionTitleRequestSchema.parse(payload);
     const scope = await hostScopeFor(id);

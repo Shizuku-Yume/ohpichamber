@@ -29,7 +29,9 @@ const metadata = {
     project_context_pins: { notes: ['note_1'], plans: ['plan_1'] },
     context_obligatory_messages: [{ id: 'message_1', createdAt: 1, role: 'user' }], linked_issues: links,
     work: { state: 'done', openedAt: 1, openedBy: 'user', doneAt: 2, suggestDoneAt: null },
-    reviewOffer: { at: 3 }, reviewSessionID: 'session_3', kind: 'review', originalSessionID: 'session_1', multirun,
+    reviewOffer: { at: 3 }, pinned: { at: 4 },
+    workbench: { lastIdleAt: 5, viewedAt: 6, lastTurnOutcome: 'completed' },
+    turn: { endedAt: 5, durationMs: 1_500 }, reviewSessionID: 'session_3', kind: 'review', originalSessionID: 'session_1', multirun,
   },
 };
 
@@ -81,6 +83,7 @@ test('metadata patches support typed null deletion and reject malformed patch va
       folder: null, isPinned: null, color: null, icon: null, notes: null, openchamber: {
         goal: null, assist: null, knowledge_context_delivered: null, context_obligatory_last_compaction_message_id: null,
         project_context_pins: null, context_obligatory_messages: null, linked_issues: null, work: null, reviewOffer: null,
+        pinned: null, workbench: null, turn: null,
         reviewSessionID: null, kind: null, originalSessionID: null, multirun: null,
       },
     }
@@ -108,4 +111,52 @@ test('metadata patches support typed null deletion and reject malformed patch va
       work: { openedAt: null }, reviewOffer: { at: null },
     }
   }).success).toBe(false);
+});
+
+test('workbench metadata pins a session, carries the unread watermark and the last turn', () => {
+  const operational = {
+    pinned: { at: 1_700_000_000_000 },
+    workbench: { lastIdleAt: 1_700_000_000_000, lastTurnOutcome: 'failed' },
+    turn: { endedAt: 1_700_000_000_000, durationMs: 1_500.5 },
+  };
+  expect(SessionMetadataSchema.parse({ openchamber: operational })).toEqual({ openchamber: operational });
+  // The view watermark is only written after the ending it acknowledges.
+  const viewed = { openchamber: { workbench: { lastIdleAt: 9, viewedAt: 9 } } };
+  expect(SessionMetadataSchema.parse(viewed)).toEqual(viewed);
+  // A cancelled turn is an outcome too.
+  const cancelled = { openchamber: { workbench: { lastTurnOutcome: 'cancelled' } } };
+  expect(SessionMetadataSchema.parse(cancelled)).toEqual(cancelled);
+  for (const invalid of [
+    { openchamber: { pinned: { at: -1 } } },
+    { openchamber: { pinned: {} } },
+    { openchamber: { pinned: 1_700 } },
+    { openchamber: { workbench: { lastTurnOutcome: 'aborted' } } },
+    { openchamber: { workbench: { lastIdleAt: 1.5 } } },
+    { openchamber: { workbench: { viewedAt: 'now' } } },
+    { openchamber: { turn: { endedAt: 5 } } },
+    { openchamber: { turn: { endedAt: 5, durationMs: -1 } } },
+    { openchamber: { turn: { durationMs: 5 } } },
+  ]) expect(SessionMetadataSchema.safeParse(invalid).success).toBe(false);
+});
+
+test('workbench patches advance a watermark, replace a pin and delete each field', () => {
+  const patch = {
+    changes: {
+      openchamber: {
+        pinned: { at: 10 },
+        workbench: { viewedAt: 9, lastTurnOutcome: null },
+        turn: { endedAt: 9, durationMs: 2_000 },
+      },
+    },
+  };
+  expect(SessionMetadataPatchSchema.parse(patch)).toEqual(patch);
+  expect(SessionMetadataPatchSchema.parse({ changes: { openchamber: { workbench: { viewedAt: null } } } }))
+    .toEqual({ changes: { openchamber: { workbench: { viewedAt: null } } } });
+  for (const invalid of [
+    { changes: { openchamber: { pinned: { at: 'now' } } } },
+    { changes: { openchamber: { workbench: { lastTurnOutcome: 'aborted' } } } },
+    { changes: { openchamber: { workbench: { unknown: null } } } },
+    { changes: { openchamber: { turn: { endedAt: 1 } } } },
+    { changes: { openchamber: { turn: { endedAt: 1, durationMs: -5 } } } },
+  ]) expect(SessionMetadataPatchSchema.safeParse(invalid).success).toBe(false);
 });

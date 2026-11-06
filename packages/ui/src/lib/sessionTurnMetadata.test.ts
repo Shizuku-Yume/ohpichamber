@@ -34,6 +34,17 @@ describe('getRecordedTurnDurationMs', () => {
     expect(getRecordedTurnDurationMs(session(50_001, recorded))).toBe(2_417_000);
   });
 
+  test('matches turn against workbench.lastIdleAt', () => {
+    const recorded = {
+      openchamber: {
+        workbench: { lastIdleAt: 60_000 },
+        turn: { endedAt: 60_000, durationMs: 1_500_000 },
+      },
+    } as unknown as SessionMetadata;
+    // idle passed to helper is undefined, so readIdleTime must use workbench.lastIdleAt
+    expect(getRecordedTurnDurationMs(session(undefined, recorded))).toBe(1_500_000);
+  });
+
   test("ignores a record left by an older turn", () => {
     const recorded = { openchamber: { turn: { endedAt: 50_000, durationMs: 2_417_000 } } } as unknown as SessionMetadata;
     expect(getRecordedTurnDurationMs(session(90_000, recorded))).toBeUndefined();

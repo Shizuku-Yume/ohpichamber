@@ -12,7 +12,7 @@ import { Icon } from '@/components/icon/Icon';
 import { useWaitingBlink } from '@/hooks/useDurationTicker';
 import { SessionActivityIndicator } from '@/components/session/SessionActivityIndicator';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useSessionUnseenCount } from '@/sync/notification-store';
+import { useSessionUnread } from '@/sync/session-unread';
 import {
   findSwitcherItemAncestorIds,
   useSwitcherItems,
@@ -200,16 +200,16 @@ function SwitcherNode({ item, depth, variant, expandedParents, toggleParent, clo
       />
       {hasChildren && isExpanded
         ? node.children.map((childNode) => (
-            <SwitcherNode
-              key={childNode.session.sessionId}
-              item={{ node: childNode, projectId: item.projectId, groupDirectory: item.groupDirectory, secondaryMeta }}
-              depth={depth + 1}
-              variant={variant}
-              expandedParents={expandedParents}
-              toggleParent={toggleParent}
-              closeDropdown={closeDropdown}
-            />
-          ))
+          <SwitcherNode
+            key={childNode.session.sessionId}
+            item={{ node: childNode, projectId: item.projectId, groupDirectory: item.groupDirectory, secondaryMeta }}
+            depth={depth + 1}
+            variant={variant}
+            expandedParents={expandedParents}
+            toggleParent={toggleParent}
+            closeDropdown={closeDropdown}
+          />
+        ))
         : null}
     </>
   );
@@ -230,18 +230,14 @@ function SwitcherRow({ session, depth, variant, secondaryMeta, hasChildren, isEx
   const { t } = useI18n();
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
   const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
-  const notifyOnSubtasks = useUIStore((state) => state.notifyOnSubtasks);
-
-  const unseenCount = useSessionUnseenCount(session.sessionId);
+  const isUnread = useSessionUnread(session.sessionId);
 
   const isActive = currentSessionId === session.sessionId;
   const sessionTitle = session.title?.trim() || t('sessions.sidebar.session.untitled');
-  const isSubtask = Boolean(session.parentSessionId);
-  const needsAttention = unseenCount > 0 && (!isSubtask || notifyOnSubtasks);
   const turnActivity = useSessionTurnActivity(session.sessionId);
   const runningBlink = useWaitingBlink(turnActivity !== null);
   const isStreaming = turnActivity !== null;
-  const showUnreadDot = !isStreaming && needsAttention && !isActive;
+  const showUnreadDot = !isStreaming && isUnread && !isActive;
 
   const timestamp = session.updatedAt || session.createdAt || Date.now();
   const timeLabel = formatSessionCompactDateLabel(timestamp);

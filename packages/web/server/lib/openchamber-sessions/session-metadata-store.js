@@ -35,6 +35,7 @@ const writeFailure = (error) => error instanceof MetadataCorruptError || error i
 const OPENCHAMBER_KEYS = new Set([
   'goal', 'assist', 'knowledge_context_delivered', 'context_obligatory_last_compaction_message_id',
   'project_context_pins', 'context_obligatory_messages', 'linked_issues', 'work', 'reviewOffer',
+  'pinned', 'workbench', 'turn',
   'reviewSessionID', 'kind', 'originalSessionID', 'multirun',
 ]);
 

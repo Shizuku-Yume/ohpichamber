@@ -6,7 +6,7 @@ import type { I18nKey, I18nParams } from '@/lib/i18n';
 import type { Session } from '@openchamber/agent-contract';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
-import { useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
+import { toggleSessionPin } from '@/sync/session-pins';
 import { useUIStore } from '@/stores/useUIStore';
 import { SessionDirectoryMissingError, setSessionWorkState } from '@/sync/session-actions';
 import { useSessionUIStore } from '@/sync/session-ui-store';
@@ -16,22 +16,22 @@ type Translate = (key: I18nKey, params?: I18nParams) => string;
 
 /** The active sessions by parent, read when an action runs rather than on every render. */
 const childrenOfActiveSessions = (): Map<string, Session[]> => {
-  const children = new Map<string, Session[]>();
-  for (const session of useGlobalSessionsStore.getState().activeSessions) {
-    const parentId = session.parentSessionId;
-    if (!parentId) continue;
-    children.set(parentId, [...(children.get(parentId) ?? []), session]);
-  }
-  return children;
+ const children = new Map<string, Session[]>();
+ for (const session of useGlobalSessionsStore.getState().activeSessions) {
+  const parentId = session.parentSessionId;
+  if (!parentId) continue;
+  children.set(parentId, [...(children.get(parentId) ?? []), session]);
+ }
+ return children;
 };
 
 /** Opens a session from the list: its project becomes the active one and the drawer closes. */
 export const selectMobileSession = (session: Session, projectId: string | null, close: () => void): void => {
-  // Selecting a session always leaves a full-page surface, as on the desktop.
-  useUIStore.getState().closeMainSurfaces();
-  if (projectId) useProjectsStore.getState().setActiveProjectIdOnly(projectId);
-  void useSessionUIStore.getState().setCurrentSession(session.sessionId, getSessionDirectory(session) || null);
-  close();
+ // Selecting a session always leaves a full-page surface, as on the desktop.
+ useUIStore.getState().closeMainSurfaces();
+ if (projectId) useProjectsStore.getState().setActiveProjectIdOnly(projectId);
+ void useSessionUIStore.getState().setCurrentSession(session.sessionId, getSessionDirectory(session) || null);
+ close();
 };
 
 /**
@@ -40,39 +40,35 @@ export const selectMobileSession = (session: Session, projectId: string | null, 
  * another worktree and still belongs to its parent.
  */
 export const runMobileSubtreeAction = (action: SessionSubtreeAction, session: Session, t: Translate): ReturnType<typeof runSessionSubtreeAction> => {
-  const store = useSessionUIStore.getState();
-  return runSessionSubtreeAction(
-    action,
-    session,
-    collectSessionSubtreeIds(session.sessionId, getDescendantIds(childrenOfActiveSessions(), session.sessionId), action === 'delete'),
-    { archiveSession: store.archiveSession, archiveSessions: store.archiveSessions, deleteSession: store.deleteSession, deleteSessions: store.deleteSessions },
-    t,
-  );
+ const store = useSessionUIStore.getState();
+ return runSessionSubtreeAction(
+  action,
+  session,
+  collectSessionSubtreeIds(session.sessionId, getDescendantIds(childrenOfActiveSessions(), session.sessionId), action === 'delete'),
+  { archiveSession: store.archiveSession, archiveSessions: store.archiveSessions, deleteSession: store.deleteSession, deleteSessions: store.deleteSessions },
+  t,
+ );
 };
 
 export const toggleMobileSessionWork = async (session: Session, inWork: boolean, t: Translate): Promise<void> => {
-  try {
-    await setSessionWorkState(session.sessionId, getSessionDirectory(session) || null, inWork ? 'done' : 'open');
-  } catch (error) {
-    toastSessionWorkFailure(error instanceof SessionDirectoryMissingError, () => { void runMobileSubtreeAction('archive', session, t); }, t);
-  }
+ try {
+  await setSessionWorkState(session.sessionId, getSessionDirectory(session) || null, inWork ? 'done' : 'open');
+ } catch (error) {
+  toastSessionWorkFailure(error instanceof SessionDirectoryMissingError, () => { void runMobileSubtreeAction('archive', session, t); }, t);
+ }
 };
 
 export const toggleMobileSessionPin = (session: Session, pinned: boolean, t: Translate): void => {
-  const directory = getSessionDirectory(session);
-  if (!directory) return;
-  try {
-    useSessionPinnedStore.getState().toggle({ directory, sessionId: session.sessionId });
-  } catch {
-    const failedKey = pinned ? 'sessions.sidebar.session.pin.unpinFailed' : 'sessions.sidebar.session.pin.pinFailed';
-    toast.error(t(failedKey));
-  }
+ const directory = getSessionDirectory(session);
+ if (!directory) return;
+ const failedKey = pinned ? 'sessions.sidebar.session.pin.unpinFailed' : 'sessions.sidebar.session.pin.pinFailed';
+ toggleSessionPin({ directory, sessionId: session.sessionId }).catch(() => toast.error(t(failedKey)));
 };
 
 export const renameMobileSession = async (sessionId: string, title: string, t: Translate): Promise<void> => {
-  try {
-    await useSessionUIStore.getState().updateSessionTitle(sessionId, title);
-  } catch {
-    toast.error(t('mobile.sessions.renameError'));
-  }
+ try {
+  await useSessionUIStore.getState().updateSessionTitle(sessionId, title);
+ } catch {
+  toast.error(t('mobile.sessions.renameError'));
+ }
 };

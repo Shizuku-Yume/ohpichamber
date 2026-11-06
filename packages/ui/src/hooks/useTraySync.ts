@@ -11,6 +11,7 @@ import {
   type BlockingPermissionRequest,
 } from '@/sync/global-blocking-requests';
 import { compareSessionsByLifecycleOrder, useSessionOrderingStore } from '@/sync/session-ordering';
+import { isSessionUnread, isSessionUnreadWithError } from '@/sync/session-unread';
 import { useNotificationStore } from '@/sync/notification-store';
 import { useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
 import { respondToPermission } from '@/sync/session-actions';
@@ -314,10 +315,11 @@ const buildSnapshot = (instanceName: string, includeTray: boolean): TraySnapshot
   if (ui.dockBadgeEnabled) {
     for (const session of allSessions) {
       if (!session?.sessionId || session.parentSessionId) continue;
-      let familyUnseen = notif.unseenCount[session.sessionId] ?? 0;
+      const isUnread = isSessionUnread(session);
+      let familyUnseen = isUnread ? 1 : (notif.unseenCount[session.sessionId] ?? 0);
       if (familyUnseen === 0 && ui.notifyOnSubtasks) {
         familyUnseen = collectDescendants(session.sessionId)
-          .reduce((sum, id) => sum + (notif.unseenCount[id] ?? 0), 0);
+          .reduce((sum, id) => sum + (isSessionUnread(useGlobalSessionsStore.getState().entityById.get(id)) ? 1 : (notif.unseenCount[id] ?? 0)), 0);
       }
       if (familyUnseen > 0) dockBadgeCount += 1;
     }
@@ -371,8 +373,8 @@ const buildSnapshot = (instanceName: string, includeTray: boolean): TraySnapshot
         status: rollupStatus(family),
         // Canonical directory state has no legacy VCS branch projection.
         branch: '',
-        unseen: family.reduce((sum, id) => sum + (notif.unseenCount[id] ?? 0), 0),
-        hasError: family.some((id) => notif.unseenHasError[id] ?? false),
+        unseen: isSessionUnread(session) ? 1 : 0,
+        hasError: isSessionUnreadWithError(session),
         directory,
         subtitle: resolveSessionSubtitle(directory, projects, worktreesByProject),
       };
@@ -574,7 +576,7 @@ export const useTraySync = (): void => {
     return () => {
       try {
         const result = unlisten?.();
-        if (result instanceof Promise) void result.catch(() => {});
+        if (result instanceof Promise) void result.catch(() => { });
       } catch {
         // ignore
       }

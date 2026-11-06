@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import type { Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
 
@@ -30,14 +30,8 @@ Object.assign(globalThis, {
 mock.module('@/hooks/useSettingsDirectory', () => ({ useSettingsDirectory: () => '/repo' }));
 
 let updatedDesktopSettingsPayload: Record<string, unknown> | null = null;
-mock.module('@/lib/persistence', () => ({
-  updateDesktopSettings: async (payload: Record<string, unknown>) => {
-    updatedDesktopSettingsPayload = payload;
-    return { ok: true };
-  },
-  loadDesktopSettings: async () => ({}),
-  reportSettingsSaveState: () => {},
-}));
+let updateSpy: ReturnType<typeof spyOn>;
+
 
 const mockModelCatalog = {
   workspaceId: 'workspace_1',
@@ -96,6 +90,7 @@ const { I18nProvider } = await import('@/lib/i18n');
 const { useUIStore } = await import('@/stores/useUIStore');
 const { useSessionDisplayStore } = await import('@/stores/useSessionDisplayStore');
 const { DefaultsSettings } = await import('./DefaultsSettings');
+const persistence = await import('@/lib/persistence');
 const settle = async () => {
   await act(async () => {
     const { promise, resolve } = Promise.withResolvers<void>();
@@ -113,6 +108,10 @@ describe('DefaultsSettings', () => {
     host = document.createElement('div');
     document.body.appendChild(host);
     root = createRoot(host);
+    updateSpy = spyOn(persistence, 'updateDesktopSettings').mockImplementation(async (payload) => {
+      updatedDesktopSettingsPayload = payload as Record<string, unknown>;
+      return { ok: true };
+    });
   });
 
   afterEach(async () => {
@@ -120,6 +119,7 @@ describe('DefaultsSettings', () => {
       root.unmount();
     });
     host.remove();
+    updateSpy?.mockRestore();
   });
 
   test('renders default model, thinking effort, session mode, and persisted checkboxes', async () => {

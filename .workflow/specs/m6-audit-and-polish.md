@@ -1,7 +1,8 @@
 # M6: Full-codebase audit, OpenChamber UX restoration, missing OMP capabilities, and UI compliance
 
-**Status:** proposed
+**Status:** in progress
 **Priority:** high
+**Integration branch:** m6-audit-and-polish/integration
 
 ## What this is for
 

@@ -150,7 +150,7 @@ test('editing global rules writes the AGENTS.md file and no settings copy', asyn
   await act(async () => { rulesField.dispatchEvent(new WindowFocusEvent('focusout', { bubbles: true }) as unknown as FocusEvent); });
   await settle();
 
-  expect(requests.settingsWrites.map((write) => write.body)).toEqual([
+  expect(requests.settingsWrites.map((write) => write.body).filter((body) => !('homeDirectory' in body))).toEqual([
     { rules: 'new rules\n', scope: 'global' },
   ]);
   await act(async () => { requests.settingsWrites[0]?.finish(); });

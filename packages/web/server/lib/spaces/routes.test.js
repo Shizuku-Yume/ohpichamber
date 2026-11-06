@@ -6,8 +6,9 @@ import express from 'express';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { SpaceError } from './errors.js';
-import { SPACES_ROUTE, answerFailure, createSwitchController, registerSpaceRoutes } from './routes.js';
+import { createSpaceJourney } from './journey.js';
 import { requireSpacesReleased } from './release.js';
+import { SPACES_ROUTE, answerFailure, createSwitchController, registerSpaceRoutes } from './routes.js';
 
 const ID = 'a1b2c3d4e5f6';
 const servers = [];
@@ -126,6 +127,86 @@ describe('space routes', () => {
       ['listSpaces', { access: true }], ['readDisk', 'docker'], ['cleanUpDisk', 'docker'], ['pullImage', 'docker'], ['createSpace', request], ['startSpace', ID], ['stopSpace', ID], ['restartSpace', ID], ['grantAccess', ID, { kind: 'domain', upstream: 'https://registry.example.com/' }], ['openDomain', ID, { domain: 'registry.npmjs.org' }], ['readJournal', ID], ['previewApply', ID], ['applySpace', ID, { as: 'branch', branch: 'b' }], ['runSetup', ID, { commands: ['npm ci'] }], ['readSetup', ID], ['removeSpace', ID, { allowUnsaved: false }],
     ]);
   });
+  it('translates release gate refusals on create, start, repair, and grant routes to 409 isolated_spaces_unreleased before touching place or gatekeeper', async () => {
+    const placeCalls = [];
+    const place = {
+      id: 'mock',
+      create: async () => { placeCalls.push('place.create'); },
+      start: async () => { placeCalls.push('place.start'); },
+      stop: async () => { placeCalls.push('place.stop'); },
+      list: async () => [{ id: ID, state: 'running' }],
+    };
+    const gatekeeper = {
+      addGrant: async () => { placeCalls.push('gatekeeper.addGrant'); },
+      setNetwork: async () => { placeCalls.push('gatekeeper.setNetwork'); },
+    };
+    const manager = {
+      createSpace: async () => { placeCalls.push('manager.createSpace'); },
+      startSpace: async () => { placeCalls.push('manager.startSpace'); },
+      stopSpace: async () => { placeCalls.push('manager.stopSpace'); },
+      listSpaces: async () => [{ id: ID, state: 'running' }],
+    };
+    const records = {
+      read: () => ({ status: 'ok', record: { grants: [] } }),
+      update: () => ({ status: 'ok' }),
+    };
+    const journey = createSpaceJourney({
+      manager,
+      place,
+      gatekeeper,
+      codeIn: { bringCodeIn: async () => { placeCalls.push('bringCodeIn'); } },
+      codeOut: { fetchQuarantine: async () => { placeCalls.push('fetchQuarantine'); } },
+      records,
+      serverInside: { writeToken: async () => { placeCalls.push('writeToken'); } },
+      // requireReleased defaults to requireSpacesReleased
+    });
+
+    const { call } = await serve({ journey });
+
+    const createRes = await call('POST', SPACES_ROUTE, { projectDirectory: '/tmp/proj', name: 'One', start: 'clean', network: { mode: 'open' } });
+    expect(createRes.status).toBe(409);
+    expect(createRes.body).toMatchObject({ code: 'isolated_spaces_unreleased' });
+
+    const startRes = await call('POST', `${SPACES_ROUTE}/${ID}/start`);
+    expect(startRes.status).toBe(409);
+    expect(startRes.body).toMatchObject({ code: 'isolated_spaces_unreleased' });
+
+    const repairRes = await call('POST', `${SPACES_ROUTE}/${ID}/restart`);
+    expect(repairRes.status).toBe(409);
+    expect(repairRes.body).toMatchObject({ code: 'isolated_spaces_unreleased' });
+
+    const modelGrantRes = await call('POST', `${SPACES_ROUTE}/${ID}/grants`, {
+      kind: 'model',
+      provider: 'anthropic',
+      upstream: 'https://api.anthropic.com/v1',
+      secret: { kind: 'typed', value: 'sk-test' },
+    });
+    expect(modelGrantRes.status).toBe(409);
+    expect(modelGrantRes.body).toMatchObject({ code: 'isolated_spaces_unreleased' });
+
+    const loginGrantRes = await call('POST', `${SPACES_ROUTE}/${ID}/grants`, {
+      kind: 'login',
+      provider: 'openai',
+    });
+    expect(loginGrantRes.status).toBe(409);
+    expect(loginGrantRes.body).toMatchObject({ code: 'isolated_spaces_unreleased' });
+
+    const domainGrantRes = await call('POST', `${SPACES_ROUTE}/${ID}/grants`, {
+      kind: 'domain',
+      upstream: 'https://registry.npmjs.org/',
+    });
+    expect(domainGrantRes.status).toBe(409);
+    expect(domainGrantRes.body).toMatchObject({ code: 'isolated_spaces_unreleased' });
+
+    const openDomainRes = await call('POST', `${SPACES_ROUTE}/${ID}/network/domains`, {
+      domain: 'registry.npmjs.org',
+    });
+    expect(openDomainRes.status).toBe(409);
+    expect(openDomainRes.body).toMatchObject({ code: 'isolated_spaces_unreleased' });
+
+    expect(placeCalls).toEqual([]);
+  });
+
 
   it('reads and changes the idle stop setting through the journey, and refuses a body that is not an object', async () => {
     const journey = journeyOf();
@@ -195,7 +276,7 @@ describe('the switch controller', () => {
       startHost: (made) => { state.started.push(made.name); },
       persist: async (enabled) => { await sleep(10); if (persistFails) throw new Error('disk full'); state.persisted.push(enabled); },
       isReleased: () => released,
-      requireReleased: released ? () => {} : requireSpacesReleased,
+      requireReleased: released ? () => { } : requireSpacesReleased,
     });
     return { controller, state };
   };

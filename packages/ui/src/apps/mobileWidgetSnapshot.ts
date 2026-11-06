@@ -1,11 +1,10 @@
 import type { Session } from '@openchamber/agent-contract';
 
 import type { ProjectEntry } from '@/lib/api/types';
-import { useUIStore } from '@/stores/useUIStore';
 import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
-import { useNotificationStore } from '@/sync/notification-store';
+import { isSessionUnread } from '@/sync/session-unread';
 import { compareSessionsByLifecycleOrder, useSessionOrderingStore } from '@/sync/session-ordering';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 
@@ -20,21 +19,24 @@ import { getRuntimeKey } from '@/lib/runtime-switch';
  */
 
 interface MobileWidgetSession {
-  id: string;
-  title: string;
-  /** True when the session needs attention (unread + honouring the subtask setting). */
-  unread: boolean;
-  /** Project label for the session's directory (matched project name, else folder name). */
-  project: string;
+ id: string;
+ title: string;
+ /** True when the session needs attention (unread + honouring the subtask setting). */
+ unread: boolean;
+ /** Project label for the session's directory (matched project name, else folder name). */
+ project: string;
 }
 
-interface MobileWidgetSnapshot {
-  /** Runtime instance that owns all session IDs and paths in this snapshot. */
-  runtimeKey: string;
-  /** Count of sessions needing attention — same signal that drives the app-icon badge. */
-  attentionCount: number;
-  /** Top-level sessions in the app's shared lifecycle order (capped for the medium widget). */
-  recentSessions: MobileWidgetSession[];
+interface MobileWidgetProject {
+ id: string;
+ label: string;
+}
+
+export interface MobileWidgetSnapshot {
+ runtimeKey: string;
+ attentionCount: number;
+ recentSessions: MobileWidgetSession[];
+ projects: MobileWidgetProject[];
 }
 
 const RECENT_LIMIT = 6;
@@ -42,66 +44,67 @@ const RECENT_LIMIT = 6;
 const parentIdOf = (session: Session): string | null => session.parentSessionId ?? null;
 
 const basename = (path: string): string => {
-  const trimmed = path.replace(/\/+$/, '');
-  return trimmed.slice(trimmed.lastIndexOf('/') + 1) || trimmed;
+ const trimmed = path.replace(/\/+$/, '');
+ return trimmed.slice(trimmed.lastIndexOf('/') + 1) || trimmed;
 };
 
 const normalizeProjectPath = (path: string): string =>
-  path.replace(/\\/g, '/').replace(/\/+$/, '');
+ path.replace(/\\/g, '/').replace(/\/+$/, '');
 
 /** Project label for a session directory: longest matching project's name, else the folder name. */
 const projectLabelForDirectory = (directory: string | null, projects: ProjectEntry[]): string => {
-  if (!directory) return '';
-  let best: ProjectEntry | null = null;
-  let bestLen = -1;
-  for (const project of projects) {
-    const projectPath = normalizeProjectPath(project.path);
-    if (directory === projectPath || directory.startsWith(`${projectPath}/`)) {
-      if (projectPath.length > bestLen) {
-        best = project;
-        bestLen = projectPath.length;
-      }
-    }
+ if (!directory) return '';
+ let best: ProjectEntry | null = null;
+ let bestLen = -1;
+ for (const project of projects) {
+  const projectPath = normalizeProjectPath(project.path);
+  if (directory === projectPath || directory.startsWith(`${projectPath}/`)) {
+   if (projectPath.length > bestLen) {
+    best = project;
+    bestLen = projectPath.length;
+   }
   }
-  if (best) {
-    return best.label?.trim() || basename(best.path);
-  }
-  return basename(directory);
+ }
+ if (best) {
+  return best.label?.trim() || basename(best.path);
+ }
+ return basename(directory);
 };
 
-const buildMobileWidgetSnapshot = (): MobileWidgetSnapshot => {
-  const sessions = useGlobalSessionsStore.getState().activeSessions;
-  const unseenBySession = useNotificationStore.getState().index.session.unseenCount;
-  const notifyOnSubtasks = useUIStore.getState().notifyOnSubtasks;
-  const projects = useProjectsStore.getState().projects;
-  const pinnedSessionIds = useSessionPinnedStore.getState().ids;
-  const sessionOrderRanks = useSessionOrderingStore.getState().rankById;
+export const buildMobileWidgetSnapshot = (): MobileWidgetSnapshot => {
+ const sessions = useGlobalSessionsStore.getState().activeSessions;
+ const projects = useProjectsStore.getState().projects;
+ const pinnedSessionIds = useSessionPinnedStore.getState().ids;
+ const sessionOrderRanks = useSessionOrderingStore.getState().rankById;
 
-  let attentionCount = 0;
-  const topLevel: Array<{ session: Session; unread: boolean; project: string }> = [];
+ let attentionCount = 0;
+ const topLevel: Array<{ session: Session; unread: boolean; project: string }> = [];
 
-  for (const session of sessions) {
-    const isSubtask = parentIdOf(session) !== null;
-    const unseenCount = unseenBySession[session.sessionId] ?? 0;
-    const needsAttention = unseenCount > 0 && (!isSubtask || notifyOnSubtasks);
-    if (needsAttention) {
-      attentionCount += 1;
-    }
-    if (!isSubtask) {
-      topLevel.push({
-        session,
-        unread: needsAttention,
-        project: projectLabelForDirectory(resolveGlobalSessionDirectory(session), projects),
-      });
-    }
+ for (const session of sessions) {
+  const unread = isSessionUnread(session);
+  if (unread) {
+   attentionCount += 1;
   }
+  if (parentIdOf(session) === null) {
+   topLevel.push({
+    session,
+    unread,
+    project: projectLabelForDirectory(resolveGlobalSessionDirectory(session), projects),
+   });
+  }
+ }
 
-  topLevel.sort((a, b) => compareSessionsByLifecycleOrder(a.session, b.session, pinnedSessionIds, sessionOrderRanks));
-  const recentSessions = topLevel
-    .slice(0, RECENT_LIMIT)
-    .map(({ session, unread, project }) => ({ id: session.sessionId, title: session.title ?? '', unread, project }));
+ topLevel.sort((a, b) => compareSessionsByLifecycleOrder(a.session, b.session, pinnedSessionIds, sessionOrderRanks));
+ const recentSessions = topLevel
+  .slice(0, RECENT_LIMIT)
+  .map(({ session, unread, project }) => ({ id: session.sessionId, title: session.title ?? '', unread, project }));
 
-  return { runtimeKey: getRuntimeKey(), attentionCount, recentSessions };
+ return {
+  runtimeKey: getRuntimeKey(),
+  attentionCount,
+  recentSessions,
+  projects: projects.map((project) => ({ id: project.id, label: project.label?.trim() || basename(project.path) })),
+ };
 };
 
 const SNAPSHOT_GLOBAL_KEY = '__OPENCHAMBER_WIDGET_SNAPSHOT__';
@@ -113,14 +116,14 @@ const SNAPSHOT_GLOBAL_KEY = '__OPENCHAMBER_WIDGET_SNAPSHOT__';
  * snapshot. Safe to call in any runtime; only the native iOS shell ever invokes it.
  */
 export const installMobileWidgetSnapshotBridge = (): void => {
-  if (typeof window === 'undefined') {
-    return;
+ if (typeof window === 'undefined') {
+  return;
+ }
+ (window as typeof window & { [SNAPSHOT_GLOBAL_KEY]?: () => string | null })[SNAPSHOT_GLOBAL_KEY] = () => {
+  try {
+   return JSON.stringify(buildMobileWidgetSnapshot());
+  } catch {
+   return null;
   }
-  (window as typeof window & { [SNAPSHOT_GLOBAL_KEY]?: () => string | null })[SNAPSHOT_GLOBAL_KEY] = () => {
-    try {
-      return JSON.stringify(buildMobileWidgetSnapshot());
-    } catch {
-      return null;
-    }
-  };
+ };
 };

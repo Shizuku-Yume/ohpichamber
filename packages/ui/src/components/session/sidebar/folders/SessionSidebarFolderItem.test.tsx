@@ -52,6 +52,8 @@ test('a collapsed virtual folder shows live and unread descendants without mount
     await act(async () => replaceGlobalSessionStatusById(new Map([['child', { status: 'running', directory: '/repo' }]])));
     expect(container.querySelector('[aria-label="Session active"]')).not.toBeNull();
     expect(container.querySelector('[data-hidden-session]')).toBeNull();
+    // A subtask's turn ends on its root, so the child carries no idle mark of
+    // its own; the client's notification index is what knows it just finished.
     await act(async () => {
       replaceGlobalSessionStatusById(new Map());
       useNotificationStore.getState().append({ type: 'turn-complete', session: 'child', time: Date.now(), viewed: false });

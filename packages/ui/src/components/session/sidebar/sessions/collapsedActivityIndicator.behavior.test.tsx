@@ -4,12 +4,13 @@ import { createRoot } from 'react-dom/client';
 import type { Session } from '@openchamber/agent-contract';
 import { replaceGlobalSessionStatusById } from '@/sync/global-session-status';
 import { applyGlobalBlockingRequestEvents, resetGlobalBlockingRequests } from '@/sync/global-blocking-requests';
+import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useNotificationStore } from '@/sync/notification-store';
 import { useCollapsedSessionActivityState } from './collapsedActivityState';
 import type { SessionNode } from '../types';
 import { installHookTestDom } from '../test-utils/testDom';
 
-const node = (sessionId: string): SessionNode => ({
+const node = (sessionId: string, metadata: Session['metadata'] = null): SessionNode => ({
   session: {
     sessionId,
     rootSessionId: sessionId,
@@ -23,12 +24,17 @@ const node = (sessionId: string): SessionNode => ({
     runtimeStatus: 'idle',
     activeRunId: null,
     mode: { kind: 'main' },
-    metadata: null,
-    metadataRevision: '0',
+    metadata,
+    metadataRevision: metadata ? '1' : '0',
     archiveRevision: '0',
   } satisfies Session,
   children: [],
   worktree: null,
+});
+
+/** Unread lives in the session's own metadata now, not the notification index. */
+const unreadMetadata = (lastIdleAt: number): Session['metadata'] => ({
+  openchamber: { workbench: { lastIdleAt } },
 });
 
 describe('collapsed activity scalar selector', () => {
@@ -51,13 +57,14 @@ describe('collapsed activity scalar selector', () => {
       await act(async () => root.render(React.createElement(Harness)));
       const initialRenders = capture.renders;
       await act(async () => replaceGlobalSessionStatusById(new Map([['unrelated', { status: 'running', directory: '/other' }]])));
-      await act(async () => useNotificationStore.getState().append({
-        type: 'turn-complete', session: 'unrelated', time: Date.now(), viewed: false,
+      await act(async () => useGlobalSessionsStore.getState().upsertSession({
+        ...node('unrelated', unreadMetadata(Date.now())).session,
       }));
       expect(capture.renders).toBe(initialRenders);
 
-      await act(async () => useNotificationStore.getState().append({
-        type: 'turn-complete', session: 'relevant', time: Date.now(), viewed: false,
+      // The node the selector watches turns unread: a finished turn nobody saw.
+      await act(async () => useGlobalSessionsStore.getState().upsertSession({
+        ...node('relevant', unreadMetadata(Date.now())).session,
       }));
       expect(capture.state).toBe('unread');
       const unreadRenders = capture.renders;

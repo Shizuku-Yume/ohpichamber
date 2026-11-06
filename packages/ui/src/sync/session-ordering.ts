@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Session } from '@openchamber/agent-contract';
-import { isSessionPinned } from '@/stores/useSessionPinnedStore';
+import { isSessionPinned } from '@/lib/sessionPins';
 import { resolveWorkspaceDirectory } from '@/stores/globalSessions';
 import { countSyncPerformance } from './performance-diagnostics';
 

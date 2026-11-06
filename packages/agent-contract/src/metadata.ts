@@ -26,6 +26,22 @@ const workFields = {
 const workSchema = z.strictObject(workFields);
 const reviewOfferFields = { at: TimestampSchema };
 const reviewOfferSchema = z.strictObject(reviewOfferFields);
+// A pin is OpenChamber workbench state, not an agent runtime fact: the Host
+// keeps it so every device sees the same sidebar. `at` is when it was pinned.
+const pinnedFields = { at: TimestampSchema };
+const pinnedSchema = z.strictObject(pinnedFields);
+// Unread marks and the last finished turn's length live beside each other.
+// `lastIdleAt` is when a turn last ended; `viewedAt` is the newest ending a
+// viewer acknowledged, and only a stamp older than `lastIdleAt` leaves the
+// session unread. `lastTurnOutcome` says how that turn ended.
+const workbenchOutcomeSchema = z.enum(['completed', 'failed', 'cancelled']);
+const workbenchFields = {
+  lastIdleAt: TimestampSchema.optional(), viewedAt: TimestampSchema.optional(),
+  lastTurnOutcome: workbenchOutcomeSchema.optional(),
+};
+const workbenchSchema = z.strictObject(workbenchFields);
+const turnFields = { endedAt: TimestampSchema, durationMs: z.number().finite().nonnegative() };
+const turnSchema = z.strictObject(turnFields);
 const linkedItemFields = { id: EntityIdSchema, title: z.string(), url: z.string(), linkedAt: TimestampSchema };
 const linkedAuthorFields = { author: z.string().optional(), authorAvatarUrl: z.string().optional() };
 const linkedIssueSchema = z.discriminatedUnion('kind', [
@@ -66,6 +82,7 @@ const operationalSchema = z.strictObject({
   knowledge_context_delivered: z.string().optional(), context_obligatory_last_compaction_message_id: EntityIdSchema.optional(),
   project_context_pins: pinsSchema.optional(), context_obligatory_messages: z.array(contextMessageSchema).optional(),
   linked_issues: z.array(linkedIssueSchema).optional(), work: workSchema.optional(), reviewOffer: reviewOfferSchema.optional(),
+  pinned: pinnedSchema.optional(), workbench: workbenchSchema.optional(), turn: turnSchema.optional(),
   reviewSessionID: EntityIdSchema.optional(), kind: z.literal('review').optional(), originalSessionID: EntityIdSchema.optional(), multirun: multirunSchema.optional(),
 });
 export const SessionMetadataSchema = z.strictObject({
@@ -107,6 +124,16 @@ export const SessionMetadataPatchSchema = z.strictObject({
         state: workFields.state.nullable(), openedAt: workFields.openedAt.nullable(), openedBy: workFields.openedBy.nullable(),
       }).nullable().optional(),
       reviewOffer: z.strictObject({ at: reviewOfferFields.at.nullable().optional() }).nullable().optional(),
+      // Only the stamp is replaceable, so a pin is set or removed whole.
+      pinned: pinnedSchema.nullable().optional(),
+      // A view watermark is advanced one field at a time; the whole object
+      // can also be deleted.
+      workbench: z.strictObject({
+        lastIdleAt: workbenchFields.lastIdleAt.nullable(),
+        viewedAt: workbenchFields.viewedAt.nullable(),
+        lastTurnOutcome: workbenchFields.lastTurnOutcome.nullable(),
+      }).nullable().optional(),
+      turn: turnSchema.nullable().optional(),
       reviewSessionID: EntityIdSchema.nullable().optional(), kind: z.literal('review').nullable().optional(),
       originalSessionID: EntityIdSchema.nullable().optional(), multirun: multirunSchema.nullable().optional(),
     }).nullable().optional(),

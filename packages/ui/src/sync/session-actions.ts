@@ -23,12 +23,14 @@ import {
 import { withContextObligatoryMessage, type ContextObligatoryMessage } from "@/lib/contextObligatoryMessages"
 import type { LinkedIssue } from "@/lib/linkedIssues"
 import { withSessionWorkState, type SessionWork } from "@/lib/sessionWorkMetadata"
+import { withSessionPinned } from "@/lib/sessionPins"
 import { getImperativeSessionMessageLoader } from "./session-message-loader"
 import { clearSessionPrefetch } from "./session-prefetch-cache"
 import { dropSessionCaches } from "./session-cache"
 import { useInputStore } from "./input-store"
 import { cleanupPersistedSessionState } from "./session-deletion-cleanup"
 import { requestSessionArchiveBatch, requestSessionLinksUpdate, requestSessionUnarchiveBatch, type SessionArchiveStamp } from "./session-archive-batch"
+import { markSessionUnreadSeen } from "./session-unread"
 import { getRuntimeKey, getRuntimeSwitchRevision } from "@/lib/runtime-switch"
 import { isRelayModeActive } from "@/lib/relay/runtime-tunnel"
 import { getErrorStatus, isAmbiguousSendFailure } from "./send-failure-classification"
@@ -958,6 +960,21 @@ export async function setSessionWorkState(
  }
 }
 
+export async function setSessionPinned(
+ sessionId: string,
+ directory: string | null | undefined,
+ pinned: boolean,
+): Promise<CanonicalSession | null> {
+ const runtimeKeyAtClick = getRuntimeKey()
+ try {
+  return await patchSessionMetadata(sessionId, directory, (metadata) =>
+   withSessionPinned(metadata, pinned, Date.now()), runtimeKeyAtClick)
+ } catch (error) {
+  if (isStaleRuntime(runtimeKeyAtClick)) return null
+  throw error
+ }
+}
+
 export async function setContextObligatoryMessage(
  sessionId: string,
  directory: string | null | undefined,
@@ -1574,6 +1591,7 @@ async function restoreArchivedSession(sessionId: string, expectedRuntimeKey: str
   }
   const restored = withArchivedAt(sessionId, null)
   if (restored) useGlobalSessionsStore.getState().upsertSession(restored)
+  markSessionUnreadSeen(sessionId)
   if (sessionDirectory) registerSessionDirectory(sessionId, sessionDirectory)
   promoteRestoredSessionOrdering(sessionId)
   // Archive discarded this session's status. An older directory snapshot

@@ -147,6 +147,7 @@ import { isWorkflowFeatureAvailable } from './lib/workflows/feature-flag.js';
 import { createPluginNotificationEmitter } from './lib/notifications/emit-route.js';
 import { OpenChamberControlError } from './lib/openchamber-control/error.js';
 import { createSessionLinker } from './lib/openchamber-sessions/session-link.js';
+import { createTurnDurationRecorder } from './lib/openchamber-sessions/turn-duration.js';
 import { createFileOpenRequester } from './lib/openchamber-control/file-open.js';
 import { applyConnectAttemptTimeout } from './lib/network-defaults.js';
 import { applyOutboundProxyFromEnv } from './lib/outbound-proxy.js';
@@ -988,6 +989,14 @@ const messageSearchRuntime = createMessageSearchRuntime({
 });
 
 
+// Turn lengths come from the canonical run events the Hub always holds, so
+// the sidebar can show how long a turn took on any device, not only in the
+// page that watched it run.
+const turnDurationRuntime = createTurnDurationRecorder({
+ persistSessionMetadataPatch,
+ isChildSession: (sessionID) => sessionLineage.isChild(sessionID),
+});
+
 globalMessageStreamHub.subscribeSnapshot((snapshot, scope) => {
  sessionRuntime.applySnapshot(snapshot, scope);
 });
@@ -1000,6 +1009,7 @@ globalMessageStreamHub.subscribeEvent(async (event, scope) => {
  sessionRuntime.processCanonicalEvent(event, scope);
  await messageQueueRuntime.observe({ ...scope, sessionId: event.sessionId }, event);
  sessionLineage.observe(event);
+ turnDurationRuntime.processCanonicalEvent(event, scope);
  sessionAssistRuntime.processCanonicalEvent(event, scope);
  sessionWorkRuntime.processCanonicalEvent(event, scope);
  contextObligatoryRuntime.processCanonicalEvent(event, scope);

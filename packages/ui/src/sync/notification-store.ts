@@ -6,6 +6,7 @@
 // ---------------------------------------------------------------------------
 
 import { create } from "zustand"
+import { markSessionUnreadSeen } from "./session-unread"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -152,6 +153,7 @@ export function appendNotification(notification: Notification) {
 
 export function markSessionViewed(sessionId: string) {
   useNotificationStore.getState().markSessionViewed(sessionId)
+  markSessionUnreadSeen(sessionId)
 }
 
 // ---------------------------------------------------------------------------

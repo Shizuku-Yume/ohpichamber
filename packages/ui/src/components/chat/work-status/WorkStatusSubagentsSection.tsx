@@ -3,6 +3,7 @@ import { useSessionWorkflowRuns } from '@/lib/workflows/store';
 import { useGlobalSessionStatusStore } from '@/sync/global-session-status';
 import { Icon } from '@/components/icon/Icon';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui';
 import { canonicalClient } from '@/api/canonicalClient';
 import { useSubagentsStore } from '@/stores/useSubagentsStore';
@@ -72,7 +73,7 @@ export const WorkStatusSubagentsSection: React.FC<Props> = ({ sessionId, directo
       setActiveSteerId(null);
       toast.success(t('chat.subagentHud.steer'));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to steer subagent');
+      toast.error(error instanceof Error ? error.message : t('chat.questionCard.submitFailed'));
     } finally {
       setIsSteering(false);
     }
@@ -90,7 +91,7 @@ export const WorkStatusSubagentsSection: React.FC<Props> = ({ sessionId, directo
       }
       toast.info(t('chat.subagentHud.cancelled'));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to cancel subagent');
+      toast.error(error instanceof Error ? error.message : t('chat.toolPart.subagent.stopFailed'));
     } finally {
       setCancellingId(null);
     }
@@ -216,18 +217,18 @@ export const WorkStatusSubagentsSection: React.FC<Props> = ({ sessionId, directo
                 value={(
                   <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                     {live?.activeTool && (
-                      <span className="text-[10px] font-mono text-muted-foreground px-1 py-0.5 rounded bg-muted/50">
+                      <span className="typography-micro font-mono text-muted-foreground px-1 py-0.5 rounded bg-muted/50">
                         {live.activeTool}
                       </span>
                     )}
                     {live?.tokens !== undefined && live.tokens > 0 && (
-                      <span className="text-[10px] text-muted-foreground tabular-nums">
-                        {live.tokens}t
+                      <span className="typography-micro text-muted-foreground tabular-nums">
+                        {t('chat.subagentHud.tokens', { count: live.tokens })}
                       </span>
                     )}
                     {live?.cost !== undefined && live.cost > 0 && (
-                      <span className="text-[10px] text-muted-foreground tabular-nums">
-                        ${live.cost.toFixed(3)}
+                      <span className="typography-micro text-muted-foreground tabular-nums">
+                        {`$${live.cost.toFixed(3)}`}
                       </span>
                     )}
                     {blocked ? (
@@ -236,11 +237,11 @@ export const WorkStatusSubagentsSection: React.FC<Props> = ({ sessionId, directo
                       <WorkStatusValue tone="warning">{t('chat.workStatus.subagent.askedQuestion')}</WorkStatusValue>
                     ) : busy ? <SubagentDuration sessionId={child.sessionId} /> : null}
                     {busy && (
-                      <div className="flex items-center gap-0.5 ml-1">
+                      <div className="flex items-center gap-0.5 ms-1">
                         <Button
                           variant="ghost"
-                          size="sm"
-                          className="h-5 px-1 text-[10px] text-muted-foreground hover:text-foreground"
+                          size="xs"
+                          className="text-muted-foreground hover:text-foreground"
                           onClick={(e) => {
                             e.stopPropagation();
                             setActiveSteerId(activeSteerId === subagentId ? null : subagentId);
@@ -251,8 +252,8 @@ export const WorkStatusSubagentsSection: React.FC<Props> = ({ sessionId, directo
                         </Button>
                         <Button
                           variant="ghost"
-                          size="sm"
-                          className="h-5 px-1 text-[10px] text-destructive hover:bg-destructive/10"
+                          size="xs"
+                          className="text-destructive hover:bg-destructive/10"
                           onClick={(e) => handleSubagentCancel(e, subagentId)}
                           disabled={cancellingId === subagentId}
                           title={t('chat.subagentHud.cancel')}
@@ -267,12 +268,11 @@ export const WorkStatusSubagentsSection: React.FC<Props> = ({ sessionId, directo
               {activeSteerId === subagentId && (
                 <form
                   onSubmit={(e) => handleSteerSubmit(e, subagentId)}
-                  className="flex items-center gap-1.5 px-6 py-1 bg-muted/30"
+                  className="flex items-center gap-1.5 ps-6 pe-2 py-1 bg-muted/30"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <input
-                    type="text"
-                    className="flex-1 h-5 px-1.5 text-xs rounded border border-border bg-background focus:outline-none"
+                  <Input
+                    inputSize="compact"
                     placeholder={t('chat.subagentHud.steerPlaceholder')}
                     value={steerInput}
                     onChange={(e) => setSteerInput(e.target.value)}
@@ -281,8 +281,7 @@ export const WorkStatusSubagentsSection: React.FC<Props> = ({ sessionId, directo
                   />
                   <Button
                     type="submit"
-                    size="sm"
-                    className="h-5 px-1.5 text-xs"
+                    size="xs"
                     disabled={!steerInput.trim() || isSteering}
                   >
                     {t('chat.subagentHud.steerSend')}

@@ -114,6 +114,32 @@ describe('session-assist canonical consumer', () => {
     runtime.stop();
   });
 
+  it('never writes a recap, because OMP IdleMaintenance owns recaps now', async () => {
+    const persisted = [];
+    // Default targets on purpose: the production default is what stopped
+    // generating recaps, so this test must not inject `getTargets`.
+    const runtime = createSessionAssistRuntime({
+      sessionService: {
+        open: async () => ({ session: rootSession }),
+        history: async () => ({ sessionId: rootSession.sessionId, branch: { branchId: 'branch-1', branchVersion: '1', leafMessageId: 'assistant-1' }, turns: [turn], messages, nextCursor: null }),
+      },
+      resolveSessionScope: async () => ({ ...scope, sessionId: rootSession.sessionId }),
+      getSmallModelService: async () => ({
+        describeSmallModel: async ({ preferredProviderID, preferredModelID }) => ({ inputCharBudget: 20_000, providerID: preferredProviderID, modelID: preferredModelID }),
+        generateSmallModelText: async () => ({ text: '{"recap":"done","suggestion":"next"}' }),
+      }),
+      persistSessionAssist: async (...args) => persisted.push(args),
+      quietMs: 0,
+    });
+    runtime.processCanonicalEvent({ type: 'session.status', sessionId: 'ses_1', epoch: 'epoch_1', sequence: '1', timestamp: 3, runtimeStatus: 'idle', activeRunId: null }, scope);
+    await new Promise((resolve) => setTimeout(resolve, 15));
+    expect(persisted).toHaveLength(1);
+    expect(persisted[0][2].recap).toBe('');
+    expect(persisted[0][2].suggestion).toBe('next');
+    expect(persisted[0][2].forMessageID).toBe('assistant-1');
+    runtime.stop();
+  });
+
   it('notifies onTurnSettled immediately when targets are disabled', async () => {
     const settled = [];
     const runtime = makeRuntime({

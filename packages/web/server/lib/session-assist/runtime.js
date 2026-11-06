@@ -15,10 +15,15 @@ const OPENCHAMBER_SETTINGS_FILE = path.join(
  'settings.json',
 );
 
+// OMP's own `IdleMaintenance` publishes recaps now (`session.recap`, journalled
+// in `history.db`), so this watcher no longer generates one: a second recap
+// written from a second timeout would describe a different turn than the
+// native note next to it. Only the next-step suggestion, which OMP has no
+// equivalent for, still asks the Small Model.
 const getSessionAssistTargets = () => {
  const settings = readMergedSettingsSync({ fs, path, settingsFilePath: OPENCHAMBER_SETTINGS_FILE });
  return {
-  recap: settings.sessionRecapEnabled !== false,
+  recap: false,
   suggestion: settings.sessionSuggestionEnabled !== false,
  };
 };

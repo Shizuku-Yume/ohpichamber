@@ -16,7 +16,7 @@ interface SessionRecapNoteProps {
 // row, which it never overlaps with — one needs an idle session, the other
 // a working one), fades with that anchor when the reader scrolls away from
 // the end, and simply vanishes in place once a new message makes it stale.
-// Appears only after the 1-minute quiet window.
+// Appears as soon as OMP publishes the recap for this idle turn.
 export const SessionRecapNote: React.FC<SessionRecapNoteProps> = React.memo(({ sessionId, directory, isMobile }) => {
   const { visibleRecap } = useSessionAssistState(sessionId, directory);
   const { t } = useI18n();
@@ -46,6 +46,15 @@ export interface CompactionDividerProps {
   className?: string;
 }
 
+const METHOD_KEYS = {
+  'soft-compacted': 'chat.compaction.method.soft-compacted',
+  'remote-compacted': 'chat.compaction.method.remote-compacted',
+  shaken: 'chat.compaction.method.shaken',
+  'snap-compacted': 'chat.compaction.method.snap-compacted',
+  'handed-off': 'chat.compaction.method.handed-off',
+  compacted: 'chat.compaction.method.compacted',
+} as const;
+
 const NORMALIZE_METHOD_MAP: Record<string, string> = {
   soft: 'soft-compacted',
   'context-full': 'soft-compacted',
@@ -74,15 +83,13 @@ export const CompactionDivider: React.FC<CompactionDividerProps> = React.memo(({
 
   const raw = (method ?? 'compacted').toLowerCase().trim();
   const normalizedKey = NORMALIZE_METHOD_MAP[raw] ?? (raw.endsWith('-compacted') || raw === 'shaken' || raw === 'handed-off' ? raw : 'compacted');
-  const methodKey = `chat.compaction.method.${normalizedKey}` as unknown as Parameters<typeof t>[0];
-  const methodLabel = t(methodKey) || normalizedKey;
+  const methodLabel = t(METHOD_KEYS[normalizedKey as keyof typeof METHOD_KEYS]);
 
-  const hasReduction = tokensAfter !== undefined && tokensBefore > 0;
-  const badgeText = hasReduction
-    ? `${formatTokens(tokensBefore)} → ${formatTokens(tokensAfter)} tokens`
-    : tokensBefore > 0
-      ? `${formatTokens(tokensBefore)} tokens`
-      : undefined;
+  // One dictionary string carries the method, the direction and the unit, so no
+  // locale sees an English suffix glued onto a formatted number.
+  const badgeText = tokensAfter === undefined
+    ? t('chat.compaction.titleNoAfter', { method: methodLabel, before: formatTokens(tokensBefore) })
+    : t('chat.compaction.title', { method: methodLabel, before: formatTokens(tokensBefore), after: formatTokens(tokensAfter) });
 
   const hasSummary = Boolean(summary);
 
@@ -100,19 +107,14 @@ export const CompactionDivider: React.FC<CompactionDividerProps> = React.memo(({
           onClick={hasSummary ? () => setIsExpanded(prev => !prev) : undefined}
           disabled={!hasSummary}
           aria-expanded={hasSummary ? isExpanded : undefined}
-          aria-label={isExpanded ? (t('chat.compaction.collapseSummary') || 'Collapse compaction summary') : (t('chat.compaction.expandSummary') || 'Expand compaction summary')}
+          aria-label={t(isExpanded ? 'chat.compaction.collapseSummary' : 'chat.compaction.expandSummary')}
           className={cn(
             'flex items-center gap-2 rounded-full border border-border/50 bg-background/80 px-3 py-1 text-xs font-medium backdrop-blur-sm transition-colors',
             hasSummary && 'hover:bg-muted/30 cursor-pointer'
           )}
         >
           <Icon name="archive" className="size-3.5 text-muted-foreground" />
-          <span className="font-semibold text-foreground/80">{methodLabel}</span>
-          {badgeText && (
-            <span className="font-mono text-[11px] text-muted-foreground">
-              · {badgeText}
-            </span>
-          )}
+          <span className="font-semibold text-foreground/80">{badgeText}</span>
           {warning && (
             <Icon name="alert" className="size-3.5 text-status-warning" />
           )}
@@ -129,10 +131,10 @@ export const CompactionDivider: React.FC<CompactionDividerProps> = React.memo(({
 
       {isExpanded && summary && (
         <div className="mt-2.5 mx-auto max-w-2xl rounded-xl border border-border/40 bg-card/60 p-4 text-xs shadow-xs space-y-2 animate-in fade-in-50 duration-150">
-          <div className="text-[11px] font-medium text-muted-foreground">
-            {hasReduction
-              ? (t('chat.compaction.reducedTokens', { before: tokensBefore.toLocaleString(), after: tokensAfter.toLocaleString() }) || `Compacted from ${tokensBefore.toLocaleString()} to ${tokensAfter.toLocaleString()} tokens`)
-              : (t('chat.compaction.tokensCount', { tokens: tokensBefore.toLocaleString() }) || `Compacted from ${tokensBefore.toLocaleString()} tokens`)}
+          <div className="typography-micro font-medium text-muted-foreground">
+            {tokensAfter === undefined
+              ? t('chat.compaction.tokensCount', { tokens: tokensBefore.toLocaleString() })
+              : t('chat.compaction.reducedTokens', { before: tokensBefore.toLocaleString(), after: String(tokensAfter) })}
           </div>
 
           {warning && (

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Icon } from '@/components/icon/Icon';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
 import { canonicalClient } from '@/api/canonicalClient';
@@ -35,7 +36,7 @@ const SubagentRow: React.FC<SubagentRowProps> = ({ subagent, sessionId }) => {
       setShowSteerInput(false);
       toast.success(t('chat.subagentHud.steer'));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to steer subagent');
+      toast.error(error instanceof Error ? error.message : t('chat.questionCard.submitFailed'));
     } finally {
       setIsSteering(false);
     }
@@ -52,7 +53,7 @@ const SubagentRow: React.FC<SubagentRowProps> = ({ subagent, sessionId }) => {
       });
       toast.info(t('chat.subagentHud.cancelled'));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to cancel subagent');
+      toast.error(error instanceof Error ? error.message : t('chat.toolPart.subagent.stopFailed'));
     } finally {
       setIsCancelling(false);
     }
@@ -64,7 +65,7 @@ const SubagentRow: React.FC<SubagentRowProps> = ({ subagent, sessionId }) => {
   return (
     <div
       className="flex flex-col gap-1 py-1.5 border-b border-border/40 last:border-b-0 text-xs"
-      style={{ paddingLeft: `${depth * 14}px` }}
+      style={{ paddingInlineStart: `${depth * 14}px` }}
       data-testid={`subagent-hud-row-${subagent.subagentId}`}
     >
       <div className="flex items-center justify-between gap-2">
@@ -84,13 +85,13 @@ const SubagentRow: React.FC<SubagentRowProps> = ({ subagent, sessionId }) => {
             {subagent.role || subagent.subagentId}
           </span>
           {subagent.activeTool && (
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted/60 text-muted-foreground text-[10px] font-mono shrink-0">
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted/60 text-muted-foreground typography-micro font-mono shrink-0">
               <Icon name="tools" className="size-2.5" />
               {subagent.activeTool}
             </span>
           )}
           {subagent.retryCountdown !== undefined && subagent.retryCountdown > 0 && (
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-warning/20 text-warning text-[10px] shrink-0">
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-warning/20 text-warning typography-micro shrink-0">
               <Icon name="refresh" className="size-2.5 animate-spin" />
               {t('chat.subagentHud.retryCountdown', { seconds: subagent.retryCountdown })}
             </span>
@@ -99,12 +100,12 @@ const SubagentRow: React.FC<SubagentRowProps> = ({ subagent, sessionId }) => {
 
         <div className="flex items-center gap-2 shrink-0">
           {subagent.tokens !== undefined && subagent.tokens > 0 && (
-            <span className="text-[10px] text-muted-foreground tabular-nums">
+            <span className="typography-micro text-muted-foreground tabular-nums">
               {t('chat.subagentHud.tokens', { count: subagent.tokens })}
             </span>
           )}
           {subagent.cost !== undefined && subagent.cost > 0 && (
-            <span className="text-[10px] text-muted-foreground tabular-nums">
+            <span className="typography-micro text-muted-foreground tabular-nums">
               ${subagent.cost.toFixed(3)}
             </span>
           )}
@@ -114,23 +115,23 @@ const SubagentRow: React.FC<SubagentRowProps> = ({ subagent, sessionId }) => {
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-6 px-1.5 text-xs text-muted-foreground hover:text-foreground"
+                className="text-muted-foreground hover:text-foreground"
                 onClick={() => setShowSteerInput(!showSteerInput)}
                 title={t('chat.subagentHud.steer')}
               >
                 <Icon name="edit" className="size-3" />
-                <span className="hidden sm:inline ml-1">{t('chat.subagentHud.steer')}</span>
+                <span className="hidden @xl:inline ms-1">{t('chat.subagentHud.steer')}</span>
               </Button>
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-6 px-1.5 text-xs text-destructive hover:bg-destructive/10"
+                className="text-destructive hover:bg-destructive/10"
                 onClick={handleCancel}
                 disabled={isCancelling}
                 title={t('chat.subagentHud.cancel')}
               >
                 <Icon name="close" className="size-3" />
-                <span className="hidden sm:inline ml-1">{isCancelling ? t('chat.subagentHud.cancelling') : t('chat.subagentHud.cancel')}</span>
+                <span className="hidden @xl:inline ms-1">{isCancelling ? t('chat.subagentHud.cancelling') : t('chat.subagentHud.cancel')}</span>
               </Button>
             </div>
           )}
@@ -138,16 +139,15 @@ const SubagentRow: React.FC<SubagentRowProps> = ({ subagent, sessionId }) => {
       </div>
 
       {subagent.description && (
-        <div className="text-[11px] text-muted-foreground truncate pl-5">
+        <div className="text-[11px] text-muted-foreground truncate ps-5">
           {subagent.description}
         </div>
       )}
 
       {showSteerInput && (
-        <form onSubmit={handleSteer} className="flex items-center gap-1.5 pl-5 pt-1">
-          <input
-            type="text"
-            className="flex-1 h-6 px-2 text-xs rounded border border-border bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+        <form onSubmit={handleSteer} className="flex items-center gap-1.5 ps-5 pt-1">
+          <Input
+            inputSize="compact"
             placeholder={t('chat.subagentHud.steerPlaceholder')}
             value={steerMessage}
             onChange={(e) => setSteerMessage(e.target.value)}
@@ -156,8 +156,7 @@ const SubagentRow: React.FC<SubagentRowProps> = ({ subagent, sessionId }) => {
           />
           <Button
             type="submit"
-            size="sm"
-            className="h-6 px-2 text-xs"
+            size="xs"
             disabled={!steerMessage.trim() || isSteering}
           >
             {t('chat.subagentHud.steerSend')}
@@ -214,7 +213,7 @@ export const SubagentHudTray: React.FC<SubagentHudTrayProps> = React.memo(({ ses
           </span>
         </button>
 
-        <div className="flex items-center gap-2 text-[10px] text-muted-foreground tabular-nums">
+        <div className="flex items-center gap-2 typography-micro text-muted-foreground tabular-nums">
           {totalTokens > 0 && <span>{t('chat.subagentHud.tokens', { count: totalTokens })}</span>}
           {totalCost > 0 && <span>${totalCost.toFixed(3)}</span>}
         </div>

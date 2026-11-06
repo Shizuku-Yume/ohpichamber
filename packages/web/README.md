@@ -24,7 +24,7 @@ curl -fsSL https://raw.githubusercontent.com/openchamber/openchamber/main/script
 
 Or install manually: `bun add -g @openchamber/web` (or npm, pnpm, yarn).
 
-> **Runtime prerequisites:** Node.js 24.14+ for the Host, Bun 1.3.14+ on PATH for the supervised Agent Service, and built Agent Service entries with their installed pinned SDK/native dependencies. An OpenCode CLI is not a startup prerequisite. The upstream installer command above is inherited distribution guidance; the npm Web package is publicly declared, but the OMP runtime inside a standalone npm installation remains unverified and out of M3 acceptance.
+> **Runtime prerequisites:** Node.js 24.14+ for the Host, Bun 1.4.4+ on PATH for the supervised Agent Service, and built Agent Service entries with their installed pinned SDK/native dependencies. An OpenCode CLI is not a startup prerequisite. The upstream installer command above is inherited distribution guidance; the npm Web package is publicly declared, but the OMP runtime inside a standalone npm installation remains unverified and out of M3 acceptance.
 
 ### Monorepo development scripts
 
@@ -149,16 +149,36 @@ network policy still applies.
 
 </details>
 
-**Optional env vars:**
+<details>
+<summary>Docker & Docker Compose setup (OMP 18.16.0)</summary>
+
+Run OpenChamber with the supervised OMP Agent Service inside Docker:
+
+```bash
+# 1. Prepare persistent host directories
+mkdir -p data/openchamber data/omp data/ssh workspaces
+chown -R 1000:1000 data/ workspaces
+
+# 2. Launch OpenChamber via Docker Compose
+OPENCHAMBER_UI_PASSWORD="your-strong-password" docker compose up -d
+```
+
+### Mounted Volumes
+- `./data/openchamber:/home/openchamber/.config/openchamber`: OpenChamber Host configuration and instance settings.
+- `./data/omp:/home/openchamber/.omp`: Pinned OMP Agent Service state, logs, and authentication credentials.
+- `./data/ssh:/home/openchamber/.ssh`: SSH keys and configuration.
+- `./workspaces:/home/openchamber/workspaces`: Project files and repositories.
+
+### Optional environment variables
 ```yaml
 environment:
-  UI_PASSWORD: your_secure_password
+  OPENCHAMBER_UI_PASSWORD: your_secure_password
+  OPENCHAMBER_HOST: 0.0.0.0
   OPENCHAMBER_TUNNEL_MODE: quick # quick | managed-remote | managed-local
   OPENCHAMBER_TUNNEL_PROVIDER: cloudflare
 ```
 
 For `managed-remote` mode, also set:
-
 ```yaml
 environment:
   OPENCHAMBER_TUNNEL_MODE: managed-remote
@@ -167,7 +187,6 @@ environment:
 ```
 
 For `managed-local` mode, you can set:
-
 ```yaml
 environment:
   OPENCHAMBER_TUNNEL_MODE: managed-local
@@ -176,11 +195,7 @@ environment:
 
 Managed-local path note: `OPENCHAMBER_TUNNEL_CONFIG` must use a container path under `/home/openchamber/...`. If the config file references `credentials-file`, ensure that JSON path is also mounted and reachable inside the container.
 
-**Data directory:** mount `data/` for persistent storage. Ensure permissions:
-```bash
-mkdir -p data/openchamber data/ssh
-chown -R 1000:1000 data/
-```
+> **Note on Container Verification:** Docker is unavailable in the current development environment. Dockerfile, compose, and entrypoint manifests are statically verified; live container runtime execution and verification are explicitly deferred to milestone M7 (`m7-release-verification`).
 
 </details>
 
@@ -241,6 +256,22 @@ systemctl --user enable --now openchamber
 - **Background notifications** - know when your agent finishes, even from another tab
 - **Cross-tab tracking** - session activity stays in sync reliably across browser tabs
 - **Self-update** - update and restart flow from the UI that keeps server settings intact
+## Client Distributions and Platform Targets
+
+OpenChamber is available across Web, Desktop, and Mobile surfaces:
+
+- **Web & PWA**: Served directly by `@openchamber/web` or installable as a standalone PWA.
+- **Desktop Electron** (`packages/electron`): Native binaries for six desktop targets:
+  - **macOS** (`darwin-arm64`, `darwin-x64`): `.dmg` and `.zip`. For unsigned builds, bypass macOS Gatekeeper quarantine via:
+    ```bash
+    xattr -cr /Applications/OpenChamber.app
+    ```
+  - **Windows** (`win32-x64`, `win32-arm64`): NSIS `.exe` installers (unsigned builds succeed cleanly when Authenticode secrets are absent).
+  - **Linux** (`linux-x64`, `linux-arm64`): AppImage, `.deb`, and `.rpm`.
+- **Mobile Capacitor** (`packages/mobile`):
+  - **Android**: Debug and release `.apk` (install via `adb install` or device package installer).
+  - **iOS**: `.ipa` and simulator builds. Unsigned/ad-hoc `.ipa` artifacts can be sideloaded to physical devices via Sideloadly, AltStore, SideStore, or the Xcode Devices window.
+
 ## License
 
 MIT

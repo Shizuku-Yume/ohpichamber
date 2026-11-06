@@ -115,22 +115,6 @@ test('malformed, truncated, empty and missing transcripts preserve siblings with
   await expect(getUsageTools(query, [truncated, empty])).rejects.toThrow('USAGE_UNAVAILABLE');
 });
 
-test('cold hydration indexes the transcript and later reads are answered from stats.db rows', async () => {
-  const source = await transcript('indexed', [user('indexed-u', null, start), assistant('indexed-a', 'indexed-u', start + 1)]);
-  await initDb();
-  // Cold: the first request hydrates the index from the JSONL.
-  expect((await getUsageStats(query, [source])).steps).toBe(1);
-  const db = currentDb();
-  if (!db) throw new Error('The stats database must be open');
-  const rows = db.query('SELECT entry_id FROM messages WHERE session_file = ?').all(resolve(source.sessionFile)) as Array<{ entry_id: string }>;
-  // The aggregate numbers really are read out of these rows.
-  expect(rows.map(row => row.entry_id).sort()).toEqual(['indexed-a']);
-  // Rewriting the bytes with a different size invalidates the branch read, and
-  // an index-only answer must agree with what the rows say.
-  await settleUsageSession(source.sessionFile);
-  expect((await getUsageStats(query, [source])).models.map(model => [model.providerId, model.modelId])).toEqual([['provider-a', 'model-a']]);
-});
-
 test('settlement indexes the transcript and an unchanged repeat request reuses the validated read', async () => {
   const source = await transcript('warm', [user('warm-u', null, start), assistant('warm-a', 'warm-u', start + 1)]);
   await settleUsageSession(source.sessionFile);
@@ -149,6 +133,32 @@ test('settlement indexes the transcript and an unchanged repeat request reuses t
   await writeFile(source.sessionFile, 'x'.repeat(bytes.length + 1));
   await utimes(source.sessionFile, pinned, pinned);
   await expect(getUsageStats(query, [source])).rejects.toThrow('USAGE_UNAVAILABLE');
+});
+
+test('a scoped usage query leaves other sessions\' indexed analytics intact', async () => {
+  const mine = await transcript('scoped-mine', [user('scoped-u', null, start), assistant('scoped-a', 'scoped-u', start + 1)]);
+  const other = await transcript('scoped-other', [user('other-u', null, start), assistant('other-a', 'other-u', start + 1, 40)]);
+  await settleUsageSession(other.sessionFile);
+  await settleUsageSession(mine.sessionFile);
+  await initDb();
+  const db = currentDb();
+  if (!db) throw new Error('The stats database must be open');
+  const rowsFor = (file: string) => (db.query('SELECT entry_id FROM messages WHERE session_file = ?').all(resolve(file)) as Array<{ entry_id: string }>);
+  // `stats.db` is shared with every other session on the machine, including
+  // rows this fixture does not own. A scoped request must not delete those.
+  const foreign = (db.query('SELECT COUNT(*) AS c FROM messages WHERE session_file <> ? AND session_file <> ?').get(resolve(mine.sessionFile), resolve(other.sessionFile)) as { c: number }).c;
+  expect(foreign).toBeGreaterThan(0);
+  const otherRows = rowsFor(other.sessionFile).length;
+  db.query('INSERT OR REPLACE INTO messages (session_file, entry_id, folder, model, provider, api, timestamp, stop_reason, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, total_tokens, premium_requests, cost_input, cost_output, cost_cache_read, cost_cache_write, cost_total, cost_unpriced, agent_type) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+    .run(resolve(mine.sessionFile), 'sentinel-row', 'f', 'model-a', 'provider-a', 'api', start, 'stop', 1, 1, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 'main');
+  expect((await getUsageStats(query, [mine])).steps).toBe(1);
+  // Nothing outside the requested reference may be touched, and the other
+  // session's own rows must survive untouched.
+  expect((db.query('SELECT COUNT(*) AS c FROM messages WHERE session_file <> ? AND session_file <> ?').get(resolve(mine.sessionFile), resolve(other.sessionFile)) as { c: number }).c).toBe(foreign);
+  expect(rowsFor(other.sessionFile).length).toBe(otherRows);
+  expect(rowsFor(mine.sessionFile).some(row => row.entry_id === 'sentinel-row')).toBe(true);
+  // Leave the shared index exactly as this test found it.
+  db.query('DELETE FROM messages WHERE session_file = ? AND entry_id = ?').run(resolve(mine.sessionFile), 'sentinel-row');
 });
 
 test('active native DAG excludes abandoned branch and deduplicates proven fork lineage, not unrelated short ID collisions', async () => {

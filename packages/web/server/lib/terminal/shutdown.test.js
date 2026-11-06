@@ -67,12 +67,7 @@ test('escalates a noncooperative workload only after the shared deadline', { ski
   await shutdownTerminalProcesses([run.terminal], { graceMs: 1000 });
   assert.ok(Date.now() - start >= 1000);
   assert.deepEqual(await run.exit, { code: null, signal: 'SIGKILL' });
-  let events = await run.events();
-  for (let i = 0; i < 50 && !events.some(event => event.event === 'SIGTERM'); i++) {
-    await delay(20);
-    events = await run.events();
-  }
-  assert.deepEqual(events.map(event => event.event), ['ready', 'SIGTERM']);
+  assert.deepEqual((await run.events()).map(event => event.event), ['ready', 'SIGTERM']);
 });
 
 test('an idle shell closes promptly and shutdown waits for its exit', { skip: process.platform === 'win32' }, async t => {

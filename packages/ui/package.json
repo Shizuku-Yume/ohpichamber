@@ -1,7 +1,6 @@
 {
   "name": "@openchamber/ui",
   "version": "3.0.0",
-  "description": "OpenChamber shared UI, components, and runtime workbench",
   "private": true,
   "type": "module",
   "main": "src/main.tsx",

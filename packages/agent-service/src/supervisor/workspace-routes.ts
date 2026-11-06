@@ -110,6 +110,10 @@ export class WorkspaceRoutes {
       }
       const result = await this.catalogs.operation(workspaceId, operation);
       if (result.type === 'plugins.catalog') return { status: 200, body: result.catalog };
+      if (result.type === 'plugins.marketplaceSources') {
+        return { status: 200, body: { workspaceId: result.result.workspaceId, revision: result.result.revision,
+          sources: result.result.sources } };
+      }
       if (result.type === 'plugins.mutated' || result.type === 'plugins.local' || result.type === 'plugins.doctor'
         || result.type === 'plugins.marketplace' || result.type === 'plugins.updateCheck' || result.type === 'plugins.upgradePreview') {
         return { status: 200, body: result.result };

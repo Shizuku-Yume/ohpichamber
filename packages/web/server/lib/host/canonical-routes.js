@@ -62,7 +62,7 @@ const AGENT_ROUTES = [
  { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/plugins\/apply$/, request: C.PluginApplyRequestSchema, response: C.PluginMutationResultSchema },
  { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/plugins\/marketplace$/, response: C.PluginMarketplaceStateSchema, pluginEgress: true },
  { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/plugins\/marketplace\/updates$/, response: C.PluginUpdateCheckResultSchema, pluginEgress: true },
- { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/plugins\/marketplace\/manage$/, request: C.PluginMarketplaceManageRequestSchema, response: C.PluginMutationResultSchema, pluginEgress: true },
+ { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/plugins\/marketplace\/manage$/, request: C.PluginMarketplaceManageRequestSchema, response: z.union([C.PluginMutationResultSchema, C.PluginMarketplaceSourcesSchema]), pluginEgress: true },
  { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/plugins\/marketplace\/preview-upgrade$/, request: C.PluginPreviewUpgradeRequestSchema, response: C.PluginUpgradePreviewResultSchema, pluginEgress: true },
  { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/plugins\/marketplace\/upgrade-all$/, request: C.PluginUpgradeAllRequestSchema, response: C.PluginMutationResultSchema, pluginEgress: true },
  { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/plugins\/doctor$/, response: C.PluginDoctorResultSchema },

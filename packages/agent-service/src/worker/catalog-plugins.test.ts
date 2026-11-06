@@ -266,6 +266,14 @@ nativeTest('marketplace source management reads, adds and removes native registr
     if (state.type !== 'plugins.marketplace') throw new Error('Expected cached marketplace state');
     expect(state.result.sources.map(source => source.name)).toEqual(['source-proof']);
 
+    // `list` is the manage read: it returns the same registry rows without a revision to commit.
+    const listed = await context.plugins.operation({ type: 'plugins.marketplace.manage',
+      request: { action: 'list' } }, '1');
+    if (listed.type !== 'plugins.marketplaceSources') throw new Error('Expected native marketplace source listing');
+    expect(listed.result).toMatchObject({ workspaceId: worker.workspaceId, revision: '1' });
+    expect(listed.result.sources).toEqual(state.result.sources);
+    expect(listed.result.sources).toEqual([expect.objectContaining({ sourceType: 'local', catalogPath: expect.any(String) })]);
+
     await context.plugins.operation({ type: 'plugins.marketplace.manage',
       request: { action: 'remove', expectedRevision: '1', name: 'source-proof' } }, '2');
     expect((await context.plugins.read('2')).marketplaceSources).toEqual([]);

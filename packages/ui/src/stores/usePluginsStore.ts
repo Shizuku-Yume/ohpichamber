@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import type {
   LocalExtensionSource, PluginCatalogState, PluginConfigureRequest, PluginDoctorResult,
-  PluginInstallRequest, PluginMutationResult, PluginTarget, PluginUpgradePreviewEntry,
+  MarketplaceSource, PluginInstallRequest, PluginMutationResult, PluginTarget, PluginUpgradePreviewEntry,
   PluginUpdateCheckEntry,
 } from '@openchamber/agent-contract';
 import { canonicalClient } from '@/api/canonicalClient';
@@ -32,6 +32,7 @@ interface PluginsStore {
   removeMarketplaceSource: (name: string) => Promise<PluginMutationResult>;
   updateMarketplaceSource: (name?: string) => Promise<PluginMutationResult>;
   checkUpdates: () => Promise<PluginUpdateCheckEntry[]>;
+  listMarketplaceSources: () => Promise<MarketplaceSource[]>;
   applyPlugins: () => Promise<PluginMutationResult>;
   readLocalExtension: (extensionId: string) => Promise<LocalExtensionSource>;
   writeLocalExtension: (extensionId: string, content: string) => Promise<PluginMutationResult>;
@@ -148,6 +149,17 @@ export const usePluginsStore = create<PluginsStore>()(devtools((set, get) => {
     updateMarketplaceSource: name => mutate(catalog => canonicalClient.plugins.manageMarketplace(catalog.workspaceId,
       name === undefined ? { action: 'update', expectedRevision: catalog.revision }
         : { action: 'update', expectedRevision: catalog.revision, name })),
+    /** Reads the native registry through the manage `list` action; never fetches. */
+    listMarketplaceSources: async () => {
+      const captured = owner();
+      const result = await canonicalClient.plugins.listMarketplaceSources(captured.catalog.workspaceId);
+      if (!current(captured.scope)) throw new Error('The selected plugin workspace changed.');
+      const catalog = get().catalog;
+      if (catalog && compareCounters(result.revision, catalog.revision) >= 0) {
+        set({ catalog: { ...catalog, marketplaceSources: result.sources } });
+      }
+      return result.sources;
+    },
     checkUpdates: async () => {
       const captured = owner();
       const result = await canonicalClient.plugins.checkUpdates(captured.catalog.workspaceId);

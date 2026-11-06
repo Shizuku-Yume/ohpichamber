@@ -38,7 +38,7 @@ const createPayload = () => {
     path: file, sha256: createHash('sha256').update(fs.readFileSync(path.join(agent, file))).digest('hex'),
   }));
   fs.writeFileSync(path.join(agent, 'manifest.json'), JSON.stringify({
-    platform: 'linux', architecture: 'x64', bunVersion: '1.4.2', files,
+    platform: 'linux', architecture: 'x64', bunVersion: '1.4.4', files,
     packages: ['@oh-my-pi/pi-coding-agent', '@oh-my-pi/pi-natives-linux-x64', 'onnxruntime-node', 'fastembed'].map(name => ({ name })),
   }));
   for (const name of ['pty.node', 'sherpa-onnx.node']) {
@@ -67,7 +67,7 @@ const addUnpackedNative = (root, relativePath, architecture) => {
 const verify = (root) => verifyExtractedPayload({
   root,
   targetArchitecture: 'x64',
-  runBunVersion: () => '1.4.2',
+  runBunVersion: () => '1.4.4',
 });
 
 test('reads supported ELF architectures', () => {
@@ -93,7 +93,7 @@ test('verifies identity, version, and native payload architecture', () => {
     const result = verifyExtractedPayload({
       root,
       targetArchitecture: 'x64',
-      runBunVersion: () => '1.4.2',
+      runBunVersion: () => '1.4.4',
     });
     assert.equal(result.nativeModuleCount, 2);
   } finally {
@@ -112,7 +112,7 @@ test('checks the selected ONNX addon for every Native ABI and skips foreign targ
     const result = verifyExtractedPayload({
       root,
       targetArchitecture: 'x64',
-      runBunVersion: () => '1.4.2',
+      runBunVersion: () => '1.4.4',
     });
     assert.equal(result.nativeModuleCount, 2);
   } finally {
@@ -128,7 +128,7 @@ test('fails when a selected ONNX addon has the wrong architecture for every ABI'
       assert.throws(() => verifyExtractedPayload({
         root,
         targetArchitecture: 'x64',
-        runBunVersion: () => '1.4.2',
+        runBunVersion: () => '1.4.4',
       }), /Agent native module architecture mismatch/);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
@@ -144,7 +144,7 @@ test('fails when the selected ONNX addon is missing', () => {
     assert.throws(() => verifyExtractedPayload({
       root,
       targetArchitecture: 'x64',
-      runBunVersion: () => '1.4.2',
+      runBunVersion: () => '1.4.4',
     }), /ENOENT/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
@@ -160,14 +160,14 @@ test('skips foreign ONNX addons in unpacked host modules and checks the selected
     const result = verifyExtractedPayload({
       root,
       targetArchitecture: 'x64',
-      runBunVersion: () => '1.4.2',
+      runBunVersion: () => '1.4.4',
     });
     assert.equal(result.nativeModuleCount, 5);
     writeElf(selected, 'arm64');
     assert.throws(() => verifyExtractedPayload({
       root,
       targetArchitecture: 'x64',
-      runBunVersion: () => '1.4.2',
+      runBunVersion: () => '1.4.4',
     }), /Native module architecture mismatch/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
@@ -181,7 +181,7 @@ test('fails on a missing native module', () => {
     assert.throws(() => verifyExtractedPayload({
       root,
       targetArchitecture: 'x64',
-      runBunVersion: () => '1.4.2',
+      runBunVersion: () => '1.4.4',
     }), /Missing packaged native module: pty\.node/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
@@ -200,7 +200,7 @@ test('fails on wrong Bun version or native architecture', () => {
     assert.throws(() => verifyExtractedPayload({
       root,
       targetArchitecture: 'x64',
-      runBunVersion: () => '1.4.2',
+      runBunVersion: () => '1.4.4',
     }), /Native module architecture mismatch/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });

@@ -10,9 +10,7 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./data/openchamber:/home/openchamber/.config/openchamber
-      - ./data/opencode/share:/home/openchamber/.local/share/opencode
-      - ./data/opencode/state:/home/openchamber/.local/state/opencode
-      - ./data/opencode/config:/home/openchamber/.config/opencode
+      - ./data/omp:/home/openchamber/.omp
       - ./data/ssh:/home/openchamber/.ssh
       - ./workspaces:/home/openchamber/workspaces
     environment:

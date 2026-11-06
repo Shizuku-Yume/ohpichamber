@@ -67,7 +67,7 @@ jobs:
       - name: Setup bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.4
 
       - name: Setup Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
@@ -79,6 +79,7 @@ jobs:
 
 
       - name: Install Apple Certificate
+        if: ${{ secrets.APPLE_CERTIFICATE != '' }}
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -103,10 +104,12 @@ jobs:
       - name: Build Electron app
         working-directory: packages/electron
         env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           ELECTRON_BUILDER_ARCH: ${{ matrix.arch }}
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.APPLE_CERTIFICATE != '' && 'true' || 'false' }}
         run: |
           bun run build:web-assets
           bun run prepare:agent-runtime
@@ -116,10 +119,19 @@ jobs:
           # recompile native deps on its own. Rebuild against the target
           # Electron ABI before packaging, matching the release workflow.
           bun run rebuild:native
-          bunx electron-builder --mac --${{ matrix.arch }} --publish=never
+          if [ -n "${APPLE_CERTIFICATE:-}" ]; then
+            bunx electron-builder --mac --${{ matrix.arch }} --publish=never
+          else
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+            bunx electron-builder --mac --${{ matrix.arch }} --publish=never \
+              --config.mac.identity=null \
+              --config.mac.notarize=false \
+              --config.mac.verifyUpdateCodeSignature=false
+          fi
           bun run verify:agent-runtime "dist/mac${{ matrix.arch == 'arm64' && '-arm64' || '' }}/OpenChamber.app/Contents/Resources"
 
       - name: Verify signature + entitlements + notarization
+        if: ${{ secrets.APPLE_CERTIFICATE != '' }}
         run: |
           set -euo pipefail
 
@@ -200,7 +212,7 @@ jobs:
       - name: Setup bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.4
 
       - name: Setup Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
@@ -241,7 +253,11 @@ jobs:
 
       - name: Build Windows app
         working-directory: packages/electron
-        shell: bash
+        env:
+          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+          OPENCHAMBER_REQUIRE_WINDOWS_SIGNING: ${{ secrets.WINDOWS_CSC_LINK != '' && '1' || '' }}
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.WINDOWS_CSC_LINK != '' && 'true' || 'false' }}
         run: |
           node ./scripts/package.mjs --win --${{ matrix.arch }} --publish=never
           bun run verify:agent-runtime "dist/win${{ matrix.arch == 'arm64' && '-arm64' || '' }}-unpacked/resources"
@@ -285,7 +301,7 @@ jobs:
       - name: Setup bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.4
 
       - name: Setup Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0

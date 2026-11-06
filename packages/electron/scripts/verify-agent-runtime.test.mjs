@@ -18,7 +18,7 @@ function fixture(t) {
     return { path: file, sha256: createHash('sha256').update(file).digest('hex') };
   });
   const manifest = {
-    platform: process.platform, architecture: process.arch, bunVersion: '1.4.2', files,
+    platform: process.platform, architecture: process.arch, bunVersion: '1.4.4', files,
     packages: ['@oh-my-pi/pi-coding-agent', `@oh-my-pi/pi-natives-${process.platform}-${process.arch}`, 'onnxruntime-node', 'fastembed'].map(name => ({ name })),
   };
   const save = () => fs.writeFileSync(path.join(root, 'manifest.json'), JSON.stringify(manifest));
@@ -28,11 +28,11 @@ function fixture(t) {
 
 test('resolves a relocated physical runtime and verifies its exact executable version and bytes', t => {
   const { root, resources } = fixture(t);
-  assert.equal(verifyAgentPayload(root, { runBunVersion: () => '1.4.2' }).packageCount, 4);
+  assert.equal(verifyAgentPayload(root, { runBunVersion: () => '1.4.4' }).packageCount, 4);
   const runtime = resolveAgentRuntime(resources);
   assert.equal(runtime.entrypoint, path.join(root, 'service/dist/index.js'));
   fs.writeFileSync(runtime.entrypoint, 'damaged');
-  assert.throws(() => verifyAgentPayload(root, { runBunVersion: () => '1.4.2' }), /checksum mismatch/);
+  assert.throws(() => verifyAgentPayload(root, { runBunVersion: () => '1.4.4' }), /checksum mismatch/);
 });
 
 test('fails closed on wrong target, wrong Bun and missing SDK closure', t => {

@@ -13,10 +13,9 @@
     "node": ">=24.14.0"
   },
   "keywords": [
-    "opencode",
+    "openchamber",
     "ai",
     "coding",
-    "openchamber",
     "cli"
   ],
   "author": "Bohdan Triapitsyn",

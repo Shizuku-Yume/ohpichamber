@@ -36,6 +36,14 @@ type LoopConditionConfig = { command: string; until: boolean };
 import { parseGeneratedRule, sanitizeRuleName } from '@oh-my-pi/pi-coding-agent/modes/controllers/omfg-rule';
 import { runCleanse, type CleanseRunUi } from '@oh-my-pi/pi-coding-agent/cleanse/index';
 import { resolveSeanceSource } from '@oh-my-pi/pi-coding-agent/task/seance';
+import { cfgTaskAgentIdleTtlMs } from '@oh-my-pi/pi-coding-agent/task/settings';
+import { createPersistedSubagentReviverFactory } from '@oh-my-pi/pi-coding-agent/task/persisted-revive';
+import { registerPersistedSubagents, sessionFileBelongsToRoot } from '@oh-my-pi/pi-coding-agent/registry/persisted-agents';
+import { agentTranscriptSource } from '@oh-my-pi/pi-coding-agent/modes/agent-hub-runtime';
+import { MAIN_AGENT_ID, type AgentRef } from '@oh-my-pi/pi-coding-agent/registry/agent-registry';
+import { SessionObserverRegistry } from '@oh-my-pi/pi-tui/overlays/session-observer-registry';
+import type { SubagentTranscriptEntry, SubagentTranscriptResponse } from '@openchamber/agent-contract';
+import { settleUsageSession } from './usage.ts';
 import type { WorkerBootstrapMessage, WorkerInteraction, WorkerOperation, WorkerOperationResult } from '../protocol.ts';
 import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
@@ -107,6 +115,10 @@ export class WorkerSession {
   private publishedContinuationPending = false;
   private readonly liveSubagents = new Map<string, Subagent>();
   private readonly toolCallToSubagentId = new Map<string, string>();
+  // Agent Hub reads: the observer registry tracks live sessions for the tree
+  // cost rollup, and the persisted roster is only awaited when the UI asks.
+  private readonly observers = new SessionObserverRegistry();
+  private persistedRoster: Promise<void> | undefined;
   get sessionId(): string { return this._sessionId; }
   get sessionFile(): string { return this._sessionFile; }
   get completedRewindState(): CompletedRewindState | undefined {
@@ -176,6 +188,20 @@ export class WorkerSession {
     this.subagentEventBus.on(TASK_SUBAGENT_EVENT_CHANNEL, data => {
       this.handleSubagentEvent(data as SubagentEventPayload);
     });
+    // OMP's own IdleMaintenance owns recaps now: it journals them into
+    // `history.db` (`session_recaps`), and the UI reads that journal through
+    // the `recaps` route. `isBlocked` keeps a recap from firing while a turn,
+    // compaction or session transition is in flight.
+    this.observers.subscribeToEventBus(this.subagentEventBus, this.subagentEventBus);
+    this.observers.setMainSession(this._sessionFile);
+    session.enableIdleMaintenance({
+      isBlocked: () => this.idleRecapBlocked(),
+      scheduledTurn: () => this.scheduledTurn(),
+      onRecap: () => undefined,
+    });
+    // Subagents restored from persisted transcripts become `parked` refs, so a
+    // UI reload still sees the swarm the previous worker built.
+    this.persistedRoster = registerPersistedSubagents(AgentRegistry.global(), this._sessionFile).catch(() => undefined);
     session.agent.prepareQueuedMessages = async (messages, signal, ...rest) => {
       const nativePreparation = await this.nativeQueuedPreparation?.(messages, signal, ...(rest as [never]));
       return {
@@ -215,6 +241,9 @@ export class WorkerSession {
       if (event.type === 'message_end' || event.type === 'turn_end' || event.type === 'agent_end') void this.bind().catch(() => this.fail());
       if (event.type === 'agent_end') {
         this.scheduleAutoTitle();
+        // Settle this turn's spend into `stats.db`; the analytics index must
+        // follow live work instead of waiting for an offline rescan.
+        void settleUsageSession(this._sessionFile).catch(() => undefined);
         if (this.loopState.active) void this.handleLoopTurnEnd();
       }
       if (
@@ -502,7 +531,17 @@ export class WorkerSession {
         await authorizeTool('provider.use', { providerId: model.provider, modelId: model.id, endpoint: model.baseUrl });
       };
       owned = new WorkerSession(nativeSession, authStorage, sessionFile, publish, input.rootSessionId, input.cwd, onFatal, interaction, catalogs, mcp, shell, completion, admission, authorize, authorizeProviderUse, onSubagent, subagentEventBus, new NativeWebSearch(runtime, input.workspaceId, authorize), permissionBridge);
-      await owned.modeController.goal.reconcile();
+      // Persisted subagents must be revivable after a worker restart: the factory
+   // rebuilds one from its transcript, and the TTL mirrors the native task-agent
+   // idle setting so a parked agent is collected exactly when OMP would.
+   AgentLifecycleManager.global().setPersistedSubagentReviverFactory(
+    createPersistedSubagentReviverFactory({
+     session: nativeSession, authStorage, modelRegistry, settings: nativeSession.settings,
+     enableLsp: true, eventBus: subagentEventBus, subagentEventBus,
+    }),
+    () => Math.trunc(Number(cfgTaskAgentIdleTtlMs.get(nativeSession.settings)) || 0),
+   );
+   await owned.modeController.goal.reconcile();
       await owned.modeController.restore();
       capturePolicy = async () => {
         const configuration = input.mcpConfigPath ? await readNativeMcpConfigurationIfPresent(input.mcpConfigPath, input.workspaceId) : null;
@@ -592,6 +631,107 @@ export class WorkerSession {
     });
     return this.binding;
   }
+  /**
+   * A recap is only meaningful for a settled session: a pending turn, an
+   * active loop iteration or a transition would describe work still in motion.
+   */
+  private idleRecapBlocked(): boolean {
+    return this.closed || this.failed || this.compacting || this.controllingBranch
+      || this.planReviewTask !== undefined || this.promptTask !== undefined;
+  }
+
+  /** A loop with turns left keeps IdleMaintenance waiting rather than recapping a partial run. */
+  private scheduledTurn(): boolean {
+    return this.loopState.active || this.publishedContinuationPending;
+  }
+
+  /** Live refs plus persisted ones, scoped to this session's artifact tree. */
+  private hubRefs(): AgentRef[] {
+    return AgentRegistry.global().list().filter(ref => ref.id !== MAIN_AGENT_ID
+      && (ref.sessionFile === null || sessionFileBelongsToRoot(ref.sessionFile, this._sessionFile)));
+  }
+
+  private hubRoster(): Subagent[] {
+    return this.hubRefs().map(ref => {
+      const live = this.liveSubagents.get(ref.id);
+      const persisted = ref.sessionFile !== null && !this.liveSubagents.has(ref.id);
+      return {
+        subagentId: ref.id,
+        parentSessionId: this._sessionId,
+        childSessionId: ref.id,
+        role: ref.displayName,
+        status: live?.status ?? (persisted ? 'parked' : 'idle'),
+        ...(live?.activeTool === undefined ? {} : { activeTool: live.activeTool }),
+        ...(live?.tokens === undefined ? {} : { tokens: live.tokens }),
+        ...(ref.history?.directCost === undefined ? {} : { directCost: ref.history.directCost }),
+        ...(ref.parentId === undefined ? {} : { parentSubagentId: ref.parentId }),
+        ...(ref.sessionFile === null ? {} : { sessionFile: ref.sessionFile }),
+        ...(persisted ? { persisted: true } : {}),
+        createdAt: ref.createdAt,
+        updatedAt: ref.lastActivity,
+      };
+    });
+  }
+
+  /** Direct spend plus every descendant's, walking the parent links. */
+  private hubTreeCost(): { sessionId: string; directCost: number; treeCost: number } {
+    const rows = this.hubRefs();
+    const byId = new Map(rows.map(row => [row.id, row]));
+    const own = new Map(rows.map(row => [row.id, row.history?.directCost ?? 0]));
+    const children = new Map<string, AgentRef[]>();
+    for (const row of rows) {
+      if (row.parentId === undefined) continue;
+      children.set(row.parentId, [...(children.get(row.parentId) ?? []), row]);
+    }
+    const directCost = rows.reduce((total, row) => total + (own.get(row.id) ?? 0), 0);
+    const walked = new Set<string>();
+    let treeCost = 0;
+    const walk = (id: string): number => {
+      if (walked.has(id)) return 0;
+      walked.add(id);
+      return (children.get(id) ?? []).reduce((total, child) => total + walk(child.id), own.get(id) ?? 0);
+    };
+    for (const row of rows) {
+      if (row.parentId !== undefined && byId.has(row.parentId)) continue;
+      treeCost += walk(row.id);
+    }
+    return { sessionId: this._sessionId, directCost, treeCost };
+  }
+
+  private async hubTranscript(subagentId: string): Promise<SubagentTranscriptResponse> {
+    const ref = this.hubRefs().find(candidate => candidate.id === subagentId);
+    if (!ref || ref.sessionFile === null) throw new ProjectionError(404, 'SESSION_NOT_FOUND', 'The subagent transcript is unavailable');
+    const text = await readFile(ref.sessionFile, 'utf8').catch(() => {
+      throw new ProjectionError(404, 'SESSION_NOT_FOUND', 'The subagent transcript is unavailable');
+    });
+    const entries: SubagentTranscriptEntry[] = [];
+    for (const entry of agentTranscriptSource.parseEntries(text)) {
+      if (entry.type !== 'message') continue;
+      // The parser returns the SDK message union, so blocks are read structurally.
+      const message = entry.message as { role: string; content?: unknown; provider?: string; model?: string };
+      const parts: Array<{ type?: string; text?: string; name?: string }> = Array.isArray(message.content) ? message.content : [];
+      const textParts: string[] = [];
+      const toolCalls: string[] = [];
+      for (const part of parts) {
+        if (part.type === 'text' && part.text) textParts.push(part.text);
+        if (part.type === 'toolCall' && part.name) toolCalls.push(part.name);
+      }
+      if (textParts.length === 0 && toolCalls.length === 0) continue;
+      const role = message.role === 'user' ? 'user' : message.role === 'assistant' ? 'assistant' : 'system';
+      entries.push({
+        entryId: String(entry.id ?? `${subagentId}-${entries.length}`),
+        role,
+        text: textParts.join('\n'),
+        createdAt: typeof entry.timestamp === 'number' && entry.timestamp > 0 ? entry.timestamp : Date.now(),
+        ...(message.provider === undefined ? {} : { providerId: message.provider }),
+        ...(message.model === undefined ? {} : { modelId: message.model }),
+        toolCalls,
+      });
+    }
+    return { subagentId, sessionFile: ref.sessionFile, entries };
+  }
+
+
   private handleSubagentLifecycle(payload: SubagentLifecyclePayload): void {
     const existing = this.liveSubagents.get(payload.id);
     const status: Subagent['status'] = payload.status === 'started' ? 'running'
@@ -1230,6 +1370,22 @@ export class WorkerSession {
         this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'subagent.updated', subagent: { ...owned } } }]);
         return { type: 'subagent.cancel', subagentId: operation.subagentId, cancelled: true };
       }
+      case 'subagent.revive': {
+        let revived: AgentSession;
+        try { revived = await AgentLifecycleManager.global().ensureLive(operation.subagentId); }
+        catch { throw new ProjectionError(404, 'SESSION_NOT_FOUND', 'The subagent is not revivable'); }
+        // The instruction goes to the subagent's own session, so it is recorded
+        // in that transcript and never attributed to the parent.
+        if (operation.message !== undefined) await revived.prompt(operation.message, { streamingBehavior: 'steer', throwOnDrop: true });
+        return { type: 'subagent.revive', subagentId: operation.subagentId, revived: true, prompted: operation.message !== undefined };
+      }
+      case 'subagents.list':
+        return { type: 'subagents.list', subagents: this.hubRoster() };
+      case 'subagents.transcript':
+        return { type: 'subagents.transcript', transcript: await this.hubTranscript(operation.subagentId) };
+      case 'subagents.tree-cost':
+        return { type: 'subagents.tree-cost', cost: this.hubTreeCost() };
+
       case 'loop.stop': {
         this.loopState = { active: false, iteration: 0 };
         this.loopCondition = undefined;

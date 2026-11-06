@@ -7,7 +7,8 @@ import type { SessionInfo } from '@oh-my-pi/pi-coding-agent/session/session-list
 import { FileSessionStorage } from '@oh-my-pi/pi-coding-agent/session/session-storage';
 import { z } from 'zod';
 import { ApprovalReplySchema, QuestionReplySchema, RuntimeSessionSchema, SessionBranchRequestSchema, SubagentSchema } from '@openchamber/agent-contract';
-import type { ApprovalReply, HistoryPageRequest, ProblemCode, QuestionReply, RuntimeSession, SessionBranchRequest, SessionSnapshot, Subagent, UsageQueryResult } from '@openchamber/agent-contract';
+import type { ApprovalReply, HistoryPageRequest, ProblemCode, QuestionReply, RuntimeSession, SessionBranchRequest, SessionRecapEntry, SessionSnapshot, Subagent, SubagentTranscriptResponse, SubagentTreeCostResponse, UsageQueryResult } from '@openchamber/agent-contract';
+import { listSessionRecaps } from '@oh-my-pi/pi-coding-agent/session/session-index';
 import { WorkerBootstrapSchema } from '../protocol.ts';
 import type { UsageSessionReference, WorkerBootstrap, WorkerInteraction, WorkerOperation, WorkerPolicyRequest } from '../protocol.ts';
 import { HostSessionBootstrapSchema, HostSessionRelocationFinalizeSchema, HostSessionRelocationPrepareSchema, type HostSessionRelocationPrepare } from '../supervisor/host-authorization-protocol.ts';
@@ -1213,6 +1214,45 @@ export class SessionRegistry {
     const result = await this.workers.request(sessionId, { type: 'subagent.cancel', subagentId });
     if (result.type !== 'subagent.cancel') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
     return result;
+  }
+  /**
+   * Agent Hub reads. All four go through the owning session's worker, so the
+   * answer is scoped to that worker's artifact tree rather than the
+   * process-global agent registry.
+   */
+  async listHubSubagents(sessionId: string): Promise<Subagent[]> {
+    this.ensureOpen(); this.get(sessionId);
+    const result = await this.workers.request(sessionId, { type: 'subagents.list' });
+    if (result.type !== 'subagents.list') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+    return result.subagents;
+  }
+  async subagentTranscript(sessionId: string, subagentId: string): Promise<SubagentTranscriptResponse> {
+    this.ensureOpen(); this.get(sessionId);
+    const result = await this.workers.request(sessionId, { type: 'subagents.transcript', subagentId });
+    if (result.type !== 'subagents.transcript') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+    return result.transcript;
+  }
+  async subagentTreeCost(sessionId: string): Promise<SubagentTreeCostResponse> {
+    this.ensureOpen(); this.get(sessionId);
+    const result = await this.workers.request(sessionId, { type: 'subagents.tree-cost' });
+    if (result.type !== 'subagents.tree-cost') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+    return result.cost;
+  }
+  async reviveSubagent(sessionId: string, subagentId: string, message?: string) {
+    this.ensureOpen(); this.assertWritable(sessionId);
+    const result = await this.workers.request(sessionId, message === undefined
+      ? { type: 'subagent.revive', subagentId }
+      : { type: 'subagent.revive', subagentId, message });
+    if (result.type !== 'subagent.revive') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+    return result;
+  }
+  /** Journaled idle recaps for one session, newest first, in epoch milliseconds. */
+  async listRecaps(sessionId: string): Promise<SessionRecapEntry[]> {
+    this.ensureOpen(); this.get(sessionId);
+    const child = [...this.subagents.values()].find(record => record.childSessionId === sessionId);
+    const reference = this.references.get(child?.rootSessionId ?? sessionId);
+    const rows = listSessionRecaps({ sessionIds: [sessionId], ...(reference ? { cwd: reference.cwd } : {}), limit: 100 });
+    return rows.map(row => ({ sessionId, cwd: row.cwd, recap: row.recap, createdAt: row.createdAt * 1000 }));
   }
   async stopLoop(sessionId: string) {
     this.ensureOpen(); this.assertWritable(sessionId);

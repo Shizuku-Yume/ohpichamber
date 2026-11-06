@@ -313,6 +313,32 @@ async function searxngLoopback(): Promise<{ url: string; requests: string[]; sto
  return { url: `http://127.0.0.1:${server.port}`, requests, stop: () => server.stop(true) };
 }
 
+test('Agent Hub reads answer from the worker without a live subagent', async () => {
+ const harness = await fixture({ respond: () => completion() });
+ try {
+  const roster = await harness.worker.operation({ type: 'subagents.list' });
+  expect(roster).toMatchObject({ type: 'subagents.list', subagents: [] });
+  const cost = await harness.worker.operation({ type: 'subagents.tree-cost' });
+  expect(cost).toMatchObject({ type: 'subagents.tree-cost', cost: { sessionId: expect.any(String), directCost: 0, treeCost: 0 } });
+ } finally { await harness.close(); }
+}, 30000);
+
+test('reviving an unknown subagent is refused rather than inventing one', async () => {
+ const harness = await fixture({ respond: () => completion() });
+ try {
+  await expect(harness.worker.operation({ type: 'subagent.revive', subagentId: 'subagent-not-registered' }))
+   .rejects.toMatchObject({ status: 404, code: 'SESSION_NOT_FOUND' });
+ } finally { await harness.close(); }
+}, 30000);
+
+test('a subagent transcript read refuses an agent this session never listed', async () => {
+ const harness = await fixture({ respond: () => completion() });
+ try {
+  await expect(harness.worker.operation({ type: 'subagents.transcript', subagentId: 'subagent-not-registered' }))
+   .rejects.toMatchObject({ status: 404, code: 'SESSION_NOT_FOUND' });
+ } finally { await harness.close(); }
+}, 30000);
+
 test('worker-originated custom prompts open canonical runs with origin', async () => {
  const harness = await fixture({ respond: () => completion() });
  try {

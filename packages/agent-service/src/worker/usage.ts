@@ -7,6 +7,8 @@ import { loadSessionFile, normalizeAssistantUsage } from '@oh-my-pi/pi-coding-ag
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import { MemorySessionStorage } from '@oh-my-pi/pi-coding-agent/session/session-storage';
 import type { UsageSessionReference } from '../protocol.ts';
+import { initDb } from '@oh-my-pi/omp-stats/db';
+import { syncAllSessions } from '@oh-my-pi/omp-stats';
 
 const Count = z.number().int().nonnegative();
 const Amount = z.number().finite().nonnegative();
@@ -145,6 +147,23 @@ function addTokens(target: UsageTokens, usage: Extract<SessionEntry, { type: 'me
 function dateKey(format: Intl.DateTimeFormat, timestamp: number): string {
   const parts = format.formatToParts(timestamp);
   return `${parts.find(part => part.type === 'year')!.value}-${parts.find(part => part.type === 'month')!.value}-${parts.find(part => part.type === 'day')!.value}`;
+}
+
+/**
+ * Settle one native transcript into `@oh-my-pi/omp-stats`' SQLite index
+ * (`stats.db`). Turn settlement calls this, so the analytics database follows
+ * live work incrementally instead of being rebuilt by a raw JSONL rescan.
+ *
+ * The canonical usage report still projects the validated native branch (see
+ * `getUsageStats`): the stats parser indexes every persisted entry and has no
+ * notion of the Host's authorized reference set or an abandoned branch, and
+ * the canonical view must never count either.
+ */
+export async function settleUsageSession(sessionFile: string): Promise<void> {
+  await initDb();
+  // One worker: the settlement runs inside the session worker process, where a
+  // Bun worker pool would cost more than the tail read it replaces.
+  await syncAllSessions({ files: [resolve(sessionFile)], workers: 1 });
 }
 
 export async function getUsageStats(input: UsageQuery, references: readonly UsageSessionReference[]): Promise<UsageStats> {

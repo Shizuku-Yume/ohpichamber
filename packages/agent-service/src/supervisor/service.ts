@@ -21,6 +21,7 @@ import type {
   WebSearchConfigState, WebSearchMutationResult,
   PluginCatalogState, PluginMutationResult, PluginDoctorResult, PluginMarketplaceState,
   PluginUpdateCheckResult, PluginUpgradePreviewResult, PluginMarketplaceSources,
+  SessionRecapListResponse, SubagentListResponse, SubagentTranscriptResponse, SubagentTreeCostResponse,
 } from '@openchamber/agent-contract';
 import { HostStreamingPromptRequestSchema, WorkerBootstrapSchema, WorkerOperationSchema } from '../protocol.ts';
 import type { WorkerBootstrap, WorkerInfo, WorkerPolicyRequest, WorkerPolicyResult } from '../protocol.ts';
@@ -29,6 +30,7 @@ import { SessionRegistry, type NativeArchiveImported, type NativeArchiveInventor
 import type { ApprovalPolicyCommit, ApprovalPolicyLoad } from '../interaction/manager.ts';
 import { SessionReferenceError } from '../sessions/references.ts';
 import { ArchiveImportRequestSchema } from '../sessions/archive.ts';
+import { sessionSurfaceRoute } from '../sessions/routes.ts';
 import { WorkerOperationError, WorkerRegistry, type RegisteredWorkerInfo, type WorkerDiagnostic, type WorkerCapacityPolicy, type WorktreeLeaseAcquireResult } from './workers.ts';
 import { deliverSessionStream } from './event-stream.ts';
 import { CatalogCoordinator, CatalogCoordinatorError, type CatalogAdmission, type CatalogBootstrap } from './catalog.ts';
@@ -98,7 +100,8 @@ type ServiceResponse =
   | CommandCatalogState | PromptTemplateCatalogState | FileResourceSkillCatalog | FileResourceExpandResult | FileResourcePromptInputResult
   | { sources: SkillSourceRevisions }
   | WorktreeLeaseAcquireResult
-  | ShellJob | ShellSnapshot | ShellOutput | ShellStopResult | ShellStreamResponse | ShellStdinResult;
+  | ShellJob | ShellSnapshot | ShellOutput | ShellStopResult | ShellStreamResponse | ShellStdinResult
+  | SessionRecapListResponse | SubagentListResponse | SubagentTranscriptResponse | SubagentTreeCostResponse;
 
 function respondJson(response: ServerResponse, status: number, body: ServiceResponse): void {
   response.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
@@ -628,6 +631,7 @@ export class AgentService {
         if (control.type === 'btw.branch') { respondJson(response, 200, SessionControlAckSchema.parse(await this.sessions.btwBranch(sessionId, control.recordId))); return; }
         if (control.type === 'subagent.steer') { respondJson(response, 200, SessionControlAckSchema.parse(await this.sessions.steerSubagent(sessionId, control.subagentId, control.message))); return; }
         if (control.type === 'subagent.cancel') { respondJson(response, 200, SessionControlAckSchema.parse(await this.sessions.cancelSubagent(sessionId, control.subagentId))); return; }
+        if (control.type === 'subagent.revive') { respondJson(response, 200, SessionControlAckSchema.parse(await this.sessions.reviveSubagent(sessionId, control.subagentId, control.message))); return; }
         if (control.type === 'loop.stop') { respondJson(response, 200, SessionControlAckSchema.parse(await this.sessions.stopLoop(sessionId))); return; }
       }
       const sessionRoute = /^\/api\/agent\/v1\/sessions\/([^/]+)(?:\/(snapshot|history|events)|\/(runs)(?:\/([^/]+)\/abort)?)?$/.exec(url.pathname);
@@ -653,6 +657,8 @@ export class AgentService {
           respondJson(response, 202, { run: await this.sessions.prompt(sessionId, { type: 'prompt', runId: randomUUID(), request: prompt }) }); return;
         }
       }
+      const surfaceResponse = await sessionSurfaceRoute(this.sessions, request, url);
+      if (surfaceResponse) { respondJson(response, surfaceResponse.status, surfaceResponse.body); return; }
       const workspaceResponse = await this.workspaceRoutes.handle(request, url, readBody);
       if (workspaceResponse) { respondJson(response, workspaceResponse.status, workspaceResponse.body); return; }
       const shellResponse = await this.shell.handle(request, url, readBody);

@@ -20,6 +20,11 @@ on:
         required: false
         default: false
         type: boolean
+      build_docker:
+        description: 'Build Docker image (non-pushing test build)'
+        required: false
+        default: true
+        type: boolean
 
 env:
   CARGO_INCREMENTAL: 0
@@ -127,6 +132,24 @@ jobs:
         run: bun publish --access public
         env:
           NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  build-docker:
+    needs: create-release
+    if: ${{ github.event.inputs.finish_published_release != 'true' && (github.event_name == 'push' || github.event.inputs.build_docker != false) }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
+
+      - name: Build Docker image (non-pushing)
+        uses: docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4 # v6.15.0
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          tags: openchamber:${{ needs.create-release.outputs.version }}
 
   build-desktop-electron-macos:
     needs: create-release

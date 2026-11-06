@@ -15,7 +15,7 @@
 - [x] Update `SessionRecapSpacer.tsx` (`SessionRecapNote` and `CompactionDivider`) and `useSessionAssist.ts` to render `session.recap` immediately (removing the 60s client delay), display full compaction metadata (`method`, `tokensBefore`, `tokensAfter`, `summary`), and remove hardcoded English fallback chains / token suffixes per Audit List C.
 - [x] Wire OMP `Agent Hub` in `worker/session.ts` and `@openchamber/agent-contract`: call `registerPersistedSubagents` on bootstrap so subagents survive UI reloads as `parked`, support `subagent.revive` via `AgentLifecycleManager`, and expose `GET /api/agent/v1/sessions/:id/subagents`, `GET /api/agent/v1/sessions/:id/subagents/:subagentId/transcript` (`agentTranscriptSource`), and `GET /api/agent/v1/sessions/:id/subagents/tree-cost` (`sumSubagentTreeCost`).
 - [x] Build `packages/ui/src/components/chat/AgentHubModal.tsx` (openable from `SubagentHudTray.tsx` and `WorkStatusSubagentsSection.tsx`) with hierarchical subagent table, direct + tree cost rollups, transcript viewer, and Revive & Prompt / Steer / Cancel controls; remediate all Audit List C primitive/i18n/RTL issues in `SubagentHudTray.tsx` and `WorkStatusSubagentsSection.tsx` (`size="xs"` buttons, shared `Input`, logical `ps-*`/`ms-*` classes).
-- [x] Cut over `packages/agent-service/src/worker/usage.ts` from synchronous raw JSONL disk scans to `@oh-my-pi/omp-stats`'s SQLite `StatsDatabase` (`stats.db`) for the aggregate read, updating stats on turn settlement; only the fields the schema cannot express (prompt rows with attachment-only content, and tool result timing) keep a bounded branch read that reuses the cold-validated cache.
+- [~] `packages/agent-service/src/worker/usage.ts`: `settleUsageSession()` indexes on turn settlement and repeat reads no longer re-parse JSONL, but the canonical report stays an authorized-reference projection — `stats.db` cannot express `parent_id` (abandoned-branch exclusion), tool result timing (`[from, to)` outcome windows), or the fork guard's single-owner entry ids (proven fork dedupe). A full SQL aggregate would silently change reported numbers; see the usage section under Progress.
 
 ## Progress
 
@@ -61,18 +61,18 @@
   `subagents.tree-cost`; persisted-subagent reviver factory installed in `open()`; `settleUsageSession` on `agent_end`.
   `idleRecapBlocked()` deliberately excludes `promptTask`, which stays assigned after a turn settles and would have
   blocked every recap.
-- `agent-service/src/worker/usage.ts`: cut over to `stats.db` reads with a narrow, stated JSONL path.
-  `settleUsageSession()` indexes each transcript on turn end; `getUsageStats` hydrates a **cold** reference
-  once (that read is also the strict validation) and then aggregates from `messages` / `user_messages` rows,
-  filtered by (a) the admitted `UsageSessionReference[]`, (b) the cached active-branch entry ids, and (c) the
-  proven fork family, so authorization, abandoned-branch exclusion and fork dedup are all preserved.
-  Every index read unions the admitted files, because a fork's copied entries are stored under whichever
-  `session_file` wrote them first. Two fields keep a bounded branch read from memory (no extra file I/O):
-  prompt count — `user_messages` omits a prompt whose only content is an attachment — and tool accounting —
-  `tool_calls` has no result timestamp, so the `[from, to)` outcome window, the interruption marker and the
-  unfinished state cannot be reconstructed from `is_error` alone. Tests: cold hydration writes the expected
-  row, later answers come from those rows, and an unchanged repeat request is proven not to re-parse (pinned
-  size+mtime, bytes replaced with garbage, same answer; growing the file is then correctly refused).
+- `agent-service/src/worker/usage.ts`: `settleUsageSession()` indexes each transcript into
+  `@oh-my-pi/omp-stats`' `stats.db` on turn end, and the canonical report reuses a validated read keyed on
+  `(size, mtimeMs)` so a repeat request parses no JSONL (proven by pinning one mtime, replacing the bytes with
+  same-size garbage and still getting the same counts, then growing the file and being correctly refused).
+  The report itself remains an authorized-reference projection rather than a SQL aggregate, because the index
+  cannot express three things the contract requires: `messages`/`tool_calls` carry no `parent_id` (so
+  `getBranch()`'s abandoned-branch exclusion is not expressible in SQL), `tool_calls` carries no result
+  timestamp (so the `[from, to)` outcome window cannot be reconstructed from `is_error`), and
+  `ChunkedInsert`'s fork guard stores a copied `(entry_id, timestamp)` under only one transcript, which breaks
+  proven-fork dedupe and unrelated-id counting in both directions. `stats.db` is OMP's machine-wide shared
+  index and is never mutated by a scoped request — a regression test asserts another session's rows survive
+  a query scoped to this one.
 - `agent-service/src/sessions/routes.ts`: `sessionSurfaceRoute` for `GET …/recaps`, `…/subagents`,
   `…/subagents/:id/transcript`, `…/subagents/tree-cost`.
 - `ui AgentHubModal.tsx`: depth-first roster (status/role/tool/tokens/direct cost/tree cost), transcript viewer,
@@ -94,6 +94,6 @@
   make the routes reachable. `service-surface-routes.test.ts` boots the real `AgentService` and exercises every new
   route over HTTP, so this is proven end to end rather than only in isolation.
 
-**Check after:** `bun test packages/agent-contract packages/agent-service` → 606 pass / 10 skip / 0 fail on the
-integration branch (616 tests, 81 files). `bun test packages/web/server/lib/session-assist` 30 pass.
+**Check after:** `bun test packages/agent-contract packages/agent-service` → 610 pass / 10 skip / 0 fail on the
+integration branch (620 tests, 82 files). `bun test packages/web/server/lib/session-assist` 30 pass. `bun test packages/agent-service/src/worker/usage.test.ts` 20 pass.
 `bun run --cwd packages/ui type-check` 0 errors. `bunx oxlint` clean. `.workflow/bin/workflow validate` valid.

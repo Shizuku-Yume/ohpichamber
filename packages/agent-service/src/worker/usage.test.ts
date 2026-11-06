@@ -1,13 +1,14 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { mkdir, mkdtemp, readFile, rm, symlink, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { UsageStatsSchema, UsageToolsResponseSchema, type UsageQuery } from '@openchamber/agent-contract';
 import type { FileEntry, SessionEntry, SessionMessageEntry } from '@oh-my-pi/pi-coding-agent/session/session-entries';
 import { loadSessionFile } from '@oh-my-pi/pi-coding-agent/session/session-loader';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import type { UsageSessionReference } from '../protocol.ts';
 import { getUsageStats, getUsageTools, settleUsageSession } from './usage.ts';
+import { currentDb, initDb } from '@oh-my-pi/omp-stats/db';
 
 let directory: string;
 const start = Date.parse('2026-03-07T05:00:00Z');
@@ -112,6 +113,22 @@ test('malformed, truncated, empty and missing transcripts preserve siblings with
   expect(JSON.stringify(stats.errors)).not.toContain(directory);
   await expect(getUsageStats(query, [malformed, missing])).rejects.toThrow('USAGE_UNAVAILABLE');
   await expect(getUsageTools(query, [truncated, empty])).rejects.toThrow('USAGE_UNAVAILABLE');
+});
+
+test('cold hydration indexes the transcript and later reads are answered from stats.db rows', async () => {
+  const source = await transcript('indexed', [user('indexed-u', null, start), assistant('indexed-a', 'indexed-u', start + 1)]);
+  await initDb();
+  // Cold: the first request hydrates the index from the JSONL.
+  expect((await getUsageStats(query, [source])).steps).toBe(1);
+  const db = currentDb();
+  if (!db) throw new Error('The stats database must be open');
+  const rows = db.query('SELECT entry_id FROM messages WHERE session_file = ?').all(resolve(source.sessionFile)) as Array<{ entry_id: string }>;
+  // The aggregate numbers really are read out of these rows.
+  expect(rows.map(row => row.entry_id).sort()).toEqual(['indexed-a']);
+  // Rewriting the bytes with a different size invalidates the branch read, and
+  // an index-only answer must agree with what the rows say.
+  await settleUsageSession(source.sessionFile);
+  expect((await getUsageStats(query, [source])).models.map(model => [model.providerId, model.modelId])).toEqual([['provider-a', 'model-a']]);
 });
 
 test('settlement indexes the transcript and an unchanged repeat request reuses the validated read', async () => {

@@ -249,3 +249,17 @@ test('a secret setting is written as a private configure value and never enters 
   expect(jsonEditor?.value ?? '').not.toContain('top-secret');
   expect(secret.value).toBe('');
 });
+
+test('PluginsPage mounts without infinite re-render loop when catalog is null', async () => {
+  usePluginsStore.setState({
+    catalog: null,
+    loadedDirectory: '/repo',
+    loadedRuntimeKey: getRuntimeKey(),
+    isLoading: true,
+  });
+  await act(async () => {
+    root.render(<I18nProvider><PluginsPage /></I18nProvider>);
+  });
+  await settle();
+  expect(container.textContent).toContain('Plugins');
+});

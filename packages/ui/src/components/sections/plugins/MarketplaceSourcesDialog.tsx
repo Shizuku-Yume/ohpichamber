@@ -18,6 +18,8 @@ const SOURCE_TYPE_LABEL = {
  local: 'settings.plugins.marketplace.source.local',
 } as const satisfies Record<MarketplaceSource['sourceType'], string>;
 
+const EMPTY_SOURCES: MarketplaceSource[] = [];
+
 /**
  * Catalog sources are user-scoped native registries. Adding or refreshing one
  * fetches over the network, so every action here is an explicit user command.
@@ -27,7 +29,7 @@ export const MarketplaceSourcesDialog: React.FC<{
  onOpenChange: (open: boolean) => void;
 }> = ({ open, onOpenChange }) => {
  const { t } = useI18n();
- const sources = usePluginsStore(state => state.catalog?.marketplaceSources ?? []);
+ const sources = usePluginsStore(state => state.catalog?.marketplaceSources) ?? EMPTY_SOURCES;
  const [source, setSource] = React.useState('');
  const [pending, setPending] = React.useState(false);
  const [refreshing, setRefreshing] = React.useState<string | null>(null);

@@ -260,17 +260,24 @@ Build output goes to `packages/electron/dist`.
 
 Electron Builder copies the `@openchamber/web` workspace package whole, ignoring its `files` field, so `build.files` in `package.json` excludes what the packaged runtime never loads: the web package's `dist` (packaged builds serve `Resources/web-dist` through `OPENCHAMBER_DIST_DIR`), its `src`, configs, tests and stray tarballs; TypeScript sources, source maps and Markdown other than licenses from every dependency; `bun-pty`, which only the Bun runtime imports; luxon builds other than `build/node` (CommonJS, for cron-parser) and `build/es6` (ESM, for the server); and `node-pty` prebuilds other than `${platform}-${arch}` (the Electron-rebuilt `build/Release` binary loads first; `${platform}` is the build host, which matches the target because `rebuild:native` already builds for the host OS). Keep these exclusions in the top-level `files`: Electron Builder treats a platform-level `files` list as its own file set, and one holding only exclusions copies the whole package directory into the archive. The `afterPack` hook then reads the `app.asar` header (`scripts/packaged-app-contents.cjs`) and fails the build when anything outside `node_modules` other than the bundled main files, `preload.mjs` and `package.json` is packed, when the web `dist` is packed, or when the bundled main files, the web server entry and manifest, or the unpacked git helpers are missing.
 
-macOS builds produce `dmg` and `zip` artifacts. Windows builds produce an NSIS installer. Linux builds produce an AppImage, a `.deb` and an `.rpm` for the native x64 or arm64 host; the `.rpm` needs `rpmbuild` on the build host.
+Packaged desktop builds target six native architectures:
+- **macOS (`darwin-arm64`, `darwin-x64`)**: produces `.dmg` and `.zip` artifacts.
+- **Windows (`win32-x64`, `win32-arm64`)**: produces NSIS installer `.exe` packages.
+- **Linux (`linux-x64`, `linux-arm64`)**: produces AppImage, `.deb`, and `.rpm` packages (requires native build host).
 
 ## Platform Notes
 
-macOS packaging needs Xcode/build tools for notarized builds and icon asset compilation.
+macOS packaging supports both signed/notarized releases and unsigned ad-hoc builds (`CSC_IDENTITY_AUTO_DISCOVERY=false`). When commercial Apple Developer ID or notarization credentials are not configured, builds succeed and emit unsigned DMG/ZIP artifacts. Unsigned macOS applications are quarantined by macOS Gatekeeper on download and will display a warning that the app is damaged or from an unidentified developer. To run an unsigned build:
 
-Windows packaging needs NSIS support through `electron-builder`. If no Windows signing env is set, `package.mjs` disables code signing and builds an unsigned installer. `build.nsis.include` adds `resources/installer.nsh`, which declares the installer and uninstaller DPI-aware; without it Windows scales their windows as a bitmap and they look blurred at a display scale above 100% (#5010). Windows updates use `latest.yml` for x64 and the `latest-arm64.yml` channel for ARM64 so each installation resolves an architecture-matching installer.
+1. Clear the Gatekeeper quarantine extended attribute:
+   ```bash
+   xattr -cr /Applications/OpenChamber.app
+   ```
+2. Alternatively, Control-click (or right-click) the application in Finder, select **Open**, and click **Open** in the confirmation dialog.
 
-Linux packages must be built natively. Set `OPENCHAMBER_TARGET_ARCH=x64` or `OPENCHAMBER_TARGET_ARCH=arm64` when packaging; the build rejects a target that does not match the Linux host. The same target selects the bundled OpenCode CLI, native Electron rebuild, and Electron Builder architecture. Linux identity is stable across architectures: executable `openchamber`, desktop file `openchamber.desktop`, icon `openchamber`, and `StartupWMClass=openchamber`.
+Windows packaging produces NSIS installers for `win32-x64` and `win32-arm64`. If no Windows Authenticode signing credentials (`CSC_LINK` / `CSC_KEY_PASSWORD`) are supplied, `package.mjs` disables code signing (`CSC_IDENTITY_AUTO_DISCOVERY=false`, `--config.win.verifyUpdateCodeSignature=false`) and builds an unsigned installer cleanly. `build.nsis.include` adds `resources/installer.nsh`, which declares the installer and uninstaller DPI-aware; without it Windows scales their windows as a bitmap and they look blurred at a display scale above 100% (#5010). Windows updates use `latest.yml` for x64 and the `latest-arm64.yml` channel for ARM64 so each installation resolves an architecture-matching installer.
 
-Linux AppImages must be built natively. Set `OPENCHAMBER_TARGET_ARCH=x64` or `OPENCHAMBER_TARGET_ARCH=arm64` when packaging; the build rejects a target that does not match the Linux host. The same target selects native Electron rebuild and Electron Builder architecture. Linux identity is stable across architectures: executable `openchamber`, desktop file `openchamber.desktop`, icon `openchamber`, and `StartupWMClass=openchamber`.
+Linux packages and AppImages must be built natively on the matching architecture host. Set `OPENCHAMBER_TARGET_ARCH=x64` or `OPENCHAMBER_TARGET_ARCH=arm64` when packaging; the build rejects a target that does not match the Linux host. The target selects native Electron rebuild, staged OMP Agent Runtime, and Electron Builder architecture. Linux identity is stable across architectures: executable `openchamber`, desktop file `openchamber.desktop`, icon `openchamber`, and `StartupWMClass=openchamber`.
 
 The Linux icon is the 512x512 `resources/icons/app-icon.png`, which the AppImage carries at `usr/share/icons/hicolor/512x512/apps/openchamber.png`. Keep it a PNG of at most 512x512: electron-builder's default AppImage path puts an SVG at `hicolor/scalable/` without the `apps/` directory, and the hicolor theme declares no size above 512, so launchers cannot resolve `Icon=openchamber` (#4766, #2934). The verifier checks both the icon and `.DirIcon`.
 

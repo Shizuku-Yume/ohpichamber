@@ -24,7 +24,7 @@ curl -fsSL https://raw.githubusercontent.com/openchamber/openchamber/main/script
 
 Or install manually: `bun add -g @openchamber/web` (or npm, pnpm, yarn).
 
-> **Runtime prerequisites:** Node.js 24.14+ for the Host, Bun 1.3.14+ on PATH for the supervised Agent Service, and built Agent Service entries with their installed pinned SDK/native dependencies. An OpenCode CLI is not a startup prerequisite. The upstream installer command above is inherited distribution guidance; the npm Web package is publicly declared, but the OMP runtime inside a standalone npm installation remains unverified and out of M3 acceptance.
+> **Runtime prerequisites:** Node.js 24.14+ for the Host, Bun 1.4.4+ on PATH for the supervised Agent Service, and built Agent Service entries with their installed pinned SDK/native dependencies. An OpenCode CLI is not a startup prerequisite. The upstream installer command above is inherited distribution guidance; the npm Web package is publicly declared, but the OMP runtime inside a standalone npm installation remains unverified and out of M3 acceptance.
 
 ### Monorepo development scripts
 
@@ -241,6 +241,22 @@ systemctl --user enable --now openchamber
 - **Background notifications** - know when your agent finishes, even from another tab
 - **Cross-tab tracking** - session activity stays in sync reliably across browser tabs
 - **Self-update** - update and restart flow from the UI that keeps server settings intact
+## Client Distributions and Platform Targets
+
+OpenChamber is available across Web, Desktop, and Mobile surfaces:
+
+- **Web & PWA**: Served directly by `@openchamber/web` or installable as a standalone PWA.
+- **Desktop Electron** (`packages/electron`): Native binaries for six desktop targets:
+  - **macOS** (`darwin-arm64`, `darwin-x64`): `.dmg` and `.zip`. For unsigned builds, bypass macOS Gatekeeper quarantine via:
+    ```bash
+    xattr -cr /Applications/OpenChamber.app
+    ```
+  - **Windows** (`win32-x64`, `win32-arm64`): NSIS `.exe` installers (unsigned builds succeed cleanly when Authenticode secrets are absent).
+  - **Linux** (`linux-x64`, `linux-arm64`): AppImage, `.deb`, and `.rpm`.
+- **Mobile Capacitor** (`packages/mobile`):
+  - **Android**: Debug and release `.apk` (install via `adb install` or device package installer).
+  - **iOS**: `.ipa` and simulator builds. Unsigned/ad-hoc `.ipa` artifacts can be sideloaded to physical devices via Sideloadly, AltStore, SideStore, or the Xcode Devices window.
+
 ## License
 
 MIT

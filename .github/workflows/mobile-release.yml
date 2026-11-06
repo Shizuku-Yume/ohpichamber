@@ -119,6 +119,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
 
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
@@ -133,29 +135,26 @@ jobs:
         run: bun install
 
       - name: Prepare Android keystore
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
         shell: bash
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
           set -euo pipefail
-          if [[ -z "$ANDROID_KEYSTORE_BASE64" ]]; then
-            echo "ANDROID_KEYSTORE_BASE64 secret is required."
-            exit 1
-          fi
           echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/openchamber-release.keystore"
+          echo "KEYSTORE_EXISTS=true" >> "$GITHUB_ENV"
 
-      - name: Build signed Android release
+      - name: Build Android release
         env:
           OPENCHAMBER_ANDROID_VERSION_CODE: ${{ needs.resolve-version.outputs.build_number }}
           OPENCHAMBER_ANDROID_VERSION_NAME: ${{ needs.resolve-version.outputs.version_name }}
-          OPENCHAMBER_ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/openchamber-release.keystore
+          OPENCHAMBER_ANDROID_KEYSTORE_PATH: ${{ env.KEYSTORE_EXISTS == 'true' && format('{0}/openchamber-release.keystore', runner.temp) || '' }}
           OPENCHAMBER_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           OPENCHAMBER_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           OPENCHAMBER_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           bun run mobile:sync
           ./packages/mobile/android/gradlew -p packages/mobile/android bundleRelease assembleRelease
-
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -195,6 +194,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
 
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
@@ -204,6 +205,7 @@ jobs:
         run: bun install
 
       - name: Install Apple signing assets
+        if: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_BASE64 != '' && secrets.IOS_APP_PROFILE_BASE64 != '' && secrets.IOS_WIDGET_PROFILE_BASE64 != '' && secrets.IOS_NSE_PROFILE_BASE64 != '' }}
         shell: bash
         env:
           IOS_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_BASE64 }}
@@ -213,13 +215,6 @@ jobs:
           IOS_NSE_PROFILE_BASE64: ${{ secrets.IOS_NSE_PROFILE_BASE64 }}
         run: |
           set -euo pipefail
-          for name in IOS_DISTRIBUTION_CERTIFICATE_BASE64 IOS_APP_PROFILE_BASE64 IOS_WIDGET_PROFILE_BASE64 IOS_NSE_PROFILE_BASE64; do
-            if [[ -z "${!name}" ]]; then
-              echo "$name secret is required."
-              exit 1
-            fi
-          done
-
           cert_path="$RUNNER_TEMP/ios_distribution.p12"
           keychain_path="$RUNNER_TEMP/app-signing.keychain-db"
           profiles_dir="$HOME/Library/MobileDevice/Provisioning Profiles"
@@ -254,11 +249,12 @@ jobs:
           install_profile "$app_profile" IOS_APP_PROFILE_UUID
           install_profile "$widget_profile" IOS_WIDGET_PROFILE_UUID
           install_profile "$nse_profile" IOS_NSE_PROFILE_UUID
+          echo "APPLE_SIGNING_READY=true" >> "$GITHUB_ENV"
 
       - name: Prepare mobile assets
         run: bun run mobile:sync
 
-      - name: Set TestFlight entitlement and versions
+      - name: Set iOS versions and signing configuration
         shell: bash
         env:
           VERSION_NAME: ${{ needs.resolve-version.outputs.version_name }}
@@ -267,75 +263,93 @@ jobs:
           IOS_APP_PROFILE_NAME: ${{ secrets.IOS_APP_PROFILE_NAME }}
           IOS_WIDGET_PROFILE_NAME: ${{ secrets.IOS_WIDGET_PROFILE_NAME }}
           IOS_NSE_PROFILE_NAME: ${{ secrets.IOS_NSE_PROFILE_NAME }}
+          APPLE_SIGNING_READY: ${{ env.APPLE_SIGNING_READY }}
         run: |
           set -euo pipefail
-          /usr/libexec/PlistBuddy -c "Set :aps-environment production" App/App.entitlements
-          xcrun agvtool new-marketing-version "$VERSION_NAME"
-          xcrun agvtool new-version -all "$BUILD_NUMBER"
+          xcrun agvtool new-marketing-version "$VERSION_NAME" || true
+          xcrun agvtool new-version -all "$BUILD_NUMBER" || true
 
-          node --input-type=module <<'NODE'
-          import { readFileSync, writeFileSync } from 'node:fs';
+          if [[ "$APPLE_SIGNING_READY" == "true" && -n "$APPLE_TEAM_ID" && -n "$IOS_APP_PROFILE_NAME" && -n "$IOS_WIDGET_PROFILE_NAME" && -n "$IOS_NSE_PROFILE_NAME" ]]; then
+            /usr/libexec/PlistBuddy -c "Set :aps-environment production" App/App.entitlements
 
-          const projectPath = 'App.xcodeproj/project.pbxproj';
-          let project = readFileSync(projectPath, 'utf8');
-          const releaseBlockPattern = /\n\t\t[^\n]+ \/\* Release \*\/ = \{\n\t\t\tisa = XCBuildConfiguration;[\s\S]*?\n\t\t\tname = Release;\n\t\t\};/g;
-          const replacements = [
-            {
-              bundle: 'com.openchamber.app',
-              profile: process.env.IOS_APP_PROFILE_NAME,
-              uuid: process.env.IOS_APP_PROFILE_UUID,
-            },
-            {
-              bundle: 'com.openchamber.app.OpenChamberWidget',
-              profile: process.env.IOS_WIDGET_PROFILE_NAME,
-              uuid: process.env.IOS_WIDGET_PROFILE_UUID,
-            },
-            {
-              bundle: 'com.openchamber.app.OpenChamberNotificationService',
-              profile: process.env.IOS_NSE_PROFILE_NAME,
-              uuid: process.env.IOS_NSE_PROFILE_UUID,
-            },
-          ];
+            node --input-type=module <<'NODE'
+            import { readFileSync, writeFileSync } from 'node:fs';
 
-          function setBuildSetting(block, key, value) {
-            const settingPattern = new RegExp(`\\n\\t\\t\\t\\t${key} = [^;]+;`);
-            const line = `\n\t\t\t\t${key} = ${value};`;
-            if (settingPattern.test(block)) return block.replace(settingPattern, line);
-            return block.replace('\n\t\t\t};', `${line}\n\t\t\t};`);
-          }
+            const projectPath = 'App.xcodeproj/project.pbxproj';
+            let project = readFileSync(projectPath, 'utf8');
+            const releaseBlockPattern = /\n\t\t[^\n]+ \/\* Release \*\/ = \{\n\t\t\tisa = XCBuildConfiguration;[\s\S]*?\n\t\t\tname = Release;\n\t\t\};/g;
+            const replacements = [
+              {
+                bundle: 'com.openchamber.app',
+                profile: process.env.IOS_APP_PROFILE_NAME,
+                uuid: process.env.IOS_APP_PROFILE_UUID,
+              },
+              {
+                bundle: 'com.openchamber.app.OpenChamberWidget',
+                profile: process.env.IOS_WIDGET_PROFILE_NAME,
+                uuid: process.env.IOS_WIDGET_PROFILE_UUID,
+              },
+              {
+                bundle: 'com.openchamber.app.OpenChamberNotificationService',
+                profile: process.env.IOS_NSE_PROFILE_NAME,
+                uuid: process.env.IOS_NSE_PROFILE_UUID,
+              },
+            ];
 
-          for (const { bundle, profile, uuid } of replacements) {
-            if (!profile) throw new Error(`Missing provisioning profile name for ${bundle}`);
-            if (!uuid) throw new Error(`Missing provisioning profile UUID for ${bundle}`);
-            const marker = `PRODUCT_BUNDLE_IDENTIFIER = ${bundle};`;
-            const match = [...project.matchAll(releaseBlockPattern)].find(([block]) => block.includes(marker));
-            if (!match) throw new Error(`Could not find ${bundle} Release build settings block`);
+            function setBuildSetting(block, key, value) {
+              const settingPattern = new RegExp(`\\n\\t\\t\\t\\t${key} = [^;]+;`);
+              const line = `\n\t\t\t\t${key} = ${value};`;
+              if (settingPattern.test(block)) return block.replace(settingPattern, line);
+              return block.replace('\n\t\t\t};', `${line}\n\t\t\t};`);
+            }
 
-            let block = match[0];
-            block = setBuildSetting(block, 'CODE_SIGN_IDENTITY', '"Apple Distribution"');
-            block = setBuildSetting(block, 'CODE_SIGN_STYLE', 'Manual');
-            block = setBuildSetting(block, 'DEVELOPMENT_TEAM', process.env.APPLE_TEAM_ID);
-            block = setBuildSetting(block, 'PROVISIONING_PROFILE', `"${uuid}"`);
-            block = setBuildSetting(block, 'PROVISIONING_PROFILE_SPECIFIER', `"${profile}"`);
+            for (const { bundle, profile, uuid } of replacements) {
+              if (!profile) throw new Error(`Missing provisioning profile name for ${bundle}`);
+              if (!uuid) throw new Error(`Missing provisioning profile UUID for ${bundle}`);
+              const marker = `PRODUCT_BUNDLE_IDENTIFIER = ${bundle};`;
+              const match = [...project.matchAll(releaseBlockPattern)].find(([block]) => block.includes(marker));
+              if (!match) throw new Error(`Could not find ${bundle} Release build settings block`);
 
-            project = project.replace(match[0], block);
-          }
+              let block = match[0];
+              block = setBuildSetting(block, 'CODE_SIGN_IDENTITY', '"Apple Distribution"');
+              block = setBuildSetting(block, 'CODE_SIGN_STYLE', 'Manual');
+              block = setBuildSetting(block, 'DEVELOPMENT_TEAM', process.env.APPLE_TEAM_ID);
+              block = setBuildSetting(block, 'PROVISIONING_PROFILE', `"${uuid}"`);
+              block = setBuildSetting(block, 'PROVISIONING_PROFILE_SPECIFIER', `"${profile}"`);
 
-          writeFileSync(projectPath, project);
-          NODE
+              project = project.replace(match[0], block);
+            }
+
+            writeFileSync(projectPath, project);
+            NODE
+          fi
         working-directory: ${{ env.IOS_PROJECT_DIR }}
 
       - name: Archive iOS app
         shell: bash
+        env:
+          APPLE_SIGNING_READY: ${{ env.APPLE_SIGNING_READY }}
         run: |
           set -euo pipefail
-          xcodebuild archive \
-            -workspace App.xcworkspace \
-            -scheme App \
-            -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -archivePath "$RUNNER_TEMP/OpenChamber.xcarchive" \
-            "OTHER_CODE_SIGN_FLAGS=--keychain $RUNNER_TEMP/app-signing.keychain-db"
+          if [[ "$APPLE_SIGNING_READY" == "true" ]]; then
+            xcodebuild archive \
+              -workspace App.xcworkspace \
+              -scheme App \
+              -configuration Release \
+              -destination 'generic/platform=iOS' \
+              -archivePath "$RUNNER_TEMP/OpenChamber.xcarchive" \
+              "OTHER_CODE_SIGN_FLAGS=--keychain $RUNNER_TEMP/app-signing.keychain-db"
+          else
+            xcodebuild archive \
+              -workspace App.xcworkspace \
+              -scheme App \
+              -configuration Release \
+              -destination 'generic/platform=iOS' \
+              -archivePath "$RUNNER_TEMP/OpenChamber.xcarchive" \
+              CODE_SIGNING_ALLOWED=NO \
+              CODE_SIGNING_REQUIRED=NO \
+              CODE_SIGN_IDENTITY=""
+          fi
         working-directory: ${{ env.IOS_PROJECT_DIR }}
 
       - name: Export IPA
@@ -345,44 +359,46 @@ jobs:
           IOS_APP_PROFILE_NAME: ${{ secrets.IOS_APP_PROFILE_NAME }}
           IOS_WIDGET_PROFILE_NAME: ${{ secrets.IOS_WIDGET_PROFILE_NAME }}
           IOS_NSE_PROFILE_NAME: ${{ secrets.IOS_NSE_PROFILE_NAME }}
+          APPLE_SIGNING_READY: ${{ env.APPLE_SIGNING_READY }}
         run: |
           set -euo pipefail
-          for name in IOS_APP_PROFILE_NAME IOS_WIDGET_PROFILE_NAME IOS_NSE_PROFILE_NAME; do
-            if [[ -z "${!name}" ]]; then
-              echo "$name secret is required."
-              exit 1
-            fi
-          done
-
-          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>method</key>
-            <string>app-store</string>
-            <key>teamID</key>
-            <string>$APPLE_TEAM_ID</string>
-            <key>signingStyle</key>
-            <string>manual</string>
-            <key>provisioningProfiles</key>
+          mkdir -p "$RUNNER_TEMP/OpenChamberExport"
+          if [[ "$APPLE_SIGNING_READY" == "true" && -n "$APPLE_TEAM_ID" && -n "$IOS_APP_PROFILE_NAME" && -n "$IOS_WIDGET_PROFILE_NAME" && -n "$IOS_NSE_PROFILE_NAME" ]]; then
+            cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+            <?xml version="1.0" encoding="UTF-8"?>
+            <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+            <plist version="1.0">
             <dict>
-              <key>com.openchamber.app</key>
-              <string>$IOS_APP_PROFILE_NAME</string>
-              <key>com.openchamber.app.OpenChamberWidget</key>
-              <string>$IOS_WIDGET_PROFILE_NAME</string>
-              <key>com.openchamber.app.OpenChamberNotificationService</key>
-              <string>$IOS_NSE_PROFILE_NAME</string>
+              <key>method</key>
+              <string>app-store</string>
+              <key>teamID</key>
+              <string>$APPLE_TEAM_ID</string>
+              <key>signingStyle</key>
+              <string>manual</string>
+              <key>provisioningProfiles</key>
+              <dict>
+                <key>com.openchamber.app</key>
+                <string>$IOS_APP_PROFILE_NAME</string>
+                <key>com.openchamber.app.OpenChamberWidget</key>
+                <string>$IOS_WIDGET_PROFILE_NAME</string>
+                <key>com.openchamber.app.OpenChamberNotificationService</key>
+                <string>$IOS_NSE_PROFILE_NAME</string>
+              </dict>
+              <key>uploadSymbols</key>
+              <true/>
             </dict>
-            <key>uploadSymbols</key>
-            <true/>
-          </dict>
-          </plist>
-          PLIST
-          xcodebuild -exportArchive \
-            -archivePath "$RUNNER_TEMP/OpenChamber.xcarchive" \
-            -exportPath "$RUNNER_TEMP/OpenChamberExport" \
-            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
+            </plist>
+            PLIST
+            xcodebuild -exportArchive \
+              -archivePath "$RUNNER_TEMP/OpenChamber.xcarchive" \
+              -exportPath "$RUNNER_TEMP/OpenChamberExport" \
+              -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
+          else
+            # Package unsigned app bundle from xcarchive into an unsigned IPA
+            mkdir -p "$RUNNER_TEMP/OpenChamberExport/Payload"
+            cp -r "$RUNNER_TEMP/OpenChamber.xcarchive/Products/Applications/App.app" "$RUNNER_TEMP/OpenChamberExport/Payload/"
+            (cd "$RUNNER_TEMP/OpenChamberExport" && zip -qr "App.ipa" Payload && rm -rf Payload)
+          fi
         working-directory: ${{ env.IOS_PROJECT_DIR }}
 
       - name: Upload IPA artifact
@@ -393,6 +409,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload to TestFlight
+        if: ${{ env.APPLE_SIGNING_READY == 'true' && secrets.APP_STORE_CONNECT_KEY_ID != '' && secrets.APP_STORE_CONNECT_PRIVATE_KEY_BASE64 != '' }}
         shell: bash
         env:
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}

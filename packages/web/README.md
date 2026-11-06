@@ -149,16 +149,36 @@ network policy still applies.
 
 </details>
 
-**Optional env vars:**
+<details>
+<summary>Docker & Docker Compose setup (OMP 18.16.0)</summary>
+
+Run OpenChamber with the supervised OMP Agent Service inside Docker:
+
+```bash
+# 1. Prepare persistent host directories
+mkdir -p data/openchamber data/omp data/ssh workspaces
+chown -R 1000:1000 data/ workspaces
+
+# 2. Launch OpenChamber via Docker Compose
+OPENCHAMBER_UI_PASSWORD="your-strong-password" docker compose up -d
+```
+
+### Mounted Volumes
+- `./data/openchamber:/home/openchamber/.config/openchamber`: OpenChamber Host configuration and instance settings.
+- `./data/omp:/home/openchamber/.omp`: Pinned OMP Agent Service state, logs, and authentication credentials.
+- `./data/ssh:/home/openchamber/.ssh`: SSH keys and configuration.
+- `./workspaces:/home/openchamber/workspaces`: Project files and repositories.
+
+### Optional environment variables
 ```yaml
 environment:
-  UI_PASSWORD: your_secure_password
+  OPENCHAMBER_UI_PASSWORD: your_secure_password
+  OPENCHAMBER_HOST: 0.0.0.0
   OPENCHAMBER_TUNNEL_MODE: quick # quick | managed-remote | managed-local
   OPENCHAMBER_TUNNEL_PROVIDER: cloudflare
 ```
 
 For `managed-remote` mode, also set:
-
 ```yaml
 environment:
   OPENCHAMBER_TUNNEL_MODE: managed-remote
@@ -167,7 +187,6 @@ environment:
 ```
 
 For `managed-local` mode, you can set:
-
 ```yaml
 environment:
   OPENCHAMBER_TUNNEL_MODE: managed-local
@@ -176,11 +195,7 @@ environment:
 
 Managed-local path note: `OPENCHAMBER_TUNNEL_CONFIG` must use a container path under `/home/openchamber/...`. If the config file references `credentials-file`, ensure that JSON path is also mounted and reachable inside the container.
 
-**Data directory:** mount `data/` for persistent storage. Ensure permissions:
-```bash
-mkdir -p data/openchamber data/ssh
-chown -R 1000:1000 data/
-```
+> **Note on Container Verification:** Docker is unavailable in the current development environment. Dockerfile, compose, and entrypoint manifests are statically verified; live container runtime execution and verification are explicitly deferred to milestone M7 (`m7-release-verification`).
 
 </details>
 

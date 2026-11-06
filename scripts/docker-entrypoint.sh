@@ -3,6 +3,9 @@ set -eu
 
 HOME="/home/openchamber"
 
+OMP_DIR="${HOME}/.omp"
+mkdir -p "${OMP_DIR}"
+
 SSH_DIR="${HOME}/.ssh"
 SSH_PRIVATE_KEY_PATH="${SSH_DIR}/id_ed25519"
 SSH_PUBLIC_KEY_PATH="${SSH_PRIVATE_KEY_PATH}.pub"

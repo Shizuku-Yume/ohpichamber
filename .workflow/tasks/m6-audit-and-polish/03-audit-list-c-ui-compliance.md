@@ -7,6 +7,8 @@
 **Files:** `.workflow/research/m6-audit-list-c-ui-compliance.md`
 **Read first:** `.workflow/specs/m6-audit-and-polish.md`; `packages/ui/src/components/sections/PATTERNS.md`; `packages/ui/src/lib/theme/STYLING.md`
 **Check:** `test -s .workflow/research/m6-audit-list-c-ui-compliance.md && grep -q 'ProvidersPage' .workflow/research/m6-audit-list-c-ui-compliance.md && grep -q 'OmpSettingsPage' .workflow/research/m6-audit-list-c-ui-compliance.md && grep -q 'WebSearch' .workflow/research/m6-audit-list-c-ui-compliance.md && .workflow/bin/workflow validate` → exits 0 with complete visual and code compliance audit and screenshot evidence.
+- **Base commit:** 76112ae00a5a8499ae4cbbd8077148c72f583eb6
+- **Status:** active
 
 - [ ] Inspect every fork-authored or fork-modified Settings section and UI component against `upstream/main` (`0056bf6a9`), `packages/ui/src/components/sections/PATTERNS.md` (plus `patterns/*.md`), and `packages/ui/src/lib/theme/STYLING.md` (plus `themes/*.md`).
 - [ ] Launch the live Web UI on an isolated port, drive every Settings page and fork-modified chat/workbench surface in headless Chrome across dark and light themes, and capture screenshots under `/home/shizuku/Project/ohpichamber-omp-artifacts/m6-phase1-audit-2026-11-06/screenshots/`.

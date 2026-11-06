@@ -19,10 +19,14 @@ const WorkspaceSchema = HostWorkspaceBootstrapSchema.omit({ env: true }).extend(
 type Workspace = z.infer<typeof WorkspaceSchema>;
 const OwnerSchema = z.strictObject({ agentDirectoryId: EntityIdSchema, agentDirectory: z.string().min(1).refine(isAbsolute), revision: CounterSchema });
 const PluginOwnerSchema = z.strictObject({ rootPath: z.string().min(1).refine(isAbsolute), revision: CounterSchema });
-const PluginBindingSchema = PluginOwnerSchema.omit({ revision: true }).extend({ workspaceId: EntityIdSchema,
-  localSourcePath: z.string().min(1).refine(isAbsolute), projectRegistryPath: z.string().min(1).refine(isAbsolute).nullable() });
-const StateSchema = z.strictObject({ workspaces: z.array(WorkspaceSchema), owners: z.array(OwnerSchema),
-  pluginOwners: z.array(PluginOwnerSchema).default([]), pluginBindings: z.array(PluginBindingSchema).default([]) });
+const PluginBindingSchema = PluginOwnerSchema.omit({ revision: true }).extend({
+  workspaceId: EntityIdSchema,
+  localSourcePath: z.string().min(1).refine(isAbsolute), projectRegistryPath: z.string().min(1).refine(isAbsolute).nullable()
+});
+const StateSchema = z.strictObject({
+  workspaces: z.array(WorkspaceSchema), owners: z.array(OwnerSchema),
+  pluginOwners: z.array(PluginOwnerSchema).default([]), pluginBindings: z.array(PluginBindingSchema).default([])
+});
 
 /** Private Host mappings and model/provider/profile CAS belong to their actual agent-directory owner. */
 export class WorkspaceCatalogs {
@@ -163,36 +167,36 @@ export class WorkspaceCatalogs {
   }
 
   private async operationNow(workspaceId: string, operation: CatalogOperation): Promise<CatalogResult> {
-      const workspace = this.get(workspaceId);
-      const owner = this.owners.get(workspace.agentDirectoryId);
-      if (!owner) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
-      const requestOperation = operation.type === 'fileResources' ? operation.operation : operation;
-      const expectedRevision = 'request' in requestOperation && 'expectedRevision' in requestOperation.request ? requestOperation.request.expectedRevision : undefined;
-      const mutation = expectedRevision !== undefined && (operation.type !== 'catalog.provider.oauth' || operation.request.action === 'commit');
-      if (expectedRevision !== undefined && expectedRevision !== owner.revision) throw new WorkerOperationError(409, 'CATALOG_CONFLICT', { currentRevision: owner.revision });
-      const revision = mutation ? CounterSchema.parse((BigInt(owner.revision) + 1n).toString()) : owner.revision;
-      const root = await this.stateless(workspaceId);
-      const result = await this.workers.request(root, { type: 'catalog', operation, revision });
-      if (result.type !== 'catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
-      const committed = mutation && (operation.type === 'fileResources' || result.result.type !== 'catalog.credential.handed-off' || result.result.result.outcome.status === 'imported');
-      if (committed) {
-        await this.stateMutation(async () => {
-          const previous = owner.revision;
-          owner.revision = revision;
-          try { await this.persist(); }
-          catch (error) {
-            owner.revision = previous;
-            if (operation.type === 'catalog.warming.persist' && result.result.type === 'catalog.warming') {
-              throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', CacheWarmingPartialWriteDetailsSchema.parse({
-                workspaceId, configuredMode: result.result.state.mode, currentRevision: previous,
-                nativeConfigurationCommitted: true, liveApplication: 'not-started',
-              }));
-            }
-            throw error;
+    const workspace = this.get(workspaceId);
+    const owner = this.owners.get(workspace.agentDirectoryId);
+    if (!owner) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+    const requestOperation = operation.type === 'fileResources' ? operation.operation : operation;
+    const expectedRevision = 'request' in requestOperation && 'expectedRevision' in requestOperation.request ? requestOperation.request.expectedRevision : undefined;
+    const mutation = expectedRevision !== undefined && (operation.type !== 'catalog.provider.oauth' || operation.request.action === 'commit');
+    if (expectedRevision !== undefined && expectedRevision !== owner.revision) throw new WorkerOperationError(409, 'CATALOG_CONFLICT', { currentRevision: owner.revision });
+    const revision = mutation ? CounterSchema.parse((BigInt(owner.revision) + 1n).toString()) : owner.revision;
+    const root = await this.stateless(workspaceId);
+    const result = await this.workers.request(root, { type: 'catalog', operation, revision });
+    if (result.type !== 'catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+    const committed = mutation && (operation.type === 'fileResources' || result.result.type !== 'catalog.credential.handed-off' || result.result.result.outcome.status === 'imported');
+    if (committed) {
+      await this.stateMutation(async () => {
+        const previous = owner.revision;
+        owner.revision = revision;
+        try { await this.persist(); }
+        catch (error) {
+          owner.revision = previous;
+          if (operation.type === 'catalog.warming.persist' && result.result.type === 'catalog.warming') {
+            throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', CacheWarmingPartialWriteDetailsSchema.parse({
+              workspaceId, configuredMode: result.result.state.mode, currentRevision: previous,
+              nativeConfigurationCommitted: true, liveApplication: 'not-started',
+            }));
           }
-        });
-      }
-      return result.result;
+          throw error;
+        }
+      });
+    }
+    return result.result;
   }
   private async readPluginOwner(rootSessionId: string, workerGeneration?: string) {
     const result = await this.workers.request(rootSessionId, { type: 'catalog', revision: '0', operation: { type: 'plugins.owner' } }, workerGeneration);
@@ -233,13 +237,16 @@ export class WorkspaceCatalogs {
     const coordinator = this.pluginCoordinator?.();
     if (!coordinator) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
     return this.serial(`plugins:${binding.identity.rootPath}`, async () => {
-      const expectedRevision = 'request' in operation ? operation.request.expectedRevision : undefined;
+      const expectedRevision = 'request' in operation && 'expectedRevision' in operation.request
+        ? operation.request.expectedRevision : undefined;
       const execute = async (): Promise<CatalogResult> => {
         if (expectedRevision !== undefined && expectedRevision !== binding.owner.revision) throw new WorkerOperationError(409, 'CATALOG_CONFLICT', { currentRevision: binding.owner.revision });
         const nativeOwner = await this.readPluginOwner(binding.rootSessionId);
         if (nativeOwner.rootPath !== binding.identity.rootPath) throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
         const revision = expectedRevision === undefined ? binding.owner.revision : CounterSchema.parse((BigInt(binding.owner.revision) + 1n).toString());
-        const global = (operation.type === 'plugins.configure' && operation.request.settings !== undefined)
+        const global = operation.type === 'plugins.marketplace.manage'
+          || operation.type === 'plugins.marketplace.upgradeAll'
+          || (operation.type === 'plugins.configure' && operation.request.settings !== undefined)
           || (operation.type === 'plugins.update' && operation.request.target.kind === 'marketplace')
           || (operation.type === 'plugins.install' ? operation.request.source.kind === 'package' || operation.request.source.scope === 'user'
             : operation.type === 'plugins.uninstall' || operation.type === 'plugins.configure' || operation.type === 'plugins.update'
@@ -267,14 +274,20 @@ export class WorkspaceCatalogs {
         }
         const updates = expectedRevision === undefined ? [] : [...affectedRootPaths].map(rootPath => {
           const previous = this.pluginOwners.get(rootPath);
-          return { rootPath, previous, previousRevision: previous?.revision,
-            revision: rootPath === binding.identity.rootPath ? revision : CounterSchema.parse((BigInt(previous?.revision ?? '0') + 1n).toString()) };
+          return {
+            rootPath, previous, previousRevision: previous?.revision,
+            revision: rootPath === binding.identity.rootPath ? revision : CounterSchema.parse((BigInt(previous?.revision ?? '0') + 1n).toString())
+          };
         });
         const result = await this.workers.request(binding.rootSessionId, { type: 'catalog', operation, revision });
         if (result.type !== 'catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
         if (expectedRevision === undefined) {
-          return result.result.type === 'plugins.catalog' ? { type: 'plugins.catalog', catalog: { ...result.result.catalog,
-            workers: await this.pluginRuntimeForOwner(workspaceId, binding.identity.rootPath, coordinator) } } : result.result;
+          return result.result.type === 'plugins.catalog' ? {
+            type: 'plugins.catalog', catalog: {
+              ...result.result.catalog,
+              workers: await this.pluginRuntimeForOwner(workspaceId, binding.identity.rootPath, coordinator)
+            }
+          } : result.result;
         }
         if (result.result.type !== 'plugins.catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
         const committedIdentity = await this.readPluginOwner(binding.rootSessionId);
@@ -284,8 +297,10 @@ export class WorkspaceCatalogs {
             if (update.previous) update.previous.revision = update.revision;
             else this.pluginOwners.set(update.rootPath, { rootPath: update.rootPath, revision: update.revision });
           }
-          this.pluginBindings.set(workspaceId, { workspaceId, rootPath: committedIdentity.rootPath,
-            localSourcePath: committedIdentity.localSourcePath, projectRegistryPath: committedIdentity.projectRegistryPath });
+          this.pluginBindings.set(workspaceId, {
+            workspaceId, rootPath: committedIdentity.rootPath,
+            localSourcePath: committedIdentity.localSourcePath, projectRegistryPath: committedIdentity.projectRegistryPath
+          });
           try { await this.persist(); }
           catch (error) {
             for (const update of updates) {
@@ -296,18 +311,26 @@ export class WorkspaceCatalogs {
             throw error;
           }
         });
-        const outcomes = await coordinator.pluginsChanged({ revision,
-          rootSessionIds: targets.map(worker => worker.rootSessionId) }, async worker => {
-          const response = await this.workers.request(worker.rootSessionId, { type: 'catalog', revision,
-            operation: { type: 'plugins.apply', persistedRevision: revision } }, worker.workerGeneration);
+        const outcomes = await coordinator.pluginsChanged({
+          revision,
+          rootSessionIds: targets.map(worker => worker.rootSessionId)
+        }, async worker => {
+          const response = await this.workers.request(worker.rootSessionId, {
+            type: 'catalog', revision,
+            operation: { type: 'plugins.apply', persistedRevision: revision }
+          }, worker.workerGeneration);
           if (response.type !== 'catalog' || response.result.type !== 'plugins.applied') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
           return response.result.result;
         });
         const applied = outcomes.some(outcome => outcome.outcome === 'applied');
         const failed = outcomes.some(outcome => outcome.outcome === 'failed');
-        return { type: 'plugins.mutated', result: PluginMutationResultSchema.parse({ workspaceId, revision, persistence: 'committed',
-          catalog: { ...result.result.catalog, workers: await this.pluginRuntimeForOwner(workspaceId, binding.identity.rootPath, coordinator) }, workers: outcomes,
-          status: applied ? failed ? 'partial' : 'applied' : failed ? 'failed' : 'no-active-workers' }) };
+        return {
+          type: 'plugins.mutated', result: PluginMutationResultSchema.parse({
+            workspaceId, revision, persistence: 'committed',
+            catalog: { ...result.result.catalog, workers: await this.pluginRuntimeForOwner(workspaceId, binding.identity.rootPath, coordinator) }, workers: outcomes,
+            status: applied ? failed ? 'partial' : 'applied' : failed ? 'failed' : 'no-active-workers'
+          })
+        };
       };
       return coordinator.runPluginOperation(execute);
     });
@@ -331,9 +354,11 @@ export class WorkspaceCatalogs {
       if (response.type !== 'catalog' || response.result.type !== 'plugins.catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
       const applied = workers.some(worker => worker.outcome === 'applied');
       const failed = workers.some(worker => worker.outcome === 'failed');
-      return PluginMutationResultSchema.parse({ workspaceId, revision, persistence: 'committed',
+      return PluginMutationResultSchema.parse({
+        workspaceId, revision, persistence: 'committed',
         catalog: { ...response.result.catalog, workers: await this.pluginRuntimeForOwner(workspaceId, binding.identity.rootPath, coordinator) }, workers,
-        status: applied ? failed ? 'partial' : 'applied' : failed ? 'failed' : 'no-active-workers' });
+        status: applied ? failed ? 'partial' : 'applied' : failed ? 'failed' : 'no-active-workers'
+      });
     }));
   }
 
@@ -343,11 +368,19 @@ export class WorkspaceCatalogs {
       try {
         const identity = await this.readPluginOwner(state.worker.rootSessionId, state.worker.workerGeneration);
         if (identity.rootPath === rootPath) return state;
-        return { ...state, status: 'unavailable' as const, error: { code: 'PLUGIN_OWNER_CHANGED',
-          detail: 'This active session belongs to a different native plugin profile than the selected workspace catalog.', retryable: false } };
+        return {
+          ...state, status: 'unavailable' as const, error: {
+            code: 'PLUGIN_OWNER_CHANGED',
+            detail: 'This active session belongs to a different native plugin profile than the selected workspace catalog.', retryable: false
+          }
+        };
       } catch {
-        return { ...state, status: 'unavailable' as const, error: { code: 'SERVICE_UNAVAILABLE',
-          detail: 'The active session native plugin owner could not be confirmed.', retryable: true } };
+        return {
+          ...state, status: 'unavailable' as const, error: {
+            code: 'SERVICE_UNAVAILABLE',
+            detail: 'The active session native plugin owner could not be confirmed.', retryable: true
+          }
+        };
       }
     }));
   }
@@ -368,8 +401,12 @@ export class WorkspaceCatalogs {
     const temporary = `${this.file}.${randomUUID()}.tmp`;
     try {
       const file = await open(temporary, 'wx', 0o600);
-      try { await file.writeFile(JSON.stringify({ workspaces: [...this.workspaces.values()], owners: [...this.owners.values()],
-        pluginOwners: [...this.pluginOwners.values()], pluginBindings: [...this.pluginBindings.values()] })); } finally { await file.close(); }
+      try {
+        await file.writeFile(JSON.stringify({
+          workspaces: [...this.workspaces.values()], owners: [...this.owners.values()],
+          pluginOwners: [...this.pluginOwners.values()], pluginBindings: [...this.pluginBindings.values()]
+        }));
+      } finally { await file.close(); }
       await rename(temporary, this.file);
     } finally { try { await unlink(temporary); } catch { /* the rename already consumed the temporary file */ } }
   }

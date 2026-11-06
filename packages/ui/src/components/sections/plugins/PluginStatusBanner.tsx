@@ -37,10 +37,10 @@ export const PluginStatusBanner: React.FC<{ result: PluginMutationResult }> = ({
 
   return (
     <div role="status" className="rounded-md border border-border bg-card p-3 flex items-start gap-3">
-      <Icon name={presentation.icon} className={cn('h-5 w-5 shrink-0 mt-0.5', TONE_ICON_CLASS[presentation.tone])} />
+      <Icon name={presentation.icon} className={cn('size-5 shrink-0 mt-0.5', TONE_ICON_CLASS[presentation.tone])} />
       <div className="flex-1 min-w-0">
         <div className="flex flex-wrap items-center gap-2">
-          <p className={cn('typography-label', TONE_TITLE_CLASS[presentation.tone])}>{presentation.label}</p>
+          <p className={cn('typography-ui-label', TONE_TITLE_CLASS[presentation.tone])}>{presentation.label}</p>
           <SettingsCardPill tone="neutral">{t('settings.plugins.apply.committed')}</SettingsCardPill>
         </div>
         {runtimeProblem ? (

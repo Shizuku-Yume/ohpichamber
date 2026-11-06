@@ -2,7 +2,8 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import type {
   LocalExtensionSource, PluginCatalogState, PluginConfigureRequest, PluginDoctorResult,
-  PluginInstallRequest, PluginMutationResult, PluginTarget,
+  PluginInstallRequest, PluginMutationResult, PluginTarget, PluginUpgradePreviewEntry,
+  PluginUpdateCheckEntry,
 } from '@openchamber/agent-contract';
 import { canonicalClient } from '@/api/canonicalClient';
 import { hostFilesystem } from '@/lib/host-filesystem';
@@ -25,6 +26,12 @@ interface PluginsStore {
   uninstallPlugin: (target: PluginTarget) => Promise<PluginMutationResult>;
   configurePlugin: (input: Omit<PluginConfigureRequest, 'expectedRevision'>) => Promise<PluginMutationResult>;
   updatePlugin: (target: PluginTarget) => Promise<PluginMutationResult>;
+  upgradeAllPlugins: () => Promise<PluginMutationResult>;
+  previewUpgrade: (target?: PluginTarget) => Promise<PluginUpgradePreviewEntry[]>;
+  addMarketplaceSource: (source: string) => Promise<PluginMutationResult>;
+  removeMarketplaceSource: (name: string) => Promise<PluginMutationResult>;
+  updateMarketplaceSource: (name?: string) => Promise<PluginMutationResult>;
+  checkUpdates: () => Promise<PluginUpdateCheckEntry[]>;
   applyPlugins: () => Promise<PluginMutationResult>;
   readLocalExtension: (extensionId: string) => Promise<LocalExtensionSource>;
   writeLocalExtension: (extensionId: string, content: string) => Promise<PluginMutationResult>;
@@ -126,6 +133,31 @@ export const usePluginsStore = create<PluginsStore>()(devtools((set, get) => {
     uninstallPlugin: target => mutate(catalog => canonicalClient.plugins.uninstall(catalog.workspaceId, { expectedRevision: catalog.revision, target })),
     configurePlugin: input => mutate(catalog => canonicalClient.plugins.configure(catalog.workspaceId, { ...input, expectedRevision: catalog.revision })),
     updatePlugin: target => mutate(catalog => canonicalClient.plugins.update(catalog.workspaceId, { expectedRevision: catalog.revision, target })),
+    upgradeAllPlugins: () => mutate(catalog => canonicalClient.plugins.upgradeAll(catalog.workspaceId, { expectedRevision: catalog.revision })),
+    previewUpgrade: async target => {
+      const captured = owner();
+      const result = await canonicalClient.plugins.previewUpgrade(captured.catalog.workspaceId,
+        target === undefined ? {} : { target });
+      if (!current(captured.scope)) throw new Error('The selected plugin workspace changed.');
+      return result.preview;
+    },
+    addMarketplaceSource: source => mutate(catalog => canonicalClient.plugins.manageMarketplace(catalog.workspaceId, {
+      action: 'add', expectedRevision: catalog.revision, source })),
+    removeMarketplaceSource: name => mutate(catalog => canonicalClient.plugins.manageMarketplace(catalog.workspaceId, {
+      action: 'remove', expectedRevision: catalog.revision, name })),
+    updateMarketplaceSource: name => mutate(catalog => canonicalClient.plugins.manageMarketplace(catalog.workspaceId,
+      name === undefined ? { action: 'update', expectedRevision: catalog.revision }
+        : { action: 'update', expectedRevision: catalog.revision, name })),
+    checkUpdates: async () => {
+      const captured = owner();
+      const result = await canonicalClient.plugins.checkUpdates(captured.catalog.workspaceId);
+      if (!current(captured.scope)) throw new Error('The selected plugin workspace changed.');
+      const catalog = get().catalog;
+      if (catalog && compareCounters(result.revision, catalog.revision) >= 0) {
+        set({ catalog: { ...catalog, availableUpdates: result.updates } });
+      }
+      return result.updates;
+    },
     applyPlugins: () => mutate(catalog => canonicalClient.plugins.apply(catalog.workspaceId, { expectedRevision: catalog.revision, strategy: 'restart-idle-sessions' })),
     readLocalExtension: async extensionId => {
       const captured = owner();
@@ -140,7 +172,8 @@ export const usePluginsStore = create<PluginsStore>()(devtools((set, get) => {
       const marketplace = await canonicalClient.plugins.marketplace(captured.catalog.workspaceId);
       const catalog = get().catalog;
       if (current(captured.scope) && catalog && compareCounters(marketplace.revision, catalog.revision) >= 0) {
-        set({ catalog: { ...catalog, marketplace: marketplace.entries } });
+        set({ catalog: { ...catalog, marketplace: marketplace.entries,
+          marketplaceSources: marketplace.sources, availableUpdates: marketplace.updates } });
       }
     },
     loadDoctor: async () => {

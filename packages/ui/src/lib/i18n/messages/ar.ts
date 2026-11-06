@@ -30,6 +30,7 @@ import { environmentI18n } from './environment.i18n';
 import { providersI18n } from './providers.i18n';
 import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
+import { pluginsMarketplaceI18n } from './plugins-marketplace.i18n';
 import { integrationsCatalogI18n } from './integrations-catalog.i18n';
 import { diffFindI18n } from './diff-find.i18n';
 import { markdownGithubI18n } from './markdown-github.i18n';
@@ -75,6 +76,7 @@ export const dict = {
   ...providersI18n.ar,
   ...mcpGridI18n.ar,
   ...pluginsGridI18n.ar,
+  ...pluginsMarketplaceI18n.ar,
   ...integrationsCatalogI18n['ar'],
   ...diffFindI18n['ar'],
   ...markdownGithubI18n['ar'],

@@ -21,9 +21,13 @@ import type { CatalogOperation, CatalogResult } from '../catalogs/protocol.ts';
 import { PrivateCredentialResolveRequestSchema, PrivateCredentialHandoffRequestSchema } from '../catalogs/private-credentials.ts';
 import type { CatalogCoordinator } from './catalog.ts';
 import type { McpOperation } from '../worker/mcp/protocol.ts';
-import { PluginInstallRequestSchema, PluginUninstallRequestSchema, PluginConfigureRequestSchema,
+import {
+  PluginInstallRequestSchema, PluginUninstallRequestSchema, PluginConfigureRequestSchema,
   LocalExtensionWriteRequestSchema, LocalExtensionDeleteRequestSchema, PluginApplyRequestSchema,
-  type PluginApplyRequest, type PluginMutationResult } from '@openchamber/agent-contract';
+  PluginMarketplaceManageRequestSchema, PluginPreviewUpgradeRequestSchema, PluginUpgradeAllRequestSchema,
+  PluginUpgradeRequestSchema,
+  type PluginApplyRequest, type PluginMutationResult
+} from '@openchamber/agent-contract';
 import type { NativePluginOperation } from '../catalogs/plugins.ts';
 import { fileResourceRoute } from './file-resource-routes.ts';
 import { UsageAuthorizationSchema } from '../protocol.ts';
@@ -54,7 +58,7 @@ export class WorkspaceRoutes {
   private readonly usageWorkerId = randomUUID();
   constructor(private readonly catalogs: WorkspaceCatalogs, private readonly workers: WorkerRegistry, private readonly mcp: CatalogCoordinator,
     private readonly sessions: SessionRegistry, private readonly stateDirectory: string, private readonly webSearch: WebSearchCoordinator,
-    private readonly applyPlugins?: (workspaceId: string, request: PluginApplyRequest) => Promise<PluginMutationResult>) {}
+    private readonly applyPlugins?: (workspaceId: string, request: PluginApplyRequest) => Promise<PluginMutationResult>) { }
   async handle(request: IncomingMessage, url: URL, readBody: <T>(request: IncomingMessage, schema: z.ZodType<T>) => Promise<T>) {
     const plugins = /^\/api\/agent\/v1\/workspaces\/([^/]+)\/plugins(?:\/(.*))?$/.exec(url.pathname);
     if (plugins) {
@@ -64,6 +68,16 @@ export class WorkspaceRoutes {
       if (request.method === 'GET' && action === '') operation = { type: 'plugins.read' };
       else if (request.method === 'GET' && action === 'doctor') operation = { type: 'plugins.doctor' };
       else if (request.method === 'GET' && action === 'marketplace') operation = { type: 'plugins.marketplace' };
+      else if (request.method === 'GET' && action === 'marketplace/updates') operation = { type: 'plugins.marketplace.checkUpdates' };
+      else if (request.method === 'POST' && action === 'marketplace/manage') operation = {
+        type: 'plugins.marketplace.manage', request: await readBody(request, PluginMarketplaceManageRequestSchema)
+      };
+      else if (request.method === 'POST' && action === 'marketplace/preview-upgrade') operation = {
+        type: 'plugins.marketplace.previewUpgrade', request: await readBody(request, PluginPreviewUpgradeRequestSchema)
+      };
+      else if (request.method === 'POST' && action === 'marketplace/upgrade-all') operation = {
+        type: 'plugins.marketplace.upgradeAll', request: await readBody(request, PluginUpgradeAllRequestSchema)
+      };
       else if (request.method === 'POST' && action === 'install') operation = { type: 'plugins.install', request: await readBody(request, PluginInstallRequestSchema) };
       else if (request.method === 'POST' && action === 'uninstall') operation = { type: 'plugins.uninstall', request: await readBody(request, PluginUninstallRequestSchema) };
       else if (request.method === 'POST' && action === 'apply') {
@@ -89,14 +103,17 @@ export class WorkspaceRoutes {
           match(decoded, input.target.name);
           operation = { type: 'plugins.configure', request: input };
         } else if (request.method === 'POST' && action.endsWith('/update') && !action.slice(0, -7).includes('/')) {
-          const input = await readBody(request, PluginUninstallRequestSchema);
+          const input = await readBody(request, PluginUpgradeRequestSchema);
           match(decoded.slice(0, -7), input.target.name);
           operation = { type: 'plugins.update', request: input };
         } else return null;
       }
       const result = await this.catalogs.operation(workspaceId, operation);
       if (result.type === 'plugins.catalog') return { status: 200, body: result.catalog };
-      if (result.type === 'plugins.mutated' || result.type === 'plugins.local' || result.type === 'plugins.doctor' || result.type === 'plugins.marketplace') return { status: 200, body: result.result };
+      if (result.type === 'plugins.mutated' || result.type === 'plugins.local' || result.type === 'plugins.doctor'
+        || result.type === 'plugins.marketplace' || result.type === 'plugins.updateCheck' || result.type === 'plugins.upgradePreview') {
+        return { status: 200, body: result.result };
+      }
       throw new WorkerOperationError(503, 'INTERNAL_ERROR');
     }
     const resource = await fileResourceRoute(this.catalogs, request, url, readBody);
@@ -113,8 +130,10 @@ export class WorkspaceRoutes {
       }
       const references = this.sessions.usageReferences(authorizedScopes, query);
       await mkdir(this.stateDirectory, { recursive: true, mode: 0o700 });
-      await this.workers.startUsage({ rootSessionId: this.usageWorkerId, workspaceId: this.usageWorkerId, projectId: this.usageWorkerId,
-        cwd: this.stateDirectory, agentDirectory: this.stateDirectory, agentDirectoryId: this.usageWorkerId, catalogRevision: '0' });
+      await this.workers.startUsage({
+        rootSessionId: this.usageWorkerId, workspaceId: this.usageWorkerId, projectId: this.usageWorkerId,
+        cwd: this.stateDirectory, agentDirectory: this.stateDirectory, agentDirectoryId: this.usageWorkerId, catalogRevision: '0'
+      });
       if (url.pathname === '/internal/usage/tools') {
         const result = await this.workers.request(this.usageWorkerId, { type: 'usage.tools', query, references });
         if (result.type !== 'usage.tools') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
@@ -192,35 +211,43 @@ export class WorkspaceRoutes {
       const action = mcpRoute[4];
       if (action === 'reconnect' && request.method === 'POST') {
         const body = await readBody(request, MCPApplyRequestSchema);
-        return { status: 200, body: await this.mcp.reconnectWorkspaceMcp(workspaceId, serverId, body, async configuration => {
-          const result = await execute({ type: 'test', serverId, configuration });
-          if (result.type !== 'tested') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
-          return result.result;
-        }) };
+        return {
+          status: 200, body: await this.mcp.reconnectWorkspaceMcp(workspaceId, serverId, body, async configuration => {
+            const result = await execute({ type: 'test', serverId, configuration });
+            if (result.type !== 'tested') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+            return result.result;
+          })
+        };
       }
       if (action === 'test' && request.method === 'POST') {
         const body = await readBody(request, MCPApplyRequestSchema);
-        return { status: 200, body: await this.mcp.withWorkspaceMcp(workspaceId, body.persistedRevision, async configuration => {
-          const result = await execute({ type: 'test', serverId, configuration });
-          if (result.type !== 'tested') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
-          return result.result;
-        }) };
+        return {
+          status: 200, body: await this.mcp.withWorkspaceMcp(workspaceId, body.persistedRevision, async configuration => {
+            const result = await execute({ type: 'test', serverId, configuration });
+            if (result.type !== 'tested') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+            return result.result;
+          })
+        };
       }
       if (action === 'oauth' && (request.method === 'GET' || request.method === 'POST')) {
         const body = request.method === 'POST' ? await readBody(request, MCPOAuthRequestSchema) : undefined;
-        return { status: 200, body: await this.mcp.workspaceOAuth(serverId, workspaceId, body?.persistedRevision, body?.workerGeneration, async configuration => {
-          const result = await execute(body ? { type: 'oauth', serverId, request: body, configuration } : { type: 'oauth.status', serverId, configuration });
-          if (result.type !== 'oauth') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
-          return result.result;
-        }) };
+        return {
+          status: 200, body: await this.mcp.workspaceOAuth(serverId, workspaceId, body?.persistedRevision, body?.workerGeneration, async configuration => {
+            const result = await execute(body ? { type: 'oauth', serverId, request: body, configuration } : { type: 'oauth.status', serverId, configuration });
+            if (result.type !== 'oauth') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+            return result.result;
+          })
+        };
       }
       if (action === 'credentials' && request.method === 'PUT') {
         const body = await readBody(request, MCPSecretWriteRequestSchema);
-        return { status: 200, body: await this.mcp.withWorkspaceMcp(workspaceId, body.persistedRevision, async configuration => {
-          const result = await execute({ type: 'secret.write', serverId, request: body, configuration });
-          if (result.type !== 'secret.written') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
-          return result.result;
-        }) };
+        return {
+          status: 200, body: await this.mcp.withWorkspaceMcp(workspaceId, body.persistedRevision, async configuration => {
+            const result = await execute({ type: 'secret.write', serverId, request: body, configuration });
+            if (result.type !== 'secret.written') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+            return result.result;
+          })
+        };
       }
       return null;
     }

@@ -4,6 +4,8 @@ import {
   JsonValueSchema,
   type InstalledPluginEntry,
   type LocalExtensionEntry,
+  type MarketplaceEntry,
+  type MarketplacePluginDetails,
   type PluginCatalogState,
   type PluginMutationResult,
 } from '@openchamber/agent-contract';
@@ -16,8 +18,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Icon } from '@/components/icon/Icon';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
-import { SettingsBackButton, SettingsCardChip, SettingsCardIcon, SettingsCardPill, SettingsCardSearch } from '@/components/sections/shared/SettingsCards';
+import { SettingsBackButton, SettingsCardChip, SettingsCardPill, SettingsCardSearch } from '@/components/sections/shared/SettingsCards';
 import {
+  SETTINGS_SELECT_TRIGGER_CLASS,
   SettingsFieldRow,
   SettingsSection,
   SettingsStackedField,
@@ -30,7 +33,8 @@ import { rankByQuery } from '@/lib/search/fuzzySearch';
 import { cn } from '@/lib/utils';
 import { usePluginsStore } from '@/stores/usePluginsStore';
 import { AddPluginDialog } from './AddPluginDialog';
-import { PluginsGrid, type PluginDeleteTarget, type PluginSelection } from './PluginsGrid';
+import { PluginsGrid, pluginUpdateFor, type PluginDeleteTarget, type PluginSelection } from './PluginsGrid';
+import { MarketplaceSourcesDialog } from './MarketplaceSourcesDialog';
 import { PluginStatusBanner } from './PluginStatusBanner';
 
 const parseSettings = (text: string) => {
@@ -39,6 +43,115 @@ const parseSettings = (text: string) => {
   } catch {
     return JsonObjectSchema.safeParse(null);
   }
+};
+
+
+/** Counts a declared capability without expanding its shape: a string is one item, a list/map is its length. */
+const capabilityCount = (value: MarketplacePluginDetails[keyof MarketplacePluginDetails]): number => {
+  if (typeof value === 'string') return 1;
+  if (Array.isArray(value)) return value.length;
+  if (value !== null && typeof value === 'object') return Object.keys(value).length;
+  return 0;
+};
+const detailList = (value: unknown): string[] => {
+  if (typeof value === 'string') return [value];
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === 'string');
+  return [];
+};
+
+const ExternalDetailLink: React.FC<{ href: string; label: string }> = ({ href, label }) => (
+  <a
+    href={href}
+    target="_blank"
+    rel="noopener noreferrer"
+    className="flex min-w-0 items-center gap-1 typography-meta text-[var(--status-info)] hover:underline"
+    title={href}
+  >
+    <span className="shrink-0">{label}</span>
+    <span className="truncate font-mono typography-micro">{href}</span>
+  </a>
+);
+
+const CAPABILITY_LABEL = {
+  commands: 'settings.plugins.details.commands',
+  agents: 'settings.plugins.details.agents',
+  hooks: 'settings.plugins.details.hooks',
+  mcpServers: 'settings.plugins.details.mcpServers',
+  lspServers: 'settings.plugins.details.lspServers',
+  dapAdapters: 'settings.plugins.details.dapAdapters',
+} as const;
+
+/** Manifest details published by the marketplace catalog; absent details stay absent rather than invented. */
+const MarketplaceDetailsSection: React.FC<{ entry: MarketplaceEntry | undefined }> = ({ entry }) => {
+  const { t } = useI18n();
+  const details = entry?.details;
+  if (!details) {
+    return (
+      <SettingsSection title={t('settings.plugins.details.title')} contentClassName="space-y-0">
+        <p className="typography-meta text-muted-foreground">{t('settings.plugins.details.none')}</p>
+      </SettingsSection>
+    );
+  }
+  const categories = [details.category, ...(details.tags ?? [])].filter((value): value is string => Boolean(value));
+  const capabilities = ([
+    ['commands', details.commands], ['agents', details.agents], ['hooks', details.hooks],
+    ['mcpServers', details.mcpServers], ['lspServers', details.lspServers], ['dapAdapters', details.dapAdapters],
+  ] as const).filter(([, value]) => capabilityCount(value) > 0);
+
+  return (
+    <SettingsSection title={t('settings.plugins.details.title')} contentClassName="space-y-0">
+      {details.author ? (
+        <SettingsFieldRow label={t('settings.plugins.details.author')}>
+          <span className="min-w-0 truncate typography-meta text-foreground">
+            {details.author.name}
+            {details.author.email ? ` · ${details.author.email}` : ''}
+          </span>
+        </SettingsFieldRow>
+      ) : null}
+      {details.license ? (
+        <SettingsFieldRow label={t('settings.plugins.details.license')}>
+          <span className="typography-meta text-foreground">{details.license}</span>
+        </SettingsFieldRow>
+      ) : null}
+      {details.repository ? (
+        <SettingsFieldRow label={t('settings.plugins.details.repository')}>
+          <ExternalDetailLink href={details.repository} label={t('settings.plugins.details.repository')} />
+        </SettingsFieldRow>
+      ) : null}
+      {details.homepage ? (
+        <SettingsFieldRow label={t('settings.plugins.details.homepage')}>
+          <ExternalDetailLink href={details.homepage} label={t('settings.plugins.details.homepage')} />
+        </SettingsFieldRow>
+      ) : null}
+      {categories.length > 0 ? (
+        <SettingsFieldRow label={t('settings.plugins.details.category')} alignEnd>
+          <span className="flex min-w-0 flex-wrap justify-end gap-1">
+            {categories.map(category => (
+              <SettingsCardChip key={category}>{category}</SettingsCardChip>
+            ))}
+          </span>
+        </SettingsFieldRow>
+      ) : null}
+      {(details.keywords ?? []).length > 0 ? (
+        <SettingsFieldRow label={t('settings.plugins.details.keywords')} alignEnd>
+          <span className="flex min-w-0 flex-wrap justify-end gap-1">
+            {(details.keywords ?? []).slice(0, 12).map(keyword => (
+              <SettingsCardChip key={keyword}>{keyword}</SettingsCardChip>
+            ))}
+          </span>
+        </SettingsFieldRow>
+      ) : null}
+      {capabilities.map(([key, value]) => (
+        <SettingsFieldRow
+          key={key}
+          label={t(CAPABILITY_LABEL[key])}
+          description={detailList(value).slice(0, 6).join(', ') || undefined}
+        >
+          <span className="typography-meta tabular-nums text-foreground">{capabilityCount(value)}</span>
+        </SettingsFieldRow>
+      ))}
+    </SettingsSection>
+  );
 };
 
 const ScopeChip: React.FC<{ scope: InstalledPluginEntry['scope'] }> = ({ scope }) => {
@@ -238,7 +351,7 @@ const LocalExtensionEditor: React.FC<{ extension: LocalExtensionEntry; revision:
         <div role="alert" className="rounded-md border border-border bg-card p-3 flex items-start gap-3">
           <Icon name="error-warning" className="h-5 w-5 shrink-0 mt-0.5 text-[var(--status-error)]" />
           <div className="flex-1 min-w-0">
-            <p className="typography-label text-foreground">{t('settings.plugins.page.header.file')}</p>
+            <p className="typography-ui-label text-foreground">{t('settings.plugins.page.header.file')}</p>
             <p className="typography-micro text-muted-foreground mt-0.5">{t('settings.plugins.error.operation')}</p>
           </div>
           <Button variant="outline" size="sm" onClick={() => setAttempt(value => value + 1)}>
@@ -269,31 +382,32 @@ const LocalExtensionEditor: React.FC<{ extension: LocalExtensionEntry; revision:
 const RuntimeSection: React.FC<{ catalog: PluginCatalogState; disabled: boolean; onApply: () => void }> = ({ catalog, disabled, onApply }) => {
   const { t } = useI18n();
   return (
-    <SettingsSection title={t('settings.plugins.runtime.title')} contentClassName="space-y-2">
+    <SettingsSection title={t('settings.plugins.runtime.title')} contentClassName="space-y-4">
       {catalog.workers.length === 0 ? (
         <p className="typography-meta text-muted-foreground">{t('settings.plugins.apply.noActiveWorkers')}</p>
-      ) : null}
-      {catalog.workers.map(worker => (
-        <div key={`${worker.worker.rootSessionId}:${worker.worker.workerGeneration}`} className="flex items-start justify-between gap-3 rounded-md border border-border p-3">
-          <div className="min-w-0 typography-meta">
-            <p className="truncate font-mono text-foreground">{worker.worker.rootSessionId}</p>
-            <p className="text-muted-foreground">
-              {t('settings.plugins.runtime.appliedRevision', { revision: worker.appliedRevision ?? '—' })}
-            </p>
-            {worker.error ? (
-              <p className="mt-1 font-mono text-[var(--status-error)] whitespace-pre-wrap break-words">{worker.error.detail}</p>
-            ) : null}
-          </div>
-          <SettingsCardPill tone={worker.status === 'ready' ? 'success' : 'error'}>
-            {t(worker.status === 'ready' ? 'settings.plugins.status.ready' : 'settings.plugins.status.unavailable')}
-          </SettingsCardPill>
+      ) : (
+        <div className="divide-y divide-[var(--surface-subtle)]">
+          {catalog.workers.map(worker => (
+            <div key={`${worker.worker.rootSessionId}:${worker.worker.workerGeneration}`} className="flex items-start justify-between gap-3 py-2">
+              <div className="min-w-0 typography-meta">
+                <p className="truncate font-mono text-foreground">{worker.worker.rootSessionId}</p>
+                <p className="text-muted-foreground">
+                  {t('settings.plugins.runtime.appliedRevision', { revision: worker.appliedRevision ?? '—' })}
+                </p>
+                {worker.error ? (
+                  <p className="mt-1 font-mono text-[var(--status-error)] whitespace-pre-wrap break-words">{worker.error.detail}</p>
+                ) : null}
+              </div>
+              <SettingsCardPill tone={worker.status === 'ready' ? 'success' : 'error'}>
+                {t(worker.status === 'ready' ? 'settings.plugins.status.ready' : 'settings.plugins.status.unavailable')}
+              </SettingsCardPill>
+            </div>
+          ))}
         </div>
-      ))}
-      <div className="pt-1">
-        <Button variant="outline" disabled={disabled || catalog.workers.length === 0} onClick={onApply}>
-          {t('settings.plugins.action.apply')}
-        </Button>
-      </div>
+      )}
+      <Button variant="outline" disabled={disabled || catalog.workers.length === 0} onClick={onApply}>
+        {t('settings.plugins.action.apply')}
+      </Button>
     </SettingsSection>
   );
 };
@@ -318,6 +432,8 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
   const [doctorRefreshing, setDoctorRefreshing] = React.useState(false);
   const [marketplaceScope, setMarketplaceScope] = React.useState<'user' | 'project'>('project');
   const [marketplaceQuery, setMarketplaceQuery] = React.useState('');
+  const [upgradingAll, setUpgradingAll] = React.useState(false);
+  const [sourcesOpen, setSourcesOpen] = React.useState(false);
 
   const current = catalog !== null && loadedDirectory === directory && loadedRuntimeKey === getRuntimeKey();
   const disabled = pending || isMutating || !current;
@@ -379,6 +495,23 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
     await run(() => usePluginsStore.getState().loadMarketplace());
     setMarketplaceRefreshing(false);
   };
+  const updatePlugin = async (plugin: InstalledPluginEntry) => {
+    await run(async () => {
+      await usePluginsStore.getState().updatePlugin(plugin.target);
+      toast.success(t('settings.plugins.update.toast.done', { name: plugin.name }));
+    });
+  };
+  const upgradeAll = async () => {
+    setUpgradingAll(true);
+    await run(async () => {
+      const updates = catalog?.availableUpdates ?? [];
+      const result = await usePluginsStore.getState().upgradeAllPlugins();
+      if (updates.length === 0) toast.success(t('settings.plugins.upgradeAll.toast.none'));
+      else toast.success(t('settings.plugins.upgradeAll.toast.done', { count: updates.length }));
+      return result;
+    });
+    setUpgradingAll(false);
+  };
   const refreshDoctor = async () => {
     setDoctorRefreshing(true);
     await run(() => usePluginsStore.getState().loadDoctor());
@@ -388,6 +521,7 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
   const dialogs = (
     <>
       <AddPluginDialog open={addOpen && current} onOpenChange={setAddOpen} />
+      <MarketplaceSourcesDialog open={sourcesOpen && current} onOpenChange={setSourcesOpen} />
       <Dialog open={deleteTarget !== null} onOpenChange={open => { if (!open && !pending) setDeleteTarget(null); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -477,7 +611,7 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
     <Button
       variant="ghost"
       size="xs"
-      className="!font-normal text-[var(--status-error)] hover:text-[var(--status-error)]"
+      className="text-[var(--status-error)] hover:text-[var(--status-error)]"
       onClick={() => requestDelete(target)}
       disabled={disabled}
     >
@@ -488,6 +622,10 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
 
   if (plugin) {
     const details = [plugin.description, ...(plugin.enabledFeatures ?? [])].filter(Boolean).join(' · ');
+    const update = pluginUpdateFor(catalog.availableUpdates, plugin);
+    const marketplaceTarget = plugin.target.kind === 'marketplace' ? plugin.target : undefined;
+    const marketplaceEntry = marketplaceTarget === undefined ? undefined
+      : catalog.marketplace.find(entry => entry.name === marketplaceTarget.name && entry.marketplace === marketplaceTarget.marketplace);
     return (
       <>
         <SettingsPageLayout
@@ -499,6 +637,11 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
           <SettingsSection divider={false} contentClassName="space-y-3">
             {operationError ? <p role="alert" className="typography-meta text-[var(--status-error)]">{operationError}</p> : null}
             {lastMutation ? <PluginStatusBanner result={lastMutation} /> : null}
+            {update ? (
+              <p className="typography-meta text-[var(--status-info)]">
+                {t('settings.plugins.update.badge', { from: update.from, to: update.to })}
+              </p>
+            ) : null}
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 variant="outline"
@@ -507,13 +650,11 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
               >
                 {t(plugin.enabled ? 'settings.plugins.action.disable' : 'settings.plugins.action.enable')}
               </Button>
-              <Button
-                variant="outline"
-                disabled={disabled}
-                onClick={() => void run(() => usePluginsStore.getState().updatePlugin(plugin.target))}
-              >
-                {t('settings.plugins.action.update')}
-              </Button>
+              {plugin.target.kind === 'marketplace' ? (
+                <Button variant="outline" disabled={disabled} onClick={() => void updatePlugin(plugin)}>
+                  {t('settings.plugins.action.update')}
+                </Button>
+              ) : null}
               <Button variant="destructive" disabled={disabled} onClick={() => requestDelete({ kind: 'plugin', plugin })}>
                 {t('settings.plugins.action.uninstall')}
               </Button>
@@ -540,6 +681,8 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
               <ScopeChip scope={plugin.scope} />
             </SettingsFieldRow>
           </SettingsSection>
+
+          {plugin.target.kind === 'marketplace' ? <MarketplaceDetailsSection entry={marketplaceEntry} /> : null}
 
           <SettingsSection
             title={t('settings.plugins.field.globalSettings')}
@@ -600,10 +743,13 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
       <PluginsGrid
         catalog={catalog}
         refreshing={isLoading || isMutating}
+        upgradingAll={upgradingAll}
         onRefresh={() => void usePluginsStore.getState().loadPlugins({ directory, force: true })}
         onAdd={() => setAddOpen(true)}
         onSelect={setSelection}
         onDelete={requestDelete}
+        onUpdate={plugin => void updatePlugin(plugin)}
+        onUpgradeAll={() => void upgradeAll()}
         notices={(
           <div className="mb-4 space-y-3">
             {loadError ? (
@@ -619,13 +765,26 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
         <SettingsSection
           title={t('settings.plugins.marketplace.title')}
           headerAction={(
-            <Button variant="ghost" size="sm" disabled={disabled} onClick={() => void refreshMarketplace()}>
-              <Icon name="refresh" className={cn('size-3.5', marketplaceRefreshing && 'animate-spin')} />
-              {t('settings.plugins.action.refresh')}
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="sm" disabled={disabled} onClick={() => void refreshMarketplace()}>
+                <Icon name="refresh" className={cn('size-3.5', marketplaceRefreshing && 'animate-spin')} />
+                {t('settings.plugins.action.refresh')}
+              </Button>
+              <Button variant="ghost" size="sm" disabled={disabled} onClick={() => setSourcesOpen(true)}>
+                <Icon name="settings-3" className="size-3.5" />
+                {t('settings.plugins.marketplace.sourcesButton')}
+              </Button>
+            </div>
           )}
           contentClassName="space-y-4"
         >
+          {catalog.marketplaceSources.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {catalog.marketplaceSources.map(source => (
+                <SettingsCardChip key={source.name}>{source.name}</SettingsCardChip>
+              ))}
+            </div>
+          ) : null}
           <SettingsCardSearch
             value={marketplaceQuery}
             onChange={setMarketplaceQuery}
@@ -638,7 +797,7 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
                 if (value === 'user' || value === 'project') setMarketplaceScope(value);
               }}
             >
-              <SelectTrigger aria-label={t('settings.plugins.page.field.scope')}>
+              <SelectTrigger className={SETTINGS_SELECT_TRIGGER_CLASS} aria-label={t('settings.plugins.page.field.scope')}>
                 <SelectValue>
                   {marketplaceScope === 'user' ? t('settings.plugins.scope.user') : t('settings.plugins.scope.project')}
                 </SelectValue>
@@ -658,28 +817,28 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
             </p>
           ) : null}
 
-          <div className="space-y-2">
+          <div className="divide-y divide-[var(--surface-subtle)]">
             {marketplaceEntries.map(entry => (
-              <div
-                key={`${entry.marketplace}:${entry.name}`}
-                className="flex items-start justify-between gap-3 rounded-xl border border-[var(--interactive-border)] bg-[var(--surface-elevated)] p-4"
-              >
-                <div className="flex min-w-0 items-start gap-3">
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-[10px] bg-[var(--surface-muted)]">
-                    <SettingsCardIcon name="stack" />
-                  </span>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-foreground">{entry.name}</p>
-                    <p className="line-clamp-2 typography-micro text-muted-foreground">{entry.description}</p>
-                    <div className="mt-2 flex flex-wrap items-center gap-2 typography-micro text-muted-foreground">
-                      <span>{entry.version ?? '—'}</span>
-                      <SettingsCardChip>{entry.marketplace}</SettingsCardChip>
-                    </div>
+              <div key={`${entry.marketplace}:${entry.name}`} className="flex min-w-0 flex-col gap-2 py-3 @xl:flex-row @xl:items-start @xl:gap-4">
+                <div className="min-w-0 flex-1">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <p className="truncate typography-ui-label text-foreground">{entry.name}</p>
+                    <span className="shrink-0 font-mono typography-micro text-muted-foreground">{entry.version ?? '—'}</span>
+                    <SettingsCardChip>{entry.marketplace}</SettingsCardChip>
                   </div>
-                </div>
+                  {entry.description ? <p className="line-clamp-2 typography-micro text-muted-foreground">{entry.description}</p> : null}
+                  {[entry.details?.category, ...(entry.details?.keywords ?? [])].filter((value): value is string => Boolean(value)).length > 0 ? (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {[entry.details?.category, ...(entry.details?.keywords ?? [])].filter((value): value is string => Boolean(value)).slice(0, 6).map(badge => (
+                        <span key={badge} className="oc-tile-inset rounded-full px-2 py-px text-[0.625rem] text-muted-foreground">{badge}</span>
+                      ))}
+                    </div>
+                  ) : null}
+          </div>
                 <Button
                   variant="outline"
                   size="sm"
+                  className="shrink-0"
                   disabled={disabled}
                   onClick={() => {
                     void run(async () => {
@@ -689,7 +848,7 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
                         marketplace: entry.marketplace,
                         scope: marketplaceScope,
                       });
-                      toast.success(t('settings.plugins.toast.created'));
+                      toast.success(t('settings.plugins.marketplace.toast.installed', { name: entry.name }));
                     });
                   }}
                 >
@@ -710,21 +869,23 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
           )}
           contentClassName="space-y-2"
         >
-          {doctor?.checks.map((check, index) => (
-            <div key={`${check.name}:${index}`} className="flex items-start justify-between gap-3 rounded-md border border-border p-3">
-              <div className="min-w-0">
-                <p className="typography-label text-foreground">{check.name}</p>
-                <p className="typography-micro text-muted-foreground mt-0.5 whitespace-pre-wrap break-words">{check.message}</p>
+          <div className="divide-y divide-[var(--surface-subtle)]">
+            {doctor?.checks.map((check, index) => (
+              <div key={`${check.name}:${index}`} className="flex items-start justify-between gap-3 py-2">
+                <div className="min-w-0">
+                  <p className="typography-ui-label text-foreground">{check.name}</p>
+                  <p className="typography-micro text-muted-foreground mt-0.5 whitespace-pre-wrap break-words">{check.message}</p>
+                </div>
+                <SettingsCardPill tone={check.status === 'ok' ? 'success' : check.status === 'warning' ? 'warning' : 'error'}>
+                  {t(check.status === 'ok'
+                    ? 'settings.plugins.doctor.status.ok'
+                    : check.status === 'warning'
+                      ? 'settings.plugins.doctor.status.warning'
+                      : 'settings.plugins.doctor.status.error')}
+                </SettingsCardPill>
               </div>
-              <SettingsCardPill tone={check.status === 'ok' ? 'success' : check.status === 'warning' ? 'warning' : 'error'}>
-                {t(check.status === 'ok'
-                  ? 'settings.plugins.doctor.status.ok'
-                  : check.status === 'warning'
-                    ? 'settings.plugins.doctor.status.warning'
-                    : 'settings.plugins.doctor.status.error')}
-              </SettingsCardPill>
-            </div>
-          ))}
+            ))}
+          </div>
         </SettingsSection>
 
         <RuntimeSection catalog={catalog} disabled={disabled} onApply={requestApply} />

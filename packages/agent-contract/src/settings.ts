@@ -55,6 +55,8 @@ export const OMP_SETTING_IDS = [
   'compaction.idleEnabled',
   'compaction.idleThresholdTokens',
   'compaction.idleTimeoutSeconds',
+  'recap.enabled',
+  'recap.idleSeconds',
   'compaction.supersedeReads',
   'compaction.dropUseless',
   'tools.approval',

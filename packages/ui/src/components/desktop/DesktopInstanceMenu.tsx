@@ -7,7 +7,6 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { UpdateDialog } from '@/components/ui/UpdateDialog';
 import { DesktopHostSwitcherDialog } from '@/components/desktop/DesktopHostSwitcher';
-import { Icon } from '@/components/icon/Icon';
 import { useKeybinds } from '@/hooks/useKeybind';
 import { isDesktopLocalOriginActive, isDesktopShell, type UpdateInfo } from '@/lib/desktop';
 import { desktopHostsGet, redactSensitiveUrl } from '@/lib/desktopHosts';
@@ -21,6 +20,7 @@ import { useI18n } from '@/lib/i18n';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { formatShortcutForDisplay, getEffectiveShortcutCombo } from '@/lib/shortcuts';
+import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/useUIStore';
 import { parseUpdateCheckResponse } from '@/stores/useUpdateStore';
 
@@ -199,7 +199,7 @@ function DesktopInstanceMenuContent({ className }: Props): React.ReactNode {
                 aria-label={t('header.services.openWithCurrent', { current: currentInstanceLabel })}
                 className={className}
               >
-                <Icon name="server" className="h-4 w-4 shrink-0" />
+                <span className={cn('h-2 w-2 shrink-0 rounded-full', currentInstanceIsLocal ? 'bg-status-success' : 'bg-status-info')} aria-hidden="true" />
                 <span className="truncate typography-ui-label">{currentInstanceLabel}</span>
               </button>
             </DropdownMenuTrigger>

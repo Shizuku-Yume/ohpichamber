@@ -328,7 +328,7 @@ describe('TerminalView project action tab indicator', () => {
 
     const tab = (label: string) => tabs.find((entry) => entry.querySelector('[data-tab-label]')?.textContent === label);
 
-    expect(tab('Interactive')?.querySelector('[data-icon]')?.getAttribute('data-icon')).toBe('terminal');
+    expect(tab('Interactive')?.querySelector('[data-icon]')?.getAttribute('data-icon')).toBe('terminal-box');
     expect(tab('Build')?.querySelector('[data-spinner]')).not.toBeNull();
     expect(tab('Deploy')?.querySelector('[data-icon]')?.getAttribute('data-icon')).toBe('play');
     expect(host.querySelectorAll('.animate-spin').length).toBe(0);

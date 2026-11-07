@@ -105,7 +105,7 @@ const TerminalTabViewport: React.FC<TerminalTabViewportProps> = ({
 
 const resolveTabIconName = (iconKey: string | null): IconName => {
     const matchedIcon = PROJECT_ACTION_ICONS.find((entry) => entry.key === iconKey);
-    return matchedIcon?.Icon ?? 'terminal';
+    return matchedIcon?.Icon ?? 'terminal-box';
 };
 
 /** A project action that starts, runs or stops shows the shared spinner on its tab. */

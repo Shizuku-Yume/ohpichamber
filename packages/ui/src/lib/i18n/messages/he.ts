@@ -416,6 +416,7 @@ export const dict = {
   "sessions.sidebar.header.actions.closeSessions": "סגור הפעלות",
   "sessions.sidebar.header.actions.addProject": "הוסף פרויקט",
   "sessions.sidebar.header.actions.more": "עוד",
+  "sessions.sidebar.header.actions.more": "עוד",
   "sessions.sidebar.header.actions.newSession": "הפעלה חדשה",
   "sessions.sidebar.header.actions.scheduledTasks": "משימות מתוזמנות",
   "sessions.scheduledTasks.dialog.title": "משימות מתוזמנות",

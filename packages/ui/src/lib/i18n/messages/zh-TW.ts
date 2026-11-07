@@ -5355,6 +5355,7 @@ export const dict = {
   "sessions.sidebar.header.actions.closeSessions": "關閉會話",
   "sessions.sidebar.header.actions.addProject": "新增專案",
   "sessions.sidebar.header.actions.more": "更多",
+  "sessions.sidebar.header.actions.more": "更多",
   "sessions.sidebar.header.actions.newSession": "新增會話",
   "sessions.sidebar.header.actions.scheduledTasks": "排程任務",
   "sessions.scheduledTasks.dialog.title": "排程任務",

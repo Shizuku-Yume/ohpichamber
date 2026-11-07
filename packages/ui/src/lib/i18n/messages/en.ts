@@ -5329,6 +5329,7 @@ export const dict = {
   "sessions.sidebar.header.actions.closeSessions": "Close sessions",
   "sessions.sidebar.header.actions.addProject": "Add project",
   "sessions.sidebar.header.actions.more": "More",
+  "sessions.sidebar.header.actions.more": "More",
   "sessions.sidebar.header.actions.newSession": "New session",
   "sessions.sidebar.header.actions.scheduledTasks": "Scheduled tasks",
   "sessions.scheduledTasks.dialog.title": "Scheduled tasks",

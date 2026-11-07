@@ -18,7 +18,6 @@ import { useSessionMultiSelectStore } from '@/stores/useSessionMultiSelectStore'
 import { useI18n, type I18nKey } from '@/lib/i18n';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { SessionSearchInput } from '@/components/session/SessionSearchInput';
-import { Button } from '@/components/ui/button';
 import { GuestIcon } from '@/components/layout/GuestRailIcon';
 import { useGuestPages } from '@/hooks/useGuestSurfaces';
 import { guestPackageIconSrc, resolveGuestIconName } from '@/lib/guests/icon';
@@ -179,6 +178,29 @@ export function SidebarHeader(props: Props): React.ReactNode {
   const isSingleProjectMode = showProjectDisplayControls && projectDisplayMode === 'single';
 
   const checkMark = <Icon name="check" className="h-4 w-4 text-primary" />;
+
+  // The pages this sidebar opens in the main area, plus the dialogs that used
+  // to sit as footer buttons. The footer now carries only Settings, an update
+  // and the instance switcher, so these stay one click from the same corner.
+  const isOverviewOpen = useUIStore((state) => state.isOverviewOpen);
+  const isOverviewAvailable = useUIStore((state) => state.overviewFeatureAvailable);
+  const isUsageOpen = useUIStore((state) => state.isUsageStatsPageOpen);
+  const morePageItems: { key: string; label: string; icon: React.ReactNode; open: boolean; onToggle: () => void }[] = [];
+  if (showSourceBoard && isOverviewAvailable) {
+    morePageItems.push({ key: 'overview', label: t('overview.title'), icon: <Icon name="compass-3" className="h-4 w-4" />, open: isOverviewOpen, onToggle: () => useUIStore.getState().setOverviewOpen(!isOverviewOpen) });
+  }
+  if (showSourceBoard) {
+    morePageItems.push({ key: 'source-board', label: t('sourceBoard.title'), icon: <Icon name="git-pull-request" className="h-4 w-4" />, open: isSourceBoardOpen, onToggle: () => useUIStore.getState().setSourceBoardOpen(!isSourceBoardOpen) });
+  }
+  morePageItems.push(
+    { key: 'scheduled', label: t('sessions.sidebar.header.actions.scheduledTasks'), icon: <Icon name="calendar-schedule" className="h-4 w-4" />, open: isScheduledOpen, onToggle: () => useUIStore.getState().setScheduledTasksDialogOpen(!isScheduledOpen) },
+    { key: 'archive', label: t('sessions.sidebar.nav.archive'), icon: <Icon name="archive" className="h-4 w-4" />, open: isArchiveOpen, onToggle: () => useUIStore.getState().setArchivePageOpen(!isArchiveOpen) },
+    { key: 'stats', label: t('usageStats.openAction'), icon: <Icon name="bar-chart" className="h-4 w-4" />, open: isUsageOpen, onToggle: () => useUIStore.getState().setUsageStatsPageOpen(!isUsageOpen) },
+  );
+  if (!enterpriseMode) {
+    morePageItems.push({ key: 'integrations', label: t('integrationsCatalog.sidebar.open'), icon: <Icon name="store-2" className="h-4 w-4" />, open: isIntegrationsCatalogOpen, onToggle: () => useUIStore.getState().setIntegrationsCatalogOpen(!isIntegrationsCatalogOpen) });
+  }
+  const moreMenuOpen = morePageItems.some((page) => page.open) || Boolean(openGuestPageId);
   const choiceSubmenu = <T extends string>(
     labelKey: I18nKey,
     options: readonly (readonly [T, I18nKey])[],
@@ -322,6 +344,53 @@ export function SidebarHeader(props: Props): React.ReactNode {
               first glyph sits 16px from the sidebar edge, in line with the
               titlebar controls. */}
           <div className="ml-[3px] flex min-w-0 items-center gap-1.5">
+            <DropdownMenu>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className={cn(headerActionButtonClass, IDLE_PAGE_BUTTON_CLASS, moreMenuOpen && 'text-foreground')}
+                      aria-label={t('sessions.sidebar.header.actions.more')}
+                    >
+                      <Icon name="more" className={headerActionIconClass} />
+                    </button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={4}><p>{t('sessions.sidebar.header.actions.more')}</p></TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent align="start" className="min-w-[200px] overflow-y-auto">
+                {morePageItems.map((page) => (
+                  <DropdownMenuItem key={page.key} onClick={page.onToggle} className="flex items-center gap-2">
+                    {page.icon}
+                    <span className="flex-1">{page.label}</span>
+                    {page.open ? checkMark : null}
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuItem onClick={() => useUIStore.getState().toggleHelpDialog()} className="flex items-center gap-2">
+                  <Icon name="command" className="h-4 w-4" />
+                  <span className="flex-1">{t('sessions.sidebar.footer.actions.shortcuts')}</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => useUIStore.getState().setAboutDialogOpen(true)} className="flex items-center gap-2">
+                  <Icon name="information" className="h-4 w-4" />
+                  <span className="flex-1">{t('sessions.sidebar.footer.actions.aboutOpenChamber')}</span>
+                </DropdownMenuItem>
+                {guestPages.length > 0 ? <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel>{t('sessions.sidebar.header.actions.extensionPages')}</DropdownMenuLabel>
+                  {guestPages.map((guest) => {
+                    const open = openGuestPageId === guest.id;
+                    return (
+                      <DropdownMenuItem key={guest.id} onClick={() => useUIStore.getState().setOpenGuestPage(open ? null : guest.id)} className="flex items-center gap-2">
+                        <GuestIcon icon={resolveGuestIconName(guest.icon)} iconSrc={guestPackageIconSrc(guest.id, guest.icon, getRuntimeUrlResolver().authenticatedAsset)} className="size-4" />
+                        <span className="flex-1">{guest.pageTitle ?? guest.name}</span>
+                        {open ? checkMark : null}
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </> : null}
+              </DropdownMenuContent>
+            </DropdownMenu>
             <div ref={builtinPagesRef} className="flex items-center gap-1.5">
               {showSourceBoard ? (
                 <SidebarPageButton
@@ -376,20 +445,7 @@ export function SidebarHeader(props: Props): React.ReactNode {
                   <GuestIcon icon={resolveGuestIconName(guest.icon)} iconSrc={guestPackageIconSrc(guest.id, guest.icon, getRuntimeUrlResolver().authenticatedAsset)} className={headerActionIconClass} />
                 </SidebarPageButton>
               );
-            }) : guestPages.length > 0 && <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="xs" className="w-6 text-muted-foreground" aria-label={t('sessions.sidebar.header.actions.extensionPages')}>
-                  <Icon name="puzzle" className={headerActionIconClass} />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                <DropdownMenuLabel>{t('sessions.sidebar.header.actions.extensionPages')}</DropdownMenuLabel>
-                {guestPages.map((guest) => <DropdownMenuItem key={guest.id} onSelect={() => useUIStore.getState().setOpenGuestPage(guest.id)}>
-                  <GuestIcon icon={resolveGuestIconName(guest.icon)} iconSrc={guestPackageIconSrc(guest.id, guest.icon, getRuntimeUrlResolver().authenticatedAsset)} className="size-4" />
-                  <span>{guest.pageTitle ?? guest.name}</span>
-                </DropdownMenuItem>)}
-              </DropdownMenuContent>
-            </DropdownMenu>}
+            }) : null}
           </div>
 
           <div ref={listControlsRef} className="flex min-w-0 items-center gap-1.5">

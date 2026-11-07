@@ -7,7 +7,15 @@
 import React from 'react';
 import { flushSync } from 'react-dom';
 import { toast } from '@/components/ui';
-import { useI18n } from '@/lib/i18n';
+import { useI18n as useBaseI18n } from '@/lib/i18n';
+const useI18n = () => {
+    const { t: baseT, ...rest } = useBaseI18n();
+    const t = React.useCallback((key: string, optsOrFallback?: unknown, fallback?: string): string => {
+        const translated = (baseT as unknown as (k: string, o?: unknown, f?: string) => string)(key, optsOrFallback, fallback);
+        return translated || (typeof optsOrFallback === "string" ? optsOrFallback : key);
+    }, [baseT]);
+    return { ...rest, t };
+};
 
 import type { MobileComposerShell } from '../state/useMobileComposerShell';
 import { useMobileCommentComposerController, useMobileCommentDraft } from './MobileCommentComposerContext';
@@ -40,13 +48,16 @@ export function useMobileCommentComposerMode(options: MobileCommentModeOptions):
     const active = isMobile && draft.status === 'open';
 
     const scope = React.useMemo<MobileCommentScope | null>(
-        () => (!isMobile || !runtimeKey || !directory || !sessionKey
+        () => (!runtimeKey || !directory || !sessionKey
             ? null
             : { runtimeKey, directory, sessionKey }),
-        [isMobile, directory, runtimeKey, sessionKey],
+        [directory, runtimeKey, sessionKey],
     );
     // Publish the committed composer's target before a selection-menu tap can
-    // open a comment. The menu must not derive a second target from the parent.
+    // file anything. The menu must not derive a second target from the parent:
+    // an expanded `/btw` fork retargets the composer while the column keeps
+    // showing the parent session. Mobile's shell captures this scope when a
+    // comment opens; desktop's floating input writes its draft into it.
     React.useLayoutEffect(() => {
         controller?.setScope(scope);
         return () => controller?.setScope(null);
@@ -79,7 +90,7 @@ export function useMobileCommentComposerMode(options: MobileCommentModeOptions):
         } else {
             const open = controller.getState();
             if (open.status === 'open' && open.generation === generation) {
-                toast.error(t('chat.textSelection.comment.attachFailed'));
+                toast.error(t('inlineComment.toast.noRoom'));
             }
         }
     }, [controller, mobileShell, t]);

@@ -88,7 +88,7 @@ macOS `activate` can ask for a window while that startup still runs, and
 `openMainWindow` then waits for it. Resolving next to it would call `main()` of
 the server module a second time in the same process: depending on the timing,
 that run fails to listen on the port, replaces the first run's listener handle
-so the managed OpenCode cannot start, or binds a second port, and the failure
+so the supervised Agent Service cannot start, or binds a second port, and the failure
 can reject the startup itself and exit the app. A background launch without a
 local server still probes its remote again when the window opens, because
 reachability from login time says little about later.
@@ -349,9 +349,9 @@ Packaged desktop builds target six native architectures:
 
 ### Why the macOS executable gets its own UUID
 
-macOS Local Network privacy identifies an app by its main executable's Mach-O `LC_UUID` (Apple TN3179). Electron ships one prebuilt executable per version and architecture, so every app on the same Electron release shares that UUID, and macOS applies the Local Network answer of whichever of those apps it met first. OpenChamber then never gets its own prompt: its terminals and the managed OpenCode get `No route to host` for LAN addresses when the other app was denied or never asked, and the prompt, when one shows, names the other app. The `afterPack` hook (`scripts/macos-executable-uuid.cjs`) writes a UUID derived from the `appId` before electron-builder signs, so it stays the same across releases and the user's answer survives updates; the first update to such a build asks once. The hook then signs the executable ad hoc, so a build that skips signing still launches on arm64. Only the small launcher changes; `Electron Framework.framework` and the helper apps keep Electron's binaries. A thin executable is required, so a `--universal` build fails here.
+macOS Local Network privacy identifies an app by its main executable's Mach-O `LC_UUID` (Apple TN3179). Electron ships one prebuilt executable per version and architecture, so every app on the same Electron release shares that UUID, and macOS applies the Local Network answer of whichever of those apps it met first. OpenChamber then never gets its own prompt: its terminals and the supervised Agent Service get `No route to host` for LAN addresses when the other app was denied or never asked, and the prompt, when one shows, names the other app. The `afterPack` hook (`scripts/macos-executable-uuid.cjs`) writes a UUID derived from the `appId` before electron-builder signs, so it stays the same across releases and the user's answer survives updates; the first update to such a build asks once. The hook then signs the executable ad hoc, so a build that skips signing still launches on arm64. Only the small launcher changes; `Electron Framework.framework` and the helper apps keep Electron's binaries. A thin executable is required, so a `--universal` build fails here.
 
-Making terminals and OpenCode their own responsible process (a private `responsibility_spawnattrs_setdisclaim` launcher) also gets them LAN access, but it moves every other privacy prompt they raise, such as Documents or Desktop, away from OpenChamber. With the UUID fix they stay attributed to OpenChamber.
+Making terminals and the Agent Service their own responsible process (a private `responsibility_spawnattrs_setdisclaim` launcher) also gets them LAN access, but it moves every other privacy prompt they raise, such as Documents or Desktop, away from OpenChamber. With the UUID fix they stay attributed to OpenChamber.
 
 ### Windows signing through SignPath
 
@@ -361,7 +361,7 @@ Making terminals and OpenCode their own responsible process (a private `responsi
 2. `build-installer` puts the signed `OpenChamber.exe` into the same unpacked app and builds the installer from it (`--prepackaged`), with the signed uninstaller in place. The request uses `windows-installer`.
 3. `finalize` regenerates the blockmap and `latest.yml`, which electron-builder computed from the unsigned installer.
 
-Only those executables are ours. Electron's DLLs, `elevate.exe`, the bundled OpenCode CLI, ripgrep and node-pty's binaries come from upstream projects, and SignPath Foundation's terms forbid signing them with our certificate; they ship unsigned inside the signed installer.
+Only those executables are ours. Electron's DLLs, `elevate.exe`, the bundled Agent Runtime, ripgrep and node-pty's binaries come from upstream projects, and SignPath Foundation's terms forbid signing them with our certificate; they ship unsigned inside the signed installer.
 
 #### Why Windows releases get their own workflow
 

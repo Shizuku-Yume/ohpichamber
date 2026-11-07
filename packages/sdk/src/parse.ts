@@ -1011,9 +1011,6 @@ const failureFromIssue = (issue: { path: ReadonlyArray<PropertyKey>; code: strin
   if (path === 'contributes.skills') {
     return fail('invalid-skills', 'contributes.skills is a folder inside the package.');
   }
-  if (path === 'contributes.opencodePlugin') {
-    return fail('invalid-opencode-plugin', 'contributes.opencodePlugin is a plugin folder inside the package: a directory with a package.json whose entry OpenCode loads.');
-  }
   if (path === 'contributes.mentions' || path.startsWith('contributes.mentions.')) {
     return fail('invalid-mentions', issue.code === 'custom' ? issue.message : `contributes.mentions is { label: 1 to ${GUEST_MENTIONS_LABEL_MAX} characters }.`);
   }

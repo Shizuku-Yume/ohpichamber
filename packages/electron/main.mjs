@@ -169,7 +169,7 @@ log.transports.console.level = isDev ? 'debug' : 'warn';
 // The in-process web server runs in this same Node process and uses plain
 // `console.log/warn/error`. Without piping console through electron-log,
 // that output never lands in ~/Library/Logs/OpenChamber/main.log and we
-// can't diagnose issues (e.g. OpenCode lifecycle, SSE disconnects) after
+// can't diagnose issues (e.g. server and Agent Service lifecycle, SSE disconnects) after
 // the fact. Route all console calls through electron-log so server-side
 // diagnostics are persisted.
 Object.assign(console, log.functions);
@@ -574,7 +574,7 @@ const performConfirmedQuit = async ({ relaunch = false } = {}) => {
 
 // Hard-stop signals (`Ctrl+C` on `electron:dev`, an external `kill`/SIGTERM,
 // terminal close) bypass the normal app-quit flow — which would orphan the
-// in-process web server's managed OpenCode child. Run the same background
+// in-process web server and its supervised Agent Service child. Run the same background
 // teardown the quit path uses (which kills the sidecar), then exit. The startup
 // reaper remains the backstop for an unhandled hard crash (SIGKILL).
 for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
@@ -1481,8 +1481,8 @@ import { pathLooksUserConfigured, mergePathValues } from '@openchamber/web/serve
 import { provideLoginShellEnvSnapshot } from '@openchamber/web/server/lib/host/login-shell-env.js';
 
 // Merge the user's login-shell env (PATH, etc.) into this process before we
-// import/start the server in-process. The server and its children (opencode
-// CLI, git, etc.) inherit process.env directly now — there is no sidecar
+// import/start the server in-process. The server and its children (Agent Service,
+// git, etc.) inherit process.env directly now — there is no sidecar
 // subprocess to hand a custom env to.
 const inheritUserShellEnv = async () => {
   const shellEnv = await startShellEnvironmentProbe();
@@ -3676,7 +3676,7 @@ const setupAutoUpdater = () => {
 // either take the app down or report why it did not.
 const UPDATE_INSTALL_GRACE_MS = 15_000;
 
-// Releasing terminals, the managed OpenCode child, and SSH sessions must not
+// Releasing terminals, the supervised Agent Service, and SSH sessions must not
 // hold the installer hostage: a stuck session would otherwise keep the app on
 // the old version forever. The backend's own stop() is already bounded; this
 // bounds everything the install path waits on, beyond the backend's 35s limit.

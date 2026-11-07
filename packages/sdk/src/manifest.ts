@@ -958,9 +958,6 @@ export type OpenChamberContributes = {
   /** A folder of `<name>/SKILL.md` skills inside the package. Grants `skills`. */
   skills?: string;
   /**
-   * An OpenCode plugin folder inside the package: a directory with a
-   * `package.json` whose entry OpenCode loads. Grants `opencodePlugin`.
-   */
   /** Rows in the composer's `@` menu. Needs `service`. */
   mentions?: MentionsContribution;
   /** Components agents write in UI blocks, each drawn by its own frame. */
@@ -1110,7 +1107,6 @@ export type ParseManifestErrorCode =
   | 'invalid-session-control'
   | 'invalid-instructions'
   | 'invalid-skills'
-  | 'invalid-opencode-plugin'
   | 'invalid-mentions'
   | 'invalid-blocks'
   | 'invalid-capabilities'

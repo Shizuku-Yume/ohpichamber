@@ -33,7 +33,6 @@ Two entrypoints:
 | Every relative `<script src="…">` `.js` from that HTML | Every declared entry | `missing-build` |
 | File named by `panel.icon`                                                       | Only when icon ends in `.svg` (e.g. `icon.svg`) | `invalid-manifest` |
 | File named by `service.entry` (e.g. `service/main.js`)                               | When `contributes.service` is set                 | `missing-build`    |
-| Folder named by `opencodePlugin`, with `index.js` or `server.js` at its root, or a `package.json` whose `name` and `exports` lead to a file in it | When `contributes.opencodePlugin` is set | `invalid-opencode-plugin` |
 
 
 **Icon.** Remixicon kebab name (`window`) needs no file. A package SVG path (`icon.svg`) must sit inside the package. URLs and absolute paths fail parse as `invalid-panel-icon`. Missing SVG on disk fails install as `invalid-manifest`.

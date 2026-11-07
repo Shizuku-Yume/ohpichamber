@@ -171,14 +171,17 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
       ),
       ...(hasSession  // Show when session exists, not when hasMessages
         ? [
-            { id: 'openchamber:undo', name: 'undo', source: 'openchamber' as const, description: t('chat.commandAutocomplete.command.undoDescription'), isBuiltIn: true },
-            { id: 'openchamber:redo', name: 'redo', source: 'openchamber' as const, description: t('chat.commandAutocomplete.command.redoDescription'), isBuiltIn: true },
-            { id: 'openchamber:timeline', name: 'timeline', source: 'openchamber' as const, description: t('chat.commandAutocomplete.command.timelineDescription'), isBuiltIn: true },
-          ]
+          { id: 'openchamber:undo', name: 'undo', source: 'openchamber' as const, description: t('chat.commandAutocomplete.command.undoDescription'), isBuiltIn: true },
+          { id: 'openchamber:redo', name: 'redo', source: 'openchamber' as const, description: t('chat.commandAutocomplete.command.redoDescription'), isBuiltIn: true },
+          { id: 'openchamber:timeline', name: 'timeline', source: 'openchamber' as const, description: t('chat.commandAutocomplete.command.timelineDescription'), isBuiltIn: true },
+        ]
         : []
       ),
-      ...(hasSession
-        ? [{ id: 'openchamber:btw', name: 'btw', source: 'openchamber' as const, description: t('chat.commandAutocomplete.command.btwDescription'), isOpenChamber: true }]
+      ...(hasSession && !builtinCommandNames.includes('btw')
+        // `/btw` is an OMP built-in that the composer runs itself (BtwPanel),
+        // so it carries the OMP badge like the other native commands. The
+        // catalog list wins when the service publishes it.
+        ? [{ id: 'native:btw', name: 'btw', source: 'native' as const, description: t('chat.commandAutocomplete.command.btwDescription'), isBuiltIn: true }]
         : []
       ),
       ...(hasSession
@@ -293,83 +296,83 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
       style={mobileMaxHeight !== undefined ? { ...style, maxHeight: mobileMaxHeight } : style}
     >
       <ScrollableOverlay ref={listRef} preventOverscroll outerClassName="flex-1 min-h-0" className="p-1">
-          <div>
-            {commands.map((command, index) => {
-              return (
-                <div
-                  key={command.id}
-                  ref={(el) => { itemRefs.current[index] = el; }}
-                  className={cn(
-                    "flex items-center gap-2 px-2 py-1.5 cursor-pointer rounded-lg typography-ui-label",
-                    index === selectedIndex && "bg-interactive-selection"
-                  )}
-                  // Block the focus transfer the tap would perform: the textarea
-                  // must stay focused so selecting a command doesn't dismiss the
-                  // soft keyboard (the blur raced the keyboard-hide trigger and
-                  // won against the deferred refocus).
-                  onMouseDown={(event) => event.preventDefault()}
-                  onPointerDown={(event) => {
-                    if (event.pointerType !== 'touch') {
-                      return;
-                    }
-                    pointerStartRef.current = { x: event.clientX, y: event.clientY };
-                    pointerMovedRef.current = false;
-                  }}
-                  onPointerMove={(event) => {
-                    if (event.pointerType !== 'touch' || !pointerStartRef.current) {
-                      return;
-                    }
-                    const dx = event.clientX - pointerStartRef.current.x;
-                    const dy = event.clientY - pointerStartRef.current.y;
-                    if (Math.hypot(dx, dy) > 6) {
-                      pointerMovedRef.current = true;
-                    }
-                  }}
-                  onPointerUp={(event) => {
-                    if (event.pointerType !== 'touch') {
-                      return;
-                    }
-                    const didMove = pointerMovedRef.current;
-                    pointerStartRef.current = null;
-                    pointerMovedRef.current = false;
-                    if (didMove) {
-                      return;
-                    }
-                    event.preventDefault();
-                    event.stopPropagation();
-                    ignoreClickRef.current = true;
-                    onCommandSelect(command);
-                  }}
-                  onPointerCancel={() => {
-                    pointerStartRef.current = null;
-                    pointerMovedRef.current = false;
-                  }}
-                  onClick={() => {
-                    if (ignoreClickRef.current) {
-                      ignoreClickRef.current = false;
-                      return;
-                    }
-                    onCommandSelect(command);
-                  }}
-                  onMouseMove={() => {
-                    setSelectedIndex(index);
-                  }}
-                >
-                  <span className="max-w-[60%] shrink-0 truncate font-medium">/{command.name}</span>
-                  <AutocompleteRowDetail
-                    scope={command.isOpenChamber ? 'openchamber' : command.isBuiltIn ? 'opencode' : (command.scope === 'project' || command.scope === 'workspace') ? 'project' : command.scope ? 'user' : null}
-                    extension={command.extensionName}
-                    description={command.description}
-                  />
-                </div>
-              );
-            })}
-            {commands.length === 0 && (
-              <div className="px-2 py-1.5 typography-ui-label text-muted-foreground">
-                {t('chat.commandAutocomplete.empty')}
+        <div>
+          {commands.map((command, index) => {
+            return (
+              <div
+                key={command.id}
+                ref={(el) => { itemRefs.current[index] = el; }}
+                className={cn(
+                  "flex items-center gap-2 px-2 py-1.5 cursor-pointer rounded-lg typography-ui-label",
+                  index === selectedIndex && "bg-interactive-selection"
+                )}
+                // Block the focus transfer the tap would perform: the textarea
+                // must stay focused so selecting a command doesn't dismiss the
+                // soft keyboard (the blur raced the keyboard-hide trigger and
+                // won against the deferred refocus).
+                onMouseDown={(event) => event.preventDefault()}
+                onPointerDown={(event) => {
+                  if (event.pointerType !== 'touch') {
+                    return;
+                  }
+                  pointerStartRef.current = { x: event.clientX, y: event.clientY };
+                  pointerMovedRef.current = false;
+                }}
+                onPointerMove={(event) => {
+                  if (event.pointerType !== 'touch' || !pointerStartRef.current) {
+                    return;
+                  }
+                  const dx = event.clientX - pointerStartRef.current.x;
+                  const dy = event.clientY - pointerStartRef.current.y;
+                  if (Math.hypot(dx, dy) > 6) {
+                    pointerMovedRef.current = true;
+                  }
+                }}
+                onPointerUp={(event) => {
+                  if (event.pointerType !== 'touch') {
+                    return;
+                  }
+                  const didMove = pointerMovedRef.current;
+                  pointerStartRef.current = null;
+                  pointerMovedRef.current = false;
+                  if (didMove) {
+                    return;
+                  }
+                  event.preventDefault();
+                  event.stopPropagation();
+                  ignoreClickRef.current = true;
+                  onCommandSelect(command);
+                }}
+                onPointerCancel={() => {
+                  pointerStartRef.current = null;
+                  pointerMovedRef.current = false;
+                }}
+                onClick={() => {
+                  if (ignoreClickRef.current) {
+                    ignoreClickRef.current = false;
+                    return;
+                  }
+                  onCommandSelect(command);
+                }}
+                onMouseMove={() => {
+                  setSelectedIndex(index);
+                }}
+              >
+                <span className="max-w-[60%] shrink-0 truncate font-medium">/{command.name}</span>
+                <AutocompleteRowDetail
+                  scope={command.isOpenChamber ? 'openchamber' : command.isBuiltIn ? 'omp' : (command.scope === 'project' || command.scope === 'workspace') ? 'project' : command.scope ? 'user' : null}
+                  extension={command.extensionName}
+                  description={command.description}
+                />
               </div>
-            )}
-          </div>
+            );
+          })}
+          {commands.length === 0 && (
+            <div className="px-2 py-1.5 typography-ui-label text-muted-foreground">
+              {t('chat.commandAutocomplete.empty')}
+            </div>
+          )}
+        </div>
       </ScrollableOverlay>
       {!isMobile && (
         <div className="px-3 py-1.5 border-t typography-meta text-muted-foreground">

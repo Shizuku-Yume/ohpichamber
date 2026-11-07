@@ -4996,7 +4996,7 @@ export const dict = {
   "chat.markdown.suggestion.title": "제안된 변경",
   "chat.autocomplete.scope.user": "사용자",
   "chat.autocomplete.scope.project": "프로젝트",
-  "chat.autocomplete.scope.opencode": "opencode",
+  "chat.autocomplete.scope.omp": "omp",
   "chat.autocomplete.scope.openchamber": "openchamber",
   "chat.autocomplete.skillsEmpty": "스킬을 찾을 수 없습니다",
   "chat.workflow.state.awaitingApproval": "승인 대기 중",

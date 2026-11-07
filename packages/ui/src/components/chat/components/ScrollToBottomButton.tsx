@@ -1,3 +1,5 @@
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useAgentStatusLabel } from '@/hooks/useAgentStatusLabel';
 import React from 'react';
 
 import { Icon } from "@/components/icon/Icon";
@@ -12,21 +14,22 @@ import { registerFloatingPanelClearanceReader } from '@/components/chat/composer
 const ScrollAction: React.FC<{ onClick: () => void; children?: React.ReactNode }> = ({ onClick, children }) => {
     const { t } = useI18n();
     return (
-        <button
-            type="button"
-            onClick={onClick}
-            aria-label={t('chat.scrollToBottom.aria')}
-            className="inline-flex h-8 min-w-0 max-w-full flex-1 items-center rounded-full [corner-shape:round] text-left"
-        >
-            {/* flex-1 so the icon stays centred when the mobile
-                touch-target floor widens the bare button past 32px;
-                with the status label present it collapses back to
-                its 32px basis. */}
-            <span className="flex h-8 w-8 flex-1 shrink-0 basis-8 items-center justify-center text-muted-foreground">
-                <Icon name="arrow-down" className="h-4 w-4" />
-            </span>
-            {children}
-        </button>
+        <Tooltip>
+            <TooltipTrigger asChild>
+                <button
+                    type="button"
+                    onClick={onClick}
+                    aria-label={t('chat.scrollToBottom.aria')}
+                    className="inline-flex h-8 min-w-0 max-w-full flex-1 items-center rounded-full [corner-shape:round] text-left"
+                >
+                    <span className="flex h-8 w-8 flex-1 shrink-0 basis-8 items-center justify-center text-muted-foreground">
+                        <Icon name="arrow-down" className="h-4 w-4" />
+                    </span>
+                    {children}
+                </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={6}>{t('chat.scrollToBottom.aria')}</TooltipContent>
+        </Tooltip>
     );
 };
 
@@ -46,11 +49,8 @@ const WorkingPillBody: React.FC<{ onClick: () => void }> = ({ onClick }) => {
         return getProviderModelDisplayName(provider, activeModel.modelId) || null;
     }, [activeModel, providers]);
 
-    if (!working.isWorking || !working.statusText) return <ScrollAction onClick={onClick} />;
-    const status = working.statusText;
-    const label = modelName && modelName.trim().length > 0
-        ? t('chat.statusRow.modelStatus', { model: modelName.trim(), status })
-        : status.charAt(0).toUpperCase() + status.slice(1);
+    const label = useAgentStatusLabel(working.isWorking ? working.status : null, modelName);
+    if (!label) return <ScrollAction onClick={onClick} />;
 
     return (
         <ScrollAction onClick={onClick}>

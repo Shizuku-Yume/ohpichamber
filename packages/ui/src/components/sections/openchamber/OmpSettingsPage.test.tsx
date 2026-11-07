@@ -12,6 +12,7 @@ Object.assign(globalThis, {
   Node: browser.Node,
   Element: browser.Element,
   HTMLElement: browser.HTMLElement,
+  HTMLInputElement: browser.HTMLInputElement,
   HTMLTextAreaElement: browser.HTMLTextAreaElement,
   Event: browser.Event,
   FocusEvent: browser.FocusEvent,
@@ -417,7 +418,7 @@ test('eliminates all raw JSON textareas and renders structured controls for all 
   const thresholdsRow = container.querySelector('[data-settings-item="omp.compaction.modelThresholds"]');
   expect(thresholdsRow).not.toBeNull();
   expect(thresholdsRow?.textContent).toContain('openai/gpt-4o');
-  expect(thresholdsRow?.textContent).toContain('90,000');
+  expect(Array.from(thresholdsRow?.querySelectorAll('input') ?? []).some(inp => inp.value.includes('90'))).toBe(true);
   expect(thresholdsRow?.querySelector('textarea')).toBeNull();
 });
 
@@ -449,4 +450,94 @@ test('provides full reactive i18n coverage in both English and Chinese for OMP s
   } finally {
     await act(async () => { useI18nStore.getState().setLocale('en'); });
   }
+});
+
+test('modelPresets structured editor supports multiple role overrides and rejects duplicate preset names', async () => {
+  const presetState = {
+    workspaceId: 'workspace_1',
+    revision: '15',
+    settings: [
+      {
+        id: 'modelPresets' as const,
+        type: 'record' as const,
+        value: {
+          arch: {
+            modelRoles: { default: 'openai/gpt-4o', plan: 'anthropic/claude-3-7-sonnet', smol: 'openai/gpt-4o-mini' },
+            defaultThinkingLevel: 'high',
+          },
+        },
+        default: {},
+        configured: true,
+        label: 'Model Presets',
+      },
+    ],
+  };
+
+  getSettings.mockResolvedValue(presetState as unknown as OmpSettingsState);
+  await act(async () => { root.render(<I18nProvider><OmpSettingsPage /></I18nProvider>); });
+  await settle();
+
+  const presetCard = container.querySelector('[data-settings-item="omp.modelPresets"]');
+  expect(presetCard?.textContent).toContain('arch');
+  // Verifies all three role overrides are preserved and rendered
+  expect(presetCard?.textContent).toContain('Default');
+  expect(presetCard?.textContent).toContain('Architect');
+  expect(presetCard?.textContent).toContain('Fast (Smol)');
+
+  // Test duplicate preset name rejection
+  const nameInput = presetCard?.querySelector('input[placeholder="New preset name"]') as HTMLInputElement;
+  const addContainer = nameInput.closest('.p-3');
+  const addBtn = addContainer?.querySelector<HTMLButtonElement>('button:not([role="combobox"])');
+  expect(nameInput).not.toBeNull();
+  expect(addBtn).not.toBeNull();
+
+  await act(async () => {
+    const nativeSetter = Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype, 'value')?.set;
+    nativeSetter?.call(nameInput, 'arch');
+    nameInput.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await settle();
+
+  await act(async () => {
+    addBtn?.click();
+  });
+  await settle();
+
+  expect(presetCard?.textContent).toContain('A preset with this name already exists');
+});
+
+test('compaction.modelThresholds preserves and renders valid native string thresholds like percentage or fixed triggers', async () => {
+  const thresholdState = {
+    workspaceId: 'workspace_1',
+    revision: '16',
+    settings: [
+      {
+        id: 'compaction.modelThresholds' as const,
+        type: 'record' as const,
+        value: {
+          'openai/gpt-4o': 90000,
+          'deepseek/*': '80%',
+          'anthropic/*': 'f100000',
+        },
+        default: {},
+        configured: true,
+        label: 'Model Thresholds',
+        group: 'Compaction',
+      },
+    ],
+  };
+
+  getSettings.mockResolvedValue(thresholdState as unknown as OmpSettingsState);
+  await act(async () => { root.render(<I18nProvider><OmpSettingsPage /></I18nProvider>); });
+  await settle();
+
+  const thSection = container.querySelector('[data-settings-item="omp.compaction.modelThresholds"]');
+  expect(thSection?.textContent).toContain('openai/gpt-4o');
+  expect(thSection?.textContent).toContain('deepseek/*');
+  expect(thSection?.textContent).toContain('anthropic/*');
+
+  const inputs = Array.from(thSection?.querySelectorAll('input') ?? []).map(i => i.value);
+  expect(inputs.some(val => val.includes('90'))).toBe(true);
+  expect(inputs.includes('80%')).toBe(true);
+  expect(inputs.includes('f100000')).toBe(true);
 });

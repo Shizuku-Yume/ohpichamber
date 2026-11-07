@@ -406,18 +406,6 @@ export class CanonicalClient {
   deleteQueueItem(sessionId: string, queueItemId: string, input: QueueDeleteRequest): Promise<QueueState> { return request(`/api/agent/v1/sessions/${id(sessionId)}/queue/${id(queueItemId)}`, scoped(C.QueueStateSchema, result => result.sessionId === sessionId), { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.QueueDeleteRequestSchema, input, body => body.queueItemId === queueItemId) }); }
 
   getModels(workspaceId: string): Promise<ModelCatalog> { return request(`/api/agent/v1/workspaces/${id(workspaceId)}/models`, scoped(C.ModelCatalogSchema, result => result.workspaceId === workspaceId)); }
-  async listImageModels(workspaceId: string): Promise<C.ImageModel[]> {
-    const catalog = await this.getModels(workspaceId);
-    return catalog.imageModels;
-  }
-  generateImage(workspaceId: string, input: Omit<C.ImageGenerateRequest, 'workspaceId'>, signal?: AbortSignal): Promise<C.ImageGenerateResult> {
-    const payload = C.ImageGenerateRequestSchema.parse({ ...input, workspaceId });
-    return request(
-      `/api/agent/v1/workspaces/${id(workspaceId)}/images/generate`,
-      scoped(C.ImageGenerateResultSchema, result => result.model.provider === payload.selection.provider && result.model.modelId === payload.selection.modelId),
-      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal },
-    );
-  }
 
   getOmpSettings(workspaceId: string, signal?: AbortSignal): Promise<OmpSettingsState> {
     return request(`/api/agent/v1/workspaces/${id(workspaceId)}/settings`, scoped(C.OmpSettingsStateSchema, result => result.workspaceId === workspaceId), { signal });

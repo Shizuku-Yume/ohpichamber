@@ -1,5 +1,5 @@
 import { useConfigStore } from '@/stores/useConfigStore';
-import { getRuntimeKey } from '@/lib/runtime-switch';
+import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import type { ImageModel } from '@openchamber/agent-contract';
 import * as React from 'react';
 
@@ -147,9 +147,15 @@ export const OpenChamberToolsSettings: React.FC = () => {
     void updateDesktopSettings({ agentImageModel: value });
   }, [setAgentImageModel]);
 
-// Only models that generate images, read when the page opens or workspace changes.
-  // Models are queried from the Canonical image catalog, which separates
-  // image generators (imageModels) from vision-input LLMs in models.
+  // The active runtime key: changing runtime re-subscribes and refetches image
+  // models even when the workspaceId string happens to remain identical.
+  const [runtimeKey, setRuntimeKey] = React.useState(getRuntimeKey);
+  React.useEffect(() => subscribeRuntimeEndpointChanged(() => setRuntimeKey(getRuntimeKey())), []);
+
+  // Only models that generate images, read when the page opens, workspaceId changes, or runtime switches.
+  // Models are queried from the Canonical image catalog (`imageModels`), which separates
+  // image generators from vision-input LLMs. Enabled: false models are filtered out so
+  // ineligible generators are never offered as selectable options.
   const [imageModels, setImageModels] = React.useState<
     | { status: 'loading' }
     | { status: 'failed' }
@@ -158,7 +164,7 @@ export const OpenChamberToolsSettings: React.FC = () => {
 
   React.useEffect(() => {
     let cancelled = false;
-    const currentRuntime = getRuntimeKey();
+    const currentRuntime = runtimeKey;
 
     if (!workspaceId) {
       setImageModels({ status: 'failed' });
@@ -170,11 +176,13 @@ export const OpenChamberToolsSettings: React.FC = () => {
     canonicalClient.listImageModels(workspaceId).then(
       (models: ImageModel[]) => {
         if (cancelled || getRuntimeKey() !== currentRuntime) return;
-        const options = models.map((model) => ({
-          value: `${model.provider}/${model.modelId}`,
-          name: model.name,
-          providerID: model.provider,
-        }));
+        const options = models
+          .filter((model) => model.enabled !== false)
+          .map((model) => ({
+            value: `${model.provider}/${model.modelId}`,
+            name: model.name,
+            providerID: model.provider,
+          }));
         setImageModels({ status: 'ready', models: options });
       },
       () => {
@@ -186,7 +194,7 @@ export const OpenChamberToolsSettings: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [workspaceId]);
+  }, [workspaceId, runtimeKey]);
     const imageModelOptions = imageModels.status === 'ready' ? imageModels.models : [];
   const imageModelKnown = imageModelOptions.some((model) => model.value === agentImageModel);
 

@@ -1,6 +1,9 @@
 import { afterAll, afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
 import { useProjectsStore } from './useProjectsStore';
+import { useUIStore } from './useUIStore';
+import { useDirectoryStore as useAppDirectoryStore } from './useDirectoryStore';
+import { hostFilesystem } from '@/lib/host-filesystem';
 import { useSkillsStore } from './useSkillsStore';
 import { useSkillsCatalogStore } from './useSkillsCatalogStore';
 
@@ -16,6 +19,8 @@ const fileCatalog = spyOn(canonicalClient.fileResources, 'getSkillFileCatalog');
 const reload = spyOn(useSkillsStore.getState(), 'loadSkills').mockResolvedValue(true);
 beforeEach(() => {
   useProjectsStore.setState({ projects: [{ id: 'project_test', path: '/workspace' }], activeProjectId: 'project_test' });
+  useUIStore.setState({ settingsProjectPath: null });
+  useAppDirectoryStore.setState({ currentDirectory: '', homeDirectory: '' });
   useSkillsCatalogStore.getState().resetForRuntimeSwitch();
   catalog.mockResolvedValue({ workspaceId: workspace.workspaceId, sources: [source] });
   sourceRead.mockResolvedValue({ workspaceId: workspace.workspaceId, items: [item] });
@@ -23,7 +28,11 @@ beforeEach(() => {
   fileCatalog.mockResolvedValue({ workspaceId: workspace.workspaceId, sources: { workspace: '7', agent: '3' }, skills: [] });
   catalog.mockClear(); sourceRead.mockClear(); scan.mockClear(); install.mockClear(); fileCatalog.mockClear(); reload.mockClear(); resolve.mockClear();
 });
-afterEach(() => { useSkillsCatalogStore.getState().resetForRuntimeSwitch(); });
+afterEach(() => {
+  useUIStore.setState({ settingsProjectPath: null });
+  useAppDirectoryStore.setState({ currentDirectory: '', homeDirectory: '' });
+  useSkillsCatalogStore.getState().resetForRuntimeSwitch();
+});
 afterAll(() => { resolve.mockRestore(); catalog.mockRestore(); sourceRead.mockRestore(); scan.mockRestore(); install.mockRestore(); fileCatalog.mockRestore(); reload.mockRestore(); });
 
 describe('Canonical skill repository store', () => {
@@ -69,13 +78,79 @@ describe('Canonical skill repository store', () => {
   });
   test('passes only approved source identity and the selected scope source revision to installation', async () => {
     const scope = { kind: 'agent' as const, agentDirectoryId: 'agent_test' };
-    const result = { ok: true as const, workspaceId: workspace.workspaceId, installed: [{ skillName: 'review', scope: 'agent' as const }], skipped: [],
-      commit: { scope, sourceRevision: '4', persistence: 'committed' as const, apply: null } };
-    install.mockRejectedValueOnce(new CanonicalApiError({ type: 'urn:test:skill-apply', title: 'Apply failed', status: 503, code: 'SKILL_APPLY_FAILED',
-      detail: 'Skill source saved but worker unavailable', retryable: true, details: { result: result.commit, repository: result } }));
+    const result = {
+      ok: true as const, workspaceId: workspace.workspaceId, installed: [{ skillName: 'review', scope: 'agent' as const }], skipped: [],
+      commit: { scope, sourceRevision: '4', persistence: 'committed' as const, apply: null }
+    };
+    install.mockRejectedValueOnce(new CanonicalApiError({
+      type: 'urn:test:skill-apply', title: 'Apply failed', status: 503, code: 'SKILL_APPLY_FAILED',
+      detail: 'Skill source saved but worker unavailable', retryable: true, details: { result: result.commit, repository: result }
+    }));
     const actual = await useSkillsCatalogStore.getState().installSkills({ sourceId: source.id, scope: 'agent', selections: [{ skillDir: item.skillDir }] });
     expect(install).toHaveBeenCalledWith(workspace.workspaceId, { sourceId: source.id, scope: 'agent', selections: [{ skillDir: item.skillDir }], expectedSourceRevision: '3' });
     expect(actual).toEqual(result);
     expect(reload).toHaveBeenCalledWith('/workspace');
+  });
+  test('loadCatalog succeeds when activeProject is null, falling back through the directory chain to home or ~', async () => {
+    useProjectsStore.setState({ projects: [], activeProjectId: null });
+    useUIStore.setState({ settingsProjectPath: null });
+    useAppDirectoryStore.setState({ currentDirectory: '', homeDirectory: '/home/fallback' });
+
+    expect(await useSkillsCatalogStore.getState().loadCatalog()).toBe(true);
+    expect(resolve).toHaveBeenCalledWith('/home/fallback');
+    expect(useSkillsCatalogStore.getState().lastCatalogError).toBeNull();
+    expect(useSkillsCatalogStore.getState().sources).toEqual([source]);
+  });
+  test('loadCatalog prioritizes settingsProjectPath and currentDirectory over activeProject', async () => {
+    useProjectsStore.setState({ projects: [{ id: 'project_test', path: '/workspace' }], activeProjectId: 'project_test' });
+    useUIStore.setState({ settingsProjectPath: '/settings/dir' });
+    useAppDirectoryStore.setState({ currentDirectory: '/current/dir', homeDirectory: '/home/user' });
+
+    expect(await useSkillsCatalogStore.getState().loadCatalog()).toBe(true);
+    expect(resolve).toHaveBeenCalledWith('/settings/dir');
+
+    useUIStore.setState({ settingsProjectPath: null });
+    expect(await useSkillsCatalogStore.getState().loadCatalog({ refresh: true })).toBe(true);
+    expect(resolve).toHaveBeenCalledWith('/current/dir');
+  });
+  test('loadCatalog falls back to homeDirectory when activeProject is null, then to ~ without resolving /', async () => {
+    useProjectsStore.setState({ projects: [], activeProjectId: null });
+    useUIStore.setState({ settingsProjectPath: '   ' });
+    useAppDirectoryStore.setState({ currentDirectory: '   ', homeDirectory: '/home/fallback' });
+    const getDir = spyOn(hostFilesystem, 'getDirectory').mockReturnValue('   ');
+    try {
+      expect(await useSkillsCatalogStore.getState().loadCatalog()).toBe(true);
+      expect(resolve).toHaveBeenCalledWith('/home/fallback');
+      expect(useSkillsCatalogStore.getState().lastCatalogError).toBeNull();
+
+      // All stores empty: falls back to '~' (which Host expands) and never '/'
+      resolve.mockClear();
+      useAppDirectoryStore.setState({ currentDirectory: '   ', homeDirectory: '   ' });
+      expect(await useSkillsCatalogStore.getState().loadCatalog({ refresh: true })).toBe(true);
+      expect(resolve).toHaveBeenCalledWith('~');
+      expect(resolve).not.toHaveBeenCalledWith('/');
+      expect(useSkillsCatalogStore.getState().lastCatalogError).toBeNull();
+
+      // When Host cannot admit the expanded home, preserves clean error
+      resolve.mockRejectedValueOnce(new Error('Cannot admit home directory'));
+      expect(await useSkillsCatalogStore.getState().loadCatalog({ refresh: true })).toBe(false);
+      expect(useSkillsCatalogStore.getState().lastCatalogError?.message).toBe('Cannot admit home directory');
+    } finally {
+      getDir.mockRestore();
+    }
+  });
+  test('installSkills preserves explicit directory override over ambient fallback', async () => {
+    useProjectsStore.setState({ projects: [], activeProjectId: null });
+    useUIStore.setState({ settingsProjectPath: '/ambient' });
+    install.mockResolvedValueOnce({
+      ok: true, workspaceId: workspace.workspaceId, installed: [], skipped: [],
+      commit: { scope: { kind: 'workspace', workspaceId: workspace.workspaceId }, sourceRevision: '1', persistence: 'committed', apply: null },
+    });
+
+    await useSkillsCatalogStore.getState().installSkills(
+      { sourceId: source.id, scope: 'workspace', selections: [{ skillDir: item.skillDir }] },
+      { directory: '/explicit/install/path' },
+    );
+    expect(resolve).toHaveBeenCalledWith('/explicit/install/path');
   });
 });

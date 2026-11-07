@@ -4,7 +4,11 @@ import { SkillRepositoryInstallFailureDetailsSchema } from '@openchamber/agent-c
 import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
 import { invalidateSkillsLoadCache, useSkillsStore } from './useSkillsStore';
 import { useProjectsStore } from './useProjectsStore';
+import { useUIStore } from './useUIStore';
+import { useDirectoryStore as useAppDirectoryStore } from './useDirectoryStore';
+import { hostFilesystem } from '@/lib/host-filesystem';
 import { emitConfigChange } from '@/lib/configSync';
+import { getChatsRoot } from '@/lib/chatDirectories';
 
 export type SkillsCatalogSource = SkillRepositorySource;
 export type SkillsCatalogItem = SkillRepositoryItem;
@@ -27,7 +31,23 @@ interface CatalogState {
 }
 const initial = { sources: [], itemsBySource: {}, loadedSourceIds: {}, selectedSourceId: null, isLoadingCatalog: false, isLoadingSource: false, isScanning: false, isInstalling: false, lastCatalogError: null, lastScanError: null, lastInstallError: null, scanResults: null };
 const failure = (error: Error | string): SkillRepositoryError => ({ kind: error instanceof CanonicalApiError && error.problem.status === 401 ? 'authRequired' : 'unknown', message: error instanceof Error ? error.message : error });
-const directory = () => useProjectsStore.getState().getActiveProject()?.path?.trim() || null;
+const directory = (): string => {
+  const settingsProjectPath = useUIStore.getState().settingsProjectPath?.trim();
+  if (settingsProjectPath) return settingsProjectPath;
+  const currentDirectory = useAppDirectoryStore.getState().currentDirectory?.trim();
+  if (currentDirectory) return currentDirectory;
+  const projectPath = useProjectsStore.getState().getActiveProject()?.path?.trim();
+  if (projectPath) return projectPath;
+  const chatsRoot = getChatsRoot()?.trim();
+  if (chatsRoot) return chatsRoot;
+  const homeDir = useAppDirectoryStore.getState().homeDirectory?.trim();
+  if (homeDir) return homeDir;
+  const anyProject = useProjectsStore.getState().projects?.[0]?.path?.trim();
+  if (anyProject) return anyProject;
+  const hostDir = hostFilesystem.getDirectory()?.trim();
+  if (hostDir) return hostDir;
+  return '~';
+};
 let generation = 0;
 let selectedDirectory: string | null = null;
 interface CatalogRequestScope { owner: number; directory: string }
@@ -37,9 +57,8 @@ export const useSkillsCatalogStore = create<CatalogState>((set, get) => {
   let catalogEpoch = 0;
   let catalogRequestRevision = 0;
   const sourceLoads = new Map<string, Promise<boolean>>();
-  const capture = (override?: string | null) => {
-    const requested = override ?? directory();
-    if (!requested) throw new Error('Workspace directory is unavailable');
+  const capture = (override?: string | null): CatalogRequestScope => {
+    const requested = override?.trim() || directory();
     if (selectedDirectory !== requested) {
       generation++; selectedDirectory = requested; catalogLoadedAt = 0; catalogInFlight = null; catalogEpoch++; sourceLoads.clear(); set(initial);
     }
@@ -63,8 +82,10 @@ export const useSkillsCatalogStore = create<CatalogState>((set, get) => {
           const result = await canonicalClient.skillRepositories.catalog(workspace.workspaceId);
           if (scope.owner !== generation || requestRevision !== catalogRequestRevision) return false;
           if (options?.refresh) { catalogEpoch++; sourceLoads.clear(); }
-          set(state => ({ sources: result.sources, selectedSourceId: result.sources.some(source => source.id === state.selectedSourceId) ? state.selectedSourceId : result.sources[0]?.id ?? null,
-            ...(options?.refresh ? { itemsBySource: {}, loadedSourceIds: {}, isLoadingSource: false } : {}) }));
+          set(state => ({
+            sources: result.sources, selectedSourceId: result.sources.some(source => source.id === state.selectedSourceId) ? state.selectedSourceId : result.sources[0]?.id ?? null,
+            ...(options?.refresh ? { itemsBySource: {}, loadedSourceIds: {}, isLoadingSource: false } : {})
+          }));
           catalogLoadedAt = Date.now();
           return true;
         } catch (error) { if (scope.owner === generation && requestRevision === catalogRequestRevision) set({ lastCatalogError: failure(error instanceof Error ? error : String(error)) }); return false; }

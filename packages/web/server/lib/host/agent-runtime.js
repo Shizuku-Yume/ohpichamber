@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ProblemDetailsSchema, RuntimeSessionSchema } from '@openchamber/agent-contract';
@@ -31,10 +32,18 @@ import {
   ensureAgentRuntimeSymlinks,
   resolveWebAgentRuntime,
 } from '../../../scripts/standalone-loader.mjs';
+import {
+  detectSystemOmpRuntime,
+  findSystemOmpCandidates,
+  probeSystemOmp,
+} from './system-omp-runtime.js';
 
 export {
   ensureAgentRuntimeSymlinks,
   resolveWebAgentRuntime,
+  detectSystemOmpRuntime,
+  findSystemOmpCandidates,
+  probeSystemOmp,
 };
 
 /** Node admission and machine policy around the separate, SDK-owning Bun service. */
@@ -42,17 +51,21 @@ export function createHostAgentRuntime({
   dataDir, scopeRuntime, validateDirectoryPath, getEnvironmentForDirectory,
   invokeHostAction, enterprisePolicyOptions, bunPath, entrypoint,
 }) {
-  let resolvedBunPath = bunPath ?? process.env.OHPICHAMBER_BUN;
-  let resolvedEntrypoint = entrypoint ?? process.env.OHPICHAMBER_AGENT_SERVICE_ENTRYPOINT;
+  const bundledRuntime = resolveWebAgentRuntime();
+  const detected = detectSystemOmpRuntime({
+    bundledRuntime,
+    env: process.env,
+  });
+  let resolvedBunPath = bunPath ?? (detected.source === 'operator' || detected.source === 'system' ? detected.bunPath : null) ?? process.env.OHPICHAMBER_BUN ?? bundledRuntime?.bunPath;
+  let resolvedEntrypoint = entrypoint ?? process.env.OHPICHAMBER_AGENT_SERVICE_ENTRYPOINT ?? bundledRuntime?.entrypoint;
   if (!resolvedBunPath || !resolvedEntrypoint) {
-    const bundled = resolveWebAgentRuntime();
-    if (bundled) {
-      resolvedBunPath ??= bundled.bunPath;
-      resolvedEntrypoint ??= bundled.entrypoint;
-    } else {
-      resolvedBunPath ??= 'bun';
-      resolvedEntrypoint ??= fileURLToPath(new URL('../index.js', import.meta.resolve('@openchamber/agent-service/private-protocol')));
-    }
+    resolvedBunPath ??= 'bun';
+    resolvedEntrypoint ??= fileURLToPath(new URL('../index.js', import.meta.resolve('@openchamber/agent-service/private-protocol')));
+  }
+  if (detected.env?.BUN_BE_BUN === '1') {
+    process.env.BUN_BE_BUN = '1';
+  } else {
+    delete process.env.BUN_BE_BUN;
   }
   process.env.OHPICHAMBER_BUN ??= resolvedBunPath;
   process.env.OHPICHAMBER_AGENT_SERVICE_ENTRYPOINT ??= resolvedEntrypoint;
@@ -83,8 +96,11 @@ export function createHostAgentRuntime({
   });
   skillFileOwner = createSkillFileOwner({ service });
   const admitWorkspace = async (scope) => {
-    const env = isEnterpriseMode(enterprisePolicyOptions)
+    const baseEnv = isEnterpriseMode(enterprisePolicyOptions)
       ? {} : await getEnvironmentForDirectory(scope.cwd);
+    const env = process.env.BUN_BE_BUN === '1'
+      ? { BUN_BE_BUN: '1', ...baseEnv }
+      : baseEnv;
     const registration = await readResponse(await service.request(
       `/internal/workspaces/${encodeURIComponent(scope.workspaceId)}`,
       {
@@ -136,7 +152,17 @@ export function createHostAgentRuntime({
     },
     stop: () => service.stop(),
     close,
-    service, skillFileOwner, resolveWorkspaceScope, resolveWorkspaceDirectory: scopeRuntime.resolveWorkspaceDirectory, resolveSessionScope, resolveHostSessionScope,
+    service, skillFileOwner, resolveWorkspaceScope,
+    resolveWorkspaceDirectory: async (dir) => {
+      let target = dir;
+      if (typeof target === 'string') {
+        const trimmed = target.trim();
+        if (trimmed === '~') target = os.homedir();
+        else if (trimmed.startsWith('~/') || trimmed.startsWith('~\\')) target = path.join(os.homedir(), trimmed.slice(2));
+      }
+      return scopeRuntime.resolveWorkspaceDirectory(target);
+    },
+    resolveSessionScope, resolveHostSessionScope,
     resolveRepositoryWorkspace: scopeRuntime.resolveRepositoryWorkspace,
     resolveHostRelocationScope: scopeRuntime.resolveRelocationSourceScope,
   };

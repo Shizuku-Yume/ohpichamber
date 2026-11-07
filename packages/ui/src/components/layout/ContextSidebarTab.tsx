@@ -1,20 +1,22 @@
 import React from 'react';
 import type { JsonValue, Message, Part } from '@openchamber/agent-contract';
-import type { Model, Provider } from '@openchamber/agent-contract';
 import { WorkerHighlightedCode } from '@/components/code/WorkerHighlightedCode';
 
 import { Icon } from "@/components/icon/Icon";
-import { useConfigStore } from '@/stores/useConfigStore';
+import { selectConfiguredModelPair, selectProvidersForDirectory, useConfigStore } from '@/stores/useConfigStore';
+import { useSelectionStore } from '@/sync/selection-store';
+import { useShallow } from 'zustand/react/shallow';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { computeCacheHitRate, findLatestContextFill, type ContextFillMessage } from '@/stores/utils/tokenUtils';
-import { useSessions, useSessionMessageRecords } from '@/sync/sync-context';
+import { useSessionMessageRecords, useSessions } from '@/sync/sync-context';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { getCurrentIntlLocale, useI18n } from '@/lib/i18n';
 import { formatMoney } from '@/lib/money';
 import type { TimeFormatPreference } from '@/stores/useUIStore';
 import { formatDateTimeForPreference } from '@/lib/timeFormat';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
+import { completePair, EMPTY_TOKEN_BREAKDOWN, readTokenBreakdown, resolveContextModel, type SidebarTokenBreakdown } from './contextSidebarModel';
 import {
   derivePartsLabel,
   deriveUserSnippet,
@@ -25,21 +27,7 @@ import {
 
 type SessionMessage = { info: Message; parts: Part[] };
 
-type ContextProvider = Provider & { models: Model[] };
-type ProviderModelDisplay = {
-  providerName: string;
-  modelName: string;
-  contextLimit: number | null;
-};
-
-type TokenBreakdown = {
-  input: number;
-  output: number;
-  reasoning: number;
-  cacheRead: number;
-  cacheWrite: number;
-  total: number;
-};
+type TokenBreakdown = SidebarTokenBreakdown;
 
 type ContextBuckets = {
   user: number;
@@ -48,14 +36,7 @@ type ContextBuckets = {
   other: number;
 };
 
-const EMPTY_BREAKDOWN: TokenBreakdown = {
-  input: 0,
-  output: 0,
-  reasoning: 0,
-  cacheRead: 0,
-  cacheWrite: 0,
-  total: 0,
-};
+const EMPTY_BREAKDOWN: TokenBreakdown = EMPTY_TOKEN_BREAKDOWN;
 
 const EMPTY_BUCKETS: ContextBuckets = {
   user: 0,
@@ -64,18 +45,7 @@ const EMPTY_BUCKETS: ContextBuckets = {
   other: 0,
 };
 
-const extractTokenBreakdown = (message: SessionMessage): TokenBreakdown => {
-  const usage = message.info.usage;
-  if (!usage) return EMPTY_BREAKDOWN;
-  return {
-    input: usage.input,
-    output: usage.output,
-    reasoning: 0,
-    cacheRead: usage.cacheRead,
-    cacheWrite: usage.cacheWrite,
-    total: usage.totalTokens,
-  };
-};
+const extractTokenBreakdown = (message: SessionMessage): TokenBreakdown => readTokenBreakdown(message.info.usage);
 
 const estimateJsonLength = (value: JsonValue): number => JSON.stringify(value).length;
 
@@ -158,21 +128,6 @@ const formatDateTime = (timestamp: number | null, timeFormatPreference: TimeForm
   });
 };
 
-const resolveProviderAndModel = (
-  providers: readonly ContextProvider[],
-  providerID: string,
-  modelID: string,
-): ProviderModelDisplay => {
-  const provider = providers.find((entry) => entry.providerId === providerID);
-  const model = provider?.models?.find((entry) => entry.modelId === modelID);
-
-  return {
-    providerName: provider?.name || providerID || '-',
-    modelName: model?.name || modelID || '-',
-    contextLimit: model?.contextWindow ?? null,
-  };
-};
-
 export const ContextPanelContent: React.FC = () => {
   const { t } = useI18n();
   const timeFormatPreference = useUIStore((state) => state.timeFormatPreference);
@@ -186,7 +141,23 @@ export const ContextPanelContent: React.FC = () => {
     currentSessionId ?? '',
     currentSessionDirectory ?? undefined,
   ).map((message): SessionMessage => ({ info: message, parts: message.parts }));
-  const providers = useConfigStore((state) => state.providers);
+  const providers = useConfigStore((state) => selectProvidersForDirectory(state, currentSessionDirectory));
+  // The readout still has to name a model before the first answer carries one.
+  // The session's own selection is authoritative; the composer's pair describes
+  // only the directory it was configured for, never another one.
+  // Primitive selectors keep every subscription stable: a fresh pair object
+  // from a selector would re-render on every store read.
+  // One shallow-compared pair per store read, so a fresh object literal still
+  // notifies only when the values change.
+  const configuredPairState = useConfigStore(useShallow(React.useCallback(
+    (state) => selectConfiguredModelPair(state, currentSessionDirectory),
+    [currentSessionDirectory],
+  )));
+  const sessionSelectionConfig = useSelectionStore(useShallow(React.useCallback((state) => {
+    const model = currentSessionId ? state.sessionModelSelections.get(currentSessionId) ?? null : null;
+    return { providerId: model?.providerId ?? '', modelId: model?.modelId ?? '' };
+  }, [currentSessionId])));
+
 
   React.useEffect(() => {
     if (copyResetTimeoutRef.current !== null) {
@@ -247,12 +218,24 @@ export const ContextPanelContent: React.FC = () => {
 
     const totalAssistantCost = assistantMessages.reduce((sum, message) => sum + (message.info.usage?.cost.total ?? 0), 0);
 
+    // The newest answer is the authority. Before one exists, the session's own
+    // selection wins, then the configured pair of the session's directory; the
+    // composer's pair only counts when it describes that same directory.
     const latestAssistantInfo = contextMessage?.info ?? null;
-    const providerModel = resolveProviderAndModel(
+    const answering = completePair({
+      providerId: latestAssistantInfo?.providerId ?? '',
+      modelId: latestAssistantInfo?.modelId ?? '',
+    });
+    const sessionSelectionPair = completePair(sessionSelectionConfig);
+    // The composer's pair describes only its own directory. Another directory's
+    // configured pair must never label this session.
+    const configuredPair = completePair(configuredPairState);
+    const providerModel = resolveContextModel({
       providers,
-      latestAssistantInfo?.providerId || '',
-      latestAssistantInfo?.modelId || '',
-    );
+      answering,
+      sessionSelection: sessionSelectionPair,
+      configured: configuredPair,
+    });
 
     const contextLimit = providerModel.contextLimit;
     const usagePercent = contextFill && contextLimit && contextLimit > 0
@@ -298,7 +281,7 @@ export const ContextPanelContent: React.FC = () => {
       },
       breakdownTotal,
     };
-  }, [currentSessionId, providers, sessionMessages, sessions, t]);
+  }, [configuredPairState, currentSessionId, providers, sessionMessages, sessionSelectionConfig, sessions, t]);
 
   if (!currentSessionId) {
     return (

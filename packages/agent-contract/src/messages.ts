@@ -168,6 +168,8 @@ export const TokenUsageSchema = z.strictObject({
   input: z.number().int().nonnegative(), output: z.number().int().nonnegative(),
   cacheRead: z.number().int().nonnegative(), cacheWrite: z.number().int().nonnegative(),
   totalTokens: z.number().int().nonnegative(), cost: TokenUsageCostSchema,
+  /** Provider-reported reasoning tokens, when the provider reports them. */
+  reasoning: z.number().int().nonnegative().optional(),
 });
 export type TokenUsage = z.infer<typeof TokenUsageSchema>;
 

@@ -133,6 +133,9 @@ type NativeAssistantMessage = Extract<VisibleMessage, { role: 'assistant' }>;
  * extras) that the canonical wire contract does not publish. Map the shared
  * fields explicitly so a provider counter added by the SDK cannot fail a
  * session restore, and parse the result to keep the canonical numbers strict.
+ * `reasoningTokens` is projected as `reasoning` because the context panel
+ * reports it beside input/output; it stays an informative counter and is not
+ * added to `totalTokens`, which the SDK already counts in full.
  */
 function canonicalUsage(usage: NonNullable<NativeAssistantMessage['usage']>): TokenUsage {
   return TokenUsageSchema.parse({
@@ -141,6 +144,7 @@ function canonicalUsage(usage: NonNullable<NativeAssistantMessage['usage']>): To
     cacheRead: usage.cacheRead,
     cacheWrite: usage.cacheWrite,
     totalTokens: usage.totalTokens,
+    reasoning: usage.reasoningTokens ?? 0,
     cost: {
       input: usage.cost.input,
       output: usage.cost.output,

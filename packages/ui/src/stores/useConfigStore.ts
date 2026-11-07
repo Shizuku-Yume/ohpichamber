@@ -1423,6 +1423,27 @@ let _initializeAppInFlight: Promise<void> | null = null;
  * `loadProviders`. Settings has none when no project is added, and nothing
  * loads a catalog without a directory.
  */
+/**
+ * The configured model pair that describes one directory's sessions. Only the
+ * active directory's pair is the live composer pair; a cached snapshot's pair
+ * is that directory's own, so a readout never borrows another directory's
+ * configuration. The boolean lets a caller tell those two sources apart.
+ */
+export const selectConfiguredModelPair = (
+    state: Pick<ConfigStore, 'providers' | 'directoryScoped' | 'activeDirectoryKey' | 'currentProviderId' | 'currentModelId'>,
+    directory?: string | null,
+): { inActiveDirectory: boolean; providerId: string; modelId: string } => {
+    if (directory == null) {
+        return { inActiveDirectory: false, providerId: state.currentProviderId, modelId: state.currentModelId };
+    }
+    const directoryKey = toConfigDirectoryKey(directory);
+    if (directoryKey === state.activeDirectoryKey) {
+        return { inActiveDirectory: true, providerId: state.currentProviderId, modelId: state.currentModelId };
+    }
+    const scoped = state.directoryScoped[directoryKey];
+    return { inActiveDirectory: false, providerId: scoped?.currentProviderId ?? '', modelId: scoped?.currentModelId ?? '' };
+};
+
 export const selectProvidersForDirectory = (
     state: Pick<ConfigStore, "providers" | "directoryScoped" | "activeDirectoryKey">,
     directory?: string | null,

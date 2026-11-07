@@ -62,7 +62,7 @@ import { createHostToolExtension } from './host-tool.ts';
 import { isSingleDevicePath } from './internal-device-path.ts';
 import type { WorkerHostInvoke } from './host-actions.ts';
 import { formatModelString } from '@oh-my-pi/pi-coding-agent/config/model-resolver';
-import { generateSelectedModelTitle } from './auto-title.ts';
+import { DEFERRED_TITLE_SYSTEM_PROMPT, deferredTitleContext, generateSelectedModelTitle } from './auto-title.ts';
 import { cfgTitleRefreshOnReplan } from '@oh-my-pi/pi-coding-agent/utils/title-settings';
 import { captureNativePolicy } from './native-policy-snapshot.ts';
 import type { HostNativePolicySnapshot, NativePolicyContext } from '../native-policy-protocol.ts';
@@ -1262,20 +1262,33 @@ export class WorkerSession {
     const text = this.pendingTitleInput;
     if (!text) return;
     this.pendingTitleInput = undefined;
+    // OMP's deferred path: the reply has settled and the exchange itself is the
+    // only thing that can name this session. This covers a greeting (which names
+    // no task) and the retry after the title model declined the opening prompt.
+    const context = deferredTitleContext({
+      messages: this.session.agent.state.messages,
+      sessionName: this.session.sessionManager.getSessionName(),
+    });
     const controller = new AbortController();
     const generation = (async () => {
       try {
         const model = this.session.model;
         if (!model) return;
-        const title = await generateSelectedModelTitle({
-          session: this.session,
-          settings: this.session.settings,
-          firstMessage: text,
-          authorize: this.authorizeProviderUse,
-          signal: controller.signal,
-        });
-        if (!title || controller.signal.aborted || this.closed || this.session.sessionManager.getSessionName()) return;
-        await this.session.sessionManager.setSessionName(title, 'auto');
+        const title = await this.generateTitleFrom(text, controller);
+        if (controller.signal.aborted || this.closed || this.session.sessionManager.getSessionName()) return;
+        if (title) {
+          await this.session.sessionManager.setSessionName(title, 'auto');
+          await this.session.sessionManager.flush();
+          return;
+        }
+        // The model declined. Retry once from the conversation context in this
+        // same turn: no second agent_end arrives for this reply.
+        if (!context) return;
+        // The deferred attempt uses its own prompt: OMP's default one declines
+        // greetings, which would leave a greeting-only session untitled forever.
+        const retitled = await this.generateTitleFrom(context, controller, DEFERRED_TITLE_SYSTEM_PROMPT);
+        if (!retitled || controller.signal.aborted || this.closed || this.session.sessionManager.getSessionName()) return;
+        await this.session.sessionManager.setSessionName(retitled, 'auto');
         await this.session.sessionManager.flush();
       } catch {
         // A refused or unavailable title provider leaves the session untitled; it never fails the user run.
@@ -1286,6 +1299,17 @@ export class WorkerSession {
     void generation.finally(() => {
       if (this.titleGeneration === generation) this.titleGeneration = undefined;
       if (this.titleAbort === controller) this.titleAbort = undefined;
+    });
+  }
+
+  private async generateTitleFrom(source: string, controller: AbortController, customSystemPrompt?: string): Promise<string | null> {
+    return generateSelectedModelTitle({
+      session: this.session,
+      settings: this.session.settings,
+      firstMessage: source,
+      authorize: this.authorizeProviderUse,
+      signal: controller.signal,
+      customSystemPrompt,
     });
   }
 

@@ -6,7 +6,18 @@ export type ContextWindowLimits = {
 
 const NO_CONTEXT_WINDOW_LIMITS: ContextWindowLimits = { context: 0, output: 0 };
 
-type AnsweringMessage = { role?: string; providerID?: string; modelID?: string };
+/**
+ * Canonical records carry `providerId`/`modelId`; the legacy OpenCode export
+ * carried `providerID`/`modelID`. Read both so a session synced by either
+ * shape still names the model that answered it.
+ */
+type AnsweringMessage = { role?: string; providerId?: string; modelId?: string; providerID?: string; modelID?: string };
+
+const messageModelKey = (message: AnsweringMessage): string | null => {
+  const providerId = message.providerId ?? message.providerID;
+  const modelId = message.modelId ?? message.modelID;
+  return providerId && modelId ? `${providerId}/${modelId}` : null;
+};
 
 /**
  * `provider/model` of the newest assistant message, or null before the first
@@ -17,8 +28,8 @@ export const findAnsweringModelKey = (messages: readonly AnsweringMessage[]): st
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
     if (message?.role !== 'assistant') continue;
-    if (!message.providerID || !message.modelID) continue;
-    return `${message.providerID}/${message.modelID}`;
+    const key = messageModelKey(message);
+    if (key) return key;
   }
   return null;
 };

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { AttachmentPartSchema, MessageSchema, PartSchema, ReasoningPartSchema, StepSummaryPartSchema, TextPartSchema, ToolCallPartSchema, ToolResultPartSchema, ToolStatusSchema, TurnSchema, TurnStatusSchema } from './messages.ts';
+import { AttachmentPartSchema, MessageSchema, PartSchema, ReasoningPartSchema, StepSummaryPartSchema, TextPartSchema, TokenUsageSchema, ToolCallPartSchema, ToolResultPartSchema, ToolStatusSchema, TurnSchema, TurnStatusSchema } from './messages.ts';
 
 const turn = {
   turnId: 'turn-1',
@@ -111,5 +111,29 @@ describe('message wire schemas', () => {
     expect(PartSchema.parse(JSON.parse(JSON.stringify(part)))).toEqual(part);
     expect(PartSchema.safeParse({ ...part, sessionMentions: [{ kind: 'session-message', sessionId: 's', sessionTitle: 'T', excerpt: 'E' }] }).success).toBe(false);
     expect(PartSchema.safeParse({ ...part, sessionMentions: [{ ...mentions[0], metadata: {} }] }).success).toBe(false);
+  });
+});
+
+describe('token usage schema', () => {
+  const cost = { input: 1, output: 2, cacheRead: 3, cacheWrite: 4, total: 10 };
+  const usage = { input: 7, output: 5, cacheRead: 2, cacheWrite: 1, totalTokens: 12, cost };
+
+  test('accepts usage records written before reasoning was published', () => {
+    // Existing sessions on disk carry no `reasoning`; a strict object that
+    // required it would refuse every restored transcript.
+    expect(TokenUsageSchema.parse(usage)).toEqual(usage);
+  });
+
+  test('projects reasoning as a separate informative counter, never into the total', () => {
+    const projected = TokenUsageSchema.parse({ ...usage, reasoning: 3 });
+    expect(projected.reasoning).toBe(3);
+    // The provider already counts reasoning inside its own total.
+    expect(projected.totalTokens).toBe(12);
+    expect(projected.totalTokens).toBe(usage.totalTokens);
+  });
+
+  test('rejects negative or fractional reasoning counts', () => {
+    expect(() => TokenUsageSchema.parse({ ...usage, reasoning: -1 })).toThrow();
+    expect(() => TokenUsageSchema.parse({ ...usage, reasoning: 1.5 })).toThrow();
   });
 });

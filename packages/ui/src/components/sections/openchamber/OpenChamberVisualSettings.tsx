@@ -398,20 +398,10 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const setActivityRenderMode = useUIStore(state => state.setActivityRenderMode);
     const fontSize = useUIStore(state => state.fontSize);
     const setFontSize = useUIStore(state => state.setFontSize);
-    const chatFontSize = useUIStore(state => (state as unknown as { chatFontSize?: number }).chatFontSize ?? 100);
-    const setChatFontSize = React.useCallback((val: number) => {
-        const store = useUIStore.getState() as unknown as { setChatFontSize?: (v: number) => void };
-        if (typeof store.setChatFontSize === 'function') store.setChatFontSize(val);
-        else useUIStore.setState({ chatFontSize: val } as unknown as Partial<ReturnType<typeof useUIStore.getState>>);
-        void updateDesktopSettings({ chatFontSize: val });
-    }, []);
-    const uiFontWeight = useUIStore(state => (state as unknown as { uiFontWeight?: UiFontWeight }).uiFontWeight ?? 'regular');
-    const setUiFontWeight = React.useCallback((val: UiFontWeight) => {
-        const store = useUIStore.getState() as unknown as { setUiFontWeight?: (v: UiFontWeight) => void };
-        if (typeof store.setUiFontWeight === 'function') store.setUiFontWeight(val);
-        else useUIStore.setState({ uiFontWeight: val } as unknown as Partial<ReturnType<typeof useUIStore.getState>>);
-        void updateDesktopSettings({ uiFontWeight: val });
-    }, []);
+    const chatFontSize = useUIStore(state => state.chatFontSize);
+    const setChatFontSize = useUIStore(state => state.setChatFontSize);
+    const uiFontWeight = useUIStore(state => state.uiFontWeight);
+    const setUiFontWeight = useUIStore(state => state.setUiFontWeight);
     const terminalFontSize = useUIStore(state => state.terminalFontSize);
     const setTerminalFontSize = useUIStore(state => state.setTerminalFontSize);
     const terminalShell = useUIStore(state => state.terminalShell);

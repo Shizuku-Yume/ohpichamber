@@ -1,4 +1,4 @@
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { HoverTooltip } from '@/components/ui/row-tooltip';
 import React from 'react';
 import {
     DropdownMenu,
@@ -20,13 +20,6 @@ import { useUIStore } from '@/stores/useUIStore';
 import { ModelPickerList, type ModelPickerEntry, type ModelPickerProvider } from '@/components/model-picker/ModelPickerList';
 import { AUTO_MODEL_ID, AUTO_PROVIDER_ID, isAutoModel } from '@/lib/routing/autoModel';
 import { selectAutoReady, useRoutingStore } from '@/stores/useRoutingStore';
-
-const HoverTooltip: React.FC<{ label: string; side?: 'top' | 'bottom'; children: React.ReactNode }> = ({ label, side = 'bottom', children }) => (
-  <Tooltip>
-    <TooltipTrigger asChild>{children}</TooltipTrigger>
-    <TooltipContent side={side}>{label}</TooltipContent>
-  </Tooltip>
-);
 
 interface ModelSelectorProps {
     providerId: string;

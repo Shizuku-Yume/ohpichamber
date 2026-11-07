@@ -314,6 +314,9 @@ export function MarkdownContent({
   preparedHighlights,
   onExportCode,
   emojiShortcodes,
+  tableWidthScope,
+  windowed = false,
+  uiBlocks = true,
 }: MarkdownContentProps) {
   const themeSystem = useOptionalThemeSystem();
   const theme = themeSystem?.currentTheme ?? getDefaultTheme(

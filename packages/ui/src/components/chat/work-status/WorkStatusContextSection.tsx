@@ -1,3 +1,4 @@
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import React from 'react';
 import { useI18n } from '@/lib/i18n';
 import { Icon } from '@/components/icon/Icon';

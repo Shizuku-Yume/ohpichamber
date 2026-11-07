@@ -548,6 +548,12 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.autoApplyAgentModel === 'boolean') {
       result.autoApplyAgentModel = candidate.autoApplyAgentModel;
     }
+    if (typeof candidate.walkthroughModelOverride === 'string') {
+      result.walkthroughModelOverride = candidate.walkthroughModelOverride.trim();
+    }
+    if (typeof candidate.walkthroughModelVariant === 'string') {
+      result.walkthroughModelVariant = candidate.walkthroughModelVariant.trim();
+    }
     if (typeof candidate.planModeAllowAgents === 'boolean') {
       result.planModeAllowAgents = candidate.planModeAllowAgents;
     }

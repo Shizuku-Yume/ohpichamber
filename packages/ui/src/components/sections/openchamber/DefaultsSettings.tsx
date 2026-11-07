@@ -1,5 +1,6 @@
 import React from 'react';
 import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
+import { JsonObjectSchema } from '@openchamber/agent-contract';
 import type { JsonValue, Model, OmpSettingsState } from '@openchamber/agent-contract';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
@@ -63,17 +64,18 @@ function formatRoleSelector(model: string, effort: string): string {
   return `${trimmedModel}:${trimmedEffort}`;
 }
 
-function parseSafeRolesRecord(val: unknown): Record<string, string> {
-  if (val && typeof val === 'object' && !Array.isArray(val)) {
-    const result: Record<string, string> = {};
-    for (const [k, v] of Object.entries(val)) {
-      if (typeof v === 'string') {
-        result[k] = v;
-      }
-    }
-    return result;
-  }
-  return {};
+/** Every entry the native `modelRoles` record holds, arrays and objects included. */
+function parseRolesRecord(val: unknown): Record<string, JsonValue> {
+  const parsed = JsonObjectSchema.safeParse(val);
+  return parsed.success ? parsed.data : {};
+}
+
+/** The selector shown for a role; native role values may be arrays of fallbacks. */
+function roleSelector(value: JsonValue | undefined): string {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value) && typeof value[0] === 'string') return value[0];
+  if (value && typeof value === 'object' && !Array.isArray(value) && typeof value.selector === 'string') return value.selector;
+  return '';
 }
 
 /**
@@ -81,13 +83,13 @@ function parseSafeRolesRecord(val: unknown): Record<string, string> {
  * the keys it removed. A conflict retry re-applies exactly these, so a role or
  * fallback chain a concurrent edit added is never overwritten or deleted.
  */
-const changedRoles = (previous: Record<string, string>, next: Record<string, JsonValue>) => {
+const changedRoles = (previous: Record<string, JsonValue>, next: Record<string, JsonValue>) => {
   const removed = Object.keys(previous).filter(role => !Object.hasOwn(next, role));
   const written: Record<string, JsonValue> = {};
   for (const [role, value] of Object.entries(next)) {
     if (previous[role] !== value) written[role] = value;
   }
-  return Object.assign(written, { removed });
+  return { written, removed };
 };
 
 export const DefaultsSettings: React.FC = () => {
@@ -146,13 +148,18 @@ export const DefaultsSettings: React.FC = () => {
 
   const modelRolesSetting = ompState?.settings.find((s) => s.id === 'modelRoles');
   const rolesMap = React.useMemo(
-    () => parseSafeRolesRecord(modelRolesSetting?.value),
+    () => parseRolesRecord(modelRolesSetting?.value),
     [modelRolesSetting?.value],
+  );
+  /** The selector each role currently shows; arrays keep their first entry. */
+  const roleSelectors = React.useMemo(
+    () => Object.fromEntries(Object.entries(rolesMap).map(([role, value]) => [role, roleSelector(value)])),
+    [rolesMap],
   );
 
   const { model: selectedModelId, effort: selectedEffort } = React.useMemo(
-    () => parseRoleSelector(rolesMap.default),
-    [rolesMap.default],
+    () => parseRoleSelector(roleSelectors.default),
+    [roleSelectors.default],
   );
 
   const matchedModel = React.useMemo(
@@ -171,7 +178,7 @@ export const DefaultsSettings: React.FC = () => {
       if (!currentState) return;
       // The snapshot this write was computed against, so a 409 re-applies only
       // the entries it actually changed.
-      const previousRoles = parseSafeRolesRecord(currentState.settings.find((s) => s.id === 'modelRoles')?.value);
+      const previousRoles = parseRolesRecord(currentState.settings.find((s) => s.id === 'modelRoles')?.value);
       setIsSavingOmp(true);
       try {
         let next: OmpSettingsState;
@@ -183,12 +190,12 @@ export const DefaultsSettings: React.FC = () => {
         } catch (error) {
           if (error instanceof CanonicalApiError && error.problem.status === 409) {
             const latest = await canonicalClient.getOmpSettings(currentState.workspaceId);
-            const latestRoles = parseSafeRolesRecord(latest.settings.find((s) => s.id === 'modelRoles')?.value);
+            const latestRoles = parseRolesRecord(latest.settings.find((s) => s.id === 'modelRoles')?.value);
             // Re-apply only the entries this write changed. Any role or fallback
             // chain someone else wrote in the newer snapshot stays untouched.
             const merged: Record<string, JsonValue> = { ...latestRoles };
             const changed = changedRoles(previousRoles, nextRoles);
-            for (const role of Object.keys(changed)) merged[role] = changed[role];
+            for (const [role, value] of Object.entries(changed.written)) merged[role] = value;
             for (const role of changed.removed) delete merged[role];
             next = await canonicalClient.updateOmpSettings(latest.workspaceId, {
               expectedRevision: latest.revision,
@@ -252,8 +259,35 @@ export const DefaultsSettings: React.FC = () => {
     [rolesMap, updateRolesOnServer],
   );
 
+  /**
+   * The walkthrough model is read by the server from the app setting
+   * (`walkthroughModelOverride`), not from the native role. Writing both keeps
+   * the choice honest: the `slow` role stays configured for any native consumer,
+   * and the server actually uses the pick.
+   */
+  const setWalkthroughModel = React.useCallback(
+    (selector: string) => {
+      setRole('slow', selector || '');
+      void updateDesktopSettings({
+        walkthroughModelOverride: selector || '',
+        walkthroughModelVariant: '',
+      });
+    },
+    [setRole],
+  );
+
   /** The stored selector for a role, custom values included; '' means unset. */
-  const roleModel = (role: string): string => rolesMap[role] ?? '';
+  const roleModel = (role: string): string => roleSelectors[role] ?? '';
+
+  /**
+   * Small and walkthrough models are opt-outs: the toggle is what turns the
+   * native role on, so a user can uncheck it before any cheap model exists.
+   * The choice is local until it is written; the role remains unset meanwhile.
+   */
+  const [smallModelChoice, setSmallModelChoice] = React.useState<string | undefined>(undefined);
+  const usesOwnSmallModel = Boolean(roleSelectors.smol) || smallModelChoice !== undefined;
+  const [walkthroughChoice, setWalkthroughChoice] = React.useState<string | undefined>(undefined);
+  const usesOwnWalkthroughModel = Boolean(roleSelectors.slow) || walkthroughChoice !== undefined;
 
   /** A role is set only when a "use default" toggle is off. */
   const roleSelect = (
@@ -303,7 +337,8 @@ export const DefaultsSettings: React.FC = () => {
     const value = ompState?.settings.find((s) => s.id === 'retry.fallbackChains')?.value;
     const parsed = typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, JsonValue> : {};
     const chain = parsed.default;
-    return { chains: parsed, current: Array.isArray(chain) && typeof chain[0] === 'string' ? chain[0] : '' };
+    const first = Array.isArray(chain) && typeof chain[0] === 'string' ? chain[0] : '';
+    return { chains: parsed, current: first };
   }, [ompState]);
 
   const updateFallbackChain = React.useCallback(
@@ -312,16 +347,23 @@ export const DefaultsSettings: React.FC = () => {
       if (!currentState) return;
       const revision = currentState.revision;
       const nextChains: Record<string, JsonValue> = { ...fallbackRoles.chains };
-      const chain = Array.isArray(nextChains.default) ? [...nextChains.default as string[]] : [];
-      if (selector) chain[0] = selector;
-      else chain.shift();
-      if (chain.length) nextChains.default = chain;
-      else delete nextChains.default;
+      if (selector) {
+        // One configured fallback, replacing whatever was there: a longer chain
+        // would continue on models this row never shows.
+        nextChains.default = [selector];
+      } else {
+        // "None" clears the default chain outright; leaving a later link would
+        // keep continuing on a model the row says is not configured.
+        delete nextChains.default;
+      }
       setIsSavingOmp(true);
       try {
         const next = await canonicalClient.updateOmpSettings(currentState.workspaceId, {
           expectedRevision: revision,
-          changes: [{ id: 'retry.fallbackChains', value: nextChains }],
+          changes: selector
+            // The chain alone never runs while native model fallback is off.
+            ? [{ id: 'retry.fallbackChains', value: nextChains }, { id: 'retry.modelFallback', value: true }]
+            : [{ id: 'retry.fallbackChains', value: nextChains }],
         });
         setOmpState(next);
       } catch (err) {
@@ -499,26 +541,39 @@ export const DefaultsSettings: React.FC = () => {
       <SettingsSection title={t('settings.layout.sessions.helperModels.title')} contentClassName="space-y-2">
         <SettingsCheckboxRow
           settingsItem="sessions.small-model"
-          checked={!rolesMap.smol}
+          checked={!usesOwnSmallModel}
           onChange={(useDefault) => {
-            if (useDefault) { setRole('smol', ''); return; }
-            // Turning the toggle off writes the `smol` role. The session default
-            // is the starting point; picking a cheaper model is the next step.
-            setRole('smol', rolesMap.default ?? '');
+            if (useDefault) { setRole('smol', ''); setSmallModelChoice(undefined); return; }
+            // Off: write the `smol` role so the picker is usable at once. The
+            // local choice is the model the user picked; the session default
+            // seeds it, and it stays `''` until one exists.
+            setSmallModelChoice('__pending__');
+            setRole('smol', roleSelectors.default ?? '');
           }}
           label={t('settings.openchamber.defaults.smallModel.useDefault')}
           ariaLabel={t('settings.openchamber.defaults.smallModel.useDefaultAria')}
           info={t('settings.openchamber.defaults.smallModel.description')}
         />
         <SettingsFieldRow label={t('settings.openchamber.defaults.smallModel.title')}>
-          {roleSelect('smol', t('settings.openchamber.defaults.smallModel.title'), t('settings.openchamber.defaults.smallModel.useDefault'), !rolesMap.smol)}
+          {roleSelect('smol', t('settings.openchamber.defaults.smallModel.title'), t('settings.openchamber.defaults.smallModel.useDefault'), usesOwnSmallModel)}
         </SettingsFieldRow>
+        <SettingsCheckboxRow
+          settingsItem="sessions.walkthrough-use-default"
+          checked={!usesOwnWalkthroughModel}
+          onChange={(useDefault) => {
+            if (useDefault) { setWalkthroughModel(''); setWalkthroughChoice(undefined); return; }
+            setWalkthroughChoice('__pending__');
+            setWalkthroughModel(roleSelectors.default ?? '');
+          }}
+          label={t('settings.openchamber.defaults.walkthroughModel.usesSmallModel')}
+          ariaLabel={t('settings.openchamber.defaults.walkthroughModel.title')}
+        />
         <SettingsFieldRow
           settingsItem="sessions.walkthrough-model"
           label={t('settings.openchamber.defaults.walkthroughModel.title')}
           info={t('settings.openchamber.defaults.walkthroughModel.description')}
         >
-          {roleSelect('slow', t('settings.openchamber.defaults.walkthroughModel.title'), t('settings.openchamber.defaults.walkthroughModel.usesSmallModel'), !rolesMap.slow)}
+          {roleSelect('slow', t('settings.openchamber.defaults.walkthroughModel.title'), t('settings.openchamber.defaults.walkthroughModel.usesSmallModel'), usesOwnWalkthroughModel)}
         </SettingsFieldRow>
       </SettingsSection>
 

@@ -183,6 +183,12 @@
     "autoApplyAgentModel": {
       "scope": "profile"
     },
+    "walkthroughModelOverride": {
+      "scope": "profile"
+    },
+    "walkthroughModelVariant": {
+      "scope": "profile"
+    },
     "planModeAllowAgents": {
       "scope": "profile"
     },

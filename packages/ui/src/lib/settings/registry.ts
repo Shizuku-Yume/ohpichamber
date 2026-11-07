@@ -277,6 +277,9 @@ export const SETTINGS_REGISTRY = {
   sessionGoalMaxAutoTurns: field({ scope: 'profile', parse: parseIntegerInRange(1, 200), ui: uiStore('sessionGoalMaxAutoTurns', (v) => useUIStore.getState().setSessionGoalMaxAutoTurns(v)) }),
   /** Start a new session on the model the picked agent pins. */
   autoApplyAgentModel: field({ scope: 'profile', parse: parseBoolean, ui: uiStore('autoApplyAgentModel', (v) => useUIStore.getState().setAutoApplyAgentModel(v)) }),
+  /** The walkthrough model; the server reads it when it starts a review. */
+  walkthroughModelOverride: field({ scope: 'profile', parse: parseNonEmptyTrimmedString }),
+  walkthroughModelVariant: field({ scope: 'profile', parse: parseNonEmptyTrimmedString }),
   /** Keep the subagent task tool available while Plan mode is active. */
   planModeAllowAgents: field({ scope: 'profile', parse: parseBoolean, ui: uiStore('planModeAllowAgents', (v) => useUIStore.getState().setPlanModeAllowAgents(v)) }),
   messageSearchEnabled: field({

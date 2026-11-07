@@ -31,11 +31,18 @@ export const ProjectListSchema = z.strictObject({
   errors: DiscoveryErrorsSchema,
 });
 export type ProjectList = z.infer<typeof ProjectListSchema>;
+export const AgentThinkingLevelSchema = z.enum(['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'auto', 'off']);
+export type AgentThinkingLevel = z.infer<typeof AgentThinkingLevelSchema>;
+
 export const AgentSchema = z.strictObject({
   agentId: EntityIdSchema, name: z.string().min(1), description: z.string(),
   model: z.strictObject({ providerId: EntityIdSchema, modelId: EntityIdSchema }).nullable(),
   allowedTools: z.array(z.string().min(1)).nullable(),
   systemPromptOverride: z.string().optional(), permissionPresetId: EntityIdSchema.optional(),
+  thinkingLevel: AgentThinkingLevelSchema.optional(),
+  spawns: z.union([z.array(z.string().min(1)), z.literal('*')]).optional(),
+  blocking: z.boolean().optional(),
+  advisor: z.union([z.boolean(), z.string().min(1)]).optional(),
 });
 export type Agent = z.infer<typeof AgentSchema>;
 export const AgentCreateRequestSchema = z.strictObject({ expectedRevision: CounterSchema, agent: AgentSchema });

@@ -1,9 +1,11 @@
 import React from 'react';
 import type { AutosaveResult } from '@/components/sections/shared/SettingsAutosave';
-import type { Agent } from '@openchamber/agent-contract';
+import type { Agent, AgentThinkingLevel } from '@openchamber/agent-contract';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { NATIVE_TOOL_NAMES } from '@/lib/toolHelpers';
 import { toast } from '@/components/ui';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
@@ -21,6 +23,7 @@ import {
   SETTINGS_CUSTOM_TRIGGER_CLASS,
   SETTINGS_HELPER_CLASS,
   SETTINGS_ICON_BUTTON_CLASS,
+  SETTINGS_SELECT_ROW_TRIGGER_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { Icon } from '@/components/icon/Icon';
 
@@ -31,6 +34,8 @@ interface FormState {
   systemPromptOverride: string;
   allowedTools: string[] | null;
   permissionPresetId: string;
+  thinkingLevel: AgentThinkingLevel | 'default';
+  spawns: string;
 }
 
 const fieldsForAgent = (agent: Agent): FormState => ({
@@ -40,6 +45,8 @@ const fieldsForAgent = (agent: Agent): FormState => ({
   systemPromptOverride: agent.systemPromptOverride ?? '',
   allowedTools: agent.allowedTools === null ? null : [...agent.allowedTools],
   permissionPresetId: agent.permissionPresetId ?? '',
+  thinkingLevel: agent.thinkingLevel ?? 'default',
+  spawns: agent.spawns === '*' ? '*' : Array.isArray(agent.spawns) ? agent.spawns.join(', ') : '',
 });
 const toolsEqual = (left: string[] | null, right: string[] | null): boolean => {
   if (left === null || right === null) return left === right;
@@ -50,7 +57,9 @@ const fieldsEqual = (left: FormState, right: FormState): boolean =>
   left.model?.providerId === right.model?.providerId && left.model?.modelId === right.model?.modelId &&
   left.systemPromptOverride === right.systemPromptOverride &&
   toolsEqual(left.allowedTools, right.allowedTools) &&
-  left.permissionPresetId === right.permissionPresetId;
+  left.permissionPresetId === right.permissionPresetId &&
+  left.thinkingLevel === right.thinkingLevel &&
+  left.spawns === right.spawns;
 
 export const AgentsPage: React.FC = () => {
   const { t } = useI18n();
@@ -81,6 +90,7 @@ export const AgentsPage: React.FC = () => {
   const savingRef = React.useRef(false);
   const [form, setForm] = React.useState<FormState>({
     name: '', description: '', model: null, systemPromptOverride: '', allowedTools: null, permissionPresetId: '',
+    thinkingLevel: 'default', spawns: '',
   });
   const formRef = React.useRef(form);
   formRef.current = form;
@@ -139,6 +149,12 @@ export const AgentsPage: React.FC = () => {
     }
     if (form.permissionPresetId) agent.permissionPresetId = form.permissionPresetId;
     else delete agent.permissionPresetId;
+    if (form.thinkingLevel !== 'default') agent.thinkingLevel = form.thinkingLevel;
+    else delete agent.thinkingLevel;
+    const spawnsTrimmed = form.spawns.trim();
+    if (spawnsTrimmed === '*') agent.spawns = '*';
+    else if (spawnsTrimmed.length > 0) agent.spawns = spawnsTrimmed.split(',').map((s) => s.trim()).filter(Boolean);
+    else delete agent.spawns;
     return agent;
   }, [form]);
 
@@ -261,6 +277,42 @@ export const AgentsPage: React.FC = () => {
               requestSave();
             }} className={SETTINGS_CUSTOM_TRIGGER_CLASS} />
         </SettingsFieldRow>
+        <SettingsFieldRow settingsItem="agents.thinking-level" label={t('sessions.scheduledTasks.editor.thinkingLevel.label')}>
+          <Select
+            value={form.thinkingLevel}
+            onValueChange={(value) => {
+              setForm({ ...form, thinkingLevel: value as AgentThinkingLevel | 'default' });
+              requestSave();
+            }}
+          >
+            <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS} aria-label={t('sessions.scheduledTasks.editor.thinkingLevel.label')}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="default">{t('sessions.scheduledTasks.editor.thinkingLevel.default')}</SelectItem>
+              <SelectItem value="off">{t('settings.skills.page.use.off')}</SelectItem>
+              <SelectItem value="minimal">{t('settings.omp.modelRoles.effort.minimal')}</SelectItem>
+              <SelectItem value="low">{t('settings.omp.modelRoles.effort.low')}</SelectItem>
+              <SelectItem value="medium">{t('settings.omp.modelRoles.effort.medium')}</SelectItem>
+              <SelectItem value="high">{t('settings.omp.modelRoles.effort.high')}</SelectItem>
+              <SelectItem value="xhigh">{t('settings.omp.modelRoles.effort.high')}</SelectItem>
+              <SelectItem value="max">{t('settings.omp.modelRoles.effort.max')}</SelectItem>
+              <SelectItem value="auto">{t('settings.remoteInstances.page.field.auto')}</SelectItem>
+            </SelectContent>
+          </Select>
+        </SettingsFieldRow>
+        <SettingsFieldRow settingsItem="agents.spawns" label={t('settings.agents.page.mode.subagent')}>
+          <Input
+            value={form.spawns}
+            placeholder={t('settings.commands.agentSelector.selectAgentPlaceholder')}
+            aria-label={t('settings.agents.page.mode.subagent')}
+            onChange={(event) => {
+              setForm({ ...form, spawns: event.target.value });
+              requestSave();
+            }}
+            className="h-8 w-64 px-2 font-mono text-xs"
+          />
+        </SettingsFieldRow>
       </SettingsSection>
       <SettingsSection title={t('settings.agents.page.section.systemPrompt')} settingsItem="agents.system-prompt">
         <Textarea value={form.systemPromptOverride}
@@ -275,70 +327,135 @@ export const AgentsPage: React.FC = () => {
           controlClassName="w-full max-w-none flex-col items-stretch"
         >
           {form.allowedTools === null && !toolsEditing ? (
-            <p className={SETTINGS_HELPER_CLASS}>{t('settings.agents.page.field.allowedToolsInherit')}</p>
-          ) : form.allowedTools === null || form.allowedTools.length === 0 ? (
-            <p className={SETTINGS_HELPER_CLASS} aria-hidden="true">—</p>
+            <div className="flex items-center justify-between gap-2 py-1">
+              <p className={SETTINGS_HELPER_CLASS}>{t('settings.agents.page.field.allowedToolsInherit')}</p>
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                onClick={() => setToolsEditing(true)}
+              >
+                {t('settings.agents.page.field.allowedToolsEdit')}
+              </Button>
+            </div>
           ) : (
-            <ul className="w-full">
-              {form.allowedTools.map((tool, index) => (
-                <li key={`${tool}-${index}`} className="flex min-h-8 items-center gap-2 border-t border-border/40 py-2">
-                  <span className="min-w-0 flex-1 truncate font-mono text-xs text-foreground">{tool}</span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="xs"
-                    className={SETTINGS_ICON_BUTTON_CLASS}
-                    aria-label={t('settings.environment.editor.removeAria', { name: tool })}
-                    title={t('settings.environment.editor.remove')}
-                    onClick={() => removeTool(index)}
-                  >
-                    <Icon name="close" className="h-3.5 w-3.5" />
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
-          <form
-            className="flex flex-wrap items-center gap-2 border-t border-border/40 pt-3"
-            onSubmit={(event) => {
-              event.preventDefault();
-              addTool();
-            }}
-          >
-            <Input
-              value={toolDraft}
-              onChange={(event) => setToolDraft(event.target.value)}
-              aria-label={t('settings.agents.page.field.allowedTools')}
-              className="h-8 w-full max-w-[16rem] font-mono text-xs"
-            />
-            {form.allowedTools === null ? (
-              toolsEditing ? (
-                <Button type="button" variant="ghost" size="xs" onClick={() => setToolsEditing(false)}>
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => {
+                    setToolsEditing(false);
+                    setForm((current) => ({ ...current, allowedTools: null }));
+                    requestSave();
+                  }}
+                >
                   {t('settings.agents.page.field.allowedToolsUseDefault')}
                 </Button>
-              ) : (
-                <Button type="button" variant="ghost" size="xs" onClick={() => setToolsEditing(true)}>
-                  {t('settings.agents.page.field.allowedToolsEdit')}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => {
+                    setToolsEditing(true);
+                    setForm((current) => ({ ...current, allowedTools: [...NATIVE_TOOL_NAMES] }));
+                    requestSave();
+                  }}
+                >
+                  {t('settings.providers.page.actions.showAll')}
                 </Button>
-              )
-            ) : (
-              <Button type="button" variant="ghost" size="xs" onClick={() => { setToolsEditing(false); setForm((current) => ({ ...current, allowedTools: null })); requestSave(); }}>
-                {t('settings.agents.page.field.allowedToolsUseDefault')}
-              </Button>
-            )}
-            <Button
-              type="submit"
-              variant="outline"
-              size="xs"
-              disabled={!toolDraft.trim()}
-              className="!font-normal"
-              aria-label={t('settings.environment.editor.add')}
-              title={t('settings.environment.editor.add')}
-            >
-              <Icon name="add" className="mr-1 h-3.5 w-3.5" />
-              {t('settings.environment.editor.add')}
-            </Button>
-          </form>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => {
+                    setToolsEditing(true);
+                    setForm((current) => ({ ...current, allowedTools: [] }));
+                    requestSave();
+                  }}
+                >
+                  {t('settings.providers.page.actions.hideAll')}
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+                {NATIVE_TOOL_NAMES.map((tool) => {
+                  const checked = (form.allowedTools ?? []).includes(tool);
+                  return (
+                    <label
+                      key={tool}
+                      className="flex cursor-pointer items-center gap-2 rounded-md border border-border/40 p-2 text-xs font-mono hover:bg-[var(--surface-subtle)]"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) => {
+                          setToolsEditing(true);
+                          const currentTools = form.allowedTools ?? [];
+                          const next = e.target.checked
+                            ? [...currentTools, tool]
+                            : currentTools.filter((t) => t !== tool);
+                          setForm((current) => ({ ...current, allowedTools: next }));
+                          requestSave();
+                        }}
+                        className="size-3.5 rounded border-border text-primary focus:ring-primary"
+                      />
+                      <span className="truncate">{tool}</span>
+                    </label>
+                  );
+                })}
+              </div>
+
+              {form.allowedTools !== null && form.allowedTools.length > 0 ? (
+                <ul className="w-full">
+                  {form.allowedTools.map((tool, index) => (
+                    <li key={`${tool}-${index}`} className="flex min-h-8 items-center gap-2 border-t border-border/40 py-2">
+                      <span className="min-w-0 flex-1 truncate font-mono text-xs text-foreground">{tool}</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        className={SETTINGS_ICON_BUTTON_CLASS}
+                        aria-label={t('settings.environment.editor.removeAria', { name: tool })}
+                        title={t('settings.environment.editor.remove')}
+                        onClick={() => removeTool(index)}
+                      >
+                        <Icon name="close" className="h-3.5 w-3.5" />
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+
+              <form
+                className="flex flex-wrap items-center gap-2 border-t border-border/40 pt-3"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  addTool();
+                }}
+              >
+                <Input
+                  value={toolDraft}
+                  onChange={(event) => setToolDraft(event.target.value)}
+                  aria-label={t('settings.agents.page.field.allowedTools')}
+                  className="h-8 w-full max-w-[16rem] font-mono text-xs"
+                />
+                <Button
+                  type="submit"
+                  variant="outline"
+                  size="xs"
+                  disabled={!toolDraft.trim()}
+                  className="!font-normal"
+                  aria-label={t('settings.environment.editor.add')}
+                  title={t('settings.environment.editor.add')}
+                >
+                  <Icon name="add" className="mr-1 h-3.5 w-3.5" />
+                  {t('settings.environment.editor.add')}
+                </Button>
+              </form>
+            </div>
+          )}
         </SettingsStackedField>
         <SettingsFieldRow settingsItem="agents.permission-preset" label={t('settings.agents.page.field.permissionPreset')}>
           <Input value={form.permissionPresetId}

@@ -613,8 +613,17 @@ export const ProvidersPage: React.FC = () => {
     return () => { active = false; };
   }, [state.workspaceId, state.runtimeKey, current, t]);
 
-  const providers = state.providers?.providers ?? [];
-  const models = state.models?.models ?? [];
+  const rawProviders = state.providers?.providers;
+  const rawModels = state.models?.models;
+  const providers = rawProviders ?? [];
+  const models = rawModels ?? [];
+  const connectedProviders = React.useMemo(() => {
+    const list = rawProviders ?? [];
+    const executableProviders = new Set((rawModels ?? []).map((m) => m.provider));
+    return list.filter(
+      (p) => p.auth.status === 'configured' || executableProviders.has(p.providerId),
+    );
+  }, [rawProviders, rawModels]);
   const provider = providers.find((entry) => entry.providerId === selected);
   const existingIds = new Set(providers.map((entry) => entry.providerId));
   const connectable = state.providers ? listConnectableProviders(providers) : null;
@@ -878,7 +887,7 @@ export const ProvidersPage: React.FC = () => {
 
   return (
     <ProviderGrid
-      providers={providers}
+      providers={connectedProviders}
       models={models}
       onSelect={setSelected}
       onConnect={() => setSelected(ADD_PROVIDER_ID)}

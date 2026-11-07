@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
+import fs from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import os, { tmpdir } from 'node:os';
+import path, { join, dirname } from 'node:path';
 import { YAML } from 'bun';
 import { getBundledModel } from '@oh-my-pi/pi-catalog';
 import { ModelRegistry } from '@oh-my-pi/pi-coding-agent/config/model-registry';
@@ -11,13 +12,14 @@ import { Settings, resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config
 import { discoverAuthStorage } from '@oh-my-pi/pi-coding-agent/sdk';
 import { cfgExtendedContext } from '@oh-my-pi/pi-coding-agent/session/context-settings';
 import { cfgDefaultThinkingLevel } from '@oh-my-pi/pi-coding-agent/session/settings';
-import { NativeModels, credentialReference, publicModel, type NativeCatalogModel } from './catalog-models.ts';
-import { openNativeRuntime } from './native-runtime.ts';
+import { NativeModels, credentialReference, publicModel, resolveProviderDisplayName, type NativeCatalogModel } from './catalog-models.ts';
+import { openNativeRuntime, syncNativeConfigPair } from './native-runtime.ts';
+import { getActiveProfile, getAgentDir, setProfile } from '@oh-my-pi/pi-utils';
 
 const routed = getBundledModel('openrouter', 'openrouter/auto');
 
-beforeEach(resetSettingsForTest);
-afterEach(resetSettingsForTest);
+beforeEach(() => { delete process.env.OMP_PROFILE; delete process.env.PI_PROFILE; setProfile(''); resetSettingsForTest(); });
+afterEach(() => { delete process.env.OMP_PROFILE; delete process.env.PI_PROFILE; setProfile(''); resetSettingsForTest(); });
 
 async function openCatalogFixture() {
   const root = await mkdtemp(join(tmpdir(), 'catalog-models-'));
@@ -29,19 +31,25 @@ async function openCatalogFixture() {
   const settings = await Settings.loadIsolated({ cwd, agentDir: agentDirectory });
   const authStorage = await discoverAuthStorage(agentDirectory, { cwd, settings });
   const modelRegistry = new ModelRegistry(authStorage, writer.modelsPath, { settings });
-  const models = new NativeModels({ settings, authStorage, modelRegistry, modelsPath: writer.modelsPath,
-    oauthProviderIds: () => new Set<string>(), currentNativeSessionId: () => 'reader-session' });
-  return { writer, reader: { settings, modelRegistry, models }, async close() {
-    authStorage.close();
-    writer.authStorage.close();
-    settings.cancelPendingSaves();
-    resetSettingsForTest();
-    await rm(root, { recursive: true, force: true });
-  } };
+  const models = new NativeModels({
+    settings, authStorage, modelRegistry, modelsPath: writer.modelsPath,
+    oauthProviderIds: () => new Set<string>(), currentNativeSessionId: () => 'reader-session'
+  });
+  return {
+    writer, reader: { settings, modelRegistry, models }, async close() {
+      authStorage.close();
+      writer.authStorage.close();
+      settings.cancelPendingSaves();
+      resetSettingsForTest();
+      await rm(root, { recursive: true, force: true });
+    }
+  };
 }
 
-const configuration = { providerId: 'm212-loopback', name: 'Loopback', endpoint: 'http://127.0.0.1:18080/v1',
-  protocol: 'chat-completions' as const, credentialRef: null };
+const configuration = {
+  providerId: 'm212-loopback', name: 'Loopback', endpoint: 'http://127.0.0.1:18080/v1',
+  protocol: 'chat-completions' as const, credentialRef: null
+};
 test('model catalog publishes only executable providers while the provider directory stays complete', async () => {
   const root = await mkdtemp(join(tmpdir(), 'catalog-models-native-'));
   const cwd = join(root, 'workspace');
@@ -89,9 +97,11 @@ test('model catalog publishes only executable providers while the provider direc
   }
 });
 
-const configuredModel = { modelId: 'm212-model', provider: configuration.providerId, name: 'Loopback text', modalities: ['text' as const],
+const configuredModel = {
+  modelId: 'm212-model', provider: configuration.providerId, name: 'Loopback text', modalities: ['text' as const],
   contextWindow: 65536, maxOutputTokens: 256, reasoningEffortSupported: false, reasoningOptions: [], variants: [],
-  toolsSupported: true, pricing: null };
+  toolsSupported: true, pricing: null
+};
 
 test('a long-lived native settings reader cannot select a deleted bundled provider', async () => {
   const fixture = await openCatalogFixture();
@@ -133,8 +143,10 @@ test('provider protocol changes reach the actual native model selected by a long
 
 test('native model selection accepts the explicit off reasoning level', async () => {
   const fixture = await openCatalogFixture();
-  const reasoningModel = { ...configuredModel, reasoningEffortSupported: true,
-    reasoningOptions: [{ reasoningEffort: 'high', label: 'High', budgetTokens: null }] };
+  const reasoningModel = {
+    ...configuredModel, reasoningEffortSupported: true,
+    reasoningOptions: [{ reasoningEffort: 'high', label: 'High', budgetTokens: null }]
+  };
   try {
     await fixture.writer.models.configureProvider({ expectedRevision: '0', configuration }, '1');
     await fixture.writer.models.configureModel({ expectedRevision: '1', model: reasoningModel }, '2');
@@ -249,15 +261,19 @@ for (const field of ['input', 'output', 'cacheRead', 'cacheWrite'] as const) {
 
 test('custom endpoint, literal private headers and canonical models save and reopen together', async () => {
   const requests: { path: string; authorization: string | null; custom: string | null }[] = [];
-  const server = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch(request) {
-    requests.push({ path: new URL(request.url).pathname, authorization: request.headers.get('authorization'), custom: request.headers.get('x-private') });
-    return Response.json({ data: [{ id: configuredModel.modelId, name: 'Discovered' }] });
-  } });
+  const server = Bun.serve({
+    hostname: '127.0.0.1', port: 0, fetch(request) {
+      requests.push({ path: new URL(request.url).pathname, authorization: request.headers.get('authorization'), custom: request.headers.get('x-private') });
+      return Response.json({ data: [{ id: configuredModel.modelId, name: 'Discovered' }] });
+    }
+  });
   const fixture = await openCatalogFixture();
   const saved = { ...configuration, endpoint: `http://127.0.0.1:${server.port}/v1` };
   try {
-    const result = await fixture.writer.models.configureProvider({ expectedRevision: '0', configuration: saved,
-      headers: { Authorization: 'Bearer private-value', 'X-Private': '!literal-not-a-command' }, models: [configuredModel] }, '1');
+    const result = await fixture.writer.models.configureProvider({
+      expectedRevision: '0', configuration: saved,
+      headers: { Authorization: 'Bearer private-value', 'X-Private': '!literal-not-a-command' }, models: [configuredModel]
+    }, '1');
     expect(JSON.stringify(result)).not.toContain('private-value');
     const reopened = await fixture.reader.models.readProviderConfiguration(saved.providerId, '1');
     expect(reopened.configuration).toEqual(saved);
@@ -283,16 +299,20 @@ test('custom endpoint, literal private headers and canonical models save and reo
 for (const protocol of ['chat-completions', 'responses', 'messages', 'generate-content'] as const) {
   test(`worker model discovery uses write-only ${protocol} authentication and real metadata`, async () => {
     const requests: Array<{ url: string; headers: Record<string, string> }> = [];
-    const server = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch(request) {
-      requests.push({ url: request.url, headers: Object.fromEntries(request.headers.entries()) });
-      return Response.json(protocol === 'generate-content'
-        ? { models: [{ name: 'models/loopback-model', displayName: 'Loopback', inputTokenLimit: 8192, outputTokenLimit: 1024 }] }
-        : { data: [{ id: 'loopback-model', name: 'Loopback' }] });
-    } });
+    const server = Bun.serve({
+      hostname: '127.0.0.1', port: 0, fetch(request) {
+        requests.push({ url: request.url, headers: Object.fromEntries(request.headers.entries()) });
+        return Response.json(protocol === 'generate-content'
+          ? { models: [{ name: 'models/loopback-model', displayName: 'Loopback', inputTokenLimit: 8192, outputTokenLimit: 1024 }] }
+          : { data: [{ id: 'loopback-model', name: 'Loopback' }] });
+      }
+    });
     const fixture = await openCatalogFixture();
     try {
-      const discovered = await fixture.reader.models.discoverProviderModels({ endpoint: `http://127.0.0.1:${server.port}/v1`, protocol,
-        apiKey: 'write-only-secret', headers: { 'x-private': 'write-only-header' } });
+      const discovered = await fixture.reader.models.discoverProviderModels({
+        endpoint: `http://127.0.0.1:${server.port}/v1`, protocol,
+        apiKey: 'write-only-secret', headers: { 'x-private': 'write-only-header' }
+      });
       const expectedModel = protocol === 'generate-content'
         ? { modelId: 'loopback-model', name: 'Loopback', contextWindow: 8192, maxOutputTokens: 1024 }
         : { modelId: 'loopback-model', name: 'Loopback' };
@@ -341,9 +361,13 @@ test('invalid bundled model write leaves the previous provider configuration and
   try {
     await fixture.writer.models.configureProvider({ expectedRevision: '0', configuration, headers: { 'x-private': 'old-secret' }, models: [configuredModel] }, '1');
     const before = await readFile(fixture.writer.modelsPath, 'utf8');
-    await expect(fixture.writer.models.configureProvider({ expectedRevision: '1', configuration: { ...configuration, name: 'Uncommitted' },
-      headers: { 'x-private': 'uncommitted-secret' }, models: [{ ...configuredModel, reasoningEffortSupported: true,
-        reasoningOptions: [{ reasoningEffort: 'not-native', label: 'Invalid', budgetTokens: null }] }] }, '2')).rejects.toMatchObject({ code: 'INVALID_REQUEST' });
+    await expect(fixture.writer.models.configureProvider({
+      expectedRevision: '1', configuration: { ...configuration, name: 'Uncommitted' },
+      headers: { 'x-private': 'uncommitted-secret' }, models: [{
+        ...configuredModel, reasoningEffortSupported: true,
+        reasoningOptions: [{ reasoningEffort: 'not-native', label: 'Invalid', budgetTokens: null }]
+      }]
+    }, '2')).rejects.toMatchObject({ code: 'INVALID_REQUEST' });
     expect(await readFile(fixture.writer.modelsPath, 'utf8')).toBe(before);
     expect((await fixture.reader.models.readProviderConfiguration(configuration.providerId, '1')).configuration.name).toBe(configuration.name);
   } finally { await fixture.close(); }
@@ -352,16 +376,20 @@ test('invalid bundled model write leaves the previous provider configuration and
 test('discovery errors and redirects cannot reveal keys or forward credentials to another endpoint', async () => {
   let redirected = 0;
   const sink = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch() { redirected++; return Response.json({ data: [] }); } });
-  const server = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch(request) {
-    return new URL(request.url).pathname.startsWith('/redirect')
-      ? Response.redirect(`http://127.0.0.1:${sink.port}/models`)
-      : new Response('private-response-key', { status: 401 });
-  } });
+  const server = Bun.serve({
+    hostname: '127.0.0.1', port: 0, fetch(request) {
+      return new URL(request.url).pathname.startsWith('/redirect')
+        ? Response.redirect(`http://127.0.0.1:${sink.port}/models`)
+        : new Response('private-response-key', { status: 401 });
+    }
+  });
   const fixture = await openCatalogFixture();
   try {
     for (const path of ['error', 'redirect']) {
-      await expect(fixture.reader.models.discoverProviderModels({ endpoint: `http://127.0.0.1:${server.port}/${path}`,
-        protocol: 'responses', apiKey: 'private-response-key' })).rejects.toMatchObject({ code: 'SERVICE_UNAVAILABLE', message: 'Provider model discovery failed' });
+      await expect(fixture.reader.models.discoverProviderModels({
+        endpoint: `http://127.0.0.1:${server.port}/${path}`,
+        protocol: 'responses', apiKey: 'private-response-key'
+      })).rejects.toMatchObject({ code: 'SERVICE_UNAVAILABLE', message: 'Provider model discovery failed' });
     }
     expect(redirected).toBe(0);
   } finally { server.stop(true); sink.stop(true); await fixture.close(); }
@@ -369,10 +397,12 @@ test('discovery errors and redirects cannot reveal keys or forward credentials t
 
 test('stored discovery credentials are opaque and saved headers do not follow endpoint edits', async () => {
   const requests: { path: string; key: string | null; custom: string | null }[] = [];
-  const server = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch(request) {
-    requests.push({ path: new URL(request.url).pathname, key: request.headers.get('authorization'), custom: request.headers.get('x-private') });
-    return Response.json({ data: [] });
-  } });
+  const server = Bun.serve({
+    hostname: '127.0.0.1', port: 0, fetch(request) {
+      requests.push({ path: new URL(request.url).pathname, key: request.headers.get('authorization'), custom: request.headers.get('x-private') });
+      return Response.json({ data: [] });
+    }
+  });
   const fixture = await openCatalogFixture();
   const saved = { ...configuration, endpoint: `http://127.0.0.1:${server.port}/original` };
   try {
@@ -390,8 +420,10 @@ test('stored discovery credentials are opaque and saved headers do not follow en
       { path: '/changed/models', key: null, custom: null },
       { path: '/changed/models', key: 'Bearer opaque-discovery-key', custom: null },
     ]);
-    await expect(fixture.reader.models.discoverProviderModels({ providerId: saved.providerId, endpoint: saved.endpoint,
-      protocol: saved.protocol, credentialRef: 'credential_unknown' })).rejects.toMatchObject({ code: 'PROVIDER_UNAVAILABLE' });
+    await expect(fixture.reader.models.discoverProviderModels({
+      providerId: saved.providerId, endpoint: saved.endpoint,
+      protocol: saved.protocol, credentialRef: 'credential_unknown'
+    })).rejects.toMatchObject({ code: 'PROVIDER_UNAVAILABLE' });
     expect(requests).toHaveLength(3);
   } finally { server.stop(true); await fixture.close(); }
 });
@@ -399,15 +431,17 @@ test('stored discovery credentials are opaque and saved headers do not follow en
 for (const protocol of ['messages', 'generate-content'] as const) {
   test(`${protocol} model discovery follows native pagination without duplicate identities`, async () => {
     const pages: string[] = [];
-    const server = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch(request) {
-      const url = new URL(request.url);
-      pages.push(url.search);
-      const second = url.search !== '';
-      return Response.json(protocol === 'messages'
-        ? { data: second ? [{ id: 'model-one' }, { id: 'model-two' }] : [{ id: 'model-one' }], has_more: !second, last_id: 'model-one' }
-        : second ? { models: [{ name: 'models/model-one' }, { name: 'models/model-two' }] }
-          : { models: [{ name: 'models/model-one' }], nextPageToken: 'page-two' });
-    } });
+    const server = Bun.serve({
+      hostname: '127.0.0.1', port: 0, fetch(request) {
+        const url = new URL(request.url);
+        pages.push(url.search);
+        const second = url.search !== '';
+        return Response.json(protocol === 'messages'
+          ? { data: second ? [{ id: 'model-one' }, { id: 'model-two' }] : [{ id: 'model-one' }], has_more: !second, last_id: 'model-one' }
+          : second ? { models: [{ name: 'models/model-one' }, { name: 'models/model-two' }] }
+            : { models: [{ name: 'models/model-one' }], nextPageToken: 'page-two' });
+      }
+    });
     const fixture = await openCatalogFixture();
     try {
       const result = await fixture.reader.models.discoverProviderModels({ endpoint: `http://127.0.0.1:${server.port}/v1`, protocol });
@@ -465,10 +499,12 @@ test('default stored credential selection never replaces a source-owned native o
 
 test('configured discovery falls back to native key cascade when no explicit account is selected', async () => {
   const requests: Array<{ authorization: string | null }> = [];
-  const server = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch(request) {
-    requests.push({ authorization: request.headers.get('authorization') });
-    return Response.json({ data: [] });
-  } });
+  const server = Bun.serve({
+    hostname: '127.0.0.1', port: 0, fetch(request) {
+      requests.push({ authorization: request.headers.get('authorization') });
+      return Response.json({ data: [] });
+    }
+  });
   const fixture = await openCatalogFixture();
   const saved = { ...configuration, endpoint: `http://127.0.0.1:${server.port}/v1`, credentialRef: null };
   try {
@@ -499,8 +535,10 @@ test('model catalog carries the model and thinking level OMP resolves for a new 
   const fixture = await openCatalogFixture();
   try {
     await fixture.writer.models.configureProvider({ expectedRevision: '0', configuration }, '1');
-    const reasoning = { ...configuredModel, reasoningEffortSupported: true,
-      reasoningOptions: ['low', 'medium', 'high'].map(reasoningEffort => ({ reasoningEffort, label: reasoningEffort, budgetTokens: null })) };
+    const reasoning = {
+      ...configuredModel, reasoningEffortSupported: true,
+      reasoningOptions: ['low', 'medium', 'high'].map(reasoningEffort => ({ reasoningEffort, label: reasoningEffort, budgetTokens: null }))
+    };
     await fixture.writer.models.configureModel({ expectedRevision: '1', model: reasoning }, '2');
     fixture.reader.settings.setModelRole('default', `${configuredModel.provider}/${configuredModel.modelId}`);
     cfgDefaultThinkingLevel.override(fixture.reader.settings, 'medium');
@@ -510,3 +548,127 @@ test('model catalog carries the model and thinking level OMP resolves for a new 
     expect((await fixture.reader.models.readModels('workspace_1', '1')).defaults.thinkingLevel).toBe('high');
   } finally { await fixture.close(); }
 }, 30000);
+
+test('canonical agentDirectory models.yml is resolved without scanning parent directories', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'omp-canonical-models-'));
+  const cwd = join(root, 'workspace');
+  const agentDir = join(root, 'agent');
+  await mkdir(cwd, { recursive: true });
+  await mkdir(agentDir, { recursive: true });
+  // Write a parent models.yml that must NOT be picked up
+  await writeFile(join(root, 'models.yml'), 'providers:\n  parent:\n    baseUrl: http://127.0.0.1:9000\n');
+
+  try {
+    const runtime = await openNativeRuntime({ cwd, agentDirectory: agentDir });
+    expect(runtime.modelsPath).toBe(join(agentDir, 'models.yml'));
+    runtime.authStorage.close();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('syncNativeConfigPair discovers root config.yml and adopts/copies agent config.yml from root', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'omp-config-pair-'));
+  const agentDir = join(root, 'agent');
+  const rootConfig = join(root, 'config.yml');
+  await writeFile(rootConfig, 'shell: /bin/bash\n');
+  try {
+    const pair = syncNativeConfigPair(agentDir);
+    expect(pair.modelsPath).toBe(join(agentDir, 'models.yml'));
+    const agentConfig = join(agentDir, 'config.yml');
+    expect(await readFile(agentConfig, 'utf8')).toContain('shell: /bin/bash');
+    expect(fs.lstatSync(agentConfig).isSymbolicLink()).toBe(false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('syncNativeConfigPair does not check parent when agentDirectory is not an agent subfolder', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'omp-custom-pair-'));
+  const customDir = join(root, 'custom');
+  const rootModels = join(root, 'models.yml');
+  await writeFile(rootModels, 'providers:\n  custom:\n    baseUrl: http://127.0.0.1:9000\n');
+  try {
+    const pair = syncNativeConfigPair(customDir);
+    expect(pair.modelsPath).toBe(join(customDir, 'models.yml'));
+    expect(await readFile(join(customDir, 'models.yml')).catch(() => null)).toBeNull();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('syncNativeConfigPair migrates root models.json into canonical agent models.yml without symlink or parent write', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'omp-models-json-pair-'));
+  const agentDir = join(root, 'agent');
+  const rootModelsJson = join(root, 'models.json');
+  await writeFile(rootModelsJson, JSON.stringify({
+    providers: {
+      jsonprovider: { baseUrl: 'http://127.0.0.1:9090' }
+    }
+  }));
+  try {
+    const pair = syncNativeConfigPair(agentDir);
+    expect(pair.modelsPath).toBe(join(agentDir, 'models.yml'));
+    const agentModels = join(agentDir, 'models.yml');
+    expect(await readFile(agentModels, 'utf8')).toContain('jsonprovider');
+    const fileStat = await stat(agentModels);
+    expect(fileStat.isFile()).toBe(true);
+    expect(fileStat.mode & 0o777).toBe(0o600);
+    expect(fs.lstatSync(agentModels).isSymbolicLink()).toBe(false);
+    // Writing to agentModels modifies agent file, not parent json
+    await writeFile(agentModels, 'providers:\n  updated:\n    baseUrl: http://127.0.0.1:9999\n');
+    expect(await readFile(rootModelsJson, 'utf8')).toContain('jsonprovider');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('openNativeRuntime validates profile agentDirectory and activates requested profile', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'omp-profile-runtime-'));
+  const cwd = join(root, 'workspace');
+  await mkdir(cwd, { recursive: true });
+  const profileName = `test-profile-${Date.now()}`;
+  const expectedDerived = path.join(os.homedir(), '.omp', 'profiles', profileName, 'agent');
+  await mkdir(expectedDerived, { recursive: true });
+
+  const oldProfile = process.env.OMP_PROFILE;
+  process.env.OMP_PROFILE = profileName;
+  try {
+    const runtime = await openNativeRuntime({ cwd, agentDirectory: expectedDerived });
+    expect(runtime.modelsPath).toBe(join(expectedDerived, 'models.yml'));
+    expect(getAgentDir()).toBe(expectedDerived);
+    runtime.authStorage.close();
+    // If profile is set, mismatched agentDirectory throws clear error and never calls setAgentDir
+    const mismatchedDir = join(root, 'mismatched-agent');
+    await mkdir(mismatchedDir, { recursive: true });
+    await expect(openNativeRuntime({ cwd, agentDirectory: mismatchedDir })).rejects.toThrow('Profile agent directory mismatch');
+
+    // Without profile, input agentDirectory is authoritative and setAgentDir is called
+    delete process.env.OMP_PROFILE;
+    delete process.env.PI_PROFILE;
+    setProfile('');
+    const standaloneDir = join(root, 'standalone-agent');
+    await mkdir(standaloneDir, { recursive: true });
+    const standaloneRuntime = await openNativeRuntime({ cwd, agentDirectory: standaloneDir });
+    expect(getAgentDir()).toBe(standaloneDir);
+    expect(getActiveProfile()).toBeUndefined();
+    standaloneRuntime.authStorage.close();
+  } finally {
+    if (oldProfile !== undefined) process.env.OMP_PROFILE = oldProfile;
+    else delete process.env.OMP_PROFILE;
+    delete process.env.PI_PROFILE;
+    setProfile('');
+    await rm(root, { recursive: true, force: true });
+    await rm(dirname(expectedDerived), { recursive: true, force: true }).catch(() => { });
+  }
+});
+
+test('resolveProviderDisplayName returns official names for well-known providers and catalog descriptors', () => {
+  expect(resolveProviderDisplayName('302ai')).toBe('302.AI');
+  expect(resolveProviderDisplayName('abacus')).toBe('Abacus.AI');
+  expect(resolveProviderDisplayName('aihubmix')).toBe('AiHubMix');
+  expect(resolveProviderDisplayName('anthropic')).toBe('Anthropic');
+  expect(resolveProviderDisplayName('openai')).toBe('OpenAI');
+  expect(resolveProviderDisplayName('google')).toContain('Google');
+  expect(resolveProviderDisplayName('custom-provider', 'My Custom Provider')).toBe('My Custom Provider');
+});

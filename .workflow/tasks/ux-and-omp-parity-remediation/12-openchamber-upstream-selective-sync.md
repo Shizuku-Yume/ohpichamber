@@ -8,6 +8,7 @@
 **Read first:** `.workflow/specs/ux-and-omp-parity-remediation.md`; `.workflow/specs/upstream-refresh.md`; `AGENTS.md`
 **Check:** `bun run type-check && bun run lint && bun run --cwd packages/ui test && npx vitest run packages/web/server/` → exits 0; every upstream-changed path in `0056bf6a9..upstream/main` is recorded as adopted, adapted to Canonical/OMP, or intentionally excluded.
 - **Base commit:** e8a6c32889717ee14a15f8830e882ac37d9f07a6
+- **Status:** active
 
 - [x] Inspect `0056bf6a9..upstream/main` (including OpenChamber `2.6.1+`) and classify all changed paths using the `upstream-refresh` disposition rules: exclude `packages/vscode`, OpenCode engine/adapter paths, `.github`, `changelog/`, and `nix/`; adopt clean upstream files; three-way merge shared files from base `0056bf6a9` while preserving fork-owned OMP features.
 - [ ] Adopt and adapt upstream OpenChamber `2.6.1+` main-window and workbench updates (`Header.tsx`, `SidebarFooter.tsx` bottom-right `● Local` instance switcher pill, cleaned-up bottom-left utility buttons, top-right terminal selector dropdown and valid `'terminal-box'` icon fallback in `ProjectActionsButton.tsx` / `TerminalView.tsx`, plus upstream Host/UI/Electron/Mobile/SDK bugfixes).

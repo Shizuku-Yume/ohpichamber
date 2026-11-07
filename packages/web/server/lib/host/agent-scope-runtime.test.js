@@ -6,7 +6,7 @@ import express from 'express';
 import request from 'supertest';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createHostSessionState } from './session-state.js';
-import { createHostAgentScopeRuntime } from './agent-scope-runtime.js';
+import { createHostAgentScopeRuntime, resolveDefaultAgentDirectory } from './agent-scope-runtime.js';
 import { createSettingsNormalizationRuntime } from './settings-normalization-runtime.js';
 import { createProjectDirectoryRuntime } from './project-directory-runtime.js';
 import { getWorktrees } from '../git/service.js';
@@ -391,5 +391,14 @@ describe('configured Host scope authority', () => {
     expect(resolved).not.toBeNull();
     expect(resolved?.workspaceId).toBe(scope.workspaceId);
     expect(resolved?.cwd).toBe(worktreeDirectory);
+  });
+
+  it('resolveDefaultAgentDirectory honors OMP_PROFILE, PI_PROFILE, and PI_CONFIG_DIR with safe fallback', () => {
+    const home = '/fake/home';
+    expect(resolveDefaultAgentDirectory({}, home)).toBe(path.join(home, '.omp', 'agent'));
+    expect(resolveDefaultAgentDirectory({ OMP_PROFILE: 'reviewer' }, home)).toBe(path.join(home, '.omp', 'profiles', 'reviewer', 'agent'));
+    expect(resolveDefaultAgentDirectory({ PI_PROFILE: 'worker-1' }, home)).toBe(path.join(home, '.omp', 'profiles', 'worker-1', 'agent'));
+    expect(resolveDefaultAgentDirectory({ OMP_PROFILE: '../unsafe/escape' }, home)).toBe(path.join(home, '.omp', 'agent'));
+    expect(resolveDefaultAgentDirectory({ PI_CONFIG_DIR: '/custom/config/dir' }, home)).toBe(path.resolve('/custom/config/dir'));
   });
 });

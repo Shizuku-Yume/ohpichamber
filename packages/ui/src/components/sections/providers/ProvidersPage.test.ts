@@ -65,6 +65,22 @@ describe('native provider management UI contracts', () => {
     expect(groups.others.map((entry) => entry.id)).toEqual(['alpha', 'zeta']);
   });
 
+  test('connected-only provider filter selects configured credentials or executable models', () => {
+    const providers = [
+      provider({ providerId: 'unconfigured-1', name: 'Unconfigured 1', auth: { status: 'missing' } }),
+      provider({ providerId: 'configured-auth', name: 'Configured Auth', auth: { status: 'configured', credentialRef: 'c1', method: 'api-key', source: 'stored-credential' } }),
+      provider({ providerId: 'ollama', name: 'Ollama', auth: { status: 'missing' } }),
+    ];
+    const models = [
+      { modelId: 'llama3', provider: 'ollama', name: 'Llama 3' },
+    ];
+    const executableProviders = new Set(models.map((m) => m.provider));
+    const connected = providers.filter(
+      (p) => p.auth.status === 'configured' || executableProviders.has(p.providerId),
+    );
+    expect(connected.map((p) => p.providerId)).toEqual(['configured-auth', 'ollama']);
+  });
+
   test('does not expose header values while editing configured header names', () => {
     const form = createEmptyCustomProviderForm({
       revision: '1',

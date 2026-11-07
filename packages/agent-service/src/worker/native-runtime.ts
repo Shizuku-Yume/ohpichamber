@@ -1,5 +1,7 @@
-import { join } from 'node:path';
-import { resolveProfileEnv, setAgentDir, setProfile } from '@oh-my-pi/pi-utils';
+import fs from 'node:fs';
+import { join, dirname, basename, resolve } from 'node:path';
+import { JSONC, YAML } from 'bun';
+import { getAgentDir, resolveProfileEnv, setAgentDir, setProfile } from '@oh-my-pi/pi-utils';
 import { getOAuthProviders, type AuthApiKeyOptions, type ResolvedApiKey } from '@oh-my-pi/pi-ai';
 import { discoverAuthStorage } from '@oh-my-pi/pi-coding-agent/sdk';
 import type { AuthStorage } from '@oh-my-pi/pi-coding-agent/session/auth-storage';
@@ -66,15 +68,21 @@ export interface NativeWorkerRuntime {
 }
 
 export async function openNativeRuntime(input: { cwd: string; agentDirectory: string }): Promise<NativeWorkerRuntime> {
-  // setAgentDir clears native profile selection; retain an explicitly selected native profile instead.
-  // Plugin storage belongs to that resolver's config/XDG root, never dirname(agentDirectory).
   const profile = resolveProfileEnv(process.env.OMP_PROFILE, process.env.PI_PROFILE);
-  if (profile) setProfile(profile);
-  else setAgentDir(input.agentDirectory);
+  if (profile) {
+    setProfile(profile);
+    const profileAgentDir = resolve(getAgentDir());
+    const requestedAgentDir = resolve(input.agentDirectory);
+    if (profileAgentDir !== requestedAgentDir) {
+      throw new Error(`Profile agent directory mismatch: profile '${profile}' resolved to '${profileAgentDir}', but '${requestedAgentDir}' was requested`);
+    }
+  } else {
+    setAgentDir(input.agentDirectory);
+  }
+  const { modelsPath } = syncNativeConfigPair(input.agentDirectory);
   const settings = await Settings.init({ cwd: input.cwd, agentDir: input.agentDirectory });
   const authStorage = await discoverAuthStorage(input.agentDirectory, { cwd: input.cwd, settings });
   try {
-    const modelsPath = join(input.agentDirectory, 'models.yml');
     let currentNativeSessionId = () => '';
     const modelRegistry: ModelRegistry = new NativeModelRegistry(
       authStorage,
@@ -116,7 +124,54 @@ export function nativeModelsContext(
 export function nativeExtensionRoots(settings: Settings, explicit: string[] = []): EffectiveExtensionRoots {
   return { explicit, mode: 'explicit-only', configured: cfgExtensions.get(settings), configuredLevel: settings.extensionsSourceLevel() };
 }
-
 export function nativeSkillOptions(settings: Settings, explicit: string[] = []): LoadSkillsOptions {
   return { ...cfgSkills.get(settings), disabledExtensions: cfgDisabledExtensions.get(settings), extensionRoots: nativeExtensionRoots(settings, explicit) };
+}
+
+export function syncNativeConfigPair(agentDirectory: string): { modelsPath: string } {
+  const isAgentPair = basename(agentDirectory) === 'agent';
+  const configRoot = isAgentPair ? dirname(agentDirectory) : null;
+  const modelsPath = join(agentDirectory, 'models.yml');
+  const modelsYaml = join(agentDirectory, 'models.yaml');
+
+  if (isAgentPair && configRoot) {
+    try { fs.mkdirSync(agentDirectory, { recursive: true, mode: 0o700 }); } catch { /* ignore */ }
+
+    // Helper: copy file safely without clobbering, ensuring destination is created owner-only (0o600)
+    // Root files (~/.omp/*) are legacy inputs; canonical agent files (~/.omp/agent/*) become
+    // the sole write authority used by standalone OMP.
+    const safeMigrateCopy = (sourcePath: string, destPath: string) => {
+      if (fs.existsSync(destPath) || !fs.existsSync(sourcePath)) return;
+      try {
+        const content = fs.readFileSync(sourcePath);
+        fs.writeFileSync(destPath, content, { mode: 0o600, flag: 'wx' });
+      } catch { /* ignore migration collision/error */ }
+    };
+
+    // 1. config.yml adoption: copy from root once if root exists and agent does not
+    const agentConfigYml = join(agentDirectory, 'config.yml');
+    const rootConfigYml = join(configRoot, 'config.yml');
+    safeMigrateCopy(rootConfigYml, agentConfigYml);
+
+    // 2. models.yml adoption: copy/migrate from root once if agent has neither models.yml nor models.yaml
+    if (!fs.existsSync(modelsPath) && !fs.existsSync(modelsYaml)) {
+      const rootModelsYml = join(configRoot, 'models.yml');
+      const rootModelsYaml = join(configRoot, 'models.yaml');
+      const rootModelsJson = join(configRoot, 'models.json');
+      if (fs.existsSync(rootModelsYml)) {
+        safeMigrateCopy(rootModelsYml, modelsPath);
+      } else if (fs.existsSync(rootModelsYaml)) {
+        safeMigrateCopy(rootModelsYaml, modelsYaml);
+      } else if (fs.existsSync(rootModelsJson)) {
+        try {
+          const raw = fs.readFileSync(rootModelsJson, 'utf8');
+          const parsed = JSONC.parse(raw);
+          if (parsed && typeof parsed === 'object') {
+            fs.writeFileSync(modelsPath, YAML.stringify(parsed), { mode: 0o600, flag: 'wx' });
+          }
+        } catch { /* ignore migration error */ }
+      }
+    }
+  }
+  return { modelsPath };
 }

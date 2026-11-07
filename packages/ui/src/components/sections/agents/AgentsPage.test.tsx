@@ -104,19 +104,23 @@ test('native catalog refresh during save preserves newer draft and advances only
   await edit(system, 'older');
   await edit(system, 'newer');
   expect(writes.map((write) => write.agent.systemPromptOverride)).toEqual(['older']);
-  await act(async () => { useAgentsStore.setState({
-    agentsByDirectory: { '/project': [{ ...initialAgent, systemPromptOverride: 'older' }] },
-    revisionsByDirectory: { '/project': '99' },
-  }); });
+  await act(async () => {
+    useAgentsStore.setState({
+      agentsByDirectory: { '/project': [{ ...initialAgent, systemPromptOverride: 'older' }] },
+      revisionsByDirectory: { '/project': '99' },
+    });
+  });
   expect(system.value).toBe('newer');
   await act(async () => { writes[0].finish(); });
   expect(writes.map((write) => write.agent.systemPromptOverride)).toEqual(['older', 'newer']);
   expect(writes.map((write) => write.revision)).toEqual(['1', '2']);
   expect(writes[1].agent.allowedTools).toEqual(initialAgent.allowedTools);
   expect(writes[1].agent.permissionPresetId).toBe(initialAgent.permissionPresetId);
-  await act(async () => { useAgentsStore.setState({
-    selectedAgentName: 'other', agentsByDirectory: { '/project': [{ ...initialAgent, agentId: 'other', name: 'other', systemPromptOverride: 'other prompt' }] },
-  }); });
+  await act(async () => {
+    useAgentsStore.setState({
+      selectedAgentName: 'other', agentsByDirectory: { '/project': [{ ...initialAgent, agentId: 'other', name: 'other', systemPromptOverride: 'other prompt' }] },
+    });
+  });
   expect(system.value).toBe('other prompt');
   await act(async () => { writes[1].finish(); });
   expect(system.value).toBe('other prompt');
@@ -124,16 +128,20 @@ test('native catalog refresh during save preserves newer draft and advances only
 
 test('dirty native fields keep hydration revision on concurrent refresh and display mutation conflict', async () => {
   const writes: Array<{ agent: Agent; revision: string | undefined }> = [];
-  useAgentsStore.setState({ updateAgent: async (agent, _directory, revision) => {
-    writes.push({ agent, revision }); return { ok: false, error: 'CATALOG_CONFLICT' };
-  } });
+  useAgentsStore.setState({
+    updateAgent: async (agent, _directory, revision) => {
+      writes.push({ agent, revision }); return { ok: false, error: 'CATALOG_CONFLICT' };
+    }
+  });
   await render();
   const description = field('Initial description');
   await edit(description, '', false);
-  await act(async () => { useAgentsStore.setState({
-    agentsByDirectory: { '/project': [{ ...initialAgent, description: 'External edit', allowedTools: ['external'] }] },
-    revisionsByDirectory: { '/project': '2' },
-  }); });
+  await act(async () => {
+    useAgentsStore.setState({
+      agentsByDirectory: { '/project': [{ ...initialAgent, description: 'External edit', allowedTools: ['external'] }] },
+      revisionsByDirectory: { '/project': '2' },
+    });
+  });
   expect(description.value).toBe('');
   await act(async () => { description.dispatchEvent(new FocusEvent('focusout', { bubbles: true })); });
   expect(writes[0].revision).toBe('1');
@@ -149,10 +157,12 @@ test('clean refresh hydrates native fields, actual preset and optional prompt re
   await render();
   expect(container.querySelector<HTMLInputElement>('input[aria-label="Permission preset ID"]')?.value).toBe('actual-native-preset');
   expect(container.querySelectorAll('textarea')).toHaveLength(2);
-  await act(async () => { useAgentsStore.setState({
-    agentsByDirectory: { '/project': [{ ...initialAgent, description: 'Refreshed description', systemPromptOverride: 'refreshed' }] },
-    revisionsByDirectory: { '/project': '2' },
-  }); });
+  await act(async () => {
+    useAgentsStore.setState({
+      agentsByDirectory: { '/project': [{ ...initialAgent, description: 'Refreshed description', systemPromptOverride: 'refreshed' }] },
+      revisionsByDirectory: { '/project': '2' },
+    });
+  });
   expect(field('Refreshed description')).toBeDefined();
   await edit(field('refreshed'), '');
   expect(writes[0].systemPromptOverride).toBeUndefined();
@@ -240,9 +250,11 @@ test('explicit empty tools remain an explicit empty list', async () => {
 
 test('native tools trim, add once, remove in order and optional preset can be removed', async () => {
   const writes: Agent[] = [];
-  useAgentsStore.setState({ updateAgent: async (agent) => {
-    writes.push(agent); return { ok: true, revision: String(writes.length + 1) };
-  } });
+  useAgentsStore.setState({
+    updateAgent: async (agent) => {
+      writes.push(agent); return { ok: true, revision: String(writes.length + 1) };
+    }
+  });
   await render();
   await addTool(' new-tool ');
   expect(writes[0].allowedTools).toEqual(['read', 'custom-tool', 'new-tool']);
@@ -262,4 +274,26 @@ test('native tools trim, add once, remove in order and optional preset can be re
   await act(async () => { preset.dispatchEvent(new FocusEvent('focusout', { bubbles: true })); });
   expect(writes[3].permissionPresetId).toBeUndefined();
   expect(Object.hasOwn(writes[3], 'permissionPresetId')).toBe(false);
+});
+
+test('thinking level and spawns are updated and saved to agent definition', async () => {
+  const writes: Agent[] = [];
+  useAgentsStore.setState({
+    updateAgent: async (agent) => {
+      writes.push(agent);
+      return { ok: true, revision: String(writes.length + 1) };
+    },
+  });
+  await render();
+  const spawnsInput = container.querySelector<HTMLInputElement>('input[aria-label="Subagent"]');
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+  if (!spawnsInput || !setter) throw new Error('Missing spawns input');
+  await act(async () => {
+    setter.call(spawnsInput, 'scout, reviewer');
+    spawnsInput.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await act(async () => {
+    spawnsInput.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+  });
+  expect(writes[0].spawns).toEqual(['scout', 'reviewer']);
 });

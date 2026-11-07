@@ -48,6 +48,7 @@ const SERVICE_ENV_KEYS = Object.freeze([
   'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME', 'XDG_RUNTIME_DIR',
   'OHPICHAMBER_BUN',
   'OMP_PROFILE', 'PI_PROFILE', 'PI_CONFIG_DIR', 'PI_CODING_AGENT_DIR',
+  'BUN_BE_BUN',
   'BUN_INSTALL', 'BUN_INSTALL_BIN',
   'OPENCHAMBER_AGENT_DIAGNOSTICS_LEVEL',
 ]);
@@ -198,7 +199,7 @@ export const createAgentServiceSupervisor = ({
     return { captured, prior };
   };
   const handlePolicyMessage = (launched, message) => {
-    const send = (value) => { if (launched.connected) launched.send(value, () => {}); };
+    const send = (value) => { if (launched.connected) launched.send(value, () => { }); };
     if (!['approval.policy.commit', 'approval.policy.list'].includes(message?.type)) return;
     try {
       if (child !== launched || !policyStore) throw new Error('Approval policy store unavailable');
@@ -247,7 +248,7 @@ export const createAgentServiceSupervisor = ({
         && workspaceScopes.get(operation.workspaceId)?.scope === captured) result = handled;
     } catch { /* Never send filesystem paths, thrown messages, or internal service details. */ }
     try {
-      if (launched.connected) launched.send({ type: 'host.skill-source.result', requestId: requestId.data.requestId, result }, () => {});
+      if (launched.connected) launched.send({ type: 'host.skill-source.result', requestId: requestId.data.requestId, result }, () => { });
     } catch { /* The service may disconnect while the Host source operation completes. */ }
   };
   // Registry failures are diagnostics, never lifecycle failures: a missing
@@ -449,7 +450,7 @@ export const createAgentServiceSupervisor = ({
           phase = 'failed';
           relocationScopes.clear(); forkTickets.clear(); scopes.clear(); workspaceScopes.clear(); authorization.closeChild(launched);
           accepting = false;
-          if (Number.isInteger(launched.pid)) void processRegistry.unregisterManagedProcess(launched.pid).catch(() => {});
+          if (Number.isInteger(launched.pid)) void processRegistry.unregisterManagedProcess(launched.pid).catch(() => { });
           scheduleRestart();
         };
         launched.stdout?.on('data', onData);

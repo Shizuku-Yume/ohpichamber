@@ -15,10 +15,25 @@ const publicWorkspace = (scope) => ({
   name: scope.cwd === scope.projectDirectory ? scope.name : path.basename(scope.cwd),
   displayPath: displayPath(scope),
 });
+
+export function resolveDefaultAgentDirectory(env = process.env, home = os.homedir()) {
+  const profile = (env.OMP_PROFILE || env.PI_PROFILE || '').trim();
+  if (profile) {
+    if (/^[a-zA-Z0-9_-]+$/.test(profile)) {
+      return path.join(home, '.omp', 'profiles', profile, 'agent');
+    }
+    // Invalid profile names fall back safely to the canonical root
+  }
+  const configDir = env.PI_CONFIG_DIR?.trim();
+  if (configDir) {
+    return path.resolve(configDir);
+  }
+  return path.join(home, '.omp', 'agent');
+}
 /** Configured Host projects and their registered worktrees are the directory authority, not client path hints. */
 export const createHostAgentScopeRuntime = ({
   store, readSettings, sanitizeProjects, validateDirectoryPath, getWorktrees, managedChatsScope,
-  getArchiveCatalog = () => [], agentDirectory = path.join(os.homedir(), '.omp', 'agent'), fsPromises = fs.promises,
+  getArchiveCatalog = () => [], agentDirectory = resolveDefaultAgentDirectory(), fsPromises = fs.promises,
 }) => {
   const readProjects = async () => sanitizeProjects((await readSettings()).projects) ?? [];
   const initialize = async () => {
@@ -26,7 +41,7 @@ export const createHostAgentScopeRuntime = ({
     if (managedChatsScope) await fsPromises.mkdir(managedChatsScope.root, { recursive: true, mode: 0o700 });
   };
   const selectedDirectory = () => fsPromises.realpath(agentDirectory);
-const archiveSpaceId = (workspaceId) => /^archive_([a-f0-9]{12})$/.exec(workspaceId)?.[1] ?? null;
+  const archiveSpaceId = (workspaceId) => /^archive_([a-f0-9]{12})$/.exec(workspaceId)?.[1] ?? null;
 
   const archiveScope = async (spaceId, directory) => ({
     projectId: `archive_${spaceId}`, workspaceId: `archive_${spaceId}`, cwd: directory,

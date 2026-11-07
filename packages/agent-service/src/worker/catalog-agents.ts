@@ -45,7 +45,7 @@ function missing(error: Error): boolean {
 }
 
 export class NativeAgents {
-  constructor(private readonly context: NativeAgentsContext) {}
+  constructor(private readonly context: NativeAgentsContext) { }
 
   private async loadDirectory(directory: string, source: AgentDefinition['source'], ignoreModel = false): Promise<AgentDefinition[]> {
     let files;
@@ -132,6 +132,14 @@ export class NativeAgents {
     const systemPromptOverride = profile ? profile.systemPromptOverride : definition.systemPrompt || undefined;
     if (systemPromptOverride !== undefined) candidate.systemPromptOverride = systemPromptOverride;
     if (profile?.permissionPresetId) candidate.permissionPresetId = profile.permissionPresetId;
+    const thinkingLevel = profile?.thinkingLevel !== undefined ? profile.thinkingLevel : definition.thinkingLevel;
+    if (thinkingLevel !== undefined) candidate.thinkingLevel = thinkingLevel;
+    const spawns = profile?.spawns !== undefined ? profile.spawns : definition.spawns;
+    if (spawns !== undefined) candidate.spawns = spawns;
+    const blocking = profile?.blocking !== undefined ? profile.blocking : definition.blocking;
+    if (blocking !== undefined) candidate.blocking = blocking;
+    const advisor = profile?.advisor !== undefined ? profile.advisor : definition.advisor;
+    if (advisor !== undefined) candidate.advisor = advisor;
     return AgentSchema.parse(candidate);
   }
 
@@ -193,11 +201,13 @@ export class NativeAgents {
     if (agent.model && !this.context.modelRegistry.find(agent.model.providerId, agent.model.modelId)) {
       throw new ProjectionError(422, 'MODEL_UNAVAILABLE', 'Agent profile model is unavailable');
     }
-    const baseFields = { name: agent.agentId, description: agent.description, openchamber: agent };
-    const fieldsWithTools = agent.allowedTools === null ? baseFields : { ...baseFields, tools: agent.allowedTools };
-    const fields = agent.model
-      ? { ...fieldsWithTools, model: `${agent.model.providerId}/${agent.model.modelId}` }
-      : fieldsWithTools;
+    const fields: Record<string, unknown> = { name: agent.agentId, description: agent.description, openchamber: agent };
+    if (agent.allowedTools !== null) fields.tools = agent.allowedTools;
+    if (agent.model) fields.model = `${agent.model.providerId}/${agent.model.modelId}`;
+    if (agent.thinkingLevel !== undefined) fields.thinkingLevel = agent.thinkingLevel;
+    if (agent.spawns !== undefined) fields.spawns = agent.spawns;
+    if (agent.blocking !== undefined) fields.blocking = agent.blocking;
+    if (agent.advisor !== undefined) fields.advisor = agent.advisor;
     const content = `---\n${YAML.stringify(fields)}\n---\n\n${agent.systemPromptOverride ?? ''}\n`;
     const path = existing?.source === 'project' && existing.filePath && resolve(dirname(existing.filePath)) === resolve(this.context.cwd, '.omp', 'agents')
       ? existing.filePath : profilePath(this.context.cwd, agent.agentId);

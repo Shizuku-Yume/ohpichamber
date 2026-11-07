@@ -2,6 +2,21 @@ import type { Element, Root, ElementContent } from 'hast';
 import { z } from 'zod';
 import { isAppLinkUrl } from '@/lib/url';
 import { isSessionDeepLink } from '@/lib/sessionLinks';
+const EXTENSION_INSTALL_PREFIX = "openchamber://extensions/install?";
+
+const parseExtensionInstallLink = (href: string): { kind: "url" | "path"; source: string } | null => {
+  if (!href.toLowerCase().startsWith(EXTENSION_INSTALL_PREFIX)) return null;
+  const params = new URLSearchParams(href.slice(EXTENSION_INSTALL_PREFIX.length));
+  const path = params.get("path");
+  if (path) return path.startsWith("/") || /^[a-z]:[\\/]/i.test(path) ? { kind: "path", source: path } : null;
+  const url = params.get("url");
+  if (!url) return null;
+  try {
+    return new URL(url).protocol === "https:" ? { kind: "url", source: url } : null;
+  } catch {
+    return null;
+  }
+};
 
 const allowedAttributes = new Set(['align', 'alt', 'checked', 'colSpan', 'controls', 'disabled', 'height', 'href', 'media', 'open', 'playsInline', 'preload', 'rel', 'rowSpan', 'src', 'srcSet', 'start', 'target', 'title', 'type', 'width']);
 const urlAttribute = z.string();
@@ -19,14 +34,14 @@ function relativeOrHttp(value: string): boolean {
   return /^https?:\/\//i.test(value) || !/^[a-z][a-z\d+.-]*:/i.test(value);
 }
 
-function safeLink(value: string): boolean {
+function safeLink(value: string, vscode: boolean): boolean {
   if (value !== value.trim() || /\s/.test(value)) return false;
   return relativeOrHttp(value) || localFile(value) || isAppLinkUrl(value)
     || /^(?:mailto|tel|sms|callto|cid|xmpp|irc|ircs|news|nntp|feed|webcal):/i.test(value)
-    || isSessionDeepLink(value);
+    || (!vscode && (isSessionDeepLink(value) || parseExtensionInstallLink(value) !== null));
 }
 
-export function rehypeMarkdownPolicy() {
+export function rehypeMarkdownPolicy({ isVSCode }: { isVSCode: boolean }) {
   return (tree: Root, file: { toString(): string }) => {
     const source = file.toString();
     function walk(parent: Root | Element): void {
@@ -56,7 +71,7 @@ export function rehypeMarkdownPolicy() {
         }
         if (node.properties.href !== undefined) {
           const href = urlAttribute.safeParse(node.properties.href);
-          if (href.success && safeLink(href.data)) node.properties.dataOcLinkSource = href.data;
+          if (href.success && safeLink(href.data, isVSCode)) node.properties.dataOcLinkSource = href.data;
           else delete node.properties.href;
         }
         if (node.tagName === 'a') node.properties.href = '#oc-link';

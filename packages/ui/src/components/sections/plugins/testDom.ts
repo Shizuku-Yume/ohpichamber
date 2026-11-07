@@ -10,29 +10,29 @@ const browser = new Window({ url: 'http://localhost/' });
  * in the shared autosave target check) in the same realm.
  */
 export const installTestDomGlobals = (): void => {
- Object.assign(globalThis, {
-  window: browser,
-  document: browser.document,
-  navigator: browser.navigator,
-  localStorage: browser.localStorage,
-  sessionStorage: browser.sessionStorage,
-  Node: browser.Node,
-  Element: browser.Element,
-  HTMLElement: browser.HTMLElement,
-  HTMLInputElement: browser.HTMLInputElement,
-  HTMLTextAreaElement: browser.HTMLTextAreaElement,
-  Event: browser.Event,
-  FocusEvent: browser.FocusEvent,
-  CustomEvent: browser.CustomEvent,
-  MouseEvent: browser.MouseEvent,
-  PointerEvent: browser.PointerEvent,
-  MutationObserver: browser.MutationObserver,
-  ResizeObserver: browser.ResizeObserver,
-  getComputedStyle: browser.getComputedStyle.bind(browser),
-  requestAnimationFrame: browser.requestAnimationFrame.bind(browser),
-  cancelAnimationFrame: browser.cancelAnimationFrame.bind(browser),
-  IS_REACT_ACT_ENVIRONMENT: true,
- });
+  Object.assign(globalThis, {
+    window: browser,
+    document: browser.document,
+    navigator: browser.navigator,
+    localStorage: browser.localStorage,
+    sessionStorage: browser.sessionStorage,
+    Node: browser.Node,
+    Element: browser.Element,
+    HTMLElement: browser.HTMLElement,
+    HTMLInputElement: browser.HTMLInputElement,
+    HTMLTextAreaElement: browser.HTMLTextAreaElement,
+    Event: browser.Event,
+    FocusEvent: browser.FocusEvent,
+    CustomEvent: browser.CustomEvent,
+    MouseEvent: browser.MouseEvent,
+    PointerEvent: browser.PointerEvent,
+    MutationObserver: browser.MutationObserver,
+    ResizeObserver: browser.ResizeObserver,
+    getComputedStyle: browser.getComputedStyle.bind(browser),
+    requestAnimationFrame: browser.requestAnimationFrame.bind(browser),
+    cancelAnimationFrame: browser.cancelAnimationFrame.bind(browser),
+    IS_REACT_ACT_ENVIRONMENT: true,
+  });
 };
 
 installTestDomGlobals();

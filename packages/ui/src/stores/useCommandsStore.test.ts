@@ -143,4 +143,20 @@ describe('native command consumers', () => {
     expect(deleteRequest).toBeDefined();
     expect(new URL(deleteRequest!.url).pathname).toBe('/api/agent/v1/workspaces/workspace_1/commands/command_custom_compact');
   });
+
+  test('deleting custom command does not clear selected builtin command with same name', async () => {
+    const builtinCompact: CommandEntry = { commandId: 'command_builtin_compact', name: 'compact', description: 'Built-in', content: '', scope: 'inherited', source: 'builtin', editable: false };
+    const customCompact: CommandEntry = { commandId: 'command_custom_compact', name: 'compact', description: 'Custom', content: 'Custom content', scope: 'workspace', source: 'workspace', editable: true };
+    catalog = { ...catalog, commands: [builtinCompact, customCompact] };
+    await useCommandsStore.getState().loadCommands('/repo');
+
+    useCommandsStore.getState().setSelectedCommandId(builtinCompact.commandId);
+    useCommandsStore.getState().setSelectedCommand('compact');
+    expect(useCommandsStore.getState().selectedCommandId).toBe(builtinCompact.commandId);
+
+    expect(await useCommandsStore.getState().deleteCommand('compact', '/repo', customCompact.commandId)).toBe(true);
+
+    expect(useCommandsStore.getState().selectedCommandId).toBe(builtinCompact.commandId);
+    expect(useCommandsStore.getState().selectedCommandName).toBe('compact');
+  });
 });

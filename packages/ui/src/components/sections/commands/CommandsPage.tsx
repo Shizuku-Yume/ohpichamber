@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
-import { selectCommandsForDirectory, useCommandsStore, type CommandConfig, type CommandScope } from '@/stores/useCommandsStore';
+import { selectCommandsForDirectory, useCommandsStore, isCommandBuiltIn, type CommandConfig, type CommandScope } from '@/stores/useCommandsStore';
 import { getLocalizedCommandDescription } from './commandDescriptions';
 import { ModelSelector } from '../agents/ModelSelector';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -39,8 +39,8 @@ export const CommandsPage: React.FC = () => {
   const draft = useCommandsStore(state => state.commandDraft);
   const entity = (selectedId ? commands.find(command => command.commandId === selectedId) : null)
     ?? commands.find(command => command.name === selectedName);
-  const isNew = Boolean(draft && draft.name === selectedName && !entity);
-  const readOnly = Boolean(entity && !entity.editable);
+  const isNew = Boolean(draft && draft.name === selectedName && (!entity || isCommandBuiltIn(entity)));
+  const readOnly = Boolean(!isNew && entity && !entity.editable);
   const group = isNew ? draft?.group : entity?.group;
   const [form, setForm] = React.useState<CommandForm>({ name: '', scope: 'agent', description: '', content: '', argumentHint: '', modelSelection: null });
   const [creating, setCreating] = React.useState(false);
@@ -53,10 +53,9 @@ export const CommandsPage: React.FC = () => {
   React.useEffect(() => {
     const source = isNew ? draft : entity;
     if (!source) return;
-    const localizedDesc = entity ? getLocalizedCommandDescription(entity, t) : source.description;
     const next: CommandForm = {
       name: source.name, scope: source.scope === 'workspace' ? 'workspace' : 'agent',
-      description: localizedDesc ?? '', content: source.content ?? '', argumentHint: source.argumentHint ?? '',
+      description: source.description ?? '', content: source.content ?? '', argumentHint: source.argumentHint ?? '',
       modelSelection: source.modelSelection ?? null,
     };
     const sameIdentity = loadedIdentity.current === identity;
@@ -65,7 +64,7 @@ export const CommandsPage: React.FC = () => {
       .some(value => value && JSON.stringify(value) === JSON.stringify(next))) return;
     setForm(next);
     saved.current = next;
-  }, [draft, entity, identity, isNew, t]);
+  }, [draft, entity, identity, isNew]);
   const config: CommandConfig = {
     name: form.name, scope: form.scope, description: form.description, content: form.content,
     argumentHint: form.argumentHint || undefined, modelSelection: form.modelSelection ?? undefined,
@@ -92,7 +91,7 @@ export const CommandsPage: React.FC = () => {
     const commandName = form.name.trim().replace(/\s+/g, '-');
     if (!commandName) { toast.error(t('settings.commands.sidebar.toast.commandNameRequired')); return; }
     if (!form.content.trim()) { toast.error(t('settings.commands.page.toast.templateRequired')); return; }
-    if (commands.some(command => command.name === commandName)) {
+    if (commands.some(command => !isCommandBuiltIn(command) && command.name === commandName)) {
       toast.error(t('settings.commands.sidebar.toast.commandExists'));
       return;
     }
@@ -120,7 +119,7 @@ export const CommandsPage: React.FC = () => {
       </div>
     );
   }
-  if (entity?.source === 'builtin') {
+  if (!isNew && entity?.source === 'builtin') {
     return (
       <SettingsPageLayout
         title={`/${selectedName}`}
@@ -129,7 +128,7 @@ export const CommandsPage: React.FC = () => {
         <SettingsSection title={t('settings.commands.page.section.identity')} divider={false} contentClassName="space-y-3">
           <SettingsStackedField className="py-1.5" label={t('settings.common.field.description')} controlClassName="w-full max-w-none">
             <p className="typography-body text-foreground leading-relaxed whitespace-pre-wrap">
-              {form.description || t('settings.commands.page.field.descriptionPlaceholder')}
+              {(entity ? getLocalizedCommandDescription(entity, t) : form.description) || t('settings.commands.page.field.descriptionPlaceholder')}
             </p>
           </SettingsStackedField>
           {form.argumentHint ? (

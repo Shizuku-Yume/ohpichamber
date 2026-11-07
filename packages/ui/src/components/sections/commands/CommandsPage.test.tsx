@@ -39,7 +39,7 @@ const _fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async (input, in
 // React's input-event support is detected when react-dom loads.
 const { act } = await import('react');
 const { createRoot } = await import('react-dom/client');
-const { I18nProvider } = await import('@/lib/i18n');
+const { I18nProvider, useI18nStore } = await import('@/lib/i18n');
 // Match Vite's eager asset glob when the real model selector loads in Bun.
 plugin({
   name: 'command-settings-provider-logos',
@@ -177,4 +177,93 @@ test('shows clean read-only built-in command detail without form chrome', async 
   expect(container.querySelector('textarea')).toBeNull();
   expect(container.querySelector('input')).toBeNull();
   expect(container.querySelector('fieldset')).toBeNull();
+});
+
+test('locale switch preserves unsaved custom command draft without rehydrating', async () => {
+  const custom: CommandEntry = {
+    commandId: 'command_custom_one',
+    name: 'my-custom-cmd',
+    content: 'Custom template content',
+    description: 'Initial description',
+    scope: 'workspace',
+    source: 'workspace',
+    editable: true,
+  };
+  useProjectsStore.setState({ projects: [{ id: 'project', path: '/project' }], activeProjectId: 'project' });
+  useCommandsStore.setState({
+    selectedCommandName: custom.name,
+    selectedCommandId: custom.commandId,
+    commands: [custom],
+    commandsByDirectory: { '/project': [custom] },
+  });
+
+  await act(async () => {
+    root.render(
+      <I18nProvider>
+        <SyncProvider directory="/project">
+          <CommandsPage />
+        </SyncProvider>
+      </I18nProvider>
+    );
+  });
+
+  const descTextarea = container.querySelector<HTMLTextAreaElement>('textarea');
+  expect(descTextarea).not.toBeNull();
+  const setTextValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+  await act(async () => {
+    setTextValue?.call(descTextarea, 'Dirty unsaved description');
+    descTextarea!.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+
+  await act(async () => {
+    await useI18nStore.getState().setLocale('zh-CN');
+  });
+
+  expect(descTextarea?.value).toBe('Dirty unsaved description');
+
+  await act(async () => {
+    await useI18nStore.getState().setLocale('en');
+  });
+});
+
+test('creating a custom command with same name as built-in is permitted', async () => {
+  const builtinCompact: CommandEntry = {
+    commandId: 'command_compact',
+    name: 'compact',
+    content: '',
+    description: 'Built-in compact',
+    scope: 'inherited',
+    source: 'builtin',
+    editable: false,
+  };
+  let created = false;
+  useProjectsStore.setState({ projects: [{ id: 'project', path: '/project' }], activeProjectId: 'project' });
+  useCommandsStore.setState({
+    selectedCommandName: 'compact',
+    selectedCommandId: null,
+    commandDraft: { name: 'compact', scope: 'workspace', description: 'Override', content: 'Custom content' },
+    commands: [builtinCompact],
+    commandsByDirectory: { '/project': [builtinCompact] },
+    createCommand: async () => {
+      created = true;
+      return true;
+    },
+  });
+
+  await act(async () => {
+    root.render(
+      <I18nProvider>
+        <SyncProvider directory="/project">
+          <CommandsPage />
+        </SyncProvider>
+      </I18nProvider>
+    );
+  });
+
+  const createBtn = Array.from(container.querySelectorAll('button'))
+    .find(button => button.textContent?.includes('Create'));
+  expect(createBtn).toBeDefined();
+  await act(async () => { createBtn?.click(); });
+
+  expect(created).toBe(true);
 });

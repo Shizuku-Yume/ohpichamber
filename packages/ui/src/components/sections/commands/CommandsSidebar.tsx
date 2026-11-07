@@ -166,7 +166,7 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
       return;
     }
 
-    if (commands.some((cmd) => cmd.name === sanitizedName)) {
+    if (commands.some((cmd) => !isCommandBuiltIn(cmd) && cmd.name === sanitizedName)) {
       toast.error(t('settings.commands.sidebar.toast.commandExists'));
       return;
     }

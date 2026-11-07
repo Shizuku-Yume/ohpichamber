@@ -572,7 +572,7 @@ export const ContextPanel: React.FC<{ zone?: ContextZone }> = ({ zone = 'right' 
   const parent = isVertical
    ? panelRef.current?.parentElement
    : panelRef.current?.closest<HTMLElement>('[data-workspace-row]');
-  if (!parent || typeof ResizeObserver === 'undefined') {
+  if (!parent || !globalThis.ResizeObserver) {
    return;
   }
 

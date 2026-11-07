@@ -98,7 +98,7 @@ const useModelDownloadProgress = (active: boolean): number | null => {
      ? data.models.find((m: { id: string }) => m.id === modelId)
      : null;
     if (!cancelled) {
-     setPercent(typeof model?.downloadProgress === 'number' ? model.downloadProgress : null);
+     setPercent(Number.isFinite(model?.downloadProgress) ? (model?.downloadProgress ?? null) : null);
     }
    } catch {
     // Display-only; keep the previous value.
@@ -241,6 +241,7 @@ export const ComposerDictation: React.FC<ComposerDictationProps> = ({
   if (!supported || !dictationEnabled) return;
   const marker = composerMarkerRef.current;
   const onToggle = (event: Event) => {
+   // SAFETY: openchamber:dictation-toggle event detail carries optional composer target form
    const requestedForm = (event as CustomEvent<{ composer?: HTMLFormElement }>).detail?.composer;
    if (requestedForm && (!marker || !requestedForm.contains(marker))) return;
    const targetForm = requestedForm

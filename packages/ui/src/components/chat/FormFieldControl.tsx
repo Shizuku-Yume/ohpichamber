@@ -44,8 +44,6 @@ const AutoGrowTextarea = React.memo(function AutoGrowTextarea({
 }: AutoGrowTextareaProps) {
     const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
     const [localValue, setLocalValue] = React.useState(value);
-    const [height, setHeight] = React.useState(FORM_CUSTOM_TEXTAREA_MIN_HEIGHT);
-    const [isScrollable, setIsScrollable] = React.useState(false);
 
     React.useEffect(() => {
         setLocalValue(value);
@@ -53,15 +51,21 @@ const AutoGrowTextarea = React.memo(function AutoGrowTextarea({
 
     React.useLayoutEffect(() => {
         const textarea = textareaRef.current;
-        if (!textarea) return;
-        const nextHeight = getFormCustomTextareaHeight({
-            scrollHeight: textarea.scrollHeight,
-            currentHeight: height,
-        });
-        const nextScrollable = textarea.scrollHeight > (nextHeight ?? height);
-        if (isScrollable !== nextScrollable) setIsScrollable(nextScrollable);
-        if (nextHeight !== null && nextHeight !== height) setHeight(nextHeight);
-    }, [height, isScrollable, localValue]);
+        const wrapper = textarea?.parentElement;
+        if (!textarea || !wrapper) return;
+        const minHeight = wrapper.style.minHeight;
+        wrapper.style.minHeight = `${wrapper.offsetHeight}px`;
+        try {
+            textarea.style.height = '0px';
+            textarea.style.overflowY = 'hidden';
+            const contentHeight = textarea.scrollHeight + textarea.offsetHeight - textarea.clientHeight;
+            const nextHeight = getFormCustomTextareaHeight(contentHeight);
+            textarea.style.height = `${nextHeight}px`;
+            textarea.style.overflowY = contentHeight > nextHeight ? 'auto' : 'hidden';
+        } finally {
+            wrapper.style.minHeight = minHeight;
+        }
+    }, [localValue]);
 
     return (
         <textarea
@@ -70,7 +74,7 @@ const AutoGrowTextarea = React.memo(function AutoGrowTextarea({
             placeholder={placeholder}
             disabled={disabled}
             autoFocus={autoFocus}
-            style={{ height }}
+            style={{ height: FORM_CUSTOM_TEXTAREA_MIN_HEIGHT }}
             onChange={(event) => {
                 setLocalValue(event.target.value);
                 onValueChange(event.target.value);

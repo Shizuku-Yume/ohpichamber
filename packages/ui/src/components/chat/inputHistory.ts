@@ -45,7 +45,7 @@ export function buildChatInputHistorySubmissions({
 
 function materializeHistoryAttachment(attachment: InputHistoryAttachment): AttachedFile | null {
   if (attachment.source === 'file-url') {
-    if (!attachment.reference || attachment.reference.startsWith('data:')) return null;
+    if (!attachment.reference || (attachment.reference.startsWith('data:') && !attachment.path)) return null;
     return {
       id: `history-${attachment.key}`,
       file: new File([], attachment.filename, { type: attachment.mimeType }),
@@ -54,7 +54,8 @@ function materializeHistoryAttachment(attachment: InputHistoryAttachment): Attac
       filename: attachment.filename,
       size: attachment.size,
       source: 'local',
-      serverPath: attachment.reference,
+      serverPath: attachment.path ?? attachment.reference,
+      agentPath: attachment.path,
     };
   }
 

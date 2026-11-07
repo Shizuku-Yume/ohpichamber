@@ -79,6 +79,49 @@ export const fileReferenceExists = (resolvedPath: string, effectiveDirectory: st
   return request;
 };
 
+
+const fileStatSchema = z.object({ exists: z.boolean().optional() });
+
+/**
+ * One answer for a person waiting on a tap. It stays out of the cache and the
+ * queue above: the file may have appeared since the last tap, and a failed
+ * request must not read as a missing file.
+ */
+export const checkFileReference = async (resolvedPath: string, effectiveDirectory: string): Promise<'exists' | 'missing' | 'failed'> => {
+  const normalizedPath = normalizeReferencePath(resolvedPath);
+  try {
+    const response = await runtimeFetch('/api/fs/stat', {
+      method: 'GET',
+      query: {
+        path: normalizedPath,
+        optional: 'true',
+        directory: effectiveDirectory || undefined,
+      },
+      cache: 'no-store',
+    });
+    if (!response.ok) return 'failed';
+    const parsed = fileStatSchema.safeParse(await response.json().catch(() => null));
+    if (!parsed.success) return 'failed';
+    return parsed.data.exists === false ? 'missing' : 'exists';
+  } catch {
+    return 'failed';
+  }
+};
+
+export const lookupFilesByName = (name: string, effectiveDirectory: string): Promise<string[] | null> => (
+  runtimeFetch('/api/fs/find-by-name', {
+    method: 'GET',
+    query: { name, directory: effectiveDirectory },
+    cache: 'no-store',
+  })
+    .then(async (response) => {
+      if (!response.ok) return null;
+      const parsed = fileNameLookupSchema.safeParse(await response.json().catch(() => null));
+      return parsed.success ? parsed.data.paths : null;
+    })
+    .catch(() => null)
+);
+
 const fileNameLookupSchema = z.object({ paths: z.array(z.string()) });
 
 const FILE_NAME_LOOKUP_CACHE = new Map<string, Promise<string | null>>();

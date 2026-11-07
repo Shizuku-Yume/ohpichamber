@@ -121,7 +121,7 @@ export function credentialReference(providerId: string, id: number): string {
 function apiProtocol(api: NativeCatalogModel['api'] | undefined): Provider['protocol'] {
  switch (api) {
   case 'openai-completions': case 'openrouter': return 'chat-completions';
-  case 'openai-responses': case 'openai-codex-responses': case 'azure-openai-responses': return 'responses';
+  case 'openai-responses': case 'openai-codex-responses': case 'azure-openai-responses': case 'openai-images': case 'openrouter-images': return 'responses';
   case 'anthropic-messages': case 'bedrock-converse-stream': return 'messages';
   case 'google-generative-ai': case 'google-gemini-cli': case 'google-vertex': return 'generate-content';
   default: return null;
@@ -393,6 +393,17 @@ export class NativeModels {
    models: this.context.modelRegistry.getProviderModels(providerId)
     .filter(model => model.contextWindow !== null && model.contextWindow > 0 && model.maxTokens !== null && model.maxTokens > 0)
     .map(model => publicModel(model, state.metadata.models[modelKey({ providerId, modelId: model.id })])),
+   imageModels: this.context.modelRegistry.getProviderModels(providerId)
+    .filter(model => modelKind(model) === 'image')
+    .map(model => {
+     const key = modelKey({ providerId, modelId: model.id });
+     const configured = state.metadata.imageModels[key];
+     return ImageModelSchema.parse({
+      modelId: model.id, provider: providerId, name: configured?.name ?? model.name,
+      enabled: configured?.enabled !== false,
+      ...(configured?.status ? { status: configured.status } : model.isBeta ? { status: 'beta' } : {}),
+     });
+    }),
   });
  }
 

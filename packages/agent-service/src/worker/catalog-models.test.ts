@@ -722,6 +722,11 @@ providers:
     expect(disabledImg).toBeDefined();
     expect(disabledImg?.enabled).toBe(false);
 
+    // readProviderConfiguration includes imageModels in its read payload
+    const providerConfig = await fixture.reader.models.readProviderConfiguration('fixture-image-provider', '2');
+    expect(providerConfig.imageModels.map(m => m.modelId)).toContain('custom-generator-1');
+    expect(providerConfig.imageModels.map(m => m.modelId)).toContain('custom-generator-disabled');
+
     // Generation predicate agrees: generating with disabled model fails with 422 MODEL_UNAVAILABLE
     await expect(fixture.reader.models.generate({
       workspaceId: 'workspace_1',

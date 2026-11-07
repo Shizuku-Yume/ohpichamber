@@ -568,8 +568,8 @@ export const DefaultsSettings: React.FC = () => {
             setWalkthroughChoice('__pending__');
             setWalkthroughModel(roleSelectors.default ?? '');
           }}
-          label={t('settings.openchamber.defaults.walkthroughModel.usesSmallModel')}
-          ariaLabel={t('settings.openchamber.defaults.walkthroughModel.title')}
+          label={t('settings.openchamber.defaults.smallModel.useDefault')}
+          ariaLabel={t('settings.openchamber.defaults.smallModel.useDefaultAria')}
         />
         <SettingsFieldRow
           settingsItem="sessions.walkthrough-model"

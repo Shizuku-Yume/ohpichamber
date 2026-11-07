@@ -26,6 +26,10 @@ const CAPABILITY_ROWS = {
   service: { icon: 'terminal', titleKey: 'settings.extensions.capability.service', detailKey: 'settings.extensions.capability.service.detail' },
   network: { icon: 'plug', titleKey: 'settings.extensions.capability.network', detailKey: 'settings.extensions.capability.network.detail' },
   origins: { icon: 'global', titleKey: 'settings.extensions.capability.origins', detailKey: 'settings.extensions.capability.origins.detail' },
+  transcript: { icon: 'history', titleKey: 'settings.extensions.capability.transcript', detailKey: 'settings.extensions.capability.transcript.detail' },
+  sessionControl: { icon: 'robot-2', titleKey: 'settings.extensions.capability.sessionControl', detailKey: 'settings.extensions.capability.sessionControl.detail' },
+  instructions: { icon: 'book-open', titleKey: 'settings.extensions.capability.instructions', detailKey: 'settings.extensions.capability.instructions.detail' },
+  skills: { icon: 'sparkling', titleKey: 'settings.extensions.capability.skills', detailKey: 'settings.extensions.capability.skills.detail' },
 } satisfies Record<GuestCapability, { icon: IconName; titleKey: I18nKey; detailKey: I18nKey }>;
 
 type GuestApprovalDialogProps = {
@@ -49,6 +53,11 @@ export const GuestApprovalDialog: React.FC<GuestApprovalDialogProps> = ({ guest,
   const serviceExec = guest?.service?.permissions?.exec ?? [];
   const serviceSockets = guest?.service?.permissions?.sockets ?? [];
   const providesBrowser = serviceProvides(guest?.service, 'browser');
+  const providesSourceControl = serviceProvides(guest?.service, 'source-control');
+  const providesNotifications = serviceProvides(guest?.service, 'notifications');
+  const providesTracker = serviceProvides(guest?.service, 'tracker');
+  const providesQuota = serviceProvides(guest?.service, 'quota');
+  const quotaProviders = guest?.quota?.providers ?? [];
   const apiOrigin = guest?.integration?.apiOrigin ?? null;
 
   return (
@@ -115,6 +124,51 @@ export const GuestApprovalDialog: React.FC<GuestApprovalDialogProps> = ({ guest,
                     <p className="typography-meta mt-0.5 text-foreground">
                       {t('settings.extensions.capability.service.providesBrowser')}
                     </p>
+                  ) : null}
+                  {capability === 'service' && providesSourceControl ? (
+                    <p className="typography-meta mt-0.5 text-foreground">
+                      {t('settings.extensions.capability.service.providesSourceControl', {
+                        label: guest?.sourceControl?.label ?? guest?.name ?? '',
+                      })}
+                    </p>
+                  ) : null}
+                  {capability === 'service' && providesNotifications ? (
+                    <p className="typography-meta mt-0.5 text-foreground">
+                      {t('settings.extensions.capability.service.providesNotifications', {
+                        label: guest?.notifications?.label ?? guest?.name ?? '',
+                      })}
+                    </p>
+                  ) : null}
+                  {capability === 'service' && providesTracker ? (
+                    <div className="typography-meta mt-0.5 text-foreground">
+                      <p>
+                        {t('settings.extensions.capability.service.providesTracker', {
+                          label: guest?.tracker?.label ?? guest?.name ?? '',
+                        })}
+                      </p>
+                      <ul className="mt-0.5 list-disc space-y-0.5 ps-4">
+                        <li>{t('settings.extensions.capability.service.providesTracker.reads')}</li>
+                        <li>{t('settings.extensions.capability.service.providesTracker.writes')}</li>
+                      </ul>
+                      <p className="mt-0.5 text-muted-foreground">{t('settings.extensions.capability.service.providesTracker.tokens')}</p>
+                    </div>
+                  ) : null}
+                  {capability === 'service' && providesQuota ? (
+                    <div className="typography-meta mt-0.5 text-foreground">
+                      {quotaProviders.length > 0 ? (
+                        <>
+                          <p>{t('settings.extensions.capability.service.providesQuota')}</p>
+                          <ul className="mt-0.5 list-disc space-y-0.5 ps-4">
+                            {quotaProviders.map((providerId) => (
+                              <li key={providerId} className="break-all font-mono">{providerId}</li>
+                            ))}
+                          </ul>
+                          <p className="mt-0.5 text-muted-foreground">{t('settings.extensions.capability.service.providesQuota.credentials')}</p>
+                        </>
+                      ) : (
+                        <p>{t('settings.extensions.capability.service.providesQuota.none')}</p>
+                      )}
+                    </div>
                   ) : null}
                 </div>
               </li>

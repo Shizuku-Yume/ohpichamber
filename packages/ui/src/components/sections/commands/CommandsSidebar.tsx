@@ -404,7 +404,7 @@ const CommandListItem: React.FC<CommandListItemProps> = ({
             </div>
 
             {getLocalizedCommandDescription(command, t) && (
-              <div className="typography-micro text-muted-foreground/60 truncate leading-tight">
+              <div className="typography-micro text-muted-foreground truncate leading-tight">
                 {getLocalizedCommandDescription(command, t)}
               </div>
             )}

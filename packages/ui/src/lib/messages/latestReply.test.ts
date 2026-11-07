@@ -1,123 +1,109 @@
 import { describe, expect, test } from 'bun:test';
+import type { Message, Turn } from '@openchamber/agent-contract';
 
-import { findCompletedReplyIds, findLatestCompletedReply, type LatestReplyRecord } from './latestReply';
+import { findCompletedReplyIds, findLatestCompletedReply } from './latestReply';
 
-const userMessage = (id: string): LatestReplyRecord => ({
-    info: {
-        id,
-        role: 'user',
-        sessionID: 'ses_1',
-        time: { created: 1 },
-    },
-    parts: [],
+const userMessage = (messageId: string): Message => ({
+  messageId,
+  sessionId: 'ses_1',
+  turnId: 'turn_0',
+  role: 'user',
+  createdAt: 1,
+  parts: [{ type: 'text', partId: `${messageId}_part`, content: 'user prompt' }],
 });
 
-const assistantMessage = (
-    id: string,
-    text: string,
-    options: { finish?: string; completed?: number } = {},
-): LatestReplyRecord => {
-    const info: LatestReplyRecord['info'] = {
-        id,
-        role: 'assistant',
-        sessionID: 'ses_1',
-        time: { created: 2 },
-    };
-    if (options.completed !== undefined) info.time = { ...info.time, completed: options.completed };
-    if (options.finish !== undefined) info.finish = options.finish;
+const assistantMessage = (messageId: string, text: string): Message => ({
+  messageId,
+  sessionId: 'ses_1',
+  turnId: 'turn_1',
+  role: 'assistant',
+  createdAt: 2,
+  parts: text ? [{ type: 'text', partId: `${messageId}_part`, content: text }] : [],
+});
 
-    return {
-        info,
-        parts: text
-            ? [{ id: `${id}-part`, sessionID: 'ses_1', messageID: id, type: 'text', text }]
-            : [],
-    };
-};
+const turn = (turnId: string, status: Turn['status'], assistantMessageIds: string[]): Turn => ({
+  turnId,
+  sessionId: 'ses_1',
+  runId: 'run_1',
+  status,
+  userMessageId: 'user_1',
+  assistantMessageIds,
+  startedAt: 1,
+  finishedAt: status === 'completed' ? 2 : undefined,
+});
 
 describe('findLatestCompletedReply', () => {
-    test('returns the last answer of the latest prompt', () => {
-        const reply = findLatestCompletedReply([
-            userMessage('user_1'),
-            assistantMessage('assistant_1', 'First answer', { finish: 'stop', completed: 10 }),
-            userMessage('user_2'),
-            assistantMessage('assistant_2', 'Progress note', { finish: 'tool-calls', completed: 20 }),
-            assistantMessage('assistant_3', 'Second answer', { finish: 'stop', completed: 30 }),
-        ]);
+  test('returns the last answer of the latest completed turn', () => {
+    const messages = [
+      userMessage('user_1'),
+      assistantMessage('assistant_1', 'First answer'),
+      userMessage('user_2'),
+      assistantMessage('assistant_2', 'Progress note'),
+      assistantMessage('assistant_3', 'Second answer'),
+    ];
+    const turns = [
+      turn('turn_1', 'completed', ['assistant_1']),
+      turn('turn_2', 'completed', ['assistant_2', 'assistant_3']),
+    ];
 
-        expect(reply).toEqual({ messageId: 'assistant_3', text: 'Second answer' });
-    });
+    const reply = findLatestCompletedReply(turns, messages);
+    expect(reply).toEqual({ messageId: 'assistant_3', text: 'Second answer' });
+  });
 
-    test('ignores a step that ended in tool calls', () => {
-        const reply = findLatestCompletedReply([
-            userMessage('user_1'),
-            assistantMessage('assistant_1', 'Only a tool step', { finish: 'tool-calls', completed: 10 }),
-        ]);
+  test('ignores turns still running or awaiting approval', () => {
+    const messages = [
+      userMessage('user_1'),
+      assistantMessage('assistant_1', 'Completed answer'),
+      userMessage('user_2'),
+      assistantMessage('assistant_2', 'Streaming answer'),
+    ];
+    const turns = [
+      turn('turn_1', 'completed', ['assistant_1']),
+      turn('turn_2', 'running', ['assistant_2']),
+    ];
 
-        expect(reply).toBeNull();
-    });
+    // Ignores turn_2 because status is 'running', falls back to turn_1
+    const reply = findLatestCompletedReply(turns, messages);
+    expect(reply).toEqual({ messageId: 'assistant_1', text: 'Completed answer' });
+  });
 
-    test('ignores messages that have not completed', () => {
-        const reply = findLatestCompletedReply([
-            userMessage('user_1'),
-            assistantMessage('assistant_1', 'Still streaming', { finish: 'stop' }),
-        ]);
+  test('ignores failed or cancelled turns', () => {
+    const messages = [
+      userMessage('user_1'),
+      assistantMessage('assistant_1', 'Partial text'),
+    ];
+    const turns = [turn('turn_1', 'failed', ['assistant_1'])];
 
-        expect(reply).toBeNull();
-    });
+    expect(findLatestCompletedReply(turns, messages)).toBeNull();
+  });
 
-    test('ignores an aborted turn with no completed answer', () => {
-        const reply = findLatestCompletedReply([
-            userMessage('user_1'),
-            assistantMessage('assistant_1', 'Partial text', { finish: 'error', completed: 10 }),
-        ]);
+  test('skips empty assistant messages within a completed turn', () => {
+    const messages = [
+      assistantMessage('assistant_1', 'Real answer'),
+      assistantMessage('assistant_2', ''),
+    ];
+    const turns = [turn('turn_1', 'completed', ['assistant_1', 'assistant_2'])];
 
-        expect(reply).toBeNull();
-    });
-
-    test('does not read an earlier turn when the latest one has no answer', () => {
-        const reply = findLatestCompletedReply([
-            userMessage('user_1'),
-            assistantMessage('assistant_1', 'Old answer', { finish: 'stop', completed: 10 }),
-            userMessage('user_2'),
-            assistantMessage('assistant_2', 'Only a tool step', { finish: 'tool-calls', completed: 20 }),
-        ]);
-
-        expect(reply).toBeNull();
-    });
-
-    test('skips an empty final message and reads the answered step before it', () => {
-        const reply = findLatestCompletedReply([
-            userMessage('user_1'),
-            assistantMessage('assistant_1', 'The answer', { finish: 'stop', completed: 10 }),
-            assistantMessage('assistant_2', '', { finish: 'stop', completed: 20 }),
-        ]);
-
-        expect(reply).toEqual({ messageId: 'assistant_1', text: 'The answer' });
-    });
+    expect(findLatestCompletedReply(turns, messages)).toEqual({ messageId: 'assistant_1', text: 'Real answer' });
+  });
 });
 
 describe('findCompletedReplyIds', () => {
-    test('returns every finished answer in history, across turns', () => {
-        const ids = findCompletedReplyIds([
-            userMessage('user_1'),
-            assistantMessage('assistant_1', 'First answer', { finish: 'stop', completed: 10 }),
-            userMessage('user_2'),
-            assistantMessage('assistant_2', 'Progress note', { finish: 'tool-calls', completed: 20 }),
-            assistantMessage('assistant_3', 'Second answer', { finish: 'stop', completed: 30 }),
-        ]);
+  test('returns every finished answer across all completed turns', () => {
+    const messages = [
+      assistantMessage('assistant_1', 'First answer'),
+      assistantMessage('assistant_2', 'Second answer'),
+      assistantMessage('assistant_3', 'Third answer'),
+      assistantMessage('assistant_4', ''),
+    ];
+    const turns = [
+      turn('turn_1', 'completed', ['assistant_1']),
+      turn('turn_2', 'completed', ['assistant_2']),
+      turn('turn_3', 'running', ['assistant_3']),
+      turn('turn_4', 'completed', ['assistant_4']),
+    ];
 
-        expect(ids).toEqual(['assistant_1', 'assistant_3']);
-    });
-
-    test('leaves out unfinished, aborted, and empty messages', () => {
-        const ids = findCompletedReplyIds([
-            userMessage('user_1'),
-            assistantMessage('assistant_1', 'Still streaming', { finish: 'stop' }),
-            assistantMessage('assistant_2', 'Partial text', { finish: 'error', completed: 10 }),
-            assistantMessage('assistant_3', '', { finish: 'stop', completed: 20 }),
-            assistantMessage('assistant_4', 'The answer', { finish: 'stop', completed: 30 }),
-        ]);
-
-        expect(ids).toEqual(['assistant_4']);
-    });
+    const ids = findCompletedReplyIds(turns, messages);
+    expect(ids).toEqual(['assistant_1', 'assistant_2']);
+  });
 });

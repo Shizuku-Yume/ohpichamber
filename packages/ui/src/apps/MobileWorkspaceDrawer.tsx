@@ -21,6 +21,7 @@ import { MobileFilesSurface } from './MobileFilesSurface';
 import { MobileStatusPane } from './MobileStatusPane';
 import { useEdgeSwipe } from './useEdgeSwipe';
 import { isVimEditorEventTarget } from '@/lib/editorFocus';
+import { registerBackLayer } from '@/lib/mobileBackLayers';
 
 const DRAWER_ROOT_ID = 'mobile-surface-root';
 const ENTER_DELAY_MS = 16;
@@ -150,6 +151,13 @@ export const MobileWorkspaceDrawer: React.FC<{
    return next;
   });
  }, [open, tab]);
+ const [statusSectionsOpen, setStatusSectionsOpen] = React.useState(false);
+ React.useEffect(() => {
+  if (statusSectionsOpen) {
+   return registerBackLayer(() => setStatusSectionsOpen(false));
+  }
+ }, [statusSectionsOpen]);
+
 
  if (typeof document !== 'undefined' && !rootRef.current) {
   let root = document.getElementById(DRAWER_ROOT_ID);
@@ -227,6 +235,17 @@ export const MobileWorkspaceDrawer: React.FC<{
       />
      ) : null}
     </div>
+    {visible && tab === 'status' ? (
+     <button
+      type="button"
+      className="-mr-1 flex size-10 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      aria-label={t('chat.workStatus.sections.open')}
+      onClick={() => setStatusSectionsOpen(true)}
+      style={{ touchAction: 'manipulation' }}
+     >
+      <Icon name="more" className="size-5" />
+     </button>
+    ) : null}
     <button
      type="button"
      className="-mr-1 flex size-10 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -247,8 +266,8 @@ export const MobileWorkspaceDrawer: React.FC<{
        <MobileStatusPane
         visible={visible && tab === 'status'}
         onLeave={() => onTabChange('changes')}
-        sectionsDialogOpen={false}
-        onSectionsDialogOpenChange={() => { }}
+        sectionsDialogOpen={statusSectionsOpen}
+        onSectionsDialogOpenChange={setStatusSectionsOpen}
        />
       </ErrorBoundary>
      </div>

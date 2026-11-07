@@ -163,6 +163,24 @@ An approval the policy answers itself publishes no canonical events: there was n
 
 The Host pushes a mode change to `POST /internal/sessions/:id/permission-mode`, and `SessionRegistry.reconsiderPermissions` re-evaluates every pending execution approval of that session, so a switch to `auto` answers a card that was already waiting.
 
+## Goal verification and the turn cap
+
+Each session worker owns a `GoalVerifyingController`, a subclass of OMP's native `RpcGoalController`. OMP keeps ownership of continuation, the tool set and the completion journal; the subclass only decides whether the next continuation is allowed:
+
+- A terminal `agent_end` with an active goal starts the check, and `continuationPending` is true while it runs, so the session is never reported settled mid-verification.
+- After the verdict the same terminal event is handed to the native controller. A `complete` verdict calls `completeGoalFromTool()` first, so OMP journals the completion from that event and no later event is needed; a `paused` verdict pauses the goal.
+- The judge is OMP's `resolveJudge` with purpose `goal-verification`, the session cost gate and `journalJudgmentUsage`, so billed attempts land on the session ledger. With `sessionGoalChecker: 'classifier'` (default) the `judge` role is used; `'small-model'` words the `smol`, `tiny` or `default` selector into the `judge` role.
+- The check sees the objective, the last eight message texts and tool calls, the todo phases and tokens used. When no judgement role resolves, the check produces no verdict: native continuation stands, and the cap still applies.
+- The cap (`sessionGoalMaxAutoTurns`, 1–200) counts turns per goal id; reaching it pauses the goal. A new goal re-arms the counter and the abort signal.
+- `stopForHostAbort` aborts the in-flight judge, and a verdict for a replaced, dropped or paused goal is discarded.
+- When the verdict ends the goal, the controller reports a dropped continuation so the Host's pending-continuation marker clears.
+
+The Host captures both preferences into the worker bootstrap environment (`OPENCHAMBER_SESSION_GOAL_CHECKER`, `OPENCHAMBER_SESSION_GOAL_MAX_AUTO_TURNS`); they are non-secret and take effect for workers admitted after the change.
+
+## Plan mode and subagent delegation
+
+Plan mode keeps its own tool set. When `OPENCHAMBER_PLAN_ALLOW_AGENTS` is set in the worker bootstrap environment (Settings → Sessions → "Allow subagents in Plan mode"), `enterPlan` and the plan restore keep the native `task` tool active alongside the plan tool set. Leaving Plan mode restores the previous tools, so the permission never outlives the mode. It grants no capability of its own: every child tool call still passes its own authorization.
+
 ## Native goal mode
 
 Session control accepts `goal` operations `create`, `pause`, `resume`, and `drop`. Creation requires a nonempty objective and accepts a positive integer token budget (or `null` for no budget). The Host authorizes the session scope and forwards the operation; it stores no native goal state. Create and resume refuse an active run; pause and drop remain available during execution.

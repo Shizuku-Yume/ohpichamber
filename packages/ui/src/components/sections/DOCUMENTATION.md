@@ -257,3 +257,15 @@ Core ownership rules:
   Host authorization and native runtime execution policy (`respondApproval`).
   Agent profiles do not expose an ordered permission rules editor or preset
   catalog. Native profiles do not have hidden-agent flags.
+## Sessions (DefaultsSettings)
+
+`DefaultsSettings.tsx` configures what a new session starts with. Model roles are OMP's own `modelRoles` record, written through `canonicalClient.updateOmpSettings`; the app keeps no second copy.
+
+- **Default model and thinking:** writes `modelRoles.default`, with the chosen thinking level as the `:effort` suffix. `supportsReasoning` decides whether the effort picker is shown.
+- **Default agent and auto-apply:** writes `defaultAgent` (the shared settings registry). Picking an agent calls `setAgent(name, { keepModel: !autoApplyAgentModel })`, so auto-apply makes the agent's pinned model win; without it the open chat keeps the model it already had.
+- **Small and walkthrough models:** each has its own "use default" checkbox plus a picker. Unchecking enables the picker immediately, even before a value exists, and writes the native role (`smol`, `slow`). The walkthrough pick additionally writes `walkthroughModelOverride`/`walkthroughModelVariant`, which is what `lib/walkthrough/model-settings.js` reads when the server runs a review, so the control has a real effect.
+- **Fallback model:** reads and writes native `retry.fallbackChains` for the `default` selector, enables `retry.modelFallback` on a pick, and "None" deletes the whole default chain rather than leaving a hidden later link.
+- **Concurrent edits:** a 409 re-fetches the workspace settings and re-applies only the entries this write changed (`changedRoles`); every other role, including array-valued ones, survives. Role values are parsed with the canonical `JsonObjectSchema`, so an array-valued role is never dropped by an unrelated edit.
+- **Permissions and Plan mode:** `PermissionDefaultModeField` writes `permissionDefaultMode` (the Host applies it to new top-level sessions). The "allow subagents in Plan mode" row writes `planModeAllowAgents`, which the Host captures into the worker bootstrap and the worker enforces while Plan mode is active.
+
+All labels come from the shared dictionaries; none are hardcoded here.

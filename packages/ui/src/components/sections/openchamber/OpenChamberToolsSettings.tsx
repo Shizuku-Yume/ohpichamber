@@ -1,4 +1,6 @@
-import { runtimeFetch } from '@/lib/runtime-fetch';
+import { useConfigStore } from '@/stores/useConfigStore';
+import { getRuntimeKey } from '@/lib/runtime-switch';
+import type { ImageModel } from '@openchamber/agent-contract';
 import * as React from 'react';
 
 import { Icon } from '@/components/icon/Icon';
@@ -76,6 +78,7 @@ const ToolRow: React.FC<ToolRowProps> = ({ icon, title, summary, info, ariaLabel
  */
 export const OpenChamberToolsSettings: React.FC = () => {
   const { t } = useI18n();
+  const workspaceId = useConfigStore((state) => state.workspaceId);
   const agentControlToolEnabled = useUIStore((state) => state.agentControlToolEnabled);
   const setAgentControlToolEnabled = useUIStore((state) => state.setAgentControlToolEnabled);
   const agentScheduleToolEnabled = useUIStore((state) => state.agentScheduleToolEnabled);
@@ -138,74 +141,53 @@ export const OpenChamberToolsSettings: React.FC = () => {
     void updateDesktopSettings({ agentImageToolEnabled: enabled });
   }, [setAgentImageToolEnabled]);
 
-  // Read by the server on every call; no OpenCode restart involved.
+  // Synchronized to the Host Gateway settings store; image generation calls read the active model without restarting the runtime.
   const handleAgentImageModelChange = React.useCallback((value: string) => {
     setAgentImageModel(value);
     void updateDesktopSettings({ agentImageModel: value });
   }, [setAgentImageModel]);
 
-  // Only models that generate images, read when the page opens.
-  // Models are queried from the Canonical image catalog (published by commit a4696cc73),
-  // which separates image generators (`imageModels` carrying { modelId, provider, name })
-  // from vision-input LLMs in `models`. Failure states stay explicit.
+// Only models that generate images, read when the page opens or workspace changes.
+  // Models are queried from the Canonical image catalog, which separates
+  // image generators (imageModels) from vision-input LLMs in models.
   const [imageModels, setImageModels] = React.useState<
     | { status: 'loading' }
-    | { status: 'failed'; error?: string }
+    | { status: 'failed' }
     | { status: 'ready'; models: Array<{ value: string; name: string; providerID: string }> }
   >({ status: 'loading' });
 
   React.useEffect(() => {
     let cancelled = false;
-    const client = canonicalClient as unknown as {
-      listImageModels?: () => Promise<Array<{ value?: string; modelId?: string; provider?: string; providerID?: string; name: string }>>;
-      getModelCatalog?: () => Promise<{ imageModels?: Array<{ modelId: string; provider: string; name: string }> }>;
-    };
+    const currentRuntime = getRuntimeKey();
 
-    const fetchImageModels = async () => {
-      try {
-        if (typeof client.listImageModels === 'function') {
-          const raw = await client.listImageModels();
-          if (cancelled) return;
-          const options = raw.map((m) => ({
-            value: m.value ?? `${m.provider ?? m.providerID}/${m.modelId}`,
-            name: m.name,
-            providerID: m.providerID ?? m.provider ?? '',
-          }));
-          setImageModels({ status: 'ready', models: options });
-          return;
-        }
-        if (typeof client.getModelCatalog === 'function') {
-          const catalog = await client.getModelCatalog();
-          if (cancelled) return;
-          const options = (catalog.imageModels ?? []).map((m) => ({
-            value: `${m.provider}/${m.modelId}`,
-            name: m.name,
-            providerID: m.provider,
-          }));
-          setImageModels({ status: 'ready', models: options });
-          return;
-        }
-        const res = await runtimeFetch('/api/agent/v1/models/catalog');
-        if (!res.ok) throw new Error(`Failed to load image models: ${res.status}`);
-        const data = await res.json() as { imageModels?: Array<{ modelId: string; provider: string; name: string }> };
-        if (cancelled) return;
-        const options = (data.imageModels ?? []).map((m) => ({
-          value: `${m.provider}/${m.modelId}`,
-          name: m.name,
-          providerID: m.provider,
+    if (!workspaceId) {
+      setImageModels({ status: 'failed' });
+      return;
+    }
+
+    setImageModels({ status: 'loading' });
+
+    canonicalClient.listImageModels(workspaceId).then(
+      (models: ImageModel[]) => {
+        if (cancelled || getRuntimeKey() !== currentRuntime) return;
+        const options = models.map((model) => ({
+          value: `${model.provider}/${model.modelId}`,
+          name: model.name,
+          providerID: model.provider,
         }));
         setImageModels({ status: 'ready', models: options });
-      } catch (error) {
-        if (!cancelled) {
-          setImageModels({ status: 'failed', error: error instanceof Error ? error.message : String(error) });
-        }
-      }
-    };
+      },
+      () => {
+        if (cancelled || getRuntimeKey() !== currentRuntime) return;
+        setImageModels({ status: 'failed' });
+      },
+    );
 
-    void fetchImageModels();
-    return () => { cancelled = true; };
-  }, []);
-  const imageModelOptions = imageModels.status === 'ready' ? imageModels.models : [];
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId]);
+    const imageModelOptions = imageModels.status === 'ready' ? imageModels.models : [];
   const imageModelKnown = imageModelOptions.some((model) => model.value === agentImageModel);
 
   const handleAgentSecretToolChange = React.useCallback((enabled: boolean) => {

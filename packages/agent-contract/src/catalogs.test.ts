@@ -10,6 +10,7 @@ const model = {
   reasoningOptions: [reasoningOption], variants: [variant],
   pricing: { inputPerMillionTokens: 1, outputPerMillionTokens: 2, cacheReadPerMillionTokens: null, cacheWritePerMillionTokens: null },
 };
+const imageModel = { modelId: 'image_1', provider: 'provider_1', name: 'Image' };
 const auth = { status: 'configured', credentialRef: 'credential_1', method: 'api-key', source: 'stored-credential' };
 const provider = { providerId: 'provider_1', name: 'Provider', endpoint: 'https://models.example/v1', protocol: 'chat-completions', authMethods: ['api-key'], auth };
 const agent = { agentId: 'agent_1', name: 'Reviewer', description: 'Reviews changes', model: selection, allowedTools: ['read'] };
@@ -55,7 +56,7 @@ const boundaries = [
   { name: 'ProviderAuthState', schema: Catalog.ProviderAuthStateSchema, valid: auth, invalid: [{ ...auth, apiKey: 'secret' }, { status: 'configured', method: 'api-key' }] },
   { name: 'Provider', schema: Catalog.ProviderSchema, valid: provider, invalid: [{ ...provider, endpoint: 'https://user:secret@models.example/v1' }, { ...provider, authMethods: ['oauth'] }, { ...provider, endpoint: 'https://models.example/v1?api_key=secret' }] },
   { name: 'ModelCatalogDefaults', schema: Catalog.ModelCatalogDefaultsSchema, valid: { model: selection, thinkingLevel: 'high' }, invalid: [{ model: selection, thinkingLevel: '' }, { ...selection }] },
-  { name: 'ModelCatalog', schema: Catalog.ModelCatalogSchema, valid: { workspaceId: 'workspace_1', revision: '1', models: [model], defaults: { model: selection, thinkingLevel: 'auto' }, planRoleAvailable: true }, invalid: [{ workspaceId: 'workspace_1', revision: '1', models: [model, model], defaults: { model: selection, thinkingLevel: 'high' }, planRoleAvailable: true }, { workspaceId: 'workspace_1', revision: '1', models: [model], planRoleAvailable: true }] },
+  { name: 'ModelCatalog', schema: Catalog.ModelCatalogSchema, valid: { workspaceId: 'workspace_1', revision: '1', models: [model], imageModels: [imageModel], defaults: { model: selection, thinkingLevel: 'auto' }, planRoleAvailable: true }, invalid: [{ workspaceId: 'workspace_1', revision: '1', models: [model, model], imageModels: [imageModel], defaults: { model: selection, thinkingLevel: 'high' }, planRoleAvailable: true }, { workspaceId: 'workspace_1', revision: '1', models: [model], imageModels: [imageModel], planRoleAvailable: true }, { workspaceId: 'workspace_1', revision: '1', models: [model], imageModels: [imageModel, imageModel], defaults: { model: selection, thinkingLevel: 'high' }, planRoleAvailable: true }] },
   { name: 'ProviderCatalog', schema: Catalog.ProviderCatalogSchema, valid: { workspaceId: 'workspace_1', revision: '1', providers: [provider] }, invalid: [{ workspaceId: 'workspace_1', revision: '1', providers: [provider, provider] }] },
   { name: 'AgentCatalog', schema: Catalog.AgentCatalogSchema, valid: { workspaceId: 'workspace_1', revision: '1', agents: [agent] }, invalid: [{ workspaceId: 'workspace_1', revision: '1', agents: [agent, agent] }] },
   { name: 'ProviderConfiguration', schema: Catalog.ProviderConfigurationSchema, valid: providerConfiguration, invalid: [{ ...providerConfiguration, endpoint: 'file:///private/provider' }, { ...providerConfiguration, apiKey: 'secret' }] },

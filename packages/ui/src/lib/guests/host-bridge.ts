@@ -418,6 +418,9 @@ export const answerGuestMessage = async (
       effects.setPopoverAnchorActive(message.payload.id, message.payload.active);
       return okResult(message.id);
   }
+  // A type the host has no answer for: the frame already ignores it, so
+  // silence is the answer rather than an error the guest cannot act on.
+  return null;
   } catch (error) {
     if (!('id' in message)) return null;
     return errorResult(message.id, error instanceof HostRequestError ? error.message : 'Extension operation failed.', error instanceof HostRequestError ? error.code : 'HOST_REJECTED');

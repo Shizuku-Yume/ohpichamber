@@ -19,7 +19,7 @@ const nativeClient = (): CanonicalClient => Object.assign(new CanonicalClient(),
   listWorkspaces: async () => ({ items: [], errors: {} }),
   resolveWorkspace: async () => ({ workspaceId: 'workspace-ready', projectId: 'project-ready', name: 'Workspace' }),
   listSessions: async () => ({ items: [], errors: {} }),
-  getModels: async (workspaceId: string) => ({ workspaceId, revision: '0', models: [], defaults: { model: null, thinkingLevel: null }, planRoleAvailable: false }),
+  getModels: async (workspaceId: string) => ({ workspaceId, revision: '0', models: [], defaults: { model: null, thinkingLevel: null }, imageModels: [], planRoleAvailable: false }),
   getProviders: async (workspaceId: string) => ({ workspaceId, revision: '0', providers: [] }),
   getAgents: async (workspaceId: string) => ({ workspaceId, revision: '0', agents: [] }),
   getShellSnapshot: async () => ({ scope: { kind: 'workspace', workspaceId: 'workspace-ready' }, epoch: 'shell-epoch', revision: '0', running: [], ended: [], recovery: { priorEpochs: 'invalidated' } }),
@@ -74,7 +74,7 @@ describe('first successful canonical bootstrap', () => {
     notifyFirstCanonicalBootstrap(owner, getRuntimeKey());
     expect(view.getRetries()).toBe(1);
     expect(notified).toEqual(['first-connect-a']);
-    await act(async () => { models.resolve({ workspaceId: 'workspace-ready', revision: '0', models: [], defaults: { model: null, thinkingLevel: null }, planRoleAvailable: false }); });
+    await act(async () => { models.resolve({ workspaceId: 'workspace-ready', revision: '0', models: [], defaults: { model: null, thinkingLevel: null }, imageModels: [], planRoleAvailable: false }); });
   });
 
   test('announces the first admitted successful scope again after native provider runtime replacement', async () => {

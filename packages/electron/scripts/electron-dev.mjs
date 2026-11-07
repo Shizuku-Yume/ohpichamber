@@ -231,18 +231,25 @@ async function main() {
     });
   }
 
-  const electron = spawnProcess('bun', ['x', 'electron', '.'], {
+  // Electron exits with this code when the app asks to relaunch (the
+  // first-launch chooser, a settings change); the dev server keeps running and
+  // Electron starts again.
+  const relaunchExitCode = 75;
+  const startElectron = () => spawnProcess('bun', ['x', 'electron', '.'], {
     cwd: electronDir,
     env: {
       ...process.env,
       ...agentEnvironment,
       OPENCHAMBER_ELECTRON_DEV: '1',
+      OPENCHAMBER_ELECTRON_DEV_RELAUNCH_EXIT_CODE: String(relaunchExitCode),
       ...(useBundledUi ? { OPENCHAMBER_ELECTRON_USE_BUNDLED_UI: '1' } : {}),
       OPENCHAMBER_HMR_UI_PORT: hmrUiPort,
       OPENCHAMBER_HMR_API_PORT: hmrApiPort,
       OPENCHAMBER_DISABLE_PWA_DEV: '1',
     },
   });
+
+  let electron = null;
 
   let cleaning = false;
   const teardown = async (code) => {

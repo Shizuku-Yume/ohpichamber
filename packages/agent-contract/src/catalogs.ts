@@ -103,12 +103,34 @@ export const ModelCatalogDefaultsSchema = z.strictObject({
 });
 export type ModelCatalogDefaults = z.infer<typeof ModelCatalogDefaultsSchema>;
 
+/**
+ * An image generator: a catalog model whose kind is `image`. It has no
+ * context window or output-token budget, because it does not answer turns;
+ * listing it beside the chat models and calling it by identity is the whole
+ * contract the Settings page and `image.generate` need.
+ */
+export const ImageModelSchema = z.strictObject({
+  modelId: EntityIdSchema,
+  provider: EntityIdSchema,
+  name: z.string().min(1),
+  enabled: z.boolean().optional(),
+  status: z.enum(['active', 'alpha', 'beta', 'deprecated']).optional(),
+});
+export type ImageModel = z.infer<typeof ImageModelSchema>;
+
 export const ModelCatalogSchema = z.strictObject({
   workspaceId: EntityIdSchema,
   revision: CounterSchema,
   models: z.array(ModelSchema).refine(
     (models) => new Set(models.map((model) => JSON.stringify([model.provider, model.modelId]))).size === models.length,
     'Model identities are unique within a provider',
+  ),
+  // Image generators are a separate role in OMP's catalog (`kind: 'image'`),
+  // not chat models that happen to accept image input: their providers answer
+  // a prompt with pictures and publish no token limits.
+  imageModels: z.array(ImageModelSchema).refine(
+    (models) => new Set(models.map((model) => JSON.stringify([model.provider, model.modelId]))).size === models.length,
+    'Image model identities are unique within a provider',
   ),
   defaults: ModelCatalogDefaultsSchema,
   // Resolved by OMP from `modelRoles.plan` against the executable models, so

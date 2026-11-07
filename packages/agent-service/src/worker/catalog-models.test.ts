@@ -79,6 +79,9 @@ test('model catalog publishes only executable providers while the provider direc
       .toEqual(['native-custom-model']);
     expect(catalog.models.filter(model => model.provider === 'native-keyless').map(model => model.modelId))
       .toEqual(['native-keyless-model']);
+    // Every image generator the registry can execute is listed beside the
+    // chat models, never inside them: it has no token limits to publish.
+    expect(catalog.imageModels.every(model => !catalog.models.some(chat => chat.provider === model.provider && chat.modelId === model.modelId))).toBe(true);
 
     // The bundled registry still knows providers nobody configured. They must
     // not reach the executable model catalog.

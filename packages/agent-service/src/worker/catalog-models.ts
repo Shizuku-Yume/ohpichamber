@@ -4,7 +4,7 @@ import { dirname } from 'node:path';
 import { JSONC, YAML } from 'bun';
 import { z } from 'zod';
 import { oauthAccountKey, type AuthApiKeyOptions, type ResolvedApiKey } from '@oh-my-pi/pi-ai';
-import { getModelPricingStatus, PROVIDER_DESCRIPTORS } from '@oh-my-pi/pi-catalog';
+import { getModelPricingStatus, modelKind, PROVIDER_DESCRIPTORS } from '@oh-my-pi/pi-catalog';
 import { authPolicyFor } from '@oh-my-pi/pi-catalog/compat/auth';
 import type { CreateAgentSessionOptions } from '@oh-my-pi/pi-coding-agent/sdk';
 import type { ModelRegistry } from '@oh-my-pi/pi-coding-agent/config/model-registry';
@@ -19,7 +19,7 @@ import { invalidateCommandConfig, resolveConfigHeaders, resolveConfigValue } fro
 import type { AuthStorage } from '@oh-my-pi/pi-coding-agent/session/auth-storage';
 import { replaceFileAtomically } from '@oh-my-pi/pi-coding-agent/utils/atomic-file';
 import {
- ModelSchema, ModelCatalogSchema, ModelConfigureRequestSchema, ModelDeleteRequestSchema,
+ ImageModelSchema, ModelSchema, ModelCatalogSchema, ModelConfigureRequestSchema, ModelDeleteRequestSchema,
  ModelMutationResultSchema, ModelSelectionSchema, ProviderSchema, ProviderCatalogSchema,
  ProviderConfigurationSchema, ProviderConfigureRequestSchema, ProviderDeleteRequestSchema,
  ProviderMutationResultSchema, PositiveCounterSchema, ProviderConfigurationReadSchema,
@@ -297,11 +297,24 @@ export class NativeModels {
     const key = modelKey({ providerId: model.provider, modelId: model.id });
     return publicModel(model, this.metadata.models[key], !disabledProviders.has(model.provider) && allowed.has(key) && this.metadata.models[key]?.enabled !== false);
    });
+  // Image generators answer a prompt with pictures and publish no token
+  // limits, so they travel beside the chat models instead of through
+  // `publicModel`: a `contextWindow` there would be invented.
+  const imageModels = all.filter(model => modelKind(model) === 'image')
+   .map(model => {
+    const key = modelKey({ providerId: model.provider, modelId: model.id });
+    const configured = this.metadata.models[key];
+    return ImageModelSchema.parse({
+     modelId: model.id, provider: model.provider, name: configured?.name ?? model.name,
+     enabled: !disabledProviders.has(model.provider) && allowed.has(key) && configured?.enabled !== false,
+     ...(configured?.status ? { status: configured.status } : model.isBeta ? { status: 'beta' } : {}),
+    });
+   });
   // Plan mode needs the `plan` role; resolve it exactly as the mode
   // controller does so the composer can disable Plan before a session exists.
   const planRole = resolveRoleModelFull(this.context.settings, 'plan', this.context.modelRegistry.getAvailable(), undefined);
   return ModelCatalogSchema.parse({
-   workspaceId, revision, models,
+   workspaceId, revision, models, imageModels,
    defaults: await this.readDefaults(), planRoleAvailable: planRole.model !== undefined
   });
  }

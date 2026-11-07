@@ -79,6 +79,9 @@ test('model catalog publishes only executable providers while the provider direc
       .toEqual(['native-custom-model']);
     expect(catalog.models.filter(model => model.provider === 'native-keyless').map(model => model.modelId))
       .toEqual(['native-keyless-model']);
+    // Every image generator the registry can execute is listed beside the
+    // chat models, never inside them: it has no token limits to publish.
+    expect(catalog.imageModels.every(model => !catalog.models.some(chat => chat.provider === model.provider && chat.modelId === model.modelId))).toBe(true);
 
     // The bundled registry still knows providers nobody configured. They must
     // not reach the executable model catalog.
@@ -671,4 +674,103 @@ test('resolveProviderDisplayName returns official names for well-known providers
   expect(resolveProviderDisplayName('openai')).toBe('OpenAI');
   expect(resolveProviderDisplayName('google')).toContain('Google');
   expect(resolveProviderDisplayName('custom-provider', 'My Custom Provider')).toBe('My Custom Provider');
+});
+
+test('authoritative image model eligibility derives independently from chatModels candidate pool', async () => {
+  const fixture = await openCatalogFixture();
+  try {
+    // Write an image model into models.yml
+    await writeFile(fixture.writer.modelsPath, `
+providers:
+  fixture-image-provider:
+    api: openai-responses
+    baseUrl: https://api.example.com/v1
+    auth: none
+    models:
+      - id: custom-generator-1
+        name: Custom Generator 1
+        kind: image
+        api: openai-images
+        input: [text]
+      - id: custom-generator-disabled
+        name: Custom Generator Disabled
+        kind: image
+        api: openai-images
+        input: [text]
+`);
+    // Configure custom-generator-disabled with enabled: false in metadata
+    await fixture.reader.models.configureImageModel({
+      expectedRevision: '1',
+      model: {
+        modelId: 'custom-generator-disabled',
+        provider: 'fixture-image-provider',
+        name: 'Custom Generator Disabled',
+        enabled: false,
+      },
+    }, '1');
+
+    const catalog = await fixture.reader.models.readModels('workspace_1', '2');
+    const enabledImg = catalog.imageModels.find(m => m.provider === 'fixture-image-provider' && m.modelId === 'custom-generator-1');
+    const disabledImg = catalog.imageModels.find(m => m.provider === 'fixture-image-provider' && m.modelId === 'custom-generator-disabled');
+
+    // custom-generator-1 is not in chatModels, yet is properly enabled in imageModels
+    expect(enabledImg).toBeDefined();
+    expect(enabledImg?.enabled).toBe(true);
+    expect(catalog.models.some(m => m.provider === 'fixture-image-provider' && m.modelId === 'custom-generator-1')).toBe(false);
+
+    // custom-generator-disabled has enabled: false
+    expect(disabledImg).toBeDefined();
+    expect(disabledImg?.enabled).toBe(false);
+
+    // Generation predicate agrees: generating with disabled model fails with 422 MODEL_UNAVAILABLE
+    await expect(fixture.reader.models.generate({
+      workspaceId: 'workspace_1',
+      selection: { providerId: 'fixture-image-provider', modelId: 'custom-generator-disabled' },
+      prompt: 'Draw a cat',
+    })).rejects.toThrow('Selected image model is disabled');
+
+    // Test real local SDK provider execution via loopback server without credential cost
+    const { createServer } = await import('node:http');
+    let capturedBody = '';
+    const mockServer = createServer(async (req, res) => {
+      for await (const chunk of req) capturedBody += chunk;
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({
+        created: Date.now(),
+        data: [{ b64_json: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==' }]
+      }));
+    });
+    await new Promise<void>(resolve => mockServer.listen(0, '127.0.0.1', resolve));
+    const port = (mockServer.address() as any).port;
+    try {
+      // Re-write models.yml pointing custom-generator-1 to the mock server endpoint
+      await writeFile(fixture.writer.modelsPath, `
+providers:
+  fixture-image-provider:
+    api: openai-responses
+    baseUrl: http://127.0.0.1:${port}/v1
+    auth: none
+    models:
+      - id: custom-generator-1
+        name: Custom Generator 1
+        kind: image
+        api: openai-images
+        input: [text]
+`);
+      const generated = await fixture.reader.models.generate({
+        workspaceId: 'workspace_1',
+        selection: { providerId: 'fixture-image-provider', modelId: 'custom-generator-1' },
+        prompt: 'Draw a cat',
+      });
+      expect(generated.model).toEqual({ providerId: 'fixture-image-provider', modelId: 'custom-generator-1' });
+      expect(generated.images).toHaveLength(1);
+      expect(generated.images[0].mimeType).toBe('image/png');
+      expect(generated.images[0].data).toBe('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
+      expect(capturedBody).toContain('Draw a cat');
+    } finally {
+      mockServer.close();
+    }
+  } finally {
+    await fixture.close();
+  }
 });

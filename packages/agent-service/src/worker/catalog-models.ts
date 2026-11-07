@@ -4,7 +4,8 @@ import { dirname } from 'node:path';
 import { JSONC, YAML } from 'bun';
 import { z } from 'zod';
 import { oauthAccountKey, type AuthApiKeyOptions, type ResolvedApiKey } from '@oh-my-pi/pi-ai';
-import { getModelPricingStatus, PROVIDER_DESCRIPTORS } from '@oh-my-pi/pi-catalog';
+import { generateImage } from '@oh-my-pi/pi-ai/images';
+import { getModelPricingStatus, IMAGE_GENERATION_APIS, modelKind, PROVIDER_DESCRIPTORS } from '@oh-my-pi/pi-catalog';
 import { authPolicyFor } from '@oh-my-pi/pi-catalog/compat/auth';
 import type { CreateAgentSessionOptions } from '@oh-my-pi/pi-coding-agent/sdk';
 import type { ModelRegistry } from '@oh-my-pi/pi-coding-agent/config/model-registry';
@@ -19,7 +20,9 @@ import { invalidateCommandConfig, resolveConfigHeaders, resolveConfigValue } fro
 import type { AuthStorage } from '@oh-my-pi/pi-coding-agent/session/auth-storage';
 import { replaceFileAtomically } from '@oh-my-pi/pi-coding-agent/utils/atomic-file';
 import {
- ModelSchema, ModelCatalogSchema, ModelConfigureRequestSchema, ModelDeleteRequestSchema,
+ ImageGenerateRequestSchema, ImageGenerateResultSchema, ImageModelConfigureRequestSchema,
+ ImageModelMutationResultSchema, ImageModelSchema, ModelSchema, ModelCatalogSchema,
+ ModelConfigureRequestSchema, ModelDeleteRequestSchema,
  ModelMutationResultSchema, ModelSelectionSchema, ProviderSchema, ProviderCatalogSchema,
  ProviderConfigurationSchema, ProviderConfigureRequestSchema, ProviderDeleteRequestSchema,
  ProviderMutationResultSchema, PositiveCounterSchema, ProviderConfigurationReadSchema,
@@ -28,7 +31,8 @@ import {
  type Model, type ModelCatalog, type ModelConfigureRequest, type ModelDeleteRequest,
  type ModelMutationResult, type ModelSelection, type Provider, type ProviderCatalog,
  type ProviderConfigureRequest, type ProviderDeleteRequest, type ProviderMutationResult,
- type CompletionRequest,
+ type CompletionRequest, type ImageGenerateRequest, type ImageGenerateResult,
+ type ImageModelConfigureRequest, type ImageModelMutationResult,
 } from '@openchamber/agent-contract';
 import { ProjectionError } from '../projection/journal.ts';
 
@@ -57,9 +61,12 @@ export type NativeModelsContext = {
 const MetadataSchema = z.object({
  providers: z.record(z.string(), ProviderConfigurationSchema).default({}),
  models: z.record(z.string(), ModelSchema).default({}),
+ // Generators are their own record: they carry no token budget, so they cannot
+ // be stored as a text model without inventing the limits the type requires.
+ imageModels: z.record(z.string(), ImageModelSchema).default({}),
  defaultCredentials: z.record(z.string(), z.string().nullable()).default({}),
  providerHeaders: z.record(z.string(), z.record(z.string(), z.string())).default({}),
-}).default({ providers: {}, models: {}, defaultCredentials: {}, providerHeaders: {} });
+}).default({ providers: {}, models: {}, imageModels: {}, defaultCredentials: {}, providerHeaders: {} });
 const FileMetadataSchema = z.object({ openchamber: MetadataSchema });
 type CatalogMetadata = z.infer<typeof MetadataSchema>;
 type ConfigState = { config: ModelsConfig; metadata: CatalogMetadata; path: string; content: string | null };
@@ -254,6 +261,8 @@ function resolveModelSelection(registry: ModelRegistry, input: ModelSelection, c
  return { nativeModel, publicModel: projected, reasoningEffort: reasoningEffort ?? null };
 }
 
+const IMAGE_GENERATION_TIMEOUT_MS = 5 * 60 * 1000;
+
 export class NativeModels {
  private metadata: CatalogMetadata = MetadataSchema.parse({});
  constructor(private readonly context: NativeModelsContext) {
@@ -289,19 +298,38 @@ export class NativeModels {
   // oauth credentials, or native keyless local providers. The full bundled
   // registry stays the source for ProviderCatalog, so Settings still offers
   // every connectable provider.
-  const all = this.context.modelRegistry.getAvailable('all');
-  const allowed = new Set(filterAvailableModelsByEnabledPatterns(all, cfgEnabledModels.get(this.context.settings), this.context.settings).map(model => modelKey({ providerId: model.provider, modelId: model.id })));
+  // Chat models keep the exact candidate pool a native session resolves roles
+  // from (`getAvailable()`), so the composer never offers a model the session
+  // cannot start with. Image generators are a separate native kind and are asked
+  // for by kind instead of being filtered out of that pool by token limits.
+  const chatModels = this.context.modelRegistry.getAvailable();
+  const allowedChat = new Set(filterAvailableModelsByEnabledPatterns(chatModels, cfgEnabledModels.get(this.context.settings), this.context.settings).map(model => modelKey({ providerId: model.provider, modelId: model.id })));
   const disabledProviders = new Set(cfgDisabledProviders.get(this.context.settings));
-  const models = all.filter(model => model.contextWindow !== null && model.maxTokens !== null && model.contextWindow > 0 && model.maxTokens > 0)
+  const models = chatModels
    .map(model => {
     const key = modelKey({ providerId: model.provider, modelId: model.id });
-    return publicModel(model, this.metadata.models[key], !disabledProviders.has(model.provider) && allowed.has(key) && this.metadata.models[key]?.enabled !== false);
+    return publicModel(model, this.metadata.models[key], !disabledProviders.has(model.provider) && allowedChat.has(key) && this.metadata.models[key]?.enabled !== false);
+   });
+  // Image generators answer a prompt with pictures and publish no token
+  // limits, so they travel beside the chat models instead of through
+  // `publicModel`: a `contextWindow` there would be invented.
+  const rawImageModels = this.context.modelRegistry.getAvailable('all').filter(model => modelKind(model) === 'image');
+  const allowedImage = new Set(filterAvailableModelsByEnabledPatterns(rawImageModels, cfgEnabledModels.get(this.context.settings), this.context.settings).map(model => modelKey({ providerId: model.provider, modelId: model.id })));
+  const imageModels = rawImageModels
+   .map(model => {
+    const key = modelKey({ providerId: model.provider, modelId: model.id });
+    const configured = this.metadata.imageModels[key];
+    return ImageModelSchema.parse({
+     modelId: model.id, provider: model.provider, name: configured?.name ?? model.name,
+     enabled: !disabledProviders.has(model.provider) && allowedImage.has(key) && configured?.enabled !== false,
+     ...(configured?.status ? { status: configured.status } : model.isBeta ? { status: 'beta' } : {}),
+    });
    });
   // Plan mode needs the `plan` role; resolve it exactly as the mode
   // controller does so the composer can disable Plan before a session exists.
   const planRole = resolveRoleModelFull(this.context.settings, 'plan', this.context.modelRegistry.getAvailable(), undefined);
   return ModelCatalogSchema.parse({
-   workspaceId, revision, models,
+   workspaceId, revision, models, imageModels,
    defaults: await this.readDefaults(), planRoleAvailable: planRole.model !== undefined
   });
  }
@@ -574,6 +602,62 @@ export class NativeModels {
   };
  }
 
+ /**
+  * Runs an image generator for a workspace agent. The model must be an
+  * executable `kind: 'image'` entry, and a configured credential must resolve:
+  * generation is billed, so an unavailable model or credential fails before the
+  * request leaves the service. The result carries bytes; the caller writes them
+  * to a file instead of returning a multi-megabyte inline picture.
+  */
+ async generate(input: ImageGenerateRequest, signal?: AbortSignal): Promise<ImageGenerateResult> {
+  const request = ImageGenerateRequestSchema.parse(input);
+  await this.load();
+  await this.context.modelRegistry.reapplyModelPolicies();
+  await this.context.authStorage.credentials.reload();
+  const { providerId, modelId } = request.selection;
+  const key = modelKey(request.selection);
+  const configured = this.metadata.imageModels[key];
+  if (configured?.enabled === false) {
+   throw new ProjectionError(422, 'MODEL_UNAVAILABLE', 'Selected image model is disabled in configuration');
+  }
+  if (cfgDisabledProviders.get(this.context.settings).includes(providerId)) {
+   throw new ProjectionError(422, 'PROVIDER_UNAVAILABLE', 'Selected provider is disabled');
+  }
+  const rawImageModels = this.context.modelRegistry.getAvailable('all').filter(model => modelKind(model) === 'image');
+  const allowedImage = new Set(filterAvailableModelsByEnabledPatterns(rawImageModels, cfgEnabledModels.get(this.context.settings), this.context.settings).map(model => modelKey({ providerId: model.provider, modelId: model.id })));
+  if (!allowedImage.has(key)) {
+   throw new ProjectionError(422, 'MODEL_UNAVAILABLE', 'Selected image model is disabled by policy or pattern');
+  }
+  const nativeModel = rawImageModels.find(model => model.provider === providerId && model.id === modelId);
+  if (!nativeModel) throw new ProjectionError(422, 'MODEL_UNAVAILABLE', 'Selected image model is disabled or unavailable');
+  const source = this.context.authStorage.keys.source(providerId);
+  const reference = source && source.kind !== 'api_key' && source.kind !== 'oauth'
+   ? null : this.defaultCredentialRef(providerId);
+  if (reference) {
+   const resolved = await this.resolveBoundCredential(providerId, reference, this.context.currentNativeSessionId(), { modelId });
+   if (!resolved) throw new ProjectionError(422, 'PROVIDER_UNAVAILABLE', 'Selected provider credential is unavailable');
+  }
+  // The image transports take the SDK's `ApiKey`: a bare bearer or a resolver
+  // that may rotate it between attempts.
+  const apiKey = this.context.modelRegistry.resolver(nativeModel, this.context.currentNativeSessionId());
+  const deadline = AbortSignal.timeout(IMAGE_GENERATION_TIMEOUT_MS);
+  const result = await generateImage(nativeModel, {
+   prompt: request.prompt,
+   ...(request.inputImages ? { inputImages: request.inputImages } : {}),
+   ...(request.aspectRatio ? { aspectRatio: request.aspectRatio } : {}),
+   ...(request.imageSize ? { imageSize: request.imageSize } : {}),
+   ...(request.count ? { count: request.count } : {}),
+  }, { apiKey, signal: signal ? AbortSignal.any([signal, deadline]) : deadline });
+  return ImageGenerateResultSchema.parse({
+   model: request.selection,
+   images: result.images.map(image => ({
+    data: image.data, mimeType: image.mimeType,
+    ...(image.size ? { size: image.size } : {}), ...(image.quality ? { quality: image.quality } : {}),
+   })),
+   ...(result.text ? { text: result.text } : {}),
+  });
+ }
+
  async selection(input: ModelSelection, controls?: Pick<CompletionRequest, 'variant' | 'reasoningEffort'>): Promise<ResolvedModelSelection> {
   await this.load();
   await this.context.modelRegistry.reapplyModelPolicies();
@@ -595,7 +679,7 @@ export class NativeModels {
     throw new ProjectionError(422, 'PROVIDER_UNAVAILABLE', 'Selected provider credential is unavailable');
    }
   }
-  const configured = this.metadata.models[modelKey(input)];
+  const configured = this.metadata.models[modelKey(input)] ?? this.metadata.imageModels[modelKey(input)];
   const resolved = resolveModelSelection(this.context.modelRegistry, input, configured, controls);
   const headers = this.metadata.providerHeaders[input.providerId];
   if (headers && Object.keys(headers).length > 0) {
@@ -630,7 +714,8 @@ export class NativeModels {
   } finally { await rm(staged, { force: true }); }
  }
 
- private async commit(state: ConfigState, project: () => void, result: () => ModelMutationResult | ProviderMutationResult) {
+ private async commit(state: ConfigState, project: () => void,
+  result: () => ModelMutationResult | ProviderMutationResult | ImageModelMutationResult) {
   const config = this.validate(state.config);
   const oldMetadata = this.metadata;
   const oldEnabled = [...cfgEnabledModels.get(this.context.settings)];
@@ -705,7 +790,11 @@ export class NativeModels {
     || new Set(request.models.map(model => model.modelId)).size !== request.models.length) {
     throw new ProjectionError(422, 'INVALID_REQUEST', 'Configured models must have unique identities within this provider');
    }
-   state.config.providers[configuration.providerId].models = [];
+   // The text model list cannot express generators, so a text-list replacement
+   // keeps the `kind: image` rows the image form owns and rebuilds the rest.
+   const keptImages = (state.config.providers[configuration.providerId].models ?? [])
+    .filter(row => row.kind === 'image' && state.metadata.imageModels[modelKey({ providerId: configuration.providerId, modelId: row.id })]);
+   state.config.providers[configuration.providerId].models = keptImages;
    for (const [key, model] of Object.entries(state.metadata.models)) {
     if (model.provider === configuration.providerId) delete state.metadata.models[key];
    }
@@ -732,6 +821,7 @@ export class NativeModels {
   delete state.metadata.defaultCredentials[request.providerId];
   delete state.metadata.providerHeaders[request.providerId];
   for (const [key, model] of Object.entries(state.metadata.models)) if (model.provider === request.providerId) delete state.metadata.models[key];
+  for (const [key, model] of Object.entries(state.metadata.imageModels)) if (model.provider === request.providerId) delete state.metadata.imageModels[key];
   return ProviderMutationResultSchema.parse(await this.commit(state, () => {
    cfgDisabledProviders.set(this.context.settings, [...new Set([...cfgDisabledProviders.get(this.context.settings), request.providerId])]);
   }, () => ProviderMutationResultSchema.parse({ revision, providerId: request.providerId, provider: null })));
@@ -809,6 +899,65 @@ export class NativeModels {
    const published = this.context.modelRegistry.find(model.provider, model.modelId);
    if (!published) throw new ProjectionError(422, 'MODEL_UNAVAILABLE', 'Configured native model was not published');
    return ModelMutationResultSchema.parse({ revision, selection, model: publicModel(published, model, model.enabled) });
+  }));
+ }
+
+ /**
+  * Writes an image generator as its own native record. The text `ModelSchema`
+  * cannot express this: a generator has no token budget, and marking a chat
+  * model as one would invent limits it does not have. The native file receives
+  * `kind: image` on the api that actually serves generation, and enablement
+  * travels through the same enabled-model selectors as chat models.
+  */
+ async configureImageModel(input: ImageModelConfigureRequest, revision: string): Promise<ImageModelMutationResult> {
+  const request = ImageModelConfigureRequestSchema.parse(input);
+  PositiveCounterSchema.parse(revision);
+  const state = await this.load();
+  await this.context.modelRegistry.reapplyModelPolicies();
+  const model = request.model;
+  const existing = this.context.modelRegistry.find(model.provider, model.modelId);
+  const configuredProvider = state.config.providers?.[model.provider];
+  const modelApi = existing?.api ?? (configuredProvider?.api && (IMAGE_GENERATION_APIS as readonly string[]).includes(configuredProvider.api) ? configuredProvider.api : 'openai-images');
+  const baseUrl = configuredProvider?.baseUrl ?? this.context.modelRegistry.getProviderBaseUrl(model.provider);
+  if (!baseUrl) throw new ProjectionError(422, 'PROVIDER_UNAVAILABLE', 'Configure the native provider before configuring this model');
+  if (!(IMAGE_GENERATION_APIS as readonly string[]).includes(modelApi)) {
+   throw new ProjectionError(422, 'INVALID_REQUEST', 'This provider api cannot run image generation');
+  }
+  const raw: NativeModelDefinitionInput = {
+   id: model.modelId, name: model.name, api: modelApi, kind: 'image', input: ['text'],
+  };
+  state.config.providers ??= {};
+  const provider: NativeProviderConfigInput = {
+   ...configuredProvider,
+   ...(configuredProvider?.api ? { api: nativeProviderApi(configuredProvider.api) } : {}),
+   baseUrl,
+  };
+  state.config = this.validate({
+   ...state.config, providers: {
+    ...state.config.providers,
+    [model.provider]: { ...provider, auth: provider.auth ?? 'none', models: [...(provider.models ?? []).filter(row => row.id !== model.modelId), raw] },
+   }
+  });
+  state.metadata.imageModels[modelKey({ providerId: model.provider, modelId: model.modelId })] = ImageModelSchema.parse(model);
+  const selection = { providerId: model.provider, modelId: model.modelId };
+  return ImageModelMutationResultSchema.parse(await this.commit(state, () => {
+   if (model.enabled !== undefined) {
+    const allowed = filterAvailableModelsByEnabledPatterns(this.context.modelRegistry.getAll('all'), cfgEnabledModels.get(this.context.settings), this.context.settings);
+    const selectors = new Set(allowed.filter(row => row.provider !== model.provider || row.id !== model.modelId).map(row => `${row.provider}/${row.id}`));
+    if (model.enabled) selectors.add(`${model.provider}/${model.modelId}`);
+    cfgEnabledModels.set(this.context.settings, enabledModelSelectors(selectors));
+   }
+  }, () => {
+   const published = this.context.modelRegistry.getAll('all').find(row => row.provider === model.provider && row.id === model.modelId && modelKind(row) === 'image');
+   if (!published) throw new ProjectionError(422, 'MODEL_UNAVAILABLE', 'Configured native image model was not published');
+   return ImageModelMutationResultSchema.parse({
+    revision, selection,
+    model: ImageModelSchema.parse({
+     modelId: published.id, provider: published.provider, name: model.name,
+     enabled: model.enabled ?? !cfgDisabledProviders.get(this.context.settings).includes(published.provider),
+     ...(model.status ? { status: model.status } : {}),
+    }),
+   });
   }));
  }
 

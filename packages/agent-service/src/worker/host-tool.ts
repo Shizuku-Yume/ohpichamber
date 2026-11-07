@@ -16,12 +16,13 @@ export const HOST_TOOL_DESCRIPTIONS = {
   web: 'Invoke retained browser navigation, snapshot, interaction, inspection, capture and resize actions. Browser credentials remain with the Host.',
   memory: 'Invoke memory.read, memory.list, memory.save or memory.delete in the captured session.',
   notify: 'Invoke notify.send for an authorized OpenChamber notification.',
+  openchamber_image: 'Generate or edit images with the configured agent image model. Returns the file path where the generated image is saved.',
 } satisfies Record<HostActionRequest['toolName'], string>;
 
 export function createHostToolExtension({ scope, invoke }: { scope: HostToolScope; invoke: (request: HostToolInvocation) => Promise<JsonValue> }): ExtensionFactory {
   const captured = Object.freeze({ ...scope });
   return api => {
-    for (const toolName of ['openchamber', 'web', 'memory', 'openchamber_knowledge', 'notify'] as const) {
+    for (const toolName of ['openchamber', 'web', 'memory', 'openchamber_knowledge', 'notify', 'openchamber_image'] as const) {
       const parameters = api.typebox.Type.Object({
         action: api.typebox.Type.String(),
         input: api.typebox.Type.Record(api.typebox.Type.String(), api.typebox.Type.Unknown()),

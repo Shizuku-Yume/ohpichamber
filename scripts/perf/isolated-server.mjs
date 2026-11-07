@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 /**
  * An OpenChamber server for perf captures that shares nothing with the user's
- * own app: its own HOME (OpenCode's sessions database), its own
- * OPENCHAMBER_DATA_DIR, an environment rebuilt from scratch so no
- * OPENCHAMBER_* / OPENCODE_* variable from the desktop app leaks in, no UI
- * password, and the fixture provider registered as the default model.
+ * own app: its own HOME, its own OPENCHAMBER_DATA_DIR, its own agent directory
+ * (`PI_CONFIG_DIR`) holding the fixture provider and default role, an
+ * environment rebuilt from scratch so no OPENCHAMBER_* / PI_* / OMP_* variable
+ * from the desktop app leaks in, no UI password, and the fixture provider
+ * registered as the default model.
  *
  * As a command (`bun run profile:serve`) it starts the fixture provider and the
  * server, checks the served bundle, and runs until interrupted, then stops
@@ -18,6 +19,7 @@
 import { execFileSync, spawn } from "node:child_process"
 import { cpSync, createWriteStream, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { connect } from "node:net"
+import { stringify as stringifyYaml } from "yaml"
 import { platform } from "node:os"
 import { basename, dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -28,7 +30,7 @@ import { AGENT_READ_FILES, agentReadFileContent, fixtureProviderConfig } from ".
 
 export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..")
 const FIXTURE_SCRIPT = join(REPO_ROOT, "scripts/perf/fixture-provider.mjs")
-const MAC_BUNDLED_OPENCODE = "/Applications/OpenChamber.app/Contents/Resources/opencode-cli/opencode"
+const MAC_BUNDLED_OMP = "/Applications/OpenChamber.app/Contents/Resources/omp/omp"
 
 const HELP = `Usage: bun run profile:serve -- [options]
 
@@ -47,8 +49,8 @@ Options:
   --port <port>            Server port (default: 4799)
   --fixture-port <port>    Fixture provider port (default: 4798); reused when
                            something already listens there
-  --opencode-binary <path> OpenCode CLI (default: $OPENCODE_BINARY, else the
-                           one bundled in /Applications/OpenChamber.app on macOS,
+  --omp-binary <path>      Agent CLI (default: $OMP_BINARY, else the one
+                           bundled in /Applications/OpenChamber.app on macOS,
                            else the server's own resolution)
   --help                   Show this help`
 
@@ -65,14 +67,14 @@ const portInUse = (port) => new Promise((resolvePort) => {
 export const isolatedEnv = (overrides = {}) => {
   const env = {}
   for (const [key, value] of Object.entries(process.env)) {
-    if (/^(OPENCHAMBER_|OPENCODE_|ELECTRON_)/.test(key)) continue
+    if (/^(OPENCHAMBER_|PI_|OMP_|ELECTRON_)/.test(key)) continue
     env[key] = value
   }
   return { ...env, ...overrides }
 }
 
-const defaultOpencodeBinary = () => process.env.OPENCODE_BINARY
-  || (platform() === "darwin" && existsSync(MAC_BUNDLED_OPENCODE) ? MAC_BUNDLED_OPENCODE : null)
+const defaultOmpBinary = () => process.env.OMP_BINARY
+  || (platform() === "darwin" && existsSync(MAC_BUNDLED_OMP) ? MAC_BUNDLED_OMP : null)
 
 const waitForPort = async (port, timeoutMs, child) => {
   const deadline = Date.now() + timeoutMs
@@ -154,8 +156,43 @@ const writeSettings = (state, project) => {
   }, null, 2))
 }
 
+const agentDirectory = (state) => join(state, "agent")
+
+/** Writes the fixture provider and default role into a fresh agent directory. */
+const writeAgentConfig = (state, fixturePort) => {
+  const directory = agentDirectory(state)
+  mkdirSync(directory, { recursive: true })
+  const modelsFile = join(directory, "models.yml")
+  if (!existsSync(modelsFile)) {
+    writeFileSync(modelsFile, stringifyYaml(toNativeModels(fixtureProviderConfig(fixturePort))), { mode: 0o600 })
+  }
+  const configFile = join(directory, "config.yml")
+  if (!existsSync(configFile)) {
+    writeFileSync(configFile, stringifyYaml({ modelRoles: { default: "perf/stream-300cps" }, autoupdate: false }), { mode: 0o600 })
+  }
+}
+
 /**
- * Creates the project directory as its own Git repository, so OpenCode does
+ * Translates the OpenCode-style fixture catalogue into OMP provider entries:
+ * one provider with a `baseUrl` and one `models` array, and each model naming
+ * the OpenAI-compatible API the fixture server actually speaks.
+ */
+export const toNativeModels = ({ provider }) => ({
+  providers: Object.fromEntries(Object.entries(provider).map(([id, entry]) => [id, {
+    baseUrl: entry.options.baseURL,
+    apiKey: entry.options.apiKey,
+    api: "openai-completions",
+    models: Object.entries(entry.models).map(([modelId, model]) => ({
+      id: modelId,
+      name: model.name,
+      api: "openai-completions",
+      ...(model.tool_call ? { supportsTools: true } : {}),
+    })),
+  }])),
+})
+
+/**
+ * Creates the project directory as its own Git repository, so the agent does
  * not resolve it to a repository that happens to contain it.
  */
 export const ensureProject = (project) => {
@@ -178,7 +215,7 @@ export const restoreState = (state, seed) => {
  * isolated home under `state`. Resolves once it answers HTTP, with the served
  * main chunk checked against the build's index.html.
  */
-export const startIsolatedServer = async ({ repo, dist, state, project, port, fixturePort, opencodeBinary = defaultOpencodeBinary(), logFile }) => {
+export const startIsolatedServer = async ({ repo, dist, state, project, port, fixturePort, ompBinary = defaultOmpBinary(), logFile }) => {
   if (await portInUse(port)) throw new Error(`Port ${port} is already in use; stop that server or pass another port.`)
   const built = builtMainChunk(dist)
   if (!built) throw new Error(`${dist}/index.html has no main chunk; build it first.`)
@@ -186,7 +223,9 @@ export const startIsolatedServer = async ({ repo, dist, state, project, port, fi
   mkdirSync(join(state, "oc-data"), { recursive: true })
   ensureProject(project)
   writeSettings(state, project)
-  const config = { ...fixtureProviderConfig(fixturePort), model: "perf/stream-300cps", small_model: "perf/stream-1200cps", autoupdate: false, share: "disabled" }
+  // The agent reads its provider and default role from a canonical agent directory,
+  // never from a process-wide config blob: point it at the fixture-provider subtree.
+  writeAgentConfig(state, fixturePort)
   const env = {
     HOME: join(state, "home"),
     USER: process.env.USER ?? "",
@@ -196,13 +235,13 @@ export const startIsolatedServer = async ({ repo, dist, state, project, port, fi
     LANG: process.env.LANG ?? "en_US.UTF-8",
     OPENCHAMBER_DATA_DIR: join(state, "oc-data"),
     OPENCHAMBER_DIST_DIR: dist,
-    OPENCODE_CONFIG_CONTENT: JSON.stringify(config),
+    PI_CONFIG_DIR: agentDirectory(state),
   }
-  if (opencodeBinary) env.OPENCODE_BINARY = opencodeBinary
+  if (ompBinary) env.OMP_BINARY = ompBinary
   const child = spawn(process.execPath, [join(repo, "packages/web/bin/cli.js"), "serve", "--port", String(port), "--foreground"], {
     cwd: project,
     env,
-    // Its own process group, so stopping it stops the OpenCode it manages.
+    // Its own process group, so stopping it stops the agent workers it manages.
     detached: true,
     stdio: ["ignore", logFile ? "pipe" : "ignore", logFile ? "pipe" : "ignore"],
   })
@@ -234,7 +273,7 @@ export const startIsolatedServer = async ({ repo, dist, state, project, port, fi
 }
 
 const parseArgs = (argv) => {
-  const options = { repo: REPO_ROOT, dist: null, root: join(REPO_ROOT, "tmp/perf-serve"), fresh: false, port: 4799, fixturePort: 4798, opencodeBinary: defaultOpencodeBinary() }
+  const options = { repo: REPO_ROOT, dist: null, root: join(REPO_ROOT, "tmp/perf-serve"), fresh: false, port: 4799, fixturePort: 4798, ompBinary: defaultOmpBinary() }
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index]
     if (value === "--help") { console.log(HELP); process.exit(0) }
@@ -244,7 +283,7 @@ const parseArgs = (argv) => {
     else if (value === "--fresh") options.fresh = true
     else if (value === "--port") options.port = Number(argv[++index])
     else if (value === "--fixture-port") options.fixturePort = Number(argv[++index])
-    else if (value === "--opencode-binary") options.opencodeBinary = resolve(argv[++index])
+    else if (value === "--omp-binary") options.ompBinary = resolve(argv[++index])
     else throw new Error(`Unknown option: ${value}`)
   }
   options.dist = options.dist ?? join(options.repo, "packages/web/dist")
@@ -263,7 +302,7 @@ const main = async () => {
   try {
     server = await startIsolatedServer({
       repo: options.repo, dist: options.dist, state, project: join(options.root, "project"),
-      port: options.port, fixturePort: options.fixturePort, opencodeBinary: options.opencodeBinary,
+      port: options.port, fixturePort: options.fixturePort, ompBinary: options.ompBinary,
       logFile: join(options.root, "server.log"),
     })
   } catch (error) {

@@ -7,7 +7,7 @@ description: Connect GitHub and start sessions from issues and pull requests.
 
 Connect your GitHub account and OpenChamber can pull in issues and pull requests, start a session straight from one, and open or update PRs for you.
 
-## Connect GitHub
+The project's remote decides which host OpenChamber talks to. A project whose `origin` is on gitlab.com uses your GitLab account for the board, the pull request badge on its branches, and the Git panel. A remote on a host alias from `~/.ssh/config`, such as `github.com-work`, isn't matched to any host. Gitea and Forgejo match an alias whose SSH configuration points at the instance's web address, and a remote on the instance's SSH clone address once you enter that address in **Settings → Integrations**.
 
 1. Open **Settings → Integrations** and expand the **GitHub** card.
 2. Choose **Connect GitHub**. OpenChamber shows a link and a short code.

@@ -55,6 +55,7 @@
     "appId": "dev.openchamber.desktop",
     "productName": "OpenChamber",
     "asarUnpack": [
+      "node_modules/7zip-bin/win/**/*",
       "node_modules/@openchamber/web/server/built-in-extensions/**/*",
       "node_modules/@openchamber/web/server/lib/git/credential-helper.js",
       "node_modules/@openchamber/web/server/lib/git/ssh-wrapper.js",
@@ -65,7 +66,10 @@
       "dist-bundle/main.mjs",
       "dist-bundle/early-startup.mjs",
       "preload.mjs",
-      "browser-panel-preload.cjs"
+      "browser-panel-preload.cjs",
+      "!**/node_modules/7zip-bin/{linux,mac}{,/**}",
+      "!**/node_modules/7zip-bin/!(${os})/**/*",
+      "!**/node_modules/7zip-bin/win/!(${arch}){,/**}"
     ],
     "extraResources": [
       {
@@ -102,7 +106,8 @@
       "artifactName": "${productName}-${version}-mac-${arch}.${ext}",
       "extendInfo": {
         "CFBundleIconName": "AppIcon",
-        "NSLocalNetworkUsageDescription": "OpenChamber needs access to devices and services on your local network."
+        "NSLocalNetworkUsageDescription": "OpenChamber needs access to devices and services on your local network.",
+        "NSAppleEventsUsageDescription": "Lets commands that you or an agent run in OpenChamber control other apps."
       },
       "hardenedRuntime": true,
       "gatekeeperAssess": false,

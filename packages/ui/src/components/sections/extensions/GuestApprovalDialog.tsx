@@ -26,6 +26,10 @@ const CAPABILITY_ROWS = {
   service: { icon: 'terminal', titleKey: 'settings.extensions.capability.service', detailKey: 'settings.extensions.capability.service.detail' },
   network: { icon: 'plug', titleKey: 'settings.extensions.capability.network', detailKey: 'settings.extensions.capability.network.detail' },
   origins: { icon: 'global', titleKey: 'settings.extensions.capability.origins', detailKey: 'settings.extensions.capability.origins.detail' },
+  transcript: { icon: 'history', titleKey: 'settings.extensions.capability.transcript', detailKey: 'settings.extensions.capability.transcript.detail' },
+  sessionControl: { icon: 'robot-2', titleKey: 'settings.extensions.capability.sessionControl', detailKey: 'settings.extensions.capability.sessionControl.detail' },
+  instructions: { icon: 'book-open', titleKey: 'settings.extensions.capability.instructions', detailKey: 'settings.extensions.capability.instructions.detail' },
+  skills: { icon: 'sparkling', titleKey: 'settings.extensions.capability.skills', detailKey: 'settings.extensions.capability.skills.detail' },
 } satisfies Record<GuestCapability, { icon: IconName; titleKey: I18nKey; detailKey: I18nKey }>;
 
 type GuestApprovalDialogProps = {

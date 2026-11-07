@@ -764,7 +764,7 @@ const UserMessageBody = React.memo(({ workspaceId, messageId, parts, messageCrea
 
     return (
         <div
-            className="relative w-full group/message"
+            className="relative w-fit max-w-full group/message"
             style={CONTAIN_LAYOUT_STYLE}
             onTouchStart={isTouchContext && canCopyMessage && hasCopyableText ? revealCopyHint : undefined}
         >

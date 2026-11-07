@@ -304,7 +304,7 @@ const UserTextPart: React.FC<UserTextPartProps> = ({
                 className={cn(
                     "break-words font-sans typography-markdown-body",
                     normalizedRenderingMode === 'plain' && 'whitespace-pre-wrap [unicode-bidi:plaintext] text-start',
-                    isCollapsed && "line-clamp-2",
+                    isCollapsed && (isTruncated || textContent.includes('\n') || textContent.length > 80) && "line-clamp-2",
                     collapsibleUserMessages && isTruncated && !messageExpanded && "cursor-pointer"
                 )}
                 ref={textRef}

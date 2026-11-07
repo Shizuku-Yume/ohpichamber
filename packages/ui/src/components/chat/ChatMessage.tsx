@@ -507,14 +507,14 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                     action row while the reply had not started yet.
                                     peek: the action row is suppressed, so reserve only its
                                     gap to the next message, OUTSIDE the bubble background. */}
-                                <div className={cn('max-w-[85%]', showStickyInlineHoverRow ? 'pb-11' : undefined, chatSurfaceMode === 'peek' ? 'pb-3' : undefined)}>
+                                <div className={cn('flex max-w-[85%] flex-col items-end', showStickyInlineHoverRow ? 'pb-11' : undefined, chatSurfaceMode === 'peek' ? 'pb-3' : undefined)}>
                                     <div
                                         style={{
                                             backgroundColor: 'var(--chat-user-message-bg)',
                                             borderRadius: userMessageRadius,
                                             borderBottomRightRadius: 'var(--radius-sm)',
                                         }}
-                                        className="px-5 py-3 shadow-none border border-primary/5"
+                                        className="w-fit max-w-full px-5 py-3 shadow-none border border-primary/5"
                                         data-user-message-bubble=""
                                     >
                                         <MessageBody

@@ -729,6 +729,8 @@
    layer is the surface. */
 .oc-surface-floating[data-dictating] > :not([data-dictation-chain]),
 .oc-surface-floating[data-dictating] [data-dictation-chain] > :not([data-dictation-chain], .oc-dictation-overlay),
+.oc-glass-composer[data-dictating] > :not([data-dictation-chain]),
+.oc-glass-composer[data-dictating] [data-dictation-chain] > :not([data-dictation-chain], .oc-dictation-overlay),
 [data-dictation-host]:has(> .oc-dictation-overlay) > :not(.oc-dictation-overlay) {
   opacity: 0;
 }

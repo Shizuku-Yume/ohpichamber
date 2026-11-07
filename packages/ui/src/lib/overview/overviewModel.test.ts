@@ -1,6 +1,5 @@
-import { beforeEach, describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import type { Session, SessionMetadata } from '@openchamber/agent-contract';
-import { useNotificationStore } from '@/sync/notification-store';
 import type { PrVisualSummary } from '@/stores/useGitHubPrStatusStore';
 import type { WorktreeMetadata } from '@/types/worktree';
 import {
@@ -33,14 +32,9 @@ const facts = (value: Session, extra: Partial<OverviewSessionFacts> = {}): Overv
   session: value, activity: null, blocking: null, prs: [], prsPending: false, issues: [], worktreeDirty: null, ...extra,
 });
 
-const setNotificationIndex = (sessionUnseen: Record<string, number> = {}) => {
-  useNotificationStore.setState({
-    index: {
-      session: { unseenCount: sessionUnseen, unseenHasError: {} },
-      project: { unseenCount: {}, unseenHasError: {} },
-    },
-  });
-};
+const unread = (metadata: SessionMetadata | null = null): SessionMetadata => ({
+  ...(metadata ?? {}), openchamber: { ...(metadata?.openchamber ?? {}), workbench: { lastIdleAt: NOW } },
+});
 const pr = (prState: string, visualState: string, mergeableState: string | null = null, checksState: string | null = null): PrVisualSummary => ({
   provider: 'github', number: 1, visualState, prState, draft: false, title: null, url: null, base: null, head: null,
   checks: checksState ? { state: checksState, total: 1, success: 0, failure: 1, pending: 0 } : null,
@@ -51,9 +45,6 @@ const on = { workEnabled: true, now: NOW };
 const off = { workEnabled: false, now: NOW };
 
 describe('classifyOverviewSession', () => {
-  beforeEach(() => {
-    setNotificationIndex({});
-  });
   test('a request waits on the user from any session, even one outside In work', () => {
     expect(classifyOverviewSession(facts(session('a'), { blocking: 'permission', activity: 'running' }), on))
       .toMatchObject({ section: 'waiting', reason: 'permission' });
@@ -72,30 +63,24 @@ describe('classifyOverviewSession', () => {
   });
 
   test('with In work on, an unread end counts only for sessions in work', () => {
-    setNotificationIndex({ a: 1 });
     expect(classifyOverviewSession(facts(session('a')), on)).toBeNull();
-    expect(classifyOverviewSession(facts(session('a', {}, { metadata: inWork() })), on))
+    expect(classifyOverviewSession(facts(session('a', {}, { metadata: unread(inWork()) })), on))
       .toMatchObject({ section: 'waiting', reason: 'finished' });
   });
 
   test('with In work off, every recent unread end counts; an old one does not', () => {
-    setNotificationIndex({ a: 1 });
-    expect(classifyOverviewSession(facts(session('a')), off))
+    expect(classifyOverviewSession(facts(session('a', {}, { metadata: unread() })), off))
       .toMatchObject({ section: 'waiting', reason: 'finished' });
-    setNotificationIndex({ a: 0 });
     expect(classifyOverviewSession(facts(session('a')), off)).toBeNull();
-    setNotificationIndex({ a: 1 });
     const old = NOW - OVERVIEW_UNTRACKED_WINDOW_MS;
-    expect(classifyOverviewSession(facts(session('a', { updated: old })), off)).toBeNull();
+    expect(classifyOverviewSession(facts(session('a', { updated: old }, { metadata: unread() })), off)).toBeNull();
   });
 
   test('a failed run waits on the user; a successful one does not', () => {
-    setNotificationIndex({ a: 1 });
-    const review = { metadata: { openchamber: { kind: 'review' as const } } };
+    const review = { metadata: unread({ openchamber: { kind: 'review' as const } }) };
     expect(classifyOverviewSession(facts(session('a', {}, { ...review, runtimeStatus: 'unavailable' })), on))
       .toMatchObject({ section: 'waiting', reason: 'error' });
-    setNotificationIndex({ a: 0 });
-    expect(classifyOverviewSession(facts(session('a', {}, { ...review, runtimeStatus: 'idle' })), on)).toBeNull();
+    expect(classifyOverviewSession(facts(session('a', {}, { metadata: { openchamber: { kind: 'review' as const } }, runtimeStatus: 'idle' })), on)).toBeNull();
   });
 
   test('a PR with a conflict or failed checks waits on the user', () => {
@@ -152,9 +137,8 @@ describe('classifyOverviewSession', () => {
 
 describe('buildOverviewSessionSections', () => {
   test('waiting rows sort by urgency, then newest first; left out lists vetoed done signals', () => {
-    setNotificationIndex({ finished: 1 });
     const sections = buildOverviewSessionSections([
-      facts(session('finished', { updated: NOW }, { metadata: inWork() })),
+      facts(session('finished', { updated: NOW }, { metadata: unread(inWork()) })),
       facts(session('permission', { updated: NOW - 2 * HOUR }), { blocking: 'permission' }),
       facts(session('vetoed', {}, { metadata: inWork() }), { prs: [pr('merged', 'merged')], worktreeDirty: true }),
       facts(session('plain', {}, { metadata: inWork() })),

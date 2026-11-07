@@ -2,7 +2,6 @@ import React, { act } from 'react';
 import { afterEach, expect, test } from 'bun:test';
 import { Window } from 'happy-dom';
 import type { Session, SessionMetadata } from '@openchamber/agent-contract';
-import { useNotificationStore } from '@/sync/notification-store';
 
 const NOW = Date.now();
 const HOUR = 60 * 60 * 1000;
@@ -16,6 +15,9 @@ const session = (sessionId: string, title: string, time: { created?: number; upd
 });
 
 const inWork = (extra: Record<string, unknown> = {}): SessionMetadata => ({ openchamber: { work: { state: 'open', openedAt: 1 }, ...extra } });
+const unread = (metadata: SessionMetadata): SessionMetadata => ({
+  ...metadata, openchamber: { ...metadata.openchamber, workbench: { lastIdleAt: NOW } },
+});
 
 let cleanup: (() => void) | null = null;
 afterEach(() => {
@@ -47,10 +49,9 @@ test('the page sums up, lists what waits first, and asks before marking everythi
   const { OverviewPage } = await import('./OverviewView');
 
   const hint = inWork({ work: { state: 'open', openedAt: 1, suggestDoneAt: NOW } });
-  useNotificationStore.setState({ index: { session: { unseenCount: { finished: 1 }, unseenHasError: {} }, project: { unseenCount: {}, unseenHasError: {} } } });
   useGlobalSessionsStore.getState().applySnapshot([
     session('asking', 'Fix relay reconnect'),
-    session('finished', 'Usage stats', { updated: NOW - HOUR }, inWork()),
+    session('finished', 'Usage stats', { updated: NOW - HOUR }, unread(inWork())),
     session('done-a', 'Release notes', { updated: NOW - 2 * HOUR }, hint),
     session('done-b', 'Tray icon states', { updated: NOW - 2 * HOUR }, hint),
     session('quiet', 'Not in work', { updated: NOW - HOUR }),

@@ -541,6 +541,7 @@ export const SETTINGS_REGISTRY = {
   summaryLength: field({ scope: 'profile', parse: parseIntegerAtLeast(10), ui: uiStore('summaryLength', (v) => useUIStore.getState().setSummaryLength(v)) }),
   maxLastMessageLength: field({ scope: 'profile', parse: parseIntegerAtLeast(10), ui: uiStore('maxLastMessageLength', (v) => useUIStore.getState().setMaxLastMessageLength(v)) }),
   showDeletionDialog: field({ scope: 'profile', parse: parseBoolean, ui: uiStore('showDeletionDialog', (v) => useUIStore.getState().setShowDeletionDialog(v)) }),
+  defaultSessionMode: field({ scope: 'profile', parse: parseOneOf(['main', 'plan', 'vibe', 'goal']), ui: uiStore('defaultSessionMode', (v) => useUIStore.getState().setDefaultSessionMode(v)) }),
 
   // ── Notifications (profile) ──
   nativeNotificationsEnabled: field({ scope: 'profile', parse: parseBoolean, ui: uiStore('nativeNotificationsEnabled', (v) => useUIStore.getState().setNativeNotificationsEnabled(v)) }),

@@ -10,9 +10,9 @@ import { getDeferredSafeStorage } from './utils/safeStorage';
 
 export { getPinnedSessionKey, isSessionPinned };
 
-export type SessionPinnedTarget = { directory: string; sessionId: string };
+type SessionPinnedTarget = { directory: string; sessionId: string };
 
-export type LegacyPin = { key: string; runtimeKey: string; directory: string; sessionId: string };
+type LegacyPin = { key: string; runtimeKey: string; directory: string; sessionId: string };
 
 type SessionPinnedStore = {
   ids: Set<string>;

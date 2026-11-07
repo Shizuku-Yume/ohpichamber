@@ -170,7 +170,7 @@ const GREP_DOT_STYLE = { backgroundColor: 'var(--status-info)', opacity: 0.6 };
 
 /** Non-React renderers receive the component's translator; count-dependent
  *  copy resolves complete singular/plural messages instead of a suffix. */
-export type ToolRendererTranslate = (key: I18nKey, params?: I18nParams) => string;
+type ToolRendererTranslate = (key: I18nKey, params?: I18nParams) => string;
 
 export const renderGrepOutput = (output: string, isMobile: boolean, t: ToolRendererTranslate, options?: { unstyled?: boolean }) => {
     try {

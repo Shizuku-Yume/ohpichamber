@@ -32,13 +32,12 @@ interface MobileWidgetProject {
  label: string;
 }
 
-export interface MobileWidgetSnapshot {
+interface MobileWidgetSnapshot {
  runtimeKey: string;
  attentionCount: number;
  recentSessions: MobileWidgetSession[];
  projects: MobileWidgetProject[];
 }
-
 const RECENT_LIMIT = 6;
 
 const parentIdOf = (session: Session): string | null => session.parentSessionId ?? null;

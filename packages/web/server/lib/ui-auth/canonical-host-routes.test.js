@@ -504,6 +504,23 @@ describe('canonical Host authenticated real-service boundary', () => {
     assertProblem(await request(app).get('/api/agent/v1/workspaces/workspace_1/models?cwd=/private').set('Authorization', `Bearer ${token}`), 400, 'INVALID_REQUEST');
     expect(requests).toHaveLength(1);
   });
+  it('forwards recaps and Agent Hub session surfaces through typed Host routes', async () => {
+    servicePhase = 'ready';
+    requestService = async (url) => {
+      if (url.endsWith('/recaps')) return Response.json({ recaps: [] });
+      if (url.endsWith('/subagents/tree-cost')) return Response.json({ sessionId: 'session_1', directCost: 0, treeCost: 0 });
+      if (url.endsWith('/subagents')) return Response.json({ subagents: [] });
+      if (url.endsWith('/transcript')) return Response.json({ subagentId: 'agent_1', sessionFile: '/private/agent.jsonl', entries: [] });
+      throw new Error(`Unexpected private service request: ${url}`);
+    };
+    const base = '/api/agent/v1/sessions/session_1';
+    for (const suffix of ['/recaps', '/subagents', '/subagents/tree-cost', '/subagents/agent_1/transcript']) {
+      await request(app).get(`${base}${suffix}`).set('Authorization', `Bearer ${token}`).expect(200);
+    }
+    expect(requests.map(({ url }) => url)).toEqual([
+      `${base}/recaps`, `${base}/subagents`, `${base}/subagents/tree-cost`, `${base}/subagents/agent_1/transcript`,
+    ]);
+  });
   it('distinguishes authoritative catalog failure from empty success and rejects private DTO fields', async () => {
     workspaceCatalog = { items: [{ workspaceId: 'workspace_1', projectId: 'project_1', name: 'Private', displayPath: privateDir }], errors: {} };
     const denied = await request(app).get('/api/agent/v1/workspaces').set('Authorization', `Bearer ${token}`);

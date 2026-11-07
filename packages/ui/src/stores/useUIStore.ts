@@ -7,7 +7,7 @@ import { SEMANTIC_TYPOGRAPHY, getTypographyVariable, type SemanticTypographyKey 
 import type { ShortcutCombo } from '@/lib/shortcuts';
 import type { DraftStarterRef } from '@/lib/draftStarters';
 import type { CustomProviderIcon } from '@/lib/customProviderIcons';
-import { DEFAULT_MONO_FONT, DEFAULT_UI_FONT, type MonoFontOption, type UiFontOption } from '@/lib/fontOptions';
+import { DEFAULT_MONO_FONT, DEFAULT_UI_FONT, DEFAULT_UI_FONT_WEIGHT, type MonoFontOption, type UiFontOption, type UiFontWeight } from '@/lib/fontOptions';
 import { getStoredMobileKeyboardMode, type MobileKeyboardMode } from '@/lib/mobileKeyboardMode';
 import type { TerminalShell } from '@/lib/api/types';
 import { directoryMayHaveActiveProjectAction, useTerminalStore } from '@/stores/useTerminalStore';
@@ -1061,6 +1061,8 @@ interface UIStore {
  autoDeleteLastRunAt: number | null;
  messageLimit: number;
  fontSize: number;
+ /** Chat text size in percent of the interface size, so the chat can grow without the sidebar. */
+ chatFontSize: number;
  // Global draft welcome starters; null = unset (use the default built-in set).
  globalDraftStarters: DraftStarterRef[] | null;
  draftStartersVisible: boolean;
@@ -1073,6 +1075,8 @@ interface UIStore {
  /** Family names used when `uiFont` / `monoFont` is `custom`. */
  customUiFont: string;
  customMonoFont: string;
+ /** Weight of regular interface text. */
+ uiFontWeight: UiFontWeight;
  padding: number;
  cornerRadius: number;
  inputBarOffset: number;
@@ -1369,6 +1373,7 @@ interface UIStore {
  setAutoDeleteLastRunAt: (timestamp: number | null) => void;
  setMessageLimit: (value: number) => void;
  setFontSize: (size: number) => void;
+ setChatFontSize: (size: number) => void;
  setGlobalDraftStarters: (refs: DraftStarterRef[]) => void;
  setDraftStartersVisible: (value: boolean) => void;
  setTerminalFontSize: (size: number) => void;
@@ -1378,6 +1383,7 @@ interface UIStore {
  setUiFont: (font: UiFontOption) => void;
  setMonoFont: (font: MonoFontOption) => void;
  setCustomUiFont: (family: string) => void;
+ setUiFontWeight: (weight: UiFontWeight) => void;
  setCustomMonoFont: (family: string) => void;
  setPadding: (size: number) => void;
  setCornerRadius: (radius: number) => void;
@@ -1627,6 +1633,7 @@ export const useUIStore = create<UIStore>()(
     autoDeleteLastRunAt: null,
     messageLimit: 200,
     fontSize: 100,
+    chatFontSize: 100,
     globalDraftStarters: null,
     terminalFontSize: 14,
     terminalShell: 'auto',
@@ -1636,6 +1643,7 @@ export const useUIStore = create<UIStore>()(
     monoFont: DEFAULT_MONO_FONT,
     customUiFont: '',
     customMonoFont: '',
+    uiFontWeight: DEFAULT_UI_FONT_WEIGHT,
     padding: 100,
     cornerRadius: 18,
     inputBarOffset: 0,
@@ -2829,6 +2837,9 @@ export const useUIStore = create<UIStore>()(
      set({ fontSize: clampedSize });
      get().applyTypography();
     },
+    setChatFontSize: (size) => {
+     set({ chatFontSize: Math.max(50, Math.min(200, Math.round(size))) });
+    },
 
     setGlobalDraftStarters: (refs) => {
      set({ globalDraftStarters: refs });
@@ -2872,6 +2883,9 @@ export const useUIStore = create<UIStore>()(
 
     setCustomMonoFont: (family) => {
      set({ customMonoFont: family.slice(0, 100) });
+    },
+    setUiFontWeight: (weight) => {
+     set({ uiFontWeight: weight });
     },
 
     setPadding: (size) => {
@@ -3872,6 +3886,7 @@ export const useUIStore = create<UIStore>()(
      autoDeleteLastRunAt: state.autoDeleteLastRunAt,
      messageLimit: state.messageLimit,
      fontSize: state.fontSize,
+     chatFontSize: state.chatFontSize,
      globalDraftStarters: state.globalDraftStarters,
      terminalFontSize: state.terminalFontSize,
      terminalShell: state.terminalShell,
@@ -3881,6 +3896,7 @@ export const useUIStore = create<UIStore>()(
      monoFont: state.monoFont,
      customUiFont: state.customUiFont,
      customMonoFont: state.customMonoFont,
+     uiFontWeight: state.uiFontWeight,
      padding: state.padding,
      cornerRadius: state.cornerRadius,
      favoriteModels: state.favoriteModels,

@@ -1,49 +1,39 @@
 import { describe, expect, test } from 'bun:test';
 
-import { fileNameOf, sessionLineage, type SessionLike } from './mobileFileRequest';
+import { fileNameOf, sessionLineage, type SessionNode } from './mobileFileRequest';
 
-type TestSession = SessionLike & {
-  id: string;
-  projectID?: string;
-  directory?: string;
+type TestSession = SessionNode & {
   title?: string;
 };
 
-const session = (id: string, fields: Partial<TestSession> = {}): TestSession => ({
-  id,
-  projectID: 'project',
-  directory: '/repo',
-  title: id,
-  ...fields,
+const session = (sessionId: string, parentSessionId?: string): TestSession => ({
+  sessionId,
+  parentSessionId,
+  title: sessionId,
 });
-const reader = (sessions: TestSession[]) => async (id: string) => sessions.find((entry) => entry.id === id) ?? null;
-const ids = (lineage: TestSession[]) => lineage.map((entry) => entry.id);
+
+const reader = (sessions: TestSession[]) => async (id: string) =>
+  sessions.find((entry) => entry.sessionId === id) ?? null;
+
+const ids = (lineage: TestSession[]) => lineage.map((entry) => entry.sessionId);
 
 describe('sessionLineage', () => {
-  test('walks from a subagent up to its root', async () => {
-    const read = reader([session('grandchild', { parentID: 'child' }), session('child', { parentID: 'root' }), session('root')]);
+  test('walks from a subagent up to its root via parentSessionId', async () => {
+    const read = reader([
+      session('grandchild', 'child'),
+      session('child', 'root'),
+      session('root'),
+    ]);
     expect(ids(await sessionLineage('grandchild', read))).toEqual(['grandchild', 'child', 'root']);
   });
 
-  test('a /btw side chat leads to the session it was typed into', async () => {
-    const fork = session('fork', { metadata: { openchamber: { kind: 'btw', originalSessionID: 'root' } } });
-    expect(ids(await sessionLineage('fork', reader([fork, session('root')])))).toEqual(['fork', 'root']);
-  });
-
-  test('a promoted side chat stands on its own', async () => {
-    const promoted = session('fork', { metadata: { openchamber: { btwPromoted: true, originalSessionID: 'root' } } });
-    expect(ids(await sessionLineage('fork', reader([promoted, session('root')])))).toEqual(['fork']);
-  });
-
   test('stops at a session it cannot read', async () => {
-    expect(ids(await sessionLineage('child', reader([session('child', { parentID: 'gone' })])))).toEqual(['child']);
+    expect(ids(await sessionLineage('child', reader([session('child', 'gone')])))).toEqual(['child']);
     expect(await sessionLineage('gone', reader([]))).toEqual([]);
   });
 
-  test('a link that loops ends the walk', async () => {
-    const fork = session('fork', { metadata: { openchamber: { kind: 'btw', originalSessionID: 'fork' } } });
-    expect(ids(await sessionLineage('fork', reader([fork])))).toEqual(['fork']);
-    const read = reader([session('a', { parentID: 'b' }), session('b', { parentID: 'a' })]);
+  test('a cycle in parentSessionId ends the walk', async () => {
+    const read = reader([session('a', 'b'), session('b', 'a')]);
     expect(ids(await sessionLineage('a', read))).toEqual(['a', 'b']);
   });
 });
